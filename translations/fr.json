@@ -1032,6 +1032,12 @@
       "lifetime_ev_solar_share": {
         "name": "Part Solaire VE Cumulée"
       },
+      "lifetime_ev_battery_share": {
+        "name": "Part Batterie VE Cumulée"
+      },
+      "lifetime_ev_grid_share": {
+        "name": "Part Réseau VE Cumulée"
+      },
       "vehicle_soc": {
         "name": "SOC Véhicule"
       },

@@ -912,9 +912,16 @@ class EVControlMixin:
             + self._session_data.battery_energy_kwh
         )
 
-        # Cost: grid portion × current import rate
+        # Cost: direct grid at the current import rate, battery-sourced at
+        # what its stored energy cost to put in — the provenance pool's rate,
+        # the same one the battery savings price from. (#793: this increment
+        # was priced at ZERO, so a car charged off a grid-filled battery
+        # looked free while the grid purchase sat in the import cost.)
         import_rate = self._energy_calculator._import_rate
-        self._session_data.cost_chf += grid_increment * import_rate
+        self._session_data.cost_chf += (
+            grid_increment * import_rate
+            + battery_increment * self._energy_calculator.ev_battery_cost_rate()
+        )
 
         # Solar share
         if self._session_data.energy_kwh > 0:

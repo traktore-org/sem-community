@@ -30,6 +30,8 @@ class SEMCostsDetailCard extends SEMLitBase {
             `${DEFAULT_PREFIX}lifetime_ev_energy`,
             `${DEFAULT_PREFIX}lifetime_ev_cost`,
             `${DEFAULT_PREFIX}lifetime_ev_solar_share`,
+            `${DEFAULT_PREFIX}lifetime_ev_battery_share`,
+            `${DEFAULT_PREFIX}lifetime_ev_grid_share`,
             'number.sem_system_investment_cost',
             `${DEFAULT_PREFIX}monthly_consecutive_peak`,
             `${DEFAULT_PREFIX}power_charge_cost`,
@@ -195,11 +197,18 @@ class SEMCostsDetailCard extends SEMLitBase {
             }
             const evCost = this._val('lifetime_ev_cost');
             const evShare = this._val('lifetime_ev_solar_share');
+            const battShare = this._val('lifetime_ev_battery_share');
+            const gridShare = this._val('lifetime_ev_grid_share');
             const perKwh = evCost / evEnergy;
+            // (#793) the full three-way split — battery-sourced kWh used to
+            // be in the denominator but shown nowhere, so 66% solar quietly
+            // implied "34% paid grid" when a fifth of it was the battery.
             return html`
                 <div class="info-tiles">
                     ${this._renderInfoTile('mdi:currency-usd', '#8DC892', 'cost_per_kwh', perKwh.toFixed(4) + ' ' + curr + '/kWh')}
                     ${this._renderInfoTile('mdi:solar-power', '#ff9800', 'solar_share', evShare.toFixed(1) + '%')}
+                    ${this._renderInfoTile('mdi:battery-arrow-down', '#4db6ac', 'battery_share', battShare.toFixed(1) + '%')}
+                    ${this._renderInfoTile('mdi:transmission-tower', '#488fc2', 'grid_share', gridShare.toFixed(1) + '%')}
                 </div>
             `;
         }

@@ -1032,6 +1032,12 @@
       "lifetime_ev_solar_share": {
         "name": "Udział słońca w EV łącznie"
       },
+      "lifetime_ev_battery_share": {
+        "name": "Udział baterii w EV łącznie"
+      },
+      "lifetime_ev_grid_share": {
+        "name": "Udział sieci w EV łącznie"
+      },
       "vehicle_soc": {
         "name": "SOC pojazdu"
       },

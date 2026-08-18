@@ -1032,6 +1032,12 @@
       "lifetime_ev_solar_share": {
         "name": "Sähköauton aurinko-osuus yhteensä"
       },
+      "lifetime_ev_battery_share": {
+        "name": "Sähköauton akkuosuus yhteensä"
+      },
+      "lifetime_ev_grid_share": {
+        "name": "Sähköauton verkko-osuus yhteensä"
+      },
       "vehicle_soc": {
         "name": "Ajoneuvon SOC"
       },

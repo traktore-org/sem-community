@@ -326,6 +326,12 @@ rate, since no price history exists for them.
 The breakdown behind the summary: EV charging economics, investment payback,
 demand-charge exposure, and the current tariff rates.
 
+EV charging economics shows the lifetime cost per kWh and the full three-way
+source split — solar, battery, and grid shares. Battery-sourced energy is
+priced by provenance: the portion of the battery that was charged from the
+grid carries the price that was paid for it, while solar-charged energy stays
+free. Cost per kWh and the shares therefore tell one consistent story.
+
 #### sem-energy-impact-card
 
 **SEM Energy Impact** · *Energy tab*

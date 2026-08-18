@@ -1032,6 +1032,12 @@
       "lifetime_ev_solar_share": {
         "name": "Összes EV napenergia-aránya"
       },
+      "lifetime_ev_battery_share": {
+        "name": "Összes EV akkumulátor-aránya"
+      },
+      "lifetime_ev_grid_share": {
+        "name": "Összes EV hálózati aránya"
+      },
       "vehicle_soc": {
         "name": "Jármű SOC"
       },

@@ -329,6 +329,23 @@ class BatteryProvenance:
             return rate
         return rate - (sum(p.grid_cost for p in self._pools.values()) / total)
 
+    def implied_cost_rate(self) -> float:
+        """Currency COST per kWh discharged from what is stored right now.
+
+        The exact dual of :meth:`implied_savings_rate` — what a discharged
+        kWh costs plus what it saves is the import rate, always. The solar
+        and unknown parts cost nothing (solar was free; unknown keeps the
+        legacy answer, which for a cost is zero — #755 contract 1: silence
+        is not a measurement). The grid part carries its purchase cost pro
+        rata. An empty pool returns 0.0: before this rate existed, battery
+        energy was priced at nothing, and not knowing must not invent a
+        charge (#793).
+        """
+        total = sum(p.total for p in self._pools.values())
+        if total <= 0:
+            return 0.0
+        return sum(p.grid_cost for p in self._pools.values()) / total
+
     # ── persistence ───────────────────────────────────────────────────
 
     def get_state(self) -> Dict[str, Any]:

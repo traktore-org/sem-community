@@ -1032,6 +1032,12 @@
       "lifetime_ev_solar_share": {
         "name": "Celkový solární podíl EV"
       },
+      "lifetime_ev_battery_share": {
+        "name": "Celkový podíl baterie EV"
+      },
+      "lifetime_ev_grid_share": {
+        "name": "Celkový podíl sítě EV"
+      },
       "vehicle_soc": {
         "name": "SOC vozidla"
       },

@@ -1567,6 +1567,21 @@ SENSOR_TYPES = [
         native_unit_of_measurement=PERCENTAGE,
         suggested_display_precision=1,
     ),
+    # (#793) the other two thirds of the split — battery-sourced kWh were in
+    # the solar-share denominator but visible nowhere, so "not solar" and
+    # "charged for" looked like the same number when they were two.
+    SensorEntityDescription(
+        key="lifetime_ev_battery_share",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=1,
+    ),
+    SensorEntityDescription(
+        key="lifetime_ev_grid_share",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=1,
+    ),
     SensorEntityDescription(
         key="vehicle_soc",
         device_class=SensorDeviceClass.BATTERY,

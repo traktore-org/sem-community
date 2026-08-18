@@ -1032,6 +1032,12 @@
       "lifetime_ev_solar_share": {
         "name": "累计车充太阳能平均占比"
       },
+      "lifetime_ev_battery_share": {
+        "name": "累计车充电池占比"
+      },
+      "lifetime_ev_grid_share": {
+        "name": "累计车充电网占比"
+      },
       "vehicle_soc": {
         "name": "车辆电量 (SOC)"
       },

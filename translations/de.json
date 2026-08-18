@@ -1032,6 +1032,12 @@
       "lifetime_ev_solar_share": {
         "name": "Gesamt EV-Solaranteil"
       },
+      "lifetime_ev_battery_share": {
+        "name": "Gesamt EV-Batterieanteil"
+      },
+      "lifetime_ev_grid_share": {
+        "name": "Gesamt EV-Netzanteil"
+      },
       "vehicle_soc": {
         "name": "Fahrzeug-SOC"
       },

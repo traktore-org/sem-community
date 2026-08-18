@@ -1032,6 +1032,12 @@
       "lifetime_ev_solar_share": {
         "name": "EV solandel totalt"
       },
+      "lifetime_ev_battery_share": {
+        "name": "EV batteriandel totalt"
+      },
+      "lifetime_ev_grid_share": {
+        "name": "EV nätandel totalt"
+      },
       "vehicle_soc": {
         "name": "Fordonets SOC"
       },

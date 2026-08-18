@@ -3100,6 +3100,16 @@ class EnergyCalculator:
             capacity * max(0.0, min(100.0, soc)) / 100.0
         )
 
+    def ev_battery_cost_rate(self) -> float:
+        """What one kWh drawn from the battery costs the EV session (#793).
+
+        The provenance pool's stored grid cost, pro rata — the same pool the
+        battery savings already price from. The EV session was the one
+        consumer that never asked, recording grid-charged battery energy
+        delivered to the car as free.
+        """
+        return self._battery_provenance.implied_cost_rate()
+
     def set_battery_grid_origin_share(self, share: float) -> None:
         """Tell autarky how much of the stored energy was bought.
 

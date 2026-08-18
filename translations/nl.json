@@ -1032,6 +1032,12 @@
       "lifetime_ev_solar_share": {
         "name": "Totaal EV Zonne Aandeel"
       },
+      "lifetime_ev_battery_share": {
+        "name": "Totaal EV Batterij Aandeel"
+      },
+      "lifetime_ev_grid_share": {
+        "name": "Totaal EV Net Aandeel"
+      },
       "vehicle_soc": {
         "name": "Voertuig SOC"
       },

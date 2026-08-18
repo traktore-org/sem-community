@@ -117,7 +117,8 @@ class TestTheFleetEntityAgreesWithItsChargers:
         h._storage = MagicMock()
         h._ev_device = None
         h._this_charger_power = lambda ev, p: 0.0
-        h._energy_calculator = SimpleNamespace(_import_rate=0.3)
+        h._energy_calculator = SimpleNamespace(
+            _import_rate=0.3, ev_battery_cost_rate=lambda: 0.0)
         return h
 
     def _cycle(self, h, *, fleet, per_charger):

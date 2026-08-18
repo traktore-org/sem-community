@@ -227,6 +227,32 @@ def demand_signature_changed(old, new) -> bool:
         return True
 
 
+def _lifetime_ev_shares(lifetime: dict) -> dict:
+    """The lifetime EV energy split, all three ways (#793).
+
+    Only the solar share used to be derived — battery-sourced kWh sat in the
+    denominator without appearing in any displayed number, so the "not solar"
+    remainder and the "actually charged for" fraction read as the same split
+    when they were two different numbers. Solar + battery + grid always sum
+    to ~100 of what was attributed.
+    """
+    total = lifetime.get("total_energy_kwh", 0)
+    if not total or total <= 0:
+        return {
+            "lifetime_ev_solar_share": 0,
+            "lifetime_ev_battery_share": 0,
+            "lifetime_ev_grid_share": 0,
+        }
+    return {
+        "lifetime_ev_solar_share": round(
+            lifetime.get("total_solar_kwh", 0) / total * 100, 1),
+        "lifetime_ev_battery_share": round(
+            lifetime.get("total_battery_kwh", 0) / total * 100, 1),
+        "lifetime_ev_grid_share": round(
+            lifetime.get("total_grid_kwh", 0) / total * 100, 1),
+    }
+
+
 def _price_changed(old_price, new_price) -> bool:
     """(#765) Shared-timestamp price change or new slots = news; a past
     slot expiring off the window = silence. Raises on old-format terms —
@@ -4112,9 +4138,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 result["lifetime_ev_solar"] = lifetime.get("total_solar_kwh", 0)
                 result["lifetime_ev_cost"] = lifetime.get("total_cost", 0)
                 result["lifetime_ev_sessions"] = lifetime.get("total_sessions", 0)
-                total = lifetime.get("total_energy_kwh", 0)
-                solar = lifetime.get("total_solar_kwh", 0)
-                result["lifetime_ev_solar_share"] = round(solar / total * 100, 1) if total > 0 else 0
+                # (#793) all three shares — battery-sourced kWh were invisible
+                result.update(_lifetime_ev_shares(lifetime))
 
             # Vehicle SOC (from per-cycle cache). Fall back to a per-charger SOC
             # when no GLOBAL vehicle_soc_entity is set but a charger has its own —

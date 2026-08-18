@@ -1032,6 +1032,12 @@
       "lifetime_ev_solar_share": {
         "name": "Cotă solară VE totală"
       },
+      "lifetime_ev_battery_share": {
+        "name": "Cotă baterie VE totală"
+      },
+      "lifetime_ev_grid_share": {
+        "name": "Cotă rețea VE totală"
+      },
       "vehicle_soc": {
         "name": "SOC vehicul"
       },

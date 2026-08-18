@@ -1071,6 +1071,12 @@
       "lifetime_ev_solar_share": {
         "name": "Lifetime EV Solar Share"
       },
+      "lifetime_ev_battery_share": {
+        "name": "Lifetime EV Battery Share"
+      },
+      "lifetime_ev_grid_share": {
+        "name": "Lifetime EV Grid Share"
+      },
       "vehicle_soc": {
         "name": "Vehicle SOC"
       },

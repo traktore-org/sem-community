@@ -1032,6 +1032,12 @@
       "lifetime_ev_solar_share": {
         "name": "EV solandel i alt"
       },
+      "lifetime_ev_battery_share": {
+        "name": "EV batteriandel i alt"
+      },
+      "lifetime_ev_grid_share": {
+        "name": "EV netandel i alt"
+      },
       "vehicle_soc": {
         "name": "Køretøjets SOC"
       },

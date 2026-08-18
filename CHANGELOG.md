@@ -13,6 +13,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🚗 **EV charging cost stops pretending the battery is free** — the session
+  accounting split the car's energy three ways (solar / grid / battery) and
+  then priced only the direct-grid slice: energy that reached the car via the
+  house battery cost nothing, even when that battery had been filled from the
+  grid at 03:00. On an install that grid-charges most nights this was most of
+  the story — PROD showed 0.043 CHF/kWh at a 66.4 % solar share, where the
+  non-solar remainder alone implies ~0.10. Battery-sourced energy is now
+  priced through the same provenance pool the battery savings already use:
+  a new `implied_cost_rate` (the exact dual of the savings rate — what a
+  discharged kWh costs plus what it saves is the import rate) charges the
+  stored grid energy at what was actually paid for it, and solar-charged or
+  unknown-origin energy stays free. The split is also finally visible: two
+  new sensors (`lifetime_ev_battery_share`, `lifetime_ev_grid_share`, all 16
+  languages) and the EV Charging Economics card now show solar / battery /
+  grid side by side, so "not solar" and "charged for" stop reading as the
+  same number. `lifetime_ev_cost` is an accumulator — the rate is correct
+  going forward; the kWh already recorded are not re-priced. (#793)
+
 - 📊 **Chart legends total what the chart shows** — under a "This Year" filter
   the savings chart's legend read "Solar Savings: 105 CHF" while the bars above
   it plotted a year that sums to ~979: the legend always showed the *newest
