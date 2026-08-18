@@ -55,7 +55,10 @@ class TestStopNotTaking:
             await rec.reconcile_and_apply(_off(), a, ChargerPower(charger_id="wb", power_w=4500), now=float(i))
         assert rec._stop_commanded_while_drawing == 3
         assert rec._last_desired == "OFF"
-        assert "DISABLE" in rec._last_actions
+        # (#763 round 3) the write itself now lands once per dwell — the
+        # LAST cycle's actions read NONE while the intent held. The
+        # counter above and the awaited call below still prove SEM is
+        # commanding the stop.
         a.command_disable.assert_awaited()  # SEM IS issuing the stop
 
     @pytest.mark.asyncio

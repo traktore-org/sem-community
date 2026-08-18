@@ -125,6 +125,14 @@ STOP_WAR_QUIET_RESET_S: float = 3600.0
 # ceasefire doubles the stand-down (capped), so the handshake-abort rate
 # decays instead of settling at one abort per backoff forever.
 STOP_WAR_BACKOFF_MAX_FACTOR: int = 8
+# (#763 round 3, evcc parity) evcc floors every corrective contactor
+# command at chargerSwitchDuration = 60 s — its syncCharger logs a
+# self-start, re-syncs its own belief, and lets the NEXT control tick
+# re-disable. We re-issued DISABLE every 10-s cycle while a burst
+# lasted: redundant bridge writes, each a fresh chance to abort the
+# car's handshake. One DISABLE per dwell; the war accounting (edges,
+# ceasefire) is unaffected.
+STOP_REASSERT_DWELL_S: float = 60.0
 
 
 class ChargerReconciler:
@@ -200,6 +208,7 @@ class ChargerReconciler:
         self._stop_war_draw_seen: bool = False
         self._stop_war_reported: bool = False
         self._stop_war_ceasefires: int = 0
+        self._last_disable_at: float = float("-inf")
 
     def snapshot_war(self, now: float) -> dict:
         """(#763 beta.7) The war state for the diagnostics download.
@@ -222,6 +231,13 @@ class ChargerReconciler:
             "last_desired": self._last_desired,
             "last_actions": list(self._last_actions),
         }
+
+    def _gated_disable(self, now: float) -> List[Action]:
+        """One DISABLE per STOP_REASSERT_DWELL_S (#763 round 3)."""
+        if now - self._last_disable_at < STOP_REASSERT_DWELL_S:
+            return [Action(ActionKind.NONE)]
+        self._last_disable_at = now
+        return [Action(ActionKind.DISABLE)]
 
     def _end_stop_war(self) -> None:
         self._stop_war_rounds = 0
@@ -306,21 +322,22 @@ class ChargerReconciler:
                     # open it. Issuing DISABLE every cycle is futile and
                     # hides the real cause from the user. Surface it.
                     return [Action(ActionKind.REPORT_ENABLE_BLOCKED)]
-                # Row 1 — user-explicit OFF: open immediately, no grace.
-                return [Action(ActionKind.DISABLE)]
+                # Row 1 — user-explicit OFF: open immediately, no grace —
+                # then re-assert at the dwell, not every cycle.
+                return self._gated_disable(now)
             # #552 — draw appeared AFTER idle had settled: not our wind-down
             # but a rogue self-start (KEBA auto-start, #315). Open the
             # contactor immediately, re-asserted every cycle it persists —
             # parity with the OFF row. The grace below stays reserved for
             # winding down a session SEM itself just stopped.
             if self._idle_settled:
-                return [Action(ActionKind.DISABLE)]
+                return self._gated_disable(now)
             # IDLE + drawing — flicker hold then confirm (rows 3-4).
             self._consecutive_idle_count += 1
             self._consecutive_idle_count = min(self._consecutive_idle_count, self._idle_disable_threshold)
             if self._consecutive_idle_count < self._idle_disable_threshold:
                 return [Action(ActionKind.NONE)]
-            return [Action(ActionKind.DISABLE)]
+            return self._gated_disable(now)
 
         # desired is CHARGE — reset idle grace, and end any stop war: SEM
         # wanting the box to charge dissolves the disagreement (#763).
@@ -422,7 +439,17 @@ class ChargerReconciler:
         self._last_actions = [a.kind.name for a in actions]
         self._last_apply_at = now
         _drawing = bool(observed.charging or observed.self_charging)
-        if any(a.kind is ActionKind.DISABLE for a in actions) and _drawing:
+        # (#763 round 3) Counts cycles the stop INTENT holds against a
+        # live draw — not emitted DISABLEs. With the reassert dwell, the
+        # write lands once a minute; the box defying it is still one
+        # defiance per cycle, and the "stop is not taking" warning must
+        # keep its ~3-cycle timing.
+        _stop_intent_held = (
+            any(a.kind is ActionKind.DISABLE for a in actions)
+            or (desired in (DesiredState.OFF, DesiredState.IDLE)
+                and now - self._last_disable_at < STOP_REASSERT_DWELL_S)
+        )
+        if _stop_intent_held and _drawing:
             self._stop_commanded_while_drawing += 1
             if self._stop_commanded_while_drawing in (3, 12, 60):
                 _LOGGER.warning(

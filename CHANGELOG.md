@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🚗 **One stop command per minute, not six per burst** (#763 round 3,
+  measured against evcc) — while a self-started charge persisted, the
+  reconciler re-issued its stop every 10-second cycle: redundant writes
+  through the user's charger bridge, each a fresh chance to abort the car's
+  handshake mid-negotiation. evcc floors every corrective contactor command
+  at 60 s (`chargerSwitchDuration`) — its sync layer logs a self-start,
+  re-syncs its own belief, and lets the next control tick act. SEM now does
+  the same: the first DISABLE is immediate, re-asserts come once per 60 s
+  dwell, and the war accounting (rounds, ceasefire, escalating backoff — all
+  of which evcc lacks; it fights forever) is unaffected. Two war-round test
+  timings updated from their fast-KEBA-era 20-second spacing to the honest
+  timescale.
+
 - 🧪 **The HA-2026.8 CI rung is now blocking — green means the HA you
   actually run** (developer-facing) — #787 built the ladder; this flips its
   top rung. The 3.14 → HA 2026.8.2 leg (what HA-PROD runs) had 37 failures
