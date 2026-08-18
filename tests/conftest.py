@@ -539,6 +539,29 @@ def charging_state_scenarios():
 
 
 # ============================================================================
+@pytest.fixture(autouse=True)
+def _frame_helper_shim(monkeypatch):
+    """(#791) HA 2026.x's DataUpdateCoordinator.__init__ reports usage
+    through the frame helper, which raises "Frame helper not set up" in
+    every test that builds a real SEMCoordinator on a MagicMock hass —
+    36 of the 3.14 rung's 37 failures, one cause. Setting a mock hass on
+    the helper only moves the crash (report_usage then hops onto
+    ``hass.loop`` via run_callback_threadsafe), so when NOTHING has set
+    the helper up, report_usage itself becomes a no-op: deprecation
+    telemetry has no meaning against a MagicMock. phacc's real ``hass``
+    fixture sets the helper up itself — those tests keep the real
+    report_usage and its guard. On the 3.12/HA 2025.1.4 floor
+    ``__init__`` never calls report_usage and the shim is inert.
+    monkeypatch restores everything per test.
+    """
+    from homeassistant.helpers import frame
+
+    holder = getattr(frame, "_hass", None)
+    if holder is not None and getattr(holder, "hass", "absent") is None:
+        monkeypatch.setattr(
+            frame, "report_usage", lambda *a, **k: None)
+
+
 # pytest-homeassistant-custom-component framework fixtures
 # ============================================================================
 # Legacy MagicMock-based fixture has been renamed ``mock_hass``. New tests

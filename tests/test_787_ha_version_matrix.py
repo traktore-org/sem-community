@@ -166,3 +166,19 @@ def test_the_newest_tested_ha_is_not_a_year_behind():
         f"{months_behind} months of API drift that no test ever sees. "
         "Add the matrix leg that uses it."
     )
+
+
+def test_791_the_prod_ha_rung_is_blocking():
+    """(#791) The 3.14 → HA 2026.8.2 rung — what PROD runs — must stay
+    BLOCKING. Only the 3.13 rung (pytest-asyncio pin still owed) may be
+    advisory. A widened exemption here silently reopens the #787 blind
+    spot at the release boundary."""
+    from pathlib import Path
+    wf = (
+        Path(__file__).resolve().parent.parent
+        / ".github" / "workflows" / "tests.yml"
+    ).read_text()
+    assert "continue-on-error: ${{ matrix.python-version == '3.13' }}" in wf
+    assert "python-version != '3.12'" not in wf, (
+        "the old blanket exemption is back — 3.14 must block (#791)"
+    )

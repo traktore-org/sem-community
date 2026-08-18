@@ -13,6 +13,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🧪 **The HA-2026.8 CI rung is now blocking — green means the HA you
+  actually run** (developer-facing) — #787 built the ladder; this flips its
+  top rung. The 3.14 → HA 2026.8.2 leg (what HA-PROD runs) had 37 failures
+  that turned out to be two causes, not thirty-seven: HA 2026.x's
+  DataUpdateCoordinator reports usage through the frame helper, which raises
+  in every test that builds a real coordinator on a mock hass (36 of the 37
+  — one autouse conftest shim no-ops `report_usage` only when nothing has
+  set the helper up; real-hass tests keep the real guard, and the 2025.1
+  floor never calls it); and `label_entities` moved into the template
+  engine's LabelExtension (the #670 test's oracle now goes through a
+  rendered template — the public surface — on both HAs). The rung's
+  blocking state is pinned by a guard so it cannot silently go advisory
+  again; 3.13 stays advisory until its pytest-asyncio pin is right. Local
+  3.14 run: 7476 passed, 1 skipped. (#791)
+
 - 🚗 **The stop-war ceasefire stops losing to slow-retrying cars** (#763,
   beta.7 recurrence) — the ceasefire counted stop→redraw rounds but forgot
   them after 10 quiet minutes, on the theory that quiet means the box gave

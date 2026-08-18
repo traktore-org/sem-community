@@ -28,7 +28,11 @@ jobs:
     # and a red board would get worked around rather than read. Flip
     # continue-on-error off rung by rung as each one comes clean — that flip is
     # the actual close-out of #787.
-    continue-on-error: ${{ matrix.python-version != '3.12' }}
+    # (#791) 3.14/HA 2026.8.2 — what PROD runs — is BLOCKING as of the
+    # frame-helper shim + label_entities oracle fix. 3.13 stays advisory
+    # until its pytest-asyncio/event-loop pin is right (its 5455 "errors"
+    # are one line, not 5455 tests).
+    continue-on-error: ${{ matrix.python-version == '3.13' }}
     strategy:
       fail-fast: false
       matrix:
