@@ -67,6 +67,11 @@ class ObservedState:
     unavailable/unknown (Wallbox locked / eco-smart) — SEM can't drive
     it, so charging is silently impossible until surfaced (#536)."""
     stop_controllable: bool = True
+    connected: bool = True
+    """Whether the car is plugged in. Disconnect is the one TRUE end of
+    a stop war (#763) — the handshake partner left, so the war memory
+    resets. Defaults True: a charger that cannot say keeps the old
+    behavior."""
     """False when NO configured mechanism can open the contactor (#627):
     no stop service, no charge-mode select, no start/stop entity, no
     ``<domain>.disable``, and a current entity whose ``min`` is above 0 so
@@ -109,7 +114,17 @@ DEFAULT_IDLE_DISABLE_THRESHOLD: int = 4
 # of six per minute), and a quiet spell means the box gave up on its own.
 STOP_WAR_ROUNDS: int = 3
 STOP_WAR_BACKOFF_S: float = 1800.0
-STOP_WAR_QUIET_RESET_S: float = 600.0
+# (#763 beta.7 recurrence) 3600, not 600: quiet is exactly what a
+# slow-retrying car looks like BETWEEN retries. onkelfu's Mercedes came
+# back every ~717 s — slower than the old 600 s reset — so every burst
+# counted from zero and the ceasefire never engaged. A war ends on
+# disconnect, on SEM wanting CHARGE, or on an HOUR of true quiet; not on
+# a gap shorter than a car's retry period.
+STOP_WAR_QUIET_RESET_S: float = 3600.0
+# A war that survives its first ceasefire is persistent: each further
+# ceasefire doubles the stand-down (capped), so the handshake-abort rate
+# decays instead of settling at one abort per backoff forever.
+STOP_WAR_BACKOFF_MAX_FACTOR: int = 8
 
 
 class ChargerReconciler:
@@ -184,10 +199,42 @@ class ChargerReconciler:
         self._stop_war_backoff_until: float = 0.0
         self._stop_war_draw_seen: bool = False
         self._stop_war_reported: bool = False
+        self._stop_war_ceasefires: int = 0
+
+    def snapshot_war(self, now: float) -> dict:
+        """(#763 beta.7) The war state for the diagnostics download.
+
+        onkelfu's dump carried the charge-stability giveup fields (all
+        empty — a different mechanism) and nothing from here, so the
+        machinery that owns the stop war was invisible and looked
+        disengaged. Read-only.
+        """
+        return {
+            "rounds": self._stop_war_rounds,
+            "ceasefires": self._stop_war_ceasefires,
+            "backoff_remaining_s": round(
+                max(0.0, self._stop_war_backoff_until - now), 1),
+            "last_round_ago_s": round(
+                now - self._stop_war_last_round_at, 1)
+                if self._stop_war_last_round_at else None,
+            "stop_commanded_while_drawing":
+                self._stop_commanded_while_drawing,
+            "last_desired": self._last_desired,
+            "last_actions": list(self._last_actions),
+        }
+
+    def _end_stop_war(self) -> None:
+        self._stop_war_rounds = 0
+        self._stop_war_backoff_until = 0.0
+        self._stop_war_draw_seen = False
+        self._stop_war_ceasefires = 0
 
     def reconcile(self, desired: DesiredState, amps: int,
                   observed: ObservedState, now: float) -> List[Action]:
         """Pure decision table (spec rows 1-8, first match wins)."""
+        # (#763) Unplugged = the war is over — its other party left.
+        if not observed.connected:
+            self._end_stop_war()
 
         # OFF / IDLE share the convergence target (contactor open). The
         # only difference is the flicker grace, which OFF never gets.
@@ -213,6 +260,7 @@ class ChargerReconciler:
                         and now - self._stop_war_last_round_at
                         > STOP_WAR_QUIET_RESET_S):
                     self._stop_war_rounds = 0
+                    self._stop_war_ceasefires = 0
                 return [Action(ActionKind.NONE)]
             if not observed.stop_controllable:
                 # #627 — SEM has no mechanism that can open this contactor.
@@ -242,8 +290,13 @@ class ChargerReconciler:
                     self._stop_war_rounds += 1
                     self._stop_war_last_round_at = now
                     if self._stop_war_rounds > STOP_WAR_ROUNDS:
+                        self._stop_war_ceasefires += 1
+                        factor = min(
+                            2 ** (self._stop_war_ceasefires - 1),
+                            STOP_WAR_BACKOFF_MAX_FACTOR,
+                        )
                         self._stop_war_backoff_until = (
-                            now + STOP_WAR_BACKOFF_S)
+                            now + STOP_WAR_BACKOFF_S * factor)
                         return [Action(ActionKind.REPORT_STOP_WAR)]
 
             if desired is DesiredState.OFF:
@@ -271,9 +324,7 @@ class ChargerReconciler:
 
         # desired is CHARGE — reset idle grace, and end any stop war: SEM
         # wanting the box to charge dissolves the disagreement (#763).
-        self._stop_war_rounds = 0
-        self._stop_war_backoff_until = 0.0
-        self._stop_war_draw_seen = False
+        self._end_stop_war()
 
         # desired is CHARGE — reset idle grace.
         #
@@ -597,6 +648,7 @@ def observe(adapter, power) -> ObservedState:
         setpoint_a=setpoint,
         self_charging=adapter.is_self_charging(power),
         power_w=float(getattr(power, "power_w", 0.0) or 0.0),
+        connected=bool(getattr(power, "connected", True)),
         enabled=enabled,
         enable_controllable=controllable,
         stop_controllable=stop_ok,

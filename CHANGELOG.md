@@ -13,6 +13,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🚗 **The stop-war ceasefire stops losing to slow-retrying cars** (#763,
+  beta.7 recurrence) — the ceasefire counted stop→redraw rounds but forgot
+  them after 10 quiet minutes, on the theory that quiet means the box gave
+  up. onkelfu's Mercedes retries every ~12 minutes: slower than the reset,
+  so every burst counted from zero, the ceasefire never engaged, and the
+  car latched its charging fault again. Quiet is exactly what a
+  slow-retrying car looks like between attempts — the horizon is now an
+  hour, a disconnect ends the war outright (the handshake partner left),
+  and a war that survives its first ceasefire doubles each following
+  stand-down (capped ×8) so the handshake-abort rate decays instead of
+  settling at one abort per half-hour forever. Two side gaps closed with
+  it: the reconciler's war state now rides the diagnostics download (the
+  dump showed only the — empty, unrelated — charge-stability give-up
+  fields, which read as "the machinery never engaged"), and the startup
+  "entities missing, commands will silently no-op" warning is deferred
+  120 s past warm-up — it fired on a healthy wallbox whose integration
+  simply hadn't loaded yet, and sent the diagnosis down a dead end.
+
 - ☀️ **The curtailment probe stops measuring its own blindness** — two holes
   found auditing the shipped probe against #743's own worked example (5 kW
   forecast, 1 kW delivered, 0 export). First, suspicion used the *dampened*

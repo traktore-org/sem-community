@@ -221,6 +221,17 @@ async def async_get_config_entry_diagnostics(
             import time as _time
             ev_stability["stability_timers"] = stab.snapshot_timers(
                 _time.monotonic())
+        # (#763 beta.7) The reconciler's stop-war state — the mechanism
+        # that actually owns start/stop cycling. Its absence here sent
+        # the reporter to the (empty) charge-stability giveup fields.
+        recs = getattr(coordinator, "_charger_reconcilers", None) or {}
+        if recs:
+            import time as _time
+            ev_stability["stop_war"] = {
+                cid: rec.snapshot_war(_time.monotonic())
+                for cid, rec in recs.items()
+                if hasattr(rec, "snapshot_war")
+            }
     except Exception:  # noqa: BLE001 — diagnostics must never fail the download
         ev_stability["error"] = "collection failed"
 

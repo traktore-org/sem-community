@@ -655,17 +655,20 @@ def test_ceasefire_expires_into_one_probe():
 
 
 def test_quiet_spell_resets_the_war_counter():
+    # (#763 beta.7) The quiet horizon is an HOUR now, not 15 minutes —
+    # onkelfu's Mercedes retried every ~12 min, so a sub-hour "quiet"
+    # is just a slow-retrying car between attempts, not a surrendered
+    # box. Same scenario, honest timescale.
     rec = _rec()
     _war_round(rec, 10.0)
     _war_round(rec, 30.0)
-    # 15 quiet minutes: the box gave up on its own — not a war anymore.
-    rec.reconcile(DesiredState.IDLE, 0, _obs(charging=False), now=1000.0)
-    assert _war_round(rec, 1010.0) == [Action(ActionKind.DISABLE)]
-    assert _war_round(rec, 1030.0) == [Action(ActionKind.DISABLE)]
+    rec.reconcile(DesiredState.IDLE, 0, _obs(charging=False), now=4000.0)
+    assert _war_round(rec, 4010.0) == [Action(ActionKind.DISABLE)]
+    assert _war_round(rec, 4030.0) == [Action(ActionKind.DISABLE)]
     # Only the third round of the NEW episode may trigger the ceasefire —
     # proving the old rounds aged out.
     actions = rec.reconcile(
-        DesiredState.IDLE, 0, _obs(charging=True, power=4100.0), now=1050.0)
+        DesiredState.IDLE, 0, _obs(charging=True, power=4100.0), now=4050.0)
     assert actions == [Action(ActionKind.DISABLE)]
 
 
@@ -694,3 +697,92 @@ def test_user_off_gets_the_same_protection():
         DesiredState.OFF, 0, _obs(charging=True, power=4100.0), now=70.0)
     assert Action(ActionKind.DISABLE) not in actions
     assert actions[0].kind is ActionKind.REPORT_STOP_WAR
+
+
+# ── #763 beta.7 recurrence (onkelfu, 18.08): the quiet-reset raced the car ───
+# The ceasefire was tuned on the KEBA's rapid retries (rounds seconds
+# apart). onkelfu's Mercedes retries every ~12 minutes — SLOWER than the
+# old 600 s quiet-reset — so every burst counted from zero, the ceasefire
+# never engaged, and the car faulted again on beta.7 (two STOP×3 warnings
+# 717 s apart in his diagnostics). Quiet is exactly what a slow-retrying
+# car looks like between retries; only a LONG quiet, a disconnect, or SEM
+# itself wanting CHARGE ends a war.
+
+
+def _obs_conn(connected, charging=False, power=0.0):
+    return ObservedState(charging=charging, setpoint_a=0,
+                         self_charging=False, power_w=power,
+                         connected=connected)
+
+
+def test_a_slow_retrying_car_still_reaches_ceasefire():
+    rec = _rec()
+    assert _war_round(rec, 0.0) == [Action(ActionKind.DISABLE)]
+    assert _war_round(rec, 717.0) == [Action(ActionKind.DISABLE)]
+    assert _war_round(rec, 1434.0) == [Action(ActionKind.DISABLE)]
+    actions = rec.reconcile(
+        DesiredState.IDLE, 0, _obs(charging=True, power=4100.0), now=2151.0)
+    assert Action(ActionKind.DISABLE) not in actions
+    assert actions[0].kind is ActionKind.REPORT_STOP_WAR
+
+
+def test_disconnect_ends_the_war():
+    """Unplugging is the one true end of a war — the handshake partner
+    left. A fresh plug-in must count from zero."""
+    rec = _rec()
+    for t in (10.0, 30.0, 50.0):
+        _war_round(rec, t)
+    rec.reconcile(DesiredState.IDLE, 0, _obs_conn(False), now=60.0)
+    # Replugged: three NEW rounds before any ceasefire.
+    assert _war_round(rec, 100.0) == [Action(ActionKind.DISABLE)]
+    assert _war_round(rec, 120.0) == [Action(ActionKind.DISABLE)]
+    assert _war_round(rec, 140.0) == [Action(ActionKind.DISABLE)]
+    actions = rec.reconcile(
+        DesiredState.IDLE, 0, _obs(charging=True, power=4100.0), now=160.0)
+    assert actions[0].kind is ActionKind.REPORT_STOP_WAR
+
+
+def test_consecutive_ceasefires_escalate_the_backoff():
+    """A war that survives its first ceasefire is persistent — each
+    further ceasefire doubles the stand-down, so the abort rate decays
+    instead of settling at one abort per backoff forever."""
+    rec = _rec()
+    for t in (10.0, 30.0, 50.0):
+        _war_round(rec, t)
+    rec.reconcile(DesiredState.IDLE, 0,
+                  _obs(charging=True, power=4100.0), now=70.0)  # ceasefire 1
+    # Probe after the first 1800 s window…
+    a = rec.reconcile(DesiredState.IDLE, 0,
+                      _obs(charging=True, power=4100.0), now=70.0 + 1801.0)
+    assert a == [Action(ActionKind.DISABLE)]
+    rec.reconcile(DesiredState.IDLE, 0, _obs(charging=False),
+                  now=70.0 + 1810.0)                              # stop takes
+    # …box returns: ceasefire 2, now 2× long.
+    a = rec.reconcile(DesiredState.IDLE, 0,
+                      _obs(charging=True, power=4100.0), now=70.0 + 1900.0)
+    assert a[0].kind is ActionKind.REPORT_STOP_WAR
+    inside_2x = 70.0 + 1900.0 + 1801.0     # would have expired at 1× pace
+    a = rec.reconcile(DesiredState.IDLE, 0,
+                      _obs(charging=True, power=4100.0), now=inside_2x)
+    assert Action(ActionKind.DISABLE) not in a
+    after_2x = 70.0 + 1900.0 + 3601.0
+    a = rec.reconcile(DesiredState.IDLE, 0,
+                      _obs(charging=True, power=4100.0), now=after_2x)
+    assert a == [Action(ActionKind.DISABLE)]
+
+
+def test_war_state_is_snapshotable_for_diagnostics():
+    """(#763 beta.7) onkelfu's dump showed empty charge_stability giveup
+    fields and NOTHING from the reconciler — the machinery that actually
+    owns the stop war was invisible, and he reasonably concluded it never
+    engaged. The war state must ride the diagnostics download."""
+    rec = _rec()
+    for t in (10.0, 30.0, 50.0):
+        _war_round(rec, t)
+    rec.reconcile(DesiredState.IDLE, 0,
+                  _obs(charging=True, power=4100.0), now=70.0)  # ceasefire
+    snap = rec.snapshot_war(now=100.0)
+    assert snap["rounds"] == 4
+    assert snap["ceasefires"] == 1
+    assert snap["backoff_remaining_s"] == pytest.approx(1770.0)
+    assert snap["stop_commanded_while_drawing"] >= 0

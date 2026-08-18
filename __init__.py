@@ -258,6 +258,43 @@ _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
 })
 
 
+def _warn_missing_charger_entities(hass, charger_name, charger_id, to_check):
+    """Warn about configured charger entity_ids absent from the state
+    registry — DEFERRED past HA's warm-up (#763 beta.7).
+
+    At SEM's setup many upstream integrations have not loaded yet; the
+    old registration-time check declared onkelfu's (perfectly healthy)
+    wallbox switch missing and sent the diagnosis down a dead end. Run
+    after warm-up: entities still missing warn exactly as before —
+    that's the real #315/#357/#462 symptom — and entities that appeared
+    in the meantime log the recovery at DEBUG only. Returns the
+    still-missing pairs.
+    """
+    missing = []
+    for _attr, _eid in to_check:
+        if not _eid:
+            continue
+        if hass.states.get(_eid) is None:
+            missing.append((_attr, _eid))
+    if missing:
+        _LOGGER.warning(
+            "EV charger '%s' (%s): %d configured entity ID(s) "
+            "missing from HA's state registry — SEM commands to "
+            "these silently no-op. Likely cause: the upstream "
+            "integration renamed entities after a version upgrade "
+            "(common with Wallbox/KEBA/Easee on HA core upgrades). "
+            "Affected: %s",
+            charger_name, charger_id, len(missing),
+            ", ".join(f"{a}={e}" for a, e in missing),
+        )
+    else:
+        _LOGGER.debug(
+            "EV charger '%s' (%s): all configured entity IDs present "
+            "after warm-up", charger_name, charger_id,
+        )
+    return missing
+
+
 def _coerce_switch_on(value) -> bool:
     """Interpret a set_option value as a switch on/off intent.
 
@@ -2026,23 +2063,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 ("ev_start_stop_entity", _cfg("ev_start_stop_entity")),
                 ("ev_charge_mode_entity", _cfg("ev_charge_mode_entity")),
             ]
-            _missing = []
-            for _attr, _eid in _to_check:
-                if not _eid:
-                    continue
-                if hass.states.get(_eid) is None:
-                    _missing.append((_attr, _eid))
-            if _missing:
-                _LOGGER.warning(
-                    "EV charger '%s' (%s): %d configured entity ID(s) "
-                    "missing from HA's state registry — SEM commands to "
-                    "these silently no-op. Likely cause: the upstream "
-                    "integration renamed entities after a version upgrade "
-                    "(common with Wallbox/KEBA/Easee on HA core upgrades). "
-                    "Affected: %s",
-                    charger_name, charger_id, len(_missing),
-                    ", ".join(f"{a}={e}" for a, e in _missing),
-                )
+            # (#763 beta.7) Deferred past warm-up: at setup time the
+            # upstream integration may simply not have loaded yet, and a
+            # false "will silently no-op" here sent a real diagnosis down
+            # a dead end. 120 s is comfortably past integration setup.
+            def _deferred_entity_check(_now, _name=charger_name,
+                                       _cid=charger_id, _chk=list(_to_check)):
+                _warn_missing_charger_entities(hass, _name, _cid, _chk)
+
+            from homeassistant.helpers.event import async_call_later
+            async_call_later(hass, 120, _deferred_entity_check)
 
             # Also register in load management for peak shedding (#436:
             # pass per-charger id + name so each ev_chargers[i] gets its
