@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.0.0-beta.8] — 18.08.2026
+
 - 🚗 **One stop command per minute, not six per burst** (#763 round 3,
   measured against evcc) — while a self-started charge persisted, the
   reconciler re-issued its stop every 10-second cycle: redundant writes
