@@ -13,6 +13,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ☀️ **The curtailment probe stops measuring its own blindness** — two holes
+  found auditing the shipped probe against #743's own worked example (5 kW
+  forecast, 1 kW delivered, 0 export). First, suspicion used the *dampened*
+  forecast — but the dampening factor learns from today's measured
+  production, which a curtailed day clamps to consumption, so on exactly the
+  day the probe exists for, its yardstick sank toward what the inverter
+  showed. The 1.8 half fixed this class one layer up ("every dampened
+  consumer under-plans exactly the hidden kilowatts the probe reveals") and
+  the probe is also a dampened consumer; suspicion now reads the raw sky.
+  Second, the hidden-room test refused to probe unless the hidden power
+  covered the charger's whole minimum — a cost guard in the one scenario
+  where the cost sign is inverted. On a 3-phase 6 A charger the reporter's
+  literal example (4000 W hidden vs 4140 W needed) was vetoed over 140 W,
+  even when the inverter explicitly reported its export limit active. The
+  probe may now overdraw the hidden room by up to 10 % of the charger floor
+  — importing ~140 W to unlock 4 kW of otherwise-curtailed solar, worst
+  case ~4 ct/h, bounded by design. Deliberately no new mode and no new
+  knob: the probe's opt-in is the consent, and the trade is equally right
+  at negative prices and on zero-feed-in installs at any price. (#743)
+
 # [2.0.0-beta.7] — 18.08.2026
 
 - 📈 **ROI stops presenting a guessed install date as a measurement** —

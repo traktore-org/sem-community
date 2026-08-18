@@ -326,7 +326,16 @@ exactly that instrument:
 
 1. **Suspicion** — the solar forecast says far more than the array delivers,
    export is pinned at ~0, and production ≈ consumption (the curtailment
-   signature; a merely cloudy day fails the forecast term). Brands that
+   signature; a merely cloudy day fails the forecast term). The forecast is
+   read **raw**, not dampened — the dampening factor learns from today's
+   measured production, which a curtailed day clamps to consumption, so on
+   exactly the day the probe exists for the dampened value would sink toward
+   what the inverter shows. The probe may also start when the hidden power
+   falls **slightly short of the charger's minimum** (up to 10 % of it):
+   importing ~140 W to unlock 4 kW of otherwise-thrown-away solar is the
+   right trade whenever curtailment is real — negative prices, or a
+   zero-feed-in install at any price. Worst case ≈ 4 ct/h, bounded by
+   design. Brands that
    publish their export limit sharpen this: SEM auto-detects the limit
    entity (Huawei active power control, GoodWe grid export limit, SolaX
    export control, Victron max feed-in, …) — "limit active" fast-tracks the

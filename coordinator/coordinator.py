@@ -8645,16 +8645,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 self._curtailment_last = {"state": probe.state, "grant_w": 0.0}
                 return 0.0
 
-            # Dampened forecast "power now" — no forecast, no suspicion.
+            # RAW forecast "power now" — no forecast, no suspicion.
+            # Deliberately NOT dampened (#743 follow-up): the dampening
+            # factor is computed live from today's actual-vs-forecast
+            # ratio, and a curtailed day's actual is clamped to
+            # consumption — so on exactly the day the probe exists for,
+            # the dampened value sinks toward what the inverter shows
+            # and the probe measures its own blindness. Same class the
+            # 1.8 half fixed one layer up ("every dampened consumer
+            # under-plans exactly the hidden kilowatts the probe
+            # reveals") — the probe is also a dampened consumer.
+            # Optimism costs one bounded failed probe, which is the
+            # probe's whole design.
             expected_w = 0.0
             try:
                 forecast = self._cycle_forecast
                 if forecast.available:
-                    expected_w = float(
-                        self._forecast_tracker.apply_dampening(
-                            forecast.power_now_w / 1000.0,
-                        ) * 1000.0
-                    )
+                    expected_w = float(forecast.power_now_w)
             except Exception:  # noqa: BLE001
                 expected_w = 0.0
 

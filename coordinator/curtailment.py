@@ -49,6 +49,14 @@ PROBE_MARGIN_W = 200.0       # grant a little above the floor
 PROBE_WINDOW_S = 120.0       # production must follow within this
 FOLLOW_RATIO = 0.6           # "followed" = ≥60 % of the granted draw
 COOLDOWN_S = 900.0           # failed probe blocks re-probing 15 min
+# The probe may overdraw the hidden room by this fraction of the charger
+# floor (#743 follow-up): the room test was a cost guard applied in the
+# one scenario where the cost sign is inverted — importing ~140 W to
+# unlock 4 kW of otherwise-curtailed solar is the right trade whenever
+# curtailment is real (negative prices, or a zero-feed-in install at any
+# price). Bounded: worst case ≈ floor × this × import rate ≈ 4 ct/h.
+# Deliberately NOT a mode or a knob — the probe's opt-in is the consent.
+SHORTFALL_FRACTION = 0.10
 STEP_BONUS_W = 690.0         # one ladder step (1 A × 3 × 230 V)
 STEP_WINDOW_S = 90.0         # a step must be followed within this
 STEP_RETRY_S = 600.0         # plateau: retry a step this often
@@ -101,8 +109,9 @@ class CurtailmentProbe:
             return False  # power is leaving the house — no limit active
         if i.production_w > SHORTFALL_RATIO * i.expected_w:
             return False  # the array delivers what the sky allows
-        if i.expected_w - i.production_w < i.probe_floor_w:
-            return False  # not enough hidden room to start a charger
+        shortfall = SHORTFALL_FRACTION * i.probe_floor_w
+        if i.expected_w - i.production_w < i.probe_floor_w - shortfall:
+            return False  # not enough hidden room, even overdrawing a bit
         if i.export_limited is False:
             return False  # the inverter says no limit is active
         if i.export_limited is True:
@@ -117,6 +126,19 @@ class CurtailmentProbe:
 
     def _room_w(self, i: ProbeInputs) -> float:
         return max(0.0, i.expected_w - i.production_w)
+
+    def _probe_grant(self, i: ProbeInputs) -> float:
+        """The ignition grant. It must REACH the charger floor or
+        ``decide()`` can never start the charger it was granted for —
+        so the cap is room + the bounded shortfall, not room alone.
+        Harvest steps stay room-bounded: climbing past the sky's own
+        number is never right, and by then the risen production is
+        real surplus."""
+        shortfall = SHORTFALL_FRACTION * i.probe_floor_w
+        return min(
+            i.probe_floor_w + PROBE_MARGIN_W,
+            self._room_w(i) + shortfall,
+        )
 
     # ── tick ─────────────────────────────────────────────────────
 
@@ -143,9 +165,7 @@ class CurtailmentProbe:
                     self.state = "probing"
                     self._probe_started = now
                     self._probe_baseline_w = i.production_w
-                    return min(
-                        i.probe_floor_w + PROBE_MARGIN_W, self._room_w(i),
-                    )
+                    return self._probe_grant(i)
             else:
                 self._suspect_since = None
                 self.state = "idle"
@@ -169,7 +189,7 @@ class CurtailmentProbe:
                 self._cooldown_until = now + COOLDOWN_S
                 self._suspect_since = None
                 return 0.0
-            return min(i.probe_floor_w + PROBE_MARGIN_W, self._room_w(i))
+            return self._probe_grant(i)
 
         if self.state == "harvest":
             if i.export_w > EXPORT_EPS_W:
