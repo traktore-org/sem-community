@@ -26,6 +26,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   timings updated from their fast-KEBA-era 20-second spacing to the honest
   timescale.
 
+- 🩹 **The dashboard renders again on HA 2025.7+ — every card was "Custom
+  element doesn't exist"** (#799, @HorizonKane, HA 2026.8.2) — a fresh install
+  showed nothing but Konfigurationsfehler tiles: `sem-price-card`,
+  `sem-solar-card`, `sem-tab-header` and every other sem-* card failed to load.
+  SEM served its card bundle by registering a static path with
+  `hass.http.register_static_path`, a blocking sync call HA **removed in
+  2025.7**. On any HA at or past that the call raised `AttributeError`, which a
+  bare `except: pass` swallowed as "already registered from a previous load" —
+  so the route serving `sem-cards.js` was never created, its URL 404'd, and no
+  card could define. Now registered through the current
+  `async_register_static_paths`, with the swallow split so a real failure logs
+  a warning instead of vanishing. New bug class #48 (a removed host API called
+  past its removal, its failure hidden by a too-broad `except`) with a source
+  lint that keeps the removed call form out of the tree. (by @traktore-org in #799)
+
 - 🧪 **The HA-2026.8 CI rung is now blocking — green means the HA you
   actually run** (developer-facing) — #787 built the ladder; this flips its
   top rung. The 3.14 → HA 2026.8.2 leg (what HA-PROD runs) had 37 failures
