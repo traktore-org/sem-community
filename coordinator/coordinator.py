@@ -3757,9 +3757,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # Also fire when only the COST backfill is outstanding (energy already
             # seeded on an older install) — the method no-ops the energy seed but
             # backfills the yearly cost so it stops equalling the monthly cost.
-            if self._energy_dashboard_config and (
-                not self._energy_calculator._yearly_seeded
-                or not self._energy_calculator._yearly_cost_seeded
+            # (#794) Gate on the property, not the two seed flags: both are
+            # persisted, so an install carrying a bad seed restores them True
+            # and would never call in again — the floor re-check that heals it
+            # would be unreachable on exactly the system that needs it.
+            if (
+                self._energy_dashboard_config
+                and self._energy_calculator.yearly_seed_pending
             ):
                 try:
                     await self._energy_calculator.seed_yearly_from_statistics(

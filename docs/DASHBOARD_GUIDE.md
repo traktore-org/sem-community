@@ -313,6 +313,12 @@ recommendation, heat-pump SG-Ready state, and the observer-mode switch.
 Daily, monthly, and yearly cost and savings with return on investment — the
 financial summary.
 
+The yearly figures are the sum of that year's recorded monthly buckets, priced
+at the rates that were in force at the time, so the year and the months on this
+tab always agree. Months from before SEM started tracking cost — anything
+predating the install — are estimated from their recorded energy at an average
+rate, since no price history exists for them.
+
 #### sem-costs-detail-card
 
 **SEM Costs Detail** · *Costs tab*

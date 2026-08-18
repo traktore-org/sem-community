@@ -13,6 +13,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 💰 **The year and the months on the Costs tab now agree** — the yearly cost
+  figures were never measured, they were *estimated once*: yearly energy ×
+  a 7-day average rate, written a single time behind a flag that is saved to
+  disk. Live on PROD that put the year's grid-import cost at 112.81 against
+  458.97 actually accumulated across the same year's monthly buckets, and
+  flipped the year's net cost sign — the yearly sensor said the house had
+  earned 168 CHF while the monthly buckets on the same screen said it had spent
+  222. The seed now sums SEM's **own recorded monthly cost statistics**, at the
+  prices that were really in force, and falls back to the energy × average-rate
+  estimate only for months with no cost record at all — so yearly = Σ monthly
+  by construction, which is the property you are checking the moment you put
+  both on one screen. Three smaller things went with it: the estimate no longer
+  subtracts grid-charged battery from solar savings (charging the battery off
+  the grid consumes no solar, but it was being deducted as if it had); a floor
+  re-check now lifts a year that sits below its own recorded months, so an
+  install that seeded badly self-heals instead of staying wrong until January;
+  and because both seed flags are persisted, the startup gate had to stop
+  asking them and ask whether the reconcile is still owed — otherwise the heal
+  would have been unreachable on precisely the installs that need it.
+  Corrects the figures going forward and re-derives the year from what was
+  recorded; it does not rewrite per-month history. (#794)
+
 # [2.0.0-beta.6] — 17.08.2026
 
 - 🔧 **`manifest.json` key order follows Home Assistant's current rule**

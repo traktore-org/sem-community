@@ -1,6 +1,7 @@
 """Energy calculation module for SEM coordinator."""
 from __future__ import annotations
 
+import inspect
 import logging
 import re
 from collections import deque
@@ -9,6 +10,8 @@ from typing import Dict, Any, List, Optional, Set
 
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
+
+from ..const import DOMAIN
 
 from .types import (
     PowerReadings, EnergyTotals, CostData, PerformanceMetrics,
@@ -118,6 +121,36 @@ CONTROLLED_LOADS_EST_CATEGORY = "controlled_loads_est"
 # check. Two weeks spans an occupancy cycle (weekday/weekend) twice.
 _BASELOAD_HISTORY_DAYS = 14
 
+# (#794) SEM's own monthly COST sensors, cost category → sensor key. The
+# recorder keeps these as long-term statistics even after the in-memory
+# monthly accumulators are pruned to the current month, so past months of
+# cost are MEASURED — at the prices actually in force — not estimable-only.
+# unique_id is f"sem_{key}" (sensor.py builds it that way); always resolved
+# through the entity registry, never by hardcoded entity_id — users rename
+# entities.
+# (#794) Rounding slack when comparing the yearly accumulator against the sum
+# of its recorded months — both are money rounded at different points, so an
+# exact `<` would lift on noise.
+_YEARLY_COST_FLOOR_TOLERANCE = 0.01
+
+_MONTHLY_COST_STAT_KEYS = {
+    "cost_import": "monthly_costs",
+    "cost_export": "monthly_export_revenue",
+    "cost_savings": "monthly_savings",
+    "cost_batt_savings": "monthly_battery_savings",
+}
+
+# (#794) The energy series each cost category's estimate is derived from.
+# A category with no recorded months AND none of its basis series in the
+# recorder has nothing to say — the seed keeps the live-accumulated value
+# for it rather than overwriting real money with a zero.
+_COST_ESTIMATE_BASIS = {
+    "cost_import": ("grid_import",),
+    "cost_export": ("grid_export",),
+    "cost_savings": ("solar",),
+    "cost_batt_savings": ("battery_discharge",),
+}
+
 # (#724) The boundary the FLEET EV total falls back to when its chargers do not
 # share a Charge-by deadline. Expressed as an offset so it flows through the
 # same ``get_current_meter_day_offset_based`` path (and the same day memo) as a
@@ -168,6 +201,39 @@ def _as_float(value: Any, default: float = 0.0) -> float:
             )
         return default
     return float(value)
+
+
+def _stat_bucket_year_month(row: Dict[str, Any]) -> Optional[tuple[int, int]]:
+    """(year, month) of a recorder statistics row's ``start``, else None (#794).
+
+    The real recorder returns float unix timestamps; test doubles and older
+    cores hand back datetimes or ISO strings — all three are one bucket
+    identity, so all three parse.
+    """
+    start = row.get("start")
+    if isinstance(start, bool):
+        return None
+    if isinstance(start, (int, float)):
+        try:
+            local = dt_util.as_local(dt_util.utc_from_timestamp(float(start)))
+        except (ValueError, OverflowError, OSError):
+            return None
+        return local.year, local.month
+    if isinstance(start, datetime):
+        # Localize aware datetimes like the float path — a bucket starts at a
+        # LOCAL month boundary, so its UTC form reads as the previous month in
+        # any zone east of UTC. Naive datetimes are already local (tests).
+        if start.tzinfo is not None:
+            start = dt_util.as_local(start)
+        return start.year, start.month
+    if isinstance(start, str):
+        parsed = dt_util.parse_datetime(start)
+        if parsed is None:
+            return None
+        if parsed.tzinfo is not None:
+            parsed = dt_util.as_local(parsed)
+        return parsed.year, parsed.month
+    return None
 
 
 # Environmental impact constants
@@ -303,6 +369,14 @@ class EnergyCalculator:
         # Separate flag for the yearly COST backfill so it can correct installs
         # whose ENERGY was already seeded before the cost backfill existed.
         self._yearly_cost_seeded: bool = False
+        # (#794) The floor re-check is deliberately NOT persisted. Both seed
+        # flags above come back True from storage, so on the very installs the
+        # floor exists to heal the startup gate would already be closed and the
+        # check would never run. Runtime-only means every restart gets one
+        # fresh chance; the attempt cap stops it holding the gate open forever
+        # when the recorder simply has no cost history to compare against.
+        self._yearly_cost_floor_checked: bool = False
+        self._yearly_cost_floor_attempts: int = 0
         # Auto-detected from recorder statistics (first solar energy entry)
         self._install_year_decimal: Optional[float] = None
         # (#773) Sealed days of the true-baseload residual, newest last.
@@ -1066,6 +1140,24 @@ class EnergyCalculator:
             solar, grid_import, grid_export, batt_charge, batt_discharge, home, ev_total,
         )
 
+    @property
+    def yearly_seed_pending(self) -> bool:
+        """Is any part of the yearly backfill still owed? (#794)
+
+        The coordinator's startup gate. It is NOT enough to ask whether the two
+        seed flags are set: both are persisted, so an install that seeded badly
+        last year comes back with them True and would never call in again —
+        and the floor re-check that exists to heal exactly that install would
+        never run. The gate therefore stays open until the floor has been
+        checked once this run (or given up), which is why that flag is
+        runtime-only.
+        """
+        return not (
+            self._yearly_seeded
+            and self._yearly_cost_seeded
+            and self._yearly_cost_floor_checked
+        )
+
     async def seed_yearly_from_statistics(self, hass: HomeAssistant, ed_config) -> None:
         """Seed yearly accumulators from HA recorder statistics.
 
@@ -1076,10 +1168,11 @@ class EnergyCalculator:
         # Yearly COST backfill — runs INDEPENDENTLY of the energy seed (own
         # flag) so it also corrects installs whose ENERGY was seeded BEFORE
         # this cost backfill existed: those had yearly_cost == monthly_cost
-        # ("month and year are the same"). Needs the yearly energy present, so
-        # it's a no-op until that's seeded; for a fresh install it runs from
-        # the success path below instead.
-        self._maybe_seed_yearly_cost(str(dt_util.now().year))
+        # ("month and year are the same"). Prefers SEM's own recorded monthly
+        # cost statistics (#794); the estimate fallback needs the yearly
+        # energy present, so that path is a no-op until it's seeded — for a
+        # fresh install it runs from the success path below instead.
+        await self._maybe_seed_yearly_cost(hass, ed_config, str(dt_util.now().year))
 
         if self._yearly_seeded:
             return
@@ -1205,7 +1298,7 @@ class EnergyCalculator:
             seeded[EV_CATEGORY] = ev_total
 
         # Now that the yearly ENERGY is seeded, derive the yearly COST too.
-        self._maybe_seed_yearly_cost(year_key)
+        await self._maybe_seed_yearly_cost(hass, ed_config, year_key)
 
         self._yearly_seeded = True
         _LOGGER.info(
@@ -1216,25 +1309,145 @@ class EnergyCalculator:
             home, ev_total,
         )
 
-    def _maybe_seed_yearly_cost(self, year_key: str) -> None:
-        """Backfill the yearly COST accumulators from the (seeded) yearly
-        ENERGY × average rate — once.
+    async def _maybe_seed_yearly_cost(
+        self, hass: Optional[HomeAssistant], ed_config, year_key: str
+    ) -> None:
+        """Backfill the yearly COST accumulators — measured months first (#794).
 
-        Without this, yearly cost only held the live-accumulated portion (since
-        cost tracking started this month) and therefore equalled the MONTHLY
-        cost ('month and year are the same'). The recorder has historical
-        energy but NOT SEM's historical hourly prices, so the backfill is
-        valued at an AVERAGE rate (7-day rolling, falling back to the
-        current/config rate) — an ESTIMATE for the pre-tracking period on a
-        dynamic tariff; the live portion since install stays exact.
+        SEM records its own monthly cost sensors as long-term statistics, so
+        for every month the recorder holds a bucket, that month's cost is
+        KNOWN, at the prices actually in force. The seed is therefore
+        Σ(recorded monthly buckets) per category, with an energy × avg-rate
+        estimate ONLY for months that have no cost record at all. This makes
+        yearly == Σ monthly by construction — the property the user checks
+        when both figures share one screen (live on PROD the old whole-year
+        estimate sat 4× below the recorded months and flipped the year's net
+        cost sign).
 
-        SET (not add): the seeded energy spans Jan→now, so this is the
-        full-year cost up to now and live accumulation continues from here
-        (disjoint — no double count), exactly like the energy seed. Idempotent
-        (``_yearly_cost_seeded`` flag); a no-op until the yearly energy exists.
+        SET (not add): the seed spans Jan→now (the current month's partial
+        bucket included), and live accumulation continues from here — disjoint,
+        no double count, exactly like the energy seed. Runs once
+        (``_yearly_cost_seeded``); the floor re-check afterwards runs on EVERY
+        call regardless of that flag, so a badly seeded install self-heals
+        instead of staying wrong until January.
+
+        Degradation: no recorder / no registry entries / query error → the
+        pre-#794 energy × avg-rate estimate, logged at debug. Never raises —
+        this runs on the coordinator startup path.
         """
-        if self._yearly_cost_seeded:
-            return
+        recorded = await self._query_recorded_monthly_costs(hass, year_key)
+        if not self._yearly_cost_seeded:
+            if recorded:
+                await self._seed_yearly_cost_from_recorded(
+                    hass, ed_config, year_key, recorded
+                )
+            else:
+                self._seed_yearly_cost_estimate(year_key)
+        self._apply_yearly_cost_floor(year_key, recorded)
+
+    async def _seed_yearly_cost_from_recorded(
+        self,
+        hass: Optional[HomeAssistant],
+        ed_config,
+        year_key: str,
+        recorded: Dict[str, Dict[int, float]],
+    ) -> None:
+        """Seed the yearly cost from recorded monthly buckets (#794).
+
+        Per category: Σ(recorded months). Months without a bucket fall back to
+        that month's energy × avg rate — measured where measured, estimated
+        only where nothing was measured. A category with neither recorded
+        months nor an estimate basis keeps its live-accumulated value.
+        """
+        now = dt_util.now()
+        months = range(1, now.month + 1) if year_key == str(now.year) else range(1, 13)
+        missing = {
+            category: [m for m in months if m not in recorded.get(category, {})]
+            for category in _MONTHLY_COST_STAT_KEYS
+        }
+        month_energy = None
+        if any(missing.values()):
+            month_energy = await self._query_monthly_energy(hass, ed_config, year_key)
+        imp_rate = self._get_avg_import_rate()
+        exp_rate = self._get_avg_export_rate()
+        estimated_months = 0
+        seeded: Dict[str, float] = {}
+        for category in _MONTHLY_COST_STAT_KEYS:
+            rec_months = recorded.get(category, {})
+            has_basis = any(
+                (month_energy or {}).get(series)
+                for series in _COST_ESTIMATE_BASIS[category]
+            )
+            if not rec_months and not has_basis:
+                # Nothing measured and nothing to estimate from — keep the
+                # live-accumulated value rather than zeroing real money.
+                continue
+            total = sum(rec_months.values())
+            for m in missing[category]:
+                estimate = self._estimate_month_cost(
+                    category, m, month_energy, imp_rate, exp_rate
+                )
+                if estimate:
+                    estimated_months += 1
+                total += estimate
+            seeded[category] = round(total, 4)
+            self._yearly_cost_accumulators[f"{category}_{year_key}"] = seeded[category]
+        self._yearly_cost_seeded = True
+        _LOGGER.info(
+            "Yearly COST seeded from recorded monthly statistics: import=%.2f "
+            "export=%.2f solar_savings=%.2f batt_savings=%.2f (%d month-value(s) "
+            "estimated for months without cost history)",
+            seeded.get("cost_import", 0.0), seeded.get("cost_export", 0.0),
+            seeded.get("cost_savings", 0.0), seeded.get("cost_batt_savings", 0.0),
+            estimated_months,
+        )
+
+    def _estimate_month_cost(
+        self,
+        category: str,
+        month: int,
+        month_energy: Optional[Dict[str, Dict[int, float]]],
+        imp_rate: float,
+        exp_rate: float,
+    ) -> float:
+        """Estimate one pre-cost-tracking month from its energy × avg rate."""
+        if not month_energy:
+            return 0.0
+
+        def _e(series: str) -> float:
+            return float(month_energy.get(series, {}).get(month, 0.0) or 0.0)
+
+        if category == "cost_import":
+            return _e("grid_import") * imp_rate
+        if category == "cost_export":
+            return _e("grid_export") * exp_rate
+        if category == "cost_savings":
+            # Only the SOLAR-charged portion of battery charge consumed solar;
+            # grid-charged energy must not reduce the solar savings (#794).
+            solar_charged = _e("battery_charge") * (
+                1.0 - self._battery_grid_origin_share
+            )
+            solar_direct = max(0.0, _e("solar") - _e("grid_export") - solar_charged)
+            return solar_direct * imp_rate
+        if category == "cost_batt_savings":
+            # (#770) Full import rate on purpose — the provenance store has no
+            # origin record for the pre-tracking past, and unknown origin keeps
+            # the legacy credit rather than being charged for a measurement SEM
+            # never took.
+            return _e("battery_discharge") * imp_rate
+        return 0.0
+
+    def _seed_yearly_cost_estimate(self, year_key: str) -> None:
+        """The degradation fallback: yearly ENERGY × average rate — once.
+
+        Kept for installs where SEM's own monthly cost statistics cannot be
+        read at all (no recorder, no registry entries, query error). The
+        recorder has historical energy but NOT SEM's historical hourly prices,
+        so the backfill is valued at an AVERAGE rate (7-day rolling, falling
+        back to the current/config rate) — an ESTIMATE for the pre-tracking
+        period on a dynamic tariff; the live portion since install stays
+        exact. A no-op until the yearly energy exists.
+        """
         ya = self._yearly_accumulators
         grid_import = float(ya.get(f"grid_import_{year_key}", 0.0) or 0.0)
         solar = float(ya.get(f"solar_{year_key}", 0.0) or 0.0)
@@ -1248,7 +1461,13 @@ class EnergyCalculator:
         # Avoided-import savings split to mirror the live accumulators and avoid
         # double counting: solar used DIRECTLY (not exported, not stored) +
         # battery discharged to load (stored solar is counted there, not here).
-        solar_direct = max(0.0, solar - grid_export - batt_charge)
+        # (#794) Only the SOLAR-charged share of the battery charge consumed
+        # solar — energy bought from the grid and stored must not reduce the
+        # solar savings (grid-charging installs understated the year
+        # structurally; the live path has always used the flow-attributed
+        # split).
+        solar_charged = batt_charge * (1.0 - self._battery_grid_origin_share)
+        solar_direct = max(0.0, solar - grid_export - solar_charged)
         ca = self._yearly_cost_accumulators
         ca[f"cost_import_{year_key}"] = round(grid_import * imp_rate, 4)
         ca[f"cost_export_{year_key}"] = round(grid_export * exp_rate, 4)
@@ -1266,6 +1485,220 @@ class EnergyCalculator:
             imp_rate, exp_rate, grid_import * imp_rate, grid_export * exp_rate,
             solar_direct * imp_rate, batt_discharge * imp_rate,
         )
+
+    def _apply_yearly_cost_floor(
+        self, year_key: str, recorded: Optional[Dict[str, Dict[int, float]]]
+    ) -> None:
+        """Hold the yearly cost at or above the months actually recorded (#794).
+
+        The invariant: a year can never have cost less than the sum of its own
+        recorded months. Σ(months) includes the current month's partial bucket
+        and live yearly = seed + accumulation since, so a healthy install
+        already sits at or above the floor and this is a no-op — it only ever
+        lifts, never caps, because live accumulation is finer-grained than the
+        month bucket it is compared against and legitimately runs ahead of it.
+
+        Unlike the seed this runs on EVERY call, regardless of
+        ``_yearly_cost_seeded``: the install that needs healing is exactly the
+        one whose flag came back True from storage carrying a bad value.
+        """
+        if not recorded:
+            # Nothing measured to compare against. Retry across a few cycles in
+            # case the recorder is still warming up, then stop holding the
+            # startup gate open — mirrors the energy seed's attempt cap.
+            self._yearly_cost_floor_attempts += 1
+            if self._yearly_cost_floor_attempts >= 3:
+                self._yearly_cost_floor_checked = True
+                _LOGGER.debug(
+                    "Yearly cost floor: no recorded monthly cost statistics "
+                    "after %d attempts — nothing to reconcile against",
+                    self._yearly_cost_floor_attempts,
+                )
+            return
+
+        ca = self._yearly_cost_accumulators
+        for category, months in recorded.items():
+            floor = sum(months.values())
+            key = f"{category}_{year_key}"
+            current = float(ca.get(key, 0.0) or 0.0)
+            if current < floor - _YEARLY_COST_FLOOR_TOLERANCE:
+                ca[key] = round(floor, 4)
+                _LOGGER.warning(
+                    "Yearly cost floor: %s was %.2f but its %d recorded months "
+                    "sum to %.2f — lifted to the measured value (#794)",
+                    key, current, len(months), floor,
+                )
+        self._yearly_cost_floor_checked = True
+
+    async def _query_recorded_monthly_costs(
+        self, hass: Optional[HomeAssistant], year_key: str
+    ) -> Optional[Dict[str, Dict[int, float]]]:
+        """Read SEM's own recorded monthly cost statistics for the year.
+
+        Returns ``{category: {month: value}}`` for every recorded bucket —
+        these are monthly-resetting counters, so a bucket's ``state`` (last
+        state in the bucket) IS that month's total. ``None`` whenever nothing
+        could be read (no registry, no entities, no recorder, query error):
+        the caller degrades to the estimate instead of guessing.
+        """
+        if hass is None:
+            return None
+        try:
+            from homeassistant.helpers import entity_registry as er
+            registry = er.async_get(hass)
+        except Exception as e:  # noqa: BLE001 — registry absent/mocked (tests, early boot)
+            _LOGGER.debug("Yearly cost seed: entity registry unavailable: %s", e)
+            return None
+        entity_map: Dict[str, str] = {}
+        for category, sensor_key in _MONTHLY_COST_STAT_KEYS.items():
+            try:
+                entity_id = registry.async_get_entity_id(
+                    "sensor", DOMAIN, f"sem_{sensor_key}"
+                )
+            except Exception:  # noqa: BLE001 — treat as unresolvable
+                entity_id = None
+            if isinstance(entity_id, str) and entity_id:
+                entity_map[entity_id] = category
+        if not entity_map:
+            _LOGGER.debug(
+                "Yearly cost seed: no SEM monthly cost sensors in the registry"
+            )
+            return None
+        try:
+            target_year = int(year_key)
+        except (TypeError, ValueError):
+            return None
+        now = dt_util.now()
+        start = now.replace(
+            month=1, day=1, hour=0, minute=0, second=0, microsecond=0
+        )
+        stats = await self._recorder_stats(
+            hass, start, set(entity_map), "month", {"state"}
+        )
+        if not stats:
+            return None
+        recorded: Dict[str, Dict[int, float]] = {}
+        for entity_id, category in entity_map.items():
+            for row in stats.get(entity_id) or []:
+                value = row.get("state")
+                if value is None:
+                    continue
+                bucket = _stat_bucket_year_month(row)
+                if bucket is None or bucket[0] != target_year:
+                    continue
+                try:
+                    recorded.setdefault(category, {})[bucket[1]] = float(value)
+                except (TypeError, ValueError):
+                    continue
+        return recorded or None
+
+    async def _query_monthly_energy(
+        self, hass: Optional[HomeAssistant], ed_config, year_key: str
+    ) -> Optional[Dict[str, Dict[int, float]]]:
+        """Per-month energy for the ED entities: ``{series: {month: kWh}}``.
+
+        Same entity roles as the yearly ENERGY seed, month buckets, per-bucket
+        ``sum`` delta. Queried from Dec 1 of the previous year so January has
+        a baseline; the recorder's sum column starts at 0 at the first
+        statistic ever, so a missing predecessor means "history starts here"
+        and 0.0 is the right baseline. ``None`` when nothing could be read.
+        """
+        if hass is None or not ed_config:
+            return None
+        entity_map: Dict[str, str] = {}
+        for attr, series in (
+            ("solar_energy", "solar"),
+            ("grid_import_energy", "grid_import"),
+            ("grid_export_energy", "grid_export"),
+            ("battery_charge_energy", "battery_charge"),
+            ("battery_discharge_energy", "battery_discharge"),
+        ):
+            entity_id = getattr(ed_config, attr, None)
+            if isinstance(entity_id, str) and entity_id:
+                entity_map[entity_id] = series
+        if not entity_map:
+            return None
+        try:
+            target_year = int(year_key)
+        except (TypeError, ValueError):
+            return None
+        now = dt_util.now()
+        jan1 = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        query_start = (jan1 - timedelta(days=1)).replace(day=1)
+        stats = await self._recorder_stats(
+            hass, query_start, set(entity_map), "month", {"sum"}
+        )
+        if not stats:
+            return None
+        result: Dict[str, Dict[int, float]] = {}
+        for entity_id, series in entity_map.items():
+            prev_sum: Optional[float] = None
+            for row in stats.get(entity_id) or []:
+                raw = row.get("sum")
+                if raw is None:
+                    continue
+                try:
+                    cumulative = float(raw)
+                except (TypeError, ValueError):
+                    continue
+                bucket = _stat_bucket_year_month(row)
+                if bucket is not None and bucket[0] == target_year:
+                    baseline = prev_sum if prev_sum is not None else 0.0
+                    result.setdefault(series, {})[bucket[1]] = max(
+                        0.0, cumulative - baseline
+                    )
+                prev_sum = cumulative
+        return result or None
+
+    async def _recorder_stats(
+        self,
+        hass: Optional[HomeAssistant],
+        start: datetime,
+        entity_ids: Set[str],
+        period: str,
+        types: Set[str],
+    ):
+        """``statistics_during_period`` without crashing the caller (#794).
+
+        The real function is SYNC database work, so the recorder's executor is
+        the proper home for it; a direct call is kept as fallback for
+        environments where no recorder instance exists but the function is
+        substituted (tests). Returns the stats dict, or ``None`` on any
+        failure.
+        """
+        try:
+            from homeassistant.components.recorder.statistics import (
+                statistics_during_period,
+            )
+        except ImportError:
+            _LOGGER.debug("Recorder not available for yearly cost seeding")
+            return None
+        result = None
+        try:
+            from homeassistant.components.recorder import get_instance
+            job = get_instance(hass).async_add_executor_job(
+                statistics_during_period,
+                hass, start, None, entity_ids, period, None, types,
+            )
+            if inspect.isawaitable(job):
+                job = await job
+            if isinstance(job, dict):
+                result = job
+        except Exception as e:  # noqa: BLE001 — no instance / incompatible core
+            _LOGGER.debug("Recorder executor path unavailable: %s", e)
+        if result is None:
+            try:
+                direct = statistics_during_period(
+                    hass, start, None, entity_ids, period, None, types
+                )
+                if inspect.isawaitable(direct):
+                    direct = await direct
+                if isinstance(direct, dict):
+                    result = direct
+            except Exception as e:  # noqa: BLE001 — degrade, don't crash startup
+                _LOGGER.debug("Recorder statistics query failed: %s", e)
+                return None
+        return result
 
     def _sun_is_down(self) -> bool:
         """Is the sun below the horizon right now? (#681)
