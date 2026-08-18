@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import logging
 from types import SimpleNamespace
-from unittest.mock import Mock
 
 import pytest
 

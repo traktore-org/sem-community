@@ -2068,7 +2068,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             # false "will silently no-op" here sent a real diagnosis down
             # a dead end. 120 s is comfortably past integration setup.
             def _deferred_entity_check(_now, _name=charger_name,
-                                       _cid=charger_id, _chk=list(_to_check)):
+                                       _cid=charger_id,
+                                       _chk=tuple(_to_check)):
                 _warn_missing_charger_entities(hass, _name, _cid, _chk)
 
             from homeassistant.helpers.event import async_call_later
