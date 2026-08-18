@@ -3463,13 +3463,35 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
 
         static_path = f"/local/custom_components/{DOMAIN}/dashboard"
 
-        # Register static path (may fail on reload if already registered)
+        # Serve the component's dashboard dir so the Lovelace resource URLs
+        # below (the sem-cards.js bundle + sem-localize.js) actually resolve.
+        # MUST be async_register_static_paths: the sync hass.http static-path
+        # register did blocking I/O on the event loop and HA *removed* it in
+        # 2025.7 (deprecated 2024.7). On 2025.7+ the old call raised
+        # AttributeError, the bare ``except Exception: pass`` below swallowed it
+        # as "already registered", the bundle URL went unserved, and EVERY sem-*
+        # card rendered "Custom element doesn't exist" — the whole dashboard was
+        # nothing but Konfigurationsfehler tiles (#799, reporter on HA 2026.8.2).
         try:
-            hass.http.register_static_path(
-                static_path, dashboard_path, cache_headers=False
+            # Imported inside this try (not above it) so a future symbol
+            # rename surfaces at WARNING here rather than being swallowed at
+            # debug by the outer handler — the class-48 shape this fix closes.
+            from homeassistant.components.http import StaticPathConfig
+
+            await hass.http.async_register_static_paths(
+                [StaticPathConfig(static_path, dashboard_path, False)]
             )
-        except Exception:
-            pass  # Already registered from previous load
+        except (RuntimeError, ValueError) as err:
+            # Benign: a reload re-runs setup and the path is already registered
+            # from the previous load.
+            _LOGGER.debug(
+                "SEM static path already registered: %s (%s)", static_path, err
+            )
+        except Exception as err:  # noqa: BLE001
+            # The #799 lesson: never silently swallow a static-path failure as
+            # "already registered" — surface it. But a hiccup here must not
+            # block the Lovelace-resource registration below.
+            _LOGGER.warning("SEM static path registration failed: %s", err)
 
         # Register the JS as Lovelace resources (not add_extra_js_url) so they
         # load into HA's scoped custom-element registry. add_extra_js_url loads

@@ -1931,3 +1931,39 @@ move a decision), plus a pin that the diagnostics row carries capability, mode, 
 **Sweep question:** for any boolean on a device row, ask "which single question does this answer?"
 If the honest answer needs an "and", it is two fields.
 Refs #780 #779 #650.
+
+### 48. A removed host API called past its removal, its failure swallowed as a benign case — GUARDED
+**Symptom:** a feature that has always worked goes dead for users on a *newer Home Assistant* than
+the one the integration was last tested against, with no error in our logs. It works in CI and on
+the maintainer's box (older HA) and is invisible until a user on the new version reports it.
+**Root shape:** HA deprecates a host API on a published schedule (`frame.report_usage(...,
+breaks_in_ha_version="X")`) and later *removes* it. The integration keeps calling the removed form;
+the call is wrapped in a defensive `try/except Exception: pass` written for ONE expected failure
+(here "already registered from a previous load"), so the `AttributeError` from the now-missing
+method is caught by the same broad clause and read as the benign case. The swallow converts a fatal
+break into silence — the comment on the `except` actively misleads, asserting the only reason it can
+fire. Two independent faults compound: calling a scheduled-for-removal API, and an `except` too
+broad to tell "already done" from "gone". Distinct from class 31 (there the `except` is *narrower*
+than the body can raise; here it is *broader*, and hides the fatal one).
+**Live catch (#799, @HorizonKane, HA 2026.8.2, fresh 1.7.5 install):**
+`_async_register_frontend_resources` served the component's dashboard dir with
+`hass.http.register_static_path` — sync, blocking, **removed in HA 2025.7** (deprecated 2024.7). On
+2025.7+ it raised `AttributeError`, the bare `except: pass` swallowed it as "already registered", the
+static route was never created, the `sem-cards.js` Lovelace-resource URL 404'd, and *every* sem-*
+custom element failed to define — the whole dashboard was nothing but "Custom element doesn't exist"
+tiles. The www-copy fallback (`_async_install_card_assets`) is gated on the dashboard already being
+generated, so it did not cover the fresh-install first view. **Closure:** migrate to the current
+`async_register_static_paths([StaticPathConfig(url, path, cache)])`, and split the handler — the
+reload-duplicate (`RuntimeError`/`ValueError`) logs at debug, anything else logs at WARNING and
+continues (never swallowed silently, never blocking the resource registration below).
+**Where else it lives:** every call into a HA host API with a removal schedule wrapped in a broad
+`except` — `hass.components.*`, `async_get_registry`, the singular `async_forward_entry_setup`,
+`async_add_job`. Swept 2026-08-18: `register_static_path` was the only *removed* API still called
+(one site); `async_forward_entry_setups` (plural, current) is already in use. **Guard:**
+`tests/test_frontend_resources.py::TestStaticPathServedViaAsyncApi` — a source lint that the
+removed `register_static_path(` call form never returns (mentioning the name in a comment is fine),
+plus a runtime assertion that the dashboard dir is actually served through
+`async_register_static_paths` with the right `/local` url_path. **Sweep question:** for every host
+API we call inside a `try/except`, has HA scheduled it for removal — and can the `except` clause tell
+"already done" apart from "this method no longer exists"? A comment on an `except` that names the one
+way it fires is a claim to verify, not a fact. Refs #799 #283 #785 #55.

@@ -33,7 +33,10 @@ def _hass_with_resources(resources):
     hass = MagicMock()
     hass.data = {"lovelace": MagicMock(resources=resources)}
     hass.http = MagicMock()
-    hass.http.register_static_path = MagicMock()
+    # The bundle URL only resolves if the component's dashboard dir is served.
+    # This is the CURRENT HA API (async_register_static_paths); the sync
+    # register_static_path was removed in 2025.7 (#799). Must be awaitable.
+    hass.http.async_register_static_paths = AsyncMock()
     # async_add_executor_job runs the callable directly in tests.
     async def _exec(fn, *args):
         return fn(*args)
@@ -145,6 +148,55 @@ class TestStorageMode:
         assert any("sem-cards.js" in u for u in urls), urls
         assert any("sem-localize.js" in u for u in urls), urls
         assert not any("card/sem-system-diagram-card.js" in u for u in urls), urls
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Static-path serving via the CURRENT HA API (#799)
+# ──────────────────────────────────────────────────────────────────────
+
+class TestStaticPathServedViaAsyncApi:
+    """The card bundle URL must be *served*, not just *registered*.
+
+    #799 (reporter on HA 2026.8.2, fresh 1.7.5 install): every sem-* card
+    showed "Custom element doesn't exist". Root cause: the component served
+    its dashboard dir with ``hass.http.register_static_path`` — a sync call
+    that did blocking I/O on the event loop and that HA **removed in 2025.7**.
+    On 2025.7+ it raised ``AttributeError``, which a bare ``except Exception:
+    pass`` swallowed as "already registered from previous load"; the static
+    route was never created, the Lovelace resource URL 404'd, and no sem-*
+    element ever defined. The fix moves to ``async_register_static_paths``.
+    """
+
+    @pytest.mark.asyncio
+    async def test_registers_the_dashboard_dir_via_async_static_paths(self):
+        """The dashboard dir is served through the non-removed async API,
+        with a StaticPathConfig whose url_path is the /local bundle prefix."""
+        from custom_components.solar_energy_management.const import DOMAIN
+
+        r = _storage_mode_resources(initial_items=[])
+        hass = _hass_with_resources(r)
+        await _async_register_frontend_resources(hass)
+
+        assert hass.http.async_register_static_paths.await_count >= 1, (
+            "the dashboard dir was never served — the bundle URL will 404"
+        )
+        configs = hass.http.async_register_static_paths.await_args.args[0]
+        url_paths = [c.url_path for c in configs]
+        assert f"/local/custom_components/{DOMAIN}/dashboard" in url_paths, url_paths
+
+    def test_removed_sync_register_static_path_is_not_called(self):
+        """Guard the whole class: the sync ``register_static_path`` was
+        removed in HA 2025.7 — a call to it silently breaks the dashboard on
+        every modern HA. The source must not contain the call form. Mentioning
+        the name in a comment (as the fix does) is fine; the open-paren call is
+        not. Same shape as the ``add_extra_js_url(`` ban below."""
+        source = Path(sem_module.__file__).read_text(encoding="utf-8")
+        assert "register_static_path(" not in source, (
+            "hass.http.register_static_path(...) is back in __init__.py — it "
+            "was removed in HA 2025.7 and its failure is swallowed as "
+            "'already registered', breaking every sem-* card. Use "
+            "async_register_static_paths. See #799."
+        )
 
 
 # ──────────────────────────────────────────────────────────────────────
