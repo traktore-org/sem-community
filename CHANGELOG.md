@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.6] — 18.08.2026
+
+- 🛠️ **Dashboard cards load again on Home Assistant 2025.7+** — every fresh
+  install showed only "Configuration error / Custom element doesn't exist"
+  cards. SEM served its card bundle via `hass.http.register_static_path`, an
+  API Home Assistant removed in 2025.7; the resulting error was swallowed by
+  a too-broad exception handler as "already registered", so the bundle's URL
+  was never served and no card could define itself. Registration now uses the
+  async static-path API, and real failures are logged instead of hidden.
+  Stable-channel hotfix — contains exactly this fix on top of v1.7.5. (#799)
+
 # [1.7.5] — 03.08.2026
 
 > **Stable release.** Consolidates the 1.7.5 beta line (beta.1 → beta.38, detailed
