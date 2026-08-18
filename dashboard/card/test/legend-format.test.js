@@ -87,3 +87,80 @@ test('missing dataset for a label is passed through untouched', () => {
     const labels = formatLegendLabels(items, [], 'EUR');
     assert.equal(labels[0].text, 'ghost');  // no ": … EUR" appended
 });
+
+/* ── #792: accumulating series legend the PERIOD, not the last bucket ──
+   The savings/costs/energy charts plot per-bucket totals (monthly_savings,
+   daily_costs, …). Labelling them with the newest bucket put "105 CHF"
+   under a chart headed "This Year" — August month-to-date, while single
+   months on the same chart were larger. Instantaneous series (W, %) keep
+   the last sample, because for those the newest value IS the answer. */
+
+// Eight monthly savings buckets as seen on PROD 2026-08-17. August is
+// partial (the 17th), which is what made the old legend so misleading.
+function yearOfSavingsBuckets() {
+    return [
+        { cumulative: true, yAxisID: 'y', data: [
+            { x: 1, y: 12.4 }, { x: 2, y: 48.9 }, { x: 3, y: 233.0 },
+            { x: 4, y: 251.7 }, { x: 5, y: 9.2 }, { x: 6, y: 246.3 },
+            { x: 7, y: 185.8 }, { x: 8, y: 104.96 },
+        ] },
+    ];
+}
+
+test('#792: a cumulative series legends the sum of the plotted buckets', () => {
+    const labels = formatLegendLabels(
+        [{ text: 'Solar Savings', datasetIndex: 0 }],
+        yearOfSavingsBuckets(), 'CHF',
+    );
+    // 12.4+48.9+233+251.7+9.2+246.3+185.8+104.96 = 1092.26 → "1.1k"
+    assert.equal(labels[0].text, 'Solar Savings: 1.1k CHF');
+    // The exact shape of the bug: August MTD standing in for the year.
+    assert.notEqual(labels[0].text, 'Solar Savings: 105 CHF');
+});
+
+test('#792: an instantaneous series still legends its newest sample', () => {
+    // preset: power on a day range resolves to the HOURLY defs (watts in
+    // day buckets) — summing daily maxima of W would invent a number that
+    // is not a quantity of anything. No `cumulative` flag → last value.
+    const datasets = [{ yAxisID: 'y', data: [
+        { x: 1, y: 4200 }, { x: 2, y: 3100 }, { x: 3, y: 900 },
+    ] }];
+    const labels = formatLegendLabels(
+        [{ text: 'solar', datasetIndex: 0 }], datasets, 'W',
+    );
+    assert.equal(labels[0].text, 'solar: 900 W');
+});
+
+test('#792: summing keeps the #585 cash-flow sign', () => {
+    // Import is plotted negated (spending points down); the period total
+    // must stay negative rather than flipping into an apparent earning.
+    const datasets = [{ cumulative: true, yAxisID: 'y', data: [
+        { x: 1, y: -8.2 }, { x: 2, y: -15.08 },
+    ] }];
+    const labels = formatLegendLabels(
+        [{ text: 'Import', datasetIndex: 0 }], datasets, 'CHF',
+    );
+    assert.equal(labels[0].text, 'Import: -23 CHF');
+});
+
+test('#792: the sum still follows datasetIndex, not legend position', () => {
+    // #574's rotation must not reappear through the new code path.
+    const datasets = [
+        { cumulative: true, yAxisID: 'y', data: [{ x: 1, y: 1 }, { x: 2, y: 2 }] },
+        { cumulative: true, yAxisID: 'y', data: [{ x: 1, y: 30 }, { x: 2, y: 40 }] },
+    ];
+    const labels = formatLegendLabels(
+        [{ text: 'export', datasetIndex: 1 }, { text: 'Import', datasetIndex: 0 }],
+        datasets, 'CHF',
+    );
+    assert.equal(labels[0].text, 'export: 70 CHF');
+    assert.equal(labels[1].text, 'Import: 3.0 CHF');
+});
+
+test('#792: an empty cumulative series reads 0, not NaN', () => {
+    const labels = formatLegendLabels(
+        [{ text: 'battery_savings', datasetIndex: 0 }],
+        [{ cumulative: true, yAxisID: 'y', data: [] }], 'CHF',
+    );
+    assert.equal(labels[0].text, 'battery_savings: 0.0 CHF');
+});

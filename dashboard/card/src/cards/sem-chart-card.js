@@ -394,11 +394,19 @@ class SEMChartCard extends SEMLitBase {
         const defs = (g === 'hour' && p.hourly)
             ? p.hourly
             : (g === 'month' && p.monthly) ? p.monthly : (p.daily || p.hourly || []);
+        // (#792) The legend sums accumulating series and samples instantaneous
+        // ones, so it needs to know which this is. That is decided HERE and
+        // nowhere else: the granularity alone can't answer it, because a preset
+        // with no `daily` block (power, battery, forecast) falls back to its
+        // HOURLY defs on a day range — watts in day buckets, which must not be
+        // added up. Only defs that came from `daily`/`monthly` are totals.
+        const cumulative = defs === p.daily || defs === p.monthly;
         return defs.map(d => ({
             entity: `${this._prefix}${d.suffix}`,
             name:   this._t(d.name),
             color:  d.color, type: d.type, y_axis: d.y_axis || 0,
             negate: d.negate || false,
+            cumulative,
         }));
     }
 
@@ -521,6 +529,9 @@ class SEMChartCard extends SEMLitBase {
             const isBar  = s.type === 'bar';
             return {
                 label: s.name, data: datasets[i].data,
+                // (#792) rides along so the legend's sum-vs-sample choice stays
+                // paired with its OWN series through Chart.js' order sorting.
+                cumulative: !!s.cumulative,
                 backgroundColor: isBar ? s.color + 'CC' : isArea ? s.color + '30' : 'transparent',
                 borderColor: s.color, borderWidth: isBar ? 0 : 2,
                 fill: isArea ? (stacked && i > 0 ? '-1' : 'origin') : false,

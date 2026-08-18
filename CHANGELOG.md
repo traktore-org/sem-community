@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 📊 **Chart legends total what the chart shows** — under a "This Year" filter
+  the savings chart's legend read "Solar Savings: 105 CHF" while the bars above
+  it plotted a year that sums to ~979: the legend always showed the *newest
+  bucket* (August, mid-month at that), labeling a year-long chart with one of
+  its data points. Legends now SUM accumulating series (money, kWh — where
+  each bucket is a per-period total) and keep the latest sample for
+  instantaneous ones (W, %, where a sum would be a quantity of nothing). The
+  sum-vs-sample choice is made where the hourly-vs-daily/monthly series choice
+  is made and travels with each dataset, so it survives Chart.js reordering
+  legend items — the same pairing bug #574 fixed — and the #585 cash-flow sign
+  convention carries through unchanged. Same fix, same screen: the Costs
+  chart's legend showed the current month's import beside year-spanning bars.
+  (#792)
 - 💰 **The year and the months on the Costs tab now agree** — the yearly cost
   figures were never measured, they were *estimated once*: yearly energy ×
   a 7-day average rate, written a single time behind a flag that is saved to
