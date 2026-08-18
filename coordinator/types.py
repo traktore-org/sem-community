@@ -589,6 +589,11 @@ class CostData:
     # on fresh installs.
     roi_payback_years: float | None = None  # estimated years to payback
     roi_annual_savings: float = 0.0  # projected annual savings rate
+    # (#796) True while the install date is a fallback ("Jan 1 this year")
+    # rather than detected from statistics — the age-dependent figures above
+    # then present as estimates, not measurements. Detection retries every
+    # cycle; success clears this.
+    roi_install_date_estimated: bool = False
 
 
 @dataclass
@@ -1139,6 +1144,7 @@ class SEMData:
             "roi_percentage": self.costs.roi_percentage,
             "roi_payback_years": self.costs.roi_payback_years,
             "roi_annual_savings": self.costs.roi_annual_savings,
+            "roi_install_date_estimated": self.costs.roi_install_date_estimated,
 
             # Financial additions
             "battery_discharge_value": self.costs.daily_battery_savings,

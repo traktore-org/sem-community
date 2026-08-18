@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > prose-paragraph style they were written in.
 
 # [Unreleased]
+- 📈 **ROI stops presenting a guessed install date as a measurement** —
+  when install-date autodetection has not succeeded, payback and annual
+  savings silently assumed "installed January 1 of this year". The figures
+  still compute (detection retries every cycle and a degraded answer beats
+  none), but both sensors now carry `install_date_estimated: true` until
+  the real date is found, so an estimate reads as one. (#796)
 
 - 💰 **Reconciliation drift is priced at the day it happened** — when a
   hardware counter proves the integrator missed (or over-counted) energy,

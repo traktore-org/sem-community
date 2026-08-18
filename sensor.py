@@ -2618,6 +2618,16 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 # Per-charger plan rows (#464) — {cid: [rows…]}.
                 "per_charger_plans": _per_charger_plans,
             })
+        elif self.entity_description.key in (
+            "roi_payback_years", "roi_annual_savings",
+        ):
+            # (#796) These two depend on the system age. While the install
+            # date is the "Jan 1 this year" fallback rather than detected
+            # from statistics, they are estimates and say so here instead
+            # of presenting a guessed date as a measurement.
+            attrs["install_date_estimated"] = bool(
+                self.coordinator.data.get("roi_install_date_estimated")
+            )
         elif (self.entity_description.key.startswith("charger_")
               and self.entity_description.key.endswith("_estimated_soc")):
             # #708 — the stale-sensor overshoot guard rides as attributes

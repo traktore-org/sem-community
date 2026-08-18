@@ -2518,7 +2518,13 @@ class EnergyCalculator:
                 (costs.lifetime_total_savings / system_cost) * 100, 1
             )
             # Calculate annual savings from lifetime data + system age
-            # Auto-detected from recorder statistics (first solar energy entry)
+            # Auto-detected from recorder statistics (first solar energy entry).
+            # (#796) The fallback means "installed January 1 of THIS year" —
+            # a guess, not a measurement. The figures still compute (a
+            # degraded answer beats none, and detection retries every cycle
+            # while undetected), but they carry the flag so the sensors can
+            # say so instead of presenting a guessed date as fact.
+            costs.roi_install_date_estimated = self._install_year_decimal is None
             install_year_decimal = self._install_year_decimal or dt_util.now().year
             now_decimal = dt_util.now().year + (dt_util.now().month / 12)
             age_years = max(0.5, now_decimal - install_year_decimal)
