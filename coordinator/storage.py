@@ -535,6 +535,16 @@ class SEMStorage:
         """(#755) Persist the outcome record; delayed-save like the stamp."""
         self._energy_data["demand_outcomes"] = dict(state)
 
+    # (#800) The battery's night — drain / refill / clipping series the
+    # #778 budget will consume. Durable for the same reason as the
+    # demand outcomes: a night spans midnight, and this is a training
+    # set whose loss at boot would be a slow silent regression.
+    def get_battery_night_state(self) -> Dict[str, Any]:
+        return self._energy_data.get("battery_nights", {})
+
+    def set_battery_night_state(self, state: Dict[str, Any]) -> None:
+        self._energy_data["battery_nights"] = dict(state)
+
     def get_ev_wpa_state(self) -> Dict[str, float]:
         """Get the persisted per-charger measured-W/A EMA."""
         return self._energy_data.get("ev_wpa_ema", {})

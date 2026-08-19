@@ -13,6 +13,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔋 **The battery's night is written down** (#800, the #778 groundwork) —
+  the #755 learner records what each *demand* did; nothing recorded the
+  battery's night as a supply story, so the "how much may tonight spend"
+  question had no training data. A new recorder seals one record per
+  night+day pair: overnight drain (flow-attributed — `battery_to_home` only,
+  so evening EV assist and export can never poison the series), EV-assist
+  and export kWh beside it, reserve-hit (which censors the drain from
+  *below* — the mirror of the demand learner's ceilings), the morning
+  refill time against the dampened forecast's captured promise, the grid's
+  overnight supply to the house beside the drain (`night_grid_kwh` — the
+  house's true overnight *need* is the sum; drain alone under-observes it
+  whenever the battery sat at reserve) and the day's house consumption
+  (`day_home_kwh` — so a missed refill promise decomposes into PV-wrong vs
+  consumption-wrong), clipping
+  hours (pack full while export runs — the direct evidence that more could
+  have been spent for free), and covariate stamps (date, outdoor
+  temperature) for later season bucketing. Holes refuse the night rather
+  than being integrated across; a restart prices its own outage as a gap.
+  Recording only: the budget consumer is #778 in 2.1, and by then weeks of
+  real nights exist. (#800)
+
 # [2.0.0-beta.8] — 18.08.2026
 
 - 🚗 **One stop command per minute, not six per burst** (#763 round 3,

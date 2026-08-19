@@ -4036,6 +4036,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # reality. Taken here, after the cycle's decisions, so the gate
             # sampled is the one this cycle's actuation actually obeyed.
             self._record_demand_outcomes(dt_util.now(), power)
+            # (#800) The battery's night rides the same cycle: drain /
+            # refill / clipping series for the #778 budget's learner.
+            try:
+                self._record_battery_night(power, power_flows)
+            except Exception:  # noqa: BLE001 — recording never costs a cycle
+                _LOGGER.debug("battery night record skipped", exc_info=True)
 
             # Add per-charger data (#131): power + session
             per_charger_soc: Dict[str, float] = {}
@@ -6822,6 +6828,92 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         except Exception:  # noqa: BLE001 — a verdict never costs a cycle
             _LOGGER.debug("demand review skipped", exc_info=True)
             self._demand_review = None
+
+    def _record_battery_night(self, power, power_flows) -> None:
+        """(#800) One tick of the battery-night recorder.
+
+        Flow-attributed on purpose: a SOC delta would conflate the house
+        drain with EV assist and export — the exact series separation the
+        #778 budget needs. Night boundary = ``time_manager.is_night_mode``,
+        the same clock the planner's night uses.
+        """
+        import time as _time
+
+        from .battery_night import BatteryNightTracker, Sample
+
+        tr = getattr(self, "_battery_night", None)
+        if tr is None:
+            tr = self._battery_night = BatteryNightTracker(
+                reserve_soc=float(
+                    self.config.get("battery_reserve_soc", 20) or 20),
+            )
+            store = getattr(self, "_storage", None)
+            if store is not None:
+                try:
+                    tr.from_dict(store.get_battery_night_state())
+                except Exception:  # noqa: BLE001
+                    pass
+
+        in_night = bool(self.time_manager.is_night_mode())
+        if in_night and tr.phase == "idle":
+            tr.start(str(dt_util.now().date()),
+                     outdoor_temp_c=self._outdoor_temp_c())
+        sealed_before = len(tr.sealed())
+        tr.tick(
+            _time.time(), in_night,
+            Sample(
+                battery_to_home_w=float(
+                    getattr(power_flows, "battery_to_home", 0.0) or 0.0),
+                battery_to_ev_w=float(
+                    getattr(power_flows, "battery_to_ev", 0.0) or 0.0),
+                battery_to_grid_w=float(
+                    getattr(power_flows, "battery_to_grid", 0.0) or 0.0),
+                grid_to_home_w=float(
+                    getattr(power_flows, "grid_to_home", 0.0) or 0.0),
+                home_w=float(
+                    getattr(power, "home_consumption_power", 0.0) or 0.0),
+                soc=getattr(power, "battery_soc", None),
+                soc_available=not bool(
+                    getattr(power, "battery_soc_unavailable", False)),
+                export_w=float(
+                    getattr(power, "grid_export_power", 0.0) or 0.0),
+                measured=not bool(
+                    getattr(power, "battery_power_unavailable", False)),
+            ),
+        )
+        if not in_night and tr.phase == "day":
+            # The refill day's promise — dampened, first call wins. After
+            # the tick, because the night→day flip happens inside it.
+            try:
+                fc = self._cycle_forecast
+                if fc.available:
+                    tr.set_forecast_kwh(float(
+                        self._forecast_tracker.apply_dampening(
+                            fc.forecast_today_kwh)))
+            except Exception:  # noqa: BLE001
+                pass
+
+        store = getattr(self, "_storage", None)
+        if store is not None and len(tr.sealed()) != sealed_before:
+            try:
+                store.set_battery_night_state(tr.to_dict())
+            except Exception:  # noqa: BLE001 — persist is best-effort
+                pass
+
+    def _outdoor_temp_c(self):
+        """(#800) Covariate stamp: the first real weather entity's
+        temperature, or None. ``weather.forecast_*`` is HA's auto
+        subentity and unusable (the standing gotcha)."""
+        try:
+            for st in self.hass.states.async_all("weather"):
+                if st.entity_id.startswith("weather.forecast_"):
+                    continue
+                t = st.attributes.get("temperature")
+                if t is not None:
+                    return float(t)
+        except Exception:  # noqa: BLE001
+            return None
+        return None
 
     def _persist_demand_outcomes(self) -> None:
         rec = getattr(self, "_demand_outcomes", None)
