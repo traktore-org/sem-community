@@ -1449,10 +1449,6 @@
     }
   },
   "issues": {
-    "ev_charger_not_configured": {
-      "title": "EV-Ladegerät nicht konfiguriert",
-      "description": "Es sind keine Sensoren für das EV-Ladegerät konfiguriert, daher sind die EV-Ladefunktionen nicht verfügbar. Fügen Sie in den Integrationsoptionen einen „Verbunden“-Sensor oder einen Ladeleistungssensor hinzu, um das EV-Laden zu aktivieren."
-    },
     "sensor_unavailable": {
       "title": "Sensor nicht verfügbar",
       "description": "Der Sensor `{entity_id}` ({friendly_name}) ist seit {minutes}+ Minuten nicht verfügbar. SEM kann ihn nicht in Berechnungen einbeziehen, bis er wieder verfügbar ist. Prüfen Sie die zugrundeliegende Integration (Huawei modbus / Solcast / Forecast.Solar / Ihr Wechselrichter-Netzwerk). Wird automatisch gelöscht, sobald der Sensor wieder einen gültigen Wert meldet."
@@ -1500,6 +1496,10 @@
     "soc_cap_unenforceable": {
       "title": "Ladelimit von {target}% kann nicht durchgesetzt werden: {name}",
       "description": "**{name}** ist auf ein prozentuales Ladeziel eingestellt, aber Ihr Fahrzeug meldet derzeit keinen Ladestand — SEM kann deshalb nicht *genau* bei **{target}%** stoppen.\n\nBlind lädt SEM aber nicht: Ab dem letzten echten Messwert dieser Sitzung zählt es die tatsächlich gelieferte Energie mit und stoppt, sobald diese gemessene Summe Ihr Ziel erreicht — überschritten wird nur, was das Auto seit diesem Messwert aufgenommen hat. Kam in dieser Sitzung überhaupt kein echter Messwert an (oder wurde SEM mitten im Ladevorgang neu gestartet), fehlt der Bezugspunkt, und es wird geladen, bis das Auto selbst kurz vor Voll abregelt.\n\nDamit die Grenze exakt trifft, hinterlegen Sie einen **echten Fahrzeug-SOC-Sensor** für diese Ladestation (Konfiguration → EV → Fahrzeug-SOC-Entität). Die Batterie-% im Dashboard sind SEMs *geschätzter* Ladestand, den es für die harte Grenze bewusst ignoriert (er kann driften). Diese Reparatur verschwindet automatisch, sobald wieder ein echter SOC-Wert verfügbar ist."
+    },
+    "unmanaged_charger_found": {
+      "title": "SEM hat eine Wallbox gefunden, die es nicht steuert",
+      "description": "Das Gerät **{name}** sieht nach einer Wallbox aus, in SEM ist aber keine Wallbox konfiguriert — SEM lässt sie deshalb unangetastet ({count} Kandidat(en) gefunden).\n\nDamit SEM das Laden mit Solarstrom und günstigen Tarifen optimieren kann, füge sie unter Einstellungen → Geräte & Dienste → SEM → Konfigurieren hinzu. Damit erscheint auch der EV-Tab mit den Lademodi.\n\nFalls das keine Wallbox ist, ignoriere diesen Hinweis — SEM steuert das Gerät so oder so nicht."
     }
   },
   "selector": {

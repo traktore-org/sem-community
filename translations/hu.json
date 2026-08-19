@@ -1449,10 +1449,6 @@
     }
   },
   "issues": {
-    "ev_charger_not_configured": {
-      "title": "Az EV-töltő nincs konfigurálva",
-      "description": "Nincsenek konfigurálva EV-töltő érzékelők, ezért az EV-töltési funkciók nem érhetők el. Az EV-töltés engedélyezéséhez adjon hozzá egy „csatlakoztatva” érzékelőt vagy egy töltési teljesítmény érzékelőt az integráció beállításaiban."
-    },
     "sensor_unavailable": {
       "title": "Az érzékelő nem érhető el",
       "description": "A(z) `{entity_id}` ({friendly_name}) érzékelő már több mint {minutes} perce nem érhető el. A SEM nem tudja bevonni a számításokba, amíg helyre nem áll. Ellenőrizze a mögöttes integrációt (Huawei modbus / Solcast / Forecast.Solar / az inverter hálózata). Ez a bejegyzés automatikusan eltűnik, amint az érzékelő legközelebb érvényes értéket jelent."
@@ -1500,6 +1496,10 @@
     "soc_cap_unenforceable": {
       "title": "A(z) {target}%-os töltési limit nem érvényesíthető: {name}",
       "description": "A(z) **{name}** százalékos töltési célra van állítva, de a jármű jelenleg nem jelenti a töltöttségi szintjét, ezért a SEM nem tud *pontosan* **{target}%**-nál megállni.\n\nNem vakon tölt azonban: a munkamenet utolsó valós leolvasásától kezdve számolja a ténylegesen leadott energiát, és leáll, amint ez a mért összeg eléri a célt — a túllépés csak annyi, amennyit az autó az óta a leolvasás óta felvett. Ha ebben a munkamenetben egyáltalán nem érkezett valós leolvasás (vagy a SEM töltés közben újraindult), nincs mihez viszonyítani, és a töltés addig tart, amíg maga az autó nem csökkenti a teljesítményt, majdnem tele állapotban.\n\nA pontos korláthoz állítson be **valós jármű-SOC-érzékelőt** ehhez a töltőhöz (Konfiguráció → EV → Jármű SOC entitás). Az irányítópulton látható akkumulátorszázalék a SEM *becsült* SOC-értéke, amelyet a kemény korlátnál szándékosan figyelmen kívül hagy (elcsúszhat). Ez a javítás automatikusan eltűnik, amint ismét elérhető valós SOC-leolvasás."
+    },
+    "unmanaged_charger_found": {
+      "title": "A SEM talált egy töltőt, amit nem vezérel",
+      "description": "A **{name}** eszköz elektromos autó töltőnek tűnik, de a SEM-ben nincs töltő beállítva — így a SEM nem nyúl hozzá ({count} jelölt).\n\nHogy a SEM napenergiával és olcsó tarifákkal optimalizálja a töltést, add hozzá: Beállítások → Eszközök és szolgáltatások → SEM → Konfigurálás. Ezzel az EV fül is megjelenik a töltési módokkal.\n\nHa ez nem töltő, hagyd figyelmen kívül — a SEM így sem fogja vezérelni."
     }
   },
   "selector": {

@@ -1449,10 +1449,6 @@
     }
   },
   "issues": {
-    "ev_charger_not_configured": {
-      "title": "Nabíječka EV není nakonfigurována",
-      "description": "Nejsou nakonfigurovány žádné senzory nabíječky EV, takže funkce nabíjení EV nejsou dostupné. Chcete-li povolit nabíjení EV, přidejte v možnostech integrace senzor „připojeno“ nebo senzor nabíjecího výkonu."
-    },
     "sensor_unavailable": {
       "title": "Senzor je nedostupný",
       "description": "Senzor `{entity_id}` ({friendly_name}) je nedostupný již {minutes}+ minut. Dokud se neobnoví, SEM jej nemůže zahrnout do výpočtů. Zkontrolujte nadřazenou integraci (Huawei modbus / Solcast / Forecast.Solar / síť vašeho měniče). Tento problém zmizí automaticky, jakmile senzor příště nahlásí platnou hodnotu."
@@ -1500,6 +1496,10 @@
     "soc_cap_unenforceable": {
       "title": "Nelze vynutit limit nabíjení {target} %: {name}",
       "description": "**{name}** má nastavený procentní cíl nabíjení, ale vozidlo právě teď nehlásí stav nabití, takže SEM nemůže zastavit *přesně* na **{target}%**.\n\nNenabíjí ale naslepo: od posledního skutečného odečtu v této relaci počítá skutečně dodanou energii a zastaví, jakmile tento naměřený součet dosáhne vašeho cíle — překročení je jen to, co si auto od onoho odečtu vzalo. Pokud v této relaci nedorazil žádný skutečný odečet (nebo se SEM restartoval během nabíjení), není se od čeho odrazit a nabíjí se, dokud auto samo krátce před plným nesníží výkon.\n\nAby limit padl přesně, nastavte pro tuto nabíječku **skutečný senzor SOC vozidla** (Konfigurace → EV → Entita SOC vozidla). Procenta baterie na nástěnce jsou *odhadovaný* SOC od SEM, který se pro tvrdý limit záměrně ignoruje (může se rozejít). Tato oprava zmizí automaticky, jakmile bude opět k dispozici skutečný odečet SOC."
+    },
+    "unmanaged_charger_found": {
+      "title": "SEM našel nabíječku, kterou neřídí",
+      "description": "Zařízení **{name}** vypadá jako nabíječka EV, ale v SEM žádná není nastavena — SEM se jí proto nedotýká (nalezeno {count} kandidátů).\n\nAby SEM optimalizoval nabíjení sluncem a levnými tarify, přidejte ji v Nastavení → Zařízení a služby → SEM → Konfigurovat. Tím se také objeví karta EV s režimy nabíjení.\n\nPokud to nabíječka není, upozornění ignorujte — SEM ji stejně řídit nebude."
     }
   },
   "selector": {

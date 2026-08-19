@@ -1449,10 +1449,6 @@
     }
   },
   "issues": {
-    "ev_charger_not_configured": {
-      "title": "Latauslaitetta ei ole määritetty",
-      "description": "Sähköauton latauslaitteen antureita ei ole määritetty, joten latausominaisuudet eivät ole käytettävissä. Ota lataus käyttöön lisäämällä integraation asetuksiin ”yhdistetty”-anturi tai lataustehon anturi."
-    },
     "sensor_unavailable": {
       "title": "Anturi ei ole saatavilla",
       "description": "Anturi `{entity_id}` ({friendly_name}) on ollut poissa käytöstä yli {minutes} minuutin ajan. SEM ei voi sisällyttää sitä laskelmiin ennen kuin se palautuu. Tarkista taustaintegraatio (Huawei modbus / Solcast / Forecast.Solar / invertterisi verkkoyhteys). Tämä ongelma poistuu automaattisesti, kun anturi seuraavan kerran raportoi kelvollisen arvon."
@@ -1500,6 +1496,10 @@
     "soc_cap_unenforceable": {
       "title": "Latausrajaa {target} % ei voi valvoa: {name}",
       "description": "**{name}** on asetettu prosentuaaliseen lataustavoitteeseen, mutta ajoneuvo ei juuri nyt raportoi varaustasoaan, joten SEM ei voi pysähtyä *tarkalleen* kohtaan **{target}%**.\n\nSe ei silti lataa sokkona: viimeisimmästä tämän istunnon todellisesta lukemasta lähtien se laskee tosiasiassa toimitetun energian ja pysäyttää latauksen, kun mitattu summa saavuttaa tavoitteesi — ylitys on vain se, minkä auto on ottanut kyseisen lukeman jälkeen. Jos tässä istunnossa ei ole saapunut yhtään todellista lukemaa (tai SEM käynnistyi uudelleen kesken latauksen), vertailukohtaa ei ole ja lataus jatkuu, kunnes auto itse laskee tehoa lähellä täyttä.\n\nJotta raja osuisi kohdalleen, määritä tälle latausasemalle **todellinen ajoneuvon SOC-anturi** (Määritykset → EV → Ajoneuvon SOC-entiteetti). Koontinäytön akkuprosentti on SEM:n *arvioitu* varaustaso, joka jätetään tarkoituksella huomiotta kovassa rajassa (se voi ajautua). Tämä korjaus poistuu automaattisesti heti, kun todellinen SOC-lukema on taas saatavilla."
+    },
+    "unmanaged_charger_found": {
+      "title": "SEM löysi latauslaitteen, jota se ei ohjaa",
+      "description": "Laite **{name}** näyttää sähköauton laturilta, mutta SEM:iin ei ole määritetty laturia — joten SEM ei koske siihen ({count} ehdokasta löytyi).\n\nLisää se kohdassa Asetukset → Laitteet ja palvelut → SEM → Määritä, niin SEM voi optimoida latauksen auringolla ja halvoilla tariffeilla. Samalla tulee näkyviin EV-välilehti lataustiloineen.\n\nJos tämä ei ole laturi, jätä ilmoitus huomiotta — SEM ei ohjaa sitä joka tapauksessa."
     }
   },
   "selector": {

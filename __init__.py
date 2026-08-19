@@ -295,6 +295,106 @@ def _warn_missing_charger_entities(hass, charger_name, charger_id, to_check):
     return missing
 
 
+def build_welcome_message(config: dict) -> str:
+    """The first-run checklist, describing THIS install (#805 fix 2).
+
+    The old text told everyone to "pick an EV charge mode on the EV tab",
+    but #595 removes that tab when no charger is configured — so the one
+    reader who most needed guidance (owns a wallbox, hasn't told SEM about
+    it) was pointed into a void and concluded the controls were missing
+    (#803, they uninstalled). Every line here is either about something
+    this install HAS, or an invitation to add what it lacks.
+
+    It also states plainly what SEM will and will not touch. The previous
+    wording promised "sensible defaults" while SEM was about to manage
+    auto-discovered devices; since #805 those are monitor-only, and saying
+    so is how the user can consent to it.
+    """
+    has_ev = bool(config.get("ev_chargers")
+                  or config.get("ev_charging_power_sensor"))
+    has_battery = bool(config.get("battery_capacity_kwh")
+                       or config.get("battery_soc_sensor")
+                       or config.get("battery_power_sensor"))
+
+    lines = ["1. Confirm solar is reporting on the Energy tab"]
+    if has_ev:
+        lines.append("2. Pick a charge mode on the EV tab "
+                     "(solar only, min + solar, solar + cheap, always max)")
+    else:
+        lines.append("2. Add your EV charger to let SEM manage charging — "
+                     "Settings → Devices & Services → SEM → Configure. "
+                     "Until then SEM leaves it alone.")
+    if has_battery:
+        lines.append("3. Set your battery reserve on the Battery tab")
+    else:
+        lines.append("3. Add your home battery, if you have one — "
+                     "same Configure screen")
+
+    return (
+        "👋 Welcome! Your SEM dashboard is ready at "
+        "[Open the SEM Dashboard](/sem-dashboard/home).\n\n"
+        "**First-day checklist:**\n"
+        + "\n".join(lines)
+        + "\n\n**What SEM does right now:** it watches, and it controls "
+          "only what you have configured. Devices it discovers on its own "
+          "are set to *monitor* until you give them a mode in the device "
+          "list — nothing gets switched behind your back."
+    )
+
+
+# (#805) What "looks like a car charger" means when SEM has to guess.
+# Word-ish matching on purpose: a bare substring test turns the guess into
+# noise (#781 — "charge" would fire on recharge_reminder), so a marker must
+# sit on a word boundary of the object_id.
+CHARGER_NAME_MARKERS = (
+    "wallbox", "keba", "easee", "goe", "go_e", "echarger", "evse",
+    "zaptec", "ladefreigabe", "ladestrom", "chargepoint", "openevse",
+    "openwb", "heidelberg", "peblar", "charger",
+)
+
+
+def charger_shaped_devices(entity_ids) -> list:
+    """Entity ids that look like an EV charger (#805).
+
+    A guess, and labelled as one wherever its result is shown: the point is
+    to turn an invisible import into an offer the user can accept or ignore,
+    never to act on the guess.
+    """
+    import re
+
+    out = []
+    for eid in entity_ids or []:
+        obj = str(eid).split(".", 1)[-1].lower()
+        words = [w for w in re.split(r"[^a-z0-9]+", obj) if w]
+        if any(m in words or any(w.startswith(m) and len(w) - len(m) <= 2
+                                 for w in words)
+               for m in CHARGER_NAME_MARKERS):
+            out.append(eid)
+    return out
+
+
+def unmanaged_charger_repair(config: dict, candidates: list):
+    """Should SEM raise "found a charger it does not manage"? (#805)
+
+    Replaces the blanket ``ev_charger_not_configured`` repair, which fired
+    for every install without a charger — including solar-only homes that
+    own no car — and named nothing. This one fires only when discovery
+    actually found something charger-shaped, and says WHICH device, which
+    is the line that would have prevented #803.
+
+    Returns the repair's translation payload, or None for silence.
+    """
+    if config.get("ev_chargers") or config.get("ev_charging_power_sensor") \
+            or config.get("ev_connected_sensor"):
+        return None
+    if not candidates:
+        return None
+    return {
+        "translation_key": "unmanaged_charger_found",
+        "placeholders": {"name": candidates[0], "count": str(len(candidates))},
+    }
+
+
 def _coerce_switch_on(value) -> bool:
     """Interpret a set_option value as a switch on/off intent.
 
@@ -1795,19 +1895,34 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     except Exception as err:  # noqa: BLE001 — defensive: never fail setup over this
         _LOGGER.debug("Version-change notification skipped: %s", err)
 
-    # Create repair issue if EV charger is not configured (quality scale: repair-issues)
-    if not full_config.get("ev_connected_sensor") and not full_config.get("ev_charging_power_sensor"):
+    # (#805) Name the charger SEM found but does not manage — and stay
+    # quiet on a solar-only install. The old blanket
+    # ``ev_charger_not_configured`` nagged every install without a charger
+    # and named nothing, so the one reader who owned a wallbox (#803) got
+    # no usable signal from it. Retired here; its id is deleted so an
+    # upgrading install loses the stale warning.
+    ir.async_delete_issue(hass, DOMAIN, "ev_charger_not_configured")
+    try:
+        _cands = charger_shaped_devices(
+            [st.entity_id for st in hass.states.async_all("switch")]
+            + [st.entity_id for st in hass.states.async_all("number")]
+        )
+        _repair = unmanaged_charger_repair(full_config, _cands)
+    except Exception:  # noqa: BLE001 — a repair never costs a setup
+        _repair = None
+    if _repair:
         ir.async_create_issue(
             hass,
             DOMAIN,
-            "ev_charger_not_configured",
+            "unmanaged_charger_found",
             is_fixable=False,
             is_persistent=False,
             severity=ir.IssueSeverity.WARNING,
-            translation_key="ev_charger_not_configured",
+            translation_key=_repair["translation_key"],
+            translation_placeholders=_repair["placeholders"],
         )
     else:
-        ir.async_delete_issue(hass, DOMAIN, "ev_charger_not_configured")
+        ir.async_delete_issue(hass, DOMAIN, "unmanaged_charger_found")
 
     # Initialize load management (optional feature - don't fail setup if it fails)
     try:
@@ -2285,16 +2400,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 {
                     "notification_id": "sem_first_install_welcome",
                     "title": "Solar Energy Management installed",
-                    "message": (
-                        "👋 Welcome! Your SEM dashboard is ready at "
-                        "[Open the SEM Dashboard](/sem-dashboard/home).\n\n"
-                        "**First-day checklist:**\n"
-                        "1. Confirm solar is reporting on the Energy tab\n"
-                        "2. Pick an EV charge mode on the EV tab\n"
-                        "3. Set your battery reserve on the Battery tab\n\n"
-                        "Everything else has sensible defaults — tune later "
-                        "via Settings → Devices & Services → SEM → Configure."
-                    ),
+                    "message": build_welcome_message(full_config),
                 },
                 blocking=False,
             )

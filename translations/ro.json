@@ -1449,10 +1449,6 @@
     }
   },
   "issues": {
-    "ev_charger_not_configured": {
-      "title": "Încărcătorul EV nu este configurat",
-      "description": "Nu este configurat niciun senzor pentru încărcătorul EV, deci funcțiile de încărcare EV nu sunt disponibile. Adăugați un senzor „conectat” sau un senzor de putere de încărcare în opțiunile integrării pentru a activa încărcarea EV."
-    },
     "sensor_unavailable": {
       "title": "Senzor indisponibil",
       "description": "Senzorul `{entity_id}` ({friendly_name}) este indisponibil de peste {minutes} minute. SEM nu îl poate include în calcule până când își revine. Verificați integrarea din amonte (Huawei modbus / Solcast / Forecast.Solar / rețeaua invertorului dumneavoastră). Această problemă se șterge automat când senzorul raportează din nou o valoare validă."
@@ -1500,6 +1496,10 @@
     "soc_cap_unenforceable": {
       "title": "Limita de încărcare de {target}% nu poate fi aplicată: {name}",
       "description": "**{name}** are setată o țintă de încărcare în procente, dar vehiculul nu îşi raportează starea de încărcare în acest moment, aşa că SEM nu poate opri *exact* la **{target}%**.\n\nTotuşi nu încarcă orbeşte: de la ultima citire reală din această sesiune contorizează energia livrată efectiv şi opreşte în momentul în care acest total măsurat atinge ţinta — depăşirea este doar cât a luat maşina de la acea citire încoace. Dacă în această sesiune nu a sosit nicio citire reală (sau SEM a repornit în timpul încărcării), nu există reper şi încărcarea continuă până când maşina însăşi reduce puterea, aproape plină.\n\nPentru o limită care nimereşte exact, configuraţi un **senzor real de SOC al vehiculului** pentru acest încărcător (Configurare → EV → Entitate SOC vehicul). Procentul bateriei din tabloul de bord este SOC-ul *estimat* de SEM, ignorat în mod deliberat pentru limita fermă (poate devia). Această reparaţie dispare automat de îndată ce o citire reală de SOC este din nou disponibilă."
+    },
+    "unmanaged_charger_found": {
+      "title": "SEM a găsit un încărcător pe care nu îl gestionează",
+      "description": "Dispozitivul **{name}** pare un încărcător EV, dar niciunul nu este configurat în SEM — deci SEM nu îl atinge ({count} candidat(i) găsiți).\n\nPentru ca SEM să optimizeze încărcarea cu energie solară și tarife ieftine, adaugă-l în Setări → Dispozitive și servicii → SEM → Configurare. Astfel apare și fila EV cu modurile de încărcare.\n\nDacă nu este un încărcător, ignoră acest mesaj — SEM nu îl va controla oricum."
     }
   },
   "selector": {

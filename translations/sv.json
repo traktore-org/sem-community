@@ -1449,10 +1449,6 @@
     }
   },
   "issues": {
-    "ev_charger_not_configured": {
-      "title": "EV-laddare ej konfigurerad",
-      "description": "Inga sensorer för EV-laddaren är konfigurerade, så EV-laddningsfunktionerna är inte tillgängliga. Lägg till en ”ansluten”-sensor eller en laddningseffektsensor i integrationsalternativen för att aktivera EV-laddning."
-    },
     "sensor_unavailable": {
       "title": "Sensorn är otillgänglig",
       "description": "Sensorn `{entity_id}` ({friendly_name}) har varit otillgänglig i {minutes}+ minuter. SEM kan inte inkludera den i beräkningarna förrän den återhämtar sig. Kontrollera den underliggande integrationen (Huawei modbus / Solcast / Forecast.Solar / ditt växelriktarnätverk). Detta problem försvinner automatiskt när sensorn nästa gång rapporterar ett giltigt värde."
@@ -1500,6 +1496,10 @@
     "soc_cap_unenforceable": {
       "title": "Kan inte upprätthålla laddgränsen på {target} %: {name}",
       "description": "**{name}** är inställd på ett laddmål i procent, men fordonet rapporterar just nu ingen laddningsnivå — SEM kan därför inte stanna *exakt* vid **{target}%**.\n\nDet laddar ändå inte blint: från den senaste riktiga avläsningen under den här sessionen räknar det den energi som faktiskt levererats och stannar när den uppmätta summan når ditt mål — överskridandet är bara det bilen tagit sedan avläsningen. Om ingen riktig avläsning alls har kommit in under sessionen (eller om SEM startades om mitt i laddningen) saknas referenspunkt, och laddningen pågår tills bilen själv drar ner effekten nära fullt.\n\nFör en gräns som träffar rätt, koppla en **riktig SOC-sensor för fordonet** till den här laddaren (Konfiguration → EV → Fordons-SOC-entitet). Batteriprocenten på instrumentpanelen är SEM:s *uppskattade* SOC, som medvetet ignoreras för den hårda gränsen (den kan driva). Den här reparationen försvinner automatiskt så snart en riktig SOC-avläsning finns igen."
+    },
+    "unmanaged_charger_found": {
+      "title": "SEM hittade en laddbox som den inte styr",
+      "description": "Enheten **{name}** ser ut som en laddbox, men ingen är konfigurerad i SEM — så SEM rör den inte ({count} kandidat(er) hittade).\n\nLägg till den under Inställningar → Enheter och tjänster → SEM → Konfigurera för att låta SEM optimera laddning med sol och billiga tariffer. Då dyker även EV-fliken med laddlägen upp.\n\nÄr det ingen laddbox? Ignorera detta — SEM styr den ändå inte."
     }
   },
   "selector": {

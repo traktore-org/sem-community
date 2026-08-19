@@ -1449,10 +1449,6 @@
     }
   },
   "issues": {
-    "ev_charger_not_configured": {
-      "title": "Caricatore EV non configurato",
-      "description": "Nessun sensore del caricatore EV è configurato, quindi le funzioni di ricarica EV non sono disponibili. Aggiungi un sensore «connesso» o un sensore di potenza di ricarica nelle opzioni dell’integrazione per abilitare la ricarica EV."
-    },
     "sensor_unavailable": {
       "title": "Sensore non disponibile",
       "description": "Il sensore `{entity_id}` ({friendly_name}) risulta non disponibile da {minutes}+ minuti. SEM non può includerlo nei calcoli finché non torna disponibile. Controlla l'integrazione a monte (Huawei modbus / Solcast / Forecast.Solar / la rete del tuo inverter). Questo problema si risolve automaticamente quando il sensore riporta di nuovo un valore valido."
@@ -1500,6 +1496,10 @@
     "soc_cap_unenforceable": {
       "title": "Impossibile applicare il limite di carica del {target}%: {name}",
       "description": "**{name}** è impostato su un obiettivo di carica in percentuale, ma il veicolo al momento non comunica il proprio stato di carica: SEM non può quindi fermarsi *esattamente* a **{target}%**.\n\nNon sta però caricando alla cieca: dall'ultima lettura reale di questa sessione conteggia l'energia effettivamente erogata e si ferma quando quel totale misurato raggiunge l'obiettivo — lo sforamento è solo ciò che l'auto ha assorbito da quella lettura in poi. Se in questa sessione non è arrivata alcuna lettura reale (o SEM è stato riavviato durante la carica) manca il riferimento e la carica prosegue finché è l'auto stessa a ridurre la potenza, quasi piena.\n\nPer un limite che cada sul numero esatto, collega un **sensore reale di SOC del veicolo** a questa stazione (Configurazione → EV → Entità SOC veicolo). La percentuale di batteria sulla dashboard è il SOC *stimato* di SEM, che viene deliberatamente ignorato per il limite rigido (può andare alla deriva). Questa riparazione si risolve automaticamente non appena torna disponibile una lettura reale del SOC."
+    },
+    "unmanaged_charger_found": {
+      "title": "SEM ha trovato una wallbox che non gestisce",
+      "description": "Il dispositivo **{name}** sembra una wallbox, ma in SEM non è configurata alcuna wallbox — quindi SEM non la tocca ({count} candidato/i trovato/i).\n\nPer far ottimizzare la ricarica con il solare e le tariffe convenienti, aggiungila in Impostazioni → Dispositivi e servizi → SEM → Configura. Così compare anche la scheda EV con le modalità di ricarica.\n\nSe non è una wallbox, ignora questo avviso — SEM non la controllerà comunque."
     }
   },
   "selector": {

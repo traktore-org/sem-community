@@ -1449,10 +1449,6 @@
     }
   },
   "issues": {
-    "ev_charger_not_configured": {
-      "title": "Carregador de VE não configurado",
-      "description": "Não há sensores do carregador de VE configurados, por isso as funções de carregamento de VE estão indisponíveis. Adicione um sensor de «ligado» ou um sensor de potência de carregamento nas opções da integração para ativar o carregamento de VE."
-    },
     "sensor_unavailable": {
       "title": "Sensor indisponível",
       "description": "O sensor `{entity_id}` ({friendly_name}) está indisponível há mais de {minutes} minutos. O SEM não o pode incluir nos cálculos enquanto não recuperar. Verifique a integração de origem (Huawei modbus / Solcast / Forecast.Solar / a rede do seu inversor). Este problema é resolvido automaticamente quando o sensor voltar a reportar um valor válido."
@@ -1500,6 +1496,10 @@
     "soc_cap_unenforceable": {
       "title": "Não é possível aplicar o limite de carga de {target}%: {name}",
       "description": "**{name}** está definido com um objetivo de carga em percentagem, mas o seu veículo não está a reportar o estado de carga neste momento, pelo que o SEM não consegue parar *exatamente* nos **{target}%**.\n\nAinda assim não carrega às cegas: a partir da última leitura real desta sessão contabiliza a energia efetivamente entregue e para assim que esse total medido atinge o seu objetivo — a ultrapassagem é apenas o que o carro tenha recebido desde essa leitura. Se nesta sessão não chegou nenhuma leitura real (ou o SEM reiniciou a meio da carga), não há referência a partir da qual contar e a carga prossegue até o próprio carro reduzir a potência, quase cheio.\n\nPara um limite que acerte no número, configure um **sensor real de SOC do veículo** para este carregador (Configuração → VE → Entidade de SOC do veículo). A % de bateria no painel é o SOC *estimado* pelo SEM, que é deliberadamente ignorado no limite rígido (pode desviar-se). Esta reparação desaparece automaticamente assim que houver novamente uma leitura real de SOC."
+    },
+    "unmanaged_charger_found": {
+      "title": "O SEM encontrou um carregador que não gere",
+      "description": "O dispositivo **{name}** parece um carregador de VE, mas nenhum está configurado no SEM — por isso o SEM não lhe toca ({count} candidato(s) encontrado(s)).\n\nPara o SEM optimizar o carregamento com solar e tarifas baratas, adicione-o em Definições → Dispositivos e serviços → SEM → Configurar. Isso também activa o separador VE com os modos de carga.\n\nSe não for um carregador, ignore este aviso — o SEM não o vai controlar de qualquer forma."
     }
   },
   "selector": {

@@ -1449,10 +1449,6 @@
     }
   },
   "issues": {
-    "ev_charger_not_configured": {
-      "title": "Ładowarka EV nie jest skonfigurowana",
-      "description": "Nie skonfigurowano żadnych czujników ładowarki EV, więc funkcje ładowania EV są niedostępne. Dodaj czujnik „podłączony” lub czujnik mocy ładowania w opcjach integracji, aby włączyć ładowanie EV."
-    },
     "sensor_unavailable": {
       "title": "Czujnik niedostępny",
       "description": "Czujnik `{entity_id}` ({friendly_name}) jest niedostępny od co najmniej {minutes} min. SEM nie może go uwzględniać w obliczeniach, dopóki nie wróci do działania. Sprawdź integrację nadrzędną (Huawei modbus / Solcast / Forecast.Solar / sieć Twojego falownika). To zgłoszenie znika automatycznie, gdy czujnik ponownie zgłosi prawidłową wartość."
@@ -1500,6 +1496,10 @@
     "soc_cap_unenforceable": {
       "title": "Nie można wymusić limitu ładowania {target}%: {name}",
       "description": "**{name}** ma ustawiony procentowy cel ładowania, ale pojazd w tej chwili nie raportuje stanu naładowania, więc SEM nie może zatrzymać się *dokładnie* przy **{target}%**.\n\nNie ładuje jednak na ślepo: od ostatniego rzeczywistego odczytu w tej sesji zlicza faktycznie dostarczoną energię i zatrzymuje ładowanie, gdy ta zmierzona suma osiągnie cel — przekroczenie to tylko to, co auto pobrało od tamtego odczytu. Jeśli w tej sesji nie dotarł żaden rzeczywisty odczyt (albo SEM uruchomił się ponownie w trakcie ładowania), nie ma punktu odniesienia i ładowanie trwa, aż samo auto zredukuje moc tuż przed pełnym.\n\nAby limit trafiał w punkt, podłącz **rzeczywisty czujnik SOC pojazdu** dla tej ładowarki (Konfiguracja → EV → Encja SOC pojazdu). Procent baterii na pulpicie to *szacowany* SOC SEM, celowo pomijany przy twardym limicie (może się rozjeżdżać). Ta naprawa znika automatycznie, gdy tylko znów pojawi się rzeczywisty odczyt SOC."
+    },
+    "unmanaged_charger_found": {
+      "title": "SEM znalazł ładowarkę, którą nie zarządza",
+      "description": "Urządzenie **{name}** wygląda na ładowarkę EV, ale w SEM nie skonfigurowano żadnej — SEM jej nie dotyka ({count} kandydat(ów)).\n\nAby SEM optymalizował ładowanie energią słoneczną i tanimi taryfami, dodaj ją w Ustawienia → Urządzenia i usługi → SEM → Konfiguruj. Pojawi się też zakładka EV z trybami ładowania.\n\nJeśli to nie ładowarka, zignoruj tę informację — SEM i tak nie będzie nią sterować."
     }
   },
   "selector": {

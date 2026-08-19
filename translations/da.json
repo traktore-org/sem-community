@@ -1449,10 +1449,6 @@
     }
   },
   "issues": {
-    "ev_charger_not_configured": {
-      "title": "EV-lader ikke konfigureret",
-      "description": "Der er ikke konfigureret nogen sensorer til EV-laderen, så EV-opladningsfunktionerne er ikke tilgængelige. Tilføj en ”tilsluttet”-sensor eller en opladningseffektsensor i integrationsindstillingerne for at aktivere EV-opladning."
-    },
     "sensor_unavailable": {
       "title": "Sensor utilgængelig",
       "description": "Sensoren `{entity_id}` ({friendly_name}) har været utilgængelig i {minutes}+ minutter. SEM kan ikke medtage den i beregningerne, før den kommer sig. Kontrollér den underliggende integration (Huawei modbus / Solcast / Forecast.Solar / dit inverternetværk). Dette problem forsvinder automatisk, når sensoren næste gang rapporterer en gyldig værdi."
@@ -1500,6 +1496,10 @@
     "soc_cap_unenforceable": {
       "title": "Kan ikke håndhæve opladningsgrænsen på {target} %: {name}",
       "description": "**{name}** er sat til et opladningsmål i procent, men dit køretøj rapporterer i øjeblikket ikke sin ladetilstand, så SEM kan ikke stoppe *præcis* ved **{target}%**.\n\nDen oplader dog ikke i blinde: fra den seneste rigtige aflæsning i denne session tæller den den energi, der faktisk er leveret, og stopper, når den målte sum når dit mål — overskridelsen er kun det, bilen har taget siden den aflæsning. Er der slet ikke kommet en rigtig aflæsning i denne session (eller genstartede SEM midt i opladningen), mangler referencepunktet, og der oplades, indtil bilen selv skruer ned tæt på fuld.\n\nFor en grænse der rammer plet, tilknyt en **rigtig SOC-sensor for køretøjet** til denne lader (Konfiguration → EV → Køretøjs-SOC-entitet). Batteriprocenten på dashboardet er SEM's *estimerede* SOC, som bevidst ignoreres ved den hårde grænse (den kan drive). Denne reparation forsvinder automatisk, så snart en rigtig SOC-aflæsning er tilgængelig igen."
+    },
+    "unmanaged_charger_found": {
+      "title": "SEM fandt en ladeboks, den ikke styrer",
+      "description": "Enheden **{name}** ligner en ladeboks, men der er ingen konfigureret i SEM — så SEM rører den ikke ({count} kandidat(er) fundet).\n\nTilføj den under Indstillinger → Enheder og tjenester → SEM → Konfigurer, så SEM kan optimere ladning med sol og billige tariffer. Det åbner også EV-fanen med ladetilstande.\n\nEr det ikke en ladeboks? Ignorér beskeden — SEM styrer den alligevel ikke."
     }
   },
   "selector": {

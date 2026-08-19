@@ -1449,10 +1449,6 @@
     }
   },
   "issues": {
-    "ev_charger_not_configured": {
-      "title": "Chargeur VE non configuré",
-      "description": "Aucun capteur de chargeur VE n’est configuré, les fonctions de charge VE sont donc indisponibles. Ajoutez un capteur « connecté » ou un capteur de puissance de charge dans les options de l’intégration pour activer la charge VE."
-    },
     "sensor_unavailable": {
       "title": "Capteur indisponible",
       "description": "Le capteur `{entity_id}` ({friendly_name}) est indisponible depuis plus de {minutes} minutes. SEM ne peut pas l'inclure dans ses calculs tant qu'il n'est pas rétabli. Vérifiez l'intégration en amont (Huawei modbus / Solcast / Forecast.Solar / le réseau de votre onduleur). Ce problème disparaît automatiquement dès que le capteur remonte à nouveau une valeur valide."
@@ -1500,6 +1496,10 @@
     "soc_cap_unenforceable": {
       "title": "Impossible d'appliquer la limite de charge de {target}% : {name}",
       "description": "**{name}** est réglé sur un objectif de charge en pourcentage, mais votre véhicule ne communique pas son état de charge actuellement — SEM ne peut donc pas s'arrêter *exactement* à **{target}%**.\n\nIl ne charge pas à l'aveugle pour autant : depuis la dernière mesure réelle de cette session, il comptabilise l'énergie réellement livrée et s'arrête dès que ce total mesuré atteint votre objectif — le dépassement se limite à ce que la voiture a pris depuis cette mesure. Si aucune mesure réelle n'est arrivée durant cette session (ou si SEM a redémarré en cours de charge), il n'y a aucun point de référence et la charge se poursuit jusqu'à ce que la voiture elle-même réduise, proche du plein.\n\nPour une limite qui tombe juste, associez un **véritable capteur de SOC véhicule** à cette borne (Configuration → VE → Entité SOC véhicule). Le pourcentage de batterie du tableau de bord est le SOC *estimé* par SEM, qu'il ignore délibérément pour la limite stricte (il peut dériver). Cette réparation disparaît automatiquement dès qu'une mesure de SOC réelle est de nouveau disponible."
+    },
+    "unmanaged_charger_found": {
+      "title": "SEM a trouvé une borne qu'il ne pilote pas",
+      "description": "L'appareil **{name}** ressemble à une borne de recharge, mais aucune borne n'est configurée dans SEM — SEM n'y touche donc pas ({count} candidat(s) trouvé(s)).\n\nPour que SEM optimise la charge avec le solaire et les tarifs bas, ajoutez-la dans Paramètres → Appareils et services → SEM → Configurer. Cela active aussi l'onglet VE avec les modes de charge.\n\nSi ce n'est pas une borne, ignorez cet avis — SEM ne la pilotera pas non plus."
     }
   },
   "selector": {

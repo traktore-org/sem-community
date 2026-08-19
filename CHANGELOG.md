@@ -13,6 +13,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔌 **SEM tells you when it finds a charger it is not managing** (#805) —
+  the old repair warned *every* install without a charger, including
+  solar-only homes that own no car, and named nothing. It is replaced by one
+  that fires only when discovery actually found something charger-shaped and
+  says **which device**: *"{name} looks like an EV charger, but none is
+  configured — so SEM is leaving it alone."* That single line is what would
+  have prevented the whole episode behind #803. It arrives in your Home
+  Assistant language like everything else, and if the guess is wrong you can
+  ignore it — SEM does not control the device either way.
+
+- 👋 **The first-run welcome describes YOUR install** (#805) — it told
+  everyone to "pick an EV charge mode on the EV tab", but that tab is
+  deliberately absent until a charger is configured: the one reader who most
+  needed guidance (owns a wallbox, hasn't told SEM about it) was pointed at
+  something that isn't there and concluded the controls were broken. Each
+  line is now either about something this install has, or an invitation to
+  add what it lacks — and it states plainly that SEM controls only what you
+  configured, with discovered devices left on *monitor* until you give them
+  a mode.
+
 - 🔒 **SEM no longer acts on devices you never configured** (#805, from a
   first-install report) — a device SEM discovered by itself defaulted to
   "peak only", an *acting* mode: load management could switch it off. A

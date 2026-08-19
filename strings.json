@@ -1449,10 +1449,6 @@
     }
   },
   "issues": {
-    "ev_charger_not_configured": {
-      "title": "EV charger not configured",
-      "description": "No EV charger sensors are configured. Solar EV charging optimization will not work. Go to the integration settings to configure your EV charger sensors."
-    },
     "sensor_unavailable": {
       "title": "Sensor unavailable",
       "description": "The sensor `{entity_id}` ({friendly_name}) has been unavailable for {minutes}+ minutes. SEM cannot include it in calculations until it recovers. Check the upstream integration (Huawei modbus / Solcast / Forecast.Solar / your inverter network). This issue clears automatically when the sensor next reports a valid value."
@@ -1500,6 +1496,10 @@
     "keba_failsafe_active": {
       "title": "KEBA failsafe is enabled — disable it for steady charging",
       "description": "Your KEBA charger \"{name}\" has its failsafe watchdog enabled. SEM (like evcc) no longer relies on it, but while it's on the charger keeps dropping the offered current to its 6 A fallback between commands, which makes charging oscillate (6↔9 A) and some cars (e.g. Renault Zoe) refuse to charge steadily.\n\nHome Assistant's KEBA service can't switch it off (it won't accept a timeout of 0), so you need to disable it at the charger itself: set the **failsafe timeout to 0** (KEBA UDP `failsafe 0 0 1`, or via KEBA's KeContact tooling). See the linked guide for step-by-step instructions. This Repair clears automatically once the failsafe is off."
+    },
+    "unmanaged_charger_found": {
+      "title": "SEM found a charger it is not managing",
+      "description": "The device **{name}** looks like an EV charger, but no charger is configured in SEM — so SEM is leaving it alone ({count} candidate(s) found).\n\nTo let SEM optimise your charging with solar and cheap tariffs, add it under Settings → Devices & Services → SEM → Configure. That also unlocks the EV tab with the charge modes.\n\nIf this is not a car charger, ignore this notice — SEM will not control it either way."
     }
   },
   "selector": {
