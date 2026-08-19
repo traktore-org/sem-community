@@ -390,12 +390,24 @@ class SEMEnergyPlanCard extends SEMLitBase {
             });
             if (text) rows.push({ d, text, k: KINDS[d.kind] || KINDS.load });
         }
+        // (#800) The battery's night, one row: codes in, sentences out;
+        // the epoch formats HERE because only the browser owns the
+        // viewer's clock.
+        const bn = rv.battery;
+        const bnText = bn ? this._format('energy_plan_review_' + bn.code, {
+            drained: (bn.drained || 0).toFixed(1),
+            clipped: (bn.clipped_h || 0).toFixed(1),
+            full_at: bn.full_at_ts
+                ? new Date(bn.full_at_ts * 1000).toLocaleTimeString(
+                    [], { hour: '2-digit', minute: '2-digit' })
+                : '',
+        }) : null;
         const sc = rv.self_consumption;
         const scText = sc ? this._format('energy_plan_review_' + sc.code, {
             actual: Math.round((sc.actual_share || 0) * 100),
             predicted: Math.round((sc.predicted_share || 0) * 100),
         }) : null;
-        if (!rows.length && !scText) return nothing;
+        if (!rows.length && !scText && !bnText) return nothing;
         return html`
             <div class="review">
                 <div class="rev-h">${this._t('energy_plan_review_title')}</div>
@@ -407,6 +419,13 @@ class SEMEnergyPlanCard extends SEMLitBase {
                         <span class="rev-txt">${r.text}</span>
                     </div>
                 `)}
+                ${bnText ? html`
+                    <div class="rev-row">
+                        <ha-icon icon="mdi:battery-arrow-down"
+                                 style="--mdc-icon-size:12px;color:#4db6ac"></ha-icon>
+                        <span class="rev-name">${this._t('battery')}</span>
+                        <span class="rev-txt">${bnText}</span>
+                    </div>` : nothing}
                 ${scText ? html`
                     <div class="rev-row">
                         <ha-icon icon="mdi:solar-power-variant"

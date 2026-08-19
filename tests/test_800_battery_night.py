@@ -285,3 +285,61 @@ class TestSpecCoverage778:
         tr.tick(t, True, _s())
         rec = tr.sealed()[-1]
         assert rec["day_home_kwh"] == pytest.approx(1.5, rel=0.03)
+
+
+class TestMorningVerdictLine:
+    """(#800 commit 2) The battery sentence in the morning review —
+    codes + numbers out, prose stays on the card (#755 pillar 4 rules:
+    silence about the trivial, silence when untrainable)."""
+
+    def _rec(self, **kw):
+        base = {
+            "date": "2026-08-18", "drain_kwh": 4.2, "assist_kwh": 0.0,
+            "export_kwh": 0.0, "night_grid_kwh": 0.0, "day_home_kwh": 9.0,
+            "soc_start": 90.0, "soc_morning": 62.0, "reserve_hit": False,
+            "gap_s": 0.0, "trainable": True, "refill_full_at": None,
+            "clipped_hours": 0.0, "forecast_kwh": 30.0,
+            "outdoor_temp_c": 12.0,
+        }
+        base.update(kw)
+        return base
+
+    def test_clipping_wins_the_verdict(self):
+        from custom_components.solar_energy_management.coordinator.demand_review import (
+            review_battery_night,
+        )
+        v = review_battery_night(self._rec(
+            refill_full_at=1755500000.0, clipped_hours=3.4))
+        assert v["code"] == "batt_clipped"
+        assert v["drained"] == pytest.approx(4.2)
+        assert v["clipped_h"] == pytest.approx(3.4)
+
+    def test_refilled_reports_the_full_timestamp(self):
+        from custom_components.solar_energy_management.coordinator.demand_review import (
+            review_battery_night,
+        )
+        v = review_battery_night(self._rec(refill_full_at=1755500000.0))
+        assert v["code"] == "batt_refilled"
+        assert v["full_at_ts"] == pytest.approx(1755500000.0)
+
+    def test_a_promised_refill_that_never_came_is_short(self):
+        from custom_components.solar_energy_management.coordinator.demand_review import (
+            review_battery_night,
+        )
+        v = review_battery_night(self._rec())
+        assert v["code"] == "batt_short"
+
+    def test_untrainable_nights_stay_silent(self):
+        from custom_components.solar_energy_management.coordinator.demand_review import (
+            review_battery_night,
+        )
+        assert review_battery_night(self._rec(trainable=False)) is None
+        assert review_battery_night(None) is None
+
+    def test_a_trivial_night_stays_silent(self):
+        from custom_components.solar_energy_management.coordinator.demand_review import (
+            review_battery_night,
+        )
+        v = review_battery_night(self._rec(
+            drain_kwh=0.2, forecast_kwh=None, clipped_hours=0.0))
+        assert v is None

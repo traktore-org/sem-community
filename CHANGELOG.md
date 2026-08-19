@@ -31,8 +31,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   have been spent for free), and covariate stamps (date, outdoor
   temperature) for later season bucketing. Holes refuse the night rather
   than being integrated across; a restart prices its own outage as a gap.
-  Recording only: the budget consumer is #778 in 2.1, and by then weeks of
-  real nights exist. (#800)
+  The morning verdict gained the battery's sentence — *drained X kWh
+  overnight · full again by HH:MM / the promised refill never came ·
+  clipped Z h at full: more was spendable* — on the Energy Plan card in all
+  16 languages, with the same restraint rules as the demand rows (an
+  untrainable night says nothing, a trivial one is not worth the morning's
+  attention). Recording + telling only: the budget consumer is #778 in 2.1,
+  and by then weeks of real nights exist. (#800)
 
 # [2.0.0-beta.8] — 18.08.2026
 

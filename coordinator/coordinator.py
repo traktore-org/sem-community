@@ -6825,6 +6825,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         try:
             self._demand_review = review_night(
                 rec.history(), rec.night_summaries())
+            # (#800 commit 2) The battery's sentence rides the same
+            # verdict — last sealed night, same restraint rules.
+            try:
+                from .demand_review import review_battery_night
+                tr = getattr(self, "_battery_night", None)
+                sealed = tr.sealed() if tr is not None else []
+                if sealed and isinstance(self._demand_review, dict):
+                    batt = review_battery_night(sealed[-1])
+                    if batt is not None:
+                        self._demand_review["battery"] = batt
+            except Exception:  # noqa: BLE001 — a verdict never costs a cycle
+                pass
         except Exception:  # noqa: BLE001 — a verdict never costs a cycle
             _LOGGER.debug("demand review skipped", exc_info=True)
             self._demand_review = None

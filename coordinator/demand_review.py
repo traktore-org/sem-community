@@ -171,6 +171,53 @@ def review_share(summaries: Sequence) -> Optional[Dict[str, Any]]:
     return None
 
 
+# (#800 commit 2) The battery's morning sentence.
+CODE_BATT_CLIPPED = "batt_clipped"    # full + exporting: more was spendable
+CODE_BATT_REFILLED = "batt_refilled"  # promise kept — full again
+CODE_BATT_SHORT = "batt_short"        # promised a refill that never came
+CODE_BATT_NIGHT = "batt_night"        # plain: what the night drained
+
+# Clipping below this is a rounding of the day, not a lesson.
+BATT_CLIP_NOISE_H = 0.5
+
+
+def review_battery_night(record) -> Optional[Dict[str, Any]]:
+    """(#800) One row about the battery's night, or silence.
+
+    Same restraint rules as the demand rows: an untrainable night says
+    nothing (its numbers are holes wearing units), and a trivial one —
+    sub-noise drain, no clipping, no broken promise — is not worth the
+    morning's attention. Codes + numbers only; the card owns the prose
+    and the local clock (``full_at_ts`` stays an epoch — formatting it
+    here would bake in a timezone this module doesn't have).
+    """
+    if not isinstance(record, dict) or not record.get("trainable"):
+        return None
+    drained = float(record.get("drain_kwh", 0.0) or 0.0)
+    clipped = float(record.get("clipped_hours", 0.0) or 0.0)
+    full_at = record.get("refill_full_at")
+    promised = record.get("forecast_kwh") is not None
+
+    out: Dict[str, Any] = {
+        "drained": round(drained, 1),
+        "clipped_h": round(clipped, 1),
+        "full_at_ts": full_at,
+    }
+    if clipped >= BATT_CLIP_NOISE_H:
+        out["code"] = CODE_BATT_CLIPPED
+        return out
+    if full_at is not None:
+        out["code"] = CODE_BATT_REFILLED
+        return out
+    if promised:
+        out["code"] = CODE_BATT_SHORT
+        return out
+    if drained < NOISE_KWH:
+        return None
+    out["code"] = CODE_BATT_NIGHT
+    return out
+
+
 def review_night(records: List, summaries: Optional[Sequence] = None,
                  **kwargs) -> Dict[str, Any]:
     """The whole review: one row per demand, plus the night's solar share.

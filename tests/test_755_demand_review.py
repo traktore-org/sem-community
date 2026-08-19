@@ -248,7 +248,9 @@ class TestTheUserCanReadIt:
     the user's own language — otherwise the recommender ships raw jargon."""
 
     CODES = ["learning", "on_target", "took_less", "at_ceiling",
-             "sc_met", "sc_missed", "sc_beat"]
+             "sc_met", "sc_missed", "sc_beat",
+             # (#800) the battery's morning sentence
+             "batt_clipped", "batt_refilled", "batt_short", "batt_night"]
 
     def test_every_code_has_a_key_in_every_language(self):
         data = json.loads((REPO / "dashboard" / "translations.json").read_text(
