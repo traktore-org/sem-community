@@ -11,8 +11,6 @@ to it. Phases B-D (manual select / reactive auto / planner boundaries)
 build on this observation layer.
 """
 
-import pytest
-
 from custom_components.solar_energy_management.coordinator.ev_phases import (
     PHASE_MIN_AMPS, PHASE_MIN_WATTS, PHASE_SWITCH_DOMAINS,
     estimate_active_phases, validate_phase_switch_entity,
