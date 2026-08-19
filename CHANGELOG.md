@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔌 **Phase awareness, observation layer** (#804 Phase A, inert by design):
+  SEM now estimates each charger's *actually used* phases from measured
+  watts-per-amp (draw ÷ commanded amps ÷ ~230 V) — a 3-phase box feeding a
+  1-phase car reads 1 — surfaced as `per_charger_phases` on
+  `sensor.sem_charging_state` and in the diagnostics download. A new
+  optional per-charger **Phase Switch Entity** setting (16 languages) lets
+  you name the select/number/switch that performs a 1↔3-phase change
+  (go-e `psm`, KEBA X-series, openWB); SEM validates the declaration and
+  surfaces the verdict but never writes to it — automatic switching builds
+  on this in a later release, per the plan on the issue.
 - 🔋 **Sensor blips no longer poison the battery-night record** (#800
   round 4, found live on the verification rig): the battery power sensor on
   a modbus rig drops out for 40–90 s every few minutes (807 s over one

@@ -312,6 +312,32 @@ Some HEMS tools bundle vendor-specific Modbus templates that write directly to i
 
 ---
 
+## Phase awareness — observed for now, switched later (#804)
+
+Some wallboxes can switch between 1‑ and 3‑phase charging (go‑e's `psm`
+select, KEBA X‑series via Modbus, openWB's flag). Automatic switching is a
+planned feature (#804, built in phases); what ships today is the
+**observation layer**:
+
+* **Active‑phase estimate.** While a charger is genuinely drawing power, SEM
+  divides its measured draw by the commanded amps — watts‑per‑amp is
+  volts‑actually‑in‑use, and over ~230 V per phase that reads the number of
+  phases the *car* is actually using (a 3‑phase box feeding a 1‑phase car
+  reads 1). Exposed per charger as `active_phases` in the
+  `per_charger_phases` attribute on `sensor.sem_charging_state` and as
+  `charger_<id>_active_phases` in the diagnostics download. `null` when the
+  charger isn't drawing enough to measure.
+* **The switch capability is an entity you name, never guessed.** If your
+  wallbox has a phase‑switch control, set **Phase Switch Entity** in the
+  charger's options (Settings → SEM → Configure → EV charger → edit). SEM
+  validates that it exists and is a `select`/`number`/`switch`, and surfaces
+  the verdict (`switch_valid`) beside the estimate. **SEM does not write to
+  this entity yet** — naming it today means automatic phase handling can be
+  enabled per charger the moment the feature lands, and the estimate above
+  already confirms any switch you perform manually.
+
+---
+
 ## The curtailment probe — harvesting solar an export limit hides
 
 Some inverters cap their grid export — permanently (a regulatory limit) or
