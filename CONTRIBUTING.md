@@ -203,8 +203,49 @@ Real-hass tests run against a real (but in-process) HA instance, so they're fast
 ## Branch Strategy
 
 - `main` — stable releases only
-- `develop` — integration branch, CI must pass
-- `feature/*` — work in progress, PR to develop when ready
+- `develop` — **the release train**: a job cuts a pre-release from it once a
+  day, automatically, whenever there is something to ship
+- `feature/*` — work in progress, PR to develop when it is *ready to ship*
+
+### develop is a release train — merging is publishing
+
+Because the daily job tags whatever is on `develop`, a merge reaches beta
+users within 24 hours. There is no queue to hide in and no "I'll clean it up
+before the release" — the merge **is** the release decision.
+
+So a change is **ready to ship** only when all four hold:
+
+1. **Green.** Full suite passes on the merge result, and CI is green on the
+   pushed commit — every workflow, including the Home-Assistant rung that
+   matches production.
+2. **Documented.** A `CHANGELOG.md` entry lands in the same change. This is
+   not politeness: the daily job refuses to cut a release when the
+   `[Unreleased]` section is empty, so an undocumented change literally
+   cannot ship.
+3. **Verified against reality.** Anything touching the Home Assistant
+   pipeline — entities, config entries, device control — is checked on a
+   live instance before merge, not only in tests.
+4. **Complete, or inert.** This is the gate that makes a train possible.
+   Work that is not finished may still merge *provided it does nothing* to
+   anyone who has not opted in: default-off switches, recording-only
+   layers, opt-in probes. What must never merge is a half-wired live path —
+   a feature that partly acts.
+
+Gate 4 is how SEM has always shipped large work, now written down: battery
+arbitrage landed complete but dormant behind a default-off switch; the
+curtailment probe ships opt-in; the battery-night recorder measures for a
+season before anything spends on its numbers. Build it whole, land it
+asleep, wake it deliberately in its own release.
+
+**If it cannot satisfy all four, it stays on its branch.** Long-lived
+branches are fine. Half-awake features on `develop` are not.
+
+### What the daily job will not do
+
+It never cuts a **stable** release (those are gated on reporter confirms,
+not the calendar), never deploys to hardware, and skips entirely when the
+tree is dirty, CI is not green, a release already went out that day, or a
+hold is in place.
 
 ## Architecture Decision Records
 
