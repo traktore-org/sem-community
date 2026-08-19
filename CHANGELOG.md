@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.0.0-beta.9] — 19.08.2026
+
 - 🔋 **The battery's night is written down** (#800, the #778 groundwork) —
   the #755 learner records what each *demand* did; nothing recorded the
   battery's night as a supply story, so the "how much may tonight spend"
