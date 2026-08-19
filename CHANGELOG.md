@@ -21,7 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unclean reboot cannot be written by a mechanism that only runs at clean
   ones (this store's own docstrings document the trap, now three times). A
   throttled real write lands the open night on disk at most every 5 minutes,
-  bounding what a power cut can take to that window.
+  bounding what a power cut can take to that window. And a night with a
+  restart in it stays *trainable*: the warm-up holes are priced honestly but
+  up to five minutes of them no longer refuse a whole night — zero tolerance
+  plus the rig's daily automated restart would have refused every night,
+  forever. A real outage still refuses.
 # [2.0.0-beta.10] — 19.08.2026
 
 - 🔋 **The battery recorder actually survives, and tells you in the morning**

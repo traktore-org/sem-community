@@ -55,6 +55,14 @@ RESERVE_EPS = 1.0
 
 DEFAULT_MAX_NIGHTS = 60
 
+# (#800 round 3b) Holes up to this total stay trainable. The first live
+# night's deploy restart priced ~110 s of sensor warm-up as gap — honest —
+# but zero tolerance would have refused a 10-hour night over it, and with
+# a daily automated restart on the rig, every night forever. One or two
+# fast restarts pass; a real outage refuses. gap_s stays on the record
+# regardless, so a consumer may always be stricter.
+GAP_TOLERANCE_S = 300.0
+
 
 @dataclass
 class Sample:
@@ -209,7 +217,7 @@ class BatteryNightTracker:
             "night_grid_kwh": round(self._night_grid_j / 3.6e6, 3),
             "day_home_kwh": round(self._day_home_j / 3.6e6, 3),
             "gap_s": round(self._gap_s, 1),
-            "trainable": self._gap_s == 0.0 and self._soc_seen,
+            "trainable": self._gap_s <= GAP_TOLERANCE_S and self._soc_seen,
             "refill_full_at": self._refill_full_at,
             "clipped_hours": round(self._clipped_s / 3600.0, 2),
             "forecast_kwh": self._forecast_kwh,
