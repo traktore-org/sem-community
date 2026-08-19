@@ -343,3 +343,75 @@ class TestMorningVerdictLine:
         v = review_battery_night(self._rec(
             drain_kwh=0.2, forecast_kwh=None, clipped_hours=0.0))
         assert v is None
+
+
+class TestPersistenceAndFreshness:
+    """Two gaps found verifying beta.9 on PROD.
+
+    1. The night was persisted ONLY at seal — a restart mid-night dropped
+       everything accumulated, which is exactly the silent-regression the
+       #755 store note warns about (and the reason to_dict/from_dict and
+       its round-trip test exist at all).
+    2. The verdict read only SEALED records, and a record seals when the
+       NEXT night begins — so last night's battery row would appear on
+       the card in the evening. A morning verdict has to be readable in
+       the morning: once the night half is complete (day phase) the open
+       record already answers drained/refilled/clipped-so-far.
+    """
+
+    def test_the_open_night_is_readable_once_the_night_half_is_done(self):
+        tr = BatteryNightTracker(reserve_soc=20.0)
+        tr.start("2026-08-19", outdoor_temp_c=None)
+        assert tr.current_record() is None          # mid-night: not yet
+        tr.tick(0.0, True, _s(home=900.0, soc=80.0))
+        tr.tick(60.0, True, _s(home=900.0, soc=79.0))
+        assert tr.current_record() is None
+        tr.tick(120.0, False, _s(soc=79.0))         # morning flip
+        rec = tr.current_record()
+        assert rec is not None
+        assert rec["drain_kwh"] > 0
+        assert rec["date"] == "2026-08-19"
+
+    def test_current_record_clears_when_the_next_night_opens(self):
+        tr = BatteryNightTracker(reserve_soc=20.0)
+        tr.start("2026-08-19", outdoor_temp_c=None)
+        tr.tick(0.0, True, _s(home=900.0, soc=80.0))
+        tr.tick(60.0, False, _s(soc=79.0))
+        assert tr.current_record() is not None
+        tr.tick(120.0, True, _s(soc=79.0))          # seals → new night
+        assert tr.current_record() is None
+        assert len(tr.sealed()) == 1
+
+
+class TestCoordinatorPersistsEveryCycle:
+
+    def test_a_mid_night_cycle_persists_the_open_record(self):
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+
+        h = SimpleNamespace()
+        h._record_battery_night = SEMCoordinator._record_battery_night.__get__(h)
+        h._outdoor_temp_c = SEMCoordinator._outdoor_temp_c.__get__(h)
+        h.config = {"battery_reserve_soc": 20}
+        h.time_manager = SimpleNamespace(is_night_mode=lambda: True)
+        h._cycle_forecast = SimpleNamespace(available=False)
+        h._forecast_tracker = SimpleNamespace(apply_dampening=lambda k: k)
+        h._storage = MagicMock()
+        h._storage.get_battery_night_state.return_value = {}
+        h.hass = SimpleNamespace(states=SimpleNamespace(async_all=lambda _d: []))
+        power = SimpleNamespace(
+            battery_soc=70.0, battery_soc_unavailable=False,
+            grid_export_power=0.0, battery_power_unavailable=False,
+            home_consumption_power=0.0)
+        flows = SimpleNamespace(
+            battery_to_home=800.0, battery_to_ev=0.0, battery_to_grid=0.0,
+            grid_to_home=0.0)
+
+        h._record_battery_night(power, flows)
+        h._record_battery_night(power, flows)
+        # No seal has happened, yet the night must already be durable.
+        assert h._storage.set_battery_night_state.called, (
+            "a restart mid-night would lose the record")

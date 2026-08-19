@@ -6830,9 +6830,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             try:
                 from .demand_review import review_battery_night
                 tr = getattr(self, "_battery_night", None)
-                sealed = tr.sealed() if tr is not None else []
-                if sealed and isinstance(self._demand_review, dict):
-                    batt = review_battery_night(sealed[-1])
+                # The OPEN record once its night half is done — a record
+                # seals only at the NEXT night, and a morning verdict has
+                # to be readable in the morning. Falls back to the last
+                # sealed one (overnight, before the new night opens).
+                rec = tr.current_record() if tr is not None else None
+                if rec is None:
+                    sealed = tr.sealed() if tr is not None else []
+                    rec = sealed[-1] if sealed else None
+                if rec is not None and isinstance(self._demand_review, dict):
+                    batt = review_battery_night(rec)
                     if batt is not None:
                         self._demand_review["battery"] = batt
             except Exception:  # noqa: BLE001 — a verdict never costs a cycle
@@ -6870,7 +6877,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         if in_night and tr.phase == "idle":
             tr.start(str(dt_util.now().date()),
                      outdoor_temp_c=self._outdoor_temp_c())
-        sealed_before = len(tr.sealed())
         tr.tick(
             _time.time(), in_night,
             Sample(
@@ -6905,8 +6911,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             except Exception:  # noqa: BLE001
                 pass
 
+        # Persist EVERY cycle, not only at seal: a restart mid-night would
+        # otherwise drop the whole accumulated night, which is the silent
+        # regression the store note warns about. The store is delayed-save,
+        # so this costs a dict copy.
         store = getattr(self, "_storage", None)
-        if store is not None and len(tr.sealed()) != sealed_before:
+        if store is not None:
             try:
                 store.set_battery_night_state(tr.to_dict())
             except Exception:  # noqa: BLE001 — persist is best-effort

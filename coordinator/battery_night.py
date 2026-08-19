@@ -184,6 +184,18 @@ class BatteryNightTracker:
     def phase(self) -> str:
         return self._phase
 
+    def current_record(self) -> Optional[Dict[str, Any]]:
+        """The OPEN record once its night half is complete, else None.
+
+        A record seals only when the next night begins, so a verdict that
+        read sealed records alone would show last night's battery row in
+        the evening. In the day phase the night half is already final —
+        drained, refill-so-far and clipping-so-far all answer honestly.
+        """
+        if self._phase != "day":
+            return None
+        return self._record()
+
 
     def _record(self) -> Dict[str, Any]:
         return {
