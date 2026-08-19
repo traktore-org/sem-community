@@ -69,19 +69,60 @@ class TestNightDrain:
         assert rec["gap_s"] >= 1200.0 - MAX_SAMPLE_GAP_S
         assert rec["trainable"] is False
 
-    def test_an_unmeasured_cycle_is_a_gap_not_a_zero(self):
+    def test_a_short_blip_is_bridged_with_the_last_measured_flow(self):
+        # (#800 round 4, second live night) The battery power sensor blips
+        # 40-90 s every few minutes on a modbus rig — 807 s across one .175
+        # evening. Zero-counting a blip loses real drain AND prices gap, so
+        # every rig night would refuse and the learner starves. A blip is
+        # bridged with the last measured flows and reported as held_s.
         tr = BatteryNightTracker(reserve_soc=20.0)
         tr.start("2026-08-18", outdoor_temp_c=None)
         tr.tick(0.0, True, _s(home=1000.0))
-        tr.tick(60.0, True, _s(home=0.0, measured=False))
+        tr.tick(60.0, True, _s(home=0.0, measured=False))  # blip reads 0
         tr.tick(120.0, True, _s(home=1000.0))
         tr.tick(180.0, False, _s())
         rec = tr._record()
-        # The hole is priced honestly — but one unmeasured minute must not
-        # refuse a whole night (#800 round 3b: zero tolerance + a daily
-        # automated restart would have refused every rig night forever).
-        assert rec["gap_s"] > 0
+        assert rec["gap_s"] == 0.0
+        assert rec["held_s"] == pytest.approx(60.0)
+        assert rec["drain_kwh"] == pytest.approx(
+            1000.0 * 120.0 / 3.6e6, rel=0.02)
         assert rec["trainable"] is True
+
+    def test_rig_noise_blips_keep_a_whole_night_trainable(self):
+        # The observed .175 shape: a ~30 s blip every ~10 minutes, all
+        # night long. Every blip bridged, nothing gapped, drain honest.
+        tr = BatteryNightTracker(reserve_soc=20.0)
+        tr.start("2026-08-18", outdoor_temp_c=None)
+        t = 0.0
+        for i in range(int(8 * 3600 / 30)):
+            measured = i == 0 or (i % 20) != 0
+            tr.tick(t, True, _s(home=800.0 if measured else 0.0,
+                                measured=measured))
+            t += 30.0
+        tr.tick(t, False, _s())
+        rec = tr._record()
+        assert rec["gap_s"] == 0.0
+        assert rec["held_s"] > 0
+        assert rec["trainable"] is True
+        assert rec["drain_kwh"] == pytest.approx(
+            800.0 * 8 * 3600.0 / 3.6e6, rel=0.01)
+
+    def test_a_long_unmeasured_stretch_refuses_beyond_the_hold(self):
+        # 30 min of continuous unavailable ticks: only the first
+        # MAX_SAMPLE_GAP_S is bridged; the rest is gap and the night
+        # refuses — a real outage is still not a measurement.
+        tr = BatteryNightTracker(reserve_soc=20.0)
+        tr.start("2026-08-18", outdoor_temp_c=None)
+        tr.tick(0.0, True, _s(home=800.0, soc=70.0))
+        t = 30.0
+        while t <= 1800.0:
+            tr.tick(t, True, _s(home=0.0, soc=70.0, measured=False))
+            t += 30.0
+        tr.tick(t, False, _s())
+        rec = tr._record()
+        assert rec["held_s"] <= MAX_SAMPLE_GAP_S
+        assert rec["gap_s"] >= 1800.0 - MAX_SAMPLE_GAP_S - 30.0
+        assert rec["trainable"] is False
 
     def test_reserve_hit_censors_drain_from_below(self):
         tr = BatteryNightTracker(reserve_soc=20.0)
@@ -487,6 +528,77 @@ class TestTheNightActuallyReachesDisk:
             "mid-night, memory-only: an unclean reboot loses the night")
 
 
+class TestVerdictRefreshOnPhaseFlip:
+    """(#800 round 4, found arming the live cycle on .175) The review
+    refreshes only at the demand ledger's seal and at restart-restore —
+    and in the sunrise update pass the demand seal runs BEFORE this
+    recorder's night→day tick, while the tracker is still in its night
+    phase. current_record() is None there, so the morning battery row
+    would show the PREVIOUS sealed night, all day, forever one night
+    stale. A phase flip is exactly when current_record()/sealed()
+    change — the flip itself must refresh the verdict."""
+
+    def _host(self):
+        from types import SimpleNamespace
+        from unittest.mock import AsyncMock, MagicMock
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        h = SimpleNamespace()
+        h._record_battery_night = SEMCoordinator._record_battery_night.__get__(h)
+        h._outdoor_temp_c = SEMCoordinator._outdoor_temp_c.__get__(h)
+        h.config = {"battery_reserve_soc": 20}
+        h._in_night = True
+        h.time_manager = SimpleNamespace(is_night_mode=lambda: h._in_night)
+        h._cycle_forecast = SimpleNamespace(available=False)
+        h._forecast_tracker = SimpleNamespace(apply_dampening=lambda k: k)
+        h._storage = MagicMock()
+        h._storage.get_battery_night_state.return_value = {}
+        h._storage.async_save_energy_throttled = AsyncMock()
+        h._refresh_demand_review = MagicMock()
+        h.hass = SimpleNamespace(states=SimpleNamespace(async_all=lambda _d: []))
+        power = SimpleNamespace(
+            battery_soc=70.0, battery_soc_unavailable=False,
+            grid_export_power=0.0, battery_power_unavailable=False,
+            home_consumption_power=0.0)
+        flows = SimpleNamespace(
+            battery_to_home=800.0, battery_to_ev=0.0, battery_to_grid=0.0,
+            grid_to_home=0.0)
+        return h, power, flows
+
+    def test_the_morning_flip_refreshes_the_review(self):
+        import asyncio
+        h, power, flows = self._host()
+        asyncio.run(h._record_battery_night(power, flows))   # night opens
+        h._refresh_demand_review.reset_mock()
+        h._in_night = False
+        asyncio.run(h._record_battery_night(power, flows))   # → day
+        assert h._battery_night.phase == "day"
+        assert h._refresh_demand_review.called, (
+            "the flip is when current_record() appears — without a refresh "
+            "the card shows the previous night all day")
+
+    def test_the_seal_refreshes_the_review(self):
+        import asyncio
+        h, power, flows = self._host()
+        asyncio.run(h._record_battery_night(power, flows))   # night opens
+        h._in_night = False
+        asyncio.run(h._record_battery_night(power, flows))   # → day
+        h._refresh_demand_review.reset_mock()
+        h._in_night = True
+        asyncio.run(h._record_battery_night(power, flows))   # → seal
+        assert h._battery_night.sealed(), "premise: the record sealed"
+        assert h._refresh_demand_review.called
+
+    def test_a_plain_night_cycle_does_not_refresh(self):
+        import asyncio
+        h, power, flows = self._host()
+        asyncio.run(h._record_battery_night(power, flows))   # night opens
+        h._refresh_demand_review.reset_mock()
+        asyncio.run(h._record_battery_night(power, flows))   # still night
+        assert not h._refresh_demand_review.called
+
+
 class TestGapTolerance:
     """(#800 round 3b, from the first live night) The deploy restart's
     sensor warm-up priced ~110 s of holes — honest — but trainable
@@ -498,18 +610,25 @@ class TestGapTolerance:
     consumer can always be stricter."""
 
     def test_a_restart_sized_hole_keeps_the_night_trainable(self):
+        # The true restart shape: a NEW process restores the persisted
+        # night, so there are no held flows to bridge with — the sensor
+        # warm-up after a deploy restart is priced as gap, honestly, and
+        # the tolerance (not the hold) is what keeps the night trainable.
         tr = BatteryNightTracker(reserve_soc=20.0)
         tr.start("2026-08-19", outdoor_temp_c=None)
         tr.tick(0.0, True, _s(home=800.0, soc=70.0))
-        # ~2 min of unavailable sensors (warm-up after a deploy restart)
-        t = 60.0
-        while t <= 180.0:
-            tr.tick(t, True, _s(home=0.0, soc=70.0, measured=False))
+        tr.tick(30.0, True, _s(home=800.0, soc=70.0))
+        tr2 = BatteryNightTracker(reserve_soc=20.0)
+        tr2.from_dict(tr.to_dict())
+        t = 150.0                     # ~2 min dead, then warm-up blips
+        while t <= 270.0:
+            tr2.tick(t, True, _s(home=0.0, soc=70.0, measured=False))
             t += 60.0
-        tr.tick(t, True, _s(home=800.0, soc=69.0))
-        tr.tick(t + 60.0, False, _s())
-        rec = tr._record()
+        tr2.tick(t, True, _s(home=800.0, soc=69.0))
+        tr2.tick(t + 60.0, False, _s())
+        rec = tr2._record()
         assert 0 < rec["gap_s"] <= 300
+        assert rec["held_s"] == 0.0
         assert rec["trainable"] is True
 
     def test_a_real_outage_still_refuses(self):

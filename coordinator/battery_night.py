@@ -16,9 +16,14 @@ story. Three series, none recorded anywhere before this module:
 Design rules inherited from the learner (#755), adapted where the
 direction flips:
 
-* Silence is not a measurement: an unmeasured cycle or a sampling hole
-  accumulates ``gap_s`` and refuses the night (``trainable=False``) —
-  never integrated across.
+* Silence is not a measurement — but a blip is not silence: modbus rigs
+  drop the battery sensor for 40-90 s every few minutes (807 s across
+  one observed .175 evening), and zero-counting those both loses real
+  drain and prices gap, refusing every rig night forever. An unmeasured
+  streak up to ``MAX_SAMPLE_GAP_S`` is bridged with the LAST measured
+  flows and reported as ``held_s``; anything longer, and any sampling
+  hole (a restart), accumulates ``gap_s`` and refuses the night
+  (``trainable=False``) — never integrated across.
 * Censoring is explicit and here it points DOWN: a night where the
   battery hit reserve and the grid took over observes LESS drain than
   the house needed (``reserve_hit`` — the budget's consumer must treat
@@ -33,7 +38,7 @@ values out. No clock, no I/O, no Home Assistant.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Dict, List, Optional
 
 # A sampling hole longer than this is a gap: nothing is integrated
@@ -116,6 +121,12 @@ class BatteryNightTracker:
         self._clipped_s = 0.0
         self._night_grid_j = 0.0
         self._day_home_j = 0.0
+        self._held_s = 0.0
+        # Hold state — deliberately NOT persisted: a new process has no
+        # last measured flows, so a restart's warm-up prices as gap and
+        # the hold can never bridge an outage it did not observe.
+        self._unmeasured_streak_s = 0.0
+        self._last_good: Optional[Sample] = None
 
     # ── lifecycle ────────────────────────────────────────────────
 
@@ -146,9 +157,24 @@ class BatteryNightTracker:
         if dt > MAX_SAMPLE_GAP_S:
             self._gap_s += dt
             dt = 0.0                    # never integrate across a hole
+            self._last_good = None      # …and never hold across one
+            self._unmeasured_streak_s = 0.0
         if not s.measured:
-            self._gap_s += dt
-            dt = 0.0
+            if (self._last_good is not None
+                    and self._unmeasured_streak_s + dt <= MAX_SAMPLE_GAP_S):
+                # Zero-order hold: a short blip's flows read 0, which is
+                # a lie — bridge with the last measured flows. SOC keeps
+                # its own sensor's word (its availability is separate).
+                self._unmeasured_streak_s += dt
+                self._held_s += dt
+                s = replace(self._last_good, soc=s.soc,
+                            soc_available=s.soc_available, measured=False)
+            else:
+                self._gap_s += dt
+                dt = 0.0
+        else:
+            self._unmeasured_streak_s = 0.0
+            self._last_good = s
 
         if self._phase == "night":
             if not in_night:
@@ -217,6 +243,7 @@ class BatteryNightTracker:
             "night_grid_kwh": round(self._night_grid_j / 3.6e6, 3),
             "day_home_kwh": round(self._day_home_j / 3.6e6, 3),
             "gap_s": round(self._gap_s, 1),
+            "held_s": round(self._held_s, 1),
             "trainable": self._gap_s <= GAP_TOLERANCE_S and self._soc_seen,
             "refill_full_at": self._refill_full_at,
             "clipped_hours": round(self._clipped_s / 3600.0, 2),
@@ -244,6 +271,7 @@ class BatteryNightTracker:
             "clipped_s": self._clipped_s,
             "night_grid_j": self._night_grid_j,
             "day_home_j": self._day_home_j,
+            "held_s": self._held_s,
             "sealed": list(self._sealed),
         }
 
@@ -271,6 +299,7 @@ class BatteryNightTracker:
         self._clipped_s = float(d.get("clipped_s", 0.0) or 0.0)
         self._night_grid_j = float(d.get("night_grid_j", 0.0) or 0.0)
         self._day_home_j = float(d.get("day_home_j", 0.0) or 0.0)
+        self._held_s = float(d.get("held_s", 0.0) or 0.0)
         sealed = d.get("sealed")
         if isinstance(sealed, list):
             self._sealed = [r for r in sealed if isinstance(r, dict)]

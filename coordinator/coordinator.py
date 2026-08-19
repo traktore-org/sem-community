@@ -6877,6 +6877,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         if in_night and tr.phase == "idle":
             tr.start(str(dt_util.now().date()),
                      outdoor_temp_c=self._outdoor_temp_c())
+        phase_before = tr.phase
         tr.tick(
             _time.time(), in_night,
             Sample(
@@ -6909,6 +6910,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         self._forecast_tracker.apply_dampening(
                             fc.forecast_today_kwh)))
             except Exception:  # noqa: BLE001
+                pass
+        if tr.phase != phase_before:
+            # (#800 round 4) The verdict reads current_record()/sealed(),
+            # and BOTH change exactly at a phase flip — but the review
+            # otherwise refreshes only at the demand ledger's seal (which
+            # runs BEFORE this tick in the same sunrise update pass, while
+            # the tracker is still in night phase) or at restart-restore.
+            # Without this, the morning battery row shows the PREVIOUS
+            # night, all day. After the forecast capture, so the flip's
+            # own verdict already knows the day's promise.
+            try:
+                self._refresh_demand_review()
+            except Exception:  # noqa: BLE001 — a verdict never costs a cycle
                 pass
 
         # Persist EVERY cycle, not only at seal: a restart mid-night would

@@ -13,6 +13,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔋 **Sensor blips no longer poison the battery-night record** (#800
+  round 4, found live on the verification rig): the battery power sensor on
+  a modbus rig drops out for 40–90 s every few minutes (807 s over one
+  observed evening) — each blip both zero-counted real drain *and* priced
+  gap, so every rig night would have been refused as untrainable and the
+  #778 learner starved on the exact hardware it exists for. An unmeasured
+  streak up to 5 minutes is now bridged with the last measured flows
+  (zero-order hold, reported honestly as `held_s` on the record); longer
+  silence and restart holes still price as gap and refuse the night. Also
+  found arming the live test: the morning battery verdict refreshed only at
+  the demand ledger's own seal — which runs *before* the recorder's
+  night→day tick in the same sunrise pass — so the card's battery row would
+  have shown the previous night, one night stale, all day. A phase flip now
+  refreshes the verdict itself.
 - 🔋 **The battery night now actually reaches disk mid-run** (#800 round 3,
   found live on the verification rig 35 minutes into a real night) — the
   "persist every cycle" fix wrote memory only: the energy store's delayed
