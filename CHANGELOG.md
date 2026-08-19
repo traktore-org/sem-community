@@ -12,6 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > prose-paragraph style they were written in.
 
 # [Unreleased]
+
+- 🔋 **The battery night now actually reaches disk mid-run** (#800 round 3,
+  found live on the verification rig 35 minutes into a real night) — the
+  "persist every cycle" fix wrote memory only: the energy store's delayed
+  save re-arms on every call under the continuous update loop, so it fires
+  only at a *graceful* stop — and a record whose whole point is surviving an
+  unclean reboot cannot be written by a mechanism that only runs at clean
+  ones (this store's own docstrings document the trap, now three times). A
+  throttled real write lands the open night on disk at most every 5 minutes,
+  bounding what a power cut can take to that window.
 # [2.0.0-beta.10] — 19.08.2026
 
 - 🔋 **The battery recorder actually survives, and tells you in the morning**

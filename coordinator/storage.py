@@ -26,6 +26,9 @@ STORAGE_VERSION = 1
 
 # Delayed save interval for energy totals (seconds)
 ENERGY_SAVE_DELAY = 60
+# (#800) How often the energy store may hit disk mid-run for the battery-
+# night record. Bounds unclean-reboot loss of the open night to this window.
+ENERGY_SAVE_INTERVAL = 300
 # Throttle interval for periodic daily-state writes (seconds). The daily store
 # previously only reached disk on a graceful HA stop (async_delay_save resets
 # its timer on every call, so under the continuous coordinator loop it never
@@ -657,6 +660,23 @@ class SEMStorage:
             _LOGGER.debug("Saved energy data immediately")
         except (OSError, TypeError) as e:
             _LOGGER.warning("Failed to save energy data: %s", e)
+
+    async def async_save_energy_throttled(self) -> None:
+        """Write the energy store to disk, at most once per
+        ENERGY_SAVE_INTERVAL seconds (#800 round 3).
+
+        The battery-night recorder updates its open record every cycle; a
+        record whose whole point is surviving an UNCLEAN reboot cannot be
+        written by ``async_delay_save`` (re-arms on every call → fires only
+        at a graceful stop; see ``async_save_energy_now``'s docstring — the
+        trap this file has now documented three times). Mirrors
+        ``async_save_daily_throttled``: a real write, bounded.
+        """
+        now = time.monotonic()
+        if now - getattr(self, "_last_energy_save_ts", 0.0) < ENERGY_SAVE_INTERVAL:
+            return
+        self._last_energy_save_ts = now
+        await self.async_save_energy_now()
 
     async def async_save_daily(self) -> None:
         """Save daily data immediately."""

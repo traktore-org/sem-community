@@ -4039,7 +4039,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # (#800) The battery's night rides the same cycle: drain /
             # refill / clipping series for the #778 budget's learner.
             try:
-                self._record_battery_night(power, power_flows)
+                await self._record_battery_night(power, power_flows)
             except Exception:  # noqa: BLE001 — recording never costs a cycle
                 _LOGGER.debug("battery night record skipped", exc_info=True)
 
@@ -6848,7 +6848,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             _LOGGER.debug("demand review skipped", exc_info=True)
             self._demand_review = None
 
-    def _record_battery_night(self, power, power_flows) -> None:
+    async def _record_battery_night(self, power, power_flows) -> None:
         """(#800) One tick of the battery-night recorder.
 
         Flow-attributed on purpose: a SOC delta would conflate the house
@@ -6919,6 +6919,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         if store is not None:
             try:
                 store.set_battery_night_state(tr.to_dict())
+                # (#800 round 3) …and actually reach DISK, throttled. The
+                # in-memory write above only survives a graceful stop; the
+                # record exists to survive the other kind. Found live on
+                # .175 mid-night: 35 min into the night, nothing on disk.
+                await store.async_save_energy_throttled()
             except Exception:  # noqa: BLE001 — persist is best-effort
                 pass
 

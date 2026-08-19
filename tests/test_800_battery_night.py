@@ -217,6 +217,8 @@ class TestCoordinatorWiring:
             apply_dampening=lambda kwh: kwh * 0.9)
         h._storage = MagicMock()
         h._storage.get_battery_night_state.return_value = {}
+        from unittest.mock import AsyncMock
+        h._storage.async_save_energy_throttled = AsyncMock()
         wst = SimpleNamespace(
             entity_id="weather.home", attributes={"temperature": 11.5})
         h.hass = SimpleNamespace(
@@ -232,19 +234,21 @@ class TestCoordinatorWiring:
             grid_export_power=0.0, battery_power_unavailable=False)
         flows = SimpleNamespace(
             battery_to_home=600.0, battery_to_ev=0.0, battery_to_grid=0.0)
-        h._record_battery_night(power, flows)          # opens the night
-        h._record_battery_night(power, flows)
+        import asyncio
+        run = lambda: asyncio.run(h._record_battery_night(power, flows))
+        run()                                            # opens the night
+        run()
         assert h._battery_night.phase == "night"
         assert h._battery_night._temp_c == pytest.approx(11.5)
 
         night["v"] = False                              # morning
-        h._record_battery_night(power, flows)
+        run()
         assert h._battery_night.phase == "day"
         # dampened promise captured: 28.0 × 0.9
         assert h._battery_night._forecast_kwh == pytest.approx(25.2)
 
         night["v"] = True                               # next night → seal
-        h._record_battery_night(power, flows)
+        run()
         h._storage.set_battery_night_state.assert_called()
         sealed = h._battery_night.sealed()
         assert len(sealed) == 1
@@ -401,6 +405,8 @@ class TestCoordinatorPersistsEveryCycle:
         h._forecast_tracker = SimpleNamespace(apply_dampening=lambda k: k)
         h._storage = MagicMock()
         h._storage.get_battery_night_state.return_value = {}
+        from unittest.mock import AsyncMock
+        h._storage.async_save_energy_throttled = AsyncMock()
         h.hass = SimpleNamespace(states=SimpleNamespace(async_all=lambda _d: []))
         power = SimpleNamespace(
             battery_soc=70.0, battery_soc_unavailable=False,
@@ -410,8 +416,69 @@ class TestCoordinatorPersistsEveryCycle:
             battery_to_home=800.0, battery_to_ev=0.0, battery_to_grid=0.0,
             grid_to_home=0.0)
 
-        h._record_battery_night(power, flows)
-        h._record_battery_night(power, flows)
+        import asyncio
+        asyncio.run(h._record_battery_night(power, flows))
+        asyncio.run(h._record_battery_night(power, flows))
         # No seal has happened, yet the night must already be durable.
         assert h._storage.set_battery_night_state.called, (
             "a restart mid-night would lose the record")
+
+
+class TestTheNightActuallyReachesDisk:
+    """(#800 round 3, found live on .175 mid-night) set_battery_night_state
+    mutated memory and nothing ever scheduled a WRITE — the energy store's
+    delayed save re-arms on every call under the continuous update loop, so
+    it only fires at a graceful stop (the async_save_energy_now docstring
+    documents this exact trap, twice). A record whose whole point is
+    surviving an unclean reboot cannot depend on a clean one. The fix is
+    the house's throttled-real-write pattern: at most one disk write per
+    interval, bounding unclean-reboot loss to that interval."""
+
+    def test_storage_has_a_throttled_energy_save(self):
+        import asyncio, time
+        from unittest.mock import AsyncMock, MagicMock
+        from custom_components.solar_energy_management.coordinator.storage import (
+            SEMStorage,
+        )
+        st = SEMStorage.__new__(SEMStorage)
+        st._energy_data = {"battery_nights": {"phase": "night"}}
+        st._energy_store = MagicMock()
+        st._energy_store.async_save = AsyncMock()
+        st._last_energy_save_ts = 0.0
+        asyncio.run(st.async_save_energy_throttled())
+        asyncio.run(st.async_save_energy_throttled())   # inside the window
+        assert st._energy_store.async_save.await_count == 1
+        st._last_energy_save_ts = time.monotonic() - 10_000
+        asyncio.run(st.async_save_energy_throttled())
+        assert st._energy_store.async_save.await_count == 2
+
+    def test_the_recorder_schedules_the_write_mid_night(self):
+        import asyncio
+        from types import SimpleNamespace
+        from unittest.mock import AsyncMock, MagicMock
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+
+        h = SimpleNamespace()
+        h._record_battery_night = SEMCoordinator._record_battery_night.__get__(h)
+        h._outdoor_temp_c = SEMCoordinator._outdoor_temp_c.__get__(h)
+        h.config = {"battery_reserve_soc": 20}
+        h.time_manager = SimpleNamespace(is_night_mode=lambda: True)
+        h._cycle_forecast = SimpleNamespace(available=False)
+        h._forecast_tracker = SimpleNamespace(apply_dampening=lambda k: k)
+        h._storage = MagicMock()
+        h._storage.get_battery_night_state.return_value = {}
+        h._storage.async_save_energy_throttled = AsyncMock()
+        h.hass = SimpleNamespace(states=SimpleNamespace(async_all=lambda _d: []))
+        power = SimpleNamespace(
+            battery_soc=70.0, battery_soc_unavailable=False,
+            grid_export_power=0.0, battery_power_unavailable=False,
+            home_consumption_power=0.0)
+        flows = SimpleNamespace(
+            battery_to_home=800.0, battery_to_ev=0.0, battery_to_grid=0.0,
+            grid_to_home=0.0)
+        asyncio.run(h._record_battery_night(power, flows))
+        asyncio.run(h._record_battery_night(power, flows))
+        assert h._storage.async_save_energy_throttled.await_count >= 1, (
+            "mid-night, memory-only: an unclean reboot loses the night")
