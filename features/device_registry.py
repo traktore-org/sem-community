@@ -146,6 +146,42 @@ class UnifiedDevice:
         }
 
 
+# (#805) What a device SEM discovered BY ITSELF may do before the user has
+# said anything: nothing but be watched. It used to be "peak_only", which
+# load management may shed — so a fresh install could switch hardware the
+# user never configured. #803: a wallbox visible in the Energy Dashboard was
+# discovered as a generic load, shed for peak, and the reporter uninstalled
+# to get his car charging. Discovery is a suggestion, not consent.
+DEFAULT_DISCOVERED_CONTROL_MODE = "off"
+
+# What that default used to be. The upgrade freezes every device it already
+# knows at this value, so an existing install's behaviour does not change.
+LEGACY_DISCOVERED_CONTROL_MODE = "peak_only"
+
+
+def _freeze_known_control_modes(
+    overrides: Dict[str, str], known_ids: List[str],
+) -> List[str]:
+    """Pin already-known devices at the OLD default before it changes (#805).
+
+    Flipping a default silently rewrites every install that never made an
+    explicit choice — their peak shedding would just stop, with no event to
+    explain it. So on upgrade each device already in the roster gets an
+    explicit ``peak_only`` entry: the same behaviour, now written down.
+    Devices discovered afterwards get the new monitor-only default.
+
+    Idempotent by construction: it only ever fills a MISSING key, so a user
+    who later sets a device to ``off`` is not re-frozen on the next boot.
+    Returns the device_ids it froze.
+    """
+    frozen = []
+    for did in known_ids:
+        if did and did not in overrides:
+            overrides[did] = LEGACY_DISCOVERED_CONTROL_MODE
+            frozen.append(did)
+    return frozen
+
+
 def _migrate_control_modes(overrides: Dict[str, str]) -> List[str]:
     """Map the removed 'surplus_target' control mode to 'surplus' in place (#235).
 
@@ -285,6 +321,33 @@ class UnifiedDeviceRegistry:
                 # surplus_target in v1.5.9 keeps surplus charging (rather than silently
                 # falling back to peak_only). The "stop at target" intent is now the
                 # separate "Limit surplus to target" switch, which the user can re-enable.
+                # (#805) Freeze what this install already knows at the OLD
+                # default BEFORE the new monitor-only one applies — an
+                # upgrade must not silently stop somebody's peak shedding.
+                # Keyed off the persisted roster, so it can only ever pin
+                # devices this install has actually seen.
+                # Every key in the store that names a device this install
+                # has already seen. Verified against a live 19-device store
+                # (2026-08-19): 7 devices had an explicit mode and 12 were
+                # riding the implicit default — exactly the set that would
+                # have silently stopped being shed. There is no
+                # "known_devices" roster key; these ARE the roster.
+                _known = []
+                for _k in ("priority_overrides", "mappings", "device_goals",
+                           "controllable_overrides", "rated_power_overrides",
+                           "dependencies", "critical_overrides"):
+                    _known.extend(list(data.get(_k, {}) or {}))
+                _frozen = _freeze_known_control_modes(
+                    self._control_mode_overrides, _known)
+                if _frozen:
+                    _LOGGER.info(
+                        "#805 — pinned %d already-known device(s) at "
+                        "'%s' so this upgrade changes nothing; devices "
+                        "discovered from here on are monitor-only until "
+                        "you opt them in: %s",
+                        len(_frozen), LEGACY_DISCOVERED_CONTROL_MODE,
+                        ", ".join(_frozen[:6]),
+                    )
                 migrated = _migrate_control_modes(self._control_mode_overrides)
                 if migrated:
                     _LOGGER.info(
@@ -843,11 +906,16 @@ class UnifiedDeviceRegistry:
                 )
                 # Apply persisted control mode (#49)
                 from ..devices.base import DeviceControlMode
-                mode_str = self._control_mode_overrides.get(device.device_id, "peak_only")
+                # (#805) No explicit choice → monitor only. See
+                # DEFAULT_DISCOVERED_CONTROL_MODE: SEM does not actuate what
+                # it found by itself until the user opts it in.
+                mode_str = self._control_mode_overrides.get(
+                    device.device_id, DEFAULT_DISCOVERED_CONTROL_MODE)
                 try:
                     surplus_device.control_mode = DeviceControlMode(mode_str)
                 except ValueError:
-                    surplus_device.control_mode = DeviceControlMode.PEAK_ONLY
+                    surplus_device.control_mode = DeviceControlMode(
+                        DEFAULT_DISCOVERED_CONTROL_MODE)
                 # (#122/#576) re-apply the persisted "Requires" link so a
                 # rebuild doesn't wipe it — the root cause of "separated all
                 # the time" (every drag/discovery/restart rebuilds the device).

@@ -13,6 +13,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔒 **SEM no longer acts on devices you never configured** (#805, from a
+  first-install report) — a device SEM discovered by itself defaulted to
+  "peak only", an *acting* mode: load management could switch it off. A
+  wallbox merely visible in Home Assistant's Energy Dashboard was therefore
+  imported as a generic load and shed to protect the peak limit, while its
+  owner — who had never configured an EV charger, and so had no EV tab and
+  no charge-mode selector — could see no reason and no control. He
+  uninstalled to get his car charging (#803). Discovery is a suggestion,
+  not consent: a device SEM found on its own is now **monitored only** until
+  you opt it in. **Existing installs do not change**: the upgrade writes
+  explicit "peak only" entries for every device already in the roster, so
+  whatever is being shed today keeps being shed — verified against a live
+  19-device install where 12 devices were riding the implicit default.
+
 # [2.0.0-beta.10] — 19.08.2026
 
 - 🔋 **The battery recorder actually survives, and tells you in the morning**
