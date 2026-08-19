@@ -12,6 +12,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > prose-paragraph style they were written in.
 
 # [Unreleased]
+# [2.0.0-beta.10] — 19.08.2026
+
+- 🔋 **The battery recorder actually survives, and tells you in the morning**
+  (#800 follow-up, found verifying beta.9 on live hardware) — two gaps in the
+  night recorder's wiring: it persisted the open night **only when the record
+  sealed**, so a restart mid-night dropped everything accumulated (the exact
+  silent regression its own `to_dict`/`from_dict` exists to prevent — it now
+  persists every cycle); and the morning verdict read **sealed records only**,
+  but a record seals when the *next* night begins — so last night's battery
+  row would have appeared on the card in the evening. The verdict now reads
+  the open record as soon as the night half is complete, which is what makes
+  a morning verdict readable in the morning.
 
 - 🔌 **SEM tells you when it finds a charger it is not managing** (#805) —
   the old repair warned *every* install without a charger, including
@@ -46,20 +58,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   explicit "peak only" entries for every device already in the roster, so
   whatever is being shed today keeps being shed — verified against a live
   19-device install where 12 devices were riding the implicit default.
-
-# [2.0.0-beta.10] — 19.08.2026
-
-- 🔋 **The battery recorder actually survives, and tells you in the morning**
-  (#800 follow-up, found verifying beta.9 on live hardware) — two gaps in the
-  night recorder's wiring: it persisted the open night **only when the record
-  sealed**, so a restart mid-night dropped everything accumulated (the exact
-  silent regression its own `to_dict`/`from_dict` exists to prevent — it now
-  persists every cycle); and the morning verdict read **sealed records only**,
-  but a record seals when the *next* night begins — so last night's battery
-  row would have appeared on the card in the evening. The verdict now reads
-  the open record as soon as the night half is complete, which is what makes
-  a morning verdict readable in the morning.
-
 
 # [2.0.0-beta.9] — 19.08.2026
 
