@@ -86,6 +86,9 @@ def build_diagnostics(coord) -> Dict[str, Any]:
     out["diag_battery_capacity"] = coord.config.get("battery_capacity_kwh", 0)
     out["diag_update_interval"] = coord.update_interval.total_seconds()
     out["diag_observer_mode"] = coord._observer_mode
+    # (#814) detection evidence — built at setup / late discovery, published
+    # every cycle so diagnostics and the Config tab read one truth.
+    out["detection_report"] = getattr(coord, "_detection_report", None)
 
     # Read-only per-phase guard diagnostics for grid-only and hybrid topologies.
     # Keep the output keys literal: the repository's sensor contract test scans

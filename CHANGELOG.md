@@ -31,6 +31,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Configuration tab's charger block as well as the options flow, and the
   Phases row on the EV card carries the selector and live status. Without
   a named entity nothing exists — no knob, no writes, no behavior change.
+- 🔎 **Auto-detection that shows its work, and a hardware matrix that can't
+  lie** (#814, from the onboarding round #803/#802 and #806/#808/#809/#810):
+  the Config tab gains a **Detected hardware** section listing every charger
+  SEM found with the evidence per role (which entity, what it is) and what it
+  could *not* place — near-misses (a brand's entities present, no role
+  matched) are shown instead of silently becoming "no charger"; the same
+  report rides the diagnostics download. A generic prober now runs beside
+  the brand profiles (classifying devices by what their entities are, never
+  by name) and reports what it sees — observation only for now. And
+  `docs/SUPPORTED_HARDWARE.md` is generated from one data table with an
+  honest status per brand (tested live with citation / implemented /
+  requested); CI fails if the doc drifts, a README claim lacks a row, or
+  pipeline-test coverage shrinks. Sungrow and Tesla Powerwall gained the
+  pipeline tests the ratchet showed missing.
 - 🌅 **The night no longer double-flips at sunrise** (#811, caught live by
   the #800 recorder's seal counter): at the moment of sunrise `sun.sun`
   rolls `next_rising` over to tomorrow — 1–2 minutes later on the clock in

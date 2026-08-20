@@ -58,6 +58,29 @@ Open an issue with the `enhancement` label. Describe the use case, not just the 
 - Add tests for new features
 - Update translations (15 languages: de, en, es, fr, it, nl, pt, pl, sv, cs, da, fi, hu, ro, no) for user-facing text
 
+### Adding a charger or inverter brand (#814)
+
+Support is DATA first. Adding a brand means three things, and CI checks two of them:
+
+1. **A row in `consts/hardware_matrix.py`** — brand, integration, control method /
+   sign pattern, and an honest status: `requested` (cite the issue),
+   `implemented`, or `tested-live` (cite the reporter or system — no citation,
+   no claim). Then `python3 scripts/generate_hardware_doc.py` regenerates
+   `docs/SUPPORTED_HARDWARE.md`; CI fails on drift.
+2. **The detection rules as data** — for a charger without quirks, a row in
+   `_BRAND_HINTS` (`hardware_detection.py`): per SEM role the domain, optional
+   device_class and name hints. The generic matcher applies it; no function
+   needed. Quirky boxes keep a function, but say why in its docstring.
+3. **The pipeline test** in `tests/test_split_grid_integration.py` (inverters)
+   or the detection tests (chargers) — the matrix ratchet fails if an
+   implemented brand has none. Never guess sign conventions: without a reporter
+   export the row stays `requested` and the brand sits in the ratchet's
+   shrink-only gap list.
+
+Users see what detection did on the dashboard **Configuration → Detected
+hardware** (evidence per role, near-misses named); when triaging a report, ask
+for that section or the diagnostics download — the same report is in both.
+
 ### Multi-charger correctness
 
 SEM was originally single-charger; multi-charger support was added

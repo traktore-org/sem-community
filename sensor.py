@@ -2703,6 +2703,11 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                     "review": self.coordinator.data.get("energy_plan_review"),
                 },
             ))
+        elif self.entity_description.key == "diag_charger_control":
+            # (#814 Pillar B) the detection evidence report rides the charger
+            # control diag sensor — the Config tab's Detected-hardware section
+            # and bug reports read it here.
+            attrs["detection_report"] = self.coordinator.data.get("detection_report")
         elif self.entity_description.key == "vpp_event":
             # #580 — per-event accounting for payment reconciliation.
             d = self.coordinator.data

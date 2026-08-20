@@ -2584,3 +2584,104 @@ class TestDeterministicDiscoveryOrder:
         reader._get_device_for_entity = lambda eid: None
         imp, exp, conf = reader._discover_split_grid_power(ed)
         assert imp == "sensor.a_grid_import"
+
+
+# ════════════════════════════════════════════
+# #814: the README-claimed brands the matrix ratchet found untested.
+# Sungrow (Pattern A) and Tesla Powerwall (Pattern B) have house-known
+# conventions; the ha-solarman trio (Deye/Sofar/Solis) stays in the
+# ratchet's shrink-only allowlist until a reporter export shows their signs.
+# ════════════════════════════════════════════
+
+class TestSungrowCombined:
+    """Sungrow (Pattern A: grid +=export, battery +=charge — SEM convention)."""
+
+    def test_sungrow_exporting_charging(self):
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.sungrow_total_dc_power",
+            grid_import_power="sensor.sungrow_export_power",
+            battery_power="sensor.sungrow_battery_power",
+        )
+        states = {
+            "sensor.sungrow_total_dc_power": _state(7000),
+            "sensor.sungrow_export_power": _state(2500),   # +2.5kW = export
+            "sensor.sungrow_battery_power": _state(1500),  # +1.5kW = charge
+        }
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+        power.calculate_derived()
+        assert power.grid_export_power == 2500
+        assert power.battery_charge_power == 1500
+        assert power.home_consumption_power == 3000   # 7000 - 2500 - 1500
+
+    def test_sungrow_importing_discharging(self):
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.sungrow_total_dc_power",
+            grid_import_power="sensor.sungrow_export_power",
+            battery_power="sensor.sungrow_battery_power",
+        )
+        states = {
+            "sensor.sungrow_total_dc_power": _state(500),
+            "sensor.sungrow_export_power": _state(-1200),  # -1.2kW = import
+            "sensor.sungrow_battery_power": _state(-800),  # -0.8kW = discharge
+        }
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+        power.calculate_derived()
+        assert power.grid_import_power == 1200
+        assert power.battery_discharge_power == 800
+        assert power.home_consumption_power == 2500   # 500 + 1200 + 800
+
+
+class TestTeslaPowerwallCombined:
+    """Tesla Powerwall (Pattern B: grid +=import, battery +=discharge)."""
+
+    def test_powerwall_importing_discharging(self):
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.powerwall_solar_now",
+            grid_import_power="sensor.powerwall_site_now",
+            battery_power="sensor.powerwall_battery_now",
+        )
+        states = {
+            "sensor.powerwall_solar_now": _state(1000),
+            "sensor.powerwall_site_now": _state(2000),     # +2kW = IMPORT (B)
+            "sensor.powerwall_battery_now": _state(1500),  # +1.5kW = DISCHARGE (B)
+        }
+        reader = _make_reader_with_states(hass, states, ed)
+        # Pattern B: grid +=import, battery +=discharge — both opposite of SEM
+        reader._grid_sign_inverted = True
+        reader._battery_sign_inverted = {reader._FLEET_BID: True}
+        reader._grid_sign_detected = True
+        reader._battery_sign_detected = {reader._FLEET_BID: True}
+        power = reader.read_power()
+        power.calculate_derived()
+        assert power.grid_import_power == 2000
+        assert power.battery_discharge_power == 1500
+        assert power.home_consumption_power == 4500   # 1000 + 2000 + 1500
+
+    def test_powerwall_exporting_charging(self):
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.powerwall_solar_now",
+            grid_import_power="sensor.powerwall_site_now",
+            battery_power="sensor.powerwall_battery_now",
+        )
+        states = {
+            "sensor.powerwall_solar_now": _state(8000),
+            "sensor.powerwall_site_now": _state(-3000),    # -3kW = EXPORT (B)
+            "sensor.powerwall_battery_now": _state(-2000), # -2kW = CHARGE (B)
+        }
+        reader = _make_reader_with_states(hass, states, ed)
+        # Pattern B: grid +=import, battery +=discharge — both opposite of SEM
+        reader._grid_sign_inverted = True
+        reader._battery_sign_inverted = {reader._FLEET_BID: True}
+        reader._grid_sign_detected = True
+        reader._battery_sign_detected = {reader._FLEET_BID: True}
+        power = reader.read_power()
+        power.calculate_derived()
+        assert power.grid_export_power == 3000
+        assert power.battery_charge_power == 2000
+        assert power.home_consumption_power == 3000   # 8000 - 3000 - 2000
