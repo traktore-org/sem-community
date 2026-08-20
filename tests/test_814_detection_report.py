@@ -185,3 +185,54 @@ class TestGenericProber:
         assert any(d["platform"] == "abl_emh1" and d["kind"] == "prober_only"
                    for d in rep["disagreements"])
         assert not any(d["platform"] == "keba" for d in rep["disagreements"])
+
+
+class TestBrandsAsData:
+    """(#814 Pillar A) ChargePoint and Heidelberg are now data rows applied
+    by one generic matcher — behavior identical to the hand-written loops."""
+
+    def test_chargepoint_row_matches_like_before(self):
+        from custom_components.solar_energy_management.hardware_detection import (
+            _discover_chargepoint,
+        )
+        ents = [
+            _ent("binary_sensor.cp_home_plug", "chargepoint", device_class=None),
+            _ent("binary_sensor.cp_home_charging", "chargepoint"),
+            _ent("sensor.cp_home_power", "chargepoint", device_class="power"),
+            _ent("sensor.cp_home_total_energy", "chargepoint", device_class="energy"),
+            _ent("sensor.cp_home_session_energy", "chargepoint", device_class="energy"),
+            _ent("number.cp_home_amperage_limit", "chargepoint"),
+        ]
+        r = _discover_chargepoint(ents)
+        assert r == {
+            "ev_connected_sensor": "binary_sensor.cp_home_plug",
+            "ev_charging_sensor": "binary_sensor.cp_home_charging",
+            "ev_charging_power_sensor": "sensor.cp_home_power",
+            "ev_total_energy_sensor": "sensor.cp_home_total_energy",
+            "ev_session_energy_sensor": "sensor.cp_home_session_energy",
+            "ev_current_control_entity": "number.cp_home_amperage_limit",
+        }
+
+    def test_heidelberg_row_accepts_active_as_charging(self):
+        from custom_components.solar_energy_management.hardware_detection import (
+            _discover_heidelberg,
+        )
+        ents = [
+            _ent("binary_sensor.hec_connected", "heidelberg_energy_control"),
+            _ent("binary_sensor.hec_active", "heidelberg_energy_control"),
+            _ent("sensor.hec_power", "heidelberg_energy_control", device_class="power"),
+            _ent("number.hec_max_current", "heidelberg_energy_control"),
+        ]
+        r = _discover_heidelberg(ents)
+        assert r["ev_charging_sensor"] == "binary_sensor.hec_active"
+        assert r["ev_current_control_entity"] == "number.hec_max_current"
+
+    def test_rows_have_the_shape_the_matcher_expects(self):
+        from custom_components.solar_energy_management.hardware_detection import (
+            _BRAND_HINTS,
+        )
+        for plat, rules in _BRAND_HINTS.items():
+            for rule in rules:
+                assert rule["role"].startswith("ev_"), (plat, rule)
+                assert rule["domain"] in ("sensor", "binary_sensor", "number",
+                                          "switch", "select", "button"), (plat, rule)

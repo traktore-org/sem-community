@@ -1134,46 +1134,75 @@ def _discover_zaptec(entities) -> Dict[str, str]:
     return result
 
 
-def _discover_chargepoint(entities) -> Dict[str, str]:
-    """Discover EV charger config from ChargePoint integration."""
+# ── (#814 Pillar A) brands as DATA ─────────────────────────────────────
+# A brand row names, per SEM role, the (domain, device_class-or-None,
+# name-hints) an entity must match. The generic matcher below applies it.
+# Two existing functions (ChargePoint, Heidelberg) were identical rule
+# sets and are now rows; others follow as their quirks allow. A new brand
+# with no quirks is a row plus the mandatory pipeline test — no function.
+_ROLE = Dict[str, Any]
+
+_BRAND_HINTS: Dict[str, List[_ROLE]] = {
+    "chargepoint": [
+        {"role": "ev_connected_sensor", "domain": "binary_sensor",
+         "names": ("connect", "plug")},
+        {"role": "ev_charging_sensor", "domain": "binary_sensor",
+         "names": ("charg",)},
+        {"role": "ev_charging_power_sensor", "domain": "sensor",
+         "device_class": "power"},
+        {"role": "ev_total_energy_sensor", "domain": "sensor",
+         "device_class": "energy", "names": ("total",)},
+        {"role": "ev_session_energy_sensor", "domain": "sensor",
+         "device_class": "energy", "names": ("session",)},
+        {"role": "ev_current_control_entity", "domain": "number",
+         "names": ("amperage", "current")},
+    ],
+    "heidelberg_energy_control": [
+        {"role": "ev_connected_sensor", "domain": "binary_sensor",
+         "names": ("connect", "plug")},
+        {"role": "ev_charging_sensor", "domain": "binary_sensor",
+         "names": ("charg", "active")},
+        {"role": "ev_charging_power_sensor", "domain": "sensor",
+         "device_class": "power"},
+        {"role": "ev_total_energy_sensor", "domain": "sensor",
+         "device_class": "energy", "names": ("total",)},
+        {"role": "ev_session_energy_sensor", "domain": "sensor",
+         "device_class": "energy", "names": ("session",)},
+        {"role": "ev_current_control_entity", "domain": "number",
+         "names": ("current",)},
+    ],
+}
+
+
+def _discover_from_hints(entities, hints: List[_ROLE]) -> Dict[str, str]:
+    """Apply a brand's data rows: each role takes the LAST matching entity
+    (the same last-wins the hand-written loops had), a rule matches on
+    domain, optional device_class, and optional any-of name hints."""
     result: Dict[str, str] = {}
     for entry in entities:
-        eid = entry.entity_id
-        dc = entry.original_device_class
-        if eid.startswith("binary_sensor.") and ("connect" in eid or "plug" in eid):
-            result["ev_connected_sensor"] = eid
-        if eid.startswith("binary_sensor.") and "charg" in eid:
-            result["ev_charging_sensor"] = eid
-        if eid.startswith("sensor.") and dc == "power":
-            result["ev_charging_power_sensor"] = eid
-        if eid.startswith("sensor.") and dc == "energy" and "total" in eid:
-            result["ev_total_energy_sensor"] = eid
-        if eid.startswith("sensor.") and dc == "energy" and "session" in eid:
-            result["ev_session_energy_sensor"] = eid
-        if eid.startswith("number.") and ("amperage" in eid or "current" in eid):
-            result["ev_current_control_entity"] = eid
+        eid = str(entry.entity_id)
+        dom = eid.split(".", 1)[0]
+        dc = getattr(entry, "original_device_class", None)
+        for rule in hints:
+            if dom != rule["domain"]:
+                continue
+            if "device_class" in rule and dc != rule["device_class"]:
+                continue
+            names = rule.get("names")
+            if names and not any(n in eid for n in names):
+                continue
+            result[rule["role"]] = eid
     return result
+
+
+def _discover_chargepoint(entities) -> Dict[str, str]:
+    """ChargePoint — a data row (#814); see _BRAND_HINTS."""
+    return _discover_from_hints(entities, _BRAND_HINTS["chargepoint"])
 
 
 def _discover_heidelberg(entities) -> Dict[str, str]:
-    """Discover EV charger config from Heidelberg Energy Control integration."""
-    result: Dict[str, str] = {}
-    for entry in entities:
-        eid = entry.entity_id
-        dc = entry.original_device_class
-        if eid.startswith("binary_sensor.") and ("connect" in eid or "plug" in eid):
-            result["ev_connected_sensor"] = eid
-        if eid.startswith("binary_sensor.") and ("charg" in eid or "active" in eid):
-            result["ev_charging_sensor"] = eid
-        if eid.startswith("sensor.") and dc == "power":
-            result["ev_charging_power_sensor"] = eid
-        if eid.startswith("sensor.") and dc == "energy" and "total" in eid:
-            result["ev_total_energy_sensor"] = eid
-        if eid.startswith("sensor.") and dc == "energy" and "session" in eid:
-            result["ev_session_energy_sensor"] = eid
-        if eid.startswith("number.") and "current" in eid:
-            result["ev_current_control_entity"] = eid
-    return result
+    """Heidelberg Energy Control — a data row (#814); see _BRAND_HINTS."""
+    return _discover_from_hints(entities, _BRAND_HINTS["heidelberg_energy_control"])
 
 
 def _discover_goecharger_mqtt(entities) -> Dict[str, str]:
