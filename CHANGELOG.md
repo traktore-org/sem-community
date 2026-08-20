@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.0.0-beta.12] — 20.08.2026
+
 - 🩹 **YAML-mode Lovelace now tells you what to do** (#799, @RonaldHass):
   on a YAML-mode install SEM cannot register its dashboard cards, so the
   dashboard came up full of "Configuration Error" cards — with the fix
