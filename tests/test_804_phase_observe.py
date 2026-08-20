@@ -120,3 +120,67 @@ class TestInertness:
     def test_thresholds_exist_and_are_sane(self):
         assert PHASE_MIN_WATTS >= 400.0
         assert 1 <= PHASE_MIN_AMPS <= 6
+
+
+class TestSwitchValuesAndCommand:
+    """(Phase B) The mapped values per domain, and the one service call a
+    switch turns into. select values are REQUIRED (option names are the
+    device's own vocabulary — never guessed); number defaults to 1/3;
+    switch defaults to off=1p / on=3p."""
+
+    def test_number_defaults(self):
+        from custom_components.solar_energy_management.coordinator.ev_phases import (
+            resolve_switch_values,
+        )
+        v1, v3, ready = resolve_switch_values("number.keba_phases", {})
+        assert (v1, v3, ready) == ("1", "3", True)
+
+    def test_switch_defaults(self):
+        from custom_components.solar_energy_management.coordinator.ev_phases import (
+            resolve_switch_values,
+        )
+        v1, v3, ready = resolve_switch_values("switch.openwb_phases", {})
+        assert (v1, v3, ready) == ("off", "on", True)
+
+    def test_select_requires_named_options(self):
+        from custom_components.solar_energy_management.coordinator.ev_phases import (
+            resolve_switch_values,
+        )
+        _, _, ready = resolve_switch_values("select.goe_psm", {})
+        assert ready is False
+        v1, v3, ready = resolve_switch_values("select.goe_psm", {
+            "ev_phase_switch_value_1p": "1 Phase",
+            "ev_phase_switch_value_3p": "3 Phasen",
+        })
+        assert (v1, v3, ready) == ("1 Phase", "3 Phasen", True)
+
+    def test_explicit_values_override_defaults(self):
+        from custom_components.solar_energy_management.coordinator.ev_phases import (
+            resolve_switch_values,
+        )
+        v1, v3, _ = resolve_switch_values("number.goe_psm", {
+            "ev_phase_switch_value_1p": "1",
+            "ev_phase_switch_value_3p": "2",   # go-e's psm: 2 means 3p
+        })
+        assert (v1, v3) == ("1", "2")
+
+    def test_command_shapes(self):
+        from custom_components.solar_energy_management.coordinator.ev_phases import (
+            phase_switch_command,
+        )
+        assert phase_switch_command("select.goe_psm", "3 Phasen") == (
+            "select", "select_option",
+            {"entity_id": "select.goe_psm", "option": "3 Phasen"})
+        assert phase_switch_command("number.keba_phases", "3") == (
+            "number", "set_value",
+            {"entity_id": "number.keba_phases", "value": 3.0})
+        assert phase_switch_command("switch.openwb_phases", "on") == (
+            "switch", "turn_on", {"entity_id": "switch.openwb_phases"})
+        assert phase_switch_command("switch.openwb_phases", "off") == (
+            "switch", "turn_off", {"entity_id": "switch.openwb_phases"})
+
+    def test_unknown_domain_returns_none(self):
+        from custom_components.solar_energy_management.coordinator.ev_phases import (
+            phase_switch_command,
+        )
+        assert phase_switch_command("sensor.goe_phases", "3") is None

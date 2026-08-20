@@ -58,6 +58,48 @@ def estimate_active_phases(
     return max(1, min(3, round(ratio)))
 
 
+# Per-domain default values for the 1p/3p positions. select has NO
+# default: its option strings are the device's own vocabulary (go-e's
+# psm speaks numbers-as-modes, others speak words) — never guessed.
+_SWITCH_VALUE_DEFAULTS = {
+    "number": ("1", "3"),
+    "switch": ("off", "on"),
+}
+
+
+def resolve_switch_values(entity_id: str, cfg: dict):
+    """The (value_1p, value_3p, ready) triple for the named entity.
+
+    Explicit ``ev_phase_switch_value_1p``/``_3p`` config wins (go-e's
+    psm number uses 2 for 3-phase, so even number defaults are only
+    defaults). ready=False when a required value is missing.
+    """
+    domain = str(entity_id or "").split(".", 1)[0]
+    d1, d3 = _SWITCH_VALUE_DEFAULTS.get(domain, (None, None))
+    v1 = cfg.get("ev_phase_switch_value_1p") or d1
+    v3 = cfg.get("ev_phase_switch_value_3p") or d3
+    return v1, v3, bool(v1 and v3)
+
+
+def phase_switch_command(entity_id: str, value: str):
+    """The one service call a phase switch turns into, or None.
+
+    (domain, service, service_data) — the caller owns the actual call,
+    behind the same observer seam as every actuation.
+    """
+    domain = str(entity_id or "").split(".", 1)[0]
+    if domain == "select":
+        return "select", "select_option", {
+            "entity_id": entity_id, "option": str(value)}
+    if domain == "number":
+        return "number", "set_value", {
+            "entity_id": entity_id, "value": float(value)}
+    if domain == "switch":
+        service = "turn_on" if str(value).lower() == "on" else "turn_off"
+        return "switch", service, {"entity_id": entity_id}
+    return None
+
+
 def validate_phase_switch_entity(
     entity_id: Optional[str],
     entity_exists: Callable[[str], bool],
