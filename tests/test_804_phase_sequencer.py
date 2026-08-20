@@ -86,6 +86,21 @@ class TestSequence:
         assert r.issue_switch == 3
 
 
+    def test_post_switch_belief_is_one_shot_and_measurement_wins(self):
+        # PROD: after a mock switch the sequencer kept asserting "1" every
+        # tick and overwrote the measured 3. It must say it ONCE.
+        seq = PhaseSwitchSequencer()
+        _run(seq, 0.0, 1, 3, charging=False)                # fire → settling
+        r = _run(seq, SETTLE_S + 1, 1, 3, charging=False)   # settle-end
+        assert r.believed_phases == 1
+        r = _run(seq, SETTLE_S + 31, 1, 3, charging=True)   # caller measured 3
+        assert r.believed_phases is None, "no standing belief after settle-end"
+        # and with the caller's belief 3 vs desired 1 the trigger is live
+        # again once the gap passes (desired != measured truth)
+        r = _run(seq, MIN_SWITCH_GAP_S + 5, 1, 3, charging=True)
+        assert r.state == "stopping"
+
+
 class TestAutoPlanner:
     """Scale down when 3p can't hold min current on the surplus; scale up
     when surplus sustains 3p at min + margin. Asymmetric delays, hard

@@ -71,12 +71,10 @@ class PhaseSwitchSequencer:
         self._pending: Optional[int] = None
         self._switched_at = 0.0
         self._last_switch_at = float("-inf")
-        self._believed: Optional[int] = None
 
     def _result(self, hold: bool, issue: Optional[int] = None) -> SeqResult:
         return SeqResult(state=self._state, hold_charging=hold,
-                         issue_switch=issue,
-                         believed_phases=self._believed)
+                         issue_switch=issue, believed_phases=None)
 
     def _abort(self) -> SeqResult:
         self._state = "idle"
@@ -93,19 +91,25 @@ class PhaseSwitchSequencer:
     def tick(self, now: float, desired_phases: Optional[int],
              believed_phases: Optional[int], charging: bool,
              capability_ready: bool) -> SeqResult:
-        believed = (self._believed if self._believed is not None
-                    else believed_phases)
+        # The CALLER's belief is the truth (it carries the measurement);
+        # the sequencer only ever asserts a belief ONCE, at settle-end, for
+        # the switch it just performed. Live on PROD the sequencer's sticky
+        # post-switch belief overwrote the fresh measurement every cycle:
+        # the estimate read 3, the belief stayed 1 forever.
+        believed = believed_phases
 
         if self._state == "settling":
             if not capability_ready:
                 return self._abort()
             if now - self._switched_at > SETTLE_S:
-                # The command is assumed to have taken; the #716 W/A
-                # estimate confirms or contradicts once charging resumes.
-                self._believed = self._pending
+                # The command is assumed to have taken — said ONCE; the
+                # #716 W/A estimate confirms or contradicts once charging
+                # resumes, and from then on measurement owns the belief.
+                target = self._pending
                 self._state = "idle"
                 self._pending = None
-                return self._result(hold=False)
+                return SeqResult(state=self._state, hold_charging=False,
+                                 issue_switch=None, believed_phases=target)
             return self._result(hold=True)
 
         if self._state == "stopping":
