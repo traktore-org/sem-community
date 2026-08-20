@@ -47,6 +47,17 @@ const SECTIONS = [
         subtitleFn: (c) => c._sensorSourcesSubtitle(),
     },
     {
+        // (#814 Pillar B) what SEM detected, with evidence — the #803/#802
+        // class made visible: mis-detection shows up here as a reviewable
+        // list, not downstream as broken behavior.
+        id: 'detected_hardware',
+        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SUPPORTED_HARDWARE.md',
+        icon: 'mdi:radar',
+        color: '#8DC892',
+        titleKey: 'config_section_detected_hardware',
+        subtitleFn: (c) => c._detectedHardwareSubtitle(),
+    },
+    {
         id: 'ev_chargers',
         docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/EV_CHARGING_LOGIC.md#the-five-charge-modes',
         icon: 'mdi:ev-station',
@@ -870,6 +881,66 @@ class SEMConfigCard extends SEMLitBase {
     // unavailable override gets a loud warning row instead of a silent
     // fallback. battery_power_sensor moved here from Battery & zones,
     // solar_production_sensor from Tariff — one concept, one home.
+    _detectionReport() {
+        const st = this._hass?.states?.['sensor.sem_diag_charger_control'];
+        return st?.attributes?.detection_report || null;
+    }
+
+    _detectedHardwareSubtitle() {
+        const r = this._detectionReport();
+        if (!r) return this._t('config_detect_none');
+        const n = (r.chargers || []).length;
+        const nm = (r.near_misses || []).length;
+        const base = `${n} ${this._t('config_detect_chargers')}`;
+        return nm ? `${base} · ${nm} ${this._t('config_detect_near_misses')}` : base;
+    }
+
+    // (#814 Pillar B) Detected hardware with evidence. Read-only view of the
+    // report the coordinator publishes; corrections happen with the existing
+    // pickers in the charger / sensor-source sections.
+    _renderDetectedHardware(T) {
+        const r = this._detectionReport();
+        if (!r) {
+            return html`<div class="setting-help-text">${this._t('config_detect_none')}</div>`;
+        }
+        const chargers = r.chargers || [];
+        const misses = r.near_misses || [];
+        const prober = r.prober_candidates || [];
+        const dis = r.disagreements || [];
+        const roleRow = (k, v) => html`
+            <div class="row"><span class="lbl">${k}</span>
+                <span style="font-family:monospace;font-size:0.85em">${v.entity || v.value || '—'}
+                    ${v.device_class ? html`<span style="opacity:.6"> · ${v.domain}/${v.device_class}</span>` : nothing}
+                </span></div>`;
+        return html`
+            <div class="setting-help-text" style="margin:0 0 6px">${this._t('config_detect_intro')}</div>
+            ${chargers.map((c) => html`
+                <div class="row" style="font-weight:600">
+                    <span class="lbl">${this._t('config_detect_charger')}: ${c.platform}</span>
+                    <span>${c.control}</span>
+                </div>
+                ${Object.entries(c.mapped || {}).map(([k, v]) => roleRow(k, v))}
+                ${(c.unmapped || []).length ? html`
+                    <div class="setting-help-text" style="margin:2px 0 8px">
+                        ${this._t('config_detect_unmapped')}: ${(c.unmapped || []).map((u) => u.entity).join(', ')}
+                    </div>` : nothing}
+            `)}
+            ${misses.map((m) => html`
+                <div class="row" style="color:${T.warn || '#ffb74d'}">
+                    <span class="lbl">⚠ ${m.platform}</span>
+                    <span>${this._t('config_detect_near_miss')}</span>
+                </div>
+                <div class="setting-help-text" style="margin:-2px 0 8px">
+                    ${(m.entities || []).map((e) => e.entity).join(', ')}
+                </div>`)}
+            ${dis.filter((d) => d.kind === 'prober_only').map((d) => html`
+                <div class="row"><span class="lbl">🔎 ${d.platform}</span>
+                    <span>${this._t('config_detect_prober_only')}</span></div>`)}
+            ${(!chargers.length && !misses.length && !prober.length) ? html`
+                <div class="setting-help-text">${this._t('config_detect_nothing')}</div>` : nothing}
+        `;
+    }
+
     _renderSensorSources(T) {
         const opts = this._options || {};
         return html`
@@ -2297,6 +2368,7 @@ class SEMConfigCard extends SEMLitBase {
         const renderers = {
             overview: (T) => this._renderOverview(T),
             sensor_sources: (T) => this._renderSensorSources(T),
+            detected_hardware: (T) => this._renderDetectedHardware(T),
             ev_chargers: (T) => this._renderEvChargers(T),
             battery_zones: (T) => this._renderBatteryZones(T),
             tariff: (T) => this._renderTariff(T),

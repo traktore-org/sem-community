@@ -1878,6 +1878,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     entry.runtime_data = coordinator
     # Also store in hass.data for backward compatibility with platform setup
     hass.data[DOMAIN][entry.entry_id] = coordinator
+    # (#814) detection evidence report — built once here, refreshed on
+    # late discovery, published every cycle.
+    coordinator.refresh_detection_report()
 
     # Version-change detection (v1.6.14): on first setup after an upgrade
     # — HACS pulled new code, HA restarted with it — fire a one-shot

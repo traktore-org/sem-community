@@ -21,7 +21,7 @@ Detection is integration-aware:
 """
 import logging
 import re
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry
@@ -768,6 +768,181 @@ def discover_all_ev_chargers_from_registry(
                 chargers.append(result)
 
     return chargers
+
+
+def probe_charger_candidates(hass: Optional[HomeAssistant] = None,
+                             registry=None) -> List[Dict[str, Any]]:
+    """(#814 Pillar A, land-asleep) Generic charger prober.
+
+    Classifies registry DEVICES from what their entities ARE — domain +
+    device_class — never from brand or entity names (the #684/#627
+    lesson, and evcc's #30143: never infer from a name or a momentary
+    state). A device is a charger candidate when it has a power reading
+    AND a plug/charging binary AND some way to be controlled (a current
+    ``number``, or a start/stop ``switch``).
+
+    Runs BESIDE the brand functions: ``build_detection_report`` carries
+    its candidates and any disagreement; nothing acts on it until the
+    comparison window is clean. Pure over registry entries.
+    """
+    if registry is None:
+        registry = entity_registry.async_get(hass)
+    entries = [e for e in registry.entities.values() if not e.disabled_by]
+    devices: Dict[Optional[str], list] = {}
+    for e in entries:
+        devices.setdefault(e.device_id, []).append(e)
+
+    out: List[Dict[str, Any]] = []
+    for device_id, dev_entities in devices.items():
+        if device_id is None:
+            continue
+        roles: Dict[str, str] = {}
+        evidence: List[str] = []
+        for e in dev_entities:
+            eid = str(e.entity_id)
+            dom = eid.split(".", 1)[0]
+            dc = getattr(e, "original_device_class", None)
+            if dom == "sensor" and dc == "power" and "ev_charging_power_sensor" not in roles:
+                roles["ev_charging_power_sensor"] = eid
+                evidence.append(f"{eid}: sensor/power → charging power")
+            elif dom == "binary_sensor" and dc == "plug" and "ev_connected_sensor" not in roles:
+                roles["ev_connected_sensor"] = eid
+                evidence.append(f"{eid}: binary_sensor/plug → connected")
+            elif dom == "binary_sensor" and dc in ("power", "battery_charging") \
+                    and "ev_charging_sensor" not in roles:
+                roles["ev_charging_sensor"] = eid
+                evidence.append(f"{eid}: binary_sensor/{dc} → charging")
+            elif dom == "number" and dc == "current" and "ev_current_control_entity" not in roles:
+                roles["ev_current_control_entity"] = eid
+                evidence.append(f"{eid}: number/current → current control")
+            elif dom == "switch" and "ev_start_stop_entity" not in roles:
+                roles["ev_start_stop_entity"] = eid
+                evidence.append(f"{eid}: switch → start/stop (candidate)")
+        has_power = "ev_charging_power_sensor" in roles
+        has_plug = "ev_connected_sensor" in roles or "ev_charging_sensor" in roles
+        # Control is reported, not required: a service-controlled box (KEBA)
+        # shows no number/switch on the device yet is plainly a charger.
+        # Power + a plug/charging binary IS the charger shape; what can
+        # drive it is a separate, named fact.
+        has_control = ("ev_current_control_entity" in roles
+                       or "ev_start_stop_entity" in roles)
+        if has_power and has_plug:
+            out.append({
+                "platform": str(dev_entities[0].platform or ""),
+                "device_id": device_id,
+                "roles": roles,
+                "evidence": evidence,
+                "control_visible": has_control,
+            })
+    return out
+
+
+def build_detection_report(hass: Optional[HomeAssistant] = None,
+                           registry=None) -> Dict[str, Any]:
+    """(#814 Pillar B) Detection that shows its work.
+
+    The same walk as ``discover_all_ev_chargers_from_registry`` — platform
+    by platform, device by device, the same brand functions — but the
+    answer carries EVIDENCE: which entity took which role (and what it
+    is: domain + device_class), which entities on that device were left
+    unmapped, and the class #803/#802 made visible: platforms whose
+    entities were present but no role matched (near-misses). Today those
+    detect silently as "no charger"; in the report the user sees the gap
+    instead of broken behavior.
+
+    JSON-serialisable; read-only; brand logic untouched.
+    """
+    from datetime import datetime, timezone
+
+    if registry is None:
+        registry = entity_registry.async_get(hass)
+    entries = list(registry.entities.values())
+
+    def _describe(e) -> Dict[str, Any]:
+        eid = str(e.entity_id)
+        return {
+            "entity": eid,
+            "domain": eid.split(".", 1)[0],
+            "device_class": getattr(e, "original_device_class", None),
+        }
+
+    report: Dict[str, Any] = {
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "scanned_platforms": [p for p, _ in _EV_CHARGER_PLATFORMS],
+        "chargers": [],
+        "near_misses": [],
+        "disabled_ignored": [],
+    }
+
+    for platform, discover_fn in _EV_CHARGER_PLATFORMS:
+        def _matches(ep: str, _this=platform) -> bool:
+            if _this == "zaptec":
+                return ep == "zaptec" or ep.startswith("zaptec_")
+            return ep == _this
+        plat_entities = [e for e in entries if _matches(str(e.platform or ""))]
+        if not plat_entities:
+            continue
+        for e in plat_entities:
+            if e.disabled_by:
+                report["disabled_ignored"].append(str(e.entity_id))
+        live = [e for e in plat_entities if not e.disabled_by]
+        devices: Dict[Optional[str], list] = {}
+        for e in live:
+            devices.setdefault(e.device_id, []).append(e)
+        for device_id, dev_entities in devices.items():
+            mapping = discover_fn(dev_entities) or {}
+            by_id = {str(e.entity_id): e for e in dev_entities}
+            if not mapping:
+                report["near_misses"].append({
+                    "platform": platform,
+                    "device_id": device_id,
+                    "entities": [_describe(e) for e in dev_entities],
+                    "note": "entities present, no role matched",
+                })
+                continue
+            mapped: Dict[str, Any] = {}
+            used = set()
+            for key, val in mapping.items():
+                if key.startswith("_"):
+                    continue
+                e = by_id.get(str(val))
+                if e is not None:
+                    mapped[key] = _describe(e)
+                    used.add(str(val))
+                else:
+                    mapped[key] = {"value": val}   # a service name, param, …
+            control = mapping.get("ev_charger_service")
+            control = (f"service: {control}" if control
+                       else "number entity" if mapping.get("ev_current_control_entity")
+                       else "see mapping")
+            report["chargers"].append({
+                "platform": str(dev_entities[0].platform or platform),
+                "device_id": device_id,
+                "mapped": mapped,
+                "unmapped": [_describe(e) for e in dev_entities
+                             if str(e.entity_id) not in used],
+                "control": control,
+            })
+
+    # (#814 Pillar A) the prober runs beside the brand walk. A candidate on
+    # a device no brand function claimed = "prober_only" (a shape we could
+    # support but have no brand row for); a brand-detected device the
+    # prober cannot see = "brand_only" (a brand function knows something
+    # the generic rules don't — or the rules are wrong). Both are data.
+    try:
+        cands = probe_charger_candidates(registry=registry)
+    except Exception:  # noqa: BLE001 — the prober must never cost the report
+        cands = []
+    report["prober_candidates"] = cands
+    brand_devices = {(c["platform"], c["device_id"]) for c in report["chargers"]}
+    prober_devices = {(c["platform"], c["device_id"]) for c in cands}
+    report["disagreements"] = (
+        [{"kind": "prober_only", "platform": p, "device_id": d}
+         for (p, d) in sorted(prober_devices - brand_devices, key=str)]
+        + [{"kind": "brand_only", "platform": p, "device_id": d}
+           for (p, d) in sorted(brand_devices - prober_devices, key=str)]
+    )
+    return report
 
 
 def discover_ev_charger_from_registry(hass: HomeAssistant) -> Dict[str, str]:

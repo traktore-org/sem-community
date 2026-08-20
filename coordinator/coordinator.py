@@ -8433,6 +8433,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     self._ev_retry_count,
                 )
 
+    def refresh_detection_report(self) -> None:
+        """(#814 Pillar B) Rebuild the detection evidence report from the
+        entity registry. Called at setup and after a late discovery; the
+        result is published every cycle (``detection_report`` on
+        coordinator.data → diag sensor attribute + diagnostics download +
+        the Config tab's Detected-hardware section). Read-only, cheap."""
+        try:
+            from ..hardware_detection import build_detection_report
+            self._detection_report = build_detection_report(self.hass)
+        except Exception:  # noqa: BLE001 — evidence must never cost setup
+            _LOGGER.debug("detection report skipped", exc_info=True)
+            self._detection_report = None
+
     async def _retry_ev_device_setup(self) -> None:
         """Retry EV device setup if KEBA wasn't available at startup."""
         from ..hardware_detection import discover_ev_charger_from_registry
@@ -8443,6 +8456,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             return
 
         _LOGGER.info("Late-discovered EV charger: %s", list(ev_auto.keys()))
+        self.refresh_detection_report()
 
         ev_device = CurrentControlDevice(
             hass=self.hass,
