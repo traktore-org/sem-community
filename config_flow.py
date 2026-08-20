@@ -2788,6 +2788,23 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         _c = lambda key, fb: self._cfg(current_config, key, fb)
         _platform = _c("battery_charge_platform", "generic")
 
+        # Re-populate the six program slots from what was actually persisted.
+        # Save normalises the numbered form fields into the ``deye_program_groups``
+        # list (above), and the flat ``deye_program_<n>_<kind>`` keys are never
+        # stored — so on reopen the fields must read the list shape (with the
+        # numbered keys as fallback), mirroring the adapter's own slot
+        # resolution order. Reading only the flat keys left every slot blank.
+        _groups = current_config.get("deye_program_groups")
+
+        def _prog(n: int, kind: str):
+            if isinstance(_groups, list) and len(_groups) >= n:
+                group = _groups[n - 1]
+                if isinstance(group, dict):
+                    value = group.get(kind)
+                    if value:
+                        return value
+            return _c(f"deye_program_{n}_{kind}", None)
+
         return self.async_show_form(
             step_id="deye",
             data_schema=vol.Schema(
@@ -2900,12 +2917,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 | {
                     vol.Optional(
                         f"deye_program_{n}_{kind}",
-                        description={"suggested_value": _c(
-                            f"deye_program_{n}_{kind}", None,
-                        )},
+                        description={"suggested_value": _prog(n, kind)},
                     ): (
                         selector.EntitySelector(
-                            selector.EntitySelectorConfig(domain="select")
+                            selector.EntitySelectorConfig(domain="time")
                         )
                         if kind == "time"
                         else selector.EntitySelector(

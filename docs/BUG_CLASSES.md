@@ -1967,3 +1967,37 @@ plus a runtime assertion that the dashboard dir is actually served through
 API we call inside a `try/except`, has HA scheduled it for removal — and can the `except` clause tell
 "already done" apart from "this method no longer exists"? A comment on an `except` that names the one
 way it fires is a claim to verify, not a fact. Refs #799 #283 #785 #55.
+
+### 49. Config-flow entity picker offers a domain the runtime validator rejects — GUARDED
+**Symptom:** a field in the setup UI cannot be configured to a working value at all — the entity
+picker only offers entities of one domain, while the code that consumes the choice hard-rejects
+that domain and demands another. Both halves look correct in isolation; together they are a closed
+loop the user cannot exit. Distinct from class 30 (there a key the runtime honours has *no* editable
+surface; here the surface exists but its type filter excludes every value the runtime will accept),
+and from class 34 (there a parser accepts a NAME but rejects a value SHAPE; here a UI selector offers
+a DOMAIN the validator refuses). **Root shape:** the accepted-domain contract for an entity is stated
+*twice* — once as the config-flow `EntitySelectorConfig(domain=…)` filter, once as the adapter's
+runtime `entity_id.split(".",1)[0]` check (and the service it writes through) — and the two drift.
+**Live catch (#807, @ab-elco-clal, Deye/2.0.0-beta.10):** the six `deye_program_<n>_time` slot fields
+offered `domain="select"`, but `DeyeBatteryAdapter._validate_slot` rejects anything but `time.*`
+("time entity must be time.*") and actuates via `time.set_value` — so no entity could satisfy both,
+and the docstring + all 16 translation labels ("time-slot **select** entity") pointed the same wrong
+way (class 24's mirror-drift, one layer out). A **second, paired fault:** save normalised the numbered
+form fields into the `deye_program_groups` *list* and never persisted the flat `deye_program_<n>_<kind>`
+keys, yet the reopen form re-populated each field from those flat keys — so every slot came back blank
+(the class-19/save-restore-asymmetry twin: the write shape and the re-read shape disagree).
+**Where it lives:** every `config_flow.py` `EntitySelector` whose value an adapter/reader later
+validates by domain — the Deye slot fields (fixed: time→`time`), and by audit the rest of the Deye
+step + `battery_discharge_control_entity` (all already `⊆` what the runtime accepts; charge/discharge
+selectors offer a permissive subset, never a contradiction). **Closure:** the picker's offered
+domain(s) must be a **subset** of the domains the runtime validator accepts, for every field — so the
+UI can never advertise a value the backend refuses; and a form must re-read on reopen from the SAME
+store its save writes (list-shape here, with the numbered keys as documented fallback, mirroring the
+adapter's own `_program_slots` resolution order). **Guard:**
+`tests/test_deye_config_flow.py::TestDeye807TimeSlotContract` — asserts every slot picker's offered
+domains `⊆` `_validate_slot`'s accepted set (time→`{"time"}`, soc→`_NUMERIC_DOMAINS`,
+charge→`_SELECT_DOMAINS`), that reopening repopulates each slot from the saved groups (and from the
+numbered-key fallback), and pins the runtime contract (a `select.*` time entity IS rejected — so the
+fix is to correct the picker, never to loosen the validator). **Sweep question:** for every entity
+field in the config flow, is the domain the picker offers a subset of the domain the runtime accepts —
+and does the form re-read on reopen from the exact store its save wrote? Refs #807.

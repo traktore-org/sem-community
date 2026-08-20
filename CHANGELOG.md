@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.0.0-beta.11] — 20.08.2026
+
+- 🔧 **Deye program-slot time picker now offers `time.*` entities** (#807,
+  @ab-elco-clal): each Deye `deye_program_groups` slot's setup field offered a
+  `select` entity picker while the adapter requires — and writes via
+  `time.set_value` to — a Home-Assistant `time.*` entity, so no slot could ever
+  be configured to work. The picker now offers `time.*` (matching the validator
+  and the corrected docstring + field labels in all 16 languages), and reopening
+  the Deye options no longer shows the six slots blank — they re-read from the
+  saved program groups instead of the never-persisted flat keys.
+
 - 🔌 **Phase awareness, observation layer** (#804 Phase A, inert by design):
   SEM now estimates each charger's *actually used* phases from measured
   watts-per-amp (draw ÷ commanded amps ÷ ~230 V) — a 3-phase box feeding a
