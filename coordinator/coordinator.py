@@ -3478,6 +3478,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         decision = await self._phase_switch_tick(
                             cid, charger_cfg, decision, view.power,
                             _now_mono_cycle,
+                            setpoint_a=int(float(getattr(
+                                getattr(adapter, "_device", None),
+                                "_current_setpoint", 0) or 0)),
                         )
                         # Track the highest commanded current across the
                         # fleet so the stall-detection path (line ~3725)

@@ -253,3 +253,22 @@ class TestCoordinatorWiring:
         assert d is d0
         assert not hasattr(h, "_phase_sequencers") or not getattr(
             h, "_phase_sequencers", {})
+
+
+    def test_belief_learns_under_charge_max_from_the_setpoint(self):
+        # Live PROD: always_max charged 9.9 kW at a 16 A setpoint — the emit
+        # showed 3 but the belief never learned it (CHARGE_MAX carries no
+        # commanded amps). The adapter's setpoint is the offer.
+        import asyncio
+        from custom_components.solar_energy_management.coordinator.charger_types import (
+            ChargerDecision, ChargerIntent,
+        )
+        h = self._host(cfg={"ev_phase_switch_entity": "number.keba_phases",
+                            "phase_mode": "auto", "ev_voltage": 230,
+                            "ev_min_current": 6})
+        d = ChargerDecision(charger_id="c1", mode="always_max",
+                            intent=ChargerIntent.CHARGE_MAX,
+                            commanded_amps=0, budget_w=11000.0, reason="max")
+        asyncio.run(h._phase_switch_tick(
+            "c1", h.cfg, d, self._cp(9900.0, True), 0.0, setpoint_a=16))
+        assert h._phase_believed["c1"] == 3

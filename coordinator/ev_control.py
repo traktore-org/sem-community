@@ -732,7 +732,8 @@ class EVControlMixin:
         )
 
     async def _phase_switch_tick(self, cid: str, charger_cfg: dict,
-                                 decision, cp, now: float):
+                                 decision, cp, now: float,
+                                 setpoint_a: int = 0):
         """(#804 Phase B/C) One cycle of the phase model for this charger.
 
         Returns the decision, replaced with IDLE while the sequencer holds
@@ -782,11 +783,19 @@ class EVControlMixin:
             planner.new_session()
         self._phase_conn_memo[cid] = cp.connected
 
-        # Belief: the #716 W/A estimate, only meaningful under an amps
-        # command (CHARGE_MAX has no commanded amps to divide by).
+        # Belief: the #716 W/A estimate. Under an amps command the decision
+        # carries the offer; under CHARGE_MAX the adapter's actual setpoint
+        # is the offer (found live on PROD: always_max charged 9.9 kW at a
+        # 16 A setpoint and the belief never learned the exact 3 the emit
+        # already showed).
+        amps_for_estimate = None
         if decision.intent is ChargerIntent.CHARGE_AT_AMPS:
+            amps_for_estimate = decision.commanded_amps
+        elif decision.intent is ChargerIntent.CHARGE_MAX and setpoint_a:
+            amps_for_estimate = setpoint_a
+        if amps_for_estimate:
             est = estimate_active_phases(
-                cp.power_w, decision.commanded_amps, voltage)
+                cp.power_w, int(amps_for_estimate), voltage)
             if est is not None:
                 self._phase_believed[cid] = est
         believed = self._phase_believed.get(cid)
