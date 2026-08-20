@@ -45,6 +45,20 @@ All settings are accessible via **Settings** > **Devices & Services** > **Solar 
 | `ev_current_sensor` | Current sensor (A) — optional, for actual amperage |
 | `ev_session_energy_sensor` | Session energy (kWh) — optional |
 | `ev_total_energy_sensor` | Cumulative energy (kWh) — optional |
+| `ev_phase_switch_entity` | (#804) Optional — the select/number/switch (helper entities too) that changes the wallbox between 1- and 3-phase charging (go-e `psm`, KEBA X-series, openWB). Naming it enables the **Phase Mode** control; SEM never writes to it unless you set Phase Mode to a fixed 1/3 or Auto. |
+| `ev_phase_switch_value_1p` / `_3p` | The values to write for each position, in the entity's own vocabulary. Required for a `select`; a `number` defaults to 1/3 and a `switch` to off/on. |
+
+### What SEM detected (#814)
+
+The dashboard **Configuration tab → Detected hardware** shows every charger SEM
+auto-detected, the evidence for each role (which entity and what it is), the
+entities it left unmapped, and **near-misses** — integrations whose entities SEM
+saw but could not map to any role. A near-miss means your hardware is *almost*
+supported: open an issue with the list shown. The same report is in the
+diagnostics download (Settings → Devices & Services → SEM → ⋮ → Download
+diagnostics). Wrong detections are corrected in place with the pickers in the
+charger and sensor-source sections — no reinstall. The full support matrix with
+an honest per-brand status is [docs/SUPPORTED_HARDWARE.md](SUPPORTED_HARDWARE.md).
 
 ### Optimization Settings
 

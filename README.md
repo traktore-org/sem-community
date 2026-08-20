@@ -28,6 +28,7 @@ SEM monitors your solar production, battery, grid, EV charger, and household dev
 - **Smart EV charging** — dynamic 6-32A current control based on real-time solar surplus
 - **Five charging modes** — Solar only, Solar + cheapest hours, Min + Solar, Always (max), Off
 - **Auto mode** — automatically switches between self-consumption and fast charging based on solar forecast vs EV need
+- **1↔3-phase switching (#804)** — for wallboxes with a phase-switch entity (go-e, KEBA X-series, openWB): SEM measures the active phases from the real draw, offers a per-charger **Phase Mode** (Auto / 1-phase / 3-phase), and switches through a safe *stop → switch → settle → start* sequence with hysteresis and hard interval/session caps. Auto scales the charger to fit the surplus; manual winter-pins 1-phase for low sun. See [docs/EV_CHARGING_LOGIC.md](docs/EV_CHARGING_LOGIC.md#phase-switching--13phase-observed-manual-and-automatic-804)
 - **Battery-aware** — four-zone SOC strategy decides when battery helps the EV and when it charges first
 - **Min/Max charge-target range** — a per-charger dual-handle slider (kWh or SOC %): **Min** is the guaranteed amount (night/grid tops up to it), **Max** is the solar ceiling (surplus charges up to it, then stops). E.g. *Min 50% / Max 80%* — always keep 50% from the grid, let solar add up to 80% for battery longevity. Max defaults to full (charge freely from sun)
 - **Charge-by deadline** — set a per-charger "be ready by HH:MM" time and SEM scales the night current to reach Min by then (overriding the gentle ramp when time is short), and warns if the target can't physically be met in time. "Set as default" copies a charger's target + deadline to the global defaults
@@ -52,6 +53,7 @@ SEM monitors your solar production, battery, grid, EV charger, and household dev
 - **Smart night charging** — in the `Min + Solar` and `Solar + cheapest hours` modes, automatically skips or reduces night charges when SOC is sufficient, with solar forecast credit, daily SOC decay, and 3-skip safety net
 - **EV battery health** — tracks capacity degradation from partial charge sessions over months
 - **Hardware compatibility test suite** — 150+ automated tests covering all supported hardware — every inverter + charger combination verified in CI
+- **Transparent auto-detection (#814)** — the dashboard **Configuration → Detected hardware** section shows every device SEM found with the evidence for each role, and names *near-misses* (a brand almost supported) instead of silently detecting nothing. The full support matrix with an honest per-brand status is generated and CI-guarded: [docs/SUPPORTED_HARDWARE.md](docs/SUPPORTED_HARDWARE.md)
 
 ---
 
