@@ -60,6 +60,12 @@ def amps_from_headroom(
     return min(max_amps, max(min_amps, round(amps)))
 
 
+# (#804) Completed switches the measurement contradicted before a manual
+# target is declared not-taking and left alone (until it changes or the car
+# is replugged). Bounds a stop/start cycle a non-switching box would cause.
+PHASE_NOT_TAKING_AFTER = 2
+
+
 class EVControlMixin:
     """EV control methods for SEMCoordinator.
 
@@ -778,9 +784,12 @@ class EVControlMixin:
                 voltage=voltage,
             ))
 
-        # A replug is a new car (or a new mood) — fresh auto-switch budget.
+        # A replug is a new car (or a new mood) — fresh auto-switch budget,
+        # and a fresh chance for a target the box did not take.
         if cp.connected and not self._phase_conn_memo.get(cid, False):
             planner.new_session()
+            if getattr(self, "_phase_contradictions", None):
+                self._phase_contradictions.pop(cid, None)
         self._phase_conn_memo[cid] = cp.connected
 
         # Belief: the #716 W/A estimate. Under an amps command the decision
@@ -805,10 +814,31 @@ class EVControlMixin:
                 self._phase_believed[cid] = est
         believed = self._phase_believed.get(cid)
 
+        # (#804) Contradiction cap — live on PROD a manual "1" on a box whose
+        # switch entity does not actually switch re-triggered the whole
+        # stop→switch→settle→resume cycle every 2 minutes, forever: the
+        # measurement said 3, the target said 1, nothing bounded the retry.
+        # After two completed switches that measurement contradicted, the
+        # target is marked not-taking and left alone until it changes or
+        # the car is replugged; the card shows it.
+        if getattr(self, "_phase_contradictions", None) is None:
+            self._phase_contradictions = {}
+        contra = self._phase_contradictions.setdefault(
+            cid, {"target": None, "count": 0, "last_asserted": None})
+        if contra["last_asserted"] is not None and believed is not None \
+                and seq_idle and believed != contra["last_asserted"]:
+            # a switch completed asserting X, measurement now says != X
+            contra["count"] += 1
+            contra["last_asserted"] = None
         mode_val = str(charger_cfg.get("phase_mode") or "auto")
         if mode_val in ("1", "3"):
             desired = int(mode_val)
+            if contra["target"] != desired:
+                contra["target"], contra["count"] = desired, 0
+            if contra["count"] >= PHASE_NOT_TAKING_AFTER:
+                desired = None          # give up on this target
         else:
+            contra["target"], contra["count"] = None, 0
             # auto (Phase C): the planner answers from THIS charger's
             # allocated budget — sustained starvation scales down,
             # sustained headroom scales up, caps protect the contactor.
@@ -844,6 +874,10 @@ class EVControlMixin:
 
         if r.believed_phases is not None:
             self._phase_believed[cid] = r.believed_phases
+            contra["last_asserted"] = r.believed_phases
+        if (contra["count"] >= PHASE_NOT_TAKING_AFTER
+                and str(charger_cfg.get("phase_mode") or "auto") in ("1", "3")):
+            self._phase_switch_states[cid] = "not_taking"
 
         # Only ever WEAKEN a charge into IDLE — an emergency stop from the
         # safety gate (DISABLE) must pass through untouched, which is also

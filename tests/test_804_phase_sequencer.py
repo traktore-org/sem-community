@@ -304,3 +304,32 @@ class TestCoordinatorWiring:
         d = run(self._decision(amps=16), self._cp(5500.0, True), 20.0)  # ramp-down reading
         assert d.intent is ChargerIntent.DISABLE
         assert h._phase_believed["c1"] == 3, "no measurement while stopping"
+
+
+    def test_a_target_the_box_never_takes_is_given_up_after_two_tries(self):
+        # PROD: a manual "1" on a non-switching box re-ran the whole cycle
+        # every 2 minutes forever. After two completed switches that the
+        # measurement contradicted, the target is declared not-taking.
+        import asyncio
+        from custom_components.solar_energy_management.coordinator.charger_types import (
+            ChargerIntent,
+        )
+        from custom_components.solar_energy_management.coordinator.ev_phase_sequencer import (
+            MIN_SWITCH_GAP_S, SETTLE_S,
+        )
+        h = self._host()   # phase_mode "1"
+        run = lambda d, cp, t: asyncio.run(h._phase_switch_tick("c1", h.cfg, d, cp, t))
+        t = 0.0
+        switches = 0
+        for attempt in range(4):
+            # charging 3p at 10A → measured 3; desired 1 → stop
+            d = run(self._decision(amps=10), self._cp(6900.0, True), t)
+            if d.intent is ChargerIntent.DISABLE:
+                t += 10; run(self._decision(amps=10), self._cp(0.0, False), t)   # fires
+                switches += 1
+                t += SETTLE_S + 5; run(self._decision(amps=10), self._cp(0.0, False), t)  # settle-end → belief 1
+                t += 20; run(self._decision(amps=10), self._cp(6900.0, True), t)  # measurement → 3
+            t += MIN_SWITCH_GAP_S + 5
+        assert switches == 2, f"expected 2 attempts then give-up, got {switches}"
+        assert h._phase_switch_states["c1"] == "not_taking"
+        assert h.hass.services.async_call.await_count == 2
