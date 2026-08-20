@@ -6896,8 +6896,27 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         in_night = bool(self.time_manager.is_night_mode())
         if in_night and tr.phase == "idle":
-            tr.start(str(dt_util.now().date()),
+            # ONE clock read answers both the record's date key and the
+            # witness line (the #645 registry counts date() reads — two
+            # would be two authorities for the same question).
+            _opened_at = dt_util.now()
+            tr.start(str(_opened_at.date()),
                      outdoor_temp_c=self._outdoor_temp_c())
+            # Openings are witnessed like flips (#811 found a phantom
+            # record whose birth nothing had logged — a night that opened
+            # at 06:40, outside every window the sensors showed).
+            try:
+                _LOGGER.info(
+                    "#800 night opened: date=%s at %s (window=%s-%s, "
+                    "path=%s)",
+                    _opened_at.date(),
+                    _opened_at.strftime("%H:%M:%S"),
+                    *self.time_manager.get_night_window(),
+                    getattr(self.time_manager,
+                            "_last_night_window_path", "?"),
+                )
+            except Exception:  # noqa: BLE001
+                pass
         phase_before = tr.phase
         tr.tick(
             _time.time(), in_night,
@@ -6933,6 +6952,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             except Exception:  # noqa: BLE001
                 pass
         if tr.phase != phase_before:
+            # A flip is rare and load-bearing — log it WITH its inputs
+            # (#762 transition-logging style). The first live nights showed
+            # phase flips the window sensors could not explain; if that
+            # ever recurs, this line is the witness: which branch of
+            # is_night_mode fired, and what the window read as.
+            try:
+                _LOGGER.info(
+                    "#800 phase flip %s -> %s (in_night=%s, window=%s-%s, "
+                    "path=%s, sealed=%d)",
+                    phase_before, tr.phase, in_night,
+                    *self.time_manager.get_night_window(),
+                    getattr(self.time_manager,
+                            "_last_night_window_path", "?"),
+                    len(tr.sealed()),
+                )
+            except Exception:  # noqa: BLE001
+                pass
             # (#800 round 4) The verdict reads current_record()/sealed(),
             # and BOTH change exactly at a phase flip — but the review
             # otherwise refreshes only at the demand ledger's seal (which

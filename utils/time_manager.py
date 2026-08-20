@@ -102,6 +102,24 @@ class TimeManager:
             self._last_night_window_path = "pre_midnight_in_night"
             return True
         if current_time < night_end:
+            # (#811, found live 20.08 06:22) At sunrise, sun.sun rolls
+            # ``next_rising`` over to TOMORROW's — 1-2 minutes later on
+            # the clock in the shrinking half of the year — and this
+            # minute-granular compare would re-enter night for that
+            # sliver: day at 06:22, night again seconds later, day at
+            # 06:23. The #800 recorder sealed the real night on the
+            # phantom re-entry and its morning verdict read a garbage
+            # one-minute record. The sun's own state is authoritative
+            # for "morning has broken": the ceiling (winter latest_end)
+            # may end the night early, but a risen sun always ends it.
+            try:
+                sun = self.hass.states.get("sun.sun")
+                if sun is not None and sun.state == "above_horizon":
+                    self._last_night_window_path = (
+                        "post_midnight_sun_already_up")
+                    return False
+            except Exception:  # noqa: BLE001 — veto only, never a crash
+                pass
             self._last_night_window_path = "post_midnight_in_night"
             return True
         self._last_night_window_path = "outside_night_window"

@@ -13,6 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🌅 **The night no longer double-flips at sunrise** (#811, caught live by
+  the #800 recorder's seal counter): at the moment of sunrise `sun.sun`
+  rolls `next_rising` over to tomorrow — 1–2 minutes later on the clock in
+  the shrinking half of the year — and the minute-granular night check
+  re-entered night for that sliver (day at 06:22, night seconds later, day
+  at 06:23). Every consumer of night mode saw the flap; the battery-night
+  recorder sealed the real record on the phantom re-entry and the morning
+  verdict read a garbage one-minute night. A risen sun now vetoes the
+  post-midnight night claim (`post_midnight_sun_already_up` on the #424
+  telemetry surface); the winter early-end ceiling is untouched. Phase
+  flips now also log their inputs at INFO — one line, transitions only.
+
 # [2.0.0-beta.11] — 20.08.2026
 
 - 🔧 **Deye program-slot time picker now offers `time.*` entities** (#807,
@@ -23,7 +35,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the corrected docstring + field labels in all 16 languages), and reopening
   the Deye options no longer shows the six slots blank — they re-read from the
   saved program groups instead of the never-persisted flat keys.
-
 - 🔌 **Phase awareness, observation layer** (#804 Phase A, inert by design):
   SEM now estimates each charger's *actually used* phases from measured
   watts-per-amp (draw ÷ commanded amps ÷ ~230 V) — a 3-phase box feeding a

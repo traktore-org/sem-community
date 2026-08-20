@@ -247,3 +247,74 @@ def test_get_diagnostics_returns_all_paths():
         "night_window_path", "meter_day_path", "night_hours_path",
         "offset_parse_path",
     }
+
+
+# ──────────────────────────────────────────────
+# #811 — the sunrise rollover sliver
+# ──────────────────────────────────────────────
+
+
+def _local_iso(*args):
+    """An ISO instant whose LOCAL clock reads the given wall time."""
+    return datetime(*args, tzinfo=dt_util.DEFAULT_TIME_ZONE).isoformat()
+
+
+def test_sunrise_rollover_sliver_does_not_reenter_night():
+    """(#811, live 20.08 06:22 on the rig) At sunrise, sun.sun rolls
+    next_rising to TOMORROW — 1-2 minutes later on the clock in the
+    shrinking half of the year — and the minute-granular post-midnight
+    compare re-entered night for that sliver. The #800 recorder sealed
+    the real night, opened a garbage one-minute night, and the morning
+    verdict read the garbage. A risen sun ends the night, always."""
+    hass = MagicMock()
+    sun = MagicMock()
+    sun.state = "above_horizon"                    # morning has broken
+    sun.attributes = {
+        # rolled over: TOMORROW's rising, 1 min later than today's
+        "next_rising": _local_iso(2026, 8, 21, 6, 23, 35),
+        "next_setting": _local_iso(2026, 8, 20, 20, 29, 33),
+    }
+    hass.states.get = MagicMock(return_value=sun)
+    tm = TimeManager(hass=hass, config={})
+    inside_sliver = datetime(2026, 8, 20, 6, 22, 30,
+                             tzinfo=dt_util.DEFAULT_TIME_ZONE)
+    with patch.object(dt_util, "now", return_value=inside_sliver):
+        assert tm.is_night_mode() is False
+    assert tm._last_night_window_path == "post_midnight_sun_already_up"
+
+
+def test_sun_below_horizon_keeps_the_night():
+    """The veto only removes false-night: 05:00, sun below → night."""
+    hass = MagicMock()
+    sun = MagicMock()
+    sun.state = "below_horizon"
+    sun.attributes = {
+        "next_rising": _local_iso(2026, 8, 20, 6, 22, 35),
+        "next_setting": _local_iso(2026, 8, 20, 20, 29, 33),
+    }
+    hass.states.get = MagicMock(return_value=sun)
+    tm = TimeManager(hass=hass, config={})
+    early = datetime(2026, 8, 20, 5, 0, 0,
+                     tzinfo=dt_util.DEFAULT_TIME_ZONE)
+    with patch.object(dt_util, "now", return_value=early):
+        assert tm.is_night_mode() is True
+    assert tm._last_night_window_path == "post_midnight_in_night"
+
+
+def test_winter_ceiling_still_ends_night_with_sun_below():
+    """latest_end < sunrise (winter): the ceiling ends the night while
+    the sun is still down — the veto must not be needed for that."""
+    hass = MagicMock()
+    sun = MagicMock()
+    sun.state = "below_horizon"
+    sun.attributes = {
+        "next_rising": _local_iso(2026, 12, 20, 8, 0, 0),
+        "next_setting": _local_iso(2026, 12, 20, 16, 40, 0),
+    }
+    hass.states.get = MagicMock(return_value=sun)
+    tm = TimeManager(hass=hass, config={"night_latest_end": 7.0})
+    after_cap = datetime(2026, 12, 20, 7, 30, 0,
+                         tzinfo=dt_util.DEFAULT_TIME_ZONE)
+    with patch.object(dt_util, "now", return_value=after_cap):
+        assert tm.is_night_mode() is False
+    assert tm._last_night_window_path == "outside_night_window"
