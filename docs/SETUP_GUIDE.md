@@ -33,6 +33,19 @@ For developer and architecture details, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ---
 
+## What SEM detected — and how to correct it
+
+After setup, the dashboard **Configuration tab → Detected hardware** shows
+every charger SEM auto-detected, with the evidence for each role (the entity
+and what it is — e.g. `binary_sensor/plug` → connected), the entities on that
+device it left unmapped, and **near-misses**: integrations whose entities SEM
+saw but could not map to any role. A near-miss means your box is *almost*
+supported — please open an issue with the list shown. Wrong rows are fixed
+with the pickers in the charger and sensor-source sections; the same report
+is included in the diagnostics download for bug reports. The full support
+matrix with an honest status per brand lives in
+[SUPPORTED_HARDWARE.md](SUPPORTED_HARDWARE.md).
+
 ## 1. Prerequisites
 
 ### Home Assistant version
