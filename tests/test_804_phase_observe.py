@@ -218,3 +218,20 @@ class TestHelperDomainTwins:
             {"entity_id": "input_number.phases", "value": 3.0})
         assert phase_switch_command("input_boolean.tp", "on") == (
             "input_boolean", "turn_on", {"entity_id": "input_boolean.tp"})
+
+
+def test_flow_selector_domains_match_the_module():
+    """The options-flow EntitySelector and PHASE_SWITCH_DOMAINS must agree —
+    the first sim-campaign config attempt was rejected by the selector for
+    an input_select the module happily validates."""
+    import pathlib
+    from custom_components.solar_energy_management.coordinator.ev_phases import (
+        PHASE_SWITCH_DOMAINS,
+    )
+    src = (pathlib.Path(__file__).resolve().parents[1]
+           / "config_flow.py").read_text()
+    for d in PHASE_SWITCH_DOMAINS:
+        needle = f'"{d}"'
+        assert src.count(needle) >= 1, f"flow selector misses domain {d}"
+    # both charger steps carry the full list
+    assert src.count('"input_boolean"') >= 2

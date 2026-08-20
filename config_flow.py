@@ -1417,7 +1417,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "ev_phase_switch_entity",
                     description={"suggested_value": suggestions.get("ev_phase_switch_entity")},
                 ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain=["select", "number", "switch"])
+                    selector.EntitySelectorConfig(domain=[
+                        "select", "number", "switch",
+                        "input_select", "input_number", "input_boolean",
+                    ])
                 ),
                 # The 1p/3p positions in the entity's own vocabulary.
                 # Required for a select (its option strings are the
@@ -1630,7 +1633,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "ev_phase_switch_entity",
                     description={"suggested_value": charger.get("ev_phase_switch_entity")},
                 ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain=["select", "number", "switch"])
+                    selector.EntitySelectorConfig(domain=[
+                        "select", "number", "switch",
+                        "input_select", "input_number", "input_boolean",
+                    ])
                 ),
                 vol.Optional(
                     "ev_phase_switch_value_1p",
