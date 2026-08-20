@@ -321,7 +321,7 @@ class TestCoordinatorWiring:
         run = lambda d, cp, t: asyncio.run(h._phase_switch_tick("c1", h.cfg, d, cp, t))
         t = 0.0
         switches = 0
-        for attempt in range(4):
+        for _attempt in range(4):
             # charging 3p at 10A → measured 3; desired 1 → stop
             d = run(self._decision(amps=10), self._cp(6900.0, True), t)
             if d.intent is ChargerIntent.DISABLE:
