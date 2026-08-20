@@ -236,3 +236,40 @@ class TestBrandsAsData:
                 assert rule["role"].startswith("ev_"), (plat, rule)
                 assert rule["domain"] in ("sensor", "binary_sensor", "number",
                                           "switch", "select", "button"), (plat, rule)
+
+
+class TestProberRefinementsFromTheRig:
+
+    def test_sem_own_entities_are_never_candidates(self):
+        from custom_components.solar_energy_management.hardware_detection import (
+            probe_charger_candidates,
+        )
+        reg = _registry([
+            _ent("sensor.sem_charger_keba_power", "solar_energy_management", device_id="s1", device_class="power"),
+            _ent("binary_sensor.sem_charger_keba_connected", "solar_energy_management", device_id="s1", device_class="plug"),
+            _ent("sensor.sem_charger_keba_energy", "solar_energy_management", device_id="s1", device_class="energy"),
+        ])
+        assert probe_charger_candidates(registry=reg) == []
+
+    def test_a_poe_port_is_not_a_charger(self):
+        from custom_components.solar_energy_management.hardware_detection import (
+            probe_charger_candidates,
+        )
+        reg = _registry([
+            _ent("sensor.unifi_port_7_poe_power", "unifi", device_id="u1", device_class="power"),
+            _ent("binary_sensor.unifi_port_7_plug", "unifi", device_id="u1", device_class="plug"),
+        ])
+        assert probe_charger_candidates(registry=reg) == []
+
+    def test_keba_without_device_id_is_a_candidate(self):
+        from custom_components.solar_energy_management.hardware_detection import (
+            probe_charger_candidates,
+        )
+        reg = _registry([
+            _ent("binary_sensor.keba_p30_plug", "keba", device_id=None, device_class="plug"),
+            _ent("sensor.keba_p30_charging_power", "keba", device_id=None, device_class="power"),
+            _ent("sensor.keba_p30_total_energy", "keba", device_id=None, device_class="energy"),
+        ])
+        cands = probe_charger_candidates(registry=reg)
+        assert len(cands) == 1 and cands[0]["platform"] == "keba"
+        assert cands[0]["control_visible"] is False   # service-controlled

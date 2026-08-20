@@ -787,16 +787,23 @@ def probe_charger_candidates(hass: Optional[HomeAssistant] = None,
     """
     if registry is None:
         registry = entity_registry.async_get(hass)
-    entries = [e for e in registry.entities.values() if not e.disabled_by]
-    devices: Dict[Optional[str], list] = {}
+    # SEM's own entities mirror the charger they describe — never a
+    # candidate (live on the rig the prober "found" sem_charger_* sensors).
+    entries = [e for e in registry.entities.values()
+               if not e.disabled_by
+               and str(e.platform or "") != "solar_energy_management"]
+    # Group by device; entities without a device (KEBA's UDP integration
+    # registers none) group per platform instead of being skipped.
+    devices: Dict[Any, list] = {}
     for e in entries:
-        devices.setdefault(e.device_id, []).append(e)
+        key = e.device_id if e.device_id is not None else ("platform", str(e.platform or ""))
+        devices.setdefault(key, []).append(e)
 
     out: List[Dict[str, Any]] = []
-    for device_id, dev_entities in devices.items():
-        if device_id is None:
-            continue
+    for device_key, dev_entities in devices.items():
+        device_id = device_key if not isinstance(device_key, tuple) else None
         roles: Dict[str, str] = {}
+        has_energy = False
         evidence: List[str] = []
         for e in dev_entities:
             eid = str(e.entity_id)
@@ -818,15 +825,22 @@ def probe_charger_candidates(hass: Optional[HomeAssistant] = None,
             elif dom == "switch" and "ev_start_stop_entity" not in roles:
                 roles["ev_start_stop_entity"] = eid
                 evidence.append(f"{eid}: switch → start/stop (candidate)")
+            elif dom == "sensor" and dc == "energy":
+                has_energy = True
         has_power = "ev_charging_power_sensor" in roles
         has_plug = "ev_connected_sensor" in roles or "ev_charging_sensor" in roles
+        # A smart plug / PoE port also has power + a plug binary (live on the
+        # rig: UniFi ports). A charger additionally meters energy, or reports
+        # charging, or offers current control — require one of those.
+        charger_marks = (has_energy or "ev_charging_sensor" in roles
+                         or "ev_current_control_entity" in roles)
         # Control is reported, not required: a service-controlled box (KEBA)
         # shows no number/switch on the device yet is plainly a charger.
         # Power + a plug/charging binary IS the charger shape; what can
         # drive it is a separate, named fact.
         has_control = ("ev_current_control_entity" in roles
                        or "ev_start_stop_entity" in roles)
-        if has_power and has_plug:
+        if has_power and has_plug and charger_marks:
             out.append({
                 "platform": str(dev_entities[0].platform or ""),
                 "device_id": device_id,
