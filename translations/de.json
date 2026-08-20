@@ -337,7 +337,8 @@
           "ev_battery_capacity_kwh": "EV-Batteriekapazität (kWh)",
           "initial_current": "Startstrom (A)",
           "ev_min_current": "Minimaler Ladestrom (A)",
-          "vehicle_min_current": "Fahrzeug-Mindeststrom (A)"
+          "vehicle_min_current": "Fahrzeug-Mindeststrom (A)",
+          "ev_phase_switch_entity": "Phasenumschaltungs-Entität (optional)"
         },
         "data_description": {
           "charger_name": "Anzeigename für diesen Lader im Dashboard.",
@@ -363,7 +364,8 @@
           "ev_battery_capacity_kwh": "Gesamte nutzbare Kapazität der EV-Batterie in kWh. Wird zur Schätzung von SOC und Ladedauer verwendet.",
           "initial_current": "Ladestrom, mit dem SEM startet, bevor es auf den verfügbaren Überschuss hochregelt.",
           "ev_min_current": "Darunter pausiert SEM das Laden, statt den Strom weiter zu senken.",
-          "vehicle_min_current": "Fahrzeugspezifische Stromuntergrenze. Der effektive Mindestwert ist der höhere aus diesem und dem Lader-Mindeststrom."
+          "vehicle_min_current": "Fahrzeugspezifische Stromuntergrenze. Der effektive Mindestwert ist der höhere aus diesem und dem Lader-Mindeststrom.",
+          "ev_phase_switch_entity": "Select/Number/Switch, das die Wallbox zwischen 1- und 3-phasigem Laden umschaltet (go-e 'psm', KEBA X-Serie, openWB). SEM beobachtet und validiert vorerst nur — automatisches Umschalten folgt in einem späteren Release."
         }
       },
       "ev_charger_add": {
@@ -392,7 +394,8 @@
           "ev_target_soc": "EV-Ziel-SOC (%)",
           "ev_battery_capacity_kwh": "EV-Batteriekapazität (kWh)",
           "initial_current": "Startstrom (A)",
-          "ev_min_current": "Minimaler Ladestrom (A)"
+          "ev_min_current": "Minimaler Ladestrom (A)",
+          "ev_phase_switch_entity": "Phasenumschaltungs-Entität (optional)"
         },
         "data_description": {
           "charger_name": "Anzeigename für diesen Lader im Dashboard.",
@@ -417,7 +420,8 @@
           "ev_target_soc": "Ziel-SOC (%), ab dem SEM das EV als voll geladen betrachtet.",
           "ev_battery_capacity_kwh": "Gesamte nutzbare Kapazität der EV-Batterie in kWh. Wird zur Schätzung von SOC und Ladedauer verwendet.",
           "initial_current": "Ladestrom, mit dem SEM startet, bevor es auf den verfügbaren Überschuss hochregelt.",
-          "ev_min_current": "Darunter pausiert SEM das Laden, statt den Strom weiter zu senken."
+          "ev_min_current": "Darunter pausiert SEM das Laden, statt den Strom weiter zu senken.",
+          "ev_phase_switch_entity": "Select/Number/Switch, das die Wallbox zwischen 1- und 3-phasigem Laden umschaltet (go-e 'psm', KEBA X-Serie, openWB). SEM beobachtet und validiert vorerst nur — automatisches Umschalten folgt in einem späteren Release."
         }
       },
       "pv_naming": {

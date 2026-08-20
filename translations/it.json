@@ -337,7 +337,8 @@
           "ev_battery_capacity_kwh": "Capacità batteria VE (kWh)",
           "initial_current": "Corrente iniziale (A)",
           "ev_min_current": "Corrente di carica minima (A)",
-          "vehicle_min_current": "Corrente minima del veicolo (A)"
+          "vehicle_min_current": "Corrente minima del veicolo (A)",
+          "ev_phase_switch_entity": "Entità di commutazione fasi (opzionale)"
         },
         "data_description": {
           "charger_name": "Nome descrittivo di questo caricatore mostrato nella dashboard.",
@@ -363,7 +364,8 @@
           "ev_battery_capacity_kwh": "Capacità utilizzabile totale della batteria del VE in kWh. Usata per stimare il SOC e il tempo di carica.",
           "initial_current": "Corrente di carica con cui SEM inizia prima di adeguarsi al surplus disponibile.",
           "ev_min_current": "Sotto questo valore SEM mette in pausa la carica invece di abbassare ulteriormente la corrente.",
-          "vehicle_min_current": "Soglia di corrente per veicolo. Il minimo effettivo è il maggiore tra questo e la corrente minima del caricatore."
+          "vehicle_min_current": "Soglia di corrente per veicolo. Il minimo effettivo è il maggiore tra questo e la corrente minima del caricatore.",
+          "ev_phase_switch_entity": "Select/number/switch che commuta il caricatore tra carica mono e trifase (go-e 'psm', KEBA serie X, openWB). Per ora SEM osserva e convalida soltanto — la commutazione automatica arriverà in una versione futura."
         }
       },
       "ev_charger_add": {
@@ -392,7 +394,8 @@
           "ev_target_soc": "SOC obiettivo VE (%)",
           "ev_battery_capacity_kwh": "Capacità batteria VE (kWh)",
           "initial_current": "Corrente iniziale (A)",
-          "ev_min_current": "Corrente di carica minima (A)"
+          "ev_min_current": "Corrente di carica minima (A)",
+          "ev_phase_switch_entity": "Entità di commutazione fasi (opzionale)"
         },
         "data_description": {
           "charger_name": "Nome descrittivo di questo caricatore mostrato nella dashboard.",
@@ -417,7 +420,8 @@
           "ev_target_soc": "SOC obiettivo (%) al quale SEM considera il VE completamente carico.",
           "ev_battery_capacity_kwh": "Capacità utilizzabile totale della batteria del VE in kWh. Usata per stimare il SOC e il tempo di carica.",
           "initial_current": "Corrente di carica con cui SEM inizia prima di adeguarsi al surplus disponibile.",
-          "ev_min_current": "Sotto questo valore SEM mette in pausa la carica invece di abbassare ulteriormente la corrente."
+          "ev_min_current": "Sotto questo valore SEM mette in pausa la carica invece di abbassare ulteriormente la corrente.",
+          "ev_phase_switch_entity": "Select/number/switch che commuta il caricatore tra carica mono e trifase (go-e 'psm', KEBA serie X, openWB). Per ora SEM osserva e convalida soltanto — la commutazione automatica arriverà in una versione futura."
         }
       },
       "pv_naming": {

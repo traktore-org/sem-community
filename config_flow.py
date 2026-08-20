@@ -984,6 +984,7 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "ev_current_sensor",
     "ev_kwh_per_100km",
     "ev_min_current",
+    "ev_phase_switch_entity",
     "ev_start_stop_entity",
     "ev_surplus_priority",
     "ev_target_soc",
@@ -1406,6 +1407,16 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "ev_charge_mode_stop",
                     description={"suggested_value": suggestions.get("ev_charge_mode_stop")},
                 ): selector.TextSelector(),
+                # (#804 Phase A) The entity that PERFORMS a 1/3-phase switch
+                # when the hardware has one (go-e's psm select, KEBA
+                # X-series number, openWB switch). Named, never inferred
+                # (evcc #30143). Observe-only until Phase B.
+                vol.Optional(
+                    "ev_phase_switch_entity",
+                    description={"suggested_value": suggestions.get("ev_phase_switch_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["select", "number", "switch"])
+                ),
                 # #604: ONE priority axis — the unified device-priority list
                 # (#576). Shed order under peak is the reverse list walk
                 # (#470: higher list number sheds first), so there is no
@@ -1600,6 +1611,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "ev_charge_mode_stop",
                     description={"suggested_value": charger.get("ev_charge_mode_stop")},
                 ): selector.TextSelector(),
+                # (#804 Phase A) See async_step_ev_charger_add for the why.
+                vol.Optional(
+                    "ev_phase_switch_entity",
+                    description={"suggested_value": charger.get("ev_phase_switch_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["select", "number", "switch"])
+                ),
                 # #604: ONE priority axis — the unified device-priority list
                 # (#576). Lower number = charges first on surplus; shed
                 # order under peak is the reverse list walk (#470: higher

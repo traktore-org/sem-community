@@ -337,7 +337,8 @@
           "ev_battery_capacity_kwh": "Pojemność akumulatora EV (kWh)",
           "initial_current": "Prąd początkowy (A)",
           "ev_min_current": "Minimalny prąd ładowania (A)",
-          "vehicle_min_current": "Minimalny prąd pojazdu (A)"
+          "vehicle_min_current": "Minimalny prąd pojazdu (A)",
+          "ev_phase_switch_entity": "Encja przełączania faz (opcjonalnie)"
         },
         "data_description": {
           "charger_name": "Przyjazna nazwa tej ładowarki wyświetlana na pulpicie.",
@@ -363,7 +364,8 @@
           "ev_battery_capacity_kwh": "Całkowita użyteczna pojemność akumulatora EV w kWh. Używana do szacowania SOC i czasu ładowania.",
           "initial_current": "Prąd ładowania, od którego SEM zaczyna, zanim dostosuje się do dostępnej nadwyżki.",
           "ev_min_current": "Poniżej tej wartości SEM wstrzymuje ładowanie, zamiast dalej obniżać prąd.",
-          "vehicle_min_current": "Dolna granica prądu dla pojazdu. Efektywne minimum to większa z tej wartości i minimalnego prądu ładowarki."
+          "vehicle_min_current": "Dolna granica prądu dla pojazdu. Efektywne minimum to większa z tej wartości i minimalnego prądu ładowarki.",
+          "ev_phase_switch_entity": "Select/number/switch przełączający ładowarkę między ładowaniem 1- i 3-fazowym (go-e 'psm', KEBA serii X, openWB). Na razie SEM tylko obserwuje i weryfikuje — automatyczne przełączanie pojawi się w późniejszej wersji."
         }
       },
       "ev_charger_add": {
@@ -392,7 +394,8 @@
           "ev_target_soc": "Docelowy SOC pojazdu EV (%)",
           "ev_battery_capacity_kwh": "Pojemność akumulatora EV (kWh)",
           "initial_current": "Prąd początkowy (A)",
-          "ev_min_current": "Minimalny prąd ładowania (A)"
+          "ev_min_current": "Minimalny prąd ładowania (A)",
+          "ev_phase_switch_entity": "Encja przełączania faz (opcjonalnie)"
         },
         "data_description": {
           "charger_name": "Przyjazna nazwa tej ładowarki wyświetlana na pulpicie.",
@@ -417,7 +420,8 @@
           "ev_target_soc": "Docelowy SOC (%), przy którym SEM uznaje pojazd EV za w pełni naładowany.",
           "ev_battery_capacity_kwh": "Całkowita użyteczna pojemność akumulatora EV w kWh. Używana do szacowania SOC i czasu ładowania.",
           "initial_current": "Prąd ładowania, od którego SEM zaczyna, zanim dostosuje się do dostępnej nadwyżki.",
-          "ev_min_current": "Poniżej tej wartości SEM wstrzymuje ładowanie, zamiast dalej obniżać prąd."
+          "ev_min_current": "Poniżej tej wartości SEM wstrzymuje ładowanie, zamiast dalej obniżać prąd.",
+          "ev_phase_switch_entity": "Select/number/switch przełączający ładowarkę między ładowaniem 1- i 3-fazowym (go-e 'psm', KEBA serii X, openWB). Na razie SEM tylko obserwuje i weryfikuje — automatyczne przełączanie pojawi się w późniejszej wersji."
         }
       },
       "pv_naming": {
