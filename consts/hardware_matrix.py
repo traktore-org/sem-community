@@ -78,7 +78,7 @@ INVERTERS = [
      "evidence": "#523/#528 arcs with reporter RienduPre"},
     {"brand": "EG4 / Flexboss", "integration": "eg4 (tbd)", "pattern": "-",
      "discharge_control": False, "status": "requested",
-     "evidence": "#689, #810 (entity export pending)"},
+     "evidence": "#810 (EG4 Web Monitor integration; #689 closed into it)"},
     {"brand": "Victron Multiplus II BESS", "integration": "victron (tbd)", "pattern": "-",
      "discharge_control": False, "status": "requested", "evidence": "#809"},
 ]

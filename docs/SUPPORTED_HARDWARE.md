@@ -35,7 +35,7 @@
 | Sungrow | `sungrow` | A | yes | 🧩 implemented | — |
 | Tesla Powerwall | `powerwall` | B | yes | 🧩 implemented | — |
 | Victron | `victron / venus` | A | yes | 🧩 implemented | Multiplus-II BESS variant requested in #809 |
-| EG4 / Flexboss | `eg4 (tbd)` | - | — | 📥 requested | #689, #810 (entity export pending) |
+| EG4 / Flexboss | `eg4 (tbd)` | - | — | 📥 requested | #810 (EG4 Web Monitor integration; #689 closed into it) |
 | Victron Multiplus II BESS | `victron (tbd)` | - | — | 📥 requested | #809 |
 
 ## EV chargers
