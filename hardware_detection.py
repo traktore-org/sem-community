@@ -803,7 +803,6 @@ def probe_charger_candidates(hass: Optional[HomeAssistant] = None,
     for device_key, dev_entities in devices.items():
         device_id = device_key if not isinstance(device_key, tuple) else None
         roles: Dict[str, str] = {}
-        has_energy = False
         evidence: List[str] = []
         for e in dev_entities:
             eid = str(e.entity_id)
@@ -826,13 +825,13 @@ def probe_charger_candidates(hass: Optional[HomeAssistant] = None,
                 roles["ev_start_stop_entity"] = eid
                 evidence.append(f"{eid}: switch → start/stop (candidate)")
             elif dom == "sensor" and dc == "energy":
-                has_energy = True
+                evidence.append(f"{eid}: sensor/energy → metered energy (not a charger mark)")
         has_power = "ev_charging_power_sensor" in roles
         has_plug = "ev_connected_sensor" in roles or "ev_charging_sensor" in roles
-        # A smart plug / PoE port also has power + a plug binary (live on the
-        # rig: UniFi ports). A charger additionally meters energy, or reports
-        # charging, or offers current control — require one of those.
-        charger_marks = (has_energy or "ev_charging_sensor" in roles
+        # A smart plug / PoE port also has power + a plug binary — and meters
+        # energy (live on the rig: UniFi ports, a sim template). What only a
+        # charger has: a CHARGING binary or a CURRENT control. Require one.
+        charger_marks = ("ev_charging_sensor" in roles
                          or "ev_current_control_entity" in roles)
         # Control is reported, not required: a service-controlled box (KEBA)
         # shows no number/switch on the device yet is plainly a charger.

@@ -267,9 +267,22 @@ class TestProberRefinementsFromTheRig:
         )
         reg = _registry([
             _ent("binary_sensor.keba_p30_plug", "keba", device_id=None, device_class="plug"),
+            _ent("binary_sensor.keba_p30_charging_state", "keba", device_id=None, device_class="power"),
             _ent("sensor.keba_p30_charging_power", "keba", device_id=None, device_class="power"),
             _ent("sensor.keba_p30_total_energy", "keba", device_id=None, device_class="energy"),
         ])
         cands = probe_charger_candidates(registry=reg)
         assert len(cands) == 1 and cands[0]["platform"] == "keba"
         assert cands[0]["control_visible"] is False   # service-controlled
+
+
+    def test_a_poe_port_with_energy_is_still_not_a_charger(self):
+        from custom_components.solar_energy_management.hardware_detection import (
+            probe_charger_candidates,
+        )
+        reg = _registry([
+            _ent("sensor.unifi_port_7_poe_power", "unifi", device_id="u1", device_class="power"),
+            _ent("sensor.unifi_port_7_poe_energy", "unifi", device_id="u1", device_class="energy"),
+            _ent("binary_sensor.unifi_port_7_plug", "unifi", device_id="u1", device_class="plug"),
+        ])
+        assert probe_charger_candidates(registry=reg) == []
