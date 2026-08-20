@@ -794,9 +794,16 @@ def probe_charger_candidates(hass: Optional[HomeAssistant] = None,
                and str(e.platform or "") != "solar_energy_management"]
     # Group by device; entities without a device (KEBA's UDP integration
     # registers none) group per platform instead of being skipped.
+    # Device-less entities cluster by platform + object-id prefix (first two
+    # tokens): keba_p30_* is one box; a rig's template platform is not one
+    # device (live: a mock charger got an SG-Ready switch for "start/stop").
+    def _prefix(eid: str) -> str:
+        obj = eid.split(".", 1)[1] if "." in eid else eid
+        return "_".join(obj.split("_")[:2])
     devices: Dict[Any, list] = {}
     for e in entries:
-        key = e.device_id if e.device_id is not None else ("platform", str(e.platform or ""))
+        key = (e.device_id if e.device_id is not None
+               else ("platform", str(e.platform or ""), _prefix(str(e.entity_id))))
         devices.setdefault(key, []).append(e)
 
     out: List[Dict[str, Any]] = []
@@ -827,19 +834,20 @@ def probe_charger_candidates(hass: Optional[HomeAssistant] = None,
             elif dom == "sensor" and dc == "energy":
                 evidence.append(f"{eid}: sensor/energy → metered energy (not a charger mark)")
         has_power = "ev_charging_power_sensor" in roles
-        has_plug = "ev_connected_sensor" in roles or "ev_charging_sensor" in roles
-        # A smart plug / PoE port also has power + a plug binary — and meters
-        # energy (live on the rig: UniFi ports, a sim template). What only a
-        # charger has: a CHARGING binary or a CURRENT control. Require one.
-        charger_marks = ("ev_charging_sensor" in roles
-                         or "ev_current_control_entity" in roles)
+        # Live on the rig: smart plugs (Shelly-class, kitchen toaster, carport
+        # light) expose power + a binary with device_class=power — the same
+        # class KEBA uses for "charging" — plus a switch. What only a charger
+        # has is a PLUG/connected binary or a CURRENT control; a power-binary
+        # alone is an input state. Require one of those two.
+        has_plug = "ev_connected_sensor" in roles
+        charger_marks = (has_plug or "ev_current_control_entity" in roles)
         # Control is reported, not required: a service-controlled box (KEBA)
         # shows no number/switch on the device yet is plainly a charger.
         # Power + a plug/charging binary IS the charger shape; what can
         # drive it is a separate, named fact.
         has_control = ("ev_current_control_entity" in roles
                        or "ev_start_stop_entity" in roles)
-        if has_power and has_plug and charger_marks:
+        if has_power and charger_marks:
             out.append({
                 "platform": str(dev_entities[0].platform or ""),
                 "device_id": device_id,

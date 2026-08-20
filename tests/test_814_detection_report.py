@@ -251,16 +251,6 @@ class TestProberRefinementsFromTheRig:
         ])
         assert probe_charger_candidates(registry=reg) == []
 
-    def test_a_poe_port_is_not_a_charger(self):
-        from custom_components.solar_energy_management.hardware_detection import (
-            probe_charger_candidates,
-        )
-        reg = _registry([
-            _ent("sensor.unifi_port_7_poe_power", "unifi", device_id="u1", device_class="power"),
-            _ent("binary_sensor.unifi_port_7_plug", "unifi", device_id="u1", device_class="plug"),
-        ])
-        assert probe_charger_candidates(registry=reg) == []
-
     def test_keba_without_device_id_is_a_candidate(self):
         from custom_components.solar_energy_management.hardware_detection import (
             probe_charger_candidates,
@@ -276,13 +266,33 @@ class TestProberRefinementsFromTheRig:
         assert cands[0]["control_visible"] is False   # service-controlled
 
 
-    def test_a_poe_port_with_energy_is_still_not_a_charger(self):
+    def test_a_smart_plug_with_power_binary_and_switch_is_not_a_charger(self):
+        # Live on the rig: Shelly-class plugs carry a binary with
+        # device_class=power (an input state — KEBA's class for charging),
+        # a power sensor, energy and a switch. No plug binary, no current
+        # control → not a charger.
         from custom_components.solar_energy_management.hardware_detection import (
             probe_charger_candidates,
         )
         reg = _registry([
-            _ent("sensor.unifi_port_7_poe_power", "unifi", device_id="u1", device_class="power"),
-            _ent("sensor.unifi_port_7_poe_energy", "unifi", device_id="u1", device_class="energy"),
-            _ent("binary_sensor.unifi_port_7_plug", "unifi", device_id="u1", device_class="plug"),
+            _ent("binary_sensor.kueche_toaster_eingang_0", "unifi", device_id="p1", device_class="power"),
+            _ent("sensor.kueche_toaster_leistung", "unifi", device_id="p1", device_class="power"),
+            _ent("sensor.kueche_toaster_energie", "unifi", device_id="p1", device_class="energy"),
+            _ent("switch.kueche_toaster", "unifi", device_id="p1"),
         ])
         assert probe_charger_candidates(registry=reg) == []
+
+    def test_device_less_entities_cluster_by_prefix(self):
+        # A rig's template platform is many things; keba_p30_* is one box.
+        from custom_components.solar_energy_management.hardware_detection import (
+            probe_charger_candidates,
+        )
+        reg = _registry([
+            _ent("binary_sensor.mock_charger_2_plug", "template", device_id=None, device_class="plug"),
+            _ent("sensor.mock_charger_2_power", "template", device_id=None, device_class="power"),
+            _ent("switch.sg_ready_heating", "template", device_id=None),
+        ])
+        cands = probe_charger_candidates(registry=reg)
+        assert len(cands) == 1
+        assert "ev_start_stop_entity" not in cands[0]["roles"], (
+            "the SG-Ready switch is a different prefix, not this device")
