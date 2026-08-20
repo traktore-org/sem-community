@@ -24,8 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scales the charger to fit the surplus (down after 10 sustained starved
   minutes, up after 5 sustained minutes of headroom + margin) under hard
   caps: one automatic switch per 30 minutes, four per session. The estimate
-  independently confirms every switch physically took. Without a named
-  entity nothing exists — no knob, no writes, no behavior change.
+  independently confirms every switch physically took — and never lies
+  below the physical floor (one phase carries at most amps × 230 W; a car
+  drawing less than the offer reads the honest lower bound — found on the
+  first real charge). All three settings live on the dashboard
+  Configuration tab's charger block as well as the options flow, and the
+  Phases row on the EV card carries the selector and live status. Without
+  a named entity nothing exists — no knob, no writes, no behavior change.
 - 🌅 **The night no longer double-flips at sunrise** (#811, caught live by
   the #800 recorder's seal counter): at the moment of sunrise `sun.sun`
   rolls `next_rising` over to tomorrow — 1–2 minutes later on the clock in

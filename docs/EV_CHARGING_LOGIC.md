@@ -322,13 +322,19 @@ three layers — observation, manual control, and automatic switching:
   divides its measured draw by the commanded amps — watts‑per‑amp is
   volts‑actually‑in‑use, and over ~230 V per phase that reads the number of
   phases the *car* is actually using (a 3‑phase box feeding a 1‑phase car
-  reads 1). Exposed per charger as `active_phases` in the
-  `per_charger_phases` attribute on `sensor.sem_charging_state` and as
-  `charger_<id>_active_phases` in the diagnostics download. `null` when the
-  charger isn't drawing enough to measure.
+  reads 1). A physical floor keeps it honest: one phase can carry at most
+  `amps × 230 W`, so the estimate never reads fewer phases than the draw
+  proves — a car taking less than the offer reads the lower bound instead
+  of a lie, and the exact count whenever it uses the offer (found live: a
+  Zoe at a 32 A offer drawing 10 kW ≈ 15 A × 3 phases). Exposed per charger
+  as `active_phases` in the `per_charger_phases` attribute on
+  `sensor.sem_charging_state` and as `charger_<id>_active_phases` in the
+  diagnostics download. `null` when the charger isn't drawing enough to
+  measure.
 * **The switch capability is an entity you name, never guessed.** If your
   wallbox has a phase‑switch control, set **Phase Switch Entity** in the
-  charger's options (Settings → SEM → Configure → EV charger → edit). SEM
+  charger's block on the dashboard **Configuration tab** (or in the options
+  flow: Settings → SEM → Configure → EV charger → edit). SEM
   validates that it exists and is a `select`/`number`/`switch`, and surfaces
   the verdict (`switch_valid`) beside the estimate. For a `select` you must
   also fill the **1‑phase value / 3‑phase value** fields with the entity's

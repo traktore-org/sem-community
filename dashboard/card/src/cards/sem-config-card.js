@@ -735,6 +735,19 @@ class SEMConfigCard extends SEMLitBase {
                           surface to set it. */ ''}
                     ${this._renderPickerNested(idx, cid, 'ev_start_stop_entity', 'config_ev_start_stop',
                         ['switch', 'button'], null, opts, 'config_help_ev_start_stop')}
+                    ${''/* (#804) phase-switch capability: the entity the user
+                       NAMES (never inferred) + the 1p/3p values in its own
+                       vocabulary. Value fields only show once the entity is
+                       set; select entities REQUIRE them, number defaults to
+                       1/3 and switch to off/on. */}
+                    ${this._renderPickerNested(idx, cid, 'ev_phase_switch_entity', 'config_ev_phase_switch',
+                        ['select', 'number', 'switch', 'input_select', 'input_number', 'input_boolean'],
+                        null, opts, 'config_help_ev_phase_switch')}
+                    ${charger.ev_phase_switch_entity ? html`
+                        ${this._renderTextNested(idx, cid, 'ev_phase_switch_value_1p', 'config_ev_phase_1p',
+                            opts, 'config_help_ev_phase_values', '1 / off / einphasig')}
+                        ${this._renderTextNested(idx, cid, 'ev_phase_switch_value_3p', 'config_ev_phase_3p',
+                            opts, 'config_help_ev_phase_values', '3 / on / dreiphasig')}` : nothing}
                     ${this._renderPickerNested(idx, cid, 'vehicle_soc_entity', 'config_ev_vehicle_soc',
                         'sensor', null, opts, 'config_help_ev_vehicle_soc')}
                     ${this._renderTargetTypeSelectNested(idx, cid, charger, opts)}
@@ -1334,6 +1347,35 @@ class SEMConfigCard extends SEMLitBase {
 
     // Entity picker bound to ev_chargers[index][key] — writes the nested
     // list shape back via config_entries/update.
+    // (#804) free-text field bound to ev_chargers[index][key] — the 1p/3p
+    // positions in the switch entity's own vocabulary. Same nested write
+    // path + status chrome as the pickers; Enter or blur saves.
+    _renderTextNested(chargerIndex, cid, chargerKey, labelKey, opts, helpKey, placeholder) {
+        const chargers = opts.ev_chargers || [];
+        const cur = chargers[chargerIndex]?.[chargerKey] ?? '';
+        const statusKey = `ev_chargers.${chargerIndex}.${chargerKey}`;
+        const status = this._saveStatus[statusKey];
+        return html`
+            <div class="picker-cell">
+                <div class="picker-row">
+                    <span class="picker-label">${this._t(labelKey)}</span>
+                    <input type="text" class="txt-opt" .value=${String(cur)}
+                           placeholder="${placeholder || ''}"
+                           @keydown=${(e) => { if (e.key === 'Enter') e.target.blur(); }}
+                           @blur=${(e) => {
+                               const v = e.target.value.trim();
+                               if (v !== String(cur)) {
+                                   this._saveChargerField(chargerIndex, cid, chargerKey, v, statusKey, opts);
+                               }
+                           }} />
+                </div>
+                ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
+                ${status === 'ok' ? html`<div class="save-status ok">✓ ${this._t('config_saved')}</div>` : nothing}
+                ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
+            </div>
+        `;
+    }
+
     _renderPickerNested(chargerIndex, cid, chargerKey, labelKey, domain, deviceClass, opts, helpKey) {
         const chargers = opts.ev_chargers || [];
         const cur = chargers[chargerIndex]?.[chargerKey] || '';
