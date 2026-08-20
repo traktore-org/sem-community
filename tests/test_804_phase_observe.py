@@ -35,6 +35,20 @@ class TestEstimateActivePhases:
         # 10 A three-phase drawing 6.4 kW → 6400/10/230 = 2.78 → 3
         assert estimate_active_phases(6400.0, 10, 230.0) == 3
 
+    def test_partial_draw_never_lies_below_the_physical_floor(self):
+        # (Live PROD finding, 20.08) A Zoe at a 32 A offer drew 10.15 kW —
+        # ~15 A/phase on 3 phases. W/commanded-amps read 1.38 → rounded to
+        # "1-phase", which is PHYSICALLY IMPOSSIBLE: one phase at 32 A
+        # carries at most 7.36 kW. The estimate must never return fewer
+        # phases than ceil(W / (A·V)); with partial draw it reads the
+        # honest lower bound (2 here — the planner stays quiet on 2, and
+        # the ratio converges to exact truth when the car uses the offer).
+        assert estimate_active_phases(10150.0, 32, 230.0) == 2
+
+    def test_full_offer_draw_stays_exact(self):
+        # 3p at the full 16 A offer: 11.04 kW → exact 3.
+        assert estimate_active_phases(11040.0, 16, 230.0) == 3
+
     def test_below_power_floor_is_unknown(self):
         # Ramp-up / trickle: not a measurement, no estimate.
         assert estimate_active_phases(300.0, 6, 230.0) is None

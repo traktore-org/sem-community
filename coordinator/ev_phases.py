@@ -22,6 +22,8 @@ block-boundary switching) build on this observation layer.
 
 from __future__ import annotations
 
+import math as _math
+
 from typing import Callable, Optional, Tuple
 
 # Below this draw the reading is ramp-up or trickle, not a measurement —
@@ -56,7 +58,19 @@ def estimate_active_phases(
     if voltage <= 0:
         return None
     ratio = float(watts) / float(amps) / float(voltage)
-    return max(1, min(3, round(ratio)))
+    # One phase carries at most ``amps × voltage`` watts, so the draw sets
+    # a hard LOWER bound on the phase count. A car using less than the
+    # offer drags the bare ratio down — live on PROD a Zoe at a 32 A offer
+    # drew 10.15 kW (~15 A × 3 phases) and the ratio read "1-phase",
+    # physically impossible at 7.36 kW per phase. The floor makes partial
+    # draw read the honest lower bound (an ambiguous 2 keeps the auto
+    # planner quiet); the ratio converges to exact truth whenever the car
+    # actually uses the offer. 5% metering tolerance keeps a full-offer
+    # 1-phase car from reading as 2. At deep partial draw the count is
+    # fundamentally under-determined from watts+offer alone — the bound
+    # is the most the physics can honestly say.
+    floor = _math.ceil(ratio * 0.95)
+    return max(1, min(3, max(round(ratio), floor)))
 
 
 # Per-domain default values for the 1p/3p positions. select has NO
