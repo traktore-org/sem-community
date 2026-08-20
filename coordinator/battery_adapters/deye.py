@@ -34,7 +34,7 @@ Config shape (documented):
     deye_work_mode_battery_first_option: Battery First
     deye_force_charge_work_mode: battery_first
     deye_program_groups:                   # list of 6 dicts (preferred)
-      - time: select.deye_slice_1_time
+      - time: time.deye_slice_1_time       # HA writable time.* entity
         soc: number.deye_slice_1_soc
         charge: select.deye_slice_1_charge
       # ... 6 entries
