@@ -793,7 +793,12 @@ class EVControlMixin:
             amps_for_estimate = decision.commanded_amps
         elif decision.intent is ChargerIntent.CHARGE_MAX and setpoint_a:
             amps_for_estimate = setpoint_a
-        if amps_for_estimate:
+        # No measurement while a switch is in flight: the wind-down ramp
+        # (stopping) and the post-switch settle both produce transitional
+        # readings — live on PROD the belief drifted to 2 during the stop
+        # ramp. The plan's settle-window rule applies to stopping too.
+        seq_idle = getattr(self._phase_sequencers.get(cid), "_state", "idle") == "idle"
+        if amps_for_estimate and seq_idle:
             est = estimate_active_phases(
                 cp.power_w, int(amps_for_estimate), voltage)
             if est is not None:
@@ -843,10 +848,14 @@ class EVControlMixin:
         # Only ever WEAKEN a charge into IDLE — an emergency stop from the
         # safety gate (DISABLE) must pass through untouched, which is also
         # why this tick runs after that gate in the loop.
+        # A phase switch is a DELIBERATE stop, not a transient dip: hold as
+        # DISABLE so the reconciler opens the contactor now. Live on PROD the
+        # IDLE hold inherited the #552 flicker grace and the real stop came
+        # ~5 minutes after the command.
         if r.hold_charging and decision.intent in (
                 ChargerIntent.CHARGE_AT_AMPS, ChargerIntent.CHARGE_MAX):
             return replace(
-                decision, intent=ChargerIntent.IDLE, commanded_amps=0,
+                decision, intent=ChargerIntent.DISABLE, commanded_amps=0,
                 reason=f"phase switch: {r.state} (#804)", bridgeable=False)
         return decision
 

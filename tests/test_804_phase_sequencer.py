@@ -221,11 +221,13 @@ class TestCoordinatorWiring:
             h._phase_switch_tick("c1", h.cfg, d, cp, t))
         # charging 3-phase at 10A: 6900W → belief 3; user wants 1
         d = run(self._decision(amps=10), self._cp(6900.0, True), 0.0)
-        assert d.intent is ChargerIntent.IDLE, "stopping must hold charging"
+        assert d.intent is ChargerIntent.DISABLE, (
+            "stopping must open the contactor NOW - IDLE inherits the #552 "
+            "flicker grace and the real stop came 5 min late on PROD")
         assert "phase switch" in d.reason
         # draw stops → the ONE service call fires
         d = run(self._decision(amps=10), self._cp(0.0, False), 30.0)
-        assert d.intent is ChargerIntent.IDLE, "settling still holds"
+        assert d.intent is ChargerIntent.DISABLE, "settling still holds"
         h.hass.services.async_call.assert_awaited_once()
         call = h.hass.services.async_call.await_args
         assert call.args[0] == "number" and call.args[1] == "set_value"
@@ -272,3 +274,18 @@ class TestCoordinatorWiring:
         asyncio.run(h._phase_switch_tick(
             "c1", h.cfg, d, self._cp(9900.0, True), 0.0, setpoint_a=16))
         assert h._phase_believed["c1"] == 3
+
+
+    def test_belief_frozen_while_a_switch_is_in_flight(self):
+        # PROD: the wind-down ramp read 2 mid-stop and the belief followed.
+        import asyncio
+        from custom_components.solar_energy_management.coordinator.charger_types import (
+            ChargerIntent,
+        )
+        h = self._host()
+        run = lambda d, cp, t: asyncio.run(h._phase_switch_tick("c1", h.cfg, d, cp, t))
+        run(self._decision(amps=16), self._cp(11000.0, True), 0.0)     # belief 3, then stopping
+        assert h._phase_believed["c1"] == 3
+        d = run(self._decision(amps=16), self._cp(5500.0, True), 20.0)  # ramp-down reading
+        assert d.intent is ChargerIntent.DISABLE
+        assert h._phase_believed["c1"] == 3, "no measurement while stopping"
