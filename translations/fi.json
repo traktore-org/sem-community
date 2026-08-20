@@ -337,8 +337,7 @@
           "ev_battery_capacity_kwh": "Sähköauton akun kapasiteetti (kWh)",
           "initial_current": "Aloitusvirta (A)",
           "ev_min_current": "Vähimmäislatausvirta (A)",
-          "vehicle_min_current": "Ajoneuvon vähimmäisvirta (A)",
-          "ev_phase_switch_entity": "Vaiheenvaihtoentiteetti (valinnainen)"
+          "vehicle_min_current": "Ajoneuvon vähimmäisvirta (A)"
         },
         "data_description": {
           "charger_name": "Laturin selkokielinen nimi, joka näkyy koontinäytöllä.",
@@ -364,8 +363,7 @@
           "ev_battery_capacity_kwh": "Sähköauton akun käytettävissä oleva kokonaiskapasiteetti kilowattitunteina. Käytetään SOC:n ja latausajan arviointiin.",
           "initial_current": "Latausvirta, jolla SEM aloittaa ennen kuin se säätää saatavilla olevaan ylijäämään.",
           "ev_min_current": "Tämän alle SEM keskeyttää latauksen sen sijaan, että laskisi virtaa edelleen.",
-          "vehicle_min_current": "Ajoneuvokohtainen virran alaraja. Tehollinen vähimmäisarvo on suurempi tästä ja laturin vähimmäisvirrasta.",
-          "ev_phase_switch_entity": "Select/number/switch, joka vaihtaa laturin 1- ja 3-vaiheisen latauksen välillä (go-e 'psm', KEBA X-sarja, openWB). SEM vain havainnoi ja validoi toistaiseksi — automaattinen vaihto tulee myöhemmässä versiossa."
+          "vehicle_min_current": "Ajoneuvokohtainen virran alaraja. Tehollinen vähimmäisarvo on suurempi tästä ja laturin vähimmäisvirrasta."
         }
       },
       "ev_charger_add": {
@@ -394,8 +392,7 @@
           "ev_target_soc": "Sähköauton tavoite-SOC (%)",
           "ev_battery_capacity_kwh": "Sähköauton akun kapasiteetti (kWh)",
           "initial_current": "Aloitusvirta (A)",
-          "ev_min_current": "Vähimmäislatausvirta (A)",
-          "ev_phase_switch_entity": "Vaiheenvaihtoentiteetti (valinnainen)"
+          "ev_min_current": "Vähimmäislatausvirta (A)"
         },
         "data_description": {
           "charger_name": "Laturin selkokielinen nimi, joka näkyy koontinäytöllä.",
@@ -420,8 +417,7 @@
           "ev_target_soc": "Tavoite-SOC (%), jossa SEM katsoo sähköauton olevan täynnä.",
           "ev_battery_capacity_kwh": "Sähköauton akun käytettävissä oleva kokonaiskapasiteetti kilowattitunteina. Käytetään SOC:n ja latausajan arviointiin.",
           "initial_current": "Latausvirta, jolla SEM aloittaa ennen kuin se säätää saatavilla olevaan ylijäämään.",
-          "ev_min_current": "Tämän alle SEM keskeyttää latauksen sen sijaan, että laskisi virtaa edelleen.",
-          "ev_phase_switch_entity": "Select/number/switch, joka vaihtaa laturin 1- ja 3-vaiheisen latauksen välillä (go-e 'psm', KEBA X-sarja, openWB). SEM vain havainnoi ja validoi toistaiseksi — automaattinen vaihto tulee myöhemmässä versiossa."
+          "ev_min_current": "Tämän alle SEM keskeyttää latauksen sen sijaan, että laskisi virtaa edelleen."
         }
       },
       "pv_naming": {

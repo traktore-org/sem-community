@@ -337,8 +337,7 @@
           "ev_battery_capacity_kwh": "EV-batterijcapaciteit (kWh)",
           "initial_current": "Startstroom (A)",
           "ev_min_current": "Minimale laadstroom (A)",
-          "vehicle_min_current": "Voertuig minimale stroom (A)",
-          "ev_phase_switch_entity": "Faseomschakelings-entiteit (optioneel)"
+          "vehicle_min_current": "Voertuig minimale stroom (A)"
         },
         "data_description": {
           "charger_name": "Weergavenaam voor deze laadpaal in het dashboard.",
@@ -364,8 +363,7 @@
           "ev_battery_capacity_kwh": "Totale bruikbare capaciteit van de EV-accu in kWh. Wordt gebruikt om het laadniveau en de laadtijd te schatten.",
           "initial_current": "Laadstroom waarmee SEM begint voordat het opregelt naar het beschikbare overschot.",
           "ev_min_current": "Hieronder pauzeert SEM het laden in plaats van de stroom verder te verlagen.",
-          "vehicle_min_current": "Stroomdrempel per voertuig. Het effectieve minimum is de hoogste van deze en de minimale laadstroom.",
-          "ev_phase_switch_entity": "Select/number/switch die de lader tussen 1- en 3-fasig laden omschakelt (go-e 'psm', KEBA X-serie, openWB). SEM observeert en valideert voorlopig alleen — automatisch omschakelen volgt in een latere release."
+          "vehicle_min_current": "Stroomdrempel per voertuig. Het effectieve minimum is de hoogste van deze en de minimale laadstroom."
         }
       },
       "ev_charger_add": {
@@ -394,8 +392,7 @@
           "ev_target_soc": "EV-doel-SOC (%)",
           "ev_battery_capacity_kwh": "EV-batterijcapaciteit (kWh)",
           "initial_current": "Startstroom (A)",
-          "ev_min_current": "Minimale laadstroom (A)",
-          "ev_phase_switch_entity": "Faseomschakelings-entiteit (optioneel)"
+          "ev_min_current": "Minimale laadstroom (A)"
         },
         "data_description": {
           "charger_name": "Weergavenaam voor deze laadpaal in het dashboard.",
@@ -420,8 +417,7 @@
           "ev_target_soc": "Doellaadniveau (%) waarbij SEM de EV als volledig geladen beschouwt.",
           "ev_battery_capacity_kwh": "Totale bruikbare capaciteit van de EV-accu in kWh. Wordt gebruikt om het laadniveau en de laadtijd te schatten.",
           "initial_current": "Laadstroom waarmee SEM begint voordat het opregelt naar het beschikbare overschot.",
-          "ev_min_current": "Hieronder pauzeert SEM het laden in plaats van de stroom verder te verlagen.",
-          "ev_phase_switch_entity": "Select/number/switch die de lader tussen 1- en 3-fasig laden omschakelt (go-e 'psm', KEBA X-serie, openWB). SEM observeert en valideert voorlopig alleen — automatisch omschakelen volgt in een latere release."
+          "ev_min_current": "Hieronder pauzeert SEM het laden in plaats van de stroom verder te verlagen."
         }
       },
       "pv_naming": {

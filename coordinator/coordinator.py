@@ -4108,27 +4108,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     result[f"charger_{cid}_taper_ratio"] = round(
                         (charger_power / taper_det._session_peak_w * 100) if taper_det._session_peak_w > 0 else 0, 1
                     )
-                # (#804 Phase A, observe-only) Active phases from measured
-                # W/A — detects the car's actual phase use and will confirm
-                # a commanded switch physically took (Phase B+). The switch
-                # capability is the entity the user NAMES, validated never
-                # probed (evcc #30143's lesson). INERT: nothing writes to
-                # that entity until Phase B.
-                from .ev_phases import (
-                    estimate_active_phases, validate_phase_switch_entity,
-                )
-                result[f"charger_{cid}_active_phases"] = estimate_active_phases(
-                    charger_power,
-                    int(float(getattr(ev_dev, "_current_setpoint", 0) or 0)),
-                    float(_per_charger_cfg.get("ev_voltage")
-                          or self.config.get("ev_voltage") or 230),
-                )
-                _ps_entity, _ps_valid = validate_phase_switch_entity(
-                    _per_charger_cfg.get("ev_phase_switch_entity"),
-                    lambda eid: self.hass.states.get(eid) is not None,
-                )
-                result[f"charger_{cid}_phase_switch_entity"] = _ps_entity
-                result[f"charger_{cid}_phase_switch_valid"] = _ps_valid
                 # Per-charger vehicle SOC (#193) — collected for the global
                 # vehicle_soc/range fallback below (no dedicated per-charger
                 # sensor consumes this, so don't write it into result; #245 review #2).

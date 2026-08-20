@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ↩️ **Phase awareness (#804 Phase A) is pulled back out** — beta.11
+  carried the observation layer (`per_charger_phases` attribute + the
+  optional Phase Switch Entity setting) because an urgent bugfix release
+  shipped everything on the development line with it. Enhancements ship
+  when the *whole* feature is built and simulated, not in slices, so the
+  layer returns with #804 complete. Nothing acted on the setting; if you
+  already selected an entity, the value is simply ignored until then.
 - 🌅 **The night no longer double-flips at sunrise** (#811, caught live by
   the #800 recorder's seal counter): at the moment of sunrise `sun.sun`
   rolls `next_rising` over to tomorrow — 1–2 minutes later on the clock in

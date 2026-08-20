@@ -210,8 +210,10 @@ Real-hass tests run against a real (but in-process) HA instance, so they're fast
 ### develop is a release train — merging is publishing
 
 Because the daily job tags whatever is on `develop`, a merge reaches beta
-users within 24 hours. There is no queue to hide in and no "I'll clean it up
-before the release" — the merge **is** the release decision.
+users within 24 hours — **and often within minutes**: an urgent bugfix
+release ships everything sitting on `develop` along with it. There is no
+queue to hide in and no "I'll clean it up before the release" — the merge
+**is** the release decision.
 
 So a change is **ready to ship** only when all four hold:
 
@@ -225,11 +227,15 @@ So a change is **ready to ship** only when all four hold:
 3. **Verified against reality.** Anything touching the Home Assistant
    pipeline — entities, config entries, device control — is checked on a
    live instance before merge, not only in tests.
-4. **Complete, or inert.** This is the gate that makes a train possible.
-   Work that is not finished may still merge *provided it does nothing* to
-   anyone who has not opted in: default-off switches, recording-only
-   layers, opt-in probes. What must never merge is a half-wired live path —
-   a feature that partly acts.
+4. **Complete, or inert — and "complete" means the whole feature.** This is
+   the gate that makes a train possible. Finished work whose behavior
+   should stay off may merge *provided it does nothing* to anyone who has
+   not opted in: default-off switches, recording-only layers, opt-in
+   probes. What must never merge is a half-wired live path — a feature
+   that partly acts — **or a slice of a feature**: an "inert first phase"
+   is not complete, it is unfinished work wearing a calm face (learned
+   20.08.2026, when an observe-only first phase merged to `develop` was
+   published to users hours later by an unrelated urgent bugfix release).
 
 Gate 4 is how SEM has always shipped large work, now written down: battery
 arbitrage landed complete but dormant behind a default-off switch; the
@@ -238,7 +244,12 @@ season before anything spends on its numbers. Build it whole, land it
 asleep, wake it deliberately in its own release.
 
 **If it cannot satisfy all four, it stays on its branch.** Long-lived
-branches are fine. Half-awake features on `develop` are not.
+branches are fine. Half-awake features on `develop` are not. Enhancements
+are built on `feature/*`, tested and live-simulated as a whole, and merge
+only on the maintainer's explicit clearance — enforced mechanically: the
+pre-push hook refuses `feat` commits and `feature/*` merges on `develop`
+unless the push is declared with `SEM_FEAT_OK="#NNN why it is whole"`.
+Bugfixes are untouched by this wall.
 
 ### What the daily job will not do
 

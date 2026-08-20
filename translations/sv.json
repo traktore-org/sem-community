@@ -337,8 +337,7 @@
           "ev_battery_capacity_kwh": "EV batterikapacitet (kWh)",
           "initial_current": "Startström (A)",
           "ev_min_current": "Minsta laddström (A)",
-          "vehicle_min_current": "Fordonets minsta ström (A)",
-          "ev_phase_switch_entity": "Fasväxlingsentitet (valfritt)"
+          "vehicle_min_current": "Fordonets minsta ström (A)"
         },
         "data_description": {
           "charger_name": "Visningsnamn för den här laddaren i instrumentpanelen.",
@@ -364,8 +363,7 @@
           "ev_battery_capacity_kwh": "Total användbar kapacitet i elbilens batteri i kWh. Används för att uppskatta SOC och laddningstid.",
           "initial_current": "Laddström som SEM startar med innan den justeras till tillgängligt överskott.",
           "ev_min_current": "Under detta pausar SEM laddningen i stället för att sänka strömmen ytterligare.",
-          "vehicle_min_current": "Strömgolv per fordon. Det effektiva minimet är det högsta av detta och laddarens minsta ström.",
-          "ev_phase_switch_entity": "Select/number/switch som växlar laddaren mellan 1- och 3-fasladdning (go-e 'psm', KEBA X-serien, openWB). SEM observerar och validerar tills vidare bara — automatisk växling kommer i en senare version."
+          "vehicle_min_current": "Strömgolv per fordon. Det effektiva minimet är det högsta av detta och laddarens minsta ström."
         }
       },
       "ev_charger_add": {
@@ -394,8 +392,7 @@
           "ev_target_soc": "EV mål-SOC (%)",
           "ev_battery_capacity_kwh": "EV batterikapacitet (kWh)",
           "initial_current": "Startström (A)",
-          "ev_min_current": "Minsta laddström (A)",
-          "ev_phase_switch_entity": "Fasväxlingsentitet (valfritt)"
+          "ev_min_current": "Minsta laddström (A)"
         },
         "data_description": {
           "charger_name": "Visningsnamn för den här laddaren i instrumentpanelen.",
@@ -420,8 +417,7 @@
           "ev_target_soc": "Mål-SOC (%) vid vilken SEM betraktar elbilen som fulladdad.",
           "ev_battery_capacity_kwh": "Total användbar kapacitet i elbilens batteri i kWh. Används för att uppskatta SOC och laddningstid.",
           "initial_current": "Laddström som SEM startar med innan den justeras till tillgängligt överskott.",
-          "ev_min_current": "Under detta pausar SEM laddningen i stället för att sänka strömmen ytterligare.",
-          "ev_phase_switch_entity": "Select/number/switch som växlar laddaren mellan 1- och 3-fasladdning (go-e 'psm', KEBA X-serien, openWB). SEM observerar och validerar tills vidare bara — automatisk växling kommer i en senare version."
+          "ev_min_current": "Under detta pausar SEM laddningen i stället för att sänka strömmen ytterligare."
         }
       },
       "pv_naming": {

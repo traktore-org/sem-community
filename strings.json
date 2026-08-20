@@ -191,8 +191,7 @@
           "ev_target_soc": "EV target SOC (%)",
           "ev_battery_capacity_kwh": "EV battery capacity (kWh)",
           "initial_current": "Start current (A)",
-          "ev_min_current": "Minimum charge current (A)",
-          "ev_phase_switch_entity": "Phase Switch Entity (optional)"
+          "ev_min_current": "Minimum charge current (A)"
         },
         "data_description": {
           "charger_name": "Friendly name for this charger shown in the dashboard (e.g. 'Garage' or 'Carport').",
@@ -217,8 +216,7 @@
           "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged.",
           "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
           "initial_current": "Charge current SEM begins with before ramping to match available surplus.",
-          "ev_min_current": "Below this SEM pauses charging instead of dropping the current further.",
-          "ev_phase_switch_entity": "Select/number/switch that changes the charger between 1- and 3-phase charging (go-e 'psm', KEBA X-series, openWB). SEM only observes and validates it for now — automatic switching comes in a later release."
+          "ev_min_current": "Below this SEM pauses charging instead of dropping the current further."
         }
       },
       "ev_charger_edit": {
@@ -248,8 +246,7 @@
           "ev_battery_capacity_kwh": "EV battery capacity (kWh)",
           "initial_current": "Start current (A)",
           "ev_min_current": "Minimum charge current (A)",
-          "vehicle_min_current": "Vehicle minimum current (A)",
-          "ev_phase_switch_entity": "Phase Switch Entity (optional)"
+          "vehicle_min_current": "Vehicle minimum current (A)"
         },
         "data_description": {
           "charger_name": "Friendly name for this charger shown in the dashboard.",
@@ -275,8 +272,7 @@
           "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
           "initial_current": "Charge current SEM begins with before ramping to match available surplus.",
           "ev_min_current": "Below this SEM pauses charging instead of dropping the current further.",
-          "vehicle_min_current": "Per-vehicle current floor. The effective minimum is the higher of this and the charger minimum current.",
-          "ev_phase_switch_entity": "Select/number/switch that changes the charger between 1- and 3-phase charging (go-e 'psm', KEBA X-series, openWB). SEM only observes and validates it for now — automatic switching comes in a later release."
+          "vehicle_min_current": "Per-vehicle current floor. The effective minimum is the higher of this and the charger minimum current."
         }
       },
       "ev_charger_remove": {
