@@ -288,6 +288,11 @@ SEM creates 70+ sensors organized by category:
 
 ## Supported Hardware
 
+> The full, generated matrix — brand, integration, sign pattern, control
+> method and how sure we are (tested live / implemented / requested) —
+> lives in [docs/SUPPORTED_HARDWARE.md](docs/SUPPORTED_HARDWARE.md). It is
+> rendered from one data table and CI keeps it from drifting.
+
 **Solar Inverters:** Huawei Solar, SolaX, DEYE/Sunsynk, Growatt, Sofar, Solis, Fronius, SMA, SolarEdge, Enphase, GoodWe, Tesla Powerwall, Kostal Plenticore, Sungrow, Victron, Sonnenbatterie, E3DC, GivEnergy, Fox ESS, Alpha ESS, Senec, RCT Power, KSTAR — or any inverter with HA sensors. SEM reads from the HA Energy Dashboard and auto-detects both grid and battery sign conventions.
 
 **Batteries:** Any battery exposed through a supported inverter integration, plus standalone systems: Sessy (NL), Huawei LUNA2000, Tesla Powerwall, Sonnen, BYD, Pylontech, and others work automatically. Battery capacity is auto-detected from the inverter.
