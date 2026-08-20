@@ -1520,6 +1520,10 @@
     "unmanaged_charger_found": {
       "title": "SEM encontró un cargador que no gestiona",
       "description": "El dispositivo **{name}** parece un cargador de VE, pero no hay ninguno configurado en SEM, así que SEM no lo toca ({count} candidato(s) encontrado(s)).\n\nPara que SEM optimice la carga con solar y tarifas baratas, añádelo en Ajustes → Dispositivos y servicios → SEM → Configurar. Eso también activa la pestaña VE con los modos de carga.\n\nSi no es un cargador, ignora este aviso — SEM tampoco lo controlará."
+    },
+    "lovelace_yaml_mode": {
+      "title": "Lovelace en modo YAML — añade los recursos de tarjetas de SEM",
+      "description": "Tu Home Assistant usa Lovelace en modo YAML, por lo que SEM no puede registrar sus tarjetas automáticamente y el panel muestra tarjetas de «Error de configuración».\n\nAñade esto en `configuration.yaml` bajo `lovelace:` → `resources:`, reinicia Home Assistant y recarga el navegador (Ctrl+Mayús+R):\n\n```yaml\n{resources}\n```\n\nEste mensaje desaparece cuando los recursos se cargan."
     }
   },
   "selector": {

@@ -1520,6 +1520,10 @@
     "unmanaged_charger_found": {
       "title": "A SEM talált egy töltőt, amit nem vezérel",
       "description": "A **{name}** eszköz elektromos autó töltőnek tűnik, de a SEM-ben nincs töltő beállítva — így a SEM nem nyúl hozzá ({count} jelölt).\n\nHogy a SEM napenergiával és olcsó tarifákkal optimalizálja a töltést, add hozzá: Beállítások → Eszközök és szolgáltatások → SEM → Konfigurálás. Ezzel az EV fül is megjelenik a töltési módokkal.\n\nHa ez nem töltő, hagyd figyelmen kívül — a SEM így sem fogja vezérelni."
+    },
+    "lovelace_yaml_mode": {
+      "title": "A Lovelace YAML módban van — add hozzá a SEM kártyaforrásokat",
+      "description": "A Home Assistant YAML módban futtatja a Lovelace-t, így a SEM nem tudja automatikusan regisztrálni a kártyáit, és az irányítópult „Konfigurációs hiba” kártyákat mutat.\n\nAdd hozzá ezt a `configuration.yaml` fájlhoz a `lovelace:` → `resources:` alá, indítsd újra a Home Assistantot, majd frissítsd a böngészőt (Ctrl+Shift+R):\n\n```yaml\n{resources}\n```\n\nAz üzenet eltűnik, amint a források betöltődnek."
     }
   },
   "selector": {

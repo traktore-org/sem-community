@@ -13,6 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🩹 **YAML-mode Lovelace now tells you what to do** (#799, @RonaldHass):
+  on a YAML-mode install SEM cannot register its dashboard cards, so the
+  dashboard came up full of "Configuration Error" cards — with the fix
+  sitting in a single log line the reporter only found after reinstalling
+  twice. That case now raises a **Repair** in Settings carrying the exact
+  `lovelace.resources` block to paste (16 languages), and clears itself
+  once the resources load.
+- 🔌 **Fronius / go-e Wattpilot auto-detected** (#802, @HorizonKane): SEM
+  used to match a lookalike Energy-Dashboard device instead, leaving the EV
+  tile pointed at the wrong thing. Added as the first brand supported
+  purely as a #814 data row — no per-brand code.
+
 - 🔌 **1↔3-phase switching for EV chargers** (#804): name your wallbox's
   phase-switch entity (go-e `psm`, KEBA X-series, openWB — select/number/
   switch, with the 1p/3p values in the entity's own vocabulary) and SEM

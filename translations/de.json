@@ -1520,6 +1520,10 @@
     "unmanaged_charger_found": {
       "title": "SEM hat eine Wallbox gefunden, die es nicht steuert",
       "description": "Das Gerät **{name}** sieht nach einer Wallbox aus, in SEM ist aber keine Wallbox konfiguriert — SEM lässt sie deshalb unangetastet ({count} Kandidat(en) gefunden).\n\nDamit SEM das Laden mit Solarstrom und günstigen Tarifen optimieren kann, füge sie unter Einstellungen → Geräte & Dienste → SEM → Konfigurieren hinzu. Damit erscheint auch der EV-Tab mit den Lademodi.\n\nFalls das keine Wallbox ist, ignoriere diesen Hinweis — SEM steuert das Gerät so oder so nicht."
+    },
+    "lovelace_yaml_mode": {
+      "title": "Lovelace im YAML-Modus — SEM-Kartenressourcen eintragen",
+      "description": "Dein Home Assistant betreibt Lovelace im YAML-Modus, daher kann SEM seine Dashboard-Karten nicht automatisch registrieren und das SEM-Dashboard zeigt „Konfigurationsfehler“-Karten.\n\nTrage Folgendes in der `configuration.yaml` unter `lovelace:` → `resources:` ein, starte Home Assistant neu und lade den Browser hart neu (Strg+Umschalt+R):\n\n```yaml\n{resources}\n```\n\nDiese Meldung verschwindet, sobald die Ressourcen geladen sind."
     }
   },
   "selector": {

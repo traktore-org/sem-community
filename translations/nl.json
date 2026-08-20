@@ -1520,6 +1520,10 @@
     "unmanaged_charger_found": {
       "title": "SEM vond een laadpunt dat het niet beheert",
       "description": "Het apparaat **{name}** lijkt op een laadpunt, maar er is geen laadpunt geconfigureerd in SEM — SEM laat het dus met rust ({count} kandidaat(en) gevonden).\n\nVoeg het toe via Instellingen → Apparaten & Diensten → SEM → Configureren om laden met zon en goedkope tarieven te laten optimaliseren. Daarmee verschijnt ook het EV-tabblad met de laadmodi.\n\nIs dit geen laadpunt? Negeer deze melding — SEM stuurt het hoe dan ook niet aan."
+    },
+    "lovelace_yaml_mode": {
+      "title": "Lovelace in YAML-modus — voeg SEM-kaartbronnen toe",
+      "description": "Home Assistant draait Lovelace in YAML-modus, dus SEM kan zijn dashboardkaarten niet automatisch registreren en het SEM-dashboard toont \"Configuratiefout\"-kaarten.\n\nVoeg dit toe in `configuration.yaml` onder `lovelace:` → `resources:`, herstart Home Assistant en doe een harde herlaadbeurt (Ctrl+Shift+R):\n\n```yaml\n{resources}\n```\n\nDeze melding verdwijnt zodra de bronnen geladen zijn."
     }
   },
   "selector": {

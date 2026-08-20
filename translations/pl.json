@@ -1520,6 +1520,10 @@
     "unmanaged_charger_found": {
       "title": "SEM znalazł ładowarkę, którą nie zarządza",
       "description": "Urządzenie **{name}** wygląda na ładowarkę EV, ale w SEM nie skonfigurowano żadnej — SEM jej nie dotyka ({count} kandydat(ów)).\n\nAby SEM optymalizował ładowanie energią słoneczną i tanimi taryfami, dodaj ją w Ustawienia → Urządzenia i usługi → SEM → Konfiguruj. Pojawi się też zakładka EV z trybami ładowania.\n\nJeśli to nie ładowarka, zignoruj tę informację — SEM i tak nie będzie nią sterować."
+    },
+    "lovelace_yaml_mode": {
+      "title": "Lovelace w trybie YAML — dodaj zasoby kart SEM",
+      "description": "Twój Home Assistant używa Lovelace w trybie YAML, więc SEM nie może automatycznie zarejestrować swoich kart, a pulpit pokazuje karty „Błąd konfiguracji”.\n\nDodaj to w `configuration.yaml` pod `lovelace:` → `resources:`, zrestartuj Home Assistant i odśwież przeglądarkę (Ctrl+Shift+R):\n\n```yaml\n{resources}\n```\n\nTa wiadomość zniknie po załadowaniu zasobów."
     }
   },
   "selector": {

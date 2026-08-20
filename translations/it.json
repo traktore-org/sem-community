@@ -1520,6 +1520,10 @@
     "unmanaged_charger_found": {
       "title": "SEM ha trovato una wallbox che non gestisce",
       "description": "Il dispositivo **{name}** sembra una wallbox, ma in SEM non è configurata alcuna wallbox — quindi SEM non la tocca ({count} candidato/i trovato/i).\n\nPer far ottimizzare la ricarica con il solare e le tariffe convenienti, aggiungila in Impostazioni → Dispositivi e servizi → SEM → Configura. Così compare anche la scheda EV con le modalità di ricarica.\n\nSe non è una wallbox, ignora questo avviso — SEM non la controllerà comunque."
+    },
+    "lovelace_yaml_mode": {
+      "title": "Lovelace in modalità YAML — aggiungi le risorse delle schede SEM",
+      "description": "Home Assistant usa Lovelace in modalità YAML, quindi SEM non può registrare le sue schede automaticamente e la dashboard mostra schede «Errore di configurazione».\n\nAggiungi questo in `configuration.yaml` sotto `lovelace:` → `resources:`, riavvia Home Assistant e ricarica il browser (Ctrl+Maiusc+R):\n\n```yaml\n{resources}\n```\n\nQuesto messaggio sparisce una volta caricate le risorse."
     }
   },
   "selector": {

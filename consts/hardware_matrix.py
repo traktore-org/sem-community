@@ -118,6 +118,9 @@ CHARGERS = [
      "status": "implemented", "evidence": ""},
     {"brand": "Generic / manual", "control": "any power+connected+charging sensors",
      "status": "implemented", "evidence": "the documented manual-config path"},
+    {"brand": "Fronius / go-e Wattpilot", "control": "number entity",
+     "status": "tested-live",
+     "evidence": "#802 (HorizonKane, ha-wattpilot fork — confirmed working)"},
     {"brand": "ABL eMH1", "control": "Modbus ASCII (quirk: '>' start symbol)",
      "status": "requested", "evidence": "#808 (interface spec attached)"},
 ]

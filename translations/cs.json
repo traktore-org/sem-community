@@ -1520,6 +1520,10 @@
     "unmanaged_charger_found": {
       "title": "SEM našel nabíječku, kterou neřídí",
       "description": "Zařízení **{name}** vypadá jako nabíječka EV, ale v SEM žádná není nastavena — SEM se jí proto nedotýká (nalezeno {count} kandidátů).\n\nAby SEM optimalizoval nabíjení sluncem a levnými tarify, přidejte ji v Nastavení → Zařízení a služby → SEM → Konfigurovat. Tím se také objeví karta EV s režimy nabíjení.\n\nPokud to nabíječka není, upozornění ignorujte — SEM ji stejně řídit nebude."
+    },
+    "lovelace_yaml_mode": {
+      "title": "Lovelace v režimu YAML — přidejte zdroje karet SEM",
+      "description": "Váš Home Assistant používá Lovelace v režimu YAML, takže SEM nemůže automaticky zaregistrovat své karty a panel zobrazuje karty „Chyba konfigurace“.\n\nPřidejte toto do `configuration.yaml` pod `lovelace:` → `resources:`, restartujte Home Assistant a načtěte prohlížeč (Ctrl+Shift+R):\n\n```yaml\n{resources}\n```\n\nZpráva zmizí, jakmile se zdroje načtou."
     }
   },
   "selector": {

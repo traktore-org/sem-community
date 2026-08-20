@@ -1520,6 +1520,10 @@
     "unmanaged_charger_found": {
       "title": "SEM fandt en ladeboks, den ikke styrer",
       "description": "Enheden **{name}** ligner en ladeboks, men der er ingen konfigureret i SEM — så SEM rører den ikke ({count} kandidat(er) fundet).\n\nTilføj den under Indstillinger → Enheder og tjenester → SEM → Konfigurer, så SEM kan optimere ladning med sol og billige tariffer. Det åbner også EV-fanen med ladetilstande.\n\nEr det ikke en ladeboks? Ignorér beskeden — SEM styrer den alligevel ikke."
+    },
+    "lovelace_yaml_mode": {
+      "title": "Lovelace i YAML-tilstand — tilføj SEM's kortressourcer",
+      "description": "Din Home Assistant kører Lovelace i YAML-tilstand, så SEM kan ikke registrere sine kort automatisk, og dashboardet viser «Konfigurationsfejl»-kort.\n\nTilføj dette i `configuration.yaml` under `lovelace:` → `resources:`, genstart Home Assistant og genindlæs browseren (Ctrl+Shift+R):\n\n```yaml\n{resources}\n```\n\nBeskeden forsvinder, når ressourcerne er indlæst."
     }
   },
   "selector": {

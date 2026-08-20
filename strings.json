@@ -1520,6 +1520,10 @@
     "unmanaged_charger_found": {
       "title": "SEM found a charger it is not managing",
       "description": "The device **{name}** looks like an EV charger, but no charger is configured in SEM — so SEM is leaving it alone ({count} candidate(s) found).\n\nTo let SEM optimise your charging with solar and cheap tariffs, add it under Settings → Devices & Services → SEM → Configure. That also unlocks the EV tab with the charge modes.\n\nIf this is not a car charger, ignore this notice — SEM will not control it either way."
+    },
+    "lovelace_yaml_mode": {
+      "title": "Lovelace is in YAML mode — add SEM's card resources",
+      "description": "Your Home Assistant runs Lovelace in YAML mode, so SEM cannot register its dashboard cards automatically and the SEM dashboard shows \"Configuration Error\" cards.\n\nAdd this under `lovelace:` → `resources:` in your `configuration.yaml`, restart Home Assistant, then hard-refresh the browser (Ctrl+Shift+R):\n\n```yaml\n{resources}\n```\n\nThis message disappears once the resources are loaded."
     }
   },
   "selector": {

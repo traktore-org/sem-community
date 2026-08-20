@@ -1520,6 +1520,10 @@
     "unmanaged_charger_found": {
       "title": "SEM a trouvé une borne qu'il ne pilote pas",
       "description": "L'appareil **{name}** ressemble à une borne de recharge, mais aucune borne n'est configurée dans SEM — SEM n'y touche donc pas ({count} candidat(s) trouvé(s)).\n\nPour que SEM optimise la charge avec le solaire et les tarifs bas, ajoutez-la dans Paramètres → Appareils et services → SEM → Configurer. Cela active aussi l'onglet VE avec les modes de charge.\n\nSi ce n'est pas une borne, ignorez cet avis — SEM ne la pilotera pas non plus."
+    },
+    "lovelace_yaml_mode": {
+      "title": "Lovelace en mode YAML — ajoutez les ressources de cartes SEM",
+      "description": "Votre Home Assistant utilise Lovelace en mode YAML : SEM ne peut pas enregistrer ses cartes automatiquement et le tableau de bord affiche des cartes « Erreur de configuration ».\n\nAjoutez ceci dans `configuration.yaml` sous `lovelace:` → `resources:`, redémarrez Home Assistant puis rechargez le navigateur (Ctrl+Maj+R) :\n\n```yaml\n{resources}\n```\n\nCe message disparaît une fois les ressources chargées."
     }
   },
   "selector": {

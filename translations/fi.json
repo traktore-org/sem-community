@@ -1520,6 +1520,10 @@
     "unmanaged_charger_found": {
       "title": "SEM löysi latauslaitteen, jota se ei ohjaa",
       "description": "Laite **{name}** näyttää sähköauton laturilta, mutta SEM:iin ei ole määritetty laturia — joten SEM ei koske siihen ({count} ehdokasta löytyi).\n\nLisää se kohdassa Asetukset → Laitteet ja palvelut → SEM → Määritä, niin SEM voi optimoida latauksen auringolla ja halvoilla tariffeilla. Samalla tulee näkyviin EV-välilehti lataustiloineen.\n\nJos tämä ei ole laturi, jätä ilmoitus huomiotta — SEM ei ohjaa sitä joka tapauksessa."
+    },
+    "lovelace_yaml_mode": {
+      "title": "Lovelace YAML-tilassa — lisää SEM:n korttiresurssit",
+      "description": "Home Assistant käyttää Lovelacea YAML-tilassa, joten SEM ei voi rekisteröidä kortteja automaattisesti ja koontinäyttö näyttää «Konfiguraatiovirhe»-kortteja.\n\nLisää tämä `configuration.yaml`-tiedostoon kohtaan `lovelace:` → `resources:`, käynnistä Home Assistant uudelleen ja lataa selain uudelleen (Ctrl+Shift+R):\n\n```yaml\n{resources}\n```\n\nViesti katoaa, kun resurssit on ladattu."
     }
   },
   "selector": {

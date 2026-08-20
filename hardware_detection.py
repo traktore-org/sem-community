@@ -1178,6 +1178,24 @@ _BRAND_HINTS: Dict[str, List[_ROLE]] = {
         {"role": "ev_current_control_entity", "domain": "number",
          "names": ("amperage", "current")},
     ],
+    # (#802) Fronius / go-e Wattpilot. SEM used to match a lookalike
+    # Energy-Dashboard device instead, so the EV tile pointed at the wrong
+    # thing until the reporter repaired it by hand. First brand added as a
+    # pure data row — no function (#814).
+    "wattpilot": [
+        {"role": "ev_charging_power_sensor", "domain": "sensor",
+         "device_class": "power"},
+        {"role": "ev_connected_sensor", "domain": "binary_sensor",
+         "device_class": "plug"},
+        {"role": "ev_charging_sensor", "domain": "binary_sensor",
+         "device_class": "battery_charging"},
+        {"role": "ev_current_control_entity", "domain": "number",
+         "device_class": "current"},
+        {"role": "ev_total_energy_sensor", "domain": "sensor",
+         "device_class": "energy", "names": ("total",)},
+        {"role": "ev_session_energy_sensor", "domain": "sensor",
+         "device_class": "energy", "names": ("session",)},
+    ],
     "heidelberg_energy_control": [
         {"role": "ev_connected_sensor", "domain": "binary_sensor",
          "names": ("connect", "plug")},
@@ -1475,6 +1493,9 @@ _EV_CHARGER_PLATFORMS = [
     ("alfen_wallbox", _discover_alfen),
     ("openevse", _discover_openevse),
     ("blue_current", _discover_blue_current),
+    # (#802/#814) data-row brands need no function — the generic matcher
+    # applies their _BRAND_HINTS rows.
+    ("wattpilot", lambda ents: _discover_from_hints(ents, _BRAND_HINTS["wattpilot"])),
 ]
 
 

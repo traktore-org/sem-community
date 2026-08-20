@@ -296,3 +296,54 @@ class TestProberRefinementsFromTheRig:
         assert len(cands) == 1
         assert "ev_start_stop_entity" not in cands[0]["roles"], (
             "the SG-Ready switch is a different prefix, not this device")
+
+
+class TestWattpilotRow:
+    """(#802) The Fronius/go-e Wattpilot — SEM matched a lookalike Energy-
+    Dashboard device instead, so the EV tile pointed at the wrong thing
+    until the reporter fixed it by hand. Added as a #814 DATA ROW: the
+    first brand supported without writing a function."""
+
+    def _ents(self, platform="wattpilot"):
+        return [
+            _ent("sensor.wattpilot_power", platform, device_id="w1", device_class="power"),
+            _ent("binary_sensor.wattpilot_car_connected", platform, device_id="w1", device_class="plug"),
+            _ent("binary_sensor.wattpilot_charging", platform, device_id="w1", device_class="battery_charging"),
+            _ent("number.wattpilot_charging_current", platform, device_id="w1", device_class="current"),
+            _ent("sensor.wattpilot_energy_total", platform, device_id="w1", device_class="energy"),
+            _ent("sensor.wattpilot_energy_session", platform, device_id="w1", device_class="energy"),
+        ]
+
+    def test_wattpilot_maps_every_role(self):
+        from custom_components.solar_energy_management.hardware_detection import (
+            _BRAND_HINTS, _discover_from_hints,
+        )
+        assert "wattpilot" in _BRAND_HINTS
+        r = _discover_from_hints(self._ents(), _BRAND_HINTS["wattpilot"])
+        assert r["ev_charging_power_sensor"] == "sensor.wattpilot_power"
+        assert r["ev_connected_sensor"] == "binary_sensor.wattpilot_car_connected"
+        assert r["ev_charging_sensor"] == "binary_sensor.wattpilot_charging"
+        assert r["ev_current_control_entity"] == "number.wattpilot_charging_current"
+        assert r["ev_total_energy_sensor"] == "sensor.wattpilot_energy_total"
+        assert r["ev_session_energy_sensor"] == "sensor.wattpilot_energy_session"
+
+    def test_wattpilot_is_in_the_scan_and_the_report(self):
+        from custom_components.solar_energy_management.hardware_detection import (
+            build_detection_report,
+        )
+        rep = build_detection_report(registry=_registry(self._ents()))
+        assert "wattpilot" in rep["scanned_platforms"]
+        assert [c["platform"] for c in rep["chargers"]] == ["wattpilot"]
+        assert rep["chargers"][0]["control"] == "number entity"
+
+    def test_the_community_fork_platform_matches_too(self):
+        # #802's reporter runs ruaan-deysel/ha-wattpilot (a fork); HACS
+        # forks commonly keep the domain, but a suffixed one must not
+        # silently detect nothing — the report at least near-misses it.
+        from custom_components.solar_energy_management.hardware_detection import (
+            build_detection_report,
+        )
+        rep = build_detection_report(registry=_registry(self._ents("wattpilot_flex")))
+        seen = ([c["platform"] for c in rep["chargers"]]
+                + [c["platform"] for c in rep["prober_candidates"]])
+        assert "wattpilot_flex" in seen, "an unknown fork must still be visible"

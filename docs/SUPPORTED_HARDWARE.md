@@ -42,6 +42,7 @@
 
 | Brand | Control method | Status | Evidence |
 |---|---|---|---|
+| Fronius / go-e Wattpilot | number entity | ✅ tested live | #802 (HorizonKane, ha-wattpilot fork — confirmed working) |
 | KEBA P30/P40 | service: keba.set_current | ✅ tested live | SEM production wallbox, daily |
 | Wallbox Pulsar | number entity | ✅ tested live | #548 status-lag fix confirmed by reporter |
 | Alfen Eve | number entity | 🧩 implemented | — |

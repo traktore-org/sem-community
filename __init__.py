@@ -395,6 +395,26 @@ def unmanaged_charger_repair(config: dict, candidates: list):
     }
 
 
+def yaml_mode_repair(yaml_mode: bool, urls) -> dict | None:
+    """(#799) Should SEM raise "your Lovelace is YAML-mode"?
+
+    #283 detected the case and logged the resource URLs — but a log line
+    is not a surface: the reporter met a dashboard full of Configuration
+    Error cards, reinstalled twice, and only recovered by finding that one
+    WARNING himself. The Repair says the same thing where a user looks,
+    with the block to paste.
+
+    Returns the repair's translation payload, or None for silence.
+    """
+    if not yaml_mode or not urls:
+        return None
+    block = "\n".join(f"  - url: {u}\n    type: module" for u in urls)
+    return {
+        "translation_key": "lovelace_yaml_mode",
+        "placeholders": {"resources": block},
+    }
+
+
 def _coerce_switch_on(value) -> bool:
     """Interpret a set_option value as a switch on/off intent.
 
@@ -3731,9 +3751,24 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
                     cards_bundle_url,
                     localize_url,
                 )
+                # (#799) …and SAY it where a user looks. The log line has
+                # existed since #283; the reporter still met a dashboard of
+                # Configuration Error cards and reinstalled twice before
+                # finding it. A Repair carries the same URLs into Settings.
+                _repair = yaml_mode_repair(True, [cards_bundle_url, localize_url])
+                if _repair:
+                    ir.async_create_issue(
+                        hass, DOMAIN, "lovelace_yaml_mode",
+                        is_fixable=False, is_persistent=True,
+                        severity=ir.IssueSeverity.ERROR,
+                        translation_key=_repair["translation_key"],
+                        translation_placeholders=_repair["placeholders"],
+                    )
                 # Skip the rest of the registration block — none of the
                 # mutating methods below are callable in YAML mode.
                 raise _SEMYAMLModeSkip()
+            # Storage mode: clear a stale repair from a previous YAML setup.
+            ir.async_delete_issue(hass, DOMAIN, "lovelace_yaml_mode")
 
             # Build lookup: base URL (without query) → resource item
             existing_by_base = {}

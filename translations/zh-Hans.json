@@ -1520,6 +1520,10 @@
     "unmanaged_charger_found": {
       "title": "SEM 发现了一个未纳管的充电桩",
       "description": "设备 **{name}** 看起来像电动车充电桩，但 SEM 中未配置任何充电桩 — 因此 SEM 不会控制它（找到 {count} 个候选）。\n\n若希望 SEM 用光伏和低价电价优化充电，请在 设置 → 设备与服务 → SEM → 配置 中添加。添加后还会出现带充电模式的 EV 标签页。\n\n如果这不是充电桩，请忽略此提示 — SEM 无论如何都不会控制它。"
+    },
+    "lovelace_yaml_mode": {
+      "title": "Lovelace 处于 YAML 模式 — 请添加 SEM 卡片资源",
+      "description": "您的 Home Assistant 以 YAML 模式运行 Lovelace，因此 SEM 无法自动注册其仪表板卡片，面板会显示“配置错误”卡片。\n\n请在 `configuration.yaml` 的 `lovelace:` → `resources:` 下添加以下内容，重启 Home Assistant，然后强制刷新浏览器（Ctrl+Shift+R）：\n\n```yaml\n{resources}\n```\n\n资源加载后此消息会自动消失。"
     }
   },
   "selector": {
