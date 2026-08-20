@@ -3470,6 +3470,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         decision = filter_charger_decision(
                             self, decision, adapter=adapter, power=view.power
                         )
+                        # (#804 Phase B/C) The phase sequencer may hold the
+                        # decision at IDLE while a switch walks its
+                        # stop→switch→settle sequence. AFTER the safety gate
+                        # on purpose: the tick only ever weakens a CHARGE
+                        # into IDLE and passes emergency stops untouched.
+                        decision = await self._phase_switch_tick(
+                            cid, charger_cfg, decision, view.power,
+                            _now_mono_cycle,
+                            setpoint_a=int(float(getattr(
+                                getattr(adapter, "_device", None),
+                                "_current_setpoint", 0) or 0)),
+                        )
                         # Track the highest commanded current across the
                         # fleet so the stall-detection path (line ~3725)
                         # can distinguish "SEM idle, EV at 0W is correct"
@@ -4108,6 +4120,36 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     result[f"charger_{cid}_taper_ratio"] = round(
                         (charger_power / taper_det._session_peak_w * 100) if taper_det._session_peak_w > 0 else 0, 1
                     )
+                # (#804 Phase A, observe-only) Active phases from measured
+                # W/A — detects the car's actual phase use and will confirm
+                # a commanded switch physically took (Phase B+). The switch
+                # capability is the entity the user NAMES, validated never
+                # probed (evcc #30143's lesson). INERT: nothing writes to
+                # that entity until Phase B.
+                from .ev_phases import (
+                    estimate_active_phases, validate_phase_switch_entity,
+                )
+                result[f"charger_{cid}_active_phases"] = estimate_active_phases(
+                    charger_power,
+                    int(float(getattr(ev_dev, "_current_setpoint", 0) or 0)),
+                    float(_per_charger_cfg.get("ev_voltage")
+                          or self.config.get("ev_voltage") or 230),
+                )
+                _ps_entity, _ps_valid = validate_phase_switch_entity(
+                    _per_charger_cfg.get("ev_phase_switch_entity"),
+                    lambda eid: self.hass.states.get(eid) is not None,
+                )
+                result[f"charger_{cid}_phase_switch_entity"] = _ps_entity
+                result[f"charger_{cid}_phase_switch_valid"] = _ps_valid
+                # (#804 Phase B/C) The sequencer's live state and the held
+                # belief — the belief outlives the instantaneous estimate
+                # (which is None whenever the car isn't drawing).
+                result[f"charger_{cid}_phase_switch_state"] = (
+                    getattr(self, "_phase_switch_states", None) or {}
+                ).get(cid, "idle")
+                result[f"charger_{cid}_believed_phases"] = (
+                    getattr(self, "_phase_believed", None) or {}
+                ).get(cid)
                 # Per-charger vehicle SOC (#193) — collected for the global
                 # vehicle_soc/range fallback below (no dedicated per-charger
                 # sensor consumes this, so don't write it into result; #245 review #2).

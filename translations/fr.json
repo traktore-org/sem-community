@@ -337,7 +337,10 @@
           "ev_battery_capacity_kwh": "Capacité batterie VE (kWh)",
           "initial_current": "Courant de démarrage (A)",
           "ev_min_current": "Courant de charge minimal (A)",
-          "vehicle_min_current": "Courant minimal du véhicule (A)"
+          "vehicle_min_current": "Courant minimal du véhicule (A)",
+          "ev_phase_switch_entity": "Entité de commutation de phases (optionnel)",
+          "ev_phase_switch_value_1p": "Commutation de phases : valeur monophasé (optionnel)",
+          "ev_phase_switch_value_3p": "Commutation de phases : valeur triphasé (optionnel)"
         },
         "data_description": {
           "charger_name": "Nom convivial de ce chargeur affiché dans le tableau de bord.",
@@ -363,7 +366,10 @@
           "ev_battery_capacity_kwh": "Capacité utile totale de la batterie du VE en kWh. Utilisée pour estimer le SOC et le temps de charge.",
           "initial_current": "Courant de charge initial de SEM avant de s'ajuster au surplus disponible.",
           "ev_min_current": "En dessous, SEM met la charge en pause au lieu de baisser encore le courant.",
-          "vehicle_min_current": "Plancher de courant par véhicule. Le minimum effectif est le plus élevé entre celui-ci et le courant minimal du chargeur."
+          "vehicle_min_current": "Plancher de courant par véhicule. Le minimum effectif est le plus élevé entre celui-ci et le courant minimal du chargeur.",
+          "ev_phase_switch_entity": "Select/number/switch qui fait passer la borne entre charge mono- et triphasée (go-e « psm », KEBA série X, openWB). SEM se contente pour l'instant d'observer et de valider — la commutation automatique viendra dans une version ultérieure.",
+          "ev_phase_switch_value_1p": "Ce qui est écrit dans l'entité de commutation pour la charge monophasée — nom d'option d'un select, valeur d'un number, ou on/off. Requis pour les entités select ; number par défaut 1, switch par défaut off.",
+          "ev_phase_switch_value_3p": "Ce qui est écrit dans l'entité de commutation pour la charge triphasée — nom d'option d'un select, valeur d'un number, ou on/off. Requis pour les entités select ; number par défaut 3, switch par défaut on."
         }
       },
       "ev_charger_add": {
@@ -392,7 +398,10 @@
           "ev_target_soc": "SOC cible VE (%)",
           "ev_battery_capacity_kwh": "Capacité batterie VE (kWh)",
           "initial_current": "Courant de démarrage (A)",
-          "ev_min_current": "Courant de charge minimal (A)"
+          "ev_min_current": "Courant de charge minimal (A)",
+          "ev_phase_switch_entity": "Entité de commutation de phases (optionnel)",
+          "ev_phase_switch_value_1p": "Commutation de phases : valeur monophasé (optionnel)",
+          "ev_phase_switch_value_3p": "Commutation de phases : valeur triphasé (optionnel)"
         },
         "data_description": {
           "charger_name": "Nom convivial de ce chargeur affiché dans le tableau de bord.",
@@ -417,7 +426,10 @@
           "ev_target_soc": "SOC cible (%) à partir duquel SEM considère le VE comme complètement chargé.",
           "ev_battery_capacity_kwh": "Capacité utile totale de la batterie du VE en kWh. Utilisée pour estimer le SOC et le temps de charge.",
           "initial_current": "Courant de charge initial de SEM avant de s'ajuster au surplus disponible.",
-          "ev_min_current": "En dessous, SEM met la charge en pause au lieu de baisser encore le courant."
+          "ev_min_current": "En dessous, SEM met la charge en pause au lieu de baisser encore le courant.",
+          "ev_phase_switch_entity": "Select/number/switch qui fait passer la borne entre charge mono- et triphasée (go-e « psm », KEBA série X, openWB). SEM se contente pour l'instant d'observer et de valider — la commutation automatique viendra dans une version ultérieure.",
+          "ev_phase_switch_value_1p": "Ce qui est écrit dans l'entité de commutation pour la charge monophasée — nom d'option d'un select, valeur d'un number, ou on/off. Requis pour les entités select ; number par défaut 1, switch par défaut off.",
+          "ev_phase_switch_value_3p": "Ce qui est écrit dans l'entité de commutation pour la charge triphasée — nom d'option d'un select, valeur d'un number, ou on/off. Requis pour les entités select ; number par défaut 3, switch par défaut on."
         }
       },
       "pv_naming": {
@@ -1406,6 +1418,14 @@
           "min_plus_solar": "Min + Solaire",
           "always_max": "Toujours (max)",
           "off": "Arrêt"
+        }
+      },
+      "phase_mode": {
+        "name": "{charger} Mode de phases",
+        "state": {
+          "auto": "Auto",
+          "1": "Monophasé",
+          "3": "Triphasé"
         }
       }
     }

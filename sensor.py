@@ -2595,6 +2595,25 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 if k.startswith("charger_") and k.endswith("_today_plan"):
                     cid = k[len("charger_"):-len("_today_plan")]
                     _per_charger_plans[cid] = v or []
+            # (#804 Phase A) Observed phase model per charger: the
+            # measured-W/A phase estimate + the user-named switch
+            # capability's validation verdict. Observe-only surface.
+            _per_charger_phases = {}
+            for k, v in self.coordinator.data.items():
+                if k.startswith("charger_") and k.endswith("_active_phases"):
+                    cid = k[len("charger_"):-len("_active_phases")]
+                    _per_charger_phases[cid] = {
+                        "active_phases": v,
+                        "switch_entity": self.coordinator.data.get(
+                            f"charger_{cid}_phase_switch_entity"),
+                        "switch_valid": self.coordinator.data.get(
+                            f"charger_{cid}_phase_switch_valid"),
+                        # (#804 B/C) sequencer state + held belief
+                        "switch_state": self.coordinator.data.get(
+                            f"charger_{cid}_phase_switch_state"),
+                        "believed_phases": self.coordinator.data.get(
+                            f"charger_{cid}_believed_phases"),
+                    }
             attrs.update({
                 "battery_soc": self.coordinator.data.get("battery_soc"),
                 "calculated_current": self.coordinator.data.get("calculated_current"),
@@ -2617,6 +2636,9 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "today_plan": self.coordinator.data.get("today_plan") or [],
                 # Per-charger plan rows (#464) — {cid: [rows…]}.
                 "per_charger_plans": _per_charger_plans,
+                # Observed phase model (#804 Phase A) — {cid: {active_phases,
+                # switch_entity, switch_valid}}.
+                "per_charger_phases": _per_charger_phases,
             })
         elif self.entity_description.key in (
             "roi_payback_years", "roi_annual_savings",

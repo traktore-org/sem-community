@@ -13,13 +13,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
-- ↩️ **Phase awareness (#804 Phase A) is pulled back out** — beta.11
-  carried the observation layer (`per_charger_phases` attribute + the
-  optional Phase Switch Entity setting) because an urgent bugfix release
-  shipped everything on the development line with it. Enhancements ship
-  when the *whole* feature is built and simulated, not in slices, so the
-  layer returns with #804 complete. Nothing acted on the setting; if you
-  already selected an entity, the value is simply ignored until then.
+- 🔌 **1↔3-phase switching for EV chargers** (#804): name your wallbox's
+  phase-switch entity (go-e `psm`, KEBA X-series, openWB — select/number/
+  switch, with the 1p/3p values in the entity's own vocabulary) and SEM
+  gives you the full ladder: a measured **active-phase estimate** from
+  watts-per-amp on `sensor.sem_charging_state` and in diagnostics; a
+  per-charger **Phase Mode select** (Auto / 1-phase / 3-phase) whose manual
+  positions run the one safe sequence — **stop → switch → settle → start**,
+  never under load, minimum 2 minutes between switches; and **Auto**, which
+  scales the charger to fit the surplus (down after 10 sustained starved
+  minutes, up after 5 sustained minutes of headroom + margin) under hard
+  caps: one automatic switch per 30 minutes, four per session. The estimate
+  independently confirms every switch physically took — and never lies
+  below the physical floor (one phase carries at most amps × 230 W; a car
+  drawing less than the offer reads the honest lower bound — found on the
+  first real charge). All three settings live on the dashboard
+  Configuration tab's charger block as well as the options flow, and the
+  Phases row on the EV card carries the selector and live status. Without
+  a named entity nothing exists — no knob, no writes, no behavior change.
 - 🌅 **The night no longer double-flips at sunrise** (#811, caught live by
   the #800 recorder's seal counter): at the moment of sunrise `sun.sun`
   rolls `next_rising` over to tomorrow — 1–2 minutes later on the clock in

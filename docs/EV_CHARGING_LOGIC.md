@@ -312,6 +312,57 @@ Some HEMS tools bundle vendor-specific Modbus templates that write directly to i
 
 ---
 
+## Phase switching — 1↔3‑phase, observed, manual and automatic (#804)
+
+Some wallboxes can switch between 1‑ and 3‑phase charging (go‑e's `psm`
+select, KEBA X‑series via Modbus, openWB's flag). SEM supports them in
+three layers — observation, manual control, and automatic switching:
+
+* **Active‑phase estimate.** While a charger is genuinely drawing power, SEM
+  divides its measured draw by the commanded amps — watts‑per‑amp is
+  volts‑actually‑in‑use, and over ~230 V per phase that reads the number of
+  phases the *car* is actually using (a 3‑phase box feeding a 1‑phase car
+  reads 1). A physical floor keeps it honest: one phase can carry at most
+  `amps × 230 W`, so the estimate never reads fewer phases than the draw
+  proves — a car taking less than the offer reads the lower bound instead
+  of a lie, and the exact count whenever it uses the offer (found live: a
+  Zoe at a 32 A offer drawing 10 kW ≈ 15 A × 3 phases). Exposed per charger
+  as `active_phases` in the `per_charger_phases` attribute on
+  `sensor.sem_charging_state` and as `charger_<id>_active_phases` in the
+  diagnostics download. `null` when the charger isn't drawing enough to
+  measure.
+* **The switch capability is an entity you name, never guessed.** If your
+  wallbox has a phase‑switch control, set **Phase Switch Entity** in the
+  charger's block on the dashboard **Configuration tab** (or in the options
+  flow: Settings → SEM → Configure → EV charger → edit). SEM
+  validates that it exists and is a `select`/`number`/`switch`, and surfaces
+  the verdict (`switch_valid`) beside the estimate. For a `select` you must
+  also fill the **1‑phase value / 3‑phase value** fields with the entity's
+  own option names (they are the device's vocabulary — SEM never guesses);
+  a `number` defaults to `1`/`3` and a `switch` to `off`/`on`, both
+  overridable (go‑e's `psm` number uses `2` for 3‑phase).
+* **Manual switching** — naming the capability creates
+  `select.sem_charger_<id>_phase_mode` (**Auto / 1‑phase / 3‑phase**).
+  Choosing 1 or 3 runs the one safe sequence SEM ever switches with:
+  **stop → switch → settle (60 s) → start**. Never under load — that
+  sequence is what buys away the pauses, ignored commands and hanging cars
+  other projects patch per‑brand. A hard 2‑minute floor separates any two
+  switches. Winter‑pinning a 3‑phase box to 1‑phase for low sun is the
+  classic manual use.
+* **Automatic switching** (`phase_mode: auto`, the default) scales the
+  charger to fit the surplus: down to 1‑phase after **10 sustained
+  minutes** below the 3‑phase minimum (~4.1 kW at 6 A), up to 3‑phase
+  after **5 sustained minutes** of headroom above it (+10 % margin).
+  Hard caps protect the hardware: at most one automatic switch per
+  30 minutes and 4 per charging session — after that the phase stays put
+  until the next plug‑in. The W/A estimate above independently confirms
+  every switch physically took once charging resumes.
+* The live sequence state and SEM's current belief ride the same
+  `per_charger_phases` attribute (`switch_state`, `believed_phases`) and
+  the diagnostics download.
+
+---
+
 ## The curtailment probe — harvesting solar an export limit hides
 
 Some inverters cap their grid export — permanently (a regulatory limit) or

@@ -337,7 +337,10 @@
           "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
           "initial_current": "起始电流 (A)",
           "ev_min_current": "最小充电电流 (A)",
-          "vehicle_min_current": "车辆最小电流 (A)"
+          "vehicle_min_current": "车辆最小电流 (A)",
+          "ev_phase_switch_entity": "相位切换实体（可选）",
+          "ev_phase_switch_value_1p": "相位切换：单相值（可选）",
+          "ev_phase_switch_value_3p": "相位切换：三相值（可选）"
         },
         "data_description": {
           "charger_name": "在看板中显示的充电桩友好名称。",
@@ -363,7 +366,10 @@
           "ev_battery_capacity_kwh": "电动汽车电池的总可用容量 (kWh)。用于估算剩余电量 (SOC) 和充电时间。",
           "initial_current": "SEM 开始充电时使用的电流，之后再按可用余量调整。",
           "ev_min_current": "低于此值时，SEM 会暂停充电，而不是继续降低电流。",
-          "vehicle_min_current": "每辆车的电流下限。实际最小值取此值与充电器最小电流中的较大者。"
+          "vehicle_min_current": "每辆车的电流下限。实际最小值取此值与充电器最小电流中的较大者。",
+          "ev_phase_switch_entity": "在单相与三相充电之间切换充电桩的 select/number/switch 实体（go-e 'psm'、KEBA X 系列、openWB）。目前 SEM 仅观察和验证该实体——自动切换将在后续版本中提供。",
+          "ev_phase_switch_value_1p": "单相充电时写入相位切换实体的值——select 的选项名、number 的数值或 on/off。select 实体必填；number 默认 1，switch 默认 off。",
+          "ev_phase_switch_value_3p": "三相充电时写入相位切换实体的值——select 的选项名、number 的数值或 on/off。select 实体必填；number 默认 3，switch 默认 on。"
         }
       },
       "ev_charger_add": {
@@ -392,7 +398,10 @@
           "ev_target_soc": "电动汽车目标电量 (%)",
           "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
           "initial_current": "起始电流 (A)",
-          "ev_min_current": "最小充电电流 (A)"
+          "ev_min_current": "最小充电电流 (A)",
+          "ev_phase_switch_entity": "相位切换实体（可选）",
+          "ev_phase_switch_value_1p": "相位切换：单相值（可选）",
+          "ev_phase_switch_value_3p": "相位切换：三相值（可选）"
         },
         "data_description": {
           "charger_name": "在看板中显示的充电桩友好名称。",
@@ -417,7 +426,10 @@
           "ev_target_soc": "SEM 视电动汽车已充满电的目标电量 (%)。",
           "ev_battery_capacity_kwh": "电动汽车电池的总可用容量 (kWh)。用于估算剩余电量 (SOC) 和充电时间。",
           "initial_current": "SEM 开始充电时使用的电流，之后再按可用余量调整。",
-          "ev_min_current": "低于此值时，SEM 会暂停充电，而不是继续降低电流。"
+          "ev_min_current": "低于此值时，SEM 会暂停充电，而不是继续降低电流。",
+          "ev_phase_switch_entity": "在单相与三相充电之间切换充电桩的 select/number/switch 实体（go-e 'psm'、KEBA X 系列、openWB）。目前 SEM 仅观察和验证该实体——自动切换将在后续版本中提供。",
+          "ev_phase_switch_value_1p": "单相充电时写入相位切换实体的值——select 的选项名、number 的数值或 on/off。select 实体必填；number 默认 1，switch 默认 off。",
+          "ev_phase_switch_value_3p": "三相充电时写入相位切换实体的值——select 的选项名、number 的数值或 on/off。select 实体必填；number 默认 3，switch 默认 on。"
         }
       },
       "pv_naming": {
@@ -1406,6 +1418,14 @@
           "min_plus_solar": "最低基础电流 + 太阳能",
           "always_max": "始终保持最大功率",
           "off": "关闭"
+        }
+      },
+      "phase_mode": {
+        "name": "{charger} 相位模式",
+        "state": {
+          "auto": "自动",
+          "1": "单相",
+          "3": "三相"
         }
       }
     }

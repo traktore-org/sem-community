@@ -663,6 +663,37 @@ class SEMEVStatusCard extends SEMLitBase {
         const showCheapHint = chargeMode === 'solar_plus_cheap'
             && nextCheapLabel;
 
+        // (#804) Phase row — exists only for a charger whose phase-switch
+        // capability is configured (the phase_mode select is only created
+        // then). Status prefers the MEASURED phases (W/A estimate), falls
+        // back to the sequencer's belief; a running switch replaces the
+        // status with its sequence state.
+        const phaseModeEntityId = `select.sem_charger_${id}_phase_mode`;
+        const phaseModeExists = !!this._hass?.states?.[phaseModeEntityId];
+        const phaseAttrs = ((csAttrs.per_charger_phases || {})[id]) || {};
+        const phaseMode = this._stateStr(phaseModeEntityId) || 'auto';
+        const phaseOptions = this._stateAttrs(phaseModeEntityId).options
+            || ['auto', '1', '3'];
+        const phaseLabels = {
+            auto: this._t('phase_mode_auto'),
+            '1': this._t('phase_mode_1'),
+            '3': this._t('phase_mode_3'),
+        };
+        let phaseStatus = '';
+        if (phaseAttrs.switch_state === 'stopping') {
+            phaseStatus = this._t('phase_status_stopping');
+        } else if (phaseAttrs.switch_state === 'settling') {
+            phaseStatus = this._t('phase_status_settling');
+        } else if (phaseAttrs.active_phases) {
+            phaseStatus = (this._t('phase_status_measured') || '{n}-phase measured')
+                .replace('{n}', phaseAttrs.active_phases);
+        } else if (phaseAttrs.believed_phases) {
+            phaseStatus = (this._t('phase_status_believed') || '{n}-phase')
+                .replace('{n}', phaseAttrs.believed_phases);
+        } else {
+            phaseStatus = this._t('phase_status_unknown');
+        }
+
         // Range the charge will ADD to reach the Min (guaranteed) target, in km —
         // updates live as the Min handle moves. Solar may add more, up to Max. (#245)
         const minTarget = this._entityVal(minEntityId, isSoc ? 80 : 10);
@@ -786,6 +817,30 @@ class SEMEVStatusCard extends SEMLitBase {
                             <b style="color:#8DC892">${nextCheapLabel}</b>
                         </div>
                     ` : nothing)}
+                    ${phaseModeExists ? html`
+                    <div class="ct-row">
+                        <span class="ct-label">${this._t('phase_mode')}</span>
+                        <span class="ct-ctl">
+                            <select class="ct-mode-select"
+                                    .value=${phaseMode}
+                                    @click=${(e) => e.stopPropagation()}
+                                    @change=${(e) => this._selectOption(phaseModeEntityId, e.target.value)}>
+                                ${phaseOptions.map(o => html`
+                                    <option value=${o} ?selected=${o === phaseMode}>
+                                        ${phaseLabels[o] || o}
+                                    </option>`)}
+                            </select>
+                        </span>
+                    </div>
+                    <div class="ct-subhint">
+                        <div class="ct-hint-row">
+                            <span class="ct-hint-text">
+                                <ha-icon icon="mdi:sine-wave" style="--mdc-icon-size:12px;color:#8DC892"></ha-icon>
+                                ${phaseStatus}
+                            </span>
+                        </div>
+                    </div>
+                    ` : nothing}
                     <div class="ct-row clickable"
                         @click=${() => this.dispatchEvent(new CustomEvent('hass-more-info',
                             { bubbles: true, composed: true, detail: { entityId: targetTimeId } }))}>
