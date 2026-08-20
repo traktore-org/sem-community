@@ -338,7 +338,9 @@
           "initial_current": "Corrente inicial (A)",
           "ev_min_current": "Corrente de carga mínima (A)",
           "vehicle_min_current": "Corrente mínima do veículo (A)",
-          "ev_phase_switch_entity": "Entidade de comutação de fases (opcional)"
+          "ev_phase_switch_entity": "Entidade de comutação de fases (opcional)",
+          "ev_phase_switch_value_1p": "Comutação de fases: valor monofásico (opcional)",
+          "ev_phase_switch_value_3p": "Comutação de fases: valor trifásico (opcional)"
         },
         "data_description": {
           "charger_name": "Nome amigável para este carregador, mostrado no painel.",
@@ -365,7 +367,9 @@
           "initial_current": "Corrente de carga com que o SEM começa antes de ajustar ao excedente disponível.",
           "ev_min_current": "Abaixo disto o SEM pausa o carregamento em vez de baixar mais a corrente.",
           "vehicle_min_current": "Piso de corrente por veículo. O mínimo efetivo é o maior entre este e a corrente mínima do carregador.",
-          "ev_phase_switch_entity": "Select/number/switch que alterna o carregador entre carga mono e trifásica (go-e 'psm', KEBA série X, openWB). Por enquanto o SEM apenas observa e valida — a comutação automática virá numa versão futura."
+          "ev_phase_switch_entity": "Select/number/switch que alterna o carregador entre carga mono e trifásica (go-e 'psm', KEBA série X, openWB). Por enquanto o SEM apenas observa e valida — a comutação automática virá numa versão futura.",
+          "ev_phase_switch_value_1p": "O que escrever na entidade de comutação para carga monofásica — nome de opção de um select, valor de um number, ou on/off. Obrigatório para entidades select; number padrão 1, switch padrão off.",
+          "ev_phase_switch_value_3p": "O que escrever na entidade de comutação para carga trifásica — nome de opção de um select, valor de um number, ou on/off. Obrigatório para entidades select; number padrão 3, switch padrão on."
         }
       },
       "ev_charger_add": {
@@ -395,7 +399,9 @@
           "ev_battery_capacity_kwh": "Capacidade da bateria do VE (kWh)",
           "initial_current": "Corrente inicial (A)",
           "ev_min_current": "Corrente de carga mínima (A)",
-          "ev_phase_switch_entity": "Entidade de comutação de fases (opcional)"
+          "ev_phase_switch_entity": "Entidade de comutação de fases (opcional)",
+          "ev_phase_switch_value_1p": "Comutação de fases: valor monofásico (opcional)",
+          "ev_phase_switch_value_3p": "Comutação de fases: valor trifásico (opcional)"
         },
         "data_description": {
           "charger_name": "Nome amigável para este carregador, mostrado no painel.",
@@ -421,7 +427,9 @@
           "ev_battery_capacity_kwh": "Capacidade total utilizável da bateria do VE em kWh. Usada para estimar o SOC e o tempo de carregamento.",
           "initial_current": "Corrente de carga com que o SEM começa antes de ajustar ao excedente disponível.",
           "ev_min_current": "Abaixo disto o SEM pausa o carregamento em vez de baixar mais a corrente.",
-          "ev_phase_switch_entity": "Select/number/switch que alterna o carregador entre carga mono e trifásica (go-e 'psm', KEBA série X, openWB). Por enquanto o SEM apenas observa e valida — a comutação automática virá numa versão futura."
+          "ev_phase_switch_entity": "Select/number/switch que alterna o carregador entre carga mono e trifásica (go-e 'psm', KEBA série X, openWB). Por enquanto o SEM apenas observa e valida — a comutação automática virá numa versão futura.",
+          "ev_phase_switch_value_1p": "O que escrever na entidade de comutação para carga monofásica — nome de opção de um select, valor de um number, ou on/off. Obrigatório para entidades select; number padrão 1, switch padrão off.",
+          "ev_phase_switch_value_3p": "O que escrever na entidade de comutação para carga trifásica — nome de opção de um select, valor de um number, ou on/off. Obrigatório para entidades select; number padrão 3, switch padrão on."
         }
       },
       "pv_naming": {
@@ -1410,6 +1418,14 @@
           "min_plus_solar": "Mín + Solar",
           "always_max": "Sempre (máx)",
           "off": "Desligado"
+        }
+      },
+      "phase_mode": {
+        "name": "{charger} Modo de fases",
+        "state": {
+          "auto": "Auto",
+          "1": "Monofásico",
+          "3": "Trifásico"
         }
       }
     }

@@ -162,3 +162,94 @@ class TestInertness:
                 for n in [mod] + names:
                     assert not n.startswith("homeassistant"), (
                         f"sequencer must stay pure, imports {n}")
+
+
+class TestCoordinatorWiring:
+    """(Phase B) The per-charger tick: capability from config, belief from
+    the W/A estimate, hold overrides the decision to IDLE, the switch is
+    ONE service call behind the observer seam."""
+
+    def _host(self, observer=False, cfg=None):
+        from types import SimpleNamespace
+        from unittest.mock import AsyncMock, MagicMock
+        from custom_components.solar_energy_management.coordinator import (
+            ev_control,
+        )
+        h = SimpleNamespace()
+        h._phase_switch_tick = ev_control.EVControlMixin._phase_switch_tick.__get__(h)
+        h._observer_mode = observer
+        h._surplus_controller = None
+        sun = MagicMock()
+        h.hass = SimpleNamespace(
+            states=SimpleNamespace(get=lambda eid: sun),
+            services=SimpleNamespace(async_call=AsyncMock()),
+        )
+        h.cfg = cfg if cfg is not None else {
+            "ev_phase_switch_entity": "number.keba_phases",
+            "phase_mode": "1",
+            "ev_voltage": 230,
+            "ev_min_current": 6,
+        }
+        return h
+
+    def _decision(self, amps=10, budget=4600.0):
+        from custom_components.solar_energy_management.coordinator.charger_types import (
+            ChargerDecision, ChargerIntent,
+        )
+        return ChargerDecision(
+            charger_id="c1", mode="solar_only",
+            intent=ChargerIntent.CHARGE_AT_AMPS,
+            commanded_amps=amps, budget_w=budget, reason="test")
+
+    def _cp(self, power_w, charging, connected=True):
+        from custom_components.solar_energy_management.coordinator.charger_types import (
+            ChargerPower,
+        )
+        return ChargerPower(charger_id="c1", power_w=power_w,
+                            connected=connected, charging=charging)
+
+    def test_manual_switch_walks_the_sequence(self):
+        import asyncio
+        from custom_components.solar_energy_management.coordinator.charger_types import (
+            ChargerIntent,
+        )
+        from custom_components.solar_energy_management.coordinator.ev_phase_sequencer import (
+            SETTLE_S,
+        )
+        h = self._host()
+        run = lambda d, cp, t: asyncio.run(
+            h._phase_switch_tick("c1", h.cfg, d, cp, t))
+        # charging 3-phase at 10A: 6900W → belief 3; user wants 1
+        d = run(self._decision(amps=10), self._cp(6900.0, True), 0.0)
+        assert d.intent is ChargerIntent.IDLE, "stopping must hold charging"
+        assert "phase switch" in d.reason
+        # draw stops → the ONE service call fires
+        d = run(self._decision(amps=10), self._cp(0.0, False), 30.0)
+        assert d.intent is ChargerIntent.IDLE, "settling still holds"
+        h.hass.services.async_call.assert_awaited_once()
+        call = h.hass.services.async_call.await_args
+        assert call.args[0] == "number" and call.args[1] == "set_value"
+        assert call.args[2] == {"entity_id": "number.keba_phases", "value": 1.0}
+        # settle over → decision passes through untouched
+        d0 = self._decision(amps=6)
+        d = run(d0, self._cp(0.0, False), 30.0 + SETTLE_S + 1)
+        assert d is d0
+
+    def test_observer_mode_never_calls_the_service(self):
+        import asyncio
+        h = self._host(observer=True)
+        run = lambda d, cp, t: asyncio.run(
+            h._phase_switch_tick("c1", h.cfg, d, cp, t))
+        run(self._decision(amps=10), self._cp(6900.0, True), 0.0)
+        run(self._decision(amps=10), self._cp(0.0, False), 30.0)
+        h.hass.services.async_call.assert_not_awaited()
+
+    def test_no_capability_passes_through(self):
+        import asyncio
+        h = self._host(cfg={"phase_mode": "1"})
+        d0 = self._decision()
+        d = asyncio.run(h._phase_switch_tick(
+            "c1", h.cfg, d0, self._cp(6900.0, True), 0.0))
+        assert d is d0
+        assert not hasattr(h, "_phase_sequencers") or not getattr(
+            h, "_phase_sequencers", {})

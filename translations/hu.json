@@ -338,7 +338,9 @@
           "initial_current": "Kezdő áram (A)",
           "ev_min_current": "Minimális töltőáram (A)",
           "vehicle_min_current": "Jármű minimális árama (A)",
-          "ev_phase_switch_entity": "Fázisváltó entitás (opcionális)"
+          "ev_phase_switch_entity": "Fázisváltó entitás (opcionális)",
+          "ev_phase_switch_value_1p": "Fázisváltás: 1 fázisú érték (opcionális)",
+          "ev_phase_switch_value_3p": "Fázisváltás: 3 fázesú érték (opcionális)"
         },
         "data_description": {
           "charger_name": "A töltő irányítópulton megjelenő, felhasználóbarát neve.",
@@ -365,7 +367,9 @@
           "initial_current": "Kezdő töltőáram, mielőtt a SEM az elérhető többlethez igazodik.",
           "ev_min_current": "Ez alatt a SEM szünetelteti a töltést, ahelyett hogy tovább csökkentené az áramot.",
           "vehicle_min_current": "Járművenkénti áram-alsóhatár. A tényleges minimum ennek és a töltő minimális áramának a nagyobbika.",
-          "ev_phase_switch_entity": "Select/number/switch, amely a töltőt 1 és 3 fázisú töltés között váltja (go-e 'psm', KEBA X-széria, openWB). A SEM egyelőre csak megfigyel és ellenőriz — az automatikus váltás egy későbbi kiadásban érkezik."
+          "ev_phase_switch_entity": "Select/number/switch, amely a töltőt 1 és 3 fázisú töltés között váltja (go-e 'psm', KEBA X-széria, openWB). A SEM egyelőre csak megfigyel és ellenőriz — az automatikus váltás egy későbbi kiadásban érkezik.",
+          "ev_phase_switch_value_1p": "Mi kerüljön a váltó entitásba 1 fázisú töltéshez — select opciónév, number érték vagy on/off. Select entitásoknál kötelező; number alapértelmezés 1, switch off.",
+          "ev_phase_switch_value_3p": "Mi kerüljön a váltó entitásba 3 fázisú töltéshez — select opciónév, number érték vagy on/off. Select entitásoknál kötelező; number alapértelmezés 3, switch on."
         }
       },
       "ev_charger_add": {
@@ -395,7 +399,9 @@
           "ev_battery_capacity_kwh": "EV akkumulátor kapacitása (kWh)",
           "initial_current": "Kezdő áram (A)",
           "ev_min_current": "Minimális töltőáram (A)",
-          "ev_phase_switch_entity": "Fázisváltó entitás (opcionális)"
+          "ev_phase_switch_entity": "Fázisváltó entitás (opcionális)",
+          "ev_phase_switch_value_1p": "Fázisváltás: 1 fázisú érték (opcionális)",
+          "ev_phase_switch_value_3p": "Fázisváltás: 3 fázesú érték (opcionális)"
         },
         "data_description": {
           "charger_name": "A töltő irányítópulton megjelenő, felhasználóbarát neve.",
@@ -421,7 +427,9 @@
           "ev_battery_capacity_kwh": "Az EV akkumulátorának teljes hasznos kapacitása kWh-ban. A SOC és a töltési idő becsléséhez használatos.",
           "initial_current": "Kezdő töltőáram, mielőtt a SEM az elérhető többlethez igazodik.",
           "ev_min_current": "Ez alatt a SEM szünetelteti a töltést, ahelyett hogy tovább csökkentené az áramot.",
-          "ev_phase_switch_entity": "Select/number/switch, amely a töltőt 1 és 3 fázisú töltés között váltja (go-e 'psm', KEBA X-széria, openWB). A SEM egyelőre csak megfigyel és ellenőriz — az automatikus váltás egy későbbi kiadásban érkezik."
+          "ev_phase_switch_entity": "Select/number/switch, amely a töltőt 1 és 3 fázisú töltés között váltja (go-e 'psm', KEBA X-széria, openWB). A SEM egyelőre csak megfigyel és ellenőriz — az automatikus váltás egy későbbi kiadásban érkezik.",
+          "ev_phase_switch_value_1p": "Mi kerüljön a váltó entitásba 1 fázisú töltéshez — select opciónév, number érték vagy on/off. Select entitásoknál kötelező; number alapértelmezés 1, switch off.",
+          "ev_phase_switch_value_3p": "Mi kerüljön a váltó entitásba 3 fázisú töltéshez — select opciónév, number érték vagy on/off. Select entitásoknál kötelező; number alapértelmezés 3, switch on."
         }
       },
       "pv_naming": {
@@ -1410,6 +1418,14 @@
           "min_plus_solar": "Min + Nap",
           "always_max": "Mindig (max)",
           "off": "Ki"
+        }
+      },
+      "phase_mode": {
+        "name": "{charger} Fázismód",
+        "state": {
+          "auto": "Auto",
+          "1": "1 fázisú",
+          "3": "3 fázisú"
         }
       }
     }

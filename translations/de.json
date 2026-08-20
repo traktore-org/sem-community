@@ -338,7 +338,9 @@
           "initial_current": "Startstrom (A)",
           "ev_min_current": "Minimaler Ladestrom (A)",
           "vehicle_min_current": "Fahrzeug-Mindeststrom (A)",
-          "ev_phase_switch_entity": "Phasenumschaltungs-Entität (optional)"
+          "ev_phase_switch_entity": "Phasenumschaltungs-Entität (optional)",
+          "ev_phase_switch_value_1p": "Phasenumschaltung: Wert für 1-phasig (optional)",
+          "ev_phase_switch_value_3p": "Phasenumschaltung: Wert für 3-phasig (optional)"
         },
         "data_description": {
           "charger_name": "Anzeigename für diesen Lader im Dashboard.",
@@ -365,7 +367,9 @@
           "initial_current": "Ladestrom, mit dem SEM startet, bevor es auf den verfügbaren Überschuss hochregelt.",
           "ev_min_current": "Darunter pausiert SEM das Laden, statt den Strom weiter zu senken.",
           "vehicle_min_current": "Fahrzeugspezifische Stromuntergrenze. Der effektive Mindestwert ist der höhere aus diesem und dem Lader-Mindeststrom.",
-          "ev_phase_switch_entity": "Select/Number/Switch, das die Wallbox zwischen 1- und 3-phasigem Laden umschaltet (go-e 'psm', KEBA X-Serie, openWB). SEM beobachtet und validiert vorerst nur — automatisches Umschalten folgt in einem späteren Release."
+          "ev_phase_switch_entity": "Select/Number/Switch, das die Wallbox zwischen 1- und 3-phasigem Laden umschaltet (go-e 'psm', KEBA X-Serie, openWB). SEM beobachtet und validiert vorerst nur — automatisches Umschalten folgt in einem späteren Release.",
+          "ev_phase_switch_value_1p": "Was für 1-phasiges Laden in die Umschalt-Entität geschrieben wird — Optionsname eines Select, Zahlenwert oder on/off. Bei Select-Entitäten erforderlich; Number-Standard ist 1, Switch-Standard off.",
+          "ev_phase_switch_value_3p": "Was für 3-phasiges Laden in die Umschalt-Entität geschrieben wird — Optionsname eines Select, Zahlenwert oder on/off. Bei Select-Entitäten erforderlich; Number-Standard ist 3, Switch-Standard on."
         }
       },
       "ev_charger_add": {
@@ -395,7 +399,9 @@
           "ev_battery_capacity_kwh": "EV-Batteriekapazität (kWh)",
           "initial_current": "Startstrom (A)",
           "ev_min_current": "Minimaler Ladestrom (A)",
-          "ev_phase_switch_entity": "Phasenumschaltungs-Entität (optional)"
+          "ev_phase_switch_entity": "Phasenumschaltungs-Entität (optional)",
+          "ev_phase_switch_value_1p": "Phasenumschaltung: Wert für 1-phasig (optional)",
+          "ev_phase_switch_value_3p": "Phasenumschaltung: Wert für 3-phasig (optional)"
         },
         "data_description": {
           "charger_name": "Anzeigename für diesen Lader im Dashboard.",
@@ -421,7 +427,9 @@
           "ev_battery_capacity_kwh": "Gesamte nutzbare Kapazität der EV-Batterie in kWh. Wird zur Schätzung von SOC und Ladedauer verwendet.",
           "initial_current": "Ladestrom, mit dem SEM startet, bevor es auf den verfügbaren Überschuss hochregelt.",
           "ev_min_current": "Darunter pausiert SEM das Laden, statt den Strom weiter zu senken.",
-          "ev_phase_switch_entity": "Select/Number/Switch, das die Wallbox zwischen 1- und 3-phasigem Laden umschaltet (go-e 'psm', KEBA X-Serie, openWB). SEM beobachtet und validiert vorerst nur — automatisches Umschalten folgt in einem späteren Release."
+          "ev_phase_switch_entity": "Select/Number/Switch, das die Wallbox zwischen 1- und 3-phasigem Laden umschaltet (go-e 'psm', KEBA X-Serie, openWB). SEM beobachtet und validiert vorerst nur — automatisches Umschalten folgt in einem späteren Release.",
+          "ev_phase_switch_value_1p": "Was für 1-phasiges Laden in die Umschalt-Entität geschrieben wird — Optionsname eines Select, Zahlenwert oder on/off. Bei Select-Entitäten erforderlich; Number-Standard ist 1, Switch-Standard off.",
+          "ev_phase_switch_value_3p": "Was für 3-phasiges Laden in die Umschalt-Entität geschrieben wird — Optionsname eines Select, Zahlenwert oder on/off. Bei Select-Entitäten erforderlich; Number-Standard ist 3, Switch-Standard on."
         }
       },
       "pv_naming": {
@@ -1410,6 +1418,14 @@
           "min_plus_solar": "Min. + Solar",
           "always_max": "Immer (max)",
           "off": "Aus"
+        }
+      },
+      "phase_mode": {
+        "name": "{charger} Phasenmodus",
+        "state": {
+          "auto": "Automatisch",
+          "1": "1-phasig",
+          "3": "3-phasig"
         }
       }
     }

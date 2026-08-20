@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔌 **1↔3-phase switching for EV chargers** (#804): name your wallbox's
+  phase-switch entity (go-e `psm`, KEBA X-series, openWB — select/number/
+  switch, with the 1p/3p values in the entity's own vocabulary) and SEM
+  gives you the full ladder: a measured **active-phase estimate** from
+  watts-per-amp on `sensor.sem_charging_state` and in diagnostics; a
+  per-charger **Phase Mode select** (Auto / 1-phase / 3-phase) whose manual
+  positions run the one safe sequence — **stop → switch → settle → start**,
+  never under load, minimum 2 minutes between switches; and **Auto**, which
+  scales the charger to fit the surplus (down after 10 sustained starved
+  minutes, up after 5 sustained minutes of headroom + margin) under hard
+  caps: one automatic switch per 30 minutes, four per session. The estimate
+  independently confirms every switch physically took. Without a named
+  entity nothing exists — no knob, no writes, no behavior change.
 - 🌅 **The night no longer double-flips at sunrise** (#811, caught live by
   the #800 recorder's seal counter): at the moment of sunrise `sun.sun`
   rolls `next_rising` over to tomorrow — 1–2 minutes later on the clock in

@@ -985,6 +985,8 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "ev_kwh_per_100km",
     "ev_min_current",
     "ev_phase_switch_entity",
+    "ev_phase_switch_value_1p",
+    "ev_phase_switch_value_3p",
     "ev_start_stop_entity",
     "ev_surplus_priority",
     "ev_target_soc",
@@ -1417,6 +1419,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=["select", "number", "switch"])
                 ),
+                # The 1p/3p positions in the entity's own vocabulary.
+                # Required for a select (its option strings are the
+                # device's language — never guessed); number defaults to
+                # 1/3 and switch to off/on when left empty.
+                vol.Optional(
+                    "ev_phase_switch_value_1p",
+                    description={"suggested_value": suggestions.get("ev_phase_switch_value_1p")},
+                ): selector.TextSelector(),
+                vol.Optional(
+                    "ev_phase_switch_value_3p",
+                    description={"suggested_value": suggestions.get("ev_phase_switch_value_3p")},
+                ): selector.TextSelector(),
                 # #604: ONE priority axis — the unified device-priority list
                 # (#576). Shed order under peak is the reverse list walk
                 # (#470: higher list number sheds first), so there is no
@@ -1618,6 +1632,14 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=["select", "number", "switch"])
                 ),
+                vol.Optional(
+                    "ev_phase_switch_value_1p",
+                    description={"suggested_value": charger.get("ev_phase_switch_value_1p")},
+                ): selector.TextSelector(),
+                vol.Optional(
+                    "ev_phase_switch_value_3p",
+                    description={"suggested_value": charger.get("ev_phase_switch_value_3p")},
+                ): selector.TextSelector(),
                 # #604: ONE priority axis — the unified device-priority list
                 # (#576). Lower number = charges first on surplus; shed
                 # order under peak is the reverse list walk (#470: higher

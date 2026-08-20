@@ -96,7 +96,9 @@ class TestValidatePhaseSwitchEntity:
         assert valid is False
 
     def test_domains_are_the_actuator_trio(self):
-        assert PHASE_SWITCH_DOMAINS == ("select", "number", "switch")
+        assert PHASE_SWITCH_DOMAINS == (
+            "select", "number", "switch",
+            "input_select", "input_number", "input_boolean")
 
 
 class TestInertness:
@@ -184,3 +186,35 @@ class TestSwitchValuesAndCommand:
             phase_switch_command,
         )
         assert phase_switch_command("sensor.goe_phases", "3") is None
+
+
+class TestHelperDomainTwins:
+    """input_select / input_number / input_boolean are first-class switch
+    targets — the natural path for users who proxy their wallbox control
+    through a helper + automation (and the sim rig's mock vocabulary)."""
+
+    def test_helper_domains_validate(self):
+        from custom_components.solar_energy_management.coordinator.ev_phases import (
+            validate_phase_switch_entity,
+        )
+        for eid in ("input_select.psm", "input_number.phases",
+                    "input_boolean.three_phase"):
+            _, valid = validate_phase_switch_entity(eid, lambda e: True)
+            assert valid is True, eid
+
+    def test_helper_values_and_commands(self):
+        from custom_components.solar_energy_management.coordinator.ev_phases import (
+            phase_switch_command, resolve_switch_values,
+        )
+        assert resolve_switch_values("input_number.phases", {}) == ("1", "3", True)
+        assert resolve_switch_values("input_boolean.tp", {}) == ("off", "on", True)
+        _, _, ready = resolve_switch_values("input_select.psm", {})
+        assert ready is False
+        assert phase_switch_command("input_select.psm", "3 Phasen") == (
+            "input_select", "select_option",
+            {"entity_id": "input_select.psm", "option": "3 Phasen"})
+        assert phase_switch_command("input_number.phases", "3") == (
+            "input_number", "set_value",
+            {"entity_id": "input_number.phases", "value": 3.0})
+        assert phase_switch_command("input_boolean.tp", "on") == (
+            "input_boolean", "turn_on", {"entity_id": "input_boolean.tp"})

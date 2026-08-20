@@ -338,7 +338,9 @@
           "initial_current": "Corriente inicial (A)",
           "ev_min_current": "Corriente de carga mínima (A)",
           "vehicle_min_current": "Corriente mínima del vehículo (A)",
-          "ev_phase_switch_entity": "Entidad de conmutación de fases (opcional)"
+          "ev_phase_switch_entity": "Entidad de conmutación de fases (opcional)",
+          "ev_phase_switch_value_1p": "Conmutación de fases: valor monofásico (opcional)",
+          "ev_phase_switch_value_3p": "Conmutación de fases: valor trifásico (opcional)"
         },
         "data_description": {
           "charger_name": "Nombre descriptivo de este cargador que se muestra en el panel.",
@@ -365,7 +367,9 @@
           "initial_current": "Corriente de carga con la que SEM empieza antes de ajustarse al excedente disponible.",
           "ev_min_current": "Por debajo de esto SEM pausa la carga en lugar de bajar más la corriente.",
           "vehicle_min_current": "Límite inferior de corriente por vehículo. El mínimo efectivo es el mayor entre este y la corriente mínima del cargador.",
-          "ev_phase_switch_entity": "Select/number/switch que cambia el cargador entre carga mono y trifásica (go-e 'psm', KEBA serie X, openWB). Por ahora SEM solo observa y valida — la conmutación automática llegará en una versión posterior."
+          "ev_phase_switch_entity": "Select/number/switch que cambia el cargador entre carga mono y trifásica (go-e 'psm', KEBA serie X, openWB). Por ahora SEM solo observa y valida — la conmutación automática llegará en una versión posterior.",
+          "ev_phase_switch_value_1p": "Qué se escribe en la entidad de conmutación para carga monofásica — nombre de opción de un select, valor de un number, o on/off. Obligatorio para entidades select; number por defecto 1, switch por defecto off.",
+          "ev_phase_switch_value_3p": "Qué se escribe en la entidad de conmutación para carga trifásica — nombre de opción de un select, valor de un number, o on/off. Obligatorio para entidades select; number por defecto 3, switch por defecto on."
         }
       },
       "ev_charger_add": {
@@ -395,7 +399,9 @@
           "ev_battery_capacity_kwh": "Capacidad batería VE (kWh)",
           "initial_current": "Corriente inicial (A)",
           "ev_min_current": "Corriente de carga mínima (A)",
-          "ev_phase_switch_entity": "Entidad de conmutación de fases (opcional)"
+          "ev_phase_switch_entity": "Entidad de conmutación de fases (opcional)",
+          "ev_phase_switch_value_1p": "Conmutación de fases: valor monofásico (opcional)",
+          "ev_phase_switch_value_3p": "Conmutación de fases: valor trifásico (opcional)"
         },
         "data_description": {
           "charger_name": "Nombre descriptivo de este cargador que se muestra en el panel.",
@@ -421,7 +427,9 @@
           "ev_battery_capacity_kwh": "Capacidad útil total de la batería del VE en kWh. Se utiliza para estimar el SOC y el tiempo de carga.",
           "initial_current": "Corriente de carga con la que SEM empieza antes de ajustarse al excedente disponible.",
           "ev_min_current": "Por debajo de esto SEM pausa la carga en lugar de bajar más la corriente.",
-          "ev_phase_switch_entity": "Select/number/switch que cambia el cargador entre carga mono y trifásica (go-e 'psm', KEBA serie X, openWB). Por ahora SEM solo observa y valida — la conmutación automática llegará en una versión posterior."
+          "ev_phase_switch_entity": "Select/number/switch que cambia el cargador entre carga mono y trifásica (go-e 'psm', KEBA serie X, openWB). Por ahora SEM solo observa y valida — la conmutación automática llegará en una versión posterior.",
+          "ev_phase_switch_value_1p": "Qué se escribe en la entidad de conmutación para carga monofásica — nombre de opción de un select, valor de un number, o on/off. Obligatorio para entidades select; number por defecto 1, switch por defecto off.",
+          "ev_phase_switch_value_3p": "Qué se escribe en la entidad de conmutación para carga trifásica — nombre de opción de un select, valor de un number, o on/off. Obligatorio para entidades select; number por defecto 3, switch por defecto on."
         }
       },
       "pv_naming": {
@@ -1410,6 +1418,14 @@
           "min_plus_solar": "Mín + Solar",
           "always_max": "Siempre (máx)",
           "off": "Apagado"
+        }
+      },
+      "phase_mode": {
+        "name": "{charger} Modo de fases",
+        "state": {
+          "auto": "Auto",
+          "1": "Monofásico",
+          "3": "Trifásico"
         }
       }
     }

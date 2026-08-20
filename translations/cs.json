@@ -338,7 +338,9 @@
           "initial_current": "Počáteční proud (A)",
           "ev_min_current": "Minimální nabíjecí proud (A)",
           "vehicle_min_current": "Minimální proud vozidla (A)",
-          "ev_phase_switch_entity": "Entita přepínání fází (volitelné)"
+          "ev_phase_switch_entity": "Entita přepínání fází (volitelné)",
+          "ev_phase_switch_value_1p": "Přepínání fází: hodnota pro 1 fázi (volitelné)",
+          "ev_phase_switch_value_3p": "Přepínání fází: hodnota pro 3 fáze (volitelné)"
         },
         "data_description": {
           "charger_name": "Popisný název této nabíječky zobrazený na panelu.",
@@ -365,7 +367,9 @@
           "initial_current": "Nabíjecí proud, kterým SEM začíná, než se přizpůsobí dostupnému přebytku.",
           "ev_min_current": "Pod touto hodnotou SEM nabíjení pozastaví, místo aby proud dále snižoval.",
           "vehicle_min_current": "Spodní mez proudu pro vozidlo. Efektivní minimum je vyšší z této a minimálního proudu nabíječky.",
-          "ev_phase_switch_entity": "Select/number/switch, který přepíná nabíječku mezi 1- a 3fázovým nabíjením (go-e 'psm', KEBA řady X, openWB). SEM zatím pouze pozoruje a ověřuje — automatické přepínání přijde v pozdější verzi."
+          "ev_phase_switch_entity": "Select/number/switch, který přepíná nabíječku mezi 1- a 3fázovým nabíjením (go-e 'psm', KEBA řady X, openWB). SEM zatím pouze pozoruje a ověřuje — automatické přepínání přijde v pozdější verzi.",
+          "ev_phase_switch_value_1p": "Co zapsat do přepínací entity pro 1fázové nabíjení — název volby selectu, hodnota number nebo on/off. Povinné pro entity select; výchozí number 1, switch off.",
+          "ev_phase_switch_value_3p": "Co zapsat do přepínací entity pro 3fázové nabíjení — název volby selectu, hodnota number nebo on/off. Povinné pro entity select; výchozí number 3, switch on."
         }
       },
       "ev_charger_add": {
@@ -395,7 +399,9 @@
           "ev_battery_capacity_kwh": "Kapacita baterie EV (kWh)",
           "initial_current": "Počáteční proud (A)",
           "ev_min_current": "Minimální nabíjecí proud (A)",
-          "ev_phase_switch_entity": "Entita přepínání fází (volitelné)"
+          "ev_phase_switch_entity": "Entita přepínání fází (volitelné)",
+          "ev_phase_switch_value_1p": "Přepínání fází: hodnota pro 1 fázi (volitelné)",
+          "ev_phase_switch_value_3p": "Přepínání fází: hodnota pro 3 fáze (volitelné)"
         },
         "data_description": {
           "charger_name": "Popisný název této nabíječky zobrazený na panelu.",
@@ -421,7 +427,9 @@
           "ev_battery_capacity_kwh": "Celková využitelná kapacita baterie EV v kWh. Slouží k odhadu SOC a doby nabíjení.",
           "initial_current": "Nabíjecí proud, kterým SEM začíná, než se přizpůsobí dostupnému přebytku.",
           "ev_min_current": "Pod touto hodnotou SEM nabíjení pozastaví, místo aby proud dále snižoval.",
-          "ev_phase_switch_entity": "Select/number/switch, který přepíná nabíječku mezi 1- a 3fázovým nabíjením (go-e 'psm', KEBA řady X, openWB). SEM zatím pouze pozoruje a ověřuje — automatické přepínání přijde v pozdější verzi."
+          "ev_phase_switch_entity": "Select/number/switch, který přepíná nabíječku mezi 1- a 3fázovým nabíjením (go-e 'psm', KEBA řady X, openWB). SEM zatím pouze pozoruje a ověřuje — automatické přepínání přijde v pozdější verzi.",
+          "ev_phase_switch_value_1p": "Co zapsat do přepínací entity pro 1fázové nabíjení — název volby selectu, hodnota number nebo on/off. Povinné pro entity select; výchozí number 1, switch off.",
+          "ev_phase_switch_value_3p": "Co zapsat do přepínací entity pro 3fázové nabíjení — název volby selectu, hodnota number nebo on/off. Povinné pro entity select; výchozí number 3, switch on."
         }
       },
       "pv_naming": {
@@ -1410,6 +1418,14 @@
           "min_plus_solar": "Min + Solární",
           "always_max": "Vždy (max)",
           "off": "Vypnuto"
+        }
+      },
+      "phase_mode": {
+        "name": "{charger} Režim fází",
+        "state": {
+          "auto": "Auto",
+          "1": "1fázový",
+          "3": "3fázový"
         }
       }
     }

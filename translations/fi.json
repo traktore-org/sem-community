@@ -338,7 +338,9 @@
           "initial_current": "Aloitusvirta (A)",
           "ev_min_current": "Vähimmäislatausvirta (A)",
           "vehicle_min_current": "Ajoneuvon vähimmäisvirta (A)",
-          "ev_phase_switch_entity": "Vaiheenvaihtoentiteetti (valinnainen)"
+          "ev_phase_switch_entity": "Vaiheenvaihtoentiteetti (valinnainen)",
+          "ev_phase_switch_value_1p": "Vaiheenvaihto: 1-vaiheen arvo (valinnainen)",
+          "ev_phase_switch_value_3p": "Vaiheenvaihto: 3-vaiheen arvo (valinnainen)"
         },
         "data_description": {
           "charger_name": "Laturin selkokielinen nimi, joka näkyy koontinäytöllä.",
@@ -365,7 +367,9 @@
           "initial_current": "Latausvirta, jolla SEM aloittaa ennen kuin se säätää saatavilla olevaan ylijäämään.",
           "ev_min_current": "Tämän alle SEM keskeyttää latauksen sen sijaan, että laskisi virtaa edelleen.",
           "vehicle_min_current": "Ajoneuvokohtainen virran alaraja. Tehollinen vähimmäisarvo on suurempi tästä ja laturin vähimmäisvirrasta.",
-          "ev_phase_switch_entity": "Select/number/switch, joka vaihtaa laturin 1- ja 3-vaiheisen latauksen välillä (go-e 'psm', KEBA X-sarja, openWB). SEM vain havainnoi ja validoi toistaiseksi — automaattinen vaihto tulee myöhemmässä versiossa."
+          "ev_phase_switch_entity": "Select/number/switch, joka vaihtaa laturin 1- ja 3-vaiheisen latauksen välillä (go-e 'psm', KEBA X-sarja, openWB). SEM vain havainnoi ja validoi toistaiseksi — automaattinen vaihto tulee myöhemmässä versiossa.",
+          "ev_phase_switch_value_1p": "Mitä vaihtoentiteettiin kirjoitetaan 1-vaiheista latausta varten — selectin vaihtoehdon nimi, numberin arvo tai on/off. Pakollinen select-entiteeteille; numberin oletus 1, switchin off.",
+          "ev_phase_switch_value_3p": "Mitä vaihtoentiteettiin kirjoitetaan 3-vaiheista latausta varten — selectin vaihtoehdon nimi, numberin arvo tai on/off. Pakollinen select-entiteeteille; numberin oletus 3, switchin on."
         }
       },
       "ev_charger_add": {
@@ -395,7 +399,9 @@
           "ev_battery_capacity_kwh": "Sähköauton akun kapasiteetti (kWh)",
           "initial_current": "Aloitusvirta (A)",
           "ev_min_current": "Vähimmäislatausvirta (A)",
-          "ev_phase_switch_entity": "Vaiheenvaihtoentiteetti (valinnainen)"
+          "ev_phase_switch_entity": "Vaiheenvaihtoentiteetti (valinnainen)",
+          "ev_phase_switch_value_1p": "Vaiheenvaihto: 1-vaiheen arvo (valinnainen)",
+          "ev_phase_switch_value_3p": "Vaiheenvaihto: 3-vaiheen arvo (valinnainen)"
         },
         "data_description": {
           "charger_name": "Laturin selkokielinen nimi, joka näkyy koontinäytöllä.",
@@ -421,7 +427,9 @@
           "ev_battery_capacity_kwh": "Sähköauton akun käytettävissä oleva kokonaiskapasiteetti kilowattitunteina. Käytetään SOC:n ja latausajan arviointiin.",
           "initial_current": "Latausvirta, jolla SEM aloittaa ennen kuin se säätää saatavilla olevaan ylijäämään.",
           "ev_min_current": "Tämän alle SEM keskeyttää latauksen sen sijaan, että laskisi virtaa edelleen.",
-          "ev_phase_switch_entity": "Select/number/switch, joka vaihtaa laturin 1- ja 3-vaiheisen latauksen välillä (go-e 'psm', KEBA X-sarja, openWB). SEM vain havainnoi ja validoi toistaiseksi — automaattinen vaihto tulee myöhemmässä versiossa."
+          "ev_phase_switch_entity": "Select/number/switch, joka vaihtaa laturin 1- ja 3-vaiheisen latauksen välillä (go-e 'psm', KEBA X-sarja, openWB). SEM vain havainnoi ja validoi toistaiseksi — automaattinen vaihto tulee myöhemmässä versiossa.",
+          "ev_phase_switch_value_1p": "Mitä vaihtoentiteettiin kirjoitetaan 1-vaiheista latausta varten — selectin vaihtoehdon nimi, numberin arvo tai on/off. Pakollinen select-entiteeteille; numberin oletus 1, switchin off.",
+          "ev_phase_switch_value_3p": "Mitä vaihtoentiteettiin kirjoitetaan 3-vaiheista latausta varten — selectin vaihtoehdon nimi, numberin arvo tai on/off. Pakollinen select-entiteeteille; numberin oletus 3, switchin on."
         }
       },
       "pv_naming": {
@@ -1410,6 +1418,14 @@
           "min_plus_solar": "Min + Aurinko",
           "always_max": "Aina (max)",
           "off": "Pois"
+        }
+      },
+      "phase_mode": {
+        "name": "{charger} Vaihetila",
+        "state": {
+          "auto": "Auto",
+          "1": "1-vaiheinen",
+          "3": "3-vaiheinen"
         }
       }
     }

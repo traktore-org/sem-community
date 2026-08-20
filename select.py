@@ -186,6 +186,25 @@ async def async_setup_entry(
                 charger_cfg.get("charge_mode") or DEFAULT_EV_CHARGE_MODE,
                 cname,
             ))
+            # (#804 Phase B/C) Phase mode: auto / 1 / 3. Exists only for a
+            # charger whose phase-switch capability the user has NAMED
+            # (ev_phase_switch_entity) — no capability, no knob. The
+            # orphan cleanup below retires the select if the entity is
+            # ever un-configured.
+            if charger_cfg.get("ev_phase_switch_entity"):
+                pm_key = f"charger_{cid}_phase_mode"
+                per_charger_keys.add(pm_key)
+                entities.append(SEMPerChargerSelect(
+                    coordinator,
+                    SelectEntityDescription(
+                        key=pm_key,
+                        options=["auto", "1", "3"],
+                        entity_category=EntityCategory.CONFIG,
+                    ),
+                    entry, cid, "phase_mode",
+                    str(charger_cfg.get("phase_mode") or "auto"),
+                    cname,
+                ))
 
     # Per-battery mode selects (#523). Multi-battery installs (Energy
     # Dashboard battery_power_list ≥ 2) get one ``select.sem_battery_<bid>_mode``

@@ -338,7 +338,9 @@
           "initial_current": "Startstrøm (A)",
           "ev_min_current": "Minimal ladestrøm (A)",
           "vehicle_min_current": "Køretøjets minimumsstrøm (A)",
-          "ev_phase_switch_entity": "Faseskift-entitet (valgfrit)"
+          "ev_phase_switch_entity": "Faseskift-entitet (valgfrit)",
+          "ev_phase_switch_value_1p": "Faseskift: værdi for 1-faset (valgfrit)",
+          "ev_phase_switch_value_3p": "Faseskift: værdi for 3-faset (valgfrit)"
         },
         "data_description": {
           "charger_name": "Visningsnavn for denne lader, som vises i dashboardet.",
@@ -365,7 +367,9 @@
           "initial_current": "Ladestrøm som SEM starter med, før den justeres til det tilgængelige overskud.",
           "ev_min_current": "Under dette sætter SEM opladningen på pause i stedet for at sænke strømmen yderligere.",
           "vehicle_min_current": "Strømgulv pr. køretøj. Det effektive minimum er det højeste af denne og laderens minimumsstrøm.",
-          "ev_phase_switch_entity": "Select/number/switch der skifter laderen mellem 1- og 3-faset ladning (go-e 'psm', KEBA X-serien, openWB). SEM observerer og validerer indtil videre kun — automatisk skift kommer i en senere version."
+          "ev_phase_switch_entity": "Select/number/switch der skifter laderen mellem 1- og 3-faset ladning (go-e 'psm', KEBA X-serien, openWB). SEM observerer og validerer indtil videre kun — automatisk skift kommer i en senere version.",
+          "ev_phase_switch_value_1p": "Hvad der skrives til skifte-entiteten for 1-faset ladning — et selects valgnavn, et numbers værdi eller on/off. Påkrævet for select-entiteter; number-standard 1, switch-standard off.",
+          "ev_phase_switch_value_3p": "Hvad der skrives til skifte-entiteten for 3-faset ladning — et selects valgnavn, et numbers værdi eller on/off. Påkrævet for select-entiteter; number-standard 3, switch-standard on."
         }
       },
       "ev_charger_add": {
@@ -395,7 +399,9 @@
           "ev_battery_capacity_kwh": "EV-batterikapacitet (kWh)",
           "initial_current": "Startstrøm (A)",
           "ev_min_current": "Minimal ladestrøm (A)",
-          "ev_phase_switch_entity": "Faseskift-entitet (valgfrit)"
+          "ev_phase_switch_entity": "Faseskift-entitet (valgfrit)",
+          "ev_phase_switch_value_1p": "Faseskift: værdi for 1-faset (valgfrit)",
+          "ev_phase_switch_value_3p": "Faseskift: værdi for 3-faset (valgfrit)"
         },
         "data_description": {
           "charger_name": "Visningsnavn for denne lader, som vises i dashboardet.",
@@ -421,7 +427,9 @@
           "ev_battery_capacity_kwh": "EV-batteriets samlede anvendelige kapacitet i kWh. Bruges til at estimere SOC og ladetid.",
           "initial_current": "Ladestrøm som SEM starter med, før den justeres til det tilgængelige overskud.",
           "ev_min_current": "Under dette sætter SEM opladningen på pause i stedet for at sænke strømmen yderligere.",
-          "ev_phase_switch_entity": "Select/number/switch der skifter laderen mellem 1- og 3-faset ladning (go-e 'psm', KEBA X-serien, openWB). SEM observerer og validerer indtil videre kun — automatisk skift kommer i en senere version."
+          "ev_phase_switch_entity": "Select/number/switch der skifter laderen mellem 1- og 3-faset ladning (go-e 'psm', KEBA X-serien, openWB). SEM observerer og validerer indtil videre kun — automatisk skift kommer i en senere version.",
+          "ev_phase_switch_value_1p": "Hvad der skrives til skifte-entiteten for 1-faset ladning — et selects valgnavn, et numbers værdi eller on/off. Påkrævet for select-entiteter; number-standard 1, switch-standard off.",
+          "ev_phase_switch_value_3p": "Hvad der skrives til skifte-entiteten for 3-faset ladning — et selects valgnavn, et numbers værdi eller on/off. Påkrævet for select-entiteter; number-standard 3, switch-standard on."
         }
       },
       "pv_naming": {
@@ -1410,6 +1418,14 @@
           "min_plus_solar": "Min + Sol",
           "always_max": "Altid (max)",
           "off": "Fra"
+        }
+      },
+      "phase_mode": {
+        "name": "{charger} Fasetilstand",
+        "state": {
+          "auto": "Auto",
+          "1": "1-faset",
+          "3": "3-faset"
         }
       }
     }

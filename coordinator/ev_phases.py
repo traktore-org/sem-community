@@ -35,7 +35,8 @@ PHASE_MIN_AMPS = 1
 # select (``psm``), KEBA's X-series a number via Modbus, openWB a
 # switch. A sensor is a reading, not an actuator — naming one is a
 # config error worth surfacing.
-PHASE_SWITCH_DOMAINS = ("select", "number", "switch")
+PHASE_SWITCH_DOMAINS = ("select", "number", "switch",
+                        "input_select", "input_number", "input_boolean")
 
 
 def estimate_active_phases(
@@ -63,7 +64,9 @@ def estimate_active_phases(
 # psm speaks numbers-as-modes, others speak words) — never guessed.
 _SWITCH_VALUE_DEFAULTS = {
     "number": ("1", "3"),
+    "input_number": ("1", "3"),
     "switch": ("off", "on"),
+    "input_boolean": ("off", "on"),
 }
 
 
@@ -88,15 +91,15 @@ def phase_switch_command(entity_id: str, value: str):
     behind the same observer seam as every actuation.
     """
     domain = str(entity_id or "").split(".", 1)[0]
-    if domain == "select":
-        return "select", "select_option", {
+    if domain in ("select", "input_select"):
+        return domain, "select_option", {
             "entity_id": entity_id, "option": str(value)}
-    if domain == "number":
-        return "number", "set_value", {
+    if domain in ("number", "input_number"):
+        return domain, "set_value", {
             "entity_id": entity_id, "value": float(value)}
-    if domain == "switch":
+    if domain in ("switch", "input_boolean"):
         service = "turn_on" if str(value).lower() == "on" else "turn_off"
-        return "switch", service, {"entity_id": entity_id}
+        return domain, service, {"entity_id": entity_id}
     return None
 
 

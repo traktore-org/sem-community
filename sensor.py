@@ -2608,6 +2608,11 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                             f"charger_{cid}_phase_switch_entity"),
                         "switch_valid": self.coordinator.data.get(
                             f"charger_{cid}_phase_switch_valid"),
+                        # (#804 B/C) sequencer state + held belief
+                        "switch_state": self.coordinator.data.get(
+                            f"charger_{cid}_phase_switch_state"),
+                        "believed_phases": self.coordinator.data.get(
+                            f"charger_{cid}_believed_phases"),
                     }
             attrs.update({
                 "battery_soc": self.coordinator.data.get("battery_soc"),

@@ -731,6 +731,116 @@ class EVControlMixin:
             controller=self._surplus_controller,
         )
 
+    async def _phase_switch_tick(self, cid: str, charger_cfg: dict,
+                                 decision, cp, now: float):
+        """(#804 Phase B/C) One cycle of the phase model for this charger.
+
+        Returns the decision, replaced with IDLE while the sequencer holds
+        (stop→switch→settle — never switch under load). The capability is
+        the entity the user NAMED; without it this is a pass-through and
+        no per-charger state is even created. The one service call a
+        switch turns into runs behind the same observer seam as every
+        actuation: observer mode logs the WOULD and touches nothing.
+        """
+        entity = charger_cfg.get("ev_phase_switch_entity")
+        if not entity:
+            return decision
+
+        from dataclasses import replace
+
+        from .charger_types import ChargerIntent
+        from .ev_phase_sequencer import PhaseAutoPlanner, PhaseSwitchSequencer
+        from .ev_phases import (
+            estimate_active_phases, phase_switch_command,
+            resolve_switch_values, validate_phase_switch_entity,
+        )
+
+        _, valid = validate_phase_switch_entity(
+            entity, lambda e: self.hass.states.get(e) is not None)
+        v1, v3, values_ready = resolve_switch_values(entity, charger_cfg)
+        ready = bool(valid) and values_ready
+
+        if getattr(self, "_phase_sequencers", None) is None:
+            self._phase_sequencers = {}
+            self._phase_planners = {}
+            self._phase_believed = {}
+            self._phase_conn_memo = {}
+            self._phase_switch_states = {}
+
+        voltage = float(charger_cfg.get("ev_voltage")
+                        or getattr(self, "config", {}).get("ev_voltage")
+                        or 230)
+        seq = self._phase_sequencers.setdefault(cid, PhaseSwitchSequencer())
+        planner = self._phase_planners.setdefault(
+            cid, PhaseAutoPlanner(
+                min_current_a=int(charger_cfg.get("ev_min_current") or 6),
+                voltage=voltage,
+            ))
+
+        # A replug is a new car (or a new mood) — fresh auto-switch budget.
+        if cp.connected and not self._phase_conn_memo.get(cid, False):
+            planner.new_session()
+        self._phase_conn_memo[cid] = cp.connected
+
+        # Belief: the #716 W/A estimate, only meaningful under an amps
+        # command (CHARGE_MAX has no commanded amps to divide by).
+        if decision.intent is ChargerIntent.CHARGE_AT_AMPS:
+            est = estimate_active_phases(
+                cp.power_w, decision.commanded_amps, voltage)
+            if est is not None:
+                self._phase_believed[cid] = est
+        believed = self._phase_believed.get(cid)
+
+        mode_val = str(charger_cfg.get("phase_mode") or "auto")
+        if mode_val in ("1", "3"):
+            desired = int(mode_val)
+        else:
+            # auto (Phase C): the planner answers from THIS charger's
+            # allocated budget — sustained starvation scales down,
+            # sustained headroom scales up, caps protect the contactor.
+            desired = planner.desired(
+                now, believed, float(decision.budget_w or 0.0))
+
+        r = seq.tick(now=now, desired_phases=desired,
+                     believed_phases=believed, charging=cp.charging,
+                     capability_ready=ready)
+        self._phase_switch_states[cid] = r.state
+
+        if r.issue_switch is not None:
+            value = v1 if r.issue_switch == 1 else v3
+            cmd = phase_switch_command(entity, value)
+            if cmd is not None:
+                domain, service, data = cmd
+                planner.note_switched(now)
+                if self._observer_mode:
+                    _LOGGER.info(
+                        "OBSERVER · WOULD switch %s to %sp via %s.%s %s "
+                        "(#804)", cid, r.issue_switch, domain, service, data)
+                else:
+                    _LOGGER.info(
+                        "#804 %s: switching to %sp via %s.%s %s",
+                        cid, r.issue_switch, domain, service, data)
+                    try:
+                        await self.hass.services.async_call(
+                            domain, service, data, blocking=False)
+                    except Exception:  # noqa: BLE001 — surfaced, never fatal
+                        _LOGGER.warning(
+                            "#804 %s: phase switch call failed",
+                            cid, exc_info=True)
+
+        if r.believed_phases is not None:
+            self._phase_believed[cid] = r.believed_phases
+
+        # Only ever WEAKEN a charge into IDLE — an emergency stop from the
+        # safety gate (DISABLE) must pass through untouched, which is also
+        # why this tick runs after that gate in the loop.
+        if r.hold_charging and decision.intent in (
+                ChargerIntent.CHARGE_AT_AMPS, ChargerIntent.CHARGE_MAX):
+            return replace(
+                decision, intent=ChargerIntent.IDLE, commanded_amps=0,
+                reason=f"phase switch: {r.state} (#804)", bridgeable=False)
+        return decision
+
     def _this_charger_power(self, ev, power) -> float:
         """Return the per-charger power reading in watts (#315 multi-charger fix).
 
