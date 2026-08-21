@@ -206,6 +206,12 @@ class SensorConfig:
     ev_charging_sensor: Optional[str] = None
 
 
+# (#818) ``_read_sensor`` names its caller; these three are the power
+# inputs whose 0.0 fallback is indistinguishable from a real reading
+# and which the surplus maths steers on.
+_DEGRADABLE_POWER_INPUTS = frozenset({"solar", "grid", "battery"})
+
+
 class SensorReader:
     """Reads power and state values from Home Assistant sensors."""
 
@@ -364,6 +370,15 @@ class SensorReader:
         # override, legacy config — reads through ``_read_sensor(..., "battery")``,
         # so the flag is raised at that one door and published once per cycle.
         self._battery_power_missing: bool = False
+        # (#818) Per-cycle tally of the POWER inputs, split two ways
+        # because two different questions are being asked:
+        #   ANY read dark  -> the DECISION cannot see; do not steer.
+        #   ALL reads dark -> the ENTITY has nothing true to publish.
+        # The split matters on a multi-inverter install: one dark
+        # inverter out of three degrades the decision but must not
+        # blank a total that is mostly real.
+        self._input_reads: dict[str, int] = {}
+        self._input_dark: dict[str, int] = {}
         # (HA Repairs, 2026-06-06) per-entity timestamp when sensor
         # first went unavailable in the current outage. Used to delay
         # the Repair issue past a transient flap window
@@ -618,6 +633,8 @@ class SensorReader:
         # Try Energy Dashboard config first, then legacy config
         self._split_pair_seen = set()
         self._battery_power_missing = False   # (#758) per-cycle
+        self._input_reads = {}                # (#818) per-cycle
+        self._input_dark = {}                 # (#818) per-cycle
         if self._energy_dashboard_config:
             readings = self._read_from_energy_dashboard()
         else:
@@ -625,6 +642,14 @@ class SensorReader:
         # (#758) An unreadable battery power sensor reads as 0.0 W, which is
         # also what an idle battery reads. Say which one this is, once, here.
         readings.battery_power_unavailable = self._battery_power_missing
+        # (#818) Two questions, two answers. ``inputs_degraded`` gates
+        # WRITING (any dark read means this cycle cannot be steered on);
+        # the per-input flags gate PUBLISHING (only a total with nothing
+        # real left in it should read unavailable).
+        readings.inputs_degraded = any(self._input_dark.values())
+        readings.solar_power_unavailable = self._all_dark("solar")
+        readings.grid_power_unavailable = self._all_dark("grid")
+        readings.battery_power_all_unavailable = self._all_dark("battery")
 
         # #661 — forget audits for pairs that are no longer being netted, so a
         # removed battery can't leave a stale fault in the trace.
@@ -1742,6 +1767,17 @@ class SensorReader:
                 )
 
         return self._battery_sign_inverted[bid]
+
+    def _all_dark(self, name: str) -> bool:
+        """(#818) Was EVERY contributing read of this input unavailable?
+
+        The entity-facing question. One dark inverter among three leaves
+        a total that is mostly real and must still be published; a total
+        with nothing real left in it has no honest number to show, and
+        0 W is not one — that is the fabricated zero this issue is about.
+        """
+        dark = self._input_dark.get(name, 0)
+        return bool(dark) and self._input_reads.get(name, 0) == 0
 
     def _read_sensors_sum(self, entity_ids: list, name: str) -> float:
         """Sum values from multiple sensors of the same type."""
@@ -3139,6 +3175,9 @@ class SensorReader:
             # call site already passes.
             if name == "battery":
                 self._battery_power_missing = True
+            # (#818) The steering inputs, same rule, no new number.
+            if name in _DEGRADABLE_POWER_INPUTS:
+                self._input_dark[name] = self._input_dark.get(name, 0) + 1
             # (HA Repairs) Stamp the outage start AND escalate to a
             # Repair issue once we cross the threshold. Quiet for
             # transient flaps; user-visible for real outages.
@@ -3160,6 +3199,12 @@ class SensorReader:
                     )
                     self._sensor_repair_raised.add(entity_id)
             return None if allow_none else 0.0
+
+        if name in _DEGRADABLE_POWER_INPUTS:
+            # (#818) The denominator for ``_all_dark``: this read reached a
+            # live state. Counted here, after the unavailable branch has
+            # returned, so the two tallies can never double-count.
+            self._input_reads[name] = self._input_reads.get(name, 0) + 1
 
         try:
             # #641 — one shared rule (this copy was ``.lower() == "kw"``, no

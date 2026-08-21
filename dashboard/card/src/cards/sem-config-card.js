@@ -1995,11 +1995,37 @@ class SEMConfigCard extends SEMLitBase {
     _renderForecast(T) {
         const raw = this._val('forecast_source') || 'none';
         const label = raw === 'none' ? this._t('none') : this._forecastProviderLabel(raw);
+        const opts = this._options || {};
+        // (#819) Running Solcast, Forecast.Solar and Open-Meteo side by side to
+        // compare them used to mean the first one on the ladder always won, and
+        // the only lever was deactivating the others. Auto keeps that ladder.
+        // Only offer what is actually installed: picking an absent source
+        // would silently fall back to auto and look like the setting did
+        // nothing. A stale choice stays listed (marked) so the user can see
+        // WHY their pick is not being used rather than finding it vanished.
+        const installed = this._val('forecast_sources_available') || [];
+        const has = (k) => !Array.isArray(installed) || installed.includes(k);
+        const chosen = opts.solar_forecast_source || 'auto';
+        const named = [
+            { value: 'solcast', label: 'Solcast PV Solar' },
+            { value: 'forecast_solar', label: 'Forecast.Solar' },
+            { value: 'open_meteo', label: 'Open-Meteo Solar Forecast' },
+        ];
+        const sourceOptions = [
+            { value: 'auto', label: this._t('config_forecast_source_auto') },
+            ...named
+                .filter((o) => has(o.value) || o.value === chosen)
+                .map((o) => (has(o.value)
+                    ? o
+                    : { ...o, label: `${o.label} — ${this._t('config_forecast_source_missing')}` })),
+        ];
         return html`
             <div class="readonly-row">
                 <span class="ctrl-label">${this._t('forecast_source')}</span>
                 <span class="readonly-value">${label}</span>
             </div>
+            ${this._renderOptionSelect('solar_forecast_source', 'config_solar_forecast_source',
+                sourceOptions, opts, 'config_help_solar_forecast_source', 'auto')}
             ${raw === 'none' ? html`<div class="overview-help">${this._t('config_forecast_install_hint')}</div>` : nothing}
         `;
     }

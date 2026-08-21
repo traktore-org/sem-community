@@ -220,11 +220,12 @@
           "update_interval": "Intervallo di aggiornamento (s)",
           "tariff_mode": "Modalità tariffa",
           "dynamic_tariff_entity": "Entità prezzo dinamico (rilevata automaticamente se vuota)",
-          "dynamic_forecast_entity": "Entità di previsione (opzionale, rilevata automaticamente se vuota)",
+          "dynamic_forecast_entity": "Entità di previsione dei prezzi (opzionale, rilevata automaticamente se vuota)",
           "dynamic_feedin_entity": "Entità prezzo di immissione (opzionale, per tariffa di esportazione dinamica)",
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
           "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
-          "tariff_classification_mode": "Modalità di classificazione dei prezzi"
+          "tariff_classification_mode": "Modalità di classificazione dei prezzi",
+          "solar_forecast_source": "Sorgente della previsione solare"
         },
         "data_description": {
           "electricity_import_rate": "Tariffa di importazione diurna/fissa (valuta/kWh, IVA inclusa). Usata come ripiego quando il prezzo dinamico non è disponibile.",
@@ -239,7 +240,8 @@
           "dynamic_feedin_entity": "Sensore opzionale che fornisce il prezzo attuale di immissione / esportazione per la tariffa di esportazione dinamica.",
           "grid_import_power_entity": "Sensore opzionale (W) per la potenza di importazione dalla rete. Rilevato automaticamente dalla Dashboard Energia; sovrascrivilo qui se necessario.",
           "grid_export_power_entity": "Sensore opzionale (W) per la potenza di esportazione dalla rete. Rilevato automaticamente dalla Dashboard Energia; sovrascrivilo qui se necessario.",
-          "tariff_classification_mode": "Percentile classifica i prezzi rispetto all'intervallo di oggi (consigliato). Statico usa soglie fisse economico/costoso."
+          "tariff_classification_mode": "Percentile classifica i prezzi rispetto all'intervallo di oggi (consigliato). Statico usa soglie fisse economico/costoso.",
+          "solar_forecast_source": "Quale integrazione di previsione legge SEM. Il rilevamento automatico preferisce Solcast, poi Forecast.Solar, poi Open-Meteo — scegline una se ne usi più di una."
         }
       },
       "load_management": {

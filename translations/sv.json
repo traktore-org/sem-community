@@ -220,11 +220,12 @@
           "update_interval": "Uppdateringsintervall (s)",
           "tariff_mode": "Tariffläge",
           "dynamic_tariff_entity": "Entitet för dynamiskt pris (detekteras automatiskt om tom)",
-          "dynamic_forecast_entity": "Prognosentitet (valfri, detekteras automatiskt om tom)",
+          "dynamic_forecast_entity": "Entitet för prisprognos (valfritt, identifieras automatiskt om tomt)",
           "dynamic_feedin_entity": "Entitet för överskottsersättning (valfri, för dynamiskt exportpris)",
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
           "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
-          "tariff_classification_mode": "Prisklassificeringsläge"
+          "tariff_classification_mode": "Prisklassificeringsläge",
+          "solar_forecast_source": "Källa för solprognos"
         },
         "data_description": {
           "electricity_import_rate": "Dag-/enhetstariff för import (valuta/kWh inkl. moms). Används som reserv när dynamisk prissättning inte är tillgänglig.",
@@ -239,7 +240,8 @@
           "dynamic_feedin_entity": "Valfri sensor som anger aktuellt pris för överskottsel/export för dynamiskt exportpris.",
           "grid_import_power_entity": "Valfri sensor (W) för importerad näteffekt. Detekteras automatiskt från Energi-instrumentpanelen; åsidosätt här vid behov.",
           "grid_export_power_entity": "Valfri sensor (W) för exporterad näteffekt. Detekteras automatiskt från Energi-instrumentpanelen; åsidosätt här vid behov.",
-          "tariff_classification_mode": "Percentil grupperar priser relativt dagens intervall (rekommenderas). Statisk använder fasta trösklar för billigt/dyrt."
+          "tariff_classification_mode": "Percentil grupperar priser relativt dagens intervall (rekommenderas). Statisk använder fasta trösklar för billigt/dyrt.",
+          "solar_forecast_source": "Vilken prognosintegration SEM läser. Automatisk identifiering föredrar Solcast, sedan Forecast.Solar, sedan Open-Meteo — välj en själv om du kör flera parallellt."
         }
       },
       "load_management": {

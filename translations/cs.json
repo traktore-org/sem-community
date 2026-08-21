@@ -220,11 +220,12 @@
           "update_interval": "Interval aktualizace (s)",
           "tariff_mode": "Režim tarifu",
           "dynamic_tariff_entity": "Entita dynamické ceny (zjistí se automaticky, pokud je prázdné)",
-          "dynamic_forecast_entity": "Entita předpovědi (volitelné, zjistí se automaticky, pokud je prázdné)",
+          "dynamic_forecast_entity": "Entita předpovědi cen (volitelné, zjistí se automaticky)",
           "dynamic_feedin_entity": "Entita výkupní ceny (volitelné, pro dynamickou sazbu dodávky)",
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
           "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
-          "tariff_classification_mode": "Režim klasifikace cen"
+          "tariff_classification_mode": "Režim klasifikace cen",
+          "solar_forecast_source": "Zdroj předpovědi výroby"
         },
         "data_description": {
           "electricity_import_rate": "Denní/jednotná sazba za odběr (měna/kWh včetně DPH). Používá se jako záloha, když není dynamické ceny.",
@@ -239,7 +240,8 @@
           "dynamic_feedin_entity": "Volitelný senzor poskytující aktuální výkupní cenu pro dynamickou sazbu dodávky do sítě.",
           "grid_import_power_entity": "Volitelný senzor (W) pro výkon odebíraný ze sítě. Automaticky zjištěno z panelu Energie; zde jej můžete v případě potřeby přepsat.",
           "grid_export_power_entity": "Volitelný senzor (W) pro výkon dodávaný do sítě. Automaticky zjištěno z panelu Energie; zde jej můžete v případě potřeby přepsat.",
-          "tariff_classification_mode": "„Percentil“ zařazuje ceny podle dnešního rozpětí (doporučeno). „Statický“ používá pevné prahy levné/drahé."
+          "tariff_classification_mode": "„Percentil“ zařazuje ceny podle dnešního rozpětí (doporučeno). „Statický“ používá pevné prahy levné/drahé.",
+          "solar_forecast_source": "Kterou integraci předpovědi SEM čte. Automatická detekce upřednostňuje Solcast, poté Forecast.Solar a poté Open-Meteo — zvolte jednu, pokud jich provozujete více."
         }
       },
       "load_management": {

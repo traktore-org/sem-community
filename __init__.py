@@ -4305,6 +4305,10 @@ async def _async_register_phase_services(
             "hot_water_minimum_temperature", "hot_water_legionella_target",
             "heat_pump_max_setpoint", "vpp_reserve_soc",
             "mobile_notification_service",
+            # (#819) The coordinator re-applies this to the forecast
+            # reader every cycle (set_preferred_source), so it is a
+            # genuinely live key rather than a construction-time one.
+            "solar_forecast_source",
         }
         # (#637) Some options are backed by number entities under a DIFFERENT
         # name (number.py CONFIG_KEY_MAP, #542) — the naive number.sem_<key>

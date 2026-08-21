@@ -542,6 +542,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         self._forecast_reader = ForecastReader(
             hass,
             custom_entities=None,  # Was config.get("forecast_entities") — never set via UI
+            # (#819) The user's chosen forecast integration, when several
+            # are installed side by side. Unset/"auto" keeps the ladder.
+            preferred_source=config.get("solar_forecast_source"),
         )
         self._forecast_tracker = ForecastTracker()
         # (#824) When each broken charger control entity was first seen,
@@ -4788,6 +4791,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 forecast_data.forecast_peak_power_today_w = forecast.peak_power_today_w
                 forecast_data.forecast_peak_time_today = forecast.peak_time_today or ""
                 forecast_data.forecast_source = forecast.source
+                # (#819) carry the install's available sources through to
+                # the dashboard picker
+                forecast_data.forecast_sources_available = list(
+                    getattr(forecast, "sources_available", []) or [])
                 forecast_data.forecast_available = forecast.available
                 daily_ev_target = self.config.get("daily_ev_target", 10)
                 forecast_data.charging_recommendation = self._forecast_reader.get_charging_recommendation(
@@ -6283,6 +6290,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 decision, adapter,
                 observer=self._observer_mode,
                 controller=self._surplus_controller,
+                # (#818) same signal the charger side uses
+                inputs_degraded=bool(
+                    getattr(power, "inputs_degraded", False)),
             )
 
         # Reset scheduler when night ends — preserved from legacy
@@ -6328,6 +6338,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 )
             return
 
+        # (#819) Re-apply the chosen source each cycle so changing it on
+        # the card takes effect without reloading the entry. Idempotent
+        # when unchanged, so this is a dict lookup on a normal cycle.
+        self._forecast_reader.set_preferred_source(
+            self.config.get("solar_forecast_source"))
         forecast = self._forecast_reader.read_forecast()
         # Rolling horizon: evaluations after midnight plan for
         # *today's* solar day; the evening evaluation plans for tomorrow.

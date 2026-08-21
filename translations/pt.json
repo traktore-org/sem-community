@@ -220,11 +220,12 @@
           "update_interval": "Intervalo de atualização (s)",
           "tariff_mode": "Modo de tarifa",
           "dynamic_tariff_entity": "Entidade de preço dinâmico (detetada automaticamente se vazio)",
-          "dynamic_forecast_entity": "Entidade de previsão (opcional, detetada automaticamente se vazio)",
+          "dynamic_forecast_entity": "Entidade de previsão de preços (opcional, detetada automaticamente se vazia)",
           "dynamic_feedin_entity": "Entidade de preço de injeção (opcional, para taxa de exportação dinâmica)",
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
           "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
-          "tariff_classification_mode": "Modo de classificação de preços"
+          "tariff_classification_mode": "Modo de classificação de preços",
+          "solar_forecast_source": "Fonte da previsão solar"
         },
         "data_description": {
           "electricity_import_rate": "Taxa de importação diurna/simples (moeda/kWh, com IVA). Usada como recurso quando o preço dinâmico não está disponível.",
@@ -239,7 +240,8 @@
           "dynamic_feedin_entity": "Sensor opcional que fornece o preço atual de injeção/exportação para a taxa de exportação dinâmica.",
           "grid_import_power_entity": "Sensor opcional (W) para a potência de importação da rede. Detetado automaticamente a partir do Painel de Energia; substitua aqui se necessário.",
           "grid_export_power_entity": "Sensor opcional (W) para a potência de exportação para a rede. Detetado automaticamente a partir do Painel de Energia; substitua aqui se necessário.",
-          "tariff_classification_mode": "Percentil classifica os preços em relação ao intervalo de hoje (recomendado). Estático usa limiares fixos de barato/caro."
+          "tariff_classification_mode": "Percentil classifica os preços em relação ao intervalo de hoje (recomendado). Estático usa limiares fixos de barato/caro.",
+          "solar_forecast_source": "Qual integração de previsão o SEM lê. A deteção automática prefere Solcast, depois Forecast.Solar e depois Open-Meteo — escolha uma se usar várias em paralelo."
         }
       },
       "load_management": {

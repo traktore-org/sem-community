@@ -574,7 +574,8 @@ scheduler and the recommendation tips.
 
 | Setting | Default | What it does and when to change it |
 |---------|---------|-------------------------------------|
-| Forecast entity | Auto | The forecast sensor SEM reads. Auto-detection prefers Solcast; set it manually if you run several forecast integrations or a custom one. |
+| Solar forecast source | Auto | Which forecast **integration** SEM reads. Auto walks Solcast → Forecast.Solar → Open-Meteo and takes the first one installed. Choose one explicitly if you run several side by side — SEM then uses that one and falls back to auto-detection only if it is no longer installed (the fallback is recorded in diagnostics, never silent). |
+| Price forecast entity | Auto | *(Dynamic tariffs only.)* The sensor carrying hourly **price** forecasts. This is a tariff setting, not a solar one — it used to be listed here as "Forecast entity", which is what made #819 look like a missing override. |
 | Weather entity | Auto | Feeds the weather card and forecast dampening. Auto-generated `weather.forecast_*` subentities are skipped (they lack the needed attributes) — any real `weather.*` entity is preferred. |
 
 **Forecast dampening** (#168): SEM continuously compares the forecast against

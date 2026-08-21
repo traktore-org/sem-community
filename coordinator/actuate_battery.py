@@ -58,12 +58,22 @@ def _observe(decision: "BatteryDecision", controller=None) -> None:
     )
 
 
+# (#818) The two intents that are decided from POWER numbers — the EV
+# protection clamp and its release. Everything else here is decided
+# from SOC, the plan, a schedule or the user's own mode, none of which
+# a blipping power sensor can move.
+_POWER_DERIVED_INTENTS = frozenset({
+    BatteryIntent.LIMIT_DISCHARGE, BatteryIntent.NORMAL,
+})
+
+
 async def actuate_battery(
     decision: "BatteryDecision",
     adapter: "BatteryControlAdapter",
     *,
     observer: bool = False,
     controller=None,
+    inputs_degraded: bool = False,
 ) -> None:
     """Apply a per-battery decision through the adapter.
 
@@ -78,6 +88,31 @@ async def actuate_battery(
     """
     if observer:
         _observe(decision, controller=controller)
+        return
+
+    # (#818) A cycle that cannot see must not flip the EV protection
+    # clamp. LIMIT_DISCHARGE engages when solar surplus sits below the
+    # assist gate — so on a Huawei modbus install the fabricated 0 W
+    # engaged it, the source recovered 30 s later and it released, ~50
+    # times a day. Each flip is a real modbus write, which is the churn
+    # #538 had to make idempotent in the first place.
+    #
+    # Narrow on purpose: ONLY the power-derived pair, and only a CHANGE
+    # between them. Force charge/discharge, OFF, arbitrage and the
+    # scheduler are decided from SOC, the plan or the user's own mode,
+    # and pass through a dark cycle untouched.
+    if (
+        inputs_degraded
+        and decision.intent in _POWER_DERIVED_INTENTS
+        and getattr(adapter, "last_intent", None) in _POWER_DERIVED_INTENTS
+        and decision.intent is not adapter.last_intent
+    ):
+        log_on_change(
+            _LOGGER, f"degraded:{decision.battery_id}", logging.DEBUG,
+            "actuate_battery(%s): inputs degraded — holding %s, not "
+            "flipping to %s on a blind cycle",
+            decision.battery_id, adapter.last_intent, decision.intent,
+        )
         return
 
     if decision.intent is BatteryIntent.OFF:

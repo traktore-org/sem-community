@@ -220,11 +220,12 @@
           "update_interval": "Aktualisierungsintervall (s)",
           "tariff_mode": "Tarifmodus",
           "dynamic_tariff_entity": "Entität für dynamischen Preis (automatisch erkannt wenn leer)",
-          "dynamic_forecast_entity": "Prognose-Entität (optional, automatisch erkannt wenn leer)",
+          "dynamic_forecast_entity": "Preisprognose-Entität (optional, wird automatisch erkannt)",
           "dynamic_feedin_entity": "Entität für Einspeisepreis (optional, für dynamische Einspeisevergütung)",
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
           "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
-          "tariff_classification_mode": "Preis-Klassifizierungsmodus"
+          "tariff_classification_mode": "Preis-Klassifizierungsmodus",
+          "solar_forecast_source": "Quelle der Solarprognose"
         },
         "data_description": {
           "electricity_import_rate": "Tag-/Einheitstarif für den Import (Währung/kWh inkl. MwSt.). Wird als Rückfallwert verwendet, wenn keine dynamische Preisgestaltung verfügbar ist.",
@@ -239,7 +240,8 @@
           "dynamic_feedin_entity": "Optionaler Sensor, der den aktuellen Einspeise-/Exportpreis für eine dynamische Einspeisevergütung liefert.",
           "grid_import_power_entity": "Optionaler Sensor (W) für die Netzbezugsleistung. Wird automatisch aus dem Energie-Dashboard erkannt; hier bei Bedarf überschreiben.",
           "grid_export_power_entity": "Optionaler Sensor (W) für die Netzeinspeiseleistung. Wird automatisch aus dem Energie-Dashboard erkannt; hier bei Bedarf überschreiben.",
-          "tariff_classification_mode": "„Perzentil“ ordnet Preise relativ zur heutigen Spanne ein (empfohlen). „Statisch“ nutzt feste Schwellen für günstig/teuer."
+          "tariff_classification_mode": "„Perzentil“ ordnet Preise relativ zur heutigen Spanne ein (empfohlen). „Statisch“ nutzt feste Schwellen für günstig/teuer.",
+          "solar_forecast_source": "Welche Prognose-Integration SEM liest. Die automatische Erkennung bevorzugt Solcast, dann Forecast.Solar, dann Open-Meteo — wähle eine aus, wenn du mehrere parallel betreibst."
         }
       },
       "load_management": {

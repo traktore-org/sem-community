@@ -220,11 +220,12 @@
           "update_interval": "Interval de actualizare (s)",
           "tariff_mode": "Mod tarifar",
           "dynamic_tariff_entity": "Entitate preț dinamic (detectată automat dacă e goală)",
-          "dynamic_forecast_entity": "Entitate de prognoză (opțional, detectată automat dacă e goală)",
+          "dynamic_forecast_entity": "Entitatea de prognoză a prețurilor (opțional, detectată automat dacă e goală)",
           "dynamic_feedin_entity": "Entitate preț de injecție (opțional, pentru tarif de export dinamic)",
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
           "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
-          "tariff_classification_mode": "Mod de clasificare a prețurilor"
+          "tariff_classification_mode": "Mod de clasificare a prețurilor",
+          "solar_forecast_source": "Sursa prognozei solare"
         },
         "data_description": {
           "electricity_import_rate": "Tarif de import de zi/unic (monedă/kWh, cu TVA inclus). Folosit ca rezervă atunci când prețul dinamic este indisponibil.",
@@ -239,7 +240,8 @@
           "dynamic_feedin_entity": "Senzor opțional care furnizează prețul curent de injecție / export pentru tariful de export dinamic.",
           "grid_import_power_entity": "Senzor opțional (W) pentru puterea importată din rețea. Detectat automat din tabloul de bord Energie; suprascrieți-l aici dacă este nevoie.",
           "grid_export_power_entity": "Senzor opțional (W) pentru puterea exportată în rețea. Detectat automat din tabloul de bord Energie; suprascrieți-l aici dacă este nevoie.",
-          "tariff_classification_mode": "„Percentilă” încadrează prețurile față de intervalul de azi (recomandat). „Static” folosește praguri fixe ieftin/scump."
+          "tariff_classification_mode": "„Percentilă” încadrează prețurile față de intervalul de azi (recomandat). „Static” folosește praguri fixe ieftin/scump.",
+          "solar_forecast_source": "Ce integrare de prognoză citește SEM. Detectarea automată preferă Solcast, apoi Forecast.Solar, apoi Open-Meteo — alege una dacă rulezi mai multe în paralel."
         }
       },
       "load_management": {

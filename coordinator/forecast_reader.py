@@ -15,7 +15,7 @@ Provides remaining-today and tomorrow forecasts for:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, Optional
 
@@ -86,6 +86,20 @@ FORECAST_SOLAR_UNIQUE_SUFFIXES = {
 # passed to _locate_integration).
 OPEN_METEO_SOLAR_PLATFORM = "open_meteo_solar_forecast"
 
+# (#819) The ladder below is an ORDER, not a preference. Someone running
+# several forecast integrations side by side to compare accuracy could
+# only reach the second one by deactivating the first — and the setup
+# guide already described an override that did not exist for solar.
+# ``solar_forecast_source`` names one of these; anything else (unset,
+# "auto", a stale value) leaves the ladder exactly as it was.
+FORECAST_SOURCES: dict = {
+    "solcast": (SOLCAST_PLATFORM, "SOLCAST_ENTITIES"),
+    "forecast_solar": (FORECAST_SOLAR_PLATFORM, "FORECAST_SOLAR_ENTITIES"),
+    # Open-Meteo is registry-only: device-prefixed entity_ids, so there
+    # is no hardcoded fallback map to hand the locator (#687).
+    "open_meteo": (OPEN_METEO_SOLAR_PLATFORM, None),
+}
+
 
 @dataclass
 class ForecastData:
@@ -104,6 +118,9 @@ class ForecastData:
     # Source info
     source: str = "none"
     available: bool = False
+    # (#819) Which forecast integrations exist on this install, so the
+    # picker can offer what is actually there instead of all four.
+    sources_available: list = field(default_factory=list)
     last_update: Optional[datetime] = None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -128,9 +145,19 @@ class ForecastReader:
         self,
         hass: HomeAssistant,
         custom_entities: Optional[Dict[str, str]] = None,
+        preferred_source: Optional[str] = None,
     ):
         self.hass = hass
         self._custom_entities = custom_entities or {}
+        # (#819) ``auto``/None/unknown all mean "walk the ladder".
+        _pref = (preferred_source or "").strip().lower()
+        self._preferred_source = _pref if _pref in FORECAST_SOURCES else None
+        # (#819) Set when a chosen source was asked for and not found.
+        # Rides along in the detection path so "why is it reading
+        # Solcast when I chose Open-Meteo" is answerable from
+        # diagnostics alone.
+        self._preferred_missing: Optional[str] = None
+        self.__detection_path: Optional[str] = None
         self._source: Optional[str] = None
         self._entities: Dict[str, str] = {}
         self._last_data = ForecastData()
@@ -238,6 +265,55 @@ class ForecastReader:
                 return candidate
         return None
 
+    def set_preferred_source(self, name: Optional[str]) -> None:
+        """(#819) Apply a changed forecast-source choice WITHOUT a reload.
+
+        #637's guard is explicit that a key consumed only at
+        construction must stay on the reload path, because live-applying
+        it would be the #462 lie — the setting looks applied and nothing
+        moves. Rather than reload the whole entry for a dropdown, the
+        coordinator re-applies the choice each cycle through here, and a
+        real change drops the cached source so the next read re-detects.
+        """
+        norm = (name or "").strip().lower()
+        norm = norm if norm in FORECAST_SOURCES else None
+        if norm == self._preferred_source:
+            return                      # idempotent: no cache churn
+        self._preferred_source = norm
+        self._source = None
+        self._entities = {}
+        _LOGGER.info("Solar forecast source changed to %s — re-detecting",
+                     norm or "auto")
+
+    def available_sources(self) -> list:
+        """(#819) Which forecast integrations are installed RIGHT NOW.
+
+        The picker needs this: offering all four regardless lets someone
+        choose a source that is not there, which then silently falls back
+        to auto — a setting that looks like it did nothing. A read-only
+        registry probe; it never re-points the reader.
+        """
+        found = []
+        for name, (platform, entity_map) in FORECAST_SOURCES.items():
+            if self._locate_integration(platform, globals().get(entity_map) or {}):
+                found.append(name)
+        return found
+
+    @property
+    def _last_source_detection_path(self) -> Optional[str]:
+        """(#434) Which branch decided the source — and (#819) whether a
+        chosen one was missing when it did. A property so the ladder
+        branches keep assigning a plain name and the miss is folded in
+        at one place."""
+        path = self.__detection_path
+        if self._preferred_missing and path:
+            return f"{self._preferred_missing}_missing_then_{path}"
+        return path
+
+    @_last_source_detection_path.setter
+    def _last_source_detection_path(self, value: Optional[str]) -> None:
+        self.__detection_path = value
+
     def detect_source(self) -> Optional[str]:
         """Auto-detect available forecast integration.
 
@@ -245,6 +321,8 @@ class ForecastReader:
         ``self._last_source_detection_path`` (#434):
         ``custom`` / ``solcast`` / ``forecast_solar`` / ``none_available``.
         """
+        self._preferred_missing = None      # (#819) fresh run
+
         # Check custom entities first
         if self._custom_entities:
             self._entities = self._custom_entities
@@ -253,6 +331,35 @@ class ForecastReader:
             _LOGGER.info("Using custom forecast entities")
             self._clear_no_forecast_repair()
             return self._source
+
+        # (#819) A chosen source outranks the ladder — but only when it
+        # is actually there. A stale preference (integration removed)
+        # must not take forecasting down with it, so a miss falls
+        # through to the ladder and SAYS SO in the detection path:
+        # silent substitution is the failure mode this codebase keeps
+        # relearning (#741/#758/#774).
+        if self._preferred_source:
+            platform, entity_map = FORECAST_SOURCES[self._preferred_source]
+            entities = self._locate_integration(
+                platform, globals().get(entity_map) or {},
+            )
+            if entities:
+                self._entities = entities
+                self._source = self._preferred_source
+                self._last_source_detection_path = (
+                    f"preferred_{self._preferred_source}")
+                _LOGGER.info(
+                    "Using the chosen solar forecast source: %s",
+                    self._preferred_source,
+                )
+                self._clear_no_forecast_repair()
+                return self._source
+            _LOGGER.warning(
+                "Chosen solar forecast source %s is not installed — "
+                "falling back to auto-detection",
+                self._preferred_source,
+            )
+            self._preferred_missing = self._preferred_source
 
         # Check Solcast
         entities = self._locate_integration(SOLCAST_PLATFORM, SOLCAST_ENTITIES)
@@ -374,6 +481,10 @@ class ForecastReader:
             source=self._source,
             available=True,
             last_update=datetime.now(),
+            # (#819) Registry probe behind the same 60 s cache the
+            # locator uses (#562), so this is three dict lookups on a
+            # warm cache rather than three scans per cycle.
+            sources_available=self.available_sources(),
         )
 
         # Read forecast today
