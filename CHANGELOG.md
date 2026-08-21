@@ -13,6 +13,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 💶 **The Costs card no longer invites a double count** (#797): savings and
+  net cost sat in one column as parallel rows, so they read as summable —
+  but avoided cost is *why* the net cost is low, not money on top of it. The
+  card now shows two labelled blocks, **Money moved** (import, export, net)
+  and **Money avoided** (solar, battery), each with its own subtotal and one
+  line saying the two must not be added.
+- 🎛️ **The device list says what SEM may actually do** (#798): the column
+  said "Controllable" — one permission word in front of the two things
+  #780 split apart, so a device could show a tick while SEM was not allowed
+  to touch it. Each device row now states both plainly: *SEM may act*,
+  *Off — SEM won't act*, or *No control* (16 languages). The Grid card's
+  device count follows the same wording, since it already counted what SEM
+  may act on rather than what it could.
+
 - 🩹 **Settings pages no longer refuse the values SEM itself saved** (#813,
   found while configuring a production install): a charge target above
   100 kWh could not be re-saved — the runtime sliders span 0–200 kWh but the

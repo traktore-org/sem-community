@@ -557,6 +557,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     <div class="status-dot ${onOff ? 'on' : (device.isShed ? 'shed' : '')}" data-field="status-${device.id}"></div>
                     <span class="dim" data-field="onoff-${device.id}">${onOff ? this._t('on') : (device.isShed ? this._t('shed_label') : this._t('off'))}</span>
                     <span class="badge priority" data-field="pri-${device.id}">${priority}</span>
+                    ${isBattery ? nothing : this._renderControlVerdict(device)}
                     <div class="spacer"></div>
                     ${isBattery ? html`<span class="dim" title="${this._t('battery_role_help')}">${this._t('battery_role_label')}</span>` : nothing}
                     ${device.deviceType === 'ev_charger' || device.deviceType === 'ev_charging' || isBattery ? nothing : html`
@@ -969,6 +970,28 @@ class SEMLoadPriorityCard extends SEMLitBase {
         const unit = this.hass?.config?.unit_system?.temperature || '°C';
         const v = unit === '°F' ? celsius * 9 / 5 + 32 : celsius;
         return `${Math.round(v * 10) / 10}\u00A0${unit}`;
+    }
+
+    // (#798) The control column used to say "Controllable" — one permission
+    // word in front of the two axes #780 split apart, so a row could read
+    // ✓ while SEM was not allowed to touch it (mode Off). Say both plainly:
+    // capability (is there a handle at all?) and permission (may SEM act
+    // right now?). Mockup approved by Guido 21.08.
+    _renderControlVerdict(device) {
+        const mode = this._mergedMode(device);
+        let key, icon, color;
+        if (!device.hasControlHandle) {
+            key = 'control_verdict_none'; icon = 'mdi:minus-circle-outline'; color = '#666';
+        } else if (!device.isControllable || mode === 'off') {
+            key = 'control_verdict_off'; icon = 'mdi:hand-back-left-outline'; color = '#ff9800';
+        } else {
+            key = 'control_verdict_may_act'; icon = 'mdi:check-circle-outline'; color = '#8DC892';
+        }
+        return html`
+            <span class="dim" style="display:inline-flex;align-items:center;gap:3px;color:${color}"
+                  title="${this._t('control_verdict_help')}">
+                <ha-icon icon="${icon}" style="--mdc-icon-size:14px"></ha-icon>${this._t(key)}
+            </span>`;
     }
 
     _renderComfortChip(device) {

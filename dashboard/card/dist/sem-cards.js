@@ -2549,20 +2549,14 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     ${st.map(t=>this._renderStepper(t,e))}
                 </div>
             </div>
-        `}getCardSize(){return 4}static getStubConfig(){return{}}},{type:"sem-battery-zones-card",name:"SEM Battery Zones Card",description:"The three battery SOC thresholds — priority, buffer and auto-start",documentationURL:"https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-battery-zones-card",preview:!1});const rt="sensor.sem_",at=["daily_costs","daily_savings","daily_export_revenue","daily_battery_savings","daily_net_cost","monthly_costs","monthly_savings","monthly_export_revenue","monthly_net_cost","monthly_battery_savings","yearly_costs","yearly_savings","yearly_export_revenue","yearly_net_cost","yearly_battery_savings","lifetime_total_savings","roi_percentage","roi_payback_years","roi_annual_savings","daily_co2_avoided","yearly_co2_avoided","lifetime_co2_avoided","yearly_trees_equivalent","lifetime_trees_equivalent"];we("sem-costs-card",class extends Se{static get watchedEntities(){return at.map(e=>`${rt}${e}`)}setConfig(e){super.setConfig(e),this._prefix=e.entity_prefix||rt}_val(e,t=0){const i=this._hass?.states[`${this._prefix}${e}`];return i&&"unavailable"!==i.state&&"unknown"!==i.state?parseFloat(i.state)??t:t}_fmt(e,t=2){return null==e||isNaN(e)?"—":e.toFixed(t)}_fmtCurr(e,t,i=2){return null==e||isNaN(e)?"—":e.toFixed(i)+" "+t}_netColor(e){return e<=0?"#8DC892":"#f06292"}_renderPeriodSection(e,t,i,s,r){const a=this._val(`${e}_costs`),o=this._val(`${e}_savings`),n=this._val(`${e}_battery_savings`),l=this._val(`${e}_export_revenue`),c=this._val(`${e}_net_cost`),d=this._netColor(c),p=(c<=0?"+":"")+this._fmtCurr(Math.abs(c),s);return W`
+        `}getCardSize(){return 4}static getStubConfig(){return{}}},{type:"sem-battery-zones-card",name:"SEM Battery Zones Card",description:"The three battery SOC thresholds — priority, buffer and auto-start",documentationURL:"https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-battery-zones-card",preview:!1});const rt="sensor.sem_",at=["daily_costs","daily_savings","daily_export_revenue","daily_battery_savings","daily_net_cost","monthly_costs","monthly_savings","monthly_export_revenue","monthly_net_cost","monthly_battery_savings","yearly_costs","yearly_savings","yearly_export_revenue","yearly_net_cost","yearly_battery_savings","lifetime_total_savings","roi_percentage","roi_payback_years","roi_annual_savings","daily_co2_avoided","yearly_co2_avoided","lifetime_co2_avoided","yearly_trees_equivalent","lifetime_trees_equivalent"];we("sem-costs-card",class extends Se{static get watchedEntities(){return at.map(e=>`${rt}${e}`)}setConfig(e){super.setConfig(e),this._prefix=e.entity_prefix||rt}_val(e,t=0){const i=this._hass?.states[`${this._prefix}${e}`];return i&&"unavailable"!==i.state&&"unknown"!==i.state?parseFloat(i.state)??t:t}_fmt(e,t=2){return null==e||isNaN(e)?"—":e.toFixed(t)}_fmtCurr(e,t,i=2){return null==e||isNaN(e)?"—":e.toFixed(i)+" "+t}_netColor(e){return e<=0?"#8DC892":"#f06292"}_renderPeriodSection(e,t,i,s,r){const a=this._val(`${e}_costs`),o=this._val(`${e}_savings`),n=this._val(`${e}_battery_savings`),l=this._val(`${e}_export_revenue`),c=this._val(`${e}_net_cost`),d=this._netColor(c),p=(c<=0?"+":"")+this._fmtCurr(Math.abs(c),s),h=o+n;return W`
             <div class="section">
                 <div class="section-title">${this._t(t)}</div>
+
+                <div class="block-title">${this._t("cost_block_moved")}</div>
                 <div class="metric-row">
                     <span class="metric-label">${this._t("import_cost")}</span>
                     <span class="metric-val c-import">${this._fmtCurr(a,s)}</span>
-                </div>
-                <div class="metric-row">
-                    <span class="metric-label">${this._t("solar_savings")}</span>
-                    <span class="metric-val c-solar">${this._fmtCurr(o,s)}</span>
-                </div>
-                <div class="metric-row">
-                    <span class="metric-label">${this._t("battery_savings")}</span>
-                    <span class="metric-val c-battery">${this._fmtCurr(n,s)}</span>
                 </div>
                 <div class="metric-row">
                     <span class="metric-label">${this._t("export_revenue")}</span>
@@ -2572,6 +2566,22 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     <span class="metric-label"><strong>${this._t(c<=0?"net_saving":"net_cost")}</strong></span>
                     <span class="metric-val" style="color:${d}">${p}</span>
                 </div>
+
+                <div class="block-title">${this._t("cost_block_avoided")}</div>
+                <div class="metric-row">
+                    <span class="metric-label">${this._t("solar_savings")}</span>
+                    <span class="metric-val c-solar">${this._fmtCurr(o,s)}</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">${this._t("battery_savings")}</span>
+                    <span class="metric-val c-battery">${this._fmtCurr(n,s)}</span>
+                </div>
+                <div class="metric-row net-row">
+                    <span class="metric-label"><strong>${this._t("cost_block_avoided_total")}</strong></span>
+                    <span class="metric-val c-solar">${this._fmtCurr(h,s)}</span>
+                </div>
+
+                <div class="block-note">${this._t("cost_block_note")}</div>
             </div>
         `}render(){if(!this._config||!this._hass)return q;const e=fe(this._hass),t=this._theme(),i=this._val("daily_net_cost"),s=i<=0,r=s?"#8DC892":"#f06292",a=(s?"+":"")+this._fmt(Math.abs(i),2)+" "+e,o=s?this._t("net_saving_today"):this._t("net_cost_today"),n=this._val("roi_percentage"),l=n>=0?"#8DC892":"#f06292",c=this._val("roi_payback_years");return W`
             <ha-card>
@@ -2699,6 +2709,13 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
             .metric-row {
                 display: flex; justify-content: space-between; align-items: baseline;
                 padding: 2px 0;
+            }
+            .block-title {
+                font-size: 12px; letter-spacing: .06em; text-transform: uppercase;
+                opacity: .55; margin: 10px 0 2px;
+            }
+            .block-note {
+                font-size: 12px; opacity: .55; margin-top: 8px; line-height: 1.35;
             }
             .net-row {
                 margin-top: 4px; padding-top: 4px;
@@ -6358,6 +6375,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     <div class="status-dot ${i?"on":e.isShed?"shed":""}" data-field="status-${e.id}"></div>
                     <span class="dim" data-field="onoff-${e.id}">${i?this._t("on"):e.isShed?this._t("shed_label"):this._t("off")}</span>
                     <span class="badge priority" data-field="pri-${e.id}">${t}</span>
+                    ${s?q:this._renderControlVerdict(e)}
                     <div class="spacer"></div>
                     ${s?W`<span class="dim" title="${this._t("battery_role_help")}">${this._t("battery_role_label")}</span>`:q}
                     ${"ev_charger"===e.deviceType||"ev_charging"===e.deviceType||s?q:W`
@@ -6472,7 +6490,11 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     </span>
                 </div>
                 <div class="ge-hint">${this._t("stop_condition_hint")}</div>
-            </div>`}_comfortChipMeta(e){const t=e.comfort;if(!t||!t.state||"disengaged"===t.state)return null;const i="cool"===(t.hvac||"cool");return{forced:{icon:"🔥",color:"#ffc107",label:this._t(i?"chip_cooling_now":"chip_heating_now")},willing:{icon:"❄",color:"#8DC892",label:this._t(i?"chip_pre_cooling":"chip_pre_heating")},banked:{icon:"✓",color:"#4db6ac",label:this._t("chip_banked")}}[t.state]||null}_displayTemp(e){if(null==e)return null;const t=this.hass?.config?.unit_system?.temperature||"°C",i="°F"===t?9*e/5+32:e;return`${Math.round(10*i)/10} ${t}`}_renderComfortChip(e){const t=this._comfortChipMeta(e);if(!t)return q;const i=this._displayTemp(e.comfort.reading_c);return W`
+            </div>`}_comfortChipMeta(e){const t=e.comfort;if(!t||!t.state||"disengaged"===t.state)return null;const i="cool"===(t.hvac||"cool");return{forced:{icon:"🔥",color:"#ffc107",label:this._t(i?"chip_cooling_now":"chip_heating_now")},willing:{icon:"❄",color:"#8DC892",label:this._t(i?"chip_pre_cooling":"chip_pre_heating")},banked:{icon:"✓",color:"#4db6ac",label:this._t("chip_banked")}}[t.state]||null}_displayTemp(e){if(null==e)return null;const t=this.hass?.config?.unit_system?.temperature||"°C",i="°F"===t?9*e/5+32:e;return`${Math.round(10*i)/10} ${t}`}_renderControlVerdict(e){const t=this._mergedMode(e);let i,s,r;return e.hasControlHandle?e.isControllable&&"off"!==t?(i="control_verdict_may_act",s="mdi:check-circle-outline",r="#8DC892"):(i="control_verdict_off",s="mdi:hand-back-left-outline",r="#ff9800"):(i="control_verdict_none",s="mdi:minus-circle-outline",r="#666"),W`
+            <span class="dim" style="display:inline-flex;align-items:center;gap:3px;color:${r}"
+                  title="${this._t("control_verdict_help")}">
+                <ha-icon icon="${s}" style="--mdc-icon-size:14px"></ha-icon>${this._t(i)}
+            </span>`}_renderComfortChip(e){const t=this._comfortChipMeta(e);if(!t)return q;const i=this._displayTemp(e.comfort.reading_c);return W`
             <div class="comfort-chip" style="border-color:${t.color}55;color:${t.color}">
                 <span>${t.icon}</span> ${t.label}${i?W` \u00B7 ${i}`:q}
             </div>`}_renderComfortBand(e){const t=!["ev_charger","ev_charging","battery"].includes(e.deviceType);if(!e.comfort&&!t)return q;const i=e.goals||{},s=this.hass?.config?.unit_system?.temperature||"°C",r=parseFloat(i.comfort_target)||0,a=parseFloat(i.comfort_offset)||0,o=parseFloat(i.comfort_limit)||0,n=r>0&&o>0,l=n?Math.min(r-a,o)-3:18,c=n?Math.max(r,o)+3:30,d=e=>Math.max(0,Math.min(100,(e-l)/(c-l)*100)),p=e.comfort?e.comfort.reading_c:null,h=null==p?null:"°F"===s?9*p/5+32:p,_=(t,i,s)=>W`
