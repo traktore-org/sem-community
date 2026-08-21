@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.0.0-beta.14] — 21.08.2026
+
 - 📊 **A consumption figure you can actually compare with the Energy
   Dashboard** (#825): `sensor.sem_daily_home_energy` excludes the EV on
   purpose — every charging decision SEM makes depends on telling the house
