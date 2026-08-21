@@ -1238,6 +1238,9 @@
       },
       "daily_true_baseload_energy": {
         "name": "Verklig baslast idag"
+      },
+      "daily_total_consumption": {
+        "name": "Idag total förbrukning"
       }
     },
     "binary_sensor": {

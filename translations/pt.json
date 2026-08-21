@@ -1238,6 +1238,9 @@
       },
       "daily_true_baseload_energy": {
         "name": "Carga base real hoje"
+      },
+      "daily_total_consumption": {
+        "name": "Consumo total hoje"
       }
     },
     "binary_sensor": {

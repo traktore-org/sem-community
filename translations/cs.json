@@ -1238,6 +1238,9 @@
       },
       "daily_true_baseload_energy": {
         "name": "Skutečné základní zatížení dnes"
+      },
+      "daily_total_consumption": {
+        "name": "Dnes celková spotřeba"
       }
     },
     "binary_sensor": {

@@ -99,8 +99,13 @@ class TestAccumulatorKeyRoundTrip666:
         nothing, every assertion below would pass vacuously."""
         totals = _run_one_cycle(_make_calc())
         assert totals.daily_solar > 0, "probe integrated nothing — cycle broke"
-        assert len(_categories()) == 9, (
-            f"expected 9 daily categories, found {_categories()} — if a "
+        # 10 since #825 added ``daily_total_consumption`` — home + EV, the
+        # figure HA's Energy Dashboard calls "Home". It is DERIVED from two
+        # accumulators rather than accumulated itself, which is why it has
+        # no monthly/yearly twin; the round-trip test below skips periods
+        # that do not exist, and was confirmed to cover this one.
+        assert len(_categories()) == 10, (
+            f"expected 10 daily categories, found {_categories()} — if a "
             "category was added or removed, confirm the guard still covers it"
         )
 

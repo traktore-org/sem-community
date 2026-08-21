@@ -1238,6 +1238,9 @@
       },
       "daily_true_baseload_energy": {
         "name": "Rzeczywiste obciążenie bazowe dziś"
+      },
+      "daily_total_consumption": {
+        "name": "Dzisiaj zużycie całkowite"
       }
     },
     "binary_sensor": {

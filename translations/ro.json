@@ -1238,6 +1238,9 @@
       },
       "daily_true_baseload_energy": {
         "name": "Sarcina de bază reală azi"
+      },
+      "daily_total_consumption": {
+        "name": "Consum total azi"
       }
     },
     "binary_sensor": {

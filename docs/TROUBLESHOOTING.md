@@ -535,6 +535,29 @@ so inflated solar inflates it 1:1.
 **Note:** the day the fix lands, the affected day's figures are already banked. Daily values are
 correct from the following midnight; monthly/yearly/lifetime keep the historic inflation.
 
+## "Home" in SEM is much lower than "Home" in the HA Energy Dashboard
+
+**This is usually not a bug — the two numbers answer different questions.**
+
+| Entity | Includes the EV? |
+|---|---|
+| `sensor.sem_daily_home_energy` | **No.** The house *without* the car. SEM keeps the EV separate because every charging decision it makes depends on telling the two apart. |
+| `sensor.sem_daily_total_consumption` | **Yes.** House + car — **this is the one that matches the Energy Dashboard's "Home" figure.** |
+
+HA's Energy Dashboard shows total consumption and draws individually-tracked devices as a *slice*
+of it, not a subtraction from it. So on any day you charge a car, HA's number is larger than SEM's
+`daily_home_energy` by roughly the car's energy, and both are correct.
+
+**The check**, for a completed day:
+
+```jinja
+{{ states('sensor.sem_daily_total_consumption') }}   {# compare THIS to the Energy Dashboard #}
+{{ states('sensor.sem_daily_home_energy') }}         {# house only, excludes the car #}
+```
+
+If `daily_total_consumption` matches your Energy Dashboard and `daily_home_energy` does not, nothing
+is wrong. If the *total* is also off, that is a real divergence — see the section below.
+
 ## Daily home consumption doesn't match my meter (or the other daily rows)
 
 **Cause (fixed in v1.7.5):** home is the one row nothing meters — it is by definition what is left

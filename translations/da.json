@@ -1238,6 +1238,9 @@
       },
       "daily_true_baseload_energy": {
         "name": "Reel grundlast i dag"
+      },
+      "daily_total_consumption": {
+        "name": "I dag samlet forbrug"
       }
     },
     "binary_sensor": {

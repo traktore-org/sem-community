@@ -1238,6 +1238,9 @@
       },
       "daily_true_baseload_energy": {
         "name": "Todellinen peruskuorma tänään"
+      },
+      "daily_total_consumption": {
+        "name": "Tänään kokonaiskulutus"
       }
     },
     "binary_sensor": {

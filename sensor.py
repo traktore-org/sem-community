@@ -452,6 +452,16 @@ SENSOR_TYPES = [
         state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
     ),
+    # (#825) home + EV. This is the one that matches HA's Energy
+    # Dashboard "Home" figure; ``daily_home_energy`` above excludes the
+    # car on purpose. Two reporters lost weeks to comparing the wrong
+    # pair, so both now exist and both say what they include.
+    SensorEntityDescription(
+        key="daily_total_consumption",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
     SensorEntityDescription(
         key="daily_grid_import_energy",
         device_class=SensorDeviceClass.ENERGY,

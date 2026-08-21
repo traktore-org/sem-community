@@ -1238,6 +1238,9 @@
       },
       "daily_true_baseload_energy": {
         "name": "今日真实基础负荷"
+      },
+      "daily_total_consumption": {
+        "name": "今日总消耗"
       }
     },
     "binary_sensor": {

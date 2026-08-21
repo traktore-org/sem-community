@@ -1238,6 +1238,9 @@
       },
       "daily_true_baseload_energy": {
         "name": "True Baseload Today"
+      },
+      "daily_total_consumption": {
+        "name": "Today total consumption"
       }
     },
     "binary_sensor": {

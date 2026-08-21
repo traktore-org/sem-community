@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 📊 **A consumption figure you can actually compare with the Energy
+  Dashboard** (#825): `sensor.sem_daily_home_energy` excludes the EV on
+  purpose — every charging decision SEM makes depends on telling the house
+  and the car apart — while HA's Energy Dashboard "Home" *includes* it and
+  draws tracked devices as a slice of that total. Both are right, nothing
+  said so, and the only comparison a user could make was the misleading
+  one. It cost one reporter a wrong-looking house tile (#802) and another
+  a month of investigation (#628). SEM already computed the number
+  internally for the autarky rate; it now publishes it as
+  **`sensor.sem_daily_total_consumption`** (house + car, named in all 16
+  languages), and the troubleshooting guide states plainly which of the
+  two matches the Energy Dashboard.
+
 # [2.0.0-beta.13] — 21.08.2026
 
 - 📋 **The support matrix now credits what users have actually proven**

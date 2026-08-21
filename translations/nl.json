@@ -1238,6 +1238,9 @@
       },
       "daily_true_baseload_energy": {
         "name": "Werkelijke basislast vandaag"
+      },
+      "daily_total_consumption": {
+        "name": "Vandaag totaal verbruik"
       }
     },
     "binary_sensor": {

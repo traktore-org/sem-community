@@ -1238,6 +1238,9 @@
       },
       "daily_true_baseload_energy": {
         "name": "Valós alapterhelés ma"
+      },
+      "daily_total_consumption": {
+        "name": "Ma teljes fogyasztás"
       }
     },
     "binary_sensor": {

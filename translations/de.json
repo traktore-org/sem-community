@@ -1238,6 +1238,9 @@
       },
       "daily_true_baseload_energy": {
         "name": "Echte Grundlast heute"
+      },
+      "daily_total_consumption": {
+        "name": "Heute Gesamtverbrauch"
       }
     },
     "binary_sensor": {

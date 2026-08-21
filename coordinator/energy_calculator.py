@@ -751,6 +751,10 @@ class EnergyCalculator:
         energy.daily_home = self._get_daily("home", today)
         energy.monthly_home = self._get_monthly("home", month_key)
         energy.yearly_home = self._get_yearly("home", year_key)
+        # (#825) The HA-comparable twin travels WITH home, on every
+        # path that publishes it — a row assembled in two places is a
+        # row that goes stale in one of them.
+        energy.daily_total_consumption = self.daily_total_consumption(today)
 
         # (#773) The audited residual, derived AFTER home because it is one
         # more subtraction from it. The W twin is filled by the coordinator,
@@ -808,6 +812,10 @@ class EnergyCalculator:
         energy.daily_home = self._get_daily("home", today)
         energy.monthly_home = self._get_monthly("home", month_key)
         energy.yearly_home = self._get_yearly("home", year_key)
+        # (#825) The HA-comparable twin travels WITH home, on every
+        # path that publishes it — a row assembled in two places is a
+        # row that goes stale in one of them.
+        energy.daily_total_consumption = self.daily_total_consumption(today)
         energy.daily_ev = self._get_daily(EV_CATEGORY, ev_day)
         energy.monthly_ev = self._get_monthly(EV_CATEGORY, month_key)
         energy.yearly_ev = self._get_yearly(EV_CATEGORY, year_key)
@@ -2701,6 +2709,27 @@ class EnergyCalculator:
         if lifetime_key not in self._lifetime_accumulators:
             self._lifetime_accumulators[lifetime_key] = 0.0
         self._lifetime_accumulators[lifetime_key] += increment
+
+    def daily_total_consumption(self, today: date) -> float:
+        """(#825) Everything the house drew today, INCLUDING the car.
+
+        This is the figure HA's Energy Dashboard calls "Home".
+        ``daily_home`` deliberately means something else — the house
+        WITHOUT the EV — and publishing only that left users comparing
+        two different questions and reading the difference as a bug
+        (#802, and a month of #628).
+
+        The EV term is the CALENDAR-DAY mirror on purpose:
+        ``EV_CATEGORY`` rolls at the charge deadline (#279), and
+        composing a midnight row out of a deadline row is the bug class
+        closed in #703/#704.
+        """
+        return round(
+            self._daily_accumulators.get(f"home_{today}", 0.0)
+            + self._daily_accumulators.get(
+                f"{MIDNIGHT_EV_CATEGORY}_{today}", 0.0),
+            2,
+        )
 
     def _get_daily(self, category: str, today: date) -> float:
         """Get daily accumulated energy."""

@@ -391,6 +391,10 @@ class EnergyTotals:
     daily_solar: float = 0.0
     daily_home: float = 0.0
     daily_ev: float = 0.0
+    # (#825) home + EV — the figure HA's Energy Dashboard calls "Home".
+    # ``daily_home`` excludes the car by design; publishing only that
+    # left users comparing two different questions (#802, #628).
+    daily_total_consumption: float = 0.0
     daily_grid_import: float = 0.0
     daily_grid_export: float = 0.0
     daily_battery_charge: float = 0.0
@@ -1022,6 +1026,8 @@ class SEMData:
             "daily_solar_energy": self.energy.daily_solar,
             "daily_home_energy": self.energy.daily_home,
             "daily_ev_energy": self.energy.daily_ev,
+            # (#825) the HA-Energy-Dashboard-comparable total
+            "daily_total_consumption": self.energy.daily_total_consumption,
             "daily_grid_import_energy": self.energy.daily_grid_import,
             "daily_grid_export_energy": self.energy.daily_grid_export,
             "daily_battery_charge_energy": self.energy.daily_battery_charge,
