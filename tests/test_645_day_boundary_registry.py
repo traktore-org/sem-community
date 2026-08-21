@@ -68,6 +68,16 @@ HA_DAY = re.compile(r"dt_util\.now\(\)\.date\(\)")
 # still know the boundary was crossed? "n/a" = the value is used immediately
 # and never memoised, so a restart cannot lose anything.
 DECLARED_AUTHORITIES = {
+    ("utils/time_manager.py", "night-ended latch (#811)"):
+        ("sunrise-ev", "does NOT survive — deliberately in-memory. The latch "
+                       "answers 'has today's night already ended', which only "
+                       "matters in the minutes around sunrise when "
+                       "next_rising has rolled over to tomorrow. A restart "
+                       "clears it, and the two independent checks beside it "
+                       "(sun.sun above_horizon, and now >= today's corrected "
+                       "sunrise) cover that window; persisting a latch would "
+                       "risk carrying a stale 'night is over' across a "
+                       "genuine night"),
     ("coordinator/coordinator.py", "battery-night record key (#800)"):
         ("calendar", "survives — the date is only the sealed record's KEY; "
                      "the real boundary is is_night_mode()'s flip, the open "

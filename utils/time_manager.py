@@ -54,6 +54,13 @@ class TimeManager:
         self._last_meter_day_path: str = "uninitialized"
         self._last_night_hours_path: str = "uninitialized"
         self._last_offset_parse_path: str = "uninitialized"
+        # (#811) The date whose night SEM has already seen end. A night ends
+        # ONCE per day: after that only the evening window may open a new
+        # one. Neither string nor datetime arithmetic can close the sunrise
+        # sliver (``next_rising`` rolls to tomorrow at sunrise, and #416's
+        # correction derives today's from tomorrow's — they differ by
+        # exactly that minute), but the sequence is unambiguous.
+        self._night_ended_on = None
 
     def _get_night_earliest_start(self) -> str:
         """Get the floor for night start as HH:MM.
@@ -96,12 +103,41 @@ class TimeManager:
         Returns:
             True if currently in night mode
         """
-        current_time = dt_util.now().strftime("%H:%M")
+        _now = dt_util.now()
+        current_time = _now.strftime("%H:%M")
         night_start, night_end = self.get_night_window()
         if current_time >= night_start:
+            self._night_ended_on = None      # a new night begins
             self._last_night_window_path = "pre_midnight_in_night"
             return True
         if current_time < night_end:
+            # Deliberately written as an explicit ``dt_util.now().date()``:
+            # the #645 day-boundary registry scans for that form, and this
+            # latch IS a day-boundary authority (declared there with its
+            # restart answer). Folding it into ``_now.date()`` would save a
+            # microsecond and make the registry blind to it.
+            _today = dt_util.now().date()
+            if self._night_ended_on == _today:
+                self._last_night_window_path = (
+                    "post_midnight_night_already_ended")
+                return False
+            # (#811 round 2, live 21.08) The STRING compare above carries no
+            # date, and ``next_rising`` means today's sunrise before it
+            # happens and TOMORROW's after. Once it rolls over, "06:26 <
+            # 06:27" reads as night again — the phantom night that sealed a
+            # clean 12 kWh record and made the morning verdict report a
+            # one-minute record instead. The datetime path already carries
+            # #416's next_rising_was_tomorrow correction, so ask it: if
+            # today's (corrected) sunrise is already behind us, the night is
+            # over, whatever the clock strings say.
+            try:
+                _sunrise_today = self.get_sunrise_datetime()
+                if _sunrise_today is not None and _now >= _sunrise_today:
+                    self._night_ended_on = _now.date()
+                    self._last_night_window_path = "post_midnight_after_sunrise"
+                    return False
+            except Exception:  # noqa: BLE001 — never crash the night check
+                pass
             # (#811, found live 20.08 06:22) At sunrise, sun.sun rolls
             # ``next_rising`` over to TOMORROW's — 1-2 minutes later on
             # the clock in the shrinking half of the year — and this
@@ -115,6 +151,7 @@ class TimeManager:
             try:
                 sun = self.hass.states.get("sun.sun")
                 if sun is not None and sun.state == "above_horizon":
+                    self._night_ended_on = _today
                     self._last_night_window_path = (
                         "post_midnight_sun_already_up")
                     return False
@@ -122,6 +159,10 @@ class TimeManager:
                 pass
             self._last_night_window_path = "post_midnight_in_night"
             return True
+        # The night is over for today (or has not started) — latch it so a
+        # rolled-over sunrise cannot reopen it minutes later.
+        if current_time < night_start:
+            self._night_ended_on = _now.date()   # same day as _today above
         self._last_night_window_path = "outside_night_window"
         return False
 

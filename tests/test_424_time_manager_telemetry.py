@@ -318,3 +318,85 @@ def test_winter_ceiling_still_ends_night_with_sun_below():
     with patch.object(dt_util, "now", return_value=after_cap):
         assert tm.is_night_mode() is False
     assert tm._last_night_window_path == "outside_night_window"
+
+
+def test_a_night_that_has_ended_today_cannot_reopen():
+    """(#811 round 2, live 21.08 on the rig) The night ENDED at 06:25, and
+    one minute later ``next_rising`` had rolled over to tomorrow's 06:27 —
+    so the HH:MM compare said "06:26 < 06:27" and re-entered night. The
+    recorder sealed a clean 12 kWh record on that phantom re-entry and the
+    morning verdict then reported a one-minute record (0.0 kWh drained).
+
+    Neither string nor datetime arithmetic can close this: #416's
+    correction derives today's sunrise from TOMORROW's, and they differ by
+    exactly the sliver. What is unambiguous is the sequence — a night ends
+    once per day. Once SEM has seen today's night end, only the next
+    evening's window may open a new one."""
+    hass = MagicMock()
+    sun = MagicMock()
+    sun.state = "unknown"                       # sun veto deliberately blind
+    sun.attributes = {
+        "next_rising": _local_iso(2026, 8, 21, 6, 25, 0),
+        "next_setting": _local_iso(2026, 8, 21, 20, 29, 0),
+    }
+    hass.states.get = MagicMock(return_value=sun)
+    tm = TimeManager(hass=hass, config={})
+
+    # 06:25 — the night ends (this is the real flip SEM observed)
+    with patch.object(dt_util, "now",
+                      return_value=datetime(2026, 8, 21, 6, 25, 0,
+                                            tzinfo=dt_util.DEFAULT_TIME_ZONE)):
+        assert tm.is_night_mode() is False
+
+    # …and now next_rising rolls over to TOMORROW, one minute later
+    sun.attributes["next_rising"] = _local_iso(2026, 8, 22, 6, 27, 0)
+    with patch.object(dt_util, "now",
+                      return_value=datetime(2026, 8, 21, 6, 26, 0,
+                                            tzinfo=dt_util.DEFAULT_TIME_ZONE)):
+        assert tm.is_night_mode() is False, (
+            "today's night already ended — it cannot reopen")
+    assert tm._last_night_window_path == "post_midnight_night_already_ended"
+
+
+def test_the_evening_window_still_opens_the_next_night():
+    """The latch must not outlive its day: the same TimeManager that saw
+    this morning's end must open tonight's night at 20:37."""
+    hass = MagicMock()
+    sun = MagicMock()
+    sun.state = "below_horizon"
+    sun.attributes = {
+        "next_rising": _local_iso(2026, 8, 22, 6, 27, 0),
+        "next_setting": _local_iso(2026, 8, 21, 20, 27, 0),
+    }
+    hass.states.get = MagicMock(return_value=sun)
+    tm = TimeManager(hass=hass, config={})
+    with patch.object(dt_util, "now",
+                      return_value=datetime(2026, 8, 21, 6, 26, 0,
+                                            tzinfo=dt_util.DEFAULT_TIME_ZONE)):
+        tm.is_night_mode()                      # morning: latch set
+    with patch.object(dt_util, "now",
+                      return_value=datetime(2026, 8, 21, 20, 40, 0,
+                                            tzinfo=dt_util.DEFAULT_TIME_ZONE)):
+        assert tm.is_night_mode() is True
+    # …and after midnight the new night continues
+    with patch.object(dt_util, "now",
+                      return_value=datetime(2026, 8, 22, 3, 0, 0,
+                                            tzinfo=dt_util.DEFAULT_TIME_ZONE)):
+        assert tm.is_night_mode() is True
+
+
+def test_before_sunrise_is_still_night_on_the_datetime_path():
+    """The mirror: the same rolled-forward reasoning must not END the
+    night early. 05:00 with today's sunrise ahead is night."""
+    hass = MagicMock()
+    sun = MagicMock()
+    sun.state = "below_horizon"
+    sun.attributes = {
+        "next_rising": _local_iso(2026, 8, 21, 6, 25, 0),
+        "next_setting": _local_iso(2026, 8, 21, 20, 29, 0),
+    }
+    hass.states.get = MagicMock(return_value=sun)
+    tm = TimeManager(hass=hass, config={})
+    early = datetime(2026, 8, 21, 5, 0, 0, tzinfo=dt_util.DEFAULT_TIME_ZONE)
+    with patch.object(dt_util, "now", return_value=early):
+        assert tm.is_night_mode() is True

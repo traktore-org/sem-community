@@ -13,6 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🌅 **A night that has ended cannot reopen** (#811 round 2, caught on the
+  verification rig's first clean night): the sunrise fix shipped in
+  beta.12 vetoed the phantom night via the sun's own state, but the rig
+  still re-entered night one minute after sunrise — because neither the
+  `HH:MM` compare nor the datetime path can close the gap (`next_rising`
+  rolls to *tomorrow* at sunrise, and the existing correction derives
+  today's sunrise from tomorrow's — they differ by exactly that minute).
+  The recorder sealed a clean 12 kWh night and the morning verdict then
+  described the phantom one-minute record instead (0.0 kWh drained). A
+  night now ends **once per day**: once SEM has seen today's night end,
+  only the evening window opens a new one.
+
 # [2.0.0-beta.12] — 20.08.2026
 
 - 🩹 **YAML-mode Lovelace now tells you what to do** (#799, @RonaldHass):
