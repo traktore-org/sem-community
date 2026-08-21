@@ -13,6 +13,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔇 **A sensor that goes quiet no longer reads as "the sun stopped"**
+  (#818, found on a production install): when a source is unavailable the
+  reader falls back to 0 W — and on a Huawei modbus system, which blips
+  8–15 % of the time, that fabricated zero reached the surplus maths about
+  **50 times a day** on each of solar, grid and battery. SEM now separates
+  two questions it had been answering with one number. A cycle where *any*
+  steering input was dark no longer **steers**: the charger keeps the
+  command it already had (clamped, so #741's below-floor freeze cannot
+  recur), and the battery's EV-protection clamp does not flip — everything
+  else, including stops, disconnects, `always_max`, forced modes and the
+  scheduler, passes through untouched. A reading where *every* source was
+  dark no longer **publishes** a number either: the entity reports
+  unavailable, exactly as `battery_soc` always has, instead of booking a
+  false zero into long-term statistics. One dark inverter among three
+  still publishes the total. Nothing anywhere substitutes a value — the
+  display hold that rides out these blips stays where it belongs, in the
+  card.
+
 # [2.0.0-beta.13] — 21.08.2026
 
 - 📋 **The support matrix now credits what users have actually proven**

@@ -139,6 +139,11 @@ def build_charger_view(
     # and passes a fleet-level kwarg directly.
     fleet = FleetContext(
         solar_w=float(getattr(power_reading, "solar_power", 0.0) or 0.0),
+        # (#818) Derived here, like every other fleet input, from the
+        # unchanged PowerReadings: did any steering input read as the
+        # 0.0 fallback this cycle? Consumed by ChargeStability, which
+        # holds the committed command rather than steering blind.
+        inputs_degraded=bool(getattr(power_reading, "inputs_degraded", False)),
         # #743 — the curtailment probe's grant rides the same one-place
         # thread as every other fleet input.
         curtailment_grant_w=float(

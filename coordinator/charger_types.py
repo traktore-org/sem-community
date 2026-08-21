@@ -618,6 +618,19 @@ class FleetContext:
     solar_w: float = 0.0
     """Solar production this cycle (W)."""
 
+    inputs_degraded: bool = False
+    """#818 — one or more of the shared inputs above was UNAVAILABLE this
+    cycle, so its number is ``_read_sensor``'s 0.0 fallback rather than a
+    measurement. On PROD the Huawei modbus blips 8-15 % of the time, which
+    fed ~50 "the sun stopped" cycles a day into the surplus maths.
+
+    SEM does not invent a replacement number (the reader stays honest, and
+    #741/#758/#774 all record what happens when a stale value is trusted
+    like a measured one). The flag exists so the layers that WRITE can
+    decline to move on a cycle they cannot see: ``ChargeStability.filter``
+    holds the committed command. Display is a separate concern and is
+    already handled card-side (``_readWithHold``, 60 s, #237/#444)."""
+
     curtailment_grant_w: float = 0.0
     """#743 — bootstrap watts the curtailment probe grants when an
     export-limited inverter hides real solar behind clamped

@@ -199,6 +199,22 @@ class PowerReadings:
     # SOC twin above is ``battery_soc_unavailable``; this is the power side.
     battery_power_unavailable: bool = False
 
+    # (#818) Two questions about the same outage, deliberately separate.
+    #
+    # ``inputs_degraded`` — ANY steering read came back as the reader's
+    # 0.0 fallback this cycle. Gates WRITING: a cycle that cannot see
+    # must not steer, so ChargeStability holds the committed command.
+    # Nothing substitutes a value (#741/#758/#774 are what that costs).
+    #
+    # ``*_unavailable`` — EVERY contributing read was dark, so there is
+    # no honest number left to publish and the entity says so instead of
+    # showing a fabricated 0 W. One dark inverter among three does NOT
+    # blank a total that is mostly real.
+    inputs_degraded: bool = False
+    solar_power_unavailable: bool = False
+    grid_power_unavailable: bool = False
+    battery_power_all_unavailable: bool = False
+
     # Battery state
     battery_soc: float = 0.0
     battery_soc_unavailable: bool = False  # True when SOC sensor is offline
@@ -986,12 +1002,28 @@ class SEMData:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to flat dictionary for coordinator.data."""
+        # (#818) An input whose every source was dark has no honest
+        # number to publish. ``None`` here makes the entity read
+        # ``unavailable`` (sensor.py: available = value is not None) —
+        # the same treatment ``battery_soc`` has always had, and the same
+        # thing the underlying source entity is itself saying. A 0.0
+        # would be a fabricated measurement that also books a false zero
+        # into HA long-term statistics.
+        #
+        # The cards are unaffected: they read the #699 power_snapshot,
+        # which carries the last self-consistent SET, and the diagram
+        # card holds for 60 s on top of that (#237/#444). Home is NOT in
+        # this list — it must never report unknown, and its own hold
+        # (#237/#444) already covers it.
+        _solar_dark = getattr(self.power, "solar_power_unavailable", False)
+        _grid_dark = getattr(self.power, "grid_power_unavailable", False)
+        _batt_dark = getattr(self.power, "battery_power_all_unavailable", False)
         data = {
             # Power readings
-            "solar_power": self.power.solar_power,
-            "grid_power": self.power.grid_power,
-            "grid_active_power": -self.power.grid_power,  # positive=import, negative=export (K-Flow convention)
-            "battery_power": self.power.battery_power,
+            "solar_power": None if _solar_dark else self.power.solar_power,
+            "grid_power": None if _grid_dark else self.power.grid_power,
+            "grid_active_power": None if _grid_dark else -self.power.grid_power,  # positive=import, negative=export (K-Flow convention)
+            "battery_power": None if _batt_dark else self.power.battery_power,
             "ev_power": self.power.ev_power,
             "home_consumption_power": self.power.home_consumption_power,
             "grid_import_power": self.power.grid_import_power,

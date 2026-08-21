@@ -462,6 +462,39 @@ class ChargeStability:
             self._giveup_streak.pop(cid, None)
             self._giveup_backoff_until.pop(cid, None)
 
+        # (#818) A cycle that cannot SEE must not steer.
+        #
+        # When a shared input was unavailable, its number is the reader's
+        # 0.0 fallback, so the surplus maths reads "no sun, no grid, no
+        # battery" and would wind the car down — ~50 times a day on a
+        # Huawei modbus install. SEM does not substitute a value for the
+        # missing one (that is #741's frozen 8 A, #758's false measured
+        # zero and #774's stale belief, all over again). It keeps doing
+        # what it was already doing and waits for sight to return.
+        #
+        # Deliberately narrow:
+        #   - only while actually CHARGING — starting needs positive
+        #     evidence, and a blind cycle is not evidence;
+        #   - only with a committed command to keep;
+        #   - clamped to the live floor/ceiling first, because #741 is
+        #     precisely a hold that preserved a floor-violating value;
+        #   - DISABLE, disconnect and non-surplus modes never arrive here
+        #     (returned above) — a stop must never wait for a sensor.
+        if view.fleet.inputs_degraded and charging:
+            held = self._last_amps.get(cid)
+            if held is not None:
+                held = max(min_amps, min(max_amps, int(held)))
+                # Feed the smoothed stream too, so a dark stretch leaves no
+                # hole for the median to snap through on recovery.
+                self._median_amps(cid, held, smooth_window)
+                self._commit_amps(cid, held, now)
+                return replace(
+                    decision,
+                    intent=ChargerIntent.CHARGE_AT_AMPS,
+                    commanded_amps=held,
+                    reason=f"inputs degraded (sensor unavailable) — holding {held}A",
+                )
+
         # #610 — full-car backoff gate. MUST sit ABOVE the ``charge_wanted``
         # split, not inside it. It has now moved twice, for two different
         # bypasses of the same shape (a guard on one branch, an unguarded

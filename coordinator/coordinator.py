@@ -6195,6 +6195,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 decision, adapter,
                 observer=self._observer_mode,
                 controller=self._surplus_controller,
+                # (#818) same signal the charger side uses
+                inputs_degraded=bool(
+                    getattr(power, "inputs_degraded", False)),
             )
 
         # Reset scheduler when night ends — preserved from legacy
