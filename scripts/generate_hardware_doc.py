@@ -36,9 +36,14 @@ def render() -> str:
     out.append("**What the status means:** ✅ *tested live* = confirmed on "
                "real hardware by a reporter or on the maintainers' own "
                "systems (the evidence column cites the source). 🧩 "
-               "*implemented* = code and CI tests exist, no live "
-               "confirmation yet — reports welcome, they upgrade the row. "
-               "📥 *requested* = an open issue asks for it.\n")
+               "*implemented* = code and CI tests exist, or someone names "
+               "the device without a confirmation we can point at — no "
+               "live proof yet. 📥 *requested* = an open issue asks for "
+               "it.\n")
+    out.append("**Reading the evidence column:** `#NNN` is a GitHub issue, "
+               "`disc. NNN` a Discussion, and the name in brackets is the "
+               "person whose system it ran on — thank you, all of you. "
+               "Everything marked ✅ traces back to one of those threads.\n")
     out.append("**Sign patterns** (grid × battery conventions) are the "
                "families verified in `tests/test_split_grid_integration.py`; "
                "`ED` rows are handled generically through the HA Energy "
@@ -59,6 +64,29 @@ def render() -> str:
     for r in _sorted(hm.CHARGERS):
         out.append("| {brand} | {control} | {st} | {ev} |".format(
             brand=r["brand"], control=r["control"],
+            st=BADGE[r["status"]], ev=r["evidence"] or "—"))
+
+    out.append("\n## Vehicles\n")
+    out.append("SEM does not talk to the car — it charges *towards* the car's "
+               "state of charge. A row here means that vehicle's HA "
+               "integration has been wired in as SEM's SOC/range source on a "
+               "real install.\n")
+    out.append("| Vehicle | SOC / range source | Status | Evidence |")
+    out.append("|---|---|---|---|")
+    for r in _sorted(hm.VEHICLES):
+        out.append("| {brand} | {src} | {st} | {ev} |".format(
+            brand=r["brand"], src=r["soc_source"],
+            st=BADGE[r["status"]], ev=r["evidence"] or "—"))
+
+    out.append("\n## Heat pumps, hot water, loads and meters\n")
+    out.append("Everything else SEM reads or switches: the SG-Ready and "
+               "hot-water path, metered loads, and the meter that supplies "
+               "the grid signal when it does not come from the inverter.\n")
+    out.append("| Device | Role | Integration | Status | Evidence |")
+    out.append("|---|---|---|---|---|")
+    for r in _sorted(hm.OTHER_DEVICES):
+        out.append("| {brand} | {role} | `{integration}` | {st} | {ev} |".format(
+            brand=r["brand"], role=r["role"], integration=r["integration"],
             st=BADGE[r["status"]], ev=r["evidence"] or "—"))
 
     out.append("\n## Upgrading a row to *tested live*\n")

@@ -12,6 +12,7 @@ Three pins:
    allowlist (the house ratchet shape): removals forced, additions
    impossible.
 """
+import re
 from pathlib import Path
 
 import importlib.util
@@ -73,19 +74,61 @@ class TestEveryClaimHasARow:
 
 
 class TestEvidenceRules:
+    """The rules apply to EVERY table, including tables added later — the
+    corpus sweep (21.08) grew the matrix from 2 tables to 4, and a new
+    table that quietly escaped the citation rule would be exactly the #530
+    false-positive door reopening."""
+
+    def test_every_table_obeys_the_rules(self):
+        """No table may exist outside _hm.TABLES: the rules below iterate
+        ALL_ROWS, so an unregistered table would be unchecked."""
+        loose = {
+            name for name, val in vars(_hm).items()
+            if name.isupper() and isinstance(val, list) and val
+            and isinstance(val[0], dict) and name != "ALL_ROWS"
+        }
+        assert loose == set(_hm.TABLES), (
+            f"tables not registered in TABLES (so unchecked): "
+            f"{loose - set(_hm.TABLES)}")
+        assert len(_hm.ALL_ROWS) == sum(len(t) for t in _hm.TABLES.values())
+
+    def test_every_row_has_the_common_fields(self):
+        for r in _hm.ALL_ROWS:
+            assert r.get("brand"), f"row without a brand: {r}"
+            assert r["status"] in ("tested-live", "implemented", "requested"), \
+                f"{r['brand']}: unknown status {r['status']!r}"
+            assert "evidence" in r, f"{r['brand']}: no evidence field"
 
     def test_tested_live_requires_citation(self):
-        for r in _hm.INVERTERS + _hm.CHARGERS:
+        for r in _hm.ALL_ROWS:
             if r["status"] == "tested-live":
                 assert r["evidence"].strip(), (
                     f"{r['brand']}: tested-live without evidence — the #530 "
                     "lesson: no citation, no claim")
 
+    def test_tested_live_evidence_names_a_source(self):
+        """A live claim points at something a reader can open: an issue, a
+        discussion, or our own system. Prose alone is not a citation."""
+        ref = re.compile(r"#\d+|disc\. \d+|SEM production|SEM's own")
+        for r in _hm.ALL_ROWS:
+            if r["status"] == "tested-live":
+                assert ref.search(r["evidence"]), (
+                    f"{r['brand']}: tested-live evidence names no source "
+                    f"(issue #, disc. N, or SEM production): "
+                    f"{r['evidence']!r}")
+
     def test_requested_cites_the_issue(self):
-        for r in _hm.INVERTERS + _hm.CHARGERS:
+        for r in _hm.ALL_ROWS:
             if r["status"] == "requested":
                 assert "#" in r["evidence"], (
                     f"{r['brand']}: requested without an issue reference")
+
+    def test_doc_shows_every_row(self):
+        doc = (_ROOT / "docs" / "SUPPORTED_HARDWARE.md").read_text()
+        for r in _hm.ALL_ROWS:
+            assert r["brand"] in doc, (
+                f"{r['brand']} is in the matrix but not in the rendered doc "
+                "— the generator is dropping a table")
 
 
 # Inverter rows with NO brand-named pipeline test yet. All three are

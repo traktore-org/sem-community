@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 📋 **The support matrix now credits what users have actually proven**
+  (#814): the *tested live* column mostly held the maintainer's own
+  hardware. A full sweep of the issue and discussion corpus found far more —
+  **live rows doubled, 9 → 18** (SMA, SolarEdge, Enphase, GoodWe, Sonnen and
+  Easee move up on real citations; FENECON Home, GARO and JuiceBox 48 are
+  new), and the rows that were already live now name their reporters. Two
+  tables join them: the **vehicles** people use as SEM's SOC source and the
+  **heat pumps, hot-water relays, metered loads and grid meters** SEM reads
+  or switches — 66 rows in all, 31 of them proven on somebody's real system.
+  Every ✅ cites the issue or discussion it was proven in, and the
+  no-citation-no-claim rule now covers every table, including ones added
+  later. #802's FENECON figures became a pipeline regression test.
+
 - 💶 **The Costs card no longer invites a double count** (#797): savings and
   net cost sat in one column as parallel rows, so they read as summable —
   but avoided cost is *why* the net cost is low, not money on top of it. The

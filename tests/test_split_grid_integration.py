@@ -771,6 +771,71 @@ class TestSessyBatteryOnly:
 
 
 # ════════════════════════════════════════════
+# FENECON Home: read through the HA Energy Dashboard (#802)
+# ════════════════════════════════════════════
+
+
+class TestFENECONEnergyDashboard:
+    """FENECON Home 11 through the Energy Dashboard mapping (#802).
+
+    No battery sign convention is asserted here, on purpose: that install
+    feeds SEM through separate import/export statistics (sign-free), and no
+    FENECON battery-power export has ever been seen from a real system.
+    Inventing one would be the #530 mistake in test form.
+
+    What #802 actually was: with a 10.3 kW Wattpilot session running, SEM's
+    *Haus* tile read ~672 W while the Energy Dashboard's total consumption
+    read ~10.94 kW — both correct, because SEM's home consumption EXCLUDES
+    the EV. The numbers below are the reporter's own.
+    """
+
+    def _reader(self, hass, ev_w):
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.fenecon_home_production_active_power",
+            grid_import_power=None,
+            grid_import_energy="sensor.fenecon_home_grid_energy_consumption",
+            grid_export_energy="sensor.fenecon_home_grid_energy_production",
+            battery_power="sensor.fenecon_home_ess_active_power",
+        )
+        states = {
+            "sensor.fenecon_home_production_active_power": _state(4000),
+            "sensor.fenecon_home_grid_power_consumption": _state(
+                6972, device_class="power"),
+            "sensor.fenecon_home_grid_power_production": _state(
+                0, device_class="power"),
+            "sensor.fenecon_home_ess_active_power": _state(0),
+            "sensor.wattpilot_power": _state(ev_w, device_class="power"),
+        }
+        return _make_reader_with_states(
+            hass, states, ed,
+            extra_config={"ev_power_sensor": "sensor.wattpilot_power"})
+
+    def test_home_excludes_the_ev_session(self):
+        power = self._reader(MagicMock(), 10300).read_power()
+        power.calculate_derived()
+
+        assert power.grid_import_power == 6972
+        assert power.ev_power == pytest.approx(10300, abs=1)
+        # 4000 solar + 6972 import − 10300 EV = 672 W of actual house
+        assert power.home_consumption_power == pytest.approx(672, abs=1)
+
+    def test_home_plus_ev_equals_the_energy_dashboard_total(self):
+        power = self._reader(MagicMock(), 10300).read_power()
+        power.calculate_derived()
+
+        # The reporter's Energy Dashboard read ~10.94 kW for the same moment.
+        assert power.home_consumption_power + power.ev_power == \
+            pytest.approx(10972, abs=1)
+
+    def test_without_a_session_the_house_carries_it_all(self):
+        power = self._reader(MagicMock(), 0).read_power()
+        power.calculate_derived()
+
+        assert power.ev_power == 0
+        assert power.home_consumption_power == pytest.approx(10972, abs=1)
+
+
+# ════════════════════════════════════════════
 # Manual grid power entity override
 # ════════════════════════════════════════════
 

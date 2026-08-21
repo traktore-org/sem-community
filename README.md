@@ -293,9 +293,12 @@ SEM creates 70+ sensors organized by category:
 > The full, generated matrix — brand, integration, sign pattern, control
 > method and how sure we are (tested live / implemented / requested) —
 > lives in [docs/SUPPORTED_HARDWARE.md](docs/SUPPORTED_HARDWARE.md). It is
-> rendered from one data table and CI keeps it from drifting.
+> rendered from one data table and CI keeps it from drifting. It also lists
+> the **vehicles** used as SOC sources and the **heat pumps, hot-water
+> relays, metered loads and grid meters** people run SEM with — every ✅ row
+> cites the issue or discussion it was proven in.
 
-**Solar Inverters:** Huawei Solar, SolaX, DEYE/Sunsynk, Growatt, Sofar, Solis, Fronius, SMA, SolarEdge, Enphase, GoodWe, Tesla Powerwall, Kostal Plenticore, Sungrow, Victron, Sonnenbatterie, E3DC, GivEnergy, Fox ESS, Alpha ESS, Senec, RCT Power, KSTAR — or any inverter with HA sensors. SEM reads from the HA Energy Dashboard and auto-detects both grid and battery sign conventions.
+**Solar Inverters:** Huawei Solar, SolaX, DEYE/Sunsynk, Growatt, Sofar, Solis, Fronius, SMA, SolarEdge, Enphase, GoodWe, Tesla Powerwall, Kostal Plenticore, Sungrow, Victron, Sonnenbatterie, E3DC, GivEnergy, Fox ESS, Alpha ESS, Senec, RCT Power, KSTAR, FENECON Home — or any inverter with HA sensors. SEM reads from the HA Energy Dashboard and auto-detects both grid and battery sign conventions.
 
 **Batteries:** Any battery exposed through a supported inverter integration, plus standalone systems: Sessy (NL), Huawei LUNA2000, Tesla Powerwall, Sonnen, BYD, Pylontech, and others work automatically. Battery capacity is auto-detected from the inverter.
 
@@ -303,7 +306,7 @@ SEM creates 70+ sensors organized by category:
 
 **EV Chargers (auto-detected):** KEBA P30, Wallbox Pulsar, go-eCharger (HTTP + MQTT), Fronius/go-e Wattpilot, Easee, Zaptec, ChargePoint, Heidelberg Energy Control, OpenWB 2.x, OCPP-compatible (ABB Terra, Vestel, Grizzl-E, etc.), Ohme, Peblar Rocksolid, V2C Trydan, Alfen Eve, Blue Current, OpenEVSE
 
-**EV Chargers (manual config):** Any charger exposing power/connected/charging sensors in HA.
+**EV Chargers (manual config):** Any charger exposing power/connected/charging sensors in HA. Proven live this way (not brand-detected yet): **GARO** wallbox and **JuiceBox 48** — see the matrix for the threads.
 
 > **Note:** KSTAR inverters are supported via the [ha-solarman](https://github.com/davidrapan/ha-solarman) integration with KSTAR YAML profiles, not via a dedicated KSTAR integration.
 
