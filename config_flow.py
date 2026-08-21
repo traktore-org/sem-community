@@ -915,6 +915,8 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 # recomputes this set from the flow source, so a new form field that isn't
 # added here fails CI.
 OPTIONS_FLOW_OWNED_KEYS = frozenset({
+    # (#819) which solar-forecast integration SEM reads
+    "solar_forecast_source",
     "action",
     "battery_assist_max_power",
     "battery_assist_min_surplus",
@@ -2290,6 +2292,26 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     description={"suggested_value": current_config.get("dynamic_feedin_entity")},
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
+                ),
+                # (#819) WHICH solar forecast integration SEM reads.
+                # Deliberately next to the price-forecast entity above,
+                # because the setup guide confused the two and promised
+                # this override on that field. "Auto" keeps the historic
+                # ladder (Solcast, then Forecast.Solar, then Open-Meteo);
+                # naming one wins only while it is actually installed.
+                vol.Optional(
+                    "solar_forecast_source",
+                    default=current_config.get("solar_forecast_source", "auto"),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            {"value": "auto", "label": "Auto-detect (Solcast, then Forecast.Solar, then Open-Meteo)"},
+                            {"value": "solcast", "label": "Solcast PV Solar"},
+                            {"value": "forecast_solar", "label": "Forecast.Solar"},
+                            {"value": "open_meteo", "label": "Open-Meteo Solar Forecast"},
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
                 ),
                 # #359 — dynamic-tariff price classification mode. The
                 # legacy fixed thresholds (0.15 / 0.35 CHF) mis-bucketed

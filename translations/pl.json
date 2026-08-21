@@ -220,11 +220,12 @@
           "update_interval": "Interwał aktualizacji (s)",
           "tariff_mode": "Tryb taryfy",
           "dynamic_tariff_entity": "Encja ceny dynamicznej (wykrywana automatycznie, jeśli pusta)",
-          "dynamic_forecast_entity": "Encja prognozy (opcjonalna, wykrywana automatycznie, jeśli pusta)",
+          "dynamic_forecast_entity": "Encja prognozy cen (opcjonalnie, wykrywana automatycznie, jeśli puste)",
           "dynamic_feedin_entity": "Encja ceny oddania energii (opcjonalna, dla dynamicznej stawki eksportu)",
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
           "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
-          "tariff_classification_mode": "Tryb klasyfikacji cen"
+          "tariff_classification_mode": "Tryb klasyfikacji cen",
+          "solar_forecast_source": "Źródło prognozy słonecznej"
         },
         "data_description": {
           "electricity_import_rate": "Dzienna/jednostrefowa stawka importu (waluta/kWh z VAT). Używana zapasowo, gdy ceny dynamiczne są niedostępne.",
@@ -239,7 +240,8 @@
           "dynamic_feedin_entity": "Opcjonalny czujnik podający bieżącą cenę oddania / eksportu energii dla dynamicznej stawki eksportu.",
           "grid_import_power_entity": "Opcjonalny czujnik (W) mocy importu z sieci. Wykrywany automatycznie z pulpitu Energia; w razie potrzeby nadpisz tutaj.",
           "grid_export_power_entity": "Opcjonalny czujnik (W) mocy eksportu do sieci. Wykrywany automatycznie z pulpitu Energia; w razie potrzeby nadpisz tutaj.",
-          "tariff_classification_mode": "„Percentyl” klasyfikuje ceny względem dzisiejszego zakresu (zalecane). „Statyczny” używa stałych progów tanio/drogo."
+          "tariff_classification_mode": "„Percentyl” klasyfikuje ceny względem dzisiejszego zakresu (zalecane). „Statyczny” używa stałych progów tanio/drogo.",
+          "solar_forecast_source": "Którą integrację prognozy odczytuje SEM. Automatyczne wykrywanie preferuje Solcast, potem Forecast.Solar, potem Open-Meteo — wybierz jedną, jeśli używasz kilku naraz."
         }
       },
       "load_management": {

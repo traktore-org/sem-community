@@ -220,11 +220,12 @@
           "update_interval": "Oppdateringsintervall (s)",
           "tariff_mode": "Tariffmodus",
           "dynamic_tariff_entity": "Entitet for dynamisk pris (oppdages automatisk hvis tom)",
-          "dynamic_forecast_entity": "Prognoseentitet (valgfri, oppdages automatisk hvis tom)",
+          "dynamic_forecast_entity": "Entitet for prisprognose (valgfritt, oppdages automatisk hvis tom)",
           "dynamic_feedin_entity": "Entitet for innmatingspris (valgfri, for dynamisk eksportpris)",
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
           "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
-          "tariff_classification_mode": "Prisklassifiseringsmodus"
+          "tariff_classification_mode": "Prisklassifiseringsmodus",
+          "solar_forecast_source": "Kilde for solprognose"
         },
         "data_description": {
           "electricity_import_rate": "Dag-/fastpris for import (valuta/kWh inkl. mva.). Brukes som reserve når dynamisk prising ikke er tilgjengelig.",
@@ -239,7 +240,8 @@
           "dynamic_feedin_entity": "Valgfri sensor som oppgir gjeldende innmatings-/eksportpris for dynamisk eksportpris.",
           "grid_import_power_entity": "Valgfri sensor (W) for effekt importert fra nettet. Oppdages automatisk fra Energi-dashbordet; overstyr her ved behov.",
           "grid_export_power_entity": "Valgfri sensor (W) for effekt eksportert til nettet. Oppdages automatisk fra Energi-dashbordet; overstyr her ved behov.",
-          "tariff_classification_mode": "Persentil grupperer priser relativt til dagens område (anbefalt). Statisk bruker faste terskler for billig/dyr."
+          "tariff_classification_mode": "Persentil grupperer priser relativt til dagens område (anbefalt). Statisk bruker faste terskler for billig/dyr.",
+          "solar_forecast_source": "Hvilken prognoseintegrasjon SEM leser. Automatisk gjenkjenning foretrekker Solcast, så Forecast.Solar, så Open-Meteo — velg én selv om du kjører flere."
         }
       },
       "load_management": {

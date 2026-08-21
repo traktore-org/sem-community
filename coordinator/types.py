@@ -705,6 +705,8 @@ class ForecastSensorData:
     forecast_peak_time_today: str = ""
     forecast_source: str = "none"
     forecast_available: bool = False
+    # (#819) Which forecast integrations are installed on this system.
+    forecast_sources_available: list = field(default_factory=list)
     charging_recommendation: str = "no_forecast"
     best_surplus_window: str = ""
     forecast_surplus_kwh: float = 0.0
@@ -1266,6 +1268,10 @@ class SEMData:
             "forecast_peak_power_today_w": self.forecast.forecast_peak_power_today_w,
             "forecast_peak_time_today": self.forecast.forecast_peak_time_today,
             "forecast_source": self.forecast.forecast_source,
+            # (#819) Which forecast integrations this install actually
+            # has, so the dashboard picker offers what is there.
+            "forecast_sources_available": list(
+                getattr(self.forecast, "forecast_sources_available", []) or []),
             "forecast_available": self.forecast.forecast_available,
             "charging_recommendation": self.forecast.charging_recommendation,
             "best_surplus_window": self.forecast.best_surplus_window,

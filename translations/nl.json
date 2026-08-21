@@ -220,11 +220,12 @@
           "update_interval": "Update-interval (s)",
           "tariff_mode": "Tarief modus",
           "dynamic_tariff_entity": "Dynamische prijsentiteit (automatisch gedetecteerd indien leeg)",
-          "dynamic_forecast_entity": "Prognose-entiteit (optioneel, automatisch gedetecteerd indien leeg)",
+          "dynamic_forecast_entity": "Prijsprognose-entiteit (optioneel, automatisch gedetecteerd indien leeg)",
           "dynamic_feedin_entity": "Terugleverprijs-entiteit (optioneel, voor dynamisch exporttarief)",
           "grid_import_power_entity": "Netstroom-invoersensor (optioneel, automatisch gedetecteerd via Energiedashboard)",
           "grid_export_power_entity": "Netstroom-exportssensor (optioneel, automatisch gedetecteerd via Energiedashboard)",
-          "tariff_classification_mode": "Prijsclassificatiemodus"
+          "tariff_classification_mode": "Prijsclassificatiemodus",
+          "solar_forecast_source": "Bron van de zonneprognose"
         },
         "data_description": {
           "electricity_import_rate": "Dag-/standaard importtarief (valuta/kWh incl. btw). Wordt gebruikt als terugval wanneer dynamische prijzen niet beschikbaar zijn.",
@@ -239,7 +240,8 @@
           "dynamic_feedin_entity": "Optionele sensor die de actuele teruglever-/exportprijs levert voor dynamisch exporttarief.",
           "grid_import_power_entity": "Optionele sensor (W) voor netstroom-invoervermogen. Automatisch gedetecteerd via het Energiedashboard; overschrijf hier indien nodig.",
           "grid_export_power_entity": "Optionele sensor (W) voor netstroom-exportvermogen. Automatisch gedetecteerd via het Energiedashboard; overschrijf hier indien nodig.",
-          "tariff_classification_mode": "Percentiel deelt prijzen in ten opzichte van het bereik van vandaag (aanbevolen). Statisch gebruikt vaste drempels voor goedkoop/duur."
+          "tariff_classification_mode": "Percentiel deelt prijzen in ten opzichte van het bereik van vandaag (aanbevolen). Statisch gebruikt vaste drempels voor goedkoop/duur.",
+          "solar_forecast_source": "Welke prognose-integratie SEM leest. Automatisch detecteren geeft voorrang aan Solcast, dan Forecast.Solar, dan Open-Meteo — kies er zelf één als je er meerdere naast elkaar draait."
         }
       },
       "load_management": {

@@ -13,6 +13,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🌤️ **Pick which solar-forecast integration SEM reads** (#819, reported by
+  @ArneGollin1987): running Solcast, Forecast.Solar and Open-Meteo side by
+  side to compare them meant the first one on SEM's ladder always won, and
+  the only way to reach another was to deactivate the others. There is now
+  a **Solar forecast source** setting — in the options flow and on the
+  dashboard's *Configuration → Forecast* section — offering the
+  integrations **actually installed** on your system, so you cannot pick
+  one that isn't there. Switching takes effect immediately, without
+  reloading the integration. A choice that later disappears falls back to
+  auto-detection rather than taking the forecast down with it, and the
+  fallback is recorded in diagnostics instead of happening silently. The
+  setup guide caused this one: it promised the override on the **Forecast
+  entity** field, which is the *price* forecast — that field is now
+  labelled **Price forecast entity** in all 16 languages so the two stop
+  being confusable.
+
 - 🔇 **A sensor that goes quiet no longer reads as "the sun stopped"**
   (#818, found on a production install): when a source is unavailable the
   reader falls back to 0 W — and on a Huawei modbus system, which blips

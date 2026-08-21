@@ -214,7 +214,7 @@
         "data": {
           "tariff_mode": "Tariff mode",
           "dynamic_tariff_entity": "Dynamic price entity (auto-detected if empty)",
-          "dynamic_forecast_entity": "Forecast entity (optional, auto-detected if empty)",
+          "dynamic_forecast_entity": "Price forecast entity (optional, auto-detected if empty)",
           "dynamic_feedin_entity": "Feed-in price entity (optional, for dynamic export rate)",
           "electricity_import_rate": "Import rate",
           "grid_import_surcharge": "Variable network-owner fee (currency/kWh)",
@@ -224,7 +224,8 @@
           "update_interval": "Update interval (s)",
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected)",
           "grid_export_power_entity": "Grid export power sensor (optional, auto-detected)",
-          "tariff_classification_mode": "Price classification mode"
+          "tariff_classification_mode": "Price classification mode",
+          "solar_forecast_source": "Solar forecast source"
         },
         "data_description": {
           "tariff_mode": "Choose 'Static' for fixed rates, 'Dynamic' for real-time pricing, or 'Calendar' for time-of-use schedules.",
@@ -239,7 +240,8 @@
           "update_interval": "How often SEM reads sensors and adjusts hardware (seconds). Range 10–60 s.",
           "grid_import_power_entity": "Optional sensor (W) for grid import power. Auto-detected from the Energy Dashboard; override here if needed.",
           "grid_export_power_entity": "Optional sensor (W) for grid export power. Auto-detected from the Energy Dashboard; override here if needed.",
-          "tariff_classification_mode": "Percentile buckets prices relative to today's range (recommended). Static uses fixed cheap/expensive thresholds."
+          "tariff_classification_mode": "Percentile buckets prices relative to today's range (recommended). Static uses fixed cheap/expensive thresholds.",
+          "solar_forecast_source": "Which forecast integration SEM reads. Auto-detect prefers Solcast, then Forecast.Solar, then Open-Meteo — pick one explicitly if you run several side by side."
         }
       },
       "load_management": {

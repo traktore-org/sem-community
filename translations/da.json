@@ -220,11 +220,12 @@
           "update_interval": "Opdateringsinterval (s)",
           "tariff_mode": "Tariftilstand",
           "dynamic_tariff_entity": "Entitet for dynamisk pris (registreres automatisk hvis tom)",
-          "dynamic_forecast_entity": "Prognoseentitet (valgfri, registreres automatisk hvis tom)",
+          "dynamic_forecast_entity": "Prisprognose-entitet (valgfri, registreres automatisk hvis tom)",
           "dynamic_feedin_entity": "Entitet for afregningspris (valgfri, til dynamisk eksportpris)",
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
           "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
-          "tariff_classification_mode": "Prisklassificeringstilstand"
+          "tariff_classification_mode": "Prisklassificeringstilstand",
+          "solar_forecast_source": "Kilde til solprognose"
         },
         "data_description": {
           "electricity_import_rate": "Dag-/fast importpris (valuta/kWh inkl. moms). Bruges som reserve, når dynamisk prissætning ikke er tilgængelig.",
@@ -239,7 +240,8 @@
           "dynamic_feedin_entity": "Valgfri sensor, der leverer den aktuelle afregnings-/eksportpris til dynamisk eksportpris.",
           "grid_import_power_entity": "Valgfri sensor (W) til netimporteffekt. Registreres automatisk fra Energi-dashboardet; tilsidesæt her, hvis det er nødvendigt.",
           "grid_export_power_entity": "Valgfri sensor (W) til neteksporteffekt. Registreres automatisk fra Energi-dashboardet; tilsidesæt her, hvis det er nødvendigt.",
-          "tariff_classification_mode": "Percentil inddeler priser i forhold til dagens interval (anbefales). Statisk bruger faste billige/dyre tærskler."
+          "tariff_classification_mode": "Percentil inddeler priser i forhold til dagens interval (anbefales). Statisk bruger faste billige/dyre tærskler.",
+          "solar_forecast_source": "Hvilken prognoseintegration SEM læser. Automatisk registrering foretrækker Solcast, derefter Forecast.Solar og derefter Open-Meteo — vælg selv én, hvis du kører flere."
         }
       },
       "load_management": {

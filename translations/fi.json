@@ -220,11 +220,12 @@
           "update_interval": "Päivitysväli (s)",
           "tariff_mode": "Tariffitila",
           "dynamic_tariff_entity": "Dynaamisen hinnan entiteetti (tunnistetaan automaattisesti jos tyhjä)",
-          "dynamic_forecast_entity": "Ennuste-entiteetti (valinnainen, tunnistetaan automaattisesti jos tyhjä)",
+          "dynamic_forecast_entity": "Hintaennusteen entiteetti (valinnainen, tunnistetaan automaattisesti)",
           "dynamic_feedin_entity": "Syöttöhinnan entiteetti (valinnainen, dynaamiselle vientihinnalle)",
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
           "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
-          "tariff_classification_mode": "Hinnan luokittelutila"
+          "tariff_classification_mode": "Hinnan luokittelutila",
+          "solar_forecast_source": "Aurinkoennusteen lähde"
         },
         "data_description": {
           "electricity_import_rate": "Päivä- tai kiinteä ostohinta (valuutta/kWh sis. alv). Käytetään varalla, kun dynaaminen hinnoittelu ei ole käytettävissä.",
@@ -239,7 +240,8 @@
           "dynamic_feedin_entity": "Valinnainen anturi, joka antaa nykyisen syöttö- tai vientihinnan dynaamista vientihintaa varten.",
           "grid_import_power_entity": "Valinnainen anturi (W) verkosta ostetulle teholle. Tunnistetaan automaattisesti Energia-paneelista; ohita tässä tarvittaessa.",
           "grid_export_power_entity": "Valinnainen anturi (W) verkkoon myydylle teholle. Tunnistetaan automaattisesti Energia-paneelista; ohita tässä tarvittaessa.",
-          "tariff_classification_mode": "Persentiili luokittelee hinnat suhteessa päivän vaihteluväliin (suositus). Staattinen käyttää kiinteitä halpa/kallis-rajoja."
+          "tariff_classification_mode": "Persentiili luokittelee hinnat suhteessa päivän vaihteluväliin (suositus). Staattinen käyttää kiinteitä halpa/kallis-rajoja.",
+          "solar_forecast_source": "Mitä ennusteintegraatiota SEM lukee. Automaattinen tunnistus suosii Solcastia, sitten Forecast.Solaria, sitten Open-Meteoa — valitse yksi, jos käytät useita rinnakkain."
         }
       },
       "load_management": {

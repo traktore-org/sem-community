@@ -214,7 +214,7 @@
         "data": {
           "tariff_mode": "电价模式",
           "dynamic_tariff_entity": "动态电价实体（留空则自动检测）",
-          "dynamic_forecast_entity": "预测实体（可选，留空则自动检测）",
+          "dynamic_forecast_entity": "电价预测实体（可选，留空则自动检测）",
           "dynamic_feedin_entity": "上网/馈电电价实体（可选，用于动态出口电价）",
           "electricity_import_rate": "购电电价",
           "grid_import_surcharge": "电网运营商可变费用（货币/千瓦时）",
@@ -224,7 +224,8 @@
           "update_interval": "更新间隔 (秒)",
           "grid_import_power_entity": "电网购电功率传感器（可选，自动检测）",
           "grid_export_power_entity": "电网供电功率传感器（可选，自动检测）",
-          "tariff_classification_mode": "电价分类模式"
+          "tariff_classification_mode": "电价分类模式",
+          "solar_forecast_source": "光伏预测数据源"
         },
         "data_description": {
           "tariff_mode": "选择“静态”代表固定费率，“动态”代表实时计价，或选择“日历”代表分时电价计划。",
@@ -239,7 +240,8 @@
           "update_interval": "SEM 读取传感器和调整硬件的频率（秒）。范围：10–60 秒。",
           "grid_import_power_entity": "可选。用于测量电网购电功率的传感器 (W)。默认从能源看板自动检测；如果需要，可在此处覆盖。",
           "grid_export_power_entity": "可选。用于测量电网供电功率的传感器 (W)。默认从能源看板自动检测；如果需要，可在此处覆盖。",
-          "tariff_classification_mode": "“百分位”相对当天价格区间分类（推荐）。“固定”使用固定的便宜/昂贵阈值。"
+          "tariff_classification_mode": "“百分位”相对当天价格区间分类（推荐）。“固定”使用固定的便宜/昂贵阈值。",
+          "solar_forecast_source": "SEM 读取哪个预测集成。自动检测优先使用 Solcast，其次 Forecast.Solar，再次 Open-Meteo — 如果同时运行多个，请手动指定一个。"
         }
       },
       "load_management": {

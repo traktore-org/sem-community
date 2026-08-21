@@ -220,11 +220,12 @@
           "update_interval": "Intervalo de actualización (s)",
           "tariff_mode": "Modo de tarifa",
           "dynamic_tariff_entity": "Entidad de precio dinámico (se detecta automáticamente si se deja vacía)",
-          "dynamic_forecast_entity": "Entidad de previsión (opcional, se detecta automáticamente si se deja vacía)",
+          "dynamic_forecast_entity": "Entidad de previsión de precios (opcional, se detecta automáticamente si se deja vacío)",
           "dynamic_feedin_entity": "Entidad de precio de inyección (opcional, para tarifa de exportación dinámica)",
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
           "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
-          "tariff_classification_mode": "Modo de clasificación de precios"
+          "tariff_classification_mode": "Modo de clasificación de precios",
+          "solar_forecast_source": "Fuente de la previsión solar"
         },
         "data_description": {
           "electricity_import_rate": "Tarifa de importación diurna/plana (moneda/kWh, IVA incluido). Se utiliza como alternativa cuando el precio dinámico no está disponible.",
@@ -239,7 +240,8 @@
           "dynamic_feedin_entity": "Sensor opcional que proporciona el precio actual de inyección / exportación para la tarifa de exportación dinámica.",
           "grid_import_power_entity": "Sensor opcional (W) para la potencia de importación de la red. Se detecta automáticamente desde el panel Energía; puede sobrescribirlo aquí si hace falta.",
           "grid_export_power_entity": "Sensor opcional (W) para la potencia de exportación a la red. Se detecta automáticamente desde el panel Energía; puede sobrescribirlo aquí si hace falta.",
-          "tariff_classification_mode": "Percentil clasifica los precios respecto al rango de hoy (recomendado). Estático usa umbrales fijos de barato/caro."
+          "tariff_classification_mode": "Percentil clasifica los precios respecto al rango de hoy (recomendado). Estático usa umbrales fijos de barato/caro.",
+          "solar_forecast_source": "Qué integración de previsión lee SEM. La detección automática prefiere Solcast, luego Forecast.Solar y luego Open-Meteo: elige una si utilizas varias a la vez."
         }
       },
       "load_management": {

@@ -220,11 +220,12 @@
           "update_interval": "Frissítési időköz (s)",
           "tariff_mode": "Tarifa mód",
           "dynamic_tariff_entity": "Dinamikus ár entitás (üresen automatikusan felismerve)",
-          "dynamic_forecast_entity": "Előrejelzés entitás (opcionális, üresen automatikusan felismerve)",
+          "dynamic_forecast_entity": "Árelőrejelzés entitás (opcionális, üresen automatikus felismerés)",
           "dynamic_feedin_entity": "Betáplálási ár entitás (opcionális, dinamikus betáplálási árhoz)",
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
           "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
-          "tariff_classification_mode": "Ár-besorolási mód"
+          "tariff_classification_mode": "Ár-besorolási mód",
+          "solar_forecast_source": "Napelemes előrejelzés forrása"
         },
         "data_description": {
           "electricity_import_rate": "Nappali/egységes vételezési ár (pénznem/kWh, áfával). Tartalékként használatos, ha a dinamikus árazás nem érhető el.",
@@ -239,7 +240,8 @@
           "dynamic_feedin_entity": "Opcionális érzékelő, amely az aktuális betáplálási / export árat adja a dinamikus betáplálási árhoz.",
           "grid_import_power_entity": "Opcionális érzékelő (W) a hálózati vételezési teljesítményhez. Automatikusan felismerve az Energia irányítópultról; szükség esetén itt írható felül.",
           "grid_export_power_entity": "Opcionális érzékelő (W) a hálózati betáplálási teljesítményhez. Automatikusan felismerve az Energia irányítópultról; szükség esetén itt írható felül.",
-          "tariff_classification_mode": "A „Percentilis” a mai tartományhoz viszonyítva sorolja be az árakat (ajánlott). A „Statikus” rögzített olcsó/drága küszöböket használ."
+          "tariff_classification_mode": "A „Percentilis” a mai tartományhoz viszonyítva sorolja be az árakat (ajánlott). A „Statikus” rögzített olcsó/drága küszöböket használ.",
+          "solar_forecast_source": "Melyik előrejelzés-integrációt olvassa a SEM. Az automatikus felismerés a Solcastot részesíti előnyben, majd a Forecast.Solart, majd az Open-Meteót — válassz egyet, ha többet is használsz."
         }
       },
       "load_management": {

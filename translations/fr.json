@@ -220,11 +220,12 @@
           "update_interval": "Intervalle de mise à jour (s)",
           "tariff_mode": "Mode tarifaire",
           "dynamic_tariff_entity": "Entité de prix dynamique (détectée automatiquement si vide)",
-          "dynamic_forecast_entity": "Entité de prévision (optionnel, détectée automatiquement si vide)",
+          "dynamic_forecast_entity": "Entité de prévision des prix (facultatif, détectée automatiquement si vide)",
           "dynamic_feedin_entity": "Entité de prix de rachat (optionnel, pour un tarif d'export dynamique)",
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
           "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
-          "tariff_classification_mode": "Mode de classification des prix"
+          "tariff_classification_mode": "Mode de classification des prix",
+          "solar_forecast_source": "Source de la prévision solaire"
         },
         "data_description": {
           "electricity_import_rate": "Tarif d'import jour/forfaitaire (devise/kWh, TVA incluse). Utilisé en secours lorsque la tarification dynamique est indisponible.",
@@ -239,7 +240,8 @@
           "dynamic_feedin_entity": "Capteur optionnel fournissant le prix de rachat / d'export actuel pour un tarif d'export dynamique.",
           "grid_import_power_entity": "Capteur optionnel (W) pour la puissance d'import réseau. Détecté automatiquement depuis le tableau de bord Énergie ; remplacez-le ici si nécessaire.",
           "grid_export_power_entity": "Capteur optionnel (W) pour la puissance d'export réseau. Détecté automatiquement depuis le tableau de bord Énergie ; remplacez-le ici si nécessaire.",
-          "tariff_classification_mode": "« Percentile » classe les prix par rapport à la plage du jour (recommandé). « Statique » utilise des seuils fixes bon marché/cher."
+          "tariff_classification_mode": "« Percentile » classe les prix par rapport à la plage du jour (recommandé). « Statique » utilise des seuils fixes bon marché/cher.",
+          "solar_forecast_source": "Quelle intégration de prévision SEM utilise. La détection automatique privilégie Solcast, puis Forecast.Solar, puis Open-Meteo — choisissez-en une si vous en utilisez plusieurs."
         }
       },
       "load_management": {

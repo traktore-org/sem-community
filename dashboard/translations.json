@@ -1380,7 +1380,11 @@
     "zone_legend_assist": "Pomoc EV",
     "zone_legend_buffer": "Buffer",
     "zone_legend_reserve": "Rezerva",
-    "zone_legend_surplus": "Přebytek"
+    "zone_legend_surplus": "Přebytek",
+    "config_solar_forecast_source": "Zdroj předpovědi výroby",
+    "config_help_solar_forecast_source": "Kterou integraci předpovědi SEM čte. Auto upřednostňuje Solcast, poté Forecast.Solar a poté Open-Meteo — zvolte jednu, pokud jich provozujete více.",
+    "config_forecast_source_auto": "Automatická detekce",
+    "config_forecast_source_missing": "není nainstalováno"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -2763,7 +2767,11 @@
     "zone_legend_assist": "EV-hjælp",
     "zone_legend_buffer": "Buffer",
     "zone_legend_reserve": "Reserve",
-    "zone_legend_surplus": "Overskud"
+    "zone_legend_surplus": "Overskud",
+    "config_solar_forecast_source": "Kilde til solprognose",
+    "config_help_solar_forecast_source": "Hvilken prognoseintegration SEM læser. Auto foretrækker Solcast, derefter Forecast.Solar og derefter Open-Meteo — vælg én, hvis du kører flere.",
+    "config_forecast_source_auto": "Registrér automatisk",
+    "config_forecast_source_missing": "ikke installeret"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -4146,7 +4154,11 @@
     "zone_legend_assist": "EV-Hilfe",
     "zone_legend_buffer": "Puffer",
     "zone_legend_reserve": "Reserve",
-    "zone_legend_surplus": "Überschuss"
+    "zone_legend_surplus": "Überschuss",
+    "config_solar_forecast_source": "Quelle der Solarprognose",
+    "config_help_solar_forecast_source": "Welche Prognose-Integration SEM liest. Automatisch bevorzugt Solcast, dann Forecast.Solar, dann Open-Meteo — wähle eine, wenn du mehrere parallel betreibst.",
+    "config_forecast_source_auto": "Automatisch erkennen",
+    "config_forecast_source_missing": "nicht installiert"
   },
   "en": {
     "% of limit": "% of limit",
@@ -5529,7 +5541,11 @@
     "zone_legend_assist": "EV assist",
     "zone_legend_buffer": "Buffer",
     "zone_legend_reserve": "Reserve",
-    "zone_legend_surplus": "Surplus"
+    "zone_legend_surplus": "Surplus",
+    "config_solar_forecast_source": "Solar forecast source",
+    "config_help_solar_forecast_source": "Which forecast integration SEM reads. Auto prefers Solcast, then Forecast.Solar, then Open-Meteo — pick one if you run several side by side.",
+    "config_forecast_source_auto": "Auto-detect",
+    "config_forecast_source_missing": "not installed"
   },
   "es": {
     "% of limit": "% del límite",
@@ -6912,7 +6928,11 @@
     "zone_legend_assist": "Asist. VE",
     "zone_legend_buffer": "Búfer",
     "zone_legend_reserve": "Reserva",
-    "zone_legend_surplus": "Excedente"
+    "zone_legend_surplus": "Excedente",
+    "config_solar_forecast_source": "Fuente de la previsión solar",
+    "config_help_solar_forecast_source": "Qué integración de previsión lee SEM. Auto prefiere Solcast, luego Forecast.Solar y luego Open-Meteo: elige una si usas varias.",
+    "config_forecast_source_auto": "Detección automática",
+    "config_forecast_source_missing": "no instalado"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -8295,7 +8315,11 @@
     "zone_legend_assist": "EV-apu",
     "zone_legend_buffer": "Puskuri",
     "zone_legend_reserve": "Varaus",
-    "zone_legend_surplus": "Ylijäämä"
+    "zone_legend_surplus": "Ylijäämä",
+    "config_solar_forecast_source": "Aurinkoennusteen lähde",
+    "config_help_solar_forecast_source": "Mitä ennusteintegraatiota SEM lukee. Auto suosii Solcastia, sitten Forecast.Solaria, sitten Open-Meteoa — valitse yksi, jos käytät useita.",
+    "config_forecast_source_auto": "Tunnista automaattisesti",
+    "config_forecast_source_missing": "ei asennettu"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -9678,7 +9702,11 @@
     "zone_legend_assist": "Assist. VE",
     "zone_legend_buffer": "Tampon",
     "zone_legend_reserve": "Réserve",
-    "zone_legend_surplus": "Surplus"
+    "zone_legend_surplus": "Surplus",
+    "config_solar_forecast_source": "Source de la prévision solaire",
+    "config_help_solar_forecast_source": "Quelle intégration de prévision SEM utilise. Auto privilégie Solcast, puis Forecast.Solar, puis Open-Meteo — choisissez-en une si vous en utilisez plusieurs.",
+    "config_forecast_source_auto": "Détection automatique",
+    "config_forecast_source_missing": "non installé"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -11061,7 +11089,11 @@
     "zone_legend_assist": "EV-segéd",
     "zone_legend_buffer": "Puffer",
     "zone_legend_reserve": "Tartalék",
-    "zone_legend_surplus": "Többlet"
+    "zone_legend_surplus": "Többlet",
+    "config_solar_forecast_source": "Napelemes előrejelzés forrása",
+    "config_help_solar_forecast_source": "Melyik előrejelzés-integrációt olvassa a SEM. Az Auto a Solcastot részesíti előnyben, majd a Forecast.Solart, majd az Open-Meteót — válassz egyet, ha többet használsz.",
+    "config_forecast_source_auto": "Automatikus felismerés",
+    "config_forecast_source_missing": "nincs telepítve"
   },
   "it": {
     "% of limit": "% del limite",
@@ -12444,7 +12476,11 @@
     "zone_legend_assist": "Assist. VE",
     "zone_legend_buffer": "Buffer",
     "zone_legend_reserve": "Riserva",
-    "zone_legend_surplus": "Surplus"
+    "zone_legend_surplus": "Surplus",
+    "config_solar_forecast_source": "Sorgente della previsione solare",
+    "config_help_solar_forecast_source": "Quale integrazione di previsione legge SEM. Auto preferisce Solcast, poi Forecast.Solar, poi Open-Meteo — scegline una se ne usi più di una.",
+    "config_forecast_source_auto": "Rilevamento automatico",
+    "config_forecast_source_missing": "non installato"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -13827,7 +13863,11 @@
     "zone_legend_assist": "EV-hulp",
     "zone_legend_buffer": "Buffer",
     "zone_legend_reserve": "Reserve",
-    "zone_legend_surplus": "Overschot"
+    "zone_legend_surplus": "Overschot",
+    "config_solar_forecast_source": "Bron van de zonneprognose",
+    "config_help_solar_forecast_source": "Welke prognose-integratie SEM leest. Automatisch kiest eerst Solcast, dan Forecast.Solar, dan Open-Meteo — kies er zelf één als je er meerdere draait.",
+    "config_forecast_source_auto": "Automatisch detecteren",
+    "config_forecast_source_missing": "niet geïnstalleerd"
   },
   "no": {
     "% of limit": "% av grense",
@@ -15210,7 +15250,11 @@
     "zone_legend_assist": "EV-hjelp",
     "zone_legend_buffer": "Buffer",
     "zone_legend_reserve": "Reserve",
-    "zone_legend_surplus": "Overskudd"
+    "zone_legend_surplus": "Overskudd",
+    "config_solar_forecast_source": "Kilde for solprognose",
+    "config_help_solar_forecast_source": "Hvilken prognoseintegrasjon SEM leser. Auto foretrekker Solcast, så Forecast.Solar, så Open-Meteo — velg én hvis du kjører flere.",
+    "config_forecast_source_auto": "Oppdag automatisk",
+    "config_forecast_source_missing": "ikke installert"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -16593,7 +16637,11 @@
     "zone_legend_assist": "Wsparcie EV",
     "zone_legend_buffer": "Bufor",
     "zone_legend_reserve": "Rezerwa",
-    "zone_legend_surplus": "Nadwyżka"
+    "zone_legend_surplus": "Nadwyżka",
+    "config_solar_forecast_source": "Źródło prognozy słonecznej",
+    "config_help_solar_forecast_source": "Którą integrację prognozy odczytuje SEM. Auto preferuje Solcast, potem Forecast.Solar, potem Open-Meteo — wybierz jedną, jeśli używasz kilku.",
+    "config_forecast_source_auto": "Wykryj automatycznie",
+    "config_forecast_source_missing": "niezainstalowane"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -17976,7 +18024,11 @@
     "zone_legend_assist": "Apoio VE",
     "zone_legend_buffer": "Tampão",
     "zone_legend_reserve": "Reserva",
-    "zone_legend_surplus": "Excedente"
+    "zone_legend_surplus": "Excedente",
+    "config_solar_forecast_source": "Fonte da previsão solar",
+    "config_help_solar_forecast_source": "Qual integração de previsão o SEM lê. Auto prefere Solcast, depois Forecast.Solar e depois Open-Meteo — escolha uma se usar várias.",
+    "config_forecast_source_auto": "Deteção automática",
+    "config_forecast_source_missing": "não instalado"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -19359,7 +19411,11 @@
     "zone_legend_assist": "Asist. EV",
     "zone_legend_buffer": "Tampon",
     "zone_legend_reserve": "Rezervă",
-    "zone_legend_surplus": "Surplus"
+    "zone_legend_surplus": "Surplus",
+    "config_solar_forecast_source": "Sursa prognozei solare",
+    "config_help_solar_forecast_source": "Ce integrare de prognoză citește SEM. Auto preferă Solcast, apoi Forecast.Solar, apoi Open-Meteo — alege una dacă rulezi mai multe.",
+    "config_forecast_source_auto": "Detectare automată",
+    "config_forecast_source_missing": "neinstalat"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -20742,7 +20798,11 @@
     "zone_legend_assist": "EV-hjälp",
     "zone_legend_buffer": "Buffert",
     "zone_legend_reserve": "Reserv",
-    "zone_legend_surplus": "Överskott"
+    "zone_legend_surplus": "Överskott",
+    "config_solar_forecast_source": "Källa för solprognos",
+    "config_help_solar_forecast_source": "Vilken prognosintegration SEM läser. Auto föredrar Solcast, sedan Forecast.Solar, sedan Open-Meteo — välj en om du kör flera.",
+    "config_forecast_source_auto": "Identifiera automatiskt",
+    "config_forecast_source_missing": "inte installerad"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -22125,6 +22185,10 @@
     "zone_legend_assist": "电动汽车辅助",
     "zone_legend_buffer": "缓冲",
     "zone_legend_reserve": "储备",
-    "zone_legend_surplus": "富余电量"
+    "zone_legend_surplus": "富余电量",
+    "config_solar_forecast_source": "光伏预测数据源",
+    "config_help_solar_forecast_source": "SEM 读取哪个预测集成。自动模式优先 Solcast，其次 Forecast.Solar，再次 Open-Meteo — 如果同时运行多个，请手动指定。",
+    "config_forecast_source_auto": "自动检测",
+    "config_forecast_source_missing": "未安装"
   }
 }
