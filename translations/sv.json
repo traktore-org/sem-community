@@ -1527,6 +1527,10 @@
     "lovelace_yaml_mode": {
       "title": "Lovelace i YAML-läge — lägg till SEM:s kortresurser",
       "description": "Din Home Assistant kör Lovelace i YAML-läge, så SEM kan inte registrera sina kort automatiskt och panelen visar «Konfigurationsfel»-kort.\n\nLägg till detta i `configuration.yaml` under `lovelace:` → `resources:`, starta om Home Assistant och ladda om webbläsaren (Ctrl+Skift+R):\n\n```yaml\n{resources}\n```\n\nMeddelandet försvinner när resurserna laddats."
+    },
+    "charger_control_entity_broken": {
+      "title": "Laddboxens styrentitet fungerar inte: {name}",
+      "description": "SEM använder **`{entity_id}`** för att {capability} på **{name}**, men den entiteten är `{reason}` — varje kommando försvinner. Kontrollera entiteten i **Utvecklarverktyg → Tillstånd** och åtgärda vid källan, eller peka om SEM via **Inställningar → Enheter och tjänster → SEM → Konfigurera → Laddbox → Redigera**."
     }
   },
   "selector": {

@@ -1527,6 +1527,10 @@
     "lovelace_yaml_mode": {
       "title": "A Lovelace YAML módban van — add hozzá a SEM kártyaforrásokat",
       "description": "A Home Assistant YAML módban futtatja a Lovelace-t, így a SEM nem tudja automatikusan regisztrálni a kártyáit, és az irányítópult „Konfigurációs hiba” kártyákat mutat.\n\nAdd hozzá ezt a `configuration.yaml` fájlhoz a `lovelace:` → `resources:` alá, indítsd újra a Home Assistantot, majd frissítsd a böngészőt (Ctrl+Shift+R):\n\n```yaml\n{resources}\n```\n\nAz üzenet eltűnik, amint a források betöltődnek."
+    },
+    "charger_control_entity_broken": {
+      "title": "A töltő vezérlő entitása nem működik: {name}",
+      "description": "A SEM a **`{entity_id}`** entitást használja ehhez: {capability} a **{name}** eszközön, de az entitás `{reason}` — minden parancs elvész. Ellenőrizd az entitást a **Fejlesztői eszközök → Állapotok** alatt, és javítsd a forrásnál, vagy állítsd át a SEM-et: **Beállítások → Eszközök és szolgáltatások → SEM → Konfigurálás → Töltő → Szerkesztés**."
     }
   },
   "selector": {

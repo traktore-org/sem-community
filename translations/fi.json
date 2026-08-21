@@ -1527,6 +1527,10 @@
     "lovelace_yaml_mode": {
       "title": "Lovelace YAML-tilassa — lisää SEM:n korttiresurssit",
       "description": "Home Assistant käyttää Lovelacea YAML-tilassa, joten SEM ei voi rekisteröidä kortteja automaattisesti ja koontinäyttö näyttää «Konfiguraatiovirhe»-kortteja.\n\nLisää tämä `configuration.yaml`-tiedostoon kohtaan `lovelace:` → `resources:`, käynnistä Home Assistant uudelleen ja lataa selain uudelleen (Ctrl+Shift+R):\n\n```yaml\n{resources}\n```\n\nViesti katoaa, kun resurssit on ladattu."
+    },
+    "charger_control_entity_broken": {
+      "title": "Latauslaitteen ohjausentiteetti ei toimi: {name}",
+      "description": "SEM käyttää entiteettiä **`{entity_id}`** toimintoon {capability} laitteella **{name}**, mutta entiteetti on `{reason}` — jokainen komento katoaa. Tarkista entiteetti kohdassa **Kehittäjätyökalut → Tilat** ja korjaa se lähteessä tai osoita SEM uudelleen: **Asetukset → Laitteet ja palvelut → SEM → Määritä → Latauslaite → Muokkaa**."
     }
   },
   "selector": {

@@ -1527,6 +1527,10 @@
     "lovelace_yaml_mode": {
       "title": "Lovelace im YAML-Modus — SEM-Kartenressourcen eintragen",
       "description": "Dein Home Assistant betreibt Lovelace im YAML-Modus, daher kann SEM seine Dashboard-Karten nicht automatisch registrieren und das SEM-Dashboard zeigt „Konfigurationsfehler“-Karten.\n\nTrage Folgendes in der `configuration.yaml` unter `lovelace:` → `resources:` ein, starte Home Assistant neu und lade den Browser hart neu (Strg+Umschalt+R):\n\n```yaml\n{resources}\n```\n\nDiese Meldung verschwindet, sobald die Ressourcen geladen sind."
+    },
+    "charger_control_entity_broken": {
+      "title": "Steuer-Entität der Wallbox funktioniert nicht: {name}",
+      "description": "SEM soll **`{entity_id}`** verwenden, um {capability} bei **{name}**, aber diese Entität ist `{reason}` — jeder Befehl von SEM läuft ins Leere. SEM zeigt weiterhin einen Sollstrom an; die Wallbox folgt ihm nicht.\n\nHäufige Ursachen: Die Entität wurde umbenannt oder entfernt, oder eine Template-Entität konnte nicht geladen werden (ein Template-`number` mit einer ungültigen Option lädt nur als `restored` und schluckt Schreibvorgänge stillschweigend).\n\nPrüfe die Entität unter **Entwicklerwerkzeuge → Zustände**. Fehlt sie dort oder ist sie nicht verfügbar, behebe es an der Quelle; ist sie dauerhaft weg, stelle SEM neu ein unter **Einstellungen → Geräte & Dienste → SEM → Konfigurieren → Wallbox → Bearbeiten**."
     }
   },
   "selector": {

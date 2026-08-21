@@ -1527,6 +1527,10 @@
     "lovelace_yaml_mode": {
       "title": "Lovelace în mod YAML — adaugă resursele de carduri SEM",
       "description": "Home Assistant rulează Lovelace în mod YAML, deci SEM nu își poate înregistra automat cardurile, iar tabloul de bord afișează carduri «Eroare de configurare».\n\nAdaugă asta în `configuration.yaml` sub `lovelace:` → `resources:`, repornește Home Assistant și reîncarcă browserul (Ctrl+Shift+R):\n\n```yaml\n{resources}\n```\n\nMesajul dispare după ce resursele se încarcă."
+    },
+    "charger_control_entity_broken": {
+      "title": "Entitatea de control a stației nu funcționează: {name}",
+      "description": "SEM folosește **`{entity_id}`** pentru a {capability} pe **{name}**, dar acea entitate este `{reason}` — fiecare comandă se pierde. Verifică entitatea în **Instrumente pentru dezvoltatori → Stări** și repar-o la sursă, sau reorientează SEM din **Setări → Dispozitive și servicii → SEM → Configurare → Stație → Editare**."
     }
   },
   "selector": {

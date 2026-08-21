@@ -1527,6 +1527,10 @@
     "lovelace_yaml_mode": {
       "title": "Lovelace is in YAML mode — add SEM's card resources",
       "description": "Your Home Assistant runs Lovelace in YAML mode, so SEM cannot register its dashboard cards automatically and the SEM dashboard shows \"Configuration Error\" cards.\n\nAdd this under `lovelace:` → `resources:` in your `configuration.yaml`, restart Home Assistant, then hard-refresh the browser (Ctrl+Shift+R):\n\n```yaml\n{resources}\n```\n\nThis message disappears once the resources are loaded."
+    },
+    "charger_control_entity_broken": {
+      "title": "EV charger control entity is not working: {name}",
+      "description": "SEM is configured to use **`{entity_id}`** to {capability} on **{name}**, but that entity is `{reason}` — so every command SEM sends lands nowhere. SEM will still show a commanded current; the charger is not actually following it.\n\nCommon causes: the entity was renamed or removed upstream, or a template entity failed to load (a template `number` with an unsupported option loads only as `restored` and silently swallows writes).\n\nCheck the entity in **Developer Tools → States**. If it is missing or unavailable there, fix it at the source; if it is gone for good, re-point SEM under **Settings → Devices & Services → SEM → Configure → EV charger → Edit**."
     }
   },
   "selector": {

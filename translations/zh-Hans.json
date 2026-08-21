@@ -1527,6 +1527,10 @@
     "lovelace_yaml_mode": {
       "title": "Lovelace 处于 YAML 模式 — 请添加 SEM 卡片资源",
       "description": "您的 Home Assistant 以 YAML 模式运行 Lovelace，因此 SEM 无法自动注册其仪表板卡片，面板会显示“配置错误”卡片。\n\n请在 `configuration.yaml` 的 `lovelace:` → `resources:` 下添加以下内容，重启 Home Assistant，然后强制刷新浏览器（Ctrl+Shift+R）：\n\n```yaml\n{resources}\n```\n\n资源加载后此消息会自动消失。"
+    },
+    "charger_control_entity_broken": {
+      "title": "充电桩控制实体无法工作：{name}",
+      "description": "SEM 使用 **`{entity_id}`** 来对 **{name}** 执行{capability}，但该实体处于 `{reason}` 状态——每条指令都会丢失。请在**开发者工具 → 状态**中检查该实体并从源头修复，或在**设置 → 设备与服务 → SEM → 配置 → 充电桩 → 编辑**中重新指定。"
     }
   },
   "selector": {

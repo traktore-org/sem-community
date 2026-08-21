@@ -1527,6 +1527,10 @@
     "lovelace_yaml_mode": {
       "title": "Lovelace en modo YAML — añade los recursos de tarjetas de SEM",
       "description": "Tu Home Assistant usa Lovelace en modo YAML, por lo que SEM no puede registrar sus tarjetas automáticamente y el panel muestra tarjetas de «Error de configuración».\n\nAñade esto en `configuration.yaml` bajo `lovelace:` → `resources:`, reinicia Home Assistant y recarga el navegador (Ctrl+Mayús+R):\n\n```yaml\n{resources}\n```\n\nEste mensaje desaparece cuando los recursos se cargan."
+    },
+    "charger_control_entity_broken": {
+      "title": "La entidad de control del cargador no funciona: {name}",
+      "description": "SEM usa **`{entity_id}`** para {capability} en **{name}**, pero esa entidad está `{reason}`: cada comando se pierde. Revisa la entidad en **Herramientas para desarrolladores → Estados** y corrígela en el origen, o vuelve a apuntar SEM en **Ajustes → Dispositivos y servicios → SEM → Configurar → Cargador → Editar**."
     }
   },
   "selector": {

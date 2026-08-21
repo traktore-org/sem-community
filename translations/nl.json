@@ -1527,6 +1527,10 @@
     "lovelace_yaml_mode": {
       "title": "Lovelace in YAML-modus — voeg SEM-kaartbronnen toe",
       "description": "Home Assistant draait Lovelace in YAML-modus, dus SEM kan zijn dashboardkaarten niet automatisch registreren en het SEM-dashboard toont \"Configuratiefout\"-kaarten.\n\nVoeg dit toe in `configuration.yaml` onder `lovelace:` → `resources:`, herstart Home Assistant en doe een harde herlaadbeurt (Ctrl+Shift+R):\n\n```yaml\n{resources}\n```\n\nDeze melding verdwijnt zodra de bronnen geladen zijn."
+    },
+    "charger_control_entity_broken": {
+      "title": "Besturingsentiteit van de laadpaal werkt niet: {name}",
+      "description": "SEM gebruikt **`{entity_id}`** om {capability} op **{name}**, maar die entiteit is `{reason}` — elke opdracht komt nergens aan. Controleer de entiteit in **Ontwikkelhulpmiddelen → Statussen** en herstel deze bij de bron, of wijs SEM opnieuw aan via **Instellingen → Apparaten & diensten → SEM → Configureren → Laadpaal → Bewerken**."
     }
   },
   "selector": {

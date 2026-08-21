@@ -1527,6 +1527,10 @@
     "lovelace_yaml_mode": {
       "title": "Lovelace in modalità YAML — aggiungi le risorse delle schede SEM",
       "description": "Home Assistant usa Lovelace in modalità YAML, quindi SEM non può registrare le sue schede automaticamente e la dashboard mostra schede «Errore di configurazione».\n\nAggiungi questo in `configuration.yaml` sotto `lovelace:` → `resources:`, riavvia Home Assistant e ricarica il browser (Ctrl+Maiusc+R):\n\n```yaml\n{resources}\n```\n\nQuesto messaggio sparisce una volta caricate le risorse."
+    },
+    "charger_control_entity_broken": {
+      "title": "L'entità di controllo della wallbox non funziona: {name}",
+      "description": "SEM usa **`{entity_id}`** per {capability} su **{name}**, ma quell'entità è `{reason}` — ogni comando si perde. Controlla l'entità in **Strumenti per sviluppatori → Stati** e correggila all'origine, oppure riassegna SEM in **Impostazioni → Dispositivi e servizi → SEM → Configura → Wallbox → Modifica**."
     }
   },
   "selector": {

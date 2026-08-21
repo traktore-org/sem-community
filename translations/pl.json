@@ -1527,6 +1527,10 @@
     "lovelace_yaml_mode": {
       "title": "Lovelace w trybie YAML — dodaj zasoby kart SEM",
       "description": "Twój Home Assistant używa Lovelace w trybie YAML, więc SEM nie może automatycznie zarejestrować swoich kart, a pulpit pokazuje karty „Błąd konfiguracji”.\n\nDodaj to w `configuration.yaml` pod `lovelace:` → `resources:`, zrestartuj Home Assistant i odśwież przeglądarkę (Ctrl+Shift+R):\n\n```yaml\n{resources}\n```\n\nTa wiadomość zniknie po załadowaniu zasobów."
+    },
+    "charger_control_entity_broken": {
+      "title": "Encja sterująca ładowarki nie działa: {name}",
+      "description": "SEM używa **`{entity_id}`**, aby {capability} na **{name}**, ale ta encja jest `{reason}` — każde polecenie przepada. Sprawdź encję w **Narzędziach dewelopera → Stany** i napraw ją u źródła lub wskaż SEM inną w **Ustawienia → Urządzenia i usługi → SEM → Konfiguruj → Ładowarka → Edytuj**."
     }
   },
   "selector": {

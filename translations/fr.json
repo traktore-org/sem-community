@@ -1527,6 +1527,10 @@
     "lovelace_yaml_mode": {
       "title": "Lovelace en mode YAML — ajoutez les ressources de cartes SEM",
       "description": "Votre Home Assistant utilise Lovelace en mode YAML : SEM ne peut pas enregistrer ses cartes automatiquement et le tableau de bord affiche des cartes « Erreur de configuration ».\n\nAjoutez ceci dans `configuration.yaml` sous `lovelace:` → `resources:`, redémarrez Home Assistant puis rechargez le navigateur (Ctrl+Maj+R) :\n\n```yaml\n{resources}\n```\n\nCe message disparaît une fois les ressources chargées."
+    },
+    "charger_control_entity_broken": {
+      "title": "L'entité de commande de la borne ne fonctionne pas : {name}",
+      "description": "SEM utilise **`{entity_id}`** pour {capability} sur **{name}**, mais cette entité est `{reason}` — chaque commande se perd. Vérifiez l'entité dans **Outils de développement → États** et corrigez-la à la source, ou redirigez SEM via **Paramètres → Appareils et services → SEM → Configurer → Borne → Modifier**."
     }
   },
   "selector": {
