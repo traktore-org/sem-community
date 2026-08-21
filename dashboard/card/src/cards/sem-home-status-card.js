@@ -331,6 +331,6 @@ semDefineCard('sem-home-status-card', SEMHomeStatusCard, {
     name: 'SEM Home Status Card',
     description: 'Consolidated status panel for the SEM Home tab',
     documentationURL:
-        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-home-status-card',
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-home-status-card',
     preview: false,
 });

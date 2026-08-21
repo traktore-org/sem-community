@@ -409,5 +409,5 @@ semDefineCard('sem-tab-header', SEMTabHeader, {
     name: 'SEM Tab Header',
     description: 'Lumina-styled tab header with glow icon and live stats',
     documentationURL:
-        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-tab-header',
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-tab-header',
 });

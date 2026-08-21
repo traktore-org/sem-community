@@ -756,5 +756,5 @@ semDefineCard('sem-chart-card', SEMChartCard, {
     name: 'SEM Chart',
     description: 'Period-reactive chart with glassmorphism styling and built-in presets',
     documentationURL:
-        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-chart-card',
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-chart-card',
 });

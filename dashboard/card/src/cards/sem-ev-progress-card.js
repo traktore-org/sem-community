@@ -335,7 +335,7 @@ const cardInfo = {
     name: 'SEM EV Progress Card',
     description: 'Daily EV progress bar and lifetime charging statistics',
     documentationURL:
-        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-ev-progress-card',
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-ev-progress-card',
 };
 
 semDefineCard('sem-ev-progress-card', SEMEvProgressCard, cardInfo);

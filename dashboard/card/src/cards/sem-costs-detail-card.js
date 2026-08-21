@@ -468,6 +468,6 @@ semDefineCard('sem-costs-detail-card', SEMCostsDetailCard, {
     name: 'SEM Costs Detail Card',
     description: 'Financial details — EV economics, investment, demand charge, and tariff rates',
     documentationURL:
-        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-costs-detail-card',
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-costs-detail-card',
     preview: false,
 });

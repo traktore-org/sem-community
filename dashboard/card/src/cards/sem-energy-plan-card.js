@@ -37,8 +37,8 @@ const KINDS = {
 // Deep links into the planner docs (guarded by tests/test_618_docs_anchors.py
 // — the regex there matches these "docs:" literals, keep the shape).
 const DOC_LINKS = {
-    actuation: { docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/ENERGY_PLANNER.md#actuation-g4' },
-    arbitrage: { docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/ENERGY_PLANNER.md#the-arbitrage-advisor' },
+    actuation: { docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/ENERGY_PLANNER.md#actuation-g4' },
+    arbitrage: { docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/ENERGY_PLANNER.md#the-arbitrage-advisor' },
 };
 
 const STATUS = {
@@ -1127,7 +1127,7 @@ semDefineCard('sem-energy-plan-card', SEMEnergyPlanCard, {
     name: 'SEM Energy Plan',
     description: 'The joint plan for the energy day — when each demand runs and where the battery hands over',
     documentationURL:
-        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-energy-plan-card',
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-energy-plan-card',
 });
 // Back-compat alias: dashboards generated before the rename still say
 // custom:sem-overnight-plan-card — serve them the same card until the

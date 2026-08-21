@@ -1864,5 +1864,5 @@ semDefineCard('sem-system-diagram-card', SEMSystemDiagramCard, {
     name: 'SEM System Diagram',
     description: 'Power flow visualization with inline SVG illustrations for each energy component',
     documentationURL:
-        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-system-diagram-card',
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-system-diagram-card',
 });

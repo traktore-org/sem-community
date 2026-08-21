@@ -632,6 +632,6 @@ semDefineCard('sem-system-card', SEMSystemCard, {
     name: 'SEM System Card',
     description: 'Integration health — version, detected hardware, grid mode, sensor availability',
     documentationURL:
-        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-system-card',
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-system-card',
     preview: false,
 });

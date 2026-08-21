@@ -14,7 +14,7 @@ import pytest
 
 _ROOT = Path(__file__).resolve().parents[1]
 _CARD = _ROOT / "dashboard" / "card" / "src" / "cards" / "sem-config-card.js"
-_BASE = "https://github.com/traktore-org/sem-community/blob/main/docs/"
+_BASE = "https://github.com/traktore-org/sem-community/blob/develop/docs/"
 
 
 def _github_slug(heading: str) -> str:
@@ -233,3 +233,28 @@ class TestIssueTemplateReferences:
                 if m.group(1) not in real:
                     problems.append(f"{f.name}: template={m.group(1)} (have: {sorted(real)})")
         assert not problems, "\n".join(problems)
+
+
+def test_no_absolute_doc_link_points_at_main():
+    """(#813 follow-up, 21.08) Card ``documentationURL``s and repair texts
+    pointed at ``blob/main/docs/…``. Two of those docs only exist on the
+    2.0 line, so every beta user clicking them got a 404 — and we sent one
+    of the broken links to three reporters by hand. ``develop`` always
+    carries every doc a shipped beta references; main catches up at the
+    stable cut. One rule, no per-file exceptions to remember."""
+    import pathlib, re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    offenders = []
+    for pattern in ("*.py", "*.md", "*.yaml", "dashboard/card/src/**/*.js"):
+        for p in root.glob(pattern) if "**" not in pattern else root.glob(pattern):
+            if "node_modules" in str(p) or "/dist/" in str(p):
+                continue
+            try:
+                text = p.read_text()
+            except Exception:
+                continue
+            if re.search(r"blob/main/docs/", text):
+                offenders.append(str(p.relative_to(root)))
+    assert not offenders, (
+        "absolute doc links must use blob/develop (main lags the beta line "
+        f"and 404s): {sorted(set(offenders))}")

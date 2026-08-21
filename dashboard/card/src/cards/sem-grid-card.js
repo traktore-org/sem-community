@@ -459,5 +459,5 @@ semDefineCard('sem-grid-card', SEMGridCard, {
     name: 'SEM Grid',
     description: 'Consolidated grid card with import/export, peak management, load control, tariff, and surplus',
     documentationURL:
-        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-grid-card',
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-grid-card',
 });

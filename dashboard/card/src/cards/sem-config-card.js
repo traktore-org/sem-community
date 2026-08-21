@@ -29,7 +29,7 @@ const SECTIONS = [
         id: 'overview',
         icon: 'mdi:check-decagram',
         color: '#8DC892',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/README.md',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/README.md',
         titleKey: 'config_section_overview',
         subtitleFn: (c) => c._overviewSubtitle(),
         expanded: true,  // open by default — gives the user a quick status read
@@ -40,7 +40,7 @@ const SECTIONS = [
         // pickers are the escape hatch when a detected sensor is wrong or
         // dead (e.g. inverter CTs dark off-grid → external meter).
         id: 'sensor_sources',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md#sensor-source-overrides',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/SETUP_GUIDE.md#sensor-source-overrides',
         icon: 'mdi:transmission-tower',
         color: '#488fc2',
         titleKey: 'config_section_sensor_sources',
@@ -51,7 +51,7 @@ const SECTIONS = [
         // class made visible: mis-detection shows up here as a reviewable
         // list, not downstream as broken behavior.
         id: 'detected_hardware',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SUPPORTED_HARDWARE.md',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/SUPPORTED_HARDWARE.md',
         icon: 'mdi:radar',
         color: '#8DC892',
         titleKey: 'config_section_detected_hardware',
@@ -59,7 +59,7 @@ const SECTIONS = [
     },
     {
         id: 'ev_chargers',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/EV_CHARGING_LOGIC.md#the-five-charge-modes',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/EV_CHARGING_LOGIC.md#the-five-charge-modes',
         icon: 'mdi:ev-station',
         color: '#5BC8D8',
         titleKey: 'config_section_ev_chargers',
@@ -67,7 +67,7 @@ const SECTIONS = [
     },
     {
         id: 'battery_zones',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md#6-soc-zone-strategy',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/SETUP_GUIDE.md#6-soc-zone-strategy',
         icon: 'mdi:battery-charging-medium',
         color: '#4db6ac',
         titleKey: 'config_section_battery_zones',
@@ -75,7 +75,7 @@ const SECTIONS = [
     },
     {
         id: 'tariff',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md#tariff-and-pricing-settings',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/SETUP_GUIDE.md#tariff-and-pricing-settings',
         icon: 'mdi:cash-multiple',
         color: '#96CAEE',
         titleKey: 'config_section_tariff',
@@ -83,7 +83,7 @@ const SECTIONS = [
     },
     {
         id: 'heat_pump',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md#10-heat-pump-and-hot-water',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/SETUP_GUIDE.md#10-heat-pump-and-hot-water',
         icon: 'mdi:heat-pump',
         color: '#4db6ac',
         titleKey: 'config_section_heat_pump',
@@ -91,7 +91,7 @@ const SECTIONS = [
     },
     {
         id: 'hot_water',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md#hot-water-boiler-separate-from-heat-pump',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/SETUP_GUIDE.md#hot-water-boiler-separate-from-heat-pump',
         icon: 'mdi:water-boiler',
         color: '#5BC8D8',
         titleKey: 'config_section_hot_water',
@@ -99,7 +99,7 @@ const SECTIONS = [
     },
     {
         id: 'battery_scheduler',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md#9-battery-charge-scheduler',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/SETUP_GUIDE.md#9-battery-charge-scheduler',
         icon: 'mdi:calendar-clock',
         color: '#f06292',
         titleKey: 'config_section_battery_scheduler',
@@ -107,7 +107,7 @@ const SECTIONS = [
     },
     {
         id: 'load_management',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/USER_GUIDE.md#load-management-settings',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/USER_GUIDE.md#load-management-settings',
         icon: 'mdi:flash-alert',
         color: '#ff9800',
         titleKey: 'config_section_load_management',
@@ -115,7 +115,7 @@ const SECTIONS = [
     },
     {
         id: 'forecast',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md#forecast-settings',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/SETUP_GUIDE.md#forecast-settings',
         icon: 'mdi:weather-partly-cloudy',
         color: '#ff9800',
         titleKey: 'config_section_forecast',
@@ -125,7 +125,7 @@ const SECTIONS = [
         // (#566) rename PV strings inline — only rendered when ≥2 strings are
         // detected (see the visibility filter in render()).
         id: 'pv_strings',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/PV_STRINGS.md#what-you-get',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/PV_STRINGS.md#what-you-get',
         icon: 'mdi:solar-panel',
         color: '#ff9800',
         titleKey: 'config_section_pv_strings',
@@ -133,7 +133,7 @@ const SECTIONS = [
     },
     {
         id: 'notifications',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md#notification-settings',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/SETUP_GUIDE.md#notification-settings',
         icon: 'mdi:bell-outline',
         color: '#96CAEE',
         titleKey: 'config_section_notifications',
@@ -141,7 +141,7 @@ const SECTIONS = [
     },
     {
         id: 'advanced',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md#advanced-settings',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/SETUP_GUIDE.md#advanced-settings',
         icon: 'mdi:cog-outline',
         color: '#888',
         titleKey: 'config_section_advanced',
@@ -3020,6 +3020,6 @@ semDefineCard('sem-config-card', SEMConfigCard, {
     name: 'SEM Configuration Card',
     description: 'In-dashboard SEM configuration surface (replaces the Settings → SEM → Configure flow for most users)',
     documentationURL:
-        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-config-card',
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-config-card',
     preview: false,
 });

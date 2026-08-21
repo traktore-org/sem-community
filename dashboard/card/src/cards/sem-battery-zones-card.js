@@ -291,6 +291,6 @@ semDefineCard('sem-battery-zones-card', SEMBatteryZonesCard, {
     name: 'SEM Battery Zones Card',
     description: 'The three battery SOC thresholds — priority, buffer and auto-start',
     documentationURL:
-        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-battery-zones-card',
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-battery-zones-card',
     preview: false,
 });

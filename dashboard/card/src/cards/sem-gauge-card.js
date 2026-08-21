@@ -161,6 +161,6 @@ semDefineCard('sem-gauge-card', SEMGaugeCard, {
     name: 'SEM Gauge Card',
     description: 'Lumina-styled arc gauge for percentage values',
     documentationURL:
-        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-gauge-card',
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-gauge-card',
     preview: false,
 });

@@ -178,6 +178,6 @@ semDefineCard('sem-period-selector-card', SEMPeriodSelectorCard, {
     name: 'SEM Period Selector',
     description: 'Glassmorphism period picker for SEM chart cards',
     documentationURL:
-        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-period-selector-card',
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-period-selector-card',
     preview: false,
 });

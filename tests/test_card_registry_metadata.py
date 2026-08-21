@@ -41,8 +41,11 @@ GUIDE = REPO / "docs" / "DASHBOARD_GUIDE.md"
 # anchor contract.
 NOT_A_CARD = {"sem-shared.js", "sem-reactive-base.js"}
 
+# develop, not main (#813 follow-up): two linked docs exist only on the 2.0
+# line, so blob/main 404s for every beta user. develop always carries the
+# docs a shipped beta references; main catches up at the stable cut.
 DOC_BASE = (
-    "https://github.com/traktore-org/sem-community/blob/main/"
+    "https://github.com/traktore-org/sem-community/blob/develop/"
     "docs/DASHBOARD_GUIDE.md#"
 )
 

@@ -1224,5 +1224,5 @@ semDefineCard('sem-flow-card', SEMFlowCard, {
     name: 'SEM Flow Card',
     description: 'Animated energy flow diagram — works with any HA entities',
     documentationURL:
-        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-flow-card',
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-flow-card',
 });

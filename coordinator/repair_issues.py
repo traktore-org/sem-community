@@ -680,7 +680,7 @@ def clear_heat_pump_partial_sg_ready(hass: HomeAssistant) -> None:
 
 # Where the user is sent to fix it (how + why to disable the KEBA failsafe).
 KEBA_FAILSAFE_DOC_URL = (
-    "https://github.com/traktore-org/sem-community/blob/main/docs/KEBA_FAILSAFE.md"
+    "https://github.com/traktore-org/sem-community/blob/develop/docs/KEBA_FAILSAFE.md"
 )
 
 

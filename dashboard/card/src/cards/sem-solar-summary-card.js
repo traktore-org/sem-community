@@ -364,5 +364,5 @@ semDefineCard('sem-solar-summary-card', SEMSolarSummaryCard, {
     name: 'SEM Solar Summary',
     description: 'Lumina-styled solar overview with glow ring and production metrics',
     documentationURL:
-        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-solar-summary-card',
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-solar-summary-card',
 });

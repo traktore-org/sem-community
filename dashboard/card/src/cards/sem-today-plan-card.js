@@ -214,5 +214,5 @@ semDefineCard('sem-today-plan-card', SEMTodayPlanCard, {
     name: "SEM Today's Plan",
     description: 'Forward-looking schedule combining tariff, solar, and EV',
     documentationURL:
-        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-today-plan-card',
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-today-plan-card',
 });

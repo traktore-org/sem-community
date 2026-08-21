@@ -143,6 +143,6 @@ semDefineCard('sem-onboarding-banner', SEMOnboardingBanner, {
     name: 'SEM Onboarding Banner',
     description: 'One-time welcome banner pointing existing users to the new Configuration tab',
     documentationURL:
-        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-onboarding-banner',
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-onboarding-banner',
     preview: false,
 });

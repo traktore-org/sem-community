@@ -1498,7 +1498,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
                             "way.\n\n"
                             "[How to read tonight's plan]"
                             "(https://github.com/traktore-org/sem-community/"
-                            "blob/main/docs/ENERGY_PLANNER.md)"
+                            "blob/develop/docs/ENERGY_PLANNER.md)"
                         ),
                         "notification_id": "sem_energy_plan_actuation_v18",
                     },

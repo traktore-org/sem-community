@@ -722,6 +722,6 @@ semDefineCard('sem-control-card', SEMControlCard, {
     name: 'SEM Control Card',
     description: 'Live controls — peak management, load shedding, heat pump SG-Ready, observer mode',
     documentationURL:
-        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-control-card',
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-control-card',
     preview: false,
 });

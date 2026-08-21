@@ -298,6 +298,6 @@ semDefineCard('sem-energy-impact-card', SEMEnergyImpactCard, {
     name: 'SEM Energy Impact Card',
     description: 'CO2 avoided and its tree equivalent — today, this year, lifetime',
     documentationURL:
-        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-energy-impact-card',
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-energy-impact-card',
     preview: false,
 });

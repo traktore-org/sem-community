@@ -34,7 +34,7 @@ import {
 // tests/test_618_docs_anchors.py — the regex there matches this
 // "docs:" literal, keep the shape).
 const COMFORT_DOCS = {
-    docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/ENERGY_PLANNER.md#comfort-banking',
+    docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/ENERGY_PLANNER.md#comfort-banking',
 };
 
 class SEMLoadPriorityCard extends SEMLitBase {
@@ -1500,6 +1500,6 @@ semDefineCard('sem-load-priority-card', SEMLoadPriorityCard, {
     name: 'SEM Load Priority Card',
     description: 'Drag and drop interface for managing load shedding priorities',
     documentationURL:
-        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-load-priority-card',
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-load-priority-card',
     preview: true,
 });

@@ -359,6 +359,6 @@ semDefineCard('sem-weather-card', SEMWeatherCard, {
     name: 'SEM Weather',
     description: 'Lumina-styled clock + weather card with forecast',
     documentationURL:
-        'https://github.com/traktore-org/sem-community/blob/main/docs/DASHBOARD_GUIDE.md#sem-weather-card',
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-weather-card',
     preview: false,
 });
