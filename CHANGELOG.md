@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.0.0-beta.13] — 21.08.2026
+
 - 📋 **The support matrix now credits what users have actually proven**
   (#814): the *tested live* column mostly held the maintainer's own
   hardware. A full sweep of the issue and discussion corpus found far more —
