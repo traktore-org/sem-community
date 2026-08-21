@@ -1524,6 +1524,10 @@
     "lovelace_yaml_mode": {
       "title": "Lovelace i YAML-modus — legg til SEMs kortressurser",
       "description": "Din Home Assistant kjører Lovelace i YAML-modus, så SEM kan ikke registrere kortene sine automatisk og dashbordet viser «Konfigurasjonsfeil»-kort.\n\nLegg til dette i `configuration.yaml` under `lovelace:` → `resources:`, start Home Assistant på nytt og last inn nettleseren på nytt (Ctrl+Shift+R):\n\n```yaml\n{resources}\n```\n\nMeldingen forsvinner når ressursene er lastet."
+    },
+    "charger_control_entity_broken": {
+      "title": "Ladeboksens styringsentitet virker ikke: {name}",
+      "description": "SEM bruker **`{entity_id}`** til å {capability} på **{name}**, men den entiteten er `{reason}` — hver kommando forsvinner. Sjekk entiteten i **Utviklerverktøy → Tilstander** og fiks den ved kilden, eller pek SEM et annet sted via **Innstillinger → Enheter og tjenester → SEM → Konfigurer → Ladeboks → Rediger**."
     }
   },
   "selector": {

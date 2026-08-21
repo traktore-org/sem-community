@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔌 **A charger control entity that never loaded is now reported, not
+  written to in silence** (#824, found by @onkelfu in #763): one
+  unsupported `mode: slider` line meant Home Assistant never properly
+  loaded his template `number` — it existed only as `restored` — so every
+  charging-current command SEM sent vanished, for days, while the
+  dashboard kept showing a commanded current. SEM's existing
+  "charger rejects commands" repair could not catch it: that one needs
+  three commands that *failed*, and these never failed. SEM now checks the
+  entities it commands **before** trusting them, and raises a Repair
+  naming the charger, the entity and what was lost ("SEM cannot set the
+  charging current") — in 16 languages, after the same five-minute grace a
+  dead sensor gets, so a restart's warm-up stays quiet.
+
 # [2.0.0-beta.13] — 21.08.2026
 
 - 📋 **The support matrix now credits what users have actually proven**

@@ -1524,6 +1524,10 @@
     "lovelace_yaml_mode": {
       "title": "Lovelace v režimu YAML — přidejte zdroje karet SEM",
       "description": "Váš Home Assistant používá Lovelace v režimu YAML, takže SEM nemůže automaticky zaregistrovat své karty a panel zobrazuje karty „Chyba konfigurace“.\n\nPřidejte toto do `configuration.yaml` pod `lovelace:` → `resources:`, restartujte Home Assistant a načtěte prohlížeč (Ctrl+Shift+R):\n\n```yaml\n{resources}\n```\n\nZpráva zmizí, jakmile se zdroje načtou."
+    },
+    "charger_control_entity_broken": {
+      "title": "Ovládací entita nabíječky nefunguje: {name}",
+      "description": "SEM používá **`{entity_id}`** k {capability} na **{name}**, ale tato entita je `{reason}` — každý příkaz zmizí. Zkontrolujte entitu ve **Vývojářských nástrojích → Stavy** a opravte ji u zdroje, nebo SEM přesměrujte v **Nastavení → Zařízení a služby → SEM → Konfigurovat → Nabíječka → Upravit**."
     }
   },
   "selector": {

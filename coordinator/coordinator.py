@@ -544,6 +544,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             custom_entities=None,  # Was config.get("forecast_entities") — never set via UI
         )
         self._forecast_tracker = ForecastTracker()
+        # (#824) When each broken charger control entity was first seen,
+        # and which ones already have a Repair filed. Keyed by
+        # (charger_id, entity_id) so two chargers naming the same helper
+        # cannot clear each other's issue.
+        self._control_broken_since: dict[tuple, float] = {}
+        self._control_repair_raised: set[tuple] = set()
         self._forecast_tracker.set_hass(hass)
 
         # Phase 1: Tariff provider
@@ -4141,6 +4147,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 )
                 result[f"charger_{cid}_phase_switch_entity"] = _ps_entity
                 result[f"charger_{cid}_phase_switch_valid"] = _ps_valid
+                # (#824) The entities SEM COMMANDS, checked the same way.
+                # A dead sensor makes the numbers look wrong and gets
+                # reported; a dead control entity makes SEM look like it
+                # is working while the car does as it likes, because the
+                # write neither lands nor raises.
+                self._check_charger_control_entities(
+                    cid, _per_charger_cfg, result)
                 # (#804 Phase B/C) The sequencer's live state and the held
                 # belief — the belief outlives the instantaneous estimate
                 # (which is None whenever the car isn't drawing).
@@ -4647,6 +4660,81 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 return core_result
             _LOGGER.error("Error updating SEM data: %s", e, exc_info=True)
             raise UpdateFailed(f"Update failed: {e}") from e
+
+    # (#824) The capabilities SEM commands on a charger, and the phrase that
+    # goes into the Repair so it says what was actually lost rather than
+    # naming a config key at the user.
+    _CONTROL_CAPABILITIES = (
+        ("ev_current_control_entity", "set the charging current"),
+        ("ev_start_stop_entity", "start and stop charging"),
+    )
+
+    def _check_charger_control_entities(self, cid, charger_cfg, result) -> None:
+        """Pre-flight the entities SEM COMMANDS on this charger (#824).
+
+        Not error handling: @onkelfu's template number carried an
+        unsupported ``mode: slider``, so HA loaded it only as ``restored``
+        and every write vanished WITHOUT raising. The existing
+        ``charger_actuation_failed`` Repair needs three raised writes and
+        therefore never fired. The failure produces no error, so the check
+        has to look at the entity before trusting it.
+
+        A broken entity waits out ``UNAVAILABLE_REPAIR_THRESHOLD_S`` before
+        becoming a Repair — a restart's warm-up window must not cry wolf
+        (#611) — but the per-charger verdict publishes immediately so the
+        Configuration card can mark the row straight away.
+        """
+        from .control_entity import validate_control_entity
+        from . import repair_issues as _ri
+
+        broken_now = None
+        any_configured = False
+        for key, capability in self._CONTROL_CAPABILITIES:
+            verdict = validate_control_entity(
+                charger_cfg.get(key),
+                lambda eid: (
+                    self.hass.states.get(eid).state
+                    if self.hass.states.get(eid) is not None else None
+                ),
+            )
+            result[f"charger_{cid}_{key}_valid"] = verdict.valid
+            result[f"charger_{cid}_{key}_reason"] = verdict.reason
+            if verdict.valid is None:
+                continue
+            any_configured = True
+            entity_id = verdict.configured
+
+            if verdict.valid:
+                self._control_broken_since.pop((cid, entity_id), None)
+                if (cid, entity_id) in self._control_repair_raised:
+                    self._control_repair_raised.discard((cid, entity_id))
+                    _ri.clear_charger_control_entity_broken(
+                        self.hass, str(cid), entity_id)
+                continue
+
+            broken_now = broken_now or verdict.reason
+            import time as _time
+            now_mono = _time.monotonic()
+            first = self._control_broken_since.setdefault(
+                (cid, entity_id), now_mono)
+            if ((cid, entity_id) not in self._control_repair_raised
+                    and now_mono - first >= _ri.UNAVAILABLE_REPAIR_THRESHOLD_S):
+                self._control_repair_raised.add((cid, entity_id))
+                _ri.raise_charger_control_entity_broken(
+                    self.hass, str(cid),
+                    name=str(charger_cfg.get("name") or cid),
+                    entity_id=entity_id,
+                    capability=capability,
+                    reason=verdict.reason or "unavailable",
+                )
+
+        # One roll-up for the card: False the moment any commanded entity is
+        # broken, True when every configured one is live, None when this
+        # charger names no control entity at all (service-driven brands).
+        result[f"charger_{cid}_control_valid"] = (
+            None if not any_configured else broken_now is None
+        )
+        result[f"charger_{cid}_control_reason"] = broken_now
 
     @staticmethod
     def _heat_pump_sensor_state(hp_controller) -> tuple[str, int, bool]:
