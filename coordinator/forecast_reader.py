@@ -323,7 +323,15 @@ class ForecastReader:
         """
         self._preferred_missing = None      # (#819) fresh run
 
-        # Check custom entities first
+        # Check custom entities first.
+        # (#819) NOTE: nothing constructs the reader with these — the
+        # coordinator passes custom_entities=None — so this branch is
+        # currently unreachable. It is the seam a 'name your own
+        # forecast sensor' feature would use, and it needs a MAP of
+        # entities (today / tomorrow / power now), not one sensor, which
+        # is why a single entity picker was never enough to wire it.
+        # Kept deliberately, and documented as unsupported in
+        # SETUP_GUIDE rather than half-claimed.
         if self._custom_entities:
             self._entities = self._custom_entities
             self._source = "custom"

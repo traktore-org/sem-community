@@ -567,10 +567,23 @@ must be stable for 60 seconds before a notification fires).
 
 ### Forecast settings
 
-SEM auto-detects a solar forecast integration (Solcast, Forecast.Solar,
-[Open-Meteo Solar Forecast](https://github.com/rany2/ha-open-meteo-solar-forecast) or a
-compatible sensor) and uses it for smart night charging, the battery
-scheduler and the recommendation tips.
+SEM reads a solar forecast for smart night charging, the battery scheduler
+and the recommendation tips. **Three integrations are supported**, and SEM
+auto-detects them in this order:
+
+1. [Solcast PV Solar](https://github.com/BJReplay/ha-solcast-solar)
+2. [Forecast.Solar](https://www.home-assistant.io/integrations/forecast_solar/)
+3. [Open-Meteo Solar Forecast](https://github.com/rany2/ha-open-meteo-solar-forecast)
+
+The first one installed wins. If you run several side by side, choose one
+explicitly with **Solar forecast source** below — the picker offers only the
+integrations actually installed on your system.
+
+> There is **no** support for pointing SEM at your own forecast sensor.
+> This section used to imply otherwise, which is what made #819 look like a
+> missing setting rather than a missing feature. If you use a forecast
+> integration that is not one of the three, please open an issue — a named
+> integration is a data row, not a rewrite.
 
 | Setting | Default | What it does and when to change it |
 |---------|---------|-------------------------------------|

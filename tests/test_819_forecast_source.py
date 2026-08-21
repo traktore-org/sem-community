@@ -156,6 +156,29 @@ class TestTheSettingIsActuallyWired:
             "dashboard, not only in the options flow"
         )
 
+    def test_the_guide_names_every_supported_source_and_no_others(self):
+        """The root cause of #819 was a doc claim with nothing behind it
+        ("or a compatible sensor"). Tie the guide to the code so the claim
+        cannot drift again: every source SEM supports must be named, and the
+        phantom must not come back."""
+        from pathlib import Path
+
+        from custom_components.solar_energy_management.coordinator.forecast_reader import (
+            FORECAST_SOURCES,
+        )
+        doc = (Path(__file__).resolve().parent.parent / "docs"
+               / "SETUP_GUIDE.md").read_text()
+        human = {"solcast": "Solcast", "forecast_solar": "Forecast.Solar",
+                 "open_meteo": "Open-Meteo"}
+        for key in FORECAST_SOURCES:
+            assert human[key] in doc, (
+                f"SEM supports {key} but the setup guide never names it"
+            )
+        assert "or a\ncompatible sensor" not in doc and "or a compatible sensor" not in doc, (
+            "the guide is claiming support for naming an arbitrary forecast "
+            "sensor again — there is no such feature"
+        )
+
     def test_the_setup_guide_no_longer_misdescribes_it(self):
         from pathlib import Path
         doc = (Path(__file__).resolve().parent.parent / "docs"
@@ -193,13 +216,26 @@ class TestTheGuiShowsWhatIsActuallyInstalled:
         r.available_sources()
         assert r.source == "open_meteo"
 
-    def test_the_card_annotates_the_list(self):
+    def test_the_card_reads_it_from_somewhere_it_can_actually_see(self):
+        """This nearly shipped inert. The card's ``_val(suffix)`` resolves
+        ``sensor.sem_<suffix>.state`` — there is no entity for a list, so it
+        returned '' and the picker silently offered every source again. The
+        list has to ride an ATTRIBUTE of a real entity, and the test has to
+        check HOW it is read, not merely that the name appears somewhere."""
         from pathlib import Path
-        card = (Path(__file__).resolve().parent.parent / "dashboard" / "card"
-                / "src" / "cards" / "sem-config-card.js").read_text()
-        assert "forecast_sources_available" in card, (
-            "the picker does not know which integrations are installed, so it "
-            "would offer sources that are not there"
+        root = Path(__file__).resolve().parent.parent
+        card = (root / "dashboard" / "card" / "src" / "cards"
+                / "sem-config-card.js").read_text()
+        assert "attributes?.sources_available" in card, (
+            "the card is not reading the list from an entity attribute"
+        )
+        assert "_val('forecast_sources_available')" not in card, (
+            "_val() reads an entity STATE — for a list it always returns '' "
+            "and the guard silently passes"
+        )
+        sensors = (root / "sensor.py").read_text()
+        assert 'attrs["sources_available"]' in sensors, (
+            "nothing puts the list on an entity, so the card reads nothing"
         )
 
 
@@ -241,11 +277,18 @@ class TestChangingItDoesNotNeedAReload:
             "the picker would reload the whole entry on every change"
         )
 
-    def test_the_coordinator_re_applies_it(self):
+    def test_the_coordinator_re_applies_it_on_the_cycle_path(self):
+        """Live simulation caught this: the call existed, but on a rarely-run
+        path, so switching the source on the rig changed the stored option and
+        nothing else. Asserting the call merely EXISTS passes while the
+        feature does nothing — it has to guard the read that runs each
+        cycle."""
         from pathlib import Path
         src = (Path(__file__).resolve().parent.parent / "coordinator"
                / "coordinator.py").read_text()
-        assert "set_preferred_source(" in src, (
-            "nothing re-applies the choice, so a live config update would "
-            "never reach the reader — #462's silent no-op"
+        i = src.index("self._cycle_forecast = self._forecast_reader.read_forecast()")
+        window = src[max(0, i - 600):i]
+        assert "set_preferred_source(" in window, (
+            "the per-cycle forecast read does not re-apply the chosen source, "
+            "so the picker would only take effect on a reload"
         )

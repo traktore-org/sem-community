@@ -7564,7 +7564,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     ${this._renderOptionNumberInput("emergency_peak_level","config_lm_emergency_peak",{min:1,max:80,step:.1,unit:"kW",default:6},t,"config_help_lm_emergency_peak")}
                 `:q}
             `}
-        `}_renderForecast(e){const t=this._val("forecast_source")||"none",i="none"===t?this._t("none"):this._forecastProviderLabel(t),s=this._options||{},r=this._val("forecast_sources_available")||[],a=e=>!Array.isArray(r)||r.includes(e),o=s.solar_forecast_source||"auto",n=[{value:"auto",label:this._t("config_forecast_source_auto")},...[{value:"solcast",label:"Solcast PV Solar"},{value:"forecast_solar",label:"Forecast.Solar"},{value:"open_meteo",label:"Open-Meteo Solar Forecast"}].filter(e=>a(e.value)||e.value===o).map(e=>a(e.value)?e:{...e,label:`${e.label} — ${this._t("config_forecast_source_missing")}`})];return W`
+        `}_renderForecast(e){const t=this._val("forecast_source")||"none",i="none"===t?this._t("none"):this._forecastProviderLabel(t),s=this._options||{},r=this._hass?.states?.["sensor.sem_forecast_source"]?.attributes?.sources_available||[],a=e=>!Array.isArray(r)||r.includes(e),o=s.solar_forecast_source||"auto",n=[{value:"auto",label:this._t("config_forecast_source_auto")},...[{value:"solcast",label:"Solcast PV Solar"},{value:"forecast_solar",label:"Forecast.Solar"},{value:"open_meteo",label:"Open-Meteo Solar Forecast"}].filter(e=>a(e.value)||e.value===o).map(e=>a(e.value)?e:{...e,label:`${e.label} — ${this._t("config_forecast_source_missing")}`})];return W`
             <div class="readonly-row">
                 <span class="ctrl-label">${this._t("forecast_source")}</span>
                 <span class="readonly-value">${i}</span>

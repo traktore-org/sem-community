@@ -2003,7 +2003,12 @@ class SEMConfigCard extends SEMLitBase {
         // would silently fall back to auto and look like the setting did
         // nothing. A stale choice stays listed (marked) so the user can see
         // WHY their pick is not being used rather than finding it vanished.
-        const installed = this._val('forecast_sources_available') || [];
+        // Reads the ATTRIBUTE, not a state: _val() resolves
+        // sensor.sem_<suffix>.state, and there is no such entity for a
+        // list. Getting this wrong returns '' and silently re-offers
+        // every source — an inert half that looks fine on screen.
+        const installed = this._hass?.states?.['sensor.sem_forecast_source']
+            ?.attributes?.sources_available || [];
         const has = (k) => !Array.isArray(installed) || installed.includes(k);
         const chosen = opts.solar_forecast_source || 'auto';
         const named = [

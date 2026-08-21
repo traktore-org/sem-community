@@ -2713,11 +2713,30 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                     "review": self.coordinator.data.get("energy_plan_review"),
                 },
             ))
+        elif self.entity_description.key == "forecast_source":
+            # (#819) Which forecast integrations are installed, so the
+            # Configuration card can offer what is actually there. It
+            # rides this sensor's attributes because the card reads
+            # ENTITY state/attributes — a key that only reaches
+            # coordinator.data is invisible to it, which is how this
+            # nearly shipped inert.
+            attrs["sources_available"] = self.coordinator.data.get(
+                "forecast_sources_available") or []
         elif self.entity_description.key == "diag_charger_control":
             # (#814 Pillar B) the detection evidence report rides the charger
             # control diag sensor — the Config tab's Detected-hardware section
             # and bug reports read it here.
             attrs["detection_report"] = self.coordinator.data.get("detection_report")
+            # (#824) Per-charger control-entity verdicts ride here too:
+            # a verdict that lives only in coordinator.data is invisible
+            # to the card AND to anyone reading a diagnostics download,
+            # which is the same inert-half trap #819 nearly shipped.
+            attrs["control_entities"] = {
+                k: v for k, v in (self.coordinator.data or {}).items()
+                if k.startswith("charger_")
+                and (k.endswith("_control_valid")
+                     or k.endswith("_control_reason"))
+            }
         elif self.entity_description.key == "vpp_event":
             # #580 — per-event accounting for payment reconciliation.
             d = self.coordinator.data

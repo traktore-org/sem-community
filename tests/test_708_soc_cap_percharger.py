@@ -131,6 +131,13 @@ PER_CHARGER_REPAIRS = {
         "structural — raised from devices/base.py on the device object "
         "whose write just failed (#392)"
     ),
+    "raise_charger_control_entity_broken": (
+        "structural — raised from coordinator._check_charger_control_entities, "
+        "which runs INSIDE the per-charger loop and reads only this "
+        "charger's own config dict. The issue id carries (charger_id, "
+        "entity_id) so two chargers naming the same helper cannot clear "
+        "each other's repair (#824)"
+    ),
 }
 
 REPAIR_ISSUES_PY = (

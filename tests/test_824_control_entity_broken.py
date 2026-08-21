@@ -134,6 +134,18 @@ class TestItBecomesVisible:
             "charger_<id>_phase_switch_valid, so the card cannot show it"
         )
 
+    def test_the_verdict_is_observable_outside_coordinator_data(self):
+        """A verdict that lives only in coordinator.data cannot be seen by
+        the card, by a diagnostics download, or by me while verifying on a
+        rig — which is how #819 nearly shipped an inert half. It rides the
+        charger-control diag sensor's attributes."""
+        from pathlib import Path
+        src = (Path(__file__).resolve().parent.parent / "sensor.py").read_text()
+        assert 'attrs["control_entities"]' in src, (
+            "the per-charger verdicts are published nowhere a human or a "
+            "card can read them"
+        )
+
     def test_a_transient_flap_stays_quiet(self):
         """A restart's warm-up window must not file a Repair — the sensor
         Repair already learned this (#611 cries wolf)."""

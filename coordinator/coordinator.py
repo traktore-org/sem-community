@@ -2762,6 +2762,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         _now_mono_cycle = time.monotonic()
         try:
             # Per-cycle caches — avoid redundant lookups within one 10s cycle (#52)
+            # (#819) Re-apply the chosen source on the PER-CYCLE read —
+            # this is the one that actually runs every cycle. Idempotent
+            # when unchanged; a real change drops the cached source so
+            # this read re-detects, which is what makes the picker apply
+            # without reloading the entry.
+            self._forecast_reader.set_preferred_source(
+                self.config.get("solar_forecast_source"))
             self._cycle_forecast = self._forecast_reader.read_forecast()
             # Cache vehicle SOC (read in both _async_update_data and _determine_charging_strategy)
             _vehicle_soc_entity = self.config.get("vehicle_soc_entity", "")
