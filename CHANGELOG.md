@@ -13,6 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🩹 **Settings pages no longer refuse the values SEM itself saved** (#813,
+  found while configuring a production install): a charge target above
+  100 kWh could not be re-saved — the runtime sliders span 0–200 kWh but the
+  options pages capped the field at 100, so the form rejected its own stored
+  value. And raising the **target peak** past the emergency level left the
+  stored peak ladder inverted: the shedding logic quietly repaired it in
+  memory, but the Load Management page then refused to save, complaining
+  about a level the user never touched. The target writer now carries the
+  ladder with it (same ratios the runtime repair uses), and a new guard test
+  fails the build whenever an options field is narrower than the entity that
+  writes it — the drift that caused both.
+
 - 🌅 **A night that has ended cannot reopen** (#811 round 2, caught on the
   verification rig's first clean night): the sunrise fix shipped in
   beta.12 vetoed the phantom night via the sun's own state, but the rig

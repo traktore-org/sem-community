@@ -510,6 +510,26 @@ class LoadManagementCoordinator:
         """
         self._target_peak_limit = new_limit
         new_options = {**self.config_entry.options, "target_peak_limit": new_limit}
+        # (#813) Carry the ladder with the target. Raising the target past the
+        # emergency level left the STORED config inverted: the decision path
+        # repairs it in memory (``_effective_levels``) so shedding still
+        # behaves, but the options page — rightly — then refuses to save what
+        # SEM itself wrote, and the user meets "emergency must be above the
+        # target" on a page they never touched (live on PROD at 6.0/6.0).
+        # A writer must leave a state its own form accepts. Same ratios the
+        # in-memory repair uses, so both agree on where the levels land.
+        _warn = float(new_options.get("warning_peak_level",
+                                      DEFAULT_WARNING_PEAK_LEVEL) or 0)
+        _emerg = float(new_options.get("emergency_peak_level",
+                                       DEFAULT_EMERGENCY_PEAK_LEVEL) or 0)
+        if _emerg <= new_limit:
+            new_options["emergency_peak_level"] = round(
+                new_limit * EMERGENCY_PEAK_RATIO, 1)
+            self._emergency_level = new_options["emergency_peak_level"]
+        if _warn >= new_limit:
+            new_options["warning_peak_level"] = round(
+                new_limit * WARNING_PEAK_RATIO, 1)
+            self._warning_level = new_options["warning_peak_level"]
         if unlimited is not None:
             self._peak_unlimited = unlimited
             new_options["peak_limit_unlimited"] = unlimited

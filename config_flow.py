@@ -1232,7 +1232,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=_c("daily_ev_target_max", 100),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=0, max=100, step=0.5, unit_of_measurement="kWh", mode="slider"
+                        min=0, max=200, step=0.5, unit_of_measurement="kWh", mode="slider"
                     )
                 ),
                 vol.Optional(
@@ -1450,7 +1450,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=self._data.get("daily_ev_target", 10),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=0, max=100, step=0.5,
+                        min=0, max=200, step=0.5,
                         unit_of_measurement="kWh", mode="slider",
                     )
                 ),
@@ -1461,7 +1461,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=self._data.get("daily_ev_target_max", 100),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=0, max=100, step=0.5,
+                        min=0, max=200, step=0.5,
                         unit_of_measurement="kWh", mode="slider",
                     )
                 ),
@@ -1663,7 +1663,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=charger.get("daily_ev_target", self._data.get("daily_ev_target", 10)),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=0, max=100, step=0.5,
+                        min=0, max=200, step=0.5,
                         unit_of_measurement="kWh", mode="slider",
                     )
                 ),
@@ -1674,7 +1674,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=charger.get("daily_ev_target_max", 100),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=0, max=100, step=0.5,
+                        min=0, max=200, step=0.5,
                         unit_of_measurement="kWh", mode="slider",
                     )
                 ),
@@ -1913,7 +1913,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "daily_ev_target",
                     default=_c("daily_ev_target", DEFAULT_DAILY_EV_TARGET),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=0, max=100, step=0.5, unit_of_measurement="kWh", mode="slider")
+                    selector.NumberSelectorConfig(min=0, max=200, step=0.5, unit_of_measurement="kWh", mode="slider")
                 ),
                 vol.Optional(
                     "minimum_solar_power",
