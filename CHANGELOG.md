@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔧 **Deye grid-charge current can be set above 100 A** (#826, reported by
+  @ab-elco-clal): the field that tells SEM how much current it may write
+  ("Maks. ladestrøm (A)") refused anything over 100 with *"Value X.0 is too
+  large"*, while the BMS-ceiling field beside it accepted up to 200 — so you
+  could describe a battery SEM was then forbidden to drive. Raised to match.
+  The effective write is still `min(entity max, your ceiling, BMS ceiling)`,
+  so a higher setting grants nothing the hardware has not already agreed to.
+
 # [2.0.0-beta.14] — 21.08.2026
 
 - 📊 **A consumption figure you can actually compare with the Energy

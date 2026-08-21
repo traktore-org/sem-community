@@ -2887,12 +2887,23 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                             mode=selector.NumberSelectorMode.BOX,
                         )
                     ),
+                    # (#826) Ceiling raised 100 -> 200 to match the BMS
+                    # field below. These two are a pair — the effective
+                    # write is min(entity max, this, BMS) in deye.py —
+                    # so SEM's own ceiling can never sensibly be the
+                    # LOWER of the two: @ab-elco-clal could tell SEM his
+                    # BMS allows 150 A and then not be allowed to let SEM
+                    # write it ("Value 150.0 is too large"). Same class as
+                    # #717, #746 and #813 — a field narrower than the
+                    # thing it describes. The adapter still clamps to the
+                    # real minimum of the three, so a raised ceiling grants
+                    # nothing the hardware has not already agreed to.
                     vol.Optional(
                         "deye_max_charge_current_a",
                         default=_c("deye_max_charge_current_a", 25),
                     ): selector.NumberSelector(
                         selector.NumberSelectorConfig(
-                            min=1, max=100, step=1,
+                            min=1, max=200, step=1,
                             unit_of_measurement="A",
                             mode=selector.NumberSelectorMode.BOX,
                         )
