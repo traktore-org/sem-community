@@ -1839,7 +1839,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "battery_capacity_kwh",
                     default=_c("battery_capacity_kwh", DEFAULT_BATTERY_CAPACITY_KWH),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=5, max=100, step=1, unit_of_measurement="kWh", mode="slider")
+                    # (#828 audit) The OTHER page declaring this same key
+                    # allows min=1, step=0.5. Two pages, one stored value:
+                    # a 3 kWh pack saved there was refused here, and 7.5
+                    # was not representable. Widened to match — the
+                    # never-narrower direction, per bug class 50.
+                    selector.NumberSelectorConfig(min=1, max=100, step=0.5, unit_of_measurement="kWh", mode="slider")
                 ),
                 vol.Optional(
                     "battery_assist_max_power",

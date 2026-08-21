@@ -2001,3 +2001,29 @@ numbered-key fallback), and pins the runtime contract (a `select.*` time entity 
 fix is to correct the picker, never to loosen the validator). **Sweep question:** for every entity
 field in the config flow, is the domain the picker offers a subset of the domain the runtime accepts —
 and does the form re-read on reopen from the exact store its save wrote? Refs #807.
+
+### 50. A field narrower than the thing it describes — OPEN
+**Symptom:** a form refuses a value the user's hardware (or SEM itself) considers legitimate —
+"Value 150.0 is too large" — with no way to raise the limit. Often the page rejects a value **SEM
+already stored**, so a working install cannot re-save its own configuration.
+**Root shape:** every tunable's range is declared **twice** — a `NumberSelectorConfig(min,max)` in
+`config_flow.py` and a `native_min_value/native_max_value` in `number.py` — with nothing deriving
+one from the other. Agreement is a coincidence maintained by hand; drift is the default. A second
+variant needs no entity at all: two *fields* that constrain each other (SEM's write ceiling ≤ the
+BMS ceiling; emergency peak > target peak) with the relationship written down nowhere.
+**Where it lives:** `config_flow.py` (45 number fields) × `number.py` (38 number entities); every
+brand page with hardware limits — Deye currents, EV targets, peak ladder, charger min/max amps.
+**Instances:** #717 (peak sliders capped at 15 kW on an 80 kW service) · #746 (every EVSE
+ceilinged at 32 A; two runtime fallbacks disagreeing 16 vs 32) · #813 (options pages rejecting
+their own stored values, twice) · #826 (Deye write ceiling 100 A against its own 200 A BMS field).
+Four reporters, one shape.
+**Closure (proposed, #828):** declare each range ONCE in a `consts/bounds.py` table keyed by config
+key, with `at_most` / `at_least` for field-to-field constraints; `config_flow.py` and `number.py`
+both build from it, so page/entity drift becomes impossible by construction rather than policed.
+**Guard:** `tests/test_813_options_round_trip.py` exists but **covers 5 distinct settings out of 45 (11 %)**
+— it can only pair fields that have an entity twin (40 have none), its entity parse reads 10 of 38
+definitions, and its no-vacuous-pass floor (`>= 5`) is satisfied by duplicate matches of those same
+5 keys, so it cannot detect that it has gone blind. Re-measure coverage with
+`scripts/audit_bounds.py` before trusting it. **Sweep question:** for every number a user can set,
+is its range stated in exactly one place — and where two fields constrain each other, is that
+relationship written down anywhere a test can read? **Found by the audit, not by a reporter:** `battery_capacity_kwh` was declared on two pages with different minimums AND steps (min 5/step 1 vs min 1/step 0.5) — a 3 kWh pack saved on one was refused by the other; reconciled to the wider. Still open: `vehicle_min_current` page (1–32) is WIDER than its entity (6–32), the inverse drift — entangled with #752's request for sub-6 A when the control entity is the vehicle, so it needs a decision rather than a widening. Refs #717, #746, #813, #826, #828.
