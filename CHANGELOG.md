@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔧 **The EV charge-stop and the message about it can no longer disagree**
+  (#708): the "remaining kWh to your SOC target" maths existed twice — once in
+  the stop decision, once hand-copied in the notification that announces it.
+  They are now one function, so SEM cannot tell you "the estimate stopped your
+  charge" about a stop it did not make. No behaviour change.
+
 - 🧱 **Settings ranges are declared once** (#828): four reported bugs (#717,
   #746, #813, #826) were one structure — every number's range was written
   twice, once for the options page and once for the entity, with nothing
