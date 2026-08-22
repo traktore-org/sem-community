@@ -4277,7 +4277,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 result["ev_deadline_reachable"] = _night_plan.reachable
                 result["ev_tariff_waiting"] = _night_plan.should_wait_for_cheap
                 if _night_plan.hours_to_deadline is not None:
-                    result["ev_deadline_hours"] = _night_plan.hours_to_deadline
+                    # (#829) 0.1 h. At two decimals this countdown moved
+                    # every ~36 s and rewrote sensor.sem_charging_state
+                    # with it; 6-minute resolution is all a deadline means.
+                    result["ev_deadline_hours"] = round(
+                        _night_plan.hours_to_deadline or 0.0, 1)
                 if _night_plan.next_cheap_start is not None:
                     result["ev_next_cheap_window"] = _night_plan.next_cheap_start.isoformat()
 

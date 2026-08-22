@@ -326,3 +326,20 @@ class TestPlanRowsDoNotChurnOnTheirTimestamp:
         a = PlanRow(when=datetime(2026, 8, 22, 20, 30, 18, 946074), kind="k", label="l")
         b = PlanRow(when=datetime(2026, 8, 22, 20, 30, 48, 945503), kind="k", label="l")
         assert a.to_dict() == b.to_dict()
+
+
+@pytest.mark.unit
+class TestTheDeadlineCountdownDoesNotChurn:
+    """Last one on charging_state after the plan stamps were fixed:
+    ``ev_deadline_hours`` published at 2 dp (10.16 -> 10.15 -> 10.14) moved
+    every ~36 s and rewrote the whole sensor with it. A deadline is useful to
+    a tenth of an hour; six-minute resolution reads the same to a human."""
+
+    def test_it_is_published_rounded(self):
+        from pathlib import Path
+        src = (Path(__file__).resolve().parent.parent / "coordinator"
+               / "coordinator.py").read_text()
+        assert 'result["ev_deadline_hours"] = round(' in src, (
+            "the deadline countdown is published raw and rewrites "
+            "charging_state every cycle"
+        )
