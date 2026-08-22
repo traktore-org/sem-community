@@ -17,7 +17,13 @@ LIVE_CONFIG = {"hot_water_minimum_temperature", "hot_water_legionella_target",
                # every cycle via set_preferred_source(), which is what
                # earns it a place here instead of in STRUCTURAL_RELOAD.
                # tests/test_819_forecast_source.py pins both halves.
-               "solar_forecast_source"}
+               "solar_forecast_source",
+               # (#829) Status-history retention. The coordinator reads it
+               # fresh from config on every daily-rollover check, so a change
+               # takes effect the next day without a reload. Backed by a
+               # per-cycle read in coordinator.py, which the consumer test
+               # below verifies.
+               "status_retention_days"}
 # Reload IS the correct behaviour: consumed at construction only (#462 —
 # live-applying these would silently not reach the constructed consumer).
 STRUCTURAL_RELOAD = {"tariff_mode", "tariff_classification_mode",

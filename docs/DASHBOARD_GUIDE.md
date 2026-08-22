@@ -178,7 +178,31 @@ The single home for **every changeable setting** (`sem-config-card`),
 organized in collapsible sections: Setup overview, Sensor sources (power-source overrides for grid / solar / battery, #628), EV chargers, Battery zones, Tariff & pricing, Heat pump, Hot water, Battery scheduler, Load management, Solar forecast, PV strings (when 2+ strings are detected), Notifications, and Advanced
 zones, Tariff & pricing, Heat pump, Hot water, Battery scheduler, Load
 management, Solar forecast, Notifications, and Advanced (update
-interval, deltas, min solar power, regulation offset, Observer Mode).
+interval, deltas, min solar power, regulation offset, Observer Mode,
+SEM status history).
+
+##### SEM status history (Advanced)
+
+SEM writes a lot of short-lived status rows — charging state, strategy,
+diagnostics. Those carry **no long-term statistics**, so keeping them for
+weeks only grows your database without giving you anything you can chart.
+
+**"SEM status history"** sets how many days of that status history to keep
+(0 = off, Home Assistant's own policy applies), and **"Clean up now"** applies
+it immediately.
+
+**Your energy history is never affected.** Home Assistant compiles *hourly
+long-term statistics* for every entity that carries a `state_class` — every
+energy and power sensor — and keeps them indefinitely, independently of the
+raw rows. SEM's clean-up derives its list from "has no `state_class`", so a
+sensor with statistics is excluded automatically, including ones added in
+future versions. Nothing that appears in a chart or on the Energy Dashboard
+can be removed by this setting.
+
+If you want to shrink the database further, the bigger lever is Home
+Assistant's own `purge_keep_days` in `configuration.yaml` — lowering it drops
+fine-grained detail while long-term statistics survive untouched. That one is
+yours to set; SEM will not touch your `configuration.yaml`.
 Each section header has a **Diagnose** button that dumps that section's
 live config + state via the `solar_energy_management.diagnose` action —
 attach its output to bug reports. Settings written here apply

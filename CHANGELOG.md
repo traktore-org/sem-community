@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🧹 **You can now tell SEM how long to keep its own status history** (#829):
+  SEM writes a lot of short-lived rows — charging state, strategy, diagnostics
+  — that carry no long-term statistics, so keeping them for weeks only grows
+  your database. **Config tab → Advanced → "SEM status history"** sets the
+  retention (default **off**), and **"Clean up now"** applies it immediately.
+  **Your energy history cannot be affected**: the clean-up list is derived
+  from "has no `state_class`", so every charted sensor — energy, power,
+  anything with long-term statistics — is excluded automatically, including
+  sensors added in future versions. Also available as the
+  `solar_energy_management.purge_status_history` action.
+
 - 🔧 **The EV charge-stop and the message about it can no longer disagree**
   (#708): the "remaining kWh to your SOC target" maths existed twice — once in
   the stop decision, once hand-copied in the notification that announces it.

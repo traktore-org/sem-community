@@ -1384,7 +1384,13 @@
     "config_solar_forecast_source": "Zdroj předpovědi výroby",
     "config_help_solar_forecast_source": "Kterou integraci předpovědi SEM čte. Auto upřednostňuje Solcast, poté Forecast.Solar a poté Open-Meteo — zvolte jednu, pokud jich provozujete více.",
     "config_forecast_source_auto": "Automatická detekce",
-    "config_forecast_source_missing": "není nainstalováno"
+    "config_forecast_source_missing": "není nainstalováno",
+    "config_retention_label": "Historie stavu SEM",
+    "config_help_retention": "SEM zapisuje mnoho krátkodobých stavových řádků — stav nabíjení, strategie, diagnostika. Nemají dlouhodobou statistiku, takže jejich držení týdny jen zvětšuje databázi. Vyberte, jak dlouho je ponechat. Vaše energetická historie zůstává nedotčena: žije v dlouhodobých statistikách, které Home Assistant uchovává navždy.",
+    "config_retention_cleanup": "Vyčistit nyní",
+    "config_help_retention_cleanup": "Vyčistí historii stavu SEM nyní podle nastavení výše. Senzory v grafech — energie, výkon, vše se statistikou — se nikdy nedotkne.",
+    "config_retention_off": "Vypnuto — rozhoduje Home Assistant",
+    "config_retention_unit_days": "dní"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -2771,7 +2777,13 @@
     "config_solar_forecast_source": "Kilde til solprognose",
     "config_help_solar_forecast_source": "Hvilken prognoseintegration SEM læser. Auto foretrækker Solcast, derefter Forecast.Solar og derefter Open-Meteo — vælg én, hvis du kører flere.",
     "config_forecast_source_auto": "Registrér automatisk",
-    "config_forecast_source_missing": "ikke installeret"
+    "config_forecast_source_missing": "ikke installeret",
+    "config_retention_label": "SEM-statushistorik",
+    "config_help_retention": "SEM skriver mange kortlivede statusrækker — ladestatus, strategi, diagnostik. De har ingen langtidsstatistik, så at gemme dem i uger får kun databasen til at vokse. Vælg hvor længe de gemmes. Din energihistorik påvirkes aldrig: den ligger i langtidsstatistikken, som Home Assistant beholder for altid.",
+    "config_retention_cleanup": "Ryd op nu",
+    "config_help_retention_cleanup": "Ryd SEM's statushistorik nu med opbevaringen ovenfor. Sensorer i grafer — energi, effekt, alt med statistik — røres aldrig.",
+    "config_retention_off": "Fra — Home Assistant bestemmer",
+    "config_retention_unit_days": "dage"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -4158,7 +4170,13 @@
     "config_solar_forecast_source": "Quelle der Solarprognose",
     "config_help_solar_forecast_source": "Welche Prognose-Integration SEM liest. Automatisch bevorzugt Solcast, dann Forecast.Solar, dann Open-Meteo — wähle eine, wenn du mehrere parallel betreibst.",
     "config_forecast_source_auto": "Automatisch erkennen",
-    "config_forecast_source_missing": "nicht installiert"
+    "config_forecast_source_missing": "nicht installiert",
+    "config_retention_label": "SEM-Statusverlauf",
+    "config_help_retention": "SEM schreibt viele kurzlebige Statuszeilen — Ladezustand, Strategie, Diagnose. Diese haben keine Langzeitstatistik, wochenlanges Aufbewahren lässt nur die Datenbank wachsen. Wähle, wie lange sie behalten werden. Dein Energieverlauf bleibt unberührt: Er liegt in der Langzeitstatistik, die Home Assistant dauerhaft behält.",
+    "config_retention_cleanup": "Jetzt aufräumen",
+    "config_help_retention_cleanup": "Den SEM-Statusverlauf jetzt bereinigen, mit der oben gewählten Aufbewahrung. Sensoren mit Diagrammen — Energie, Leistung, alles mit Statistik — werden nie angefasst.",
+    "config_retention_off": "Aus — Home Assistant entscheidet",
+    "config_retention_unit_days": "Tage"
   },
   "en": {
     "% of limit": "% of limit",
@@ -5545,7 +5563,13 @@
     "config_solar_forecast_source": "Solar forecast source",
     "config_help_solar_forecast_source": "Which forecast integration SEM reads. Auto prefers Solcast, then Forecast.Solar, then Open-Meteo — pick one if you run several side by side.",
     "config_forecast_source_auto": "Auto-detect",
-    "config_forecast_source_missing": "not installed"
+    "config_forecast_source_missing": "not installed",
+    "config_retention_label": "SEM status history",
+    "config_help_retention": "SEM writes a lot of short-lived status rows — charging state, strategy, diagnostics. These carry no long-term statistics, so keeping them for weeks only grows your database. Pick how long to keep them. Your energy history is never affected: it lives in long-term statistics, which Home Assistant keeps forever.",
+    "config_retention_cleanup": "Clean up now",
+    "config_help_retention_cleanup": "Purge SEM's status history right now, using the retention above. Sensors that are charted — energy, power, anything with statistics — are never touched.",
+    "config_retention_off": "Off — Home Assistant decides",
+    "config_retention_unit_days": "days"
   },
   "es": {
     "% of limit": "% del límite",
@@ -6932,7 +6956,13 @@
     "config_solar_forecast_source": "Fuente de la previsión solar",
     "config_help_solar_forecast_source": "Qué integración de previsión lee SEM. Auto prefiere Solcast, luego Forecast.Solar y luego Open-Meteo: elige una si usas varias.",
     "config_forecast_source_auto": "Detección automática",
-    "config_forecast_source_missing": "no instalado"
+    "config_forecast_source_missing": "no instalado",
+    "config_retention_label": "Historial de estado de SEM",
+    "config_help_retention": "SEM escribe muchas filas de estado efímeras — estado de carga, estrategia, diagnósticos. No tienen estadísticas a largo plazo, así que guardarlas semanas solo hace crecer la base de datos. Elige cuánto conservarlas. Tu historial de energía nunca se ve afectado: vive en las estadísticas a largo plazo, que Home Assistant guarda para siempre.",
+    "config_retention_cleanup": "Limpiar ahora",
+    "config_help_retention_cleanup": "Purga ahora el historial de estado de SEM con la retención de arriba. Los sensores que se grafican — energía, potencia, todo con estadísticas — nunca se tocan.",
+    "config_retention_off": "Desactivado — decide Home Assistant",
+    "config_retention_unit_days": "días"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -8319,7 +8349,13 @@
     "config_solar_forecast_source": "Aurinkoennusteen lähde",
     "config_help_solar_forecast_source": "Mitä ennusteintegraatiota SEM lukee. Auto suosii Solcastia, sitten Forecast.Solaria, sitten Open-Meteoa — valitse yksi, jos käytät useita.",
     "config_forecast_source_auto": "Tunnista automaattisesti",
-    "config_forecast_source_missing": "ei asennettu"
+    "config_forecast_source_missing": "ei asennettu",
+    "config_retention_label": "SEM:n tilahistoria",
+    "config_help_retention": "SEM kirjoittaa paljon lyhytikäisiä tilarivejä — lataustila, strategia, diagnostiikka. Niillä ei ole pitkän aikavälin tilastoja, joten viikkojen säilytys vain kasvattaa tietokantaa. Valitse säilytysaika. Energiahistoriaasi ei kosketa: se elää pitkän aikavälin tilastoissa, jotka Home Assistant säilyttää ikuisesti.",
+    "config_retention_cleanup": "Siivoa nyt",
+    "config_help_retention_cleanup": "Siivoa SEM:n tilahistoria nyt yllä valitulla säilytyksellä. Kaavioissa näkyviin antureihin — energia, teho, kaikki tilastolliset — ei kosketa koskaan.",
+    "config_retention_off": "Pois — Home Assistant päättää",
+    "config_retention_unit_days": "päivää"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -9706,7 +9742,13 @@
     "config_solar_forecast_source": "Source de la prévision solaire",
     "config_help_solar_forecast_source": "Quelle intégration de prévision SEM utilise. Auto privilégie Solcast, puis Forecast.Solar, puis Open-Meteo — choisissez-en une si vous en utilisez plusieurs.",
     "config_forecast_source_auto": "Détection automatique",
-    "config_forecast_source_missing": "non installé"
+    "config_forecast_source_missing": "non installé",
+    "config_retention_label": "Historique d'état SEM",
+    "config_help_retention": "SEM écrit beaucoup de lignes d'état éphémères — état de charge, stratégie, diagnostics. Elles n'ont aucune statistique long terme : les garder des semaines ne fait que gonfler la base de données. Choisissez la durée de conservation. Votre historique d'énergie n'est jamais affecté : il vit dans les statistiques long terme, conservées indéfiniment par Home Assistant.",
+    "config_retention_cleanup": "Nettoyer maintenant",
+    "config_help_retention_cleanup": "Purger maintenant l'historique d'état de SEM, selon la durée choisie ci-dessus. Les capteurs tracés — énergie, puissance, tout ce qui a des statistiques — ne sont jamais touchés.",
+    "config_retention_off": "Désactivé — Home Assistant décide",
+    "config_retention_unit_days": "jours"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -11093,7 +11135,13 @@
     "config_solar_forecast_source": "Napelemes előrejelzés forrása",
     "config_help_solar_forecast_source": "Melyik előrejelzés-integrációt olvassa a SEM. Az Auto a Solcastot részesíti előnyben, majd a Forecast.Solart, majd az Open-Meteót — válassz egyet, ha többet használsz.",
     "config_forecast_source_auto": "Automatikus felismerés",
-    "config_forecast_source_missing": "nincs telepítve"
+    "config_forecast_source_missing": "nincs telepítve",
+    "config_retention_label": "SEM állapotelőzmények",
+    "config_help_retention": "A SEM sok rövid életű állapotsort ír — töltési állapot, stratégia, diagnosztika. Ezekhez nincs hosszú távú statisztika, így hetekig tartani őket csak növeli az adatbázist. Válaszd ki, meddig maradjanak. Az energiaelőzményeidet ez soha nem érinti: azok a hosszú távú statisztikákban élnek, amelyeket a Home Assistant örökre megőriz.",
+    "config_retention_cleanup": "Takarítás most",
+    "config_help_retention_cleanup": "Törli a SEM állapotelőzményeit a fenti megőrzéssel. A grafikonon szereplő érzékelőket — energia, teljesítmény, minden statisztikás — soha nem érinti.",
+    "config_retention_off": "Ki — a Home Assistant dönt",
+    "config_retention_unit_days": "nap"
   },
   "it": {
     "% of limit": "% del limite",
@@ -12480,7 +12528,13 @@
     "config_solar_forecast_source": "Sorgente della previsione solare",
     "config_help_solar_forecast_source": "Quale integrazione di previsione legge SEM. Auto preferisce Solcast, poi Forecast.Solar, poi Open-Meteo — scegline una se ne usi più di una.",
     "config_forecast_source_auto": "Rilevamento automatico",
-    "config_forecast_source_missing": "non installato"
+    "config_forecast_source_missing": "non installato",
+    "config_retention_label": "Cronologia di stato SEM",
+    "config_help_retention": "SEM scrive molte righe di stato di breve durata — stato di carica, strategia, diagnostica. Non hanno statistiche a lungo termine, quindi conservarle per settimane fa solo crescere il database. Scegli per quanto tenerle. La tua cronologia energetica non è mai toccata: vive nelle statistiche a lungo termine, che Home Assistant conserva per sempre.",
+    "config_retention_cleanup": "Pulisci ora",
+    "config_help_retention_cleanup": "Elimina ora la cronologia di stato di SEM secondo la conservazione scelta sopra. I sensori nei grafici — energia, potenza, tutto ciò che ha statistiche — non vengono mai toccati.",
+    "config_retention_off": "Disattivato — decide Home Assistant",
+    "config_retention_unit_days": "giorni"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -13867,7 +13921,13 @@
     "config_solar_forecast_source": "Bron van de zonneprognose",
     "config_help_solar_forecast_source": "Welke prognose-integratie SEM leest. Automatisch kiest eerst Solcast, dan Forecast.Solar, dan Open-Meteo — kies er zelf één als je er meerdere draait.",
     "config_forecast_source_auto": "Automatisch detecteren",
-    "config_forecast_source_missing": "niet geïnstalleerd"
+    "config_forecast_source_missing": "niet geïnstalleerd",
+    "config_retention_label": "SEM-statusgeschiedenis",
+    "config_help_retention": "SEM schrijft veel kortstondige statusregels — laadstatus, strategie, diagnostiek. Deze hebben geen langetermijnstatistiek, dus wekenlang bewaren laat alleen je database groeien. Kies hoelang ze bewaard blijven. Je energiegeschiedenis blijft ongemoeid: die zit in langetermijnstatistieken, die Home Assistant voor altijd bewaart.",
+    "config_retention_cleanup": "Nu opruimen",
+    "config_help_retention_cleanup": "Ruim de SEM-statusgeschiedenis nu op met de bewaartermijn hierboven. Sensoren met grafieken — energie, vermogen, alles met statistiek — worden nooit aangeraakt.",
+    "config_retention_off": "Uit — Home Assistant beslist",
+    "config_retention_unit_days": "dagen"
   },
   "no": {
     "% of limit": "% av grense",
@@ -15254,7 +15314,13 @@
     "config_solar_forecast_source": "Kilde for solprognose",
     "config_help_solar_forecast_source": "Hvilken prognoseintegrasjon SEM leser. Auto foretrekker Solcast, så Forecast.Solar, så Open-Meteo — velg én hvis du kjører flere.",
     "config_forecast_source_auto": "Oppdag automatisk",
-    "config_forecast_source_missing": "ikke installert"
+    "config_forecast_source_missing": "ikke installert",
+    "config_retention_label": "SEM-statushistorikk",
+    "config_help_retention": "SEM skriver mange kortlivde statusrader — ladestatus, strategi, diagnostikk. De har ingen langtidsstatistikk, så å beholde dem i uker gjør bare databasen større. Velg hvor lenge de skal beholdes. Energihistorikken din berøres aldri: den ligger i langtidsstatistikken, som Home Assistant beholder for alltid.",
+    "config_retention_cleanup": "Rydd opp nå",
+    "config_help_retention_cleanup": "Rydd SEMs statushistorikk nå med oppbevaringen over. Sensorer i grafer — energi, effekt, alt med statistikk — røres aldri.",
+    "config_retention_off": "Av — Home Assistant bestemmer",
+    "config_retention_unit_days": "dager"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -16641,7 +16707,13 @@
     "config_solar_forecast_source": "Źródło prognozy słonecznej",
     "config_help_solar_forecast_source": "Którą integrację prognozy odczytuje SEM. Auto preferuje Solcast, potem Forecast.Solar, potem Open-Meteo — wybierz jedną, jeśli używasz kilku.",
     "config_forecast_source_auto": "Wykryj automatycznie",
-    "config_forecast_source_missing": "niezainstalowane"
+    "config_forecast_source_missing": "niezainstalowane",
+    "config_retention_label": "Historia stanu SEM",
+    "config_help_retention": "SEM zapisuje wiele krótkotrwałych wierszy stanu — stan ładowania, strategia, diagnostyka. Nie mają statystyk długoterminowych, więc trzymanie ich tygodniami tylko powiększa bazę danych. Wybierz, jak długo je przechowywać. Twoja historia energii pozostaje nienaruszona: żyje w statystykach długoterminowych, które Home Assistant trzyma na zawsze.",
+    "config_retention_cleanup": "Wyczyść teraz",
+    "config_help_retention_cleanup": "Wyczyść teraz historię stanu SEM zgodnie z powyższym ustawieniem. Czujniki na wykresach — energia, moc, wszystko ze statystykami — nigdy nie są ruszane.",
+    "config_retention_off": "Wyłączone — decyduje Home Assistant",
+    "config_retention_unit_days": "dni"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -18028,7 +18100,13 @@
     "config_solar_forecast_source": "Fonte da previsão solar",
     "config_help_solar_forecast_source": "Qual integração de previsão o SEM lê. Auto prefere Solcast, depois Forecast.Solar e depois Open-Meteo — escolha uma se usar várias.",
     "config_forecast_source_auto": "Deteção automática",
-    "config_forecast_source_missing": "não instalado"
+    "config_forecast_source_missing": "não instalado",
+    "config_retention_label": "Histórico de estado do SEM",
+    "config_help_retention": "O SEM escreve muitas linhas de estado efémeras — estado de carga, estratégia, diagnósticos. Não têm estatísticas de longo prazo, por isso guardá-las semanas só faz crescer a base de dados. Escolha quanto tempo mantê-las. O seu histórico de energia nunca é afetado: vive nas estatísticas de longo prazo, guardadas para sempre pelo Home Assistant.",
+    "config_retention_cleanup": "Limpar agora",
+    "config_help_retention_cleanup": "Purgar agora o histórico de estado do SEM com a retenção acima. Sensores com gráficos — energia, potência, tudo com estatísticas — nunca são tocados.",
+    "config_retention_off": "Desligado — o Home Assistant decide",
+    "config_retention_unit_days": "dias"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -19415,7 +19493,13 @@
     "config_solar_forecast_source": "Sursa prognozei solare",
     "config_help_solar_forecast_source": "Ce integrare de prognoză citește SEM. Auto preferă Solcast, apoi Forecast.Solar, apoi Open-Meteo — alege una dacă rulezi mai multe.",
     "config_forecast_source_auto": "Detectare automată",
-    "config_forecast_source_missing": "neinstalat"
+    "config_forecast_source_missing": "neinstalat",
+    "config_retention_label": "Istoricul de stare SEM",
+    "config_help_retention": "SEM scrie multe rânduri de stare de scurtă durată — stare de încărcare, strategie, diagnostice. Nu au statistici pe termen lung, așa că păstrarea lor săptămâni întregi doar mărește baza de date. Alege cât timp să fie păstrate. Istoricul tău de energie nu este niciodată afectat: trăiește în statisticile pe termen lung, pe care Home Assistant le păstrează pentru totdeauna.",
+    "config_retention_cleanup": "Curăță acum",
+    "config_help_retention_cleanup": "Curăță acum istoricul de stare SEM cu retenția de mai sus. Senzorii din grafice — energie, putere, tot ce are statistici — nu sunt atinși niciodată.",
+    "config_retention_off": "Oprit — decide Home Assistant",
+    "config_retention_unit_days": "zile"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -20802,7 +20886,13 @@
     "config_solar_forecast_source": "Källa för solprognos",
     "config_help_solar_forecast_source": "Vilken prognosintegration SEM läser. Auto föredrar Solcast, sedan Forecast.Solar, sedan Open-Meteo — välj en om du kör flera.",
     "config_forecast_source_auto": "Identifiera automatiskt",
-    "config_forecast_source_missing": "inte installerad"
+    "config_forecast_source_missing": "inte installerad",
+    "config_retention_label": "SEM-statushistorik",
+    "config_help_retention": "SEM skriver många kortlivade statusrader — laddstatus, strategi, diagnostik. De har ingen långtidsstatistik, så att spara dem i veckor får bara databasen att växa. Välj hur länge de sparas. Din energihistorik påverkas aldrig: den lever i långtidsstatistiken, som Home Assistant behåller för alltid.",
+    "config_retention_cleanup": "Rensa nu",
+    "config_help_retention_cleanup": "Rensa SEM:s statushistorik nu med lagringstiden ovan. Sensorer som visas i diagram — energi, effekt, allt med statistik — rörs aldrig.",
+    "config_retention_off": "Av — Home Assistant bestämmer",
+    "config_retention_unit_days": "dagar"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -22189,6 +22279,12 @@
     "config_solar_forecast_source": "光伏预测数据源",
     "config_help_solar_forecast_source": "SEM 读取哪个预测集成。自动模式优先 Solcast，其次 Forecast.Solar，再次 Open-Meteo — 如果同时运行多个，请手动指定。",
     "config_forecast_source_auto": "自动检测",
-    "config_forecast_source_missing": "未安装"
+    "config_forecast_source_missing": "未安装",
+    "config_retention_label": "SEM 状态历史",
+    "config_help_retention": "SEM 会写入大量短暂的状态记录——充电状态、策略、诊断。它们没有长期统计数据，保留数周只会让数据库变大。请选择保留时长。你的能源历史不受影响：它保存在长期统计中，Home Assistant 会永久保留。",
+    "config_retention_cleanup": "立即清理",
+    "config_help_retention_cleanup": "按上面的保留时长立即清理 SEM 的状态历史。图表中的传感器——能源、功率、任何有统计数据的——都不会被触及。",
+    "config_retention_off": "关闭——由 Home Assistant 决定",
+    "config_retention_unit_days": "天"
   }
 }

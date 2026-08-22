@@ -2733,6 +2733,31 @@ async def _async_register_services(
         coordinator.request_replan()
         _LOGGER.info("Service replan: fresh plan requested")
 
+    async def async_purge_status_history_service(call) -> None:
+        """(#829) Purge SEM's statistics-less status entities.
+
+        Safe by construction: the list is DERIVED from "has no state_class",
+        so anything carrying long-term statistics — every energy and power
+        sensor — is excluded automatically, including sensors added later.
+        """
+        from .coordinator.retention import run_purge
+        days = call.data.get("keep_days")
+        if days is None:
+            days = coordinator.config.get("status_retention_days", 3)
+        purged = await run_purge(hass, days)
+        _LOGGER.info(
+            "Service purge_status_history: %d SEM status entities, keeping "
+            "%s day(s); statistics-bearing sensors untouched",
+            len(purged), days,
+        )
+
+    try:
+        hass.services.async_register(
+            DOMAIN, "purge_status_history", async_purge_status_history_service)
+        _LOGGER.debug("Registered service: %s.purge_status_history", DOMAIN)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.error("Failed to register purge_status_history service: %s", err)
+
     try:
         hass.services.async_register(DOMAIN, "replan", async_replan_service)
         _LOGGER.debug("Registered service: %s.replan", DOMAIN)
@@ -4309,6 +4334,10 @@ async def _async_register_phase_services(
             # reader every cycle (set_preferred_source), so it is a
             # genuinely live key rather than a construction-time one.
             "solar_forecast_source",
+            # (#829) The coordinator reads this fresh from config on every
+            # daily-rollover check (retention_is_due), so changing it takes
+            # effect without a reload — a genuinely live key.
+            "status_retention_days",
         }
         # (#637) Some options are backed by number entities under a DIFFERENT
         # name (number.py CONFIG_KEY_MAP, #542) — the naive number.sem_<key>

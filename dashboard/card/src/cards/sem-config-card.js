@@ -203,6 +203,8 @@ class SEMConfigCard extends SEMLitBase {
     static get properties() {
         return {
             ...super.properties,
+            _retentionBusy: { state: true },
+            _retentionMsg: { state: true },
             _showHelp: { state: true },
             _lmAdvancedOpen: { state: true },
             _entryId: { state: true },
@@ -2170,8 +2172,45 @@ class SEMConfigCard extends SEMLitBase {
             <div class="stepper-pair">
                 ${this._renderStepper('number.sem_ev_disable_delay_seconds', 'ev_disable_delay', T, 'config_help_ev_disable_delay')}
             </div>
+            ${this._renderRetention(T)}
             ${this._renderGridSignFix(T)}
         `;
+    }
+
+    // (#829) Retention for SEM's OWN status entities. Safe by construction:
+    // the purge list is derived from "has no state_class", so every charted
+    // sensor - energy, power, anything with long-term statistics - is
+    // excluded automatically, including ones added later.
+    _renderRetention(T) {
+        const opts = this._options || {};
+        return html`
+            <div style="margin-top:6px;border-top:1px solid ${T.surfaceBorder};padding-top:4px"></div>
+            ${this._renderOptionSlider('status_retention_days', 'config_retention_label',
+                { min: 0, max: 14, step: 1,
+                  unit: ' ' + this._t('config_retention_unit_days'), default: 0 },
+                opts, 'config_help_retention')}
+            <div class="action-row">
+                <button class="action-btn" ?disabled=${this._retentionBusy}
+                        @click=${() => this._purgeStatusHistory()}>
+                    ${this._t('config_retention_cleanup')}
+                </button>
+                <span class="readonly-value">${this._retentionMsg || ''}</span>
+            </div>
+        `;
+    }
+
+    async _purgeStatusHistory() {
+        this._retentionBusy = true;
+        this.requestUpdate();
+        try {
+            await this._hass.callService(
+                'solar_energy_management', 'purge_status_history', {});
+            this._retentionMsg = 'OK';
+        } catch (e) {
+            this._retentionMsg = String(e && e.message ? e.message : e).slice(0, 60);
+        }
+        this._retentionBusy = false;
+        this.requestUpdate();
     }
 
     // #461: grid import/export sign — one-tap fix + re-learn. Lives in the

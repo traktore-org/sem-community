@@ -605,3 +605,23 @@ replan:
     Discards the current stamped plan and computes a fresh one on the next
     cycle (within ~10 seconds). The testing/ops lever — the plan survives
     restarts, so a reboot no longer re-plans.
+
+purge_status_history:
+  name: Clean up SEM status history
+  description: >-
+    Purge recorder history for SEM's own status and diagnostic entities — the
+    ones that carry no long-term statistics. Sensors with statistics (energy,
+    power, anything charted) are never touched, so no history you can chart is
+    ever removed. Runs once; the daily policy is set on the SEM Config tab.
+  fields:
+    keep_days:
+      name: Keep days
+      description: How many days of status history to keep. 0 removes all of it.
+      required: false
+      example: 3
+      default: 3
+      selector:
+        number:
+          min: 0
+          max: 365
+          unit_of_measurement: days

@@ -504,6 +504,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # Surplus smoothing lives in surplus_controller (median-of-3
         # pre-filter) and sensor_reader._smooth_ev_power.
         self._daily_ev_per_charger: Dict[str, float] = {}  # Per-charger daily energy (#193)
+        # (#829) last calendar day the status-retention purge ran
+        self._retention_last_day: Optional[str] = None
         # Per-charger "EV day" boundary, keyed by charger id. Each charger's day
         # ends at its own ``Charge by`` deadline (#246) — NOT at sunrise — so the
         # counter doesn't wipe between hitting Min and the deadline (which on
@@ -4615,6 +4617,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # in-memory tracker above — a restart re-initialises the tracker to
             # today and would swallow the rollover.
             self._run_due_daily_decay(now_time, today_date, power)
+            # (#829) Retention for SEM's own statistics-less status entities.
+            # Off by default; the user sets it on the Config tab. Runs at most
+            # once a calendar day and never touches an entity that carries
+            # long-term statistics — see coordinator/retention.py.
+            try:
+                from .retention import retention_is_due, run_purge
+                _ret = self.config.get("status_retention_days", 0)
+                _today_s = str(today_date)
+                if retention_is_due(_ret, self._retention_last_day, _today_s):
+                    self._retention_last_day = _today_s
+                    self.hass.async_create_task(run_purge(self.hass, _ret))
+            except Exception as _e:  # noqa: BLE001
+                _LOGGER.debug("retention purge skipped: %s", _e)
             hour = now_time.hour
             if surplus_data.surplus_total_w > 100:
                 self._today_surplus_hours[hour] = True
