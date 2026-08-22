@@ -1281,10 +1281,13 @@ class SEMData:
 
             # Surplus controller (Phase 0)
             "surplus_total_w": self.surplus_control.surplus_total_w,
-            "surplus_distributable_w": self.surplus_control.surplus_distributable_w,
+            # (#829) whole watts — raw floats moved every cycle (707 rows/2h)
+            "surplus_distributable_w": int(round(
+                self.surplus_control.surplus_distributable_w or 0)),
             "surplus_regulation_offset_w": self.surplus_control.surplus_regulation_offset_w,
             "surplus_allocated_w": self.surplus_control.surplus_allocated_w,
-            "surplus_unallocated_w": self.surplus_control.surplus_unallocated_w,
+            "surplus_unallocated_w": int(round(
+                self.surplus_control.surplus_unallocated_w or 0)),
             "surplus_active_devices": self.surplus_control.surplus_active_devices,
             "surplus_available": self.surplus_control.surplus_available,
             "surplus_total_devices": self.surplus_control.surplus_total_devices,
@@ -1308,7 +1311,9 @@ class SEMData:
             "charging_recommendation": self.forecast.charging_recommendation,
             "best_surplus_window": self.forecast.best_surplus_window,
             "forecast_surplus_kwh": self.forecast.forecast_surplus_kwh,
-            "forecast_dampening_factor": self.forecast.forecast_dampening_factor,
+            # (#829) 2 dp — nobody reads a dampening factor to 8 places
+            "forecast_dampening_factor": round(
+                self.forecast.forecast_dampening_factor or 0.0, 2),
 
             # Tariff (Phase 1)
             "tariff_current_import_rate": self.tariff.tariff_current_import_rate,
@@ -1413,7 +1418,8 @@ class SEMData:
             "battery_session_energy": self.battery_session.published()["energy_kwh"],
             "battery_session_solar_share": self.battery_session.solar_share_pct,
             "battery_session_cost": self.battery_session.cost,
-            "battery_session_savings": self.battery_session.savings,
+            # (#829) currency precision, not 17 digits
+            "battery_session_savings": round(self.battery_session.savings or 0.0, 2),
             "battery_session_duration": self.battery_session.published()["duration_minutes"],
             "battery_session_avg_power": self.battery_session.published()["avg_power_w"],
 

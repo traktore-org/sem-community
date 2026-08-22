@@ -229,3 +229,45 @@ class TestChargingStateBlobDoesNotChurn:
                 f"{key} is excluded from charging_state but has no own entity "
                 "— that would lose its history"
             )
+
+
+@pytest.mark.unit
+class TestTheRemainingPerCycleWriters:
+    """Measured on the rig after the first pass: four entities still wrote a
+    row every 10 s cycle, all for the same reason — raw float precision on a
+    value that moves constantly.
+
+        surplus_distributable_w  5965.464021148     (707 rows/2h)
+        surplus_unallocated_w    5874.764021148     (706)
+        forecast_dampening_factor 0.809             (700)
+        battery_session_savings  0.00684362166666667 (632)
+
+    A watt is a watt; a currency figure nobody can read to 17 digits is
+    noise. Rounding at publish costs nothing a human can see.
+    """
+
+    def test_surplus_watts_are_whole(self):
+        from custom_components.solar_energy_management.coordinator.types import (
+            SEMData, SurplusControlData,
+        )
+        d = SEMData(surplus_control=SurplusControlData(
+            surplus_distributable_w=5965.464021148,
+            surplus_unallocated_w=5874.764021148)).to_dict()
+        assert d["surplus_distributable_w"] == 5965
+        assert d["surplus_unallocated_w"] == 5875
+
+    def test_session_savings_is_currency_precision(self):
+        from custom_components.solar_energy_management.coordinator.types import (
+            BatterySessionData, SEMData,
+        )
+        d = SEMData(battery_session=BatterySessionData(
+            savings=0.00684362166666667)).to_dict()
+        assert d["battery_session_savings"] == 0.01
+
+    def test_dampening_factor_is_two_decimals(self):
+        from custom_components.solar_energy_management.coordinator.types import (
+            ForecastSensorData, SEMData,
+        )
+        d = SEMData(forecast=ForecastSensorData(
+            forecast_dampening_factor=0.80912345)).to_dict()
+        assert d["forecast_dampening_factor"] == 0.81
