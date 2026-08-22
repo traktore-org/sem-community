@@ -68,7 +68,13 @@ class PlanRow:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "when": self.when.isoformat(),
+            # (#829) Minute resolution. A plan is a minute-grained promise and
+            # the card renders it with an hours:minutes formatter, but the raw
+            # stamp carried seconds AND microseconds — so rows whose ``when``
+            # is "now" (or a jittering projection) re-serialised every 10 s
+            # cycle and made sensor.sem_charging_state write a recorder row
+            # each time, with nothing a human could see having changed.
+            "when": self.when.replace(second=0, microsecond=0).isoformat(),
             "kind": self.kind,
             "label": self.label,
             "detail": self.detail,

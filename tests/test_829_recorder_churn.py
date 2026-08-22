@@ -289,3 +289,40 @@ class TestTheRemainingPerCycleWriters:
                 f"{key} is published raw by the tracker, which overwrites the "
                 "rounded value from SEMData.to_dict"
             )
+
+
+@pytest.mark.unit
+class TestPlanRowsDoNotChurnOnTheirTimestamp:
+    """The last per-cycle writer on sensor.sem_charging_state, and it was not
+    live power at all — it was the plan rows' own ``when`` stamp.
+
+    Sampled live on the rig, three cycles 20 s apart, with the state string
+    and every other attribute identical:
+
+        /today_plan[0]/when  ...T20:30:18.946074 -> ...T20:30:48.945503
+        /today_plan[5]/when  ...T22:59:02.458822 -> ...T22:56:51.115183
+
+    A plan is a minute-resolution promise — the card renders it with an
+    hours:minutes formatter — so second and microsecond precision is churn
+    that no one can read. Truncating to the minute keeps every displayed
+    value identical and stops the row.
+    """
+
+    def test_row_when_has_no_seconds_or_microseconds(self):
+        from datetime import datetime
+        from custom_components.solar_energy_management.coordinator.today_plan import (
+            PlanRow,
+        )
+        row = PlanRow(when=datetime(2026, 8, 22, 20, 30, 18, 946074),
+                      kind="charge", label="x")
+        assert row.to_dict()["when"] == "2026-08-22T20:30:00"
+
+    def test_two_rows_in_the_same_minute_serialise_identically(self):
+        """The property that actually stops the recorder row."""
+        from datetime import datetime
+        from custom_components.solar_energy_management.coordinator.today_plan import (
+            PlanRow,
+        )
+        a = PlanRow(when=datetime(2026, 8, 22, 20, 30, 18, 946074), kind="k", label="l")
+        b = PlanRow(when=datetime(2026, 8, 22, 20, 30, 48, 945503), kind="k", label="l")
+        assert a.to_dict() == b.to_dict()
