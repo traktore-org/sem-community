@@ -87,6 +87,7 @@ from ..tariff.tariff_provider import _local_date as _tariff_local_date
 from ..analytics.pv_performance import PVPerformanceAnalyzer
 from ..analytics.consumption_predictor import ConsumptionPredictor
 from .ev_taper_detector import EVTaperDetector
+from .ev_soc_need import soc_remaining_need
 from ..utils.log_gate import log_on_change
 from ..analytics.energy_assistant import EnergyAssistant
 
@@ -8516,10 +8517,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         tgt = self._resolve_target(
                             cfg_708, "ev_target_soc", bound_708, 80, 100
                         )
-                        sensor_rem = max(0.0, (tgt - soc_708) / 100 * cap_708)
-                        eff_rem = max(
-                            0.0, (tgt - max(soc_708, ea_708)) / 100 * cap_708
-                        )
+                        # (#708) same helper as the decision — see SITE 1.
+                        need_708 = soc_remaining_need(
+                            tgt, soc_708, ea_708, cap_708)
+                        sensor_rem = need_708.sensor_kwh or 0.0
+                        eff_rem = need_708.effective_kwh or 0.0
                         if (not det_708._estimate_stop_active
                                 and sensor_rem > 0.1 and eff_rem <= 0.1):
                             det_708._estimate_stop_active = True
@@ -8823,20 +8825,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 det = self._ev_taper_detector  # primary (single-charger installs)
             if det is not None:
                 ceiling_soc = det.energy_accounted_soc()
-            if vehicle_soc is None:
-                # Sensor momentarily unavailable: pre-#708 this returned the
-                # full capacity (keep charging until taper). With an anchor
-                # from earlier in the session the estimate keeps counting —
-                # strictly better than charging blind. Never estimated_soc.
-                if ceiling_soc is None:
-                    return float(ev_capacity)
-                soc_target = self._resolve_target(cfg, "ev_target_soc", bound, 80, 100)
-                return max(0, (soc_target - ceiling_soc) / 100 * ev_capacity)
             soc_target = self._resolve_target(cfg, "ev_target_soc", bound, 80, 100)
-            effective_soc = (
-                max(vehicle_soc, ceiling_soc) if ceiling_soc is not None else vehicle_soc
-            )
-            return max(0, (soc_target - effective_soc) / 100 * ev_capacity)
+            # (#708) ONE source for the effective-SOC remaining — same helper
+            # the estimate-stop announcement uses, so the message can never
+            # claim a stop the decision did not make. The measured ceiling
+            # only ever caps (pulls the stop earlier); the speculative
+            # estimate is not an input (#446).
+            need = soc_remaining_need(
+                soc_target, vehicle_soc, ceiling_soc, ev_capacity)
+            if need.effective_kwh is None:
+                # No sensor, no anchor: pre-#708 fallback — charge to taper.
+                return float(ev_capacity)
+            return need.effective_kwh
 
         # kWh branch — the default mode for installs without a SOC sensor.
         daily_target = self._resolve_target(cfg, "daily_ev_target", bound, 10, 100)
