@@ -163,7 +163,9 @@ def test_solar_only_charges_when_redirect_lifts_surplus_above_min() -> None:
     assert decision.commanded_amps == 6
     # Reason includes the bare/redirect breakdown — debugging aid +
     # proof the right code path ran.
-    assert "redirect=850" in decision.reason
+    # (#829) reason figures are in 100 W steps so the explanation does not
+    # rewrite the recorder row every cycle: 850 -> 800.
+    assert "redirect=800W" in decision.reason
     assert "bare=3500" in decision.reason
 
 
@@ -182,7 +184,7 @@ def test_solar_only_charges_with_forecast_redirect_zero_bare_surplus() -> None:
     # (the regression-floor case — redirect helps but not enough)
     # If amps > 0 here the math has shifted; surface explicitly.
     assert decision.intent is ChargerIntent.IDLE
-    assert "redirect=3640" in decision.reason
+    assert "redirect=3600W" in decision.reason   # (#829) 100 W steps
 
 
 def test_solar_only_idles_with_disconnected_ev_regardless_of_surplus() -> None:
