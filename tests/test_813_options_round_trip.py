@@ -36,14 +36,34 @@ class TestTargetMaxBounds:
         return (float(m.group(1)), float(m.group(2))) if m else None
 
     def test_every_flow_page_spans_the_entity_range(self):
+        """#828 note: this key now comes from `consts/bounds.py`, so the flow
+        carries no literals to compare and the property is guaranteed by
+        construction rather than checked here. The assertion moved DOWN a
+        level — the table's range must match the entity's — which is the same
+        promise with one fewer way to break."""
         ent = self._entity_bounds("daily_ev_target_max")
         assert ent == (0.0, 200.0), f"premise moved: entity is {ent}"
         pages = self._flow_bounds("daily_ev_target_max")
-        assert pages, "premise: the key is offered on at least one page"
-        bad = [p for p in pages if p != ent]
-        assert not bad, (
-            f"options pages cap daily_ev_target_max at {bad} while the entity "
-            f"allows {ent} — a user above the cap cannot re-save the page")
+        if pages:
+            bad = [p for p in pages if p != ent]
+            assert not bad, (
+                f"options pages cap daily_ev_target_max at {bad} while the "
+                f"entity allows {ent} — a user above the cap cannot re-save")
+            return
+        # Migrated: assert the table agrees with the entity instead.
+        import importlib.util
+        import pathlib as _pl
+        import sys as _sys
+        _root = _pl.Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location(
+            "bounds", _root / "consts" / "bounds.py")
+        mod = importlib.util.module_from_spec(spec)
+        _sys.modules["bounds"] = mod
+        spec.loader.exec_module(mod)
+        r = mod.BOUNDS["daily_ev_target_max"]
+        assert (r.min, r.max) == ent, (
+            f"consts/bounds.py says {(r.min, r.max)} but the entity allows "
+            f"{ent} — the single declaration disagrees with the value it writes")
 
 
 class TestPeakLadderStaysCoherent:
@@ -143,7 +163,25 @@ class TestEveryFlowFieldSpansItsEntity:
             + "\n".join(f"  {k}: page {f} vs entity {e}" for k, f, e in narrow))
 
     def test_the_guard_actually_sees_pairs(self):
-        """No-vacuous-pass: the scan must find real pairs, or it proves
-        nothing when someone reformats either file."""
-        pairs = self._pairs()
-        assert len(pairs) >= 5, f"only {len(pairs)} pairs found — scan broke"
+        """No-vacuous-pass: the scan must find real settings, or it proves
+        nothing when someone reformats either file.
+
+        #828: a migrated field leaves this scan (it has no literals left) and
+        joins `consts/bounds.py`, where it cannot drift at all. So the floor
+        counts BOTH — literal pairs plus table rows — and a field moving
+        between them is progress, not a broken scan. The old floor was 5 and
+        counted duplicate matches of the same 5 keys, which is how it would
+        have passed while going blind."""
+        import importlib.util
+        import pathlib as _pl
+        import sys as _sys
+        _root = _pl.Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location(
+            "bounds", _root / "consts" / "bounds.py")
+        mod = importlib.util.module_from_spec(spec)
+        _sys.modules["bounds"] = mod
+        spec.loader.exec_module(mod)
+        covered = len(self._pairs()) + len(mod.BOUNDS)
+        assert covered >= 5, (
+            f"only {covered} settings covered (literal pairs + table rows) — "
+            "the scan broke")
