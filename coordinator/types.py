@@ -966,6 +966,24 @@ class BatterySessionData:
             "energy_kwh": round(self.energy_kwh or 0.0, 2),
         }
 
+def _w(value):
+    """(#829) Whole watts at the publish seam — a watt is a watt.
+
+    ``to_dict`` is the PRESENTATION boundary: control decisions read the
+    dataclasses directly, never ``coordinator.data``. So rounding here costs
+    nothing a decision can see, while sub-watt float jitter on the busiest
+    entities in SEM (solar, grid, home, battery, EV) rewrote them every 10 s
+    cycle and dominated the recorder. Preserves None — a dark source must
+    stay unknown, never 0 (#818).
+    """
+    if value is None:
+        return None
+    try:
+        return int(round(float(value)))
+    except (TypeError, ValueError):
+        return None
+
+
 @dataclass
 class SEMData:
     """Complete SEM data structure combining all components."""
@@ -1050,16 +1068,16 @@ class SEMData:
         _batt_dark = getattr(self.power, "battery_power_all_unavailable", False)
         data = {
             # Power readings
-            "solar_power": None if _solar_dark else self.power.solar_power,
-            "grid_power": None if _grid_dark else self.power.grid_power,
-            "grid_active_power": None if _grid_dark else -self.power.grid_power,  # positive=import, negative=export (K-Flow convention)
-            "battery_power": None if _batt_dark else self.power.battery_power,
-            "ev_power": self.power.ev_power,
-            "home_consumption_power": self.power.home_consumption_power,
-            "grid_import_power": self.power.grid_import_power,
-            "grid_export_power": self.power.grid_export_power,
-            "battery_charge_power": self.power.battery_charge_power,
-            "battery_discharge_power": self.power.battery_discharge_power,
+            "solar_power": None if _solar_dark else _w(self.power.solar_power),
+            "grid_power": None if _grid_dark else _w(self.power.grid_power),
+            "grid_active_power": None if _grid_dark else _w(-self.power.grid_power),  # positive=import, negative=export (K-Flow convention)
+            "battery_power": None if _batt_dark else _w(self.power.battery_power),
+            "ev_power": _w(self.power.ev_power),
+            "home_consumption_power": _w(self.power.home_consumption_power),
+            "grid_import_power": _w(self.power.grid_import_power),
+            "grid_export_power": _w(self.power.grid_export_power),
+            "battery_charge_power": _w(self.power.battery_charge_power),
+            "battery_discharge_power": _w(self.power.battery_discharge_power),
             "battery_soc": None if self.power.battery_soc_unavailable else self.power.battery_soc,
             "battery_temperature": self.power.battery_temperature,
             "inverter_temperature": self.power.inverter_temperature,
@@ -1238,7 +1256,7 @@ class SEMData:
             "battery_too_low": self.battery_too_low,
             "battery_needs_priority": self.battery_needs_priority,
             "solar_sufficient": self.solar_sufficient,
-            "excess_solar": self.excess_solar,
+            "excess_solar": _w(self.excess_solar),
             "safe_discharge_power": self.safe_discharge_power,
 
             # EV aliases and routing

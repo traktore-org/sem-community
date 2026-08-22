@@ -343,3 +343,37 @@ class TestTheDeadlineCountdownDoesNotChurn:
             "the deadline countdown is published raw and rewrites "
             "charging_state every cycle"
         )
+
+
+@pytest.mark.unit
+class TestThePowerFamilyPublishesWholeWatts:
+    """Found by scripts/audit_live_churn.py on its first run: the busiest
+    entities in SEM (solar, grid, home, battery, EV, excess) published raw
+    floats, so sub-watt jitter rewrote them every 10 s cycle — and carried
+    that churn into every attribute payload that mirrors them
+    (``available_power``'s excess_solar/home_consumption, power_snapshot).
+
+    ``to_dict`` is the PRESENTATION boundary — control decisions read the
+    dataclasses, never ``coordinator.data`` — so this costs nothing a
+    decision can see."""
+
+    def test_powers_are_integers(self):
+        from custom_components.solar_energy_management.coordinator.types import (
+            PowerReadings, SEMData,
+        )
+        d = SEMData(power=PowerReadings(
+            solar_power=4931.4567, home_consumption_power=1333.2,
+            ev_power=3210.77, grid_import_power=12.6,
+        ), excess_solar=-1382.51).to_dict()
+        for k in ("solar_power", "home_consumption_power", "ev_power",
+                  "grid_import_power", "excess_solar"):
+            assert isinstance(d[k], int), f"{k} is {d[k]!r}, not whole watts"
+        assert d["solar_power"] == 4931
+        assert d["excess_solar"] == -1383
+
+    def test_a_dark_source_stays_unknown_not_zero(self):
+        """#818's rule survives the rounding: unavailable must not become 0 W."""
+        from custom_components.solar_energy_management.coordinator.types import _w
+        assert _w(None) is None
+        assert _w("unavailable") is None
+        assert _w(0) == 0
