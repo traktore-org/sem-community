@@ -271,3 +271,21 @@ class TestTheRemainingPerCycleWriters:
         d = SEMData(forecast=ForecastSensorData(
             forecast_dampening_factor=0.80912345)).to_dict()
         assert d["forecast_dampening_factor"] == 0.81
+
+    def test_the_tracker_publishes_rounded_too(self):
+        """THE lesson of this fix. ``SEMData.to_dict`` rounds it, but the
+        forecast tracker publishes the SAME key and
+        ``result.update(tracker_data)`` makes the tracker win — so the entity
+        stayed unrounded and kept writing a row every cycle (0.694 -> 0.707 ->
+        0.719 on the rig, 20 s apart) while the unit test above passed happily.
+
+        Two publishers of one key, later one wins — the #828 class again.
+        Pin the WINNING path, not the one that is easy to construct."""
+        from pathlib import Path
+        src = (Path(__file__).resolve().parent.parent / "coordinator"
+               / "forecast_tracker.py").read_text()
+        for key in ("forecast_dampening_factor", "forecast_correction_factor"):
+            assert f'"{key}": round(' in src, (
+                f"{key} is published raw by the tracker, which overwrites the "
+                "rounded value from SEMData.to_dict"
+            )
