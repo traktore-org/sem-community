@@ -124,7 +124,9 @@ def test_autodiscovered_falls_back_to_live_when_no_rating(registry):
     registry.hass.states.get = lambda e: SimpleNamespace(state="42")
     registry._service_registrations = {}
     result = registry.get_devices_for_sensor()
-    assert result[ud.device_id]["power_rating"] == 42.0
+    # (#829) the fallback is a rating, published in 10 W steps so a
+    # jittering sensor does not write a recorder row per cycle: 42 -> 40.
+    assert result[ud.device_id]["power_rating"] == 40.0
 
 
 # ---------------------------------------------------------------------------

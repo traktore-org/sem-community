@@ -137,13 +137,14 @@ class TestLiveValuesDoNotRideStableEntities:
     def test_rating_fallback_is_a_rating_not_a_live_reading(self):
         """With no registered device, power_rating mirrored the raw sensor
         (40.1 -> 37.5 -> …) — a live reading wearing a rating's name. A rating
-        is a characterization: round the fallback to 100 W."""
+        is a characterization: round the fallback to 10 W (100 W turned a
+        42 W load's rating into 0, which is worse than churn)."""
         from pathlib import Path
         src = (Path(__file__).resolve().parent.parent / "features"
                / "device_registry.py").read_text()
         i = src.index("def _get_power_rating")
         window = src[i:i + 900]
-        assert "round(" in window and "100" in window, (
+        assert "round(" in window and "/ 10.0) * 10" in window, (
             "the rating fallback returns the raw live reading"
         )
 

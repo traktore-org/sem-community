@@ -2393,8 +2393,10 @@ class UnifiedDeviceRegistry:
         if state and state.state not in ("unknown", "unavailable"):
             try:
                 # (#829) a rating is a characterization, not a live reading —
-                # unrounded this mirrored the sensor tick for tick.
-                return float(round(float(state.state) / 100.0) * 100)
+                # unrounded this mirrored the sensor tick for tick. 10 W
+                # steps: a 37.5->40.1 W jitter stays 40, and a 42 W load
+                # still gets a rating instead of the 0 that 100 W gave it.
+                return float(round(float(state.state) / 10.0) * 10)
             except (ValueError, TypeError):
                 pass
         return 0.0
