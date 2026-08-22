@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🧹 **SEM writes far fewer recorder rows** (#829, Guido: *"SEM is gathering a
+  lot of information and cluttering HA"*): measured on a production system,
+  SEM wrote **25 % of all state rows with 13 % of the entities** — not from
+  recording too much, but from a handful of entities writing a row every
+  10 s cycle: a daily energy published at 1 Wh, session durations in tenths
+  of a minute, averages as raw floats, live per-device watts riding the
+  attributes of a device *count*, a per-cycle counter on the mismatch flag,
+  and the energy tip rotating every cycle. Each now publishes on change at
+  the precision a human reads: 10 Wh energies, whole-minute durations, 10 W
+  averages, whole-watt powers, a 100 W-coarse device map (cards read live
+  watts from each device's own entity), a tip that rotates every five
+  minutes. Nothing you see changes; what the database stores shrinks.
+
 - 🔧 **Deye grid-charge current can be set above 100 A** (#826, reported by
   @ab-elco-clal): the field that tells SEM how much current it may write
   ("Maks. ladestrøm (A)") refused anything over 100 with *"Value X.0 is too

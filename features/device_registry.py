@@ -1416,7 +1416,8 @@ class UnifiedDeviceRegistry:
                 "switch_entity": device.control_entity,
                 "is_available": True,
                 "is_on": is_on,
-                "current_power": current_power,
+                # (#829) coarse fallback only — cards read live W from power_entity
+                "current_power": self._coarse_w(current_power),
                 "device_type": "ev_charger" if device.is_ev else "individual_device",
                 "has_manual_mapping": device.has_manual_mapping,
                 "control": device.control,
@@ -1465,7 +1466,7 @@ class UnifiedDeviceRegistry:
                 "switch_entity": spec.get("entity_id"),
                 "is_available": True,
                 "is_on": is_on,
-                "current_power": current_power,
+                "current_power": self._coarse_w(current_power),
                 # (#788) the kind the CALLER passed, which
                 # ``async_register_service_device`` normalised into the stored
                 # spec — not a literal. The literal threw it away, and the
@@ -1583,7 +1584,7 @@ class UnifiedDeviceRegistry:
             "is_on": charge_w > 0,          # "on" = currently charging
             # WATTS — the card divides by 1000 then formats. Emitting kW here
             # showed a 2 kW charge as "2 W" (ruflo HIGH; matches the ED rows).
-            "current_power": round(charge_w),
+            "current_power": self._coarse_w(charge_w),
             "device_type": "battery",
             "has_manual_mapping": False,
             "control": {"type": "none"},
@@ -1631,7 +1632,7 @@ class UnifiedDeviceRegistry:
             "is_on": is_on,
             # WATTS (ruflo HIGH — the card divides by 1000; kW here showed
             # milliwatts). Matches the battery / ED rows.
-            "current_power": round(current_w),
+            "current_power": self._coarse_w(current_w),
             "device_type": dtype,
             "has_manual_mapping": False,
             "control": {"type": "surplus"},
@@ -1867,7 +1868,7 @@ class UnifiedDeviceRegistry:
             "is_on": bool(charger.get("is_on", False)),
             # WATTS (ruflo HIGH — the card divides by 1000; kW here showed
             # milliwatts). Matches the battery / ED rows.
-            "current_power": round(power_w),
+            "current_power": self._coarse_w(power_w),
             "device_type": "ev_charger",
             "has_manual_mapping": False,
             "control": {"type": "current"},
@@ -1910,7 +1911,7 @@ class UnifiedDeviceRegistry:
                 "comfort_limit": goals.get("comfort_limit", 0),
             },
             "progress": {
-                "runtime_today_min": round(runtime_min, 1),
+                "runtime_today_min": int(round(runtime_min)),
                 "targets_met": targets_met,
             },
         } | self._comfort_payload(live)
@@ -2391,10 +2392,28 @@ class UnifiedDeviceRegistry:
         state = self.hass.states.get(power_sensor)
         if state and state.state not in ("unknown", "unavailable"):
             try:
-                return float(state.state)
+                # (#829) a rating is a characterization, not a live reading —
+                # unrounded this mirrored the sensor tick for tick.
+                return float(round(float(state.state) / 100.0) * 100)
             except (ValueError, TypeError):
                 pass
         return 0.0
+
+    @staticmethod
+    def _coarse_w(value) -> int:
+        """(#829) A live power for the device map, in 100 W steps.
+
+        The map rides the attributes of ``sensor.sem_controllable_devices_count``
+        — a count, state "1" all day — and raw watts in it made that sensor
+        write a row EVERY cycle (8,099/day on PROD). Cards read live power from
+        each row's ``power_entity`` (system-diagram precedent); this value is
+        the fallback for rows without one, and 100 W steps change only when
+        the load actually changes.
+        """
+        try:
+            return int(round(float(value or 0.0) / 100.0) * 100)
+        except (TypeError, ValueError):
+            return 0
 
     def _rated_power_for(self, device_id: str, power_sensor: Optional[str]) -> float:
         """(#559) The device's rated power for the Control card.

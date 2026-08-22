@@ -2938,10 +2938,12 @@ class EnergyCalculator:
             f"{CONTROLLED_LOADS_EST_CATEGORY}_{today}", 0.0)
         home = self._daily_accumulators.get(home_key)
         return {
-            "today_kwh": None if home is None else round(home - controlled, 3),
+            # (#829) 10 Wh, the house standard for daily rows — at 1 Wh this ticked
+            # every cycle (7,806 rows/day on PROD vs ~2k for daily_home).
+            "today_kwh": None if home is None else round(home - controlled, 2),
             "home_today_kwh": home,
-            "controlled_today_kwh": round(controlled, 3),
-            "estimated_today_kwh": round(estimated, 3),
+            "controlled_today_kwh": round(controlled, 2),
+            "estimated_today_kwh": round(estimated, 2),
             "measured": home is not None and estimated == 0.0,
         }
 
