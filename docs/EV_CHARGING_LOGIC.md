@@ -367,7 +367,11 @@ three layers — observation, manual control, and automatic switching:
 
 Some inverters cap their grid export — permanently (a regulatory limit) or
 dynamically (dropping to **0 W when the electricity selling price is
-negative**). With the limit active, the inverter reduces production to match
+negative**). **The price is only the most common *reason* for the limit — it is
+not part of what SEM detects.** The probe keys on physics alone: an export
+limit that is *active*, whatever put it there. A zero-feed-in install triggers
+it on an ordinary sunny day at an ordinary price. With the limit active, the
+inverter reduces production to match
 local consumption, so SEM's measured surplus honestly reads ~0 while the
 array could deliver kilowatts more. Reading harder cannot fix this — raising
 consumption is the only instrument that reveals the hidden power.
