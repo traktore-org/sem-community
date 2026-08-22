@@ -87,3 +87,93 @@ class TestQuotaStop:
         fs = [c for c in _calls(hass, "set_failsafe")
               if c.get("failsafe_fallback") == 0]
         assert fs, "the masterless guard rides every stop path (#740)"
+
+
+@pytest.mark.asyncio
+class TestTheQuotaIsNotATreadmill:
+    """Live, PROD, 21.08 evening: the reconciler re-asserts a standing stop
+    every 60 s while the box still draws — correct for a `disable`, and
+    self-defeating for a quota. Each re-assert rewrote
+    ``quota = session + 0.3``, so the finish line moved ahead of the car
+    forever (log: quota-hold 1.8 → 2.0 → 3.7 → 3.8 …). A car drawing less
+    than 18 kW can NEVER consume the 0.3 kWh margin inside one 60 s dwell,
+    so the "stop" charges unbounded. The thing that ended it tonight was the
+    #763 ceasefire — it silenced the rewrites, and the box then reached the
+    LAST quota and suspended natively, which is the quota doing exactly what
+    it was designed to do the moment SEM stopped moving it.
+
+    The rule: ONE stop, one quota. While the box still holds an unmet quota
+    of ours, a re-asserted stop is already in force — leave the register
+    alone and let the box arrive. Rewrite only when the box's target reads
+    cleared (a lost write, or the box defied us), which is what the
+    re-assert exists for.
+    """
+
+    def _with_target(self, dev, hass, session_kwh, target_kwh):
+        """Wire the box's session AND energy-target registers."""
+        session = MagicMock(); session.state = str(session_kwh)
+        target = MagicMock(); target.state = str(target_kwh)
+        dev._session_energy_sensor_cache = "sensor.keba_p30_session_energy"
+        dev._energy_target_sensor_cache = "sensor.keba_p30_energy_target"
+
+        def get(eid):
+            if "session" in eid:
+                return session
+            if "target" in eid:
+                return target
+            return None
+        hass.states.get = MagicMock(side_effect=get)
+        return session, target
+
+    async def test_a_standing_quota_is_not_rewritten(self):
+        dev, hass = _keba(session_kwh=None)
+        session, target = self._with_target(dev, hass, 3.5, 0.0)
+
+        await dev.stop_session()          # first stop: writes the quota
+        assert len(_calls(hass, "set_energy")) == 1
+
+        # The box honoured it (target register carries our quota, session
+        # still below it) — the 60 s re-assert arrives while the car drinks
+        # the margin.
+        target.state = str(_calls(hass, "set_energy")[0]["energy"])
+        session.state = "3.6"
+        await dev.stop_session()
+
+        assert len(_calls(hass, "set_energy")) == 1, (
+            "the re-assert moved the finish line — this is the treadmill: "
+            "the box can never reach a quota that is rewritten every 60 s"
+        )
+
+    async def test_a_cleared_register_is_rewritten(self):
+        """The re-assert's real job: the box lost or defied the write."""
+        dev, hass = _keba(session_kwh=None)
+        session, target = self._with_target(dev, hass, 3.5, 0.0)
+
+        await dev.stop_session()
+        assert len(_calls(hass, "set_energy")) == 1
+
+        # Box register reads 0 — the quota is GONE (lost write / defiance).
+        target.state = "0.0"
+        session.state = "3.6"
+        await dev.stop_session()
+        assert len(_calls(hass, "set_energy")) == 2, (
+            "a cleared register means the box holds no quota — the re-assert "
+            "must restore it or the box charges unbounded"
+        )
+
+    async def test_a_met_quota_left_behind_is_rewritten(self):
+        """A stale target BELOW the session bounds nothing (KEBA rejects or
+        has already consumed it) — a fresh stop must write a fresh quota."""
+        dev, hass = _keba(session_kwh=None)
+        session, target = self._with_target(dev, hass, 5.0, 4.0)
+
+        await dev.stop_session()
+        assert len(_calls(hass, "set_energy")) == 1
+
+    async def test_no_target_sensor_keeps_todays_behaviour(self):
+        """A box whose integration exposes no energy-target register cannot
+        be checked — rewriting is then the safe default, exactly as today."""
+        dev, hass = _keba(session_kwh=3.5)
+        await dev.stop_session()
+        await dev.stop_session()
+        assert len(_calls(hass, "set_energy")) == 2

@@ -2448,6 +2448,28 @@ class CurrentControlDevice(ControllableDevice):
             self._session_energy_sensor_cache = found
         return found
 
+    def _standing_quota_kwh(self, session_kwh):
+        """(#829) The box's UNMET energy quota from a previous stop, or None.
+
+        None means "no standing quota — write one": no target register to
+        read, a cleared register (0), a quota at/below the session (met or
+        stale), or an unreadable state. Only a target strictly above the
+        current session counts — that is a stop the box is still honouring.
+        """
+        if session_kwh is None:
+            return None
+        sensor = self._energy_target_sensor_id()
+        if not sensor or self.hass is None:
+            return None
+        st = self.hass.states.get(sensor)
+        try:
+            target = float(st.state)
+        except (AttributeError, TypeError, ValueError):
+            return None
+        if target > 0 and target > float(session_kwh):
+            return target
+        return None
+
     def _box_session_kwh(self):
         """The box's session counter in kWh, or None. The quota math
         needs the BOX's number (it persists across enable/disable —
@@ -2791,6 +2813,33 @@ class CurrentControlDevice(ControllableDevice):
                 # KEBA-style fallback
                 domain = self.charger_service.split(".", 1)[0]
                 _session_kwh = self._box_session_kwh()
+                # (#829, live PROD 21.08 evening) ONE stop, ONE quota. The
+                # reconciler re-asserts a standing stop every 60 s while the
+                # box still draws — right for a `disable`, self-defeating
+                # here: each re-assert rewrote quota = session + margin, so
+                # the finish line moved ahead of the car forever (log:
+                # quota-hold 1.8 → 2.0 → 3.7 → 3.8 …). A car drawing under
+                # 18 kW can never consume the 0.3 kWh margin inside one 60 s
+                # dwell, so the "stop" charged unbounded — until the #763
+                # ceasefire silenced the rewrites and the box promptly
+                # reached the LAST quota and suspended natively, which is
+                # this mechanism working the moment SEM stopped moving it.
+                #
+                # So: while the box still holds an UNMET quota of ours, the
+                # stop is already in force — touch nothing and let the box
+                # arrive. Rewrite only when the register reads cleared (lost
+                # write / defiance — the re-assert's actual job) or the
+                # quota is already met/stale. No target sensor → rewrite,
+                # exactly today's behaviour: an unverifiable box gets the
+                # safe default.
+                _standing = self._standing_quota_kwh(_session_kwh)
+                if _standing is not None:
+                    _LOGGER.debug(
+                        "%s: stop re-assert — box already holds an unmet "
+                        "quota (%.1f kWh, session %.1f) — leaving it alone",
+                        self.name, _standing, _session_kwh,
+                    )
+                    return
                 if (_session_kwh is not None
                         and self.hass.services.has_service(domain, "set_energy")
                         and self.hass.services.has_service(domain, "enable")):
