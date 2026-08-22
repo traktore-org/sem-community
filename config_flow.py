@@ -39,6 +39,7 @@ from .const import (
     PEAK_LIMIT_STEP_KW,
     DEFAULT_PEAK_LIMIT_UNLIMITED,
 )
+from .consts.bounds import bounds_selector
 from .coordinator.ev_taper_detector import resolve_charge_efficiency
 from .coordinator.units import energy_state_to_kwh, normalize_unit
 from .ha_energy_reader import read_energy_dashboard_config, EnergyDashboardConfig
@@ -1182,11 +1183,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "ev_battery_capacity_kwh",
                     default=_c("ev_battery_capacity_kwh", 40),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=10, max=120, step=5, unit_of_measurement="kWh", mode="box"
-                    )
-                ),
+                ): bounds_selector("ev_battery_capacity_kwh", mode="box"),
                 # #735 — AC metered → DC in the pack. Sits next to capacity
                 # because the two are read together: the estimate is
                 # ``delivered kWh × efficiency ÷ capacity``. The band matches
@@ -1214,11 +1211,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "ev_kwh_per_100km",
                     default=_c("ev_kwh_per_100km", 18),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=8, max=50, step=0.5, unit_of_measurement="kWh/100km", mode="box"
-                    )
-                ),
+                ): bounds_selector("ev_kwh_per_100km", mode="box"),
                 vol.Optional(
                     "ev_target_soc",
                     default=_c("ev_target_soc", 80),
@@ -1232,11 +1225,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "daily_ev_target_max",
                     default=_c("daily_ev_target_max", 100),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=0, max=200, step=0.5, unit_of_measurement="kWh", mode="slider"
-                    )
-                ),
+                ): bounds_selector("daily_ev_target_max", mode="slider"),
                 vol.Optional(
                     "ev_target_soc_max",
                     default=_c("ev_target_soc_max", 100),
@@ -1450,23 +1439,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "daily_ev_target",
                     default=self._data.get("daily_ev_target", 10),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=0, max=200, step=0.5,
-                        unit_of_measurement="kWh", mode="slider",
-                    )
-                ),
+                ): bounds_selector("daily_ev_target", mode="slider"),
                 # Solar ceiling (Max): surplus charges up to this, then stops.
                 # Default full (100) = charge freely from sun (#245).
                 vol.Optional(
                     "daily_ev_target_max",
                     default=self._data.get("daily_ev_target_max", 100),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=0, max=200, step=0.5,
-                        unit_of_measurement="kWh", mode="slider",
-                    )
-                ),
+                ): bounds_selector("daily_ev_target", mode="slider"),
                 vol.Optional(
                     "initial_current",
                     default=self._data.get("initial_current", 10),
@@ -1503,12 +1482,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "ev_kwh_per_100km",
                     default=self._data.get("ev_kwh_per_100km", 18),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=8, max=50, step=0.5,
-                        unit_of_measurement="kWh/100km", mode="box",
-                    )
-                ),
+                ): bounds_selector("ev_kwh_per_100km", mode="box"),
                 # Per-charger SOC target (#215): Min floor + Max solar ceiling (#245)
                 vol.Optional(
                     "ev_target_soc",
@@ -1531,12 +1505,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "ev_battery_capacity_kwh",
                     default=self._data.get("ev_battery_capacity_kwh", 40),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=10, max=120, step=5,
-                        unit_of_measurement="kWh", mode="box",
-                    )
-                ),
+                ): bounds_selector("ev_battery_capacity_kwh", mode="box"),
             }),
             errors=errors,
         )
@@ -1663,23 +1632,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "daily_ev_target",
                     default=charger.get("daily_ev_target", self._data.get("daily_ev_target", 10)),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=0, max=200, step=0.5,
-                        unit_of_measurement="kWh", mode="slider",
-                    )
-                ),
+                ): bounds_selector("daily_ev_target", mode="slider"),
                 # Optional solar ceiling (Max): surplus charges up to this, then
                 # stops. Defaults to full (100) = charge freely from sun (#245).
                 vol.Optional(
                     "daily_ev_target_max",
                     default=charger.get("daily_ev_target_max", 100),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=0, max=200, step=0.5,
-                        unit_of_measurement="kWh", mode="slider",
-                    )
-                ),
+                ): bounds_selector("daily_ev_target", mode="slider"),
                 vol.Optional(
                     "initial_current",
                     default=charger.get("initial_current", self._data.get("initial_current", 10)),
@@ -1732,12 +1691,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "ev_kwh_per_100km",
                     default=charger.get("ev_kwh_per_100km", self._data.get("ev_kwh_per_100km", 18)),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=8, max=50, step=0.5,
-                        unit_of_measurement="kWh/100km", mode="box",
-                    )
-                ),
+                ): bounds_selector("ev_kwh_per_100km", mode="box"),
                 # Per-charger SOC target (#215)
                 vol.Optional(
                     "ev_target_soc",
@@ -1760,12 +1714,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "ev_battery_capacity_kwh",
                     default=charger.get("ev_battery_capacity_kwh", self._data.get("ev_battery_capacity_kwh", 40)),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=10, max=120, step=5,
-                        unit_of_measurement="kWh", mode="box",
-                    )
-                ),
+                ): bounds_selector("ev_battery_capacity_kwh", mode="box"),
             }),
             errors=errors,
         )
@@ -1838,14 +1787,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "battery_capacity_kwh",
                     default=_c("battery_capacity_kwh", DEFAULT_BATTERY_CAPACITY_KWH),
-                ): selector.NumberSelector(
-                    # (#828 audit) The OTHER page declaring this same key
-                    # allows min=1, step=0.5. Two pages, one stored value:
-                    # a 3 kWh pack saved there was refused here, and 7.5
-                    # was not representable. Widened to match — the
-                    # never-narrower direction, per bug class 50.
-                    selector.NumberSelectorConfig(min=1, max=100, step=0.5, unit_of_measurement="kWh", mode="slider")
-                ),
+                ): bounds_selector("battery_capacity_kwh", mode="slider"),
                 vol.Optional(
                     "battery_assist_max_power",
                     default=_c("battery_assist_max_power", _c("super_charger_power", DEFAULT_BATTERY_ASSIST_MAX_POWER)),
@@ -1919,9 +1861,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "daily_ev_target",
                     default=_c("daily_ev_target", DEFAULT_DAILY_EV_TARGET),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=0, max=200, step=0.5, unit_of_measurement="kWh", mode="slider")
-                ),
+                ): bounds_selector("daily_ev_target", mode="slider"),
                 vol.Optional(
                     "minimum_solar_power",
                     default=_c("minimum_solar_power", DEFAULT_MIN_SOLAR_POWER),
@@ -2642,13 +2582,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "battery_capacity_kwh",
                     default=_c("battery_capacity_kwh", 10.0),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=1, max=100, step=0.5,
-                        unit_of_measurement="kWh",
-                        mode=selector.NumberSelectorMode.BOX,
-                    )
-                ),
+                ): bounds_selector("battery_capacity_kwh", mode="box"),
                 vol.Optional(
                     "battery_max_charge_power_w",
                     default=_c("battery_max_charge_power_w", 5000),
@@ -2906,23 +2840,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     vol.Optional(
                         "deye_max_charge_current_a",
                         default=_c("deye_max_charge_current_a", 25),
-                    ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            min=1, max=200, step=1,
-                            unit_of_measurement="A",
-                            mode=selector.NumberSelectorMode.BOX,
-                        )
-                    ),
+                    ): bounds_selector("deye_max_charge_current_a", mode="box"),
                     vol.Optional(
                         "deye_bms_max_charge_current_a",
                         default=_c("deye_bms_max_charge_current_a", 0),
-                    ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            min=0, max=200, step=1,
-                            unit_of_measurement="A",
-                            mode=selector.NumberSelectorMode.BOX,
-                        )
-                    ),
+                    ): bounds_selector("deye_bms_max_charge_current_a", mode="box"),
                     vol.Optional(
                         "deye_max_discharge_power",
                         default=_c("deye_max_discharge_power", 0),

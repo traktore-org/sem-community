@@ -26,20 +26,37 @@ CONFIG_FLOW = Path(__file__).resolve().parent.parent / "config_flow.py"
 
 
 def _number_bounds(key: str) -> dict:
-    """The NumberSelectorConfig bounds for one options-flow FIELD.
+    """The bounds for one options-flow field.
 
-    Anchored on the ``vol.Optional("<key>"`` declaration on purpose: these
-    keys also appear in plain key lists (OPTIONS_FLOW_OWNED_KEYS, the Deye
-    copy-through loop) two thousand lines earlier, and a lazy search from
-    the first mention happily reads a completely different field's bounds —
-    which it did, and made this test pass while the bug was still there.
+    Reads `consts/bounds.py` first: since #828 these two fields are declared
+    there ONCE and the flow builds its selector from it, so the table IS the
+    declaration and there are no literals left to scan. Falls back to the
+    flow's own literals for fields not yet migrated.
+
+    The fallback stays anchored on the ``vol.Optional("<key>"`` declaration:
+    these keys also appear in OPTIONS_FLOW_OWNED_KEYS and copy-through loops
+    thousands of lines earlier, and searching from the first mention reads a
+    different field's bounds — which is how this test's first version PASSED
+    against the live bug.
     """
+    import importlib.util
+    import sys
+
+    spec = importlib.util.spec_from_file_location(
+        "bounds", CONFIG_FLOW.parent / "consts" / "bounds.py")
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["bounds"] = mod
+    spec.loader.exec_module(mod)
+    if key in mod.BOUNDS:
+        r = mod.BOUNDS[key]
+        return {"min": float(r.min), "max": float(r.max)}
+
     src = CONFIG_FLOW.read_text()
     m = re.search(
         r'vol\.Optional\(\s*\n\s*"' + re.escape(key) + r'"'
         r'.*?NumberSelectorConfig\(\s*\n?(.*?)\)',
         src, re.S)
-    assert m, f"no vol.Optional field declaration found for {key}"
+    assert m, f"no declaration found for {key} in the table or the flow"
     body = m.group(1)
     out = {}
     for name in ("min", "max"):
