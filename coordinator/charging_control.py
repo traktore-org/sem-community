@@ -30,6 +30,23 @@ from ..utils.log_gate import log_on_change
 _LOGGER = logging.getLogger(__name__)
 
 
+def _cw(watts) -> int:
+    """(#829) A live watt figure for a REASON string, in 100 W steps.
+
+    Reasons explain a decision; they ride the attributes of
+    ``sensor.sem_charging_state`` and were formatted with the raw reading
+    (``solar=550W < 1000W``), so the text — and therefore the recorder row and
+    the attribute blob — changed every 10 s cycle: 8,641 rows and ~1,400
+    distinct blobs a day on the rig. ``solar=500W < 1000W`` explains exactly
+    as much and changes only when the situation does. The live value itself
+    is on sensor.sem_solar_power, where a chart belongs.
+    """
+    try:
+        return int(round(float(watts or 0.0) / 100.0) * 100)
+    except (TypeError, ValueError):
+        return 0
+
+
 @dataclass
 class ChargingContext:
     """Context data for charging decisions.
@@ -287,7 +304,7 @@ class ChargingStateMachine:
         log_on_change(   # (#762) 125 near-identical lines/day; digits stripped
             _LOGGER, "solar_wait", logging.DEBUG,
             f"Solar: Waiting — calculated_current={ctx.calculated_current:.1f}A, "
-            f"excess_solar={ctx.excess_solar:.0f}W, "
+            f"excess_solar={_cw(ctx.excess_solar)}W, "
             f"battery_soc={ctx.battery_soc:.0f}%, "
             f"session_allowed={self._ev_session_allowed}, "
             f"daily_ev={ctx.daily_ev_energy:.1f}kWh, "

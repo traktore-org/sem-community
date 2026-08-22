@@ -48,6 +48,23 @@ from .energy_reclaim import ev_reclaims_battery_charge
 _LOGGER = logging.getLogger(__name__)
 
 
+def _cw(watts) -> int:
+    """(#829) A live watt figure for a REASON string, in 100 W steps.
+
+    Reasons explain a decision; they ride the attributes of
+    ``sensor.sem_charging_state`` and were formatted with the raw reading
+    (``solar=550W < 1000W``), so the text — and therefore the recorder row and
+    the attribute blob — changed every 10 s cycle: 8,641 rows and ~1,400
+    distinct blobs a day on the rig. ``solar=500W < 1000W`` explains exactly
+    as much and changes only when the situation does. The live value itself
+    is on sensor.sem_solar_power, where a chart belongs.
+    """
+    try:
+        return int(round(float(watts or 0.0) / 100.0) * 100)
+    except (TypeError, ValueError):
+        return 0
+
+
 def _ev_reclaims(view: ChargerView) -> bool:
     """#576 P2.2 — does this charger reclaim battery-charge power? (Above the
     battery in the one list, SOC ≥ reserve floor, battery not commanded.)"""
@@ -332,7 +349,7 @@ def _idle_bridgeable(view: ChargerView) -> tuple[bool, str]:
     f = view.fleet
     if float(f.solar_w) < float(f.min_solar_w):
         return False, (
-            f"sun gone (solar {f.solar_w:.0f}W < {f.min_solar_w:.0f}W)"
+            f"sun gone (solar {_cw(f.solar_w)}W < {_cw(f.min_solar_w)}W)"
         )
     if f.tariff_level in _NOT_CHEAP_LEVELS:
         return False, f"not-cheap tariff ({f.tariff_level})"
@@ -345,8 +362,8 @@ def _idle_bridgeable(view: ChargerView) -> tuple[bool, str]:
     if float(f.battery_soc) < float(f.buffer_soc) and real_surplus_w < min_charge_w:
         return False, (
             f"no battery assist (SoC {f.battery_soc:.0f}% < buffer "
-            f"{f.buffer_soc:.0f}%) + EV surplus {real_surplus_w:.0f}W "
-            f"< min charge {min_charge_w:.0f}W"
+            f"{f.buffer_soc:.0f}%) + EV surplus {_cw(real_surplus_w)}W "
+            f"< min charge {_cw(min_charge_w)}W"
         )
     return True, ""
 
@@ -457,8 +474,8 @@ class SolarOnlyMode(ModeStrategy):
                 charger_id=cid, mode="solar_only",
                 intent=ChargerIntent.IDLE,
                 reason=(
-                    f"solar_only: solar={f.solar_w:.0f}W < "
-                    f"{f.min_solar_w:.0f}W threshold"
+                    f"solar_only: solar={_cw(f.solar_w)}W < "
+                    f"{_cw(f.min_solar_w)}W threshold"
                 ),
             )
 
@@ -507,8 +524,8 @@ class SolarOnlyMode(ModeStrategy):
                 intent=ChargerIntent.IDLE,
                 budget_w=surplus_w,
                 reason=(
-                    f"solar_only: surplus={surplus_w:.0f}W "
-                    f"(bare={bare_surplus_w:.0f}W + redirect={redirect_w:.0f}W) "
+                    f"solar_only: surplus={_cw(surplus_w)}W "
+                    f"(bare={_cw(bare_surplus_w)}W + redirect={_cw(redirect_w)}W) "
                     f"< min={min_w}W (={min_amps}A) — idle"
                 ),
             )
@@ -521,10 +538,10 @@ class SolarOnlyMode(ModeStrategy):
             intent=ChargerIntent.CHARGE_AT_AMPS,
             commanded_amps=amps, budget_w=surplus_w,
             reason=(
-                f"solar_only: surplus={surplus_w:.0f}W "
-                f"(bare={bare_surplus_w:.0f}W + redirect={redirect_w:.0f}W) "
-                f"→ {amps}A (solar={f.solar_w:.0f}W, home={f.home_w:.0f}W, "
-                f"batt_chg={f.battery_charge_w:.0f}W)"
+                f"solar_only: surplus={_cw(surplus_w)}W "
+                f"(bare={_cw(bare_surplus_w)}W + redirect={_cw(redirect_w)}W) "
+                f"→ {amps}A (solar={_cw(f.solar_w)}W, home={_cw(f.home_w)}W, "
+                f"batt_chg={_cw(f.battery_charge_w)}W)"
             ),
         )
 
@@ -722,7 +739,7 @@ class MinPlusSolarMode(ModeStrategy):
                     f"min_plus_solar day Zone {zone}: Min floor engaged "
                     f"({remaining:.1f} kWh remaining > "
                     f"{view.night_deliverable_kwh:.1f} kWh night-deliverable) "
-                    f"→ {amps}A (budget={budget_w:.0f}W, floor={min_amps}A)"
+                    f"→ {amps}A (budget={_cw(budget_w)}W, floor={min_amps}A)"
                 ),
             )
         if surplus_amps >= min_amps:
@@ -732,7 +749,7 @@ class MinPlusSolarMode(ModeStrategy):
                 intent=ChargerIntent.CHARGE_AT_AMPS,
                 commanded_amps=amps, budget_w=budget_w,
                 reason=(
-                    f"min_plus_solar day Zone {zone}: budget={budget_w:.0f}W "
+                    f"min_plus_solar day Zone {zone}: budget={_cw(budget_w)}W "
                     f"→ {amps}A (solar surplus + capped battery assist)"
                 ),
             )
@@ -741,7 +758,7 @@ class MinPlusSolarMode(ModeStrategy):
             charger_id=cid, mode="min_plus_solar",
             intent=ChargerIntent.IDLE,
             reason=(
-                f"min_plus_solar day Zone {zone}: budget={budget_w:.0f}W "
+                f"min_plus_solar day Zone {zone}: budget={_cw(budget_w)}W "
                 f"below {min_amps}A min — Min ({remaining_str} kWh) is "
                 f"covered by the night window, staying self-consumption-only"
             ),

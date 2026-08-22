@@ -187,8 +187,13 @@ class TestOptimizationScore:
 class TestTipRotation:
     """Test tip rotation and sorting."""
 
-    def test_tip_rotation(self, mock_hass):
-        """Multiple calls rotate through tips."""
+    def test_tip_rotation(self, mock_hass, monkeypatch):
+        """Calls spaced past the rotation interval rotate through tips.
+        (#829: rotation is time-based now — per-cycle rotation wrote 6k
+        recorder rows a day, so the test drives the clock explicitly.)"""
+        import custom_components.solar_energy_management.analytics.energy_assistant as ea_mod
+        clock = {"t": 0.0}
+        monkeypatch.setattr(ea_mod.time, "monotonic", lambda: clock["t"])
         ea = EnergyAssistant(mock_hass)
         # First call generates tips
         ea.analyze(
@@ -199,7 +204,8 @@ class TestTipRotation:
             daily_solar_kwh=10.0,
             daily_grid_export_kwh=3.0,
         )
-        # Second call should potentially rotate
+        # Second call, past the interval, rotates
+        clock["t"] += ea_mod.TIP_ROTATION_INTERVAL_S + 1
         ea.analyze(
             daily_ev_kwh=10.0,
             solar_to_ev_kwh=2.0,

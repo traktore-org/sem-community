@@ -919,6 +919,18 @@ class SessionData:
     avg_power_w: float = 0
 
 
+
+    def published(self) -> dict:
+        """(#829) What the entities PUBLISH — on-change precision. Durations in
+        tenths of a minute and averages as raw floats changed every 10 s
+        cycle (~6,200 rows/day each on PROD); whole minutes, 10 W steps and
+        10 Wh are what a human reads and what the recorder should keep."""
+        return {
+            "duration_minutes": int(round(self.duration_minutes or 0)),
+            "avg_power_w": int(round((self.avg_power_w or 0) / 10.0) * 10),
+            "energy_kwh": round(self.energy_kwh or 0.0, 2),
+        }
+
 @dataclass
 class BatterySessionData:
     """Per-session battery charge/discharge tracking.
@@ -941,6 +953,18 @@ class BatterySessionData:
     savings: float = 0            # discharge: energy × import_rate (avoided grid)
     avg_power_w: float = 0
 
+
+
+    def published(self) -> dict:
+        """(#829) What the entities PUBLISH — on-change precision. Durations in
+        tenths of a minute and averages as raw floats changed every 10 s
+        cycle (~6,200 rows/day each on PROD); whole minutes, 10 W steps and
+        10 Wh are what a human reads and what the recorder should keep."""
+        return {
+            "duration_minutes": int(round(self.duration_minutes or 0)),
+            "avg_power_w": int(round((self.avg_power_w or 0) / 10.0) * 10),
+            "energy_kwh": round(self.energy_kwh or 0.0, 2),
+        }
 
 @dataclass
 class SEMData:
@@ -1075,7 +1099,8 @@ class SEMData:
             "battery_stored_grid_share": self.performance.battery_stored_grid_share,
             # (#773) The audited residual pair + its honesty flag. May be
             # None (no home row yet) and may be negative (the finding).
-            "true_baseload_power": self.energy.true_baseload_power,
+            # (#829) whole watts — float jitter alone cost 5.6k rows/day
+            "true_baseload_power": int(round(self.energy.true_baseload_power or 0)),
             "daily_true_baseload_energy": self.energy.true_baseload_today,
             "daily_controlled_loads_energy": self.energy.controlled_loads_today,
             "true_baseload_measured": self.energy.true_baseload_measured,
@@ -1101,16 +1126,17 @@ class SEMData:
             "yearly_ev_energy": self.energy.yearly_ev,
 
             # Energy flows
-            "flow_solar_to_home_energy": self.energy_flows.solar_to_home,
-            "flow_solar_to_battery_energy": self.energy_flows.solar_to_battery,
-            "flow_solar_to_ev_energy": self.energy_flows.solar_to_ev,
-            "flow_solar_to_grid_energy": self.energy_flows.solar_to_grid,
-            "flow_grid_to_home_energy": self.energy_flows.grid_to_home,
-            "flow_grid_to_ev_energy": self.energy_flows.grid_to_ev,
-            "flow_grid_to_battery_energy": self.energy_flows.grid_to_battery,
-            "flow_battery_to_home_energy": self.energy_flows.battery_to_home,
-            "flow_battery_to_ev_energy": self.energy_flows.battery_to_ev,
-            "flow_battery_to_grid_energy": self.energy_flows.battery_to_grid,
+            # (#829) 10 Wh at publish — the calculator keeps 1 Wh internally
+            "flow_solar_to_home_energy": round(self.energy_flows.solar_to_home or 0.0, 2),
+            "flow_solar_to_battery_energy": round(self.energy_flows.solar_to_battery or 0.0, 2),
+            "flow_solar_to_ev_energy": round(self.energy_flows.solar_to_ev or 0.0, 2),
+            "flow_solar_to_grid_energy": round(self.energy_flows.solar_to_grid or 0.0, 2),
+            "flow_grid_to_home_energy": round(self.energy_flows.grid_to_home or 0.0, 2),
+            "flow_grid_to_ev_energy": round(self.energy_flows.grid_to_ev or 0.0, 2),
+            "flow_grid_to_battery_energy": round(self.energy_flows.grid_to_battery or 0.0, 2),
+            "flow_battery_to_home_energy": round(self.energy_flows.battery_to_home or 0.0, 2),
+            "flow_battery_to_ev_energy": round(self.energy_flows.battery_to_ev or 0.0, 2),
+            "flow_battery_to_grid_energy": round(self.energy_flows.battery_to_grid or 0.0, 2),
 
             # Per-charger flow surface (v1.6.15). Emit only when the
             # multi-charger pipeline has populated these maps; in
@@ -1206,7 +1232,7 @@ class SEMData:
             "charging_state": self.charging_state,
             "charging_strategy": self.charging_strategy,
             "charging_strategy_reason": self.charging_strategy_reason,
-            "available_power": self.available_power,
+            "available_power": int(round(self.available_power or 0)),
             "calculated_current": self.calculated_current,
             # (#657) EV block reasons + budget internals.
             "battery_too_low": self.battery_too_low,
@@ -1375,7 +1401,7 @@ class SEMData:
             "session_energy": self.session.energy_kwh,
             "session_solar_share": self.session.solar_share_pct,
             "session_cost": self.session.cost_chf,
-            "session_duration": self.session.duration_minutes,
+            "session_duration": self.session.published()["duration_minutes"],
             "session_solar_energy": self.session.solar_energy_kwh,
             "session_grid_energy": self.session.grid_energy_kwh,
             "session_battery_energy": self.session.battery_energy_kwh,
@@ -1384,12 +1410,12 @@ class SEMData:
             # Battery session tracking
             "battery_session_active": self.battery_session.active,
             "battery_session_type": self.battery_session.session_type,
-            "battery_session_energy": self.battery_session.energy_kwh,
+            "battery_session_energy": self.battery_session.published()["energy_kwh"],
             "battery_session_solar_share": self.battery_session.solar_share_pct,
             "battery_session_cost": self.battery_session.cost,
             "battery_session_savings": self.battery_session.savings,
-            "battery_session_duration": self.battery_session.duration_minutes,
-            "battery_session_avg_power": self.battery_session.avg_power_w,
+            "battery_session_duration": self.battery_session.published()["duration_minutes"],
+            "battery_session_avg_power": self.battery_session.published()["avg_power_w"],
 
             # System metadata
             "currency": self.currency,
