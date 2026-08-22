@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🧱 **Settings ranges are declared once** (#828): four reported bugs (#717,
+  #746, #813, #826) were one structure — every number's range was written
+  twice, once for the options page and once for the entity, with nothing
+  binding them. Seven settings now come from a single table and cannot
+  drift; a build-time ratchet refuses any new field that hardcodes its own
+  bounds. One user-visible correction fell out: **Battery capacity** was
+  offered with different minimums and steps on two pages (5 kWh/1 kWh vs
+  1 kWh/0.5 kWh), so a small pack saved on one page was refused by the
+  other — both now allow 1–100 kWh in 0.5 kWh steps.
+
 - 🔧 **Deye grid-charge current can be set above 100 A** (#826, reported by
   @ab-elco-clal): the field that tells SEM how much current it may write
   ("Maks. ladestrøm (A)") refused anything over 100 with *"Value X.0 is too
