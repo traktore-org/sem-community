@@ -2245,6 +2245,24 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         # already recorded via its own sensor; recording the bundle again
         # would double the write volume for zero charting value.
         "power_snapshot",
+        # (#829) charging_state carried these as RECORDED attributes, so a new
+        # blob was stored every time any of them wiggled — battery_soc,
+        # calculated_current and available_power are ALREADY their own recorded
+        # entities (duplicated here for the card), and solar_sufficient /
+        # battery_too_low / battery_needs_priority / the strategy strings are
+        # live UI context with no charting value. They stay on the live state
+        # (cards read them); the recorder stops re-storing them.
+        "battery_soc",
+        "calculated_current",
+        "available_power",
+        "solar_sufficient",
+        "battery_too_low",
+        "battery_needs_priority",
+        "charging_strategy",
+        "strategy_reason",
+        "per_charger_phases",
+        "control_entities",
+        "sources_available",
     })
 
     # Sensors disabled by default (not used by dashboard template)

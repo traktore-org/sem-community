@@ -195,3 +195,37 @@ class TestMismatchCounterDoesNotChurn:
         assert coarse_cycles(10) == 10
         assert coarse_cycles(47) == 40
         assert coarse_cycles(3144) == 3000
+
+
+
+@pytest.mark.unit
+class TestChargingStateBlobDoesNotChurn:
+    """charging_state was the worst offender (5 MB/day, ~375 distinct blobs).
+    Its attributes carried live values that wiggle every cycle — battery_soc,
+    calculated_current, available_power (each ALREADY its own recorded
+    entity), plus solar_sufficient and the strategy strings. Recorded, each
+    wiggle stored a fresh blob. They must be excluded from the recorder while
+    staying on the live state for the cards."""
+
+    def test_churning_attrs_are_unrecorded(self):
+        from custom_components.solar_energy_management.sensor import SEMSolarSensor
+        must_exclude = {
+            "battery_soc", "calculated_current", "available_power",
+            "solar_sufficient", "battery_too_low", "battery_needs_priority",
+            "charging_strategy", "strategy_reason",
+        }
+        missing = must_exclude - set(SEMSolarSensor._unrecorded_attributes)
+        assert not missing, (
+            f"charging_state still records live-wiggling attributes: {missing}"
+        )
+
+    def test_the_measurements_still_have_their_own_entities(self):
+        """Excluding them as ATTRIBUTES is only safe because they are recorded
+        as their own sensors — history is not lost, just not duplicated."""
+        from pathlib import Path
+        src = (Path(__file__).resolve().parent.parent / "sensor.py").read_text()
+        for key in ("battery_soc", "calculated_current", "available_power"):
+            assert f'key="{key}"' in src, (
+                f"{key} is excluded from charging_state but has no own entity "
+                "— that would lose its history"
+            )
