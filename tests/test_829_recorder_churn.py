@@ -49,17 +49,17 @@ class TestEnergyPrecisionMatchesTheHouseStandard:
                 continue
             assert round(v, 2) == v, f"{key} carries more than 10 Wh: {v}"
 
-    def test_energy_flows_are_10wh(self):
-        from custom_components.solar_energy_management.coordinator.flow_calculator import (
-            FlowCalculator,
+    def test_energy_flows_publish_at_10wh(self):
+        """The calculator keeps 1 Wh internally (its own tests pin that); what
+        the ENTITIES publish is 10 Wh — at 1 Wh flow_battery_to_home wrote
+        2,916 rows/day on PROD."""
+        from custom_components.solar_energy_management.coordinator.types import (
+            EnergyFlows, SEMData,
         )
-        fc = FlowCalculator()
-        fc._flow_accumulators = {"battery_to_home": 1.23456, "solar_to_home": 7.89012}
-        flows = fc._flows_snapshot() if hasattr(fc, "_flows_snapshot") else None
-        if flows is None:
-            pytest.skip("flow snapshot helper not exposed; covered by integrate test")
-        assert flows.battery_to_home == 1.23
-        assert flows.solar_to_home == 7.89
+        d = SEMData(energy_flows=EnergyFlows(battery_to_home=1.23456,
+                                             solar_to_home=7.89012)).to_dict()
+        assert d["flow_battery_to_home_energy"] == 1.23
+        assert d["flow_solar_to_home_energy"] == 7.89
 
 
 @pytest.mark.unit

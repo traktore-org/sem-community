@@ -1126,16 +1126,17 @@ class SEMData:
             "yearly_ev_energy": self.energy.yearly_ev,
 
             # Energy flows
-            "flow_solar_to_home_energy": self.energy_flows.solar_to_home,
-            "flow_solar_to_battery_energy": self.energy_flows.solar_to_battery,
-            "flow_solar_to_ev_energy": self.energy_flows.solar_to_ev,
-            "flow_solar_to_grid_energy": self.energy_flows.solar_to_grid,
-            "flow_grid_to_home_energy": self.energy_flows.grid_to_home,
-            "flow_grid_to_ev_energy": self.energy_flows.grid_to_ev,
-            "flow_grid_to_battery_energy": self.energy_flows.grid_to_battery,
-            "flow_battery_to_home_energy": self.energy_flows.battery_to_home,
-            "flow_battery_to_ev_energy": self.energy_flows.battery_to_ev,
-            "flow_battery_to_grid_energy": self.energy_flows.battery_to_grid,
+            # (#829) 10 Wh at publish — the calculator keeps 1 Wh internally
+            "flow_solar_to_home_energy": round(self.energy_flows.solar_to_home or 0.0, 2),
+            "flow_solar_to_battery_energy": round(self.energy_flows.solar_to_battery or 0.0, 2),
+            "flow_solar_to_ev_energy": round(self.energy_flows.solar_to_ev or 0.0, 2),
+            "flow_solar_to_grid_energy": round(self.energy_flows.solar_to_grid or 0.0, 2),
+            "flow_grid_to_home_energy": round(self.energy_flows.grid_to_home or 0.0, 2),
+            "flow_grid_to_ev_energy": round(self.energy_flows.grid_to_ev or 0.0, 2),
+            "flow_grid_to_battery_energy": round(self.energy_flows.grid_to_battery or 0.0, 2),
+            "flow_battery_to_home_energy": round(self.energy_flows.battery_to_home or 0.0, 2),
+            "flow_battery_to_ev_energy": round(self.energy_flows.battery_to_ev or 0.0, 2),
+            "flow_battery_to_grid_energy": round(self.energy_flows.battery_to_grid or 0.0, 2),
 
             # Per-charger flow surface (v1.6.15). Emit only when the
             # multi-charger pipeline has populated these maps; in

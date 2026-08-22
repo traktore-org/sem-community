@@ -481,17 +481,6 @@ class FlowCalculator:
         "energy_kwh",
     )
 
-    def _flows_snapshot(self):
-        """(#829) The rounded EnergyFlows view of the accumulators — 10 Wh,
-        the house standard for daily rows. At 1 Wh these ticked every cycle
-        (flow_battery_to_home 2,916 rows/day on PROD)."""
-        from .types import EnergyFlows
-        flows = EnergyFlows()
-        for attr in self._flow_accumulators:
-            if hasattr(flows, attr):
-                setattr(flows, attr, round(self._flow_accumulators.get(attr, 0.0), 2))
-        return flows
-
     def integrate_energy_flows(
         self, power_flows: PowerFlows, interval_seconds: float,
     ) -> EnergyFlows:
@@ -544,7 +533,7 @@ class FlowCalculator:
 
         flows = EnergyFlows()
         for attr in self._ACCUMULATED_ATTRS:
-            setattr(flows, attr, round(self._flow_accumulators.get(attr, 0.0), 2))
+            setattr(flows, attr, round(self._flow_accumulators.get(attr, 0.0), 3))
 
         # v1.6.15: per-charger EV slice. Integrate ``power_flows.per_charger``
         # into a parallel dict-of-dicts so each charger has its own kWh
@@ -564,9 +553,9 @@ class FlowCalculator:
         # to 0 just because the charger went idle.
         for cid, acc in self._per_charger_accumulators.items():
             flows.per_charger[cid] = ChargerEnergyFlows(
-                solar_to_ev=round(acc.get("solar_to_ev", 0.0), 2),
-                grid_to_ev=round(acc.get("grid_to_ev", 0.0), 2),
-                battery_to_ev=round(acc.get("battery_to_ev", 0.0), 2),
+                solar_to_ev=round(acc.get("solar_to_ev", 0.0), 3),
+                grid_to_ev=round(acc.get("grid_to_ev", 0.0), 3),
+                battery_to_ev=round(acc.get("battery_to_ev", 0.0), 3),
             )
 
         # v1.7.0 / #312: per-PV-string slice. Integrate the raw
