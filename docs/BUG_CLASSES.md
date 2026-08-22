@@ -2027,3 +2027,30 @@ definitions, and its no-vacuous-pass floor (`>= 5`) is satisfied by duplicate ma
 `scripts/audit_bounds.py` before trusting it. **Sweep question:** for every number a user can set,
 is its range stated in exactly one place — and where two fields constrain each other, is that
 relationship written down anywhere a test can read? **Found by the audit, not by a reporter:** `battery_capacity_kwh` was declared on two pages with different minimums AND steps (min 5/step 1 vs min 1/step 0.5) — a 3 kWh pack saved on one was refused by the other; reconciled to the wider. Still open: `vehicle_min_current` page (1–32) is WIDER than its entity (6–32), the inverse drift — entangled with #752's request for sub-6 A when the control entity is the vehicle, so it needs a decision rather than a widening. Refs #717, #746, #813, #826, #828.
+
+### 51. A value published at precision no human reads, or published twice where the later writer wins — GUARDED
+**Symptom:** an entity rewrites itself every coordinator cycle while nothing a user could see has
+changed. Costs recorder rows (SEM was **25 % of all state writes with 13 % of the entities**), and
+reads as instability: a system visibly changing its mind for no reason.
+**Root shape:** two variants of one mistake — publishing more than the thing means.
+ * *Precision:* `surplus_distributable_w = 5965.464021148`, a deadline countdown at 2 dp (moves
+   every ~36 s), session durations in tenths of a minute, a plan row stamped with
+   `datetime.now()` to the microsecond, a currency figure at 17 digits. A watt is a watt.
+ * *Two publishers:* the same key emitted by `SEMData.to_dict()` **and** by something merged in
+   via `result.update(...)`. The later writer wins silently, so a unit test asserting the first
+   one passes while the entity shows the other value.
+**Why tests miss it:** a unit test asserts the losing publisher, and once `_unrecorded_attributes`
+stabilises the stored blob the **database looks quiet too** — the state object still churns.
+Every instance on 22.08.2026 was found by diffing LIVE attributes across cycles on a running
+instance, never by the suite (7,700+ tests) and never by the recorder.
+**Instances (#829):** session tickers · flow energies · energy-tip rotation · device map ·
+`surplus_distributable_w`/`surplus_unallocated_w`/`battery_session_savings` · the forecast
+dampening + correction factors (the two-publisher case) · plan-row `when` stamps · the EV
+deadline countdown. Result: SEM's share of recorder rows **25 % → 6.1 %**.
+**Guard:** `tests/test_829_single_publisher.py` — any key emitted by both `to_dict` and a
+`result.update(...)` source must be in a SHRINK-ONLY allowlist (the #828 ratchet), and a new
+merge source must be registered or the test fails. Proven to bite on an injected regression.
+**Instrument:** `scripts/audit_live_churn.py` — samples a running instance N times and reports
+attribute paths that churn while the state is unchanged, plus numeric precision above 2 dp. This
+is the only thing that finds the precision half; run it after any change to what SEM publishes.
+
