@@ -60,6 +60,11 @@ RESERVE_EPS = 1.0
 
 DEFAULT_MAX_NIGHTS = 60
 
+# (#800) Fastest discharge a bridge will believe, as a fraction of the pack per
+# hour. A 1C pack empties in an hour; anything faster across a hole is a sensor
+# re-initialising after a reboot, not a real discharge.
+BRIDGE_MAX_C_RATE = 1.0
+
 # (#800 round 3b) Holes up to this total stay trainable. The first live
 # night's deploy restart priced ~110 s of sensor warm-up as gap — honest —
 # but zero tolerance would have refused a 10-hour night over it, and with
@@ -101,9 +106,16 @@ class BatteryNightTracker:
     """
 
     def __init__(self, reserve_soc: float,
-                 max_nights: int = DEFAULT_MAX_NIGHTS) -> None:
+                 max_nights: int = DEFAULT_MAX_NIGHTS,
+                 capacity_kwh: Optional[float] = None) -> None:
         self.reserve_soc = float(reserve_soc)
         self.max_nights = int(max_nights)
+        # (#800) Needed to convert SOC points into kWh when bridging a
+        # sampling hole. None disables the bridge rather than guessing a pack
+        # size — a fabricated capacity would fabricate the very number the
+        # #778 envelope is built from.
+        self.capacity_kwh = (None if capacity_kwh is None
+                             else float(capacity_kwh))
         self._sealed: List[Dict[str, Any]] = []
         self._reset()
 
@@ -117,6 +129,11 @@ class BatteryNightTracker:
         # is enough to make the night's drain untrustworthy, and a later
         # balanced sample does not un-inflate what was already integrated.
         self._flows_balanced = True
+        # (#800) Energy recovered across sampling holes from the pack's own
+        # SOC, and how much wall time those holes covered.
+        self._bridged_j = 0.0
+        self._bridged_s = 0.0
+        self._bridge_failed = False
         self._assist_j = 0.0
         self._export_j = 0.0
         self._gap_s = 0.0
@@ -164,6 +181,11 @@ class BatteryNightTracker:
         self._last_ts = now
 
         if dt > MAX_SAMPLE_GAP_S:
+            # A restart is a hole in the SAMPLING, not in the physics: the
+            # pack's SOC kept counting the whole time, so ask the pack what
+            # happened rather than writing the interval off. Without this a
+            # reboot silently UNDER-states the drain — and users reboot.
+            self._bridge_hole(dt, s)
             self._gap_s += dt
             dt = 0.0                    # never integrate across a hole
             self._last_good = None      # …and never hold across one
@@ -231,6 +253,54 @@ class BatteryNightTracker:
 
     # ── reads ────────────────────────────────────────────────────
 
+    def _unbridged_gap_s(self) -> float:
+        """Sampling time no measurement covers — the only kind that should
+        still refuse a night."""
+        return max(0.0, self._gap_s - self._bridged_s)
+
+    def _bridge_hole(self, dt: float, s: "Sample") -> None:
+        """Recover a sampling hole's energy from the battery's own SOC.
+
+        Only ever ADDS: an SOC that rose across the hole means the pack was
+        charging, which is not negative house demand and must not shrink what
+        the night measured.
+
+        The recovered energy is attributed to the house. When some of it
+        actually went to the car or the grid this over-states the drain — on
+        purpose. A larger drain means a larger reserve and less spending, and
+        of the two ways to be wrong that is the one that cannot strand anyone.
+
+        A hole it cannot measure (no SOC either side, no configured capacity,
+        or an SOC jump too large to be real) leaves the night refused, which is
+        the honest outcome: better an unusable night than a confidently wrong
+        one.
+        """
+        if self._phase != "night":
+            return
+        cap = self.capacity_kwh
+        before = self._soc_morning if self._soc_morning is not None else self._soc_start
+        after = s.soc if s.soc_available else None
+
+        if cap is None or cap <= 0 or before is None or after is None:
+            self._bridge_failed = True
+            return
+
+        drop_pct = float(before) - float(after)
+        if drop_pct <= 0:
+            self._bridged_s += dt      # covered, and nothing left the pack
+            return
+
+        # A pack cannot lose more than a plausible fraction of itself in the
+        # time available. A sensor re-initialising after a reboot looks exactly
+        # like a huge discharge, and believing it would poison the envelope.
+        max_plausible_pct = min(100.0, 100.0 * (dt / 3600.0) * BRIDGE_MAX_C_RATE)
+        if drop_pct > max_plausible_pct:
+            self._bridge_failed = True
+            return
+
+        self._bridged_j += cap * drop_pct / 100.0 * 3.6e6
+        self._bridged_s += dt
+
     @property
     def phase(self) -> str:
         return self._phase
@@ -251,13 +321,15 @@ class BatteryNightTracker:
     def _record(self) -> Dict[str, Any]:
         return {
             "date": self._date,
-            "drain_kwh": round(self._drain_j / 3.6e6, 3),
+            "drain_kwh": round((self._drain_j + self._bridged_j) / 3.6e6, 3),
             "assist_kwh": round(self._assist_j / 3.6e6, 3),
             "export_kwh": round(self._export_j / 3.6e6, 3),
             "soc_start": self._soc_start,
             "soc_morning": self._soc_morning,
             "reserve_hit": self._reserve_hit,
             "flows_balanced": self._flows_balanced,
+            "bridged_kwh": round(self._bridged_j / 3.6e6, 3),
+            "bridged_s": round(self._bridged_s, 1),
             "night_grid_kwh": round(self._night_grid_j / 3.6e6, 3),
             "day_home_kwh": round(self._day_home_j / 3.6e6, 3),
             "gap_s": round(self._gap_s, 1),
@@ -267,8 +339,12 @@ class BatteryNightTracker:
             # is not evidence: its drain is inflated by whatever inflated the
             # flows, and an inflated drain teaches #778 that the house needs
             # more overnight than it does.
-            "trainable": (self._gap_s <= GAP_TOLERANCE_S and self._soc_seen
-                          and self._flows_balanced),
+            # A hole the pack itself covered is no longer a reason to refuse
+            # the night — that is the whole point of the bridge. Only holes it
+            # could NOT measure still count against the tolerance.
+            "trainable": (self._unbridged_gap_s() <= GAP_TOLERANCE_S
+                          and self._soc_seen and self._flows_balanced
+                          and not self._bridge_failed),
             "refill_full_at": self._refill_full_at,
             "clipped_hours": round(self._clipped_s / 3600.0, 2),
             "forecast_kwh": self._forecast_kwh,
@@ -313,6 +389,9 @@ class BatteryNightTracker:
         # Default True: a store written before this field existed describes a
         # night nobody checked, not a night that failed.
         self._flows_balanced = bool(d.get("flows_balanced", True))
+        self._bridged_j = float(d.get("bridged_j", 0.0) or 0.0)
+        self._bridged_s = float(d.get("bridged_s", 0.0) or 0.0)
+        self._bridge_failed = bool(d.get("bridge_failed", False))
         self._assist_j = float(d.get("assist_j", 0.0) or 0.0)
         self._export_j = float(d.get("export_j", 0.0) or 0.0)
         self._gap_s = float(d.get("gap_s", 0.0) or 0.0)

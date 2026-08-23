@@ -7113,6 +7113,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             tr = self._battery_night = BatteryNightTracker(
                 reserve_soc=float(
                     self.config.get("battery_reserve_soc", 20) or 20),
+                # (#800) The pack size, so a restart's sampling hole can be
+                # bridged from the battery's own SOC instead of writing the
+                # interval off. Users restart; a night must survive it.
+                capacity_kwh=self.config.get("battery_capacity_kwh"),
             )
             store = getattr(self, "_storage", None)
             if store is not None:
