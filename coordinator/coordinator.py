@@ -10318,6 +10318,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     recorded += 1
             if recorded:
                 self._forecast_ledger_day = today_s
+                _LOGGER.info(
+                    "#778 ledger: recorded %d horizon(s) for %s "
+                    "(today=%s tomorrow=%s d2=%s)",
+                    recorded, today_s,
+                    getattr(forecast_data, "forecast_today_kwh", None),
+                    getattr(forecast_data, "forecast_tomorrow_kwh", None),
+                    getattr(forecast_data, "forecast_d2_kwh", None),
+                )
+            else:
+                _LOGGER.warning(
+                    "#778 ledger: nothing recorded for %s — forecast reads "
+                    "today=%r tomorrow=%r d2=%r",
+                    today_s,
+                    getattr(forecast_data, "forecast_today_kwh", None),
+                    getattr(forecast_data, "forecast_tomorrow_kwh", None),
+                    getattr(forecast_data, "forecast_d2_kwh", None),
+                )
             if recorded and self._storage is not None:
                 try:
                     self._storage.set_forecast_ledger_state(led.to_dict())
