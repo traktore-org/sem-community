@@ -327,7 +327,6 @@ class BatteryNightTracker:
             "soc_start": self._soc_start,
             "soc_morning": self._soc_morning,
             "reserve_hit": self._reserve_hit,
-            "flows_balanced": self._flows_balanced,
             "bridged_kwh": round(self._bridged_j / 3.6e6, 3),
             "bridged_s": round(self._bridged_s, 1),
             "night_grid_kwh": round(self._night_grid_j / 3.6e6, 3),
@@ -372,6 +371,14 @@ class BatteryNightTracker:
             "night_grid_j": self._night_grid_j,
             "day_home_j": self._day_home_j,
             "held_s": self._held_s,
+            # (#778/#800) The conservation verdict and the bridge ledger. These
+            # MUST persist: a restart is exactly when they matter, and a
+            # tracker that forgets them re-opens the night believing its books
+            # balanced and no hole was ever covered.
+            "flows_balanced": self._flows_balanced,
+            "bridged_j": self._bridged_j,
+            "bridged_s": self._bridged_s,
+            "bridge_failed": self._bridge_failed,
             "sealed": list(self._sealed),
         }
 

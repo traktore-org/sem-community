@@ -180,3 +180,81 @@ class TestOrdinaryOperationIsUnchanged:
         tr.tick(t, True, _s(battery_to_home_w=0.0, soc=80.0, measured=False))
         assert tr._record()["bridged_kwh"] == 0.0
         assert tr._record()["held_s"] > 0
+
+
+class TestTheBridgeSurvivesTheRestartItExistsFor:
+    """to_dict/from_dict must carry every field a record depends on.
+
+    Caught on .175 by deploying: the bridge landed, and its PERSISTENCE did
+    not. Two edits aimed at ``to_dict`` had silently matched an identical line
+    inside ``_record`` instead, so ``from_dict`` read fields nothing ever wrote.
+    A restart therefore reset ``bridged_j``, ``bridged_s``, ``bridge_failed``
+    AND ``flows_balanced`` — the tracker re-opened the night believing its
+    books balanced and no hole had ever been covered.
+
+    The irony is the point: a fix whose entire purpose is surviving restarts
+    did not itself survive one, and every unit test passed, because they all
+    exercise one live object and never round-trip it.
+
+    So this asserts the PROPERTY rather than a field list: mutate the tracker,
+    round-trip it, and require the record to come out identical. A field added
+    later without persistence fails here automatically.
+    """
+
+    def _dirty_tracker(self):
+        """A tracker with every accumulator moved off its default."""
+        tr = _tracker()
+        tr.start("2026-08-23", outdoor_temp_c=11.5)
+        tr.set_forecast_kwh(42.0)
+        t = _run(tr, 0.0, 600.0, power=2500.0, soc=88.0)
+        # a hole the bridge covers
+        t += 900.0
+        tr.tick(t, True, _s(battery_to_home_w=2500.0, soc=80.0))
+        # a blip the zero-order hold covers
+        t += 60.0
+        tr.tick(t, True, _s(battery_to_home_w=0.0, soc=80.0, measured=False))
+        # flows that break conservation
+        t += 30.0
+        tr.tick(t, True, _s(battery_to_home_w=2500.0, soc=79.0,
+                            battery_discharge_kwh=0.05))
+        return tr
+
+    def test_a_round_trip_preserves_the_record_exactly(self):
+        tr = self._dirty_tracker()
+        before = tr._record()
+
+        revived = BatteryNightTracker(reserve_soc=10.0, capacity_kwh=CAP)
+        revived.from_dict(tr.to_dict())
+        after = revived._record()
+
+        assert after == before, (
+            "a restart changed the night's record — some accumulator is not "
+            "persisted: " + repr({k: (before.get(k), after.get(k))
+                                  for k in set(before) | set(after)
+                                  if before.get(k) != after.get(k)}))
+
+    def test_the_dirty_tracker_really_is_dirty(self):
+        """Guard the guard: if the fixture stopped exercising the bridge, the
+        round-trip above would pass while proving nothing."""
+        rec = self._dirty_tracker()._record()
+        assert rec["bridged_kwh"] > 0, "fixture never bridged a hole"
+        assert rec["bridged_s"] > 0
+        assert rec["held_s"] > 0, "fixture never held a blip"
+        assert rec["flows_balanced"] is False, "fixture never broke conservation"
+
+    def test_a_restart_does_not_forget_a_broken_invariant(self):
+        """The specific regression: flows_balanced was not persisted, so a
+        restart laundered a night whose books did not balance back into
+        trainable evidence."""
+        tr = self._dirty_tracker()
+        assert tr._record()["trainable"] is False
+        revived = BatteryNightTracker(reserve_soc=10.0, capacity_kwh=CAP)
+        revived.from_dict(tr.to_dict())
+        assert revived._record()["trainable"] is False
+
+    def test_a_restart_does_not_forget_bridged_energy(self):
+        tr = self._dirty_tracker()
+        bridged = tr._record()["bridged_kwh"]
+        revived = BatteryNightTracker(reserve_soc=10.0, capacity_kwh=CAP)
+        revived.from_dict(tr.to_dict())
+        assert revived._record()["bridged_kwh"] == bridged
