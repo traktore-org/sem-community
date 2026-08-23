@@ -110,3 +110,79 @@ class TestTheRigsOwnRecords:
             distinct_nights,
         )
         assert len(distinct_nights(self.RIG)) == 1
+
+
+class TestTheProgressCountIsTheGateCount:
+    """"2 of 5 nights" must mean the five the gate is actually waiting for.
+
+    Live on .175: the card published ``nights_sealed = 3`` — the raw length of
+    the sealed list — while the need envelope, which dedupes by date and drops
+    untrainable records, could see exactly **one** usable night. A user reading
+    that card would wait two days for something that needed four.
+
+    This is the same defect as counting records instead of nights, one layer
+    up: fixed in the consumer, left wrong in the display. The rule the ledger
+    already states for forecast days applies here too — the number a user
+    watches and the evidence a decision uses may never be counted differently,
+    which means ONE function counts and everyone else asks it.
+    """
+
+    def _rec(self, date, drain, trainable=True):
+        return {"date": date, "drain_kwh": drain, "soc_start": 90.0,
+                "soc_morning": 60.0, "trainable": trainable}
+
+    def test_usable_nights_ignores_duplicates(self):
+        from custom_components.solar_energy_management.coordinator.measured_capacity import (
+            usable_nights,
+        )
+        recs = [self._rec("2026-08-21", 5.0), self._rec("2026-08-21", 0.004),
+                self._rec("2026-08-22", 6.0)]
+        assert usable_nights(recs) == 2
+
+    def test_usable_nights_ignores_untrainable_records(self):
+        from custom_components.solar_energy_management.coordinator.measured_capacity import (
+            usable_nights,
+        )
+        recs = [self._rec("2026-08-20", 5.0, trainable=False),
+                self._rec("2026-08-21", 6.0)]
+        assert usable_nights(recs) == 1
+
+    def test_the_rigs_own_records_count_as_one(self):
+        """.175 on 23.08: three sealed records, one trainable, all one date."""
+        from custom_components.solar_energy_management.coordinator.measured_capacity import (
+            usable_nights,
+        )
+        rig = [
+            {"date": "2026-08-21", "drain_kwh": 0.016, "trainable": False},
+            {"date": "2026-08-21", "drain_kwh": 8.789, "trainable": True},
+            {"date": "2026-08-21", "drain_kwh": 0.004, "trainable": True},
+        ]
+        assert usable_nights(rig) == 1
+
+    def test_the_count_reaching_the_gate_unlocks_the_envelope(self):
+        """The property that makes the number honest: when the published count
+        hits the required number, the envelope must actually answer."""
+        from custom_components.solar_energy_management.coordinator.measured_capacity import (
+            MIN_NEED_SAMPLES, expected_overnight_need, usable_nights,
+        )
+        recs = [self._rec(f"2026-08-{d:02d}", 5.0 + d) for d in range(1, 6)]
+        assert usable_nights(recs) == MIN_NEED_SAMPLES
+        assert expected_overnight_need(recs) is not None
+
+    def test_one_short_of_the_gate_still_answers_nothing(self):
+        from custom_components.solar_energy_management.coordinator.measured_capacity import (
+            MIN_NEED_SAMPLES, expected_overnight_need, usable_nights,
+        )
+        recs = [self._rec(f"2026-08-{d:02d}", 5.0 + d)
+                for d in range(1, MIN_NEED_SAMPLES)]
+        assert usable_nights(recs) == MIN_NEED_SAMPLES - 1
+        assert expected_overnight_need(recs) is None
+
+    def test_the_coordinator_publishes_the_usable_count(self):
+        from pathlib import Path
+        src = (Path(__file__).resolve().parent.parent
+               / "coordinator" / "coordinator.py").read_text(encoding="utf-8")
+        assert '"nights_sealed": len(sealed)' not in src, (
+            "the card still publishes the raw record count, which over-states "
+            "progress toward a gate that counts distinct trainable nights")
+        assert "usable_nights(sealed)" in src

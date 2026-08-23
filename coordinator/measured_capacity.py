@@ -156,6 +156,18 @@ def distinct_nights(records: Optional[Iterable[dict]]) -> list:
     return [entry[1] for entry in best.values()] + undated
 
 
+def usable_nights(records: Optional[Iterable[dict]]) -> int:
+    """How many nights the envelope can actually learn from.
+
+    The number a card shows as progress. It must count exactly what
+    ``expected_overnight_need`` counts — one record per date, trainable only —
+    because a user reading "3 of 5" and a gate seeing 1 is a promise the
+    feature cannot keep, and they wait days for something that needs longer.
+    """
+    return sum(1 for rec in distinct_nights(records)
+               if isinstance(rec, dict) and rec.get("trainable"))
+
+
 #: Nights needed before an overnight-need figure is offered.
 MIN_NEED_SAMPLES: int = 5
 

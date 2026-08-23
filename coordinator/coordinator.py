@@ -10445,12 +10445,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # (#778 phase 6) The state a card renders, published rather than
         # inferred. See planning_phase for why the reason strings must not be
         # matched on.
-        from .measured_capacity import MIN_NEED_SAMPLES
+        from .measured_capacity import MIN_NEED_SAMPLES, usable_nights
         from .forecast_ledger import MIN_SAMPLES_FOR_TRUST
         from .planning_phase import planning_phase
 
         phase = planning_phase(
-            nights_sealed=len(sealed),
+            nights_sealed=usable_nights(sealed),
             nights_required=MIN_NEED_SAMPLES,
             overnight_need_kwh=need_kwh,
             usable_capacity_kwh=usable_kwh,
@@ -10462,7 +10462,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # The progress a user watches while the evidence accrues. Without
             # these the learning state is a bare 0.0, which reads as "nothing
             # to spend" rather than "not measured yet".
-            "nights_sealed": len(sealed),
+            # The count the GATE uses, not the raw record length: a night
+            # sealed twice, or sealed untrainable, is not progress.
+            "nights_sealed": usable_nights(sealed),
+            "nights_recorded_raw": len(sealed),
             "nights_required": MIN_NEED_SAMPLES,
             "forecast_days_d1": led.settled_samples(1),
             "forecast_days_d2": led.settled_samples(2),
