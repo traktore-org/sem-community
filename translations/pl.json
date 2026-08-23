@@ -64,7 +64,7 @@
           "mobile_notification_service": "Usługa powiadomień mobilnych",
           "vehicle_soc_entity": "SOC akumulatora pojazdu",
           "ev_battery_capacity_kwh": "Pojemność akumulatora EV (kWh)",
-          "ev_target_soc": "Docelowy SOC pojazdu EV (%)"
+          "ev_target_soc": "Uznaj za pełny przy (%)"
         },
         "data_description": {
           "ev_connected_sensor": "Czujnik binarny raportujący, czy wtyczka pojazdu jest aktualnie podłączona.",
@@ -78,7 +78,7 @@
           "mobile_notification_service": "Usługa notify HA do powiadomień push (np. notify.mobile_app_your_phone).",
           "vehicle_soc_entity": "Opcjonalny czujnik raportujący bieżący stan naładowania pojazdu (0–100%).",
           "ev_battery_capacity_kwh": "Całkowita użyteczna pojemność akumulatora EV w kWh. Używana do szacowania SOC i czasu ładowania.",
-          "ev_target_soc": "Docelowy SOC (%), przy którym SEM uznaje pojazd EV za w pełni naładowany."
+          "ev_target_soc": "Od tego momentu SEM uznaje samochód za naładowany. To definicja \"pełnego\", nie limit ładowania."
         }
       }
     },
@@ -108,9 +108,9 @@
           "vehicle_soc_entity": "Czujnik SOC akumulatora pojazdu (opcjonalny)",
           "ev_battery_capacity_kwh": "Pojemność akumulatora EV (kWh)",
           "ev_charger_efficiency": "Sprawność ładowarki (%)",
-          "ev_target_soc": "Docelowy SOC pojazdu EV (%)",
-          "daily_ev_target_max": "Limit ładowania słonecznego (kWh)",
-          "ev_target_soc_max": "Limit ładowania słonecznego (SOC %)",
+          "ev_target_soc": "Uznaj za pełny przy (%)",
+          "daily_ev_target_max": "Nigdy nie ładuj powyżej (kWh)",
+          "ev_target_soc_max": "Nigdy nie ładuj powyżej (%)",
           "vehicle_range_entity": "Czujnik zasięgu pojazdu",
           "ev_kwh_per_100km": "Zużycie pojazdu (kWh/100km)"
         },
@@ -124,9 +124,9 @@
           "vehicle_soc_entity": "Opcjonalny czujnik raportujący bieżący stan naładowania pojazdu (0–100%).",
           "ev_battery_capacity_kwh": "Całkowita użyteczna pojemność akumulatora EV w kWh. Używana do szacowania SOC i czasu ładowania.",
           "ev_charger_efficiency": "Część zmierzonej energii AC, która trafia do akumulatora. Zmniejsz wartość, jeśli szacowany SOC wyprzedza pojazd. Zwykle 85-95%, mniej przy ładowaniu jednofazowym lub na mrozie.",
-          "ev_target_soc": "Docelowy SOC (%), przy którym SEM uznaje pojazd EV za w pełni naładowany.",
-          "daily_ev_target_max": "Nadwyżka słoneczna ładuje do tej wartości, a potem się zatrzymuje. Pozostaw na maksimum, aby ładować swobodnie ze słońca.",
-          "ev_target_soc_max": "Nadwyżka słoneczna ładuje do tego SOC, a potem się zatrzymuje. Pozostaw na 100%, aby ładować swobodnie ze słońca.",
+          "ev_target_soc": "Od tego momentu SEM uznaje samochód za naładowany. To definicja \"pełnego\", nie limit ładowania.",
+          "daily_ev_target_max": "Nadwyżka solarna przestaje tu ładować. To sufit, nie cel — zostaw na maksimum, aby ładować swobodnie ze słońca.",
+          "ev_target_soc_max": "Nadwyżka solarna przestaje tu ładować. To sufit, nie cel — zostaw na 100%, aby ładować swobodnie ze słońca.",
           "ev_kwh_per_100km": "Używane do szacowania zasięgu, gdy nie skonfigurowano czujnika zasięgu.",
           "vehicle_range_entity": "Opcjonalny rzeczywisty czujnik zasięgu. W przeciwnym razie zasięg jest szacowany na podstawie SOC × pojemność × wydajność."
         }
@@ -138,7 +138,7 @@
           "update_interval": "Interwał aktualizacji (sekundy)",
           "battery_priority_soc": "SOC priorytetu baterii (%)",
           "min_solar_power": "Minimalna moc solarna — surowa produkcja PV (W)",
-          "daily_ev_target": "Dzienny cel EV (kWh)",
+          "daily_ev_target": "Zagwarantuj co najmniej (kWh)",
           "battery_assist_max_power": "Wsparcie baterii – maks. moc (W)",
           "battery_capacity_kwh": "Pojemność baterii (kWh)",
           "battery_discharge_protection_enabled": "Włącz ochronę przed rozładowaniem baterii",
@@ -151,7 +151,7 @@
           "smart_night_charging": "Inteligentne ładowanie nocne",
           "vehicle_soc_entity": "SOC akumulatora pojazdu",
           "ev_battery_capacity_kwh": "Pojemność akumulatora EV (kWh)",
-          "ev_target_soc": "Docelowy SOC pojazdu EV (%)",
+          "ev_target_soc": "Uznaj za pełny przy (%)",
           "battery_buffer_soc": "Granica stref 2/3 — SOC bufora baterii (%)",
           "battery_auto_start_soc": "Granica stref 3/4 — SOC autostartu baterii (%)",
           "battery_discharge_control_entity": "Encja sterowania rozładowaniem baterii (opcjonalna)",
@@ -168,7 +168,7 @@
           "battery_buffer_soc": "Granica strefy 2 → strefy 3. Powyżej tego SOC bateria może się rozładowywać, aby mostkować deficyty słoneczne podczas ładowania EV. Domyślnie 70 %.",
           "battery_auto_start_soc": "Granica strefy 3 → strefy 4. Powyżej tego SOC pojazd EV może zacząć ładowanie nawet bez nadwyżki słonecznej, pobierając energię z baterii. Domyślnie 90 %.",
           "min_solar_power": "Dolny próg surowej produkcji PV — moc paneli, poniżej której „słońce jest aktywne” jest fałszem: solar_only nie startuje, a zabezpieczenie przed głębokim deficytem traktuje to jak ciemność (ładowanie szybko się zatrzymuje zamiast mostkować z sieci). To jest SUROWA produkcja, NIE nadwyżka — w przeciwieństwie do „Wsparcie baterii – min. nadwyżka solarna” (słońce − dom), która decyduje, kiedy bateria domowa może pomóc. Domyślnie 1000 W; utrzymuj poniżej minimum sprzętowego ładowarki EV (~4140 W przy 3 fazach, ~1380 W przy 1 fazie).",
-          "daily_ev_target": "Docelowa liczba kWh na dobę do nocnego ładowania z sieci. Ustaw 0, aby całkowicie wyłączyć ładowanie nocne.",
+          "daily_ev_target": "SEM doładowuje z sieci w nocy, aby rano samochód miał co najmniej tyle. To dolna granica, nie limit — słońce może dodać więcej. 0 = nigdy nie używaj sieci.",
           "battery_assist_max_power": "Maksymalna moc, jaką bateria domowa może oddać, wspierając ładowanie EV w strefie 3/4. Domyślnie 4500 W.",
           "battery_capacity_kwh": "Całkowita użyteczna pojemność baterii domowej (NIE akumulatora EV — to osobne pole w kroku EV). Używana przez strategię ładowania opartą na prognozie.",
           "battery_discharge_protection_enabled": "Gdy WŁĄCZONE, SEM ogranicza limit rozładowania falownika podczas nocnego ładowania EV, tak aby bateria domowa zasilała wyłącznie dom (a nie pojazd).",
@@ -192,7 +192,7 @@
         "title": "Ładowanie EV i solar",
         "description": "Skonfiguruj cele ładowania EV i progi solarne.",
         "data": {
-          "daily_ev_target": "Cel ładowania nocnego (kWh)",
+          "daily_ev_target": "Zagwarantuj co najmniej (kWh)",
           "observer_mode": "Tryb obserwatora (tylko odczyt, bez sterowania sprzętem)",
           "smart_night_charging": "Zmniejsz cel nocny na podstawie prognozy na jutro",
           "minimum_solar_power": "Minimalna moc solarna do startu ładowania EV (W)",
@@ -200,7 +200,7 @@
           "export_limit_entity": "Encja limitu eksportu (opcjonalnie)"
         },
         "data_description": {
-          "daily_ev_target": "Docelowa liczba kWh do naładowania z sieci każdej nocy. Ustaw 0, aby wyłączyć nocne ładowanie z sieci.",
+          "daily_ev_target": "SEM doładowuje z sieci w nocy, aby rano samochód miał co najmniej tyle. To dolna granica, nie limit — słońce może dodać więcej. 0 = nigdy nie używaj sieci.",
           "observer_mode": "Gdy WŁĄCZONE, SEM wszystko monitoruje, ale nigdy nie wysyła poleceń do sprzętu.",
           "smart_night_charging": "Gdy WŁĄCZONE, SEM zmniejsza cel ładowania nocnego, jeśli jutrzejsza prognoza słoneczna jest wystarczająca.",
           "minimum_solar_power": "Minimalna nadwyżka mocy solarnej (W) wymagana, zanim SEM rozpocznie ładowanie EV ze słońca.",
@@ -255,7 +255,7 @@
           "emergency_peak_level": "Awaryjny poziom szczytu (kW)",
           "vehicle_soc_entity": "SOC akumulatora pojazdu",
           "ev_battery_capacity_kwh": "Pojemność akumulatora EV (kWh)",
-          "ev_target_soc": "Docelowy SOC pojazdu EV (%)"
+          "ev_target_soc": "Uznaj za pełny przy (%)"
         },
         "data_description": {
           "load_management_enabled": "Włącz/wyłącz automatyczne zrzucanie obciążeń przez SEM, aby utrzymać się poniżej limitu szczytu sieci.",
@@ -265,7 +265,7 @@
           "emergency_peak_level": "Poziom mocy (kW), przy którym SEM agresywnie zrzuca obciążenia, aby uniknąć opłat mocowych. Musi być wyższy niż docelowy limit szczytu.",
           "vehicle_soc_entity": "Opcjonalny czujnik raportujący bieżący stan naładowania pojazdu (0–100%).",
           "ev_battery_capacity_kwh": "Całkowita użyteczna pojemność akumulatora EV w kWh.",
-          "ev_target_soc": "Docelowy SOC (%), przy którym SEM uznaje pojazd EV za w pełni naładowany."
+          "ev_target_soc": "Od tego momentu SEM uznaje samochód za naładowany. To definicja \"pełnego\", nie limit ładowania."
         }
       },
       "notifications": {
@@ -277,7 +277,7 @@
           "mobile_notification_service": "Usługa powiadomień mobilnych",
           "vehicle_soc_entity": "SOC akumulatora pojazdu",
           "ev_battery_capacity_kwh": "Pojemność akumulatora EV (kWh)",
-          "ev_target_soc": "Docelowy SOC pojazdu EV (%)"
+          "ev_target_soc": "Uznaj za pełny przy (%)"
         },
         "data_description": {
           "enable_charger_notifications": "Włącz/wyłącz trwałe banery powiadomień na karcie statusu ładowarki.",
@@ -285,7 +285,7 @@
           "mobile_notification_service": "Usługa notify HA do powiadomień push (np. notify.mobile_app_your_phone).",
           "vehicle_soc_entity": "Opcjonalny czujnik raportujący bieżący stan naładowania pojazdu (0–100%).",
           "ev_battery_capacity_kwh": "Całkowita użyteczna pojemność akumulatora EV w kWh.",
-          "ev_target_soc": "Docelowy SOC (%), przy którym SEM uznaje pojazd EV za w pełni naładowany."
+          "ev_target_soc": "Od tego momentu SEM uznaje samochód za naładowany. To definicja \"pełnego\", nie limit ładowania."
         }
       },
       "battery_scheduler": {
@@ -329,13 +329,13 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "Priorytet nadwyżki (1=najwyższy)",
           "ev_current_control_entity": "Encja sterowania prądem (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Limit ładowania słonecznego (kWh)",
-          "ev_target_soc_max": "Limit ładowania słonecznego (SOC %)",
-          "daily_ev_target": "Cel ładowania nocnego (kWh)",
+          "daily_ev_target_max": "Nigdy nie ładuj powyżej (kWh)",
+          "ev_target_soc_max": "Nigdy nie ładuj powyżej (%)",
+          "daily_ev_target": "Zagwarantuj co najmniej (kWh)",
           "vehicle_soc_entity": "Czujnik SOC akumulatora pojazdu (opcjonalny)",
           "vehicle_range_entity": "Czujnik zasięgu pojazdu",
           "ev_kwh_per_100km": "Zużycie pojazdu (kWh/100km)",
-          "ev_target_soc": "Docelowy SOC pojazdu EV (%)",
+          "ev_target_soc": "Uznaj za pełny przy (%)",
           "ev_battery_capacity_kwh": "Pojemność akumulatora EV (kWh)",
           "initial_current": "Prąd początkowy (A)",
           "ev_min_current": "Minimalny prąd ładowania (A)",
@@ -358,13 +358,13 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "Kolejność przydziału nadwyżki pomiędzy wieloma ładowarkami. Niższy numer = wyższy priorytet.",
           "ev_current_control_entity": "Encja Number używana do ustawiania prądu ładowania (A). Dla Wallbox, go-eCharger i podobnych ładowarek.",
-          "daily_ev_target_max": "Nadwyżka słoneczna ładuje do tej wartości, a potem się zatrzymuje. Pozostaw na maksimum, aby ładować swobodnie ze słońca.",
-          "ev_target_soc_max": "Nadwyżka słoneczna ładuje do tego SOC, a potem się zatrzymuje. Pozostaw na 100%, aby ładować swobodnie ze słońca.",
-          "daily_ev_target": "Docelowa liczba kWh do naładowania z sieci każdej nocy. Ustaw 0, aby wyłączyć nocne ładowanie z sieci.",
+          "daily_ev_target_max": "Nadwyżka solarna przestaje tu ładować. To sufit, nie cel — zostaw na maksimum, aby ładować swobodnie ze słońca.",
+          "ev_target_soc_max": "Nadwyżka solarna przestaje tu ładować. To sufit, nie cel — zostaw na 100%, aby ładować swobodnie ze słońca.",
+          "daily_ev_target": "SEM doładowuje z sieci w nocy, aby rano samochód miał co najmniej tyle. To dolna granica, nie limit — słońce może dodać więcej. 0 = nigdy nie używaj sieci.",
           "vehicle_soc_entity": "Opcjonalny czujnik raportujący bieżący stan naładowania pojazdu (0–100%).",
           "vehicle_range_entity": "Opcjonalny rzeczywisty czujnik zasięgu. W przeciwnym razie zasięg jest szacowany na podstawie SOC × pojemność × wydajność.",
           "ev_kwh_per_100km": "Używane do szacowania zasięgu, gdy nie skonfigurowano czujnika zasięgu.",
-          "ev_target_soc": "Docelowy SOC (%), przy którym SEM uznaje pojazd EV za w pełni naładowany.",
+          "ev_target_soc": "Od tego momentu SEM uznaje samochód za naładowany. To definicja \"pełnego\", nie limit ładowania.",
           "ev_battery_capacity_kwh": "Całkowita użyteczna pojemność akumulatora EV w kWh. Używana do szacowania SOC i czasu ładowania.",
           "initial_current": "Prąd ładowania, od którego SEM zaczyna, zanim dostosuje się do dostępnej nadwyżki.",
           "ev_min_current": "Poniżej tej wartości SEM wstrzymuje ładowanie, zamiast dalej obniżać prąd.",
@@ -391,13 +391,13 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "Priorytet nadwyżki (1=najwyższy)",
           "ev_current_control_entity": "Encja sterowania prądem (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Limit ładowania słonecznego (kWh)",
-          "ev_target_soc_max": "Limit ładowania słonecznego (SOC %)",
-          "daily_ev_target": "Cel ładowania nocnego (kWh)",
+          "daily_ev_target_max": "Nigdy nie ładuj powyżej (kWh)",
+          "ev_target_soc_max": "Nigdy nie ładuj powyżej (%)",
+          "daily_ev_target": "Zagwarantuj co najmniej (kWh)",
           "vehicle_soc_entity": "Czujnik SOC akumulatora pojazdu (opcjonalny)",
           "vehicle_range_entity": "Czujnik zasięgu pojazdu",
           "ev_kwh_per_100km": "Zużycie pojazdu (kWh/100km)",
-          "ev_target_soc": "Docelowy SOC pojazdu EV (%)",
+          "ev_target_soc": "Uznaj za pełny przy (%)",
           "ev_battery_capacity_kwh": "Pojemność akumulatora EV (kWh)",
           "initial_current": "Prąd początkowy (A)",
           "ev_min_current": "Minimalny prąd ładowania (A)",
@@ -419,13 +419,13 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "Kolejność przydziału nadwyżki pomiędzy wieloma ładowarkami. Niższy numer = wyższy priorytet.",
           "ev_current_control_entity": "Encja Number używana do ustawiania prądu ładowania (A). Dla Wallbox, go-eCharger i podobnych ładowarek.",
-          "daily_ev_target_max": "Nadwyżka słoneczna ładuje do tej wartości, a potem się zatrzymuje. Pozostaw na maksimum, aby ładować swobodnie ze słońca.",
-          "ev_target_soc_max": "Nadwyżka słoneczna ładuje do tego SOC, a potem się zatrzymuje. Pozostaw na 100%, aby ładować swobodnie ze słońca.",
-          "daily_ev_target": "Docelowa liczba kWh do naładowania z sieci każdej nocy. Ustaw 0, aby wyłączyć nocne ładowanie z sieci.",
+          "daily_ev_target_max": "Nadwyżka solarna przestaje tu ładować. To sufit, nie cel — zostaw na maksimum, aby ładować swobodnie ze słońca.",
+          "ev_target_soc_max": "Nadwyżka solarna przestaje tu ładować. To sufit, nie cel — zostaw na 100%, aby ładować swobodnie ze słońca.",
+          "daily_ev_target": "SEM doładowuje z sieci w nocy, aby rano samochód miał co najmniej tyle. To dolna granica, nie limit — słońce może dodać więcej. 0 = nigdy nie używaj sieci.",
           "vehicle_soc_entity": "Opcjonalny czujnik raportujący bieżący stan naładowania pojazdu (0–100%).",
           "vehicle_range_entity": "Opcjonalny rzeczywisty czujnik zasięgu. W przeciwnym razie zasięg jest szacowany na podstawie SOC × pojemność × wydajność.",
           "ev_kwh_per_100km": "Używane do szacowania zasięgu, gdy nie skonfigurowano czujnika zasięgu.",
-          "ev_target_soc": "Docelowy SOC (%), przy którym SEM uznaje pojazd EV za w pełni naładowany.",
+          "ev_target_soc": "Od tego momentu SEM uznaje samochód za naładowany. To definicja \"pełnego\", nie limit ładowania.",
           "ev_battery_capacity_kwh": "Całkowita użyteczna pojemność akumulatora EV w kWh. Używana do szacowania SOC i czasu ładowania.",
           "initial_current": "Prąd ładowania, od którego SEM zaczyna, zanim dostosuje się do dostępnej nadwyżki.",
           "ev_min_current": "Poniżej tej wartości SEM wstrzymuje ładowanie, zamiast dalej obniżać prąd.",

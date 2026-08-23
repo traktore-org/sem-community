@@ -76,6 +76,43 @@ def _declaring_steps(cf: str) -> dict:
     return out
 
 
+def _first_run(cf: str) -> dict:
+    """What a NEW user faces before SEM works at all.
+
+    (#830 step 5) The total of 158 is the maintenance burden; THIS is the
+    number a user feels, and it deserves its own target. The split is by class:
+    the install flow is what a new user walks, the options flow is everything
+    they can come back to later.
+    """
+    classes = [(m.start(), m.group(1))
+               for m in re.finditer(r"^class (\w+)", cf, re.M)]
+    steps = [(m.start(), m.group(1))
+             for m in re.finditer(r"    async def async_step_([a-z0-9_]+)", cf)]
+
+    def owner(pos, table, default):
+        n = default
+        for start, name in table:
+            if start < pos:
+                n = name
+            else:
+                break
+        return n
+
+    install, later = {}, {}
+    for m in re.finditer(r'vol\.(?:Optional|Required)\(\s*["\']([a-z0-9_]+)["\']', cf):
+        cls = owner(m.start(), classes, "?")
+        step = owner(m.start(), steps, "(module)")
+        (later if "Options" in cls else install).setdefault(m.group(1), set()).add(step)
+
+    return {
+        "first_run_fields": len(install),
+        "first_run_steps": len({s for v in install.values() for s in v}),
+        "first_run_field_names": sorted(install),
+        "options_fields": len(later),
+        "options_steps": len({s for v in later.values() for s in v}),
+    }
+
+
 def measure() -> dict:
     cf = (ROOT / "config_flow.py").read_text()
     decls = re.findall(r'vol\.(?:Optional|Required)\(\s*["\']([a-z0-9_]+)["\']', cf)
@@ -121,6 +158,7 @@ def measure() -> dict:
         "number_entities": count_keys("number.py"),
         "switch_entities": count_keys("switch.py"),
         "user_facing_controls": len(fields) + count_keys("number.py") + count_keys("switch.py"),
+        **_first_run(cf),
         # The inventory the #830 ratchet compares against.
         "inventory": {
             "config_fields": sorted(fields),
@@ -141,6 +179,8 @@ def write_baseline(path: Path) -> dict:
             "Regenerate:  python3 scripts/audit_options.py --baseline",
         ],
         "total": m["user_facing_controls"],
+        "first_run_fields": m["first_run_fields"],
+        "first_run_steps": m["first_run_steps"],
         **m["inventory"],
     }
     path.write_text(json.dumps(payload, indent=2) + "\n")
@@ -167,6 +207,10 @@ def main() -> int:
     print(f"  number entities           {m['number_entities']:4}")
     print(f"  switch entities           {m['switch_entities']:4}")
     print(f"  TOTAL user-facing controls{m['user_facing_controls']:4}")
+    print()
+    print("  what a NEW user faces before SEM works:")
+    print(f"    first run  steps {m['first_run_steps']:3}   fields {m['first_run_fields']:3}")
+    print(f"    later      steps {m['options_steps']:3}   fields {m['options_fields']:3}")
     if m["duplicates"]:
         print("\n  genuine duplicates (a user can set these in two places):")
         for k, sts in sorted(m["duplicates"].items()):

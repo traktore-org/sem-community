@@ -64,7 +64,7 @@
           "mobile_notification_service": "Tjeneste for mobilvarsling",
           "vehicle_soc_entity": "Kjøretøyets batteri-SOC",
           "ev_battery_capacity_kwh": "Elbilbatteriets kapasitet (kWh)",
-          "ev_target_soc": "EV mål-SOC (%)"
+          "ev_target_soc": "Regn som full ved (%)"
         },
         "data_description": {
           "ev_connected_sensor": "Binærsensor som rapporterer om kjøretøyets plugg er tilkoblet akkurat nå.",
@@ -78,7 +78,7 @@
           "mobile_notification_service": "HA notify-tjeneste for push til mobil (f.eks. notify.mobile_app_your_phone).",
           "vehicle_soc_entity": "Valgfri sensor som rapporterer kjøretøyets nåværende ladenivå (0–100 %).",
           "ev_battery_capacity_kwh": "Total brukbar kapasitet på elbilbatteriet i kWh. Brukes til å anslå SOC og ladetid.",
-          "ev_target_soc": "Mål-SOC (%) der SEM anser elbilen som fulladet."
+          "ev_target_soc": "Herfra regner SEM bilen som ladet. Det er en definisjon av \"full\", ikke en ladegrense."
         }
       }
     },
@@ -108,9 +108,9 @@
           "vehicle_soc_entity": "SOC-sensor for kjøretøyets batteri (valgfri)",
           "ev_battery_capacity_kwh": "Elbilbatteriets kapasitet (kWh)",
           "ev_charger_efficiency": "Laderens virkningsgrad (%)",
-          "ev_target_soc": "EV mål-SOC (%)",
-          "daily_ev_target_max": "Solladegrense (kWh)",
-          "ev_target_soc_max": "Solladegrense (SOC %)",
+          "ev_target_soc": "Regn som full ved (%)",
+          "daily_ev_target_max": "Lad aldri utover (kWh)",
+          "ev_target_soc_max": "Lad aldri utover (%)",
           "vehicle_range_entity": "Kjøretøyets rekkeviddesensor",
           "ev_kwh_per_100km": "Kjøretøyets forbruk (kWh/100km)"
         },
@@ -124,9 +124,9 @@
           "vehicle_soc_entity": "Valgfri sensor som rapporterer kjøretøyets nåværende ladenivå (0–100 %).",
           "ev_battery_capacity_kwh": "Total brukbar kapasitet på elbilbatteriet i kWh. Brukes til å anslå SOC og ladetid.",
           "ev_charger_efficiency": "Andel av den målte AC-energien som når batteriet. Senk verdien hvis SOC-estimatet ligger foran bilen. Vanligvis 85-95 %, lavere ved enfaset lading eller i kulde.",
-          "ev_target_soc": "Mål-SOC (%) der SEM anser elbilen som fulladet.",
-          "daily_ev_target_max": "Soloverskudd lader opp til dette og stopper deretter. La stå på full for å lade fritt fra sol.",
-          "ev_target_soc_max": "Soloverskudd lader opp til denne SOC-en og stopper deretter. La stå på 100 % for å lade fritt fra sol.",
+          "ev_target_soc": "Herfra regner SEM bilen som ladet. Det er en definisjon av \"full\", ikke en ladegrense.",
+          "daily_ev_target_max": "Soloverskudd slutter å lade her. Dette er et tak, ikke et mål — la stå på fullt for å lade fritt fra sola.",
+          "ev_target_soc_max": "Soloverskudd slutter å lade her. Dette er et tak, ikke et mål — la stå på 100% for å lade fritt fra sola.",
           "ev_kwh_per_100km": "Brukes til å anslå rekkevidden når ingen rekkeviddesensor er konfigurert.",
           "vehicle_range_entity": "Valgfri reell rekkeviddesensor. Ellers anslås rekkevidden fra SOC × kapasitet × effektivitet."
         }
@@ -138,7 +138,7 @@
           "update_interval": "Oppdateringsintervall (sekunder)",
           "battery_priority_soc": "Batteriets prioritets-SOC (%)",
           "min_solar_power": "Minimum soleffekt — rå PV-produksjon (W)",
-          "daily_ev_target": "Daglig EV-mål (kWh)",
+          "daily_ev_target": "Garanter minst (kWh)",
           "battery_assist_max_power": "Batteristøtte – maks. effekt (W)",
           "battery_capacity_kwh": "Batterikapasitet (kWh)",
           "battery_discharge_protection_enabled": "Aktiver vern mot batteriutlading",
@@ -151,7 +151,7 @@
           "smart_night_charging": "Smart nattlading",
           "vehicle_soc_entity": "Kjøretøyets batteri-SOC",
           "ev_battery_capacity_kwh": "Elbilbatteriets kapasitet (kWh)",
-          "ev_target_soc": "EV mål-SOC (%)",
+          "ev_target_soc": "Regn som full ved (%)",
           "battery_buffer_soc": "Grense sone 2/3 — Batteriets buffer-SOC (%)",
           "battery_auto_start_soc": "Grense sone 3/4 — Batteriets autostart-SOC (%)",
           "battery_discharge_control_entity": "Styringsentitet for batteriutlading (valgfri)",
@@ -168,7 +168,7 @@
           "battery_buffer_soc": "Grensen sone 2 → sone 3. Over denne SOC-en kan batteriet lade ut for å dekke solunderskudd mens elbilen lader. Standard 70 %.",
           "battery_auto_start_soc": "Grensen sone 3 → sone 4. Over denne SOC-en kan elbilen begynne å lade selv uten soloverskudd, ved å trekke fra batteriet. Standard 90 %.",
           "min_solar_power": "Nedre grense for rå PV-produksjon — paneleffekten der „solen er aktiv“ er usann: solar_only starter ikke, og vernet mot dypt underskudd behandler det som mørke (ladingen stopper altså raskt i stedet for å bygge bro via strømnettet). Dette er RÅ produksjon, IKKE overskudd — i motsetning til „Batteristøtte – min. soloverskudd“ (sol − hjem), som avgjør når hjemmebatteriet kan hjelpe. Standard 1000 W; hold den under EV-laderens maskinvareminimum (~4140 W ved 3-fase, ~1380 W ved 1-fase).",
-          "daily_ev_target": "Mål i kWh per dag for nattlading fra nettet. Sett til 0 for å deaktivere nattlading helt.",
+          "daily_ev_target": "SEM fyller på fra nettet om natten så bilen har minst dette om morgenen. Dette er en bunngrense, ikke en grense — sola kan legge til mer. 0 = bruk aldri nettet.",
           "battery_assist_max_power": "Maksimal effekt husbatteriet kan lade ut for å støtte elbilen i sone 3/4. Standard 4500 W.",
           "battery_capacity_kwh": "Total brukbar kapasitet på husbatteriet (IKKE elbilbatteriet — det er et eget felt i EV-steget). Brukes av den prognosestyrte ladestrategien.",
           "battery_discharge_protection_enabled": "Når denne er PÅ, begrenser SEM inverterens utladegrense under nattlading av elbilen, slik at husbatteriet bare forsyner huset (ikke elbilen).",
@@ -192,7 +192,7 @@
         "title": "EV Lading og sol",
         "description": "Konfigurer ladermål for elbil og solterskler.",
         "data": {
-          "daily_ev_target": "Mål for nattlading (kWh)",
+          "daily_ev_target": "Garanter minst (kWh)",
           "observer_mode": "Observatørmodus (skrivebeskyttet, ingen maskinvarestyring)",
           "smart_night_charging": "Reduser nattmålet basert på morgendagens prognose",
           "minimum_solar_power": "Minimum soleffekt for å starte EV-lading (W)",
@@ -200,7 +200,7 @@
           "export_limit_entity": "Eksportgrense-entitet (valgfritt)"
         },
         "data_description": {
-          "daily_ev_target": "Mål i kWh som skal lades fra nettet hver natt. Sett til 0 for å deaktivere nattlading fra nettet.",
+          "daily_ev_target": "SEM fyller på fra nettet om natten så bilen har minst dette om morgenen. Dette er en bunngrense, ikke en grense — sola kan legge til mer. 0 = bruk aldri nettet.",
           "observer_mode": "Når denne er PÅ, overvåker SEM alt, men sender aldri kommandoer til maskinvaren.",
           "smart_night_charging": "Når denne er PÅ, reduserer SEM målet for nattlading når morgendagens solprognose er tilstrekkelig.",
           "minimum_solar_power": "Minste soloverskudd (W) som kreves før SEM starter sollading av elbilen.",
@@ -255,7 +255,7 @@
           "emergency_peak_level": "Nødnivå for topplast (kW)",
           "vehicle_soc_entity": "Kjøretøyets batteri-SOC",
           "ev_battery_capacity_kwh": "Elbilbatteriets kapasitet (kWh)",
-          "ev_target_soc": "EV mål-SOC (%)"
+          "ev_target_soc": "Regn som full ved (%)"
         },
         "data_description": {
           "load_management_enabled": "Slå av/på SEMs automatiske utkobling av laster for å holde seg under nettets topplastgrense.",
@@ -265,7 +265,7 @@
           "emergency_peak_level": "Effektnivået (kW) der SEM aggressivt kobler ut laster for å unngå effekttariffkostnader. Må være over mål-toppgrensen.",
           "vehicle_soc_entity": "Valgfri sensor som rapporterer kjøretøyets nåværende ladenivå (0–100 %).",
           "ev_battery_capacity_kwh": "Total brukbar kapasitet på elbilbatteriet i kWh.",
-          "ev_target_soc": "Mål-SOC (%) der SEM anser elbilen som fulladet."
+          "ev_target_soc": "Herfra regner SEM bilen som ladet. Det er en definisjon av \"full\", ikke en ladegrense."
         }
       },
       "notifications": {
@@ -277,7 +277,7 @@
           "mobile_notification_service": "Tjeneste for mobilvarsling",
           "vehicle_soc_entity": "Kjøretøyets batteri-SOC",
           "ev_battery_capacity_kwh": "Elbilbatteriets kapasitet (kWh)",
-          "ev_target_soc": "EV mål-SOC (%)"
+          "ev_target_soc": "Regn som full ved (%)"
         },
         "data_description": {
           "enable_charger_notifications": "Slå av/på de faste varselbannerne på laderens statuskort.",
@@ -285,7 +285,7 @@
           "mobile_notification_service": "HA notify-tjeneste for push til mobil (f.eks. notify.mobile_app_your_phone).",
           "vehicle_soc_entity": "Valgfri sensor som rapporterer kjøretøyets nåværende ladenivå (0–100 %).",
           "ev_battery_capacity_kwh": "Total brukbar kapasitet på elbilbatteriet i kWh.",
-          "ev_target_soc": "Mål-SOC (%) der SEM anser elbilen som fulladet."
+          "ev_target_soc": "Herfra regner SEM bilen som ladet. Det er en definisjon av \"full\", ikke en ladegrense."
         }
       },
       "battery_scheduler": {
@@ -329,13 +329,13 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "Overskuddsprioritet (1=høyeste)",
           "ev_current_control_entity": "Strømkontroll-entitet (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Solladegrense (kWh)",
-          "ev_target_soc_max": "Solladegrense (SOC %)",
-          "daily_ev_target": "Mål for nattlading (kWh)",
+          "daily_ev_target_max": "Lad aldri utover (kWh)",
+          "ev_target_soc_max": "Lad aldri utover (%)",
+          "daily_ev_target": "Garanter minst (kWh)",
           "vehicle_soc_entity": "SOC-sensor for kjøretøyets batteri (valgfri)",
           "vehicle_range_entity": "Kjøretøyets rekkeviddesensor",
           "ev_kwh_per_100km": "Kjøretøyets forbruk (kWh/100km)",
-          "ev_target_soc": "EV mål-SOC (%)",
+          "ev_target_soc": "Regn som full ved (%)",
           "ev_battery_capacity_kwh": "Elbilbatteriets kapasitet (kWh)",
           "initial_current": "Startstrøm (A)",
           "ev_min_current": "Minimum ladestrøm (A)",
@@ -358,13 +358,13 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "Rekkefølgen overskuddet fordeles i når du har flere ladere. Lavere tall = høyere prioritet.",
           "ev_current_control_entity": "Number-entitet brukt for å sette ladestrømmen (A). For Wallbox, go-eCharger og lignende ladere.",
-          "daily_ev_target_max": "Soloverskudd lader opp til dette og stopper deretter. La stå på full for å lade fritt fra sol.",
-          "ev_target_soc_max": "Soloverskudd lader opp til denne SOC-en og stopper deretter. La stå på 100 % for å lade fritt fra sol.",
-          "daily_ev_target": "Mål i kWh som skal lades fra nettet hver natt. Sett til 0 for å deaktivere nattlading fra nettet.",
+          "daily_ev_target_max": "Soloverskudd slutter å lade her. Dette er et tak, ikke et mål — la stå på fullt for å lade fritt fra sola.",
+          "ev_target_soc_max": "Soloverskudd slutter å lade her. Dette er et tak, ikke et mål — la stå på 100% for å lade fritt fra sola.",
+          "daily_ev_target": "SEM fyller på fra nettet om natten så bilen har minst dette om morgenen. Dette er en bunngrense, ikke en grense — sola kan legge til mer. 0 = bruk aldri nettet.",
           "vehicle_soc_entity": "Valgfri sensor som rapporterer kjøretøyets nåværende ladenivå (0–100 %).",
           "vehicle_range_entity": "Valgfri reell rekkeviddesensor. Ellers anslås rekkevidden fra SOC × kapasitet × effektivitet.",
           "ev_kwh_per_100km": "Brukes til å anslå rekkevidden når ingen rekkeviddesensor er konfigurert.",
-          "ev_target_soc": "Mål-SOC (%) der SEM anser elbilen som fulladet.",
+          "ev_target_soc": "Herfra regner SEM bilen som ladet. Det er en definisjon av \"full\", ikke en ladegrense.",
           "ev_battery_capacity_kwh": "Total brukbar kapasitet på elbilbatteriet i kWh. Brukes til å anslå SOC og ladetid.",
           "initial_current": "Ladestrøm som SEM starter med før den justeres til tilgjengelig overskudd.",
           "ev_min_current": "Under dette pauser SEM ladingen i stedet for å senke strømmen ytterligere.",
@@ -391,13 +391,13 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "Overskuddsprioritet (1=høyeste)",
           "ev_current_control_entity": "Strømkontroll-entitet (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Solladegrense (kWh)",
-          "ev_target_soc_max": "Solladegrense (SOC %)",
-          "daily_ev_target": "Mål for nattlading (kWh)",
+          "daily_ev_target_max": "Lad aldri utover (kWh)",
+          "ev_target_soc_max": "Lad aldri utover (%)",
+          "daily_ev_target": "Garanter minst (kWh)",
           "vehicle_soc_entity": "SOC-sensor for kjøretøyets batteri (valgfri)",
           "vehicle_range_entity": "Kjøretøyets rekkeviddesensor",
           "ev_kwh_per_100km": "Kjøretøyets forbruk (kWh/100km)",
-          "ev_target_soc": "EV mål-SOC (%)",
+          "ev_target_soc": "Regn som full ved (%)",
           "ev_battery_capacity_kwh": "Elbilbatteriets kapasitet (kWh)",
           "initial_current": "Startstrøm (A)",
           "ev_min_current": "Minimum ladestrøm (A)",
@@ -419,13 +419,13 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "Rekkefølgen overskuddet fordeles i når du har flere ladere. Lavere tall = høyere prioritet.",
           "ev_current_control_entity": "Number-entitet brukt for å sette ladestrømmen (A). For Wallbox, go-eCharger og lignende ladere.",
-          "daily_ev_target_max": "Soloverskudd lader opp til dette og stopper deretter. La stå på full for å lade fritt fra sol.",
-          "ev_target_soc_max": "Soloverskudd lader opp til denne SOC-en og stopper deretter. La stå på 100 % for å lade fritt fra sol.",
-          "daily_ev_target": "Mål i kWh som skal lades fra nettet hver natt. Sett til 0 for å deaktivere nattlading fra nettet.",
+          "daily_ev_target_max": "Soloverskudd slutter å lade her. Dette er et tak, ikke et mål — la stå på fullt for å lade fritt fra sola.",
+          "ev_target_soc_max": "Soloverskudd slutter å lade her. Dette er et tak, ikke et mål — la stå på 100% for å lade fritt fra sola.",
+          "daily_ev_target": "SEM fyller på fra nettet om natten så bilen har minst dette om morgenen. Dette er en bunngrense, ikke en grense — sola kan legge til mer. 0 = bruk aldri nettet.",
           "vehicle_soc_entity": "Valgfri sensor som rapporterer kjøretøyets nåværende ladenivå (0–100 %).",
           "vehicle_range_entity": "Valgfri reell rekkeviddesensor. Ellers anslås rekkevidden fra SOC × kapasitet × effektivitet.",
           "ev_kwh_per_100km": "Brukes til å anslå rekkevidden når ingen rekkeviddesensor er konfigurert.",
-          "ev_target_soc": "Mål-SOC (%) der SEM anser elbilen som fulladet.",
+          "ev_target_soc": "Herfra regner SEM bilen som ladet. Det er en definisjon av \"full\", ikke en ladegrense.",
           "ev_battery_capacity_kwh": "Total brukbar kapasitet på elbilbatteriet i kWh. Brukes til å anslå SOC og ladetid.",
           "initial_current": "Ladestrøm som SEM starter med før den justeres til tilgjengelig overskudd.",
           "ev_min_current": "Under dette pauser SEM ladingen i stedet for å senke strømmen ytterligere.",

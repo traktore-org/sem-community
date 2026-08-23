@@ -64,7 +64,7 @@
           "mobile_notification_service": "Mobiili-ilmoituspalvelu",
           "vehicle_soc_entity": "Ajoneuvon akun SOC",
           "ev_battery_capacity_kwh": "Sähköauton akun kapasiteetti (kWh)",
-          "ev_target_soc": "Sähköauton tavoite-SOC (%)"
+          "ev_target_soc": "Katso täydeksi kohdassa (%)"
         },
         "data_description": {
           "ev_connected_sensor": "Binäärianturi, joka kertoo, onko ajoneuvon pistoke kytkettynä juuri nyt.",
@@ -78,7 +78,7 @@
           "mobile_notification_service": "HA:n notify-palvelu mobiili-ilmoituksille (esim. notify.mobile_app_your_phone).",
           "vehicle_soc_entity": "Valinnainen anturi, joka kertoo ajoneuvon nykyisen varaustason (0–100 %).",
           "ev_battery_capacity_kwh": "Sähköauton akun käytettävissä oleva kokonaiskapasiteetti kilowattitunteina. Käytetään SOC:n ja latausajan arviointiin.",
-          "ev_target_soc": "Tavoite-SOC (%), jossa SEM katsoo sähköauton olevan täynnä."
+          "ev_target_soc": "Tästä lähtien SEM pitää autoa ladattuna. Tämä on \"täyden\" määritelmä, ei latausraja."
         }
       }
     },
@@ -108,9 +108,9 @@
           "vehicle_soc_entity": "Ajoneuvon akun SOC-anturi (valinnainen)",
           "ev_battery_capacity_kwh": "Sähköauton akun kapasiteetti (kWh)",
           "ev_charger_efficiency": "Latauslaitteen hyötysuhde (%)",
-          "ev_target_soc": "Sähköauton tavoite-SOC (%)",
-          "daily_ev_target_max": "Aurinkolatauksen raja (kWh)",
-          "ev_target_soc_max": "Aurinkolatauksen raja (SOC %)",
+          "ev_target_soc": "Katso täydeksi kohdassa (%)",
+          "daily_ev_target_max": "Älä koskaan lataa yli (kWh)",
+          "ev_target_soc_max": "Älä koskaan lataa yli (%)",
           "vehicle_range_entity": "Ajoneuvon toimintamatka-anturi",
           "ev_kwh_per_100km": "Ajoneuvon kulutus (kWh/100km)"
         },
@@ -124,9 +124,9 @@
           "vehicle_soc_entity": "Valinnainen anturi, joka kertoo ajoneuvon nykyisen varaustason (0–100 %).",
           "ev_battery_capacity_kwh": "Sähköauton akun käytettävissä oleva kokonaiskapasiteetti kilowattitunteina. Käytetään SOC:n ja latausajan arviointiin.",
           "ev_charger_efficiency": "Osuus mitatusta AC-energiasta, joka päätyy akkuun. Laske arvoa, jos SOC-arvio kiirii auton edelle. Tyypillisesti 85-95 %, vähemmän yksivaiheisella latauksella tai kylmällä.",
-          "ev_target_soc": "Tavoite-SOC (%), jossa SEM katsoo sähköauton olevan täynnä.",
-          "daily_ev_target_max": "Aurinkoylijäämä lataa tähän asti ja pysähtyy sitten. Jätä täyteen ladataksesi vapaasti auringosta.",
-          "ev_target_soc_max": "Aurinkoylijäämä lataa tähän varaustasoon asti ja pysähtyy sitten. Jätä 100 %:iin ladataksesi vapaasti auringosta.",
+          "ev_target_soc": "Tästä lähtien SEM pitää autoa ladattuna. Tämä on \"täyden\" määritelmä, ei latausraja.",
+          "daily_ev_target_max": "Aurinkoylijäämä lopettaa lataamisen tähän. Tämä on katto, ei tavoite — jätä täyteen ladataksesi vapaasti auringosta.",
+          "ev_target_soc_max": "Aurinkoylijäämä lopettaa lataamisen tähän. Tämä on katto, ei tavoite — jätä 100%:iin ladataksesi vapaasti auringosta.",
           "ev_kwh_per_100km": "Käytetään toimintamatkan arviointiin, kun matka-anturia ei ole määritetty.",
           "vehicle_range_entity": "Valinnainen todellinen matka-anturi. Muuten matka arvioidaan: SOC × kapasiteetti × hyötysuhde."
         }
@@ -138,7 +138,7 @@
           "update_interval": "Päivitysväli (sekuntia)",
           "battery_priority_soc": "Akun etusijan SOC (%)",
           "min_solar_power": "Vähimmäisaurinkoteho — raaka PV-tuotanto (W)",
-          "daily_ev_target": "Sähköauton päivätavoite (kWh)",
+          "daily_ev_target": "Takaa vähintään (kWh)",
           "battery_assist_max_power": "Akkutuen enimmäisteho (W)",
           "battery_capacity_kwh": "Akun kapasiteetti (kWh)",
           "battery_discharge_protection_enabled": "Ota akun purkaussuojaus käyttöön",
@@ -151,7 +151,7 @@
           "smart_night_charging": "Älykäs yölataus",
           "vehicle_soc_entity": "Ajoneuvon akun SOC",
           "ev_battery_capacity_kwh": "Sähköauton akun kapasiteetti (kWh)",
-          "ev_target_soc": "Sähköauton tavoite-SOC (%)",
+          "ev_target_soc": "Katso täydeksi kohdassa (%)",
           "battery_buffer_soc": "Vyöhykkeiden 2/3 raja — akun puskurin SOC (%)",
           "battery_auto_start_soc": "Vyöhykkeiden 3/4 raja — akun automaattikäynnistyksen SOC (%)",
           "battery_discharge_control_entity": "Akun purkauksen ohjausentiteetti (valinnainen)",
@@ -168,7 +168,7 @@
           "battery_buffer_soc": "Vyöhykkeen 2 → vyöhykkeen 3 raja. Tämän varaustason yläpuolella akku saa purkautua paikatakseen aurinkovajetta sähköauton latauksen aikana. Oletus 70 %.",
           "battery_auto_start_soc": "Vyöhykkeen 3 → vyöhykkeen 4 raja. Tämän varaustason yläpuolella sähköauto voi aloittaa latauksen ilman aurinkoylijäämääkin ottamalla energiaa akusta. Oletus 90 %.",
           "min_solar_power": "Raa'an PV-tuotannon alaraja — paneeliteho, jonka alapuolella ”aurinko on aktiivinen” on epätosi: solar_only ei käynnisty ja syvän vajeen suojaus käsittelee sen pimeytenä (lataus pysähtyy siis nopeasti sen sijaan, että se siltautuisi verkosta). Tämä on RAAKA tuotanto, EI ylijäämä — toisin kuin ”Akkutuki – vähimmäisaurinkoylijäämä” (aurinko − koti), joka päättää, milloin kotiakku saa auttaa. Oletus 1000 W; pidä se EV-laturin laitteistominimin alapuolella (~4140 W 3-vaiheisena, ~1380 W 1-vaiheisena).",
-          "daily_ev_target": "Tavoite kWh vuorokaudessa verkosta tapahtuvalle yölataukselle. Aseta arvoon 0 poistaaksesi yölatauksen kokonaan käytöstä.",
+          "daily_ev_target": "SEM täydentää verkosta yöllä, jotta autossa on aamulla vähintään tämä. Tämä on alaraja, ei rajoitus — aurinko voi lisätä enemmän. 0 = älä koskaan käytä verkkoa.",
           "battery_assist_max_power": "Suurin teho, jolla kotiakku saa purkautua avustaakseen sähköautoa vyöhykkeellä 3/4. Oletus 4500 W.",
           "battery_capacity_kwh": "Kotiakun käytettävissä oleva kokonaiskapasiteetti (EI sähköauton akku — sille on oma kenttänsä EV-vaiheessa). Ennusteohjattu latausstrategia käyttää tätä.",
           "battery_discharge_protection_enabled": "Kun tämä on PÄÄLLÄ, SEM rajoittaa invertterin purkutehoa sähköauton yölatauksen aikana, jotta kotiakku syöttää vain taloa (ei autoa).",
@@ -192,7 +192,7 @@
         "title": "Sähköauton lataus ja aurinko",
         "description": "Määritä sähköauton lataustavoitteet ja aurinkokynnykset.",
         "data": {
-          "daily_ev_target": "Yölatauksen tavoite (kWh)",
+          "daily_ev_target": "Takaa vähintään (kWh)",
           "observer_mode": "Tarkkailutila (vain luku, ei laitteiston ohjausta)",
           "smart_night_charging": "Pienennä yötavoitetta huomisen ennusteen perusteella",
           "minimum_solar_power": "Vähimmäisaurinkoteho sähköauton latauksen käynnistämiseen (W)",
@@ -200,7 +200,7 @@
           "export_limit_entity": "Vientirajaentiteetti (valinnainen)"
         },
         "data_description": {
-          "daily_ev_target": "Tavoite kWh, joka ladataan verkosta joka yö. Aseta arvoon 0 poistaaksesi verkosta tapahtuvan yölatauksen käytöstä.",
+          "daily_ev_target": "SEM täydentää verkosta yöllä, jotta autossa on aamulla vähintään tämä. Tämä on alaraja, ei rajoitus — aurinko voi lisätä enemmän. 0 = älä koskaan käytä verkkoa.",
           "observer_mode": "Kun tämä on PÄÄLLÄ, SEM seuraa kaikkea, mutta ei koskaan lähetä komentoja laitteistolle.",
           "smart_night_charging": "Kun tämä on PÄÄLLÄ, SEM pienentää yölatauksen tavoitetta, kun huomisen aurinkoennuste on riittävä.",
           "minimum_solar_power": "Vähimmäisaurinkoylijäämä (W), joka vaaditaan ennen kuin SEM aloittaa sähköauton aurinkolatauksen.",
@@ -255,7 +255,7 @@
           "emergency_peak_level": "Hätätason huipputeho (kW)",
           "vehicle_soc_entity": "Ajoneuvon akun SOC",
           "ev_battery_capacity_kwh": "Sähköauton akun kapasiteetti (kWh)",
-          "ev_target_soc": "Sähköauton tavoite-SOC (%)"
+          "ev_target_soc": "Katso täydeksi kohdassa (%)"
         },
         "data_description": {
           "load_management_enabled": "Ota käyttöön tai poista käytöstä SEM:n automaattinen kuormien pudotus, jolla pysytään verkon huipputehorajan alapuolella.",
@@ -265,7 +265,7 @@
           "emergency_peak_level": "Tehotaso (kW), jolla SEM pudottaa kuormia voimakkaasti välttääkseen tehomaksuja. On oltava tavoitehuippurajan yläpuolella.",
           "vehicle_soc_entity": "Valinnainen anturi, joka kertoo ajoneuvon nykyisen varaustason (0–100 %).",
           "ev_battery_capacity_kwh": "Sähköauton akun käytettävissä oleva kokonaiskapasiteetti kilowattitunteina.",
-          "ev_target_soc": "Tavoite-SOC (%), jossa SEM katsoo sähköauton olevan täynnä."
+          "ev_target_soc": "Tästä lähtien SEM pitää autoa ladattuna. Tämä on \"täyden\" määritelmä, ei latausraja."
         }
       },
       "notifications": {
@@ -277,7 +277,7 @@
           "mobile_notification_service": "Mobiili-ilmoituspalvelu",
           "vehicle_soc_entity": "Ajoneuvon akun SOC",
           "ev_battery_capacity_kwh": "Sähköauton akun kapasiteetti (kWh)",
-          "ev_target_soc": "Sähköauton tavoite-SOC (%)"
+          "ev_target_soc": "Katso täydeksi kohdassa (%)"
         },
         "data_description": {
           "enable_charger_notifications": "Ota käyttöön tai poista käytöstä laturin tilakortin pysyvät ilmoitusbannerit.",
@@ -285,7 +285,7 @@
           "mobile_notification_service": "HA:n notify-palvelu mobiili-ilmoituksille (esim. notify.mobile_app_your_phone).",
           "vehicle_soc_entity": "Valinnainen anturi, joka kertoo ajoneuvon nykyisen varaustason (0–100 %).",
           "ev_battery_capacity_kwh": "Sähköauton akun käytettävissä oleva kokonaiskapasiteetti kilowattitunteina.",
-          "ev_target_soc": "Tavoite-SOC (%), jossa SEM katsoo sähköauton olevan täynnä."
+          "ev_target_soc": "Tästä lähtien SEM pitää autoa ladattuna. Tämä on \"täyden\" määritelmä, ei latausraja."
         }
       },
       "battery_scheduler": {
@@ -329,13 +329,13 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "Ylijäämäprioriteetti (1=korkein)",
           "ev_current_control_entity": "Virranhallintaentiteetti (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Aurinkolatauksen raja (kWh)",
-          "ev_target_soc_max": "Aurinkolatauksen raja (SOC %)",
-          "daily_ev_target": "Yölatauksen tavoite (kWh)",
+          "daily_ev_target_max": "Älä koskaan lataa yli (kWh)",
+          "ev_target_soc_max": "Älä koskaan lataa yli (%)",
+          "daily_ev_target": "Takaa vähintään (kWh)",
           "vehicle_soc_entity": "Ajoneuvon akun SOC-anturi (valinnainen)",
           "vehicle_range_entity": "Ajoneuvon toimintamatka-anturi",
           "ev_kwh_per_100km": "Ajoneuvon kulutus (kWh/100km)",
-          "ev_target_soc": "Sähköauton tavoite-SOC (%)",
+          "ev_target_soc": "Katso täydeksi kohdassa (%)",
           "ev_battery_capacity_kwh": "Sähköauton akun kapasiteetti (kWh)",
           "initial_current": "Aloitusvirta (A)",
           "ev_min_current": "Vähimmäislatausvirta (A)",
@@ -358,13 +358,13 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "Ylijäämän jakojärjestys useiden latureiden kesken. Pienempi numero = korkeampi prioriteetti.",
           "ev_current_control_entity": "Number-entiteetti, jolla asetetaan latausvirta (A). Wallboxille, go-eChargerille ja vastaaville latureille.",
-          "daily_ev_target_max": "Aurinkoylijäämä lataa tähän asti ja pysähtyy sitten. Jätä täyteen ladataksesi vapaasti auringosta.",
-          "ev_target_soc_max": "Aurinkoylijäämä lataa tähän varaustasoon asti ja pysähtyy sitten. Jätä 100 %:iin ladataksesi vapaasti auringosta.",
-          "daily_ev_target": "Tavoite kWh, joka ladataan verkosta joka yö. Aseta arvoon 0 poistaaksesi verkosta tapahtuvan yölatauksen käytöstä.",
+          "daily_ev_target_max": "Aurinkoylijäämä lopettaa lataamisen tähän. Tämä on katto, ei tavoite — jätä täyteen ladataksesi vapaasti auringosta.",
+          "ev_target_soc_max": "Aurinkoylijäämä lopettaa lataamisen tähän. Tämä on katto, ei tavoite — jätä 100%:iin ladataksesi vapaasti auringosta.",
+          "daily_ev_target": "SEM täydentää verkosta yöllä, jotta autossa on aamulla vähintään tämä. Tämä on alaraja, ei rajoitus — aurinko voi lisätä enemmän. 0 = älä koskaan käytä verkkoa.",
           "vehicle_soc_entity": "Valinnainen anturi, joka kertoo ajoneuvon nykyisen varaustason (0–100 %).",
           "vehicle_range_entity": "Valinnainen todellinen matka-anturi. Muuten matka arvioidaan: SOC × kapasiteetti × hyötysuhde.",
           "ev_kwh_per_100km": "Käytetään toimintamatkan arviointiin, kun matka-anturia ei ole määritetty.",
-          "ev_target_soc": "Tavoite-SOC (%), jossa SEM katsoo sähköauton olevan täynnä.",
+          "ev_target_soc": "Tästä lähtien SEM pitää autoa ladattuna. Tämä on \"täyden\" määritelmä, ei latausraja.",
           "ev_battery_capacity_kwh": "Sähköauton akun käytettävissä oleva kokonaiskapasiteetti kilowattitunteina. Käytetään SOC:n ja latausajan arviointiin.",
           "initial_current": "Latausvirta, jolla SEM aloittaa ennen kuin se säätää saatavilla olevaan ylijäämään.",
           "ev_min_current": "Tämän alle SEM keskeyttää latauksen sen sijaan, että laskisi virtaa edelleen.",
@@ -391,13 +391,13 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "Ylijäämäprioriteetti (1=korkein)",
           "ev_current_control_entity": "Virranhallintaentiteetti (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Aurinkolatauksen raja (kWh)",
-          "ev_target_soc_max": "Aurinkolatauksen raja (SOC %)",
-          "daily_ev_target": "Yölatauksen tavoite (kWh)",
+          "daily_ev_target_max": "Älä koskaan lataa yli (kWh)",
+          "ev_target_soc_max": "Älä koskaan lataa yli (%)",
+          "daily_ev_target": "Takaa vähintään (kWh)",
           "vehicle_soc_entity": "Ajoneuvon akun SOC-anturi (valinnainen)",
           "vehicle_range_entity": "Ajoneuvon toimintamatka-anturi",
           "ev_kwh_per_100km": "Ajoneuvon kulutus (kWh/100km)",
-          "ev_target_soc": "Sähköauton tavoite-SOC (%)",
+          "ev_target_soc": "Katso täydeksi kohdassa (%)",
           "ev_battery_capacity_kwh": "Sähköauton akun kapasiteetti (kWh)",
           "initial_current": "Aloitusvirta (A)",
           "ev_min_current": "Vähimmäislatausvirta (A)",
@@ -419,13 +419,13 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "Ylijäämän jakojärjestys useiden latureiden kesken. Pienempi numero = korkeampi prioriteetti.",
           "ev_current_control_entity": "Number-entiteetti, jolla asetetaan latausvirta (A). Wallboxille, go-eChargerille ja vastaaville latureille.",
-          "daily_ev_target_max": "Aurinkoylijäämä lataa tähän asti ja pysähtyy sitten. Jätä täyteen ladataksesi vapaasti auringosta.",
-          "ev_target_soc_max": "Aurinkoylijäämä lataa tähän varaustasoon asti ja pysähtyy sitten. Jätä 100 %:iin ladataksesi vapaasti auringosta.",
-          "daily_ev_target": "Tavoite kWh, joka ladataan verkosta joka yö. Aseta arvoon 0 poistaaksesi verkosta tapahtuvan yölatauksen käytöstä.",
+          "daily_ev_target_max": "Aurinkoylijäämä lopettaa lataamisen tähän. Tämä on katto, ei tavoite — jätä täyteen ladataksesi vapaasti auringosta.",
+          "ev_target_soc_max": "Aurinkoylijäämä lopettaa lataamisen tähän. Tämä on katto, ei tavoite — jätä 100%:iin ladataksesi vapaasti auringosta.",
+          "daily_ev_target": "SEM täydentää verkosta yöllä, jotta autossa on aamulla vähintään tämä. Tämä on alaraja, ei rajoitus — aurinko voi lisätä enemmän. 0 = älä koskaan käytä verkkoa.",
           "vehicle_soc_entity": "Valinnainen anturi, joka kertoo ajoneuvon nykyisen varaustason (0–100 %).",
           "vehicle_range_entity": "Valinnainen todellinen matka-anturi. Muuten matka arvioidaan: SOC × kapasiteetti × hyötysuhde.",
           "ev_kwh_per_100km": "Käytetään toimintamatkan arviointiin, kun matka-anturia ei ole määritetty.",
-          "ev_target_soc": "Tavoite-SOC (%), jossa SEM katsoo sähköauton olevan täynnä.",
+          "ev_target_soc": "Tästä lähtien SEM pitää autoa ladattuna. Tämä on \"täyden\" määritelmä, ei latausraja.",
           "ev_battery_capacity_kwh": "Sähköauton akun käytettävissä oleva kokonaiskapasiteetti kilowattitunteina. Käytetään SOC:n ja latausajan arviointiin.",
           "initial_current": "Latausvirta, jolla SEM aloittaa ennen kuin se säätää saatavilla olevaan ylijäämään.",
           "ev_min_current": "Tämän alle SEM keskeyttää latauksen sen sijaan, että laskisi virtaa edelleen.",

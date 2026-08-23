@@ -64,7 +64,7 @@
           "mobile_notification_service": "手机通知服务",
           "vehicle_soc_entity": "车辆电池电量 (SOC)",
           "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
-          "ev_target_soc": "电动汽车目标电量 (%)"
+          "ev_target_soc": "达到此值视为充满 (%)"
         },
         "data_description": {
           "ev_connected_sensor": "报告车辆插头当前是否已连接的二进制传感器。",
@@ -78,7 +78,7 @@
           "mobile_notification_service": "用于移动端推送的 HA 通知服务 (例如 notify.mobile_app_your_phone)。",
           "vehicle_soc_entity": "可选。报告车辆当前剩余电量的传感器 (0–100%)。",
           "ev_battery_capacity_kwh": "电动汽车电池的总可用容量 (kWh)。用于估算剩余电量 (SOC) 和充电时间。",
-          "ev_target_soc": "SEM 视电动汽车已充满电的目标电量 (%)。"
+          "ev_target_soc": "达到此值后 SEM 视车辆为已充满。这是对\"充满\"的定义，不是充电上限。"
         }
       }
     },
@@ -108,9 +108,9 @@
           "vehicle_soc_entity": "车辆电池电量 (SOC) 传感器（可选）",
           "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
           "ev_charger_efficiency": "充电桩效率 (%)",
-          "ev_target_soc": "电动汽车目标电量 (%)",
-          "daily_ev_target_max": "太阳能充电限制量 (kWh)",
-          "ev_target_soc_max": "太阳能充电限制电量 (SOC %)",
+          "ev_target_soc": "达到此值视为充满 (%)",
+          "daily_ev_target_max": "充电不超过 (kWh)",
+          "ev_target_soc_max": "充电不超过 (%)",
           "vehicle_range_entity": "车辆续航里程传感器",
           "ev_kwh_per_100km": "车辆百公里能耗 (kWh/100km)"
         },
@@ -124,9 +124,9 @@
           "vehicle_soc_entity": "可选。报告车辆当前剩余电量的传感器 (0–100%)。",
           "ev_battery_capacity_kwh": "电动汽车电池的总可用容量 (kWh)。用于估算剩余电量 (SOC) 和充电时间。",
           "ev_charger_efficiency": "计量的交流电能中真正进入电池的比例。若剩余电量估算超前于车辆，请调低该值。通常为 85-95%，单相充电或低温时更低。",
-          "ev_target_soc": "SEM 视电动汽车已充满电的目标电量 (%)。",
-          "daily_ev_target_max": "太阳能富余电量充电达到此值后将停止。保持最大值以允许自由使用太阳能充电。",
-          "ev_target_soc_max": "太阳能富余电量充电达到此剩余电量 (SOC %) 后将停止。保持 100% 以允许自由使用太阳能充电。",
+          "ev_target_soc": "达到此值后 SEM 视车辆为已充满。这是对\"充满\"的定义，不是充电上限。",
+          "daily_ev_target_max": "光伏余电充到此为止。这是上限而非目标——保持最大值即可自由使用阳光充电。",
+          "ev_target_soc_max": "光伏余电充到此为止。这是上限而非目标——保持 100% 即可自由使用阳光充电。",
           "vehicle_range_entity": "可选。真实的续航里程传感器。若未提供，续航里程将根据 SOC × 容量 × 能效进行估算。",
           "ev_kwh_per_100km": "在未配置续航里程传感器时，用于估算行驶续航里程。"
         }
@@ -138,7 +138,7 @@
           "update_interval": "更新间隔 (秒)",
           "battery_priority_soc": "蓄电池优先电量 (SOC %)",
           "min_solar_power": "最低太阳能功率 — 原始光伏发电量 (W)",
-          "daily_ev_target": "每日电动汽车充电目标 (kWh)",
+          "daily_ev_target": "至少保证 (kWh)",
           "battery_assist_max_power": "蓄电池辅助最大功率 (W)",
           "battery_assist_min_surplus": "蓄电池辅助最低太阳能富余量 (W)",
           "battery_capacity_kwh": "蓄电池容量 (kWh)",
@@ -152,7 +152,7 @@
           "smart_night_charging": "智能夜间充电",
           "vehicle_soc_entity": "车辆电池电量 (SOC)",
           "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
-          "ev_target_soc": "电动汽车目标电量 (%)",
+          "ev_target_soc": "达到此值视为充满 (%)",
           "battery_buffer_soc": "区域 2/3 边界 — 蓄电池缓冲电量 (SOC %)",
           "battery_auto_start_soc": "区域 3/4 边界 — 蓄电池自动启动电量 (SOC %)",
           "battery_discharge_control_entity": "蓄电池放电控制实体（可选）",
@@ -168,7 +168,7 @@
           "battery_buffer_soc": "区域 2 → 区域 3 的边界。高于此电量 (SOC) 时，蓄电池可以放电以弥补太阳能不足，从而为电动汽车充电。默认值为 70%。",
           "battery_auto_start_soc": "区域 3 → 区域 4 的边界。高于此电量 (SOC) 时，即使没有太阳能富余，电动汽车也可以开始充电，电能直接从蓄电池中抽取。默认值为 90%。",
           "min_solar_power": "原始光伏发电底线 —— 低于该面板输出功率时，“太阳能可用”状态将转为 false：仅太阳能充电模式不会启动，且深度亏电保护会将其视作黑夜（因此充电会迅速停止，而不会转由电网支撑）。注意这是原始发电量，而不是富余量 —— 区别于“蓄电池辅助最低太阳能富余量”（光伏减去家庭用电），后者决定了家用蓄电池何时可以介入协助。默认值为 1000 W；请保持在电动汽车充电桩的硬件最低功率以下（三相约为 4140 W，单相约为 1380 W）。",
-          "daily_ev_target": "夜间利用电网充电的每日目标 kWh。设置为 0 可完全禁用夜间充电。",
+          "daily_ev_target": "SEM 会在夜间从电网补充，使车辆在早晨至少有这么多电量。这是下限而非上限——阳光可以充得更多。0 = 从不使用电网。",
           "battery_assist_max_power": "在区域 3/4 中，家用蓄电池可以放电协助电动汽车充电的最大功率。默认值为 4500 W。",
           "battery_assist_min_surplus": "在任何充电模式下，家用蓄电池获准协助电动汽车充电前的最低实际太阳能富余量。低于此值时，蓄电池的电量将保留供家庭使用（汽车从电网 + 太阳能抽电）。默认值为 1200 W。设置为 0 可让蓄电池在任何情况下（包括通宵）都支持电动汽车。",
           "battery_capacity_kwh": "家用蓄电池的总可用容量（注意：不是电动汽车电池 —— 汽车电池在电动汽车步骤中是一个单独的字段）。用于基于天气预测的充电策略。",
@@ -192,7 +192,7 @@
         "title": "电动汽车充电与太阳能",
         "description": "配置电动汽车充电目标和太阳能阈值。",
         "data": {
-          "daily_ev_target": "夜间充电目标量 (kWh)",
+          "daily_ev_target": "至少保证 (kWh)",
           "observer_mode": "观察者模式（只读，无硬件控制）",
           "smart_night_charging": "根据明天的天气预测减少夜间目标量",
           "minimum_solar_power": "启动电动汽车充电的最低太阳能功率 (W)",
@@ -200,7 +200,7 @@
           "export_limit_entity": "输出限制实体(可选)"
         },
         "data_description": {
-          "daily_ev_target": "每晚从电网充电的目标 kWh。设置为 0 可禁用夜间电网充电。",
+          "daily_ev_target": "SEM 会在夜间从电网补充，使车辆在早晨至少有这么多电量。这是下限而非上限——阳光可以充得更多。0 = 从不使用电网。",
           "observer_mode": "启用时，SEM 将监控所有数据，但绝不向硬件发送指令。",
           "smart_night_charging": "启用时，当明天的太阳能发电量预测充足时，SEM 将减少夜间充电目标量。",
           "minimum_solar_power": "SEM 启动太阳能电动汽车充电所需的最低富余太阳能功率 (W)。",
@@ -255,7 +255,7 @@
           "emergency_peak_level": "紧急峰值水平 (kW)",
           "vehicle_soc_entity": "车辆电池电量 (SOC)",
           "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
-          "ev_target_soc": "电动汽车目标电量 (%)"
+          "ev_target_soc": "达到此值视为充满 (%)"
         },
         "data_description": {
           "load_management_enabled": "启用/禁用 SEM 的自动减载功能，以保持在您的电网峰值限制以下。",
@@ -265,7 +265,7 @@
           "emergency_peak_level": "SEM 为避免产生需量电费而采取激进减载措施的功率水平 (kW)。 必须高于目标峰值上限。",
           "vehicle_soc_entity": "可选。报告车辆当前剩余电量的传感器 (0–100%)。",
           "ev_battery_capacity_kwh": "电动汽车电池的总可用容量 (kWh)。",
-          "ev_target_soc": "SEM 视电动汽车已充满电的目标电量 (%)。"
+          "ev_target_soc": "达到此值后 SEM 视车辆为已充满。这是对\"充满\"的定义，不是充电上限。"
         }
       },
       "battery_scheduler": {
@@ -301,7 +301,7 @@
           "mobile_notification_service": "手机通知服务",
           "vehicle_soc_entity": "车辆电池电量 (SOC)",
           "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
-          "ev_target_soc": "电动汽车目标电量 (%)"
+          "ev_target_soc": "达到此值视为充满 (%)"
         },
         "data_description": {
           "enable_charger_notifications": "启用/禁用充电桩状态卡片上显示的常驻通知条。",
@@ -309,7 +309,7 @@
           "mobile_notification_service": "用于移动端推送的 HA 通知服务 (例如 notify.mobile_app_your_phone)。",
           "vehicle_soc_entity": "可选。报告车辆当前剩余电量的传感器 (0–100%)。",
           "ev_battery_capacity_kwh": "电动汽车电池的总可用容量 (kWh)。",
-          "ev_target_soc": "SEM 视电动汽车已充满电的目标电量 (%)。"
+          "ev_target_soc": "达到此值后 SEM 视车辆为已充满。这是对\"充满\"的定义，不是充电上限。"
         }
       },
       "ev_charger_edit": {
@@ -329,13 +329,13 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "绿电/富余功率优先级 (1=最高)",
           "ev_current_control_entity": "电流控制实体（number 实体 — Wallbox, go-eCharger 等）",
-          "daily_ev_target_max": "太阳能充电上限量 (kWh)",
-          "ev_target_soc_max": "太阳能充电上限电量 (SOC %)",
-          "daily_ev_target": "夜间充电目标量 (kWh)",
+          "daily_ev_target_max": "充电不超过 (kWh)",
+          "ev_target_soc_max": "充电不超过 (%)",
+          "daily_ev_target": "至少保证 (kWh)",
           "vehicle_soc_entity": "车辆电池电量 (SOC) 传感器（可选）",
           "vehicle_range_entity": "车辆续航里程传感器",
           "ev_kwh_per_100km": "车辆百公里能耗 (kWh/100km)",
-          "ev_target_soc": "电动汽车目标电量 (%)",
+          "ev_target_soc": "达到此值视为充满 (%)",
           "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
           "initial_current": "起始电流 (A)",
           "ev_min_current": "最小充电电流 (A)",
@@ -358,13 +358,13 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "多个充电桩之间的富余绿电分配顺序。数字越小 = 优先级越高。",
           "ev_current_control_entity": "用于设置充电电流 (A) 的数值实体 (number 实体)。适用于 Wallbox、go-eCharger 以及类似的充电桩。",
-          "daily_ev_target_max": "太阳能富余绿电充电达到此数值后将停止充电。保持默认满额则允许不受限地使用太阳能充电。",
-          "ev_target_soc_max": "太阳能富余绿电充电达到此 SOC 后将停止充电。保持 100% 则允许不受限地使用太阳能充电。",
-          "daily_ev_target": "每晚从电网充电的目标 kWh。设置为 0 可禁用夜间电网充电。",
+          "daily_ev_target_max": "光伏余电充到此为止。这是上限而非目标——保持最大值即可自由使用阳光充电。",
+          "ev_target_soc_max": "光伏余电充到此为止。这是上限而非目标——保持 100% 即可自由使用阳光充电。",
+          "daily_ev_target": "SEM 会在夜间从电网补充，使车辆在早晨至少有这么多电量。这是下限而非上限——阳光可以充得更多。0 = 从不使用电网。",
           "vehicle_soc_entity": "可选。报告车辆当前剩余电量的传感器 (0–100%)。",
           "vehicle_range_entity": "可选。真实的续航里程传感器。若未提供，续航里程将根据 SOC × 容量 × 能效进行估算。",
           "ev_kwh_per_100km": "在未配置续航里程传感器时，用于估算行驶续航里程。",
-          "ev_target_soc": "SEM 视电动汽车已充满电的目标电量 (%)。",
+          "ev_target_soc": "达到此值后 SEM 视车辆为已充满。这是对\"充满\"的定义，不是充电上限。",
           "ev_battery_capacity_kwh": "电动汽车电池的总可用容量 (kWh)。用于估算剩余电量 (SOC) 和充电时间。",
           "initial_current": "SEM 开始充电时使用的电流，之后再按可用余量调整。",
           "ev_min_current": "低于此值时，SEM 会暂停充电，而不是继续降低电流。",
@@ -391,13 +391,13 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "绿电/富余功率优先级 (1=最高)",
           "ev_current_control_entity": "电流控制实体（number 实体 — Wallbox, go-eCharger 等）",
-          "daily_ev_target_max": "太阳能充电上限量 (kWh)",
-          "ev_target_soc_max": "太阳能充电上限电量 (SOC %)",
-          "daily_ev_target": "夜间充电目标量 (kWh)",
+          "daily_ev_target_max": "充电不超过 (kWh)",
+          "ev_target_soc_max": "充电不超过 (%)",
+          "daily_ev_target": "至少保证 (kWh)",
           "vehicle_soc_entity": "车辆电池电量 (SOC) 传感器（可选）",
           "vehicle_range_entity": "车辆续航里程传感器",
           "ev_kwh_per_100km": "车辆百公里能耗 (kWh/100km)",
-          "ev_target_soc": "电动汽车目标电量 (%)",
+          "ev_target_soc": "达到此值视为充满 (%)",
           "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
           "initial_current": "起始电流 (A)",
           "ev_min_current": "最小充电电流 (A)",
@@ -419,13 +419,13 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "多个充电桩之间的富余绿电分配顺序。数字越小 = 优先级越高。",
           "ev_current_control_entity": "用于设置充电电流 (A) 的数值实体 (number 实体)。适用于 Wallbox、go-eCharger 以及类似的充电桩。",
-          "daily_ev_target_max": "太阳能富余绿电充电达到此数值后将停止充电。保持默认满额则允许不受限地使用太阳能充电。",
-          "ev_target_soc_max": "太阳能富余绿电充电达到此 SOC 后将停止充电。保持 100% 则允许不受限地使用太阳能充电。",
-          "daily_ev_target": "每晚从电网充电的目标 kWh。设置为 0 可禁用夜间电网充电。",
+          "daily_ev_target_max": "光伏余电充到此为止。这是上限而非目标——保持最大值即可自由使用阳光充电。",
+          "ev_target_soc_max": "光伏余电充到此为止。这是上限而非目标——保持 100% 即可自由使用阳光充电。",
+          "daily_ev_target": "SEM 会在夜间从电网补充，使车辆在早晨至少有这么多电量。这是下限而非上限——阳光可以充得更多。0 = 从不使用电网。",
           "vehicle_soc_entity": "可选。报告车辆当前剩余电量的传感器 (0–100%)。",
           "vehicle_range_entity": "可选。真实的续航里程传感器。若未提供，续航里程将根据 SOC × 容量 × 能效进行估算。",
           "ev_kwh_per_100km": "在未配置续航里程传感器时，用于估算行驶续航里程。",
-          "ev_target_soc": "SEM 视电动汽车已充满电的目标电量 (%)。",
+          "ev_target_soc": "达到此值后 SEM 视车辆为已充满。这是对\"充满\"的定义，不是充电上限。",
           "ev_battery_capacity_kwh": "电动汽车电池的总可用容量 (kWh)。用于估算剩余电量 (SOC) 和充电时间。",
           "initial_current": "SEM 开始充电时使用的电流，之后再按可用余量调整。",
           "ev_min_current": "低于此值时，SEM 会暂停充电，而不是继续降低电流。",
