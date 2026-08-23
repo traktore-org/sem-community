@@ -625,3 +625,28 @@ purge_status_history:
           min: 0
           max: 365
           unit_of_measurement: days
+
+backfill_forecast_ledger:
+  name: Learn forecast accuracy from past history
+  description: >-
+    SEM normally learns how accurate your solar forecast is by watching it
+    forward, and needs a week of days before it will trust one. If your system
+    has been running longer than that, the answer is already in your recorder
+    history — this reads it and settles the ledger in one pass, so
+    forecast-led spending can start from what your site has actually done
+    rather than from a week's wait. Days SEM recorded live are never
+    overwritten.
+  fields:
+    days:
+      name: How far back to look
+      description: >-
+        How many days of history to read. More days means a better-grounded
+        answer; a year is plenty.
+      required: false
+      example: 365
+      default: 365
+      selector:
+        number:
+          min: 14
+          max: 730
+          unit_of_measurement: days

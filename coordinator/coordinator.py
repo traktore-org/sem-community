@@ -4078,7 +4078,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # (#800) The battery's night rides the same cycle: drain /
             # refill / clipping series for the #778 budget's learner.
             try:
-                await self._record_battery_night(power, power_flows)
+                await self._record_battery_night(power, power_flows, energy)
             except Exception:  # noqa: BLE001 — recording never costs a cycle
                 _LOGGER.debug("battery night record skipped", exc_info=True)
 
@@ -7095,7 +7095,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             _LOGGER.debug("demand review skipped", exc_info=True)
             self._demand_review = None
 
-    async def _record_battery_night(self, power, power_flows) -> None:
+    async def _record_battery_night(self, power, power_flows,
+                                    energy=None) -> None:
         """(#800) One tick of the battery-night recorder.
 
         Flow-attributed on purpose: a SOC delta would conflate the house
@@ -7153,6 +7154,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     getattr(power_flows, "battery_to_ev", 0.0) or 0.0),
                 battery_to_grid_w=float(
                     getattr(power_flows, "battery_to_grid", 0.0) or 0.0),
+                # (#778) The battery's own daily discharge counter, so the
+                # recorder can check its attributed flows against it. Read
+                # from the published value rather than re-derived: the point
+                # is to compare the two numbers SEM actually shows.
+                battery_discharge_kwh=(
+                    None if energy is None
+                    else getattr(energy, "daily_battery_discharge", None)),
                 grid_to_home_w=float(
                     getattr(power_flows, "grid_to_home", 0.0) or 0.0),
                 home_w=float(

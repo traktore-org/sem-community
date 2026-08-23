@@ -189,6 +189,27 @@ class ForecastLedger:
         idx = int(REFILL_TRUST_PERCENTILE * (len(ratios) - 1))
         return min(1.0, max(0.0, ratios[idx]))
 
+    def backfill(self, pairs, horizon: int) -> int:
+        """Merge reconstructed forecast/actual pairs; return how many landed.
+
+        A day the coordinator already recorded LIVE is never overwritten. The
+        live record is what SEM actually saw at the moment it decided; the
+        backfill is a reconstruction from hourly buckets, and where the two
+        disagree the one that was there wins.
+        """
+        added = 0
+        for target, (forecast_kwh, actual_kwh) in (pairs or {}).items():
+            date = target.isoformat() if hasattr(target, "isoformat") else str(target)
+            rec = self._days.get(date)
+            if rec is not None and rec.get("f", {}).get(int(horizon)) is not None:
+                continue  # live evidence already stands for this day
+            self.record(date, horizon, forecast_kwh)
+            self.settle(date, actual_kwh)
+            added += 1
+        if added:
+            self._prune()
+        return added
+
     # ── persistence ──────────────────────────────────────────────────────
     def to_dict(self) -> dict:
         return {

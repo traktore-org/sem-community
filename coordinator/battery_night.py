@@ -82,6 +82,10 @@ class Sample:
     # Day-phase house consumption — lets 2.1 decompose a missed refill
     # promise into PV-wrong vs consumption-wrong.
     home_w: float = 0.0
+    # (#778) The battery's OWN discharge counter for the day, if the install
+    # publishes one. Not integrated — only used to check that the attributed
+    # flows above fit inside it. See flow_invariant.
+    battery_discharge_kwh: Optional[float] = None
     soc: Optional[float] = None
     soc_available: bool = True
     export_w: float = 0.0
@@ -108,6 +112,11 @@ class BatteryNightTracker:
         self._date: Optional[str] = None
         self._last_ts: Optional[float] = None
         self._drain_j = 0.0            # watt-seconds
+        # (#778) False once any night sample showed more energy leaving the
+        # battery than the battery says it discharged. Latches: one violation
+        # is enough to make the night's drain untrustworthy, and a later
+        # balanced sample does not un-inflate what was already integrated.
+        self._flows_balanced = True
         self._assist_j = 0.0
         self._export_j = 0.0
         self._gap_s = 0.0
@@ -185,6 +194,14 @@ class BatteryNightTracker:
                 return
             if s.soc_available and s.soc is not None:
                 self._soc_seen = True
+            if s.battery_discharge_kwh is not None:
+                from .flow_invariant import flows_balance
+                if not flows_balance(
+                        discharge_kwh=s.battery_discharge_kwh,
+                        to_home=self._drain_j / 3.6e6,
+                        to_ev=self._assist_j / 3.6e6,
+                        to_grid=self._export_j / 3.6e6):
+                    self._flows_balanced = False
             if dt > 0:
                 self._drain_j += s.battery_to_home_w * dt
                 self._assist_j += s.battery_to_ev_w * dt
@@ -240,11 +257,18 @@ class BatteryNightTracker:
             "soc_start": self._soc_start,
             "soc_morning": self._soc_morning,
             "reserve_hit": self._reserve_hit,
+            "flows_balanced": self._flows_balanced,
             "night_grid_kwh": round(self._night_grid_j / 3.6e6, 3),
             "day_home_kwh": round(self._day_home_j / 3.6e6, 3),
             "gap_s": round(self._gap_s, 1),
             "held_s": round(self._held_s, 1),
-            "trainable": self._gap_s <= GAP_TOLERANCE_S and self._soc_seen,
+            "flows_balanced": self._flows_balanced,
+            # A night whose books do not balance is recorded and visible, but
+            # is not evidence: its drain is inflated by whatever inflated the
+            # flows, and an inflated drain teaches #778 that the house needs
+            # more overnight than it does.
+            "trainable": (self._gap_s <= GAP_TOLERANCE_S and self._soc_seen
+                          and self._flows_balanced),
             "refill_full_at": self._refill_full_at,
             "clipped_hours": round(self._clipped_s / 3600.0, 2),
             "forecast_kwh": self._forecast_kwh,
@@ -286,6 +310,9 @@ class BatteryNightTracker:
         # integrate across the outage instead.
         self._last_ts = d.get("last_ts")
         self._drain_j = float(d.get("drain_j", 0.0) or 0.0)
+        # Default True: a store written before this field existed describes a
+        # night nobody checked, not a night that failed.
+        self._flows_balanced = bool(d.get("flows_balanced", True))
         self._assist_j = float(d.get("assist_j", 0.0) or 0.0)
         self._export_j = float(d.get("export_j", 0.0) or 0.0)
         self._gap_s = float(d.get("gap_s", 0.0) or 0.0)

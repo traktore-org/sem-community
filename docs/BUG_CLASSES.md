@@ -2054,3 +2054,63 @@ merge source must be registered or the test fails. Proven to bite on an injected
 attribute paths that churn while the state is unchanged, plus numeric precision above 2 dp. This
 is the only thing that finds the precision half; run it after any change to what SEM publishes.
 
+
+### 52. A summary statistic chosen without asking which tail hurts — GUARDED
+
+**Root shape:** a distribution reduced to its mean when the decision is asymmetric. The mean
+answers "what happens typically"; a decision that is cheap in one direction and expensive in the
+other needs a percentile, and *which* percentile is set by which tail hurts.
+
+**Instance (#778):** `ForecastLedger.trust()` returned `min(1.0, mean_ratio)` — how the forecast
+performs on average. Backfilling .175's own five months of history produced **139 settled
+forecast/actual pairs** and showed the mean was 1.050: an *unbiased* forecast. The spread was
+p10 0.514 / p90 1.502. Under the mean rule SEM would plan against the full forecast and the day
+would deliver less on **58 of 139 days (42 %)** — each one a battery sold against energy that
+never arrived. Now p20, with `accuracy()` keeping the mean as the bias diagnostic it actually is.
+
+**What makes it hard to see:** the mean is not *wrong*. It is a correct answer to a question
+nobody asked. Every unit test passed, the number looked reasonable, and the codebase already
+contained the correct argument for the OTHER side of the same ledger —
+`measured_capacity.NEED_PERCENTILE` takes a high percentile of overnight draw, with a comment
+explaining that "being short is not symmetric with being generous". The mirror image was simply
+never written.
+
+**Why tests miss it:** a test that asserts `trust(uniform_ratios) == expected_mean` passes for
+both rules. Only a REAL distribution — wide, unbiased, skewed — separates them, and the suite had
+no reason to contain one.
+
+**Guard:** `tests/test_778_trust_is_conservative.py` — an unbiased-but-volatile sample must not
+yield full trust, a reliable one must, and the measured .175 shape is pinned as a regression case
+with its own mean asserted so the counter-example cannot silently stop being one.
+
+**Where else to look:** anywhere SEM averages a series to make a spending or safety decision —
+tariff level classification, the dampening factor, EV session estimates, load calibration. The
+question to ask each one is not "is the average right" but *"which direction is expensive, and
+does this statistic protect it?"*
+
+### 53. An arithmetic identity nothing ever checks — GUARDED
+
+**Root shape:** two quantities SEM publishes that are related by physics or definition, with no
+assertion anywhere that the relation holds. Both look plausible alone; only together are they
+impossible.
+
+**Instance (#778):** the battery cannot send out more energy than it discharged, yet .175
+published `daily_battery_discharge_energy = 4.06` alongside outbound flows of
+`9.39 + 0.19 + 4.38 = 13.96` — **3.4× conservation**. PROD, on identical code, read 3.04 ≤ 4.04.
+So the violation was environmental, and *nothing in SEM noticed in either direction*. The damage
+path was silent: #800's night recorder integrates `battery_to_home_w` into `drain_kwh`, #778
+builds its overnight-need envelope from those drains, so an inflated flow inflates what SEM
+believes the house needs, the budget stays at zero, and the card reports **"holding"** — a
+sentence that reads as a considered decision rather than a broken input.
+
+**The fix shape — gate, do not clamp:** a violating night is recorded, is visible, and is not
+`trainable`. Repairing the number would hide a real misconfiguration; the same treatment the
+sampling-gap tolerance already gives an unreliable night.
+
+**Guard:** `coordinator/flow_invariant.py` + `tests/test_778_flow_invariant.py`, with the live
+PROD and .175 readings pinned as the balanced and violating cases.
+
+**Where else to look:** every published identity SEM never asserts — `home = solar + import +
+discharge − ev − export − charge` (the balance the `max(0, …)` clamp hides), per-charger draw
+summing to `ev_power`, daily energies summing to their monthly, flow energies summing to their
+source counter.

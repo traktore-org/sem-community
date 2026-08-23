@@ -466,6 +466,27 @@ A single mode could not express *"may sell, may not touch the car"*. Both
 default to your current behaviour, so turning forecast spending on does not
 silently grant a permission you never gave.
 
+**Starting from history instead of waiting a week**
+
+If SEM has been running on your system for months, it has already recorded how
+good your forecast is — it just never wrote it down in the form the budget
+reads. The action **"Learn forecast accuracy from past history"**
+(`solar_energy_management.backfill_forecast_ledger`) reads your own recorder
+statistics and settles the ledger in one pass, so forecast-led spending can
+start from what your site has actually done. Days SEM recorded live are never
+overwritten by the reconstruction.
+
+**Nights that do not add up are not used**
+
+A battery cannot send out more energy than it discharged. SEM checks that on
+every night it records, and a night that fails is kept and shown but not used
+for learning. This matters more than it sounds: the overnight-need figure is
+built from those nights, and one impossible number inflates what SEM believes
+your house needs — which shows up as a budget of zero and a dashboard calmly
+reporting that nothing is spare. If you see nights marked this way, something
+upstream of SEM is double-counting a flow; the Config tab's sensor sources are
+the place to start.
+
 **Why it refuses to spend without evidence**
 
 A forecast that runs high is exactly the case where spending the battery hurts:
@@ -473,6 +494,14 @@ you sell tonight, tomorrow underdelivers, and you buy it back at the evening
 price. So SEM keeps a per-horizon ledger of what it forecast versus what the day
 delivered, and only trusts a horizon after seven settled days. Until then the
 budget is zero and the card says so.
+
+It scores that record against its **bad days, not its average one**. A forecast
+can be perfectly unbiased over a season and still be wrong by half in either
+direction on any given day — and the average hides exactly the days that cost
+you money. Measured on the development system: 139 real days, average ratio
+1.05 (unbiased), but a tenth of the days delivered under half what was
+promised. Planning against the average would have over-committed the battery on
+42% of them.
 
 ### Example: Sunny Day, Battery at 30%, EV Connected
 

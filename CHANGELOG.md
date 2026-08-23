@@ -13,6 +13,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 📊 **SEM can now learn your forecast's accuracy from history you already
+  have** (#778): forecast-led spending normally watches the forecast forward
+  and needs a week of days before it trusts one. If your system has been
+  running longer, the answer is already in your recorder history — the new
+  **"Learn forecast accuracy from past history"** action reads it and settles
+  the ledger in one pass. Days SEM recorded live are never overwritten. On the
+  development rig this recovered **139 days** of real forecast-vs-actual.
+
+- ⚖️ **Forecast trust is now measured against the bad days, not the average
+  one** (#778): SEM scored its forecast by the average ratio of actual to
+  forecast. Those 139 recovered days showed why that is not enough — the
+  forecast was **unbiased on average** (1.05) and hugely variable day to day
+  (p10 0.51, p90 1.50). Planning against the average would have over-committed
+  the battery on **42% of days**. SEM now plans against a low percentile of its
+  own track record, so a forecast that is right on average but unreliable in
+  practice earns less trust than one that is simply right.
+
+- 🔍 **A night whose energy does not add up is no longer treated as evidence**
+  (#778): the battery cannot send out more energy than it discharged. SEM now
+  checks that each night and marks any night that fails it as unusable for
+  learning, instead of quietly folding an impossible number into what it
+  believes your house needs overnight. Found on the development rig, which was
+  reporting 13.96 kWh leaving a battery that had discharged 4.06 — the effect
+  would have been a budget stuck at zero with the dashboard calmly reporting
+  that nothing was spare.
+
+
 - 🔋 **SEM can now spend part of your battery tonight when tomorrow's sun will
   refill it** (#778): the overnight floor stops being a number you type and
   becomes an answer that changes nightly — 30 % before a sunny day, 90 %+ before

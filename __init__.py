@@ -2751,6 +2751,53 @@ async def _async_register_services(
             len(purged), days,
         )
 
+    async def async_backfill_forecast_ledger_service(call) -> None:
+        """(#778) Recover forecast accuracy from history the install already has.
+
+        The ledger normally learns forward, seven settled days before it will
+        offer a trust figure. An install that has been running for months has
+        already proven how good its forecast is — the statistics are sitting
+        there — so this reads them and settles the ledger in one pass. Days the
+        coordinator recorded live are never overwritten.
+        """
+        from .coordinator.ledger_backfill import DEFAULT_LOOKBACK_DAYS, run_backfill
+
+        days = call.data.get("days") or DEFAULT_LOOKBACK_DAYS
+        ledger = getattr(coordinator, "_forecast_ledger", None)
+        if ledger is None:
+            _LOGGER.warning(
+                "backfill_forecast_ledger: no ledger on the coordinator yet — "
+                "try again once SEM has completed a cycle")
+            return
+        try:
+            report = await run_backfill(hass, ledger, days=int(days))
+        except Exception as err:  # noqa: BLE001 — a service must not kill setup
+            _LOGGER.error("backfill_forecast_ledger failed: %s", err)
+            return
+
+        try:
+            coordinator._storage.set_forecast_ledger_state(ledger.to_dict())
+            await coordinator._storage.async_save_energy_now()
+        except (AttributeError, TypeError, ValueError) as err:
+            _LOGGER.warning("backfilled ledger not persisted: %s", err)
+
+        _LOGGER.info(
+            "Service backfill_forecast_ledger: %d actual day(s) in history; "
+            "added d1=%s d0=%s; trust now d1=%s d0=%s",
+            report.get("actual_days", 0),
+            report.get("added", {}).get(1), report.get("added", {}).get(0),
+            report.get("trust", {}).get(1), report.get("trust", {}).get(0),
+        )
+        await coordinator.async_request_refresh()
+
+    try:
+        hass.services.async_register(
+            DOMAIN, "backfill_forecast_ledger",
+            async_backfill_forecast_ledger_service)
+        _LOGGER.debug("Registered service: %s.backfill_forecast_ledger", DOMAIN)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.error("Failed to register backfill_forecast_ledger: %s", err)
+
     try:
         hass.services.async_register(
             DOMAIN, "purge_status_history", async_purge_status_history_service)
