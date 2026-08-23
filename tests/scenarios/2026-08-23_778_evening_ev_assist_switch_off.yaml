@@ -1,0 +1,67 @@
+name: "2026-08-23 #778 control — spending switch off, no assist"
+
+coverage:
+  - mode: min_plus_solar
+    regime: forecast_spend_battery_assist
+    issue: "#778 spendable battery budget — the EV sink"
+
+description: |
+  The SAME inputs as ``2026-08-23_778_evening_ev_assist.yaml`` — same
+  pack, same SOC, same surplus, same budget — with ONE thing changed.
+  The assist must not engage.
+
+  These three controls are the point of the pair. A scenario that only
+  ever says "yes" cannot tell a working gate from a missing one: if the
+  assist fired here too, the positive scenario would be proving nothing
+  more than that battery_assist is reachable at all.
+
+  Changed: ``forecast_spending_enabled: false``.
+
+  This is the INERT proof, in the harness. Gate 4 of the release train
+  says a feature may ride to users asleep; this asserts that asleep
+  really means asleep — with the switch off, a budget sitting in the
+  evidence dict changes no decision at all.
+
+cycle_seconds: 30
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 30
+  ev_charging_mode: min_plus_solar
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  battery_assist_enabled: true
+  battery_assist_min_surplus_w: 1200
+  forecast_spending_enabled: false
+
+planning_evidence:
+  battery_spendable_kwh: 5.96
+  battery_dynamic_floor_pct: 40.3
+
+timeline:
+  - t: 0
+    solar_power: 900
+    grid_power: -200
+    battery_power: -300
+    battery_soc: 85
+    ev_power: 0
+    ev_connected: true
+  - t: 30
+    solar_power: 900
+    grid_power: -200
+    battery_power: -300
+    battery_soc: 85
+    ev_power: 0
+    ev_connected: true
+  - t: 60
+    solar_power: 900
+    grid_power: -200
+    battery_power: -300
+    battery_soc: 85
+    ev_power: 0
+    ev_connected: true
+
+expect:
+  strategy_not_substring: "battery_assist"

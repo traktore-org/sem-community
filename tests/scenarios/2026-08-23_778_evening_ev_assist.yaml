@@ -1,0 +1,74 @@
+name: "2026-08-23 #778 evening EV assist — a real budget reaches the car"
+
+coverage:
+  - mode: min_plus_solar
+    regime: forecast_spend_battery_assist
+    issue: "#778 spendable battery budget — the EV sink"
+
+description: |
+  The maintainer's own worked example from #778, run through the REAL
+  decide() path instead of the pure budget function.
+
+    "Pack full by midday, an evening EV charge, and tomorrow forecast
+     strong — spend the battery on the car tonight, because the sun
+     will refill it anyway."
+
+  Inputs (identical to test_778_use_cases.py::TestEveningEvAssist):
+    * 15 kWh pack at 85 %          → 12.75 kWh stored
+    * 3.0 kWh overnight house need → 3.79 kWh reserved (eff + pessimism)
+    * strong tomorrow              → 6.0 kWh expected refill
+    * static floor 20 %            → 3.0 kWh
+    → spendable ≈ 5.96 kWh
+
+  The evening surplus (400 W) is BELOW battery_assist_min_surplus_w
+  (1200 W), so today's SEM stops at the gate and the car gets solar
+  scraps. With the #778 budget present and the switch on, the gate
+  yields: the battery is allowed to push the car.
+
+  What this pins that the unit tests cannot: that the number computed
+  in _update_analytics_phases actually REACHES the charger decision
+  through build_view → decide, with every real gate in between.
+
+cycle_seconds: 30
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 30
+  ev_charging_mode: min_plus_solar
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  battery_assist_enabled: true
+  battery_assist_min_surplus_w: 1200
+  forecast_spending_enabled: true
+
+planning_evidence:
+  battery_spendable_kwh: 5.96
+  battery_dynamic_floor_pct: 40.3
+
+timeline:
+  - t: 0
+    solar_power: 900
+    grid_power: -200
+    battery_power: -300
+    battery_soc: 85
+    ev_power: 0
+    ev_connected: true
+  - t: 30
+    solar_power: 900
+    grid_power: -200
+    battery_power: -300
+    battery_soc: 85
+    ev_power: 0
+    ev_connected: true
+  - t: 60
+    solar_power: 900
+    grid_power: -200
+    battery_power: -300
+    battery_soc: 85
+    ev_power: 0
+    ev_connected: true
+
+expect:
+  strategy_substring: "battery_assist"

@@ -1,0 +1,68 @@
+name: "2026-08-23 #778 control — winter, no budget, no assist"
+
+coverage:
+  - mode: min_plus_solar
+    regime: forecast_spend_battery_assist
+    issue: "#778 spendable battery budget — the EV sink"
+
+description: |
+  The SAME inputs as ``2026-08-23_778_evening_ev_assist.yaml`` — same
+  pack, same SOC, same surplus, same budget — with ONE thing changed.
+  The assist must not engage.
+
+  These three controls are the point of the pair. A scenario that only
+  ever says "yes" cannot tell a working gate from a missing one: if the
+  assist fired here too, the positive scenario would be proving nothing
+  more than that battery_assist is reachable at all.
+
+  Changed: the budget itself is 0.0 — a 14 kWh winter night against a
+  weak forecast, the reversal case from the issue body.
+
+  Nothing is configured differently from the sunny scenario. The same
+  code, the same pack and the same switch reverse their answer because
+  the EVIDENCE reversed. That is the whole claim of #778, and this is
+  the cheapest possible place to keep it honest.
+
+cycle_seconds: 30
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 30
+  ev_charging_mode: min_plus_solar
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  battery_assist_enabled: true
+  battery_assist_min_surplus_w: 1200
+  forecast_spending_enabled: true
+
+planning_evidence:
+  battery_spendable_kwh: 0.0
+  battery_dynamic_floor_pct: 93.3
+
+timeline:
+  - t: 0
+    solar_power: 900
+    grid_power: -200
+    battery_power: -300
+    battery_soc: 85
+    ev_power: 0
+    ev_connected: true
+  - t: 30
+    solar_power: 900
+    grid_power: -200
+    battery_power: -300
+    battery_soc: 85
+    ev_power: 0
+    ev_connected: true
+  - t: 60
+    solar_power: 900
+    grid_power: -200
+    battery_power: -300
+    battery_soc: 85
+    ev_power: 0
+    ev_connected: true
+
+expect:
+  strategy_not_substring: "battery_assist"

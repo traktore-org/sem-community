@@ -309,6 +309,16 @@ def _build_coordinator(scenario: Dict[str, Any]):
     )
     coord._surplus_controller = SurplusController(coord.hass)
 
+    # (#778) The forecast-spending evidence dict. In production this is
+    # written once per cycle by ``_update_analytics_phases`` and read by
+    # ``_build_fleet_cycle_state`` — one publisher, so the number the user
+    # is shown and the number the decision uses cannot drift. The harness
+    # injects it directly: a scenario states the budget as an INPUT so the
+    # question under test is what the decision path DOES with it, not
+    # whether the ledger arithmetic is right (that is
+    # ``test_778_spendable_budget.py``'s job).
+    coord._planning_evidence = dict(scenario.get("planning_evidence") or {})
+
     coord._ev_device = None
     coord._cycle_night_plan = None
     coord._cycle_vehicle_soc = None  # No external vehicle SOC entity in scenario
