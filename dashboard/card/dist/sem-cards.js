@@ -7029,16 +7029,16 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                 <ha-icon icon="mdi:cog-outline" style="--mdc-icon-size:14px"></ha-icon>
                 ${this._t(e)}
             </button>
-        `}_setupItems(){const e=this._options||{};return[{key:"energy",labelKey:"config_overview_energy_dashboard",icon:"mdi:flash",color:"#ff9800",sectionId:"overview",done:!!this._hass?.states["sensor.sem_charging_state"]},{key:"ev",labelKey:"config_overview_chargers",icon:"mdi:ev-station",color:"#5BC8D8",sectionId:"ev_chargers",done:this._chargersList().length>0},{key:"hp",labelKey:"heat_pump_title",icon:"mdi:heat-pump",color:"#4db6ac",sectionId:"heat_pump",done:this._bin("heat_pump_registered")},{key:"hw",labelKey:"config_section_hot_water",icon:"mdi:water-boiler",color:"#5BC8D8",sectionId:"hot_water",done:!!e.hot_water_entity}]}_openSection(e){this._collapsed={...this._collapsed,[e]:!1},this.requestUpdate()}_renderOverview(e){const t=this._setupItems(),i=t.filter(e=>e.done).length,s=t.length,r=i===s,a=s?Math.round(i/s*100):100;return W`
+        `}_setupItems(){const e=this._options||{};return[{key:"energy",labelKey:"config_overview_energy_dashboard",icon:"mdi:flash",color:"#ff9800",sectionId:"overview",done:!!this._hass?.states["sensor.sem_charging_state"]},{key:"ev",labelKey:"config_overview_chargers",icon:"mdi:ev-station",color:"#5BC8D8",sectionId:"ev_chargers",done:this._chargersList().length>0},{key:"hp",labelKey:"heat_pump_title",icon:"mdi:heat-pump",color:"#4db6ac",sectionId:"heat_pump",done:this._bin("heat_pump_registered")},{key:"hw",labelKey:"config_section_hot_water",icon:"mdi:water-boiler",color:"#5BC8D8",sectionId:"hot_water",done:!!e.hot_water_entity},{key:"tariff",labelKey:"config_section_tariff",icon:"mdi:cash-multiple",color:"#8353d1",sectionId:"tariff",done:!!(e.electricity_rate||e.tariff_provider||e.tariff_entity)},{key:"battery",labelKey:"config_section_battery_zones",icon:"mdi:battery-charging",color:"#4db6ac",sectionId:"battery_zones",done:!!e.has_battery},{key:"loads",labelKey:"config_section_load_management",icon:"mdi:flash-alert",color:"#ff9800",sectionId:"load_management",optional:!0,done:(e.managed_devices||[]).length>0}]}_openSection(e){this._collapsed={...this._collapsed,[e]:!1},this.requestUpdate()}_renderOverview(e){const t=this._setupItems(),i=t.filter(e=>!e.optional),s=i.filter(e=>e.done).length,r=i.length,a=s===r,o=r?Math.round(s/r*100):100;return W`
             <div class="setup-progress">
                 <div class="setup-progress-top">
                     <span class="setup-progress-label">
-                        ${r?this._t("config_setup_done"):this._t("config_setup_progress").replace(/\{done\}/g,String(i)).replace(/\{total\}/g,String(s))}
+                        ${a?this._t("config_setup_done"):this._t("config_setup_progress").replace(/\{done\}/g,String(s)).replace(/\{total\}/g,String(r))}
                     </span>
-                    <span class="setup-progress-pct">${a}%</span>
+                    <span class="setup-progress-pct">${o}%</span>
                 </div>
                 <div class="setup-progress-bar">
-                    <div class="setup-progress-fill ${r?"done":""}" style=${`width:${a}%`}></div>
+                    <div class="setup-progress-fill ${a?"done":""}" style=${`width:${o}%`}></div>
                 </div>
             </div>
             <div class="chips">
@@ -7047,8 +7047,8 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                         @click=${e.done?void 0:()=>this._openSection(e.sectionId)}>
                         <ha-icon icon="${e.icon}" style="--mdc-icon-size:16px;color:${e.color}"></ha-icon>
                         <div class="chip-label">${this._t(e.labelKey)}</div>
-                        <div class="chip-value ${e.done?"c-ok":"c-warn"}">
-                            ${e.done?"✓":this._t("config_setup_action")}
+                        <div class="chip-value ${e.done?"c-ok":e.optional?"":"c-warn"}">
+                            ${e.done?"✓":e.optional?this._t("config_setup_optional"):this._t("config_setup_action")}
                         </div>
                     </div>`)}
             </div>
