@@ -4291,6 +4291,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             result.update(getattr(self, "_vpp_publish", None)
                           or {"vpp_event": "idle", "vpp_event_observer": True})
 
+            # (#778 phase 1) Planning evidence — measured, not assumed, and
+            # driving nothing yet. Set key-by-key rather than result.update()
+            # so it never becomes a second publisher of a to_dict key, which
+            # is the trap #829's single-publisher guard exists to catch.
+            for _k, _v in (getattr(self, "_planning_evidence", None) or {}).items():
+                result[_k] = _v
+
             # (#625 phase 3) Diagnostics summary for the System tab —
             # read-only assembly extracted to publish_diag.build_diagnostics.
             from .publish_diag import build_diagnostics
@@ -10260,6 +10267,35 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     self._storage.set_forecast_ledger_state(led.to_dict())
                 except Exception:  # noqa: BLE001
                     pass
+
+        # (#778 phase 1) Publish the evidence, act on none of it. These are the
+        # quantities honestly computable today; the spendable budget itself
+        # waits for the day ledger's refill term (phase 3), because publishing
+        # it from a raw forecast would systematically over-promise.
+        from .measured_capacity import measured_capacity
+
+        tracker = getattr(self, "_battery_night", None)
+        cap = None
+        try:
+            cap = measured_capacity(tracker.sealed) if tracker is not None else None
+        except Exception:  # noqa: BLE001
+            cap = None
+
+        nameplate = self.config.get("battery_capacity_kwh")
+        drift = None if cap is None else cap.drift_vs(nameplate)
+        self._planning_evidence = {
+            "battery_measured_capacity_kwh": None if cap is None else cap.usable_kwh,
+            "battery_capacity_kwh_per_pct": None if cap is None else cap.kwh_per_pct,
+            "battery_capacity_samples": 0 if cap is None else cap.samples,
+            "battery_capacity_drift_pct": (
+                None if drift is None else round(drift * 100.0, 1)),
+            "battery_capacity_reason": (
+                "not enough qualifying nights yet" if cap is None else cap.reason),
+            # Trust stays None until a horizon has earned it — never a
+            # confident-looking 1.0 (see forecast_ledger).
+            "forecast_trust_d1": led.trust(1),
+            "forecast_trust_d2": led.trust(2),
+        }
 
     def _run_due_daily_decay(self, now_time, today_date, power) -> None:
         """Run the virtual-SOC daily decay if it hasn't run yet today (#645).

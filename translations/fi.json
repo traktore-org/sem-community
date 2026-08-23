@@ -1243,6 +1243,18 @@
       },
       "daily_total_consumption": {
         "name": "Tänään kokonaiskulutus"
+      },
+      "battery_measured_capacity_kwh": {
+        "name": "Mitattu akun kapasiteetti"
+      },
+      "battery_capacity_drift_pct": {
+        "name": "Kapasiteetin poikkeama"
+      },
+      "forecast_trust_d1": {
+        "name": "Ennusteen luotettavuus (huomenna)"
+      },
+      "forecast_trust_d2": {
+        "name": "Ennusteen luotettavuus (ylihuomenna)"
       }
     },
     "binary_sensor": {

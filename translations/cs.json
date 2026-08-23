@@ -1243,6 +1243,18 @@
       },
       "daily_total_consumption": {
         "name": "Dnes celková spotřeba"
+      },
+      "battery_measured_capacity_kwh": {
+        "name": "Naměřená kapacita baterie"
+      },
+      "battery_capacity_drift_pct": {
+        "name": "Odchylka kapacity"
+      },
+      "forecast_trust_d1": {
+        "name": "Důvěra v předpověď (zítra)"
+      },
+      "forecast_trust_d2": {
+        "name": "Důvěra v předpověď (pozítří)"
       }
     },
     "binary_sensor": {

@@ -1243,6 +1243,18 @@
       },
       "daily_total_consumption": {
         "name": "今日总消耗"
+      },
+      "battery_measured_capacity_kwh": {
+        "name": "电池实测容量"
+      },
+      "battery_capacity_drift_pct": {
+        "name": "容量偏差"
+      },
+      "forecast_trust_d1": {
+        "name": "预测可信度（明天）"
+      },
+      "forecast_trust_d2": {
+        "name": "预测可信度（后天）"
       }
     },
     "binary_sensor": {

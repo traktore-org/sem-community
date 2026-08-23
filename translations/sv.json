@@ -1243,6 +1243,18 @@
       },
       "daily_total_consumption": {
         "name": "Idag total förbrukning"
+      },
+      "battery_measured_capacity_kwh": {
+        "name": "Uppmätt batterikapacitet"
+      },
+      "battery_capacity_drift_pct": {
+        "name": "Kapacitetsavvikelse"
+      },
+      "forecast_trust_d1": {
+        "name": "Prognosförtroende (imorgon)"
+      },
+      "forecast_trust_d2": {
+        "name": "Prognosförtroende (i övermorgon)"
       }
     },
     "binary_sensor": {

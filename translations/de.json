@@ -1243,6 +1243,18 @@
       },
       "daily_total_consumption": {
         "name": "Heute Gesamtverbrauch"
+      },
+      "battery_measured_capacity_kwh": {
+        "name": "Gemessene Batteriekapazität"
+      },
+      "battery_capacity_drift_pct": {
+        "name": "Kapazitätsabweichung"
+      },
+      "forecast_trust_d1": {
+        "name": "Prognose-Vertrauen (morgen)"
+      },
+      "forecast_trust_d2": {
+        "name": "Prognose-Vertrauen (übermorgen)"
       }
     },
     "binary_sensor": {

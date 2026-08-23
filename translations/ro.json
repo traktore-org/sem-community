@@ -1243,6 +1243,18 @@
       },
       "daily_total_consumption": {
         "name": "Consum total azi"
+      },
+      "battery_measured_capacity_kwh": {
+        "name": "Capacitate măsurată a bateriei"
+      },
+      "battery_capacity_drift_pct": {
+        "name": "Abatere de capacitate"
+      },
+      "forecast_trust_d1": {
+        "name": "Încrederea în prognoză (mâine)"
+      },
+      "forecast_trust_d2": {
+        "name": "Încrederea în prognoză (poimâine)"
       }
     },
     "binary_sensor": {

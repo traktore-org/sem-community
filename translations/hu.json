@@ -1243,6 +1243,18 @@
       },
       "daily_total_consumption": {
         "name": "Ma teljes fogyasztás"
+      },
+      "battery_measured_capacity_kwh": {
+        "name": "Mért akkumulátor-kapacitás"
+      },
+      "battery_capacity_drift_pct": {
+        "name": "Kapacitáseltérés"
+      },
+      "forecast_trust_d1": {
+        "name": "Előrejelzés megbízhatósága (holnap)"
+      },
+      "forecast_trust_d2": {
+        "name": "Előrejelzés megbízhatósága (holnapután)"
       }
     },
     "binary_sensor": {

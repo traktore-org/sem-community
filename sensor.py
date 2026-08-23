@@ -1246,6 +1246,39 @@ SENSOR_TYPES = [
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
     ),
+    # (#778 phase 1) Planning evidence — measured, driving nothing. Diagnostic
+    # and slow-moving by nature (capacity shifts over weeks, trust over days),
+    # so they add no recorder churn (#829).
+    SensorEntityDescription(
+        key="battery_measured_capacity_kwh",
+        native_unit_of_measurement="kWh",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:battery-heart-variant",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=1,
+    ),
+    SensorEntityDescription(
+        key="battery_capacity_drift_pct",
+        native_unit_of_measurement="%",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:battery-alert-variant-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=1,
+    ),
+    SensorEntityDescription(
+        key="forecast_trust_d1",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:weather-partly-cloudy",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="forecast_trust_d2",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:weather-cloudy-clock",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=2,
+    ),
     SensorEntityDescription(
         key="forecast_dampening_factor",
         state_class=SensorStateClass.MEASUREMENT,

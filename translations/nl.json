@@ -1243,6 +1243,18 @@
       },
       "daily_total_consumption": {
         "name": "Vandaag totaal verbruik"
+      },
+      "battery_measured_capacity_kwh": {
+        "name": "Gemeten accucapaciteit"
+      },
+      "battery_capacity_drift_pct": {
+        "name": "Capaciteitsafwijking"
+      },
+      "forecast_trust_d1": {
+        "name": "Prognosevertrouwen (morgen)"
+      },
+      "forecast_trust_d2": {
+        "name": "Prognosevertrouwen (overmorgen)"
       }
     },
     "binary_sensor": {
