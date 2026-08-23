@@ -21,7 +21,12 @@ from custom_components.solar_energy_management.number import (
 )
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-_LOGIC_ROOTS = ["coordinator", "features", "devices", "tariff", "utils"]
+# (#778) ``consts`` joined the roots: despite the name it holds decision
+# FUNCTIONS, not only constants — battery_permissions.may_export and
+# battery_modes.arbitrage_allowed_for_mode are where the permission axis is
+# actually resolved. Leaving it out meant a knob resolved entirely in there
+# read as a silent no-op, which is the opposite of what this guard is for.
+_LOGIC_ROOTS = ["coordinator", "features", "devices", "tariff", "utils", "consts"]
 
 # Keys intentionally consumed somewhere the loose grep can't see (e.g. only
 # through dynamic config dict iteration). Empty today — add with a reason.
@@ -75,6 +80,14 @@ _DYNAMIC_SWITCH_SELECT_KEYS: dict[str, str] = {
     # select.py per-battery dynamics + global battery mode
     "battery_{bid}_mode": "battery_mode",
     "battery_mode": "battery_mode",
+    # (#778) The two permissions persist into the NESTED battery_permissions
+    # dict, so the switch key never appears verbatim in the logic layer — the
+    # slot name does. Mapped rather than allow-listed on purpose: an allowance
+    # would stop checking anything, while this still fails the moment the slot
+    # loses its last reader, which is what caught decide_battery calling
+    # arbitrage_allowed_for_mode without the permissions argument.
+    "battery_may_export": "may_export",
+    "battery_may_assist_ev": "may_assist_ev",
 }
 
 
@@ -84,11 +97,14 @@ class TestSwitchSelectKnobsHaveReaders:
         blob = _logic_blob()
         dead = []
         for desc in list(SWITCH_TYPES) + list(SELECT_TYPES):
-            key = desc.key
+            # Same indirection the number knobs already use: an entity whose
+            # key differs from the config key it drives is checked against the
+            # KEY IT DRIVES, not its own name.
+            key = _DYNAMIC_SWITCH_SELECT_KEYS.get(desc.key, desc.key)
             if key in _ALLOWED_NO_READER:
                 continue
             if f'"{key}"' not in blob and f"'{key}'" not in blob:
-                dead.append(key)
+                dead.append(desc.key)
         assert not dead, (
             f"switch/select knobs with NO logic reader (silent no-ops): {dead}"
         )

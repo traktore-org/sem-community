@@ -60,6 +60,27 @@ class SEMBatteryZonesCard extends SEMLitBase {
         });
     }
 
+    /* ── (#778) Tonight's floor — the one marker that is an ANSWER rather
+       than a setting. The three zone markers above are values the user typed;
+       this one is computed nightly from tomorrow's forecast, so it is drawn
+       as a line rather than a dot and coloured solar orange: in the SEM
+       palette orange already means "this came from the sun".
+
+       Absent entirely when there is no floor to show — a marker at 0% would
+       claim the battery may be emptied. ── */
+    _renderDynamicFloor() {
+        const a = this._hass?.states['sensor.sem_battery_spendable_kwh']?.attributes || {};
+        if (a.phase !== 'spending') return nothing;
+        const raw = parseFloat(a.dynamic_floor_pct);
+        if (raw == null || isNaN(raw)) return nothing;
+        const pos = Math.max(0, Math.min(100, raw));
+        return html`
+            <div class="dyn-floor" style="left:${pos}%">
+                <span class="dyn-floor-label">${this._t('tonight')} ${raw.toFixed(0)}%</span>
+            </div>
+        `;
+    }
+
     _renderStepper(z, T) {
         const val = this._state(z.entity);
         const decimals = this._getDecimalsForZone(z.entity);
@@ -148,6 +169,28 @@ class SEMBatteryZonesCard extends SEMLitBase {
                     background: linear-gradient(90deg, #f44336 0%, #ff9800 30%, #4db6ac 60%, #488fc2 80%, #8DC892 100%);
                     opacity: 0.6;
                 }
+                /* (#778) tonight's computed floor — a line, not a dot:
+                   the dots are settings, this is an answer. */
+                .dyn-floor {
+                    position: absolute;
+                    top: -5px;
+                    bottom: -5px;
+                    width: 2px;
+                    background: #ff9800;
+                    border-radius: 1px;
+                    pointer-events: none;
+                }
+                .dyn-floor-label {
+                    position: absolute;
+                    bottom: -19px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    font-size: 10px;
+                    font-weight: 500;
+                    color: #ff9800;
+                    white-space: nowrap;
+                }
+
                 .zone-marker {
                     position: absolute;
                     top: -6px;
@@ -273,6 +316,7 @@ class SEMBatteryZonesCard extends SEMLitBase {
                 <div class="zone-bar-wrap">
                     <div class="zone-bar">
                         ${this._renderZoneMarkers(T)}
+                        ${this._renderDynamicFloor()}
                     </div>
                 </div>
                 <div class="stepper-grid">

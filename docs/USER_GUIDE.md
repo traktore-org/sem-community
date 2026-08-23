@@ -416,6 +416,64 @@ The discharge *rate* is not per-battery: **`number.sem_battery_max_discharge_pow
 
 **Other brands:** set `battery_force_discharge_control_entity` in the options flow to a number entity on your inverter (e.g. Growatt's max discharge power, SolaX's force-discharge current).
 
+### Forecast-Led Spending (v2.1)
+
+By default your battery's overnight floor is a number you type once, and it is
+the same number in June and in December. Forecast-led spending makes it an
+answer instead: SEM works out how much of the pack tonight can actually be
+spared, given what your house really uses overnight and how much tomorrow's sun
+is expected to put back.
+
+Turn it on under **Config → Battery charge scheduler → Forecast-led spending**.
+It is **off by default**, and while it is off every number below is still
+measured and shown — nothing is spent.
+
+**How the budget is worked out**
+
+```
+spendable = stored now − (what the night needs) − (your configured floor)
+            capped at what tomorrow is expected to refill
+```
+
+Each term is measured rather than assumed:
+
+| Term | Where it comes from |
+|---|---|
+| Stored now | measured pack size × SOC, falling back to the nameplate capacity |
+| What the night needs | the high-percentile envelope of your own recorded nights, not an average |
+| Tomorrow's refill | tomorrow's forecast **after** your house load and any committed EV charge, scaled by how accurate that forecast horizon has actually been |
+| Your floor | `battery_reserve_soc` — the computed floor never goes below it |
+
+**Three states, on the Battery tab**
+
+- **Learning** — SEM has not seen enough nights yet (it needs five). It spends
+  nothing and shows you how many it has. Every new install starts here.
+- **Holding** — there is enough evidence and the answer is genuinely nothing
+  spare: a long winter night against a weak forecast.
+- **Spending** — there is a budget tonight, with the floor it will land on.
+
+The SOC zones bar draws tonight's computed floor in orange beside your
+configured floor, so you can see it move from day to day.
+
+**What the budget may be spent on**
+
+Two switches, and they are deliberately separate rather than one setting:
+
+- **Battery may sell to the grid** — export the budget when the price is high.
+- **Battery may charge the car** — use the budget on the EV in the evening.
+
+A single mode could not express *"may sell, may not touch the car"*. Both
+default to your current behaviour, so turning forecast spending on does not
+silently grant a permission you never gave.
+
+**Why it refuses to spend without evidence**
+
+A forecast that runs high is exactly the case where spending the battery hurts:
+you sell tonight, tomorrow underdelivers, and you buy it back at the evening
+price. So SEM keeps a per-horizon ledger of what it forecast versus what the day
+delivered, and only trusts a horizon after seven settled days. Until then the
+budget is zero and the card says so.
+
 ### Example: Sunny Day, Battery at 30%, EV Connected
 
 1. **SOC 30-69%** — Battery charges from solar. EV waits (surplus usually below 4140W minimum)

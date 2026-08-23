@@ -13,6 +13,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔋 **SEM can now spend part of your battery tonight when tomorrow's sun will
+  refill it** (#778): the overnight floor stops being a number you type and
+  becomes an answer that changes nightly — 30 % before a sunny day, 90 %+ before
+  a poor one, from the same settings. **Battery tab → "Tonight"** shows the
+  budget, the floor it lands on, and the arithmetic behind it, and the SOC zones
+  bar draws tonight's floor beside your configured one. **Off by default**: turn
+  it on under **Config → Battery charge scheduler → Forecast-led spending**,
+  where two separate switches decide what the budget may be spent on — selling
+  to the grid, and charging the car. They are separate on purpose, so
+  "may sell, may not touch the car" is expressible.
+
+- 🔍 **SEM now says "still learning" instead of showing nothing** (#778): the
+  new planning sensors published an honest blank while evidence accrued, which
+  Home Assistant renders with the same word it uses for a dead integration. The
+  Battery tab now distinguishes three states — *learning* (with a count of the
+  nights recorded so far), *holding* (enough evidence, and the answer is
+  genuinely nothing spare), and *spending* — and the evidence strip beneath it
+  separates "not enough days yet" from "your forecast provider does not publish
+  this at all", which are different problems and only one of them resolves by
+  waiting.
+
+
 - 🧹 **You can now tell SEM how long to keep its own status history** (#829):
   SEM writes a lot of short-lived rows — charging state, strategy, diagnostics
   — that carry no long-term statistics, so keeping them for weeks only grows

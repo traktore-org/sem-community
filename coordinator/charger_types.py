@@ -381,6 +381,12 @@ class BatteryView:
     battery_spendable_kwh: float = 0.0
     forecast_spending_enabled: bool = False
     dynamic_floor_pct: float = None
+    battery_permissions: "Any" = None
+    """(#778) The user's per-permission choices, tri-state: a key absent means
+    UNSET and the legacy rule decides. ``None`` here is the same as an empty
+    mapping — every existing install keeps today's behaviour. Carried on the
+    view rather than read from config inside ``decide_battery`` because that
+    function is pure: everything it decides on arrives through the view."""
     """Whether any charger in the fleet has a vehicle plugged in
     (cable connected), regardless of whether it is drawing right now.
     The discharge-protection gate keys off this so the clamp HOLDS

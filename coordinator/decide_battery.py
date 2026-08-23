@@ -227,7 +227,13 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
             # the pipeline).
             _sell = getattr(view, "arbitrage_sell", None)
             _sell_open = bool(_sell and _sell[0])
-            if _sell_open and arbitrage_allowed_for_mode(mode, global_arb):
+            # (#778) The user's export permission binds here too. Passing it
+            # is not optional politeness: without it the "Battery may sell to
+            # the grid" switch persists a value nothing reads, and a user who
+            # revokes the permission watches SEM keep selling. Caught by
+            # tests/test_knob_wiring.py, which exists for exactly this.
+            _perms = getattr(view, "battery_permissions", None)
+            if _sell_open and arbitrage_allowed_for_mode(mode, global_arb, _perms):
                 # BOTH floors bind and the higher wins: the user's backup
                 # reserve AND the verdict's arbitrage_reserve_soc. The old
                 # either/or dropped the arbitrage reserve on every install

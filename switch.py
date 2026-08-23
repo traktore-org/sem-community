@@ -46,7 +46,40 @@ SWITCH_TYPES = [
         entity_category=EntityCategory.CONFIG,
         icon="mdi:calendar-clock",
     ),
+    # (#778 phase 6) The master switch for forecast-led spending. Default OFF:
+    # the whole arc ships inert and is woken deliberately. It had no GUI at
+    # all until this entity existed — the config key was readable only by
+    # editing options by hand, which does not satisfy "every setting is
+    # reachable on the dashboard".
+    SwitchEntityDescription(
+        key="forecast_spending_enabled",
+        entity_category=EntityCategory.CONFIG,
+        icon="mdi:chart-timeline-variant-shimmer",
+    ),
+    # (#778 phase 6) The two battery permissions. Switches rather than another
+    # battery mode because a mode is single-select and cannot say "may sell,
+    # may not touch the car". Both default to UNSET, which resolves to today's
+    # behaviour exactly — see consts/battery_permissions.
+    SwitchEntityDescription(
+        key="battery_may_export",
+        entity_category=EntityCategory.CONFIG,
+        icon="mdi:transmission-tower-export",
+    ),
+    SwitchEntityDescription(
+        key="battery_may_assist_ev",
+        entity_category=EntityCategory.CONFIG,
+        icon="mdi:car-electric",
+    ),
 ]
+
+# (#778 phase 6) Switch key -> its slot in the nested ``battery_permissions``
+# dict. That dict is the ONE representation the resolver reads; persisting a
+# flat ``battery_may_export`` option beside it would create a second spelling
+# of one fact, which is precisely the drift class this arc has been closing.
+PERMISSION_SWITCHES = {
+    "battery_may_export": "may_export",
+    "battery_may_assist_ev": "may_assist_ev",
+}
 
 # (ev_limit_surplus (#235) was folded into the optional Max ceiling (#245); its
 # global config-switch mechanism + entity are gone. Old entities are auto-removed
@@ -151,18 +184,51 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         # Force stable entity ID regardless of HA language
         self.entity_id = f"switch.sem_{description.key}"
 
-        if description.key in self._PERSISTED_DEFAULTS:
-            # (#777) Seed from the EXPLICIT config — options first (every
-            # flip persists there via ``_persist_flag``), then entry data
-            # (the install flow writes there), then the per-key default.
-            # The old seed read options only, so "observer checked at
-            # install" showed an OFF switch while the coordinator
-            # observed.
-            explicit = self._configured(description.key)
-            self._is_on = (explicit if explicit is not None
-                           else self._PERSISTED_DEFAULTS[description.key])
-        else:
-            self._is_on = False
+        self._is_on = self._seed_state()
+
+    def _seed_state(self) -> bool:
+        """This switch's state at attach time.
+
+        (#777) Seed from the EXPLICIT config — options first (every flip
+        persists there via ``_persist_flag``), then entry data (the install
+        flow writes there), then the per-key default. The old seed read
+        options only, so "observer checked at install" showed an OFF switch
+        while the coordinator observed.
+
+        (#778) A permission switch is different: it seeds from the RESOLVED
+        permission, not from a stored boolean. Both permissions are UNSET on
+        an untouched install and resolve to True — the battery already assists
+        the car and already exports. Seeding those entities to False would
+        show two switches in the off position for behaviour that is running,
+        and a user flipping one "on" to enable something that was never off
+        has been actively misled about their own system.
+        """
+        key = self.entity_description.key
+        if key in PERMISSION_SWITCHES:
+            from .consts.battery_permissions import (
+                effective_permissions, may_assist_ev, may_export,
+            )
+            cfg = getattr(self.coordinator, "config", None) or {}
+            mode = cfg.get("battery_mode") or "auto"
+            stored = cfg.get("battery_permissions") or {}
+            try:
+                stored = {**stored, **((
+                    getattr(self.coordinator.config_entry, "options", None)
+                    or {}).get("battery_permissions") or {})}
+            except (AttributeError, TypeError):
+                pass
+            perms = effective_permissions(mode, stored)
+            if PERMISSION_SWITCHES[key] == "may_export":
+                return bool(may_export(
+                    mode, perms,
+                    bool(cfg.get("battery_arbitrage_enabled", True))))
+            return bool(may_assist_ev(mode, perms))
+
+        if key in self._PERSISTED_DEFAULTS:
+            explicit = self._configured(key)
+            return bool(explicit if explicit is not None
+                        else self._PERSISTED_DEFAULTS[key])
+        return False
 
     # (#777) The three persisted toggles and what a fresh install means by
     # silence. Defined in ``persisted_flags`` and shared by reference, not
@@ -258,6 +324,21 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
             return  # pre-add lifecycle / bare test stubs — nothing to persist to
         key = self.entity_description.key
         entry = self.coordinator.config_entry
+        if key in PERMISSION_SWITCHES:
+            # Merge into the existing dict rather than replacing it: the two
+            # permissions share one mapping, and a replace would silently
+            # drop whichever one this switch does not own.
+            slot = PERMISSION_SWITCHES[key]
+            existing = dict((entry.options or {}).get("battery_permissions") or {})
+            existing[slot] = bool(value)
+            new_options = {**(entry.options or {}), "battery_permissions": existing}
+            self.coordinator._skip_options_reload = dict(new_options)
+            try:
+                self.coordinator.config["battery_permissions"] = dict(existing)
+            except Exception:  # noqa: BLE001
+                pass
+            self.hass.config_entries.async_update_entry(entry, options=new_options)
+            return
         new_options = {**(entry.options or {}), key: value}
         self.coordinator._skip_options_reload = dict(new_options)
         try:

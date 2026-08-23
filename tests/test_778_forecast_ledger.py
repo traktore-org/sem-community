@@ -147,3 +147,74 @@ class TestItStaysBounded:
         restored = ForecastLedger.from_dict(led.to_dict())
         assert restored.forecast_for("2026-08-25", 2) == 31.6
         assert restored.actual_for("2026-08-25") == 30.0
+
+
+class TestEvidenceCounts:
+    """(#778 phase 6) What the card needs to say "1 of 7" honestly.
+
+    ``trust()`` answers None both when a horizon has too few settled days AND
+    when nothing has ever published that horizon at all. Those are different
+    facts and a user deserves the difference: the first resolves by waiting,
+    the second never does — their forecast provider simply has no day-2 figure
+    (live on .175: Forecast.Solar exposes d2 only per string).
+    """
+
+    def _ledger_with(self, days):
+        led = ForecastLedger()
+        for date, horizon, fc, actual in days:
+            led.record(date, horizon, fc)
+            if actual is not None:
+                led.settle(date, actual)
+        return led
+
+    def test_settled_samples_counts_only_pairs(self):
+        led = self._ledger_with([
+            ("2026-08-20", 1, 40.0, 35.0),
+            ("2026-08-21", 1, 42.0, 38.0),
+            ("2026-08-22", 1, 44.0, None),   # forecast made, day not settled
+        ])
+        assert led.settled_samples(1) == 2
+
+    def test_settled_samples_is_per_horizon(self):
+        led = self._ledger_with([
+            ("2026-08-20", 1, 40.0, 35.0),
+            ("2026-08-20", 2, 39.0, None),
+        ])
+        # the 2026-08-20 settle applies to every horizon recorded for that day
+        assert led.settled_samples(1) == 1
+        assert led.settled_samples(2) == 1
+
+    def test_settled_samples_ignores_a_zero_forecast(self):
+        """accuracy() skips fc <= 0 to avoid dividing by it; the count the user
+        is shown must agree with the count the trust actually used."""
+        led = self._ledger_with([
+            ("2026-08-20", 1, 0.0, 35.0),
+            ("2026-08-21", 1, 40.0, 35.0),
+        ])
+        assert led.settled_samples(1) == 1
+
+    def test_settled_samples_of_an_unknown_horizon_is_zero(self):
+        assert ForecastLedger().settled_samples(2) == 0
+
+    def test_has_horizon_is_true_once_anything_was_recorded(self):
+        led = self._ledger_with([("2026-08-22", 1, 44.0, None)])
+        assert led.has_horizon(1) is True
+
+    def test_has_horizon_is_false_when_no_source_publishes_it(self):
+        """The live .175 case — d1 records every day, d2 never does."""
+        led = self._ledger_with([
+            ("2026-08-20", 1, 40.0, 35.0),
+            ("2026-08-21", 1, 42.0, 38.0),
+        ])
+        assert led.has_horizon(2) is False
+
+    def test_counts_survive_a_round_trip(self):
+        led = self._ledger_with([("2026-08-20", 1, 40.0, 35.0)])
+        back = ForecastLedger.from_dict(led.to_dict())
+        assert back.settled_samples(1) == 1
+        assert back.has_horizon(1) is True
+
+    def test_junk_horizon_never_raises(self):
+        led = ForecastLedger()
+        assert led.settled_samples("x") == 0
+        assert led.has_horizon(None) is False

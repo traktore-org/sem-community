@@ -2918,6 +2918,26 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "clipped_kwh": d.get("battery_refill_clipped_kwh"),
                 "measured_capacity_kwh": d.get("battery_measured_capacity_kwh"),
                 "forecast_trust_d1": d.get("forecast_trust_d1"),
+                # (#778 phase 6) The three states a card must tell apart, and
+                # the progress behind the two that look like zero. Published as
+                # a stable token beside the prose: the card switches on the
+                # token and DISPLAYS the prose, so rewording a reason — or
+                # translating it into any of sixteen languages — can never
+                # change what gets rendered.
+                "phase": d.get("planning_phase"),
+                "nights_sealed": d.get("planning_nights_sealed"),
+                "nights_required": d.get("planning_nights_required"),
+                "forecast_days_d1": d.get("forecast_days_d1"),
+                "forecast_days_d2": d.get("forecast_days_d2"),
+                "forecast_days_required": d.get("forecast_days_required"),
+                # False = no source publishes that horizon at all. Distinct
+                # from thin evidence: only one of the two resolves by waiting.
+                "forecast_d1_available": d.get("forecast_d1_available"),
+                "forecast_d2_available": d.get("forecast_d2_available"),
+                "capacity_samples": d.get("battery_capacity_samples"),
+                "capacity_drift_pct": d.get("battery_capacity_drift_pct"),
+                "nameplate_capacity_kwh": self.coordinator.config.get(
+                    "battery_capacity_kwh"),
             })
         elif self.entity_description.key == "forecast_dampening_factor":
             # #416: mirror the #359 ``classifier_path`` pattern — expose

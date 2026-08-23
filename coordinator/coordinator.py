@@ -4319,6 +4319,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             result["battery_spendable_kwh"] = _pe.get("battery_spendable_kwh")
             result["battery_dynamic_floor_pct"] = _pe.get("battery_dynamic_floor_pct")
             result["battery_spendable_reason"] = _pe.get("battery_spendable_reason")
+            result["planning_phase"] = _pe.get("planning_phase")
+            result["planning_nights_sealed"] = _pe.get("nights_sealed")
+            result["planning_nights_required"] = _pe.get("nights_required")
+            result["forecast_days_d1"] = _pe.get("forecast_days_d1")
+            result["forecast_days_d2"] = _pe.get("forecast_days_d2")
+            result["forecast_days_required"] = _pe.get("forecast_days_required")
+            result["forecast_d1_available"] = _pe.get("forecast_d1_available")
+            result["forecast_d2_available"] = _pe.get("forecast_d2_available")
 
             # (#625 phase 3) Diagnostics summary for the System tab —
             # read-only assembly extracted to publish_diag.build_diagnostics.
@@ -6325,6 +6333,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     .get("battery_spendable_kwh") or 0.0),
                 forecast_spending_enabled=bool(
                     self.config.get("forecast_spending_enabled", False)),
+                # (#778) The permission axis, resolved from the per-battery
+                # config so a multi-battery install can grant export on one
+                # pack and withhold it on another.
+                battery_permissions=(
+                    self._per_battery_config(batt_idx, _bat_count).get(
+                        "battery_permissions")
+                    or self.config.get("battery_permissions")),
                 dynamic_floor_pct=(
                     getattr(self, "_planning_evidence", None) or {}
                 ).get("battery_dynamic_floor_pct"),
@@ -10409,7 +10424,35 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             discharge_efficiency=self.config.get("battery_discharge_efficiency", 0.95),
         )
 
+        # (#778 phase 6) The state a card renders, published rather than
+        # inferred. See planning_phase for why the reason strings must not be
+        # matched on.
+        from .measured_capacity import MIN_NEED_SAMPLES
+        from .forecast_ledger import MIN_SAMPLES_FOR_TRUST
+        from .planning_phase import planning_phase
+
+        phase = planning_phase(
+            nights_sealed=len(sealed),
+            nights_required=MIN_NEED_SAMPLES,
+            overnight_need_kwh=need_kwh,
+            usable_capacity_kwh=usable_kwh,
+            spendable_kwh=budget.spendable_kwh,
+        )
+
         self._planning_evidence = {
+            "planning_phase": phase,
+            # The progress a user watches while the evidence accrues. Without
+            # these the learning state is a bare 0.0, which reads as "nothing
+            # to spend" rather than "not measured yet".
+            "nights_sealed": len(sealed),
+            "nights_required": MIN_NEED_SAMPLES,
+            "forecast_days_d1": led.settled_samples(1),
+            "forecast_days_d2": led.settled_samples(2),
+            "forecast_days_required": MIN_SAMPLES_FOR_TRUST,
+            # False means no source publishes this horizon at all — a fact
+            # that never resolves by waiting, unlike thin evidence.
+            "forecast_d1_available": led.has_horizon(1),
+            "forecast_d2_available": led.has_horizon(2),
             "battery_measured_capacity_kwh": None if cap is None else cap.usable_kwh,
             "battery_capacity_kwh_per_pct": None if cap is None else cap.kwh_per_pct,
             "battery_capacity_samples": 0 if cap is None else cap.samples,

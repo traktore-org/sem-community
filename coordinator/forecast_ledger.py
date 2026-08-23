@@ -32,6 +32,22 @@ from typing import Dict, Optional
 #: Seven is a week of weather — enough that one freak day cannot set policy.
 MIN_SAMPLES_FOR_TRUST: int = 7
 
+#: Which percentile of observed accuracy to spend against.
+#:
+#: The mirror image of ``measured_capacity.NEED_PERCENTILE``, and for the same
+#: reason. That one takes a HIGH percentile of what the house draws overnight,
+#: because reserving for the typical night leaves the pack short on half of
+#: them. This one takes a LOW percentile of what the sun actually delivers,
+#: because planning against the typical day spends the battery on energy that
+#: does not arrive on half of them.
+#:
+#: Measured, not chosen by taste: .175's own 139 settled days have a mean ratio
+#: of 1.050 — an UNBIASED forecast — with p10 0.514 and p90 1.502. Trusting the
+#: mean (capped at 1.0) would have spent against the full forecast on days that
+#: under-delivered **58 times out of 139 (42%)**. At p20 that is 28 of 139
+#: (20%) — which is what "p20" means, chosen deliberately rather than suffered.
+REFILL_TRUST_PERCENTILE: float = 0.2
+
 #: Days kept before the oldest are pruned. A season is the useful window for a
 #: seasonal quantity; beyond that the sun has moved.
 DEFAULT_MAX_DAYS: int = 120
@@ -93,12 +109,17 @@ class ForecastLedger:
     def days(self) -> list:
         return sorted(self._days)
 
-    def accuracy(self, horizon_days: int) -> Optional[HorizonAccuracy]:
-        """How this horizon has performed, or None while evidence is thin."""
+    def _ratios(self, horizon_days) -> list:
+        """Every settled actual/forecast ratio at this horizon.
+
+        One extractor for accuracy, trust and the sample count, so the number a
+        user is shown as progress and the evidence a decision is made from can
+        never be counted differently.
+        """
         try:
             h = int(horizon_days)
         except (TypeError, ValueError):
-            return None
+            return []
         ratios = []
         for rec in self._days.values():
             actual = rec.get("actual")
@@ -106,21 +127,67 @@ class ForecastLedger:
             if actual is None or fc is None or fc <= 0:
                 continue
             ratios.append(actual / fc)
+        return ratios
+
+    def accuracy(self, horizon_days: int) -> Optional[HorizonAccuracy]:
+        """How this horizon has performed on AVERAGE, or None while evidence
+        is thin.
+
+        Diagnostic: the mean answers "is this forecast biased", which is a real
+        question and worth showing. It is deliberately NOT what decides
+        spending — see ``trust``.
+        """
+        ratios = self._ratios(horizon_days)
         if len(ratios) < MIN_SAMPLES_FOR_TRUST:
             return None
-        return HorizonAccuracy(h, len(ratios), sum(ratios) / len(ratios))
+        return HorizonAccuracy(int(horizon_days), len(ratios),
+                               sum(ratios) / len(ratios))
+
+    def settled_samples(self, horizon_days) -> int:
+        """How many settled forecast/actual pairs this horizon has.
+
+        The numerator of the "N of 7" a card shows while trust is still being
+        earned. It counts exactly what ``accuracy`` counts — including the
+        ``fc <= 0`` skip — so the progress a user watches and the evidence the
+        trust is actually built from can never disagree.
+        """
+        return len(self._ratios(horizon_days))
+
+    def has_horizon(self, horizon_days) -> bool:
+        """Whether anything has ever published a forecast at this horizon.
+
+        ``trust`` answers None for two unrelated reasons — too few days yet,
+        and no source at all. Only the first one resolves by waiting, so a
+        user staring at an empty day-2 figure needs to be told which they are
+        looking at (live on .175: Forecast.Solar publishes d2 only as
+        per-string entities, so this horizon never fills there).
+        """
+        try:
+            h = int(horizon_days)
+        except (TypeError, ValueError):
+            return False
+        return any(h in (rec.get("f") or {}) for rec in self._days.values())
 
     def trust(self, horizon_days: int) -> Optional[float]:
         """A factor to scale a forecast at this horizon, or None if unknown.
+
+        A LOW percentile of observed accuracy, not the average — see
+        ``REFILL_TRUST_PERCENTILE``. An unbiased forecast with a wide spread
+        must not read as fully trustworthy: the average day is not the day
+        that hurts.
 
         Capped at 1.0: a forecast that habitually UNDER-promises does not
         license spending more than it predicts. Optimism is capped; pessimism
         is respected in full.
         """
-        acc = self.accuracy(horizon_days)
-        if acc is None:
+        ratios = self._ratios(horizon_days)
+        if len(ratios) < MIN_SAMPLES_FOR_TRUST:
             return None
-        return min(1.0, max(0.0, acc.mean_ratio))
+        ratios.sort()
+        # Nearest-rank, rounding DOWN: with few samples the index errs toward
+        # the worse day, which is the direction that cannot hurt.
+        idx = int(REFILL_TRUST_PERCENTILE * (len(ratios) - 1))
+        return min(1.0, max(0.0, ratios[idx]))
 
     # ── persistence ──────────────────────────────────────────────────────
     def to_dict(self) -> dict:

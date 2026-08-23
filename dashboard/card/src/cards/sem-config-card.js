@@ -1950,6 +1950,22 @@ class SEMConfigCard extends SEMLitBase {
                 { min: 0, max: 1, step: 0.1, unit: '', default: 0.3 }, opts, 'config_help_bs_pessimism')}
             ${this._renderOptionToggle('battery_force_charge_negative_price', 'config_bs_force_neg',
                 opts, 'config_help_bs_force_neg', true)}
+
+            ${''/* (#778) Forecast-led spending. Three switch ENTITIES rather
+               than options, because they must be flippable from the dashboard
+               without an Apply cycle — a permission a user revokes is usually
+               revoked because they want it to stop NOW. The two permissions
+               are separate switches rather than another battery mode: a mode
+               is single-select and cannot say "may sell, may not touch the
+               car". */}
+            <div class="subsection-title">${this._t('config_section_forecast_spending')}</div>
+            <div class="setup-intro">${this._t('config_forecast_spending_intro')}</div>
+            ${this._renderToggle('switch.sem_forecast_spending_enabled',
+                'forecast_spending_enabled', T, 'config_help_forecast_spending')}
+            ${this._renderToggle('switch.sem_battery_may_export',
+                'battery_may_export', T, 'config_help_battery_may_export')}
+            ${this._renderToggle('switch.sem_battery_may_assist_ev',
+                'battery_may_assist_ev', T, 'config_help_battery_may_assist_ev')}
         `;
     }
 
@@ -2935,6 +2951,20 @@ class SEMConfigCard extends SEMLitBase {
                 }
                 .save-status.ok { color: #8DC892; }
                 .save-status.err { color: var(--error-color, #d33); }
+
+                /* (#778) sub-heading inside a section — the forecast-spending
+                   block sits under the battery scheduler rather than claiming
+                   its own top-level section. */
+                .subsection-title {
+                    margin: 20px 0 2px;
+                    font-size: 12px;
+                    font-weight: 500;
+                    letter-spacing: .07em;
+                    text-transform: uppercase;
+                    color: var(--sem-text-sec, #8fa3a0);
+                    border-top: 1px solid rgba(255,255,255,.08);
+                    padding-top: 16px;
+                }
 
                 .setup-intro {
                     font-size: 12px; line-height: 1.45;

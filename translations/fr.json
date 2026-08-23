@@ -1310,6 +1310,15 @@
       },
       "energy_plan_actuation": {
         "name": "Exécution du plan énergétique"
+      },
+      "battery_may_export": {
+        "name": "La batterie peut vendre au réseau"
+      },
+      "battery_may_assist_ev": {
+        "name": "La batterie peut charger la voiture"
+      },
+      "forecast_spending_enabled": {
+        "name": "Dépense guidée par les prévisions"
       }
     },
     "number": {

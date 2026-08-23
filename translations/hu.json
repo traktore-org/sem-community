@@ -1310,6 +1310,15 @@
       },
       "energy_plan_actuation": {
         "name": "Energiaterv végrehajtása"
+      },
+      "battery_may_export": {
+        "name": "Az akkumulátor eladhat a hálózatra"
+      },
+      "battery_may_assist_ev": {
+        "name": "Az akkumulátor töltheti az autót"
+      },
+      "forecast_spending_enabled": {
+        "name": "Előrejelzés-vezérelt költés"
       }
     },
     "number": {

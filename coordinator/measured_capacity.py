@@ -88,7 +88,7 @@ def measured_capacity(records: Optional[Iterable[dict]]) -> Optional[MeasuredCap
         return None
 
     ratios = []
-    for rec in records:
+    for rec in distinct_nights(records):
         if not isinstance(rec, dict) or not rec.get("trainable"):
             continue
         start = _f(rec.get("soc_start"))
@@ -120,6 +120,42 @@ def measured_capacity(records: Optional[Iterable[dict]]) -> Optional[MeasuredCap
     )
 
 
+def distinct_nights(records: Optional[Iterable[dict]]) -> list:
+    """One record per night — the most complete one.
+
+    The seal path can emit more than one record for a date: a restart
+    mid-night seals what it has, and the night seals again later. Both readers
+    below make a claim about NIGHTS ("five nights of evidence"), so counting
+    records over-states it, and — worse — a partial night's drain is smaller
+    than the whole night's, which drags the need percentile in the unsafe
+    direction. Live example on .175: two records for 2026-08-21, one of them
+    a 994-second-gap fragment.
+
+    Ranking within a date: a trainable record beats an untrainable one, and
+    among equals the larger drain wins — that record saw more of the night.
+
+    Records with no date are each kept: an unknown date is not evidence that
+    two records describe the same night, and collapsing them would silently
+    discard real evidence.
+    """
+    if not records:
+        return []
+    best: dict = {}
+    undated: list = []
+    for rec in records:
+        if not isinstance(rec, dict):
+            continue
+        date = rec.get("date")
+        if not date:
+            undated.append(rec)
+            continue
+        rank = (bool(rec.get("trainable")), _f(rec.get("drain_kwh")) or 0.0)
+        prev = best.get(date)
+        if prev is None or rank > prev[0]:
+            best[date] = (rank, rec)
+    return [entry[1] for entry in best.values()] + undated
+
+
 #: Nights needed before an overnight-need figure is offered.
 MIN_NEED_SAMPLES: int = 5
 
@@ -143,7 +179,7 @@ def expected_overnight_need(
     if not records:
         return None
     drains = []
-    for rec in records:
+    for rec in distinct_nights(records):
         if not isinstance(rec, dict) or not rec.get("trainable"):
             continue
         d = _f(rec.get("drain_kwh"))
