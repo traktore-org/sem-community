@@ -761,18 +761,6 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     "generate_dashboard_on_install",
                     default=True,
                 ): selector.BooleanSelector(),
-                vol.Optional(
-                    "diagram_style",
-                    default="sem",
-                ): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=[
-                            {"value": "sem", "label": "SEM (built-in)"},
-                            {"value": "kflow", "label": "K-Flow (HACS)"},
-                        ],
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                    )
-                ),
             }),
             description_placeholders={
                 "discharge_entity": discharge_summary,
@@ -2579,10 +2567,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "battery_charge_scheduler_enabled",
                     default=_c("battery_charge_scheduler_enabled", False),
                 ): selector.BooleanSelector(),
-                vol.Optional(
-                    "battery_capacity_kwh",
-                    default=_c("battery_capacity_kwh", 10.0),
-                ): bounds_selector("battery_capacity_kwh", mode="box"),
                 vol.Optional(
                     "battery_max_charge_power_w",
                     default=_c("battery_max_charge_power_w", 5000),

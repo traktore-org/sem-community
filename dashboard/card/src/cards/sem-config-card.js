@@ -628,6 +628,23 @@ class SEMConfigCard extends SEMLitBase {
             { key: 'hw', labelKey: 'config_section_hot_water', icon: 'mdi:water-boiler',
               color: '#5BC8D8', sectionId: 'hot_water',
               done: !!opts.hot_water_entity },
+            // (#830) The overview stopped at four subsystems while the Config
+            // tab has fourteen sections, so "all set up" could read 100% with
+            // no tariff configured — SEM cannot cost anything without one, and
+            // nothing said so. These three are the ones whose absence changes
+            // what SEM can DO, which is the bar for appearing here: a guide is
+            // only useful if reaching the end of it means something.
+            { key: 'tariff', labelKey: 'config_section_tariff', icon: 'mdi:cash-multiple',
+              color: '#8353d1', sectionId: 'tariff',
+              done: !!(opts.electricity_rate || opts.tariff_provider
+                       || opts.tariff_entity) },
+            { key: 'battery', labelKey: 'config_section_battery_zones', icon: 'mdi:battery-charging',
+              color: '#4db6ac', sectionId: 'battery_zones',
+              done: !!opts.has_battery },
+            { key: 'loads', labelKey: 'config_section_load_management', icon: 'mdi:flash-alert',
+              color: '#ff9800', sectionId: 'load_management',
+              optional: true,
+              done: (opts.managed_devices || []).length > 0 },
         ];
     }
 
@@ -638,8 +655,12 @@ class SEMConfigCard extends SEMLitBase {
 
     _renderOverview(T) {
         const items = this._setupItems();
-        const done = items.filter(i => i.done).length;
-        const total = items.length;
+        // (#830) Optional subsystems do not hold the bar down. A user with no
+        // controllable loads is not 86% set up — they are finished, and a
+        // progress bar that disagrees teaches them to ignore it.
+        const counted = items.filter(i => !i.optional);
+        const done = counted.filter(i => i.done).length;
+        const total = counted.length;
         const allDone = done === total;
         const pct = total ? Math.round((done / total) * 100) : 100;
         return html`
@@ -662,8 +683,10 @@ class SEMConfigCard extends SEMLitBase {
                         @click=${i.done ? undefined : () => this._openSection(i.sectionId)}>
                         <ha-icon icon="${i.icon}" style="--mdc-icon-size:16px;color:${i.color}"></ha-icon>
                         <div class="chip-label">${this._t(i.labelKey)}</div>
-                        <div class="chip-value ${i.done ? 'c-ok' : 'c-warn'}">
-                            ${i.done ? '✓' : this._t('config_setup_action')}
+                        <div class="chip-value ${i.done ? 'c-ok' : (i.optional ? '' : 'c-warn')}">
+                            ${i.done ? '✓'
+                                : (i.optional ? this._t('config_setup_optional')
+                                              : this._t('config_setup_action'))}
                         </div>
                     </div>`)}
             </div>
