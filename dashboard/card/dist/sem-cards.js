@@ -2375,7 +2375,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                 </div>
                 ${this._showHelp?W`<div class="zone-help-text" style="border-left-color:${e.color}">${a}</div>`:q}
             </div>
-        `}render(){if(!this._config)return q;const e=this._theme(),t=this._state(st[0].entity),i=this._state(st[1].entity),s=this._state(st[3].entity),r=`${this._t("auto_start_soc")} ${t.toFixed(0)}% · Buffer ${i.toFixed(0)}% · ${this._t("priority_soc")} ${s.toFixed(0)}%`;return W`
+        `}render(){if(!this._config)return q;const e=this._theme(),t=this._state(st[0].entity),i=this._state(st[1].entity),s=this._state(st[2].entity),r=`${this._t("auto_start_soc")} ${t.toFixed(0)}% · Buffer ${i.toFixed(0)}% · ${this._t("priority_soc")} ${s.toFixed(0)}%`;return W`
             <style>
                 :host { display: block; contain: layout style paint; }
                 .wrap {
