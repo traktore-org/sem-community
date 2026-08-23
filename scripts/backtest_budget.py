@@ -226,11 +226,14 @@ def main() -> int:
     rate = (100.0 * rep.breaches_caused / len(spent)) if spent else 0.0
 
     if args.quiet:
-        print("  p%-4d nights=%-4d budget_nights=%-4d mean_spend=%.2f "
-              "breaches=%-3d (%.0f%% of spending nights)"
-              % ((args.need_pctile or mc.NEED_PERCENTILE) * 100, rep.nights,
-                 len(spent), (sum(o.spendable_kwh for o in spent) / len(spent))
-                 if spent else 0.0, rep.breaches_caused, rate))
+        caused = [o for o in outcomes if o.scorable and o.caused_by_budget]
+        worst = min((o.margin_kwh for o in caused), default=0.0)
+        total_spend = sum(o.spendable_kwh for o in spent)
+        print("  p%-4d budget_nights=%-4d mean=%.2f total=%6.1f kWh  "
+              "breaches=%-2d (%.0f%%)  worst=%+.2f kWh"
+              % ((args.need_pctile or mc.NEED_PERCENTILE) * 100,
+                 len(spent), (total_spend / len(spent)) if spent else 0.0,
+                 total_spend, rep.breaches_caused, rate, worst))
         return 0
 
     print()

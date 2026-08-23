@@ -168,3 +168,69 @@ class TestTheOvernightNeedIsAnEnvelopeNotAnAverage:
         )
         bad = [{"drain_kwh": 5.0, "trainable": False} for _ in range(9)]
         assert expected_overnight_need(bad) is None
+
+
+class TestTheEnvelopePercentileIsMeasured:
+    """(#778) p85, and the number came from data rather than taste.
+
+    The envelope was p80 by judgement — "a high percentile, because being short
+    is not symmetric with being generous". Correct in direction, unargued in
+    magnitude. Backtesting 211 real PROD nights priced every candidate:
+
+        pctile  spending nights  total spent  breaches  worst
+        p70     103              74.0 kWh     3 (3%)    -0.48 kWh
+        p80      97              63.6 kWh     3 (3%)    -0.40 kWh
+        p85      90              53.5 kWh     2 (2%)    -0.12 kWh
+        p90      68              30.0 kWh     1 (1%)    -0.05 kWh
+        p95       5               0.3 kWh     0         -
+
+    p85 is the knee: the worst floor violation drops 70% (400 Wh -> 120 Wh, on
+    a 15 kWh pack) while 84% of the energy survives. p90 costs HALF the value
+    for a further 70 Wh, and p95 is a cliff — the feature stops working, five
+    nights out of two hundred and eleven.
+
+    One install's data, so the value is a default and not a law; the sweep that
+    produced it ships as ``scripts/backtest_budget.py --need-pctile`` so any
+    install can price its own.
+    """
+
+    def test_the_envelope_is_p85(self):
+        from custom_components.solar_energy_management.coordinator.measured_capacity import (
+            NEED_PERCENTILE,
+        )
+        assert NEED_PERCENTILE == 0.85
+
+    def test_it_is_a_high_percentile_not_an_average(self):
+        """The property that must survive any future retuning: the envelope
+        reserves for a HEAVY night, never a typical one."""
+        from custom_components.solar_energy_management.coordinator.measured_capacity import (
+            NEED_PERCENTILE,
+        )
+        assert NEED_PERCENTILE > 0.5
+
+    def test_it_reserves_above_the_median_of_real_drains(self):
+        drains = [3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 20.0]
+        records = [{"date": f"2026-08-{i:02d}", "drain_kwh": d,
+                    "soc_start": 90.0, "soc_morning": 60.0, "trainable": True}
+                   for i, d in enumerate(drains, start=1)]
+        from custom_components.solar_energy_management.coordinator.measured_capacity import (
+            expected_overnight_need,
+        )
+        need = expected_overnight_need(records)
+        median = sorted(drains)[len(drains) // 2]
+        assert need > median, (
+            "the envelope reserves the typical night, which leaves the pack "
+            "short on half of them")
+
+    def test_it_does_not_simply_take_the_worst_night(self):
+        """p100 reserved everything and spent nothing — five spending nights
+        out of 211. An envelope that never releases energy is not safe, it is
+        absent."""
+        drains = [3.0] * 9 + [30.0]
+        records = [{"date": f"2026-08-{i:02d}", "drain_kwh": d,
+                    "soc_start": 90.0, "soc_morning": 60.0, "trainable": True}
+                   for i, d in enumerate(drains, start=1)]
+        from custom_components.solar_energy_management.coordinator.measured_capacity import (
+            expected_overnight_need,
+        )
+        assert expected_overnight_need(records) < 30.0

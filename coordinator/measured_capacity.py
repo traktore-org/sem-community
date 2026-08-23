@@ -164,7 +164,22 @@ MIN_NEED_SAMPLES: int = 5
 #: the typical night leaves the pack short on half of them, and being short is
 #: not symmetric with being generous: one costs a little export revenue, the
 #: other strands the house at its floor before dawn.
-NEED_PERCENTILE: float = 0.8
+#:
+#: The DIRECTION was judgement; the VALUE is measured. Backtesting 211 real
+#: nights (scripts/backtest_budget.py) priced every candidate:
+#:
+#:     pctile  spending nights  total spent  breaches  worst breach
+#:     p70     103              74.0 kWh     3 (3%)    -0.48 kWh
+#:     p80      97              63.6 kWh     3 (3%)    -0.40 kWh
+#:     p85      90              53.5 kWh     2 (2%)    -0.12 kWh
+#:     p90      68              30.0 kWh     1 (1%)    -0.05 kWh
+#:     p95       5               0.3 kWh     0         -
+#:
+#: p85 is the knee: the worst floor violation drops 70% while 84% of the energy
+#: survives. p90 costs half the value for a further 70 Wh; p95 is a cliff where
+#: the feature simply stops working. One install's data, so this is a default
+#: and not a law — the sweep ships so any install can price its own.
+NEED_PERCENTILE: float = 0.85
 
 
 def expected_overnight_need(
