@@ -135,3 +135,36 @@ class TestItSaysWhy:
         m = measured_capacity([_night() for _ in range(MIN_SAMPLES)])
         drift = m.drift_vs(nameplate_kwh=30.0)
         assert drift == pytest.approx((25.0 - 30.0) / 30.0, abs=0.02)
+
+
+@pytest.mark.unit
+class TestTheOvernightNeedIsAnEnvelopeNotAnAverage:
+    """Guido's framing on #778: the learner-safe ENVELOPE. Reserving the
+    typical night leaves the pack short on half of them — and short is not
+    symmetric with generous. One costs a little export revenue; the other
+    strands the house at its floor before dawn."""
+
+    def _nights(self, drains):
+        return [{"soc_start": 90.0, "soc_morning": 60.0, "drain_kwh": d,
+                 "trainable": True} for d in drains]
+
+    def test_it_reserves_above_the_median(self):
+        from custom_components.solar_energy_management.coordinator.measured_capacity import (
+            expected_overnight_need,
+        )
+        need = expected_overnight_need(self._nights([4, 5, 6, 7, 8, 9, 20]))
+        assert need is not None
+        assert need > 7, "an average would under-reserve on the bad nights"
+
+    def test_thin_evidence_is_none_not_a_guess(self):
+        from custom_components.solar_energy_management.coordinator.measured_capacity import (
+            MIN_NEED_SAMPLES, expected_overnight_need,
+        )
+        assert expected_overnight_need(self._nights([5] * (MIN_NEED_SAMPLES - 1))) is None
+
+    def test_untrainable_nights_are_ignored(self):
+        from custom_components.solar_energy_management.coordinator.measured_capacity import (
+            expected_overnight_need,
+        )
+        bad = [{"drain_kwh": 5.0, "trainable": False} for _ in range(9)]
+        assert expected_overnight_need(bad) is None

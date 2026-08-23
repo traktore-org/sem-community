@@ -1255,6 +1255,12 @@
       },
       "forecast_trust_d2": {
         "name": "Prognosetillid (i overmorgen)"
+      },
+      "battery_spendable_kwh": {
+        "name": "Tilgængeligt i nat"
+      },
+      "battery_dynamic_floor_pct": {
+        "name": "Dynamisk grænse"
       }
     },
     "binary_sensor": {

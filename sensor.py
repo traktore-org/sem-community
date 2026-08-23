@@ -1249,6 +1249,25 @@ SENSOR_TYPES = [
     # (#778 phase 1) Planning evidence — measured, driving nothing. Diagnostic
     # and slow-moving by nature (capacity shifts over weeks, trust over days),
     # so they add no recorder churn (#829).
+    # (#778) The budget. Two entities, not seven — the supporting numbers ride
+    # as attributes of the headline one (#830: every control and every entity
+    # has to earn its place). Both are daily-moving, so no recorder churn.
+    SensorEntityDescription(
+        key="battery_spendable_kwh",
+        native_unit_of_measurement="kWh",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:battery-arrow-up-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=1,
+    ),
+    SensorEntityDescription(
+        key="battery_dynamic_floor_pct",
+        native_unit_of_measurement="%",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:battery-lock-open",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=0,
+    ),
     SensorEntityDescription(
         key="battery_measured_capacity_kwh",
         native_unit_of_measurement="kWh",
@@ -2877,6 +2896,21 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "provider": d.get("tariff_provider"),
                 "is_dynamic": d.get("tariff_is_dynamic"),
                 "current_import_rate": d.get("tariff_current_import_rate"),
+            })
+        elif self.entity_description.key == "battery_spendable_kwh":
+            # (#778) Everything a user needs to argue with the number, on the
+            # number itself. A budget nobody can check is one nobody trusts.
+            attrs.update({
+                "why": d.get("battery_spendable_reason"),
+                "dynamic_floor_pct": d.get("battery_dynamic_floor_pct"),
+                "overnight_need_kwh": d.get("battery_overnight_need_kwh"),
+                "expected_refill_kwh": d.get("battery_expected_refill_kwh"),
+                "refill_why": d.get("battery_refill_reason"),
+                # Surplus tomorrow physically cannot hold — spending this
+                # tonight costs nothing at all.
+                "clipped_kwh": d.get("battery_refill_clipped_kwh"),
+                "measured_capacity_kwh": d.get("battery_measured_capacity_kwh"),
+                "forecast_trust_d1": d.get("forecast_trust_d1"),
             })
         elif self.entity_description.key == "forecast_dampening_factor":
             # #416: mirror the #359 ``classifier_path`` pattern — expose

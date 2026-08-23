@@ -93,6 +93,14 @@ from ..analytics.energy_assistant import EnergyAssistant
 
 _LOGGER = logging.getLogger(__name__)
 
+
+def _f_or_none(value):
+    """(#778) A float, or None — so "unconfigured" never reads as zero."""
+    try:
+        return None if value is None else float(value)
+    except (TypeError, ValueError):
+        return None
+
 # (#638 finding #3) How long the energy plan shadow waits for every battery
 # unit to report before planning on the ones that do. Long enough that a
 # boot warm-up (seconds) always wins the wait, short enough that a failed
@@ -4875,7 +4883,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # once a day, which fixes the convention to "what we believed at
             # the start of the day" for every horizon alike.
             try:
-                self._record_forecast_horizons(forecast_data, energy, now_time)
+                self._record_forecast_horizons(forecast_data, energy, now_time, power)
             except Exception as _fe:  # noqa: BLE001
                 _LOGGER.debug("forecast ledger update skipped: %s", _fe)
         except (ValueError, TypeError, AttributeError) as e:
@@ -10218,7 +10226,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     # ``energy_since_full``), so this only bounds the loop and the log noise.
     MAX_DECAY_CATCHUP_DAYS = 7
 
-    def _record_forecast_horizons(self, forecast_data, energy, now_time) -> None:
+    def _record_forecast_horizons(
+        self, forecast_data, energy, now_time, power=None,
+    ) -> None:
         """(#778) Keep the per-horizon forecast ledger up to date.
 
         Records what we believe today about today, tomorrow and the day after,
@@ -10283,6 +10293,54 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         nameplate = self.config.get("battery_capacity_kwh")
         drift = None if cap is None else cap.drift_vs(nameplate)
+
+        # (#778 phases 3-4) Assemble the budget from measured inputs. Every
+        # term prefers evidence over configuration and falls back honestly:
+        #   capacity  — measured kWh/% if enough qualifying nights, else the
+        #               configured nameplate;
+        #   need      — the high-percentile observed drain (the learner-safe
+        #               envelope), else None, which spends nothing;
+        #   refill    — tomorrow's forecast AFTER the house and committed
+        #               demands, trust-scaled per horizon, never the raw scalar.
+        from .measured_capacity import expected_overnight_need
+        from .refill_estimate import estimate_refill
+        from .spendable_budget import spendable_budget
+
+        sealed = []
+        try:
+            sealed = tracker.sealed if tracker is not None else []
+        except Exception:  # noqa: BLE001
+            sealed = []
+
+        usable_kwh = cap.usable_kwh if cap is not None else _f_or_none(nameplate)
+        need_kwh = expected_overnight_need(sealed)
+        soc_now = getattr(power, "battery_soc", None)
+
+        headroom = None
+        if usable_kwh and soc_now is not None:
+            try:
+                headroom = max(0.0, usable_kwh * (100.0 - float(soc_now)) / 100.0)
+            except (TypeError, ValueError):
+                headroom = None
+
+        refill = estimate_refill(
+            getattr(forecast_data, "forecast_tomorrow_kwh", None),
+            house_tomorrow_kwh=need_kwh,
+            committed_demand_kwh=self.config.get("daily_ev_target") or 0.0,
+            pack_headroom_kwh=headroom,
+            trust=led.trust(1),
+        )
+
+        budget = spendable_budget(
+            soc_pct=soc_now,
+            usable_capacity_kwh=usable_kwh,
+            overnight_need_kwh=need_kwh,
+            expected_refill_kwh=refill.refill_kwh,
+            static_floor_pct=self.config.get("battery_reserve_soc", 20),
+            pessimism=self.config.get("forecast_pessimism", 1.2),
+            discharge_efficiency=self.config.get("battery_discharge_efficiency", 0.95),
+        )
+
         self._planning_evidence = {
             "battery_measured_capacity_kwh": None if cap is None else cap.usable_kwh,
             "battery_capacity_kwh_per_pct": None if cap is None else cap.kwh_per_pct,
@@ -10295,6 +10353,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # confident-looking 1.0 (see forecast_ledger).
             "forecast_trust_d1": led.trust(1),
             "forecast_trust_d2": led.trust(2),
+            # (#778) The budget itself — still driving nothing. Published so a
+            # season of mornings can judge it before it is allowed to spend.
+            "battery_overnight_need_kwh": need_kwh,
+            "battery_expected_refill_kwh": refill.refill_kwh,
+            "battery_refill_clipped_kwh": refill.clipped_kwh,
+            "battery_refill_reason": refill.reason,
+            "battery_spendable_kwh": budget.spendable_kwh,
+            "battery_dynamic_floor_pct": budget.floor_pct,
+            "battery_spendable_reason": budget.reason,
         }
 
     def _run_due_daily_decay(self, now_time, today_date, power) -> None:

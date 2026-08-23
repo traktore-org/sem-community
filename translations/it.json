@@ -1255,6 +1255,12 @@
       },
       "forecast_trust_d2": {
         "name": "Affidabilità previsione (dopodomani)"
+      },
+      "battery_spendable_kwh": {
+        "name": "Disponibile stanotte"
+      },
+      "battery_dynamic_floor_pct": {
+        "name": "Soglia dinamica"
       }
     },
     "binary_sensor": {

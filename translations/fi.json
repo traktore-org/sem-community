@@ -1255,6 +1255,12 @@
       },
       "forecast_trust_d2": {
         "name": "Ennusteen luotettavuus (ylihuomenna)"
+      },
+      "battery_spendable_kwh": {
+        "name": "Käytettävissä yöllä"
+      },
+      "battery_dynamic_floor_pct": {
+        "name": "Dynaaminen raja"
       }
     },
     "binary_sensor": {

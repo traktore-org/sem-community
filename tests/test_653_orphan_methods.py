@@ -61,14 +61,13 @@ _PACKAGES = ("devices", "coordinator", "features")
 #                       Triaging these is follow-up work, not a blocker for
 #                       the ratchet: locking the set stops the bleeding now.
 _BASELINE = {
-    # (#778 phase 1) Deliberately not yet wired, per the plan of record on the
-    # issue. `spendable_budget` must NOT be called until phase 3 gives it the
-    # day ledger's "refill after tomorrow's packed claims" — wiring it to a raw
-    # forecast would systematically over-promise, so an early call site would be
-    # worse than none. `forecast_for` / `actual_for` are the ledger's read
-    # accessors, used by phase 3 and by its tests. Remove these three from the
-    # baseline when phase 3 lands.
-    "spendable_budget", "forecast_for", "actual_for",
+    # (#778) `spendable_budget` LEFT this list when phase 3 wired it to the
+    # refill estimate — the guard's staleness check is what forced the removal,
+    # which is the behaviour that keeps a baseline from rotting into a rubber
+    # stamp. `forecast_for` / `actual_for` remain the ledger's read accessors,
+    # used by its tests and by the phase-4 planner feed; remove them when that
+    # lands.
+    "forecast_for", "actual_for",
     # generic-accessor (coordinator/storage.py)
     "clear_daily_accumulators", "clear_monthly_accumulators", "get_accumulator",
     "get_baseline", "get_daily_accumulator", "get_flow_accumulator",

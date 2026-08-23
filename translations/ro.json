@@ -1255,6 +1255,12 @@
       },
       "forecast_trust_d2": {
         "name": "Încrederea în prognoză (poimâine)"
+      },
+      "battery_spendable_kwh": {
+        "name": "Disponibil la noapte"
+      },
+      "battery_dynamic_floor_pct": {
+        "name": "Prag dinamic"
       }
     },
     "binary_sensor": {

@@ -1255,6 +1255,12 @@
       },
       "forecast_trust_d2": {
         "name": "预测可信度（后天）"
+      },
+      "battery_spendable_kwh": {
+        "name": "今夜可用电量"
+      },
+      "battery_dynamic_floor_pct": {
+        "name": "动态下限"
       }
     },
     "binary_sensor": {

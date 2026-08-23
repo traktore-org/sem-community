@@ -1255,6 +1255,12 @@
       },
       "forecast_trust_d2": {
         "name": "Confianza del pronóstico (pasado mañana)"
+      },
+      "battery_spendable_kwh": {
+        "name": "Disponible esta noche"
+      },
+      "battery_dynamic_floor_pct": {
+        "name": "Límite dinámico"
       }
     },
     "binary_sensor": {

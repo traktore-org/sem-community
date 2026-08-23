@@ -1255,6 +1255,12 @@
       },
       "forecast_trust_d2": {
         "name": "Prognose-Vertrauen (übermorgen)"
+      },
+      "battery_spendable_kwh": {
+        "name": "Heute Nacht verfügbar"
+      },
+      "battery_dynamic_floor_pct": {
+        "name": "Dynamische Untergrenze"
       }
     },
     "binary_sensor": {

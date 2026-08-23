@@ -1255,6 +1255,12 @@
       },
       "forecast_trust_d2": {
         "name": "Confiance prévision (après-demain)"
+      },
+      "battery_spendable_kwh": {
+        "name": "Disponible ce soir"
+      },
+      "battery_dynamic_floor_pct": {
+        "name": "Seuil dynamique"
       }
     },
     "binary_sensor": {

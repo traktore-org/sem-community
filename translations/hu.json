@@ -1255,6 +1255,12 @@
       },
       "forecast_trust_d2": {
         "name": "Előrejelzés megbízhatósága (holnapután)"
+      },
+      "battery_spendable_kwh": {
+        "name": "Ma éjjel elkölthető"
+      },
+      "battery_dynamic_floor_pct": {
+        "name": "Dinamikus küszöb"
       }
     },
     "binary_sensor": {

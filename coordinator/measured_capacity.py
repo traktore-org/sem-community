@@ -118,3 +118,40 @@ def measured_capacity(records: Optional[Iterable[dict]]) -> Optional[MeasuredCap
         reason=(f"median of {len(ratios)} night(s) with at least "
                 f"{MIN_SOC_SPAN_PCT:.0f}% SOC span"),
     )
+
+
+#: Nights needed before an overnight-need figure is offered.
+MIN_NEED_SAMPLES: int = 5
+
+#: Which percentile of observed drains to reserve for. Guido's framing on #778
+#: is the "learner-safe envelope" — a HIGH percentile, not an average. Reserving
+#: the typical night leaves the pack short on half of them, and being short is
+#: not symmetric with being generous: one costs a little export revenue, the
+#: other strands the house at its floor before dawn.
+NEED_PERCENTILE: float = 0.8
+
+
+def expected_overnight_need(
+    records: Optional[Iterable[dict]],
+) -> Optional[float]:
+    """kWh the house has actually drawn from the pack overnight, high-percentile.
+
+    Uses the same quality gate as the capacity reader — ``trainable`` nights
+    only — and returns ``None`` while the evidence is thin, so a caller can
+    tell measured from assumed and stay conservative until it knows.
+    """
+    if not records:
+        return None
+    drains = []
+    for rec in records:
+        if not isinstance(rec, dict) or not rec.get("trainable"):
+            continue
+        d = _f(rec.get("drain_kwh"))
+        if d is None or d < 0:
+            continue
+        drains.append(d)
+    if len(drains) < MIN_NEED_SAMPLES:
+        return None
+    drains.sort()
+    idx = min(len(drains) - 1, int(round(NEED_PERCENTILE * (len(drains) - 1))))
+    return round(drains[idx], 2)

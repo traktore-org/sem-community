@@ -1255,6 +1255,12 @@
       },
       "forecast_trust_d2": {
         "name": "Důvěra v předpověď (pozítří)"
+      },
+      "battery_spendable_kwh": {
+        "name": "Dnes v noci k dispozici"
+      },
+      "battery_dynamic_floor_pct": {
+        "name": "Dynamická mez"
       }
     },
     "binary_sensor": {
