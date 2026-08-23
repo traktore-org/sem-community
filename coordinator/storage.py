@@ -548,6 +548,16 @@ class SEMStorage:
     def set_battery_night_state(self, state: Dict[str, Any]) -> None:
         self._energy_data["battery_nights"] = dict(state)
 
+    # (#778) The forecast ledger — "on day D we said D+h would make X; D+h made
+    # Y", per horizon. Durable for the same reason as the night records: it is a
+    # training set that takes a season to build, and losing it at boot would be
+    # a slow silent regression back to trusting every horizon equally.
+    def get_forecast_ledger_state(self) -> Dict[str, Any]:
+        return self._energy_data.get("forecast_ledger", {})
+
+    def set_forecast_ledger_state(self, state: Dict[str, Any]) -> None:
+        self._energy_data["forecast_ledger"] = dict(state)
+
     def get_ev_wpa_state(self) -> Dict[str, float]:
         """Get the persisted per-charger measured-W/A EMA."""
         return self._energy_data.get("ev_wpa_ema", {})

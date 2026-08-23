@@ -120,9 +120,14 @@ def spendable_budget(
 
     # Rule 2 — what the night itself demands, in STORED terms.
     night_reserve = max(0.0, need) / eff * pess
-    # Rule 1 — and never below the promise.
+    # Rule 1 — the emergency floor, which is where the pack must be AT DAWN.
     static_reserve = max(0.0, min(floor_pct, 100.0)) / 100.0 * cap
-    reserve = max(night_reserve, static_reserve)
+    # ADDITIVE, not max(): the floor is the level the night must END on, so the
+    # night's own draw sits on top of it. #778's worked example is exactly this
+    # — 28.5 stored − 7 overnight − 2 reserve = 19.5 spendable. Taking the
+    # larger of the two instead would let the pack reach the emergency floor
+    # before sunrise, which is the one thing the floor exists to prevent.
+    reserve = night_reserve + static_reserve
 
     headroom = stored - reserve
     if headroom <= 0:
@@ -151,6 +156,11 @@ def spendable_budget(
         reason = (f"{spendable:.1f} kWh above what the night requires — "
                   f"holding {reserve:.1f} kWh for {binding}")
 
+    # The floor a user actually experiences is where the pack lands, which the
+    # refill cap can lift above the reserve: #778's "minimum SOC 30 % tonight
+    # because tomorrow is sunny, 70 % because it is cloudy" is this number, not
+    # the reserve alone.
+    effective_floor_kwh = stored - spendable
     return SpendableBudget(
-        round(spendable, 2), round(reserve / cap * 100.0, 1), reason,
+        round(spendable, 2), round(effective_floor_kwh / cap * 100.0, 1), reason,
     )

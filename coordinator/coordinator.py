@@ -4859,6 +4859,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 )
             tracker_data = self._forecast_tracker.get_data()
             # (#544) forecast_corrected_tomorrow removed — dead sensor.
+
+            # (#778) The horizon ledger. The tracker above scores ONE horizon —
+            # what we said about today. This scores the others: what we said
+            # two days ago about today, and whether that deserved believing.
+            # Settling runs every cycle (idempotent, so the last value before
+            # midnight becomes the day's final); the forecasts are recorded
+            # once a day, which fixes the convention to "what we believed at
+            # the start of the day" for every horizon alike.
+            try:
+                self._record_forecast_horizons(forecast_data, energy, now_time)
+            except Exception as _fe:  # noqa: BLE001
+                _LOGGER.debug("forecast ledger update skipped: %s", _fe)
         except (ValueError, TypeError, AttributeError) as e:
             _LOGGER.debug("Forecast tracker update failed: %s", e)
 
@@ -10198,6 +10210,56 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     # is already clamped at battery capacity (``apply_daily_decay`` caps
     # ``energy_since_full``), so this only bounds the loop and the log noise.
     MAX_DECAY_CATCHUP_DAYS = 7
+
+    def _record_forecast_horizons(self, forecast_data, energy, now_time) -> None:
+        """(#778) Keep the per-horizon forecast ledger up to date.
+
+        Records what we believe today about today, tomorrow and the day after,
+        and settles today with what the sun has actually delivered so far. The
+        settle is deliberately every-cycle and idempotent: the last value
+        written before midnight is the day's final figure, which needs no
+        rollover hook and cannot be lost to a restart at 23:59.
+        """
+        from datetime import timedelta
+
+        from .forecast_ledger import ForecastLedger
+
+        led = getattr(self, "_forecast_ledger", None)
+        if led is None:
+            raw = {}
+            if self._storage is not None:
+                try:
+                    raw = self._storage.get_forecast_ledger_state() or {}
+                except Exception:  # noqa: BLE001
+                    raw = {}
+            led = ForecastLedger.from_dict(raw)
+            self._forecast_ledger = led
+
+        today = now_time.date()
+        today_s = str(today)
+
+        # Settle today with what has actually arrived (idempotent).
+        actual = getattr(energy, "daily_solar", None)
+        if actual is not None:
+            led.settle(today_s, actual)
+
+        # Record the horizons once a day.
+        if getattr(self, "_forecast_ledger_day", None) != today_s:
+            self._forecast_ledger_day = today_s
+            for horizon, value in (
+                (0, getattr(forecast_data, "forecast_today_kwh", None)),
+                (1, getattr(forecast_data, "forecast_tomorrow_kwh", None)),
+                (2, getattr(forecast_data, "forecast_d2_kwh", None)),
+            ):
+                # 0.0 means "this source does not publish that far" — recording
+                # it as a forecast of nothing would teach the ledger a lie.
+                if value:
+                    led.record(str(today + timedelta(days=horizon)), horizon, value)
+            if self._storage is not None:
+                try:
+                    self._storage.set_forecast_ledger_state(led.to_dict())
+                except Exception:  # noqa: BLE001
+                    pass
 
     def _run_due_daily_decay(self, now_time, today_date, power) -> None:
         """Run the virtual-SOC daily decay if it hasn't run yet today (#645).
