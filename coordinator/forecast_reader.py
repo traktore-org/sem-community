@@ -31,6 +31,13 @@ _LOGGER = logging.getLogger(__name__)
 SOLCAST_ENTITIES = {
     "forecast_today": "sensor.solcast_pv_forecast_forecast_today",
     "forecast_tomorrow": "sensor.solcast_pv_forecast_forecast_tomorrow",
+    # (#778) Solcast numbers its days from today, so "day_3" is the day after
+    # tomorrow. Entity-id route only: the upstream unique_ids for these were
+    # not verified against a live Solcast install, and inventing one would be
+    # worse than falling back — see the #562 note above on why the registry
+    # path is normally preferred.
+    "forecast_d2": "sensor.solcast_pv_forecast_forecast_day_3",
+    "forecast_d3": "sensor.solcast_pv_forecast_forecast_day_4",
     "forecast_remaining": "sensor.solcast_pv_forecast_forecast_remaining_today",
     "power_now": "sensor.solcast_pv_forecast_power_now",
     "power_next_hour": "sensor.solcast_pv_forecast_power_next_hour",
@@ -75,6 +82,12 @@ FORECAST_SOLAR_UNIQUE_SUFFIXES = {
     "forecast_tomorrow": "_energy_production_tomorrow",
     "forecast_remaining": "_energy_production_today_remaining",
     "power_now": "_power_production_now",
+    # (#778) Beyond tomorrow. A one-day view cannot answer "may I sell this
+    # tonight?" — a cloudy tomorrow followed by a brilliant day is a SELL, and
+    # the reverse is a HOLD. Verified live on the rig: this integration emits
+    # sensor.<string>_energy_production_d2 … _d7.
+    "forecast_d2": "_energy_production_d2",
+    "forecast_d3": "_energy_production_d3",
 }
 # (#687) Open-Meteo Solar Forecast (rany2/ha-open-meteo-solar-forecast)
 # deliberately mirrors core Forecast.Solar: unique_id = ``{entry_id}_{key}``
@@ -107,6 +120,12 @@ class ForecastData:
     # Energy forecasts (kWh)
     forecast_today_kwh: float = 0.0
     forecast_tomorrow_kwh: float = 0.0
+    # (#778) Beyond tomorrow, for the spendable-battery budget. 0.0 when the
+    # installed integration does not publish that far — treated as UNKNOWN by
+    # the budget, never as 'no sun', because a missing forecast is not a
+    # forecast of nothing.
+    forecast_d2_kwh: float = 0.0
+    forecast_d3_kwh: float = 0.0
     forecast_remaining_today_kwh: float = 0.0
 
     # Power forecasts (W)
@@ -127,6 +146,8 @@ class ForecastData:
         return {
             "forecast_today_kwh": round(self.forecast_today_kwh, 2),
             "forecast_tomorrow_kwh": round(self.forecast_tomorrow_kwh, 2),
+            "forecast_d2_kwh": round(self.forecast_d2_kwh, 2),
+            "forecast_d3_kwh": round(self.forecast_d3_kwh, 2),
             "forecast_remaining_today_kwh": round(self.forecast_remaining_today_kwh, 2),
             # (#575) forecast_power_now_w restored — consumed by the "Forecast vs
             # Actual" chart. forecast_power_next_hour_w stays removed (orphan).
@@ -503,6 +524,14 @@ class ForecastReader:
         # Read forecast tomorrow
         data.forecast_tomorrow_kwh = self._read_float(
             self._entities.get("forecast_tomorrow"), 0.0
+        )
+
+        # (#778) …and the two days after it, when the source offers them.
+        data.forecast_d2_kwh = self._read_float(
+            self._entities.get("forecast_d2"), 0.0
+        )
+        data.forecast_d3_kwh = self._read_float(
+            self._entities.get("forecast_d3"), 0.0
         )
 
         # Read remaining today
