@@ -170,3 +170,47 @@ class TestTheNightRecordsAreActuallyRead:
         assert "@property" not in preceding, (
             "sealed became a property — update the call site in coordinator.py"
         )
+
+
+@pytest.mark.unit
+class TestTheAttributesActuallyRender:
+    """Third live-only failure in this wiring, and the worst of the three: the
+    attributes branch used `d` without binding it, so extra_state_attributes
+    raised UnboundLocalError on EVERY cycle. HA surfaced that as "Unexpected
+    error updating listener" and aborted the whole coordinator listener update
+    — so it did not merely blank one attribute, it took down the state write
+    for the batch.
+
+    A unit test that calls the property with a real coordinator would have
+    caught it; a test that only checks the key exists would not."""
+
+    def test_every_branch_binds_what_it_reads(self):
+        import ast
+        src = (REPO / "sensor.py").read_text()
+        tree = ast.parse(src)
+        fn = next((n for n in ast.walk(tree)
+                   if isinstance(n, ast.FunctionDef)
+                   and n.name == "extra_state_attributes"), None)
+        assert fn is not None, "premise: the property exists"
+
+        # Walk each `elif` branch body and require that any use of `d` is
+        # preceded by an assignment to `d` inside that same branch.
+        for node in ast.walk(fn):
+            if not isinstance(node, ast.If):
+                continue
+            body = node.body
+            assigns_d = any(
+                isinstance(st, ast.Assign)
+                and any(isinstance(t, ast.Name) and t.id == "d" for t in st.targets)
+                for st in body
+            )
+            uses_d = any(
+                isinstance(nm, ast.Name) and nm.id == "d" and isinstance(nm.ctx, ast.Load)
+                for st in body for nm in ast.walk(st)
+            )
+            if uses_d:
+                assert assigns_d, (
+                    "a branch of extra_state_attributes reads `d` without "
+                    "binding it — this raises UnboundLocalError every cycle and "
+                    "aborts HA's whole listener update"
+                )

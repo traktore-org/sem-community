@@ -2900,6 +2900,13 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         elif self.entity_description.key == "battery_spendable_kwh":
             # (#778) Everything a user needs to argue with the number, on the
             # number itself. A budget nobody can check is one nobody trusts.
+            #
+            # `d` is bound per-branch in this method, not once at the top — the
+            # first version of this block assumed otherwise and raised
+            # UnboundLocalError on EVERY cycle, which HA reported as
+            # "Unexpected error updating listener" and which blanked the whole
+            # coordinator listener update rather than just this attribute.
+            d = self.coordinator.data
             attrs.update({
                 "why": d.get("battery_spendable_reason"),
                 "dynamic_floor_pct": d.get("battery_dynamic_floor_pct"),
