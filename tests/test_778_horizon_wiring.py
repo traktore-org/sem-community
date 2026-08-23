@@ -54,9 +54,15 @@ class TestTheLedgerIsWiredNotJustWritten:
     def test_a_missing_far_forecast_is_not_recorded_as_zero(self):
         """Sources that stop at tomorrow publish 0.0 for d2. Recording that as
         a forecast would teach the ledger that the sun does not rise."""
+        import ast
         src = (REPO / "coordinator" / "coordinator.py").read_text()
-        i = src.index("def _record_forecast_horizons")
-        body = src[i:i + 2200]
+        fn = next(n for n in ast.walk(ast.parse(src))
+                  if isinstance(n, ast.FunctionDef)
+                  and n.name == "_record_forecast_horizons")
+        # AST-bounded, not a character count: the first version windowed 2200
+        # chars and started failing the moment the method grew — the same
+        # mistake this file already made once.
+        body = ast.get_source_segment(src, fn) or ""
         assert "if value:" in body, (
             "a 0.0 / absent far-horizon forecast must be skipped, not recorded"
         )
@@ -214,3 +220,29 @@ class TestTheAttributesActuallyRender:
                     "binding it — this raises UnboundLocalError every cycle and "
                     "aborts HA's whole listener update"
                 )
+
+
+@pytest.mark.unit
+class TestOncePerDayMeansOnceSuccessfully:
+    """Found on .175: the ledger held a settled actual for the day with
+    `horizons=[]`. The recorder marked the day done BEFORE checking whether
+    anything had been recorded, so a restart on a cycle where the forecast was
+    not yet populated burned that day permanently — and the failure is
+    invisible, because an empty horizon looks exactly like "no source publishes
+    that far"."""
+
+    def test_the_day_marker_is_set_only_after_a_successful_record(self):
+        import ast
+        src = (REPO / "coordinator" / "coordinator.py").read_text()
+        fn = next(n for n in ast.walk(ast.parse(src))
+                  if isinstance(n, ast.FunctionDef)
+                  and n.name == "_record_forecast_horizons")
+        body = ast.get_source_segment(src, fn) or ""
+        assert "if recorded:" in body, (
+            "the day marker must be guarded by an actual record, or a restart "
+            "at the wrong moment silently loses a day of evidence"
+        )
+        # …and the marker assignment must come after the loop, not before it.
+        assert body.index("recorded += 1") < body.index("self._forecast_ledger_day = today_s"), (
+            "the marker is set before the loop can record anything"
+        )

@@ -10298,9 +10298,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         if actual is not None:
             led.settle(today_s, actual)
 
-        # Record the horizons once a day.
+        # Record the horizons once a day — once SUCCESSFULLY, which is not the
+        # same thing. The first version marked the day done before knowing
+        # whether anything had been recorded, so a restart on a cycle where the
+        # forecast was not yet populated burned that day permanently: the rig
+        # showed `horizons=[]` against a settled actual, for a day whose
+        # forecast was sitting right there.
         if getattr(self, "_forecast_ledger_day", None) != today_s:
-            self._forecast_ledger_day = today_s
+            recorded = 0
             for horizon, value in (
                 (0, getattr(forecast_data, "forecast_today_kwh", None)),
                 (1, getattr(forecast_data, "forecast_tomorrow_kwh", None)),
@@ -10310,11 +10315,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # it as a forecast of nothing would teach the ledger a lie.
                 if value:
                     led.record(str(today + timedelta(days=horizon)), horizon, value)
-            if self._storage is not None:
+                    recorded += 1
+            if recorded:
+                self._forecast_ledger_day = today_s
+            if recorded and self._storage is not None:
                 try:
                     self._storage.set_forecast_ledger_state(led.to_dict())
-                except Exception:  # noqa: BLE001
-                    pass
+                except (AttributeError, TypeError, ValueError) as _se:
+                    _LOGGER.warning("forecast ledger not persisted: %s", _se)
 
         # (#778 phase 1) Publish the evidence, act on none of it. These are the
         # quantities honestly computable today; the spendable budget itself
