@@ -25,6 +25,21 @@ if TYPE_CHECKING:  # pragma: no cover — type-only
     pass
 
 
+
+def _battery_may_assist_ev(config) -> bool:
+    """(#778) Resolve the per-install EV-assist permission.
+
+    UNSET resolves to True — the battery already assists the car today when
+    the #537 surplus gate passes, and defaulting this off would silently
+    remove a working feature. The global battery mode still applies: `off`
+    means SEM is hands-off that battery entirely.
+    """
+    from ..consts.battery_permissions import effective_permissions, may_assist_ev
+
+    mode = (config.get("battery_mode") or "auto")
+    stored = config.get("battery_permissions") or {}
+    return may_assist_ev(mode, effective_permissions(mode, stored))
+
 def build_charger_view(
     fleet_state: FleetCycleState,
     *,
@@ -170,6 +185,7 @@ def build_charger_view(
         battery_assist_min_surplus_w=float(config.get(
             "battery_assist_min_surplus", 1200,
         )),
+        battery_may_assist_ev=_battery_may_assist_ev(config),
         solar_committed_w=float(solar_committed_w),
         forecast_remaining_kwh=fleet_state.forecast_remaining_kwh,
         # The user's "Minimum Solar Power" slider (number entity key

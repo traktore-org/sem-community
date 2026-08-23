@@ -708,6 +708,10 @@ class FleetContext:
     bigger EV budget → higher commanded amps → more discharge)."""
 
     battery_assist_min_surplus_w: float = 1200.0
+    # (#778) May the battery be spent on the car at all? Defaults True so an
+    # install that has expressed no opinion behaves exactly as before; the
+    # #537 surplus threshold above remains the separate 'when' question.
+    battery_may_assist_ev: bool = True
     """Solar-surplus gate for battery assist (``battery_assist_min_surplus``).
     Battery assist only SUPPLEMENTS real solar — below this much pure
     solar surplus the battery is off-limits to the EV, so a sunless

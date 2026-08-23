@@ -199,6 +199,14 @@ def battery_assist_budget_w(view: ChargerView) -> float:
 
     f = view.fleet
     surplus = self_consumption_surplus_w(view)
+
+    # (#778) The permission gate. Previously the ONLY way to say "the house may
+    # use my battery, the car may not" was to set the surplus threshold below
+    # absurdly high — a tuning knob doing a permission's job. Unset resolves to
+    # ON, so nothing changes for anyone who has not asked.
+    if not getattr(f, "battery_may_assist_ev", True):
+        return surplus
+
     zone = soc_zone(f.battery_soc, f.auto_start_soc, f.buffer_soc, f.priority_soc)
     if zone < 3:
         return surplus
