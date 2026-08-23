@@ -33,6 +33,7 @@ import pytest
 from custom_components.solar_energy_management.coordinator.spendable_budget import (
     SpendableBudget,
     spendable_budget,
+    DEFAULT_STATIC_FLOOR_PCT,
 )
 
 
@@ -151,3 +152,79 @@ class TestItSaysWhy:
         """A big overnight need lifts the dynamic floor above the static one."""
         r = _b(overnight_need_kwh=20.0, static_floor_pct=10.0)
         assert r.floor_pct > 10.0
+
+
+class TestAnUnknownFloorIsNotNoFloor:
+    """An unconfigured reserve must not resolve to "spend to empty".
+
+    Found by backtesting PROD: ``battery_reserve_soc`` is **None** there — the
+    key exists with a null value, so ``config.get("battery_reserve_soc", 20)``
+    returns None rather than the 20 the default was meant to supply, and the
+    budget then read the floor as 0.0. The user's "never below this, ever"
+    backstop, silently absent, on the one install with a real battery.
+
+    The distinction that matters: an explicit 0 is a choice ("spend it all"),
+    while None is an absence ("nobody said"). Collapsing the second into the
+    first is how a safety default stops applying to precisely the installs
+    that never touched it — the unconfigured-sibling class.
+    """
+
+    def test_none_falls_back_to_the_safe_default_not_zero(self):
+        # The refill is deliberately generous so the FLOOR is the binding
+        # term. With a small refill the budget is capped by tomorrow's sun in
+        # every case and the floor never shows — a scenario that would pass
+        # against the bug and prove nothing.
+        b = spendable_budget(
+            soc_pct=90.0, usable_capacity_kwh=15.0, overnight_need_kwh=3.0,
+            expected_refill_kwh=20.0, static_floor_pct=None,
+        )
+        floorless = spendable_budget(
+            soc_pct=90.0, usable_capacity_kwh=15.0, overnight_need_kwh=3.0,
+            expected_refill_kwh=20.0, static_floor_pct=0.0,
+        )
+        assert b.spendable_kwh < floorless.spendable_kwh, (
+            "an unconfigured floor spends as much as an explicitly zero one — "
+            "the reserve default never applied")
+
+    def test_none_matches_the_documented_default(self):
+        assert spendable_budget(
+            soc_pct=90.0, usable_capacity_kwh=15.0, overnight_need_kwh=3.0,
+            expected_refill_kwh=20.0, static_floor_pct=None,
+        ).spendable_kwh == spendable_budget(
+            soc_pct=90.0, usable_capacity_kwh=15.0, overnight_need_kwh=3.0,
+            expected_refill_kwh=20.0, static_floor_pct=DEFAULT_STATIC_FLOOR_PCT,
+        ).spendable_kwh
+
+    def test_an_explicit_zero_is_still_honoured(self):
+        """Someone who deliberately sets 0 means it. The fix must not take
+        that choice away — it only fills in for silence."""
+        b = spendable_budget(
+            soc_pct=90.0, usable_capacity_kwh=15.0, overnight_need_kwh=3.0,
+            expected_refill_kwh=20.0, static_floor_pct=0.0,
+        )
+        assert b.floor_pct is not None
+        assert b.spendable_kwh > 0
+
+    def test_junk_is_treated_as_silence(self):
+        for bad in ("", "x", float("nan")):
+            b = spendable_budget(
+                soc_pct=90.0, usable_capacity_kwh=15.0, overnight_need_kwh=3.0,
+                expected_refill_kwh=20.0, static_floor_pct=bad,
+            )
+            assert b.spendable_kwh == spendable_budget(
+                soc_pct=90.0, usable_capacity_kwh=15.0, overnight_need_kwh=3.0,
+                expected_refill_kwh=20.0, static_floor_pct=DEFAULT_STATIC_FLOOR_PCT,
+            ).spendable_kwh, f"{bad!r} was not treated as 'nobody said'"
+
+
+class TestTheCallSitePassesAFloor:
+    def test_the_coordinator_does_not_rely_on_dict_get_default(self):
+        """``config.get(key, 20)`` returns None when the key is present and
+        null — which is exactly how PROD is configured. The call site must
+        say what it means."""
+        from pathlib import Path
+        src = (Path(__file__).resolve().parent.parent
+               / "coordinator" / "coordinator.py").read_text(encoding="utf-8")
+        assert 'static_floor_pct=self.config.get("battery_reserve_soc", 20)' not in src, (
+            "the coordinator still leans on a dict default that a null value "
+            "silently defeats")

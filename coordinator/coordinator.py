@@ -10431,7 +10431,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             usable_capacity_kwh=usable_kwh,
             overnight_need_kwh=need_kwh,
             expected_refill_kwh=refill.refill_kwh,
-            static_floor_pct=self.config.get("battery_reserve_soc", 20),
+            # A dict default does NOT fire when the key is present holding
+            # null, which is how an install that never set a reserve looks.
+            # Pass the absence through and let spendable_budget name what
+            # silence means, in one place.
+            static_floor_pct=self.config.get("battery_reserve_soc"),
             pessimism=self.config.get("forecast_pessimism", 1.2),
             discharge_efficiency=self.config.get("battery_discharge_efficiency", 0.95),
         )

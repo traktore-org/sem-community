@@ -35,6 +35,20 @@ from dataclasses import dataclass
 from typing import Optional
 
 
+#: The static reserve assumed when an install has never set one.
+#:
+#: Not a taste call — it is the value the config default documents, and it must
+#: apply to installs that never touched the setting. That is exactly where it
+#: was NOT applying: ``config.get("battery_reserve_soc", 20)`` returns None when
+#: the key exists holding null (how PROD is configured), the None reached this
+#: function, and the floor resolved to 0.0 — no backstop at all, on the one
+#: install with a real battery.
+#:
+#: An explicit 0 remains a choice and is honoured. None is an absence, and the
+#: two must not collapse into each other.
+DEFAULT_STATIC_FLOOR_PCT: float = 20.0
+
+
 @dataclass(frozen=True)
 class SpendableBudget:
     """What the battery may give up tonight, and why that much."""
@@ -100,7 +114,8 @@ def spendable_budget(
     refill = _num(expected_refill_kwh)
     floor_pct = _num(static_floor_pct)
     if floor_pct is None:
-        floor_pct = 0.0
+        # Silence means "nobody said", not "spend to empty".
+        floor_pct = DEFAULT_STATIC_FLOOR_PCT
 
     # Rule 4 — a dark input is not permission.
     missing = [n for n, v in (("battery SOC", soc), ("battery capacity", cap),
