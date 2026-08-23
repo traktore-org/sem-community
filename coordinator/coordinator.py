@@ -4897,9 +4897,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # once a day, which fixes the convention to "what we believed at
             # the start of the day" for every horizon alike.
             try:
-                self._record_forecast_horizons(forecast_data, energy, now_time, power)
-            except Exception as _fe:  # noqa: BLE001
-                _LOGGER.debug("forecast ledger update skipped: %s", _fe)
+                self._record_forecast_horizons(forecast_data, energy, dt_util.now(), power)
+            except (AttributeError, TypeError, ValueError, KeyError) as _fe:
+                # Narrow deliberately. A broad `except Exception` here caught a
+                # NameError for two hours on .175 and reported it as a DEBUG
+                # line, so the suite stayed green while six sensors sat
+                # unavailable. A programming error must not be indistinguishable
+                # from a missing sensor reading.
+                _LOGGER.warning(
+                    "forecast ledger update skipped (%s): %s",
+                    type(_fe).__name__, _fe,
+                )
         except (ValueError, TypeError, AttributeError) as e:
             _LOGGER.debug("Forecast tracker update failed: %s", e)
 
