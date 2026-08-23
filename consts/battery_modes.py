@@ -50,7 +50,9 @@ DEFAULT_BATTERY_MODE: str = "auto"
 DEFAULT_BATTERY_RESERVE_SOC: float = 20.0
 
 
-def arbitrage_allowed_for_mode(mode: str, global_enabled: bool) -> bool:
+def arbitrage_allowed_for_mode(
+    mode: str, global_enabled: bool, permissions: dict = None,
+) -> bool:
     """Whether a battery in ``mode`` may act on a DISCHARGING_ARBITRAGE
     verdict this cycle.
 
@@ -58,9 +60,16 @@ def arbitrage_allowed_for_mode(mode: str, global_enabled: bool) -> bool:
     * ``allow_arbitrage``  → always (per-battery opt-in).
     * ``auto`` / unknown   → follow the global arbitrage toggle.
     """
+    # (#778) The permission axis now owns this question. The mapping below
+    # keeps every existing install behaving exactly as it did — the legacy
+    # values migrate to the permissions they always were — while making
+    # "self-consumption posture AND permitted to sell" expressible, which a
+    # single-select enum never could. See consts/battery_permissions.py.
+    from .battery_permissions import effective_permissions, may_export
+
     m = (mode or "auto").lower()
     if m in ("self_consumption", "off"):
         return False
     if m == "allow_arbitrage":
         return True
-    return bool(global_enabled)
+    return may_export(m, effective_permissions(m, permissions), bool(global_enabled))
