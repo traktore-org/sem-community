@@ -10344,10 +10344,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         from .refill_estimate import estimate_refill
         from .spendable_budget import spendable_budget
 
+        # `sealed` is a METHOD on BatteryNightTracker, not a property — reading
+        # it without calling handed measured_capacity a bound method and every
+        # sensor went unavailable. Caught on .175 only because the handler above
+        # was narrowed to WARNING; as a DEBUG line it was invisible.
         sealed = []
         try:
-            sealed = tracker.sealed if tracker is not None else []
-        except Exception:  # noqa: BLE001
+            if tracker is not None:
+                sealed = tracker.sealed() if callable(tracker.sealed) else tracker.sealed
+        except (AttributeError, TypeError):
             sealed = []
 
         usable_kwh = cap.usable_kwh if cap is not None else _f_or_none(nameplate)

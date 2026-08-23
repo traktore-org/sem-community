@@ -133,3 +133,40 @@ class TestTheCallSiteActuallyResolves:
         assert "_LOGGER.warning" in window, (
             "a skipped ledger update must be visible, not debug-only"
         )
+
+
+@pytest.mark.unit
+class TestTheNightRecordsAreActuallyRead:
+    """Second live-only failure in the same wiring: `BatteryNightTracker.sealed`
+    is a METHOD, not a property. Reading it without calling handed
+    measured_capacity a bound method — 'method' object is not iterable — and
+    every planning sensor went unavailable.
+
+    Only visible because the handler had just been narrowed to WARNING. As the
+    original DEBUG line it would have shipped."""
+
+    def test_sealed_is_invoked_not_merely_referenced(self):
+        import ast
+        src = (REPO / "coordinator" / "coordinator.py").read_text()
+        tree = ast.parse(src)
+        fn = next(n for n in ast.walk(tree)
+                  if isinstance(n, ast.FunctionDef)
+                  and n.name == "_record_forecast_horizons")
+        # Bound by the real method, not a guessed character count — the first
+        # version of this test windowed 3000 chars and missed the line it was
+        # written to catch.
+        body = ast.get_source_segment(src, fn) or ""
+        assert "tracker.sealed()" in body, (
+            "sealed is a method; referencing it yields a bound method and the "
+            "capacity reader silently produces nothing"
+        )
+
+    def test_the_tracker_still_exposes_it_as_a_method(self):
+        """If this ever becomes a property, the call above breaks — so pin the
+        premise rather than let the two drift."""
+        src = (REPO / "coordinator" / "battery_night.py").read_text()
+        i = src.index("def sealed(")
+        preceding = src[max(0, i - 120):i]
+        assert "@property" not in preceding, (
+            "sealed became a property — update the call site in coordinator.py"
+        )
