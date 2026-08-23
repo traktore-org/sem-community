@@ -103,3 +103,31 @@ class TestTheSampleGatesAreMeaningful:
         )
         assert MIN_NEED_SAMPLES == 5
         assert MIN_SAMPLES_FOR_TRUST == 7
+
+
+class TestPublishedPrecision:
+    """(bug class 51) Trust is published at a precision a person can read.
+
+    Caught on .175 by its own live value: ``0.840207806207237``. Fifteen
+    significant digits of a ratio nobody reads past the second, churning a
+    recorder row every cycle — the exact class #829 spent a day closing, in
+    code written after it.
+    """
+
+    def test_trust_is_rounded_where_it_is_published(self):
+        from pathlib import Path
+        src = (_PKG / "coordinator" / "coordinator.py").read_text(encoding="utf-8")
+        assert '"forecast_trust_d1": _round_or_none(led.trust(1), 3)' in src, (
+            "forecast trust is published raw again — a ratio at full float "
+            "precision churns a row per cycle for digits nobody can act on")
+        assert '"forecast_trust_d2": _round_or_none(led.trust(2), 3)' in src
+
+    def test_rounding_preserves_an_honest_none(self):
+        """The whole point of the ledger's None is that it is not a confident
+        1.0; a rounding helper that turned it into 0.0 would be worse than
+        the precision it fixes."""
+        import re
+        src = (_PKG / "coordinator" / "coordinator.py").read_text(encoding="utf-8")
+        body = re.search(r"def _round_or_none\(value, digits\):.*?\n\n", src,
+                         re.DOTALL).group(0)
+        assert "None if value is None" in body

@@ -10368,6 +10368,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # quantities honestly computable today; the spendable budget itself
         # waits for the day ledger's refill term (phase 3), because publishing
         # it from a raw forecast would systematically over-promise.
+        def _round_or_none(value, digits):
+            """Round for publication, preserving an honest None."""
+            return None if value is None else round(float(value), digits)
+
         from .measured_capacity import measured_capacity
 
         tracker = getattr(self, "_battery_night", None)
@@ -10470,8 +10474,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 "not enough qualifying nights yet" if cap is None else cap.reason),
             # Trust stays None until a horizon has earned it — never a
             # confident-looking 1.0 (see forecast_ledger).
-            "forecast_trust_d1": led.trust(1),
-            "forecast_trust_d2": led.trust(2),
+            # Rounded at the publisher (bug class 51): trust is a ratio a
+            # person reads as a percentage, and 0.840207806207237 churns a
+            # recorder row on every cycle for digits nobody can act on.
+            "forecast_trust_d1": _round_or_none(led.trust(1), 3),
+            "forecast_trust_d2": _round_or_none(led.trust(2), 3),
             # (#778) The budget itself — still driving nothing. Published so a
             # season of mornings can judge it before it is allowed to spend.
             "battery_overnight_need_kwh": need_kwh,
