@@ -487,6 +487,34 @@ reporting that nothing is spare. If you see nights marked this way, something
 upstream of SEM is double-counting a flow; the Config tab's sensor sources are
 the place to start.
 
+**Checking the setting against your own history**
+
+The amount SEM holds back for the night is a high percentile of what your house
+has actually drawn — high on purpose, because running short before dawn is
+worse than leaving a little export revenue on the table. The exact percentile
+shipped was chosen by replaying 211 real nights and measuring what each
+candidate would have cost:
+
+| Percentile | Nights it would spend on | Energy spent | Nights it overshot the floor | Worst overshoot |
+|---|---|---|---|---|
+| p80 | 97 | 63.6 kWh | 3 | 400 Wh |
+| **p85 (shipped)** | 90 | 53.5 kWh | 2 | 120 Wh |
+| p90 | 68 | 30.0 kWh | 1 | 50 Wh |
+| p95 | 5 | 0.3 kWh | 0 | — |
+
+p95 looks safest and is the worst answer on the list: the feature effectively
+stops working while still appearing to be switched on.
+
+You can run the same measurement against your own system:
+
+```
+python3 scripts/backtest_budget.py --host root@YOUR_HA --key ~/.ssh/your.key \
+    --capacity 15 --floor 20 --need-pctile 0.85
+```
+
+It replays your recorded nights, asks the budget what it would have spent on
+each, and reports how often that would have left the pack below its floor.
+
 **Why it refuses to spend without evidence**
 
 A forecast that runs high is exactly the case where spending the battery hurts:

@@ -13,6 +13,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🛡️ **Your battery reserve now applies even if you never set one** (#778): if
+  the reserve was left unconfigured, SEM's new forecast-led spending read it as
+  *no reserve at all* rather than the 20% its own default documents. Same for
+  the forecast safety margin, which read as "no margin" instead of its
+  documented value. Both now fall back to the documented default when nothing
+  was ever chosen — an explicit `0` is still respected as a deliberate choice.
+
+- 📐 **SEM measured how much of the battery is safe to spend, instead of
+  guessing** (#778): the amount held back for the night was set to a
+  conservative estimate picked by judgement. Replaying **211 real nights** of
+  a live system showed what each candidate would actually have cost, and the
+  value shipped is the one that cut the worst overshoot by 70% while keeping
+  84% of the benefit. The tool that measured it ships too, so any installation
+  can check the setting against its own history rather than trusting ours.
+
+
 - 📊 **SEM can now learn your forecast's accuracy from history you already
   have** (#778): forecast-led spending normally watches the forecast forward
   and needs a week of days before it trusts one. If your system has been

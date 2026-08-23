@@ -2114,3 +2114,60 @@ PROD and .175 readings pinned as the balanced and violating cases.
 discharge − ev − export − charge` (the balance the `max(0, …)` clamp hides), per-charger draw
 summing to `ev_power`, daily energies summing to their monthly, flow energies summing to their
 source counter.
+
+### 54. A dict default defeated by a key that exists holding null — GUARDED
+
+**Root shape:** `config.get("key", SAFE_DEFAULT)` returns the default only when the key is
+**absent**. A key that is present holding `None` returns `None`, and the safe default never fires —
+on precisely the installs that never configured the setting, which is the population the default
+exists to protect.
+
+**Instances (#778):** PROD carries `battery_reserve_soc: None`. So
+`config.get("battery_reserve_soc", 20)` handed `spendable_budget` a `None`, which resolved the
+static floor to **0.0** — the user's "never below this, ever" backstop silently absent, on the one
+install with a real battery. Sweeping for siblings found `forecast_pessimism` doing the same in the
+same unsafe direction: missing resolved to `1.0` (no margin) against a documented `1.2`, so an
+install with a null in options quietly spent ~9 % more than one never configured at all.
+`battery_discharge_efficiency` was already correct (`_num(x) or 0.95`) — which is half the value of
+a sweep: *"already correct" is only knowable by looking.*
+
+**Why tests miss it:** every unit test constructs its config explicitly, so the key is either
+present-with-a-value or absent — never present-holding-null. That third state is created by the
+options flow and by `set_option`, i.e. only ever by a real install. The function's own signature
+default (`static_floor_pct=20.0`) reads as protection and provides none, because the caller passes
+an explicit `None` straight past it.
+
+**The distinction that matters:** an explicit `0` is a CHOICE ("spend it all"); `None` is an
+ABSENCE ("nobody said"). Collapsing the second into the first is the whole bug. The fix names what
+silence means, once, in the function — never at each call site, which is how the two drifted apart.
+
+**Found by:** backtesting against a real install's config, not by reading code. The suite was green
+throughout.
+
+**Guard:** `tests/test_778_spendable_budget.py::TestSilenceMeansTheDocumentedDefaultEverywhere` —
+every tunable arriving null must not out-spend an install carrying none of them.
+
+**Where else to look — and the sweep was RUN, 23.08.2026.** The exposure is checkable against real
+data rather than by reading: take a live config entry, list every key holding `None`, and
+cross-reference against every `config.get(k, default)` in the codebase. PROD carries **12 null
+keys**; exactly **4** call sites rely on a default for one of them:
+
+| site | key | verdict |
+|---|---|---|
+| `coordinator.py` (spendable budget) | `battery_reserve_soc` | **HAZARD** — fixed |
+| `coordinator.py` (spendable budget) | `forecast_pessimism` | **HAZARD** — fixed |
+| `coordinator.py:2785` | `vehicle_soc_entity` | safe — default `""`, consumed as `if entity:`, and `None` is equally falsy |
+| `coordinator.py:4237` | `vehicle_range_entity` | safe — same shape |
+
+So the class has **two** live instances and both are closed. The pattern that made the last two
+safe is worth copying: a default that is only ever tested for truthiness cannot be defeated by a
+null, because both fall the same way. The dangerous shape is a default that carries a NUMBER the
+arithmetic then uses.
+
+**Instrument:** `scripts/audit_null_defaults.py --host … --key …` reads a live install's null keys,
+cross-references every `config.get(k, default)` in the tree, and exits non-zero on any hazard — so
+it can gate CI against a reference config. Against PROD on 23.08 it reports **0 hazards, 2 safe**.
+
+Re-run it against any install's config before trusting the table above on a different deployment:
+the null set is per-install, and a key null on one machine may be set on another. That is also why
+this is an instrument rather than a static test — the hazard lives in the CONFIG, not in the code.
