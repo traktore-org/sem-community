@@ -48,6 +48,19 @@ from typing import Optional
 #: two must not collapse into each other.
 DEFAULT_STATIC_FLOOR_PCT: float = 20.0
 
+#: The forecast-pessimism multiplier assumed when an install has never set one.
+#:
+#: Same shape as the floor above, found by sweeping for siblings: the old code
+#: resolved a missing pessimism to 1.0 — NO margin — while its own signature
+#: documented 1.2. An install carrying a null in options quietly spent ~9% more
+#: than one that had never been configured at all.
+DEFAULT_PESSIMISM: float = 1.2
+
+#: Discharge efficiency assumed when unset. Already handled correctly before
+#: the sweep; named here so all three live in one place and the next reader
+#: does not have to work out which of them are safe.
+DEFAULT_DISCHARGE_EFFICIENCY: float = 0.95
+
 
 @dataclass(frozen=True)
 class SpendableBudget:
@@ -81,7 +94,7 @@ def spendable_budget(
     usable_capacity_kwh,
     overnight_need_kwh,
     expected_refill_kwh,
-    static_floor_pct=20.0,
+    static_floor_pct=DEFAULT_STATIC_FLOOR_PCT,
     pessimism: float = 1.2,
     discharge_efficiency: float = 0.95,
 ) -> SpendableBudget:
@@ -126,10 +139,13 @@ def spendable_budget(
     if cap <= 0:
         return SpendableBudget(0.0, None, "no usable battery capacity configured")
 
-    eff = _num(discharge_efficiency) or 0.95
+    eff = _num(discharge_efficiency)
+    eff = DEFAULT_DISCHARGE_EFFICIENCY if eff is None else eff
     eff = min(max(eff, 0.05), 1.0)
     pess = _num(pessimism)
-    pess = 1.0 if pess is None else max(pess, 1.0)
+    # Silence is the documented default, not "no margin" — the floor bug's
+    # sibling, in the same unsafe direction.
+    pess = DEFAULT_PESSIMISM if pess is None else max(pess, 1.0)
 
     stored = max(0.0, soc) / 100.0 * cap
 

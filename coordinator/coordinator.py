@@ -10436,8 +10436,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # Pass the absence through and let spendable_budget name what
             # silence means, in one place.
             static_floor_pct=self.config.get("battery_reserve_soc"),
-            pessimism=self.config.get("forecast_pessimism", 1.2),
-            discharge_efficiency=self.config.get("battery_discharge_efficiency", 0.95),
+            # Absences pass through; spendable_budget names what silence
+            # means, in one place, for all three tunables.
+            pessimism=self.config.get("forecast_pessimism"),
+            discharge_efficiency=self.config.get("battery_discharge_efficiency"),
         )
 
         # (#778 phase 6) The state a card renders, published rather than

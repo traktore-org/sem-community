@@ -34,6 +34,8 @@ from custom_components.solar_energy_management.coordinator.spendable_budget impo
     SpendableBudget,
     spendable_budget,
     DEFAULT_STATIC_FLOOR_PCT,
+    DEFAULT_PESSIMISM,
+    DEFAULT_DISCHARGE_EFFICIENCY,
 )
 
 
@@ -228,3 +230,51 @@ class TestTheCallSitePassesAFloor:
         assert 'static_floor_pct=self.config.get("battery_reserve_soc", 20)' not in src, (
             "the coordinator still leans on a dict default that a null value "
             "silently defeats")
+
+
+class TestSilenceMeansTheDocumentedDefaultEverywhere:
+    """The unconfigured-floor bug had a SHAPE, and it had siblings.
+
+    ``config.get(key, default)`` does not fire when the key is present holding
+    null, so every tunable this function accepts can arrive as None on a real
+    install. The floor was the instance that mattered most; the sweep for the
+    rest found ``pessimism`` doing the same thing in the same direction —
+    resolving to 1.0, no margin at all, rather than the 1.2 its signature
+    documents. An install with a null in options would silently spend ~9% more
+    than one that had never been configured.
+
+    Efficiency was already correct (``_num(x) or 0.95``), which is what a
+    systematic sweep is for: it tells you where you are fine as well as where
+    you are not.
+    """
+
+    BASE = dict(soc_pct=90.0, usable_capacity_kwh=15.0,
+                overnight_need_kwh=3.0, expected_refill_kwh=20.0)
+
+    def test_pessimism_none_matches_the_documented_default(self):
+        assert spendable_budget(**self.BASE, pessimism=None).spendable_kwh == \
+            spendable_budget(**self.BASE,
+                             pessimism=DEFAULT_PESSIMISM).spendable_kwh
+
+    def test_pessimism_none_is_not_no_margin(self):
+        assert spendable_budget(**self.BASE, pessimism=None).spendable_kwh < \
+            spendable_budget(**self.BASE, pessimism=1.0).spendable_kwh, (
+                "an unconfigured pessimism spends as much as one explicitly "
+                "set to 'no margin'")
+
+    def test_efficiency_none_matches_its_default(self):
+        assert spendable_budget(**self.BASE, discharge_efficiency=None).spendable_kwh == \
+            spendable_budget(**self.BASE,
+                             discharge_efficiency=DEFAULT_DISCHARGE_EFFICIENCY).spendable_kwh
+
+    def test_every_tunable_arriving_null_is_safe(self):
+        """The whole shape, in one assertion: an install whose options carry
+        nulls for all three must not out-spend one that carries none of them."""
+        allnull = spendable_budget(**self.BASE, static_floor_pct=None,
+                                   pessimism=None, discharge_efficiency=None)
+        defaults = spendable_budget(**self.BASE)
+        assert allnull.spendable_kwh <= defaults.spendable_kwh + 1e-9
+
+    def test_an_explicit_optimistic_value_is_still_honoured(self):
+        assert spendable_budget(**self.BASE, pessimism=1.0).spendable_kwh > \
+            spendable_budget(**self.BASE, pessimism=DEFAULT_PESSIMISM).spendable_kwh
