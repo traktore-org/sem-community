@@ -4299,12 +4299,26 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             result.update(getattr(self, "_vpp_publish", None)
                           or {"vpp_event": "idle", "vpp_event_observer": True})
 
-            # (#778 phase 1) Planning evidence — measured, not assumed, and
-            # driving nothing yet. Set key-by-key rather than result.update()
-            # so it never becomes a second publisher of a to_dict key, which
-            # is the trap #829's single-publisher guard exists to catch.
-            for _k, _v in (getattr(self, "_planning_evidence", None) or {}).items():
-                result[_k] = _v
+            # (#778) Planning evidence — measured, not assumed. Written out
+            # EXPLICITLY rather than looped: #657's guard cannot see keys
+            # published through a dynamic loop, and it is right not to — a
+            # phantom key hiding behind clever publishing reads to a user as
+            # "measured, and null", which is worse than an absent attribute.
+            _pe = getattr(self, "_planning_evidence", None) or {}
+            result["battery_measured_capacity_kwh"] = _pe.get("battery_measured_capacity_kwh")
+            result["battery_capacity_kwh_per_pct"] = _pe.get("battery_capacity_kwh_per_pct")
+            result["battery_capacity_samples"] = _pe.get("battery_capacity_samples")
+            result["battery_capacity_drift_pct"] = _pe.get("battery_capacity_drift_pct")
+            result["battery_capacity_reason"] = _pe.get("battery_capacity_reason")
+            result["forecast_trust_d1"] = _pe.get("forecast_trust_d1")
+            result["forecast_trust_d2"] = _pe.get("forecast_trust_d2")
+            result["battery_overnight_need_kwh"] = _pe.get("battery_overnight_need_kwh")
+            result["battery_expected_refill_kwh"] = _pe.get("battery_expected_refill_kwh")
+            result["battery_refill_clipped_kwh"] = _pe.get("battery_refill_clipped_kwh")
+            result["battery_refill_reason"] = _pe.get("battery_refill_reason")
+            result["battery_spendable_kwh"] = _pe.get("battery_spendable_kwh")
+            result["battery_dynamic_floor_pct"] = _pe.get("battery_dynamic_floor_pct")
+            result["battery_spendable_reason"] = _pe.get("battery_spendable_reason")
 
             # (#625 phase 3) Diagnostics summary for the System tab —
             # read-only assembly extracted to publish_diag.build_diagnostics.
