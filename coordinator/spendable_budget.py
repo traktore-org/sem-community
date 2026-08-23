@@ -74,9 +74,25 @@ def spendable_budget(
     """How many kWh of this battery are genuinely surplus tonight.
 
     ``overnight_need_kwh`` is the forecast house draw until PV meaningfully
-    resumes; ``expected_refill_kwh`` the surplus tomorrow is expected to
-    return to the pack. ``pessimism`` (>= 1) inflates the reserve — the
-    user's own margin against a forecast that disappoints.
+    resumes. ``pessimism`` (>= 1) inflates the reserve — the user's own margin
+    against a forecast that disappoints.
+
+    ``expected_refill_kwh`` is **NOT tomorrow's raw solar forecast.** Guido
+    pinned this on #778 before anyone built it: *"will it refill" is not a
+    scalar forecast question — the morning solar is also claimed by tomorrow's
+    packed EV blocks and loads, and the day ledger is the only component that
+    already does that subtraction.* Wiring this to ``forecast_tomorrow_kwh``
+    would systematically over-promise: a 40 kWh day already owes 12 kWh to the
+    house and whatever the car has booked. Pass the ledger's expected refill
+    AFTER tomorrow's claims, capped by the learner's verified envelope:
+
+        spendable = min(learner-safe envelope,
+                        ledger refill after tomorrow's packed claims) - reserve
+
+    A corollary worth exploiting later: where the ledger expects surplus beyond
+    capacity + demands (clipping), tonight's spend is **provably free** — that
+    is the strongest case this budget can make, and it comes from the ledger,
+    never from a scalar.
     """
     soc = _num(soc_pct)
     cap = _num(usable_capacity_kwh)
