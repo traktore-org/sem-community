@@ -64,7 +64,7 @@
           "mobile_notification_service": "Mobil értesítési szolgáltatás",
           "vehicle_soc_entity": "Jármű akkumulátor SOC",
           "ev_battery_capacity_kwh": "EV akkumulátor kapacitása (kWh)",
-          "ev_target_soc": "EV cél-SOC (%)"
+          "ev_target_soc": "Tekintsd tele ennél (%)"
         },
         "data_description": {
           "ev_connected_sensor": "Bináris érzékelő, amely jelzi, hogy a jármű dugasza csatlakoztatva van-e.",
@@ -78,7 +78,7 @@
           "mobile_notification_service": "HA notify szolgáltatás mobil push értesítéshez (pl. notify.mobile_app_your_phone).",
           "vehicle_soc_entity": "Opcionális érzékelő, amely a jármű aktuális töltöttségi szintjét jelenti (0–100%).",
           "ev_battery_capacity_kwh": "Az EV akkumulátorának teljes hasznos kapacitása kWh-ban. A SOC és a töltési idő becsléséhez használatos.",
-          "ev_target_soc": "Az a cél-SOC (%), amelynél a SEM teljesen feltöltöttnek tekinti az EV-t."
+          "ev_target_soc": "Ettől a SEM töltöttnek tekinti az autót. Ez a \"tele\" definíciója, nem töltési korlát."
         }
       }
     },
@@ -108,9 +108,9 @@
           "vehicle_soc_entity": "Jármű akkumulátor SOC érzékelő (opcionális)",
           "ev_battery_capacity_kwh": "EV akkumulátor kapacitása (kWh)",
           "ev_charger_efficiency": "Töltő hatásfoka (%)",
-          "ev_target_soc": "EV cél-SOC (%)",
-          "daily_ev_target_max": "Napelemes töltési limit (kWh)",
-          "ev_target_soc_max": "Napelemes töltési limit (SOC %)",
+          "ev_target_soc": "Tekintsd tele ennél (%)",
+          "daily_ev_target_max": "Soha ne töltsön ennél többet (kWh)",
+          "ev_target_soc_max": "Soha ne tölts (%) fölé",
           "vehicle_range_entity": "Jármű hatótáv-érzékelő",
           "ev_kwh_per_100km": "Jármű fogyasztás (kWh/100km)"
         },
@@ -124,9 +124,9 @@
           "vehicle_soc_entity": "Opcionális érzékelő, amely a jármű aktuális töltöttségi szintjét jelenti (0–100%).",
           "ev_battery_capacity_kwh": "Az EV akkumulátorának teljes hasznos kapacitása kWh-ban. A SOC és a töltési idő becsléséhez használatos.",
           "ev_charger_efficiency": "A mért AC-energia azon hányada, amely az akkumulátorba jut. Csökkentse, ha a SOC-becslés megelőzi a járművet. Jellemzően 85-95%, egyfázisú töltésnél vagy hidegben kevesebb.",
-          "ev_target_soc": "Az a cél-SOC (%), amelynél a SEM teljesen feltöltöttnek tekinti az EV-t.",
-          "daily_ev_target_max": "A napelemes többlet eddig tölt, majd leáll. Hagyja maximumon, hogy szabadon töltsön a napból.",
-          "ev_target_soc_max": "A napelemes többlet eddig a töltöttségi szintig tölt, majd leáll. Hagyja 100%-on, hogy szabadon töltsön a napból.",
+          "ev_target_soc": "Ettől a SEM töltöttnek tekinti az autót. Ez a \"tele\" definíciója, nem töltési korlát.",
+          "daily_ev_target_max": "A napenergia-többlet itt hagyja abba a töltést. Ez felső határ, nem cél — hagyja maximumon a szabad napenergiás töltéshez.",
+          "ev_target_soc_max": "A napenergia-többlet itt hagyja abba a töltést. Ez felső határ, nem cél — hagyja 100%-on a szabad napenergiás töltéshez.",
           "ev_kwh_per_100km": "A hatótáv becsléséhez használatos, ha nincs hatótáv-érzékelő konfigurálva.",
           "vehicle_range_entity": "Opcionális valós hatótáv-érzékelő. Egyébként a hatótáv becslése: SOC × kapacitás × hatékonyság."
         }
@@ -138,7 +138,7 @@
           "update_interval": "Frissítési időköz (másodperc)",
           "battery_priority_soc": "Akkumulátor prioritási SOC (%)",
           "min_solar_power": "Minimális napenergia-teljesítmény — nyers PV-termelés (W)",
-          "daily_ev_target": "Napi EV-cél (kWh)",
+          "daily_ev_target": "Legalább ennyit garantálj (kWh)",
           "battery_assist_max_power": "Akkumulátor-támogatás max. teljesítménye (W)",
           "battery_capacity_kwh": "Akkumulátor kapacitása (kWh)",
           "battery_discharge_protection_enabled": "Akkumulátor kisütésvédelem engedélyezése",
@@ -151,7 +151,7 @@
           "smart_night_charging": "Intelligens éjszakai töltés",
           "vehicle_soc_entity": "Jármű akkumulátor SOC",
           "ev_battery_capacity_kwh": "EV akkumulátor kapacitása (kWh)",
-          "ev_target_soc": "EV cél-SOC (%)",
+          "ev_target_soc": "Tekintsd tele ennél (%)",
           "battery_buffer_soc": "2/3 zóna határa — akkumulátor puffer SOC (%)",
           "battery_auto_start_soc": "3/4 zóna határa — akkumulátor automatikus indítási SOC (%)",
           "battery_discharge_control_entity": "Akkumulátor kisütésvezérlő entitás (opcionális)",
@@ -168,7 +168,7 @@
           "battery_buffer_soc": "A 2. → 3. zóna határa. E töltöttségi szint felett az akkumulátor kisülhet, hogy az EV töltése közben áthidalja a napenergia-hiányt. Alapértelmezés 70 %.",
           "battery_auto_start_soc": "A 3. → 4. zóna határa. E töltöttségi szint felett az EV napenergia-többlet nélkül is megkezdheti a töltést, az akkumulátorból merítve. Alapértelmezés 90 %.",
           "min_solar_power": "A nyers PV-termelés alsó határa — az a panelteljesítmény, amely alatt a „napenergia aktív” hamis: a solar_only nem indul el, és a mély hiány elleni védelem sötétségként kezeli (a töltés tehát gyorsan leáll, ahelyett hogy hálózatról hidalná át). Ez NYERS termelés, NEM többlet — szemben az „Akkumulátor-támogatás – min. napenergia-többlet” beállítással (nap − ház), amely eldönti, mikor segíthet a házi akkumulátor. Alapértelmezett 1000 W; tartsa az EV-töltő hardveres minimuma alatt (~4140 W 3 fázison, ~1380 W 1 fázison).",
-          "daily_ev_target": "A napi cél kWh az éjszakai, hálózatról történő töltéshez. Állítsa 0-ra az éjszakai töltés teljes kikapcsolásához.",
+          "daily_ev_target": "A SEM éjjel a hálózatról tölt, hogy reggelre az autóban legalább ennyi legyen. Ez alsó határ, nem korlát — a nap többet is adhat. 0 = soha ne használja a hálózatot.",
           "battery_assist_max_power": "A maximális teljesítmény, amellyel a házi akkumulátor kisülhet az EV támogatására a 3./4. zónában. Alapértelmezés 4500 W.",
           "battery_capacity_kwh": "A házi akkumulátor teljes hasznos kapacitása (NEM az EV akkumulátoráé — az külön mező az EV lépésben). Az előrejelzés-vezérelt töltési stratégia használja.",
           "battery_discharge_protection_enabled": "Bekapcsolva a SEM korlátozza az inverter kisütési határát az éjszakai EV-töltés alatt, így a házi akkumulátor csak a házat látja el (az EV-t nem).",
@@ -192,7 +192,7 @@
         "title": "EV Töltés és napelem",
         "description": "Az EV-töltési célok és napenergia-küszöbök beállítása.",
         "data": {
-          "daily_ev_target": "Éjszakai töltési cél (kWh)",
+          "daily_ev_target": "Legalább ennyit garantálj (kWh)",
           "observer_mode": "Megfigyelő mód (csak olvasás, nincs hardvervezérlés)",
           "smart_night_charging": "Éjszakai cél csökkentése a holnapi előrejelzés alapján",
           "minimum_solar_power": "Minimális napenergia-teljesítmény az EV-töltés indításához (W)",
@@ -200,7 +200,7 @@
           "export_limit_entity": "Exportkorlát-entitás (opcionális)"
         },
         "data_description": {
-          "daily_ev_target": "A hálózatról minden éjjel megtöltendő cél kWh. Állítsa 0-ra az éjszakai hálózati töltés kikapcsolásához.",
+          "daily_ev_target": "A SEM éjjel a hálózatról tölt, hogy reggelre az autóban legalább ennyi legyen. Ez alsó határ, nem korlát — a nap többet is adhat. 0 = soha ne használja a hálózatot.",
           "observer_mode": "Bekapcsolva a SEM mindent figyel, de soha nem küld parancsot a hardvernek.",
           "smart_night_charging": "Bekapcsolva a SEM csökkenti az éjszakai töltési célt, ha a holnapi napelemes előrejelzés elegendő.",
           "minimum_solar_power": "A minimális napenergia-többlet (W), amely szükséges ahhoz, hogy a SEM elindítsa a napelemes EV-töltést.",
@@ -255,7 +255,7 @@
           "emergency_peak_level": "Vészhelyzeti csúcsszint (kW)",
           "vehicle_soc_entity": "Jármű akkumulátor SOC",
           "ev_battery_capacity_kwh": "EV akkumulátor kapacitása (kWh)",
-          "ev_target_soc": "EV cél-SOC (%)"
+          "ev_target_soc": "Tekintsd tele ennél (%)"
         },
         "data_description": {
           "load_management_enabled": "A SEM automatikus terheléslekapcsolásának be- és kikapcsolása, hogy a hálózati csúcskorlát alatt maradjon.",
@@ -265,7 +265,7 @@
           "emergency_peak_level": "Az a teljesítményszint (kW), amelynél a SEM agresszíven kapcsol le terheléseket a teljesítménydíjak elkerülése érdekében. A cél csúcsteljesítmény-korlát fölött kell lennie.",
           "vehicle_soc_entity": "Opcionális érzékelő, amely a jármű aktuális töltöttségi szintjét jelenti (0–100%).",
           "ev_battery_capacity_kwh": "Az EV akkumulátorának teljes hasznos kapacitása kWh-ban.",
-          "ev_target_soc": "Az a cél-SOC (%), amelynél a SEM teljesen feltöltöttnek tekinti az EV-t."
+          "ev_target_soc": "Ettől a SEM töltöttnek tekinti az autót. Ez a \"tele\" definíciója, nem töltési korlát."
         }
       },
       "notifications": {
@@ -277,7 +277,7 @@
           "mobile_notification_service": "Mobil értesítési szolgáltatás",
           "vehicle_soc_entity": "Jármű akkumulátor SOC",
           "ev_battery_capacity_kwh": "EV akkumulátor kapacitása (kWh)",
-          "ev_target_soc": "EV cél-SOC (%)"
+          "ev_target_soc": "Tekintsd tele ennél (%)"
         },
         "data_description": {
           "enable_charger_notifications": "A töltő állapotkártyáján megjelenő állandó értesítési sávok be- és kikapcsolása.",
@@ -285,7 +285,7 @@
           "mobile_notification_service": "HA notify szolgáltatás mobil push értesítéshez (pl. notify.mobile_app_your_phone).",
           "vehicle_soc_entity": "Opcionális érzékelő, amely a jármű aktuális töltöttségi szintjét jelenti (0–100%).",
           "ev_battery_capacity_kwh": "Az EV akkumulátorának teljes hasznos kapacitása kWh-ban.",
-          "ev_target_soc": "Az a cél-SOC (%), amelynél a SEM teljesen feltöltöttnek tekinti az EV-t."
+          "ev_target_soc": "Ettől a SEM töltöttnek tekinti az autót. Ez a \"tele\" definíciója, nem töltési korlát."
         }
       },
       "battery_scheduler": {
@@ -329,13 +329,13 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "Többlet prioritás (1=legmagasabb)",
           "ev_current_control_entity": "Áramszabályozó entitás (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Napelemes töltési limit (kWh)",
-          "ev_target_soc_max": "Napelemes töltési limit (SOC %)",
-          "daily_ev_target": "Éjszakai töltési cél (kWh)",
+          "daily_ev_target_max": "Soha ne töltsön ennél többet (kWh)",
+          "ev_target_soc_max": "Soha ne tölts (%) fölé",
+          "daily_ev_target": "Legalább ennyit garantálj (kWh)",
           "vehicle_soc_entity": "Jármű akkumulátor SOC érzékelő (opcionális)",
           "vehicle_range_entity": "Jármű hatótáv-érzékelő",
           "ev_kwh_per_100km": "Jármű fogyasztás (kWh/100km)",
-          "ev_target_soc": "EV cél-SOC (%)",
+          "ev_target_soc": "Tekintsd tele ennél (%)",
           "ev_battery_capacity_kwh": "EV akkumulátor kapacitása (kWh)",
           "initial_current": "Kezdő áram (A)",
           "ev_min_current": "Minimális töltőáram (A)",
@@ -358,13 +358,13 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "A többlet elosztásának sorrendje több töltő között. Alacsonyabb szám = magasabb prioritás.",
           "ev_current_control_entity": "Number entitás, amellyel a töltőáram (A) beállítható. Wallbox, go-eCharger és hasonló töltőkhöz.",
-          "daily_ev_target_max": "A napelemes többlet eddig tölt, majd leáll. Hagyja maximumon, hogy szabadon töltsön a napból.",
-          "ev_target_soc_max": "A napelemes többlet eddig a töltöttségi szintig tölt, majd leáll. Hagyja 100%-on, hogy szabadon töltsön a napból.",
-          "daily_ev_target": "A hálózatról minden éjjel megtöltendő cél kWh. Állítsa 0-ra az éjszakai hálózati töltés kikapcsolásához.",
+          "daily_ev_target_max": "A napenergia-többlet itt hagyja abba a töltést. Ez felső határ, nem cél — hagyja maximumon a szabad napenergiás töltéshez.",
+          "ev_target_soc_max": "A napenergia-többlet itt hagyja abba a töltést. Ez felső határ, nem cél — hagyja 100%-on a szabad napenergiás töltéshez.",
+          "daily_ev_target": "A SEM éjjel a hálózatról tölt, hogy reggelre az autóban legalább ennyi legyen. Ez alsó határ, nem korlát — a nap többet is adhat. 0 = soha ne használja a hálózatot.",
           "vehicle_soc_entity": "Opcionális érzékelő, amely a jármű aktuális töltöttségi szintjét jelenti (0–100%).",
           "vehicle_range_entity": "Opcionális valós hatótáv-érzékelő. Egyébként a hatótáv becslése: SOC × kapacitás × hatékonyság.",
           "ev_kwh_per_100km": "A hatótáv becsléséhez használatos, ha nincs hatótáv-érzékelő konfigurálva.",
-          "ev_target_soc": "Az a cél-SOC (%), amelynél a SEM teljesen feltöltöttnek tekinti az EV-t.",
+          "ev_target_soc": "Ettől a SEM töltöttnek tekinti az autót. Ez a \"tele\" definíciója, nem töltési korlát.",
           "ev_battery_capacity_kwh": "Az EV akkumulátorának teljes hasznos kapacitása kWh-ban. A SOC és a töltési idő becsléséhez használatos.",
           "initial_current": "Kezdő töltőáram, mielőtt a SEM az elérhető többlethez igazodik.",
           "ev_min_current": "Ez alatt a SEM szünetelteti a töltést, ahelyett hogy tovább csökkentené az áramot.",
@@ -391,13 +391,13 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "Többlet prioritás (1=legmagasabb)",
           "ev_current_control_entity": "Áramszabályozó entitás (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Napelemes töltési limit (kWh)",
-          "ev_target_soc_max": "Napelemes töltési limit (SOC %)",
-          "daily_ev_target": "Éjszakai töltési cél (kWh)",
+          "daily_ev_target_max": "Soha ne töltsön ennél többet (kWh)",
+          "ev_target_soc_max": "Soha ne tölts (%) fölé",
+          "daily_ev_target": "Legalább ennyit garantálj (kWh)",
           "vehicle_soc_entity": "Jármű akkumulátor SOC érzékelő (opcionális)",
           "vehicle_range_entity": "Jármű hatótáv-érzékelő",
           "ev_kwh_per_100km": "Jármű fogyasztás (kWh/100km)",
-          "ev_target_soc": "EV cél-SOC (%)",
+          "ev_target_soc": "Tekintsd tele ennél (%)",
           "ev_battery_capacity_kwh": "EV akkumulátor kapacitása (kWh)",
           "initial_current": "Kezdő áram (A)",
           "ev_min_current": "Minimális töltőáram (A)",
@@ -419,13 +419,13 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "A többlet elosztásának sorrendje több töltő között. Alacsonyabb szám = magasabb prioritás.",
           "ev_current_control_entity": "Number entitás, amellyel a töltőáram (A) beállítható. Wallbox, go-eCharger és hasonló töltőkhöz.",
-          "daily_ev_target_max": "A napelemes többlet eddig tölt, majd leáll. Hagyja maximumon, hogy szabadon töltsön a napból.",
-          "ev_target_soc_max": "A napelemes többlet eddig a töltöttségi szintig tölt, majd leáll. Hagyja 100%-on, hogy szabadon töltsön a napból.",
-          "daily_ev_target": "A hálózatról minden éjjel megtöltendő cél kWh. Állítsa 0-ra az éjszakai hálózati töltés kikapcsolásához.",
+          "daily_ev_target_max": "A napenergia-többlet itt hagyja abba a töltést. Ez felső határ, nem cél — hagyja maximumon a szabad napenergiás töltéshez.",
+          "ev_target_soc_max": "A napenergia-többlet itt hagyja abba a töltést. Ez felső határ, nem cél — hagyja 100%-on a szabad napenergiás töltéshez.",
+          "daily_ev_target": "A SEM éjjel a hálózatról tölt, hogy reggelre az autóban legalább ennyi legyen. Ez alsó határ, nem korlát — a nap többet is adhat. 0 = soha ne használja a hálózatot.",
           "vehicle_soc_entity": "Opcionális érzékelő, amely a jármű aktuális töltöttségi szintjét jelenti (0–100%).",
           "vehicle_range_entity": "Opcionális valós hatótáv-érzékelő. Egyébként a hatótáv becslése: SOC × kapacitás × hatékonyság.",
           "ev_kwh_per_100km": "A hatótáv becsléséhez használatos, ha nincs hatótáv-érzékelő konfigurálva.",
-          "ev_target_soc": "Az a cél-SOC (%), amelynél a SEM teljesen feltöltöttnek tekinti az EV-t.",
+          "ev_target_soc": "Ettől a SEM töltöttnek tekinti az autót. Ez a \"tele\" definíciója, nem töltési korlát.",
           "ev_battery_capacity_kwh": "Az EV akkumulátorának teljes hasznos kapacitása kWh-ban. A SOC és a töltési idő becsléséhez használatos.",
           "initial_current": "Kezdő töltőáram, mielőtt a SEM az elérhető többlethez igazodik.",
           "ev_min_current": "Ez alatt a SEM szünetelteti a töltést, ahelyett hogy tovább csökkentené az áramot.",

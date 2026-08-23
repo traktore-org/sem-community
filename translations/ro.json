@@ -64,7 +64,7 @@
           "mobile_notification_service": "Serviciu notificări mobile",
           "vehicle_soc_entity": "SOC baterie vehicul",
           "ev_battery_capacity_kwh": "Capacitatea bateriei VE (kWh)",
-          "ev_target_soc": "SOC țintă VE (%)"
+          "ev_target_soc": "Consideră plin la (%)"
         },
         "data_description": {
           "ev_connected_sensor": "Senzor binar care raportează dacă ștecherul vehiculului este conectat în acest moment.",
@@ -78,7 +78,7 @@
           "mobile_notification_service": "Serviciul HA notify pentru notificări push mobile (de ex. notify.mobile_app_your_phone).",
           "vehicle_soc_entity": "Senzor opțional care raportează starea de încărcare curentă a vehiculului (0–100%).",
           "ev_battery_capacity_kwh": "Capacitatea utilizabilă totală a bateriei VE, în kWh. Folosită pentru a estima SOC-ul și durata de încărcare.",
-          "ev_target_soc": "SOC-ul țintă (%) la care SEM consideră VE complet încărcat."
+          "ev_target_soc": "De aici SEM consideră mașina încărcată. Este o definiție a lui \"plin\", nu o limită de încărcare."
         }
       }
     },
@@ -108,9 +108,9 @@
           "vehicle_soc_entity": "Senzor SOC baterie vehicul (opțional)",
           "ev_battery_capacity_kwh": "Capacitatea bateriei VE (kWh)",
           "ev_charger_efficiency": "Randamentul încărcătorului (%)",
-          "ev_target_soc": "SOC țintă VE (%)",
-          "daily_ev_target_max": "Limită încărcare solară (kWh)",
-          "ev_target_soc_max": "Limită încărcare solară (SOC %)",
+          "ev_target_soc": "Consideră plin la (%)",
+          "daily_ev_target_max": "Nu încărca niciodată peste (kWh)",
+          "ev_target_soc_max": "Nu încărca niciodată peste (%)",
           "vehicle_range_entity": "Senzor autonomie vehicul",
           "ev_kwh_per_100km": "Consum vehicul (kWh/100km)"
         },
@@ -124,9 +124,9 @@
           "vehicle_soc_entity": "Senzor opțional care raportează starea de încărcare curentă a vehiculului (0–100%).",
           "ev_battery_capacity_kwh": "Capacitatea utilizabilă totală a bateriei VE, în kWh. Folosită pentru a estima SOC-ul și durata de încărcare.",
           "ev_charger_efficiency": "Partea din energia CA măsurată care ajunge în baterie. Reduceți valoarea dacă estimarea SOC o ia înaintea vehiculului. De obicei 85-95%, mai puțin la monofazat sau pe frig.",
-          "ev_target_soc": "SOC-ul țintă (%) la care SEM consideră VE complet încărcat.",
-          "daily_ev_target_max": "Surplusul solar încarcă până la această valoare, apoi se oprește. Lăsați la maximum pentru a încarca liber din soare.",
-          "ev_target_soc_max": "Surplusul solar încarcă până la acest SOC, apoi se oprește. Lăsați la 100% pentru a încarca liber din soare.",
+          "ev_target_soc": "De aici SEM consideră mașina încărcată. Este o definiție a lui \"plin\", nu o limită de încărcare.",
+          "daily_ev_target_max": "Surplusul solar se oprește aici. Este un plafon, nu un obiectiv — lăsați la maxim pentru încărcare liberă din soare.",
+          "ev_target_soc_max": "Surplusul solar se oprește aici. Este un plafon, nu un obiectiv — lăsați la 100% pentru încărcare liberă din soare.",
           "ev_kwh_per_100km": "Folosit pentru a estima autonomia când nu este configurat un senzor de autonomie.",
           "vehicle_range_entity": "Senzor de autonomie real opțional. Altfel, autonomia este estimată din SOC × capacitate × eficiență."
         }
@@ -138,7 +138,7 @@
           "update_interval": "Interval de actualizare (secunde)",
           "battery_priority_soc": "SOC de prioritate a bateriei (%)",
           "min_solar_power": "Putere solară minimă — producție FV brută (W)",
-          "daily_ev_target": "Țintă zilnică VE (kWh)",
+          "daily_ev_target": "Garantează cel puțin (kWh)",
           "battery_assist_max_power": "Asistență baterie – putere max. (W)",
           "battery_capacity_kwh": "Capacitatea bateriei (kWh)",
           "battery_discharge_protection_enabled": "Activează protecția la descărcarea bateriei",
@@ -151,7 +151,7 @@
           "smart_night_charging": "Încărcare inteligentă pe timp de noapte",
           "vehicle_soc_entity": "SOC baterie vehicul",
           "ev_battery_capacity_kwh": "Capacitatea bateriei VE (kWh)",
-          "ev_target_soc": "SOC țintă VE (%)",
+          "ev_target_soc": "Consideră plin la (%)",
           "battery_buffer_soc": "Limita zonelor 2/3 — SOC tampon baterie (%)",
           "battery_auto_start_soc": "Limita zonelor 3/4 — SOC pornire automată baterie (%)",
           "battery_discharge_control_entity": "Entitate de control al descărcării bateriei (opțional)",
@@ -168,7 +168,7 @@
           "battery_buffer_soc": "Limita dintre zona 2 și zona 3. Peste acest SOC, bateria poate să se descarce pentru a acoperi deficitele solare în timpul încărcării VE. Implicit 70 %.",
           "battery_auto_start_soc": "Limita dintre zona 3 și zona 4. Peste acest SOC, VE poate începe încărcarea chiar și fără surplus solar, consumând din baterie. Implicit 90 %.",
           "min_solar_power": "Prag minim al producției FV brute — puterea panourilor sub care „solarul este activ” este fals: solar_only nu pornește, iar protecția împotriva deficitului profund o tratează ca pe întuneric (încărcarea se oprește astfel rapid în loc să fie suplinită din rețea). Aceasta este producția BRUTĂ, NU surplusul — spre deosebire de „Asistență baterie – surplus solar min.” (solar − casă), care decide când poate ajuta bateria casnică. Implicit 1000 W; păstrați-l sub minimul hardware al încărcătorului EV (~4140 W la 3 faze, ~1380 W la 1 fază).",
-          "daily_ev_target": "Ținta în kWh pe zi pentru încărcarea de noapte din rețea. Setați 0 pentru a dezactiva complet încărcarea pe timp de noapte.",
+          "daily_ev_target": "SEM completează din rețea peste noapte ca mașina să aibă cel puțin atât dimineața. Este un prag minim, nu o limită — soarele poate adăuga mai mult. 0 = nu folosi niciodată rețeaua.",
           "battery_assist_max_power": "Puterea maximă pe care bateria casei o poate descărca pentru a ajuta VE în zonele 3/4. Implicit 4500 W.",
           "battery_capacity_kwh": "Capacitatea utilizabilă totală a bateriei casnice (NU bateria VE — aceasta are un câmp separat la pasul EV). Folosită de strategia de încărcare bazată pe prognoză.",
           "battery_discharge_protection_enabled": "Când este ACTIVĂ, SEM limitează pragul de descărcare al invertorului în timpul încărcării VE pe timp de noapte, astfel încât bateria casei să alimenteze doar locuința (nu și VE).",
@@ -192,7 +192,7 @@
         "title": "Încărcare EV și solar",
         "description": "Configurați țintele de încărcare EV și pragurile solare.",
         "data": {
-          "daily_ev_target": "Țintă încărcare de noapte (kWh)",
+          "daily_ev_target": "Garantează cel puțin (kWh)",
           "observer_mode": "Mod observator (doar citire, fără control hardware)",
           "smart_night_charging": "Reduce ținta de noapte în funcție de prognoza de mâine",
           "minimum_solar_power": "Putere solară minimă pentru a începe încărcarea EV (W)",
@@ -200,7 +200,7 @@
           "export_limit_entity": "Entitatea limitei de export (opțional)"
         },
         "data_description": {
-          "daily_ev_target": "Ținta în kWh de încărcat din rețea în fiecare noapte. Setați 0 pentru a dezactiva încărcarea de noapte din rețea.",
+          "daily_ev_target": "SEM completează din rețea peste noapte ca mașina să aibă cel puțin atât dimineața. Este un prag minim, nu o limită — soarele poate adăuga mai mult. 0 = nu folosi niciodată rețeaua.",
           "observer_mode": "Când este ACTIV, SEM monitorizează totul, dar nu trimite niciodată comenzi către hardware.",
           "smart_night_charging": "Când este ACTIVĂ, SEM reduce ținta de încărcare de noapte atunci când prognoza solară de mâine este suficientă.",
           "minimum_solar_power": "Puterea solară minimă de surplus (W) necesară înainte ca SEM să înceapă încărcarea solară a VE.",
@@ -255,7 +255,7 @@
           "emergency_peak_level": "Nivel de vârf de urgență (kW)",
           "vehicle_soc_entity": "SOC baterie vehicul",
           "ev_battery_capacity_kwh": "Capacitatea bateriei VE (kWh)",
-          "ev_target_soc": "SOC țintă VE (%)"
+          "ev_target_soc": "Consideră plin la (%)"
         },
         "data_description": {
           "load_management_enabled": "Activează/dezactivează delestarea automată a sarcinilor de către SEM pentru a rămâne sub limita de vârf a rețelei.",
@@ -265,7 +265,7 @@
           "emergency_peak_level": "Nivelul de putere (kW) la care SEM delestează agresiv sarcinile pentru a evita taxele de putere. Trebuie să fie peste limita de vârf țintă.",
           "vehicle_soc_entity": "Senzor opțional care raportează starea de încărcare curentă a vehiculului (0–100%).",
           "ev_battery_capacity_kwh": "Capacitatea utilizabilă totală a bateriei VE, în kWh.",
-          "ev_target_soc": "SOC-ul țintă (%) la care SEM consideră VE complet încărcat."
+          "ev_target_soc": "De aici SEM consideră mașina încărcată. Este o definiție a lui \"plin\", nu o limită de încărcare."
         }
       },
       "notifications": {
@@ -277,7 +277,7 @@
           "mobile_notification_service": "Serviciu notificări mobile",
           "vehicle_soc_entity": "SOC baterie vehicul",
           "ev_battery_capacity_kwh": "Capacitatea bateriei VE (kWh)",
-          "ev_target_soc": "SOC țintă VE (%)"
+          "ev_target_soc": "Consideră plin la (%)"
         },
         "data_description": {
           "enable_charger_notifications": "Activează/dezactivează bannerele de notificare permanente de pe cardul de stare al încărcătorului.",
@@ -285,7 +285,7 @@
           "mobile_notification_service": "Serviciul HA notify pentru notificări push mobile (de ex. notify.mobile_app_your_phone).",
           "vehicle_soc_entity": "Senzor opțional care raportează starea de încărcare curentă a vehiculului (0–100%).",
           "ev_battery_capacity_kwh": "Capacitatea utilizabilă totală a bateriei VE, în kWh.",
-          "ev_target_soc": "SOC-ul țintă (%) la care SEM consideră VE complet încărcat."
+          "ev_target_soc": "De aici SEM consideră mașina încărcată. Este o definiție a lui \"plin\", nu o limită de încărcare."
         }
       },
       "battery_scheduler": {
@@ -329,13 +329,13 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "Prioritate surplus (1=cea mai mare)",
           "ev_current_control_entity": "Entitate de control al curentului (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Limită încărcare solară (kWh)",
-          "ev_target_soc_max": "Limită încărcare solară (SOC %)",
-          "daily_ev_target": "Țintă încărcare de noapte (kWh)",
+          "daily_ev_target_max": "Nu încărca niciodată peste (kWh)",
+          "ev_target_soc_max": "Nu încărca niciodată peste (%)",
+          "daily_ev_target": "Garantează cel puțin (kWh)",
           "vehicle_soc_entity": "Senzor SOC baterie vehicul (opțional)",
           "vehicle_range_entity": "Senzor autonomie vehicul",
           "ev_kwh_per_100km": "Consum vehicul (kWh/100km)",
-          "ev_target_soc": "SOC țintă VE (%)",
+          "ev_target_soc": "Consideră plin la (%)",
           "ev_battery_capacity_kwh": "Capacitatea bateriei VE (kWh)",
           "initial_current": "Curent inițial (A)",
           "ev_min_current": "Curent minim de încărcare (A)",
@@ -358,13 +358,13 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "Ordinea de alocare a surplusului între mai multe încărcătoare. Număr mai mic = prioritate mai mare.",
           "ev_current_control_entity": "Entitate Number folosită pentru a seta curentul de încărcare (A). Pentru Wallbox, go-eCharger și încărcătoare similare.",
-          "daily_ev_target_max": "Surplusul solar încarcă până la această valoare, apoi se oprește. Lăsați la maximum pentru a încarca liber din soare.",
-          "ev_target_soc_max": "Surplusul solar încarcă până la acest SOC, apoi se oprește. Lăsați la 100% pentru a încarca liber din soare.",
-          "daily_ev_target": "Ținta în kWh de încărcat din rețea în fiecare noapte. Setați 0 pentru a dezactiva încărcarea de noapte din rețea.",
+          "daily_ev_target_max": "Surplusul solar se oprește aici. Este un plafon, nu un obiectiv — lăsați la maxim pentru încărcare liberă din soare.",
+          "ev_target_soc_max": "Surplusul solar se oprește aici. Este un plafon, nu un obiectiv — lăsați la 100% pentru încărcare liberă din soare.",
+          "daily_ev_target": "SEM completează din rețea peste noapte ca mașina să aibă cel puțin atât dimineața. Este un prag minim, nu o limită — soarele poate adăuga mai mult. 0 = nu folosi niciodată rețeaua.",
           "vehicle_soc_entity": "Senzor opțional care raportează starea de încărcare curentă a vehiculului (0–100%).",
           "vehicle_range_entity": "Senzor de autonomie real opțional. Altfel, autonomia este estimată din SOC × capacitate × eficiență.",
           "ev_kwh_per_100km": "Folosit pentru a estima autonomia când nu este configurat un senzor de autonomie.",
-          "ev_target_soc": "SOC-ul țintă (%) la care SEM consideră VE complet încărcat.",
+          "ev_target_soc": "De aici SEM consideră mașina încărcată. Este o definiție a lui \"plin\", nu o limită de încărcare.",
           "ev_battery_capacity_kwh": "Capacitatea utilizabilă totală a bateriei VE, în kWh. Folosită pentru a estima SOC-ul și durata de încărcare.",
           "initial_current": "Curentul de încărcare cu care începe SEM înainte de a se ajusta la surplusul disponibil.",
           "ev_min_current": "Sub această valoare SEM întrerupe încărcarea în loc să scadă curentul mai mult.",
@@ -391,13 +391,13 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "Prioritate surplus (1=cea mai mare)",
           "ev_current_control_entity": "Entitate de control al curentului (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Limită încărcare solară (kWh)",
-          "ev_target_soc_max": "Limită încărcare solară (SOC %)",
-          "daily_ev_target": "Țintă încărcare de noapte (kWh)",
+          "daily_ev_target_max": "Nu încărca niciodată peste (kWh)",
+          "ev_target_soc_max": "Nu încărca niciodată peste (%)",
+          "daily_ev_target": "Garantează cel puțin (kWh)",
           "vehicle_soc_entity": "Senzor SOC baterie vehicul (opțional)",
           "vehicle_range_entity": "Senzor autonomie vehicul",
           "ev_kwh_per_100km": "Consum vehicul (kWh/100km)",
-          "ev_target_soc": "SOC țintă VE (%)",
+          "ev_target_soc": "Consideră plin la (%)",
           "ev_battery_capacity_kwh": "Capacitatea bateriei VE (kWh)",
           "initial_current": "Curent inițial (A)",
           "ev_min_current": "Curent minim de încărcare (A)",
@@ -419,13 +419,13 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "Ordinea de alocare a surplusului între mai multe încărcătoare. Număr mai mic = prioritate mai mare.",
           "ev_current_control_entity": "Entitate Number folosită pentru a seta curentul de încărcare (A). Pentru Wallbox, go-eCharger și încărcătoare similare.",
-          "daily_ev_target_max": "Surplusul solar încarcă până la această valoare, apoi se oprește. Lăsați la maximum pentru a încarca liber din soare.",
-          "ev_target_soc_max": "Surplusul solar încarcă până la acest SOC, apoi se oprește. Lăsați la 100% pentru a încarca liber din soare.",
-          "daily_ev_target": "Ținta în kWh de încărcat din rețea în fiecare noapte. Setați 0 pentru a dezactiva încărcarea de noapte din rețea.",
+          "daily_ev_target_max": "Surplusul solar se oprește aici. Este un plafon, nu un obiectiv — lăsați la maxim pentru încărcare liberă din soare.",
+          "ev_target_soc_max": "Surplusul solar se oprește aici. Este un plafon, nu un obiectiv — lăsați la 100% pentru încărcare liberă din soare.",
+          "daily_ev_target": "SEM completează din rețea peste noapte ca mașina să aibă cel puțin atât dimineața. Este un prag minim, nu o limită — soarele poate adăuga mai mult. 0 = nu folosi niciodată rețeaua.",
           "vehicle_soc_entity": "Senzor opțional care raportează starea de încărcare curentă a vehiculului (0–100%).",
           "vehicle_range_entity": "Senzor de autonomie real opțional. Altfel, autonomia este estimată din SOC × capacitate × eficiență.",
           "ev_kwh_per_100km": "Folosit pentru a estima autonomia când nu este configurat un senzor de autonomie.",
-          "ev_target_soc": "SOC-ul țintă (%) la care SEM consideră VE complet încărcat.",
+          "ev_target_soc": "De aici SEM consideră mașina încărcată. Este o definiție a lui \"plin\", nu o limită de încărcare.",
           "ev_battery_capacity_kwh": "Capacitatea utilizabilă totală a bateriei VE, în kWh. Folosită pentru a estima SOC-ul și durata de încărcare.",
           "initial_current": "Curentul de încărcare cu care începe SEM înainte de a se ajusta la surplusul disponibil.",
           "ev_min_current": "Sub această valoare SEM întrerupe încărcarea în loc să scadă curentul mai mult.",

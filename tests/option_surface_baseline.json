@@ -6,6 +6,8 @@
     "Regenerate:  python3 scripts/audit_options.py --baseline"
   ],
   "total": 158,
+  "first_run_fields": 13,
+  "first_run_steps": 4,
   "config_fields": [
     "action",
     "battery_assist_max_power",

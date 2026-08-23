@@ -64,7 +64,7 @@
           "mobile_notification_service": "Mobile Notification Service",
           "vehicle_soc_entity": "Vehicle Battery SOC",
           "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "ev_target_soc": "Consider full at (%)"
         },
         "data_description": {
           "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is currently connected.",
@@ -78,7 +78,7 @@
           "mobile_notification_service": "HA notify service for mobile push (e.g. notify.mobile_app_your_phone).",
           "vehicle_soc_entity": "Optional sensor that reports the vehicle's current state of charge (0–100%).",
           "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "ev_target_soc": "SEM stops treating the car as needing charge once it reaches this. It is a definition of \"full\", not a limit on charging."
         }
       }
     },
@@ -108,9 +108,9 @@
           "vehicle_soc_entity": "Vehicle Battery SOC sensor (optional)",
           "ev_battery_capacity_kwh": "EV battery capacity (kWh)",
           "ev_charger_efficiency": "Charger efficiency (%)",
-          "ev_target_soc": "EV target SOC (%)",
-          "daily_ev_target_max": "Solar charge limit (kWh)",
-          "ev_target_soc_max": "Solar charge limit (SOC %)",
+          "ev_target_soc": "Consider full at (%)",
+          "daily_ev_target_max": "Never charge past (kWh)",
+          "ev_target_soc_max": "Never charge past (%)",
           "vehicle_range_entity": "Vehicle range sensor",
           "ev_kwh_per_100km": "Vehicle consumption (kWh/100km)"
         },
@@ -124,9 +124,9 @@
           "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
           "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
           "ev_charger_efficiency": "Share of the metered AC energy that reaches the battery. Lower it if the SOC estimate runs ahead of the car. Typically 85-95%, less on single-phase or in cold weather.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged.",
-          "daily_ev_target_max": "Solar surplus charges up to this, then stops. Leave at full to charge freely from sun.",
-          "ev_target_soc_max": "Solar surplus charges up to this SOC, then stops. Leave at 100% to charge freely from sun.",
+          "ev_target_soc": "SEM stops treating the car as needing charge once it reaches this. It is a definition of \"full\", not a limit on charging.",
+          "daily_ev_target_max": "Solar surplus stops charging here. This is a ceiling, not a goal — leave it at full to charge freely from the sun.",
+          "ev_target_soc_max": "Solar surplus stops charging here. This is a ceiling, not a goal — leave at 100% to charge freely from the sun.",
           "vehicle_range_entity": "Optional real range sensor. Otherwise range is estimated from SOC × capacity × efficiency.",
           "ev_kwh_per_100km": "Used to estimate driving range when no range sensor is configured."
         }
@@ -138,7 +138,7 @@
           "update_interval": "Update Interval (seconds)",
           "battery_priority_soc": "Battery Priority SOC (%)",
           "min_solar_power": "Minimum solar power — raw PV production (W)",
-          "daily_ev_target": "Daily EV Target (kWh)",
+          "daily_ev_target": "Guarantee at least (kWh)",
           "battery_assist_max_power": "Battery Assist Max Power (W)",
           "battery_assist_min_surplus": "Battery Assist Min Solar Surplus (W)",
           "battery_capacity_kwh": "Battery Capacity (kWh)",
@@ -152,7 +152,7 @@
           "smart_night_charging": "Smart Night Charging",
           "vehicle_soc_entity": "Vehicle Battery SOC",
           "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)",
+          "ev_target_soc": "Consider full at (%)",
           "battery_buffer_soc": "Zone 2/3 boundary — Battery buffer SOC (%)",
           "battery_auto_start_soc": "Zone 3/4 boundary — Battery auto-start SOC (%)",
           "battery_discharge_control_entity": "Battery discharge control entity (optional)",
@@ -168,7 +168,7 @@
           "battery_buffer_soc": "Zone 2 → Zone 3 boundary. Above this SOC the battery may discharge to bridge solar deficits while charging the EV. Default 70 %.",
           "battery_auto_start_soc": "Zone 3 → Zone 4 boundary. Above this SOC the EV can start charging even with no solar surplus, drawing from the battery. Default 90 %.",
           "min_solar_power": "Raw PV-production floor — the panel output below which 'solar is up' is false: solar_only won't start and the deep-deficit guard treats it as darkness (so charging stops quickly instead of bridging on grid). This is RAW production, NOT surplus — contrast 'Battery assist minimum solar surplus' (solar − home), which decides when the home battery may help. Default 1000 W; keep below the EV charger's hardware minimum (~4140 W 3-phase, ~1380 W 1-phase).",
-          "daily_ev_target": "Target kWh per day for night-grid charging. Set to 0 to disable night charging entirely.",
+          "daily_ev_target": "SEM tops up from the grid overnight so the car has at least this much by morning. This is a floor, not a limit — sunshine can add more. 0 = never use the grid.",
           "battery_assist_max_power": "Maximum power the home battery can discharge to assist the EV in Zone 3/4. Default 4500 W.",
           "battery_assist_min_surplus": "Minimum real solar surplus before the home battery may help charge the EV — in any charging mode. Below this the battery is reserved for the house (the car draws from grid + solar). Default 1200 W. Set to 0 to let the battery support the EV everywhere, including overnight.",
           "battery_capacity_kwh": "Total usable home battery capacity (NOT the EV battery — that's a separate field on the EV step). Used by the forecast-driven charging strategy.",
@@ -192,7 +192,7 @@
         "title": "EV Charging & Solar",
         "description": "Configure EV charging targets and solar thresholds.",
         "data": {
-          "daily_ev_target": "Night charge target (kWh)",
+          "daily_ev_target": "Guarantee at least (kWh)",
           "observer_mode": "Observer mode (read-only, no hardware control)",
           "smart_night_charging": "Reduce night target based on tomorrow's forecast",
           "minimum_solar_power": "Minimum solar power to start EV charging (W)",
@@ -200,7 +200,7 @@
           "export_limit_entity": "Export-limit entity (optional)"
         },
         "data_description": {
-          "daily_ev_target": "Target kWh to charge from the grid each night. Set to 0 to disable night grid charging.",
+          "daily_ev_target": "SEM tops up from the grid overnight so the car has at least this much by morning. This is a floor, not a limit — sunshine can add more. 0 = never use the grid.",
           "observer_mode": "When ON, SEM monitors everything but never sends commands to hardware.",
           "smart_night_charging": "When ON, SEM reduces the night charge target when tomorrow's solar forecast is sufficient.",
           "minimum_solar_power": "Minimum surplus solar power (W) required before SEM starts solar EV charging.",
@@ -255,7 +255,7 @@
           "emergency_peak_level": "Emergency Peak Level (kW)",
           "vehicle_soc_entity": "Vehicle Battery SOC",
           "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "ev_target_soc": "Consider full at (%)"
         },
         "data_description": {
           "load_management_enabled": "Enable/disable SEM's automatic load-shedding to stay under your grid peak limit.",
@@ -265,7 +265,7 @@
           "emergency_peak_level": "Power level (kW) at which SEM aggressively sheds loads to avoid demand charges. Must be above the target peak limit.",
           "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
           "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "ev_target_soc": "SEM stops treating the car as needing charge once it reaches this. It is a definition of \"full\", not a limit on charging."
         }
       },
       "battery_scheduler": {
@@ -301,7 +301,7 @@
           "mobile_notification_service": "Mobile Notification Service",
           "vehicle_soc_entity": "Vehicle Battery SOC",
           "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "ev_target_soc": "Consider full at (%)"
         },
         "data_description": {
           "enable_charger_notifications": "Enable/disable persistent notification banners on the charger status card.",
@@ -309,7 +309,7 @@
           "mobile_notification_service": "HA notify service for mobile push (e.g. notify.mobile_app_your_phone).",
           "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
           "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "ev_target_soc": "SEM stops treating the car as needing charge once it reaches this. It is a definition of \"full\", not a limit on charging."
         }
       },
       "ev_charger_edit": {
@@ -329,13 +329,13 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "Surplus Priority (1=highest)",
           "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Solar charge limit (kWh)",
-          "ev_target_soc_max": "Solar charge limit (SOC %)",
-          "daily_ev_target": "Night charge target (kWh)",
+          "daily_ev_target_max": "Never charge past (kWh)",
+          "ev_target_soc_max": "Never charge past (%)",
+          "daily_ev_target": "Guarantee at least (kWh)",
           "vehicle_soc_entity": "Vehicle Battery SOC sensor (optional)",
           "vehicle_range_entity": "Vehicle range sensor",
           "ev_kwh_per_100km": "Vehicle consumption (kWh/100km)",
-          "ev_target_soc": "EV target SOC (%)",
+          "ev_target_soc": "Consider full at (%)",
           "ev_battery_capacity_kwh": "EV battery capacity (kWh)",
           "initial_current": "Start current (A)",
           "ev_min_current": "Minimum charge current (A)",
@@ -358,13 +358,13 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
           "ev_current_control_entity": "Number entity used to set the charging current (A). Use for Wallbox, go-eCharger, and similar chargers.",
-          "daily_ev_target_max": "Solar surplus charges up to this, then stops. Leave at full to charge freely from sun.",
-          "ev_target_soc_max": "Solar surplus charges up to this SOC, then stops. Leave at 100% to charge freely from sun.",
-          "daily_ev_target": "Target kWh to charge from the grid each night. Set to 0 to disable night grid charging.",
+          "daily_ev_target_max": "Solar surplus stops charging here. This is a ceiling, not a goal — leave it at full to charge freely from the sun.",
+          "ev_target_soc_max": "Solar surplus stops charging here. This is a ceiling, not a goal — leave at 100% to charge freely from the sun.",
+          "daily_ev_target": "SEM tops up from the grid overnight so the car has at least this much by morning. This is a floor, not a limit — sunshine can add more. 0 = never use the grid.",
           "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
           "vehicle_range_entity": "Optional real range sensor. Otherwise range is estimated from SOC × capacity × efficiency.",
           "ev_kwh_per_100km": "Used to estimate driving range when no range sensor is configured.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged.",
+          "ev_target_soc": "SEM stops treating the car as needing charge once it reaches this. It is a definition of \"full\", not a limit on charging.",
           "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
           "initial_current": "Charge current SEM begins with before ramping to match available surplus.",
           "ev_min_current": "Below this SEM pauses charging instead of dropping the current further.",
@@ -391,13 +391,13 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "Surplus Priority (1=highest)",
           "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Solar charge limit (kWh)",
-          "ev_target_soc_max": "Solar charge limit (SOC %)",
-          "daily_ev_target": "Night charge target (kWh)",
+          "daily_ev_target_max": "Never charge past (kWh)",
+          "ev_target_soc_max": "Never charge past (%)",
+          "daily_ev_target": "Guarantee at least (kWh)",
           "vehicle_soc_entity": "Vehicle Battery SOC sensor (optional)",
           "vehicle_range_entity": "Vehicle range sensor",
           "ev_kwh_per_100km": "Vehicle consumption (kWh/100km)",
-          "ev_target_soc": "EV target SOC (%)",
+          "ev_target_soc": "Consider full at (%)",
           "ev_battery_capacity_kwh": "EV battery capacity (kWh)",
           "initial_current": "Start current (A)",
           "ev_min_current": "Minimum charge current (A)",
@@ -419,13 +419,13 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
           "ev_current_control_entity": "Number entity used to set the charging current (A). Use for Wallbox, go-eCharger, and similar chargers.",
-          "daily_ev_target_max": "Solar surplus charges up to this, then stops. Leave at full to charge freely from sun.",
-          "ev_target_soc_max": "Solar surplus charges up to this SOC, then stops. Leave at 100% to charge freely from sun.",
-          "daily_ev_target": "Target kWh to charge from the grid each night. Set to 0 to disable night grid charging.",
+          "daily_ev_target_max": "Solar surplus stops charging here. This is a ceiling, not a goal — leave it at full to charge freely from the sun.",
+          "ev_target_soc_max": "Solar surplus stops charging here. This is a ceiling, not a goal — leave at 100% to charge freely from the sun.",
+          "daily_ev_target": "SEM tops up from the grid overnight so the car has at least this much by morning. This is a floor, not a limit — sunshine can add more. 0 = never use the grid.",
           "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
           "vehicle_range_entity": "Optional real range sensor. Otherwise range is estimated from SOC × capacity × efficiency.",
           "ev_kwh_per_100km": "Used to estimate driving range when no range sensor is configured.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged.",
+          "ev_target_soc": "SEM stops treating the car as needing charge once it reaches this. It is a definition of \"full\", not a limit on charging.",
           "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
           "initial_current": "Charge current SEM begins with before ramping to match available surplus.",
           "ev_min_current": "Below this SEM pauses charging instead of dropping the current further.",

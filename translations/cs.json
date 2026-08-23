@@ -64,7 +64,7 @@
           "mobile_notification_service": "Služba mobilních oznámení",
           "vehicle_soc_entity": "SOC baterie vozidla",
           "ev_battery_capacity_kwh": "Kapacita baterie EV (kWh)",
-          "ev_target_soc": "Cílový SOC EV (%)"
+          "ev_target_soc": "Považovat za plné při (%)"
         },
         "data_description": {
           "ev_connected_sensor": "Binární senzor hlásící, zda je konektor vozidla právě připojen.",
@@ -78,7 +78,7 @@
           "mobile_notification_service": "Služba HA notify pro mobilní push (např. notify.mobile_app_your_phone).",
           "vehicle_soc_entity": "Volitelný senzor hlásící aktuální stav nabití vozidla (0–100 %).",
           "ev_battery_capacity_kwh": "Celková využitelná kapacita baterie EV v kWh. Slouží k odhadu SOC a doby nabíjení.",
-          "ev_target_soc": "Cílový SOC (%), při kterém SEM považuje EV za plně nabité."
+          "ev_target_soc": "Od této hodnoty SEM považuje auto za nabité. Je to definice \"plného\", ne limit nabíjení."
         }
       }
     },
@@ -108,9 +108,9 @@
           "vehicle_soc_entity": "Senzor SOC baterie vozidla (volitelné)",
           "ev_battery_capacity_kwh": "Kapacita baterie EV (kWh)",
           "ev_charger_efficiency": "Účinnost nabíječky (%)",
-          "ev_target_soc": "Cílový SOC EV (%)",
-          "daily_ev_target_max": "Limit solárního nabíjení (kWh)",
-          "ev_target_soc_max": "Limit solárního nabíjení (SOC %)",
+          "ev_target_soc": "Považovat za plné při (%)",
+          "daily_ev_target_max": "Nikdy nenabíjet nad (kWh)",
+          "ev_target_soc_max": "Nikdy nenabíjet nad (%)",
           "vehicle_range_entity": "Senzor dojezdu vozidla",
           "ev_kwh_per_100km": "Spotřeba vozidla (kWh/100km)"
         },
@@ -124,9 +124,9 @@
           "vehicle_soc_entity": "Volitelný senzor hlásící aktuální stav nabití vozidla (0–100 %).",
           "ev_battery_capacity_kwh": "Celková využitelná kapacita baterie EV v kWh. Slouží k odhadu SOC a doby nabíjení.",
           "ev_charger_efficiency": "Podíl naměřené střídavé energie, který se dostane do baterie. Snižte jej, pokud odhad SOC předbíhá vozidlo. Obvykle 85-95 %, méně při jednofázovém nabíjení nebo v mrazu.",
-          "ev_target_soc": "Cílový SOC (%), při kterém SEM považuje EV za plně nabité.",
-          "daily_ev_target_max": "Solární přebytek nabíjí až do této hodnoty a poté se zastaví. Ponechte na maximu pro volné nabíjení ze slunce.",
-          "ev_target_soc_max": "Solární přebytek nabíjí až do tohoto SOC a poté se zastaví. Ponechte na 100 % pro volné nabíjení ze slunce.",
+          "ev_target_soc": "Od této hodnoty SEM považuje auto za nabité. Je to definice \"plného\", ne limit nabíjení.",
+          "daily_ev_target_max": "Solární přebytek zde přestane nabíjet. Je to strop, ne cíl — nechte na maximu pro volné nabíjení ze slunce.",
+          "ev_target_soc_max": "Solární přebytek zde přestane nabíjet. Je to strop, ne cíl — nechte na 100% pro volné nabíjení ze slunce.",
           "ev_kwh_per_100km": "Slouží k odhadu dojezdu, pokud není nakonfigurován senzor dojezdu.",
           "vehicle_range_entity": "Volitelný skutečný senzor dojezdu. Jinak se dojezd odhaduje z SOC × kapacita × účinnost."
         }
@@ -138,7 +138,7 @@
           "update_interval": "Interval aktualizace (sekundy)",
           "battery_priority_soc": "Prioritní SOC baterie (%)",
           "min_solar_power": "Minimální solární výkon — surová výroba FV (W)",
-          "daily_ev_target": "Denní cíl EV (kWh)",
+          "daily_ev_target": "Zaručit alespoň (kWh)",
           "battery_assist_max_power": "Podpora baterie – max. výkon (W)",
           "battery_capacity_kwh": "Kapacita baterie (kWh)",
           "battery_discharge_protection_enabled": "Povolit ochranu proti vybíjení baterie",
@@ -151,7 +151,7 @@
           "smart_night_charging": "Chytré noční nabíjení",
           "vehicle_soc_entity": "SOC baterie vozidla",
           "ev_battery_capacity_kwh": "Kapacita baterie EV (kWh)",
-          "ev_target_soc": "Cílový SOC EV (%)",
+          "ev_target_soc": "Považovat za plné při (%)",
           "battery_buffer_soc": "Hranice zóny 2/3 — rezervní SOC baterie (%)",
           "battery_auto_start_soc": "Hranice zóny 3/4 — SOC pro automatický start z baterie (%)",
           "battery_discharge_control_entity": "Entita řízení vybíjení baterie (volitelné)",
@@ -168,7 +168,7 @@
           "battery_buffer_soc": "Hranice zóny 2 → zóny 3. Nad tímto SOC se baterie smí vybíjet a překlenovat solární deficity při nabíjení EV. Výchozí 70 %.",
           "battery_auto_start_soc": "Hranice zóny 3 → zóny 4. Nad tímto SOC může EV začít nabíjet i bez solárního přebytku, s odběrem z baterie. Výchozí 90 %.",
           "min_solar_power": "Spodní mez surové výroby FV — výkon panelů, pod kterým je „slunce je aktivní“ nepravdivé: solar_only se nespustí a ochrana proti hlubokému deficitu to považuje za tmu (nabíjení se tedy rychle zastaví místo přemostění ze sítě). Toto je SUROVÁ výroba, NIKOLI přebytek — na rozdíl od „Podpora baterie – min. solární přebytek“ (slunce − dům), který rozhoduje, kdy může domácí baterie pomoci. Výchozí 1000 W; udržujte pod hardwarovým minimem nabíječky EV (~4140 W u 3 fází, ~1380 W u 1 fáze).",
-          "daily_ev_target": "Cílový počet kWh za den pro noční nabíjení ze sítě. Nastavením na 0 noční nabíjení zcela vypnete.",
+          "daily_ev_target": "SEM v noci dobíjí ze sítě, aby auto mělo ráno alespoň tolik. Je to spodní mez, ne limit — slunce může přidat víc. 0 = nikdy nepoužívat síť.",
           "battery_assist_max_power": "Maximální výkon, kterým smí domácí baterie vybíjet na podporu EV v zóně 3/4. Výchozí 4500 W.",
           "battery_capacity_kwh": "Celková využitelná kapacita domácí baterie (NIKOLI baterie EV — ta má vlastní pole v kroku EV). Používá ji strategie nabíjení řízená předpovědí.",
           "battery_discharge_protection_enabled": "Je-li ZAPNUTO, SEM během nočního nabíjení EV omezí limit vybíjení měniče tak, aby domácí baterie napájela pouze dům (nikoli EV).",
@@ -192,7 +192,7 @@
         "title": "Nabíjení EV a solární",
         "description": "Nakonfigurujte cíle nabíjení EV a solární prahy.",
         "data": {
-          "daily_ev_target": "Cíl nočního nabíjení (kWh)",
+          "daily_ev_target": "Zaručit alespoň (kWh)",
           "observer_mode": "Režim pozorovatele (pouze čtení)",
           "smart_night_charging": "Snížit noční cíl na základě předpovědi",
           "minimum_solar_power": "Minimální solární výkon pro nabíjení (W)",
@@ -200,7 +200,7 @@
           "export_limit_entity": "Entita limitu exportu (volitelné)"
         },
         "data_description": {
-          "daily_ev_target": "Cílový počet kWh, které se každou noc nabijí ze sítě. Nastavením na 0 noční nabíjení ze sítě vypnete.",
+          "daily_ev_target": "SEM v noci dobíjí ze sítě, aby auto mělo ráno alespoň tolik. Je to spodní mez, ne limit — slunce může přidat víc. 0 = nikdy nepoužívat síť.",
           "observer_mode": "Je-li ZAPNUTO, SEM vše sleduje, ale nikdy neposílá příkazy do hardwaru.",
           "smart_night_charging": "Je-li ZAPNUTO, SEM sníží cíl nočního nabíjení, pokud je zítřejší solární předpověď dostatečná.",
           "minimum_solar_power": "Minimální přebytečný solární výkon (W) potřebný k tomu, aby SEM zahájil solární nabíjení EV.",
@@ -255,7 +255,7 @@
           "emergency_peak_level": "Nouzová úroveň špičky (kW)",
           "vehicle_soc_entity": "SOC baterie vozidla",
           "ev_battery_capacity_kwh": "Kapacita baterie EV (kWh)",
-          "ev_target_soc": "Cílový SOC EV (%)"
+          "ev_target_soc": "Považovat za plné při (%)"
         },
         "data_description": {
           "load_management_enabled": "Zapnout/vypnout automatické odpojování zátěží, kterým SEM drží odběr pod vaším limitem špičky.",
@@ -265,7 +265,7 @@
           "emergency_peak_level": "Úroveň výkonu (kW), při které SEM agresivně odpojuje zátěže, aby se vyhnul poplatkům za rezervovaný příkon. Musí být vyšší než cílový limit špičky.",
           "vehicle_soc_entity": "Volitelný senzor hlásící aktuální stav nabití vozidla (0–100 %).",
           "ev_battery_capacity_kwh": "Celková využitelná kapacita baterie EV v kWh.",
-          "ev_target_soc": "Cílový SOC (%), při kterém SEM považuje EV za plně nabité."
+          "ev_target_soc": "Od této hodnoty SEM považuje auto za nabité. Je to definice \"plného\", ne limit nabíjení."
         }
       },
       "notifications": {
@@ -277,7 +277,7 @@
           "mobile_notification_service": "Služba mobilních oznámení",
           "vehicle_soc_entity": "SOC baterie vozidla",
           "ev_battery_capacity_kwh": "Kapacita baterie EV (kWh)",
-          "ev_target_soc": "Cílový SOC EV (%)"
+          "ev_target_soc": "Považovat za plné při (%)"
         },
         "data_description": {
           "enable_charger_notifications": "Zapnout/vypnout trvalé informační proužky na kartě stavu nabíječky.",
@@ -285,7 +285,7 @@
           "mobile_notification_service": "Služba HA notify pro mobilní push (např. notify.mobile_app_your_phone).",
           "vehicle_soc_entity": "Volitelný senzor hlásící aktuální stav nabití vozidla (0–100 %).",
           "ev_battery_capacity_kwh": "Celková využitelná kapacita baterie EV v kWh.",
-          "ev_target_soc": "Cílový SOC (%), při kterém SEM považuje EV za plně nabité."
+          "ev_target_soc": "Od této hodnoty SEM považuje auto za nabité. Je to definice \"plného\", ne limit nabíjení."
         }
       },
       "battery_scheduler": {
@@ -329,13 +329,13 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "Priorita přebytku (1=nejvyšší)",
           "ev_current_control_entity": "Entita řízení proudu (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Limit solárního nabíjení (kWh)",
-          "ev_target_soc_max": "Limit solárního nabíjení (SOC %)",
-          "daily_ev_target": "Cíl nočního nabíjení (kWh)",
+          "daily_ev_target_max": "Nikdy nenabíjet nad (kWh)",
+          "ev_target_soc_max": "Nikdy nenabíjet nad (%)",
+          "daily_ev_target": "Zaručit alespoň (kWh)",
           "vehicle_soc_entity": "Senzor SOC baterie vozidla (volitelné)",
           "vehicle_range_entity": "Senzor dojezdu vozidla",
           "ev_kwh_per_100km": "Spotřeba vozidla (kWh/100km)",
-          "ev_target_soc": "Cílový SOC EV (%)",
+          "ev_target_soc": "Považovat za plné při (%)",
           "ev_battery_capacity_kwh": "Kapacita baterie EV (kWh)",
           "initial_current": "Počáteční proud (A)",
           "ev_min_current": "Minimální nabíjecí proud (A)",
@@ -358,13 +358,13 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "Pořadí přidělování přebytku mezi více nabíječkami. Nižší číslo = vyšší priorita.",
           "ev_current_control_entity": "Entita Number použitá pro nastavení nabíjecího proudu (A). Pro Wallbox, go-eCharger a podobné nabíječky.",
-          "daily_ev_target_max": "Solární přebytek nabíjí až do této hodnoty a poté se zastaví. Ponechte na maximu pro volné nabíjení ze slunce.",
-          "ev_target_soc_max": "Solární přebytek nabíjí až do tohoto SOC a poté se zastaví. Ponechte na 100 % pro volné nabíjení ze slunce.",
-          "daily_ev_target": "Cílový počet kWh, které se každou noc nabijí ze sítě. Nastavením na 0 noční nabíjení ze sítě vypnete.",
+          "daily_ev_target_max": "Solární přebytek zde přestane nabíjet. Je to strop, ne cíl — nechte na maximu pro volné nabíjení ze slunce.",
+          "ev_target_soc_max": "Solární přebytek zde přestane nabíjet. Je to strop, ne cíl — nechte na 100% pro volné nabíjení ze slunce.",
+          "daily_ev_target": "SEM v noci dobíjí ze sítě, aby auto mělo ráno alespoň tolik. Je to spodní mez, ne limit — slunce může přidat víc. 0 = nikdy nepoužívat síť.",
           "vehicle_soc_entity": "Volitelný senzor hlásící aktuální stav nabití vozidla (0–100 %).",
           "vehicle_range_entity": "Volitelný skutečný senzor dojezdu. Jinak se dojezd odhaduje z SOC × kapacita × účinnost.",
           "ev_kwh_per_100km": "Slouží k odhadu dojezdu, pokud není nakonfigurován senzor dojezdu.",
-          "ev_target_soc": "Cílový SOC (%), při kterém SEM považuje EV za plně nabité.",
+          "ev_target_soc": "Od této hodnoty SEM považuje auto za nabité. Je to definice \"plného\", ne limit nabíjení.",
           "ev_battery_capacity_kwh": "Celková využitelná kapacita baterie EV v kWh. Slouží k odhadu SOC a doby nabíjení.",
           "initial_current": "Nabíjecí proud, kterým SEM začíná, než se přizpůsobí dostupnému přebytku.",
           "ev_min_current": "Pod touto hodnotou SEM nabíjení pozastaví, místo aby proud dále snižoval.",
@@ -391,13 +391,13 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "Priorita přebytku (1=nejvyšší)",
           "ev_current_control_entity": "Entita řízení proudu (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Limit solárního nabíjení (kWh)",
-          "ev_target_soc_max": "Limit solárního nabíjení (SOC %)",
-          "daily_ev_target": "Cíl nočního nabíjení (kWh)",
+          "daily_ev_target_max": "Nikdy nenabíjet nad (kWh)",
+          "ev_target_soc_max": "Nikdy nenabíjet nad (%)",
+          "daily_ev_target": "Zaručit alespoň (kWh)",
           "vehicle_soc_entity": "Senzor SOC baterie vozidla (volitelné)",
           "vehicle_range_entity": "Senzor dojezdu vozidla",
           "ev_kwh_per_100km": "Spotřeba vozidla (kWh/100km)",
-          "ev_target_soc": "Cílový SOC EV (%)",
+          "ev_target_soc": "Považovat za plné při (%)",
           "ev_battery_capacity_kwh": "Kapacita baterie EV (kWh)",
           "initial_current": "Počáteční proud (A)",
           "ev_min_current": "Minimální nabíjecí proud (A)",
@@ -419,13 +419,13 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "Pořadí přidělování přebytku mezi více nabíječkami. Nižší číslo = vyšší priorita.",
           "ev_current_control_entity": "Entita Number použitá pro nastavení nabíjecího proudu (A). Pro Wallbox, go-eCharger a podobné nabíječky.",
-          "daily_ev_target_max": "Solární přebytek nabíjí až do této hodnoty a poté se zastaví. Ponechte na maximu pro volné nabíjení ze slunce.",
-          "ev_target_soc_max": "Solární přebytek nabíjí až do tohoto SOC a poté se zastaví. Ponechte na 100 % pro volné nabíjení ze slunce.",
-          "daily_ev_target": "Cílový počet kWh, které se každou noc nabijí ze sítě. Nastavením na 0 noční nabíjení ze sítě vypnete.",
+          "daily_ev_target_max": "Solární přebytek zde přestane nabíjet. Je to strop, ne cíl — nechte na maximu pro volné nabíjení ze slunce.",
+          "ev_target_soc_max": "Solární přebytek zde přestane nabíjet. Je to strop, ne cíl — nechte na 100% pro volné nabíjení ze slunce.",
+          "daily_ev_target": "SEM v noci dobíjí ze sítě, aby auto mělo ráno alespoň tolik. Je to spodní mez, ne limit — slunce může přidat víc. 0 = nikdy nepoužívat síť.",
           "vehicle_soc_entity": "Volitelný senzor hlásící aktuální stav nabití vozidla (0–100 %).",
           "vehicle_range_entity": "Volitelný skutečný senzor dojezdu. Jinak se dojezd odhaduje z SOC × kapacita × účinnost.",
           "ev_kwh_per_100km": "Slouží k odhadu dojezdu, pokud není nakonfigurován senzor dojezdu.",
-          "ev_target_soc": "Cílový SOC (%), při kterém SEM považuje EV za plně nabité.",
+          "ev_target_soc": "Od této hodnoty SEM považuje auto za nabité. Je to definice \"plného\", ne limit nabíjení.",
           "ev_battery_capacity_kwh": "Celková využitelná kapacita baterie EV v kWh. Slouží k odhadu SOC a doby nabíjení.",
           "initial_current": "Nabíjecí proud, kterým SEM začíná, než se přizpůsobí dostupnému přebytku.",
           "ev_min_current": "Pod touto hodnotou SEM nabíjení pozastaví, místo aby proud dále snižoval.",

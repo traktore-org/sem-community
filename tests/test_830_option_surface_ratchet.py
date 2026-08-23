@@ -160,3 +160,41 @@ class TestNoFieldIsDead:
         assert len(seen) == len(set(seen)), "a field was classified twice"
         assert len(seen) == c["total"], (
             f"{c['total'] - len(seen)} field(s) fell through the classifier")
+
+
+class TestTheFirstRunPathHasItsOwnCeiling:
+    """(#830 step 5) The number a new user actually feels, ratcheted separately.
+
+    158 is the maintenance burden; the first-run path is the experience. They
+    move independently — the options flow could double while install stays at
+    four steps, and only one of those is what someone judges SEM by in their
+    first ten minutes.
+
+    Measured: **4 steps, 13 fields**, and eight of the thirteen are EV charger
+    entity pickers — one subsystem, which #814's detection already pre-fills
+    when it can. That is where this number goes down, and it is a far better
+    target than trimming the other 124.
+    """
+
+    def test_first_run_never_grows(self):
+        live, base = _live(), _baseline()
+        assert live["first_run_fields"] <= base["first_run_fields"], (
+            f"a new user now meets {live['first_run_fields']} fields before "
+            f"SEM works, up from {base['first_run_fields']}. This is the number "
+            f"users feel. {REGEN}")
+
+    def test_first_run_steps_never_grow(self):
+        live, base = _live(), _baseline()
+        assert live["first_run_steps"] <= base["first_run_steps"], (
+            f"the install flow grew to {live['first_run_steps']} steps from "
+            f"{base['first_run_steps']}. {REGEN}")
+
+    def test_install_and_options_are_measured_separately(self):
+        """Guard the guard: if the class split ever breaks, both numbers
+        collapse into one and the ratchet above silently stops meaning
+        anything."""
+        m = _live()
+        assert m["first_run_fields"] > 0
+        assert m["options_fields"] > m["first_run_fields"], (
+            "install and options no longer separate — the first-run ceiling "
+            "is measuring the whole surface")
