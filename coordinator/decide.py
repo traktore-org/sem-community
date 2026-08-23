@@ -215,8 +215,18 @@ def battery_assist_budget_w(view: ChargerView) -> float:
     # off-limits to the EV — a sunless evening/overnight session must
     # never drain the home battery into the car. Falls back to surplus
     # only (the day path then behaves like solar_only → idle).
+    #
+    # (#778 phase 5) …unless the forecast says tonight's spend comes back.
+    # This is the case the maintainer's own PROD night exposed: the pack rode
+    # 53% into a morning whose forecast refilled it anyway, because the ONLY
+    # question anyone asked was "is the sun shining right now". The budget
+    # answers a different one — "will tomorrow put this back" — and it is
+    # measured, floored and permissioned before it gets here. Master switch
+    # OFF by default: this is the first non-inert behaviour in the arc.
     if surplus < f.battery_assist_min_surplus_w:
-        return surplus
+        if not (getattr(f, "forecast_spending_enabled", False)
+                and float(getattr(f, "battery_spendable_kwh", 0.0) or 0.0) > 0.0):
+            return surplus
     potential = battery_assist_potential_w(
         f.battery_soc,
         f.buffer_soc,

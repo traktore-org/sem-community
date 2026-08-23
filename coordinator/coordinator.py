@@ -8992,6 +8992,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             is_night=self.time_manager.is_night_mode(),
             tariff_level=tariff_level,
             forecast_remaining_kwh=float(forecast_remaining),
+            # (#778) Tonight's budget, computed a step earlier from measured
+            # inputs. 0.0 until the evidence exists — never a guess.
+            battery_spendable_kwh=float(
+                (getattr(self, "_planning_evidence", None) or {})
+                .get("battery_spendable_kwh") or 0.0),
             battery_priority=battery_priority,
             battery_commanded=self._battery_commanded(),
             curtailment_grant_w=self._curtailment_grant_w(power),

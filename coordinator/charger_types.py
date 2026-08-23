@@ -712,6 +712,11 @@ class FleetContext:
     # install that has expressed no opinion behaves exactly as before; the
     # #537 surplus threshold above remains the separate 'when' question.
     battery_may_assist_ev: bool = True
+    # (#778 phase 5) The forecast budget, and the master switch that lets it
+    # spend anything at all. Default OFF: this is the first behaviour in the
+    # arc that is not inert, and turning it on for someone is not ours to do.
+    battery_spendable_kwh: float = 0.0
+    forecast_spending_enabled: bool = False
     """Solar-surplus gate for battery assist (``battery_assist_min_surplus``).
     Battery assist only SUPPLEMENTS real solar — below this much pure
     solar surplus the battery is off-limits to the EV, so a sunless
@@ -811,6 +816,9 @@ class FleetCycleState:
     power: "PowerReadings"
     config: "Mapping[str, Any]"
     is_night: bool = False
+    # (#778 phase 5) Tonight's forecast-derived spendable budget, in kWh.
+    # 0.0 until the arc's master switch is on and the evidence exists.
+    battery_spendable_kwh: float = 0.0
     tariff_level: "Optional[str]" = None
     forecast_remaining_kwh: float = 0.0
     # (#747) the load manager's peak posture, resolved once per cycle.
