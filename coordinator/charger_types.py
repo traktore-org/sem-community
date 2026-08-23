@@ -374,6 +374,13 @@ class BatteryView:
     """Used as the discharge limit when LIMIT_DISCHARGE fires
     (the 1:1 protection)."""
     ev_connected: bool = False
+    # (#778) The forecast budget and its dynamic floor, for the export
+    # sink. Defaults keep every existing install untouched: no master
+    # switch, no budget, and a dynamic floor of None contributes nothing
+    # to the max() rather than being read as a floor of zero.
+    battery_spendable_kwh: float = 0.0
+    forecast_spending_enabled: bool = False
+    dynamic_floor_pct: float = None
     """Whether any charger in the fleet has a vehicle plugged in
     (cable connected), regardless of whether it is drawing right now.
     The discharge-protection gate keys off this so the clamp HOLDS

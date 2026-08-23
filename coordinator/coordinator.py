@@ -6295,6 +6295,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 fleet=fleet,
                 charging_state=getattr(charging_state, "value", str(charging_state)),
                 ev_charging=bool(getattr(power, "ev_charging", False)),
+                # (#778) The forecast budget and its dynamic floor. Both
+                # come from the single published computation, so the export
+                # decision cannot drift from the number the user was shown.
+                battery_spendable_kwh=float(
+                    (getattr(self, "_planning_evidence", None) or {})
+                    .get("battery_spendable_kwh") or 0.0),
+                forecast_spending_enabled=bool(
+                    self.config.get("forecast_spending_enabled", False)),
+                dynamic_floor_pct=(
+                    getattr(self, "_planning_evidence", None) or {}
+                ).get("battery_dynamic_floor_pct"),
                 # Same operational gate as the charging context: a legacy flat
                 # sensor with no registered charger must not make the battery
                 # hold discharge protection for a phantom EV.
