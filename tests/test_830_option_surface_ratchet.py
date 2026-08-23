@@ -110,3 +110,53 @@ def test_the_audit_script_still_runs():
         capture_output=True, text=True, timeout=60)
     assert out.returncode == 0, out.stderr[-400:]
     assert json.loads(out.stdout)["user_facing_controls"] > 0
+
+
+class TestNoFieldIsDead:
+    """A config field nobody reads is a question asked for nothing.
+
+    Cheap to check and worth checking forever: a field survives a refactor of
+    its consumer far more easily than it survives review, so this is exactly
+    the debt that accumulates silently.
+
+    Today the answer is ZERO, which is the uncomfortable finding of #830's
+    classification pass: the option surface is not bloated with corpses. All
+    125 fields are read by live code. It cannot be shrunk by tidying — only by
+    SEM making more decisions itself, which is the slow work (#814 detection,
+    #755 learning, #638 the plan), not a cleanup.
+    """
+
+    def _classify(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "classify_options", ROOT / "scripts" / "classify_options.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod.classify()
+
+    def test_no_config_field_is_read_by_nothing(self):
+        c = self._classify()
+        assert c["unread"] == [], (
+            f"config fields declared and consumed by nothing: {c['unread']}. "
+            f"Retire them — a question asked for nothing is the cheapest "
+            f"control there is to remove.")
+
+    def test_the_classifier_sees_dynamically_built_keys(self):
+        """Guard the guard. A first pass called twelve phase-guard fields dead;
+        every one is read through an f-string key. A classifier blind to those
+        would recommend deleting live configuration, so the property that it
+        can see them is pinned rather than assumed."""
+        c = self._classify()
+        dynamic = set(c["read_dynamically"]) | set(c["autodetected"])
+        assert any(f.startswith("phase_guard_") for f in dynamic), (
+            "the classifier no longer resolves constructed config keys — it "
+            "will start reporting live fields as dead")
+
+    def test_every_field_lands_in_exactly_one_bucket(self):
+        c = self._classify()
+        buckets = ("autodetected", "flow_action", "read",
+                   "read_dynamically", "unread")
+        seen = [f for b in buckets for f in c[b]]
+        assert len(seen) == len(set(seen)), "a field was classified twice"
+        assert len(seen) == c["total"], (
+            f"{c['total'] - len(seen)} field(s) fell through the classifier")
