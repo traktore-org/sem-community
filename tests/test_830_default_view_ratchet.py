@@ -23,8 +23,6 @@ Two properties matter as much as the size:
 import re
 from pathlib import Path
 
-import pytest
-
 CARD = (Path(__file__).resolve().parent.parent / "dashboard" / "card" / "src"
         / "cards" / "sem-config-card.js")
 
