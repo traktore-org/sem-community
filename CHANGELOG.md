@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔌 **A charger that reports its state as text is no longer read as "no car"
+  while it sits idle** (#833): if you point SEM's connection field at a status
+  sensor rather than a plug binary sensor, states like `Paused` and `Locked` —
+  a Wallbox's normal idle and its must-unlock-first state — were not
+  recognised as "cable is in", so SEM decided no car was present and never
+  started a session. Both the connection and charging readers now share the
+  same cross-brand status vocabulary the rest of SEM already used, so they
+  cannot disagree again; several brands' charging states (Zaptec, Easee,
+  Alfen, V2G discharge) are now recognised too.
+
 # [2.0.0-beta.15] — 24.08.2026
 
 - ☀️ **Choosing your solar forecast source now sticks** (#819): if you had

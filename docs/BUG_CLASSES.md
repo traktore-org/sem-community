@@ -1874,6 +1874,20 @@ which is why it survived: the class hides *because* a downstream guarantee absor
 directly-registered devices (`_surplus_device_row`) reads the real type. The card's icon map knows
 `climate` and `heat_pump` but not `service_device`, so a correctly registered, correctly controlled
 second heat pump rendered as a generic plug — and read to its owner as "it was not added" (#685).
+**Live catch (#833), shape (c) — the duplicated *vocabulary*:** the owner need not be a scalar.
+`charger_adapters/status_enum.py` is the single cross-brand map from a charger's status string to a
+control class, built for #548 precisely so no brand needs its own reader. `sensor_reader.
+_read_binary_sensor` nonetheless carried two private tuples of the same brand strings — 14 for
+`ev_plug`, 2 for `ev_charging` — and they aged apart. The plug tuple never learned `paused` or
+`locked`, so a Wallbox Commander 2 whose only cable signal is its status sensor read **not
+connected** at its normal idle and its must-unlock state: SEM decided there was no car and never
+started a session (discussion #821). The `ev_charging` tuple knew `charging` and `charging power on`
+while the owner knew nine strings across five brands. Note the shape-(a) trap in the obvious fix:
+adding two strings to the tuple would have satisfied the reporter and *preserved the count of
+sites*. Note also that delegation is not free — `_NOT_CHARGING` deliberately holds both
+cable-present idle states and cable-ABSENT ones, so cable presence had to become its own
+enumerated axis (`_CABLE_ABSENT` + `is_cable_present`) rather than be inferred as
+"anything not disconnected", which would have read an empty bay as occupied on OCPP, go-e and Ohme.
 **Closure:** import the owner and delete the literal, at **every** site in one pass — and where a
 literal is not a default at all, say so in the code rather than in a comment: `charge_stability`'s
 `or 0` was a sentinel meaning "config is silent, ask the adapter", and became a conditional so the
@@ -1891,7 +1905,7 @@ argument form and would have passed while three of the five 16s were still in th
 **Sweep question:** for a config key, grep the *readers* and compare their defaults before reading
 any logic — if they disagree, that is the bug, whatever the issue says it is about. And when a key
 has no write path, its default is not a fallback, it is the value.
-Refs #789 #788 #716 #746 #685 #678.
+Refs #789 #788 #716 #746 #685 #678 #833.
 
 ### 47. One word names two axes, so every reader picks the axis it expected — GUARDED
 **Symptom:** a flag reads as an answer to a question it does not answer. Nothing misbehaves; the

@@ -42,7 +42,7 @@ _CHARGING = frozenset({
     "connected_charging",
     # Alfen (leeyuentuen/alfen_wallbox STATUS_DICT)
     "charging normal", "charging simplified", "solar charging",
-    "partial solar charging",
+    "partial solar charging", "charging power on",
     # OCPP / go-e / Ohme all use the bare "charging" above.
 })
 
@@ -62,7 +62,7 @@ _NOT_CHARGING = frozenset({
     "charger ready, no vehicle", "waiting for vehicle",
     "charging finished, vehicle still connected",
     # Ohme (models.py ChargerStatus)
-    "plugged_in", "finished", "unplugged",
+    "plugged_in", "plugged in", "finished", "unplugged",
     # OCPP 1.6 ChargePointStatus (lower-cased, both spellings of suspended)
     "available", "preparing", "suspendedev", "suspended_ev",
     "suspendedevse", "suspended_evse", "finishing", "reserved",
@@ -98,6 +98,49 @@ _LOCKED = frozenset({
     # operation-mode select uses "In-operative". Cover both spellings.
     "in operative", "in-operative", "in_operative",
 })
+
+
+# ── CABLE ABSENT — recognised states that mean NO car is plugged in ────
+# Cable presence is its OWN axis, not a corollary of the three classes
+# above: ``_NOT_CHARGING`` deliberately holds both cable-present idle
+# states (``paused``, ``ready``, ``connected``) and cable-absent ones
+# (``unplugged``, ``available``, ``waiting for vehicle``). Inferring
+# "plugged" from "not disconnected" would therefore read an empty bay as
+# occupied on OCPP, go-e and Ohme — so the absent states are enumerated
+# explicitly and everything else recognised counts as cable present.
+_CABLE_ABSENT = frozenset({
+    "off",
+    # Wallbox
+    "disconnected", "no car connected",
+    # Ohme
+    "unplugged",
+    # OCPP 1.6 — "Available" is the connector with no EV attached
+    "available",
+    # go-e
+    "charger ready, no vehicle", "waiting for vehicle",
+    # Alfen
+    "suspended ev disconnected", "finish wait disconnect",
+})
+
+
+def is_cable_present(raw: "str | None") -> "bool | None":
+    """Is a car plugged in, according to this charger's status string?
+
+    Returns ``True`` / ``False`` for a recognised status, or ``None`` when
+    the string is unrecognised so the caller can fall back to its own
+    heuristic — the same strictly-additive contract as
+    :func:`classify_charger_status`.
+
+    #833: the connection reader used to carry its own tuple of brand
+    strings, which drifted from the sets above and lost ``paused`` and
+    ``locked`` — a Wallbox sitting idle-but-plugged read as "no car" and
+    SEM never started a session (discussion #821). Plug detection now
+    derives from the same vocabulary as everything else, so the two
+    cannot disagree again.
+    """
+    if classify_charger_status(raw) == "unknown":
+        return None
+    return str(raw).strip().lower() not in _CABLE_ABSENT
 
 
 def classify_charger_status(raw: "str | None") -> str:
