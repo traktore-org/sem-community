@@ -29,7 +29,6 @@ import pytest
 
 from custom_components.solar_energy_management.coordinator.battery_night import (
     GAP_TOLERANCE_S,
-    MAX_SAMPLE_GAP_S,
     BatteryNightTracker,
     Sample,
 )
@@ -164,7 +163,7 @@ class TestOrdinaryOperationIsUnchanged:
     def test_a_night_without_gaps_measures_exactly_as_before(self):
         tr = _tracker()
         tr.start("2026-08-23", outdoor_temp_c=None)
-        t = _run(tr, 0.0, 3600.0, power=2000.0, soc=80.0)
+        _run(tr, 0.0, 3600.0, power=2000.0, soc=80.0)
         rec = tr._record()
         assert rec["drain_kwh"] == pytest.approx(2.0, abs=0.05)
         assert rec["bridged_kwh"] == 0.0

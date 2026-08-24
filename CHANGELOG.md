@@ -19,7 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the forecast safety margin, which read as "no margin" instead of its
   documented value. Both now fall back to the documented default when nothing
   was ever chosen — an explicit `0` is still respected as a deliberate choice.
-
 - 📐 **SEM measured how much of the battery is safe to spend, instead of
   guessing** (#778): the amount held back for the night was set to a
   conservative estimate picked by judgement. Replaying **211 real nights** of
@@ -27,8 +26,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   value shipped is the one that cut the worst overshoot by 70% while keeping
   84% of the benefit. The tool that measured it ships too, so any installation
   can check the setting against its own history rather than trusting ours.
-
-
 - 📊 **SEM can now learn your forecast's accuracy from history you already
   have** (#778): forecast-led spending normally watches the forecast forward
   and needs a week of days before it trusts one. If your system has been
@@ -36,7 +33,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **"Learn forecast accuracy from past history"** action reads it and settles
   the ledger in one pass. Days SEM recorded live are never overwritten. On the
   development rig this recovered **139 days** of real forecast-vs-actual.
-
 - ⚖️ **Forecast trust is now measured against the bad days, not the average
   one** (#778): SEM scored its forecast by the average ratio of actual to
   forecast. Those 139 recovered days showed why that is not enough — the
@@ -45,7 +41,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the battery on **42% of days**. SEM now plans against a low percentile of its
   own track record, so a forecast that is right on average but unreliable in
   practice earns less trust than one that is simply right.
-
 - 🔍 **A night whose energy does not add up is no longer treated as evidence**
   (#778): the battery cannot send out more energy than it discharged. SEM now
   checks that each night and marks any night that fails it as unusable for
@@ -54,8 +49,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reporting 13.96 kWh leaving a battery that had discharged 4.06 — the effect
   would have been a budget stuck at zero with the dashboard calmly reporting
   that nothing was spare.
-
-
 - 🔋 **SEM can now spend part of your battery tonight when tomorrow's sun will
   refill it** (#778): the overnight floor stops being a number you type and
   becomes an answer that changes nightly — 30 % before a sunny day, 90 %+ before
@@ -66,7 +59,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   where two separate switches decide what the budget may be spent on — selling
   to the grid, and charging the car. They are separate on purpose, so
   "may sell, may not touch the car" is expressible.
-
 - 🔍 **SEM now says "still learning" instead of showing nothing** (#778): the
   new planning sensors published an honest blank while evidence accrued, which
   Home Assistant renders with the same word it uses for a dead integration. The
@@ -76,6 +68,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   separates "not enough days yet" from "your forecast provider does not publish
   this at all", which are different problems and only one of them resolves by
   waiting.
+
+# [2.0.0-beta.15] — 24.08.2026
+
+- ☀️ **Choosing your solar forecast source now sticks** (#819): if you had
+  Solcast installed alongside another forecast integration, picking that other
+  one appeared to work and then silently went back to Solcast on the next
+  update — every time. SEM had a rule from an earlier release that upgraded to
+  Solcast whenever it appeared, written before the source picker existed, and
+  it overrode your choice one cycle after you made it. It now leaves an
+  explicit choice alone, and still upgrades automatically for installations
+  that never picked one.
+
+- 🔎 **The forecast sensor now says which source was asked for and whether it
+  was used** (#819): when SEM cannot use your chosen integration it falls back,
+  which is correct — but it used to do so in silence, so "SEM cannot find your
+  integration" and "your setting did not save" looked identical from the
+  outside. `sensor.sem_forecast_source` now carries `requested_source` and
+  `source_honoured` beside the list of what is installed.
+
+
+- 🧭 **The Configuration tab now shows what you need, with everything else one
+  switch away** (#830): SEM had grown to around ninety controls on that tab, and
+  a new install needs about eight of them. The default view shows the setup
+  guide, your tariff, your chargers and your battery floors — plus any
+  subsystem you have already configured, because hiding something you set up
+  is not simplification. An **Advanced** switch reveals the rest and hides
+  nothing: every setting stays one click away, and the choice is remembered per
+  browser.
+
+- 🏷️ **Settings are named for what they do** (#830): *"Night charge target"*
+  read like a ceiling and is a floor — the maintainer misread his own setting
+  while testing on production and reported correct behaviour as a bug. It is
+  now **"Guarantee at least (kWh)"**, with **"Never charge past"** for the
+  ceiling, matching names for the SOC versions, and descriptions that say which
+  kind of number each one is.
+
+- 💡 **Every setting has an explanation** (#830): ten controls had no help text
+  — the per-charger targets, phase count, consumption figure and the VPP
+  entities. All ninety now explain what they do when you turn on *Explain
+  settings*.
+
+- 🐛 **The SOC Zones card now appears at all**: it has never rendered. A code
+  error made it throw on every attempt, and because a card that fails silently
+  just looks absent, it read as "not configured" rather than broken. Present in
+  every 2.0 beta so far.
+
+- 🧹 **Two settings that appeared on two pages now appear on one** (#830), and
+  one of them was also a bug: opening the hardware page reset your chosen
+  system-diagram style back to the default.
 
 
 - 🧹 **You can now tell SEM how long to keep its own status history** (#829):

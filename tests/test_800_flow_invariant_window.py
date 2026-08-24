@@ -27,7 +27,6 @@ POWER per sample, which has no window at all. Two consequences worth keeping:
   averaged into a daily total.
 """
 
-import pytest
 
 from custom_components.solar_energy_management.coordinator.battery_night import (
     BatteryNightTracker,

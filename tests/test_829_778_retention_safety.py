@@ -20,7 +20,6 @@ because "safe by accident" is one refactor away from unsafe:
 
 from pathlib import Path
 
-import pytest
 
 from custom_components.solar_energy_management.coordinator.retention import (
     purgeable_entities,
@@ -115,7 +114,6 @@ class TestPublishedPrecision:
     """
 
     def test_trust_is_rounded_where_it_is_published(self):
-        from pathlib import Path
         src = (_PKG / "coordinator" / "coordinator.py").read_text(encoding="utf-8")
         assert '"forecast_trust_d1": _round_or_none(led.trust(1), 3)' in src, (
             "forecast trust is published raw again — a ratio at full float "

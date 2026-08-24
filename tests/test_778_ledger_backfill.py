@@ -23,7 +23,6 @@ The pairing rules are the whole substance here, so they are what is tested:
 
 import datetime
 
-import pytest
 
 from custom_components.solar_energy_management.coordinator.ledger_backfill import (
     backfill_pairs,

@@ -20,7 +20,6 @@ beats an untrainable one, and among equals the larger drain wins — that is the
 one that saw more of the night.
 """
 
-import pytest
 
 from custom_components.solar_energy_management.coordinator.measured_capacity import (
     expected_overnight_need,

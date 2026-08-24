@@ -80,13 +80,6 @@
           "ev_battery_capacity_kwh": "Całkowita użyteczna pojemność akumulatora EV w kWh. Używana do szacowania SOC i czasu ładowania.",
           "ev_target_soc": "Od tego momentu SEM uznaje samochód za naładowany. To definicja \"pełnego\", nie limit ładowania."
         }
-      },
-      "ev_charger_confirm": {
-        "title": "Znaleziono ładowarkę",
-        "description": "SEM znalazł Twoją ładowarkę i odczytał jej encje:\n\n{found}\n\nJeśli to się zgadza, po prostu kontynuuj — nic więcej nie trzeba.",
-        "data": {
-          "review_details": "Chcę sprawdzić szczegóły"
-        }
       }
     },
     "error": {

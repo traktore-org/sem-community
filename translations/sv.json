@@ -80,13 +80,6 @@
           "ev_battery_capacity_kwh": "Total användbar kapacitet i elbilens batteri i kWh. Används för att uppskatta SOC och laddningstid.",
           "ev_target_soc": "Härifrån betraktar SEM bilen som laddad. Det är en definition av \"full\", inte en laddgräns."
         }
-      },
-      "ev_charger_confirm": {
-        "title": "Laddare hittad",
-        "description": "SEM hittade din laddare och läste dess entiteter:\n\n{found}\n\nOm det stämmer, fortsätt bara — inget mer behövs.",
-        "data": {
-          "review_details": "Låt mig se detaljerna"
-        }
       }
     },
     "error": {

@@ -172,6 +172,10 @@ class ForecastReader:
         self._custom_entities = custom_entities or {}
         # (#819) ``auto``/None/unknown all mean "walk the ladder".
         _pref = (preferred_source or "").strip().lower()
+        # (#819) Keep the raw request. The normalised one drives detection;
+        # this one is what the user is TOLD, so a name SEM does not know is
+        # visible as a rejected request instead of vanishing.
+        self._requested_raw = _pref
         self._preferred_source = _pref if _pref in FORECAST_SOURCES else None
         # (#819) Set when a chosen source was asked for and not found.
         # Rides along in the detection path so "why is it reading
@@ -298,6 +302,7 @@ class ForecastReader:
         """
         norm = (name or "").strip().lower()
         norm = norm if norm in FORECAST_SOURCES else None
+        self._requested_raw = (name or "").strip().lower()
         if norm == self._preferred_source:
             return                      # idempotent: no cache churn
         self._preferred_source = norm
@@ -334,6 +339,60 @@ class ForecastReader:
     @_last_source_detection_path.setter
     def _last_source_detection_path(self, value: Optional[str]) -> None:
         self.__detection_path = value
+
+    @property
+    def requested_source(self) -> Optional[str]:
+        """What the user asked for, whether or not it could be used.
+
+        (#819) Deliberately NOT normalised away: a stored name SEM does not
+        recognise is a real misconfiguration and the user needs to see that it
+        was asked for and rejected, rather than watching SEM behave as though
+        nothing was set.
+        """
+        raw = (self._requested_raw or "").strip().lower()
+        # "auto" is the absence of a request, not a request for a source
+        # named auto — reporting it would put a non-source in a field the
+        # card renders as one.
+        if not raw or raw == "auto":
+            return None
+        return raw
+
+    @property
+    def honoured(self) -> bool:
+        """Whether the requested source is the one actually in use.
+
+        True when nothing was requested — nothing was asked for, so nothing
+        was denied, and a 'not honoured' flag on every auto install would be
+        noise that teaches people to ignore it.
+        """
+        want = self.requested_source
+        if want is None or want == "auto":
+            return True
+        if self._preferred_missing:
+            return False
+        return self._source == want
+
+    @property
+    def should_retry_preference(self) -> bool:
+        """Is a chosen source still waiting to be found?
+
+        (#819) ``detect_source`` runs at coordinator construction, which can be
+        before a slower forecast integration has registered its entities — and
+        the fallback it picks was then cached forever, because ``read_forecast``
+        only re-detects when the CURRENT source's entities vanish. A user's
+        choice could therefore lose a startup race once and never get another
+        chance, which reads as "it always goes back to Solcast".
+
+        Cheap to answer and self-limiting: it stops the moment the preference
+        is honoured, so a correctly-resolved install never re-detects.
+
+        The condition is simply "what was asked for is not what is in use".
+        A first version keyed on ``_preferred_missing`` alone and did NOT fix
+        the live case, because that flag is only set when the preferred BRANCH
+        runs and finds nothing — it says nothing about a preference that never
+        got that far. Asking the honest question covers both.
+        """
+        return not self.honoured
 
     def detect_source(self) -> Optional[str]:
         """Auto-detect available forecast integration.
@@ -471,7 +530,15 @@ class ForecastReader:
             # onto Forecast.Solar until the next restart. Upgrade as soon
             # as the preferred source's entity becomes available.
             upgraded = False
-            if self._source != "solcast":
+            # (#819) An upgrade is only an upgrade if nobody asked for
+            # something else. #562 added this for installs that never chose —
+            # Solcast loading after SEM's first detection used to leave the
+            # cache latched on a lesser source until a restart. It predates the
+            # user preference and never learned about it, so it handed an
+            # explicit choice straight back to Solcast on the very next read:
+            # the choice applied, then reverted a cycle later, forever. That is
+            # the whole of the reported bug.
+            if self._source != "solcast" and not self._preferred_source:
                 solcast_entities = self._locate_integration(
                     SOLCAST_PLATFORM, SOLCAST_ENTITIES
                 )
@@ -486,6 +553,14 @@ class ForecastReader:
                     self._last_source_detection_path = "solcast"
                     self._last_read_path = "upgraded_to_solcast"
                     upgraded = True
+            if not upgraded and self.should_retry_preference:
+                # (#819) The chosen source was missing when we last looked.
+                # Look again — it may simply have been slower to load than SEM
+                # was to ask. Ends as soon as it is found.
+                self._source = None
+                self.detect_source()
+                self._last_read_path = "preference_retried"
+                upgraded = True
             if not upgraded:
                 # Verify cached source is still valid (entity may have disappeared)
                 test_entity = self._entities.get("forecast_today")
@@ -687,6 +762,11 @@ class ForecastReader:
         in ``forecast_tracker.py`` from #416.
         """
         return {
+            # (#819) What was asked for and whether it was honoured. The
+            # silent fallback was the whole complaint: SEM logged a warning
+            # nobody reads and showed a source nobody chose.
+            "requested_source": self.requested_source,
+            "honoured": self.honoured,
             "source_detection_path": self._last_source_detection_path,
             "read_path": self._last_read_path,
             "recommendation_path": self._last_recommendation_path,

@@ -47,7 +47,7 @@ def walk(a, b, path: str, out: dict) -> None:
         for k in set(a) | set(b):
             walk(a.get(k), b.get(k), f"{path}/{k}", out)
     elif isinstance(a, list) and isinstance(b, list) and len(a) == len(b):
-        for i, (x, y) in enumerate(zip(a, b)):
+        for i, (x, y) in enumerate(zip(a, b, strict=False)):
             walk(x, y, f"{path}[{i}]", out)
     elif a != b:
         out[path] = (a, b)
@@ -84,7 +84,7 @@ def main() -> int:
     state_moved: set[str] = set()
 
     for eid in mine:
-        for x, y in zip(snaps, snaps[1:]):
+        for x, y in zip(snaps, snaps[1:], strict=False):
             if eid not in x or eid not in y:
                 continue
             if x[eid]["state"] != y[eid]["state"]:
