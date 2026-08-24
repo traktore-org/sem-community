@@ -13,6 +13,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🧭 **The Configuration tab now shows what you need, with everything else one
+  switch away** (#830): SEM had grown to around ninety controls on that tab, and
+  a new install needs about eight of them. The default view shows the setup
+  guide, your tariff, your chargers and your battery floors — plus any
+  subsystem you have already configured, because hiding something you set up
+  is not simplification. An **Advanced** switch reveals the rest and hides
+  nothing: every setting stays one click away, and the choice is remembered per
+  browser.
+
+- 🏷️ **Settings are named for what they do** (#830): *"Night charge target"*
+  read like a ceiling and is a floor — the maintainer misread his own setting
+  while testing on production and reported correct behaviour as a bug. It is
+  now **"Guarantee at least (kWh)"**, with **"Never charge past"** for the
+  ceiling, matching names for the SOC versions, and descriptions that say which
+  kind of number each one is.
+
+- 💡 **Every setting has an explanation** (#830): ten controls had no help text
+  — the per-charger targets, phase count, consumption figure and the VPP
+  entities. All ninety now explain what they do when you turn on *Explain
+  settings*.
+
+- 🐛 **The SOC Zones card now appears at all**: it has never rendered. A code
+  error made it throw on every attempt, and because a card that fails silently
+  just looks absent, it read as "not configured" rather than broken. Present in
+  every 2.0 beta so far.
+
+- 🧹 **Two settings that appeared on two pages now appear on one** (#830), and
+  one of them was also a bug: opening the hardware page reset your chosen
+  system-diagram style back to the default.
+
+
 - 🧹 **You can now tell SEM how long to keep its own status history** (#829):
   SEM writes a lot of short-lived rows — charging state, strategy, diagnostics
   — that carry no long-term statistics, so keeping them for weeks only grows
