@@ -13,6 +13,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ☀️ **Choosing your solar forecast source now sticks** (#819): if you had
+  Solcast installed alongside another forecast integration, picking that other
+  one appeared to work and then silently went back to Solcast on the next
+  update — every time. SEM had a rule from an earlier release that upgraded to
+  Solcast whenever it appeared, written before the source picker existed, and
+  it overrode your choice one cycle after you made it. It now leaves an
+  explicit choice alone, and still upgrades automatically for installations
+  that never picked one.
+
+- 🔎 **The forecast sensor now says which source was asked for and whether it
+  was used** (#819): when SEM cannot use your chosen integration it falls back,
+  which is correct — but it used to do so in silence, so "SEM cannot find your
+  integration" and "your setting did not save" looked identical from the
+  outside. `sensor.sem_forecast_source` now carries `requested_source` and
+  `source_honoured` beside the list of what is installed.
+
+
 - 🧭 **The Configuration tab now shows what you need, with everything else one
   switch away** (#830): SEM had grown to around ninety controls on that tab, and
   a new install needs about eight of them. The default view shows the setup
