@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.0.0-beta.15] — 24.08.2026
+
 - ☀️ **Choosing your solar forecast source now sticks** (#819): if you had
   Solcast installed alongside another forecast integration, picking that other
   one appeared to work and then silently went back to Solcast on the next
