@@ -351,6 +351,28 @@ class ForecastReader:
             return False
         return self._source == want
 
+    @property
+    def should_retry_preference(self) -> bool:
+        """Is a chosen source still waiting to be found?
+
+        (#819) ``detect_source`` runs at coordinator construction, which can be
+        before a slower forecast integration has registered its entities — and
+        the fallback it picks was then cached forever, because ``read_forecast``
+        only re-detects when the CURRENT source's entities vanish. A user's
+        choice could therefore lose a startup race once and never get another
+        chance, which reads as "it always goes back to Solcast".
+
+        Cheap to answer and self-limiting: it stops the moment the preference
+        is honoured, so a correctly-resolved install never re-detects.
+
+        The condition is simply "what was asked for is not what is in use".
+        A first version keyed on ``_preferred_missing`` alone and did NOT fix
+        the live case, because that flag is only set when the preferred BRANCH
+        runs and finds nothing — it says nothing about a preference that never
+        got that far. Asking the honest question covers both.
+        """
+        return not self.honoured
+
     def detect_source(self) -> Optional[str]:
         """Auto-detect available forecast integration.
 
@@ -502,6 +524,14 @@ class ForecastReader:
                     self._last_source_detection_path = "solcast"
                     self._last_read_path = "upgraded_to_solcast"
                     upgraded = True
+            if not upgraded and self.should_retry_preference:
+                # (#819) The chosen source was missing when we last looked.
+                # Look again — it may simply have been slower to load than SEM
+                # was to ask. Ends as soon as it is found.
+                self._source = None
+                self.detect_source()
+                self._last_read_path = "preference_retried"
+                upgraded = True
             if not upgraded:
                 # Verify cached source is still valid (entity may have disappeared)
                 test_entity = self._entities.get("forecast_today")
