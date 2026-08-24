@@ -277,22 +277,6 @@ def _detect_hardware_specs(hass: HomeAssistant) -> Dict[str, float]:
     return detected
 
 
-#: The three entities SEM cannot run an EV charger without. Detection must have
-#: found ALL of them before the pickers are skipped — see async_step_ev_charger.
-EV_REQUIRED_ENTITIES = (
-    "ev_connected_sensor",
-    "ev_charging_sensor",
-    "ev_charging_power_sensor",
-)
-
-#: What the confirmation lists back, in the order a person would check it.
-EV_CONFIRM_SUMMARY_ORDER = EV_REQUIRED_ENTITIES + (
-    "ev_current_control_entity",
-    "ev_current_sensor",
-    "ev_total_energy_sensor",
-)
-
-
 class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Solar Energy Management."""
 
@@ -328,12 +312,6 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._errors = {}
         self._energy_dashboard_config: EnergyDashboardConfig | None = None
         self._detector = None
-        # (#830) What discovery found for the EV charger, and whether the user
-        # asked to see the pickers anyway. The flag latches: once someone has
-        # asked to review, they are not bounced back to the confirmation on
-        # every validation error.
-        self._ev_suggestions: dict = {}
-        self._ev_review_requested = False
 
     async def async_step_integration_discovery(
         self, discovery_info: dict[str, Any]
@@ -540,17 +518,6 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if self._energy_dashboard_config.ev_energy and not suggestions.get("ev_total_energy_sensor"):
                 suggestions["ev_total_energy_sensor"] = self._energy_dashboard_config.ev_energy
 
-        # (#830) Every option is a decision SEM could not make for itself — and
-        # here it did. When discovery found all three REQUIRED entities, eight
-        # pickers collapse into one sentence: this is the charger I found, is
-        # that right? Partial detection still shows the form, because
-        # confirming two of three would tell the user setup succeeded with the
-        # third blank.
-        self._ev_suggestions = dict(suggestions)
-        if (not self._ev_review_requested
-                and all(suggestions.get(k) for k in EV_REQUIRED_ENTITIES)):
-            return await self.async_step_ev_charger_confirm()
-
         # Helper for optional EntitySelector fields: HA rejects default="" because
         # an empty string is neither a valid entity_id nor None. Use suggested_value
         # via the field description so the prefill is shown without becoming a
@@ -696,36 +663,6 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # dashboard Configuration tab → OptionsFlow ``ev_charger_add``.
             "ev_chargers": [],
         }
-
-    async def async_step_ev_charger_confirm(self, user_input=None):
-        """(#830) Confirm what discovery found, instead of asking eight times.
-
-        One boolean, defaulting to "no thanks": declining review accepts the
-        detected entities and moves on. Asking for review falls straight
-        through to the existing form with everything pre-filled, so the escape
-        from a wrong guess costs one checkbox — detection is a guess, and a
-        guess a user cannot correct is worse than a form.
-        """
-        suggestions = getattr(self, "_ev_suggestions", {}) or {}
-
-        if user_input is not None:
-            if user_input.get("review_details"):
-                self._ev_review_requested = True
-                return await self.async_step_ev_charger()
-            _merge_form_input(self, self._data, suggestions)
-            return await self.async_step_hardware()
-
-        found = "\n".join(
-            f"• {suggestions[k]}" for k in EV_CONFIRM_SUMMARY_ORDER
-            if suggestions.get(k))
-        return self.async_show_form(
-            step_id="ev_charger_confirm",
-            data_schema=vol.Schema({
-                vol.Optional("review_details", default=False):
-                    selector.BooleanSelector(),
-            }),
-            description_placeholders={"found": found},
-        )
 
     async def async_step_hardware(
         self, user_input: dict[str, Any] | None = None

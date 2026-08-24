@@ -80,13 +80,6 @@
           "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
           "ev_target_soc": "SEM stops treating the car as needing charge once it reaches this. It is a definition of \"full\", not a limit on charging."
         }
-      },
-      "ev_charger_confirm": {
-        "title": "Charger found",
-        "description": "SEM found your charger and read its entities:\n\n{found}\n\nIf that looks right, just continue — nothing else is needed.",
-        "data": {
-          "review_details": "Let me check the details"
-        }
       }
     },
     "error": {

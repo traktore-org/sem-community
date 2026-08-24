@@ -80,13 +80,6 @@
           "ev_battery_capacity_kwh": "Celková využitelná kapacita baterie EV v kWh. Slouží k odhadu SOC a doby nabíjení.",
           "ev_target_soc": "Od této hodnoty SEM považuje auto za nabité. Je to definice \"plného\", ne limit nabíjení."
         }
-      },
-      "ev_charger_confirm": {
-        "title": "Nabíječka nalezena",
-        "description": "SEM našel vaši nabíječku a načetl její entity:\n\n{found}\n\nPokud to sedí, jednoduše pokračujte — nic dalšího není potřeba.",
-        "data": {
-          "review_details": "Chci zkontrolovat podrobnosti"
-        }
       }
     },
     "error": {
