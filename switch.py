@@ -271,6 +271,15 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         install upgrading, the one case where it is the only record.
         """
         key = self.entity_description.key
+        if key in PERMISSION_SWITCHES:
+            # (#778) A permission is never restored. Absence is MEANINGFUL —
+            # no entry in ``battery_permissions`` means UNSET, which resolves
+            # through the legacy rule for the mode — so a ghost in the restore
+            # store has nothing to say and can only contradict it. Re-resolve
+            # instead. Live proof this is needed: the misspelled-key bug wrote
+            # ON into the store, and without this the bug outlived its own fix.
+            self._is_on = self._seed_state()
+            return
         if key not in self._PERSISTED_DEFAULTS:
             if last_state is not None:
                 self._is_on = last_state.state == "on"

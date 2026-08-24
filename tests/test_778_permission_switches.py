@@ -219,3 +219,63 @@ class TestTheExportPermissionActuallyGates:
             "decide_battery still resolves arbitrage without the permission "
             "axis — the 'Battery may sell to the grid' switch would be inert")
         assert "arbitrage_allowed_for_mode(" in src
+
+
+class TestTheRestoreStoreCannotOverrideAPermission:
+    """(#777, one class of switch later) A permission's truth is its dict.
+
+    Caught by reading the LIVE switch after deploying, not by any test: it
+    showed ON while the kill switch defaults OFF. ``_apply_restored_state``
+    treats every key outside ``_PERSISTED_DEFAULTS`` as restore-first —
+
+        if key not in self._PERSISTED_DEFAULTS:
+            if last_state is not None:
+                self._is_on = last_state.state == "on"
+            return
+
+    — so the restore store overwrote the resolved permission unconditionally,
+    and yesterday's misspelled-key bug (which displayed ON) had already written
+    ON into that store. The bug would have outlived its own fix.
+
+    A permission cannot be restored, because absence is MEANINGFUL: no entry in
+    ``battery_permissions`` means UNSET, which resolves through the legacy rule
+    for the mode. A restore ghost has nothing to say about that — it can only
+    contradict it. This is the same lesson #777 learned for observer mode: the
+    restore store outlives the config entry, so anything whose meaning depends
+    on absence must never read it.
+    """
+
+    class _Restored:
+        def __init__(self, state):
+            self.state = state
+
+    def test_a_stale_on_does_not_grant_export(self):
+        sw, coord, entry = _switch("battery_may_export")
+        sw._is_on = False
+        sw._apply_restored_state(self._Restored("on"))
+        assert sw._is_on is False, (
+            "a ghost in the restore store granted permission to sell the "
+            "user's battery to the grid")
+
+    def test_a_stale_off_does_not_revoke_assist(self):
+        """Symmetrical: the ghost must not take a permission away either."""
+        sw, coord, entry = _switch("battery_may_assist_ev")
+        sw._is_on = True
+        sw._apply_restored_state(self._Restored("off"))
+        assert sw._is_on is True
+
+    def test_an_explicit_choice_still_wins_over_the_ghost(self):
+        sw, coord, entry = _switch(
+            "battery_may_export",
+            options={"battery_permissions": {"may_export": True},
+                     "battery_grid_arbitrage_enabled": True})
+        sw._apply_restored_state(self._Restored("off"))
+        assert sw._is_on is True
+
+    def test_ordinary_switches_still_restore(self):
+        """The restore path exists for a reason — a legacy install upgrading
+        with no config record. Only permissions opt out of it."""
+        sw, coord, entry = _switch("observer_mode")
+        sw._is_on = False
+        sw._apply_restored_state(self._Restored("on"))
+        assert sw._is_on is True
