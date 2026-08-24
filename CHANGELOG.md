@@ -22,6 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   same cross-brand status vocabulary the rest of SEM already used, so they
   cannot disagree again; several brands' charging states (Zaptec, Easee,
   Alfen, V2G discharge) are now recognised too.
+- 📦 **Releases now carry a downloadable archive** (#834): SEM's HACS entry
+  showed no download count, because that column counts a release's attached
+  files and SEM published none. Every release now ships
+  `solar_energy_management.zip`. Your installs also get tidier — HACS
+  previously copied the whole repository into your config directory, test
+  suite and documentation included; now it installs only what SEM needs to
+  run.
 
 # [2.0.0-beta.15] — 24.08.2026
 

@@ -2,5 +2,8 @@
   "name": "Solar Energy Management",
   "render_readme": true,
   "homeassistant": "2025.1.0",
-  "content_in_root": true
+  "content_in_root": true,
+  "zip_release": true,
+  "filename": "solar_energy_management.zip",
+  "hide_default_branch": true
 }
