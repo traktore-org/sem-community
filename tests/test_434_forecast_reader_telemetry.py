@@ -233,6 +233,9 @@ def test_get_diagnostics_shape():
     r = ForecastReader(hass=hass)
     diag = r.get_diagnostics()
     assert set(diag.keys()) == {
+        # (#819) what the user asked for, and whether they got it
+        "requested_source",
+        "honoured",
         "source_detection_path", "read_path", "recommendation_path",
         "unit_conversion_count", "source",
     }

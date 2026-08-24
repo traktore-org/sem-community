@@ -2740,6 +2740,17 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             # nearly shipped inert.
             attrs["sources_available"] = self.coordinator.data.get(
                 "forecast_sources_available") or []
+            # (#819) What the user ASKED for, and whether they got it. When a
+            # chosen integration cannot be located SEM falls back to the
+            # ladder — correct behaviour, but it used to happen in silence:
+            # the picker went on showing the choice while the source showed
+            # something else, and the only trace was a log line. Two very
+            # different failures ("SEM cannot find your integration" and
+            # "your setting never saved") wore the same face.
+            _fr = getattr(self.coordinator, "_forecast_reader", None)
+            if _fr is not None:
+                attrs["requested_source"] = getattr(_fr, "requested_source", None)
+                attrs["source_honoured"] = getattr(_fr, "honoured", True)
         elif self.entity_description.key == "diag_charger_control":
             # (#814 Pillar B) the detection evidence report rides the charger
             # control diag sensor — the Config tab's Detected-hardware section

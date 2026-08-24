@@ -151,6 +151,10 @@ class ForecastReader:
         self._custom_entities = custom_entities or {}
         # (#819) ``auto``/None/unknown all mean "walk the ladder".
         _pref = (preferred_source or "").strip().lower()
+        # (#819) Keep the raw request. The normalised one drives detection;
+        # this one is what the user is TOLD, so a name SEM does not know is
+        # visible as a rejected request instead of vanishing.
+        self._requested_raw = _pref
         self._preferred_source = _pref if _pref in FORECAST_SOURCES else None
         # (#819) Set when a chosen source was asked for and not found.
         # Rides along in the detection path so "why is it reading
@@ -277,6 +281,7 @@ class ForecastReader:
         """
         norm = (name or "").strip().lower()
         norm = norm if norm in FORECAST_SOURCES else None
+        self._requested_raw = (name or "").strip().lower()
         if norm == self._preferred_source:
             return                      # idempotent: no cache churn
         self._preferred_source = norm
@@ -313,6 +318,38 @@ class ForecastReader:
     @_last_source_detection_path.setter
     def _last_source_detection_path(self, value: Optional[str]) -> None:
         self.__detection_path = value
+
+    @property
+    def requested_source(self) -> Optional[str]:
+        """What the user asked for, whether or not it could be used.
+
+        (#819) Deliberately NOT normalised away: a stored name SEM does not
+        recognise is a real misconfiguration and the user needs to see that it
+        was asked for and rejected, rather than watching SEM behave as though
+        nothing was set.
+        """
+        raw = (self._requested_raw or "").strip().lower()
+        # "auto" is the absence of a request, not a request for a source
+        # named auto — reporting it would put a non-source in a field the
+        # card renders as one.
+        if not raw or raw == "auto":
+            return None
+        return raw
+
+    @property
+    def honoured(self) -> bool:
+        """Whether the requested source is the one actually in use.
+
+        True when nothing was requested — nothing was asked for, so nothing
+        was denied, and a 'not honoured' flag on every auto install would be
+        noise that teaches people to ignore it.
+        """
+        want = self.requested_source
+        if want is None or want == "auto":
+            return True
+        if self._preferred_missing:
+            return False
+        return self._source == want
 
     def detect_source(self) -> Optional[str]:
         """Auto-detect available forecast integration.
@@ -658,6 +695,11 @@ class ForecastReader:
         in ``forecast_tracker.py`` from #416.
         """
         return {
+            # (#819) What was asked for and whether it was honoured. The
+            # silent fallback was the whole complaint: SEM logged a warning
+            # nobody reads and showed a source nobody chose.
+            "requested_source": self.requested_source,
+            "honoured": self.honoured,
             "source_detection_path": self._last_source_detection_path,
             "read_path": self._last_read_path,
             "recommendation_path": self._last_recommendation_path,
