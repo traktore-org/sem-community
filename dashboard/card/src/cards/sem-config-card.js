@@ -24,6 +24,40 @@ import { semTheme, semDefineCard, semCardSurfaceCSS } from '../base/sem-shared.j
 // Section index — order = visual order in the rendered tab. Each entry
 // carries a colour-accent that matches the section icon, mirroring the
 // Control card's design language.
+// (#830) What a new install is shown before it asks for more.
+//
+// Guido: "if a user is starting with SEM he is overwhelmed with so many
+// options and stops using it — it is just too much." The Config tab renders
+// about ninety controls; making SEM work needs about eight.
+//
+// The default view is NAMELESS on purpose. Nobody is labelled a beginner —
+// there is simply the configuration, and an "advanced" switch for people who
+// want the rest. Advanced hides nothing: everything is one toggle away.
+//
+// This list is deliberately tiny and is pinned by a shrink-only test. Adding
+// to it has to be argued for, because a default view is only useful while it
+// stays small — and every individually reasonable addition is exactly how
+// ninety happened.
+const ESSENTIAL_SECTIONS = new Set([
+    'overview',        // what is still missing, and the route to each
+    'tariff',          // without a price, every saving SEM reports is zero
+    'ev_chargers',     // the main sink on most installs
+    'battery_zones',   // the floors that keep the house covered
+]);
+
+const ESSENTIAL_CONTROLS = new Set([
+    // Tariff: the one decision, then the two numbers or the one entity.
+    'tariff_mode',
+    'electricity_import_rate',
+    'electricity_export_rate',
+    'dynamic_tariff_entity',
+    // Battery: the safety floor. Everything else in that section is a
+    // sensor override that detection normally supplies.
+    'battery_discharge_protection_enabled',
+]);
+
+const ADV_KEY = 'sem_config_advanced_v1';
+
 const SECTIONS = [
     {
         id: 'overview',
@@ -206,6 +240,7 @@ class SEMConfigCard extends SEMLitBase {
             _retentionBusy: { state: true },
             _retentionMsg: { state: true },
             _showHelp: { state: true },
+            _advanced: { state: true },
             _lmAdvancedOpen: { state: true },
             _entryId: { state: true },
             _saveStatus: { state: true },
@@ -246,6 +281,13 @@ class SEMConfigCard extends SEMLitBase {
             notifications: true, advanced: true,
         };
         this._showHelp = false;
+        // (#830) A VIEW preference, so it lives per browser like the
+        // onboarding banner's dismissal — not in the config entry, which
+        // would make one person's choice everyone's.
+        this._advanced = (() => {
+            try { return localStorage.getItem(ADV_KEY) === '1'; }
+            catch (e) { return false; }
+        })();
         this._lmAdvancedOpen = false;  // (#717) warning/emergency ladder disclosure
         this._entryId = '';
         this._saveStatus = {};  // { fieldKey: 'saving' | 'ok' | error-msg }
@@ -395,6 +437,21 @@ class SEMConfigCard extends SEMLitBase {
     get hass() { return super.hass; }
 
     _toggleHelp() { this._showHelp = !this._showHelp; }
+
+    _toggleAdvanced() {
+        this._advanced = !this._advanced;
+        try { localStorage.setItem(ADV_KEY, this._advanced ? '1' : '0'); }
+        catch (e) { /* private window / blocked storage — session only */ }
+    }
+
+    /** Should this control appear in the current view? */
+    _showsControl(key) {
+        if (this._advanced) return true;
+        // Entity-backed controls carry their domain; compare on the
+        // config key, which is what the tier list is written in.
+        const k = String(key || '').replace(/^[a-z_]+\.sem_/, '');
+        return ESSENTIAL_CONTROLS.has(k);
+    }
     _toggleSection(id) {
         // `_collapsed` is a plain instance property (not a Lit reactive
         // state) — mutating it does NOT schedule a re-render on its own.
@@ -553,6 +610,10 @@ class SEMConfigCard extends SEMLitBase {
     // delegates to ``_renderZoneKnob`` so all sections (tariff, heat pump,
     // hot water, advanced, per-charger) restyle uniformly with one change.
     _renderStepper(entityId, labelKey, T, helpKey) {
+        // (#830) One choke point for the default view: a control not on
+        // the essential list is simply not rendered until advanced is on.
+        if (!this._showsControl(entityId)) return nothing;
+
         return this._renderZoneKnob(entityId, labelKey, T, helpKey);
     }
 
@@ -646,6 +707,21 @@ class SEMConfigCard extends SEMLitBase {
               optional: true,
               done: (opts.managed_devices || []).length > 0 },
         ];
+    }
+
+    /** Has the user already set this subsystem up?
+
+        Reuses the Setup overview's own done-signals rather than a second list:
+        two answers to "is this configured" would drift, and the overview's is
+        the one already shown to the user.
+     */
+    _sectionConfigured(id) {
+        const item = this._setupItems().find(i => i.sectionId === id);
+        if (item) return !!item.done;
+        const opts = this._options || {};
+        if (id === 'battery_scheduler') return !!opts.battery_charge_scheduler_enabled;
+        if (id === 'notifications') return !!opts.enable_mobile_notifications;
+        return false;
     }
 
     _openSection(id) {
@@ -806,22 +882,22 @@ class SEMConfigCard extends SEMLitBase {
                           actual target + its ceiling (#245 range). */ ''}
                     ${charger.ev_target_type === 'soc' ? html`
                         <div class="stepper-pair">
-                            ${this._renderStepper(`number.sem_charger_${cid}_target_soc`, 'config_ev_target_soc', T, null)}
-                            ${this._renderStepper(`number.sem_charger_${cid}_target_soc_max`, 'config_ev_target_soc_max', T, null)}
+                            ${this._renderStepper(`number.sem_charger_${cid}_target_soc`, 'config_ev_target_soc', T, 'config_help_ev_target_soc')}
+                            ${this._renderStepper(`number.sem_charger_${cid}_target_soc_max`, 'config_ev_target_soc_max', T, 'config_help_ev_target_soc_max')}
                         </div>` : html`
                         <div class="stepper-pair">
-                            ${this._renderStepper(`number.sem_charger_${cid}_daily_ev_target`, 'config_ev_daily_target', T, null)}
-                            ${this._renderStepper(`number.sem_charger_${cid}_daily_ev_target_max`, 'config_ev_daily_target_max', T, null)}
+                            ${this._renderStepper(`number.sem_charger_${cid}_daily_ev_target`, 'config_ev_daily_target', T, 'config_help_ev_daily_target')}
+                            ${this._renderStepper(`number.sem_charger_${cid}_daily_ev_target_max`, 'config_ev_daily_target_max', T, 'config_help_ev_daily_target_max')}
                         </div>`}
                     ${/* Capacity moved down here when Max Amps took its slot
                           (#746) — it belongs with the other car properties
                           anyway, and the current range now reads as a pair. */ ''}
                     <div class="stepper-pair">
                         ${this._renderStepper(`number.sem_charger_${cid}_ev_battery_capacity_kwh`, 'capacity_kwh', T, 'tile_help_capacity')}
-                        ${this._renderStepper(`number.sem_charger_${cid}_ev_kwh_per_100km`, 'config_ev_kwh_per_100km', T, null)}
+                        ${this._renderStepper(`number.sem_charger_${cid}_ev_kwh_per_100km`, 'config_ev_kwh_per_100km', T, 'config_help_ev_kwh_per_100km')}
                     </div>
                     <div class="stepper-pair">
-                        ${this._renderStepper(`number.sem_charger_${cid}_ev_phases`, 'config_ev_phases', T, null)}
+                        ${this._renderStepper(`number.sem_charger_${cid}_ev_phases`, 'config_ev_phases', T, 'config_help_ev_phases')}
                     </div>
                 </div>
             `;})}
@@ -1593,6 +1669,10 @@ class SEMConfigCard extends SEMLitBase {
     // Entity picker bound to an entry.options key. Auto-saves via WebSocket
     // on change → SEM update_listener reloads → registered=on within ~1s.
     _renderPicker(optionKey, labelKey, domain, deviceClass, opts, helpKey) {
+        // (#830) One choke point for the default view: a control not on
+        // the essential list is simply not rendered until advanced is on.
+        if (!this._showsControl(optionKey)) return nothing;
+
         const status = this._saveStatus[optionKey];
         // #528: structural (entity-wiring) keys reload the entry — stage the
         // edit locally and commit on Apply so the reload fires once for the
@@ -1812,6 +1892,10 @@ class SEMConfigCard extends SEMLitBase {
     // ``switch.sem_*`` entity exists for the option.
     // Native <select> bound to an entry.options key.
     _renderOptionSelect(optionKey, labelKey, options, opts, helpKey, defaultVal) {
+        // (#830) One choke point for the default view: a control not on
+        // the essential list is simply not rendered until advanced is on.
+        if (!this._showsControl(optionKey)) return nothing;
+
         const sid = 'opt:' + optionKey;
         this._reg(sid);
         const live = opts[optionKey] != null ? opts[optionKey] : defaultVal;
@@ -1842,6 +1926,10 @@ class SEMConfigCard extends SEMLitBase {
     // doesn't fire its own reload and discard a sibling picker's staged edit.
     // Non-structural toggles keep saving live on click (unchanged).
     _renderOptionToggle(optionKey, labelKey, opts, helpKey, defaultVal) {
+        // (#830) One choke point for the default view: a control not on
+        // the essential list is simply not rendered until advanced is on.
+        if (!this._showsControl(optionKey)) return nothing;
+
         const structural = STRUCTURAL_KEYS.has(optionKey);
         const sid = 'opt:' + optionKey;
         if (!structural) this._reg(sid);
@@ -1879,6 +1967,10 @@ class SEMConfigCard extends SEMLitBase {
     // need hundreds of clicks; typing the number is faster. Commits on
     // blur and Enter to avoid one save per keystroke.
     _renderOptionNumberInput(optionKey, labelKey, cfg, opts, helpKey) {
+        // (#830) One choke point for the default view: a control not on
+        // the essential list is simply not rendered until advanced is on.
+        if (!this._showsControl(optionKey)) return nothing;
+
         const sid = 'opt:' + optionKey;
         this._reg(sid);
         const live = opts[optionKey] != null ? opts[optionKey] : cfg.default;
@@ -1914,6 +2006,10 @@ class SEMConfigCard extends SEMLitBase {
     // #528: option-key slider in the same colorful accent style as the
     // entity knob (saves an entry.option live via _saveOption).
     _renderOptionSlider(optionKey, labelKey, cfg, opts, helpKey) {
+        // (#830) One choke point for the default view: a control not on
+        // the essential list is simply not rendered until advanced is on.
+        if (!this._showsControl(optionKey)) return nothing;
+
         const sid = 'opt:' + optionKey;
         this._reg(sid);
         const live = parseFloat(opts[optionKey] != null ? opts[optionKey] : cfg.default) || 0;
@@ -2172,13 +2268,13 @@ class SEMConfigCard extends SEMLitBase {
             ${this._renderOptionToggle('vpp_observer_mode', 'config_vpp_observer',
                 opts, 'config_help_vpp_observer', true)}
             ${this._renderPicker('vpp_event_active_entity', 'config_vpp_event_entity',
-                ['binary_sensor', 'sensor'], null, opts, null)}
+                ['binary_sensor', 'sensor'], null, opts, 'config_help_vpp_event_active_entity')}
             ${this._renderPicker('vpp_direction_entity', 'config_vpp_direction_entity',
-                ['sensor', 'select', 'input_select'], null, opts, null)}
+                ['sensor', 'select', 'input_select'], null, opts, 'config_help_vpp_direction_entity')}
             ${this._renderPicker('vpp_event_end_entity', 'config_vpp_event_end_entity',
-                'sensor', 'timestamp', opts, null)}
+                'sensor', 'timestamp', opts, 'config_help_vpp_event_end_entity')}
             ${this._renderPicker('vpp_pre_event_entity', 'config_vpp_pre_event_entity',
-                ['binary_sensor', 'sensor'], null, opts, null)}
+                ['binary_sensor', 'sensor'], null, opts, 'config_help_vpp_pre_event_entity')}
             ${this._renderOptionSlider('vpp_reserve_soc', 'config_vpp_reserve_soc',
                 { min: 5, max: 80, step: 5, unit: '%', default: 20 }, opts,
                 'config_help_vpp_reserve_soc')}
@@ -3094,10 +3190,28 @@ class SEMConfigCard extends SEMLitBase {
                             ></ha-icon>
                             <span>${this._t('config_help_label')}</span>
                         </span>
+                        ${/* (#830) The advanced switch sits beside the help
+                            switch because it is the same kind of thing: a view
+                            preference, not a setting. The default view has no
+                            name — nobody is told they are a beginner. */ ''}
+                        <span class="help-toggle-labeled ${this._advanced ? 'on' : ''}"
+                              @click=${() => this._toggleAdvanced()}>
+                            <ha-icon
+                                icon="${this._advanced ? 'mdi:tune-variant' : 'mdi:tune'}"
+                                style="--mdc-icon-size:16px"
+                            ></ha-icon>
+                            <span>${this._t('config_advanced_label')}</span>
+                        </span>
                     </div>
                     ${this._renderApplyBar()}
                     ${SECTIONS
                         .filter(s => s.id !== 'pv_strings' || this._pvStrings().length >= 2)
+                        // (#830) The default view shows what SEM needs to work.
+                        // A subsystem the user has already configured stays
+                        // visible either way — hiding something someone set up
+                        // is not simplification, it is losing their work.
+                        .filter(s => this._advanced || ESSENTIAL_SECTIONS.has(s.id)
+                                     || this._sectionConfigured(s.id))
                         .map(s => this._renderSection(s, renderers[s.id], T))}
                 </div>
             </ha-card>
