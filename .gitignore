@@ -65,6 +65,10 @@ sankey_*.yaml
 *.sh
 # Exception: live integration tests need their bash scripts tracked (#282).
 !tests/live/*.sh
+# Exception: the HACS release-asset builder is invoked BY CI, so it has to
+# be in the repo the workflow checks out (#834). It is excluded from the
+# published zip itself — see scripts/build_release_zip.sh.
+!scripts/build_release_zip.sh
 
 # IDE
 .vscode/

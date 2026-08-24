@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 📦 **Releases now carry a downloadable archive** (#834): SEM's HACS entry
+  showed no download count, because that column counts a release's attached
+  files and SEM published none. Every release now ships
+  `solar_energy_management.zip`. Your installs also get tidier — HACS
+  previously copied the whole repository into your config directory, test
+  suite and documentation included; now it installs only what SEM needs to
+  run.
+
 # [2.0.0-beta.15] — 24.08.2026
 
 - ☀️ **Choosing your solar forecast source now sticks** (#819): if you had
