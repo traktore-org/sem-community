@@ -64,7 +64,7 @@
           "mobile_notification_service": "Service de notification mobile",
           "vehicle_soc_entity": "SOC batterie véhicule",
           "ev_battery_capacity_kwh": "Capacité batterie VE (kWh)",
-          "ev_target_soc": "SOC cible VE (%)"
+          "ev_target_soc": "Considérer plein à (%)"
         },
         "data_description": {
           "ev_connected_sensor": "Capteur binaire indiquant si le véhicule est actuellement branché.",
@@ -78,7 +78,7 @@
           "mobile_notification_service": "Service notify de HA pour les notifications push mobiles (par ex. notify.mobile_app_your_phone).",
           "vehicle_soc_entity": "Capteur optionnel indiquant l'état de charge actuel du véhicule (0–100 %).",
           "ev_battery_capacity_kwh": "Capacité utile totale de la batterie du VE en kWh. Utilisée pour estimer le SOC et le temps de charge.",
-          "ev_target_soc": "SOC cible (%) à partir duquel SEM considère le VE comme complètement chargé."
+          "ev_target_soc": "À partir de là, SEM considère la voiture comme chargée. C'est une définition de \"plein\", pas une limite de charge."
         }
       }
     },
@@ -108,9 +108,9 @@
           "vehicle_soc_entity": "Capteur SOC batterie véhicule (optionnel)",
           "ev_battery_capacity_kwh": "Capacité batterie VE (kWh)",
           "ev_charger_efficiency": "Rendement du chargeur (%)",
-          "ev_target_soc": "SOC cible VE (%)",
-          "daily_ev_target_max": "Limite de charge solaire (kWh)",
-          "ev_target_soc_max": "Limite de charge solaire (SOC %)",
+          "ev_target_soc": "Considérer plein à (%)",
+          "daily_ev_target_max": "Ne jamais dépasser (kWh)",
+          "ev_target_soc_max": "Ne jamais dépasser (%)",
           "vehicle_range_entity": "Capteur d'autonomie du véhicule",
           "ev_kwh_per_100km": "Consommation du véhicule (kWh/100km)"
         },
@@ -124,9 +124,9 @@
           "vehicle_soc_entity": "Capteur optionnel indiquant l'état de charge actuel du véhicule (0–100 %).",
           "ev_battery_capacity_kwh": "Capacité utile totale de la batterie du VE en kWh. Utilisée pour estimer le SOC et le temps de charge.",
           "ev_charger_efficiency": "Part de l'énergie CA mesurée qui atteint la batterie. Réduisez-la si l'estimation du SOC devance le véhicule. Généralement 85-95 %, moins en monophasé ou par temps froid.",
-          "ev_target_soc": "SOC cible (%) à partir duquel SEM considère le VE comme complètement chargé.",
-          "daily_ev_target_max": "Le surplus solaire charge jusqu’à cette valeur, puis s’arrête. Laissez au maximum pour charger librement au soleil.",
-          "ev_target_soc_max": "Le surplus solaire charge jusqu’à ce SOC, puis s’arrête. Laissez à 100 % pour charger librement au soleil.",
+          "ev_target_soc": "À partir de là, SEM considère la voiture comme chargée. C'est une définition de \"plein\", pas une limite de charge.",
+          "daily_ev_target_max": "Le surplus solaire s'arrête ici. C'est un plafond, pas un objectif — laissez au maximum pour charger librement au soleil.",
+          "ev_target_soc_max": "Le surplus solaire s'arrête ici. C'est un plafond, pas un objectif — laissez à 100% pour charger librement au soleil.",
           "ev_kwh_per_100km": "Utilisé pour estimer l’autonomie lorsqu’aucun capteur d’autonomie n’est configuré.",
           "vehicle_range_entity": "Capteur d’autonomie réel optionnel. Sinon, l’autonomie est estimée à partir de SOC × capacité × efficacité."
         }
@@ -138,7 +138,7 @@
           "update_interval": "Intervalle de Mise à Jour (secondes)",
           "battery_priority_soc": "SOC Prioritaire Batterie (%)",
           "min_solar_power": "Puissance solaire minimale — production PV brute (W)",
-          "daily_ev_target": "Objectif Quotidien VE (kWh)",
+          "daily_ev_target": "Garantir au moins (kWh)",
           "battery_assist_max_power": "Puissance Max. Assistance Batterie (W)",
           "battery_capacity_kwh": "Capacité Batterie (kWh)",
           "battery_discharge_protection_enabled": "Activer la Protection de Décharge Batterie",
@@ -156,7 +156,7 @@
           "legionella_target_temp": "Cible de désinfection légionelle (°C)",
           "legionella_interval_hours": "Heures max. entre deux cycles de désinfection",
           "ev_battery_capacity_kwh": "Capacité batterie EV (kWh)",
-          "ev_target_soc": "SOC cible EV (%)",
+          "ev_target_soc": "Considérer plein à (%)",
           "vehicle_soc_entity": "Capteur SOC véhicule",
           "diagram_style": "Style du diagramme système",
           "battery_assist_min_surplus": "Assistance batterie – surplus solaire min. (W)",
@@ -168,7 +168,7 @@
           "battery_buffer_soc": "Limite Zone 2 → Zone 3. Au-dessus de ce SOC, la batterie peut se décharger pour compenser les déficits solaires pendant la charge du VE. Par défaut 70 %.",
           "battery_auto_start_soc": "Limite Zone 3 → Zone 4. Au-dessus de ce SOC, le VE peut démarrer la charge même sans surplus solaire, en puisant dans la batterie. Par défaut 90 %.",
           "min_solar_power": "Plancher de production PV brute — la puissance des panneaux en dessous de laquelle « le solaire est actif » est faux : solar_only ne démarre pas et la protection contre le déficit profond traite cela comme l'obscurité (la charge s'arrête donc rapidement au lieu de compenser sur le réseau). Il s'agit de la production BRUTE, PAS du surplus — à distinguer de « Assistance batterie – surplus solaire min. » (solaire − maison), qui détermine quand la batterie domestique peut aider. Par défaut 1000 W ; gardez-le sous le minimum matériel du chargeur VE (~4140 W en triphasé, ~1380 W en monophasé).",
-          "daily_ev_target": "Objectif en kWh par jour pour la charge nocturne sur le réseau. Réglez sur 0 pour désactiver entièrement la charge nocturne.",
+          "daily_ev_target": "SEM complète depuis le réseau la nuit pour que la voiture ait au moins cela au matin. C'est un plancher, pas une limite — le soleil peut ajouter plus. 0 = ne jamais utiliser le réseau.",
           "battery_assist_max_power": "Puissance maximale que la batterie domestique peut décharger pour assister le VE en Zone 3/4. Par défaut 4500 W.",
           "battery_capacity_kwh": "Capacité utile totale de la batterie domestique (PAS la batterie du VE — c'est un champ distinct à l'étape VE). Utilisée par la stratégie de charge pilotée par les prévisions.",
           "battery_discharge_protection_enabled": "Lorsque cette option est ACTIVÉE, SEM plafonne la limite de décharge de l'onduleur pendant la charge nocturne du VE, afin que la batterie domestique n'alimente que la maison (et non le VE).",
@@ -192,7 +192,7 @@
         "title": "Charge VE & Solaire",
         "description": "Configurer les objectifs de charge VE et les seuils solaires.",
         "data": {
-          "daily_ev_target": "Objectif de charge nocturne (kWh)",
+          "daily_ev_target": "Garantir au moins (kWh)",
           "observer_mode": "Mode observation (lecture seule, pas de contrôle matériel)",
           "smart_night_charging": "Réduire l'objectif nocturne selon la prévision de demain",
           "minimum_solar_power": "Puissance solaire minimale pour démarrer la charge VE (W)",
@@ -200,7 +200,7 @@
           "export_limit_entity": "Entité de limite d'export (optionnel)"
         },
         "data_description": {
-          "daily_ev_target": "Objectif en kWh à charger depuis le réseau chaque nuit. Réglez sur 0 pour désactiver la charge nocturne sur le réseau.",
+          "daily_ev_target": "SEM complète depuis le réseau la nuit pour que la voiture ait au moins cela au matin. C'est un plancher, pas une limite — le soleil peut ajouter plus. 0 = ne jamais utiliser le réseau.",
           "observer_mode": "Lorsque cette option est ACTIVÉE, SEM surveille tout mais n'envoie jamais de commandes au matériel.",
           "smart_night_charging": "Lorsque cette option est ACTIVÉE, SEM réduit l'objectif de charge nocturne lorsque la prévision solaire de demain est suffisante.",
           "minimum_solar_power": "Surplus solaire minimal (W) requis avant que SEM ne démarre la charge solaire du VE.",
@@ -255,7 +255,7 @@
           "emergency_peak_level": "Niveau d'Urgence de Pointe (kW)",
           "vehicle_soc_entity": "SOC batterie véhicule",
           "ev_battery_capacity_kwh": "Capacité batterie VE (kWh)",
-          "ev_target_soc": "SOC cible VE (%)"
+          "ev_target_soc": "Considérer plein à (%)"
         },
         "data_description": {
           "load_management_enabled": "Activer/désactiver le délestage automatique de SEM pour rester sous votre limite de pointe réseau.",
@@ -265,7 +265,7 @@
           "emergency_peak_level": "Niveau de puissance (kW) auquel SEM déleste agressivement les charges pour éviter les pénalités de puissance souscrite. Doit être supérieur à la limite de pointe cible.",
           "vehicle_soc_entity": "Capteur optionnel indiquant l'état de charge actuel du véhicule (0–100 %).",
           "ev_battery_capacity_kwh": "Capacité utile totale de la batterie du VE en kWh.",
-          "ev_target_soc": "SOC cible (%) à partir duquel SEM considère le VE comme complètement chargé."
+          "ev_target_soc": "À partir de là, SEM considère la voiture comme chargée. C'est une définition de \"plein\", pas une limite de charge."
         }
       },
       "notifications": {
@@ -277,7 +277,7 @@
           "mobile_notification_service": "Service de Notification Mobile",
           "vehicle_soc_entity": "SOC batterie véhicule",
           "ev_battery_capacity_kwh": "Capacité batterie VE (kWh)",
-          "ev_target_soc": "SOC cible VE (%)"
+          "ev_target_soc": "Considérer plein à (%)"
         },
         "data_description": {
           "enable_charger_notifications": "Activer/désactiver les bannières de notification persistantes sur la carte d'état du chargeur.",
@@ -285,7 +285,7 @@
           "mobile_notification_service": "Service notify de HA pour les notifications push mobiles (par ex. notify.mobile_app_your_phone).",
           "vehicle_soc_entity": "Capteur optionnel indiquant l'état de charge actuel du véhicule (0–100 %).",
           "ev_battery_capacity_kwh": "Capacité utile totale de la batterie du VE en kWh.",
-          "ev_target_soc": "SOC cible (%) à partir duquel SEM considère le VE comme complètement chargé."
+          "ev_target_soc": "À partir de là, SEM considère la voiture comme chargée. C'est une définition de \"plein\", pas une limite de charge."
         }
       },
       "battery_scheduler": {
@@ -329,13 +329,13 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "Priorité surplus (1=plus haute)",
           "ev_current_control_entity": "Entité de contrôle du courant (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Limite de charge solaire (kWh)",
-          "ev_target_soc_max": "Limite de charge solaire (SOC %)",
-          "daily_ev_target": "Objectif de charge nocturne (kWh)",
+          "daily_ev_target_max": "Ne jamais dépasser (kWh)",
+          "ev_target_soc_max": "Ne jamais dépasser (%)",
+          "daily_ev_target": "Garantir au moins (kWh)",
           "vehicle_soc_entity": "Capteur SOC batterie véhicule (optionnel)",
           "vehicle_range_entity": "Capteur d'autonomie du véhicule",
           "ev_kwh_per_100km": "Consommation du véhicule (kWh/100km)",
-          "ev_target_soc": "SOC cible VE (%)",
+          "ev_target_soc": "Considérer plein à (%)",
           "ev_battery_capacity_kwh": "Capacité batterie VE (kWh)",
           "initial_current": "Courant de démarrage (A)",
           "ev_min_current": "Courant de charge minimal (A)",
@@ -358,13 +358,13 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "Ordre de répartition du surplus entre plusieurs chargeurs. Nombre plus bas = priorité plus haute.",
           "ev_current_control_entity": "Entité Number utilisée pour définir le courant de charge (A). Pour Wallbox, go-eCharger et chargeurs similaires.",
-          "daily_ev_target_max": "Le surplus solaire charge jusqu’à cette valeur, puis s’arrête. Laissez au maximum pour charger librement au soleil.",
-          "ev_target_soc_max": "Le surplus solaire charge jusqu’à ce SOC, puis s’arrête. Laissez à 100 % pour charger librement au soleil.",
-          "daily_ev_target": "Objectif en kWh à charger depuis le réseau chaque nuit. Réglez sur 0 pour désactiver la charge nocturne sur le réseau.",
+          "daily_ev_target_max": "Le surplus solaire s'arrête ici. C'est un plafond, pas un objectif — laissez au maximum pour charger librement au soleil.",
+          "ev_target_soc_max": "Le surplus solaire s'arrête ici. C'est un plafond, pas un objectif — laissez à 100% pour charger librement au soleil.",
+          "daily_ev_target": "SEM complète depuis le réseau la nuit pour que la voiture ait au moins cela au matin. C'est un plancher, pas une limite — le soleil peut ajouter plus. 0 = ne jamais utiliser le réseau.",
           "vehicle_soc_entity": "Capteur optionnel indiquant l'état de charge actuel du véhicule (0–100 %).",
           "vehicle_range_entity": "Capteur d’autonomie réel optionnel. Sinon, l’autonomie est estimée à partir de SOC × capacité × efficacité.",
           "ev_kwh_per_100km": "Utilisé pour estimer l’autonomie lorsqu’aucun capteur d’autonomie n’est configuré.",
-          "ev_target_soc": "SOC cible (%) à partir duquel SEM considère le VE comme complètement chargé.",
+          "ev_target_soc": "À partir de là, SEM considère la voiture comme chargée. C'est une définition de \"plein\", pas une limite de charge.",
           "ev_battery_capacity_kwh": "Capacité utile totale de la batterie du VE en kWh. Utilisée pour estimer le SOC et le temps de charge.",
           "initial_current": "Courant de charge initial de SEM avant de s'ajuster au surplus disponible.",
           "ev_min_current": "En dessous, SEM met la charge en pause au lieu de baisser encore le courant.",
@@ -391,13 +391,13 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "Priorité surplus (1=plus haute)",
           "ev_current_control_entity": "Entité de contrôle du courant (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Limite de charge solaire (kWh)",
-          "ev_target_soc_max": "Limite de charge solaire (SOC %)",
-          "daily_ev_target": "Objectif de charge nocturne (kWh)",
+          "daily_ev_target_max": "Ne jamais dépasser (kWh)",
+          "ev_target_soc_max": "Ne jamais dépasser (%)",
+          "daily_ev_target": "Garantir au moins (kWh)",
           "vehicle_soc_entity": "Capteur SOC batterie véhicule (optionnel)",
           "vehicle_range_entity": "Capteur d'autonomie du véhicule",
           "ev_kwh_per_100km": "Consommation du véhicule (kWh/100km)",
-          "ev_target_soc": "SOC cible VE (%)",
+          "ev_target_soc": "Considérer plein à (%)",
           "ev_battery_capacity_kwh": "Capacité batterie VE (kWh)",
           "initial_current": "Courant de démarrage (A)",
           "ev_min_current": "Courant de charge minimal (A)",
@@ -419,13 +419,13 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "Ordre de répartition du surplus entre plusieurs chargeurs. Nombre plus bas = priorité plus haute.",
           "ev_current_control_entity": "Entité Number utilisée pour définir le courant de charge (A). Pour Wallbox, go-eCharger et chargeurs similaires.",
-          "daily_ev_target_max": "Le surplus solaire charge jusqu’à cette valeur, puis s’arrête. Laissez au maximum pour charger librement au soleil.",
-          "ev_target_soc_max": "Le surplus solaire charge jusqu’à ce SOC, puis s’arrête. Laissez à 100 % pour charger librement au soleil.",
-          "daily_ev_target": "Objectif en kWh à charger depuis le réseau chaque nuit. Réglez sur 0 pour désactiver la charge nocturne sur le réseau.",
+          "daily_ev_target_max": "Le surplus solaire s'arrête ici. C'est un plafond, pas un objectif — laissez au maximum pour charger librement au soleil.",
+          "ev_target_soc_max": "Le surplus solaire s'arrête ici. C'est un plafond, pas un objectif — laissez à 100% pour charger librement au soleil.",
+          "daily_ev_target": "SEM complète depuis le réseau la nuit pour que la voiture ait au moins cela au matin. C'est un plancher, pas une limite — le soleil peut ajouter plus. 0 = ne jamais utiliser le réseau.",
           "vehicle_soc_entity": "Capteur optionnel indiquant l'état de charge actuel du véhicule (0–100 %).",
           "vehicle_range_entity": "Capteur d’autonomie réel optionnel. Sinon, l’autonomie est estimée à partir de SOC × capacité × efficacité.",
           "ev_kwh_per_100km": "Utilisé pour estimer l’autonomie lorsqu’aucun capteur d’autonomie n’est configuré.",
-          "ev_target_soc": "SOC cible (%) à partir duquel SEM considère le VE comme complètement chargé.",
+          "ev_target_soc": "À partir de là, SEM considère la voiture comme chargée. C'est une définition de \"plein\", pas une limite de charge.",
           "ev_battery_capacity_kwh": "Capacité utile totale de la batterie du VE en kWh. Utilisée pour estimer le SOC et le temps de charge.",
           "initial_current": "Courant de charge initial de SEM avant de s'ajuster au surplus disponible.",
           "ev_min_current": "En dessous, SEM met la charge en pause au lieu de baisser encore le courant.",

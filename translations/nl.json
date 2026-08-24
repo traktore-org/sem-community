@@ -64,7 +64,7 @@
           "mobile_notification_service": "Mobiele meldingsservice",
           "vehicle_soc_entity": "Vehicle Batterij SOC",
           "ev_battery_capacity_kwh": "EV Batterij Capaciteit (kWh)",
-          "ev_target_soc": "EV Doel SOC (%)"
+          "ev_target_soc": "Beschouw als vol bij (%)"
         },
         "data_description": {
           "ev_connected_sensor": "Binaire sensor die aangeeft of de stekker momenteel is aangesloten op het voertuig.",
@@ -78,7 +78,7 @@
           "mobile_notification_service": "HA notify-service voor mobiele pushmeldingen (bijv. notify.mobile_app_uw_telefoon).",
           "vehicle_soc_entity": "Optionele sensor die het huidige laadniveau van het voertuig toont (0–100%).",
           "ev_battery_capacity_kwh": "Totale bruikbare capaciteit van de EV-accu in kWh. Wordt gebruikt om het laadniveau en de laadtijd te schatten.",
-          "ev_target_soc": "Doellaadniveau (%) waarbij SEM de EV als volledig geladen beschouwt."
+          "ev_target_soc": "Vanaf hier beschouwt SEM de auto als geladen. Dit is een definitie van \"vol\", geen laadlimiet."
         }
       }
     },
@@ -108,9 +108,9 @@
           "vehicle_soc_entity": "Voertuig-batterij-SOC-sensor (optioneel)",
           "ev_battery_capacity_kwh": "EV-batterijcapaciteit (kWh)",
           "ev_charger_efficiency": "Laderrendement (%)",
-          "ev_target_soc": "EV-doel-SOC (%)",
-          "daily_ev_target_max": "Zonne-laadlimiet (kWh)",
-          "ev_target_soc_max": "Zonne-laadlimiet (SOC %)",
+          "ev_target_soc": "Beschouw als vol bij (%)",
+          "daily_ev_target_max": "Nooit verder laden dan (kWh)",
+          "ev_target_soc_max": "Nooit verder laden dan (%)",
           "vehicle_range_entity": "Voertuig-bereiksensor",
           "ev_kwh_per_100km": "Voertuigverbruik (kWh/100km)"
         },
@@ -124,9 +124,9 @@
           "vehicle_soc_entity": "Optionele sensor die het huidige laadniveau van het voertuig toont (0–100%).",
           "ev_battery_capacity_kwh": "Totale bruikbare capaciteit van de EV-accu in kWh. Wordt gebruikt om het laadniveau en de laadtijd te schatten.",
           "ev_charger_efficiency": "Deel van de gemeten AC-energie dat de accu bereikt. Verlaag dit als de laadniveauschatting op het voertuig vooruitloopt. Meestal 85-95%, lager bij eenfasig laden of kou.",
-          "ev_target_soc": "Doellaadniveau (%) waarbij SEM de EV als volledig geladen beschouwt.",
-          "daily_ev_target_max": "Zonne-overschot laadt tot deze waarde en stopt dan. Laat op vol staan om vrij op zon te laden.",
-          "ev_target_soc_max": "Zonne-overschot laadt tot deze SOC en stopt dan. Laat op 100% staan om vrij op zon te laden.",
+          "ev_target_soc": "Vanaf hier beschouwt SEM de auto als geladen. Dit is een definitie van \"vol\", geen laadlimiet.",
+          "daily_ev_target_max": "Zonneoverschot stopt hier met laden. Dit is een plafond, geen doel — laat het op vol om vrij op zon te laden.",
+          "ev_target_soc_max": "Zonneoverschot stopt hier met laden. Dit is een plafond, geen doel — laat op 100% om vrij op zon te laden.",
           "ev_kwh_per_100km": "Gebruikt om het rijbereik te schatten wanneer er geen bereiksensor is geconfigureerd.",
           "vehicle_range_entity": "Optionele echte bereiksensor. Anders wordt het bereik geschat op basis van SOC × capaciteit × efficiëntie."
         }
@@ -138,7 +138,7 @@
           "update_interval": "Update-interval (seconden)",
           "battery_priority_soc": "Batterij prioriteit SOC (%)",
           "min_solar_power": "Minimaal zonnevermogen — ruwe PV-productie (W)",
-          "daily_ev_target": "Dagelijkse EV-doel (kWh)",
+          "daily_ev_target": "Minimaal garanderen (kWh)",
           "battery_assist_max_power": "Maximaal batterij-ondersteuningsvermogen (W)",
           "battery_assist_min_surplus": "Min. zonne-overschot voor batterij-ondersteuning (W)",
           "battery_capacity_kwh": "Batterijcapaciteit (kWh)",
@@ -152,7 +152,7 @@
           "smart_night_charging": "Slimme nachtelijke laadreductie",
           "vehicle_soc_entity": "Voertuig batterij SOC",
           "ev_battery_capacity_kwh": "EV batterijcapaciteit (kWh)",
-          "ev_target_soc": "EV doel SOC (%)",
+          "ev_target_soc": "Beschouw als vol bij (%)",
           "battery_buffer_soc": "Zone 2/3 grens — batterijbuffer SOC (%)",
           "battery_auto_start_soc": "Zone 3/4 grens — batterij auto-start SOC (%)",
           "battery_discharge_control_entity": "Batterij ontladingsregel-entiteit (optioneel)",
@@ -168,7 +168,7 @@
           "battery_buffer_soc": "Grens tussen zone 2 en zone 3. Boven deze SOC mag de batterij ontladen om tekorten in zonne-energie op te vangen terwijl de EV wordt geladen. Standaard 70%.",
           "battery_auto_start_soc": "Grens tussen zone 3 en zone 4. Boven deze SOC kan de EV beginnen met laden, zelfs zonder zonne-overschot, gebruikmakend van de batterij. Standaard 90%.",
           "min_solar_power": "Ondergrens voor ruwe PV-productie — het paneelvermogen waaronder 'zon is actief' onwaar is: solar_only start niet en de diepe-tekort-bewaking behandelt het als duisternis (laden stopt dus snel in plaats van te overbruggen op het net). Dit is RUWE productie, GEEN overschot — in tegenstelling tot 'Min. zonne-overschot voor batterij-ondersteuning' (zon − huis), dat bepaalt wanneer de thuisbatterij mag helpen. Standaard 1000 W; houd dit onder het hardware-minimum van de EV-lader (~4140 W bij 3-fase, ~1380 W bij 1-fase).",
-          "daily_ev_target": "Doelwaarde kWh per dag voor nachtelijk laden via het net. Zet op 0 om nachtelijk laden volledig uit te schakelen.",
+          "daily_ev_target": "SEM laadt 's nachts bij uit het net zodat de auto 's ochtends minstens dit heeft. Dit is een ondergrens, geen limiet — de zon kan meer toevoegen. 0 = nooit het net gebruiken.",
           "battery_assist_max_power": "Maximaal vermogen dat de thuisbatterij kan ontladen om de EV te ondersteunen in zone 3/4. Standaard 4500 W.",
           "battery_assist_min_surplus": "Minimaal echt zonne-overschot voordat de thuisbatterij de EV mag helpen laden — in elke laadmodus. Daaronder blijft de batterij voor het huis (de auto laadt uit net + zon). Standaard 1200 W. Zet op 0 om de batterij de EV overal te laten ondersteunen, ook 's nachts.",
           "battery_capacity_kwh": "Totale bruikbare capaciteit van de thuisbatterij (NIET de EV-batterij — dat is een aparte instelling). Wordt gebruikt voor forecast-gestuurd laden.",
@@ -192,7 +192,7 @@
         "title": "EV-laden & Zon",
         "description": "EV-laaddoelen en zonne-energiedrempels configureren.",
         "data": {
-          "daily_ev_target": "Nachtlaaddoel (kWh)",
+          "daily_ev_target": "Minimaal garanderen (kWh)",
           "observer_mode": "Observatiemodus (alleen lezen, geen hardwarebesturing)",
           "smart_night_charging": "Nachtdoel verlagen op basis van voorspelling van morgen",
           "minimum_solar_power": "Minimaal zonnevermogen om EV-laden te starten (W)",
@@ -200,7 +200,7 @@
           "export_limit_entity": "Exportlimiet-entiteit (optioneel)"
         },
         "data_description": {
-          "daily_ev_target": "Doelverbruik in kWh dat elke nacht van het net wordt geladen. Stel in op 0 om nachtelijk laden via het net uit te schakelen.",
+          "daily_ev_target": "SEM laadt 's nachts bij uit het net zodat de auto 's ochtends minstens dit heeft. Dit is een ondergrens, geen limiet — de zon kan meer toevoegen. 0 = nooit het net gebruiken.",
           "observer_mode": "Wanneer AAN, bewaakt SEM alles maar stuurt nooit opdrachten naar hardware.",
           "smart_night_charging": "Wanneer AAN, verlaagt SEM het nachtlaaddoel wanneer de zonne-energieprognose voor morgen voldoende is.",
           "minimum_solar_power": "Minimaal zonne-energieoverschot (W) dat vereist is voordat SEM begint met zonneladen voor de EV.",
@@ -255,7 +255,7 @@
           "emergency_peak_level": "Noodniveau piekvermogen (kW)",
           "vehicle_soc_entity": "Voertuig batterij SOC",
           "ev_battery_capacity_kwh": "EV batterijcapaciteit (kWh)",
-          "ev_target_soc": "EV doel SOC (%)"
+          "ev_target_soc": "Beschouw als vol bij (%)"
         },
         "data_description": {
           "load_management_enabled": "Schakel SEM's automatische lastafschakeling in of uit om onder uw netpieklimiet te blijven.",
@@ -265,7 +265,7 @@
           "emergency_peak_level": "Vermogensniveau (kW) waarbij SEM agressief verbruikers afschakelt om piekkosten te vermijden. Moet boven de doel-pieklimiet liggen.",
           "vehicle_soc_entity": "Optionele sensor die het huidige laadniveau van het voertuig toont (0–100%).",
           "ev_battery_capacity_kwh": "Totale bruikbare capaciteit van de EV-accu in kWh.",
-          "ev_target_soc": "Doellaadniveau (%) waarbij SEM de EV als volledig geladen beschouwt."
+          "ev_target_soc": "Vanaf hier beschouwt SEM de auto als geladen. Dit is een definitie van \"vol\", geen laadlimiet."
         }
       },
       "notifications": {
@@ -277,7 +277,7 @@
           "mobile_notification_service": "Mobiele meldingsservice",
           "vehicle_soc_entity": "Vehicle Batterij SOC",
           "ev_battery_capacity_kwh": "EV Batterij Capaciteit (kWh)",
-          "ev_target_soc": "EV Doel SOC (%)"
+          "ev_target_soc": "Beschouw als vol bij (%)"
         },
         "data_description": {
           "enable_charger_notifications": "Schakel persistente meldingsbanners op de laadpaalstatuskaart in of uit.",
@@ -285,7 +285,7 @@
           "mobile_notification_service": "HA notify-service voor mobiele pushmeldingen (bijv. notify.mobile_app_uw_telefoon).",
           "vehicle_soc_entity": "Optionele sensor die het huidige laadniveau van het voertuig toont (0–100%).",
           "ev_battery_capacity_kwh": "Totale bruikbare capaciteit van de EV-accu in kWh.",
-          "ev_target_soc": "Doellaadniveau (%) waarbij SEM de EV als volledig geladen beschouwt."
+          "ev_target_soc": "Vanaf hier beschouwt SEM de auto als geladen. Dit is een definitie van \"vol\", geen laadlimiet."
         }
       },
       "battery_scheduler": {
@@ -329,13 +329,13 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "Overschotprioriteit (1 = hoogste)",
           "ev_current_control_entity": "Number-entiteit voor laadstroom (Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Zonne-laadlimiet (kWh)",
-          "ev_target_soc_max": "Zonne-laadlimiet (SOC %)",
-          "daily_ev_target": "Nachtlaaddoel (kWh)",
+          "daily_ev_target_max": "Nooit verder laden dan (kWh)",
+          "ev_target_soc_max": "Nooit verder laden dan (%)",
+          "daily_ev_target": "Minimaal garanderen (kWh)",
           "vehicle_soc_entity": "Voertuig-batterij-SOC-sensor (optioneel)",
           "vehicle_range_entity": "Voertuig-bereiksensor",
           "ev_kwh_per_100km": "Voertuigverbruik (kWh/100km)",
-          "ev_target_soc": "EV-doel-SOC (%)",
+          "ev_target_soc": "Beschouw als vol bij (%)",
           "ev_battery_capacity_kwh": "EV-batterijcapaciteit (kWh)",
           "initial_current": "Startstroom (A)",
           "ev_min_current": "Minimale laadstroom (A)",
@@ -358,13 +358,13 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "Volgorde van overschotverdeling over meerdere laadpalen. Lager getal = hogere prioriteit.",
           "ev_current_control_entity": "Number-entiteit die wordt gebruikt om de laadstroom (A) in te stellen. Gebruiken voor Wallbox, go-eCharger en vergelijkbare laadpalen.",
-          "daily_ev_target_max": "Zonne-overschot laadt tot deze waarde en stopt dan. Laat op vol staan om vrij op zon te laden.",
-          "ev_target_soc_max": "Zonne-overschot laadt tot deze SOC en stopt dan. Laat op 100% staan om vrij op zon te laden.",
-          "daily_ev_target": "Doelverbruik in kWh dat elke nacht van het net wordt geladen. Stel in op 0 om nachtelijk laden via het net uit te schakelen.",
+          "daily_ev_target_max": "Zonneoverschot stopt hier met laden. Dit is een plafond, geen doel — laat het op vol om vrij op zon te laden.",
+          "ev_target_soc_max": "Zonneoverschot stopt hier met laden. Dit is een plafond, geen doel — laat op 100% om vrij op zon te laden.",
+          "daily_ev_target": "SEM laadt 's nachts bij uit het net zodat de auto 's ochtends minstens dit heeft. Dit is een ondergrens, geen limiet — de zon kan meer toevoegen. 0 = nooit het net gebruiken.",
           "vehicle_soc_entity": "Optionele sensor die het huidige laadniveau van het voertuig toont (0–100%).",
           "vehicle_range_entity": "Optionele echte bereiksensor. Anders wordt het bereik geschat op basis van SOC × capaciteit × efficiëntie.",
           "ev_kwh_per_100km": "Gebruikt om het rijbereik te schatten wanneer er geen bereiksensor is geconfigureerd.",
-          "ev_target_soc": "Doellaadniveau (%) waarbij SEM de EV als volledig geladen beschouwt.",
+          "ev_target_soc": "Vanaf hier beschouwt SEM de auto als geladen. Dit is een definitie van \"vol\", geen laadlimiet.",
           "ev_battery_capacity_kwh": "Totale bruikbare capaciteit van de EV-accu in kWh. Wordt gebruikt om het laadniveau en de laadtijd te schatten.",
           "initial_current": "Laadstroom waarmee SEM begint voordat het opregelt naar het beschikbare overschot.",
           "ev_min_current": "Hieronder pauzeert SEM het laden in plaats van de stroom verder te verlagen.",
@@ -391,13 +391,13 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "Overschotprioriteit (1 = hoogste)",
           "ev_current_control_entity": "Number-entiteit voor laadstroom (Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Zonne-laadlimiet (kWh)",
-          "ev_target_soc_max": "Zonne-laadlimiet (SOC %)",
-          "daily_ev_target": "Nachtlaaddoel (kWh)",
+          "daily_ev_target_max": "Nooit verder laden dan (kWh)",
+          "ev_target_soc_max": "Nooit verder laden dan (%)",
+          "daily_ev_target": "Minimaal garanderen (kWh)",
           "vehicle_soc_entity": "Voertuig-batterij-SOC-sensor (optioneel)",
           "vehicle_range_entity": "Voertuig-bereiksensor",
           "ev_kwh_per_100km": "Voertuigverbruik (kWh/100km)",
-          "ev_target_soc": "EV-doel-SOC (%)",
+          "ev_target_soc": "Beschouw als vol bij (%)",
           "ev_battery_capacity_kwh": "EV-batterijcapaciteit (kWh)",
           "initial_current": "Startstroom (A)",
           "ev_min_current": "Minimale laadstroom (A)",
@@ -419,13 +419,13 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "Volgorde van overschotverdeling over meerdere laadpalen. Lager getal = hogere prioriteit.",
           "ev_current_control_entity": "Number-entiteit die wordt gebruikt om de laadstroom (A) in te stellen. Gebruiken voor Wallbox, go-eCharger en vergelijkbare laadpalen.",
-          "daily_ev_target_max": "Zonne-overschot laadt tot deze waarde en stopt dan. Laat op vol staan om vrij op zon te laden.",
-          "ev_target_soc_max": "Zonne-overschot laadt tot deze SOC en stopt dan. Laat op 100% staan om vrij op zon te laden.",
-          "daily_ev_target": "Doelverbruik in kWh dat elke nacht van het net wordt geladen. Stel in op 0 om nachtelijk laden via het net uit te schakelen.",
+          "daily_ev_target_max": "Zonneoverschot stopt hier met laden. Dit is een plafond, geen doel — laat het op vol om vrij op zon te laden.",
+          "ev_target_soc_max": "Zonneoverschot stopt hier met laden. Dit is een plafond, geen doel — laat op 100% om vrij op zon te laden.",
+          "daily_ev_target": "SEM laadt 's nachts bij uit het net zodat de auto 's ochtends minstens dit heeft. Dit is een ondergrens, geen limiet — de zon kan meer toevoegen. 0 = nooit het net gebruiken.",
           "vehicle_soc_entity": "Optionele sensor die het huidige laadniveau van het voertuig toont (0–100%).",
           "vehicle_range_entity": "Optionele echte bereiksensor. Anders wordt het bereik geschat op basis van SOC × capaciteit × efficiëntie.",
           "ev_kwh_per_100km": "Gebruikt om het rijbereik te schatten wanneer er geen bereiksensor is geconfigureerd.",
-          "ev_target_soc": "Doellaadniveau (%) waarbij SEM de EV als volledig geladen beschouwt.",
+          "ev_target_soc": "Vanaf hier beschouwt SEM de auto als geladen. Dit is een definitie van \"vol\", geen laadlimiet.",
           "ev_battery_capacity_kwh": "Totale bruikbare capaciteit van de EV-accu in kWh. Wordt gebruikt om het laadniveau en de laadtijd te schatten.",
           "initial_current": "Laadstroom waarmee SEM begint voordat het opregelt naar het beschikbare overschot.",
           "ev_min_current": "Hieronder pauzeert SEM het laden in plaats van de stroom verder te verlagen.",
