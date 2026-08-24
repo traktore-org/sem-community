@@ -7,6 +7,8 @@ _ha_config_dir = str(Path(__file__).resolve().parent.parent.parent.parent)
 if _ha_config_dir not in sys.path:
     sys.path.insert(0, _ha_config_dir)
 
+import asyncio
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 from datetime import timedelta
@@ -560,6 +562,43 @@ def _frame_helper_shim(monkeypatch):
     if holder is not None and getattr(holder, "hass", "absent") is None:
         monkeypatch.setattr(
             frame, "report_usage", lambda *a, **k: None)
+
+
+@pytest.fixture(autouse=True)
+async def enable_event_loop_debug() -> None:
+    """(#835) Override phacc's fixture of the same name, which is broken on
+    the 3.13 rung. A conftest fixture shadows a plugin fixture, so this is
+    the whole fix.
+
+    phacc 0.13.316 — the version the 3.13 rung is pinned to — ships::
+
+        @pytest.fixture(autouse=True)
+        def enable_event_loop_debug() -> None:
+            asyncio.get_event_loop().set_debug(True)
+
+    Synchronous, and that is the bug. ``asyncio.get_event_loop()`` only
+    auto-creates a loop while nobody has *explicitly* set one; the moment
+    something calls ``set_event_loop(None)`` it raises instead. pytest-asyncio
+    1.3.0 does exactly that when it tears a test's loop down — so the first
+    async test in a session poisons every SYNC test after it, and this autouse
+    fixture raises at setup for each one. That is the shape of the failure:
+    1,987 tests pass, then 5,935 error with "There is no current event loop in
+    thread 'MainThread'". Run a file on its own and it passes, which is why
+    this only ever showed in a full-suite run.
+
+    Upstream fixed it in 0.13.356 by making the fixture async and asking for
+    the RUNNING loop — the body below is that fix, verbatim. We cannot simply
+    take it: 0.13.316 is the LAST phacc release supporting Python 3.13 (all 41
+    later releases declare ``requires_python >= 3.14``), so the 3.13 rung is
+    stuck on the release carrying the bug and the correction has to live here.
+
+    Held on every rung rather than guarded by version, because it is what the
+    3.14 rung already runs (identical to its phacc) and the 3.12 floor has an
+    event loop under it either way — pinned by
+    ``tests/test_835_event_loop_fixture.py`` and by all three rungs staying
+    green.
+    """
+    asyncio.get_running_loop().set_debug(True)
 
 
 # pytest-homeassistant-custom-component framework fixtures
