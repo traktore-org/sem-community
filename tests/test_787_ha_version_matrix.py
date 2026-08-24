@@ -168,17 +168,30 @@ def test_the_newest_tested_ha_is_not_a_year_behind():
     )
 
 
-def test_791_the_prod_ha_rung_is_blocking():
-    """(#791) The 3.14 → HA 2026.8.2 rung — what PROD runs — must stay
-    BLOCKING. Only the 3.13 rung (pytest-asyncio pin still owed) may be
-    advisory. A widened exemption here silently reopens the #787 blind
-    spot at the release boundary."""
+def test_791_835_every_rung_is_blocking():
+    """(#791, #835) EVERY rung must block. No continue-on-error at all.
+
+    This used to assert the opposite for 3.13 — that its exemption was
+    present — on the theory that a "pytest-asyncio pin" was still owed. That
+    diagnosis was wrong (phacc pins pytest-asyncio itself, exactly), and the
+    exemption is what made the wrongness survive: the rung never passed once
+    in its entire life and the board stayed green throughout, because a rung
+    that cannot fail is a rung nobody reads. #835 fixed the real cause — a
+    sync upstream fixture that pytest-asyncio 1.3.0 leaves without a current
+    event loop — so the exemption is gone and this test now guards its
+    absence.
+    """
     from pathlib import Path
     wf = (
         Path(__file__).resolve().parent.parent
         / ".github" / "workflows" / "tests.yml"
     ).read_text()
-    assert "continue-on-error: ${{ matrix.python-version == '3.13' }}" in wf
-    assert "python-version != '3.12'" not in wf, (
-        "the old blanket exemption is back — 3.14 must block (#791)"
+    offending = [
+        line.strip() for line in wf.splitlines()
+        if "continue-on-error" in line and not line.strip().startswith("#")
+    ]
+    assert not offending, (
+        "a rung has been made non-blocking again: "
+        f"{offending}. Every rung in the ladder must be able to fail the "
+        "board, or the HA version it covers is untested in practice (#787)."
     )

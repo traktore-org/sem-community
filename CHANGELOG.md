@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🧪 **SEM is now actually tested against three Home Assistant versions**
+  (#835): the middle rung of the test ladder — HA 2026.2.3 — had never passed
+  a single run. It was marked advisory, so the board stayed green and nobody
+  saw it. The cause was one line in a test dependency, not in SEM; it is fixed,
+  all three versions now run clean, and none of them can go red without
+  blocking a release any more.
+
 - 🔌 **A charger that reports its state as text is no longer read as "no car"
   while it sits idle** (#833): if you point SEM's connection field at a status
   sensor rather than a plug binary sensor, states like `Paused` and `Locked` —
