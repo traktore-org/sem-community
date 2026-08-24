@@ -2171,3 +2171,48 @@ it can gate CI against a reference config. Against PROD on 23.08 it reports **0 
 Re-run it against any install's config before trusting the table above on a different deployment:
 the null set is per-install, and a key null on one machine may be set on another. That is also why
 this is an instrument rather than a static test — the hazard lives in the CONFIG, not in the code.
+
+### 55. Two measurements compared across different reset windows — GUARDED
+
+**Root shape:** an invariant compares quantity A against quantity B, and the two accumulate over
+different windows. Both are individually correct; the comparison is meaningless. Worse, it usually
+fails in the direction that looks like caution, so the code appears to be working.
+
+**Instance (#778/#800):** `flow_invariant` checked that the night's attributed flows fit inside the
+battery's discharge. The flows accumulated from dusk in `BatteryNightTracker` with **no midnight
+reset**; `daily_battery_discharge` is keyed `f"{category}_{today}"` with `today = now.date()` —
+`energy_calculator.py`'s own comment says *"Midnight-based reset — matches HA Energy Dashboard."*
+Every real night spans midnight. From 00:00 the counter restarts near zero while the tracker keeps
+climbing, so the two diverge by however much discharged before midnight, and a 15 % tolerance trips.
+
+**Why it was invisible:** it **failed safe.** `flows_balanced` latches → `trainable` false →
+`expected_overnight_need` and `measured_capacity` refuse the night → the #778 budget stays at zero
+and the card says *"holding"*. Nothing breaks, nothing errors, no user is harmed today — the
+feature simply never activates, and the sentence it shows while not activating reads like a
+considered decision. A gate written to reject the occasional impossible night would have rejected
+**almost every night**, forever, on real hardware.
+
+**Why tests missed it:** every test passed a **constant** `battery_discharge_kwh`. A constant has no
+reset window, so the mismatch cannot exist in the fixture. The bug lives entirely in the
+*relationship between two clocks*, and a unit test that supplies both sides as literals has quietly
+removed the only thing under test. Live evidence pointed at it (.175 read 4.06 vs 13.96) and was
+misattributed to a mock battery — which was ALSO real, so the arithmetic confirmed a partial
+explanation and the search stopped.
+
+**The fix shape — compare instantaneous, not cumulative.** Power against power, per sample: there is
+no window, so there is nothing to mismatch. The price is a duration tolerance (two sensors read
+microseconds apart disagree constantly, and one bad sample must not condemn a ten-hour night), and
+the gain is strictly more sensitivity when it does fire — a sustained impossible flow appears in
+every sample rather than being averaged into a daily total.
+
+**Guard:** `tests/test_800_flow_invariant_window.py` — a ten-hour simulated night at steady,
+legitimate discharge must stay balanced (the regression), a sustained impossible flow must still be
+rejected (not softened into uselessness), and a single bad sample must not condemn a night.
+
+**Where else to look — anywhere SEM compares an accumulator to another accumulator.** The reset
+windows in this codebase are genuinely different and genuinely undocumented at the comparison sites:
+midnight (`daily_*`), sunset→sunrise (the night tracker), per-charger deadline (`daily_ev_energy`,
+#279), monthly, lifetime (inverter counters), and "since SEM started" (session totals). Any
+assertion, diagnostic or Repair that puts two of those on opposite sides of an inequality is
+suspect. The question to ask is not "are both numbers right" but *"do these two zero at the same
+moment?"*
