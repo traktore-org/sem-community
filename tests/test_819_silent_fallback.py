@@ -152,3 +152,61 @@ class TestAMissedPreferenceIsRetried:
         r._locate_integration = lambda platform, entity_map: {}
         r.detect_source()
         assert r.should_retry_preference is False
+
+
+class TestTheSolcastUpgradeRespectsAChoice:
+    """The actual root cause: an auto-mode upgrade overriding an explicit pick.
+
+    #562 added a Solcast upgrade to ``read_forecast``: source priority is
+    Solcast > Forecast.Solar, and if Solcast loaded AFTER SEM's first detection
+    the cache used to stay latched on the lesser source until a restart. Sound
+    fix — for an install that never chose.
+
+    #819 then added a user preference, and the two were never introduced. So
+    detection honours the choice, and the very next read hands it straight back
+    to Solcast:
+
+        detect_source()  -> open_meteo   (correct)
+        read_forecast()  -> "Solcast became available — upgrading"  -> solcast
+
+    Every symptom the reporter described falls out of this: it only happens
+    with Solcast installed, the choice appears to apply and reverts a cycle
+    later, the picker keeps showing the choice because the stored preference is
+    fine, and ``sources_available`` lists the chosen source because it really is
+    installed. Reproduced on .46 with all three integrations present.
+
+    An upgrade is only an upgrade if nobody asked for something else.
+    """
+
+    def _reader_all_installed(self, preferred):
+        """A reader for which every forecast integration is installed."""
+        r = _reader(preferred)
+        r._locate_integration = lambda platform, entity_map: {
+            "forecast_today": f"sensor.{platform}_today"}
+        return r
+
+    def test_an_explicit_choice_survives_the_upgrade(self):
+        r = self._reader_all_installed("open_meteo")
+        assert r.detect_source() == "open_meteo"
+        r.read_forecast()
+        assert r._source == "open_meteo", (
+            "the Solcast upgrade overrode the user's explicit choice — the "
+            "whole of #819 as reported")
+        assert r.honoured is True
+
+    def test_auto_still_upgrades_to_solcast(self):
+        """#562 must keep working for installs that never chose: that is the
+        case it was written for, and losing it would trade one silent
+        substitution for another."""
+        r = self._reader_all_installed(None)
+        r._source = "forecast_solar"
+        r._entities = {"forecast_today": "sensor.forecast_solar_today"}
+        r.read_forecast()
+        assert r._source == "solcast"
+
+    def test_choosing_solcast_is_not_disturbed(self):
+        r = self._reader_all_installed("solcast")
+        assert r.detect_source() == "solcast"
+        r.read_forecast()
+        assert r._source == "solcast"
+        assert r.honoured is True

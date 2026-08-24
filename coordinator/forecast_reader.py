@@ -509,7 +509,15 @@ class ForecastReader:
             # onto Forecast.Solar until the next restart. Upgrade as soon
             # as the preferred source's entity becomes available.
             upgraded = False
-            if self._source != "solcast":
+            # (#819) An upgrade is only an upgrade if nobody asked for
+            # something else. #562 added this for installs that never chose —
+            # Solcast loading after SEM's first detection used to leave the
+            # cache latched on a lesser source until a restart. It predates the
+            # user preference and never learned about it, so it handed an
+            # explicit choice straight back to Solcast on the very next read:
+            # the choice applied, then reverted a cycle later, forever. That is
+            # the whole of the reported bug.
+            if self._source != "solcast" and not self._preferred_source:
                 solcast_entities = self._locate_integration(
                     SOLCAST_PLATFORM, SOLCAST_ENTITIES
                 )
