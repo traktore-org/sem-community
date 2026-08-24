@@ -80,6 +80,13 @@
           "ev_battery_capacity_kwh": "电动汽车电池的总可用容量 (kWh)。用于估算剩余电量 (SOC) 和充电时间。",
           "ev_target_soc": "达到此值后 SEM 视车辆为已充满。这是对\"充满\"的定义，不是充电上限。"
         }
+      },
+      "ev_charger_confirm": {
+        "title": "已找到充电桩",
+        "description": "SEM 找到了您的充电桩并读取了其实体：\n\n{found}\n\n如果没有问题，直接继续即可——无需其他设置。",
+        "data": {
+          "review_details": "让我查看详细设置"
+        }
       }
     },
     "error": {

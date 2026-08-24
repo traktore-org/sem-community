@@ -5,9 +5,10 @@
     "reason; removing one is the point of the issue.",
     "Regenerate:  python3 scripts/audit_options.py --baseline"
   ],
-  "total": 158,
-  "first_run_fields": 13,
-  "first_run_steps": 4,
+  "total": 159,
+  "first_run_fields": 10,
+  "first_run_steps": 3,
+  "first_run_fields_best": 3,
   "config_fields": [
     "action",
     "battery_assist_max_power",
@@ -125,6 +126,7 @@
     "phase_guard_recovery_cycles",
     "phase_guard_recovery_margin_a",
     "phase_guard_topology",
+    "review_details",
     "solar_forecast_source",
     "target_peak_limit",
     "tariff_classification_mode",

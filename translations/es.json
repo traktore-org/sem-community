@@ -80,6 +80,13 @@
           "ev_battery_capacity_kwh": "Capacidad útil total de la batería del VE en kWh. Se utiliza para estimar el SOC y el tiempo de carga.",
           "ev_target_soc": "A partir de aquí SEM considera el coche cargado. Es una definición de \"lleno\", no un límite de carga."
         }
+      },
+      "ev_charger_confirm": {
+        "title": "Cargador encontrado",
+        "description": "SEM ha encontrado su cargador y leído sus entidades:\n\n{found}\n\nSi es correcto, simplemente continúe — no hace falta nada más.",
+        "data": {
+          "review_details": "Revisar los detalles"
+        }
       }
     },
     "error": {
