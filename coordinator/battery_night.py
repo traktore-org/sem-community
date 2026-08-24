@@ -87,10 +87,12 @@ class Sample:
     # Day-phase house consumption — lets 2.1 decompose a missed refill
     # promise into PV-wrong vs consumption-wrong.
     home_w: float = 0.0
-    # (#778) The battery's OWN discharge counter for the day, if the install
-    # publishes one. Not integrated — only used to check that the attributed
-    # flows above fit inside it. See flow_invariant.
-    battery_discharge_kwh: Optional[float] = None
+    # (#778) The pack's own discharge POWER this cycle, if the install
+    # publishes it. Not integrated — only used to check that the attributed
+    # flows above fit inside it, per sample. Energy counters cannot be used
+    # here: the daily one resets at midnight while a night does not, so
+    # comparing them condemned ordinary nights. See flow_invariant.
+    battery_discharge_w: Optional[float] = None
     soc: Optional[float] = None
     soc_available: bool = True
     export_w: float = 0.0
@@ -125,15 +127,15 @@ class BatteryNightTracker:
         self._last_ts: Optional[float] = None
         self._drain_j = 0.0            # watt-seconds
         # (#778) False once any night sample showed more energy leaving the
-        # battery than the battery says it discharged. Latches: one violation
-        # is enough to make the night's drain untrustworthy, and a later
-        # balanced sample does not un-inflate what was already integrated.
-        self._flows_balanced = True
         # (#800) Energy recovered across sampling holes from the pack's own
         # SOC, and how much wall time those holes covered.
         self._bridged_j = 0.0
         self._bridged_s = 0.0
         self._bridge_failed = False
+        # (#778) How long the attributed flows exceeded the pack's discharge.
+        # A duration, not a latch: one sample of sensor skew is thirty seconds
+        # of a ten-hour night and must not condemn it.
+        self._flow_violation_s = 0.0
         self._assist_j = 0.0
         self._export_j = 0.0
         self._gap_s = 0.0
@@ -216,14 +218,14 @@ class BatteryNightTracker:
                 return
             if s.soc_available and s.soc is not None:
                 self._soc_seen = True
-            if s.battery_discharge_kwh is not None:
+            if s.battery_discharge_w is not None and dt > 0:
                 from .flow_invariant import flows_balance
                 if not flows_balance(
-                        discharge_kwh=s.battery_discharge_kwh,
-                        to_home=self._drain_j / 3.6e6,
-                        to_ev=self._assist_j / 3.6e6,
-                        to_grid=self._export_j / 3.6e6):
-                    self._flows_balanced = False
+                        discharge_w=s.battery_discharge_w,
+                        to_home=s.battery_to_home_w,
+                        to_ev=s.battery_to_ev_w,
+                        to_grid=s.battery_to_grid_w):
+                    self._flow_violation_s += dt
             if dt > 0:
                 self._drain_j += s.battery_to_home_w * dt
                 self._assist_j += s.battery_to_ev_w * dt
@@ -252,6 +254,27 @@ class BatteryNightTracker:
                 self._clipped_s += dt
 
     # ── reads ────────────────────────────────────────────────────
+
+    @property
+    def _flows_balanced(self) -> bool:
+        """Did the pack's books balance for long enough to trust this night?
+
+        Derived from the accumulated violation time rather than latched on the
+        first bad sample: sensors read microseconds apart disagree constantly,
+        and a night is ten hours long.
+        """
+        from .flow_invariant import VIOLATION_TOLERANCE_S
+        return self._flow_violation_s <= VIOLATION_TOLERANCE_S
+
+    @_flows_balanced.setter
+    def _flows_balanced(self, value) -> None:
+        # Restoring a persisted verdict: a stored False means the night had
+        # already spent its tolerance, so carry that across the restart.
+        from .flow_invariant import VIOLATION_TOLERANCE_S
+        if not value:
+            self._flow_violation_s = max(
+                getattr(self, "_flow_violation_s", 0.0),
+                VIOLATION_TOLERANCE_S + 1.0)
 
     def _unbridged_gap_s(self) -> float:
         """Sampling time no measurement covers — the only kind that should
@@ -327,6 +350,10 @@ class BatteryNightTracker:
             "soc_start": self._soc_start,
             "soc_morning": self._soc_morning,
             "reserve_hit": self._reserve_hit,
+            # How long the attributed flows exceeded the pack's discharge. On
+            # the record so a rejected night can be argued with rather than
+            # merely disbelieved.
+            "flow_violation_s": round(self._flow_violation_s, 1),
             "bridged_kwh": round(self._bridged_j / 3.6e6, 3),
             "bridged_s": round(self._bridged_s, 1),
             "night_grid_kwh": round(self._night_grid_j / 3.6e6, 3),
@@ -376,6 +403,7 @@ class BatteryNightTracker:
             # tracker that forgets them re-opens the night believing its books
             # balanced and no hole was ever covered.
             "flows_balanced": self._flows_balanced,
+            "flow_violation_s": self._flow_violation_s,
             "bridged_j": self._bridged_j,
             "bridged_s": self._bridged_s,
             "bridge_failed": self._bridge_failed,
@@ -395,7 +423,12 @@ class BatteryNightTracker:
         self._drain_j = float(d.get("drain_j", 0.0) or 0.0)
         # Default True: a store written before this field existed describes a
         # night nobody checked, not a night that failed.
-        self._flows_balanced = bool(d.get("flows_balanced", True))
+        # Order matters: the duration is the truth and the boolean is only a
+        # fallback for a store written before the duration existed. Setting
+        # the boolean first would be undone by the line after it.
+        self._flow_violation_s = float(d.get("flow_violation_s", 0.0) or 0.0)
+        if "flow_violation_s" not in d:
+            self._flows_balanced = bool(d.get("flows_balanced", True))
         self._bridged_j = float(d.get("bridged_j", 0.0) or 0.0)
         self._bridged_s = float(d.get("bridged_s", 0.0) or 0.0)
         self._bridge_failed = bool(d.get("bridge_failed", False))

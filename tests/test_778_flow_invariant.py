@@ -1,117 +1,121 @@
 """#778 — a night whose energy books do not balance is not evidence.
 
-Found on .175 while backfilling: SEM reported the battery discharging 4.06 kWh
-that day and simultaneously reported 13.96 kWh flowing OUT of it (9.39 home +
-0.19 EV + 4.38 grid). 3.4x more energy leaving the battery than left the
-battery. PROD holds the invariant on the same code (3.04 <= 4.04), so it is a
-rig artifact — but nothing in SEM noticed either way, and #778 integrates
-exactly that inflated flow into ``drain_kwh``.
+The pack cannot send out more power than it is discharging. When the attributed
+flows exceed it for long enough, the night is recorded, is visible, and is NOT
+trainable — the same treatment a night with too large a sampling gap gets.
 
-The consequence is quiet and bad: an inflated drain makes the overnight-need
-envelope too large, the budget stays at zero forever, and the card says
-"holding" — a sentence that sounds like a considered decision. The user is told
-their house needs 13 kWh a night when it needs 5.
-
-So the invariant becomes an evidence-quality gate, exactly like the gap
-tolerance already is: a night that violated conservation is recorded, is
-visible, and is NOT trainable. It is not silently repaired — clamping the
-number would hide the cause, and the cause is a real misconfiguration
-somewhere that deserves to be found.
+The comparison is per-sample POWER. It used to be cumulative energy against
+``daily_battery_discharge``, and that was wrong in a way worth remembering: the
+daily counter resets at midnight and a night does not, so from 00:00 the two
+diverged and the check condemned ordinary nights. It failed SAFE — the feature
+just never activated — which is exactly why it survived review of the code and
+was only caught by reading the two windows against each other.
+``test_800_flow_invariant_window.py`` owns that regression; this file owns the
+contract.
 """
 
 import pytest
 
 from custom_components.solar_energy_management.coordinator.flow_invariant import (
+    NOISE_FLOOR_W,
     TOLERANCE_FRACTION,
+    VIOLATION_TOLERANCE_S,
     flows_balance,
 )
 
 
 class TestTheInvariant:
     def test_flows_within_the_discharge_balance(self):
-        assert flows_balance(discharge_kwh=10.0, to_home=6.0, to_ev=2.0,
-                             to_grid=1.0) is True
-
-    def test_the_prod_reading_balances(self):
-        """PROD, 23.08: discharged 4.04, flows 2.9 + 0.1 + 0.04."""
-        assert flows_balance(discharge_kwh=4.04, to_home=2.9, to_ev=0.1,
-                             to_grid=0.04) is True
-
-    def test_the_rig_reading_does_not(self):
-        """.175, same moment: discharged 4.06, flows 9.39 + 0.19 + 4.38."""
-        assert flows_balance(discharge_kwh=4.06, to_home=9.39, to_ev=0.19,
-                             to_grid=4.38) is False
-
-    def test_a_small_overshoot_is_tolerated(self):
-        """Sampling and rounding put the two sides a little apart; the gate is
-        for the 3x case, not for measurement noise."""
-        assert flows_balance(discharge_kwh=10.0, to_home=10.0 * (1 + TOLERANCE_FRACTION / 2),
-                             to_ev=0.0, to_grid=0.0) is True
-
-    def test_a_large_overshoot_is_not(self):
-        assert flows_balance(discharge_kwh=10.0, to_home=13.0, to_ev=0.0,
-                             to_grid=0.0) is False
+        assert flows_balance(discharge_w=3000.0, to_home=2000.0, to_ev=500.0,
+                             to_grid=100.0) is True
 
     def test_flows_below_the_discharge_are_always_fine(self):
-        """Losses, self-consumption in the inverter, unattributed flow — the
+        """Losses, inverter self-consumption, unattributed flow — the
         invariant is one-sided by nature."""
-        assert flows_balance(discharge_kwh=10.0, to_home=1.0, to_ev=0.0,
-                             to_grid=0.0) is True
+        assert flows_balance(discharge_w=3000.0, to_home=200.0) is True
+
+    def test_a_small_overshoot_is_tolerated(self):
+        assert flows_balance(
+            discharge_w=1000.0,
+            to_home=1000.0 * (1 + TOLERANCE_FRACTION / 2)) is True
+
+    def test_a_large_overshoot_is_not(self):
+        assert flows_balance(discharge_w=1000.0, to_home=3000.0) is False
+
+    def test_the_three_sinks_are_summed(self):
+        """Each alone fits; together they cannot. Checking only the largest
+        would miss a fleet quietly over-attributing across all three."""
+        assert flows_balance(discharge_w=1000.0, to_home=600.0, to_ev=600.0,
+                             to_grid=600.0) is False
 
 
 class TestItNeverRaises:
-    """Evaluated once per night on live sensor values, some of which will be
-    missing. A quality gate that throws would take the whole record with it."""
+    """Evaluated every cycle on live sensor values, some of which are missing
+    or junk. A quality gate that throws takes the whole record with it."""
 
     @pytest.mark.parametrize("bad", [None, "x", float("nan")])
     def test_junk_discharge_is_unverifiable_not_false(self, bad):
-        """Unknown is not the same as violated: without a discharge figure
-        there is nothing to check, and failing every such night closed would
-        discard evidence on installs that simply do not publish it."""
-        assert flows_balance(discharge_kwh=bad, to_home=1.0, to_ev=0.0,
-                             to_grid=0.0) is True
+        """Unknown is not violated: without a discharge reading there is
+        nothing to check, and failing every such night would discard evidence
+        on hardware that simply reports less."""
+        assert flows_balance(discharge_w=bad, to_home=5000.0) is True
 
     @pytest.mark.parametrize("bad", [None, "x"])
     def test_junk_flows_count_as_zero(self, bad):
-        assert flows_balance(discharge_kwh=10.0, to_home=bad, to_ev=0.0,
-                             to_grid=0.0) is True
+        assert flows_balance(discharge_w=1000.0, to_home=bad) is True
 
-    def test_a_zero_discharge_night_is_not_flagged(self):
-        """A battery that never discharged cannot violate anything, and 0/0
-        must not become a division."""
-        assert flows_balance(discharge_kwh=0.0, to_home=0.0, to_ev=0.0,
-                             to_grid=0.0) is True
+    def test_an_idle_battery_is_not_policed(self):
+        """A pack at rest reads a few watts either way on both sides. Below
+        the noise floor there is no conservation question to answer."""
+        assert flows_balance(discharge_w=0.0,
+                             to_home=NOISE_FLOOR_W / 2) is True
+
+    def test_outflow_while_charging_is_a_violation(self):
+        """Above the noise floor it is real: the pack is taking energy IN and
+        SEM claims kilowatts flowing OUT of it."""
+        assert flows_balance(discharge_w=0.0, to_home=2000.0) is False
 
 
 class TestTheNightRecordCarriesIt:
-    def test_a_violating_night_is_recorded_but_not_trainable(self):
+    def test_a_sustained_violation_makes_the_night_untrainable(self):
         from custom_components.solar_energy_management.coordinator.battery_night import (
             BatteryNightTracker, Sample,
         )
-        tr = BatteryNightTracker(reserve_soc=10.0)
+        tr = BatteryNightTracker(reserve_soc=10.0, capacity_kwh=15.0)
         tr.start("2026-08-21", outdoor_temp_c=None)
         t = 0.0
-        # An hour of night at SEM's own cycle interval: 4 kW to home, while
-        # the battery reports having discharged only 1 kWh in total. Ticks
-        # must stay inside MAX_SAMPLE_GAP_S or the recorder treats each one as
-        # a hole and integrates nothing.
-        for _ in range(120):
+        # Long enough to spend the tolerance: 4 kW claimed out of a pack
+        # discharging 1 kW.
+        for _ in range(int(VIOLATION_TOLERANCE_S / 30) + 30):
             t += 30.0
             tr.tick(t, True, Sample(
                 battery_to_home_w=4000.0, battery_to_ev_w=0.0,
                 battery_to_grid_w=0.0, grid_to_home_w=0.0,
-                soc=80.0, soc_available=True,
-                battery_discharge_kwh=1.0,
-            ))
-        t += 30.0
-        tr.tick(t, False, Sample(
-            battery_to_home_w=0.0, battery_to_ev_w=0.0, battery_to_grid_w=0.0,
-            grid_to_home_w=0.0, soc=60.0, soc_available=True,
-            battery_discharge_kwh=1.0,
-        ))
-        rec = tr.sealed()[-1] if tr.sealed() else tr.current_record()
-        assert rec is not None
-        assert rec.get("flows_balanced") is False
-        assert rec.get("trainable") is False, (
-            "a night whose flows exceed the discharge was accepted as "
-            "trainable evidence")
+                soc=80.0, soc_available=True, battery_discharge_w=1000.0))
+        rec = tr._record()
+        assert rec["flows_balanced"] is False
+        assert rec["flow_violation_s"] > VIOLATION_TOLERANCE_S
+        assert rec["trainable"] is False, (
+            "a night whose flows exceeded the pack's discharge was accepted "
+            "as trainable evidence")
+
+    def test_the_violation_is_visible_on_the_record(self):
+        """Recorded, not merely rejected: a user or maintainer must be able to
+        argue with the verdict, which needs the number behind it."""
+        from custom_components.solar_energy_management.coordinator.battery_night import (
+            BatteryNightTracker, Sample,
+        )
+        tr = BatteryNightTracker(reserve_soc=10.0, capacity_kwh=15.0)
+        tr.start("2026-08-21", outdoor_temp_c=None)
+        t = 0.0
+        for _ in range(4):
+            t += 30.0
+            tr.tick(t, True, Sample(
+                battery_to_home_w=4000.0, battery_to_ev_w=0.0,
+                battery_to_grid_w=0.0, grid_to_home_w=0.0,
+                soc=80.0, soc_available=True, battery_discharge_w=1000.0))
+        rec = tr._record()
+        assert rec["flow_violation_s"] > 0
+        assert rec["flows_balanced"] is True, (
+            "four samples is two minutes — well inside the tolerance a night "
+            "needs against sensor skew")

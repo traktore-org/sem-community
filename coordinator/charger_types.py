@@ -374,6 +374,13 @@ class BatteryView:
     """Used as the discharge limit when LIMIT_DISCHARGE fires
     (the 1:1 protection)."""
     ev_connected: bool = False
+    """Whether any charger in the fleet has a vehicle plugged in
+    (cable connected), regardless of whether it is drawing right now.
+    The discharge-protection gate keys off this so the clamp HOLDS
+    steady through a bursty car's on/off pulses instead of flickering
+    with ``ev_charging`` — which would let the battery drain between
+    bursts and then feed the next pull. See decide_battery."""
+
     # (#778) The forecast budget and its dynamic floor, for the export
     # sink. Defaults keep every existing install untouched: no master
     # switch, no budget, and a dynamic floor of None contributes nothing
@@ -387,12 +394,6 @@ class BatteryView:
     mapping — every existing install keeps today's behaviour. Carried on the
     view rather than read from config inside ``decide_battery`` because that
     function is pure: everything it decides on arrives through the view."""
-    """Whether any charger in the fleet has a vehicle plugged in
-    (cable connected), regardless of whether it is drawing right now.
-    The discharge-protection gate keys off this so the clamp HOLDS
-    steady through a bursty car's on/off pulses instead of flickering
-    with ``ev_charging`` — which would let the battery drain between
-    bursts and then feed the next pull. See decide_battery."""
     scheduler_decision: "Any" = None
     """The output of today's ``BatteryChargeScheduler.evaluate()``.
     Typed as ``Any`` so importing scheduler types in this module

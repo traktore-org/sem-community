@@ -95,8 +95,8 @@ def spendable_budget(
     overnight_need_kwh,
     expected_refill_kwh,
     static_floor_pct=DEFAULT_STATIC_FLOOR_PCT,
-    pessimism: float = 1.2,
-    discharge_efficiency: float = 0.95,
+    pessimism: float = DEFAULT_PESSIMISM,
+    discharge_efficiency: float = DEFAULT_DISCHARGE_EFFICIENCY,
 ) -> SpendableBudget:
     """How many kWh of this battery are genuinely surplus tonight.
 

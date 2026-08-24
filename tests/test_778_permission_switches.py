@@ -141,8 +141,24 @@ class TestSeeding:
         sw, coord, entry = _switch(key, options=options, mode=mode)
         return SEMSolarSwitch._seed_state(sw)
 
-    def test_unset_permissions_seed_on(self):
-        assert self._seeded("battery_may_export") is True
+    def test_unset_export_follows_the_global_kill_switch(self):
+        """This test asserted True and was WRONG — it encoded the bug it was
+        meant to guard. The seed read a misspelled key
+        (``battery_arbitrage_enabled``), so the .get default always won and the
+        switch displayed ON while the decision path was OFF. The kill switch is
+        ``battery_grid_arbitrage_enabled`` and it defaults OFF, so an untouched
+        install must show this switch OFF — which is also what
+        consts/battery_permissions.py says it wants: "selling someone's battery
+        to the grid is not a thing to switch on for them"."""
+        assert self._seeded("battery_may_export") is False
+        assert self._seeded(
+            "battery_may_export",
+            options={"battery_grid_arbitrage_enabled": True}) is True
+
+    def test_unset_ev_assist_seeds_on(self):
+        """The EV permission is NOT gated by the arbitrage switch — energy into
+        the car never leaves the house — so an untouched install shows it on,
+        which is what SEM already does today."""
         assert self._seeded("battery_may_assist_ev") is True
 
     def test_an_explicit_false_seeds_off(self):

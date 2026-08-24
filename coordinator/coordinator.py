@@ -7158,13 +7158,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     getattr(power_flows, "battery_to_ev", 0.0) or 0.0),
                 battery_to_grid_w=float(
                     getattr(power_flows, "battery_to_grid", 0.0) or 0.0),
-                # (#778) The battery's own daily discharge counter, so the
-                # recorder can check its attributed flows against it. Read
-                # from the published value rather than re-derived: the point
-                # is to compare the two numbers SEM actually shows.
-                battery_discharge_kwh=(
-                    None if energy is None
-                    else getattr(energy, "daily_battery_discharge", None)),
+                # (#778) The pack's own discharge POWER, so the recorder can
+                # check its attributed flows against it per sample. Explicitly
+                # NOT the daily energy counter: that resets at midnight while
+                # a night does not, so comparing the two condemned ordinary
+                # nights and silently starved the #778 learner.
+                battery_discharge_w=(
+                    max(0.0, -float(getattr(power, "battery_power", 0.0) or 0.0))
+                    if getattr(power, "battery_power", None) is not None
+                    else None),
                 grid_to_home_w=float(
                     getattr(power_flows, "grid_to_home", 0.0) or 0.0),
                 home_w=float(

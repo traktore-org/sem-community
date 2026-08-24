@@ -213,10 +213,15 @@ class TestTheBridgeSurvivesTheRestartItExistsFor:
         # a blip the zero-order hold covers
         t += 60.0
         tr.tick(t, True, _s(battery_to_home_w=0.0, soc=80.0, measured=False))
-        # flows that break conservation
-        t += 30.0
-        tr.tick(t, True, _s(battery_to_home_w=2500.0, soc=79.0,
-                            battery_discharge_kwh=0.05))
+        # flows that break conservation, for long enough to spend the
+        # tolerance — 2.5 kW claimed out of a pack discharging 300 W
+        from custom_components.solar_energy_management.coordinator.flow_invariant import (
+            VIOLATION_TOLERANCE_S,
+        )
+        for _ in range(int(VIOLATION_TOLERANCE_S / 30) + 4):
+            t += 30.0
+            tr.tick(t, True, _s(battery_to_home_w=2500.0, soc=79.0,
+                                battery_discharge_w=300.0))
         return tr
 
     def test_a_round_trip_preserves_the_record_exactly(self):
@@ -241,6 +246,7 @@ class TestTheBridgeSurvivesTheRestartItExistsFor:
         assert rec["bridged_s"] > 0
         assert rec["held_s"] > 0, "fixture never held a blip"
         assert rec["flows_balanced"] is False, "fixture never broke conservation"
+        assert rec["flow_violation_s"] > 0
 
     def test_a_restart_does_not_forget_a_broken_invariant(self):
         """The specific regression: flows_balanced was not persisted, so a

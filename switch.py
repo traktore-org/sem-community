@@ -219,9 +219,14 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
                 pass
             perms = effective_permissions(mode, stored)
             if PERMISSION_SWITCHES[key] == "may_export":
+                # The kill switch is ``battery_grid_arbitrage_enabled`` and it
+                # defaults OFF. Seeding from a misspelled key meant the .get
+                # default (True) always won, so this switch displayed ON while
+                # the decision path was OFF — the same knob-that-lies bug this
+                # class was written to prevent, pointing the other way.
                 return bool(may_export(
                     mode, perms,
-                    bool(cfg.get("battery_arbitrage_enabled", True))))
+                    bool(cfg.get("battery_grid_arbitrage_enabled", False))))
             return bool(may_assist_ev(mode, perms))
 
         if key in self._PERSISTED_DEFAULTS:
