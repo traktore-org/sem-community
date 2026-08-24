@@ -76,6 +76,21 @@ def _declaring_steps(cf: str) -> dict:
     return out
 
 
+#: Install steps a user walks exactly ONE of. Both are declared, only one is
+#: ever shown — so their fields must not be added together.
+FIRST_RUN_ALTERNATIVES = (
+    ("ev_charger", "ev_charger_confirm"),
+)
+
+#: Steps in the install class that a NEW user never walks. ``reconfigure`` is
+#: re-entry into an existing install and ``integration_discovery`` is the
+#: "we noticed your inverter" prompt; counting either inflates the first-run
+#: number with fields nobody meets on day one — and worse, it made most EV
+#: pickers look like they had a second home, so removing them from the walked
+#: path scored as no change at all.
+NOT_FIRST_RUN_STEPS = {"reconfigure", "integration_discovery"}
+
+
 def _first_run(cf: str) -> dict:
     """What a NEW user faces before SEM works at all.
 
@@ -102,14 +117,43 @@ def _first_run(cf: str) -> dict:
     for m in re.finditer(r'vol\.(?:Optional|Required)\(\s*["\']([a-z0-9_]+)["\']', cf):
         cls = owner(m.start(), classes, "?")
         step = owner(m.start(), steps, "(module)")
-        (later if "Options" in cls else install).setdefault(m.group(1), set()).add(step)
+        if "Options" in cls:
+            later.setdefault(m.group(1), set()).add(step)
+        elif step not in NOT_FIRST_RUN_STEPS:
+            install.setdefault(m.group(1), set()).add(step)
+
+    # Steps a user walks ONE of, never both. Summing an either/or branch
+    # scores a shortcut as a regression: adding a confirmation that REPLACES
+    # eight pickers made this metric report 13 -> 14 while the walked path
+    # went 13 -> 6.
+    steps_of = lambda fs: {st for v in fs.values() for st in v}
+    fields_in = lambda step: {f for f, sts in install.items() if step in sts}
+
+    worst, best = dict(install), dict(install)
+    for branch in FIRST_RUN_ALTERNATIVES:
+        present = [b for b in branch if b in steps_of(install)]
+        if len(present) < 2:
+            continue
+        heavy = max(present, key=lambda b: len(fields_in(b)))
+        light = min(present, key=lambda b: len(fields_in(b)))
+        # worst case walks the heavy branch, best case the light one; a field
+        # only drops if the OTHER branch is its sole home.
+        for f in list(install):
+            homes = install[f]
+            if homes <= {light}:
+                worst.pop(f, None)
+            if homes <= {heavy}:
+                best.pop(f, None)
 
     return {
-        "first_run_fields": len(install),
-        "first_run_steps": len({s for v in install.values() for s in v}),
-        "first_run_field_names": sorted(install),
+        "first_run_fields": len(worst),
+        "first_run_fields_best": len(best),
+        "first_run_steps": len(steps_of(install)) - sum(
+            len([b for b in br if b in steps_of(install)]) - 1
+            for br in FIRST_RUN_ALTERNATIVES),
+        "first_run_field_names": sorted(worst),
         "options_fields": len(later),
-        "options_steps": len({s for v in later.values() for s in v}),
+        "options_steps": len(steps_of(later)),
     }
 
 
@@ -181,6 +225,7 @@ def write_baseline(path: Path) -> dict:
         "total": m["user_facing_controls"],
         "first_run_fields": m["first_run_fields"],
         "first_run_steps": m["first_run_steps"],
+        "first_run_fields_best": m["first_run_fields_best"],
         **m["inventory"],
     }
     path.write_text(json.dumps(payload, indent=2) + "\n")
@@ -209,7 +254,8 @@ def main() -> int:
     print(f"  TOTAL user-facing controls{m['user_facing_controls']:4}")
     print()
     print("  what a NEW user faces before SEM works:")
-    print(f"    first run  steps {m['first_run_steps']:3}   fields {m['first_run_fields']:3}")
+    print(f"    first run  steps {m['first_run_steps']:3}   fields {m['first_run_fields']:3}"
+          f"   (best case, hardware detected: {m['first_run_fields_best']})")
     print(f"    later      steps {m['options_steps']:3}   fields {m['options_fields']:3}")
     if m["duplicates"]:
         print("\n  genuine duplicates (a user can set these in two places):")

@@ -80,6 +80,13 @@
           "ev_battery_capacity_kwh": "Gesamte nutzbare Kapazität der EV-Batterie in kWh. Wird zur Schätzung von SOC und Ladedauer verwendet.",
           "ev_target_soc": "Ab hier gilt das Auto für SEM als geladen. Das ist eine Definition von \"voll\", keine Ladegrenze."
         }
+      },
+      "ev_charger_confirm": {
+        "title": "Wallbox gefunden",
+        "description": "SEM hat Ihre Wallbox gefunden und deren Entitäten gelesen:\n\n{found}\n\nWenn das stimmt, einfach fortfahren — mehr ist nicht nötig.",
+        "data": {
+          "review_details": "Details prüfen"
+        }
       }
     },
     "error": {

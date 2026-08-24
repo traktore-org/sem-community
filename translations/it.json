@@ -80,6 +80,13 @@
           "ev_battery_capacity_kwh": "Capacità utilizzabile totale della batteria del VE in kWh. Usata per stimare il SOC e il tempo di carica.",
           "ev_target_soc": "Da qui SEM considera l'auto carica. È una definizione di \"pieno\", non un limite di ricarica."
         }
+      },
+      "ev_charger_confirm": {
+        "title": "Wallbox trovata",
+        "description": "SEM ha trovato la tua wallbox e letto le sue entità:\n\n{found}\n\nSe è corretto, continua pure — non serve altro.",
+        "data": {
+          "review_details": "Fammi controllare i dettagli"
+        }
       }
     },
     "error": {

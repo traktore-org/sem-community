@@ -80,6 +80,13 @@
           "ev_battery_capacity_kwh": "Az EV akkumulátorának teljes hasznos kapacitása kWh-ban. A SOC és a töltési idő becsléséhez használatos.",
           "ev_target_soc": "Ettől a SEM töltöttnek tekinti az autót. Ez a \"tele\" definíciója, nem töltési korlát."
         }
+      },
+      "ev_charger_confirm": {
+        "title": "Töltő megtalálva",
+        "description": "A SEM megtalálta a töltőjét és beolvasta az entitásait:\n\n{found}\n\nHa ez így helyes, egyszerűen folytassa — másra nincs szükség.",
+        "data": {
+          "review_details": "Megnézem a részleteket"
+        }
       }
     },
     "error": {

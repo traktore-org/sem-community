@@ -80,6 +80,13 @@
           "ev_battery_capacity_kwh": "Totale bruikbare capaciteit van de EV-accu in kWh. Wordt gebruikt om het laadniveau en de laadtijd te schatten.",
           "ev_target_soc": "Vanaf hier beschouwt SEM de auto als geladen. Dit is een definitie van \"vol\", geen laadlimiet."
         }
+      },
+      "ev_charger_confirm": {
+        "title": "Lader gevonden",
+        "description": "SEM heeft uw laadpaal gevonden en de entiteiten gelezen:\n\n{found}\n\nKlopt dat, ga dan gewoon verder — meer is niet nodig.",
+        "data": {
+          "review_details": "Laat me de details bekijken"
+        }
       }
     },
     "error": {

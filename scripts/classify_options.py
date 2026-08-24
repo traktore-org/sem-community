@@ -41,7 +41,14 @@ LOGIC_GLOBS = ("coordinator/**/*.py", "features/**/*.py", "devices/**/*.py",
                "dashboard/card/src/**/*.js")
 
 #: Steps whose fields are decisions made INSIDE the flow, not stored settings.
-FLOW_ACTIONS = {"charger_to_remove"}
+FLOW_ACTIONS = {
+    # which charger to delete — an action, gone the moment it is answered
+    "charger_to_remove",
+    # (#830) "show me the pickers anyway" on the detection confirmation. The
+    # user answers it, so it counts toward the first-run number they feel; it
+    # is never stored, so it is not a setting and cannot be "dead".
+    "review_details",
+}
 
 #: Modules that ANSWER a config question rather than consume it. Only keys
 #: these write count as "SEM already knows" — the whole point of the bucket is
