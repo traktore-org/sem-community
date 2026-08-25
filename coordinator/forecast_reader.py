@@ -179,6 +179,16 @@ class ForecastReader:
         self.__detection_path: Optional[str] = None
         self._source: Optional[str] = None
         self._entities: Dict[str, str] = {}
+        # (#838) Forecast.Solar / Open-Meteo model a multi-string array as
+        # one config entry PER PLANE, each with its own energy_production_*
+        # sensor. ``_entities`` keeps the representative (first) entity per
+        # role — used for detection, validity checks and peak-time parsing
+        # — while ``_entity_groups`` holds ALL of a role's plane entities so
+        # the fleet forecast is their SUM, not a single string. Empty (→ read
+        # the single ``_entities`` value) for single-plane, Solcast (already a
+        # total), custom and hardcoded-fallback installs. Built in the SAME
+        # scan as the primary, so the two cannot drift.
+        self._entity_groups: Dict[str, list] = {}
         self._last_data = ForecastData()
 
         # (HA Repairs, 2026-06-06) Log-once + Repair gating. Pre-fix
@@ -226,13 +236,24 @@ class ForecastReader:
                 _LOGGER.debug("Could not clear no_forecast Repair: %s", e)
             self._no_forecast_repair_raised = False
 
-    def _registry_entities(self, platform: str) -> Dict[str, str]:
-        """Resolve a forecast integration's entities via the entity registry.
+    def _registry_entity_groups(self, platform: str) -> Dict[str, list]:
+        """All matching entities per role for a platform (registry scan).
 
         (#562) Entity IDs are localized per HA language; the registry
-        ``unique_id`` is not. Returns ``{role: entity_id}`` for every
-        role whose unique_id matches; empty dict when the registry is
-        unavailable (tests, early boot) or nothing matches.
+        ``unique_id`` is not, so resolution keys off the unique_id.
+
+        (#838) Forecast.Solar and Open-Meteo model a multi-string array
+        as one CONFIG ENTRY PER PLANE — each plane emits its own
+        ``energy_production_*`` sensor (unique_id ``{entry_id}_{key}``,
+        entity_id disambiguated with ``_2``/``_3``). Every plane's
+        unique_id ends in the SAME suffix, so a role maps to a LIST and
+        the fleet forecast is their SUM, not any single plane. Solcast
+        matches on an exact unique_id that is ALREADY the site/account
+        total (per-site Solcast sensors are deliberately not matched —
+        see SOLCAST_UNIQUE_IDS), so its roles stay single-element.
+
+        Returns ``{role: [entity_id, ...]}``; empty dict when the
+        registry is unavailable (tests, early boot) or nothing matches.
 
         Results are cached for 60 s — the upgrade peek in
         ``read_forecast`` runs every coordinator cycle (~10 s) while a
@@ -250,7 +271,7 @@ class ForecastReader:
             # transient at boot, so this path is deliberately NOT cached
             return {}
 
-        resolved: Dict[str, str] = {}
+        resolved: Dict[str, list] = {}
         for entry in entries:
             try:
                 if entry.platform != platform or entry.disabled_by is not None:
@@ -261,28 +282,81 @@ class ForecastReader:
                 continue
             if platform == SOLCAST_PLATFORM:
                 for role, keys in SOLCAST_UNIQUE_IDS.items():
+                    # Exact-match total sensor: keep the first, never sum.
                     if unique_id in keys and role not in resolved:
-                        resolved[role] = entity_id
+                        resolved[role] = [entity_id]
             else:
                 for role, suffix in FORECAST_SOLAR_UNIQUE_SUFFIXES.items():
-                    if unique_id.endswith(suffix) and role not in resolved:
-                        resolved[role] = entity_id
+                    # Suffix-match per-plane sensor: collect EVERY plane so
+                    # the read path can sum them (#838).
+                    if unique_id.endswith(suffix) and entity_id not in resolved.get(role, ()):
+                        resolved.setdefault(role, []).append(entity_id)
         self._registry_cache[platform] = (self._mono_time(), resolved)
         return resolved
+
+    def _registry_entities(self, platform: str) -> Dict[str, str]:
+        """Representative (first) entity per role — the one used for source
+        detection, validity checks and peak-time parsing.
+
+        The full per-role plane set (which the fleet forecast SUMS across)
+        lives in ``_registry_entity_groups`` (#838); this returns each
+        role's first entity, which is byte-for-byte the pre-#838 result.
+        """
+        return {
+            role: ents[0]
+            for role, ents in self._registry_entity_groups(platform).items()
+            if ents
+        }
+
+    def _entity_state_ok(self, entity_id: Optional[str]) -> bool:
+        """True when an entity exists and holds a usable (non-unknown,
+        non-unavailable) state."""
+        if not entity_id:
+            return False
+        state = self.hass.states.get(entity_id)
+        return bool(
+            state and state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE, None)
+        )
 
     def _locate_integration(
         self, platform: str, fallback: Dict[str, str]
     ) -> Optional[Dict[str, str]]:
         """Find an integration's entities (registry first, hardcoded
-        entity_ids second) and confirm ``forecast_today`` is usable."""
-        for candidate in (self._registry_entities(platform), fallback):
-            test_entity = candidate.get("forecast_today")
-            if not test_entity:
-                continue
-            state = self.hass.states.get(test_entity)
-            if state and state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE, None):
-                return candidate
+        entity_ids second) and confirm ``forecast_today`` is usable.
+
+        (#838) For a multi-plane source the role is usable if ANY plane's
+        ``forecast_today`` is available — so one dark string does not hide
+        an otherwise-working array (detection used to key off the first
+        plane alone, which would drop the whole forecast). The returned
+        dict is still the representative (first) entity per role; the full
+        plane set is captured separately in ``_entity_groups``.
+        """
+        groups = self._registry_entity_groups(platform)
+        if any(self._entity_state_ok(e) for e in groups.get("forecast_today", ())):
+            return {role: ents[0] for role, ents in groups.items() if ents}
+        if self._entity_state_ok(fallback.get("forecast_today")):
+            return fallback
         return None
+
+    def _capture_entity_groups(self, platform: str) -> None:
+        """(#838) Record the active source's full per-role plane entities so
+        a multi-string Forecast.Solar / Open-Meteo install is SUMMED rather
+        than read as one plane.
+
+        Only adopt the registry groups when the ACTIVE entities are the
+        registry ones: if detection fell back to the hardcoded entity_ids
+        (registry primary unusable), there are no discoverable sibling
+        planes to sum and the groups must stay empty so the read path keeps
+        using the single fallback entity. Matching on the ``forecast_today``
+        primary guarantees the groups and ``_entities`` describe the same
+        source — they cannot drift.
+        """
+        groups = self._registry_entity_groups(platform)
+        primary = groups.get("forecast_today") or []
+        if primary and self._entities.get("forecast_today") == primary[0]:
+            self._entity_groups = groups
+        else:
+            self._entity_groups = {}
 
     def set_preferred_source(self, name: Optional[str]) -> None:
         """(#819) Apply a changed forecast-source choice WITHOUT a reload.
@@ -302,6 +376,7 @@ class ForecastReader:
         self._preferred_source = norm
         self._source = None
         self._entities = {}
+        self._entity_groups = {}
         _LOGGER.info("Solar forecast source changed to %s — re-detecting",
                      norm or "auto")
 
@@ -408,6 +483,7 @@ class ForecastReader:
         # SETUP_GUIDE rather than half-claimed.
         if self._custom_entities:
             self._entities = self._custom_entities
+            self._entity_groups = {}   # (#838) custom map is single-entity per role
             self._source = "custom"
             self._last_source_detection_path = "custom"
             _LOGGER.info("Using custom forecast entities")
@@ -427,6 +503,7 @@ class ForecastReader:
             )
             if entities:
                 self._entities = entities
+                self._capture_entity_groups(platform)   # (#838)
                 self._source = self._preferred_source
                 self._last_source_detection_path = (
                     f"preferred_{self._preferred_source}")
@@ -475,6 +552,7 @@ class ForecastReader:
         entities = self._locate_integration(SOLCAST_PLATFORM, SOLCAST_ENTITIES)
         if entities:
             self._entities = entities
+            self._capture_entity_groups(SOLCAST_PLATFORM)   # (#838)
             self._source = "solcast"
             self._last_source_detection_path = "solcast"
             _LOGGER.info("Detected Solcast PV Solar integration")
@@ -487,6 +565,7 @@ class ForecastReader:
         )
         if entities:
             self._entities = entities
+            self._capture_entity_groups(FORECAST_SOLAR_PLATFORM)   # (#838)
             self._source = "forecast_solar"
             self._last_source_detection_path = "forecast_solar"
             _LOGGER.info("Detected Forecast.Solar integration")
@@ -498,6 +577,7 @@ class ForecastReader:
         entities = self._locate_integration(OPEN_METEO_SOLAR_PLATFORM, {})
         if entities:
             self._entities = entities
+            self._capture_entity_groups(OPEN_METEO_SOLAR_PLATFORM)   # (#838)
             self._source = "open_meteo"
             self._last_source_detection_path = "open_meteo"
             _LOGGER.info("Detected Open-Meteo Solar Forecast integration")
@@ -571,6 +651,7 @@ class ForecastReader:
                         self._source,
                     )
                     self._entities = solcast_entities
+                    self._capture_entity_groups(SOLCAST_PLATFORM)   # (#838)
                     self._source = "solcast"
                     self._last_source_detection_path = "solcast"
                     self._last_read_path = "upgraded_to_solcast"
@@ -584,18 +665,22 @@ class ForecastReader:
                 self._last_read_path = "preference_retried"
                 upgraded = True
             if not upgraded:
-                # Verify cached source is still valid (entity may have disappeared)
-                test_entity = self._entities.get("forecast_today")
-                if test_entity:
-                    state = self.hass.states.get(test_entity)
-                    if state is None or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-                        self._source = None
-                        self.detect_source()
-                        self._last_read_path = "cached_source_lost_redetected"
-                    else:
-                        self._last_read_path = "cached_source_valid"
-                else:
+                # Verify cached source is still valid (entity may have
+                # disappeared). (#838) A multi-plane source stays valid while
+                # ANY plane is available — matching plane-aware detection, so
+                # a dark representative plane does not force a redetect churn
+                # every cycle while siblings keep producing.
+                group = self._entity_groups.get("forecast_today")
+                candidates = group or [self._entities.get("forecast_today")]
+                if not any(candidates):
+                    # No forecast_today entity at all → nothing to re-validate.
                     self._last_read_path = "cached_source_valid"
+                elif any(self._entity_state_ok(e) for e in candidates):
+                    self._last_read_path = "cached_source_valid"
+                else:
+                    self._source = None
+                    self.detect_source()
+                    self._last_read_path = "cached_source_lost_redetected"
         else:
             self._last_read_path = "cached_source_valid"
 
@@ -613,20 +698,19 @@ class ForecastReader:
             sources_available=self.available_sources(),
         )
 
-        # Read forecast today
-        data.forecast_today_kwh = self._read_float(
-            self._entities.get("forecast_today"), 0.0
-        )
+        # Read forecast today (summed across planes for a multi-string
+        # Forecast.Solar / Open-Meteo install, single otherwise — #838)
+        data.forecast_today_kwh = self._read_role_energy("forecast_today", 0.0)
 
         # Read forecast tomorrow
-        data.forecast_tomorrow_kwh = self._read_float(
-            self._entities.get("forecast_tomorrow"), 0.0
-        )
+        data.forecast_tomorrow_kwh = self._read_role_energy("forecast_tomorrow", 0.0)
 
         # Read remaining today
         remaining_entity = self._entities.get("forecast_remaining")
         if remaining_entity:
-            data.forecast_remaining_today_kwh = self._read_float(remaining_entity, 0.0)
+            data.forecast_remaining_today_kwh = self._read_role_energy(
+                "forecast_remaining", 0.0
+            )
         else:
             # Estimate remaining from today total and current production
             # This is a rough estimate — actual remaining depends on time of day
@@ -635,16 +719,13 @@ class ForecastReader:
             )
 
         # Read power now / next hour / peak — normalized to Watts off the
-        # sensor's declared unit (see _read_power_w).
-        data.power_now_w = self._read_power_w(
-            self._entities.get("power_now"), 0.0
-        )
-        data.power_next_hour_w = self._read_power_w(
-            self._entities.get("power_next_hour"), 0.0
-        )
-        data.peak_power_today_w = self._read_power_w(
-            self._entities.get("peak_power_today"), 0.0
-        )
+        # sensor's declared unit (see _read_power_w). power_now is summed
+        # across planes for a multi-string install (#838); next-hour and
+        # peak are Solcast-only (single-element groups) so they read the
+        # single entity unchanged.
+        data.power_now_w = self._read_role_power_w("power_now", 0.0)
+        data.power_next_hour_w = self._read_role_power_w("power_next_hour", 0.0)
+        data.peak_power_today_w = self._read_role_power_w("peak_power_today", 0.0)
 
         # Peak time — Solcast exposes a full ISO datetime; coordinator
         # and dashboard consumers expect "HH:MM" local time.
@@ -665,6 +746,70 @@ class ForecastReader:
         self._last_data = data
         self._last_read_path = "read_complete"
         return data
+
+    def _read_role_energy(self, role: str, default: float) -> float:
+        """Read an energy role, summing across planes when the source
+        exposes more than one (#838).
+
+        A multi-string Forecast.Solar / Open-Meteo install registers one
+        ``energy_production_*`` sensor per plane; the fleet forecast is
+        their sum. For every other source the group is single (or empty),
+        so this reads the single ``_entities`` value exactly as before.
+        """
+        group = self._entity_groups.get(role)
+        if group and len(group) > 1:
+            return self._sum_floats(group, default)
+        return self._read_float(self._entities.get(role), default)
+
+    def _read_role_power_w(self, role: str, default: float) -> float:
+        """Read a power role in Watts, summing across planes when the
+        source exposes more than one (#838). Single otherwise."""
+        group = self._entity_groups.get(role)
+        if group and len(group) > 1:
+            return self._sum_power_w(group, default)
+        return self._read_power_w(self._entities.get(role), default)
+
+    def _sum_floats(self, entity_ids: list, default: float) -> float:
+        """Sum the numeric states of several entities (#838).
+
+        Unavailable/non-numeric planes contribute nothing; if EVERY plane
+        is unavailable the caller's default is returned, matching the
+        single-entity ``_read_float`` contract. A partially-available
+        multi-plane install therefore under-reports rather than reading 0
+        — the pragmatic choice, since the plane sensors update together in
+        practice.
+        """
+        total = 0.0
+        any_available = False
+        for entity_id in entity_ids:
+            state = self.hass.states.get(entity_id)
+            if state and state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE, None):
+                try:
+                    total += float(state.state)
+                    any_available = True
+                except (ValueError, TypeError):
+                    pass
+        return total if any_available else default
+
+    def _sum_power_w(self, entity_ids: list, default: float) -> float:
+        """Sum several power sensors, each normalized to Watts off its
+        declared unit (see _read_power_w), keeping the unit-conversion
+        counter accurate across planes (#838)."""
+        total = 0.0
+        any_available = False
+        for entity_id in entity_ids:
+            state = self.hass.states.get(entity_id)
+            if not state or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE, None):
+                continue
+            try:
+                float(state.state)
+            except (ValueError, TypeError):
+                continue
+            if power_unit_scale(state) != 1.0:
+                self._last_unit_conversion_count += 1
+            total += power_state_to_watts(state, default=0.0)
+            any_available = True
+        return total if any_available else default
 
     def _read_float(self, entity_id: Optional[str], default: float) -> float:
         """Read a float value from a HA entity."""
