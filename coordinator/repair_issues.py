@@ -188,6 +188,56 @@ def clear_charger_actuation_failed(hass: HomeAssistant, device_id: str) -> None:
         _LOGGER.debug("issue_registry.delete failed for %s: %s", device_id, e)
 
 
+def _battery_force_discharge_issue_id(entity_id: str) -> str:
+    return f"battery_force_discharge_unsupported_{entity_id}"
+
+
+def raise_battery_force_discharge_unsupported(
+    hass: HomeAssistant,
+    entity_id: str,
+    *,
+    error: str,
+) -> None:
+    """File a repair when the battery refuses the forcible-discharge write.
+
+    (#840) @RienduPre's Growatt exposes the setpoint entity but its firmware
+    does not implement the write, so every attempt was rejected — 2,364 log
+    lines in nineteen hours. SEM now stops asking after three refusals, but
+    stopping quietly would trade one silent failure for another: the user
+    configured battery-to-grid export and it would simply never happen.
+
+    #799's lesson applies — a log line is not a surface. Raised once the
+    capability is withdrawn; cleared the moment a write succeeds again.
+    """
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id=_battery_force_discharge_issue_id(entity_id),
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="battery_force_discharge_unsupported",
+            translation_placeholders={
+                "entity_id": entity_id,
+                "error": error,
+            },
+        )
+    except Exception as e:  # noqa: BLE001 — never fail the cycle over a repair
+        _LOGGER.debug("issue_registry.create failed for %s: %s", entity_id, e)
+
+
+def clear_battery_force_discharge_unsupported(
+    hass: HomeAssistant, entity_id: str,
+) -> None:
+    """Clear it once the device accepts a setpoint again."""
+    try:
+        ir.async_delete_issue(
+            hass, DOMAIN, _battery_force_discharge_issue_id(entity_id))
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete failed for %s: %s", entity_id, e)
+
+
 def _stop_unenforceable_issue_id(device_id: str) -> str:
     return f"charger_stop_unenforceable_{device_id}"
 

@@ -1533,6 +1533,10 @@
     "charger_control_entity_broken": {
       "title": "Steuer-Entität der Wallbox funktioniert nicht: {name}",
       "description": "SEM soll **`{entity_id}`** verwenden, um {capability} bei **{name}**, aber diese Entität ist `{reason}` — jeder Befehl von SEM läuft ins Leere. SEM zeigt weiterhin einen Sollstrom an; die Wallbox folgt ihm nicht.\n\nHäufige Ursachen: Die Entität wurde umbenannt oder entfernt, oder eine Template-Entität konnte nicht geladen werden (ein Template-`number` mit einer ungültigen Option lädt nur als `restored` und schluckt Schreibvorgänge stillschweigend).\n\nPrüfe die Entität unter **Entwicklerwerkzeuge → Zustände**. Fehlt sie dort oder ist sie nicht verfügbar, behebe es an der Quelle; ist sie dauerhaft weg, stelle SEM neu ein unter **Einstellungen → Geräte & Dienste → SEM → Konfigurieren → Wallbox → Bearbeiten**."
+    },
+    "battery_force_discharge_unsupported": {
+      "title": "Batterie-Leistungssollwert lässt sich nicht schreiben: {entity_id}",
+      "description": "SEM hat versucht, **{entity_id}** zu schreiben, und das Gerät hat jedes Mal abgelehnt: `{error}`.\n\nDie Entität existiert und SEM spricht sie korrekt an — die Firmware des Wechselrichters setzt den Schreibzugriff auf dieses Register schlicht nicht um. Meist heißt das: die in SEMs Batterie-Einstellungen für *Zwangsentladung* gewählte Entität ist lesbar, aber nicht schreibbar.\n\nSEM versucht es nicht mehr, das Log bleibt also sauber. Zwei Folgen: der routinemäßige Sicherheits-Schreibvorgang beim Zurückschalten in den Normalbetrieb entfällt (unkritisch — es war nichts gesetzt), und die **Batterie-Einspeisung ins Netz ist nicht möglich**. Laden, Entladegrenzen und Normalbetrieb bleiben unberührt.\n\n**Wenn Sie keine Netzeinspeisung aus der Batterie nutzen**, entfernen Sie die Zwangsentlade-Entität in den Batterie-Einstellungen — der Hinweis verschwindet dann. **Wenn Sie sie erwartet haben**, ist vermutlich die falsche Entität hinterlegt, oder Ihr Wechselrichter kann keine kommandierte Einspeisung. Ein Neustart lässt SEM erneut versuchen."
     }
   },
   "selector": {

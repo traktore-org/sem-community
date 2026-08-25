@@ -13,6 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔇 **A battery setpoint your inverter cannot accept no longer floods the log**
+  (#840): if the entity picked for forcible discharge is readable but not
+  writable on your hardware, SEM retried it on **every cycle** — one reporter's
+  log had **2,364 warnings in nineteen hours**, burying everything else. Two
+  things were wrong. SEM was writing a zero to that setpoint on every ordinary
+  cycle to clear a value it had never set, which is pure cost and guaranteed to
+  fail on such a device; it no longer does. And when a write really is refused,
+  SEM now stops after three attempts, says so once in plain language, and
+  raises a repair notice explaining exactly what is and is not affected —
+  charging, discharge limits and everyday operation are untouched. A restart
+  re-tries, so a firmware update or a corrected entity is picked up on its own.
+
 - ☀️ **Peak solar power is no longer over-stated on a multi-string roof**
   (#841): summing each string's forecast was right for the day's energy, but
   it was also applied to peak power — and peaks do not add. An east-facing and
