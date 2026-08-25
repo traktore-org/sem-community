@@ -7882,7 +7882,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                 .c-ok { color: #8DC892; }
                 .c-warn { color: #ff9800; }
                 .overview-help { font-size: 12px; color: var(--secondary-text-color, ${e.textSec}); padding: 4px 0; }
-                /* (#840) Per-string forecast. Tabular numerals so the kWh
+                /* (#841) Per-string forecast. Tabular numerals so the kWh
                    column reads as a column, not as ragged text. */
                 .sem-planes { width: 100%; border-collapse: collapse; font-size: 12px; margin: 2px 0 6px; }
                 .sem-planes th { text-align: left; font-weight: 500; padding: 3px 6px 3px 0;

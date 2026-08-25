@@ -729,7 +729,7 @@ class ForecastReader:
         # single entity unchanged.
         data.power_now_w = self._read_role_power_w("power_now", 0.0)
         data.power_next_hour_w = self._read_role_power_w("power_next_hour", 0.0)
-        # (#840) NOT _read_role_power_w: that sums, and peaks do not add.
+        # (#841) NOT _read_role_power_w: that sums, and peaks do not add.
         data.peak_power_today_w = self._read_role_peak_w("peak_power_today", 0.0)
 
         # Peak time — Solcast exposes a full ISO datetime; coordinator
@@ -775,7 +775,7 @@ class ForecastReader:
         return self._read_power_w(self._entities.get(role), default)
 
     def plane_breakdown(self) -> list:
-        """(#840) Today's forecast per PLANE, for the card.
+        """(#841) Today's forecast per PLANE, for the card.
 
         #838 made the TOTAL right. The total is what SEM plans on, but it is
         not what the owner recognises — they built the roof one string at a
@@ -812,7 +812,7 @@ class ForecastReader:
         return out
 
     def _read_role_peak_w(self, role: str, default: float) -> float:
-        """Read a PEAK power role — the largest plane, never the sum (#840).
+        """Read a PEAK power role — the largest plane, never the sum (#841).
 
         #838 taught the reader to sum a multi-string roof, which is right for
         energies and right for instantaneous power: two arrays really do
