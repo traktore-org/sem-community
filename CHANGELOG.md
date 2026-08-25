@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔋 **The battery charge scheduler works again** (#839): if you had it
+  switched on, it crashed on every cycle and never once decided anything —
+  SEM compared two timestamps that were not comparable. Nothing looked broken
+  from outside: the integration kept running and the dashboard looked healthy,
+  while the feature quietly did nothing and wrote a warning to the log every
+  ten seconds. Found in a diagnostics download sent about something else
+  entirely, reproduced here, and fixed.
+
 - 🔭 **A forecast source that is still loading is no longer reported as "not
   installed"** (#819): after choosing a source, diagnostics could show a
   warning claiming the integration was missing — while that same integration
