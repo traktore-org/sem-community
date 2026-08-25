@@ -41,6 +41,9 @@ class TestSEMSwitches:
                         # the Config tab: the master switch, then what it is
                         # allowed to spend on.
                         "forecast_spending_enabled",
+                        # #820 — charge pacing, asleep by default; sits with
+                        # the battery family it paces.
+                        "battery_charge_pacing_enabled",
                         "battery_may_export", "battery_may_assist_ev"]
 
     # ``test_night_charging_default_off`` and

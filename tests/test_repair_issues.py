@@ -273,7 +273,11 @@ def test_raise_keba_failsafe_active_creates_issue():
     assert kwargs["translation_key"] == "keba_failsafe_active"
     assert kwargs["translation_placeholders"] == {"name": "KEBA P30"}
     assert kwargs["severity"] is ri.ir.IssueSeverity.WARNING
-    assert kwargs["learn_more_url"] == ri.KEBA_FAILSAFE_DOC_URL
+    # (#831) the dedicated doc now travels through the ONE builder — same
+    # URL, no per-repair constants.
+    assert kwargs["learn_more_url"] == ri.next_step_url(
+        "docs", "keba_failsafe_active")
+    assert kwargs["learn_more_url"].endswith("docs/KEBA_FAILSAFE.md")
 
 
 def test_clear_keba_failsafe_active_deletes_issue():
