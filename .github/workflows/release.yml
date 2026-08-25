@@ -13,7 +13,13 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.12", "3.13"]
+        # (#836) The ladder, same as tests.yml: 3.13 -> HA 2026.2.3 (the
+        # hacs.json floor) and 3.14 -> HA 2026.8.2 (what PROD runs). 3.12 was
+        # removed with the 2025.1 floor — the phacc pins now require >= 3.13,
+        # so a 3.12 leg cannot resolve its dependencies at all. It failed on
+        # the v2.0.0-beta.16 release, which is how this was found:
+        # tests.yml was swept and this file was not.
+        python-version: ["3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
 
