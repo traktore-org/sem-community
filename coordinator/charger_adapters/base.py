@@ -245,6 +245,17 @@ class ChargerAdapter(ABC):
         except Exception as e:  # noqa: BLE001 — a repair never costs a cycle
             _LOGGER.debug("failsafe repair not raised: %s", e)
 
+    async def clear_failsafe_suspected(self) -> None:
+        """(#823) Retire the failsafe Repair once a stop finally holds."""
+        try:
+            from ..repair_issues import clear_charger_failsafe_suspected
+            dev = self._device
+            clear_charger_failsafe_suspected(
+                dev.hass, str(getattr(dev, "device_id", "") or
+                              getattr(dev, "charger_id", "charger")))
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.debug("failsafe repair not cleared: %s", e)
+
     def watts_for_amps(self, amps: int) -> float:
         """How much power ``amps`` corresponds to at this charger's
         phases × voltage."""

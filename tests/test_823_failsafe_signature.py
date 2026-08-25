@@ -117,3 +117,36 @@ class TestSemDoesNotEscalate:
         acts = rec.reconcile(DesiredState.OFF, 0,
                              _obs(charging=True, power=4100.0), now=3610.0)
         assert ActionKind.REPORT_FAILSAFE_SUSPECTED not in [a.kind for a in acts]
+
+
+class TestRecovery:
+    """The repair must be able to RETIRE: the fix is a one-time change on the
+    box, and once a stop finally holds past the learned interval the user has
+    made it — the notice should go, and the recogniser re-arm so a relapse is
+    named again rather than absorbed by a spent flag."""
+
+    def test_a_stop_that_holds_clears_the_report(self):
+        rec = _rec()
+        _stop_then_reenable(rec, 1000.0, 600.0)
+        _stop_then_reenable(rec, 3000.0, 600.0)          # reported here
+        # a later stop…
+        rec.reconcile(DesiredState.OFF, 0,
+                      _obs(charging=True, power=4100.0), now=5000.0)
+        # …that HOLDS: quiet past 2× the learned interval
+        acts = rec.reconcile(DesiredState.OFF, 0, _obs(charging=False),
+                             now=5000.0 + 1300.0)
+        assert ActionKind.CLEAR_FAILSAFE_SUSPECTED in [a.kind for a in acts]
+
+    def test_a_relapse_after_recovery_is_named_again(self):
+        rec = _rec()
+        _stop_then_reenable(rec, 1000.0, 600.0)
+        _stop_then_reenable(rec, 3000.0, 600.0)
+        rec.reconcile(DesiredState.OFF, 0,
+                      _obs(charging=True, power=4100.0), now=5000.0)
+        rec.reconcile(DesiredState.OFF, 0, _obs(charging=False),
+                      now=5000.0 + 1300.0)               # cleared
+        # the box regresses (a firmware reset restores the failsafe)
+        acts1 = _stop_then_reenable(rec, 10000.0, 600.0)
+        assert ActionKind.REPORT_FAILSAFE_SUSPECTED not in [a.kind for a in acts1]
+        acts2 = _stop_then_reenable(rec, 13000.0, 600.0)
+        assert ActionKind.REPORT_FAILSAFE_SUSPECTED in [a.kind for a in acts2]

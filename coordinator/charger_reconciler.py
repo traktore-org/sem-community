@@ -43,6 +43,7 @@ class ActionKind(Enum):
     REPORT_STOP_WAR = auto()        # box keeps re-starting against our stop — cease fire (#763)
     REPORT_STOP_UNENFORCEABLE = auto()  # no mechanism can open the contactor (#627)
     REPORT_FAILSAFE_SUSPECTED = auto()  # box re-enables on a CONSTANT interval after our stop (#823)
+    CLEAR_FAILSAFE_SUSPECTED = auto()   # a stop finally HELD past the interval — the box was fixed (#823)
 
 
 @dataclass(frozen=True)
@@ -218,6 +219,7 @@ class ChargerReconciler:
         # stop cadence (that war the box always wins, #763).
         self._failsafe_gaps: list = []
         self._failsafe_reported: bool = False
+        self._failsafe_interval_s: float = 0.0
         self._last_disable_issued_at: float = 0.0
         self._last_disable_at: float = float("-inf")
 
@@ -268,8 +270,9 @@ class ChargerReconciler:
         if mean <= 0 or abs(a - b) > max(5.0, 0.02 * mean):
             return []
         self._failsafe_reported = True
+        self._failsafe_interval_s = round(mean, 1)
         return [Action(ActionKind.REPORT_FAILSAFE_SUSPECTED,
-                       interval_s=round(mean, 1))]
+                       interval_s=self._failsafe_interval_s)]
 
     def _end_stop_war(self) -> None:
         self._stop_war_rounds = 0
@@ -280,6 +283,18 @@ class ChargerReconciler:
     def reconcile(self, desired: DesiredState, amps: int,
                   observed: ObservedState, now: float) -> List[Action]:
         """Pure decision table (spec rows 1-8, first match wins)."""
+        # (#823) Recovery: a reported failsafe whose LAST stop has now held
+        # quiet for twice the learned interval means the user fixed the box —
+        # retire the Repair and re-arm the recogniser, so a later relapse is
+        # named again rather than silently absorbed by a spent flag.
+        if (self._failsafe_reported and self._failsafe_interval_s
+                and not observed.charging and self._last_disable_issued_at
+                and now - self._last_disable_issued_at
+                > 2.0 * self._failsafe_interval_s):
+            self._failsafe_reported = False
+            self._failsafe_gaps.clear()
+            self._failsafe_interval_s = 0.0
+            return [Action(ActionKind.CLEAR_FAILSAFE_SUSPECTED)]
         # (#763) Unplugged = the war is over — its other party left.
         if not observed.connected:
             self._end_stop_war()
@@ -627,6 +642,14 @@ class ChargerReconciler:
                 report = getattr(adapter, "report_failsafe_suspected", None)
                 if report is not None:
                     await report(action.interval_s)
+            elif action.kind is ActionKind.CLEAR_FAILSAFE_SUSPECTED:
+                _LOGGER.info(
+                    "reconcile(%s): a stop has held past the learned failsafe "
+                    "interval — the box appears fixed; retiring the repair",
+                    self.charger_id)
+                clear = getattr(adapter, "clear_failsafe_suspected", None)
+                if clear is not None:
+                    await clear()
             elif action.kind is ActionKind.REPORT_STOP_UNENFORCEABLE:
                 # #627 — the stop is structurally impossible on this config.
                 # (#700) Once per ONSET, not per cycle: the condition persists
