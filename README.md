@@ -109,7 +109,7 @@ Beta releases are tested on real hardware before publishing but may contain roug
 
 Before setting up SEM, make sure you have:
 
-- **Home Assistant 2025.1.0** or newer
+- **Home Assistant 2026.2.0** or newer
 - **Energy Dashboard configured** — SEM reads your solar and grid sensors from the HA Energy Dashboard (Settings > Energy). You need at least:
   - A solar production sensor (W)
   - A grid consumption sensor (W)

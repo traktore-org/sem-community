@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ⬆️ **SEM now requires Home Assistant 2026.2.0 or newer** (#836): the old
+  minimum was 2025.1.0, a version no SEM user has ever reported running — of
+  62 issues that state a Home Assistant version, the oldest is 2026.4.3 and
+  none is on 2025.x. If you are on an older Home Assistant, HACS will stop
+  offering SEM updates until you upgrade; your existing install keeps working
+  and nothing is removed. Everything SEM supports is now covered by a test
+  run that can block a release, which was the point.
+
 - 🧪 **SEM is now actually tested against three Home Assistant versions**
   (#835): the middle rung of the test ladder — HA 2026.2.3 — had never passed
   a single run. It was marked advisory, so the board stayed green and nobody

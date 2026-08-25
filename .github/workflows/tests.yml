@@ -17,9 +17,11 @@ jobs:
     # The matrix is an HA matrix wearing a Python label (#787). Each rung
     # installs a different pytest-homeassistant-custom-component pin — see
     # tests/requirements_test.txt — so this list reads:
-    #   3.12 -> HA 2025.1.4  (the hacs.json floor; blocking)
-    #   3.13 -> HA 2026.2.3
+    #   3.13 -> HA 2026.2.3  (the hacs.json floor)
     #   3.14 -> HA 2026.8.2  (what HA-PROD runs)
+    # (#836) The 3.12 -> HA 2025.1.4 rung was removed with the 2025.1 floor:
+    # no SEM user has ever reported an HA below 2026.4, so it verified a
+    # version nobody runs.
     # Nineteen months of API drift went unverified because both legs used to
     # install the same HA and nothing in the file said which one.
     #
@@ -40,7 +42,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12", "3.13", "3.14"]
+        python-version: ["3.13", "3.14"]
 
     steps:
       - uses: actions/checkout@v4

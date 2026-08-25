@@ -10,9 +10,12 @@ matrix — chose the HA.
 ``phacc`` pins exactly one HA version per release and each release has a
 Python floor, so the interpreter *is* the HA selector:
 
-    0.13.205  (py3.12+)  ->  homeassistant 2025.1.4
-    0.13.316  (py3.13+)  ->  homeassistant 2026.2.3
-    0.13.356  (py3.14+)  ->  homeassistant 2026.8.2
+    0.13.316  (py3.13+)  ->  homeassistant 2026.2.3   <- the hacs.json floor
+    0.13.356  (py3.14+)  ->  homeassistant 2026.8.2   <- what HA-PROD runs
+
+(#836) A third pin, 0.13.205 -> HA 2025.1.4, was dropped together with the
+2025.1 floor: no SEM user has ever reported an HA below 2026.4, so that rung
+verified a version nobody runs.
 
 This file pins the shape, not the numbers. It fails when a matrix leg has
 no pin that applies to it (the leg would silently resolve to whatever pip
@@ -130,9 +133,9 @@ def test_the_supported_floor_is_a_version_we_actually_test():
     def parts(v):
         return tuple(int(p) for p in v.split("."))
 
-    # A pin of 2025.1.4 satisfies a declared floor of 2025.1.0: same release
-    # line, patch-level ahead. A floor of 2026.x with nothing tested above
-    # 2025.x does not.
+    # A pin of 2026.2.3 satisfies a declared floor of 2026.2.0: same release
+    # line, patch-level ahead. A floor of 2026.7 with nothing tested above
+    # 2026.2 does not.
     assert any(parts(c)[:2] == parts(floor)[:2] and parts(c) >= parts(floor)
                for c in covered), (
         f"hacs.json promises Home Assistant {floor} but CI tests {sorted(covered)}. "
