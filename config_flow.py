@@ -919,6 +919,7 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "battery_discharge_protection_enabled",
     "battery_force_charge_negative_price",
     "battery_max_charge_power_w",
+    "battery_charge_power_limit_entity",
     "battery_max_discharge_power",
     "battery_max_target_soc",
     "battery_min_deficit_kwh",
@@ -2576,6 +2577,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         unit_of_measurement="W",
                         mode=selector.NumberSelectorMode.BOX,
                     )
+                ),
+                # (#820) Where a paced charge cap is WRITTEN — the
+                # inverter's standing max-charge-power number (e.g. Huawei's
+                # "Maximale Ladeleistung"). Suggested, never defaulted: an
+                # unset entity means pacing has nothing to act on and stays
+                # advisory even when its switch is on.
+                vol.Optional(
+                    "battery_charge_power_limit_entity",
+                    description={"suggested_value":
+                                 _c("battery_charge_power_limit_entity", None)},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="number")
                 ),
                 vol.Optional(
                     "battery_roundtrip_efficiency",

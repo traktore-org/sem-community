@@ -1260,6 +1260,15 @@ SENSOR_TYPES = [
         entity_category=EntityCategory.DIAGNOSTIC,
         suggested_display_precision=1,
     ),
+    # (#820) charge pacing — state is the cap in W (unknown while idle);
+    # attributes carry reason/action/full_at. Daily-moving, no recorder churn.
+    SensorEntityDescription(
+        key="battery_charge_pacing",
+        native_unit_of_measurement="W",
+        icon="mdi:speedometer-slow",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=0,
+    ),
     SensorEntityDescription(
         key="battery_dynamic_floor_pct",
         native_unit_of_measurement="%",
@@ -2931,6 +2940,19 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "provider": d.get("tariff_provider"),
                 "is_dynamic": d.get("tariff_is_dynamic"),
                 "current_import_rate": d.get("tariff_current_import_rate"),
+            })
+        elif self.entity_description.key == "battery_charge_pacing":
+            # d binds PER BRANCH in this method — the block below the
+            # spendable branch documents the UnboundLocalError that blanked
+            # a whole listener when someone assumed otherwise.
+            d = self.coordinator.data
+            cp = d.get("charge_pacing") or {}
+            attrs.update({
+                "enabled": cp.get("enabled"),
+                "reason": cp.get("reason"),
+                "action": cp.get("action"),
+                "full_at": cp.get("full_at"),
+                "limit_entity": cp.get("entity"),
             })
         elif self.entity_description.key == "battery_spendable_kwh":
             # (#778) Everything a user needs to argue with the number, on the

@@ -1261,6 +1261,9 @@
       },
       "battery_dynamic_floor_pct": {
         "name": "Dynamische ondergrens"
+      },
+      "battery_charge_pacing": {
+        "name": "Battery charge pacing"
       }
     },
     "binary_sensor": {
@@ -1319,6 +1322,9 @@
       },
       "forecast_spending_enabled": {
         "name": "Voorspellinggestuurd besteden"
+      },
+      "battery_charge_pacing_enabled": {
+        "name": "Battery charge pacing"
       }
     },
     "number": {

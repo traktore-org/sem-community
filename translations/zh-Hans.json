@@ -1261,6 +1261,9 @@
       },
       "battery_dynamic_floor_pct": {
         "name": "动态下限"
+      },
+      "battery_charge_pacing": {
+        "name": "Battery charge pacing"
       }
     },
     "binary_sensor": {
@@ -1319,6 +1322,9 @@
       },
       "forecast_spending_enabled": {
         "name": "基于预报的支出"
+      },
+      "battery_charge_pacing_enabled": {
+        "name": "Battery charge pacing"
       }
     },
     "number": {

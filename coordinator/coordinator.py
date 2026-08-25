@@ -4310,6 +4310,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             result["battery_capacity_samples"] = _pe.get("battery_capacity_samples")
             result["battery_capacity_drift_pct"] = _pe.get("battery_capacity_drift_pct")
             result["battery_capacity_reason"] = _pe.get("battery_capacity_reason")
+            # (#820) what pacing decided this cycle (None until first run)
+            _cp = getattr(self, "_charge_pacing_state", None)
+            if _cp:
+                result["charge_pacing"] = dict(_cp)
+                # scalar twin: the sensor's generic value path reads
+                # data[key] directly, and a dict is not a state.
+                result["battery_charge_pacing"] = _cp.get("cap_w")
             result["forecast_trust_d1"] = _pe.get("forecast_trust_d1")
             result["forecast_trust_d2"] = _pe.get("forecast_trust_d2")
             result["battery_overnight_need_kwh"] = _pe.get("battery_overnight_need_kwh")
@@ -4641,6 +4648,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     self._compose_tomorrow_preview(power))
             except Exception:  # noqa: BLE001 — a preview never costs a cycle
                 result["energy_plan_tomorrow"] = None
+            # (#820) apply charge pacing with the inputs the preview stashed.
+            # Decision always computed+published; the write additionally
+            # needs the master switch, a named entity, and non-observer.
+            _cpi = getattr(self, "_charge_pacing_inputs", None)
+            if _cpi is not None:
+                try:
+                    await self._run_charge_pacing(*_cpi)
+                except Exception:  # noqa: BLE001 — pacing never costs a cycle
+                    _LOGGER.debug("charge pacing skipped", exc_info=True)
+                self._charge_pacing_inputs = None
             # (#755 pillar 4) Last night's verdict, on its OWN key. It has to
             # outlive the plan: ``energy_plan`` empties out in daylight, which
             # is exactly when somebody reads what the night taught.
@@ -6021,6 +6038,46 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             self._storage.set_vpp_events(self._vpp_dispatcher.events)
 
         self._vpp_publish = self._vpp_dispatcher.publish_state(decision)
+
+    async def _run_charge_pacing(self, ledger, capacity_kwh: float) -> None:
+        """(#820) One cycle of charge pacing: decide, maybe write, publish."""
+        from .charge_pacing import ChargePacingWriter, paced_charge_cap_w
+        if getattr(self, "_charge_pacing_writer", None) is None:
+            self._charge_pacing_writer = ChargePacingWriter()
+        soc = None
+        try:
+            soc = float(self.data.get("battery_soc"))
+        except (TypeError, ValueError):
+            soc = None
+        pe = getattr(self, "_planning_evidence", {}) or {}
+        trusted = pe.get("forecast_trust_d1") is not None
+        enabled = bool(self.config.get("battery_charge_pacing_enabled", False))
+        entity = str(self.config.get(
+            "battery_charge_power_limit_entity") or "")
+        if soc is None or capacity_kwh <= 0:
+            decision = None
+        else:
+            decision = paced_charge_cap_w(
+                ledger=ledger, capacity_kwh=capacity_kwh, soc_pct=soc,
+                target_soc_pct=float(self.config.get(
+                    "battery_max_target_soc", 95.0) or 95.0),
+                forecast_trusted=trusted,
+                inverter_ac_limit_w=float(self.config.get(
+                    "inverter_ac_limit_w", 0.0) or 0.0),
+                hw_max_charge_w=float(self.config.get(
+                    "battery_max_charge_power_w", 5000.0) or 5000.0),
+            )
+        cap = decision.cap_w if (decision and enabled) else None
+        action = await self._charge_pacing_writer.apply(
+            self.hass, entity, cap, observer=self._observer_mode)
+        self._charge_pacing_state = {
+            "enabled": enabled,
+            "cap_w": decision.cap_w if decision else None,
+            "reason": decision.reason if decision else "no day model",
+            "full_at": getattr(decision, "full_at", None) if decision else None,
+            "action": action,
+            "entity": entity or None,
+        }
 
     async def _run_battery_pipeline(self, power, energy, charging_state) -> None:
         """Per-cycle battery control via decide_battery + actuate_battery.
@@ -7461,6 +7518,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     ledger2, capacity_kwh=cap_kwh2,
                     max_charge_w=float(self.config.get(
                         "battery_max_charge_power_w", 5000.0) or 5000.0))
+                # (#820) Pace the fill: invert the SAME curve model. This
+                # method is sync — stash the inputs; _async_update_data
+                # applies the pacing right after the preview composes.
+                self._charge_pacing_inputs = (ledger2, cap_kwh2)
                 # Compress for the recorder budget: ≤ 5 waypoints + end.
                 if len(curve) > 6:
                     step = max(1, (len(curve) - 1) // 5)

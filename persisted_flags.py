@@ -49,6 +49,8 @@ PERSISTED_FLAG_DEFAULTS: Final[Dict[str, bool]] = {
     # table (not just as a switch default) so the coordinator resolves it the
     # same way at setup — the drift this table exists to prevent.
     "forecast_spending_enabled": False,
+    # (#820) charge pacing ships asleep like the spending arc.
+    "battery_charge_pacing_enabled": False,
 }
 
 

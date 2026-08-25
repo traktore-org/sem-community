@@ -56,6 +56,14 @@ SWITCH_TYPES = [
         entity_category=EntityCategory.CONFIG,
         icon="mdi:chart-timeline-variant-shimmer",
     ),
+    # (#820) Charge pacing master switch. Default OFF — the pack fills
+    # greedily exactly as before until a person flips this, and the pacing
+    # additionally requires a named charge-power-limit entity to act on.
+    SwitchEntityDescription(
+        key="battery_charge_pacing_enabled",
+        entity_category=EntityCategory.CONFIG,
+        icon="mdi:speedometer-slow",
+    ),
     # (#778 phase 6) The two battery permissions. Switches rather than another
     # battery mode because a mode is single-select and cannot say "may sell,
     # may not touch the car". Both default to UNSET, which resolves to today's

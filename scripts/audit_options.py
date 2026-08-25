@@ -299,6 +299,9 @@ def print_successor_sweep() -> None:
 
 
 if __name__ == "__main__":
+    import sys as _sys
     rc = main()
-    print_successor_sweep()
+    # the sweep is prose — never after the machine-readable --json output
+    if "--json" not in _sys.argv:
+        print_successor_sweep()
     raise SystemExit(rc)

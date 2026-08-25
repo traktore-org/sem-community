@@ -5,7 +5,7 @@
     "reason; removing one is the point of the issue.",
     "Regenerate:  python3 scripts/audit_options.py --baseline"
   ],
-  "total": 158,
+  "total": 160,
   "first_run_fields": 10,
   "first_run_steps": 3,
   "first_run_fields_best": 10,
@@ -17,6 +17,7 @@
     "battery_buffer_soc",
     "battery_capacity_kwh",
     "battery_charge_platform",
+    "battery_charge_power_limit_entity",
     "battery_charge_scheduler_enabled",
     "battery_cycle_cost",
     "battery_discharge_control_entity",
@@ -166,6 +167,7 @@
     "update_interval"
   ],
   "switch_entities": [
+    "battery_charge_pacing_enabled",
     "battery_may_assist_ev",
     "battery_may_export",
     "energy_plan_actuation",
