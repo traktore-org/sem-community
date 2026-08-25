@@ -13,6 +13,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔋 **Smart battery charge pacing** (#820): opt-in — SEM paces the daytime
+  fill by solar forecast minus house forecast so the pack lands full at
+  day's end instead of ~11:30, protecting battery longevity and capturing
+  midday sun that would otherwise clip. Point it at your inverter's
+  max-charge-power number, flip the switch; below ~35 % it always charges
+  as fast as the sun allows, an untrusted forecast paces nothing, and the
+  original register value is restored the moment pacing disengages.
+- ☀️ **Deye: System Work Mode is configurable** (#827) — the export-policy
+  selector (Selling First / Zero Export To Load / Zero Export To CT), and
+  with it Deye gains its first battery-export surface: forecast-led
+  spending can now engage Selling First and restore your previous mode
+  afterwards. The discharge rate is set by the inverter in this mode and
+  SEM says so on the card.
+- 🔌 **EV chargers that latch after a stop can come back** (#804): a
+  start/resume *button* is now a first-class control — SEM presses exactly
+  the button you named, paced by its existing retry budget. Wattpilot's
+  force-state select and a resume button are auto-detected; Zaptec installs
+  get their installation's 3→1 phase threshold suggested (with the right
+  values) instead of silently unconfigured.
+- 🛡️ **Per-phase safety knows about phase switching** (#804): after a 3→1
+  switch the whole load sits on one conductor — the phase guard now uses
+  SEM's live phase belief instead of the nameplate, tightening the
+  per-phase clamp the moment a switch lands.
+- 🧭 **Every repair notice offers the next step** (#831): setup-side
+  notices link the exact troubleshooting section; notices that look like
+  SEM's fault link a bug report with your versions and context already
+  filled in, plus a copy-out dialog for anyone without a GitHub account.
+  Nothing is ever sent without you pressing the button.
+- 🎛️ **One less hidden margin** (#830): with measured forecast trust in
+  place, the internal pessimism factor no longer stacks on top of the
+  measurement — caution is counted once, and the audit that judges every
+  remaining knob against its measured successor now runs with the option
+  audit.
+
 - ⏸️ **EV phase switching is switched off by default while it is reworked**
   (#804): real-world testing found the shipped model harmful on two charger
   brands — a Wattpilot is left paused after every switch because it needs an
