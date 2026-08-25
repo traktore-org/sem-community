@@ -949,6 +949,11 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "deye_program_groups",
     "deye_work_mode_battery_first_option",
     "deye_work_mode_control",
+    "deye_system_work_mode_control",
+    "deye_system_work_mode_entity",
+    "deye_system_work_mode_selling_option",
+    "deye_system_work_mode_zero_ct_option",
+    "deye_system_work_mode_zero_load_option",
     "deye_work_mode_entity",
     "deye_work_mode_load_first_option",
     "diagram_style",
@@ -2721,6 +2726,15 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 battery_first = clean.get(
                     "deye_work_mode_battery_first_option", ""
                 ).strip()
+                if clean.get("deye_system_work_mode_control") is True:
+                    labels = [
+                        clean.get("deye_system_work_mode_selling_option", "").strip(),
+                        clean.get("deye_system_work_mode_zero_load_option", "").strip(),
+                        clean.get("deye_system_work_mode_zero_ct_option", "").strip(),
+                    ]
+                    if any(not v for v in labels) or len(set(labels)) != 3:
+                        errors["deye_system_work_mode_selling_option"] = (
+                            "deye_system_work_mode_mapping_not_distinct")
                 if clean.get("deye_work_mode_control") is True:
                     if not load_first or not battery_first or load_first == battery_first:
                         errors["deye_work_mode_battery_first_option"] = (
@@ -2745,6 +2759,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 self._data["deye_work_mode_control"] = clean.get(
                     "deye_work_mode_control", False,
                 ) is True
+                self._data["deye_system_work_mode_control"] = clean.get(
+                    "deye_system_work_mode_control", False,
+                ) is True
                 # Copy the scalar Deye config terms through.
                 for key in (
                     "deye_grid_charge_switch",
@@ -2758,6 +2775,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "deye_work_mode_load_first_option",
                     "deye_work_mode_battery_first_option",
                     "deye_force_charge_work_mode",
+                    "deye_system_work_mode_entity",
+                    "deye_system_work_mode_selling_option",
+                    "deye_system_work_mode_zero_load_option",
+                    "deye_system_work_mode_zero_ct_option",
                 ):
                     if clean.get(key) is not None:
                         self._data[key] = clean[key]
@@ -2897,6 +2918,39 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                             ],
                             mode=selector.SelectSelectorMode.DROPDOWN,
                         )
+                    ),
+                    # (#827) System Work Mode — the EXPORT-POLICY selector
+                    # (Selling First / Zero Export To Load / Zero Export To
+                    # CT), a different register from the Work Mode above.
+                    # With it configured, #778's spend half gains its first
+                    # Deye actuator.
+                    vol.Optional(
+                        "deye_system_work_mode_control",
+                        default=_c("deye_system_work_mode_control", False),
+                    ): selector.BooleanSelector(),
+                    vol.Optional(
+                        "deye_system_work_mode_entity",
+                        description={"suggested_value": _c("deye_system_work_mode_entity", None)},
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="select")
+                    ),
+                    vol.Optional(
+                        "deye_system_work_mode_selling_option",
+                        description={"suggested_value": _c("deye_system_work_mode_selling_option", "Selling First")},
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+                    ),
+                    vol.Optional(
+                        "deye_system_work_mode_zero_load_option",
+                        description={"suggested_value": _c("deye_system_work_mode_zero_load_option", "Zero Export To Load")},
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+                    ),
+                    vol.Optional(
+                        "deye_system_work_mode_zero_ct_option",
+                        description={"suggested_value": _c("deye_system_work_mode_zero_ct_option", "Zero Export To CT")},
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
                     ),
                 }
                 | {

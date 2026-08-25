@@ -583,7 +583,12 @@
           "deye_program_5_charge": "Program 5 — netopladning-select-entitet",
           "deye_program_6_time": "Program 6 — tidsrum-entitet (time.*)",
           "deye_program_6_soc": "Program 6 — mål-SOC-number-entitet",
-          "deye_program_6_charge": "Program 6 — netopladning-select-entitet"
+          "deye_program_6_charge": "Program 6 — netopladning-select-entitet",
+          "deye_system_work_mode_control": "Control Deye System Work Mode (export policy)",
+          "deye_system_work_mode_entity": "Deye System Work Mode entity",
+          "deye_system_work_mode_selling_option": "Label of the 'Selling First' option",
+          "deye_system_work_mode_zero_load_option": "Label of the 'Zero Export To Load' option",
+          "deye_system_work_mode_zero_ct_option": "Label of the 'Zero Export To CT' option"
         },
         "data_description": {
           "deye_bms_max_charge_current_a": "Valgfrit BMS-pålagt loft. 0 = ingen BMS-grænse — inverterens eget maksimum gælder.",
@@ -600,7 +605,8 @@
       "heat_pump_partial_relays": "SG-Ready kræver BEGGE relæentiteter. Angiv begge relæer — eller lad begge stå tomme og konfigurer kun klimaentiteten til setpunkt-boost i klima-kun-tilstand.",
       "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities.",
       "deye_work_mode_mapping_not_distinct": "Work Mode-styring kræver to forskellige valg – ét til Load First og ét til Battery First. Vælg begge, og ikke det samme to gange.",
-      "deye_force_charge_work_mode_invalid": "Vælg hvilken Work Mode SEM skal bruge til tvangsopladning af batteriet: Load First eller Battery First."
+      "deye_force_charge_work_mode_invalid": "Vælg hvilken Work Mode SEM skal bruge til tvangsopladning af batteriet: Load First eller Battery First.",
+      "deye_system_work_mode_mapping_not_distinct": "The three System Work Mode labels must be filled in and distinct."
     }
   },
   "entity": {

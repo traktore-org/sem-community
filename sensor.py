@@ -2982,6 +2982,9 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 # translating it into any of sixteen languages — can never
                 # change what gets rendered.
                 "phase": d.get("planning_phase"),
+                # (#827) On a Deye the spend runs at the INVERTER's own rate
+                # — the card must say so rather than imply SEM chose it.
+                "rate_caveat": d.get("battery_discharge_rate_caveat"),
                 "nights_sealed": d.get("planning_nights_sealed"),
                 "nights_required": d.get("planning_nights_required"),
                 "forecast_days_d1": d.get("forecast_days_d1"),

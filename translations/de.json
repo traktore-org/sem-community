@@ -583,7 +583,12 @@
           "deye_program_5_charge": "Programm 5 — Netzladen-Auswahl (Entität)",
           "deye_program_6_time": "Programm 6 — Zeitfenster-Entität (time.*)",
           "deye_program_6_soc": "Programm 6 — Ziel-SOC-Zahlenentität",
-          "deye_program_6_charge": "Programm 6 — Netzladen-Auswahl (Entität)"
+          "deye_program_6_charge": "Programm 6 — Netzladen-Auswahl (Entität)",
+          "deye_system_work_mode_control": "Control Deye System Work Mode (export policy)",
+          "deye_system_work_mode_entity": "Deye System Work Mode entity",
+          "deye_system_work_mode_selling_option": "Label of the 'Selling First' option",
+          "deye_system_work_mode_zero_load_option": "Label of the 'Zero Export To Load' option",
+          "deye_system_work_mode_zero_ct_option": "Label of the 'Zero Export To CT' option"
         },
         "data_description": {
           "deye_bms_max_charge_current_a": "Optionale vom BMS vorgegebene Obergrenze. 0 = keine BMS-Grenze; es gilt das Wechselrichter-Maximum.",
@@ -600,7 +605,8 @@
       "heat_pump_partial_relays": "SG-Ready benötigt BEIDE Relais-Entitäten. Setze beide Relais — oder lasse beide leer und konfiguriere nur die climate-Entität für den climate-only Setpoint-Boost.",
       "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities.",
       "deye_work_mode_mapping_not_distinct": "Die Work-Mode-Steuerung braucht zwei verschiedene Optionen – eine für Load First und eine für Battery First. Wählen Sie beide, und nicht zweimal dieselbe.",
-      "deye_force_charge_work_mode_invalid": "Wählen Sie, mit welchem Work Mode SEM die Batterie zwangsladen soll: Load First oder Battery First."
+      "deye_force_charge_work_mode_invalid": "Wählen Sie, mit welchem Work Mode SEM die Batterie zwangsladen soll: Load First oder Battery First.",
+      "deye_system_work_mode_mapping_not_distinct": "The three System Work Mode labels must be filled in and distinct."
     }
   },
   "entity": {

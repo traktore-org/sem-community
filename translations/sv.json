@@ -583,7 +583,12 @@
           "deye_program_5_charge": "Program 5 — nätladdning-select-entitet",
           "deye_program_6_time": "Program 6 — tidslucka-entitet (time.*)",
           "deye_program_6_soc": "Program 6 — mål-SOC-number-entitet",
-          "deye_program_6_charge": "Program 6 — nätladdning-select-entitet"
+          "deye_program_6_charge": "Program 6 — nätladdning-select-entitet",
+          "deye_system_work_mode_control": "Control Deye System Work Mode (export policy)",
+          "deye_system_work_mode_entity": "Deye System Work Mode entity",
+          "deye_system_work_mode_selling_option": "Label of the 'Selling First' option",
+          "deye_system_work_mode_zero_load_option": "Label of the 'Zero Export To Load' option",
+          "deye_system_work_mode_zero_ct_option": "Label of the 'Zero Export To CT' option"
         },
         "data_description": {
           "deye_bms_max_charge_current_a": "Valfritt tak från BMS. 0 = ingen BMS-gräns — växelriktarens eget maximum gäller.",
@@ -600,7 +605,8 @@
       "heat_pump_partial_relays": "SG-Ready kräver BÅDA reläentiteterna. Ange båda reläerna — eller lämna båda tomma och konfigurera endast klimatentiteten för börvärdesboost i klimatläge.",
       "deye_program_groups_incomplete": "Alla sex Deye-programgrupper måste ha entiteter för tid, SOC och nätladdning.",
       "deye_work_mode_mapping_not_distinct": "Work Mode-styrning kräver två olika alternativ – ett för Load First och ett för Battery First. Välj båda, och inte samma två gånger.",
-      "deye_force_charge_work_mode_invalid": "Välj vilket Work Mode SEM ska använda för att tvångsladda batteriet: Load First eller Battery First."
+      "deye_force_charge_work_mode_invalid": "Välj vilket Work Mode SEM ska använda för att tvångsladda batteriet: Load First eller Battery First.",
+      "deye_system_work_mode_mapping_not_distinct": "The three System Work Mode labels must be filled in and distinct."
     }
   },
   "entity": {

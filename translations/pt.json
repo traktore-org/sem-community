@@ -583,7 +583,12 @@
           "deye_program_5_charge": "Programa 5 — entidade select de carga de rede",
           "deye_program_6_time": "Programa 6 — entidade de faixa horária (time.*)",
           "deye_program_6_soc": "Programa 6 — entidade number de SOC alvo",
-          "deye_program_6_charge": "Programa 6 — entidade select de carga de rede"
+          "deye_program_6_charge": "Programa 6 — entidade select de carga de rede",
+          "deye_system_work_mode_control": "Control Deye System Work Mode (export policy)",
+          "deye_system_work_mode_entity": "Deye System Work Mode entity",
+          "deye_system_work_mode_selling_option": "Label of the 'Selling First' option",
+          "deye_system_work_mode_zero_load_option": "Label of the 'Zero Export To Load' option",
+          "deye_system_work_mode_zero_ct_option": "Label of the 'Zero Export To CT' option"
         },
         "data_description": {
           "deye_bms_max_charge_current_a": "Limite opcional imposto pelo BMS. 0 significa sem limite do BMS — aplica-se o máximo do inversor.",
@@ -600,7 +605,8 @@
       "heat_pump_partial_relays": "O SG-Ready necessita de AMBAS as entidades de relé. Defina os dois relés — ou deixe ambos vazios e configure apenas a entidade climate para o boost de setpoint em modo apenas-climate.",
       "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities.",
       "deye_work_mode_mapping_not_distinct": "O controlo do Work Mode precisa de duas opções diferentes — uma para Load First e outra para Battery First. Escolha ambas e não duas vezes a mesma.",
-      "deye_force_charge_work_mode_invalid": "Escolha com que Work Mode o SEM deve forçar a carga da bateria: Load First ou Battery First."
+      "deye_force_charge_work_mode_invalid": "Escolha com que Work Mode o SEM deve forçar a carga da bateria: Load First ou Battery First.",
+      "deye_system_work_mode_mapping_not_distinct": "The three System Work Mode labels must be filled in and distinct."
     }
   },
   "entity": {

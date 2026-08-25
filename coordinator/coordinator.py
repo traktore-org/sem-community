@@ -4311,6 +4311,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             result["battery_capacity_drift_pct"] = _pe.get("battery_capacity_drift_pct")
             result["battery_capacity_reason"] = _pe.get("battery_capacity_reason")
             # (#820) what pacing decided this cycle (None until first run)
+            # (#827) a brand whose discharge rate SEM cannot set says so.
+            try:
+                _ad = getattr(self, "_battery_adapter", None)
+                _cav = getattr(_ad, "discharge_rate_caveat", None)
+                if callable(_cav) and getattr(
+                        _ad, "_system_work_mode_control", False):
+                    result["battery_discharge_rate_caveat"] = _cav()
+            except Exception:  # noqa: BLE001
+                pass
             _cp = getattr(self, "_charge_pacing_state", None)
             if _cp:
                 result["charge_pacing"] = dict(_cp)

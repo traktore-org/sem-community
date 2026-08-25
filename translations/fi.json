@@ -583,7 +583,12 @@
           "deye_program_5_charge": "Ohjelma 5 — verkkolatauksen select-entiteetti",
           "deye_program_6_time": "Ohjelma 6 — aikavälin entiteetti (time.*)",
           "deye_program_6_soc": "Ohjelma 6 — tavoite-SOC:n number-entiteetti",
-          "deye_program_6_charge": "Ohjelma 6 — verkkolatauksen select-entiteetti"
+          "deye_program_6_charge": "Ohjelma 6 — verkkolatauksen select-entiteetti",
+          "deye_system_work_mode_control": "Control Deye System Work Mode (export policy)",
+          "deye_system_work_mode_entity": "Deye System Work Mode entity",
+          "deye_system_work_mode_selling_option": "Label of the 'Selling First' option",
+          "deye_system_work_mode_zero_load_option": "Label of the 'Zero Export To Load' option",
+          "deye_system_work_mode_zero_ct_option": "Label of the 'Zero Export To CT' option"
         },
         "data_description": {
           "deye_bms_max_charge_current_a": "Valinnainen BMS:n asettama katto. 0 = ei BMS-rajaa; invertterin oma maksimi pätee.",
@@ -600,7 +605,8 @@
       "heat_pump_partial_relays": "SG-Ready vaatii MOLEMMAT releentiteetit. Aseta molemmat releet — tai jätä molemmat tyhjiksi ja määritä vain ilmastointientiteetti pelkän ilmastoinnin asetusarvon boostia varten.",
       "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities.",
       "deye_work_mode_mapping_not_distinct": "Work Mode -ohjaus tarvitsee kaksi eri vaihtoehtoa – yhden Load First- ja yhden Battery First -tilalle. Valitse molemmat, älä samaa kahdesti.",
-      "deye_force_charge_work_mode_invalid": "Valitse, mitä Work Mode -tilaa SEM käyttää akun pakkolataukseen: Load First vai Battery First."
+      "deye_force_charge_work_mode_invalid": "Valitse, mitä Work Mode -tilaa SEM käyttää akun pakkolataukseen: Load First vai Battery First.",
+      "deye_system_work_mode_mapping_not_distinct": "The three System Work Mode labels must be filled in and distinct."
     }
   },
   "entity": {
