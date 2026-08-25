@@ -729,7 +729,8 @@ class ForecastReader:
         # single entity unchanged.
         data.power_now_w = self._read_role_power_w("power_now", 0.0)
         data.power_next_hour_w = self._read_role_power_w("power_next_hour", 0.0)
-        data.peak_power_today_w = self._read_role_power_w("peak_power_today", 0.0)
+        # (#840) NOT _read_role_power_w: that sums, and peaks do not add.
+        data.peak_power_today_w = self._read_role_peak_w("peak_power_today", 0.0)
 
         # Peak time — Solcast exposes a full ISO datetime; coordinator
         # and dashboard consumers expect "HH:MM" local time.
@@ -772,6 +773,75 @@ class ForecastReader:
         if group and len(group) > 1:
             return self._sum_power_w(group, default)
         return self._read_power_w(self._entities.get(role), default)
+
+    def plane_breakdown(self) -> list:
+        """(#840) Today's forecast per PLANE, for the card.
+
+        #838 made the TOTAL right. The total is what SEM plans on, but it is
+        not what the owner recognises — they built the roof one string at a
+        time and think of it that way. It is also the cheapest possible check
+        on the total: a string reading zero, or one carrying the whole roof,
+        is obvious in a list and invisible in a sum.
+
+        Named from the entity's friendly name, because a plane's identity
+        lives in the third-party integration's config entry and SEM only ever
+        sees its entities.
+        """
+        group = self._entity_groups.get("forecast_today")
+        ids = group if group else [self._entities.get("forecast_today")]
+        out = []
+        for entity_id in ids:
+            if not entity_id:
+                continue
+            state = self.hass.states.get(entity_id)
+            if not state:
+                continue
+            try:
+                value = float(state.state)
+            except (ValueError, TypeError):
+                continue
+            name = (state.attributes or {}).get("friendly_name") or entity_id
+            for suffix in (" Energy production today",
+                           " Estimated energy production - today"):
+                if name.endswith(suffix):
+                    name = name[: -len(suffix)]
+                    break
+            out.append({"entity_id": entity_id, "name": name,
+                        "today_kwh": round(value, 3)})
+        out.sort(key=lambda r: r["name"])
+        return out
+
+    def _read_role_peak_w(self, role: str, default: float) -> float:
+        """Read a PEAK power role — the largest plane, never the sum (#840).
+
+        #838 taught the reader to sum a multi-string roof, which is right for
+        energies and right for instantaneous power: two arrays really do
+        produce the sum of their watts at the same moment. A peak is different.
+        An east-facing array and a west-facing one reach their maxima hours
+        apart, so their peaks are never simultaneous, and adding them claims
+        an output the roof cannot physically produce — an 8 kWp east plus
+        8 kWp west install would report 16 kW against a true system peak
+        nearer 9-10 kW.
+
+        Note the direction. #838 corrected an UNDER-statement; this prevents an
+        OVER-statement, which is the more dangerous of the two: anything
+        sizing headroom, a shaving threshold or an export limit against this
+        figure would be planning for a spike that never arrives.
+
+        The largest plane under-states a co-planar split — two arrays at the
+        same azimuth do peak together — but it is a number the system can
+        actually reach.
+        """
+        group = self._entity_groups.get(role)
+        candidates = group if group else [self._entities.get(role)]
+        peaks = []
+        for entity_id in candidates:
+            if not entity_id:
+                continue
+            value = self._read_power_w(entity_id, None)
+            if value is not None:
+                peaks.append(value)
+        return max(peaks) if peaks else default
 
     def _sum_floats(self, entity_ids: list, default: float) -> float:
         """Sum the numeric states of several entities (#838).
@@ -827,7 +897,7 @@ class ForecastReader:
                 pass
         return default
 
-    def _read_power_w(self, entity_id: Optional[str], default: float) -> float:
+    def _read_power_w(self, entity_id: Optional[str], default):
         """Read a forecast power sensor and normalize it to Watts.
 
         Solcast (``UnitOfPower.WATT``) and Forecast.Solar both publish their

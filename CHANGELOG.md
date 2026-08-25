@@ -13,6 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ☀️ **Peak solar power is no longer over-stated on a multi-string roof**
+  (#840): summing each string's forecast was right for the day's energy, but
+  it was also applied to peak power — and peaks do not add. An east-facing and
+  a west-facing array reach their maxima hours apart, so adding them claimed
+  an instantaneous output your roof can never reach (an 8 kWp + 8 kWp install
+  would have shown 16 kW). SEM now reports the largest string's peak, which is
+  a figure the system can actually produce.
+- ☀️ **You can see the forecast per string** (#840): the Configuration tab's
+  Forecast section lists today's forecast for each string with the total
+  beneath it — so a string that has stopped reporting is visible, instead of
+  quietly shrinking the total.
+
 # [2.0.0-beta.16] — 25.08.2026
 
 - 🔭 **Multiple solar forecasts, one per PV string, are now added together

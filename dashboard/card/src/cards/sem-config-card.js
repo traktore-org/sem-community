@@ -2145,14 +2145,46 @@ class SEMConfigCard extends SEMLitBase {
                     ? o
                     : { ...o, label: `${o.label} — ${this._t('config_forecast_source_missing')}` })),
         ];
+        const attrs = this._hass?.states?.['sensor.sem_forecast_source']?.attributes || {};
         return html`
             <div class="readonly-row">
                 <span class="ctrl-label">${this._t('forecast_source')}</span>
                 <span class="readonly-value">${label}</span>
             </div>
+            ${this._renderPlanesToday(attrs)}
             ${this._renderOptionSelect('solar_forecast_source', 'config_solar_forecast_source',
                 sourceOptions, opts, 'config_help_solar_forecast_source', 'auto')}
             ${raw === 'none' ? html`<div class="overview-help">${this._t('config_forecast_install_hint')}</div>` : nothing}
+        `;
+    }
+
+    // (#840) Today's forecast per string.
+    //
+    // #838 made the multi-string total right; this shows the parts. The total
+    // is what SEM plans on, the parts are what the owner recognises — they
+    // built the roof one string at a time — and it is the cheapest check on
+    // the total, because a string reading zero is obvious here and invisible
+    // in a sum.
+    _renderPlanesToday(attrs) {
+        const rows = attrs.planes_today || [];
+        if (!Array.isArray(rows) || rows.length < 2) return nothing;
+        const total = rows.reduce((a, r) => a + Number(r.today_kwh || 0), 0);
+        return html`
+            <table class="sem-planes">
+                <tr>
+                    <th>${this._t('forecast_per_string_title')}</th>
+                    <th>${this._t('forecast_per_string_today')}</th>
+                </tr>
+                ${rows.map((r) => html`
+                    <tr>
+                        <td>${r.name}</td>
+                        <td class="num">${Number(r.today_kwh || 0).toFixed(1)} kWh</td>
+                    </tr>`)}
+                <tr class="is-total">
+                    <td>${this._t('forecast_per_string_total').replace('{n}', String(rows.length))}</td>
+                    <td class="num">${total.toFixed(1)} kWh</td>
+                </tr>
+            </table>
         `;
     }
 
@@ -2771,6 +2803,17 @@ class SEMConfigCard extends SEMLitBase {
                 .c-ok { color: #8DC892; }
                 .c-warn { color: #ff9800; }
                 .overview-help { font-size: 12px; color: var(--secondary-text-color, ${T.textSec}); padding: 4px 0; }
+                /* (#840) Per-string forecast. Tabular numerals so the kWh
+                   column reads as a column, not as ragged text. */
+                .sem-planes { width: 100%; border-collapse: collapse; font-size: 12px; margin: 2px 0 6px; }
+                .sem-planes th { text-align: left; font-weight: 500; padding: 3px 6px 3px 0;
+                    color: var(--secondary-text-color, ${T.textSec}); text-transform: uppercase;
+                    letter-spacing: .04em; font-size: 10px; }
+                .sem-planes td { padding: 3px 6px 3px 0;
+                    border-top: 1px solid var(--divider-color, rgba(127,127,127,.2)); }
+                .sem-planes td.num { text-align: right; font-variant-numeric: tabular-nums; }
+                .sem-planes tr.is-total td { font-weight: 600;
+                    border-top: 1px solid var(--primary-text-color, ${T.text}); }
                 .overview-actions { display: flex; gap: 8px; margin-top: 10px; }
 
                 .empty-state {
