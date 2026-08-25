@@ -154,7 +154,8 @@ class ActivePhaseGuard:
         return self._runtime_snapshot(guard, "enforcing_recovery")
 
     def filter_decision(
-        self, decision: ChargerDecision, *, adapter: Any = None, power: Any = None
+        self, decision: ChargerDecision, *, adapter: Any = None, power: Any = None,
+        believed_phases: Any = None,
     ) -> ChargerDecision:
         """Apply the latch and clamp charging increases to verified headroom."""
         if not self._enforcing:
@@ -171,7 +172,7 @@ class ActivePhaseGuard:
         ):
             return self._disable_decision(decision, "unsupported_charge_intent")
 
-        context = self._actuation_context(adapter, power)
+        context = self._actuation_context(adapter, power, believed_phases)
         min_margin = self._minimum_required_margin()
         if context is None or min_margin is None:
             return self._disable_decision(decision, "context_missing")
@@ -235,9 +236,16 @@ class ActivePhaseGuard:
         )
 
     @staticmethod
-    def _actuation_context(adapter: Any, power: Any):
+    def _actuation_context(adapter: Any, power: Any,
+                           believed_phases: Any = None):
         try:
-            phases = int(adapter.phases)
+            # (#804 B4d, #843) A 3→1 switch lands the whole load on ONE
+            # conductor — same watts, 3x the per-phase amps — and nameplate
+            # config cannot see it. The live belief (estimate_active_phases)
+            # overrides the nameplate; absent belief falls back, so installs
+            # without phase switching are untouched byte-for-byte.
+            phases = int(believed_phases) if believed_phases in (1, 3) \
+                else int(adapter.phases)
             voltage = float(adapter.voltage)
             minimum_a = int(adapter.min_current_a)
             maximum_a = int(adapter.max_current_a)
@@ -384,7 +392,8 @@ def update_active_phase_guard(coord: Any) -> Dict[str, Any]:
 
 
 def filter_charger_decision(
-    coord: Any, decision: ChargerDecision, *, adapter: Any = None, power: Any = None
+    coord: Any, decision: ChargerDecision, *, adapter: Any = None, power: Any = None,
+    believed_phases: Any = None,
 ) -> ChargerDecision:
     """Apply the cached guard state; fail closed if enforcement skipped evaluation."""
     enforcer = getattr(coord, "_active_phase_guard", None)
@@ -398,4 +407,5 @@ def filter_charger_decision(
     elif not hasattr(coord, "_phase_guard_snapshot"):
         runtime = enforcer.update({}, config)
         coord._phase_guard_snapshot = runtime
-    return enforcer.filter_decision(decision, adapter=adapter, power=power)
+    return enforcer.filter_decision(decision, adapter=adapter, power=power,
+                                    believed_phases=believed_phases)

@@ -759,6 +759,24 @@ def discover_all_ev_chargers_from_registry(
                 result["_platform"] = str(device_entities[0].platform or platform)
                 if device_id:
                     result["_device_id"] = device_id
+                # (#804 B4c) Zaptec's phase selector lives on the
+                # INSTALLATION device as a current threshold (EVCC's Go2
+                # path: 32 A → 1-phase, 0 A → 3-phase) — a sibling device
+                # this per-device loop never hands to the discover fn. When
+                # this platform's registry carries one, SUGGEST it: entity +
+                # values, underscore-keyed (report data, not a config role),
+                # never auto-configured — the user confirms it in the flow.
+                if platform == "zaptec":
+                    for _e in entities:
+                        _uid = str(getattr(_e, "unique_id", "") or "").lower()
+                        if (str(_e.entity_id).startswith("number.")
+                                and _uid.endswith(
+                                    "three_to_one_phase_switch_current")):
+                            result["_suggested_phase_switch"] = {
+                                "entity": str(_e.entity_id),
+                                "value_1p": "32", "value_3p": "0",
+                            }
+                            break
                 _LOGGER.info(
                     "Auto-discovered EV charger from %s (device %s): %s",
                     platform,
@@ -1266,6 +1284,17 @@ _BRAND_HINTS: Dict[str, List[_ROLE]] = {
          "device_class": "energy", "names": ("total",)},
         {"role": "ev_session_energy_sensor", "domain": "sensor",
          "device_class": "energy", "names": ("session",)},
+        # (#804 B4b) The go-e firmware family's force-state select — the
+        # surface that latches this box (HorizonKane: every SEM stop left it
+        # paused, no current write clears it). Mirrored from goecharger_mqtt.
+        # Option VALUES stay unconfigured on purpose: the integration's
+        # labels vary by version, and a guessed label is the mangler bug in
+        # select form — the entity is surfaced, the reporter confirms.
+        {"role": "ev_charge_mode_entity", "domain": "select",
+         "names": ("frc", "force_state")},
+        # (#804 B4a/B4b) a start/resume button rides the new press path.
+        {"role": "ev_start_stop_entity", "domain": "button",
+         "names": ("start", "resume")},
     ],
     "heidelberg_energy_control": [
         {"role": "ev_connected_sensor", "domain": "binary_sensor",

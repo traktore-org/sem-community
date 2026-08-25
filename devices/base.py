@@ -2799,16 +2799,17 @@ class CurrentControlDevice(ControllableDevice):
                     )
                     stop_method = f"{domain}.turn_off={self.start_stop_entity}"
                 elif domain == "button":
-                    # Stop buttons have different entity_ids than start buttons
-                    # The stop entity is typically named *_stop_charging*
-                    stop_entity = self.start_stop_entity.replace("resume", "stop").replace("start", "stop")
-                    if "_charging" not in stop_entity:
-                        stop_entity = stop_entity.replace("_stop", "_stop_charging")
-                    await self.hass.services.async_call(
-                        "button", "press",
-                        {"entity_id": stop_entity}, blocking=True,
-                    )
-                    stop_method = f"button.press={stop_entity}"
+                    # (#804 B4a) The old code GUESSED a stop button by
+                    # string-rewriting the start entity's id (resume→stop,
+                    # then _stop→_stop_charging) — pressing an entity nobody
+                    # named, on the strength of a naming convention. Deleted.
+                    # A button-surface charger (Zaptec resume, Wattpilot
+                    # start) stops through the CURRENT path — command_idle
+                    # writes 0, which both reporters' hardware honours as a
+                    # soft pause — and the button exists to come BACK, via
+                    # ensure_enabled. Pressing a guessed id is worse than
+                    # pressing nothing.
+                    stop_method = "current-0 (button surface: stop rides the current write)"
             elif self.charger_service:
                 # KEBA-style fallback
                 domain = self.charger_service.split(".", 1)[0]

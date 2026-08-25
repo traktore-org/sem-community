@@ -205,15 +205,33 @@ class ChargerAdapter(ABC):
         return (st.state == "on", True)
 
     async def ensure_enabled(self) -> None:
-        """Idempotently turn the start/stop switch ON. No-op for chargers
-        without a ``switch.``/``input_boolean.`` enable entity."""
+        """Idempotently assert the start/stop surface ON.
+
+        ``switch.``/``input_boolean.`` → ``turn_on`` (idempotent by nature).
+        ``button.`` → ``press`` — (#804 B4a) a button start entity used to be
+        INVISIBLE here (early return), while the only presser in the tree
+        string-mangled the entity id and was unreachable after a latching
+        stop. Now the button is a first-class enable surface: SEM presses
+        exactly what the user named, and the reconciler's existing ENABLE
+        retry/backoff budget paces the presses — a press has no readable
+        state, so pacing by observed charging is the whole design.
+        No-op only when no start/stop entity is configured at all."""
         dev = self._device
         ent = getattr(dev, "start_stop_entity", None)
-        if not ent or not str(ent).startswith(("switch.", "input_boolean.")):
+        if not ent:
             return
-        await dev.hass.services.async_call(
-            ent.split(".")[0], "turn_on", {"entity_id": ent}, blocking=True,
-        )
+        ent = str(ent)
+        if ent.startswith(("switch.", "input_boolean.")):
+            await dev.hass.services.async_call(
+                ent.split(".")[0], "turn_on", {"entity_id": ent},
+                blocking=True,
+            )
+        elif ent.startswith("button."):
+            await dev.hass.services.async_call(
+                "button", "press", {"entity_id": ent}, blocking=True,
+            )
+        else:
+            return
         # Keep SEM's session view consistent with the contactor we just closed.
         dev._session_active = True
 

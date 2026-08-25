@@ -1319,6 +1319,15 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             c for c in all_discovered if not _charger_already_installed(c, installed)
         ]
         suggestions = new_discoveries[0] if new_discoveries else {}
+        # (#804 B4c) detection may carry a threshold-model phase-switch
+        # SUGGESTION (Zaptec: the installation's 3→1 current). Feed the
+        # entity AND its values into the form's suggested values — the user
+        # still confirms; nothing is auto-configured.
+        _sps = suggestions.get("_suggested_phase_switch")
+        if isinstance(_sps, dict):
+            suggestions.setdefault("ev_phase_switch_entity", _sps.get("entity"))
+            suggestions.setdefault("ev_phase_switch_value_1p", _sps.get("value_1p"))
+            suggestions.setdefault("ev_phase_switch_value_3p", _sps.get("value_3p"))
 
         return self.async_show_form(
             step_id="ev_charger_add",

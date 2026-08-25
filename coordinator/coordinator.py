@@ -3495,7 +3495,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         # phase-guard stop.
                         from .active_phase_guard import filter_charger_decision
                         decision = filter_charger_decision(
-                            self, decision, adapter=adapter, power=view.power
+                            self, decision, adapter=adapter, power=view.power,
+                            # (#804 B4d) the live phase belief — a 3→1
+                            # switch tightens the per-phase clamp at once.
+                            believed_phases=getattr(
+                                self, "_phase_believed", {}).get(cid),
                         )
                         # (#804 Phase B/C) The phase sequencer may hold the
                         # decision at IDLE while a switch walks its
@@ -3733,7 +3737,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 )
                 from .active_phase_guard import filter_charger_decision
                 decision = filter_charger_decision(
-                    self, decision, adapter=adapter, power=view.power
+                    self, decision, adapter=adapter, power=view.power,
+                    # (#804 B4d) the legacy single-charger path never runs
+                    # phase switching, so the belief is always absent here —
+                    # passed for one uniform call shape, resolves to the
+                    # nameplate fallback.
+                    believed_phases=getattr(
+                        self, "_phase_believed", {}).get("ev_charger"),
                 )
                 try:
                     await actuate(
