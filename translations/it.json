@@ -1533,6 +1533,10 @@
     "charger_control_entity_broken": {
       "title": "L'entità di controllo della wallbox non funziona: {name}",
       "description": "SEM usa **`{entity_id}`** per {capability} su **{name}**, ma quell'entità è `{reason}` — ogni comando si perde. Controlla l'entità in **Strumenti per sviluppatori → Stati** e correggila all'origine, oppure riassegna SEM in **Impostazioni → Dispositivi e servizi → SEM → Configura → Wallbox → Modifica**."
+    },
+    "battery_force_discharge_unsupported": {
+      "title": "Battery power setpoint cannot be written: {entity_id}",
+      "description": "SEM tried to write **{entity_id}** and the device refused every time: `{error}`.\n\nThe entity exists and SEM is addressing it correctly — the inverter's firmware simply does not implement writing that register. This usually means the entity you picked for *forcible discharge* in SEM's battery settings is readable but not writable on your hardware.\n\nSEM has stopped trying, so this will no longer fill your log. Two things follow: the routine safety write SEM makes when returning the battery to normal operation is skipped (harmless — there was nothing set to clear), and **battery-to-grid export cannot run** on this battery. Charging, discharge limits and everyday operation are unaffected.\n\n**If you do not use battery-to-grid export**, clear the forcible-discharge entity in SEM's battery settings and this notice goes away. **If you expected it to work**, the entity is likely the wrong one — or your inverter does not support commanded export. A restart makes SEM try again, so a firmware update or a corrected entity is picked up on its own."
     }
   },
   "selector": {
