@@ -380,6 +380,17 @@ class BatteryNightTracker:
     def sealed(self) -> List[Dict[str, Any]]:
         return list(self._sealed)
 
+    def replace_sealed(self, records: Any) -> None:
+        """(#815) Swap the sealed history wholesale — the backfill's write.
+
+        Pruned by ``max_nights`` exactly as the seal path prunes, so the
+        window is decided in one place regardless of who wrote the records.
+        The night in flight is untouched: this replaces history, never the
+        measurement in progress.
+        """
+        self._sealed = [r for r in (records or []) if isinstance(r, dict)]
+        del self._sealed[:-self.max_nights]
+
     # ── persistence (restart mid-night must not halve the record) ──
 
     def to_dict(self) -> Dict[str, Any]:

@@ -13,6 +13,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🌙 **SEM can now learn overnight battery use from history you already have**
+  (#815): working out how much of your battery is safe to spend needs five
+  good nights of evidence, and recording produces one per day — so a new
+  install waited a week for something its own database usually already proved.
+  The new **"Learn overnight battery use from past history"** action
+  reconstructs those nights from your battery's recorded discharge in one
+  pass. On the development rig it recovered **272 nights** and took the
+  evidence from 1 usable night to 57 immediately. Nights SEM measured live are
+  never overwritten: a live night can tell house use apart from car charging
+  and export, a reconstructed one cannot, so reconstructed nights are treated
+  as an upper bound — which errs toward holding more back, never less.
+- 🌙 **A flaky sensor during the DAY no longer throws away the night before
+  it** (#837): SEM judges whether a night was measured well enough to learn
+  from. That judgement was counting sensor dropouts from the following day
+  against the night, because a night's record is not filed until the next one
+  begins. On a system whose battery sensor blinks during the day — normal for
+  modbus inverters — good nights were being discarded and the battery-spending
+  feature could never gather its evidence. It would have looked like nothing
+  was wrong. A night is now judged on its own hours.
+
 - 🛡️ **Your battery reserve now applies even if you never set one** (#778): if
   the reserve was left unconfigured, SEM's new forecast-led spending read it as
   *no reserve at all* rather than the 20% its own default documents. Same for
