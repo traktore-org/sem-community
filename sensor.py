@@ -1246,6 +1246,58 @@ SENSOR_TYPES = [
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
     ),
+    # (#778 phase 1) Planning evidence — measured, driving nothing. Diagnostic
+    # and slow-moving by nature (capacity shifts over weeks, trust over days),
+    # so they add no recorder churn (#829).
+    # (#778) The budget. Two entities, not seven — the supporting numbers ride
+    # as attributes of the headline one (#830: every control and every entity
+    # has to earn its place). Both are daily-moving, so no recorder churn.
+    SensorEntityDescription(
+        key="battery_spendable_kwh",
+        native_unit_of_measurement="kWh",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:battery-arrow-up-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=1,
+    ),
+    SensorEntityDescription(
+        key="battery_dynamic_floor_pct",
+        native_unit_of_measurement="%",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:battery-lock-open",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=0,
+    ),
+    SensorEntityDescription(
+        key="battery_measured_capacity_kwh",
+        native_unit_of_measurement="kWh",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:battery-heart-variant",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=1,
+    ),
+    SensorEntityDescription(
+        key="battery_capacity_drift_pct",
+        native_unit_of_measurement="%",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:battery-alert-variant-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=1,
+    ),
+    SensorEntityDescription(
+        key="forecast_trust_d1",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:weather-partly-cloudy",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="forecast_trust_d2",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:weather-cloudy-clock",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=2,
+    ),
     SensorEntityDescription(
         key="forecast_dampening_factor",
         state_class=SensorStateClass.MEASUREMENT,
@@ -2761,10 +2813,10 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                     attrs["planes_today"] = planes
                 except Exception:  # noqa: BLE001
                     pass
-                # (#822) What every OTHER installed source says, and how
-                # well each has actually predicted this roof. Side-by-side
-                # numbers alone would mislead — they may describe differently
-                # configured arrays — so the accuracy scores are what to read.
+                # (#822) What every OTHER installed source says, and how well
+                # each has actually predicted this roof. Side-by-side numbers
+                # alone would mislead — they may describe differently
+                # configured arrays — so the scores are what to read.
                 try:
                     attrs["sources_now"] = _fr.peek_sources()
                 except Exception:  # noqa: BLE001
@@ -2879,6 +2931,48 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "provider": d.get("tariff_provider"),
                 "is_dynamic": d.get("tariff_is_dynamic"),
                 "current_import_rate": d.get("tariff_current_import_rate"),
+            })
+        elif self.entity_description.key == "battery_spendable_kwh":
+            # (#778) Everything a user needs to argue with the number, on the
+            # number itself. A budget nobody can check is one nobody trusts.
+            #
+            # `d` is bound per-branch in this method, not once at the top — the
+            # first version of this block assumed otherwise and raised
+            # UnboundLocalError on EVERY cycle, which HA reported as
+            # "Unexpected error updating listener" and which blanked the whole
+            # coordinator listener update rather than just this attribute.
+            d = self.coordinator.data
+            attrs.update({
+                "why": d.get("battery_spendable_reason"),
+                "dynamic_floor_pct": d.get("battery_dynamic_floor_pct"),
+                "overnight_need_kwh": d.get("battery_overnight_need_kwh"),
+                "expected_refill_kwh": d.get("battery_expected_refill_kwh"),
+                "refill_why": d.get("battery_refill_reason"),
+                # Surplus tomorrow physically cannot hold — spending this
+                # tonight costs nothing at all.
+                "clipped_kwh": d.get("battery_refill_clipped_kwh"),
+                "measured_capacity_kwh": d.get("battery_measured_capacity_kwh"),
+                "forecast_trust_d1": d.get("forecast_trust_d1"),
+                # (#778 phase 6) The three states a card must tell apart, and
+                # the progress behind the two that look like zero. Published as
+                # a stable token beside the prose: the card switches on the
+                # token and DISPLAYS the prose, so rewording a reason — or
+                # translating it into any of sixteen languages — can never
+                # change what gets rendered.
+                "phase": d.get("planning_phase"),
+                "nights_sealed": d.get("planning_nights_sealed"),
+                "nights_required": d.get("planning_nights_required"),
+                "forecast_days_d1": d.get("forecast_days_d1"),
+                "forecast_days_d2": d.get("forecast_days_d2"),
+                "forecast_days_required": d.get("forecast_days_required"),
+                # False = no source publishes that horizon at all. Distinct
+                # from thin evidence: only one of the two resolves by waiting.
+                "forecast_d1_available": d.get("forecast_d1_available"),
+                "forecast_d2_available": d.get("forecast_d2_available"),
+                "capacity_samples": d.get("battery_capacity_samples"),
+                "capacity_drift_pct": d.get("battery_capacity_drift_pct"),
+                "nameplate_capacity_kwh": self.coordinator.config.get(
+                    "battery_capacity_kwh"),
             })
         elif self.entity_description.key == "forecast_dampening_factor":
             # #416: mirror the #359 ``classifier_path`` pattern — expose
