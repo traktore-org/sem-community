@@ -81,6 +81,9 @@ class BatteryControlAdapter(ABC):
         # update or corrected entity gets another chance without the user
         # needing to know SEM had given up.
         self._force_discharge_failures: int = 0
+        # (#840) The last value whose write was REFUSED. Distinct from
+        # ``_last_force_discharge_w``, which records what actually landed.
+        self._last_force_discharge_attempt_w: "Optional[float]" = None
         # de-dup writes. None = never written (so the first write of any sign
         # always goes through; a plain -1.0 sentinel would alias a real
         # negative charge setpoint on a bidirectional entity, #523).
@@ -335,22 +338,28 @@ class BatteryControlAdapter(ABC):
         # settle the question. Do not ask again this run.
         if self._force_discharge_failures >= self.FORCE_DISCHARGE_FAILURE_LIMIT:
             return False
-        # (#840) Nothing to clear. ``command_normal`` / ``command_limit_
-        # discharge`` / ``command_off`` each write 0 W as #523 mutual
-        # exclusion, and that runs on EVERY ordinary cycle — but if SEM has
-        # never commanded a forcible discharge there is no setpoint of ours to
-        # undo. Writing it anyway is pure cost, and on a device that refuses
-        # the register it is a guaranteed failure every cycle for the entire
-        # life of the install. @RienduPre's Growatt logged 2,364 of them in
-        # nineteen hours, none of them from the export feature — which is
-        # dormant on his system — all from this defensive zero.
+        # (#840) Do not re-issue a write that just failed with the SAME value.
         #
-        # Note this is not merely an optimisation: ``_last_force_discharge_w``
+        # ``command_normal`` / ``command_limit_discharge`` / ``command_off``
+        # each write 0 W as #523 mutual exclusion, and command_normal runs on
+        # EVERY ordinary cycle. On a device that refuses the register that is
+        # a guaranteed failure every cycle for the life of the install —
+        # @RienduPre's Growatt logged 2,364 of them in nineteen hours, none
+        # from the export feature (dormant on his system), all from this
+        # routine zero.
+        #
+        # The repeat is unbounded BY CONSTRUCTION: ``_last_force_discharge_w``
         # is only assigned after a SUCCESSFUL call, so a failing write never
-        # records itself, the de-dup below never engages, and the retry is
-        # unbounded by construction.
-        if watts == 0.0 and self._last_force_discharge_w is None:
-            return True
+        # records itself and the de-dup below never engages.
+        #
+        # Tracked separately from the applied value on purpose. A failed write
+        # did NOT reach the device, so recording it as "applied" would be a
+        # lie — a later genuine request for the same value would be skipped
+        # while the hardware sat somewhere else entirely. This field only
+        # answers "we just tried exactly this and it was refused".
+        if (self._last_force_discharge_attempt_w is not None
+                and abs(watts - self._last_force_discharge_attempt_w) < 100.0):
+            return False
         # Skip when within 100 W of the last applied value — the 0→0 case
         # (the common NORMAL cycle) must not spam the bus.
         if (self._last_force_discharge_w is not None
@@ -372,6 +381,7 @@ class BatteryControlAdapter(ABC):
                 blocking=True,
             )
             self._last_force_discharge_w = watts
+            self._last_force_discharge_attempt_w = None
             if self._force_discharge_failures:
                 # Recovered — say so, and re-arm. A transient refusal that
                 # cleared should not leave a countdown half-spent.
@@ -396,6 +406,7 @@ class BatteryControlAdapter(ABC):
                 )
             return True
         except Exception as e:  # noqa: BLE001
+            self._last_force_discharge_attempt_w = watts
             self._force_discharge_failures += 1
             limit = self.FORCE_DISCHARGE_FAILURE_LIMIT
             if self._force_discharge_failures < limit:
