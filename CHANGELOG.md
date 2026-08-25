@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔭 **A forecast source that is still loading is no longer reported as "not
+  installed"** (#819): after choosing a source, diagnostics could show a
+  warning claiming the integration was missing — while that same integration
+  was selected, working, and supplying the forecast values on screen. SEM
+  checks for your chosen source the moment it starts, which can be before a
+  slower forecast integration has finished loading; it already retried and
+  recovered, but the alarming line was written and the recovery was not. It
+  now stays quiet while it retries, says something only if the source really
+  never appears, and records when it does turn up.
+
 - ⬆️ **SEM now requires Home Assistant 2026.2.0 or newer** (#836): the old
   minimum was 2025.1.0, a version no SEM user has ever reported running — of
   62 issues that state a Home Assistant version, the oldest is 2026.4.3 and
