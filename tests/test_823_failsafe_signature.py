@@ -150,3 +150,29 @@ class TestRecovery:
         assert ActionKind.REPORT_FAILSAFE_SUSPECTED not in [a.kind for a in acts1]
         acts2 = _stop_then_reenable(rec, 13000.0, 600.0)
         assert ActionKind.REPORT_FAILSAFE_SUSPECTED in [a.kind for a in acts2]
+
+
+class TestStopNotTakingIsNotAFailsafe:
+    """The false positive the full suite caught: a box that NEVER stops
+    drawing against SEM's stop produced cycle-cadence gaps of 1-2 s, and the
+    tolerance floor called them constant. That is a different fault with its
+    own surfaces (#548 stop-not-taking, #763 stop war). The failsafe
+    signature requires the stop to have TAKEN — a settle between the disable
+    and the return — and a minute-scale interval, because no real controller
+    timeout is under 60 s."""
+
+    def test_continuous_drawing_never_names_a_failsafe(self):
+        rec = _rec()
+        for i in range(1, 30):
+            acts = rec.reconcile(DesiredState.OFF, 0,
+                                 _obs(charging=True, power=4100.0),
+                                 now=float(i))
+            assert ActionKind.REPORT_FAILSAFE_SUSPECTED not in \
+                [a.kind for a in acts], f"cycle {i} misdiagnosed (#823/#548)"
+
+    def test_sub_minute_returns_are_not_a_failsafe(self):
+        """A car that re-tries 30 s after the stop is a car, not a timeout."""
+        rec = _rec()
+        _stop_then_reenable(rec, 1000.0, 30.0)
+        acts = _stop_then_reenable(rec, 2000.0, 30.0)
+        assert ActionKind.REPORT_FAILSAFE_SUSPECTED not in [a.kind for a in acts]

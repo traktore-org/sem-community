@@ -220,6 +220,14 @@ class ChargerReconciler:
         self._failsafe_gaps: list = []
         self._failsafe_reported: bool = False
         self._failsafe_interval_s: float = 0.0
+        # (#823) A gap only counts if the stop actually TOOK in between —
+        # the box settled and then returned. Continuous drawing against a
+        # stop is a DIFFERENT fault (stop-not-taking, #548) and produced
+        # cycle-cadence "gaps" of 1-2 s that the tolerance floor happily
+        # called constant. A failsafe that never lets the stop land is
+        # indistinguishable from that case and is already reported by the
+        # stop-war / stop-not-taking surfaces.
+        self._failsafe_settled_since_disable: bool = False
         self._last_disable_issued_at: float = 0.0
         self._last_disable_at: float = float("-inf")
 
@@ -287,6 +295,8 @@ class ChargerReconciler:
         # quiet for twice the learned interval means the user fixed the box —
         # retire the Repair and re-arm the recogniser, so a later relapse is
         # named again rather than silently absorbed by a spent flag.
+        if not observed.charging and self._last_disable_issued_at:
+            self._failsafe_settled_since_disable = True
         if (self._failsafe_reported and self._failsafe_interval_s
                 and not observed.charging and self._last_disable_issued_at
                 and now - self._last_disable_issued_at
@@ -352,11 +362,18 @@ class ChargerReconciler:
                         self._stop_war_rounds = 0
                     self._stop_war_rounds += 1
                     self._stop_war_last_round_at = now
-                    # (#823) the gap from OUR stop to the box's return
-                    if self._last_disable_issued_at:
+                    # (#823) the gap from OUR stop to the box's return —
+                    # counted only when the stop actually took (a settle was
+                    # observed since the disable) and the gap is failsafe-
+                    # scale. No real controller timeout is under a minute;
+                    # sub-minute returns are cars, humans, or cycle noise.
+                    if (self._last_disable_issued_at
+                            and self._failsafe_settled_since_disable
+                            and now - self._last_disable_issued_at >= 60.0):
                         self._failsafe_gaps.append(
                             now - self._last_disable_issued_at)
                         del self._failsafe_gaps[:-4]
+                    self._failsafe_settled_since_disable = False
                     if self._stop_war_rounds > STOP_WAR_ROUNDS:
                         self._stop_war_ceasefires += 1
                         factor = min(
