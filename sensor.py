@@ -2751,7 +2751,7 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             if _fr is not None:
                 attrs["requested_source"] = getattr(_fr, "requested_source", None)
                 attrs["source_honoured"] = getattr(_fr, "honoured", True)
-                # (#840) #838 made the multi-string TOTAL right but published
+                # (#841) #838 made the multi-string TOTAL right but published
                 # only the total. The parts are what the owner recognises, and
                 # a string that has stopped reporting is visible in a list and
                 # invisible in a sum.

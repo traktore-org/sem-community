@@ -1,4 +1,4 @@
-"""#840 — a peak is not additive across PV planes.
+"""#841 — a peak is not additive across PV planes.
 
 Follow-up to #838, which taught SEM to sum a multi-string roof's forecast
 instead of reading one string and calling it the roof. That was right for
@@ -57,7 +57,7 @@ class TestPeakTakesTheLargestPlane:
         peak = r._read_role_peak_w("peak_power_today", 0.0)
         assert peak == pytest.approx(8000.0), (
             f"got {peak} — summing plane peaks claims an output the roof "
-            "never produces, because east and west peak hours apart (#840)"
+            "never produces, because east and west peak hours apart (#841)"
         )
 
     def test_a_single_plane_is_unchanged(self):
