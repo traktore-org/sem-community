@@ -138,6 +138,27 @@ class SEMBatteryCard extends SEMLitBase {
         return this._stateStr(`${this._prefix}${suffix}`);
     }
 
+    // (#820) One line: what charge pacing is doing right now. Reads the
+    // pacing sensor's ACTION token (wrote/held/restored/idle/observer) and
+    // cap — never the prose reason (translated 16 ways; rewording must not
+    // change what renders). Absent sensor = feature absent = no line.
+    _renderPacingLine() {
+        const st = this._hass?.states?.['sensor.sem_battery_charge_pacing'];
+        if (!st) return nothing;
+        const act = st.attributes?.action;
+        if (!act || act === 'idle') return nothing;
+        const capW = Number(st.state);
+        const cap = Number.isFinite(capW) && capW > 0
+            ? `${(capW / 1000).toFixed(1)} kW` : '';
+        const key = act === 'observer' ? 'pacing_observer'
+            : (act === 'restored' ? 'pacing_restored' : 'pacing_active');
+        return html`
+            <div class="tonight-row" style="opacity:.85">
+                <span>${this._t('charge_pacing')}</span>
+                <span>${this._t(key)}${cap ? ` · ${cap}` : ''}</span>
+            </div>`;
+    }
+
     _fmt(val, decimals = 1) {
         if (val == null || isNaN(val)) return '—';
         return val.toFixed(decimals);
@@ -444,6 +465,7 @@ class SEMBatteryCard extends SEMLitBase {
                         ${pips.map((on) => html`<i class="${on ? 'on' : ''}"></i>`)}
                     </div>` : nothing}
                 <div class="tonight-why">${a.why || ''}</div>
+                ${this._renderPacingLine()}
                 ${rows.length ? html`
                     <div class="tonight-work">
                         ${rows.map(([k, v]) => html`

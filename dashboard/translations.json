@@ -1444,7 +1444,11 @@
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
     "forecast_per_string_total": "Total across {n} strings",
-    "forecast_per_string_today": "Forecast today"
+    "forecast_per_string_today": "Forecast today",
+    "charge_pacing": "Charge pacing",
+    "pacing_active": "pacing",
+    "pacing_observer": "would pace (observer)",
+    "pacing_restored": "released"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -2891,7 +2895,11 @@
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
     "forecast_per_string_total": "Total across {n} strings",
-    "forecast_per_string_today": "Forecast today"
+    "forecast_per_string_today": "Forecast today",
+    "charge_pacing": "Charge pacing",
+    "pacing_active": "pacing",
+    "pacing_observer": "would pace (observer)",
+    "pacing_restored": "released"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -4338,7 +4346,11 @@
     "forecast_planes_summed": "Summiert über {n} Dachflächen.",
     "forecast_per_string_title": "Pro String",
     "forecast_per_string_total": "Summe über {n} Strings",
-    "forecast_per_string_today": "Prognose heute"
+    "forecast_per_string_today": "Prognose heute",
+    "charge_pacing": "Ladetempo",
+    "pacing_active": "taktet",
+    "pacing_observer": "würde takten (Beobachter)",
+    "pacing_restored": "freigegeben"
   },
   "en": {
     "% of limit": "% of limit",
@@ -5785,7 +5797,11 @@
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
     "forecast_per_string_total": "Total across {n} strings",
-    "forecast_per_string_today": "Forecast today"
+    "forecast_per_string_today": "Forecast today",
+    "charge_pacing": "Charge pacing",
+    "pacing_active": "pacing",
+    "pacing_observer": "would pace (observer)",
+    "pacing_restored": "released"
   },
   "es": {
     "% of limit": "% del límite",
@@ -7232,7 +7248,11 @@
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
     "forecast_per_string_total": "Total across {n} strings",
-    "forecast_per_string_today": "Forecast today"
+    "forecast_per_string_today": "Forecast today",
+    "charge_pacing": "Charge pacing",
+    "pacing_active": "pacing",
+    "pacing_observer": "would pace (observer)",
+    "pacing_restored": "released"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -8679,7 +8699,11 @@
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
     "forecast_per_string_total": "Total across {n} strings",
-    "forecast_per_string_today": "Forecast today"
+    "forecast_per_string_today": "Forecast today",
+    "charge_pacing": "Charge pacing",
+    "pacing_active": "pacing",
+    "pacing_observer": "would pace (observer)",
+    "pacing_restored": "released"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -10126,7 +10150,11 @@
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
     "forecast_per_string_total": "Total across {n} strings",
-    "forecast_per_string_today": "Forecast today"
+    "forecast_per_string_today": "Forecast today",
+    "charge_pacing": "Charge pacing",
+    "pacing_active": "pacing",
+    "pacing_observer": "would pace (observer)",
+    "pacing_restored": "released"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -11573,7 +11601,11 @@
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
     "forecast_per_string_total": "Total across {n} strings",
-    "forecast_per_string_today": "Forecast today"
+    "forecast_per_string_today": "Forecast today",
+    "charge_pacing": "Charge pacing",
+    "pacing_active": "pacing",
+    "pacing_observer": "would pace (observer)",
+    "pacing_restored": "released"
   },
   "it": {
     "% of limit": "% del limite",
@@ -13020,7 +13052,11 @@
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
     "forecast_per_string_total": "Total across {n} strings",
-    "forecast_per_string_today": "Forecast today"
+    "forecast_per_string_today": "Forecast today",
+    "charge_pacing": "Charge pacing",
+    "pacing_active": "pacing",
+    "pacing_observer": "would pace (observer)",
+    "pacing_restored": "released"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -14467,7 +14503,11 @@
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
     "forecast_per_string_total": "Total across {n} strings",
-    "forecast_per_string_today": "Forecast today"
+    "forecast_per_string_today": "Forecast today",
+    "charge_pacing": "Charge pacing",
+    "pacing_active": "pacing",
+    "pacing_observer": "would pace (observer)",
+    "pacing_restored": "released"
   },
   "no": {
     "% of limit": "% av grense",
@@ -15914,7 +15954,11 @@
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
     "forecast_per_string_total": "Total across {n} strings",
-    "forecast_per_string_today": "Forecast today"
+    "forecast_per_string_today": "Forecast today",
+    "charge_pacing": "Charge pacing",
+    "pacing_active": "pacing",
+    "pacing_observer": "would pace (observer)",
+    "pacing_restored": "released"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -17361,7 +17405,11 @@
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
     "forecast_per_string_total": "Total across {n} strings",
-    "forecast_per_string_today": "Forecast today"
+    "forecast_per_string_today": "Forecast today",
+    "charge_pacing": "Charge pacing",
+    "pacing_active": "pacing",
+    "pacing_observer": "would pace (observer)",
+    "pacing_restored": "released"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -18808,7 +18856,11 @@
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
     "forecast_per_string_total": "Total across {n} strings",
-    "forecast_per_string_today": "Forecast today"
+    "forecast_per_string_today": "Forecast today",
+    "charge_pacing": "Charge pacing",
+    "pacing_active": "pacing",
+    "pacing_observer": "would pace (observer)",
+    "pacing_restored": "released"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -20255,7 +20307,11 @@
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
     "forecast_per_string_total": "Total across {n} strings",
-    "forecast_per_string_today": "Forecast today"
+    "forecast_per_string_today": "Forecast today",
+    "charge_pacing": "Charge pacing",
+    "pacing_active": "pacing",
+    "pacing_observer": "would pace (observer)",
+    "pacing_restored": "released"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -21702,7 +21758,11 @@
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
     "forecast_per_string_total": "Total across {n} strings",
-    "forecast_per_string_today": "Forecast today"
+    "forecast_per_string_today": "Forecast today",
+    "charge_pacing": "Charge pacing",
+    "pacing_active": "pacing",
+    "pacing_observer": "would pace (observer)",
+    "pacing_restored": "released"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -23149,6 +23209,10 @@
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
     "forecast_per_string_total": "Total across {n} strings",
-    "forecast_per_string_today": "Forecast today"
+    "forecast_per_string_today": "Forecast today",
+    "charge_pacing": "Charge pacing",
+    "pacing_active": "pacing",
+    "pacing_observer": "would pace (observer)",
+    "pacing_restored": "released"
   }
 }
