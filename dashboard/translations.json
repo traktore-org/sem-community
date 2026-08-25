@@ -1405,7 +1405,10 @@
     "config_retention_cleanup": "Vyčistit nyní",
     "config_help_retention_cleanup": "Vyčistí historii stavu SEM nyní podle nastavení výše. Senzory v grafech — energie, výkon, vše se statistikou — se nikdy nedotkne.",
     "config_retention_off": "Vypnuto — rozhoduje Home Assistant",
-    "config_retention_unit_days": "dní"
+    "config_retention_unit_days": "dní",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_today": "Forecast today",
+    "forecast_per_string_total": "Total across {n} strings"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -2813,7 +2816,10 @@
     "config_retention_cleanup": "Ryd op nu",
     "config_help_retention_cleanup": "Ryd SEM's statushistorik nu med opbevaringen ovenfor. Sensorer i grafer — energi, effekt, alt med statistik — røres aldrig.",
     "config_retention_off": "Fra — Home Assistant bestemmer",
-    "config_retention_unit_days": "dage"
+    "config_retention_unit_days": "dage",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_today": "Forecast today",
+    "forecast_per_string_total": "Total across {n} strings"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -4221,7 +4227,10 @@
     "config_retention_cleanup": "Jetzt aufräumen",
     "config_help_retention_cleanup": "Den SEM-Statusverlauf jetzt bereinigen, mit der oben gewählten Aufbewahrung. Sensoren mit Diagrammen — Energie, Leistung, alles mit Statistik — werden nie angefasst.",
     "config_retention_off": "Aus — Home Assistant entscheidet",
-    "config_retention_unit_days": "Tage"
+    "config_retention_unit_days": "Tage",
+    "forecast_per_string_title": "Pro String",
+    "forecast_per_string_today": "Prognose heute",
+    "forecast_per_string_total": "Summe über {n} Strings"
   },
   "en": {
     "% of limit": "% of limit",
@@ -5629,7 +5638,10 @@
     "config_retention_cleanup": "Clean up now",
     "config_help_retention_cleanup": "Purge SEM's status history right now, using the retention above. Sensors that are charted — energy, power, anything with statistics — are never touched.",
     "config_retention_off": "Off — Home Assistant decides",
-    "config_retention_unit_days": "days"
+    "config_retention_unit_days": "days",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_today": "Forecast today",
+    "forecast_per_string_total": "Total across {n} strings"
   },
   "es": {
     "% of limit": "% del límite",
@@ -7037,7 +7049,10 @@
     "config_retention_cleanup": "Limpiar ahora",
     "config_help_retention_cleanup": "Purga ahora el historial de estado de SEM con la retención de arriba. Los sensores que se grafican — energía, potencia, todo con estadísticas — nunca se tocan.",
     "config_retention_off": "Desactivado — decide Home Assistant",
-    "config_retention_unit_days": "días"
+    "config_retention_unit_days": "días",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_today": "Forecast today",
+    "forecast_per_string_total": "Total across {n} strings"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -8445,7 +8460,10 @@
     "config_retention_cleanup": "Siivoa nyt",
     "config_help_retention_cleanup": "Siivoa SEM:n tilahistoria nyt yllä valitulla säilytyksellä. Kaavioissa näkyviin antureihin — energia, teho, kaikki tilastolliset — ei kosketa koskaan.",
     "config_retention_off": "Pois — Home Assistant päättää",
-    "config_retention_unit_days": "päivää"
+    "config_retention_unit_days": "päivää",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_today": "Forecast today",
+    "forecast_per_string_total": "Total across {n} strings"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -9853,7 +9871,10 @@
     "config_retention_cleanup": "Nettoyer maintenant",
     "config_help_retention_cleanup": "Purger maintenant l'historique d'état de SEM, selon la durée choisie ci-dessus. Les capteurs tracés — énergie, puissance, tout ce qui a des statistiques — ne sont jamais touchés.",
     "config_retention_off": "Désactivé — Home Assistant décide",
-    "config_retention_unit_days": "jours"
+    "config_retention_unit_days": "jours",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_today": "Forecast today",
+    "forecast_per_string_total": "Total across {n} strings"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -11261,7 +11282,10 @@
     "config_retention_cleanup": "Takarítás most",
     "config_help_retention_cleanup": "Törli a SEM állapotelőzményeit a fenti megőrzéssel. A grafikonon szereplő érzékelőket — energia, teljesítmény, minden statisztikás — soha nem érinti.",
     "config_retention_off": "Ki — a Home Assistant dönt",
-    "config_retention_unit_days": "nap"
+    "config_retention_unit_days": "nap",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_today": "Forecast today",
+    "forecast_per_string_total": "Total across {n} strings"
   },
   "it": {
     "% of limit": "% del limite",
@@ -12669,7 +12693,10 @@
     "config_retention_cleanup": "Pulisci ora",
     "config_help_retention_cleanup": "Elimina ora la cronologia di stato di SEM secondo la conservazione scelta sopra. I sensori nei grafici — energia, potenza, tutto ciò che ha statistiche — non vengono mai toccati.",
     "config_retention_off": "Disattivato — decide Home Assistant",
-    "config_retention_unit_days": "giorni"
+    "config_retention_unit_days": "giorni",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_today": "Forecast today",
+    "forecast_per_string_total": "Total across {n} strings"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -14077,7 +14104,10 @@
     "config_retention_cleanup": "Nu opruimen",
     "config_help_retention_cleanup": "Ruim de SEM-statusgeschiedenis nu op met de bewaartermijn hierboven. Sensoren met grafieken — energie, vermogen, alles met statistiek — worden nooit aangeraakt.",
     "config_retention_off": "Uit — Home Assistant beslist",
-    "config_retention_unit_days": "dagen"
+    "config_retention_unit_days": "dagen",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_today": "Forecast today",
+    "forecast_per_string_total": "Total across {n} strings"
   },
   "no": {
     "% of limit": "% av grense",
@@ -15485,7 +15515,10 @@
     "config_retention_cleanup": "Rydd opp nå",
     "config_help_retention_cleanup": "Rydd SEMs statushistorikk nå med oppbevaringen over. Sensorer i grafer — energi, effekt, alt med statistikk — røres aldri.",
     "config_retention_off": "Av — Home Assistant bestemmer",
-    "config_retention_unit_days": "dager"
+    "config_retention_unit_days": "dager",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_today": "Forecast today",
+    "forecast_per_string_total": "Total across {n} strings"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -16893,7 +16926,10 @@
     "config_retention_cleanup": "Wyczyść teraz",
     "config_help_retention_cleanup": "Wyczyść teraz historię stanu SEM zgodnie z powyższym ustawieniem. Czujniki na wykresach — energia, moc, wszystko ze statystykami — nigdy nie są ruszane.",
     "config_retention_off": "Wyłączone — decyduje Home Assistant",
-    "config_retention_unit_days": "dni"
+    "config_retention_unit_days": "dni",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_today": "Forecast today",
+    "forecast_per_string_total": "Total across {n} strings"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -18301,7 +18337,10 @@
     "config_retention_cleanup": "Limpar agora",
     "config_help_retention_cleanup": "Purgar agora o histórico de estado do SEM com a retenção acima. Sensores com gráficos — energia, potência, tudo com estatísticas — nunca são tocados.",
     "config_retention_off": "Desligado — o Home Assistant decide",
-    "config_retention_unit_days": "dias"
+    "config_retention_unit_days": "dias",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_today": "Forecast today",
+    "forecast_per_string_total": "Total across {n} strings"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -19709,7 +19748,10 @@
     "config_retention_cleanup": "Curăță acum",
     "config_help_retention_cleanup": "Curăță acum istoricul de stare SEM cu retenția de mai sus. Senzorii din grafice — energie, putere, tot ce are statistici — nu sunt atinși niciodată.",
     "config_retention_off": "Oprit — decide Home Assistant",
-    "config_retention_unit_days": "zile"
+    "config_retention_unit_days": "zile",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_today": "Forecast today",
+    "forecast_per_string_total": "Total across {n} strings"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -21117,7 +21159,10 @@
     "config_retention_cleanup": "Rensa nu",
     "config_help_retention_cleanup": "Rensa SEM:s statushistorik nu med lagringstiden ovan. Sensorer som visas i diagram — energi, effekt, allt med statistik — rörs aldrig.",
     "config_retention_off": "Av — Home Assistant bestämmer",
-    "config_retention_unit_days": "dagar"
+    "config_retention_unit_days": "dagar",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_today": "Forecast today",
+    "forecast_per_string_total": "Total across {n} strings"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -22525,6 +22570,9 @@
     "config_retention_cleanup": "立即清理",
     "config_help_retention_cleanup": "按上面的保留时长立即清理 SEM 的状态历史。图表中的传感器——能源、功率、任何有统计数据的——都不会被触及。",
     "config_retention_off": "关闭——由 Home Assistant 决定",
-    "config_retention_unit_days": "天"
+    "config_retention_unit_days": "天",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_today": "Forecast today",
+    "forecast_per_string_total": "Total across {n} strings"
   }
 }

@@ -2751,6 +2751,16 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             if _fr is not None:
                 attrs["requested_source"] = getattr(_fr, "requested_source", None)
                 attrs["source_honoured"] = getattr(_fr, "honoured", True)
+                # (#840) #838 made the multi-string TOTAL right but published
+                # only the total. The parts are what the owner recognises, and
+                # a string that has stopped reporting is visible in a list and
+                # invisible in a sum.
+                try:
+                    planes = _fr.plane_breakdown()
+                    attrs["planes"] = len(planes)
+                    attrs["planes_today"] = planes
+                except Exception:  # noqa: BLE001
+                    pass
         elif self.entity_description.key == "diag_charger_control":
             # (#814 Pillar B) the detection evidence report rides the charger
             # control diag sensor — the Config tab's Detected-hardware section
