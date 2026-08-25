@@ -1,0 +1,48 @@
+name: Release asset
+
+# Attach the HACS download zip to a published release (#834).
+#
+# WHY: HACS's "Downloads" column is the sum of a release's ASSET download
+# counts. A source-only repository has no assets, so HACS renders "-" — which
+# is what SEM showed for its whole life. The asset is the only way to be
+# counted.
+#
+# WHY HERE AND NOT IN THE RELEASE SCRIPTS: releases are cut from three places
+# — ~/bin/sem-daily-beta.sh, ~/bin/sem-autopilot.sh, and create-release.yml.
+# Hanging the build off `release: published` means all three are covered
+# without any of them knowing this exists, so a fourth path cannot forget.
+#
+# THE EXCEPTION, HANDLED SEPARATELY: a release created with the default
+# GITHUB_TOKEN does NOT fire `release: published` (GitHub suppresses
+# token-triggered chains — create-release.yml's own header says so). That path
+# therefore uploads the asset inline; both call the same build script so the
+# artifact cannot diverge.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  attach-zip:
+    name: Build and attach solar_energy_management.zip
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Build the zip
+        run: bash scripts/build_release_zip.sh solar_energy_management.zip
+
+      - name: Verify it is installable before publishing it
+        run: python3 scripts/verify_release_zip.py solar_energy_management.zip
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            solar_energy_management.zip --clobber

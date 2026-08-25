@@ -10,6 +10,10 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
 from .types import FleetEvPower, PowerReadings
+from .charger_adapters.status_enum import (
+    classify_charger_status,
+    is_cable_present,
+)
 from .sign_audit import CounterCorrelationAudit, SplitSensorExclusivityAudit
 from .units import (
     energy_state_to_kwh,
@@ -3342,28 +3346,22 @@ class SensorReader:
             return True
         if s in ("off", "unknown", "unavailable"):
             return False
-        # Regular sensor status values (Easee, Wallbox, OCPP, Ohme, Alfen, etc.)
-        if name == "ev_plug" and s in (
-            "connected", "ready_to_charge", "awaiting_start",
-            "awaiting_authorization", "charging", "completed", "ready",
-            # OCPP: Preparing/Charging/SuspendedEV mean EV is plugged in
-            "preparing", "suspended_ev", "suspended_evse", "finishing",
-            # Ohme
-            "plugged in",
-            # Alfen
-            "ev connected", "charging power on",
-            # Peblar
-            # ("connected" already listed above)
-            # Blue Current
-            # ("connected" already listed above)
-        ):
-            return True
-        if name == "ev_charging" and s in (
-            "charging",
-            # Alfen
-            "charging power on",
-        ):
-            return True
+        # Regular sensor status values (Easee, Wallbox, OCPP, Ohme, Alfen, …).
+        # #833: these used to be two hardcoded tuples here, which drifted from
+        # the cross-brand vocabulary in ``status_enum.py`` — the plug tuple
+        # lost "paused" and "locked", so a Wallbox sitting idle-but-plugged
+        # read as "no car" and no session ever started (discussion #821). Both
+        # readers now delegate, so one place answers per brand and the lists
+        # cannot disagree again. Unrecognised → fall through to the numeric
+        # heuristic below, exactly as before.
+        if name == "ev_plug":
+            present = is_cable_present(s)
+            if present is not None:
+                return present
+        elif name == "ev_charging":
+            status = classify_charger_status(s)
+            if status != "unknown":
+                return status == "charging"
         # Numeric: treat > 0 as True (e.g. power sensor as charging indicator)
         try:
             return float(s) > 0
