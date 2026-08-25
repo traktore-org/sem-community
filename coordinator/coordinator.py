@@ -10293,6 +10293,96 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     # ``energy_since_full``), so this only bounds the loop and the log noise.
     MAX_DECAY_CATCHUP_DAYS = 7
 
+    def _record_source_ledgers(self, now_time, energy, today_s, today) -> None:
+        """(#822) Score every installed forecast source against reality.
+
+        One ``ForecastLedger`` per source, settled from the same actual as the
+        active one, so ``trust()`` answers "how good is THIS source on THIS
+        roof" with the maths #778 already proved out. No new statistics, no
+        normalisation, and nothing here re-points the reader — comparing a
+        source must not change which one is in use.
+        """
+        from datetime import timedelta
+
+        from .forecast_ledger import ForecastLedger
+
+        reader = getattr(self, "_forecast_reader", None)
+        if reader is None or not hasattr(reader, "peek_sources"):
+            return
+
+        ledgers = getattr(self, "_source_ledgers", None)
+        if ledgers is None:
+            raw = {}
+            if self._storage is not None:
+                try:
+                    raw = self._storage.get_source_ledgers_state() or {}
+                except Exception:  # noqa: BLE001
+                    raw = {}
+            ledgers = {name: ForecastLedger.from_dict(state or {})
+                       for name, state in raw.items()}
+            self._source_ledgers = ledgers
+
+        actual = getattr(energy, "daily_solar", None)
+
+        seen = reader.peek_sources()
+        for name in seen:
+            led = ledgers.get(name)
+            if led is None:
+                led = ledgers[name] = ForecastLedger()
+            if actual is not None:
+                led.settle(today_s, actual)
+
+        # Record the horizons once a day, and only once SUCCESSFULLY — the
+        # same rule the active ledger learned the hard way (#778): marking the
+        # day done before anything was written burns it permanently.
+        if getattr(self, "_source_ledger_day", None) == today_s:
+            return
+        recorded = 0
+        for name, values in seen.items():
+            led = ledgers[name]
+            for horizon, key in ((0, "today_kwh"), (1, "tomorrow_kwh")):
+                value = values.get(key)
+                # 0.0 means "this source does not publish that far"; recording
+                # it would teach the ledger a lie.
+                if value:
+                    led.record(str(today + timedelta(days=horizon)),
+                               horizon, value)
+                    recorded += 1
+        if not recorded:
+            return
+        self._source_ledger_day = today_s
+        if self._storage is not None:
+            try:
+                self._storage.set_source_ledgers_state(
+                    {n: l.to_dict() for n, l in ledgers.items()})
+            except (AttributeError, TypeError, ValueError) as err:
+                _LOGGER.warning("source ledgers not persisted: %s", err)
+        _LOGGER.info(
+            "#822 source ledgers: recorded %d horizon(s) across %d source(s) "
+            "for %s — %s",
+            recorded, len(seen), today_s,
+            {n: v.get("today_kwh") for n, v in seen.items()},
+        )
+
+    def source_accuracy(self) -> dict:
+        """(#822) Per-source trust, for the card and the diagnostics.
+
+        ``None`` for a source with too few settled days — the ledger refuses
+        to score on thin evidence and that refusal must reach the user rather
+        than being rendered as a confident number.
+        """
+        out = {}
+        for name, led in (getattr(self, "_source_ledgers", None) or {}).items():
+            try:
+                out[name] = {
+                    "trust_today": led.trust(0),
+                    "trust_tomorrow": led.trust(1),
+                    "settled_days": len(getattr(led, "_days", {}) or {}),
+                }
+            except Exception:  # noqa: BLE001
+                continue
+        return out
+
     def _record_forecast_horizons(
         self, forecast_data, energy, now_time, power=None,
     ) -> None:
@@ -10369,6 +10459,26 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     self._storage.set_forecast_ledger_state(led.to_dict())
                 except (AttributeError, TypeError, ValueError) as _se:
                     _LOGGER.warning("forecast ledger not persisted: %s", _se)
+
+        # (#822) The same question, asked of every installed source.
+        #
+        # Users install two or three forecast integrations to find out which
+        # one is right for their roof, and SEM has been picking one and
+        # ignoring the rest. The obvious comparison — put their numbers side
+        # by side — is worthless: on the dev rig they read 125.6 / 47.2 / 20.0
+        # kWh for one day, and that 6x spread was three DIFFERENT CONFIGURED
+        # ARRAYS, not three opinions. SEM cannot see how a third-party
+        # integration was configured, so it cannot normalise them.
+        #
+        # What it can do is score each against what the roof actually
+        # produced — exactly what the ledger above already does for the active
+        # source. One ledger per source, same settle, same trust maths: a
+        # source configured for the wrong array scores badly and says so, and
+        # the answer is measured rather than assumed.
+        try:
+            self._record_source_ledgers(now_time, energy, today_s, today)
+        except Exception:  # noqa: BLE001 — comparison never costs a cycle
+            _LOGGER.debug("source ledgers skipped", exc_info=True)
 
         # (#778 phase 1) Publish the evidence, act on none of it. These are the
         # quantities honestly computable today; the spendable budget itself
