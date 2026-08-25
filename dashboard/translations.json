@@ -1432,7 +1432,18 @@
     "zone_legend_assist": "Pomoc EV",
     "zone_legend_buffer": "Buffer",
     "zone_legend_reserve": "Rezerva",
-    "zone_legend_surplus": "Přebytek"
+    "zone_legend_surplus": "Přebytek",
+    "forecast_compare_title": "Forecast sources",
+    "forecast_compare_help": "Each source's own figure, next to how well it has actually predicted your roof. Sources may be configured for different array sizes, so compare the accuracy rather than the kWh.",
+    "forecast_compare_source": "Source",
+    "forecast_compare_today": "Says today",
+    "forecast_compare_accuracy": "Accuracy",
+    "forecast_in_use": "in use",
+    "forecast_still_learning": "still learning",
+    "forecast_days_of_evidence": "days of evidence",
+    "forecast_planes_summed": "Summed across {n} planes of your roof.",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_total": "Total across {n} strings"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -2867,7 +2878,18 @@
     "zone_legend_assist": "EV-hjælp",
     "zone_legend_buffer": "Buffer",
     "zone_legend_reserve": "Reserve",
-    "zone_legend_surplus": "Overskud"
+    "zone_legend_surplus": "Overskud",
+    "forecast_compare_title": "Forecast sources",
+    "forecast_compare_help": "Each source's own figure, next to how well it has actually predicted your roof. Sources may be configured for different array sizes, so compare the accuracy rather than the kWh.",
+    "forecast_compare_source": "Source",
+    "forecast_compare_today": "Says today",
+    "forecast_compare_accuracy": "Accuracy",
+    "forecast_in_use": "in use",
+    "forecast_still_learning": "still learning",
+    "forecast_days_of_evidence": "days of evidence",
+    "forecast_planes_summed": "Summed across {n} planes of your roof.",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_total": "Total across {n} strings"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -4302,7 +4324,18 @@
     "zone_legend_assist": "EV-Hilfe",
     "zone_legend_buffer": "Puffer",
     "zone_legend_reserve": "Reserve",
-    "zone_legend_surplus": "Überschuss"
+    "zone_legend_surplus": "Überschuss",
+    "forecast_compare_title": "Prognosequellen",
+    "forecast_compare_help": "Der Wert jeder Quelle, daneben wie gut sie Ihr Dach bisher wirklich vorhergesagt hat. Quellen können für unterschiedliche Anlagengrößen konfiguriert sein — vergleichen Sie daher die Genauigkeit, nicht die kWh.",
+    "forecast_compare_source": "Quelle",
+    "forecast_compare_today": "Sagt heute",
+    "forecast_compare_accuracy": "Genauigkeit",
+    "forecast_in_use": "aktiv",
+    "forecast_still_learning": "lernt noch",
+    "forecast_days_of_evidence": "Tage Datenbasis",
+    "forecast_planes_summed": "Summiert über {n} Dachflächen.",
+    "forecast_per_string_title": "Pro String",
+    "forecast_per_string_total": "Summe über {n} Strings"
   },
   "en": {
     "% of limit": "% of limit",
@@ -5737,7 +5770,18 @@
     "zone_legend_assist": "EV assist",
     "zone_legend_buffer": "Buffer",
     "zone_legend_reserve": "Reserve",
-    "zone_legend_surplus": "Surplus"
+    "zone_legend_surplus": "Surplus",
+    "forecast_compare_title": "Forecast sources",
+    "forecast_compare_help": "Each source's own figure, next to how well it has actually predicted your roof. Sources may be configured for different array sizes, so compare the accuracy rather than the kWh.",
+    "forecast_compare_source": "Source",
+    "forecast_compare_today": "Says today",
+    "forecast_compare_accuracy": "Accuracy",
+    "forecast_in_use": "in use",
+    "forecast_still_learning": "still learning",
+    "forecast_days_of_evidence": "days of evidence",
+    "forecast_planes_summed": "Summed across {n} planes of your roof.",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_total": "Total across {n} strings"
   },
   "es": {
     "% of limit": "% del límite",
@@ -7172,7 +7216,18 @@
     "zone_legend_assist": "Asist. VE",
     "zone_legend_buffer": "Búfer",
     "zone_legend_reserve": "Reserva",
-    "zone_legend_surplus": "Excedente"
+    "zone_legend_surplus": "Excedente",
+    "forecast_compare_title": "Forecast sources",
+    "forecast_compare_help": "Each source's own figure, next to how well it has actually predicted your roof. Sources may be configured for different array sizes, so compare the accuracy rather than the kWh.",
+    "forecast_compare_source": "Source",
+    "forecast_compare_today": "Says today",
+    "forecast_compare_accuracy": "Accuracy",
+    "forecast_in_use": "in use",
+    "forecast_still_learning": "still learning",
+    "forecast_days_of_evidence": "days of evidence",
+    "forecast_planes_summed": "Summed across {n} planes of your roof.",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_total": "Total across {n} strings"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -8607,7 +8662,18 @@
     "zone_legend_assist": "EV-apu",
     "zone_legend_buffer": "Puskuri",
     "zone_legend_reserve": "Varaus",
-    "zone_legend_surplus": "Ylijäämä"
+    "zone_legend_surplus": "Ylijäämä",
+    "forecast_compare_title": "Forecast sources",
+    "forecast_compare_help": "Each source's own figure, next to how well it has actually predicted your roof. Sources may be configured for different array sizes, so compare the accuracy rather than the kWh.",
+    "forecast_compare_source": "Source",
+    "forecast_compare_today": "Says today",
+    "forecast_compare_accuracy": "Accuracy",
+    "forecast_in_use": "in use",
+    "forecast_still_learning": "still learning",
+    "forecast_days_of_evidence": "days of evidence",
+    "forecast_planes_summed": "Summed across {n} planes of your roof.",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_total": "Total across {n} strings"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -10042,7 +10108,18 @@
     "zone_legend_assist": "Assist. VE",
     "zone_legend_buffer": "Tampon",
     "zone_legend_reserve": "Réserve",
-    "zone_legend_surplus": "Surplus"
+    "zone_legend_surplus": "Surplus",
+    "forecast_compare_title": "Forecast sources",
+    "forecast_compare_help": "Each source's own figure, next to how well it has actually predicted your roof. Sources may be configured for different array sizes, so compare the accuracy rather than the kWh.",
+    "forecast_compare_source": "Source",
+    "forecast_compare_today": "Says today",
+    "forecast_compare_accuracy": "Accuracy",
+    "forecast_in_use": "in use",
+    "forecast_still_learning": "still learning",
+    "forecast_days_of_evidence": "days of evidence",
+    "forecast_planes_summed": "Summed across {n} planes of your roof.",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_total": "Total across {n} strings"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -11477,7 +11554,18 @@
     "zone_legend_assist": "EV-segéd",
     "zone_legend_buffer": "Puffer",
     "zone_legend_reserve": "Tartalék",
-    "zone_legend_surplus": "Többlet"
+    "zone_legend_surplus": "Többlet",
+    "forecast_compare_title": "Forecast sources",
+    "forecast_compare_help": "Each source's own figure, next to how well it has actually predicted your roof. Sources may be configured for different array sizes, so compare the accuracy rather than the kWh.",
+    "forecast_compare_source": "Source",
+    "forecast_compare_today": "Says today",
+    "forecast_compare_accuracy": "Accuracy",
+    "forecast_in_use": "in use",
+    "forecast_still_learning": "still learning",
+    "forecast_days_of_evidence": "days of evidence",
+    "forecast_planes_summed": "Summed across {n} planes of your roof.",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_total": "Total across {n} strings"
   },
   "it": {
     "% of limit": "% del limite",
@@ -12912,7 +13000,18 @@
     "zone_legend_assist": "Assist. VE",
     "zone_legend_buffer": "Buffer",
     "zone_legend_reserve": "Riserva",
-    "zone_legend_surplus": "Surplus"
+    "zone_legend_surplus": "Surplus",
+    "forecast_compare_title": "Forecast sources",
+    "forecast_compare_help": "Each source's own figure, next to how well it has actually predicted your roof. Sources may be configured for different array sizes, so compare the accuracy rather than the kWh.",
+    "forecast_compare_source": "Source",
+    "forecast_compare_today": "Says today",
+    "forecast_compare_accuracy": "Accuracy",
+    "forecast_in_use": "in use",
+    "forecast_still_learning": "still learning",
+    "forecast_days_of_evidence": "days of evidence",
+    "forecast_planes_summed": "Summed across {n} planes of your roof.",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_total": "Total across {n} strings"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -14347,7 +14446,18 @@
     "zone_legend_assist": "EV-hulp",
     "zone_legend_buffer": "Buffer",
     "zone_legend_reserve": "Reserve",
-    "zone_legend_surplus": "Overschot"
+    "zone_legend_surplus": "Overschot",
+    "forecast_compare_title": "Forecast sources",
+    "forecast_compare_help": "Each source's own figure, next to how well it has actually predicted your roof. Sources may be configured for different array sizes, so compare the accuracy rather than the kWh.",
+    "forecast_compare_source": "Source",
+    "forecast_compare_today": "Says today",
+    "forecast_compare_accuracy": "Accuracy",
+    "forecast_in_use": "in use",
+    "forecast_still_learning": "still learning",
+    "forecast_days_of_evidence": "days of evidence",
+    "forecast_planes_summed": "Summed across {n} planes of your roof.",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_total": "Total across {n} strings"
   },
   "no": {
     "% of limit": "% av grense",
@@ -15782,7 +15892,18 @@
     "zone_legend_assist": "EV-hjelp",
     "zone_legend_buffer": "Buffer",
     "zone_legend_reserve": "Reserve",
-    "zone_legend_surplus": "Overskudd"
+    "zone_legend_surplus": "Overskudd",
+    "forecast_compare_title": "Forecast sources",
+    "forecast_compare_help": "Each source's own figure, next to how well it has actually predicted your roof. Sources may be configured for different array sizes, so compare the accuracy rather than the kWh.",
+    "forecast_compare_source": "Source",
+    "forecast_compare_today": "Says today",
+    "forecast_compare_accuracy": "Accuracy",
+    "forecast_in_use": "in use",
+    "forecast_still_learning": "still learning",
+    "forecast_days_of_evidence": "days of evidence",
+    "forecast_planes_summed": "Summed across {n} planes of your roof.",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_total": "Total across {n} strings"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -17217,7 +17338,18 @@
     "zone_legend_assist": "Wsparcie EV",
     "zone_legend_buffer": "Bufor",
     "zone_legend_reserve": "Rezerwa",
-    "zone_legend_surplus": "Nadwyżka"
+    "zone_legend_surplus": "Nadwyżka",
+    "forecast_compare_title": "Forecast sources",
+    "forecast_compare_help": "Each source's own figure, next to how well it has actually predicted your roof. Sources may be configured for different array sizes, so compare the accuracy rather than the kWh.",
+    "forecast_compare_source": "Source",
+    "forecast_compare_today": "Says today",
+    "forecast_compare_accuracy": "Accuracy",
+    "forecast_in_use": "in use",
+    "forecast_still_learning": "still learning",
+    "forecast_days_of_evidence": "days of evidence",
+    "forecast_planes_summed": "Summed across {n} planes of your roof.",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_total": "Total across {n} strings"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -18652,7 +18784,18 @@
     "zone_legend_assist": "Apoio VE",
     "zone_legend_buffer": "Tampão",
     "zone_legend_reserve": "Reserva",
-    "zone_legend_surplus": "Excedente"
+    "zone_legend_surplus": "Excedente",
+    "forecast_compare_title": "Forecast sources",
+    "forecast_compare_help": "Each source's own figure, next to how well it has actually predicted your roof. Sources may be configured for different array sizes, so compare the accuracy rather than the kWh.",
+    "forecast_compare_source": "Source",
+    "forecast_compare_today": "Says today",
+    "forecast_compare_accuracy": "Accuracy",
+    "forecast_in_use": "in use",
+    "forecast_still_learning": "still learning",
+    "forecast_days_of_evidence": "days of evidence",
+    "forecast_planes_summed": "Summed across {n} planes of your roof.",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_total": "Total across {n} strings"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -20087,7 +20230,18 @@
     "zone_legend_assist": "Asist. EV",
     "zone_legend_buffer": "Tampon",
     "zone_legend_reserve": "Rezervă",
-    "zone_legend_surplus": "Surplus"
+    "zone_legend_surplus": "Surplus",
+    "forecast_compare_title": "Forecast sources",
+    "forecast_compare_help": "Each source's own figure, next to how well it has actually predicted your roof. Sources may be configured for different array sizes, so compare the accuracy rather than the kWh.",
+    "forecast_compare_source": "Source",
+    "forecast_compare_today": "Says today",
+    "forecast_compare_accuracy": "Accuracy",
+    "forecast_in_use": "in use",
+    "forecast_still_learning": "still learning",
+    "forecast_days_of_evidence": "days of evidence",
+    "forecast_planes_summed": "Summed across {n} planes of your roof.",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_total": "Total across {n} strings"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -21522,7 +21676,18 @@
     "zone_legend_assist": "EV-hjälp",
     "zone_legend_buffer": "Buffert",
     "zone_legend_reserve": "Reserv",
-    "zone_legend_surplus": "Överskott"
+    "zone_legend_surplus": "Överskott",
+    "forecast_compare_title": "Forecast sources",
+    "forecast_compare_help": "Each source's own figure, next to how well it has actually predicted your roof. Sources may be configured for different array sizes, so compare the accuracy rather than the kWh.",
+    "forecast_compare_source": "Source",
+    "forecast_compare_today": "Says today",
+    "forecast_compare_accuracy": "Accuracy",
+    "forecast_in_use": "in use",
+    "forecast_still_learning": "still learning",
+    "forecast_days_of_evidence": "days of evidence",
+    "forecast_planes_summed": "Summed across {n} planes of your roof.",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_total": "Total across {n} strings"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -22957,6 +23122,17 @@
     "zone_legend_assist": "电动汽车辅助",
     "zone_legend_buffer": "缓冲",
     "zone_legend_reserve": "储备",
-    "zone_legend_surplus": "富余电量"
+    "zone_legend_surplus": "富余电量",
+    "forecast_compare_title": "Forecast sources",
+    "forecast_compare_help": "Each source's own figure, next to how well it has actually predicted your roof. Sources may be configured for different array sizes, so compare the accuracy rather than the kWh.",
+    "forecast_compare_source": "Source",
+    "forecast_compare_today": "Says today",
+    "forecast_compare_accuracy": "Accuracy",
+    "forecast_in_use": "in use",
+    "forecast_still_learning": "still learning",
+    "forecast_days_of_evidence": "days of evidence",
+    "forecast_planes_summed": "Summed across {n} planes of your roof.",
+    "forecast_per_string_title": "Per string",
+    "forecast_per_string_total": "Total across {n} strings"
   }
 }

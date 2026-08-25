@@ -558,6 +558,13 @@ class SEMStorage:
     def set_forecast_ledger_state(self, state: Dict[str, Any]) -> None:
         self._energy_data["forecast_ledger"] = dict(state)
 
+    def get_source_ledgers_state(self) -> Dict[str, Any]:
+        """(#822) One forecast ledger per INSTALLED source, keyed by name."""
+        return self._energy_data.get("forecast_source_ledgers", {})
+
+    def set_source_ledgers_state(self, state: Dict[str, Any]) -> None:
+        self._energy_data["forecast_source_ledgers"] = dict(state)
+
     def get_ev_wpa_state(self) -> Dict[str, float]:
         """Get the persisted per-charger measured-W/A EMA."""
         return self._energy_data.get("ev_wpa_ema", {})

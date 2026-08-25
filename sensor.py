@@ -2803,6 +2803,32 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             if _fr is not None:
                 attrs["requested_source"] = getattr(_fr, "requested_source", None)
                 attrs["source_honoured"] = getattr(_fr, "honoured", True)
+                # (#838) How many planes the source in use is built from.
+                # Forecast.Solar and Open-Meteo take one config entry per
+                # azimuth, so a two-plane roof is two entries — and SEM used
+                # to read one of them and call it the roof.
+                try:
+                    attrs["planes"] = len(_fr._entities_for("forecast_today"))
+                    # (#838) The parts, not only the sum — a user recognises
+                    # their roof one array at a time, and a plane reading zero
+                    # is visible here and invisible in a total.
+                    attrs["planes_today"] = _fr.plane_breakdown()
+                except Exception:  # noqa: BLE001
+                    pass
+                # (#822) What every OTHER installed source says, and how well
+                # each has actually predicted this roof. Side-by-side numbers
+                # alone would mislead — they may describe differently
+                # configured arrays — so the scores are what to read.
+                try:
+                    attrs["sources_now"] = _fr.peek_sources()
+                except Exception:  # noqa: BLE001
+                    pass
+            try:
+                accuracy = self.coordinator.source_accuracy()
+                if accuracy:
+                    attrs["source_accuracy"] = accuracy
+            except Exception:  # noqa: BLE001
+                pass
         elif self.entity_description.key == "diag_charger_control":
             # (#814 Pillar B) the detection evidence report rides the charger
             # control diag sensor — the Config tab's Detected-hardware section
