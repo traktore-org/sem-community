@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.0.0-beta.16] — 25.08.2026
+
+- 🔭 **Multiple solar forecasts, one per PV string, are now added together
+  instead of read as one** (#838): if you run a separate Forecast.Solar or
+  Open-Meteo forecast per string, SEM counted only the first one — so its
+  forecast ran far below your real array. It now sums every string's forecast
+  (today, tomorrow, remaining and current power), and one string being
+  momentarily unavailable no longer hides the rest. Solcast, which already
+  publishes a single combined total, is unchanged.
+
 - 🔭 **A forecast source that is still loading is no longer reported as "not
   installed"** (#819): after choosing a source, diagnostics could show a
   warning claiming the integration was missing — while that same integration
