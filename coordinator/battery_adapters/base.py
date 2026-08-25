@@ -47,6 +47,12 @@ class BatteryControlAdapter(ABC):
     #: few enough that a device which simply cannot do it is not asked all day.
     FORCE_DISCHARGE_FAILURE_LIMIT: int = 3
 
+    #: (#840) How long to wait between silent probes once the capability has
+    #: been withdrawn. Ten minutes turns @RienduPre's 360 failed writes an hour
+    #: into six, none of them logged — while still letting a device that
+    #: recovers do so without the user having to restart SEM to find out.
+    FORCE_DISCHARGE_RETRY_S: float = 600.0
+
     def __init__(self, hass, config: dict) -> None:
         self._hass = hass
         self._config = config
@@ -84,6 +90,8 @@ class BatteryControlAdapter(ABC):
         # (#840) The last value whose write was REFUSED. Distinct from
         # ``_last_force_discharge_w``, which records what actually landed.
         self._last_force_discharge_attempt_w: "Optional[float]" = None
+        #: Monotonic deadline before the next silent probe (#840).
+        self._force_discharge_retry_after: float = 0.0
         # de-dup writes. None = never written (so the first write of any sign
         # always goes through; a plain -1.0 sentinel would alias a real
         # negative charge setpoint on a bidirectional entity, #523).
@@ -334,10 +342,16 @@ class BatteryControlAdapter(ABC):
                 _requested, watts, self._force_discharge_entity,
                 attrs.get("min"), attrs.get("max"),
             )
-        # (#840) The device has already refused this write enough times to
-        # settle the question. Do not ask again this run.
+        # (#840) The device has refused enough times to settle the question.
+        # Ask again only occasionally, and silently: a firmware update or a
+        # cleared fault should recover on its own, but nobody needs to watch
+        # it being asked.
         if self._force_discharge_failures >= self.FORCE_DISCHARGE_FAILURE_LIMIT:
-            return False
+            import time as _time
+            now = _time.monotonic()
+            if now < self._force_discharge_retry_after:
+                return False
+            self._force_discharge_retry_after = now + self.FORCE_DISCHARGE_RETRY_S
         # (#840) Do not re-issue a write that just failed with the SAME value.
         #
         # ``command_normal`` / ``command_limit_discharge`` / ``command_off``
@@ -352,14 +366,15 @@ class BatteryControlAdapter(ABC):
         # is only assigned after a SUCCESSFUL call, so a failing write never
         # records itself and the de-dup below never engages.
         #
-        # Tracked separately from the applied value on purpose. A failed write
-        # did NOT reach the device, so recording it as "applied" would be a
-        # lie — a later genuine request for the same value would be skipped
-        # while the hardware sat somewhere else entirely. This field only
-        # answers "we just tried exactly this and it was refused".
-        if (self._last_force_discharge_attempt_w is not None
-                and abs(watts - self._last_force_discharge_attempt_w) < 100.0):
-            return False
+        # A same-value block was the first attempt at this and it was wrong:
+        # test_fd2_retry_after_failure requires a TRANSIENT failure to be
+        # retried with the same value, and it should be — a modbus blip that
+        # clears must not permanently disable export. The distinction cannot
+        # be made from the error, so it is made from persistence instead: the
+        # strike counter below withdraws the capability after
+        # FORCE_DISCHARGE_FAILURE_LIMIT consecutive refusals, and a SILENT
+        # probe every FORCE_DISCHARGE_RETRY_S lets a device that recovers say
+        # so without anyone watching the log.
         # Skip when within 100 W of the last applied value — the 0→0 case
         # (the common NORMAL cycle) must not spam the bus.
         if (self._last_force_discharge_w is not None
@@ -409,6 +424,10 @@ class BatteryControlAdapter(ABC):
             self._last_force_discharge_attempt_w = watts
             self._force_discharge_failures += 1
             limit = self.FORCE_DISCHARGE_FAILURE_LIMIT
+            if self._force_discharge_failures > limit:
+                # Past the limit this is a silent probe. It already said its
+                # piece; repeating it is the 2,364-line log (#840).
+                return False
             if self._force_discharge_failures < limit:
                 _LOGGER.warning(
                     "Battery: failed to set forcible discharge via %s "
@@ -427,5 +446,11 @@ class BatteryControlAdapter(ABC):
                     "gained the register — restart SEM to try again.",
                     self._force_discharge_entity, limit, e,
                 )
+                # Start the backoff HERE, at the moment of withdrawal —
+                # otherwise the deadline is still 0.0 and the very next cycle
+                # fires a probe, spending a strike for nothing.
+                import time as _time
+                self._force_discharge_retry_after = (
+                    _time.monotonic() + self.FORCE_DISCHARGE_RETRY_S)
                 self._raise_force_discharge_repair(str(e))
             return False
