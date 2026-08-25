@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.0.0-beta.16] — 25.08.2026
+
 - 🔇 **A battery setpoint your inverter cannot accept no longer floods the log**
   (#840): if the entity picked for forcible discharge is readable but not
   writable on your hardware, SEM retried it on **every cycle** — one reporter's
