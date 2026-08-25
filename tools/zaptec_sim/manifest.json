@@ -1,0 +1,10 @@
+{
+  "domain": "zaptec_sim",
+  "name": "Zaptec (simulated)",
+  "codeowners": ["@traktore-org"],
+  "config_flow": true,
+  "documentation": "https://github.com/traktore-org/sem-community/blob/develop/tools/zaptec_sim/README.md",
+  "iot_class": "local_push",
+  "requirements": [],
+  "version": "1.0.0"
+}

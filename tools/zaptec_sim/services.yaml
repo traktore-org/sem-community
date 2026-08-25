@@ -1,0 +1,21 @@
+plug_in:
+  name: Plug in
+  description: Connect the simulated cable.
+unplug:
+  name: Unplug
+  description: Disconnect the simulated cable.
+hard_stop:
+  name: Hard stop
+  description: >-
+    Latching stop (EVCC's CmdStopChargingFinal). Raising the current will NOT
+    resume charging afterwards — only the resume button will.
+set_phases:
+  name: Set phases
+  description: Force the installation's phase-switch threshold.
+  fields:
+    phases:
+      name: Phases
+      required: true
+      selector:
+        select:
+          options: ["1", "3"]

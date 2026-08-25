@@ -28,7 +28,7 @@ cd "$(git rev-parse --show-toplevel)"
 
 # Mirrors rsync_exclude_args (~/bin/lib/ha-api.sh). Directory prefixes and
 # exact root-level filenames.
-EXCLUDE_DIRS=(.github tests docs logo scripts .claude tmp)
+EXCLUDE_DIRS=(.github tests docs logo scripts .claude tmp tools)
 EXCLUDE_FILES=(CLAUDE.md .mcp.json .gitignore hacs.json LICENSE README.md
                KNOWN_LIMITATIONS.md CHANGELOG.md TROUBLESHOOTING.md
                USER_GUIDE.md)
