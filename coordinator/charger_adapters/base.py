@@ -13,8 +13,12 @@ adapter properties — different brands report different idle power
 """
 from __future__ import annotations
 
+import logging
+
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
+
+_LOGGER = logging.getLogger(__name__)
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
     from ..charger_types import ChargerPower
@@ -219,6 +223,27 @@ class ChargerAdapter(ABC):
         rec = getattr(self._device, "_record_actuation_failure", None)
         if rec is not None:
             rec(RuntimeError("enable switch unavailable/locked — cannot start charging"))
+
+    async def report_failsafe_suspected(self, interval_s: float) -> None:
+        """(#823) Raise the failsafe Repair for this charger.
+
+        The reconciler recognised a constant-interval self-re-enable after
+        SEM's stop. The fix is a one-time change on the box (a failsafe /
+        controller-timeout fallback setting), so the Repair carries the
+        learned interval and points there. Warn-once is the reconciler's
+        job; this only files the surface (#799: a log line is not one).
+        """
+        try:
+            from ..repair_issues import raise_charger_failsafe_suspected
+            dev = self._device
+            raise_charger_failsafe_suspected(
+                dev.hass, str(getattr(dev, "device_id", "") or
+                              getattr(dev, "charger_id", "charger")),
+                name=str(getattr(dev, "name", None) or "EV charger"),
+                interval_s=float(interval_s),
+            )
+        except Exception as e:  # noqa: BLE001 — a repair never costs a cycle
+            _LOGGER.debug("failsafe repair not raised: %s", e)
 
     def watts_for_amps(self, amps: int) -> float:
         """How much power ``amps`` corresponds to at this charger's
