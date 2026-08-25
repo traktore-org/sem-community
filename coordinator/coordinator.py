@@ -10556,6 +10556,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # means, in one place, for all three tunables.
             pessimism=self.config.get("forecast_pessimism"),
             discharge_efficiency=self.config.get("battery_discharge_efficiency"),
+            # (Build 0) measured trust on the refill relaxes the default
+            # pessimism to 1.0 — the p20 measurement does that job now.
+            refill_trusted=bool(getattr(refill, "trusted", False)),
         )
 
         # (#778 phase 6) The state a card renders, published rather than

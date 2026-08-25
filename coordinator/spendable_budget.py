@@ -97,6 +97,7 @@ def spendable_budget(
     static_floor_pct=DEFAULT_STATIC_FLOOR_PCT,
     pessimism: float = DEFAULT_PESSIMISM,
     discharge_efficiency: float = DEFAULT_DISCHARGE_EFFICIENCY,
+    refill_trusted: bool = False,
 ) -> SpendableBudget:
     """How many kWh of this battery are genuinely surplus tonight.
 
@@ -143,9 +144,18 @@ def spendable_budget(
     eff = DEFAULT_DISCHARGE_EFFICIENCY if eff is None else eff
     eff = min(max(eff, 0.05), 1.0)
     pess = _num(pessimism)
-    # Silence is the documented default, not "no margin" — the floor bug's
-    # sibling, in the same unsafe direction.
-    pess = DEFAULT_PESSIMISM if pess is None else max(pess, 1.0)
+    if pess is None:
+        # (Build 0, 25.08) Caution is not counted twice. While no measured
+        # trust backs the refill, silence means the documented 1.2 margin —
+        # the floor bug's sibling, in the same unsafe direction. Once a
+        # MEASURED p20 trust factor has been applied to the refill (bug
+        # class 52), that measurement does this margin's job, and stacking
+        # the hand guess on top of it is a budget that never opens wearing
+        # a calm face. An explicitly configured pessimism still wins in
+        # both regimes — somebody who typed it meant it.
+        pess = 1.0 if refill_trusted else DEFAULT_PESSIMISM
+    else:
+        pess = max(pess, 1.0)
 
     stored = max(0.0, soc) / 100.0 * cap
 
