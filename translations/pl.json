@@ -1511,11 +1511,27 @@
     },
     "charger_actuation_failed": {
       "title": "Ładowarka EV nie przyjmuje poleceń: {name}",
-      "description": "Ostatnie co najmniej 3 polecenia prądu wysłane przez SEM do **{name}** zostały odrzucone: `{error}`. Ładowarka NIE jest w tej chwili pod kontrolą SEM — będzie robić to, co zostało jej ostatnio nakazane (łącznie z ładowaniem pełną mocą w trybie wyłączonym). Najczęstsze przyczyny: encja sterująca ładowarki została zmieniona przez aktualizację integracji nadrzędnej albo `ev_charger_service` wskazuje usługę o innym schemacie parametrów. Sprawdź encję sterującą / usługę ładowarki w konfiguracji SEM. To zgłoszenie znika automatycznie po następnym udanym poleceniu."
+      "description": "Ostatnie co najmniej 3 polecenia prądu wysłane przez SEM do **{name}** zostały odrzucone: `{error}`. Ładowarka NIE jest w tej chwili pod kontrolą SEM — będzie robić to, co zostało jej ostatnio nakazane (łącznie z ładowaniem pełną mocą w trybie wyłączonym). Najczęstsze przyczyny: encja sterująca ładowarki została zmieniona przez aktualizację integracji nadrzędnej albo `ev_charger_service` wskazuje usługę o innym schemacie parametrów. Sprawdź encję sterującą / usługę ładowarki w konfiguracji SEM. To zgłoszenie znika automatycznie po następnym udanym poleceniu.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Report this to SEM",
+            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+          }
+        }
+      }
     },
     "charger_stop_unenforceable": {
       "title": "Nie można zatrzymać ładowarki EV: {name}",
-      "description": "SEM wydał **{name}** polecenie zatrzymania, ale żaden skonfigurowany mechanizm nie potrafi faktycznie rozłączyć stycznika — samochód nadal pobiera {power} W. Jedyne sterowanie, jakie SEM ma dla tej ładowarki, to `{entity}`, a jej minimum jest większe od 0 A, więc zapis 0 A nic nie daje (SEM nigdy nie zapisuje wartości, którą encja by odrzuciła). Jeśli masz magazyn energii, ta moc pochodzi z niego — o każdej porze dnia i nocy. Rozwiązanie: skonfiguruj dla tej ładowarki w opcjach SEM encję start/stop (`ev_start_stop_entity`), encję trybu ładowania albo usługę zatrzymania. To ostrzeżenie zniknie, gdy tylko ładowarka przestanie pobierać moc."
+      "description": "SEM wydał **{name}** polecenie zatrzymania, ale żaden skonfigurowany mechanizm nie potrafi faktycznie rozłączyć stycznika — samochód nadal pobiera {power} W. Jedyne sterowanie, jakie SEM ma dla tej ładowarki, to `{entity}`, a jej minimum jest większe od 0 A, więc zapis 0 A nic nie daje (SEM nigdy nie zapisuje wartości, którą encja by odrzuciła). Jeśli masz magazyn energii, ta moc pochodzi z niego — o każdej porze dnia i nocy. Rozwiązanie: skonfiguruj dla tej ładowarki w opcjach SEM encję start/stop (`ev_start_stop_entity`), encję trybu ładowania albo usługę zatrzymania. To ostrzeżenie zniknie, gdy tylko ładowarka przestanie pobierać moc.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Report this to SEM",
+            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+          }
+        }
+      }
     },
     "no_forecast_integration": {
       "title": "Nie wykryto integracji prognozy słonecznej",
@@ -1547,7 +1563,15 @@
     },
     "soc_cap_unenforceable": {
       "title": "Nie można wymusić limitu ładowania {target}%: {name}",
-      "description": "**{name}** ma ustawiony procentowy cel ładowania, ale pojazd w tej chwili nie raportuje stanu naładowania, więc SEM nie może zatrzymać się *dokładnie* przy **{target}%**.\n\nNie ładuje jednak na ślepo: od ostatniego rzeczywistego odczytu w tej sesji zlicza faktycznie dostarczoną energię i zatrzymuje ładowanie, gdy ta zmierzona suma osiągnie cel — przekroczenie to tylko to, co auto pobrało od tamtego odczytu. Jeśli w tej sesji nie dotarł żaden rzeczywisty odczyt (albo SEM uruchomił się ponownie w trakcie ładowania), nie ma punktu odniesienia i ładowanie trwa, aż samo auto zredukuje moc tuż przed pełnym.\n\nAby limit trafiał w punkt, podłącz **rzeczywisty czujnik SOC pojazdu** dla tej ładowarki (Konfiguracja → EV → Encja SOC pojazdu). Procent baterii na pulpicie to *szacowany* SOC SEM, celowo pomijany przy twardym limicie (może się rozjeżdżać). Ta naprawa znika automatycznie, gdy tylko znów pojawi się rzeczywisty odczyt SOC."
+      "description": "**{name}** ma ustawiony procentowy cel ładowania, ale pojazd w tej chwili nie raportuje stanu naładowania, więc SEM nie może zatrzymać się *dokładnie* przy **{target}%**.\n\nNie ładuje jednak na ślepo: od ostatniego rzeczywistego odczytu w tej sesji zlicza faktycznie dostarczoną energię i zatrzymuje ładowanie, gdy ta zmierzona suma osiągnie cel — przekroczenie to tylko to, co auto pobrało od tamtego odczytu. Jeśli w tej sesji nie dotarł żaden rzeczywisty odczyt (albo SEM uruchomił się ponownie w trakcie ładowania), nie ma punktu odniesienia i ładowanie trwa, aż samo auto zredukuje moc tuż przed pełnym.\n\nAby limit trafiał w punkt, podłącz **rzeczywisty czujnik SOC pojazdu** dla tej ładowarki (Konfiguracja → EV → Encja SOC pojazdu). Procent baterii na pulpicie to *szacowany* SOC SEM, celowo pomijany przy twardym limicie (może się rozjeżdżać). Ta naprawa znika automatycznie, gdy tylko znów pojawi się rzeczywisty odczyt SOC.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Report this to SEM",
+            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+          }
+        }
+      }
     },
     "unmanaged_charger_found": {
       "title": "SEM znalazł ładowarkę, którą nie zarządza",

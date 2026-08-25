@@ -1511,11 +1511,27 @@
     },
     "charger_actuation_failed": {
       "title": "EV-lader accepteert geen commando's: {name}",
-      "description": "De laatste 3+ stroomcommando's van SEM naar **{name}** zijn geweigerd: `{error}`. De lader staat op dit moment NIET onder controle van SEM — hij blijft doen wat hem het laatst is opgedragen (inclusief op vol vermogen laden in de uit-stand). Meest voorkomende oorzaken: de besturingsentiteit van de lader is hernoemd door een update van de bovenliggende integratie, of `ev_charger_service` verwijst naar een service met een ander parameterschema. Controleer de besturingsentiteit/service van de lader in de SEM-configuratie. Deze melding verdwijnt automatisch na het eerstvolgende geslaagde commando."
+      "description": "De laatste 3+ stroomcommando's van SEM naar **{name}** zijn geweigerd: `{error}`. De lader staat op dit moment NIET onder controle van SEM — hij blijft doen wat hem het laatst is opgedragen (inclusief op vol vermogen laden in de uit-stand). Meest voorkomende oorzaken: de besturingsentiteit van de lader is hernoemd door een update van de bovenliggende integratie, of `ev_charger_service` verwijst naar een service met een ander parameterschema. Controleer de besturingsentiteit/service van de lader in de SEM-configuratie. Deze melding verdwijnt automatisch na het eerstvolgende geslaagde commando.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Report this to SEM",
+            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+          }
+        }
+      }
     },
     "charger_stop_unenforceable": {
       "title": "Laadpaal kan niet gestopt worden: {name}",
-      "description": "SEM heeft **{name}** opdracht gegeven te stoppen, maar geen enkel geconfigureerd mechanisme kan het relais daadwerkelijk openen — de auto trekt nog steeds {power} W. De enige besturing die SEM voor deze laadpaal heeft is `{entity}`, en het minimum daarvan ligt boven 0 A, dus 0 A schrijven doet niets (SEM schrijft nooit een waarde die de entiteit zou weigeren). Heb je een thuisbatterij, dan komt dit vermogen daaruit — op elk moment van de dag of nacht. Oplossing: configureer voor deze laadpaal in de SEM-opties een start/stop-entiteit (`ev_start_stop_entity`), een laadmodus-entiteit of een stopservice. Deze melding verdwijnt zodra de laadpaal geen vermogen meer trekt."
+      "description": "SEM heeft **{name}** opdracht gegeven te stoppen, maar geen enkel geconfigureerd mechanisme kan het relais daadwerkelijk openen — de auto trekt nog steeds {power} W. De enige besturing die SEM voor deze laadpaal heeft is `{entity}`, en het minimum daarvan ligt boven 0 A, dus 0 A schrijven doet niets (SEM schrijft nooit een waarde die de entiteit zou weigeren). Heb je een thuisbatterij, dan komt dit vermogen daaruit — op elk moment van de dag of nacht. Oplossing: configureer voor deze laadpaal in de SEM-opties een start/stop-entiteit (`ev_start_stop_entity`), een laadmodus-entiteit of een stopservice. Deze melding verdwijnt zodra de laadpaal geen vermogen meer trekt.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Report this to SEM",
+            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+          }
+        }
+      }
     },
     "no_forecast_integration": {
       "title": "Geen zonneprognose-integratie gevonden",
@@ -1547,7 +1563,15 @@
     },
     "soc_cap_unenforceable": {
       "title": "Laadlimiet van {target}% kan niet worden afgedwongen: {name}",
-      "description": "**{name}** heeft een laaddoel in procenten, maar uw voertuig meldt op dit moment geen laadtoestand — SEM kan daardoor niet *precies* bij **{target}%** stoppen.\n\nBlind laden doet SEM echter niet: vanaf de laatste echte meting van deze sessie telt het de werkelijk geleverde energie mee en stopt het zodra dat gemeten totaal uw doel bereikt — de overschrijding is alleen wat de auto sinds die meting heeft opgenomen. Is er in deze sessie helemaal geen echte meting binnengekomen (of is SEM tijdens het laden herstart), dan ontbreekt het ankerpunt en wordt er geladen tot de auto zelf bijna vol terugregelt.\n\nVoor een limiet die exact uitkomt, koppelt u een **echte voertuig-SOC-sensor** aan deze laadpaal (Configuratie → EV → Voertuig-SOC-entiteit). Het batterijpercentage op het dashboard is SEM's *geschatte* SOC, die het voor de harde limiet bewust negeert (die kan afwijken). Deze reparatie verdwijnt automatisch zodra er weer een echte SOC-meting beschikbaar is."
+      "description": "**{name}** heeft een laaddoel in procenten, maar uw voertuig meldt op dit moment geen laadtoestand — SEM kan daardoor niet *precies* bij **{target}%** stoppen.\n\nBlind laden doet SEM echter niet: vanaf de laatste echte meting van deze sessie telt het de werkelijk geleverde energie mee en stopt het zodra dat gemeten totaal uw doel bereikt — de overschrijding is alleen wat de auto sinds die meting heeft opgenomen. Is er in deze sessie helemaal geen echte meting binnengekomen (of is SEM tijdens het laden herstart), dan ontbreekt het ankerpunt en wordt er geladen tot de auto zelf bijna vol terugregelt.\n\nVoor een limiet die exact uitkomt, koppelt u een **echte voertuig-SOC-sensor** aan deze laadpaal (Configuratie → EV → Voertuig-SOC-entiteit). Het batterijpercentage op het dashboard is SEM's *geschatte* SOC, die het voor de harde limiet bewust negeert (die kan afwijken). Deze reparatie verdwijnt automatisch zodra er weer een echte SOC-meting beschikbaar is.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Report this to SEM",
+            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+          }
+        }
+      }
     },
     "unmanaged_charger_found": {
       "title": "SEM vond een laadpunt dat het niet beheert",

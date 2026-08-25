@@ -1511,11 +1511,27 @@
     },
     "charger_actuation_failed": {
       "title": "Le chargeur VE n'accepte pas les commandes : {name}",
-      "description": "Les 3 dernières commandes de courant (ou plus) envoyées par SEM à **{name}** ont été rejetées : `{error}`. Le chargeur n'est PAS sous le contrôle de SEM actuellement — il continuera à faire ce qui lui a été demandé en dernier (y compris charger à pleine puissance en mode arrêt). Causes les plus fréquentes : l'entité de commande du chargeur a été renommée par une mise à jour de l'intégration en amont, ou `ev_charger_service` pointe vers un service dont le schéma de paramètres est différent. Vérifiez l'entité de commande / le service du chargeur dans la configuration SEM. Ce problème disparaît automatiquement à la prochaine commande réussie."
+      "description": "Les 3 dernières commandes de courant (ou plus) envoyées par SEM à **{name}** ont été rejetées : `{error}`. Le chargeur n'est PAS sous le contrôle de SEM actuellement — il continuera à faire ce qui lui a été demandé en dernier (y compris charger à pleine puissance en mode arrêt). Causes les plus fréquentes : l'entité de commande du chargeur a été renommée par une mise à jour de l'intégration en amont, ou `ev_charger_service` pointe vers un service dont le schéma de paramètres est différent. Vérifiez l'entité de commande / le service du chargeur dans la configuration SEM. Ce problème disparaît automatiquement à la prochaine commande réussie.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Report this to SEM",
+            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+          }
+        }
+      }
     },
     "charger_stop_unenforceable": {
       "title": "Impossible d'arrêter la borne de recharge : {name}",
-      "description": "SEM a demandé à **{name}** de s'arrêter, mais aucun mécanisme configuré ne peut réellement ouvrir le contacteur — la voiture consomme toujours {power} W. Le seul contrôle dont SEM dispose pour cette borne est `{entity}`, et son minimum est supérieur à 0 A : écrire 0 A n'a donc aucun effet (SEM n'écrit jamais une valeur que l'entité refuserait). Si vous avez une batterie domestique, cette puissance en sort — à n'importe quelle heure du jour ou de la nuit. Solution : configurez pour cette borne, dans les options SEM, une entité marche/arrêt (`ev_start_stop_entity`), une entité de mode de charge ou un service d'arrêt. Cet avertissement disparaît dès que la borne ne consomme plus."
+      "description": "SEM a demandé à **{name}** de s'arrêter, mais aucun mécanisme configuré ne peut réellement ouvrir le contacteur — la voiture consomme toujours {power} W. Le seul contrôle dont SEM dispose pour cette borne est `{entity}`, et son minimum est supérieur à 0 A : écrire 0 A n'a donc aucun effet (SEM n'écrit jamais une valeur que l'entité refuserait). Si vous avez une batterie domestique, cette puissance en sort — à n'importe quelle heure du jour ou de la nuit. Solution : configurez pour cette borne, dans les options SEM, une entité marche/arrêt (`ev_start_stop_entity`), une entité de mode de charge ou un service d'arrêt. Cet avertissement disparaît dès que la borne ne consomme plus.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Report this to SEM",
+            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+          }
+        }
+      }
     },
     "no_forecast_integration": {
       "title": "Aucune intégration de prévision solaire détectée",
@@ -1547,7 +1563,15 @@
     },
     "soc_cap_unenforceable": {
       "title": "Impossible d'appliquer la limite de charge de {target}% : {name}",
-      "description": "**{name}** est réglé sur un objectif de charge en pourcentage, mais votre véhicule ne communique pas son état de charge actuellement — SEM ne peut donc pas s'arrêter *exactement* à **{target}%**.\n\nIl ne charge pas à l'aveugle pour autant : depuis la dernière mesure réelle de cette session, il comptabilise l'énergie réellement livrée et s'arrête dès que ce total mesuré atteint votre objectif — le dépassement se limite à ce que la voiture a pris depuis cette mesure. Si aucune mesure réelle n'est arrivée durant cette session (ou si SEM a redémarré en cours de charge), il n'y a aucun point de référence et la charge se poursuit jusqu'à ce que la voiture elle-même réduise, proche du plein.\n\nPour une limite qui tombe juste, associez un **véritable capteur de SOC véhicule** à cette borne (Configuration → VE → Entité SOC véhicule). Le pourcentage de batterie du tableau de bord est le SOC *estimé* par SEM, qu'il ignore délibérément pour la limite stricte (il peut dériver). Cette réparation disparaît automatiquement dès qu'une mesure de SOC réelle est de nouveau disponible."
+      "description": "**{name}** est réglé sur un objectif de charge en pourcentage, mais votre véhicule ne communique pas son état de charge actuellement — SEM ne peut donc pas s'arrêter *exactement* à **{target}%**.\n\nIl ne charge pas à l'aveugle pour autant : depuis la dernière mesure réelle de cette session, il comptabilise l'énergie réellement livrée et s'arrête dès que ce total mesuré atteint votre objectif — le dépassement se limite à ce que la voiture a pris depuis cette mesure. Si aucune mesure réelle n'est arrivée durant cette session (ou si SEM a redémarré en cours de charge), il n'y a aucun point de référence et la charge se poursuit jusqu'à ce que la voiture elle-même réduise, proche du plein.\n\nPour une limite qui tombe juste, associez un **véritable capteur de SOC véhicule** à cette borne (Configuration → VE → Entité SOC véhicule). Le pourcentage de batterie du tableau de bord est le SOC *estimé* par SEM, qu'il ignore délibérément pour la limite stricte (il peut dériver). Cette réparation disparaît automatiquement dès qu'une mesure de SOC réelle est de nouveau disponible.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Report this to SEM",
+            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+          }
+        }
+      }
     },
     "unmanaged_charger_found": {
       "title": "SEM a trouvé une borne qu'il ne pilote pas",

@@ -31,6 +31,8 @@ spamming", 2026-06-06) drove this work.
 from __future__ import annotations
 
 import logging
+import re
+import urllib.parse
 from typing import Optional
 
 from homeassistant.core import HomeAssistant
@@ -81,6 +83,7 @@ def raise_sensor_unavailable(
             is_persistent=True,
             severity=ir.IssueSeverity.WARNING,
             translation_key="sensor_unavailable",
+            learn_more_url=next_step_url("docs", "sensor_unavailable"),
             translation_placeholders={
                 "entity_id": entity_id,
                 "friendly_name": friendly_name or entity_id,
@@ -123,6 +126,7 @@ def raise_sensor_stale(
             is_persistent=True,
             severity=ir.IssueSeverity.WARNING,
             translation_key="sensor_stale",
+            learn_more_url=next_step_url("docs", "sensor_stale"),
             translation_placeholders={
                 "entity_id": entity_id,
                 "friendly_name": friendly_name or entity_id,
@@ -167,10 +171,16 @@ def raise_charger_actuation_failed(
             hass,
             domain=DOMAIN,
             issue_id=_actuation_issue_id(device_id),
-            is_fixable=False,
+            is_fixable=True,
             is_persistent=True,
             severity=ir.IssueSeverity.ERROR,
             translation_key="charger_actuation_failed",
+            data={"copy_context": copy_context(
+                "charger_actuation_failed", reason=str(error or ""), brand=str(name or ""), **_versions(hass))},
+            learn_more_url=next_step_url(
+                "report", "charger_actuation_failed",
+                reason=str(error or ""), brand=str(name or ""),
+                **_versions(hass)),
             translation_placeholders={
                 "name": name,
                 "error": error,
@@ -186,6 +196,112 @@ def clear_charger_actuation_failed(hass: HomeAssistant, device_id: str) -> None:
         ir.async_delete_issue(hass, DOMAIN, _actuation_issue_id(device_id))
     except Exception as e:  # noqa: BLE001
         _LOGGER.debug("issue_registry.delete failed for %s: %s", device_id, e)
+
+
+# ── #831: every repair offers the next step ─────────────────────────────────
+# A repair card is the one moment SEM has the user's attention WITH the
+# context in hand. Two kinds of repair, two kinds of link — mixing them would
+# flood the tracker with user-side misconfigurations:
+#   docs   → "your setup needs attention": a TROUBLESHOOTING.md anchor.
+#   report → "this looks like SEM's fault": a bug-report form with the
+#            context prefilled (GitHub issue forms accept per-field prefill
+#            by id). The user reviews and presses the button — or does not.
+# Privacy is load-bearing: versions, repair key and reason travel; entity ids
+# and diagnostics NEVER do (URLs are proxy-logged and truncate ~8 KB).
+
+_REPO_URL = "https://github.com/traktore-org/sem-community"
+_ENTITY_ID_RE = re.compile(
+    r"\b(?:sensor|binary_sensor|number|switch|select|button|input_\w+|climate|"
+    r"water_heater|light|cover)\.[a-z0-9_]+")
+
+#: docs-side repair key → TROUBLESHOOTING.md anchor. Pinned by
+#: tests/test_831_repair_next_step.py — every anchor must resolve to a real
+#: heading, the #219 lesson shape.
+_DOCS_ANCHORS = {
+    "sensor_unavailable": "a-configured-sensor-is-unavailable",
+    "sensor_stale": "a-sensor-stopped-updating-stale",
+    "no_forecast_integration": "no-solar-forecast-integration-found",
+    "no_recorder": "the-recorder-is-not-available",
+    "heat_pump_relay_unavailable": "heat-pump-sg-ready-relay-unavailable",
+    "hot_water_entity_unavailable": "hot-water-switch-unavailable",
+    "hot_water_temperature_sensor_unavailable":
+        "hot-water-temperature-sensor-unavailable",
+    "heat_pump_partial_sg_ready": "heat-pump-only-one-sg-ready-relay",
+    "charger_control_entity_broken": "a-charger-control-entity-is-broken",
+    # KEBA has a dedicated deep-dive doc — richer than a troubleshooting
+    # section, so the builder serves it whole (a full URL passes through).
+    "keba_failsafe_active":
+        "https://github.com/traktore-org/sem-community/blob/develop/docs/KEBA_FAILSAFE.md",
+    "charger_failsafe_suspected": "your-wallbox-undoes-sems-stop-on-a-timer",
+    "battery_force_discharge_unsupported":
+        "the-inverter-refuses-forced-discharge",
+}
+
+
+def copy_context(key: str, *, reason: str = "", brand: str = "",
+                 sem_version: str = "", ha_version: str = "") -> str:
+    """The selectable text the RepairsFlow shows (#831) — same fields as the
+    report URL, same privacy rule (the caller passes scrubbed reasons)."""
+    lines = [f"Repair: {key}"]
+    if brand:
+        lines.append(f"Hardware: {brand}")
+    if sem_version:
+        lines.append(f"SEM: {sem_version}")
+    if ha_version:
+        lines.append(f"Home Assistant: {ha_version}")
+    if reason:
+        lines.append(f"Detail: {_ENTITY_ID_RE.sub('(entity)', str(reason))}")
+    return "\n".join(lines)
+
+
+def next_step_url(kind: str, key: str, *, reason: str = "",
+                  sem_version: str = "", ha_version: str = "",
+                  brand: str = "") -> str:
+    """The one builder — no call site hand-rolls a URL (#831).
+
+    ``kind="docs"`` → a TROUBLESHOOTING anchor. ``kind="report"`` → the
+    bug-report form, prefilled. Only FREE-TEXT fields are prefilled:
+    ``inverter``/``charger`` are dropdowns and a value that does not exactly
+    match an option renders empty — the brand rides the description line
+    instead, where it survives any option-list rename.
+    """
+    if kind == "docs":
+        anchor = _DOCS_ANCHORS.get(key, "")
+        if anchor.startswith("http"):
+            return anchor
+        return f"{_REPO_URL}/blob/main/docs/TROUBLESHOOTING.md#{anchor}"
+    # Entity ids never enter a logged URL — scrub even when a reason string
+    # embeds one (they routinely do; that is the card's job, not the URL's).
+    clean_reason = _ENTITY_ID_RE.sub("(entity)", str(reason or ""))
+    desc = f"Repair: {key}"
+    if brand:
+        desc += f" — {brand}"
+    if clean_reason:
+        desc += f" — {clean_reason}"
+    q = urllib.parse.urlencode({
+        "template": "bug_report.yml",
+        "sem-version": sem_version or "",
+        "ha-version": ha_version or "",
+        "description": desc,
+    })
+    return f"{_REPO_URL}/issues/new?{q}"
+
+
+def _versions(hass: HomeAssistant) -> dict:
+    """SEM + HA versions for the report prefill, resolved in one place."""
+    sem = ""
+    try:
+        integ = hass.data.get("integrations", {}).get(DOMAIN)
+        sem = str(getattr(integ, "version", "") or "")
+    except Exception:  # noqa: BLE001
+        sem = ""
+    if not sem:
+        sem = str(hass.data.get(DOMAIN, {}).get("_manifest_version", "") or "")
+    try:
+        from homeassistant.const import __version__ as ha_ver
+    except Exception:  # noqa: BLE001
+        ha_ver = ""
+    return {"sem_version": sem, "ha_version": str(ha_ver)}
 
 
 def _failsafe_issue_id(device_id: str) -> str:
@@ -207,6 +323,7 @@ def raise_charger_failsafe_suspected(
             is_fixable=False, is_persistent=True,
             severity=ir.IssueSeverity.WARNING,
             translation_key="charger_failsafe_suspected",
+            learn_more_url=next_step_url("docs", "charger_failsafe_suspected"),
             translation_placeholders={
                 "name": name, "interval_s": str(int(interval_s)),
             },
@@ -252,6 +369,7 @@ def raise_battery_force_discharge_unsupported(
             is_persistent=True,
             severity=ir.IssueSeverity.WARNING,
             translation_key="battery_force_discharge_unsupported",
+            learn_more_url=next_step_url("docs", "battery_force_discharge_unsupported"),
             translation_placeholders={
                 "entity_id": entity_id,
                 "error": error,
@@ -302,10 +420,16 @@ def raise_charger_stop_unenforceable(
             hass,
             domain=DOMAIN,
             issue_id=_stop_unenforceable_issue_id(device_id),
-            is_fixable=False,
+            is_fixable=True,
             is_persistent=True,
             severity=ir.IssueSeverity.ERROR,
             translation_key="charger_stop_unenforceable",
+            data={"copy_context": copy_context(
+                "charger_stop_unenforceable", reason=f"stop unenforceable at {power_w:.0f} W", brand=str(name or ""), **_versions(hass))},
+            learn_more_url=next_step_url(
+                "report", "charger_stop_unenforceable",
+                reason=f"stop unenforceable at {power_w:.0f} W", brand=str(name or ""),
+                **_versions(hass)),
             translation_placeholders={
                 "name": name,
                 "power": f"{power_w:.0f}",
@@ -358,10 +482,16 @@ def raise_soc_cap_unenforceable(
             hass,
             domain=DOMAIN,
             issue_id=_soc_cap_issue_id(device_id),
-            is_fixable=False,
+            is_fixable=True,
             is_persistent=True,
             severity=ir.IssueSeverity.WARNING,
             translation_key="soc_cap_unenforceable",
+            data={"copy_context": copy_context(
+                "soc_cap_unenforceable", reason=f"SOC cap {target_soc:.0f}% unenforceable", brand=str(name or ""), **_versions(hass))},
+            learn_more_url=next_step_url(
+                "report", "soc_cap_unenforceable",
+                reason=f"SOC cap {target_soc:.0f}% unenforceable", brand=str(name or ""),
+                **_versions(hass)),
             translation_placeholders={
                 "name": name,
                 "target": f"{target_soc:.0f}",
@@ -397,6 +527,7 @@ def raise_no_forecast_integration(hass: HomeAssistant) -> None:
             is_persistent=True,
             severity=ir.IssueSeverity.WARNING,
             translation_key="no_forecast_integration",
+            learn_more_url=next_step_url("docs", "no_forecast_integration"),
         )
     except Exception as e:  # noqa: BLE001
         _LOGGER.debug("issue_registry.create no_forecast failed: %s", e)
@@ -421,6 +552,7 @@ def raise_no_recorder(hass: HomeAssistant) -> None:
             is_persistent=True,
             severity=ir.IssueSeverity.WARNING,
             translation_key="no_recorder",
+            learn_more_url=next_step_url("docs", "no_recorder"),
         )
     except Exception as e:  # noqa: BLE001
         _LOGGER.debug("issue_registry.create no_recorder failed: %s", e)
@@ -469,6 +601,7 @@ def raise_heat_pump_relay_unavailable(
             is_persistent=True,
             severity=ir.IssueSeverity.WARNING,
             translation_key="heat_pump_relay_unavailable",
+            learn_more_url=next_step_url("docs", "heat_pump_relay_unavailable"),
             translation_placeholders={
                 "slot": slot,
                 "entity_id": entity_id,
@@ -535,6 +668,7 @@ def raise_hot_water_entity_unavailable(
             is_persistent=True,
             severity=ir.IssueSeverity.WARNING,
             translation_key="hot_water_entity_unavailable",
+            learn_more_url=next_step_url("docs", "hot_water_entity_unavailable"),
             translation_placeholders={
                 "entity_id": entity_id,
                 "minutes": str(minutes_unavailable),
@@ -585,6 +719,7 @@ def raise_hot_water_temperature_sensor_unavailable(
             is_persistent=True,
             severity=ir.IssueSeverity.WARNING,
             translation_key="hot_water_temperature_sensor_unavailable",
+            learn_more_url=next_step_url("docs", "hot_water_temperature_sensor_unavailable"),
             translation_placeholders={
                 "entity_id": entity_id,
                 "minutes": str(minutes_unavailable),
@@ -742,6 +877,7 @@ def raise_heat_pump_partial_sg_ready(hass: HomeAssistant) -> None:
             is_persistent=True,
             severity=ir.IssueSeverity.WARNING,
             translation_key="heat_pump_partial_sg_ready",
+            learn_more_url=next_step_url("docs", "heat_pump_partial_sg_ready"),
         )
     except Exception as e:  # noqa: BLE001
         _LOGGER.debug(
@@ -763,11 +899,6 @@ def clear_heat_pump_partial_sg_ready(hass: HomeAssistant) -> None:
 # ---------------------------------------------------------------------------
 
 # Where the user is sent to fix it (how + why to disable the KEBA failsafe).
-KEBA_FAILSAFE_DOC_URL = (
-    "https://github.com/traktore-org/sem-community/blob/develop/docs/KEBA_FAILSAFE.md"
-)
-
-
 def raise_keba_failsafe_active(
     hass: HomeAssistant, *, charger_name: str,
 ) -> None:
@@ -792,7 +923,7 @@ def raise_keba_failsafe_active(
             severity=ir.IssueSeverity.WARNING,
             translation_key="keba_failsafe_active",
             translation_placeholders={"name": charger_name},
-            learn_more_url=KEBA_FAILSAFE_DOC_URL,
+            learn_more_url=next_step_url("docs", "keba_failsafe_active"),
         )
     except Exception as e:  # noqa: BLE001 — never fail the cycle over a repair
         _LOGGER.debug("issue_registry.create keba_failsafe_active failed: %s", e)
@@ -873,6 +1004,7 @@ def raise_charger_control_entity_broken(
             is_persistent=True,
             severity=ir.IssueSeverity.ERROR,
             translation_key="charger_control_entity_broken",
+            learn_more_url=next_step_url("docs", "charger_control_entity_broken"),
             translation_placeholders={
                 "name": name,
                 "entity_id": entity_id,

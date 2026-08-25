@@ -1511,11 +1511,27 @@
     },
     "charger_actuation_failed": {
       "title": "E-Auto-Ladegerät nimmt keine Befehle an: {name}",
-      "description": "Die letzten 3+ Strombefehle von SEM an **{name}** wurden abgelehnt: `{error}`. Das Ladegerät steht derzeit NICHT unter SEM-Kontrolle — es macht weiter, was zuletzt befohlen wurde (einschließlich Laden mit voller Leistung im Aus-Modus). Häufigste Ursachen: Die Steuer-Entität wurde durch ein Update der Upstream-Integration umbenannt, oder `ev_charger_service` zeigt auf einen Dienst mit anderem Parameterschema. Prüfe die Steuer-Entität/den Dienst des Ladegeräts in der SEM-Konfiguration. Dieser Hinweis verschwindet automatisch nach dem nächsten erfolgreichen Befehl."
+      "description": "Die letzten 3+ Strombefehle von SEM an **{name}** wurden abgelehnt: `{error}`. Das Ladegerät steht derzeit NICHT unter SEM-Kontrolle — es macht weiter, was zuletzt befohlen wurde (einschließlich Laden mit voller Leistung im Aus-Modus). Häufigste Ursachen: Die Steuer-Entität wurde durch ein Update der Upstream-Integration umbenannt, oder `ev_charger_service` zeigt auf einen Dienst mit anderem Parameterschema. Prüfe die Steuer-Entität/den Dienst des Ladegeräts in der SEM-Konfiguration. Dieser Hinweis verschwindet automatisch nach dem nächsten erfolgreichen Befehl.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "An SEM melden",
+            "description": "SEM hält dies für einen eigenen Fehler. Öffnen Sie nach Möglichkeit über den Hinweis einen Bug-Report — das Formular ist bereits ausgefüllt. Alternativ kopieren Sie den untenstehenden Kontext. Dieser Dialog sendet nichts.\n\n```\n{context}\n```\n\nBestätigen schließt den Hinweis."
+          }
+        }
+      }
     },
     "charger_stop_unenforceable": {
       "title": "E-Auto-Ladegerät lässt sich nicht stoppen: {name}",
-      "description": "SEM hat **{name}** den Stopp-Befehl gegeben, aber kein konfigurierter Mechanismus kann den Schütz tatsächlich öffnen — das Auto zieht weiterhin {power} W. Die einzige Steuerung, die SEM für dieses Ladegerät hat, ist `{entity}`, und deren Minimum liegt über 0 A, sodass das Schreiben von 0 A nichts bewirkt (SEM schreibt nie einen Wert, den die Entität ablehnen würde). Wenn du einen Hausspeicher hast, kommt diese Leistung aus dem Speicher — zu jeder Tages- und Nachtzeit. Lösung: Konfiguriere für dieses Ladegerät in den SEM-Optionen eine Start/Stopp-Entität (`ev_start_stop_entity`), eine Lademodus-Entität oder einen Stopp-Dienst. Dieser Hinweis verschwindet, sobald das Ladegerät keine Leistung mehr zieht."
+      "description": "SEM hat **{name}** den Stopp-Befehl gegeben, aber kein konfigurierter Mechanismus kann den Schütz tatsächlich öffnen — das Auto zieht weiterhin {power} W. Die einzige Steuerung, die SEM für dieses Ladegerät hat, ist `{entity}`, und deren Minimum liegt über 0 A, sodass das Schreiben von 0 A nichts bewirkt (SEM schreibt nie einen Wert, den die Entität ablehnen würde). Wenn du einen Hausspeicher hast, kommt diese Leistung aus dem Speicher — zu jeder Tages- und Nachtzeit. Lösung: Konfiguriere für dieses Ladegerät in den SEM-Optionen eine Start/Stopp-Entität (`ev_start_stop_entity`), eine Lademodus-Entität oder einen Stopp-Dienst. Dieser Hinweis verschwindet, sobald das Ladegerät keine Leistung mehr zieht.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "An SEM melden",
+            "description": "SEM hält dies für einen eigenen Fehler. Öffnen Sie nach Möglichkeit über den Hinweis einen Bug-Report — das Formular ist bereits ausgefüllt. Alternativ kopieren Sie den untenstehenden Kontext. Dieser Dialog sendet nichts.\n\n```\n{context}\n```\n\nBestätigen schließt den Hinweis."
+          }
+        }
+      }
     },
     "no_forecast_integration": {
       "title": "Keine Solar-Prognose-Integration erkannt",
@@ -1547,7 +1563,15 @@
     },
     "soc_cap_unenforceable": {
       "title": "Ladelimit von {target}% kann nicht durchgesetzt werden: {name}",
-      "description": "**{name}** ist auf ein prozentuales Ladeziel eingestellt, aber Ihr Fahrzeug meldet derzeit keinen Ladestand — SEM kann deshalb nicht *genau* bei **{target}%** stoppen.\n\nBlind lädt SEM aber nicht: Ab dem letzten echten Messwert dieser Sitzung zählt es die tatsächlich gelieferte Energie mit und stoppt, sobald diese gemessene Summe Ihr Ziel erreicht — überschritten wird nur, was das Auto seit diesem Messwert aufgenommen hat. Kam in dieser Sitzung überhaupt kein echter Messwert an (oder wurde SEM mitten im Ladevorgang neu gestartet), fehlt der Bezugspunkt, und es wird geladen, bis das Auto selbst kurz vor Voll abregelt.\n\nDamit die Grenze exakt trifft, hinterlegen Sie einen **echten Fahrzeug-SOC-Sensor** für diese Ladestation (Konfiguration → EV → Fahrzeug-SOC-Entität). Die Batterie-% im Dashboard sind SEMs *geschätzter* Ladestand, den es für die harte Grenze bewusst ignoriert (er kann driften). Diese Reparatur verschwindet automatisch, sobald wieder ein echter SOC-Wert verfügbar ist."
+      "description": "**{name}** ist auf ein prozentuales Ladeziel eingestellt, aber Ihr Fahrzeug meldet derzeit keinen Ladestand — SEM kann deshalb nicht *genau* bei **{target}%** stoppen.\n\nBlind lädt SEM aber nicht: Ab dem letzten echten Messwert dieser Sitzung zählt es die tatsächlich gelieferte Energie mit und stoppt, sobald diese gemessene Summe Ihr Ziel erreicht — überschritten wird nur, was das Auto seit diesem Messwert aufgenommen hat. Kam in dieser Sitzung überhaupt kein echter Messwert an (oder wurde SEM mitten im Ladevorgang neu gestartet), fehlt der Bezugspunkt, und es wird geladen, bis das Auto selbst kurz vor Voll abregelt.\n\nDamit die Grenze exakt trifft, hinterlegen Sie einen **echten Fahrzeug-SOC-Sensor** für diese Ladestation (Konfiguration → EV → Fahrzeug-SOC-Entität). Die Batterie-% im Dashboard sind SEMs *geschätzter* Ladestand, den es für die harte Grenze bewusst ignoriert (er kann driften). Diese Reparatur verschwindet automatisch, sobald wieder ein echter SOC-Wert verfügbar ist.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "An SEM melden",
+            "description": "SEM hält dies für einen eigenen Fehler. Öffnen Sie nach Möglichkeit über den Hinweis einen Bug-Report — das Formular ist bereits ausgefüllt. Alternativ kopieren Sie den untenstehenden Kontext. Dieser Dialog sendet nichts.\n\n```\n{context}\n```\n\nBestätigen schließt den Hinweis."
+          }
+        }
+      }
     },
     "unmanaged_charger_found": {
       "title": "SEM hat eine Wallbox gefunden, die es nicht steuert",

@@ -1511,11 +1511,27 @@
     },
     "charger_actuation_failed": {
       "title": "Nabíječka EV nepřijímá příkazy: {name}",
-      "description": "Poslední 3 a více příkazů proudu, které SEM poslal na **{name}**, bylo odmítnuto: `{error}`. Nabíječka právě NENÍ pod kontrolou SEM — bude dál dělat to, co jí bylo řečeno naposledy (včetně nabíjení plným výkonem v režimu vypnuto). Nejčastější příčiny: ovládací entitu nabíječky přejmenovala aktualizace nadřazené integrace, nebo `ev_charger_service` ukazuje na službu s jiným schématem parametrů. Zkontrolujte ovládací entitu / službu nabíječky v konfiguraci SEM. Tato oprava zmizí automaticky po prvním úspěšném příkazu."
+      "description": "Poslední 3 a více příkazů proudu, které SEM poslal na **{name}**, bylo odmítnuto: `{error}`. Nabíječka právě NENÍ pod kontrolou SEM — bude dál dělat to, co jí bylo řečeno naposledy (včetně nabíjení plným výkonem v režimu vypnuto). Nejčastější příčiny: ovládací entitu nabíječky přejmenovala aktualizace nadřazené integrace, nebo `ev_charger_service` ukazuje na službu s jiným schématem parametrů. Zkontrolujte ovládací entitu / službu nabíječky v konfiguraci SEM. Tato oprava zmizí automaticky po prvním úspěšném příkazu.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Report this to SEM",
+            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+          }
+        }
+      }
     },
     "charger_stop_unenforceable": {
       "title": "Nabíječku nelze zastavit: {name}",
-      "description": "SEM dal **{name}** pokyn k zastavení, ale žádný nakonfigurovaný mechanismus nedokáže skutečně rozepnout stykač — auto stále odebírá {power} W. Jediné ovládání, které SEM pro tuto nabíječku má, je `{entity}`, a jeho minimum je vyšší než 0 A, takže zápis 0 A nic neudělá (SEM nikdy nezapíše hodnotu, kterou by entita odmítla). Pokud máte domácí baterii, tento výkon jde z ní — v kteroukoli denní i noční dobu. Řešení: nastavte pro tuto nabíječku v možnostech SEM entitu start/stop (`ev_start_stop_entity`), entitu režimu nabíjení nebo službu zastavení. Toto upozornění zmizí, jakmile nabíječka přestane odebírat."
+      "description": "SEM dal **{name}** pokyn k zastavení, ale žádný nakonfigurovaný mechanismus nedokáže skutečně rozepnout stykač — auto stále odebírá {power} W. Jediné ovládání, které SEM pro tuto nabíječku má, je `{entity}`, a jeho minimum je vyšší než 0 A, takže zápis 0 A nic neudělá (SEM nikdy nezapíše hodnotu, kterou by entita odmítla). Pokud máte domácí baterii, tento výkon jde z ní — v kteroukoli denní i noční dobu. Řešení: nastavte pro tuto nabíječku v možnostech SEM entitu start/stop (`ev_start_stop_entity`), entitu režimu nabíjení nebo službu zastavení. Toto upozornění zmizí, jakmile nabíječka přestane odebírat.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Report this to SEM",
+            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+          }
+        }
+      }
     },
     "no_forecast_integration": {
       "title": "Nebyla zjištěna žádná integrace solární předpovědi",
@@ -1547,7 +1563,15 @@
     },
     "soc_cap_unenforceable": {
       "title": "Nelze vynutit limit nabíjení {target} %: {name}",
-      "description": "**{name}** má nastavený procentní cíl nabíjení, ale vozidlo právě teď nehlásí stav nabití, takže SEM nemůže zastavit *přesně* na **{target}%**.\n\nNenabíjí ale naslepo: od posledního skutečného odečtu v této relaci počítá skutečně dodanou energii a zastaví, jakmile tento naměřený součet dosáhne vašeho cíle — překročení je jen to, co si auto od onoho odečtu vzalo. Pokud v této relaci nedorazil žádný skutečný odečet (nebo se SEM restartoval během nabíjení), není se od čeho odrazit a nabíjí se, dokud auto samo krátce před plným nesníží výkon.\n\nAby limit padl přesně, nastavte pro tuto nabíječku **skutečný senzor SOC vozidla** (Konfigurace → EV → Entita SOC vozidla). Procenta baterie na nástěnce jsou *odhadovaný* SOC od SEM, který se pro tvrdý limit záměrně ignoruje (může se rozejít). Tato oprava zmizí automaticky, jakmile bude opět k dispozici skutečný odečet SOC."
+      "description": "**{name}** má nastavený procentní cíl nabíjení, ale vozidlo právě teď nehlásí stav nabití, takže SEM nemůže zastavit *přesně* na **{target}%**.\n\nNenabíjí ale naslepo: od posledního skutečného odečtu v této relaci počítá skutečně dodanou energii a zastaví, jakmile tento naměřený součet dosáhne vašeho cíle — překročení je jen to, co si auto od onoho odečtu vzalo. Pokud v této relaci nedorazil žádný skutečný odečet (nebo se SEM restartoval během nabíjení), není se od čeho odrazit a nabíjí se, dokud auto samo krátce před plným nesníží výkon.\n\nAby limit padl přesně, nastavte pro tuto nabíječku **skutečný senzor SOC vozidla** (Konfigurace → EV → Entita SOC vozidla). Procenta baterie na nástěnce jsou *odhadovaný* SOC od SEM, který se pro tvrdý limit záměrně ignoruje (může se rozejít). Tato oprava zmizí automaticky, jakmile bude opět k dispozici skutečný odečet SOC.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Report this to SEM",
+            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+          }
+        }
+      }
     },
     "unmanaged_charger_found": {
       "title": "SEM našel nabíječku, kterou neřídí",
