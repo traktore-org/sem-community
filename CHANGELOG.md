@@ -13,6 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ⏸️ **EV phase switching is switched off by default while it is reworked**
+  (#804): real-world testing found the shipped model harmful on two charger
+  brands — a Wattpilot is left paused after every switch because it needs an
+  explicit start signal SEM never sends, and a Zaptec has no phase command at
+  all, so SEM stopped the charger, switched nothing, and retried. If you use
+  phase switching and want to keep testing it, set
+  `ev_phase_switching_enabled` on your charger; for everyone else the phase
+  selector disappears and SEM leaves your phases alone. The rework — a proper
+  start signal per brand, the Zaptec model, and a per-phase current guard so
+  switching down cannot overload one phase of your grid connection — is the
+  2.1 arc.
+
 # [2.0.0-beta.16] — 25.08.2026
 
 - 🔇 **A battery setpoint your inverter cannot accept no longer floods the log**
