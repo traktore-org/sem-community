@@ -304,12 +304,14 @@
           "battery_force_charge_negative_price": "Geforceerd laden bij negatieve prijs",
           "battery_charge_platform": "Batterij-laadplatform",
           "battery_replan_interval_min": "Herplan-interval (min)",
-          "battery_prefer_consecutive_window": "Aaneengesloten laadvenster verkiezen"
+          "battery_prefer_consecutive_window": "Aaneengesloten laadvenster verkiezen",
+          "battery_charge_power_limit_entity": "Battery charge-power limit entity (for pacing)"
         },
         "data_description": {
           "battery_charge_platform": "Welke omvormer SEM aanstuurt voor geplande netladen. Kies Deye om de Deye-bedradingsstap te tonen.",
           "battery_replan_interval_min": "Hoe vaak het laadschema opnieuw wordt berekend op basis van de nieuwste voorspelling en prijzen.",
-          "battery_prefer_consecutive_window": "Aan: goedkope uren in één blok (minder start/stop-cycli); uit: de afzonderlijk goedkoopste uren, ook verspreid."
+          "battery_prefer_consecutive_window": "Aan: goedkope uren in één blok (minder start/stop-cycli); uit: de afzonderlijk goedkoopste uren, ook verspreid.",
+          "battery_charge_power_limit_entity": "The inverter's max-charge-power number that charge pacing writes to (e.g. Huawei's 'Maximum charging power'). Leave empty to keep pacing advisory-only."
         }
       },
       "ev_charger_edit": {

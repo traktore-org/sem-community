@@ -284,12 +284,14 @@
           "battery_force_charge_negative_price": "负电价时强制充电",
           "battery_charge_platform": "电池充电平台",
           "battery_replan_interval_min": "重新规划间隔 (min)",
-          "battery_prefer_consecutive_window": "优先选择连续的充电时段"
+          "battery_prefer_consecutive_window": "优先选择连续的充电时段",
+          "battery_charge_power_limit_entity": "Battery charge-power limit entity (for pacing)"
         },
         "data_description": {
           "battery_charge_platform": "SEM 用于计划电网充电的逆变器。选择 Deye 可显示 Deye 接线步骤。",
           "battery_replan_interval_min": "根据最新预测和电价重新计算充电计划的频率。",
-          "battery_prefer_consecutive_window": "开启：将便宜时段集中为一整块（减少启停次数）；关闭：即使分散也选择单独最便宜的小时。"
+          "battery_prefer_consecutive_window": "开启：将便宜时段集中为一整块（减少启停次数）；关闭：即使分散也选择单独最便宜的小时。",
+          "battery_charge_power_limit_entity": "The inverter's max-charge-power number that charge pacing writes to (e.g. Huawei's 'Maximum charging power'). Leave empty to keep pacing advisory-only."
         }
       },
       "notifications": {

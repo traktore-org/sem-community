@@ -304,12 +304,14 @@
           "battery_force_charge_negative_price": "Tvungen opladning ved negativ pris",
           "battery_charge_platform": "Batteriets ladeplatform",
           "battery_replan_interval_min": "Genplanlægningsinterval (min)",
-          "battery_prefer_consecutive_window": "Foretræk et sammenhængende ladevindue"
+          "battery_prefer_consecutive_window": "Foretræk et sammenhængende ladevindue",
+          "battery_charge_power_limit_entity": "Battery charge-power limit entity (for pacing)"
         },
         "data_description": {
           "battery_charge_platform": "Hvilken inverter SEM styrer til planlagt netopladning. Vælg Deye for at vise Deye-ledningstrinnet.",
           "battery_replan_interval_min": "Hvor ofte ladeplanen genberegnes ud fra den nyeste prognose og priser.",
-          "battery_prefer_consecutive_window": "Til: de billige timer i én blok (færre start/stop-cyklusser); fra: de enkeltvis billigste timer, selv spredt."
+          "battery_prefer_consecutive_window": "Til: de billige timer i én blok (færre start/stop-cyklusser); fra: de enkeltvis billigste timer, selv spredt.",
+          "battery_charge_power_limit_entity": "The inverter's max-charge-power number that charge pacing writes to (e.g. Huawei's 'Maximum charging power'). Leave empty to keep pacing advisory-only."
         }
       },
       "ev_charger_edit": {

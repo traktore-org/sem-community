@@ -304,12 +304,14 @@
           "battery_force_charge_negative_price": "Forzar carga con precio negativo",
           "battery_charge_platform": "Plataforma de carga de batería",
           "battery_replan_interval_min": "Intervalo de replanificación (min)",
-          "battery_prefer_consecutive_window": "Preferir una ventana de carga consecutiva"
+          "battery_prefer_consecutive_window": "Preferir una ventana de carga consecutiva",
+          "battery_charge_power_limit_entity": "Battery charge-power limit entity (for pacing)"
         },
         "data_description": {
           "battery_charge_platform": "Qué inversor controla SEM para la carga de red programada. Elige Deye para mostrar el paso de cableado de Deye.",
           "battery_replan_interval_min": "Con qué frecuencia se recalcula el plan de carga según la última previsión y los precios.",
-          "battery_prefer_consecutive_window": "Activado: horas baratas en un solo bloque (menos ciclos de arranque/parada); desactivado: las horas más baratas aunque estén dispersas."
+          "battery_prefer_consecutive_window": "Activado: horas baratas en un solo bloque (menos ciclos de arranque/parada); desactivado: las horas más baratas aunque estén dispersas.",
+          "battery_charge_power_limit_entity": "The inverter's max-charge-power number that charge pacing writes to (e.g. Huawei's 'Maximum charging power'). Leave empty to keep pacing advisory-only."
         }
       },
       "ev_charger_edit": {

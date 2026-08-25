@@ -304,12 +304,14 @@
           "battery_force_charge_negative_price": "Kényszertöltés negatív ár esetén",
           "battery_charge_platform": "Akkumulátor töltési platform",
           "battery_replan_interval_min": "Újratervezési intervallum (min)",
-          "battery_prefer_consecutive_window": "Összefüggő töltési ablak előnyben részesítése"
+          "battery_prefer_consecutive_window": "Összefüggő töltési ablak előnyben részesítése",
+          "battery_charge_power_limit_entity": "Battery charge-power limit entity (for pacing)"
         },
         "data_description": {
           "battery_charge_platform": "Melyik invertert vezérli a SEM az ütemezett hálózati töltéshez. Válaszd a Deye-t a Deye bekötési lépés megjelenítéséhez.",
           "battery_replan_interval_min": "Milyen gyakran számolja újra a töltési ütemtervet a legfrissebb előrejelzés és árak alapján.",
-          "battery_prefer_consecutive_window": "Be: az olcsó órák egy blokkban (kevesebb indítás/leállítás ciklus); ki: az egyenként legolcsóbb órák, akár szétszórtan is."
+          "battery_prefer_consecutive_window": "Be: az olcsó órák egy blokkban (kevesebb indítás/leállítás ciklus); ki: az egyenként legolcsóbb órák, akár szétszórtan is.",
+          "battery_charge_power_limit_entity": "The inverter's max-charge-power number that charge pacing writes to (e.g. Huawei's 'Maximum charging power'). Leave empty to keep pacing advisory-only."
         }
       },
       "ev_charger_edit": {

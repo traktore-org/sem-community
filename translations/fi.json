@@ -304,12 +304,14 @@
           "battery_force_charge_negative_price": "Pakota lataus negatiivisella hinnalla",
           "battery_charge_platform": "Akun latausalusta",
           "battery_replan_interval_min": "Uudelleensuunnitteluväli (min)",
-          "battery_prefer_consecutive_window": "Suosi yhtenäistä latausikkunaa"
+          "battery_prefer_consecutive_window": "Suosi yhtenäistä latausikkunaa",
+          "battery_charge_power_limit_entity": "Battery charge-power limit entity (for pacing)"
         },
         "data_description": {
           "battery_charge_platform": "Mitä invertteriä SEM ohjaa ajastettuun verkkolataukseen. Valitse Deye näyttääksesi Deye-kytkentävaiheen.",
           "battery_replan_interval_min": "Kuinka usein latausaikataulu lasketaan uudelleen uusimman ennusteen ja hintojen perusteella.",
-          "battery_prefer_consecutive_window": "Päällä: halvat tunnit yhtenä lohkona (vähemmän käynnistys/pysäytys-syklejä); pois: yksittäiset halvimmat tunnit, vaikka hajallaan."
+          "battery_prefer_consecutive_window": "Päällä: halvat tunnit yhtenä lohkona (vähemmän käynnistys/pysäytys-syklejä); pois: yksittäiset halvimmat tunnit, vaikka hajallaan.",
+          "battery_charge_power_limit_entity": "The inverter's max-charge-power number that charge pacing writes to (e.g. Huawei's 'Maximum charging power'). Leave empty to keep pacing advisory-only."
         }
       },
       "ev_charger_edit": {

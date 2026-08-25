@@ -468,14 +468,16 @@
           "battery_roundtrip_efficiency": "Round-trip Efficiency",
           "battery_charge_platform": "Battery charge platform",
           "battery_replan_interval_min": "Replan interval (min)",
-          "battery_prefer_consecutive_window": "Prefer a consecutive charge window"
+          "battery_prefer_consecutive_window": "Prefer a consecutive charge window",
+          "battery_charge_power_limit_entity": "Battery charge-power limit entity (for pacing)"
         },
         "description": "Configure forecast-aware grid-to-battery charging during cheap hours",
         "title": "Battery Charge Scheduler",
         "data_description": {
           "battery_charge_platform": "Which inverter SEM commands for scheduled grid charging. Choose Deye to reveal the Deye wiring step.",
           "battery_replan_interval_min": "How often the charge schedule is recomputed against the latest forecast and prices.",
-          "battery_prefer_consecutive_window": "On keeps the cheap hours in one block (fewer start/stop cycles); off picks the individual cheapest hours even if scattered."
+          "battery_prefer_consecutive_window": "On keeps the cheap hours in one block (fewer start/stop cycles); off picks the individual cheapest hours even if scattered.",
+          "battery_charge_power_limit_entity": "The inverter's max-charge-power number that charge pacing writes to (e.g. Huawei's 'Maximum charging power'). Leave empty to keep pacing advisory-only."
         }
       },
       "pv_naming": {
