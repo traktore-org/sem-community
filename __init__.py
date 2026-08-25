@@ -2798,6 +2798,65 @@ async def _async_register_services(
     except Exception as err:  # noqa: BLE001
         _LOGGER.error("Failed to register backfill_forecast_ledger: %s", err)
 
+    async def async_backfill_battery_nights_service(call) -> None:
+        """(#815) Recover the battery's night history from statistics.
+
+        #778's need envelope wants five trainable nights and live recording
+        produces one a day, so a fresh install waits a working week to learn
+        what its own database usually already proves. This reads the pack's
+        cumulative discharge counter and reconstructs the nights in one pass.
+
+        Sounder as well as faster: live recording integrates POWER, so a
+        dropped sample loses that energy for good (#837). A counter keeps
+        counting while nobody is looking, so missing hours between the
+        endpoints cost nothing. Nights SEM measured live are never
+        overwritten — live separates house drain from EV assist and export,
+        and this cannot.
+        """
+        from .coordinator.night_backfill import run_backfill as _night_backfill
+
+        days = call.data.get("days") or 365
+        tracker = getattr(coordinator, "_battery_night", None)
+        if tracker is None:
+            _LOGGER.warning(
+                "backfill_battery_nights: no night tracker on the coordinator "
+                "yet — try again once SEM has completed a cycle")
+            return
+        try:
+            report = await _night_backfill(
+                hass, tracker, coordinator.config, days=int(days))
+        except Exception as err:  # noqa: BLE001 — a service must not kill setup
+            _LOGGER.error("backfill_battery_nights failed: %s", err)
+            return
+
+        if report.get("error"):
+            _LOGGER.warning("backfill_battery_nights: %s", report["error"])
+            return
+
+        try:
+            coordinator._storage.set_battery_night_state(tracker.to_dict())
+            await coordinator._storage.async_save_energy_now()
+        except (AttributeError, TypeError, ValueError) as err:
+            _LOGGER.warning("backfilled nights not persisted: %s", err)
+
+        _LOGGER.info(
+            "Service backfill_battery_nights: %d hour(s) of history from %s; "
+            "recovered %d night(s) (%d trainable); history now %d night(s), "
+            "%d usable",
+            report.get("days_of_history", 0), report.get("statistic"),
+            report.get("recovered", 0), report.get("trainable_recovered", 0),
+            report.get("nights_total", 0), report.get("usable_total", 0),
+        )
+        await coordinator.async_request_refresh()
+
+    try:
+        hass.services.async_register(
+            DOMAIN, "backfill_battery_nights",
+            async_backfill_battery_nights_service)
+        _LOGGER.debug("Registered service: %s.backfill_battery_nights", DOMAIN)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.error("Failed to register backfill_battery_nights: %s", err)
+
     try:
         hass.services.async_register(
             DOMAIN, "purge_status_history", async_purge_status_history_service)

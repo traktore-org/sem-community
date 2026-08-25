@@ -476,6 +476,22 @@ statistics and settles the ledger in one pass, so forecast-led spending can
 start from what your site has actually done. Days SEM recorded live are never
 overwritten by the reconstruction.
 
+The battery half has the same shortcut. SEM wants five good nights of evidence
+before it will say how much of the pack is safe to spend, and recording
+produces one per day. The action **"Learn overnight battery use from past
+history"** (`solar_energy_management.backfill_battery_nights`) reconstructs
+those nights from your battery's recorded discharge, so the answer arrives at
+once rather than a week later.
+
+Two things worth knowing about reconstructed nights. They are read from a
+cumulative energy counter, which keeps counting whether or not SEM was
+watching — so unlike live recording they cannot be spoiled by a sensor that
+drops out. But that counter reports everything the battery sent out, and
+cannot separate what your house used from what went to the car or the grid.
+Reconstructed nights are therefore treated as an **upper bound** on household
+use, which errs toward holding more back rather than less. Nights SEM measured
+live are always kept in preference, because a live night can tell those apart.
+
 **Nights that do not add up are not used**
 
 A battery cannot send out more energy than it discharged. SEM checks that on

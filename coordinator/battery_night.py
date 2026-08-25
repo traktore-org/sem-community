@@ -139,6 +139,17 @@ class BatteryNightTracker:
         self._assist_j = 0.0
         self._export_j = 0.0
         self._gap_s = 0.0
+        # (#837) The night's OWN gap/hold, frozen at dawn. gap_s and held_s
+        # keep accumulating through the day phase — they have to, the day is
+        # measured too — but a record does not seal until the NEXT night
+        # opens, so reading the running totals made every night carry the
+        # following day's sensor dropouts as if they were its own. On .175
+        # that meant ~2,750 s of DAYTIME modbus flakiness refusing nights it
+        # never touched, and #778 sat at 1 usable night of 5 indefinitely.
+        # None until dawn: a record sealed straight out of the night phase
+        # (a restart mid-night) still reports the live totals.
+        self._night_gap_s: Optional[float] = None
+        self._night_held_s: Optional[float] = None
         self._reserve_hit = False
         self._soc_start: Optional[float] = None
         self._soc_morning: Optional[float] = None
@@ -214,6 +225,13 @@ class BatteryNightTracker:
                 # Morning: freeze the night half, open the day half. The
                 # flip tick's SOC belongs to the DAY — the night's morning
                 # value is whatever its own last tick recorded.
+                #
+                # (#837) Freeze the night's gap/hold here too, for the same
+                # reason and at the same instant. Everything the day spends
+                # unmeasured is the day's business; the trainable gate is a
+                # claim about the night.
+                self._night_gap_s = self._gap_s
+                self._night_held_s = self._held_s
                 self._phase = "day"
                 return
             if s.soc_available and s.soc is not None:
@@ -276,10 +294,16 @@ class BatteryNightTracker:
                 getattr(self, "_flow_violation_s", 0.0),
                 VIOLATION_TOLERANCE_S + 1.0)
 
+    def _night_gap(self) -> float:
+        """The gap that belongs to the night (#837) — frozen at dawn, or the
+        live total while the night is still running."""
+        return (self._night_gap_s if self._night_gap_s is not None
+                else self._gap_s)
+
     def _unbridged_gap_s(self) -> float:
         """Sampling time no measurement covers — the only kind that should
         still refuse a night."""
-        return max(0.0, self._gap_s - self._bridged_s)
+        return max(0.0, self._night_gap() - self._bridged_s)
 
     def _bridge_hole(self, dt: float, s: "Sample") -> None:
         """Recover a sampling hole's energy from the battery's own SOC.
@@ -358,8 +382,9 @@ class BatteryNightTracker:
             "bridged_s": round(self._bridged_s, 1),
             "night_grid_kwh": round(self._night_grid_j / 3.6e6, 3),
             "day_home_kwh": round(self._day_home_j / 3.6e6, 3),
-            "gap_s": round(self._gap_s, 1),
-            "held_s": round(self._held_s, 1),
+            "gap_s": round(self._night_gap_s if self._night_gap_s is not None
+                           else self._gap_s, 1),
+            "held_s": round(self._night_held_s if self._night_held_s is not None else self._held_s, 1),
             "flows_balanced": self._flows_balanced,
             # A night whose books do not balance is recorded and visible, but
             # is not evidence: its drain is inflated by whatever inflated the
@@ -380,6 +405,17 @@ class BatteryNightTracker:
     def sealed(self) -> List[Dict[str, Any]]:
         return list(self._sealed)
 
+    def replace_sealed(self, records: Any) -> None:
+        """(#815) Swap the sealed history wholesale — the backfill's write.
+
+        Pruned by ``max_nights`` exactly as the seal path prunes, so the
+        window is decided in one place regardless of who wrote the records.
+        The night in flight is untouched: this replaces history, never the
+        measurement in progress.
+        """
+        self._sealed = [r for r in (records or []) if isinstance(r, dict)]
+        del self._sealed[:-self.max_nights]
+
     # ── persistence (restart mid-night must not halve the record) ──
 
     def to_dict(self) -> Dict[str, Any]:
@@ -398,6 +434,8 @@ class BatteryNightTracker:
             "night_grid_j": self._night_grid_j,
             "day_home_j": self._day_home_j,
             "held_s": self._held_s,
+            "night_gap_s": self._night_gap_s,
+            "night_held_s": self._night_held_s,
             # (#778/#800) The conservation verdict and the bridge ledger. These
             # MUST persist: a restart is exactly when they matter, and a
             # tracker that forgets them re-opens the night believing its books
@@ -446,6 +484,18 @@ class BatteryNightTracker:
         self._night_grid_j = float(d.get("night_grid_j", 0.0) or 0.0)
         self._day_home_j = float(d.get("day_home_j", 0.0) or 0.0)
         self._held_s = float(d.get("held_s", 0.0) or 0.0)
+        self._night_gap_s = d.get("night_gap_s")
+        self._night_held_s = d.get("night_held_s")
+        # (#837) One-time migration. A state written before the freeze
+        # existed, restored into the DAY phase, has a night that already
+        # flipped and nothing frozen for it — so it would go on absorbing the
+        # rest of the day exactly as before. Freeze what it has: at worst that
+        # under-counts a gap the old code would have mis-attributed to the
+        # night anyway, and it lets the running instance seal an honest record
+        # tonight instead of a day later.
+        if self._phase == "day" and self._night_gap_s is None:
+            self._night_gap_s = self._gap_s
+            self._night_held_s = self._held_s
         sealed = d.get("sealed")
         if isinstance(sealed, list):
             self._sealed = [r for r in sealed if isinstance(r, dict)]
