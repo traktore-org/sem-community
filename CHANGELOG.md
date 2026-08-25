@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.0.0-beta.17] — 25.08.2026
+
 - ⏸️ **EV phase switching is switched off by default while it is reworked**
   (#804): real-world testing found the shipped model harmful on two charger
   brands — a Wattpilot is left paused after every switch because it needs an
