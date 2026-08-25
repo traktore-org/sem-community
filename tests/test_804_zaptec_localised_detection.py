@@ -26,6 +26,14 @@ Two design facts pinned here, both measured on the reporter's hardware:
   (3×25 A in his case) and must NOT be taken as SEM's throttle, even when the
   charger-level number is missing — a wrong write there constrains the whole
   installation.
+
+The two INSTALLATION entity_ids below are the reporter's own, quoted from
+#804. The charger-device ids were derived from the integration's naming rules
+(``has_entity_name`` + the device name) and then CONFIRMED byte-for-byte by
+``tools/zaptec_sim``, which reproduces those rules and independently produced
+the same two installation ids the reporter reported. The whole file is also
+exercised live: the simulator runs on the rig and SEM's real discovery picks
+``maximale_laadstroom`` over ``beschikbare_stroom``.
 """
 from __future__ import annotations
 

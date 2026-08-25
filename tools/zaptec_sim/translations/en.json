@@ -1,0 +1,12 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Zaptec (simulated)",
+        "description": "A local stand-in for a Zaptec Go 2, for SEM testing. Device names default to the Dutch, owner-prefixed shape that broke detection in #804.",
+        "data": {"device_prefix": "Device name prefix"}
+      }
+    },
+    "abort": {"already_configured": "The simulator is already set up."}
+  }
+}

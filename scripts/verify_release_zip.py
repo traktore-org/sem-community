@@ -40,7 +40,7 @@ MUST_EXIST = (
     "brand/icon.png",                     # HACS's documented brand mechanism
     "icon.png",                           # HA 2026.3+ inline brand assets
 )
-MUST_NOT_SHIP = ("tests/", "docs/", ".github/", "scripts/", "CLAUDE.md",
+MUST_NOT_SHIP = ("tests/", "docs/", ".github/", "scripts/", "tools/", "CLAUDE.md",
                  ".mcp.json")
 
 
@@ -62,7 +62,7 @@ def main(path: str) -> int:
     # 2 — completeness against git, using the builder's own exclusions
     tracked = subprocess.run(["git", "ls-files"], capture_output=True,
                              text=True, check=True).stdout.split()
-    excl_dirs = (".github/", "tests/", "docs/", "logo/", "scripts/",
+    excl_dirs = (".github/", "tests/", "docs/", "logo/", "scripts/", "tools/",
                  ".claude/", "tmp/")
     excl_files = {"CLAUDE.md", ".mcp.json", ".gitignore", "hacs.json",
                   "LICENSE", "README.md", "KNOWN_LIMITATIONS.md",
