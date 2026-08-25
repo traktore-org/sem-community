@@ -752,6 +752,23 @@ class EVControlMixin:
         entity = charger_cfg.get("ev_phase_switch_entity")
         if not entity:
             return decision
+        # (#804, 25.08) DORMANT in 2.0 unless explicitly woken. Real testing
+        # found the shipped model harmful on two of the three brands that
+        # tried it: a Wattpilot latches into a paused force-state that a
+        # current write cannot clear (every switch pauses charging and
+        # nothing resumes it), and a Zaptec has no phase command at all — it
+        # switches implicitly on a current threshold — so the sequence
+        # stopped the charger, switched nothing, and retried forever.
+        # Making it safe is the 2.1 arc: a per-brand resume surface, the
+        # threshold model, stop-eagerness on latching hardware, and the
+        # per-phase current guard (switching down lands the whole load on
+        # one phase, invisible to a kW peak limit). Until that arc lands,
+        # the entity alone must not activate the path — that is exactly how
+        # both reporters walked into it. select.py gates the phase-mode
+        # knob on the same key, because a selector that switches while the
+        # actuation is dormant is the #462 lie.
+        if not charger_cfg.get("ev_phase_switching_enabled", False):
+            return decision
 
         from dataclasses import replace
 

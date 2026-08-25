@@ -20,6 +20,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 
 from ..devices.base import ControllableDevice, DeviceState, DeviceControlMode
 from .plan_verdict import NO_OPINION, PlanVerdict
@@ -950,7 +951,7 @@ class SurplusController:
             allocated_w=total_allocated,
             unallocated_w=max(0.0, distributable - total_allocated),
             active_devices=active_count, total_devices=len(self._devices),
-            allocations=allocations, last_update=datetime.now())
+            allocations=allocations, last_update=dt_util.now())
         return self._allocation_data
 
     async def update(
@@ -1640,7 +1641,7 @@ class SurplusController:
             active_devices=active_count,
             total_devices=len(self._devices),
             allocations=allocations,
-            last_update=datetime.now(),
+            last_update=dt_util.now(),
         )
 
         return self._allocation_data

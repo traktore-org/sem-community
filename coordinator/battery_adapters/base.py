@@ -41,6 +41,18 @@ class BatteryControlAdapter(ABC):
     The actuator never branches on brand; the adapter does.
     """
 
+    #: (#840) Consecutive write refusals before the capability is withdrawn.
+    #: Three is the charger side's number and the same reasoning: enough that a
+    #: transient modbus stumble is not mistaken for a permanent limitation,
+    #: few enough that a device which simply cannot do it is not asked all day.
+    FORCE_DISCHARGE_FAILURE_LIMIT: int = 3
+
+    #: (#840) How long to wait between silent probes once the capability has
+    #: been withdrawn. Ten minutes turns @RienduPre's 360 failed writes an hour
+    #: into six, none of them logged — while still letting a device that
+    #: recovers do so without the user having to restart SEM to find out.
+    FORCE_DISCHARGE_RETRY_S: float = 600.0
+
     def __init__(self, hass, config: dict) -> None:
         self._hass = hass
         self._config = config
@@ -60,6 +72,26 @@ class BatteryControlAdapter(ABC):
         self._force_discharge_entity: str = config.get(
             "battery_force_discharge_control_entity", "",
         )
+        # (#840) Consecutive refusals of the forcible-discharge write.
+        #
+        # @RienduPre's Growatt exposes the setpoint entity but its firmware
+        # does not implement the write ("Not supported by device"), and SEM
+        # retried every cycle for nineteen hours — 2,364 log lines. That
+        # register will not appear tomorrow: the retry is the fault, and the
+        # log spam only its symptom.
+        #
+        # Deliberately NOT parsed from the error string: those differ per
+        # integration and change without notice. Count evidence instead, the
+        # way the charger side already does (3 strikes → Repair, cleared on
+        # success). Not persisted, so a restart re-arms it and a firmware
+        # update or corrected entity gets another chance without the user
+        # needing to know SEM had given up.
+        self._force_discharge_failures: int = 0
+        # (#840) The last value whose write was REFUSED. Distinct from
+        # ``_last_force_discharge_w``, which records what actually landed.
+        self._last_force_discharge_attempt_w: "Optional[float]" = None
+        #: Monotonic deadline before the next silent probe (#840).
+        self._force_discharge_retry_after: float = 0.0
         # de-dup writes. None = never written (so the first write of any sign
         # always goes through; a plain -1.0 sentinel would alias a real
         # negative charge setpoint on a bidirectional entity, #523).
@@ -88,12 +120,38 @@ class BatteryControlAdapter(ABC):
         """True if this brand has a forced-charge service.
         ``Sonnen`` would return False — protection-only adapter."""
 
+    def _raise_force_discharge_repair(self, error: str) -> None:
+        """(#840) Surface the withdrawn capability outside the log."""
+        try:
+            from ..repair_issues import raise_battery_force_discharge_unsupported
+            raise_battery_force_discharge_unsupported(
+                self._hass, self._force_discharge_entity, error=error)
+        except Exception as e:  # noqa: BLE001 — a repair never costs a cycle
+            _LOGGER.debug("force-discharge repair not raised: %s", e)
+
+    def _clear_force_discharge_repair(self) -> None:
+        try:
+            from ..repair_issues import clear_battery_force_discharge_unsupported
+            clear_battery_force_discharge_unsupported(
+                self._hass, self._force_discharge_entity)
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.debug("force-discharge repair not cleared: %s", e)
+
     @property
     def supports_forced_discharge(self) -> bool:
         """True when a forcible-discharge control entity is configured
         (#523) — brand-agnostic battery→grid arbitrage. No entity → the
-        actuator drops FORCE_DISCHARGE."""
-        return bool(self._force_discharge_entity)
+        actuator drops FORCE_DISCHARGE.
+
+        (#840) Also False once the device has REFUSED the write
+        ``FORCE_DISCHARGE_FAILURE_LIMIT`` times in a row. Muting the log while
+        still advertising the capability would be the worse half of a fix: the
+        actuator would go on issuing FORCE_DISCHARGE and the planner would go
+        on budgeting an export that can never happen, silently. Withdrawing it
+        makes the loss of function explicit to every consumer at once."""
+        if not self._force_discharge_entity:
+            return False
+        return self._force_discharge_failures < self.FORCE_DISCHARGE_FAILURE_LIMIT
 
     @property
     def last_intent(self) -> "Optional[BatteryIntent]":
@@ -284,6 +342,39 @@ class BatteryControlAdapter(ABC):
                 _requested, watts, self._force_discharge_entity,
                 attrs.get("min"), attrs.get("max"),
             )
+        # (#840) The device has refused enough times to settle the question.
+        # Ask again only occasionally, and silently: a firmware update or a
+        # cleared fault should recover on its own, but nobody needs to watch
+        # it being asked.
+        if self._force_discharge_failures >= self.FORCE_DISCHARGE_FAILURE_LIMIT:
+            import time as _time
+            now = _time.monotonic()
+            if now < self._force_discharge_retry_after:
+                return False
+            self._force_discharge_retry_after = now + self.FORCE_DISCHARGE_RETRY_S
+        # (#840) Do not re-issue a write that just failed with the SAME value.
+        #
+        # ``command_normal`` / ``command_limit_discharge`` / ``command_off``
+        # each write 0 W as #523 mutual exclusion, and command_normal runs on
+        # EVERY ordinary cycle. On a device that refuses the register that is
+        # a guaranteed failure every cycle for the life of the install —
+        # @RienduPre's Growatt logged 2,364 of them in nineteen hours, none
+        # from the export feature (dormant on his system), all from this
+        # routine zero.
+        #
+        # The repeat is unbounded BY CONSTRUCTION: ``_last_force_discharge_w``
+        # is only assigned after a SUCCESSFUL call, so a failing write never
+        # records itself and the de-dup below never engages.
+        #
+        # A same-value block was the first attempt at this and it was wrong:
+        # test_fd2_retry_after_failure requires a TRANSIENT failure to be
+        # retried with the same value, and it should be — a modbus blip that
+        # clears must not permanently disable export. The distinction cannot
+        # be made from the error, so it is made from persistence instead: the
+        # strike counter below withdraws the capability after
+        # FORCE_DISCHARGE_FAILURE_LIMIT consecutive refusals, and a SILENT
+        # probe every FORCE_DISCHARGE_RETRY_S lets a device that recovers say
+        # so without anyone watching the log.
         # Skip when within 100 W of the last applied value — the 0→0 case
         # (the common NORMAL cycle) must not spam the bus.
         if (self._last_force_discharge_w is not None
@@ -305,6 +396,18 @@ class BatteryControlAdapter(ABC):
                 blocking=True,
             )
             self._last_force_discharge_w = watts
+            self._last_force_discharge_attempt_w = None
+            if self._force_discharge_failures:
+                # Recovered — say so, and re-arm. A transient refusal that
+                # cleared should not leave a countdown half-spent.
+                _LOGGER.info(
+                    "Battery: %s accepted a setpoint again after %d "
+                    "refusal(s) — forcible discharge is available",
+                    self._force_discharge_entity,
+                    self._force_discharge_failures,
+                )
+                self._force_discharge_failures = 0
+                self._clear_force_discharge_repair()
             if watts > 0:
                 _LOGGER.info(
                     "Battery: forcible-discharge %.0f W → %s (arbitrage)",
@@ -318,7 +421,36 @@ class BatteryControlAdapter(ABC):
                 )
             return True
         except Exception as e:  # noqa: BLE001
-            _LOGGER.warning(
-                "Battery: failed to set forcible discharge: %s", e,
-            )
+            self._last_force_discharge_attempt_w = watts
+            self._force_discharge_failures += 1
+            limit = self.FORCE_DISCHARGE_FAILURE_LIMIT
+            if self._force_discharge_failures > limit:
+                # Past the limit this is a silent probe. It already said its
+                # piece; repeating it is the 2,364-line log (#840).
+                return False
+            if self._force_discharge_failures < limit:
+                _LOGGER.warning(
+                    "Battery: failed to set forcible discharge via %s "
+                    "(attempt %d/%d): %s",
+                    self._force_discharge_entity,
+                    self._force_discharge_failures, limit, e,
+                )
+            else:
+                # The last word on the subject. Everything after this is
+                # silence, because the answer will not change (#840).
+                _LOGGER.warning(
+                    "Battery: %s refused the forcible-discharge setpoint %d "
+                    "times (%s). Treating battery-to-grid export as "
+                    "unsupported on this device and no longer attempting it. "
+                    "If this is wrong — a renamed entity, or firmware that "
+                    "gained the register — restart SEM to try again.",
+                    self._force_discharge_entity, limit, e,
+                )
+                # Start the backoff HERE, at the moment of withdrawal —
+                # otherwise the deadline is still 0.0 and the very next cycle
+                # fires a probe, spending a strike for nothing.
+                import time as _time
+                self._force_discharge_retry_after = (
+                    _time.monotonic() + self.FORCE_DISCHARGE_RETRY_S)
+                self._raise_force_discharge_repair(str(e))
             return False

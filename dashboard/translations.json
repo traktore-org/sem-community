@@ -1443,7 +1443,8 @@
     "forecast_days_of_evidence": "days of evidence",
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
-    "forecast_per_string_total": "Total across {n} strings"
+    "forecast_per_string_total": "Total across {n} strings",
+    "forecast_per_string_today": "Forecast today"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -2889,7 +2890,8 @@
     "forecast_days_of_evidence": "days of evidence",
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
-    "forecast_per_string_total": "Total across {n} strings"
+    "forecast_per_string_total": "Total across {n} strings",
+    "forecast_per_string_today": "Forecast today"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -4335,7 +4337,8 @@
     "forecast_days_of_evidence": "Tage Datenbasis",
     "forecast_planes_summed": "Summiert über {n} Dachflächen.",
     "forecast_per_string_title": "Pro String",
-    "forecast_per_string_total": "Summe über {n} Strings"
+    "forecast_per_string_total": "Summe über {n} Strings",
+    "forecast_per_string_today": "Prognose heute"
   },
   "en": {
     "% of limit": "% of limit",
@@ -5781,7 +5784,8 @@
     "forecast_days_of_evidence": "days of evidence",
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
-    "forecast_per_string_total": "Total across {n} strings"
+    "forecast_per_string_total": "Total across {n} strings",
+    "forecast_per_string_today": "Forecast today"
   },
   "es": {
     "% of limit": "% del límite",
@@ -7227,7 +7231,8 @@
     "forecast_days_of_evidence": "days of evidence",
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
-    "forecast_per_string_total": "Total across {n} strings"
+    "forecast_per_string_total": "Total across {n} strings",
+    "forecast_per_string_today": "Forecast today"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -8673,7 +8678,8 @@
     "forecast_days_of_evidence": "days of evidence",
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
-    "forecast_per_string_total": "Total across {n} strings"
+    "forecast_per_string_total": "Total across {n} strings",
+    "forecast_per_string_today": "Forecast today"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -10119,7 +10125,8 @@
     "forecast_days_of_evidence": "days of evidence",
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
-    "forecast_per_string_total": "Total across {n} strings"
+    "forecast_per_string_total": "Total across {n} strings",
+    "forecast_per_string_today": "Forecast today"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -11565,7 +11572,8 @@
     "forecast_days_of_evidence": "days of evidence",
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
-    "forecast_per_string_total": "Total across {n} strings"
+    "forecast_per_string_total": "Total across {n} strings",
+    "forecast_per_string_today": "Forecast today"
   },
   "it": {
     "% of limit": "% del limite",
@@ -13011,7 +13019,8 @@
     "forecast_days_of_evidence": "days of evidence",
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
-    "forecast_per_string_total": "Total across {n} strings"
+    "forecast_per_string_total": "Total across {n} strings",
+    "forecast_per_string_today": "Forecast today"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -14457,7 +14466,8 @@
     "forecast_days_of_evidence": "days of evidence",
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
-    "forecast_per_string_total": "Total across {n} strings"
+    "forecast_per_string_total": "Total across {n} strings",
+    "forecast_per_string_today": "Forecast today"
   },
   "no": {
     "% of limit": "% av grense",
@@ -15903,7 +15913,8 @@
     "forecast_days_of_evidence": "days of evidence",
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
-    "forecast_per_string_total": "Total across {n} strings"
+    "forecast_per_string_total": "Total across {n} strings",
+    "forecast_per_string_today": "Forecast today"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -17349,7 +17360,8 @@
     "forecast_days_of_evidence": "days of evidence",
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
-    "forecast_per_string_total": "Total across {n} strings"
+    "forecast_per_string_total": "Total across {n} strings",
+    "forecast_per_string_today": "Forecast today"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -18795,7 +18807,8 @@
     "forecast_days_of_evidence": "days of evidence",
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
-    "forecast_per_string_total": "Total across {n} strings"
+    "forecast_per_string_total": "Total across {n} strings",
+    "forecast_per_string_today": "Forecast today"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -20241,7 +20254,8 @@
     "forecast_days_of_evidence": "days of evidence",
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
-    "forecast_per_string_total": "Total across {n} strings"
+    "forecast_per_string_total": "Total across {n} strings",
+    "forecast_per_string_today": "Forecast today"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -21687,7 +21701,8 @@
     "forecast_days_of_evidence": "days of evidence",
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
-    "forecast_per_string_total": "Total across {n} strings"
+    "forecast_per_string_total": "Total across {n} strings",
+    "forecast_per_string_today": "Forecast today"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -23133,6 +23148,7 @@
     "forecast_days_of_evidence": "days of evidence",
     "forecast_planes_summed": "Summed across {n} planes of your roof.",
     "forecast_per_string_title": "Per string",
-    "forecast_per_string_total": "Total across {n} strings"
+    "forecast_per_string_total": "Total across {n} strings",
+    "forecast_per_string_today": "Forecast today"
   }
 }

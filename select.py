@@ -191,7 +191,12 @@ async def async_setup_entry(
             # (ev_phase_switch_entity) — no capability, no knob. The
             # orphan cleanup below retires the select if the entity is
             # ever un-configured.
-            if charger_cfg.get("ev_phase_switch_entity"):
+            # (#804) Same gate as the actuation in ev_control — dormant in
+            # 2.0 unless ev_phase_switching_enabled is set. One gate, both
+            # halves: a knob that switches while the actuation is dormant
+            # looks applied and does nothing (#462).
+            if (charger_cfg.get("ev_phase_switch_entity")
+                    and charger_cfg.get("ev_phase_switching_enabled", False)):
                 pm_key = f"charger_{cid}_phase_mode"
                 per_charger_keys.add(pm_key)
                 entities.append(SEMPerChargerSelect(

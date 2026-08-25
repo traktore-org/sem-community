@@ -7718,13 +7718,6 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
             ${this._renderOptionNumberInput("battery_min_deficit_kwh","config_bs_min_deficit",{min:.5,max:10,step:.5,unit:"kWh",default:2},t,"config_help_bs_min_deficit")}
             ${this._renderOptionSlider("battery_pessimism_weight","config_bs_pessimism",{min:0,max:1,step:.1,unit:"",default:.3},t,"config_help_bs_pessimism")}
             ${this._renderOptionToggle("battery_force_charge_negative_price","config_bs_force_neg",t,"config_help_bs_force_neg",!0)}
-
-            ${""}
-            <div class="subsection-title">${this._t("config_section_forecast_spending")}</div>
-            <div class="setup-intro">${this._t("config_forecast_spending_intro")}</div>
-            ${this._renderToggle("switch.sem_forecast_spending_enabled","forecast_spending_enabled",e,"config_help_forecast_spending")}
-            ${this._renderToggle("switch.sem_battery_may_export","battery_may_export",e,"config_help_battery_may_export")}
-            ${this._renderToggle("switch.sem_battery_may_assist_ev","battery_may_assist_ev",e,"config_help_battery_may_assist_ev")}
         `}_renderLoadManagement(e){const t=this._options||{},i="opt:peak_limit_unlimited",s=this._isDirty(i)?!!this._staged[i].value:!!t.peak_limit_unlimited;return W`
             <div class="readonly-row">
                 <span class="ctrl-label">${this._t("load_management_status")}</span>
@@ -7749,54 +7742,54 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     ${this._renderOptionNumberInput("emergency_peak_level","config_lm_emergency_peak",{min:1,max:80,step:.1,unit:"kW",default:6},t,"config_help_lm_emergency_peak")}
                 `:q}
             `}
-        `}_renderForecast(e){const t=this._val("forecast_source")||"none",i="none"===t?this._t("none"):this._forecastProviderLabel(t),s=this._options||{},r=this._hass?.states?.["sensor.sem_forecast_source"]?.attributes?.sources_available||[],a=e=>!Array.isArray(r)||r.includes(e),o=s.solar_forecast_source||"auto",n=[{value:"auto",label:this._t("config_forecast_source_auto")},...[{value:"solcast",label:"Solcast PV Solar"},{value:"forecast_solar",label:"Forecast.Solar"},{value:"open_meteo",label:"Open-Meteo Solar Forecast"}].filter(e=>a(e.value)||e.value===o).map(e=>a(e.value)?e:{...e,label:`${e.label} — ${this._t("config_forecast_source_missing")}`})],l=this._hass?.states?.["sensor.sem_forecast_source"]?.attributes||{},c=Number(l.planes||0);return W`
+        `}_renderForecast(e){const t=this._val("forecast_source")||"none",i="none"===t?this._t("none"):this._forecastProviderLabel(t),s=this._options||{},r=this._hass?.states?.["sensor.sem_forecast_source"]?.attributes?.sources_available||[],a=e=>!Array.isArray(r)||r.includes(e),o=s.solar_forecast_source||"auto",n=[{value:"auto",label:this._t("config_forecast_source_auto")},...[{value:"solcast",label:"Solcast PV Solar"},{value:"forecast_solar",label:"Forecast.Solar"},{value:"open_meteo",label:"Open-Meteo Solar Forecast"}].filter(e=>a(e.value)||e.value===o).map(e=>a(e.value)?e:{...e,label:`${e.label} — ${this._t("config_forecast_source_missing")}`})],l=this._hass?.states?.["sensor.sem_forecast_source"]?.attributes||{};return W`
             <div class="readonly-row">
                 <span class="ctrl-label">${this._t("forecast_source")}</span>
                 <span class="readonly-value">${i}</span>
             </div>
-            ${this._renderPlanesToday(l,c)}
+            ${this._renderPlanesToday(l)}
             ${this._renderOptionSelect("solar_forecast_source","config_solar_forecast_source",n,s,"config_help_solar_forecast_source","auto")}
-            ${"none"===t?W`<div class="overview-help">${this._t("config_forecast_install_hint")}</div>`:q}
             ${this._renderForecastComparison(l,t)}
-        `}_renderPlanesToday(e,t){const i=e.planes_today||[];if(!Array.isArray(i)||i.length<2)return q;const s=i.reduce((e,t)=>e+Number(t.today_kwh||0),0);return W`
-            <table class="sem-forecast-compare sem-planes">
-                <tr>
-                    <th>${this._t("forecast_per_string_title")}</th>
-                    <th>${this._t("forecast_compare_today")}</th>
-                </tr>
-                ${i.map(e=>W`
-                    <tr>
-                        <td>${e.name}</td>
-                        <td class="num">${Number(e.today_kwh||0).toFixed(1)} kWh</td>
-                    </tr>`)}
-                <tr class="is-total">
-                    <td>${this._t("forecast_per_string_total").replace("{n}",String(t))}</td>
-                    <td class="num">${s.toFixed(1)} kWh</td>
-                </tr>
-            </table>
+            ${"none"===t?W`<div class="overview-help">${this._t("config_forecast_install_hint")}</div>`:q}
         `}_renderForecastComparison(e,t){const i=e.sources_now||{},s=e.source_accuracy||{},r=Object.keys(i);if(r.length<2)return q;const a=e=>null==e?this._t("forecast_still_learning"):`${Math.round(100*Number(e))}%`;return W`
             <div class="readonly-row" style="margin-top:8px">
                 <span class="ctrl-label">${this._t("forecast_compare_title")}</span>
             </div>
             <div class="overview-help">${this._t("forecast_compare_help")}</div>
-            <table class="sem-forecast-compare">
+            <table class="sem-planes">
                 <tr>
                     <th>${this._t("forecast_compare_source")}</th>
                     <th>${this._t("forecast_compare_today")}</th>
                     <th>${this._t("forecast_compare_accuracy")}</th>
                 </tr>
                 ${r.map(e=>{const r=i[e]||{},o=s[e]||{},n=Number(o.settled_days||0);return W`
-                        <tr class="${e===t?"is-active":""}">
+                        <tr class="${e===t?"is-total":""}">
                             <td>
                                 ${this._forecastProviderLabel(e)}
-                                ${e===t?W`<span class="in-use">${this._t("forecast_in_use")}</span>`:q}
-                                ${Number(r.planes||0)>1?W`<span class="planes">${r.planes}×</span>`:q}
+                                ${e===t?W`<span style="font-size:10px;opacity:.75;margin-left:6px">${this._t("forecast_in_use")}</span>`:q}
+                                ${Number(r.planes||0)>1?W`<span style="font-size:10px;opacity:.6;margin-left:4px">${r.planes}×</span>`:q}
                             </td>
                             <td class="num">${Number(r.today_kwh||0).toFixed(1)} kWh</td>
                             <td class="num" title="${n} ${this._t("forecast_days_of_evidence")}">
                                 ${a(o.trust_today)}
                             </td>
                         </tr>`})}
+            </table>
+        `}_renderPlanesToday(e){const t=e.planes_today||[];if(!Array.isArray(t)||t.length<2)return q;const i=t.reduce((e,t)=>e+Number(t.today_kwh||0),0);return W`
+            <table class="sem-planes">
+                <tr>
+                    <th>${this._t("forecast_per_string_title")}</th>
+                    <th>${this._t("forecast_per_string_today")}</th>
+                </tr>
+                ${t.map(e=>W`
+                    <tr>
+                        <td>${e.name}</td>
+                        <td class="num">${Number(e.today_kwh||0).toFixed(1)} kWh</td>
+                    </tr>`)}
+                <tr class="is-total">
+                    <td>${this._t("forecast_per_string_total").replace("{n}",String(t.length))}</td>
+                    <td class="num">${i.toFixed(1)} kWh</td>
+                </tr>
             </table>
         `}_pvStrings(){const e=this._hass?.states||{},t=[];for(const i of Object.keys(e)){const s=i.match(/^sensor\.sem_pv_string_(pv\d+)_power$/);if(!s)continue;const r=e[i];t.push({slot:s[1],power:parseFloat(r.state),displayName:r.attributes?.string_name||s[1].toUpperCase()})}return t.sort((e,t)=>e.slot.localeCompare(t.slot,void 0,{numeric:!0})),t}_pvStringsSubtitle(){const e=this._pvStrings().length;return e?`${e} ${this._t("pv_strings_unit")||"strings"}`:""}_onPvNameInput(e,t){this._pvNameEdits={...this._pvNameEdits||{},[e]:t}}async _savePvNames(){const e={...this._options?.pv_string_names||{}},t=this._pvNameEdits||{};for(const[i,s]of Object.entries(t)){const t=(s||"").trim();t?e[i]=t:delete e[i]}await this._saveOption("pv_string_names",e,"pv_string_names"),this._pvNameEdits={}}_renderPvStrings(e){const t=this._pvStrings(),i=this._options?.pv_string_names||{},s=this._pvNameEdits||{},r=this._saveStatus?.pv_string_names;return W`
             <div class="setting-help-text">${this._t("config_pv_strings_help")}</div>
@@ -8092,17 +8085,16 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                 .c-ok { color: #8DC892; }
                 .c-warn { color: #ff9800; }
                 .overview-help { font-size: 12px; color: var(--secondary-text-color, ${e.textSec}); padding: 4px 0; }
-                /* (#822) The source comparison. Tabular numerals so the kWh
-                   column reads as a column and not as ragged text. */
-                .sem-forecast-compare { width: 100%; border-collapse: collapse; font-size: 12px; margin: 2px 0 6px; }
-                .sem-forecast-compare th { text-align: left; font-weight: 500; padding: 3px 6px 3px 0;
-                    color: var(--secondary-text-color, ${e.textSec}); text-transform: uppercase; letter-spacing: .04em; font-size: 10px; }
-                .sem-forecast-compare td { padding: 3px 6px 3px 0; border-top: 1px solid var(--divider-color, rgba(127,127,127,.2)); }
-                .sem-forecast-compare td.num { text-align: right; font-variant-numeric: tabular-nums; }
-                .sem-forecast-compare tr.is-active td { font-weight: 600; }
-                .sem-forecast-compare .in-use { font-size: 10px; opacity: .75; margin-left: 6px; }
-                .sem-forecast-compare .planes { font-size: 10px; opacity: .6; margin-left: 4px; }
-                .sem-forecast-compare.sem-planes tr.is-total td { font-weight: 600;
+                /* (#841) Per-string forecast. Tabular numerals so the kWh
+                   column reads as a column, not as ragged text. */
+                .sem-planes { width: 100%; border-collapse: collapse; font-size: 12px; margin: 2px 0 6px; }
+                .sem-planes th { text-align: left; font-weight: 500; padding: 3px 6px 3px 0;
+                    color: var(--secondary-text-color, ${e.textSec}); text-transform: uppercase;
+                    letter-spacing: .04em; font-size: 10px; }
+                .sem-planes td { padding: 3px 6px 3px 0;
+                    border-top: 1px solid var(--divider-color, rgba(127,127,127,.2)); }
+                .sem-planes td.num { text-align: right; font-variant-numeric: tabular-nums; }
+                .sem-planes tr.is-total td { font-weight: 600;
                     border-top: 1px solid var(--primary-text-color, ${e.text}); }
                 .overview-actions { display: flex; gap: 8px; margin-top: 10px; }
 
@@ -8387,20 +8379,6 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                 }
                 .save-status.ok { color: #8DC892; }
                 .save-status.err { color: var(--error-color, #d33); }
-
-                /* (#778) sub-heading inside a section — the forecast-spending
-                   block sits under the battery scheduler rather than claiming
-                   its own top-level section. */
-                .subsection-title {
-                    margin: 20px 0 2px;
-                    font-size: 12px;
-                    font-weight: 500;
-                    letter-spacing: .07em;
-                    text-transform: uppercase;
-                    color: var(--sem-text-sec, #8fa3a0);
-                    border-top: 1px solid rgba(255,255,255,.08);
-                    padding-top: 16px;
-                }
 
                 .setup-intro {
                     font-size: 12px; line-height: 1.45;

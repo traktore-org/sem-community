@@ -13,6 +13,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ⏸️ **EV phase switching is switched off by default while it is reworked**
+  (#804): real-world testing found the shipped model harmful on two charger
+  brands — a Wattpilot is left paused after every switch because it needs an
+  explicit start signal SEM never sends, and a Zaptec has no phase command at
+  all, so SEM stopped the charger, switched nothing, and retried. If you use
+  phase switching and want to keep testing it, set
+  `ev_phase_switching_enabled` on your charger; for everyone else the phase
+  selector disappears and SEM leaves your phases alone. The rework — a proper
+  start signal per brand, the Zaptec model, and a per-phase current guard so
+  switching down cannot overload one phase of your grid connection — is the
+  2.1 arc.
+
+# [2.0.0-beta.16] — 25.08.2026
+
+- 🔇 **A battery setpoint your inverter cannot accept no longer floods the log**
+  (#840): if the entity picked for forcible discharge is readable but not
+  writable on your hardware, SEM retried it on **every cycle** — one reporter's
+  log had **2,364 warnings in nineteen hours**, burying everything else. Two
+  things were wrong. SEM was writing a zero to that setpoint on every ordinary
+  cycle to clear a value it had never set, which is pure cost and guaranteed to
+  fail on such a device; it no longer does. And when a write really is refused,
+  SEM now stops after three attempts, says so once in plain language, and
+  raises a repair notice explaining exactly what is and is not affected —
+  charging, discharge limits and everyday operation are untouched. A restart
+  re-tries, so a firmware update or a corrected entity is picked up on its own.
+
+- ☀️ **Peak solar power is no longer over-stated on a multi-string roof**
+  (#841): summing each string's forecast was right for the day's energy, but
+  it was also applied to peak power — and peaks do not add. An east-facing and
+  a west-facing array reach their maxima hours apart, so adding them claimed
+  an instantaneous output your roof can never reach (an 8 kWp + 8 kWp install
+  would have shown 16 kW). SEM now reports the largest string's peak, which is
+  a figure the system can actually produce.
+- ☀️ **You can see the forecast per string** (#841): the Configuration tab's
+  Forecast section lists today's forecast for each string with the total
+  beneath it — so a string that has stopped reporting is visible, instead of
+  quietly shrinking the total.
+
+# [2.0.0-beta.16] — 25.08.2026
+
+- 🔭 **Multiple solar forecasts, one per PV string, are now added together
+  instead of read as one** (#838): if you run a separate Forecast.Solar or
+  Open-Meteo forecast per string, SEM counted only the first one — so its
+  forecast ran far below your real array. It now sums every string's forecast
+  (today, tomorrow, remaining and current power), and one string being
+  momentarily unavailable no longer hides the rest. Solcast, which already
+  publishes a single combined total, is unchanged.
+- 🔋 **The battery charge scheduler works again** (#839): if you had it
+  switched on, it crashed on every cycle and never once decided anything —
+  SEM compared two timestamps that were not comparable. Nothing looked broken
+  from outside: the integration kept running and the dashboard looked healthy,
+  while the feature quietly did nothing and wrote a warning to the log every
+  ten seconds. Found in a diagnostics download sent about something else
+  entirely, reproduced here, and fixed.
 - 🌙 **SEM can now learn overnight battery use from history you already have**
   (#815): working out how much of your battery is safe to spend needs five
   good nights of evidence, and recording produces one per day — so a new

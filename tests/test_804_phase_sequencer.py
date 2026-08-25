@@ -201,6 +201,11 @@ class TestCoordinatorWiring:
         )
         h.cfg = cfg if cfg is not None else {
             "ev_phase_switch_entity": "number.keba_phases",
+            # (#804, 25.08) The path is dormant in 2.0 by default; these
+            # tests exercise the WOKEN behaviour, so they opt in the same
+            # way a tester does. The dormancy itself is pinned in
+            # test_804_phase_switching_default_off.py.
+            "ev_phase_switching_enabled": True,
             "phase_mode": "1",
             "ev_voltage": 230,
             "ev_min_current": 6,
@@ -281,6 +286,7 @@ class TestCoordinatorWiring:
             ChargerDecision, ChargerIntent,
         )
         h = self._host(cfg={"ev_phase_switch_entity": "number.keba_phases",
+                            "ev_phase_switching_enabled": True,   # woken (#804)
                             "phase_mode": "auto", "ev_voltage": 230,
                             "ev_min_current": 6})
         d = ChargerDecision(charger_id="c1", mode="always_max",

@@ -2069,22 +2069,6 @@ class SEMConfigCard extends SEMLitBase {
                 { min: 0, max: 1, step: 0.1, unit: '', default: 0.3 }, opts, 'config_help_bs_pessimism')}
             ${this._renderOptionToggle('battery_force_charge_negative_price', 'config_bs_force_neg',
                 opts, 'config_help_bs_force_neg', true)}
-
-            ${''/* (#778) Forecast-led spending. Three switch ENTITIES rather
-               than options, because they must be flippable from the dashboard
-               without an Apply cycle — a permission a user revokes is usually
-               revoked because they want it to stop NOW. The two permissions
-               are separate switches rather than another battery mode: a mode
-               is single-select and cannot say "may sell, may not touch the
-               car". */}
-            <div class="subsection-title">${this._t('config_section_forecast_spending')}</div>
-            <div class="setup-intro">${this._t('config_forecast_spending_intro')}</div>
-            ${this._renderToggle('switch.sem_forecast_spending_enabled',
-                'forecast_spending_enabled', T, 'config_help_forecast_spending')}
-            ${this._renderToggle('switch.sem_battery_may_export',
-                'battery_may_export', T, 'config_help_battery_may_export')}
-            ${this._renderToggle('switch.sem_battery_may_assist_ev',
-                'battery_may_assist_ev', T, 'config_help_battery_may_assist_ev')}
         `;
     }
 
@@ -2162,58 +2146,28 @@ class SEMConfigCard extends SEMLitBase {
                     : { ...o, label: `${o.label} — ${this._t('config_forecast_source_missing')}` })),
         ];
         const attrs = this._hass?.states?.['sensor.sem_forecast_source']?.attributes || {};
-        const planes = Number(attrs.planes || 0);
         return html`
             <div class="readonly-row">
                 <span class="ctrl-label">${this._t('forecast_source')}</span>
                 <span class="readonly-value">${label}</span>
             </div>
-            ${this._renderPlanesToday(attrs, planes)}
+            ${this._renderPlanesToday(attrs)}
             ${this._renderOptionSelect('solar_forecast_source', 'config_solar_forecast_source',
                 sourceOptions, opts, 'config_help_solar_forecast_source', 'auto')}
-            ${raw === 'none' ? html`<div class="overview-help">${this._t('config_forecast_install_hint')}</div>` : nothing}
             ${this._renderForecastComparison(attrs, raw)}
-        `;
-    }
-
-    // (#838) Today's forecast per plane, above the fold.
-    //
-    // The total is what SEM plans on; the parts are what the user recognises,
-    // because they built the roof one array at a time. It is also the cheapest
-    // possible check on the total: a plane reading zero, or one carrying the
-    // whole roof, is obvious here and invisible in a sum.
-    _renderPlanesToday(attrs, planes) {
-        const rows = attrs.planes_today || [];
-        if (!Array.isArray(rows) || rows.length < 2) return nothing;
-        const total = rows.reduce((a, r) => a + Number(r.today_kwh || 0), 0);
-        return html`
-            <table class="sem-forecast-compare sem-planes">
-                <tr>
-                    <th>${this._t('forecast_per_string_title')}</th>
-                    <th>${this._t('forecast_compare_today')}</th>
-                </tr>
-                ${rows.map((r) => html`
-                    <tr>
-                        <td>${r.name}</td>
-                        <td class="num">${Number(r.today_kwh || 0).toFixed(1)} kWh</td>
-                    </tr>`)}
-                <tr class="is-total">
-                    <td>${this._t('forecast_per_string_total').replace('{n}', String(planes))}</td>
-                    <td class="num">${total.toFixed(1)} kWh</td>
-                </tr>
-            </table>
+            ${raw === 'none' ? html`<div class="overview-help">${this._t('config_forecast_install_hint')}</div>` : nothing}
         `;
     }
 
     // (#822) Side-by-side is not the feature — the SCORE is.
     //
-    // Two integrations disagreeing does not make either wrong: measured on the
-    // dev rig they read 125.6 / 47.2 / 20.0 kWh for one day, and that spread
-    // was three differently CONFIGURED arrays, not three opinions. SEM cannot
-    // see how a third-party integration was set up, so the table shows each
-    // source's own number next to how well it has actually predicted THIS
-    // roof, and says "still learning" rather than inventing a score from thin
-    // evidence.
+    // Two integrations disagreeing does not make either wrong: measured on
+    // the dev rig they read 125.6 / 47.2 / 20.0 kWh for one day, and that
+    // spread was three differently CONFIGURED arrays, not three opinions.
+    // SEM cannot see how a third-party integration was set up, so the table
+    // shows each source's own number NEXT TO how well it has actually
+    // predicted THIS roof, and says "still learning" rather than inventing a
+    // score from thin evidence.
     _renderForecastComparison(attrs, active) {
         const now = attrs.sources_now || {};
         const scores = attrs.source_accuracy || {};
@@ -2229,7 +2183,7 @@ class SEMConfigCard extends SEMLitBase {
                 <span class="ctrl-label">${this._t('forecast_compare_title')}</span>
             </div>
             <div class="overview-help">${this._t('forecast_compare_help')}</div>
-            <table class="sem-forecast-compare">
+            <table class="sem-planes">
                 <tr>
                     <th>${this._t('forecast_compare_source')}</th>
                     <th>${this._t('forecast_compare_today')}</th>
@@ -2240,11 +2194,11 @@ class SEMConfigCard extends SEMLitBase {
                     const sc = scores[n] || {};
                     const days = Number(sc.settled_days || 0);
                     return html`
-                        <tr class="${n === active ? 'is-active' : ''}">
+                        <tr class="${n === active ? 'is-total' : ''}">
                             <td>
                                 ${this._forecastProviderLabel(n)}
-                                ${n === active ? html`<span class="in-use">${this._t('forecast_in_use')}</span>` : nothing}
-                                ${Number(row.planes || 0) > 1 ? html`<span class="planes">${row.planes}×</span>` : nothing}
+                                ${n === active ? html`<span style="font-size:10px;opacity:.75;margin-left:6px">${this._t('forecast_in_use')}</span>` : nothing}
+                                ${Number(row.planes || 0) > 1 ? html`<span style="font-size:10px;opacity:.6;margin-left:4px">${row.planes}×</span>` : nothing}
                             </td>
                             <td class="num">${Number(row.today_kwh || 0).toFixed(1)} kWh</td>
                             <td class="num" title="${days} ${this._t('forecast_days_of_evidence')}">
@@ -2252,6 +2206,36 @@ class SEMConfigCard extends SEMLitBase {
                             </td>
                         </tr>`;
                 })}
+            </table>
+        `;
+    }
+
+    // (#841) Today's forecast per string.
+    //
+    // #838 made the multi-string total right; this shows the parts. The total
+    // is what SEM plans on, the parts are what the owner recognises — they
+    // built the roof one string at a time — and it is the cheapest check on
+    // the total, because a string reading zero is obvious here and invisible
+    // in a sum.
+    _renderPlanesToday(attrs) {
+        const rows = attrs.planes_today || [];
+        if (!Array.isArray(rows) || rows.length < 2) return nothing;
+        const total = rows.reduce((a, r) => a + Number(r.today_kwh || 0), 0);
+        return html`
+            <table class="sem-planes">
+                <tr>
+                    <th>${this._t('forecast_per_string_title')}</th>
+                    <th>${this._t('forecast_per_string_today')}</th>
+                </tr>
+                ${rows.map((r) => html`
+                    <tr>
+                        <td>${r.name}</td>
+                        <td class="num">${Number(r.today_kwh || 0).toFixed(1)} kWh</td>
+                    </tr>`)}
+                <tr class="is-total">
+                    <td>${this._t('forecast_per_string_total').replace('{n}', String(rows.length))}</td>
+                    <td class="num">${total.toFixed(1)} kWh</td>
+                </tr>
             </table>
         `;
     }
@@ -2871,17 +2855,16 @@ class SEMConfigCard extends SEMLitBase {
                 .c-ok { color: #8DC892; }
                 .c-warn { color: #ff9800; }
                 .overview-help { font-size: 12px; color: var(--secondary-text-color, ${T.textSec}); padding: 4px 0; }
-                /* (#822) The source comparison. Tabular numerals so the kWh
-                   column reads as a column and not as ragged text. */
-                .sem-forecast-compare { width: 100%; border-collapse: collapse; font-size: 12px; margin: 2px 0 6px; }
-                .sem-forecast-compare th { text-align: left; font-weight: 500; padding: 3px 6px 3px 0;
-                    color: var(--secondary-text-color, ${T.textSec}); text-transform: uppercase; letter-spacing: .04em; font-size: 10px; }
-                .sem-forecast-compare td { padding: 3px 6px 3px 0; border-top: 1px solid var(--divider-color, rgba(127,127,127,.2)); }
-                .sem-forecast-compare td.num { text-align: right; font-variant-numeric: tabular-nums; }
-                .sem-forecast-compare tr.is-active td { font-weight: 600; }
-                .sem-forecast-compare .in-use { font-size: 10px; opacity: .75; margin-left: 6px; }
-                .sem-forecast-compare .planes { font-size: 10px; opacity: .6; margin-left: 4px; }
-                .sem-forecast-compare.sem-planes tr.is-total td { font-weight: 600;
+                /* (#841) Per-string forecast. Tabular numerals so the kWh
+                   column reads as a column, not as ragged text. */
+                .sem-planes { width: 100%; border-collapse: collapse; font-size: 12px; margin: 2px 0 6px; }
+                .sem-planes th { text-align: left; font-weight: 500; padding: 3px 6px 3px 0;
+                    color: var(--secondary-text-color, ${T.textSec}); text-transform: uppercase;
+                    letter-spacing: .04em; font-size: 10px; }
+                .sem-planes td { padding: 3px 6px 3px 0;
+                    border-top: 1px solid var(--divider-color, rgba(127,127,127,.2)); }
+                .sem-planes td.num { text-align: right; font-variant-numeric: tabular-nums; }
+                .sem-planes tr.is-total td { font-weight: 600;
                     border-top: 1px solid var(--primary-text-color, ${T.text}); }
                 .overview-actions { display: flex; gap: 8px; margin-top: 10px; }
 
@@ -3166,20 +3149,6 @@ class SEMConfigCard extends SEMLitBase {
                 }
                 .save-status.ok { color: #8DC892; }
                 .save-status.err { color: var(--error-color, #d33); }
-
-                /* (#778) sub-heading inside a section — the forecast-spending
-                   block sits under the battery scheduler rather than claiming
-                   its own top-level section. */
-                .subsection-title {
-                    margin: 20px 0 2px;
-                    font-size: 12px;
-                    font-weight: 500;
-                    letter-spacing: .07em;
-                    text-transform: uppercase;
-                    color: var(--sem-text-sec, #8fa3a0);
-                    border-top: 1px solid rgba(255,255,255,.08);
-                    padding-top: 16px;
-                }
 
                 .setup-intro {
                     font-size: 12px; line-height: 1.45;

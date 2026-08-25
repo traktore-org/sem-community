@@ -171,6 +171,51 @@ def test_the_newest_tested_ha_is_not_a_year_behind():
     )
 
 
+def test_836_every_workflow_runs_the_same_ladder():
+    """(#844) The ladder is a claim about which HA versions SEM supports, so
+    EVERY workflow that runs the suite has to agree on it.
+
+    #836 removed the 3.12 rung and raised the floor, and swept tests.yml, the
+    pins, hacs.json, README, SETUP_GUIDE, CONTRIBUTING and this file — but not
+    release.yml, which kept a 3.12 leg. Nothing noticed until the
+    v2.0.0-beta.16 release ran it and the leg could not resolve its
+    dependencies (the phacc pins now require >= 3.13).
+
+    A per-file sweep is only as good as the list of files. This asserts the
+    property instead.
+
+    Scope is deliberately narrow: only workflows that INSTALL
+    ``requirements_test.txt``. lint.yml pins Python 3.12 and is perfectly
+    correct to — it installs ruff and nothing else, and ruff does not care
+    which Home Assistant SEM supports. An earlier draft of this test flagged
+    it, which would have meant "fixing" a file that was never broken.
+    """
+    import re
+    from pathlib import Path
+
+    wf_dir = Path(__file__).resolve().parent.parent / ".github" / "workflows"
+    supported = {"3.13", "3.14"}
+    offenders = {}
+    for wf in sorted(wf_dir.glob("*.yml")):
+        text = wf.read_text()
+        if "requirements_test.txt" not in text:
+            continue                      # does not depend on the HA pins
+        for line in text.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("#") or "python-version:" not in stripped:
+                continue
+            named = set(re.findall(r'"(\d+\.\d+)"', stripped))
+            stale = named - supported
+            if stale:
+                offenders.setdefault(wf.name, set()).update(stale)
+    assert not offenders, (
+        f"workflow(s) name a Python the dependency pins cannot satisfy: "
+        f"{ {k: sorted(v) for k, v in offenders.items()} }. "
+        "tests/requirements_test.txt requires >= 3.13 since #836 — a leg on "
+        "anything older fails at pip install, not at a test (#844)."
+    )
+
+
 def test_791_835_every_rung_is_blocking():
     """(#791, #835) EVERY rung must block. No continue-on-error at all.
 
