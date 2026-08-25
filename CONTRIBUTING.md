@@ -139,9 +139,21 @@ release and each release has a Python floor, so the interpreter picks the HA.
 
 | CI leg | phacc pin | Home Assistant | Blocking? |
 |---|---|---|---|
-| Python 3.12 | `0.13.205` | 2025.1.4 — the `hacs.json` floor | yes |
-| Python 3.13 | `0.13.316` | 2026.2.3 | not yet |
-| Python 3.14 | `0.13.356` | 2026.8.2 — what HA-PROD runs | not yet |
+| Python 3.13 | `0.13.316` | 2026.2.3 — the `hacs.json` floor | yes |
+| Python 3.14 | `0.13.356` | 2026.8.2 — what HA-PROD runs | yes |
+
+Both rungs block. There is no `continue-on-error` anywhere in the matrix and
+there must not be again (#835): the 3.13 rung spent its entire life marked
+advisory and never passed once, invisibly, because a rung that cannot fail the
+board is a rung nobody reads.
+
+A third rung — Python 3.12 → HA 2025.1.4 — was removed in #836 together with
+the 2025.1 floor it verified. Of 62 issues stating an HA version the oldest
+ever reported is 2026.4.3, and none is on 2025.x; since the old floor let such
+users install and file, that is absence rather than sampling. Note that 2026.2
+is the **last HA that runs on Python 3.13** — raising the floor further makes
+every rung 3.14, at which point the interpreter can no longer select the HA and
+the matrix has to be re-cut around the phacc version.
 
 Until #787 this was two legs both installing 2025.1.4, and nothing said so:
 every test was green against an HA nineteen months older than the one users
@@ -149,12 +161,14 @@ run. Anything SEM asserts about the entity registry, config-entry migration,
 the recorder, statistics or service-call validation was being verified against
 a copy of HA nobody has.
 
-The upper rungs are `continue-on-error` on purpose — they were added on top of
-a release, and the deprecation backlog they surface needs unhurried triage, not
-a green-chase. **Turning a rung blocking once it comes clean is the actual
-close-out of #787.** `tests/test_787_ha_version_matrix.py` guards the shape: it
-fails if a leg loses its pin, if the rungs collapse back onto one HA, or if the
-floor `hacs.json` promises stops being tested.
+The rungs were added `continue-on-error` on purpose — on top of a release, with
+a deprecation backlog that needed unhurried triage rather than a green-chase.
+**Turning a rung blocking once it came clean was the actual close-out of
+#787**, and both flips are now done (#791 for 3.14, #835 for 3.13), so the
+exemption is gone. `tests/test_787_ha_version_matrix.py` guards the shape: it
+fails if a leg loses its pin, if the rungs collapse back onto one HA, if the
+floor `hacs.json` promises stops being tested, or if any rung is made
+non-blocking again.
 
 Locally, `pip install -r tests/requirements_test.txt` gives you the rung that
 matches your interpreter — the markers do the selection.
