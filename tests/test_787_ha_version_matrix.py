@@ -172,7 +172,7 @@ def test_the_newest_tested_ha_is_not_a_year_behind():
 
 
 def test_836_every_workflow_runs_the_same_ladder():
-    """(#842) The ladder is a claim about which HA versions SEM supports, so
+    """(#844) The ladder is a claim about which HA versions SEM supports, so
     EVERY workflow that runs the suite has to agree on it.
 
     #836 removed the 3.12 rung and raised the floor, and swept tests.yml, the
@@ -212,7 +212,7 @@ def test_836_every_workflow_runs_the_same_ladder():
         f"workflow(s) name a Python the dependency pins cannot satisfy: "
         f"{ {k: sorted(v) for k, v in offenders.items()} }. "
         "tests/requirements_test.txt requires >= 3.13 since #836 — a leg on "
-        "anything older fails at pip install, not at a test (#842)."
+        "anything older fails at pip install, not at a test (#844)."
     )
 
 
