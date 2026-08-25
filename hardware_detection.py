@@ -1181,12 +1181,15 @@ def _discover_zaptec(entities) -> Dict[str, str]:
     if not state_keys.intersection(result):
         return {}
 
-    # Prefer number entity control if found, otherwise use Zaptec's service.
-    if "ev_current_control_entity" not in result:
-        result["ev_charger_service"] = "zaptec.limit_current"
-        result["ev_service_param_name"] = "available_current"
-        if device_id:
-            result["ev_service_device_id"] = device_id
+    # (#804, 25.08) NO service fallback. ``zaptec.limit_current`` writes the
+    # INSTALLATION's available_current — the user's per-phase grid guard
+    # (3×25 A on the reporting install), shared by every charger on the
+    # installation and, per the reporter's EVCC layering, never SEM's
+    # throttle. A charger without its charger-level max-current number is
+    # honestly reported without control rather than silently steered through
+    # a limit that constrains the whole site. #695/#698: a charger SEM can
+    # command but not read was the discovery class; one SEM commands through
+    # the WRONG SCOPE is worse.
     return result
 
 
@@ -1217,6 +1220,39 @@ _BRAND_HINTS: Dict[str, List[_ROLE]] = {
     # Energy-Dashboard device instead, so the EV tile pointed at the wrong
     # thing until the reporter repaired it by hand. First brand added as a
     # pure data row — no function (#814).
+    # (#816) GARO — proven live in #700/#748 through the generic path; the
+    # entity names below are the reporter's own. The 6 A floor is carried by
+    # the wrapper (_discover_garo), not a rule: it is a hardware constant,
+    # not an entity.
+    "garo": [
+        {"role": "ev_start_stop_entity", "domain": "switch",
+         "names": ("laddbox", "charging", "on_off")},
+        {"role": "ev_current_control_entity", "domain": "number",
+         "device_class": "current"},
+        {"role": "ev_charging_power_sensor", "domain": "sensor",
+         "device_class": "power"},
+        {"role": "ev_charging_sensor", "domain": "sensor",
+         "names": ("status",)},
+        {"role": "ev_total_energy_sensor", "domain": "sensor",
+         "device_class": "energy"},
+    ],
+    # (#816) JuiceBox 48 over JuiceBoxProxy/MQTT (#683/#698). Rides the
+    # generic ``mqtt`` platform, so EVERY rule requires the juicebox naming —
+    # without that, any Shelly plug publishing power over MQTT could become a
+    # charger. Both energy counters are declared; ha_energy_reader already
+    # de-duplicates the pair (#698) and detection must not re-introduce it.
+    "juicebox": [
+        {"role": "ev_charging_power_sensor", "domain": "sensor",
+         "device_class": "power", "names": ("juicebox",)},
+        {"role": "ev_total_energy_sensor", "domain": "sensor",
+         "device_class": "energy", "names": ("juicebox",), "names2": ("lifetime",)},
+        {"role": "ev_session_energy_sensor", "domain": "sensor",
+         "device_class": "energy", "names": ("juicebox",), "names2": ("session",)},
+        {"role": "ev_charging_sensor", "domain": "sensor",
+         "names": ("juicebox",), "names2": ("status",)},
+        {"role": "ev_current_control_entity", "domain": "number",
+         "names": ("juicebox",)},
+    ],
     "wattpilot": [
         {"role": "ev_charging_power_sensor", "domain": "sensor",
          "device_class": "power"},
@@ -1248,6 +1284,35 @@ _BRAND_HINTS: Dict[str, List[_ROLE]] = {
 }
 
 
+def _discover_garo(entities) -> Dict[str, str]:
+    """(#816) GARO — a data row plus one hardware constant.
+
+    The 6 A floor is why #700 existed: SEM issued stops the hardware cannot
+    honour. It is a property of the brand, not of any entity, so the row
+    carries it into the charger config the same way KEBA's service name
+    travels."""
+    result = _discover_from_hints(entities, _BRAND_HINTS["garo"])
+    if not result.get("ev_current_control_entity")             and not result.get("ev_start_stop_entity"):
+        return {}
+    result["ev_min_current"] = 6
+    return result
+
+
+def _discover_juicebox(entities) -> Dict[str, str]:
+    """(#816) JuiceBox 48 over the generic mqtt platform.
+
+    Identity is deliberately strict: power AND an energy counter, both
+    juicebox-named. The mqtt platform is everyone's platform, and a lone
+    power sensor is an input state, not a charger (#695/#698)."""
+    result = _discover_from_hints(entities, _BRAND_HINTS["juicebox"])
+    if "ev_charging_power_sensor" not in result:
+        return {}
+    if ("ev_total_energy_sensor" not in result
+            and "ev_session_energy_sensor" not in result):
+        return {}
+    return result
+
+
 def _discover_from_hints(entities, hints: List[_ROLE]) -> Dict[str, str]:
     """Apply a brand's data rows: each role takes the LAST matching entity
     (the same last-wins the hand-written loops had), a rule matches on
@@ -1264,6 +1329,12 @@ def _discover_from_hints(entities, hints: List[_ROLE]) -> Dict[str, str]:
                 continue
             names = rule.get("names")
             if names and not any(n in eid for n in names):
+                continue
+            # (#816) an optional SECOND any-of set, ANDed with the first —
+            # "juicebox" AND "lifetime" — because brands on the shared mqtt
+            # platform need conjunctions a single any-of cannot express.
+            names2 = rule.get("names2")
+            if names2 and not any(n in eid for n in names2):
                 continue
             result[rule["role"]] = eid
     return result
@@ -1531,6 +1602,11 @@ _EV_CHARGER_PLATFORMS = [
     # (#802/#814) data-row brands need no function — the generic matcher
     # applies their _BRAND_HINTS rows.
     ("wattpilot", lambda ents: _discover_from_hints(ents, _BRAND_HINTS["wattpilot"])),
+    # (#816) GARO's custom integration domain.
+    ("garo_wallbox", _discover_garo),
+    # (#816) JuiceBoxProxy publishes over plain MQTT — the discover fn's
+    # identity gate is what keeps this from claiming unrelated mqtt devices.
+    ("mqtt", _discover_juicebox),
 ]
 
 
