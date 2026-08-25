@@ -930,6 +930,21 @@ def build_detection_report(hass: Optional[HomeAssistant] = None,
             devices.setdefault(e.device_id, []).append(e)
         for device_id, dev_entities in devices.items():
             mapping = discover_fn(dev_entities) or {}
+            # (#804 B4c) the report path re-runs discovery per DEVICE, so the
+            # installation-sibling threshold scan from the config path never
+            # fires here — attach the same suggestion so the diagnostics
+            # show what the flow will suggest.
+            if mapping and platform == "zaptec":
+                for _e in live:
+                    _uid = str(getattr(_e, "unique_id", "") or "").lower()
+                    if (str(_e.entity_id).startswith("number.")
+                            and _uid.endswith(
+                                "three_to_one_phase_switch_current")):
+                        mapping["_suggested_phase_switch"] = {
+                            "entity": str(_e.entity_id),
+                            "value_1p": "32", "value_3p": "0",
+                        }
+                        break
             by_id = {str(e.entity_id): e for e in dev_entities}
             if not mapping:
                 report["near_misses"].append({
@@ -954,14 +969,18 @@ def build_detection_report(hass: Optional[HomeAssistant] = None,
             control = (f"service: {control}" if control
                        else "number entity" if mapping.get("ev_current_control_entity")
                        else "see mapping")
-            report["chargers"].append({
+            row = {
                 "platform": str(dev_entities[0].platform or platform),
                 "device_id": device_id,
                 "mapped": mapped,
                 "unmapped": [_describe(e) for e in dev_entities
                              if str(e.entity_id) not in used],
                 "control": control,
-            })
+            }
+            # (#804 B4c) the one underscore key that IS report data.
+            if mapping.get("_suggested_phase_switch"):
+                row["suggested_phase_switch"] = mapping["_suggested_phase_switch"]
+            report["chargers"].append(row)
 
     # (#814 Pillar A) the prober runs beside the brand walk. A candidate on
     # a device no brand function claimed = "prober_only" (a shape we could
