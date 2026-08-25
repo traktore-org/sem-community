@@ -105,6 +105,15 @@ OPEN_METEO_SOLAR_PLATFORM = "open_meteo_solar_forecast"
 # guide already described an override that did not exist for solar.
 # ``solar_forecast_source`` names one of these; anything else (unset,
 # "auto", a stale value) leaves the ladder exactly as it was.
+#: (#819) How many detection attempts a chosen source gets to appear before
+#: SEM says anything alarming about it. Detection runs at coordinator
+#: construction and after a config reload, either of which can precede a
+#: slower forecast integration registering its entities — so the FIRST miss
+#: is the expected case, not the exceptional one, and ``should_retry_preference``
+#: already exists to resolve it. At the 10 s default cycle this is about a
+#: minute of quiet before we conclude anything.
+PREFERRED_GRACE_CYCLES: int = 6
+
 FORECAST_SOURCES: dict = {
     "solcast": (SOLCAST_PLATFORM, "SOLCAST_ENTITIES"),
     "forecast_solar": (FORECAST_SOLAR_PLATFORM, "FORECAST_SOLAR_ENTITIES"),
@@ -182,6 +191,12 @@ class ForecastReader:
         # Solcast when I chose Open-Meteo" is answerable from
         # diagnostics alone.
         self._preferred_missing: Optional[str] = None
+        # (#819) Consecutive detection attempts in which the chosen source
+        # was not found. Survives across detect_source() runs — unlike
+        # _preferred_missing, which is per-run — because that is the only
+        # way to tell "not loaded YET" from "not there".
+        self._preferred_miss_streak: int = 0
+        self._preferred_warned: bool = False
         self.__detection_path: Optional[str] = None
         self._source: Optional[str] = None
         self._entities: Dict[str, str] = {}
@@ -436,17 +451,45 @@ class ForecastReader:
                 self._source = self._preferred_source
                 self._last_source_detection_path = (
                     f"preferred_{self._preferred_source}")
-                _LOGGER.info(
-                    "Using the chosen solar forecast source: %s",
-                    self._preferred_source,
-                )
+                if self._preferred_miss_streak:
+                    # Say so explicitly. The diagnostics buffer keeps the
+                    # alarm and would otherwise lose the resolution, which is
+                    # exactly how the reporter ended up looking at a warning
+                    # about an integration that was working (#819).
+                    _LOGGER.info(
+                        "Chosen solar forecast source %s is available now "
+                        "(after %d attempt(s)) — using it",
+                        self._preferred_source, self._preferred_miss_streak,
+                    )
+                else:
+                    _LOGGER.info(
+                        "Using the chosen solar forecast source: %s",
+                        self._preferred_source,
+                    )
+                self._preferred_miss_streak = 0
+                self._preferred_warned = False
                 self._clear_no_forecast_repair()
                 return self._source
-            _LOGGER.warning(
-                "Chosen solar forecast source %s is not installed — "
-                "falling back to auto-detection",
-                self._preferred_source,
-            )
+            self._preferred_miss_streak += 1
+            if self._preferred_miss_streak < PREFERRED_GRACE_CYCLES:
+                # The expected case: detection outran the integration's
+                # entity registration. Visible to us, silent to the user.
+                _LOGGER.debug(
+                    "Chosen solar forecast source %s not visible yet "
+                    "(attempt %d/%d) — using auto-detection meanwhile",
+                    self._preferred_source, self._preferred_miss_streak,
+                    PREFERRED_GRACE_CYCLES,
+                )
+            elif not self._preferred_warned:
+                # Once, not per cycle: a 10 s loop would write 8,640 lines a
+                # day and teach people to ignore the log (#762).
+                self._preferred_warned = True
+                _LOGGER.warning(
+                    "Chosen solar forecast source %s has not appeared after "
+                    "%d attempts — check that its integration is installed "
+                    "and loading. Using auto-detection meanwhile.",
+                    self._preferred_source, self._preferred_miss_streak,
+                )
             self._preferred_missing = self._preferred_source
 
         # Check Solcast

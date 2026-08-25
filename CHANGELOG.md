@@ -33,6 +33,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   feature could never gather its evidence. It would have looked like nothing
   was wrong. A night is now judged on its own hours.
 
+- 🔭 **A forecast source that is still loading is no longer reported as "not
+  installed"** (#819): after choosing a source, diagnostics could show a
+  warning claiming the integration was missing — while that same integration
+  was selected, working, and supplying the forecast values on screen. SEM
+  checks for your chosen source the moment it starts, which can be before a
+  slower forecast integration has finished loading; it already retried and
+  recovered, but the alarming line was written and the recovery was not. It
+  now stays quiet while it retries, says something only if the source really
+  never appears, and records when it does turn up.
+
+- ⬆️ **SEM now requires Home Assistant 2026.2.0 or newer** (#836): the old
+  minimum was 2025.1.0, a version no SEM user has ever reported running — of
+  62 issues that state a Home Assistant version, the oldest is 2026.4.3 and
+  none is on 2025.x. If you are on an older Home Assistant, HACS will stop
+  offering SEM updates until you upgrade; your existing install keeps working
+  and nothing is removed. Everything SEM supports is now covered by a test
+  run that can block a release, which was the point.
+
+- 🧪 **SEM is now actually tested against three Home Assistant versions**
+  (#835): the middle rung of the test ladder — HA 2026.2.3 — had never passed
+  a single run. It was marked advisory, so the board stayed green and nobody
+  saw it. The cause was one line in a test dependency, not in SEM; it is fixed,
+  all three versions now run clean, and none of them can go red without
+  blocking a release any more.
+
+- 🔌 **A charger that reports its state as text is no longer read as "no car"
+  while it sits idle** (#833): if you point SEM's connection field at a status
+  sensor rather than a plug binary sensor, states like `Paused` and `Locked` —
+  a Wallbox's normal idle and its must-unlock-first state — were not
+  recognised as "cable is in", so SEM decided no car was present and never
+  started a session. Both the connection and charging readers now share the
+  same cross-brand status vocabulary the rest of SEM already used, so they
+  cannot disagree again; several brands' charging states (Zaptec, Easee,
+  Alfen, V2G discharge) are now recognised too.
+- 📦 **Releases now carry a downloadable archive** (#834): SEM's HACS entry
+  showed no download count, because that column counts a release's attached
+  files and SEM published none. Every release now ships
+  `solar_energy_management.zip`. Your installs also get tidier — HACS
+  previously copied the whole repository into your config directory, test
+  suite and documentation included; now it installs only what SEM needs to
+  run.
 - 🛡️ **Your battery reserve now applies even if you never set one** (#778): if
   the reserve was left unconfigured, SEM's new forecast-led spending read it as
   *no reserve at all* rather than the 20% its own default documents. Same for

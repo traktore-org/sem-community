@@ -116,3 +116,19 @@ jobs:
             ARGS+=(--generate-notes)
           fi
           gh release create "$TAG" "${ARGS[@]}"
+
+      # A release created with the default GITHUB_TOKEN does NOT fire
+      # `release: published` — GitHub suppresses token-triggered workflow
+      # chains, as this file's own header notes — so release-asset.yml never
+      # runs for this path and the release would ship with no HACS download
+      # zip. Attach it inline. Both paths call the same build + verify
+      # scripts, so the artifact cannot differ by which path cut the release
+      # (#834).
+      - name: Attach the HACS download zip
+        if: env.SKIP != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bash scripts/build_release_zip.sh solar_energy_management.zip
+          python3 scripts/verify_release_zip.py solar_energy_management.zip
+          gh release upload "$TAG" solar_energy_management.zip --clobber
