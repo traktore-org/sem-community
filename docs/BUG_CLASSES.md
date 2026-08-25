@@ -2068,3 +2068,37 @@ merge source must be registered or the test fails. Proven to bite on an injected
 attribute paths that churn while the state is unchanged, plus numeric precision above 2 dp. This
 is the only thing that finds the precision half; run it after any change to what SEM publishes.
 
+### 52. External integration's per-unit siblings collapsed to the first match (fleet read as one) — GUARDED
+**Symptom:** a fleet quantity sourced from an EXTERNAL integration reads as a single unit's value —
+a multi-string solar install's forecast is far too low because only one string is counted (#838,
+@HorizonKane: "I have one Forecast set up per String. SEM seems to only use one of them instead of
+summarising all strings"). No error: the one value it does read is valid, just partial.
+**Root shape:** SEM resolves ONE entity per role from an integration that models a fleet as N
+sibling entities, then reads that one as the whole. Forecast.Solar and Open-Meteo register **one
+config entry per plane**, each emitting its own `energy_production_*` sensor whose unique_id ends in
+the same suffix (`{entry_id}_{key}`, entity_id disambiguated `_2`/`_3`); the registry scan kept only
+the first (`role not in resolved`), so the fleet forecast = one plane. Distinct from class 16 (that
+one is SEM's OWN per-unit sensors suppressed by a fleet-override branch); this is an *external*
+source's per-unit entities dropped at the resolution boundary. Cousin of class 5's open
+"multi-unit partial-availability sums silently under-report" sibling. **Where it lives:**
+`coordinator/forecast_reader.py` — the suffix-matched platforms (`forecast_solar`, `open_meteo`,
+which share the `else` branch of the registry scan). **Watch:** Solcast is the deliberate
+exception — it is matched on an EXACT unique_id that is already the site/account total (per-site
+Solcast sensors are intentionally not matched), so it must stay single; summing it would double-count.
+**Closure:** the registry scan returns `{role: [entity_id, ...]}` (`_registry_entity_groups`) — the
+suffix branch collects EVERY plane, the exact-match Solcast branch stays single-element — and the read
+path SUMS a role across its planes (`_read_role_energy`/`_read_role_power_w`) while `_entities` keeps
+the representative first entity (byte-for-byte the pre-fix value) for peak-time parsing. The FIRST-match
+shape lived in detection too — `_locate_integration` and the cached-source validity check keyed off the
+representative plane alone, so a dark FIRST string would drop the whole array — so both were made
+plane-aware (a source is usable while ANY plane's `forecast_today` is available). A partially-available
+multi-plane install therefore sums the available planes rather than zeroing, whichever plane is dark
+(matches the single-entity default contract). **Guard:**
+`tests/test_838_forecast_multi_string.py` — two Forecast.Solar strings sum (today/tomorrow/remaining/
+power_now), the Open-Meteo sibling sums, a single plane is unchanged, a Solcast total is read once
+(not doubled), a non-representative dark plane still sums the rest (three planes → discriminating,
+fails on revert), and a dark FIRST plane does not hide a live sibling. **Sweep question:** for every
+quantity SEM reads from an external integration, does the integration model that quantity as ONE
+entity or as N siblings that must be aggregated — and does the resolver (read AND detection) take the
+first, or all of them? Refs #562 #687 #819 #838.
+
