@@ -1102,12 +1102,22 @@ def _discover_zaptec(entities) -> Dict[str, str]:
             device_id = entry.device_id
         dc = entry.original_device_class
         eid_lower = eid.lower()
-        if eid.startswith("binary_sensor.") and ("cable" in eid_lower or "connect" in eid_lower):
+        # (#804/#562) unique_id first, entity-id substring as fallback:
+        # entity ids are localised (a Dutch install says kabel/laden, not
+        # cable/charging) while the integration's unique_ids keep fixed
+        # English keys in every language.
+        _uid = str(getattr(entry, "unique_id", "") or "").lower()
+        if eid.startswith("binary_sensor.") and (
+            _uid.endswith("cable_connected") or _uid.endswith("_connected")
+            or "cable" in eid_lower or "connect" in eid_lower
+        ):
             result["ev_connected_sensor"] = eid
-        if eid.startswith("binary_sensor.") and "charg" in eid_lower:
+        if eid.startswith("binary_sensor.") and (
+            _uid.endswith("_charging") or "charg" in eid_lower
+        ):
             result["ev_charging_sensor"] = eid
         if eid.startswith("sensor.") and (
-            dc == "power"
+            dc == "power" or _uid.endswith("charge_power")
             or ("power" in eid_lower and "energy" not in eid_lower and "kwh" not in eid_lower)
         ):
             result["ev_charging_power_sensor"] = eid
@@ -1123,11 +1133,36 @@ def _discover_zaptec(entities) -> Dict[str, str]:
                 result["ev_session_energy_sensor"] = eid
             else:
                 result["ev_total_energy_sensor"] = eid
-        if eid.startswith("number.") and (
-            "current" in eid_lower or "available_current" in eid_lower
+        # (#804) Roles by registry unique_id FIRST — the #562 lesson.
+        # Entity ids are localised and owner-renameable: @coppe218's Dutch
+        # install names its numbers ``…_beschikbare_stroom`` and
+        # ``…_maximale_laadstroom``, so "current" appears in none of them and
+        # the substring fallbacks below see nothing. The integration builds
+        # unique_ids as ``{object_id}_{key}`` with fixed English keys, so the
+        # suffix identifies the role in every language.
+        uid = _uid
+        if eid.startswith("number."):
+            # The throttle is the CHARGER-level max current — measured on the
+            # reporter's hardware: writing 0 is a soft pause and raising it
+            # resumes automatically (his half-hour hold test), which is
+            # exactly SEM's stop=0/start=N model and how EVCC drives the
+            # brand. The INSTALLATION's available_current is deliberately
+            # NOT a candidate: that is the user's per-phase grid guard
+            # (3×25 A on the reporting install), and a write there
+            # constrains every charger on the installation.
+            if uid.endswith("charger_max_current"):
+                result["ev_current_control_entity"] = eid
+            elif ("ev_current_control_entity" not in result
+                    and "current" in eid_lower
+                    and "available_current" not in uid
+                    and "min_current" not in uid
+                    and not uid.endswith("charger_min_current")):
+                # entity-id fallback for integration builds whose unique_ids
+                # differ — still never the installation limit or the min bound
+                result["ev_current_control_entity"] = eid
+        if eid.startswith("button.") and (
+            "resume" in eid_lower or uid.endswith("resume_charging")
         ):
-            result["ev_current_control_entity"] = eid
-        if eid.startswith("button.") and "resume" in eid_lower:
             result["ev_start_stop_entity"] = eid
 
     # Site/installation aggregates commonly contain only power/energy. A real
