@@ -188,6 +188,40 @@ def clear_charger_actuation_failed(hass: HomeAssistant, device_id: str) -> None:
         _LOGGER.debug("issue_registry.delete failed for %s: %s", device_id, e)
 
 
+def _failsafe_issue_id(device_id: str) -> str:
+    return f"charger_failsafe_suspected_{device_id}"
+
+
+def raise_charger_failsafe_suspected(
+    hass: HomeAssistant, device_id: str, *, name: str, interval_s: float,
+) -> None:
+    """(#823) The box re-enabled itself on a CONSTANT interval after SEM's
+    stop — a charger-side failsafe/controller-timeout fallback. SEM cannot
+    write failsafe registers on a generic charger and must not guess register
+    numbers; the fix is a one-time change on the box, so this is instruction,
+    not war (#763)."""
+    try:
+        ir.async_create_issue(
+            hass, domain=DOMAIN,
+            issue_id=_failsafe_issue_id(device_id),
+            is_fixable=False, is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="charger_failsafe_suspected",
+            translation_placeholders={
+                "name": name, "interval_s": str(int(interval_s)),
+            },
+        )
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.create failed for %s: %s", device_id, e)
+
+
+def clear_charger_failsafe_suspected(hass: HomeAssistant, device_id: str) -> None:
+    try:
+        ir.async_delete_issue(hass, DOMAIN, _failsafe_issue_id(device_id))
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete failed for %s: %s", device_id, e)
+
+
 def _battery_force_discharge_issue_id(entity_id: str) -> str:
     return f"battery_force_discharge_unsupported_{entity_id}"
 

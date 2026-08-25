@@ -42,12 +42,16 @@ class ActionKind(Enum):
     REPORT_ENABLE_BLOCKED = auto()  # enable switch unavailable/locked — surface it (#536)
     REPORT_STOP_WAR = auto()        # box keeps re-starting against our stop — cease fire (#763)
     REPORT_STOP_UNENFORCEABLE = auto()  # no mechanism can open the contactor (#627)
+    REPORT_FAILSAFE_SUSPECTED = auto()  # box re-enables on a CONSTANT interval after our stop (#823)
 
 
 @dataclass(frozen=True)
 class Action:
     kind: ActionKind
     amps: int = 0
+    # (#823) the learned stop→re-enable interval, on REPORT_FAILSAFE_SUSPECTED
+    # only — the Repair cannot point at "Tmo FS: 600" without the number.
+    interval_s: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -208,6 +212,13 @@ class ChargerReconciler:
         self._stop_war_draw_seen: bool = False
         self._stop_war_reported: bool = False
         self._stop_war_ceasefires: int = 0
+        # (#823) stop→re-enable gap history. A failsafe timeout re-enables on
+        # a CONSTANT interval after our DISABLE — a retrying car or a human
+        # does not. Two matching gaps name it; the report never changes the
+        # stop cadence (that war the box always wins, #763).
+        self._failsafe_gaps: list = []
+        self._failsafe_reported: bool = False
+        self._last_disable_issued_at: float = 0.0
         self._last_disable_at: float = float("-inf")
 
     def snapshot_war(self, now: float) -> dict:
@@ -237,7 +248,28 @@ class ChargerReconciler:
         if now - self._last_disable_at < STOP_REASSERT_DWELL_S:
             return [Action(ActionKind.NONE)]
         self._last_disable_at = now
+        self._last_disable_issued_at = now          # (#823) gap anchor
         return [Action(ActionKind.DISABLE)]
+
+    def _failsafe_action(self) -> List[Action]:
+        """(#823) Name a constant-interval self-re-enable, once.
+
+        Two gaps within 2% (or 5 s) of each other is the signature — a
+        failsafe timeout is periodic TO THE SECOND, which is the whole
+        discriminator. The tolerance is deliberately tight: onkelfu's
+        Mercedes retried "every ~12 minutes", and a 10% band at that scale
+        (72 s) would swallow a car timer's jitter and cry wolf (#611).
+        The action only ever ACCOMPANIES the row's normal decision: naming
+        the fault must not change the stop cadence."""
+        if self._failsafe_reported or len(self._failsafe_gaps) < 2:
+            return []
+        a, b = self._failsafe_gaps[-2], self._failsafe_gaps[-1]
+        mean = (a + b) / 2.0
+        if mean <= 0 or abs(a - b) > max(5.0, 0.02 * mean):
+            return []
+        self._failsafe_reported = True
+        return [Action(ActionKind.REPORT_FAILSAFE_SUSPECTED,
+                       interval_s=round(mean, 1))]
 
     def _end_stop_war(self) -> None:
         self._stop_war_rounds = 0
@@ -305,6 +337,11 @@ class ChargerReconciler:
                         self._stop_war_rounds = 0
                     self._stop_war_rounds += 1
                     self._stop_war_last_round_at = now
+                    # (#823) the gap from OUR stop to the box's return
+                    if self._last_disable_issued_at:
+                        self._failsafe_gaps.append(
+                            now - self._last_disable_issued_at)
+                        del self._failsafe_gaps[:-4]
                     if self._stop_war_rounds > STOP_WAR_ROUNDS:
                         self._stop_war_ceasefires += 1
                         factor = min(
@@ -316,6 +353,11 @@ class ChargerReconciler:
                         return [Action(ActionKind.REPORT_STOP_WAR)]
 
             if desired is DesiredState.OFF:
+                fs = self._failsafe_action()
+                if fs:
+                    if not observed.enable_controllable:
+                        return fs + [Action(ActionKind.REPORT_ENABLE_BLOCKED)]
+                    return fs + self._gated_disable(now)
                 if not observed.enable_controllable:
                     # #548 — the contactor is app/cloud-locked (Wallbox
                     # Eco-Smart / Scheduled / Power-Sharing): SEM cannot
@@ -569,6 +611,22 @@ class ChargerReconciler:
                         "reconcile(%s): stop-war ceasefire holding (%d rounds)",
                         self.charger_id, self._stop_war_rounds)
                 continue
+            elif action.kind is ActionKind.REPORT_FAILSAFE_SUSPECTED:
+                # (#823) once, by construction (_failsafe_reported). SEM
+                # cannot write failsafe registers on a generic charger and
+                # must not guess register numbers — the fix is a one-time
+                # change on the box, so the output is instruction, not war.
+                _LOGGER.warning(
+                    "reconcile(%s): the charger re-enabled itself %.0f s "
+                    "after SEM's stop, twice, to the second — that is a "
+                    "charger-side failsafe/controller-timeout fallback, not "
+                    "a car retrying. SEM will not fight it (#763). Fix it on "
+                    "the box: look for a failsafe/fallback current setting "
+                    "(KEBA: 'Curr FS' / 'Tmo FS') and set the fallback "
+                    "current to 0.", self.charger_id, action.interval_s)
+                report = getattr(adapter, "report_failsafe_suspected", None)
+                if report is not None:
+                    await report(action.interval_s)
             elif action.kind is ActionKind.REPORT_STOP_UNENFORCEABLE:
                 # #627 — the stop is structurally impossible on this config.
                 # (#700) Once per ONSET, not per cycle: the condition persists
