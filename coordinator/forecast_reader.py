@@ -691,7 +691,11 @@ class ForecastReader:
         data = ForecastData(
             source=self._source,
             available=True,
-            last_update=datetime.now(),
+            # (#839) AWARE, not naive. The battery scheduler computes
+            # `dt_util.now() - last_update`, and dt_util.now() is
+            # timezone-aware — a naive stamp here raised TypeError on
+            # every evaluation and the scheduler never ran once.
+            last_update=dt_util.now(),
             # (#819) Registry probe behind the same 60 s cache the
             # locator uses (#562), so this is three dict lookups on a
             # warm cache rather than three scans per cycle.
