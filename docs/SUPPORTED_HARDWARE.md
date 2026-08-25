@@ -47,8 +47,8 @@
 |---|---|---|---|
 | Easee | service-based | ✅ tested live | #68/#283 (Brkie) with GoodWe; #415 (zlakes01) two boxes on one install; disc. 103 (praun) beside a Deye Sun12k |
 | Fronius / go-e Wattpilot | number entity | ✅ tested live | #802 (HorizonKane, ha-wattpilot fork — confirmed working) |
-| GARO | switch + 6 A-floor current entity | ✅ tested live | #700/#748 (jappish84) switch.garo_laddbox — its 6 A floor drove the fix, confirmed on v1.7.6-beta.14 |
-| JuiceBox 48 | number entity (JuiceBoxProxy - MQTT) | ✅ tested live | #683/#698 (Azlinon) two JuiceBox 48 over JuiceBoxProxy/MQTT — SOC mix-up and double-detection fixed, confirmed live |
+| GARO | switch + 6 A-floor current entity | ✅ tested live | #700/#748 (jappish84) switch.garo_laddbox — its 6 A floor drove the fix, confirmed on v1.7.6-beta.14; brand-detected with the floor carried since #816 |
+| JuiceBox 48 | number entity (JuiceBoxProxy - MQTT) | ✅ tested live | #683/#698 (Azlinon) two JuiceBox 48 over JuiceBoxProxy/MQTT — SOC mix-up and double-detection fixed, confirmed live; brand-detected since #816 |
 | KEBA P30/P40 | service: keba.set_current | ✅ tested live | SEM production wallbox, daily; #616/#763 (onkelfu) two P30 C driven over plain Modbus, not the KEBA integration |
 | Wallbox Pulsar | number entity | ✅ tested live | #548 status-lag fix confirmed by the reporter; two Pulsar Plus charging under SEM (disc. 103, RienduPre) |
 | Alfen Eve | number entity | 🧩 implemented | — |

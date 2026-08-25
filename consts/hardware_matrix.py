@@ -133,11 +133,13 @@ CHARGERS = [
     {"brand": "GARO", "control": "switch + 6 A-floor current entity",
      "status": "tested-live",
      "evidence": "#700/#748 (jappish84) switch.garo_laddbox — its 6 A floor "
-                 "drove the fix, confirmed on v1.7.6-beta.14"},
+                 "drove the fix, confirmed on v1.7.6-beta.14; brand-detected "
+                 "with the floor carried since #816"},
     {"brand": "JuiceBox 48", "control": "number entity (JuiceBoxProxy - MQTT)",
      "status": "tested-live",
      "evidence": "#683/#698 (Azlinon) two JuiceBox 48 over JuiceBoxProxy/MQTT "
-                 "— SOC mix-up and double-detection fixed, confirmed live"},
+                 "— SOC mix-up and double-detection fixed, confirmed live; "
+                 "brand-detected since #816"},
     {"brand": "Fronius / go-e Wattpilot", "control": "number entity",
      "status": "tested-live",
      "evidence": "#802 (HorizonKane, ha-wattpilot fork — confirmed working)"},
