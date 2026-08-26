@@ -76,7 +76,6 @@ _BASELINE = {
     "set_daily_accumulator", "set_flow_accumulator", "set_monthly_accumulator",
     "set_previous_value",
     # compat-alias / public API kept deliberately
-    "amps_for_watts", "watts_for_amps",       # adapter unit helpers, symmetric pair
     "deactivate_all",                          # thin wrapper; #656 wired the
                                                # module-level deactivate_devices
     "create_dashboard",                        # generator entry point, service-driven

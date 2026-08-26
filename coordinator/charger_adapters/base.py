@@ -285,8 +285,12 @@ class ChargerAdapter(ABC):
         nameplate otherwise: the belief anchors this, never the reverse."""
         dev = self._device
         coord = getattr(dev, "_coordinator", None) or getattr(dev, "coordinator", None)
+        from ..watts_per_amp import WattsPerAmpLearner
         learner = getattr(coord, "_wpa_learner", None)
-        if learner is None:
+        # isinstance, not truthiness: a mocked device hands back a Mock for
+        # any attribute, and the conversion then returns a Mock instead of
+        # watts. Type-check the collaborator (test_charger_adapters).
+        if not isinstance(learner, WattsPerAmpLearner):
             return None
         cid = str(getattr(dev, "charger_id", "") or "")
         if not cid:

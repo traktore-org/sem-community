@@ -2329,7 +2329,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # only ever asked "did anything happen" (30 % of nominal) and threw
         # the number away. Feed it to the learner, which decides for itself
         # whether the moment can teach.
-        self._feed_wpa_learner(amps, observed, connected)
+        # Wrapped: _collect_trace's own try/except swallows anything raised
+        # here and ABORTS the remaining layers (battery, loads, heat pump) —
+        # caught by test_cycle_trace_wiring. The comment above this method
+        # says the trace can never affect the control path; the same must be
+        # true in reverse.
+        try:
+            self._feed_wpa_learner(amps, observed, connected)
+        except Exception:  # noqa: BLE001 — learning never costs a trace
+            _LOGGER.debug("wpa learner feed skipped", exc_info=True)
 
     def _trace_battery(self, trace, sem_data, power) -> None:
         st = trace.subsystem("battery")
