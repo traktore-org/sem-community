@@ -48,6 +48,7 @@ _ROOT = Path(__file__).resolve().parent.parent
 _PLATFORMS = (
     "sensor.py", "binary_sensor.py", "number.py",
     "select.py", "switch.py", "time.py",
+    "button.py",   # (2.1 audit, item 8) the backfill button
 )
 
 # EMPTY — and it must stay that way. The 33 were triaged individually in #667

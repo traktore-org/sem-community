@@ -146,7 +146,7 @@ const SECTIONS = [
         // routes here.
         // They were HA entities only, or options-flow pages 11-12.
         id: 'battery_intelligence',
-        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/USER_GUIDE.md#forecast-led-spending',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/USER_GUIDE.md#forecast-led-spending-v21',
         titleKey: 'config_section_battery_intelligence',
         subtitleFn: (c) => c._batteryIntelligenceSubtitle(),
     },

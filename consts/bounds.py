@@ -66,6 +66,9 @@ BOUNDS: dict[str, Range] = {
     "daily_ev_target": Range(0, 200, step=0.5, unit="kWh"),
     "daily_ev_target_max": Range(0, 200, step=0.5, unit="kWh"),
     "ev_battery_capacity_kwh": Range(10, 120, step=5, unit="kWh"),
+    # ── charge pacing (#820, 2.1 audit item 6) ──────────────────────
+    # The inverter's AC output limit; 0 = not set (clipping guard off).
+    "inverter_ac_limit_w": Range(0, 100000, step=100, unit="W"),
     "ev_kwh_per_100km": Range(8, 50, step=0.5, unit="kWh/100km"),
 
     # ── Home battery ─────────────────────────────────────────────────

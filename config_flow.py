@@ -2660,13 +2660,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "inverter_ac_limit_w",
                     default=_c("inverter_ac_limit_w", 0),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=0, max=100000, step=100,
-                        unit_of_measurement="W",
-                        mode=selector.NumberSelectorMode.BOX,
-                    )
-                ),
+                ): bounds_selector("inverter_ac_limit_w", mode="box"),
                 vol.Optional(
                     "battery_charge_power_limit_entity",
                     description={"suggested_value": (
