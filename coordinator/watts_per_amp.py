@@ -162,6 +162,20 @@ class WattsPerAmpLearner:
         """Diagnostic shape: a person looking at '16 A' deserves to know
         SEM expects 10.0 kW, not 11.0 kW."""
         out: Dict[str, Dict[str, dict]] = {}
+        # (#846) Rows for REFUSED buckets too. "SEM has no measurement" is not
+        # the same statement as "SEM measured and it is fine", and a reader
+        # deserves the difference — especially when the reason is
+        # phase_belief, which points at a different bug entirely.
+        for (cid, phases), n in self._refused.items():
+            if not n:
+                continue
+            out.setdefault(cid, {})[str(phases)] = {
+                "watts_per_amp": None,
+                "samples": len(self._samples.get((cid, phases), [])),
+                "refused": n,
+                "refusal_reasons": dict(self._reasons.get((cid, phases), {})),
+                "nominal_ratio": None,
+            }
         for (cid, phases), buf in self._samples.items():
             if len(buf) < MIN_SAMPLES:
                 continue
@@ -170,6 +184,7 @@ class WattsPerAmpLearner:
                 "watts_per_amp": round(med, 1),
                 "samples": len(buf),
                 "refused": self._refused.get((cid, phases), 0),
+                "refusal_reasons": dict(self._reasons.get((cid, phases), {})),
                 "nominal_ratio": None,
             }
         return out
@@ -181,6 +196,6 @@ class WattsPerAmpLearner:
         for cid, per in d.items():
             for ph, row in per.items():
                 nom = nominal_for(cid, int(ph))
-                if nom:
+                if nom and row.get("watts_per_amp"):
                     row["nominal_ratio"] = round(row["watts_per_amp"] / nom, 3)
         return d

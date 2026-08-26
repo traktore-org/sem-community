@@ -240,3 +240,30 @@ class TestTheGatesAreRealNotVacuous:
         for kw in ("belief_confirmed=True", "setpoint_steady=True",
                    "switch_in_flight=False", "tapering=False"):
             assert kw not in feeder, f"{kw} is hardcoded — the gate is theatre"
+
+
+class TestNoMeasurementSaysWhy:
+    """Live on .175 the learner reported nothing, and nothing distinguished
+    "not fed" from "fed and refused". The second is a finding; the first is
+    a bug. The surface must tell them apart."""
+
+    def test_a_refused_bucket_appears_with_its_reason(self):
+        l = _learn(WattsPerAmpLearner(), phases=3, amps=16, watts=4950.0)
+        d = l.as_dict()
+        row = d["c1"]["3"]
+        assert row["watts_per_amp"] is None
+        assert row["refused"] >= MIN_SAMPLES
+        assert row["refusal_reasons"].get("phase_belief", 0) >= MIN_SAMPLES
+
+    def test_the_prod_rig_case_is_a_phase_question_not_an_efficiency_one(self):
+        """.175: 4950 W at 16 A = 309 W/A against a 690 nominal — 1.34 phases'
+        worth. The honest answer is "your phase count is wrong", not
+        "this car is 45 % efficient"."""
+        l = _learn(WattsPerAmpLearner(), phases=3, amps=16, watts=4950.0)
+        assert l.refusal_reasons("c1", 3).get("phase_belief", 0) >= MIN_SAMPLES
+        assert l.watts_for_amps("c1", 3, 16, NOMINAL_3P) == pytest.approx(11040)
+
+    def test_a_measured_bucket_still_carries_its_ratio(self):
+        l = _learn(WattsPerAmpLearner())
+        d = l.as_dict_with_nominal(lambda c, ph: NOMINAL_3P if ph == 3 else NOMINAL_1P)
+        assert d["c1"]["3"]["nominal_ratio"] == pytest.approx(0.908, abs=0.005)
