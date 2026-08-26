@@ -145,9 +145,9 @@ class SEMBatteryCard extends SEMLitBase {
     _renderPacingLine() {
         const st = this._hass?.states?.['sensor.sem_battery_charge_pacing'];
         if (!st) return nothing;
-        const act = st.attributes?.action;
-        if (!act || act === 'idle') return nothing;
-        const capW = Number(st.state);
+        const act = st.state;                 // the action token IS the state
+        if (!act || act === 'idle' || act === 'unavailable') return nothing;
+        const capW = Number(st.attributes?.cap_w);
         const cap = Number.isFinite(capW) && capW > 0
             ? `${(capW / 1000).toFixed(1)} kW` : '';
         const key = act === 'observer' ? 'pacing_observer'

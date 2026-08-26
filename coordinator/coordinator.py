@@ -4335,7 +4335,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 result["charge_pacing"] = dict(_cp)
                 # scalar twin: the sensor's generic value path reads
                 # data[key] directly, and a dict is not a state.
-                result["battery_charge_pacing"] = _cp.get("cap_w")
+                result["battery_charge_pacing"] = _cp.get("action") or "idle"
             result["forecast_trust_d1"] = _pe.get("forecast_trust_d1")
             result["forecast_trust_d2"] = _pe.get("forecast_trust_d2")
             result["battery_overnight_need_kwh"] = _pe.get("battery_overnight_need_kwh")
@@ -6127,6 +6127,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             "battery_charge_power_limit_entity") or "")
         if soc is None or capacity_kwh <= 0:
             decision = None
+            _why = ("battery SOC unknown" if soc is None
+                    else "no battery capacity")
         else:
             decision = paced_charge_cap_w(
                 ledger=ledger, capacity_kwh=capacity_kwh, soc_pct=soc,
@@ -6146,7 +6148,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             "cap_w": decision.cap_w if decision else None,
             "reason": decision.reason if decision else (
                 "pacing idle — outside daylight or no forecast"
-                if not ledger else "no day model"),
+                if not ledger else f"pacing idle — {_why}"),
             "full_at": getattr(decision, "full_at", None) if decision else None,
             "action": action,
             "entity": entity or None,

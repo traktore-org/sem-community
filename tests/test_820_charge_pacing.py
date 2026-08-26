@@ -225,3 +225,26 @@ class TestTodayRemainingSlots:
         assert today_remaining_slots(
             now=datetime(2026, 8, 26, 9, 0), sunrise=sr, sunset=ss,
             day_kwh=None, home_w_at=lambda t: 500.0, builder=self._builder) == []
+
+
+class TestTheSensorNeverGoesUnavailable:
+    """26.08: as a W-valued sensor it went `unavailable` whenever the cap was
+    None — most of the time, by design — and HA hides the attributes of an
+    unavailable entity, so the REASON vanished exactly when it mattered.
+    The state is the action token now; the cap rides the attributes."""
+
+    def test_state_is_the_action_token_and_never_none(self):
+        import inspect
+        from custom_components.solar_energy_management.coordinator import coordinator as cm
+        src = inspect.getsource(cm)
+        assert 'result["battery_charge_pacing"] = _cp.get("action") or "idle"' in src
+        assert 'result["battery_charge_pacing"] = _cp.get("cap_w")' not in src, (
+            "a None cap blanks the sensor and hides the reason (#820)"
+        )
+
+    def test_description_carries_no_unit(self):
+        import custom_components.solar_energy_management.sensor as sen
+        d = next(x for x in sen.SENSOR_TYPES if x.key == "battery_charge_pacing") \
+            if hasattr(sen, "SENSOR_TYPES") else None
+        if d is not None:
+            assert d.native_unit_of_measurement is None

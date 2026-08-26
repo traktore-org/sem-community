@@ -1262,12 +1262,16 @@ SENSOR_TYPES = [
     ),
     # (#820) charge pacing — state is the cap in W (unknown while idle);
     # attributes carry reason/action/full_at. Daily-moving, no recorder churn.
+    # State is the ACTION token (idle/wrote/held/restored/observer) — never
+    # None once evaluated, so the sensor is never `unavailable` and its
+    # reason stays readable. The cap rides the attributes. (26.08: as a W
+    # value it went unavailable whenever the cap was None — which is most
+    # of the time by design — and HA hides attributes of an unavailable
+    # entity, so the reason vanished exactly when it mattered.)
     SensorEntityDescription(
         key="battery_charge_pacing",
-        native_unit_of_measurement="W",
         icon="mdi:speedometer-slow",
         entity_category=EntityCategory.DIAGNOSTIC,
-        suggested_display_precision=0,
     ),
     SensorEntityDescription(
         key="battery_dynamic_floor_pct",
@@ -2949,6 +2953,7 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             cp = d.get("charge_pacing") or {}
             attrs.update({
                 "enabled": cp.get("enabled"),
+                "cap_w": cp.get("cap_w"),
                 "reason": cp.get("reason"),
                 "action": cp.get("action"),
                 "full_at": cp.get("full_at"),
