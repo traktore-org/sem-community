@@ -6100,6 +6100,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             self._charge_pacing_writer = ChargePacingWriter()
         ledger = self._today_pacing_ledger()
         capacity_kwh = float(getattr(self, "battery_capacity_kwh", 0.0) or 0.0)
+        # (#762 pattern) one INFO line when the tick's shape CHANGES — never
+        # per cycle. This is how the PROD-morning "unavailable" was run down.
+        _shape = (len(ledger), round(capacity_kwh, 1))
+        if _shape != getattr(self, "_charge_pacing_last_shape", None):
+            self._charge_pacing_last_shape = _shape
+            _LOGGER.info("charge pacing tick: %d day slot(s), capacity %.1f kWh",
+                         *_shape)
         soc = None
         try:
             soc = float(self.data.get("battery_soc"))
