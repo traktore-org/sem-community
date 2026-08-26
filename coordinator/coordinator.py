@@ -482,6 +482,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # PerChargerContext's device; this assignment routes to the _default
         # backing via the setter.
         self._ev_device = None
+        # (#846) fire → check → adjust: what each command ACTUALLY bought.
+        from .watts_per_amp import WattsPerAmpLearner
+        self._wpa_learner = WattsPerAmpLearner()
         self._ev_devices: Dict[str, Any] = {}  # All chargers keyed by charger_id (#112)
         # #589 Surface-A: these three are PROPERTIES backed by the current
         # PerChargerContext's durable state; the _default variants back them
@@ -2321,6 +2324,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             i_status, f"observed {observed:.0f}W",
             {"observed_w": observed, "commanded_amps": amps, "match": match},
         )
+        # (#846) fire → CHECK → adjust. This is already the one place SEM
+        # holds its own command and the resulting draw side by side; the trace
+        # only ever asked "did anything happen" (30 % of nominal) and threw
+        # the number away. Feed it to the learner, which decides for itself
+        # whether the moment can teach.
+        self._feed_wpa_learner(amps, observed, connected)
 
     def _trace_battery(self, trace, sem_data, power) -> None:
         st = trace.subsystem("battery")
@@ -2971,6 +2980,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             except (ValueError, TypeError):
                                 _LOGGER.debug("Vehicle SOC %s not numeric: %r (#259)", per_charger_soc_entity, soc_state.state)
                     self._ev_device = ev_dev
+                    # (#846) the device's way back to the coordinator, so the
+                    # adapter's amps↔watts conversions can consult the
+                    # measured-W/A learner and the phase BELIEF.
+                    try:
+                        ev_dev._coordinator = self
+                    except Exception:  # noqa: BLE001
+                        pass
                     self._session_data = self._session_data_per_charger[cid]
                     self._last_ev_connected = self._last_ev_connected_per_charger[cid]
                     # Per-charger plug/charging state (#193): power.ev_connected is
@@ -4328,6 +4344,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 if callable(_cav) and getattr(
                         _ad, "_system_work_mode_control", False):
                     result["battery_discharge_rate_caveat"] = _cav()
+            except Exception:  # noqa: BLE001
+                pass
+            # (#846) what SEM has learned each command really buys
+            try:
+                _wl = getattr(self, "_wpa_learner", None)
+                if _wl is not None:
+                    _v = float(self.config.get("ev_voltage", 230) or 230)
+                    _d = _wl.as_dict_with_nominal(lambda c, ph: ph * _v)
+                    if _d:
+                        result["ev_watts_per_amp"] = _d
             except Exception:  # noqa: BLE001
                 pass
             _cp = getattr(self, "_charge_pacing_state", None)
@@ -6102,6 +6128,63 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             )
         except Exception:  # noqa: BLE001 — no frame, no pacing
             return []
+
+    def _feed_wpa_learner(self, amps, observed_w, connected) -> None:
+        """(#846) Offer one command/result pair to the W/A learner.
+
+        Gating lives here because this is where the cycle's context is: the
+        phase BELIEF (never the learner's own opinion), whether a phase switch
+        is mid-sequence, whether the setpoint has been steady, and whether the
+        car is tapering. The learner refuses anything implausible on top."""
+        learner = getattr(self, "_wpa_learner", None)
+        if learner is None or not connected or self._observer_mode:
+            return
+        dev = getattr(self, "_ev_device", None)
+        if dev is None:
+            return
+        cid = str(getattr(dev, "charger_id", "") or "")
+        if not cid or not amps:
+            return
+        believed = (getattr(self, "_phase_believed", {}) or {}).get(cid)
+        phases = int(believed) if believed in (1, 3) else int(
+            self.config.get("ev_phases", 3) or 3)
+        voltage = float(self.config.get("ev_voltage", 230) or 230)
+
+        # steady = the same commanded amps for two consecutive cycles. A
+        # ramping setpoint measures the ramp, not the car.
+        prev = getattr(self, "_wpa_last_cmd", {}) or {}
+        steady = prev.get(cid) == int(amps)
+        self._wpa_last_cmd = {**prev, cid: int(amps)}
+
+        # a switch mid-sequence, or a belief SEM itself distrusts
+        seqs = getattr(self, "_phase_sequencers", None) or {}
+        seq = seqs.get(cid)
+        in_flight = bool(getattr(seq, "in_flight", False)) if seq else False
+        # "Does SEM still trust its own phase belief?" — the contradiction
+        # counter that PHASE_NOT_TAKING_AFTER reads, NOT _phase_conn_memo
+        # (which only remembers whether the car was plugged in; the first
+        # draft grabbed it by name and the gate was always open).
+        contra = (getattr(self, "_phase_contradictions", {}) or {}).get(cid) or {}
+        belief_ok = believed in (1, 3) and not contra.get("count")
+
+        # A car on a full battery reduces its own draw — that is evidence
+        # about the battery, not about watts-per-amp. ``full_detected`` on the
+        # per-charger taper detector is the question SEM already asks
+        # (published as ``taper_detected``); the first draft guessed a
+        # ``tapering`` attribute that does not exist, so the gate was
+        # permanently False — a vacuous guard is worse than none, because it
+        # reads as protection.
+        try:
+            tapering = bool(self._ev_taper_detector.full_detected)
+        except Exception:  # noqa: BLE001
+            tapering = False
+
+        learner.record(
+            cid, phases=phases, commanded_amps=float(amps),
+            observed_w=float(observed_w), nominal_wpa=phases * voltage,
+            belief_confirmed=belief_ok, setpoint_steady=steady,
+            switch_in_flight=in_flight, tapering=tapering,
+        )
 
     async def _run_charge_pacing(self) -> None:
         """(#820) One cycle of charge pacing: decide, maybe write, publish."""

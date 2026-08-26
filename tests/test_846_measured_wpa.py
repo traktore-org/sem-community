@@ -166,3 +166,77 @@ class TestRefusalsAreClassified:
         assert l.watts_per_amp("c1", 3) is None
         r = l.refusal_reasons("c1", 3)
         assert r.get("implausible", 0) >= MIN_SAMPLES and "phase_belief" not in r
+
+
+class TestTheGatesAreRealNotVacuous:
+    """A getattr that never finds its attribute is a gate that never fires.
+    The sequencer must actually answer the in-flight question."""
+
+    def test_the_sequencer_answers_in_flight(self):
+        from custom_components.solar_energy_management.coordinator.ev_phase_sequencer import (
+            PhaseSwitchSequencer,
+        )
+        seq = PhaseSwitchSequencer()
+        assert seq.in_flight is False
+        seq._state = "stopping"
+        assert seq.in_flight is True
+        seq._state = "settling"
+        assert seq.in_flight is True
+        seq._state = "idle"
+        assert seq.in_flight is False
+
+    def test_the_coordinator_feeds_the_learner_from_the_trace_site(self):
+        import inspect
+        from custom_components.solar_energy_management.coordinator import coordinator as cm
+        src = inspect.getsource(cm)
+        assert "_feed_wpa_learner(amps, observed, connected)" in src
+        assert "_wpa_learner = WattsPerAmpLearner()" in src
+
+    def test_the_adapter_conversions_consult_the_learner(self):
+        import inspect
+        from custom_components.solar_energy_management.coordinator.charger_adapters import base
+        src = inspect.getsource(base)
+        assert "_wpa_context" in src
+        assert src.count("learner.watts_for_amps") == 1
+        assert src.count("learner.amps_for_watts") == 1
+
+    def test_the_taper_gate_asks_a_question_that_exists(self):
+        """The first draft read `.tapering`, which no detector has — a gate
+        that never fires. It must use the same `full_detected` SEM already
+        publishes as `taper_detected`."""
+        import inspect
+        from custom_components.solar_energy_management.coordinator import coordinator as cm
+        from custom_components.solar_energy_management.coordinator.ev_taper_detector import (
+            EVTaperDetector,
+        )
+        assert isinstance(getattr(EVTaperDetector, "full_detected", None), property)
+        assert not hasattr(EVTaperDetector, "tapering")
+        feeder = inspect.getsource(cm.SEMCoordinator._feed_wpa_learner)
+        assert "full_detected" in feeder and ".tapering" not in feeder
+
+    def test_the_belief_gate_reads_the_contradiction_counter(self):
+        """Third vacuous gate of this build: _phase_conn_memo remembers
+        whether the CAR IS PLUGGED IN, not whether the phase belief is
+        disputed. Reading it left the gate permanently open."""
+        import inspect
+        from custom_components.solar_energy_management.coordinator import coordinator as cm
+        feeder = inspect.getsource(cm.SEMCoordinator._feed_wpa_learner)
+        # strip comments — the WRONG name is named in one, as the record of
+        # why it is wrong, and a blunt substring test would fail on prose.
+        code = "\n".join(l.split("#", 1)[0] for l in feeder.split("\n"))
+        assert "_phase_contradictions" in code
+        assert "_phase_conn_memo" not in code
+
+    def test_every_gate_the_feeder_claims_is_wired_to_something_real(self):
+        """One test that fails if any gate becomes a getattr against a name
+        nothing sets — the failure mode this build hit three times."""
+        import inspect
+        from custom_components.solar_energy_management.coordinator import coordinator as cm
+        feeder = inspect.getsource(cm.SEMCoordinator._feed_wpa_learner)
+        for kw in ("belief_confirmed=", "setpoint_steady=",
+                   "switch_in_flight=", "tapering="):
+            assert kw in feeder, f"{kw} gate missing from the feed"
+        # and none of them may be a bare literal
+        for kw in ("belief_confirmed=True", "setpoint_steady=True",
+                   "switch_in_flight=False", "tapering=False"):
+            assert kw not in feeder, f"{kw} is hardcoded — the gate is theatre"

@@ -274,16 +274,53 @@ class ChargerAdapter(ABC):
         except Exception as e:  # noqa: BLE001
             _LOGGER.debug("failsafe repair not cleared: %s", e)
 
+    # (#846) The ONE place amps and watts convert. Both consult the measured
+    # W/A when one has been earned for the BELIEVED phase count, and fall
+    # back to nameplate otherwise — so the surplus→amps math, the night
+    # planner's block sizing, the peak guard and the phase guard all improve
+    # from a single change rather than each growing its own opinion (#46).
+    def _wpa_context(self):
+        """(learner, charger_id, phases) — or None when nothing can be
+        measured. ``phases`` is the BELIEF where the coordinator has one,
+        nameplate otherwise: the belief anchors this, never the reverse."""
+        dev = self._device
+        coord = getattr(dev, "_coordinator", None) or getattr(dev, "coordinator", None)
+        learner = getattr(coord, "_wpa_learner", None)
+        if learner is None:
+            return None
+        cid = str(getattr(dev, "charger_id", "") or "")
+        if not cid:
+            return None
+        believed = (getattr(coord, "_phase_believed", {}) or {}).get(cid)
+        phases = int(believed) if believed in (1, 3) else int(self.phases)
+        return learner, cid, phases
+
+    def nominal_watts_per_amp(self, phases: int | None = None) -> float:
+        ph = int(phases) if phases in (1, 3) else int(self.phases)
+        return float(ph) * float(self.voltage)
+
     def watts_for_amps(self, amps: int) -> float:
-        """How much power ``amps`` corresponds to at this charger's
-        phases × voltage."""
-        return float(amps) * self.phases * self.voltage
+        """How much power ``amps`` really buys — measured where known,
+        nameplate otherwise. Never MORE than nameplate (#846)."""
+        ctx = self._wpa_context()
+        if ctx is None:
+            return float(amps) * self.phases * self.voltage
+        learner, cid, phases = ctx
+        return learner.watts_for_amps(cid, phases, float(amps),
+                                      self.nominal_watts_per_amp(phases))
 
     def amps_for_watts(self, watts: float) -> int:
         """Round-toward-zero conversion from watts to amps. The
         actuator should clamp the result to
         ``[min_current_a, max_current_a]`` itself; this is a
-        plain conversion."""
-        if self.phases * self.voltage <= 0:
-            return 0
-        return int(watts // (self.phases * self.voltage))
+        plain conversion — measured W/A where known (#846), and always
+        rounding DOWN, because handing out an amp the car then exceeds is
+        the one direction that can breach a limit."""
+        ctx = self._wpa_context()
+        if ctx is None:
+            if self.phases * self.voltage <= 0:
+                return 0
+            return int(watts // (self.phases * self.voltage))
+        learner, cid, phases = ctx
+        return learner.amps_for_watts(cid, phases, float(watts),
+                                      self.nominal_watts_per_amp(phases))

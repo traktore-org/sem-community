@@ -72,6 +72,14 @@ class PhaseSwitchSequencer:
         self._switched_at = 0.0
         self._last_switch_at = float("-inf")
 
+    @property
+    def in_flight(self) -> bool:
+        """(#846) True while a switch is mid-sequence (stopping or settling).
+        Anything measured now describes the ramp, not the car — the W/A
+        learner gates on this. A property rather than a caller poking
+        ``_state``: one name, one truth."""
+        return self._state in ("stopping", "settling")
+
     def _result(self, hold: bool, issue: Optional[int] = None) -> SeqResult:
         return SeqResult(state=self._state, hold_charging=hold,
                          issue_switch=issue, believed_phases=None)
