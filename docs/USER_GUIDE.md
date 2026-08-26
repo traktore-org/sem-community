@@ -45,7 +45,7 @@ All settings are accessible via **Settings** > **Devices & Services** > **Solar 
 | `ev_current_sensor` | Current sensor (A) — optional, for actual amperage |
 | `ev_session_energy_sensor` | Session energy (kWh) — optional |
 | `ev_total_energy_sensor` | Cumulative energy (kWh) — optional |
-| `ev_phase_switch_entity` | (#804) Optional — the select/number/switch (helper entities too) that changes the wallbox between 1- and 3-phase charging (go-e `psm`, KEBA X-series, openWB). Naming it enables the **Phase Mode** control; SEM never writes to it unless you set Phase Mode to a fixed 1/3 or Auto. |
+| `ev_phase_switch_entity` | (#804) Optional — the select/number/switch (helper entities too) that changes the wallbox between 1- and 3-phase charging (go-e `psm`, KEBA X-series, openWB). Naming it *plus* turning on **Phase switching** (per charger, off by default in 2.1) enables the **Phase Mode** control; SEM never writes to it unless you set Phase Mode to a fixed 1/3 or Auto. |
 | `ev_phase_switch_value_1p` / `_3p` | The values to write for each position, in the entity's own vocabulary. Required for a `select`; a `number` defaults to 1/3 and a `switch` to off/on. |
 
 ### What SEM detected (#814)
@@ -424,7 +424,7 @@ answer instead: SEM works out how much of the pack tonight can actually be
 spared, given what your house really uses overnight and how much tomorrow's sun
 is expected to put back.
 
-Turn it on under **Config → Battery charge scheduler → Forecast-led spending**.
+Turn it on under **Configuration → Battery intelligence → Forecast-led spending** (the two permissions — *may sell to the grid*, *may assist the car* — sit right beside it).
 It is **off by default**, and while it is off every number below is still
 measured and shown — nothing is spent.
 

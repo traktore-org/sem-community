@@ -181,6 +181,7 @@ PLATFORMS: list[Platform] = [
     Platform.NUMBER,
     Platform.BINARY_SENSOR,
     Platform.SELECT,
+    Platform.BUTTON,
     Platform.TIME,
 ]
 
@@ -2847,6 +2848,22 @@ async def _async_register_services(
             report.get("recovered", 0), report.get("trainable_recovered", 0),
             report.get("nights_total", 0), report.get("usable_total", 0),
         )
+        # (2.1 audit, item 8) the result where a person looks, not the log
+        try:
+            from homeassistant.components import persistent_notification
+            persistent_notification.async_create(
+                hass,
+                (f"Recovered {report.get('recovered', 0)} night(s) "
+                 f"({report.get('trainable_recovered', 0)} trainable) from "
+                 f"{report.get('days_of_history', 0)} hour(s) of history. "
+                 f"Battery-night history now holds "
+                 f"{report.get('nights_total', 0)} night(s), "
+                 f"{report.get('usable_total', 0)} usable."),
+                title="SEM: battery-night history rebuilt",
+                notification_id="sem_backfill_battery_nights",
+            )
+        except Exception:  # noqa: BLE001 — a notice never fails the service
+            pass
         await coordinator.async_request_refresh()
 
     try:

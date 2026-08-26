@@ -83,7 +83,7 @@ def raise_sensor_unavailable(
             is_persistent=True,
             severity=ir.IssueSeverity.WARNING,
             translation_key="sensor_unavailable",
-            learn_more_url=next_step_url("docs", "sensor_unavailable"),
+            learn_more_url=next_step_url("docs", "sensor_unavailable", **_versions(hass)),
             translation_placeholders={
                 "entity_id": entity_id,
                 "friendly_name": friendly_name or entity_id,
@@ -126,7 +126,7 @@ def raise_sensor_stale(
             is_persistent=True,
             severity=ir.IssueSeverity.WARNING,
             translation_key="sensor_stale",
-            learn_more_url=next_step_url("docs", "sensor_stale"),
+            learn_more_url=next_step_url("docs", "sensor_stale", **_versions(hass)),
             translation_placeholders={
                 "entity_id": entity_id,
                 "friendly_name": friendly_name or entity_id,
@@ -235,6 +235,7 @@ _DOCS_ANCHORS = {
     "charger_failsafe_suspected": "your-wallbox-undoes-sems-stop-on-a-timer",
     "battery_force_discharge_unsupported":
         "the-inverter-refuses-forced-discharge",
+    "deye_system_work_mode_invalid": "deye-system-work-mode-setup-cannot-be-used",
 }
 
 
@@ -254,6 +255,14 @@ def copy_context(key: str, *, reason: str = "", brand: str = "",
     return "\n".join(lines)
 
 
+def _docs_ref(sem_version: str) -> str:
+    """(2.1 audit, item 7) A beta runs from develop; its docs anchors do not
+    exist on main until the stable merge. Link the branch the running
+    version came from, so a repair's deep link never 404s from a beta."""
+    v = str(sem_version or "")
+    return "develop" if ("beta" in v or "rc" in v or not v) else "main"
+
+
 def next_step_url(kind: str, key: str, *, reason: str = "",
                   sem_version: str = "", ha_version: str = "",
                   brand: str = "") -> str:
@@ -267,9 +276,11 @@ def next_step_url(kind: str, key: str, *, reason: str = "",
     """
     if kind == "docs":
         anchor = _DOCS_ANCHORS.get(key, "")
+        ref = _docs_ref(sem_version)
         if anchor.startswith("http"):
-            return anchor
-        return f"{_REPO_URL}/blob/main/docs/TROUBLESHOOTING.md#{anchor}"
+            return anchor.replace("/blob/develop/", f"/blob/{ref}/").replace(
+                "/blob/main/", f"/blob/{ref}/")
+        return f"{_REPO_URL}/blob/{ref}/docs/TROUBLESHOOTING.md#{anchor}"
     # Entity ids never enter a logged URL — scrub even when a reason string
     # embeds one (they routinely do; that is the card's job, not the URL's).
     clean_reason = _ENTITY_ID_RE.sub("(entity)", str(reason or ""))
@@ -292,16 +303,47 @@ def _versions(hass: HomeAssistant) -> dict:
     sem = ""
     try:
         integ = hass.data.get("integrations", {}).get(DOMAIN)
-        sem = str(getattr(integ, "version", "") or "")
+        v = getattr(integ, "version", None)
+        sem = v if isinstance(v, str) else ""
     except Exception:  # noqa: BLE001
         sem = ""
     if not sem:
-        sem = str(hass.data.get(DOMAIN, {}).get("_manifest_version", "") or "")
+        try:
+            v = hass.data.get(DOMAIN, {}).get("_manifest_version")
+            sem = v if isinstance(v, str) else ""
+        except Exception:  # noqa: BLE001
+            sem = ""
     try:
         from homeassistant.const import __version__ as ha_ver
     except Exception:  # noqa: BLE001
         ha_ver = ""
-    return {"sem_version": sem, "ha_version": str(ha_ver)}
+    return {"sem_version": sem, "ha_version": ha_ver if isinstance(ha_ver, str) else ""}
+
+
+def raise_deye_system_work_mode_invalid(hass: HomeAssistant, entity_id: str,
+                                        *, reason: str) -> None:
+    """(#827, 2.1 audit) A System Work Mode setup SEM cannot use — the reason
+    used to land in a private attribute nobody reads."""
+    try:
+        ir.async_create_issue(
+            hass, domain=DOMAIN,
+            issue_id=f"deye_system_work_mode_invalid_{entity_id}",
+            is_fixable=False, is_persistent=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="deye_system_work_mode_invalid",
+            translation_placeholders={"entity_id": entity_id, "reason": reason},
+            learn_more_url=next_step_url("docs", "deye_system_work_mode_invalid",
+                                         **_versions(hass)),
+        )
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.create failed for %s: %s", entity_id, e)
+
+
+def clear_deye_system_work_mode_invalid(hass: HomeAssistant, entity_id: str) -> None:
+    try:
+        ir.async_delete_issue(hass, DOMAIN, f"deye_system_work_mode_invalid_{entity_id}")
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete failed for %s: %s", entity_id, e)
 
 
 def _failsafe_issue_id(device_id: str) -> str:
@@ -323,7 +365,7 @@ def raise_charger_failsafe_suspected(
             is_fixable=False, is_persistent=True,
             severity=ir.IssueSeverity.WARNING,
             translation_key="charger_failsafe_suspected",
-            learn_more_url=next_step_url("docs", "charger_failsafe_suspected"),
+            learn_more_url=next_step_url("docs", "charger_failsafe_suspected", **_versions(hass)),
             translation_placeholders={
                 "name": name, "interval_s": str(int(interval_s)),
             },
@@ -369,7 +411,7 @@ def raise_battery_force_discharge_unsupported(
             is_persistent=True,
             severity=ir.IssueSeverity.WARNING,
             translation_key="battery_force_discharge_unsupported",
-            learn_more_url=next_step_url("docs", "battery_force_discharge_unsupported"),
+            learn_more_url=next_step_url("docs", "battery_force_discharge_unsupported", **_versions(hass)),
             translation_placeholders={
                 "entity_id": entity_id,
                 "error": error,
@@ -527,7 +569,7 @@ def raise_no_forecast_integration(hass: HomeAssistant) -> None:
             is_persistent=True,
             severity=ir.IssueSeverity.WARNING,
             translation_key="no_forecast_integration",
-            learn_more_url=next_step_url("docs", "no_forecast_integration"),
+            learn_more_url=next_step_url("docs", "no_forecast_integration", **_versions(hass)),
         )
     except Exception as e:  # noqa: BLE001
         _LOGGER.debug("issue_registry.create no_forecast failed: %s", e)
@@ -552,7 +594,7 @@ def raise_no_recorder(hass: HomeAssistant) -> None:
             is_persistent=True,
             severity=ir.IssueSeverity.WARNING,
             translation_key="no_recorder",
-            learn_more_url=next_step_url("docs", "no_recorder"),
+            learn_more_url=next_step_url("docs", "no_recorder", **_versions(hass)),
         )
     except Exception as e:  # noqa: BLE001
         _LOGGER.debug("issue_registry.create no_recorder failed: %s", e)
@@ -601,7 +643,7 @@ def raise_heat_pump_relay_unavailable(
             is_persistent=True,
             severity=ir.IssueSeverity.WARNING,
             translation_key="heat_pump_relay_unavailable",
-            learn_more_url=next_step_url("docs", "heat_pump_relay_unavailable"),
+            learn_more_url=next_step_url("docs", "heat_pump_relay_unavailable", **_versions(hass)),
             translation_placeholders={
                 "slot": slot,
                 "entity_id": entity_id,
@@ -668,7 +710,7 @@ def raise_hot_water_entity_unavailable(
             is_persistent=True,
             severity=ir.IssueSeverity.WARNING,
             translation_key="hot_water_entity_unavailable",
-            learn_more_url=next_step_url("docs", "hot_water_entity_unavailable"),
+            learn_more_url=next_step_url("docs", "hot_water_entity_unavailable", **_versions(hass)),
             translation_placeholders={
                 "entity_id": entity_id,
                 "minutes": str(minutes_unavailable),
@@ -719,7 +761,7 @@ def raise_hot_water_temperature_sensor_unavailable(
             is_persistent=True,
             severity=ir.IssueSeverity.WARNING,
             translation_key="hot_water_temperature_sensor_unavailable",
-            learn_more_url=next_step_url("docs", "hot_water_temperature_sensor_unavailable"),
+            learn_more_url=next_step_url("docs", "hot_water_temperature_sensor_unavailable", **_versions(hass)),
             translation_placeholders={
                 "entity_id": entity_id,
                 "minutes": str(minutes_unavailable),
@@ -877,7 +919,7 @@ def raise_heat_pump_partial_sg_ready(hass: HomeAssistant) -> None:
             is_persistent=True,
             severity=ir.IssueSeverity.WARNING,
             translation_key="heat_pump_partial_sg_ready",
-            learn_more_url=next_step_url("docs", "heat_pump_partial_sg_ready"),
+            learn_more_url=next_step_url("docs", "heat_pump_partial_sg_ready", **_versions(hass)),
         )
     except Exception as e:  # noqa: BLE001
         _LOGGER.debug(
@@ -923,7 +965,7 @@ def raise_keba_failsafe_active(
             severity=ir.IssueSeverity.WARNING,
             translation_key="keba_failsafe_active",
             translation_placeholders={"name": charger_name},
-            learn_more_url=next_step_url("docs", "keba_failsafe_active"),
+            learn_more_url=next_step_url("docs", "keba_failsafe_active", **_versions(hass)),
         )
     except Exception as e:  # noqa: BLE001 — never fail the cycle over a repair
         _LOGGER.debug("issue_registry.create keba_failsafe_active failed: %s", e)
@@ -1004,7 +1046,7 @@ def raise_charger_control_entity_broken(
             is_persistent=True,
             severity=ir.IssueSeverity.ERROR,
             translation_key="charger_control_entity_broken",
-            learn_more_url=next_step_url("docs", "charger_control_entity_broken"),
+            learn_more_url=next_step_url("docs", "charger_control_entity_broken", **_versions(hass)),
             translation_placeholders={
                 "name": name,
                 "entity_id": entity_id,

@@ -42,7 +42,7 @@ const ESSENTIAL_SECTIONS = new Set([
     'overview',        // what is still missing, and the route to each
     'tariff',          // without a price, every saving SEM reports is zero
     'ev_chargers',     // the main sink on most installs
-    'battery_zones',   // the floors that keep the house covered
+    'battery_zones',   // the floors that keep the house covered,
 ]);
 
 const ESSENTIAL_CONTROLS = new Set([
@@ -138,6 +138,17 @@ const SECTIONS = [
         color: '#f06292',
         titleKey: 'config_section_battery_scheduler',
         subtitleFn: () => '',
+    },
+    {
+        // (2.1 audit, item 2) One home for the four 2.1 switches, the
+        // pacing picker, the AC limit and the Deye export row. An ADVANCED
+        // section: #830's default view stays at four; the Setup overview
+        // routes here.
+        // They were HA entities only, or options-flow pages 11-12.
+        id: 'battery_intelligence',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/USER_GUIDE.md#forecast-led-spending',
+        titleKey: 'config_section_battery_intelligence',
+        subtitleFn: (c) => c._batteryIntelligenceSubtitle(),
     },
     {
         id: 'load_management',
@@ -852,6 +863,8 @@ class SEMConfigCard extends SEMLitBase {
                        vocabulary. Value fields only show once the entity is
                        set; select entities REQUIRE them, number defaults to
                        1/3 and switch to off/on. */}
+                    ${this._renderToggleNested(idx, cid, 'ev_phase_switching_enabled', 'config_ev_phase_switching',
+                        opts, 'config_help_ev_phase_switching')}
                     ${this._renderPickerNested(idx, cid, 'ev_phase_switch_entity', 'config_ev_phase_switch',
                         ['select', 'number', 'switch', 'input_select', 'input_number', 'input_boolean'],
                         null, opts, 'config_help_ev_phase_switch')}
@@ -860,6 +873,17 @@ class SEMConfigCard extends SEMLitBase {
                             opts, 'config_help_ev_phase_values', '1 / off / einphasig')}
                         ${this._renderTextNested(idx, cid, 'ev_phase_switch_value_3p', 'config_ev_phase_3p',
                             opts, 'config_help_ev_phase_values', '3 / on / dreiphasig')}` : nothing}
+                    ${''/* (2.1 audit) start/stop via a charge-mode select
+                       (go-e / Wattpilot force-state). The option labels are
+                       the integration's own vocabulary — never guessed —
+                       so they are typed here, beside the entity. */}
+                    ${this._renderPickerNested(idx, cid, 'ev_charge_mode_entity', 'config_ev_charge_mode',
+                        ['select', 'input_select'], null, opts, 'config_help_ev_charge_mode')}
+                    ${charger.ev_charge_mode_entity ? html`
+                        ${this._renderTextNested(idx, cid, 'ev_charge_mode_start', 'config_ev_charge_mode_start',
+                            opts, 'config_help_ev_charge_mode', 'On / 2')}
+                        ${this._renderTextNested(idx, cid, 'ev_charge_mode_stop', 'config_ev_charge_mode_stop',
+                            opts, 'config_help_ev_charge_mode', 'Off / 1')}` : nothing}
                     ${this._renderPickerNested(idx, cid, 'vehicle_soc_entity', 'config_ev_vehicle_soc',
                         'sensor', null, opts, 'config_help_ev_vehicle_soc')}
                     ${this._renderTargetTypeSelectNested(idx, cid, charger, opts)}
@@ -1548,6 +1572,30 @@ class SEMConfigCard extends SEMLitBase {
         `;
     }
 
+    // (2.1 audit, item 1) A per-charger boolean — the phase-switching gate
+    // shipped with no UI at all. Saves through the same per-charger field
+    // path as the text/picker rows.
+    _renderToggleNested(chargerIndex, cid, chargerKey, labelKey, opts, helpKey) {
+        const chargers = opts.ev_chargers || [];
+        const cur = !!(chargers[chargerIndex]?.[chargerKey]);
+        const statusKey = `ev_chargers.${chargerIndex}.${chargerKey}`;
+        const status = this._saveStatus[statusKey];
+        return html`
+            <div class="picker-cell">
+                <div class="toggle-row">
+                    <span class="toggle-label">${this._t(labelKey)}${this._helpBtn(helpKey)}</span>
+                    <div class="toggle-track ${cur ? 'on' : ''}"
+                         @click=${() => this._saveChargerField(chargerIndex, cid, chargerKey, !cur, statusKey, opts)}>
+                        <div class="toggle-thumb"></div>
+                    </div>
+                </div>
+                ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
+                ${status === 'ok' ? html`<div class="save-status ok">✓ ${this._t('config_saved')}</div>` : nothing}
+                ${this._helpBlock(helpKey)}
+            </div>
+        `;
+    }
+
     _renderPickerNested(chargerIndex, cid, chargerKey, labelKey, domain, deviceClass, opts, helpKey) {
         const chargers = opts.ev_chargers || [];
         const cur = chargers[chargerIndex]?.[chargerKey] || '';
@@ -2069,6 +2117,34 @@ class SEMConfigCard extends SEMLitBase {
                 { min: 0, max: 1, step: 0.1, unit: '', default: 0.3 }, opts, 'config_help_bs_pessimism')}
             ${this._renderOptionToggle('battery_force_charge_negative_price', 'config_bs_force_neg',
                 opts, 'config_help_bs_force_neg', true)}
+        `;
+    }
+
+    _batteryIntelligenceSubtitle() {
+        const st = this._hass?.states?.['sensor.sem_battery_spendable_kwh'];
+        const phase = st?.attributes?.phase;
+        return phase ? this._t(`planning_phase_${phase}`) : '';
+    }
+
+    _renderBatteryIntelligence(T) {
+        const opts = this._options || {};
+        const deye = opts.battery_charge_platform === 'deye';
+        return html`
+            ${this._renderToggle('switch.sem_forecast_spending_enabled', 'forecast_spending', T, 'config_help_forecast_spending')}
+            ${this._renderToggle('switch.sem_battery_may_export', 'battery_may_export', T, 'config_help_battery_may_export')}
+            ${this._renderToggle('switch.sem_battery_may_assist_ev', 'battery_may_assist_ev', T, 'config_help_battery_may_assist_ev')}
+            <div style="margin-top:6px;border-top:1px solid ${T.surfaceBorder};padding-top:4px"></div>
+            ${this._renderToggle('switch.sem_battery_charge_pacing_enabled', 'battery_charge_pacing', T, 'config_help_battery_charge_pacing')}
+            ${this._renderPicker('battery_charge_power_limit_entity', 'config_charge_power_limit_entity',
+                'number', null, opts, 'config_help_charge_power_limit_entity')}
+            ${this._renderOptionNumberInput('inverter_ac_limit_w', 'config_inverter_ac_limit',
+                { min: 0, max: 100000, step: 100, unit: 'W', default: 0 }, opts, 'config_help_inverter_ac_limit')}
+            ${deye ? html`
+                <div style="margin-top:6px;border-top:1px solid ${T.surfaceBorder};padding-top:4px"></div>
+                ${this._renderOptionToggle('deye_system_work_mode_control', 'config_deye_system_work_mode',
+                    opts, 'config_help_deye_system_work_mode', false)}
+                ${this._renderPicker('deye_system_work_mode_entity', 'config_deye_system_work_mode_entity',
+                    'select', null, opts, 'config_help_deye_system_work_mode_entity')}` : nothing}
         `;
     }
 
@@ -2690,6 +2766,7 @@ class SEMConfigCard extends SEMLitBase {
             heat_pump: (T) => this._renderHeatPump(T),
             hot_water: (T) => this._renderHotWater(T),
             battery_scheduler: (T) => this._renderBatteryScheduler(T),
+            battery_intelligence: (T) => this._renderBatteryIntelligence(T),
             load_management: (T) => this._renderLoadManagement(T),
             forecast: (T) => this._renderForecast(T),
             pv_strings: (T) => this._renderPvStrings(T),

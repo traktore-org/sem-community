@@ -314,6 +314,8 @@ Some HEMS tools bundle vendor-specific Modbus templates that write directly to i
 
 ## Phase switching — 1↔3‑phase, observed, manual and automatic (#804)
 
+> **2.1: off by default.** Real-world testing found the shipped model harmful on two brands (a Wattpilot latched paused after every switch; a Zaptec has no phase command — it switches on a current threshold). Phase switching is dormant until you turn on **Phase switching** for the charger (Configuration → EV chargers). The rework — a per-brand start signal, the threshold model, a per-phase current guard — is the 2.1 arc; everything below describes the behaviour once enabled.
+
 Some wallboxes can switch between 1‑ and 3‑phase charging (go‑e's `psm`
 select, KEBA X‑series via Modbus, openWB's flag). SEM supports them in
 three layers — observation, manual control, and automatic switching:

@@ -305,13 +305,15 @@
           "battery_charge_platform": "Batteriets ladeplattform",
           "battery_replan_interval_min": "Replanleggingsintervall (min)",
           "battery_prefer_consecutive_window": "Foretrekk et sammenhengende ladevindu",
-          "battery_charge_power_limit_entity": "Battery charge-power limit entity (for pacing)"
+          "battery_charge_power_limit_entity": "Battery charge-power limit entity (for pacing)",
+          "inverter_ac_limit_w": "Inverter AC output limit"
         },
         "data_description": {
           "battery_charge_platform": "Hvilken inverter SEM styrer for planlagt nettlading. Velg Deye for å vise Deye-koblingstrinnet.",
           "battery_replan_interval_min": "Hvor ofte ladeplanen beregnes på nytt ut fra nyeste prognose og priser.",
           "battery_prefer_consecutive_window": "På: de billige timene i én blokk (færre start/stopp-sykluser); av: de enkeltvis billigste timene, selv spredt.",
-          "battery_charge_power_limit_entity": "The inverter's max-charge-power number that charge pacing writes to (e.g. Huawei's 'Maximum charging power'). Leave empty to keep pacing advisory-only."
+          "battery_charge_power_limit_entity": "The inverter's max-charge-power number that charge pacing writes to (e.g. Huawei's 'Maximum charging power'). Leave empty to keep pacing advisory-only.",
+          "inverter_ac_limit_w": "Your inverter's maximum AC output in watts. Charge pacing opens its cap wherever solar would exceed this, so clipped sun is captured. 0 = not set."
         }
       },
       "ev_charger_edit": {
@@ -344,7 +346,8 @@
           "vehicle_min_current": "Kjøretøyets minimumsstrøm (A)",
           "ev_phase_switch_entity": "Faseskifte-entitet (valgfritt)",
           "ev_phase_switch_value_1p": "Faseskifte: verdi for 1-fase (valgfritt)",
-          "ev_phase_switch_value_3p": "Faseskifte: verdi for 3-fase (valgfritt)"
+          "ev_phase_switch_value_3p": "Faseskifte: verdi for 3-fase (valgfritt)",
+          "ev_phase_switching_enabled": "Phase switching"
         },
         "data_description": {
           "charger_name": "Visningsnavn for denne laderen på dashbordet.",
@@ -373,7 +376,8 @@
           "vehicle_min_current": "Strømgulv per kjøretøy. Effektivt minimum er det høyeste av denne og laderens minimumsstrøm.",
           "ev_phase_switch_entity": "Select/number/switch som veksler laderen mellom 1- og 3-fase lading (go-e 'psm', KEBA X-serien, openWB). SEM observerer og validerer foreløpig bare — automatisk veksling kommer i en senere versjon.",
           "ev_phase_switch_value_1p": "Hva som skrives til skifte-entiteten for 1-fase lading — et selects alternativnavn, et numbers verdi eller on/off. Påkrevd for select-entiteter; number-standard 1, switch-standard off.",
-          "ev_phase_switch_value_3p": "Hva som skrives til skifte-entiteten for 3-fase lading — et selects alternativnavn, et numbers verdi eller on/off. Påkrevd for select-entiteter; number-standard 3, switch-standard on."
+          "ev_phase_switch_value_3p": "Hva som skrives til skifte-entiteten for 3-fase lading — et selects alternativnavn, et numbers verdi eller on/off. Påkrevd for select-entiteter; number-standard 3, switch-standard on.",
+          "ev_phase_switching_enabled": "Off by default while the 1/3-phase model is reworked (it paused chargers that never resumed on some brands). Turn on to test it on your charger."
         }
       },
       "ev_charger_add": {
@@ -405,7 +409,8 @@
           "ev_min_current": "Minimum ladestrøm (A)",
           "ev_phase_switch_entity": "Faseskifte-entitet (valgfritt)",
           "ev_phase_switch_value_1p": "Faseskifte: verdi for 1-fase (valgfritt)",
-          "ev_phase_switch_value_3p": "Faseskifte: verdi for 3-fase (valgfritt)"
+          "ev_phase_switch_value_3p": "Faseskifte: verdi for 3-fase (valgfritt)",
+          "ev_phase_switching_enabled": "Phase switching"
         },
         "data_description": {
           "charger_name": "Visningsnavn for denne laderen på dashbordet.",
@@ -433,7 +438,8 @@
           "ev_min_current": "Under dette pauser SEM ladingen i stedet for å senke strømmen ytterligere.",
           "ev_phase_switch_entity": "Select/number/switch som veksler laderen mellom 1- og 3-fase lading (go-e 'psm', KEBA X-serien, openWB). SEM observerer og validerer foreløpig bare — automatisk veksling kommer i en senere versjon.",
           "ev_phase_switch_value_1p": "Hva som skrives til skifte-entiteten for 1-fase lading — et selects alternativnavn, et numbers verdi eller on/off. Påkrevd for select-entiteter; number-standard 1, switch-standard off.",
-          "ev_phase_switch_value_3p": "Hva som skrives til skifte-entiteten for 3-fase lading — et selects alternativnavn, et numbers verdi eller on/off. Påkrevd for select-entiteter; number-standard 3, switch-standard on."
+          "ev_phase_switch_value_3p": "Hva som skrives til skifte-entiteten for 3-fase lading — et selects alternativnavn, et numbers verdi eller on/off. Påkrevd for select-entiteter; number-standard 3, switch-standard on.",
+          "ev_phase_switching_enabled": "Off by default while the 1/3-phase model is reworked (it paused chargers that never resumed on some brands). Turn on to test it on your charger."
         }
       },
       "pv_naming": {
@@ -1474,6 +1480,11 @@
           "3": "3-fase"
         }
       }
+    },
+    "button": {
+      "backfill_battery_nights": {
+        "name": "Rebuild battery-night history"
+      }
     }
   },
   "exceptions": {
@@ -1606,6 +1617,10 @@
     "charger_failsafe_suspected": {
       "title": "Your wallbox undoes SEM's stop on a timer: {name}",
       "description": "**{name}** re-enabled itself **{interval_s} seconds** after SEM stopped it — at least twice, with the same delay to the second, and with no command from SEM in between. That regularity is the signature of a charger-side **failsafe / controller-timeout fallback**, not of a car retrying.\n\nSEM will not fight it: re-issuing stops faster would strobe the contactor and the box would win anyway. Until it is fixed the charger may draw at its stored fallback current (often 6 A) whenever SEM stops it.\n\n**The fix is a one-time change on the wallbox itself.** Look for a failsafe or fallback-current setting in its configuration — on a KEBA these are `Curr FS` (fallback current) and `Tmo FS` (timeout) — and set the **fallback current to 0**, so a quiet controller means *stay off* rather than *charge at 6 A*. If your box is driven over Modbus, the setting usually lives in the same register block the integration already uses."
+    },
+    "deye_system_work_mode_invalid": {
+      "title": "Deye export control cannot be used: {entity_id}",
+      "description": "SEM cannot use {entity_id} for export control: {reason}. Check the select entity and the three option labels under Configuration → Battery intelligence."
     }
   },
   "selector": {

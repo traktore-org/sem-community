@@ -285,13 +285,15 @@
           "battery_charge_platform": "电池充电平台",
           "battery_replan_interval_min": "重新规划间隔 (min)",
           "battery_prefer_consecutive_window": "优先选择连续的充电时段",
-          "battery_charge_power_limit_entity": "Battery charge-power limit entity (for pacing)"
+          "battery_charge_power_limit_entity": "Battery charge-power limit entity (for pacing)",
+          "inverter_ac_limit_w": "Inverter AC output limit"
         },
         "data_description": {
           "battery_charge_platform": "SEM 用于计划电网充电的逆变器。选择 Deye 可显示 Deye 接线步骤。",
           "battery_replan_interval_min": "根据最新预测和电价重新计算充电计划的频率。",
           "battery_prefer_consecutive_window": "开启：将便宜时段集中为一整块（减少启停次数）；关闭：即使分散也选择单独最便宜的小时。",
-          "battery_charge_power_limit_entity": "The inverter's max-charge-power number that charge pacing writes to (e.g. Huawei's 'Maximum charging power'). Leave empty to keep pacing advisory-only."
+          "battery_charge_power_limit_entity": "The inverter's max-charge-power number that charge pacing writes to (e.g. Huawei's 'Maximum charging power'). Leave empty to keep pacing advisory-only.",
+          "inverter_ac_limit_w": "Your inverter's maximum AC output in watts. Charge pacing opens its cap wherever solar would exceed this, so clipped sun is captured. 0 = not set."
         }
       },
       "notifications": {
@@ -344,7 +346,8 @@
           "vehicle_min_current": "车辆最小电流 (A)",
           "ev_phase_switch_entity": "相位切换实体（可选）",
           "ev_phase_switch_value_1p": "相位切换：单相值（可选）",
-          "ev_phase_switch_value_3p": "相位切换：三相值（可选）"
+          "ev_phase_switch_value_3p": "相位切换：三相值（可选）",
+          "ev_phase_switching_enabled": "Phase switching"
         },
         "data_description": {
           "charger_name": "在看板中显示的充电桩友好名称。",
@@ -373,7 +376,8 @@
           "vehicle_min_current": "每辆车的电流下限。实际最小值取此值与充电器最小电流中的较大者。",
           "ev_phase_switch_entity": "在单相与三相充电之间切换充电桩的 select/number/switch 实体（go-e 'psm'、KEBA X 系列、openWB）。目前 SEM 仅观察和验证该实体——自动切换将在后续版本中提供。",
           "ev_phase_switch_value_1p": "单相充电时写入相位切换实体的值——select 的选项名、number 的数值或 on/off。select 实体必填；number 默认 1，switch 默认 off。",
-          "ev_phase_switch_value_3p": "三相充电时写入相位切换实体的值——select 的选项名、number 的数值或 on/off。select 实体必填；number 默认 3，switch 默认 on。"
+          "ev_phase_switch_value_3p": "三相充电时写入相位切换实体的值——select 的选项名、number 的数值或 on/off。select 实体必填；number 默认 3，switch 默认 on。",
+          "ev_phase_switching_enabled": "Off by default while the 1/3-phase model is reworked (it paused chargers that never resumed on some brands). Turn on to test it on your charger."
         }
       },
       "ev_charger_add": {
@@ -405,7 +409,8 @@
           "ev_min_current": "最小充电电流 (A)",
           "ev_phase_switch_entity": "相位切换实体（可选）",
           "ev_phase_switch_value_1p": "相位切换：单相值（可选）",
-          "ev_phase_switch_value_3p": "相位切换：三相值（可选）"
+          "ev_phase_switch_value_3p": "相位切换：三相值（可选）",
+          "ev_phase_switching_enabled": "Phase switching"
         },
         "data_description": {
           "charger_name": "在看板中显示的充电桩友好名称。",
@@ -433,7 +438,8 @@
           "ev_min_current": "低于此值时，SEM 会暂停充电，而不是继续降低电流。",
           "ev_phase_switch_entity": "在单相与三相充电之间切换充电桩的 select/number/switch 实体（go-e 'psm'、KEBA X 系列、openWB）。目前 SEM 仅观察和验证该实体——自动切换将在后续版本中提供。",
           "ev_phase_switch_value_1p": "单相充电时写入相位切换实体的值——select 的选项名、number 的数值或 on/off。select 实体必填；number 默认 1，switch 默认 off。",
-          "ev_phase_switch_value_3p": "三相充电时写入相位切换实体的值——select 的选项名、number 的数值或 on/off。select 实体必填；number 默认 3，switch 默认 on。"
+          "ev_phase_switch_value_3p": "三相充电时写入相位切换实体的值——select 的选项名、number 的数值或 on/off。select 实体必填；number 默认 3，switch 默认 on。",
+          "ev_phase_switching_enabled": "Off by default while the 1/3-phase model is reworked (it paused chargers that never resumed on some brands). Turn on to test it on your charger."
         }
       },
       "pv_naming": {
@@ -1474,6 +1480,11 @@
           "3": "三相"
         }
       }
+    },
+    "button": {
+      "backfill_battery_nights": {
+        "name": "Rebuild battery-night history"
+      }
     }
   },
   "exceptions": {
@@ -1606,6 +1617,10 @@
     "charger_failsafe_suspected": {
       "title": "Your wallbox undoes SEM's stop on a timer: {name}",
       "description": "**{name}** re-enabled itself **{interval_s} seconds** after SEM stopped it — at least twice, with the same delay to the second, and with no command from SEM in between. That regularity is the signature of a charger-side **failsafe / controller-timeout fallback**, not of a car retrying.\n\nSEM will not fight it: re-issuing stops faster would strobe the contactor and the box would win anyway. Until it is fixed the charger may draw at its stored fallback current (often 6 A) whenever SEM stops it.\n\n**The fix is a one-time change on the wallbox itself.** Look for a failsafe or fallback-current setting in its configuration — on a KEBA these are `Curr FS` (fallback current) and `Tmo FS` (timeout) — and set the **fallback current to 0**, so a quiet controller means *stay off* rather than *charge at 6 A*. If your box is driven over Modbus, the setting usually lives in the same register block the integration already uses."
+    },
+    "deye_system_work_mode_invalid": {
+      "title": "Deye export control cannot be used: {entity_id}",
+      "description": "SEM cannot use {entity_id} for export control: {reason}. Check the select entity and the three option labels under Configuration → Battery intelligence."
     }
   },
   "selector": {

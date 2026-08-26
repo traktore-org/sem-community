@@ -34,6 +34,7 @@ DOCS_SIDE = {
     "hot_water_temperature_sensor_unavailable", "heat_pump_partial_sg_ready",
     "charger_control_entity_broken", "keba_failsafe_active",
     "charger_failsafe_suspected", "battery_force_discharge_unsupported",
+    "deye_system_work_mode_invalid",
 }
 REPORT_SIDE = {
     "charger_actuation_failed", "charger_stop_unenforceable",

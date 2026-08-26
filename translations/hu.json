@@ -305,13 +305,15 @@
           "battery_charge_platform": "Akkumulátor töltési platform",
           "battery_replan_interval_min": "Újratervezési intervallum (min)",
           "battery_prefer_consecutive_window": "Összefüggő töltési ablak előnyben részesítése",
-          "battery_charge_power_limit_entity": "Battery charge-power limit entity (for pacing)"
+          "battery_charge_power_limit_entity": "Battery charge-power limit entity (for pacing)",
+          "inverter_ac_limit_w": "Inverter AC output limit"
         },
         "data_description": {
           "battery_charge_platform": "Melyik invertert vezérli a SEM az ütemezett hálózati töltéshez. Válaszd a Deye-t a Deye bekötési lépés megjelenítéséhez.",
           "battery_replan_interval_min": "Milyen gyakran számolja újra a töltési ütemtervet a legfrissebb előrejelzés és árak alapján.",
           "battery_prefer_consecutive_window": "Be: az olcsó órák egy blokkban (kevesebb indítás/leállítás ciklus); ki: az egyenként legolcsóbb órák, akár szétszórtan is.",
-          "battery_charge_power_limit_entity": "The inverter's max-charge-power number that charge pacing writes to (e.g. Huawei's 'Maximum charging power'). Leave empty to keep pacing advisory-only."
+          "battery_charge_power_limit_entity": "The inverter's max-charge-power number that charge pacing writes to (e.g. Huawei's 'Maximum charging power'). Leave empty to keep pacing advisory-only.",
+          "inverter_ac_limit_w": "Your inverter's maximum AC output in watts. Charge pacing opens its cap wherever solar would exceed this, so clipped sun is captured. 0 = not set."
         }
       },
       "ev_charger_edit": {
@@ -344,7 +346,8 @@
           "vehicle_min_current": "Jármű minimális árama (A)",
           "ev_phase_switch_entity": "Fázisváltó entitás (opcionális)",
           "ev_phase_switch_value_1p": "Fázisváltás: 1 fázisú érték (opcionális)",
-          "ev_phase_switch_value_3p": "Fázisváltás: 3 fázesú érték (opcionális)"
+          "ev_phase_switch_value_3p": "Fázisváltás: 3 fázesú érték (opcionális)",
+          "ev_phase_switching_enabled": "Phase switching"
         },
         "data_description": {
           "charger_name": "A töltő irányítópulton megjelenő, felhasználóbarát neve.",
@@ -373,7 +376,8 @@
           "vehicle_min_current": "Járművenkénti áram-alsóhatár. A tényleges minimum ennek és a töltő minimális áramának a nagyobbika.",
           "ev_phase_switch_entity": "Select/number/switch, amely a töltőt 1 és 3 fázisú töltés között váltja (go-e 'psm', KEBA X-széria, openWB). A SEM egyelőre csak megfigyel és ellenőriz — az automatikus váltás egy későbbi kiadásban érkezik.",
           "ev_phase_switch_value_1p": "Mi kerüljön a váltó entitásba 1 fázisú töltéshez — select opciónév, number érték vagy on/off. Select entitásoknál kötelező; number alapértelmezés 1, switch off.",
-          "ev_phase_switch_value_3p": "Mi kerüljön a váltó entitásba 3 fázisú töltéshez — select opciónév, number érték vagy on/off. Select entitásoknál kötelező; number alapértelmezés 3, switch on."
+          "ev_phase_switch_value_3p": "Mi kerüljön a váltó entitásba 3 fázisú töltéshez — select opciónév, number érték vagy on/off. Select entitásoknál kötelező; number alapértelmezés 3, switch on.",
+          "ev_phase_switching_enabled": "Off by default while the 1/3-phase model is reworked (it paused chargers that never resumed on some brands). Turn on to test it on your charger."
         }
       },
       "ev_charger_add": {
@@ -405,7 +409,8 @@
           "ev_min_current": "Minimális töltőáram (A)",
           "ev_phase_switch_entity": "Fázisváltó entitás (opcionális)",
           "ev_phase_switch_value_1p": "Fázisváltás: 1 fázisú érték (opcionális)",
-          "ev_phase_switch_value_3p": "Fázisváltás: 3 fázesú érték (opcionális)"
+          "ev_phase_switch_value_3p": "Fázisváltás: 3 fázesú érték (opcionális)",
+          "ev_phase_switching_enabled": "Phase switching"
         },
         "data_description": {
           "charger_name": "A töltő irányítópulton megjelenő, felhasználóbarát neve.",
@@ -433,7 +438,8 @@
           "ev_min_current": "Ez alatt a SEM szünetelteti a töltést, ahelyett hogy tovább csökkentené az áramot.",
           "ev_phase_switch_entity": "Select/number/switch, amely a töltőt 1 és 3 fázisú töltés között váltja (go-e 'psm', KEBA X-széria, openWB). A SEM egyelőre csak megfigyel és ellenőriz — az automatikus váltás egy későbbi kiadásban érkezik.",
           "ev_phase_switch_value_1p": "Mi kerüljön a váltó entitásba 1 fázisú töltéshez — select opciónév, number érték vagy on/off. Select entitásoknál kötelező; number alapértelmezés 1, switch off.",
-          "ev_phase_switch_value_3p": "Mi kerüljön a váltó entitásba 3 fázisú töltéshez — select opciónév, number érték vagy on/off. Select entitásoknál kötelező; number alapértelmezés 3, switch on."
+          "ev_phase_switch_value_3p": "Mi kerüljön a váltó entitásba 3 fázisú töltéshez — select opciónév, number érték vagy on/off. Select entitásoknál kötelező; number alapértelmezés 3, switch on.",
+          "ev_phase_switching_enabled": "Off by default while the 1/3-phase model is reworked (it paused chargers that never resumed on some brands). Turn on to test it on your charger."
         }
       },
       "pv_naming": {
@@ -1474,6 +1480,11 @@
           "3": "3 fázisú"
         }
       }
+    },
+    "button": {
+      "backfill_battery_nights": {
+        "name": "Rebuild battery-night history"
+      }
     }
   },
   "exceptions": {
@@ -1606,6 +1617,10 @@
     "charger_failsafe_suspected": {
       "title": "Your wallbox undoes SEM's stop on a timer: {name}",
       "description": "**{name}** re-enabled itself **{interval_s} seconds** after SEM stopped it — at least twice, with the same delay to the second, and with no command from SEM in between. That regularity is the signature of a charger-side **failsafe / controller-timeout fallback**, not of a car retrying.\n\nSEM will not fight it: re-issuing stops faster would strobe the contactor and the box would win anyway. Until it is fixed the charger may draw at its stored fallback current (often 6 A) whenever SEM stops it.\n\n**The fix is a one-time change on the wallbox itself.** Look for a failsafe or fallback-current setting in its configuration — on a KEBA these are `Curr FS` (fallback current) and `Tmo FS` (timeout) — and set the **fallback current to 0**, so a quiet controller means *stay off* rather than *charge at 6 A*. If your box is driven over Modbus, the setting usually lives in the same register block the integration already uses."
+    },
+    "deye_system_work_mode_invalid": {
+      "title": "Deye export control cannot be used: {entity_id}",
+      "description": "SEM cannot use {entity_id} for export control: {reason}. Check the select entity and the three option labels under Configuration → Battery intelligence."
     }
   },
   "selector": {

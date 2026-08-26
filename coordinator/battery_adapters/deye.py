@@ -582,8 +582,17 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
         if work_mode_reason:
             return self._unavailable(work_mode_reason)
         system_mode_reason = self._validate_system_work_mode()
+        _hass = getattr(self, "_hass", None) or getattr(self, "hass", None)
         if system_mode_reason:
+            if _hass is not None and self._system_work_mode_entity:
+                from ..repair_issues import raise_deye_system_work_mode_invalid
+                raise_deye_system_work_mode_invalid(
+                    _hass, self._system_work_mode_entity,
+                    reason=system_mode_reason)
             return self._unavailable(system_mode_reason)
+        if _hass is not None and self._system_work_mode_entity:
+            from ..repair_issues import clear_deye_system_work_mode_invalid
+            clear_deye_system_work_mode_invalid(_hass, self._system_work_mode_entity)
 
         return DeyeCapability(
             available=True,

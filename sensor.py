@@ -2955,6 +2955,7 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "enabled": cp.get("enabled"),
                 "cap_w": cp.get("cap_w"),
                 "reason": cp.get("reason"),
+                "reason_code": cp.get("reason_code"),
                 "action": cp.get("action"),
                 "full_at": cp.get("full_at"),
                 "limit_entity": cp.get("entity"),
@@ -2990,6 +2991,9 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 # (#827) On a Deye the spend runs at the INVERTER's own rate
                 # — the card must say so rather than imply SEM chose it.
                 "rate_caveat": d.get("battery_discharge_rate_caveat"),
+                # (2.1 audit) last night with hindsight — the reason to wait
+                "last_night_surplus_kwh": d.get("battery_last_night_surplus_kwh"),
+                "last_night_date": d.get("battery_last_night_date"),
                 "nights_sealed": d.get("planning_nights_sealed"),
                 "nights_required": d.get("planning_nights_required"),
                 "forecast_days_d1": d.get("forecast_days_d1"),

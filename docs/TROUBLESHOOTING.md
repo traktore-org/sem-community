@@ -757,3 +757,13 @@ ten minutes, so a firmware update recovers on its own. **Fix:** if you never
 intended battery export, clear the forcible-discharge entity in SEM's battery
 settings and the notice disappears; if you do want it, check whether your
 inverter's firmware/integration version exposes a working discharge control.
+
+## Deye System Work Mode setup cannot be used
+
+SEM was asked to control your Deye's export policy but the select entity you
+named does not offer the three labels SEM expects (Selling First / Zero Export
+To Load / Zero Export To CT), or it is unavailable. The notice carries the
+exact reason. **Fix:** in Configuration → Battery intelligence, check the
+select entity and the three option labels against what your Deye integration
+actually shows; the labels must match exactly. SEM clears the notice the
+moment the setup validates.

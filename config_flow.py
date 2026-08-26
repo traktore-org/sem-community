@@ -920,6 +920,7 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "battery_force_charge_negative_price",
     "battery_max_charge_power_w",
     "battery_charge_power_limit_entity",
+    "inverter_ac_limit_w",
     "battery_max_discharge_power",
     "battery_max_target_soc",
     "battery_min_deficit_kwh",
@@ -984,6 +985,7 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "ev_phase_switch_entity",
     "ev_phase_switch_value_1p",
     "ev_phase_switch_value_3p",
+    "ev_phase_switching_enabled",
     "ev_start_stop_entity",
     "ev_surplus_priority",
     "ev_target_soc",
@@ -1041,6 +1043,47 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "warning_peak_level",
 })
 
+
+
+_CHARGE_LIMIT_HINTS = ("maximale_ladeleistung", "maximum_charging_power",
+                       "max_charge_power", "charge_power_limit",
+                       "max_charging_power", "battery_charge_power")
+
+
+def _suggest_charge_limit_number(hass) -> str | None:
+    """(#820, 2.1 audit) The inverter's standing max-charge-power number,
+    by the names the common integrations give it (Huawei's
+    'Maximale Ladeleistung' / 'maximum_charging_power' first). A suggestion
+    the user confirms — never auto-configured."""
+    if hass is None:
+        return None
+    try:
+        for st in hass.states.async_all("number"):
+            eid = st.entity_id.lower()
+            if any(h in eid for h in _CHARGE_LIMIT_HINTS) and "discharg" not in eid \
+                    and "entlade" not in eid:
+                return st.entity_id
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
+def _suggest_select_with_options(hass, labels) -> str | None:
+    """(#827, 2.1 audit) The select entity whose options contain ALL the
+    given labels — the Deye System Work Mode selector identifies itself by
+    its vocabulary, whatever the integration named the entity. Detection,
+    not asking: the user confirms a prefilled picker instead of hunting."""
+    want = [str(x).strip() for x in labels if str(x or "").strip()]
+    if len(want) < 3 or hass is None:
+        return None
+    try:
+        for st in hass.states.async_all("select"):
+            opts = st.attributes.get("options") or []
+            if all(w in opts for w in want):
+                return st.entity_id
+    except Exception:  # noqa: BLE001 — a suggestion never breaks a form
+        return None
+    return None
 
 class OptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for Solar Energy Management."""
@@ -1420,6 +1463,14 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 # Required for a select (its option strings are the
                 # device's language — never guessed); number defaults to
                 # 1/3 and switch to off/on when left empty.
+                # (#804, 2.1 audit) The gate that wakes phase switching. It
+                # shipped with NO user interface — a 2.0 user lost the phase
+                # row and could not turn it back on. Default off; one line of
+                # copy says why (the label's description).
+                vol.Optional(
+                    "ev_phase_switching_enabled",
+                    default=False,
+                ): selector.BooleanSelector(),
                 vol.Optional(
                     "ev_phase_switch_value_1p",
                     description={"suggested_value": suggestions.get("ev_phase_switch_value_1p")},
@@ -1612,6 +1663,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         "input_select", "input_number", "input_boolean",
                     ])
                 ),
+                vol.Optional(
+                    "ev_phase_switching_enabled",
+                    default=bool(charger.get("ev_phase_switching_enabled", False)),
+                ): selector.BooleanSelector(),
                 vol.Optional(
                     "ev_phase_switch_value_1p",
                     description={"suggested_value": charger.get("ev_phase_switch_value_1p")},
@@ -2597,10 +2652,26 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 # "Maximale Ladeleistung"). Suggested, never defaulted: an
                 # unset entity means pacing has nothing to act on and stays
                 # advisory even when its switch is on.
+                # (#820, 2.1 audit) The inverter's AC output limit. Charge
+                # pacing opens its cap wherever solar would exceed this —
+                # captured sun beats an even pace. It was READ and never
+                # DEFINED, so the clipping guard was dead on every install.
+                # 0 = not set (guard off).
+                vol.Optional(
+                    "inverter_ac_limit_w",
+                    default=_c("inverter_ac_limit_w", 0),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=100000, step=100,
+                        unit_of_measurement="W",
+                        mode=selector.NumberSelectorMode.BOX,
+                    )
+                ),
                 vol.Optional(
                     "battery_charge_power_limit_entity",
-                    description={"suggested_value":
-                                 _c("battery_charge_power_limit_entity", None)},
+                    description={"suggested_value": (
+                        _c("battery_charge_power_limit_entity", None)
+                        or _suggest_charge_limit_number(self.hass))},
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="number")
                 ),
@@ -2939,7 +3010,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     ): selector.BooleanSelector(),
                     vol.Optional(
                         "deye_system_work_mode_entity",
-                        description={"suggested_value": _c("deye_system_work_mode_entity", None)},
+                        description={"suggested_value": (
+                            _c("deye_system_work_mode_entity", None)
+                            or _suggest_select_with_options(self.hass, (
+                                _c("deye_system_work_mode_selling_option", "Selling First"),
+                                _c("deye_system_work_mode_zero_load_option", "Zero Export To Load"),
+                                _c("deye_system_work_mode_zero_ct_option", "Zero Export To CT"),
+                            )))},
                     ): selector.EntitySelector(
                         selector.EntitySelectorConfig(domain="select")
                     ),

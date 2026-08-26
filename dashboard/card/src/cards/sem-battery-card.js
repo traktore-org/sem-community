@@ -142,21 +142,43 @@ class SEMBatteryCard extends SEMLitBase {
     // pacing sensor's ACTION token (wrote/held/restored/idle/observer) and
     // cap — never the prose reason (translated 16 ways; rewording must not
     // change what renders). Absent sensor = feature absent = no line.
+    // (#820 / 2.1 audit item 4) One line, ALWAYS when a decision exists —
+    // including while the switch is off, when it says what pacing WOULD do.
+    // Token-driven (reason_code); the prose reason is the tooltip.
     _renderPacingLine() {
         const st = this._hass?.states?.['sensor.sem_battery_charge_pacing'];
-        if (!st) return nothing;
-        const act = st.state;                 // the action token IS the state
-        if (!act || act === 'idle' || act === 'unavailable') return nothing;
-        const capW = Number(st.attributes?.cap_w);
-        const cap = Number.isFinite(capW) && capW > 0
-            ? `${(capW / 1000).toFixed(1)} kW` : '';
-        const key = act === 'observer' ? 'pacing_observer'
-            : (act === 'restored' ? 'pacing_restored' : 'pacing_active');
+        if (!st || st.state === 'unavailable') return nothing;
+        const a = st.attributes || {};
+        const code = a.reason_code || 'none';
+        if (code === 'none' || code === 'night') return nothing;
+        const capW = Number(a.cap_w);
+        const cap = Number.isFinite(capW) && capW > 0 ? `${(capW / 1000).toFixed(1)} kW` : '';
+        const at = a.full_at ? String(a.full_at).slice(11, 16) : '';
+        const would = a.enabled ? '' : `${this._t('pacing_would')} `;
+        const what = this._t(`pacing_${code}`);
+        const tail = cap ? ` · ${cap}${at ? ` · ${this._t('pacing_full_by')} ${at}` : ''}` : '';
+        return html`
+            <div class="tonight-row" style="opacity:.85" title="${a.reason || ''}">
+                <span>${this._t('charge_pacing')}</span>
+                <span>${would}${what}${tail}</span>
+            </div>`;
+    }
+
+    // (2.1 audit item 3) The reason to wait, shown while waiting.
+    _renderLastNightLine(a) {
+        const v = Number(a.last_night_surplus_kwh);
+        if (!Number.isFinite(v)) return nothing;
         return html`
             <div class="tonight-row" style="opacity:.85">
-                <span>${this._t('charge_pacing')}</span>
-                <span>${this._t(key)}${cap ? ` · ${cap}` : ''}</span>
+                <span>${this._t('last_night_surplus')}</span>
+                <span>${this._fmt(v, 1)} kWh</span>
             </div>`;
+    }
+
+    // (#827 / 2.1 audit item 7) A brand whose discharge rate SEM cannot set.
+    _renderRateCaveat(a) {
+        if (!a.rate_caveat) return nothing;
+        return html`<div class="tonight-why" style="opacity:.75">${this._t('rate_set_by_inverter')}</div>`;
     }
 
     _fmt(val, decimals = 1) {
@@ -466,6 +488,8 @@ class SEMBatteryCard extends SEMLitBase {
                     </div>` : nothing}
                 <div class="tonight-why">${a.why || ''}</div>
                 ${this._renderPacingLine()}
+                ${this._renderLastNightLine(a)}
+                ${this._renderRateCaveat(a)}
                 ${rows.length ? html`
                     <div class="tonight-work">
                         ${rows.map(([k, v]) => html`

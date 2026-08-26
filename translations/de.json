@@ -305,13 +305,15 @@
           "battery_charge_platform": "Batterie-Ladeplattform",
           "battery_replan_interval_min": "Neuplanungsintervall (min)",
           "battery_prefer_consecutive_window": "Zusammenhängendes Ladefenster bevorzugen",
-          "battery_charge_power_limit_entity": "Entität für Batterie-Ladeleistungs-Limit (für Ladetempo)"
+          "battery_charge_power_limit_entity": "Entität für Batterie-Ladeleistungs-Limit (für Ladetempo)",
+          "inverter_ac_limit_w": "AC-Ausgangsgrenze des Wechselrichters"
         },
         "data_description": {
           "battery_charge_platform": "Welchen Wechselrichter SEM für die geplante Netzladung ansteuert. Wähle Deye, um den Deye-Verdrahtungsschritt einzublenden.",
           "battery_replan_interval_min": "Wie oft der Ladeplan anhand der neuesten Prognose und Preise neu berechnet wird.",
           "battery_prefer_consecutive_window": "Ein: günstige Stunden in einem Block (weniger Start/Stopp-Zyklen); Aus: einzelne günstigste Stunden, auch wenn verstreut.",
-          "battery_charge_power_limit_entity": "Die Max-Ladeleistungs-Number des Wechselrichters, in die das Ladetempo schreibt (z. B. Huaweis 'Maximale Ladeleistung'). Leer lassen = Ladetempo bleibt rein informativ."
+          "battery_charge_power_limit_entity": "Die Max-Ladeleistungs-Number des Wechselrichters, in die das Ladetempo schreibt (z. B. Huaweis 'Maximale Ladeleistung'). Leer lassen = Ladetempo bleibt rein informativ.",
+          "inverter_ac_limit_w": "Maximale AC-Ausgangsleistung des Wechselrichters in Watt. Das Ladetempo öffnet seine Grenze, wo Solar dies überschreiten würde — so wird abgeregelte Sonne genutzt. 0 = nicht gesetzt."
         }
       },
       "ev_charger_edit": {
@@ -344,7 +346,8 @@
           "vehicle_min_current": "Fahrzeug-Mindeststrom (A)",
           "ev_phase_switch_entity": "Phasenumschaltungs-Entität (optional)",
           "ev_phase_switch_value_1p": "Phasenumschaltung: Wert für 1-phasig (optional)",
-          "ev_phase_switch_value_3p": "Phasenumschaltung: Wert für 3-phasig (optional)"
+          "ev_phase_switch_value_3p": "Phasenumschaltung: Wert für 3-phasig (optional)",
+          "ev_phase_switching_enabled": "Phasenumschaltung"
         },
         "data_description": {
           "charger_name": "Anzeigename für diesen Lader im Dashboard.",
@@ -373,7 +376,8 @@
           "vehicle_min_current": "Fahrzeugspezifische Stromuntergrenze. Der effektive Mindestwert ist der höhere aus diesem und dem Lader-Mindeststrom.",
           "ev_phase_switch_entity": "Select/Number/Switch, das die Wallbox zwischen 1- und 3-phasigem Laden umschaltet (go-e 'psm', KEBA X-Serie, openWB). SEM beobachtet und validiert vorerst nur — automatisches Umschalten folgt in einem späteren Release.",
           "ev_phase_switch_value_1p": "Was für 1-phasiges Laden in die Umschalt-Entität geschrieben wird — Optionsname eines Select, Zahlenwert oder on/off. Bei Select-Entitäten erforderlich; Number-Standard ist 1, Switch-Standard off.",
-          "ev_phase_switch_value_3p": "Was für 3-phasiges Laden in die Umschalt-Entität geschrieben wird — Optionsname eines Select, Zahlenwert oder on/off. Bei Select-Entitäten erforderlich; Number-Standard ist 3, Switch-Standard on."
+          "ev_phase_switch_value_3p": "Was für 3-phasiges Laden in die Umschalt-Entität geschrieben wird — Optionsname eines Select, Zahlenwert oder on/off. Bei Select-Entitäten erforderlich; Number-Standard ist 3, Switch-Standard on.",
+          "ev_phase_switching_enabled": "Standardmäßig aus, solange das 1/3-Phasen-Modell überarbeitet wird (auf manchen Marken pausierten Wallboxen und liefen nicht wieder an). Zum Testen einschalten."
         }
       },
       "ev_charger_add": {
@@ -405,7 +409,8 @@
           "ev_min_current": "Minimaler Ladestrom (A)",
           "ev_phase_switch_entity": "Phasenumschaltungs-Entität (optional)",
           "ev_phase_switch_value_1p": "Phasenumschaltung: Wert für 1-phasig (optional)",
-          "ev_phase_switch_value_3p": "Phasenumschaltung: Wert für 3-phasig (optional)"
+          "ev_phase_switch_value_3p": "Phasenumschaltung: Wert für 3-phasig (optional)",
+          "ev_phase_switching_enabled": "Phasenumschaltung"
         },
         "data_description": {
           "charger_name": "Anzeigename für diesen Lader im Dashboard.",
@@ -433,7 +438,8 @@
           "ev_min_current": "Darunter pausiert SEM das Laden, statt den Strom weiter zu senken.",
           "ev_phase_switch_entity": "Select/Number/Switch, das die Wallbox zwischen 1- und 3-phasigem Laden umschaltet (go-e 'psm', KEBA X-Serie, openWB). SEM beobachtet und validiert vorerst nur — automatisches Umschalten folgt in einem späteren Release.",
           "ev_phase_switch_value_1p": "Was für 1-phasiges Laden in die Umschalt-Entität geschrieben wird — Optionsname eines Select, Zahlenwert oder on/off. Bei Select-Entitäten erforderlich; Number-Standard ist 1, Switch-Standard off.",
-          "ev_phase_switch_value_3p": "Was für 3-phasiges Laden in die Umschalt-Entität geschrieben wird — Optionsname eines Select, Zahlenwert oder on/off. Bei Select-Entitäten erforderlich; Number-Standard ist 3, Switch-Standard on."
+          "ev_phase_switch_value_3p": "Was für 3-phasiges Laden in die Umschalt-Entität geschrieben wird — Optionsname eines Select, Zahlenwert oder on/off. Bei Select-Entitäten erforderlich; Number-Standard ist 3, Switch-Standard on.",
+          "ev_phase_switching_enabled": "Standardmäßig aus, solange das 1/3-Phasen-Modell überarbeitet wird (auf manchen Marken pausierten Wallboxen und liefen nicht wieder an). Zum Testen einschalten."
         }
       },
       "pv_naming": {
@@ -1474,6 +1480,11 @@
           "3": "3-phasig"
         }
       }
+    },
+    "button": {
+      "backfill_battery_nights": {
+        "name": "Batterie-Nachthistorie neu aufbauen"
+      }
     }
   },
   "exceptions": {
@@ -1606,6 +1617,10 @@
     "charger_failsafe_suspected": {
       "title": "Ihre Wallbox hebt SEMs Stopp per Timer wieder auf: {name}",
       "description": "**{name}** hat sich **{interval_s} Sekunden** nach SEMs Stopp selbst wieder aktiviert — mindestens zweimal, sekundengenau im gleichen Abstand, ohne dass SEM dazwischen etwas geschrieben hätte. Diese Regelmäßigkeit ist die Signatur eines wallboxseitigen **Failsafe-/Controller-Timeout-Fallbacks**, nicht eines erneut versuchenden Fahrzeugs.\n\nSEM kämpft nicht dagegen an: schnellere Stopps würden das Schütz takten, und die Box gewinnt ohnehin. Bis zur Behebung kann die Wallbox nach jedem Stopp mit ihrem hinterlegten Fallback-Strom (oft 6 A) laden.\n\n**Die Behebung ist eine einmalige Einstellung an der Wallbox selbst.** Suchen Sie die Failsafe-/Fallback-Strom-Einstellung — bei KEBA `Curr FS` (Fallback-Strom) und `Tmo FS` (Timeout) — und setzen Sie den **Fallback-Strom auf 0**: ein stiller Controller bedeutet dann *aus bleiben* statt *mit 6 A laden*."
+    },
+    "deye_system_work_mode_invalid": {
+      "title": "Deye-Exportsteuerung nicht nutzbar: {entity_id}",
+      "description": "SEM kann {entity_id} nicht für die Exportsteuerung nutzen: {reason}. Prüfen Sie die Auswahl-Entität und die drei Optionsnamen unter Konfiguration → Batterie-Intelligenz."
     }
   },
   "selector": {

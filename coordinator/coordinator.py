@@ -4336,6 +4336,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # scalar twin: the sensor's generic value path reads
                 # data[key] directly, and a dict is not a state.
                 result["battery_charge_pacing"] = _cp.get("action") or "idle"
+            result["battery_last_night_surplus_kwh"] = _pe.get("battery_last_night_surplus_kwh")
+            result["battery_last_night_date"] = _pe.get("battery_last_night_date")
             result["forecast_trust_d1"] = _pe.get("forecast_trust_d1")
             result["forecast_trust_d2"] = _pe.get("forecast_trust_d2")
             result["battery_overnight_need_kwh"] = _pe.get("battery_overnight_need_kwh")
@@ -6141,6 +6143,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "battery_max_charge_power_w", 5000.0) or 5000.0),
             )
         cap = decision.cap_w if (decision and enabled) else None
+        code = (decision.code if decision else
+                ("night" if not ledger else
+                 ("soc_unknown" if soc is None else "none")))
         action = await self._charge_pacing_writer.apply(
             self.hass, entity, cap, observer=self._observer_mode)
         self._charge_pacing_state = {
@@ -6150,6 +6155,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 "pacing idle — outside daylight or no forecast"
                 if not ledger else f"pacing idle — {_why}"),
             "full_at": getattr(decision, "full_at", None) if decision else None,
+            "reason_code": code,
             "action": action,
             "entity": entity or None,
         }
@@ -10698,6 +10704,33 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # inferred. See planning_phase for why the reason strings must not be
         # matched on.
         from .measured_capacity import MIN_NEED_SAMPLES, usable_nights
+        # (2.1 audit, item 3) The reason to wait, shown while waiting: with
+        # hindsight, how much of last night's stored energy was genuinely
+        # surplus — the pack ended above its floor by that much. Same
+        # arithmetic as the budget, with the actual drain in place of the
+        # forecast and no forecast margin: a demonstration, not a promise.
+        last_surplus, last_date = None, None
+        try:
+            from .spendable_budget import spendable_budget as _sb
+            for _r in reversed(sealed or []):
+                if not _r.get("trainable") or _r.get("reserve_hit"):
+                    continue
+                _hind = _sb(
+                    soc_pct=_r.get("soc_start"),
+                    usable_capacity_kwh=usable_kwh,
+                    overnight_need_kwh=_r.get("drain_kwh"),
+                    expected_refill_kwh=1e9,
+                    static_floor_pct=self.config.get("battery_reserve_soc"),
+                    pessimism=1.0,
+                    discharge_efficiency=self.config.get(
+                        "battery_discharge_efficiency"),
+                    refill_trusted=True,
+                )
+                last_surplus = round(max(0.0, _hind.spendable_kwh), 2)
+                last_date = _r.get("date")
+                break
+        except Exception:  # noqa: BLE001 — a demonstration never costs a cycle
+            last_surplus, last_date = None, None
         from .forecast_ledger import MIN_SAMPLES_FOR_TRUST
         from .planning_phase import planning_phase
 
@@ -10711,6 +10744,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         self._planning_evidence = {
             "planning_phase": phase,
+            "battery_last_night_surplus_kwh": last_surplus,
+            "battery_last_night_date": last_date,
             # The progress a user watches while the evidence accrues. Without
             # these the learning state is a bare 0.0, which reads as "nothing
             # to spend" rather than "not measured yet".

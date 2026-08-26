@@ -305,13 +305,15 @@
           "battery_charge_platform": "Plateforme de charge de la batterie",
           "battery_replan_interval_min": "Intervalle de replanification (min)",
           "battery_prefer_consecutive_window": "Préférer une fenêtre de charge continue",
-          "battery_charge_power_limit_entity": "Battery charge-power limit entity (for pacing)"
+          "battery_charge_power_limit_entity": "Battery charge-power limit entity (for pacing)",
+          "inverter_ac_limit_w": "Inverter AC output limit"
         },
         "data_description": {
           "battery_charge_platform": "Onduleur que SEM pilote pour la charge réseau planifiée. Choisissez Deye pour afficher l'étape de câblage Deye.",
           "battery_replan_interval_min": "Fréquence de recalcul du plan de charge selon les dernières prévisions et prix.",
           "battery_prefer_consecutive_window": "Activé : heures bon marché en un seul bloc (moins de cycles marche/arrêt) ; désactivé : les heures les moins chères même dispersées.",
-          "battery_charge_power_limit_entity": "The inverter's max-charge-power number that charge pacing writes to (e.g. Huawei's 'Maximum charging power'). Leave empty to keep pacing advisory-only."
+          "battery_charge_power_limit_entity": "The inverter's max-charge-power number that charge pacing writes to (e.g. Huawei's 'Maximum charging power'). Leave empty to keep pacing advisory-only.",
+          "inverter_ac_limit_w": "Your inverter's maximum AC output in watts. Charge pacing opens its cap wherever solar would exceed this, so clipped sun is captured. 0 = not set."
         }
       },
       "ev_charger_edit": {
@@ -344,7 +346,8 @@
           "vehicle_min_current": "Courant minimal du véhicule (A)",
           "ev_phase_switch_entity": "Entité de commutation de phases (optionnel)",
           "ev_phase_switch_value_1p": "Commutation de phases : valeur monophasé (optionnel)",
-          "ev_phase_switch_value_3p": "Commutation de phases : valeur triphasé (optionnel)"
+          "ev_phase_switch_value_3p": "Commutation de phases : valeur triphasé (optionnel)",
+          "ev_phase_switching_enabled": "Phase switching"
         },
         "data_description": {
           "charger_name": "Nom convivial de ce chargeur affiché dans le tableau de bord.",
@@ -373,7 +376,8 @@
           "vehicle_min_current": "Plancher de courant par véhicule. Le minimum effectif est le plus élevé entre celui-ci et le courant minimal du chargeur.",
           "ev_phase_switch_entity": "Select/number/switch qui fait passer la borne entre charge mono- et triphasée (go-e « psm », KEBA série X, openWB). SEM se contente pour l'instant d'observer et de valider — la commutation automatique viendra dans une version ultérieure.",
           "ev_phase_switch_value_1p": "Ce qui est écrit dans l'entité de commutation pour la charge monophasée — nom d'option d'un select, valeur d'un number, ou on/off. Requis pour les entités select ; number par défaut 1, switch par défaut off.",
-          "ev_phase_switch_value_3p": "Ce qui est écrit dans l'entité de commutation pour la charge triphasée — nom d'option d'un select, valeur d'un number, ou on/off. Requis pour les entités select ; number par défaut 3, switch par défaut on."
+          "ev_phase_switch_value_3p": "Ce qui est écrit dans l'entité de commutation pour la charge triphasée — nom d'option d'un select, valeur d'un number, ou on/off. Requis pour les entités select ; number par défaut 3, switch par défaut on.",
+          "ev_phase_switching_enabled": "Off by default while the 1/3-phase model is reworked (it paused chargers that never resumed on some brands). Turn on to test it on your charger."
         }
       },
       "ev_charger_add": {
@@ -405,7 +409,8 @@
           "ev_min_current": "Courant de charge minimal (A)",
           "ev_phase_switch_entity": "Entité de commutation de phases (optionnel)",
           "ev_phase_switch_value_1p": "Commutation de phases : valeur monophasé (optionnel)",
-          "ev_phase_switch_value_3p": "Commutation de phases : valeur triphasé (optionnel)"
+          "ev_phase_switch_value_3p": "Commutation de phases : valeur triphasé (optionnel)",
+          "ev_phase_switching_enabled": "Phase switching"
         },
         "data_description": {
           "charger_name": "Nom convivial de ce chargeur affiché dans le tableau de bord.",
@@ -433,7 +438,8 @@
           "ev_min_current": "En dessous, SEM met la charge en pause au lieu de baisser encore le courant.",
           "ev_phase_switch_entity": "Select/number/switch qui fait passer la borne entre charge mono- et triphasée (go-e « psm », KEBA série X, openWB). SEM se contente pour l'instant d'observer et de valider — la commutation automatique viendra dans une version ultérieure.",
           "ev_phase_switch_value_1p": "Ce qui est écrit dans l'entité de commutation pour la charge monophasée — nom d'option d'un select, valeur d'un number, ou on/off. Requis pour les entités select ; number par défaut 1, switch par défaut off.",
-          "ev_phase_switch_value_3p": "Ce qui est écrit dans l'entité de commutation pour la charge triphasée — nom d'option d'un select, valeur d'un number, ou on/off. Requis pour les entités select ; number par défaut 3, switch par défaut on."
+          "ev_phase_switch_value_3p": "Ce qui est écrit dans l'entité de commutation pour la charge triphasée — nom d'option d'un select, valeur d'un number, ou on/off. Requis pour les entités select ; number par défaut 3, switch par défaut on.",
+          "ev_phase_switching_enabled": "Off by default while the 1/3-phase model is reworked (it paused chargers that never resumed on some brands). Turn on to test it on your charger."
         }
       },
       "pv_naming": {
@@ -1474,6 +1480,11 @@
           "3": "Triphasé"
         }
       }
+    },
+    "button": {
+      "backfill_battery_nights": {
+        "name": "Rebuild battery-night history"
+      }
     }
   },
   "exceptions": {
@@ -1606,6 +1617,10 @@
     "charger_failsafe_suspected": {
       "title": "Your wallbox undoes SEM's stop on a timer: {name}",
       "description": "**{name}** re-enabled itself **{interval_s} seconds** after SEM stopped it — at least twice, with the same delay to the second, and with no command from SEM in between. That regularity is the signature of a charger-side **failsafe / controller-timeout fallback**, not of a car retrying.\n\nSEM will not fight it: re-issuing stops faster would strobe the contactor and the box would win anyway. Until it is fixed the charger may draw at its stored fallback current (often 6 A) whenever SEM stops it.\n\n**The fix is a one-time change on the wallbox itself.** Look for a failsafe or fallback-current setting in its configuration — on a KEBA these are `Curr FS` (fallback current) and `Tmo FS` (timeout) — and set the **fallback current to 0**, so a quiet controller means *stay off* rather than *charge at 6 A*. If your box is driven over Modbus, the setting usually lives in the same register block the integration already uses."
+    },
+    "deye_system_work_mode_invalid": {
+      "title": "Deye export control cannot be used: {entity_id}",
+      "description": "SEM cannot use {entity_id} for export control: {reason}. Check the select entity and the three option labels under Configuration → Battery intelligence."
     }
   },
   "selector": {
