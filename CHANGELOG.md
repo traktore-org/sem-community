@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🧭 **The setup checklist can be completed** (#842): four of its rows —
+  tariff, hot water, battery and load management — tested for settings that
+  do not exist, so they stayed unticked however well you had configured
+  them. Reported by a user whose dynamic tariff was working perfectly while
+  SEM's overview insisted it was not set up.
+
 - 🔋 **Smart battery charge pacing** (#820): opt-in — SEM paces the daytime
   fill by solar forecast minus house forecast so the pack lands full at
   day's end instead of ~11:30, protecting battery longevity and capturing
