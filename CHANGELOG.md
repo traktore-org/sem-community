@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🧭 **The setup checklist can be completed** (#842): three of its rows —
+  tariff, battery and load management — tested for settings that do not
+  exist, so they stayed unticked however well you had configured them.
+  Reported by a user whose dynamic tariff was working perfectly while
+  SEM's overview insisted it was not set up.
+
 # [2.0.0-beta.17] — 25.08.2026
 
 - ⏸️ **EV phase switching is switched off by default while it is reworked**
