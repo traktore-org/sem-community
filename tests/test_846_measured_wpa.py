@@ -267,3 +267,88 @@ class TestNoMeasurementSaysWhy:
         l = _learn(WattsPerAmpLearner())
         d = l.as_dict_with_nominal(lambda c, ph: NOMINAL_3P if ph == 3 else NOMINAL_1P)
         assert d["c1"]["3"]["nominal_ratio"] == pytest.approx(0.908, abs=0.005)
+
+
+class TestTheWholeChainOnProdsRealNumbers:
+    """The rig cannot prove this one. `_trace_ev` returns early in observer
+    mode — correctly: SEM is not commanding, so there is no command to check
+    — and .175 is observer-on by house rule. PROD is the only non-observer
+    instance, and it is the one that produced the evidence.
+
+    So the chain is proven here, driving the REAL coordinator feeder with
+    PROD's measured values: 16 A commanded, 10.02 kW drawn, 3-phase belief.
+    """
+
+    def _coord(self, observer=False, believed=3, contradictions=0):
+        from types import SimpleNamespace
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        c = SEMCoordinator.__new__(SEMCoordinator)
+        c._wpa_learner = WattsPerAmpLearner()
+        c._observer_mode = observer
+        c.config = {"ev_phases": 3, "ev_voltage": 230}
+        c._ev_device = SimpleNamespace(charger_id="keba_prod")
+        c._phase_believed = {"keba_prod": believed}
+        c._phase_contradictions = {"keba_prod": {"count": contradictions}}
+        c._phase_sequencers = {}
+        c._ev_taper_detector = SimpleNamespace(full_detected=False)
+        return c
+
+    def _drive(self, c, amps=16, watts=10020.0, cycles=MIN_SAMPLES + 1):
+        for _ in range(cycles):
+            c._feed_wpa_learner(amps, watts, True)
+
+    def test_the_chain_learns_prods_626_watts_per_amp(self):
+        c = self._coord()
+        self._drive(c)
+        assert c._wpa_learner.watts_per_amp("keba_prod", 3) == pytest.approx(626.25, abs=1.0)
+
+    def test_the_first_cycle_teaches_nothing_because_nothing_is_steady_yet(self):
+        """Steadiness is 'the same amps as last cycle' — the very first
+        command has no predecessor and must not be measured."""
+        c = self._coord()
+        c._feed_wpa_learner(16, 10020.0, True)
+        assert c._wpa_learner.watts_per_amp("keba_prod", 3) is None
+
+    def test_a_ramping_setpoint_teaches_nothing(self):
+        c = self._coord()
+        for amps in (6, 8, 10, 12, 14, 16):
+            c._feed_wpa_learner(amps, amps * 626.25, True)
+        assert c._wpa_learner.watts_per_amp("keba_prod", 3) is None
+
+    def test_observer_mode_never_learns(self):
+        c = self._coord(observer=True)
+        self._drive(c)
+        assert c._wpa_learner.as_dict() == {}
+
+    def test_a_disputed_belief_never_learns(self):
+        c = self._coord(contradictions=2)
+        self._drive(c)
+        assert c._wpa_learner.watts_per_amp("keba_prod", 3) is None
+
+    def test_a_switch_in_flight_never_learns(self):
+        from custom_components.solar_energy_management.coordinator.ev_phase_sequencer import (
+            PhaseSwitchSequencer,
+        )
+        c = self._coord()
+        seq = PhaseSwitchSequencer(); seq._state = "settling"
+        c._phase_sequencers = {"keba_prod": seq}
+        self._drive(c)
+        assert c._wpa_learner.watts_per_amp("keba_prod", 3) is None
+
+    def test_a_full_car_never_learns(self):
+        from types import SimpleNamespace
+        c = self._coord()
+        c._ev_taper_detector = SimpleNamespace(full_detected=True)
+        self._drive(c)
+        assert c._wpa_learner.watts_per_amp("keba_prod", 3) is None
+
+    def test_and_then_the_conversion_returns_the_measured_watts(self):
+        """The point of the whole exercise: after learning, SEM stops
+        believing it bought 11.04 kW for 16 A."""
+        c = self._coord()
+        self._drive(c)
+        got = c._wpa_learner.watts_for_amps("keba_prod", 3, 16, 3 * 230.0)
+        assert got == pytest.approx(10020, abs=20)
+        assert got < 11040
