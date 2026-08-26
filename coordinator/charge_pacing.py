@@ -200,3 +200,31 @@ class ChargePacingWriter:
             {"entity_id": entity_id, "value": float(cap_w)},
             blocking=False)
         return "wrote"
+
+
+def today_remaining_slots(*, now, sunrise, sunset, day_kwh, home_w_at,
+                          builder, price_at=None, level_cheap_at=None):
+    """Today's remaining day, [now, sunset), in the planner's slot shape.
+
+    The PROD campaign (26.08 morning) caught pacing hooked to the tomorrow
+    PREVIEW ledger — a night-only artifact. It solved a correct cap on
+    tomorrow's books at 23:00 and had nothing to read in the hours it is
+    meant to act. This is the daytime source.
+
+    ``day_kwh`` is the FULL day's forecast, not the remaining kWh: the day
+    builder distributes the total over the solar curve between sunrise and
+    sunset and tiles only [start, end), so the window naturally receives
+    the remaining fraction. Passing the remaining kWh as the total would
+    hand the window only the curve's fraction of it — under-counting the
+    afternoon and pacing too tight.
+    """
+    if day_kwh is None or day_kwh <= 0:
+        return []
+    if now < sunrise or now >= sunset:
+        return []
+    return builder(
+        start=now, end=sunset, day_kwh=float(day_kwh),
+        sunrise=sunrise, sunset=sunset, home_w_at=home_w_at,
+        **({"price_at": price_at} if price_at else {}),
+        **({"level_cheap_at": level_cheap_at} if level_cheap_at else {}),
+    )

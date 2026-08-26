@@ -167,3 +167,61 @@ class TestTheWriter:
         w = ChargePacingWriter(); h = self._hass()
         assert self._run(w.apply(h, "number.x", 2000.0, observer=True)) == "observer"
         h.services.async_call.assert_not_awaited()
+
+
+class TestTodayRemainingSlots:
+    """PROD campaign catch (26.08 morning): pacing was hooked to the
+    tomorrow PREVIEW ledger, which exists only at night — so it solved a
+    correct cap on tomorrow's books at 23:00 and had no input at all in the
+    hours it is meant to act. Both rigs read `unavailable` at 06:50.
+
+    The daytime source: today's remaining slots [now, sunset), tiled by the
+    same day builder the planner uses, fed the FULL-day forecast so the
+    solar curve yields the remaining fraction naturally (passing the
+    remaining kWh as the day total would under-count — the builder would
+    hand the window only the curve's fraction of it)."""
+
+    def _sun(self):
+        return (datetime(2026, 8, 26, 6, 32), datetime(2026, 8, 26, 20, 30))
+
+    def _builder(self, **kw):
+        from custom_components.solar_energy_management.coordinator.day_ledger import (
+            build_day_slots,
+        )
+        return build_day_slots(price_at=lambda t: None,
+                               level_cheap_at=lambda t: False, **kw)
+
+    def test_night_yields_no_slots(self):
+        from custom_components.solar_energy_management.coordinator.charge_pacing import (
+            today_remaining_slots,
+        )
+        sr, ss = self._sun()
+        for now in (datetime(2026, 8, 26, 3, 0), datetime(2026, 8, 26, 21, 0)):
+            assert today_remaining_slots(
+                now=now, sunrise=sr, sunset=ss, day_kwh=40.0,
+                home_w_at=lambda t: 500.0, builder=self._builder) == []
+
+    def test_morning_yields_the_rest_of_the_day(self):
+        from custom_components.solar_energy_management.coordinator.charge_pacing import (
+            today_remaining_slots,
+        )
+        sr, ss = self._sun()
+        now = datetime(2026, 8, 26, 9, 0)
+        slots = today_remaining_slots(
+            now=now, sunrise=sr, sunset=ss, day_kwh=40.0,
+            home_w_at=lambda t: 500.0, builder=self._builder)
+        assert slots, "a sunny morning produced no remaining-day slots"
+        assert slots[0].start >= now and slots[-1].end <= ss + timedelta(hours=1)
+        solar_kwh = sum(s.solar_w * s.hours for s in slots) / 1000.0
+        # the morning's 2.5 h are gone, so LESS than the full day — but the
+        # bulk of it (midday) is still ahead
+        assert 25.0 < solar_kwh < 40.0, solar_kwh
+
+    def test_unknown_forecast_yields_no_slots(self):
+        from custom_components.solar_energy_management.coordinator.charge_pacing import (
+            today_remaining_slots,
+        )
+        sr, ss = self._sun()
+        assert today_remaining_slots(
+            now=datetime(2026, 8, 26, 9, 0), sunrise=sr, sunset=ss,
+            day_kwh=None, home_w_at=lambda t: 500.0, builder=self._builder) == []

@@ -4667,16 +4667,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     self._compose_tomorrow_preview(power))
             except Exception:  # noqa: BLE001 — a preview never costs a cycle
                 result["energy_plan_tomorrow"] = None
-            # (#820) apply charge pacing with the inputs the preview stashed.
-            # Decision always computed+published; the write additionally
-            # needs the master switch, a named entity, and non-observer.
-            _cpi = getattr(self, "_charge_pacing_inputs", None)
-            if _cpi is not None:
-                try:
-                    await self._run_charge_pacing(*_cpi)
-                except Exception:  # noqa: BLE001 — pacing never costs a cycle
-                    _LOGGER.debug("charge pacing skipped", exc_info=True)
-                self._charge_pacing_inputs = None
+            # (#820) Charge pacing on TODAY's remaining day, every cycle.
+            # (The first build hooked it to the tomorrow PREVIEW — a
+            # night-only ledger — so it had no input in daylight; caught on
+            # PROD the morning after.) Decision always computed+published;
+            # the write additionally needs the master switch, a named entity,
+            # and non-observer.
+            try:
+                await self._run_charge_pacing()
+            except Exception:  # noqa: BLE001 — pacing never costs a cycle
+                _LOGGER.debug("charge pacing skipped", exc_info=True)
             # (#755 pillar 4) Last night's verdict, on its OWN key. It has to
             # outlive the plan: ``energy_plan`` empties out in daylight, which
             # is exactly when somebody reads what the night taught.
@@ -6058,11 +6058,48 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         self._vpp_publish = self._vpp_dispatcher.publish_state(decision)
 
-    async def _run_charge_pacing(self, ledger, capacity_kwh: float) -> None:
+    def _today_pacing_ledger(self) -> list:
+        """(#820) Today's remaining-day slots, or [] outside daylight /
+        without a forecast. Same sun frame and home-draw fallback the
+        tomorrow preview uses, same day builder the planner uses."""
+        from .charge_pacing import today_remaining_slots
+        from .day_ledger import build_day_slots, tariff_cheap_at, tariff_price_at
+        try:
+            now = dt_util.now()
+            sr_s = self.time_manager.get_sunrise_time()
+            ss_s = self.time_manager.get_sunset_plus_10_time()
+
+            def _at(hhmm):
+                h, m = (int(x) for x in hhmm.split(":"))
+                return now.replace(hour=h, minute=m, second=0, microsecond=0)
+
+            sunrise, sunset = _at(sr_s), _at(ss_s)
+            _fd = getattr(getattr(self, "_forecast_reader", None),
+                          "forecast_data", None)
+            day_kwh = getattr(_fd, "forecast_today_kwh", None)
+            if day_kwh is None:
+                day_kwh = getattr(_fd, "forecast_remaining_today_kwh", None)
+            try:
+                flat_home = float(self._expected_night_home_w(None))
+            except Exception:  # noqa: BLE001
+                flat_home = 300.0
+            prov = self._tariff_provider
+            return today_remaining_slots(
+                now=now, sunrise=sunrise, sunset=sunset, day_kwh=day_kwh,
+                home_w_at=lambda t: flat_home, builder=build_day_slots,
+                price_at=lambda ts: tariff_price_at(prov, ts),
+                level_cheap_at=lambda ts: tariff_cheap_at(prov, ts),
+            )
+        except Exception:  # noqa: BLE001 — no frame, no pacing
+            return []
+
+    async def _run_charge_pacing(self) -> None:
         """(#820) One cycle of charge pacing: decide, maybe write, publish."""
         from .charge_pacing import ChargePacingWriter, paced_charge_cap_w
         if getattr(self, "_charge_pacing_writer", None) is None:
             self._charge_pacing_writer = ChargePacingWriter()
+        ledger = self._today_pacing_ledger()
+        capacity_kwh = float(getattr(self, "battery_capacity_kwh", 0.0) or 0.0)
         soc = None
         try:
             soc = float(self.data.get("battery_soc"))
@@ -6092,7 +6129,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         self._charge_pacing_state = {
             "enabled": enabled,
             "cap_w": decision.cap_w if decision else None,
-            "reason": decision.reason if decision else "no day model",
+            "reason": decision.reason if decision else (
+                "pacing idle — outside daylight or no forecast"
+                if not ledger else "no day model"),
             "full_at": getattr(decision, "full_at", None) if decision else None,
             "action": action,
             "entity": entity or None,
@@ -7537,10 +7576,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     ledger2, capacity_kwh=cap_kwh2,
                     max_charge_w=float(self.config.get(
                         "battery_max_charge_power_w", 5000.0) or 5000.0))
-                # (#820) Pace the fill: invert the SAME curve model. This
-                # method is sync — stash the inputs; _async_update_data
-                # applies the pacing right after the preview composes.
-                self._charge_pacing_inputs = (ledger2, cap_kwh2)
+
                 # Compress for the recorder budget: ≤ 5 waypoints + end.
                 if len(curve) > 6:
                     step = max(1, (len(curve) - 1) // 5)
