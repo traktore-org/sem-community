@@ -504,6 +504,17 @@ class SEMStorage:
     # 6.9 kW nameplate, found no slot under the peak, and yielded a car
     # that then charged at 4.54 kW. Same rule as the sign locks below:
     # learned state that gates behaviour is not allowed to die at boot.
+    def get_wpa_learner_state(self) -> Dict[str, Any]:
+        """(#846) The per-setpoint watts-per-amp learner's buckets."""
+        return dict(self._energy_data.get("wpa_learner") or {})
+
+    def set_wpa_learner_state(self, state: Dict[str, Any]) -> None:
+        """(#846) Persisted every cycle, saved by the normal throttled
+        cycle. Learned state that gates behaviour is not allowed to die at
+        boot (#638 night 2) — and the cold-start replay from the recorder
+        exists precisely for the boot where this is empty."""
+        self._energy_data["wpa_learner"] = dict(state or {})
+
     def get_energy_plan_state(self) -> Dict[str, Any]:
         """(#638) Tonight's stamped plan + period + demand signature —
         a reboot must not silently reshuffle a night the actuation is

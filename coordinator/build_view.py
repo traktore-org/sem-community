@@ -57,6 +57,7 @@ def build_charger_view(
     soc_ceiling_reached: bool = False,
     ev_priority: int = 999,
     hardware_max_a: Optional[float] = None,
+    wpa_table: Optional[Mapping[int, float]] = None,
 ) -> ChargerView:
     """Construct a ChargerView from a per-cycle FleetCycleState +
     per-charger overrides.
@@ -284,4 +285,5 @@ def build_charger_view(
         night_deliverable_kwh=night_deliverable_kwh,
         soc_ceiling_reached=soc_ceiling_reached,
         ev_priority=ev_priority,
+        wpa_table=dict(wpa_table or {}),
     )

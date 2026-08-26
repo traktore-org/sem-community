@@ -485,6 +485,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # (#846) fire → check → adjust: what each command ACTUALLY bought.
         from .watts_per_amp import WattsPerAmpLearner
         self._wpa_learner = WattsPerAmpLearner()
+        self._wpa_replay_report: Dict[str, Any] = {}
+        self._wpa_replay_scheduled = False
         self._ev_devices: Dict[str, Any] = {}  # All chargers keyed by charger_id (#112)
         # #589 Surface-A: these three are PROPERTIES backed by the current
         # PerChargerContext's durable state; the _default variants back them
@@ -1063,6 +1065,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 _st = getattr(self, "_storage", None)
                 if _st is not None:
                     _st.set_ev_wpa_state(dict(self._ev_wpa_ema))
+        # (#846) the per-setpoint table first, at this charger's max amps —
+        # the setpoint the packer and the deadline floor size by. Then the
+        # #716 EMA this accessor used to be, then nameplate.
+        learner = getattr(self, "_wpa_learner", None)
+        phases, _ok = self._wpa_phases_for(cid, cfg)
+        if learner is not None and phases:
+            max_a = int(cfg.get("ev_max_current") or DEFAULT_MAX_CHARGING_CURRENT)
+            if learner.watts_per_amp(cid, phases, max_a) is not None:
+                return learner.watts_for_amps(
+                    cid, phases, max_a, phases * float(cfg.get("ev_voltage") or 230)) / max_a
         learned = self._ev_wpa_ema.get(cid)
         return float(learned) if learned else nameplate
 
@@ -2324,20 +2336,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             i_status, f"observed {observed:.0f}W",
             {"observed_w": observed, "commanded_amps": amps, "match": match},
         )
-        # (#846) fire → CHECK → adjust. This is already the one place SEM
-        # holds its own command and the resulting draw side by side; the trace
-        # only ever asked "did anything happen" (30 % of nominal) and threw
-        # the number away. Feed it to the learner, which decides for itself
-        # whether the moment can teach.
-        # Wrapped: _collect_trace's own try/except swallows anything raised
-        # here and ABORTS the remaining layers (battery, loads, heat pump) —
-        # caught by test_cycle_trace_wiring. The comment above this method
-        # says the trace can never affect the control path; the same must be
-        # true in reverse.
-        try:
-            self._feed_wpa_learner(amps, observed, connected)
-        except Exception:  # noqa: BLE001 — learning never costs a trace
-            _LOGGER.debug("wpa learner feed skipped", exc_info=True)
 
     def _trace_battery(self, trace, sem_data, power) -> None:
         st = trace.subsystem("battery")
@@ -2662,6 +2660,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # the car's next charge, and a deploy at 23:36 + a re-plan at
             # 23:46 yielded an EV demand the plan should have placed.
             self._restore_ev_wpa(self._storage.get_ev_wpa_state())
+            # (#846) the per-setpoint W/A table — learned state that gates
+            # behaviour is not allowed to die at boot; a charger it has never
+            # been fed for replays itself from SEM's own recorded series.
+            self._wpa_learner.restore(self._storage.get_wpa_learner_state())
+            self._schedule_wpa_replay()
             self._restore_energy_plan(
                 self._storage.get_energy_plan_state())
             # (#755) The night's outcome record restores beside the plan it
@@ -3478,6 +3481,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             # #576 — this charger's slot in the one list (drag
                             # override wins immediately via the priority store).
                             ev_priority=self._ev_priority_for(cid),
+                            wpa_table=self._wpa_table_for(cid),
                             charger_cfg=charger_cfg,
                             mode=per_mode,
                             daily_ev_kwh=self._charger_daily_kwh(cid, energy),
@@ -3728,6 +3732,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     charger_id=cid,
                     # #576 — this charger's slot in the one priority list.
                     ev_priority=self._ev_priority_for(cid),
+                    wpa_table=self._wpa_table_for(cid),
                     charger_cfg={},
                     mode=per_mode,
                     daily_ev_kwh=getattr(energy, "daily_ev", 0.0),
@@ -4052,6 +4057,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 self._storage._daily_data["predictor"] = self._predictor.get_state()
                 # Persist EV intelligence state (#106)
                 self._storage.set_ev_intelligence_state(self._ev_taper_detector.get_state())
+                # (#846) the W/A table rides the same throttled save
+                self._storage.set_wpa_learner_state(self._wpa_learner.as_state())
                 # (#635) per-charger detectors persist too — the restore has
                 # always read chargers.<cid>; without this every restart
                 # blanked the estimated SOC (not anchored → sensor None).
@@ -4124,6 +4131,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 result[f"charger_{cid}_power"] = round(charger_power, 0)
                 result[f"charger_{cid}_name"] = ev_dev.name
                 result[f"charger_{cid}_connected"] = self._last_ev_connected_per_charger.get(cid, False)
+                # (#846) fire → CHECK → adjust: THIS charger's setpoint against
+                # THIS charger's draw, offered to the W/A learner. Here and not
+                # in the fleet trace: on a two-charger install the trace holds
+                # the summed ``power.ev_power`` and whichever device was bound
+                # last (docs/MULTI_CHARGER.md — the class behind four
+                # hotfixes). The learner decides for itself whether the moment
+                # can teach; a failure here costs a debug line, never the cycle.
+                try:
+                    self._feed_wpa_learner(cid, ev_dev, charger_power,
+                                           result[f"charger_{cid}_connected"])
+                except Exception:  # noqa: BLE001
+                    _LOGGER.debug("wpa learner feed skipped", exc_info=True)
                 # #351 M4 — surface per-charger effective state so the
                 # fleet ``sem_charging_state`` no longer hides per-charger
                 # disagreements (e.g. fleet says NIGHT_CHARGING_ACTIVE
@@ -4362,6 +4381,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     _d = _wl.as_dict_with_nominal(lambda c, ph: ph * _v)
                     if _d:
                         result["ev_watts_per_amp"] = _d
+                    _rep = getattr(self, "_wpa_replay_report", None)
+                    if _rep:
+                        result["ev_watts_per_amp_replay"] = dict(_rep)
             except Exception:  # noqa: BLE001
                 pass
             _cp = getattr(self, "_charge_pacing_state", None)
@@ -6137,62 +6159,164 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         except Exception:  # noqa: BLE001 — no frame, no pacing
             return []
 
-    def _feed_wpa_learner(self, amps, observed_w, connected) -> None:
-        """(#846) Offer one command/result pair to the W/A learner.
+    def _ev_charger_cfg(self, cid: str) -> dict:
+        """This charger's row in the multi-charger config, or {}."""
+        for c in self.config.get("ev_chargers") or []:
+            if str(c.get("id")) == str(cid):
+                return c
+        return {}
+
+    def _wpa_phases_for(self, cid: str, cfg: Optional[dict] = None):
+        """(#846) ``(phases, ok)`` — the phase count the learner files this
+        charger's samples under, and whether that belief is fit to learn
+        from.
+
+        Without phase switching the CONFIGURED count is the belief: there is
+        no machinery to dispute it, and the learner's own band is the honest
+        check — a wrong config shows up as refusals named ``phase_belief``,
+        never as a learned number. (The first wiring required the #804
+        estimator's belief here, which is empty after every restart until
+        the car charges and reads "2" for a Zoe at 8 A — PROD could never
+        have learned its 8 A bucket.)
+
+        With phase switching the sequencer's belief anchors the bucket — the
+        physical phase count can change under SEM's own hand — and it must
+        be undisputed: ``_phase_contradictions`` is the counter
+        PHASE_NOT_TAKING_AFTER reads (not the plug memory, which only
+        remembers whether the car was connected).
+        """
+        cfg = cfg if cfg is not None else self._ev_charger_cfg(cid)
+        if not cfg.get("ev_phase_switching_enabled", False):
+            ph = int(cfg.get("ev_phases") or self.config.get("ev_phases") or 3)
+            return (ph if ph in (1, 3) else 3), True
+        believed = (getattr(self, "_phase_believed", {}) or {}).get(cid)
+        contra = (getattr(self, "_phase_contradictions", {}) or {}).get(cid) or {}
+        if believed in (1, 3) and not contra.get("count"):
+            return int(believed), True
+        return None, False
+
+    def _feed_wpa_learner(self, cid, ev_dev, observed_w, connected) -> None:
+        """(#846) Offer this cycle's (setpoint, draw) pair for ONE charger.
 
         Gating lives here because this is where the cycle's context is: the
-        phase BELIEF (never the learner's own opinion), whether a phase switch
-        is mid-sequence, whether the setpoint has been steady, and whether the
-        car is tapering. The learner refuses anything implausible on top."""
+        phase belief, whether a phase switch is mid-sequence, whether the
+        setpoint has been steady, and whether the car is tapering. The
+        learner refuses anything implausible on top. Observer mode never
+        learns: SEM is not commanding, so there is nothing to check."""
         learner = getattr(self, "_wpa_learner", None)
         if learner is None or not connected or self._observer_mode:
             return
-        dev = getattr(self, "_ev_device", None)
-        if dev is None:
+        cid = str(cid)
+        amps = float(getattr(ev_dev, "_current_setpoint", 0.0) or 0.0)
+        prev = getattr(self, "_wpa_last_cmd", {}) or {}
+        if amps < 1:
+            self._wpa_last_cmd = {**prev, cid: 0}
             return
-        cid = str(getattr(dev, "charger_id", "") or "")
-        if not cid or not amps:
-            return
-        believed = (getattr(self, "_phase_believed", {}) or {}).get(cid)
-        phases = int(believed) if believed in (1, 3) else int(
-            self.config.get("ev_phases", 3) or 3)
-        voltage = float(self.config.get("ev_voltage", 230) or 230)
+        cfg = self._ev_charger_cfg(cid)
+        phases, belief_ok = self._wpa_phases_for(cid, cfg)
+        voltage = float(cfg.get("ev_voltage") or self.config.get("ev_voltage", 230) or 230)
 
         # steady = the same commanded amps for two consecutive cycles. A
         # ramping setpoint measures the ramp, not the car.
-        prev = getattr(self, "_wpa_last_cmd", {}) or {}
-        steady = prev.get(cid) == int(amps)
-        self._wpa_last_cmd = {**prev, cid: int(amps)}
+        bucket = int(round(amps))
+        steady = prev.get(cid) == bucket
+        self._wpa_last_cmd = {**prev, cid: bucket}
 
-        # a switch mid-sequence, or a belief SEM itself distrusts
-        seqs = getattr(self, "_phase_sequencers", None) or {}
-        seq = seqs.get(cid)
+        seq = (getattr(self, "_phase_sequencers", None) or {}).get(cid)
         in_flight = bool(getattr(seq, "in_flight", False)) if seq else False
-        # "Does SEM still trust its own phase belief?" — the contradiction
-        # counter that PHASE_NOT_TAKING_AFTER reads, NOT _phase_conn_memo
-        # (which only remembers whether the car was plugged in; the first
-        # draft grabbed it by name and the gate was always open).
-        contra = (getattr(self, "_phase_contradictions", {}) or {}).get(cid) or {}
-        belief_ok = believed in (1, 3) and not contra.get("count")
 
-        # A car on a full battery reduces its own draw — that is evidence
-        # about the battery, not about watts-per-amp. ``full_detected`` on the
-        # per-charger taper detector is the question SEM already asks
-        # (published as ``taper_detected``); the first draft guessed a
-        # ``tapering`` attribute that does not exist, so the gate was
-        # permanently False — a vacuous guard is worse than none, because it
-        # reads as protection.
+        # A car on a full battery reduces its own draw — evidence about the
+        # battery, not about what the setpoint buys. ``full_detected`` on
+        # THIS charger's taper detector is the question SEM already asks
+        # (published as ``taper_detected``).
+        det = ((getattr(self, "_ev_taper_detectors", None) or {}).get(cid)
+               or getattr(self, "_ev_taper_detector", None))
         try:
-            tapering = bool(self._ev_taper_detector.full_detected)
+            tapering = bool(det.full_detected) if det is not None else False
         except Exception:  # noqa: BLE001
             tapering = False
 
         learner.record(
-            cid, phases=phases, commanded_amps=float(amps),
-            observed_w=float(observed_w), nominal_wpa=phases * voltage,
+            cid, phases=int(phases or 3), commanded_amps=amps,
+            observed_w=float(observed_w), nominal_wpa=int(phases or 3) * voltage,
             belief_confirmed=belief_ok, setpoint_steady=steady,
             switch_in_flight=in_flight, tapering=tapering,
         )
+
+    def _schedule_wpa_replay(self) -> None:
+        """(#846) Once per boot: a charger the learner has never been fed
+        for replays itself from SEM's own recorded series, in the
+        background — the first cycle does not wait on the recorder."""
+        if getattr(self, "_wpa_replay_scheduled", False):
+            return
+        learner = getattr(self, "_wpa_learner", None)
+        chargers = [c for c in (self.config.get("ev_chargers") or []) if c.get("id")]
+        if learner is None:
+            return
+        cold = False
+        for c in chargers:
+            phases, _ok = self._wpa_phases_for(str(c["id"]), c)
+            if phases and learner.is_cold(str(c["id"]), phases):
+                cold = True
+        if not cold:
+            return
+        self._wpa_replay_scheduled = True
+        self.hass.async_create_task(self._replay_wpa_from_history())
+
+    async def _replay_wpa_from_history(self) -> None:
+        from .wpa_replay import DEFAULT_LOOKBACK_DAYS, run_replay
+        days = DEFAULT_LOOKBACK_DAYS
+        try:
+            from homeassistant.components.recorder import get_instance
+            days = max(1, min(days, int(get_instance(self.hass).keep_days)))
+        except Exception:  # noqa: BLE001 — no recorder, the default stands
+            pass
+        try:
+            report = await run_replay(
+                self.hass, self._wpa_learner, self.config.get("ev_chargers") or [],
+                days=days,
+                default_voltage=float(self.config.get("ev_voltage", 230) or 230))
+        except Exception as err:  # noqa: BLE001 — a cold learner, not a crash
+            _LOGGER.warning("#846 W/A replay from history failed: %s", err)
+            return
+        self._wpa_replay_report = report
+        for cid, row in report.items():
+            _LOGGER.info(
+                "#846 %s: replayed %d day(s) of history — %d rows, %d samples, "
+                "%d accepted, %d refused%s", cid, row["days"], row["rows"],
+                row["samples"], row["accepted"], row["refused"],
+                f" ({row['reason']})" if row.get("reason") else "")
+        st = getattr(self, "_storage", None)
+        if st is not None:
+            try:
+                st.set_wpa_learner_state(self._wpa_learner.as_state())
+            except Exception:  # noqa: BLE001
+                pass
+
+    def _wpa_table_for(self, cid: str) -> dict:
+        """(#846) The measured ``{amps: W/A}`` table for the phase count SEM
+        believes on this charger — what ``decide()`` converts with. Empty
+        (→ nameplate) while nothing is earned or the belief is disputed:
+        never a guess."""
+        learner = getattr(self, "_wpa_learner", None)
+        if learner is None:
+            return {}
+        phases, ok = self._wpa_phases_for(cid)
+        if not ok or not phases:
+            return {}
+        return learner.measured(cid, phases)
+
+    def _ev_watts_for_amps(self, cid: str, cfg: dict, amps: float) -> float:
+        """(#846) What ``amps`` really buys on this charger: the measured
+        table where one exists (bridged between measured setpoints), else
+        ``amps`` × the scalar ``_ev_watts_per_amp`` (EMA, then nameplate).
+        Never more than nameplate."""
+        learner = getattr(self, "_wpa_learner", None)
+        phases, _ok = self._wpa_phases_for(cid, cfg)
+        if learner is not None and phases and learner.measured(cid, phases):
+            nominal = phases * float(cfg.get("ev_voltage") or self.config.get("ev_voltage") or 230)
+            return learner.watts_for_amps(cid, phases, amps, nominal)
+        return float(amps) * self._ev_watts_per_amp(cid, cfg)
 
     async def _run_charge_pacing(self) -> None:
         """(#820) One cycle of charge pacing: decide, maybe write, publish."""
@@ -7994,7 +8118,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # packer sized the floor at nameplate 6.9 kW, found no slot
                 # under the 6.0 kW peak, and yielded a car that then charged
                 # at 4.85 kW below the threshold all night.
-                wpa = self._ev_watts_per_amp(cid, cfg, power)
+                # (#716) still called WITH power: this is the live feed of the
+                # EMA fallback (it learns on the call); the block sizes below
+                # read the #846 table first.
+                self._ev_watts_per_amp(cid, cfg, power)
                 deadline = resolve_deadline(now, cfg.get("ev_target_time"))
                 try:
                     # The canonical one-list slot (#576): a drag override wins
@@ -8005,9 +8132,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 labels[f"ev:{cid}"] = str(cfg.get("name") or "").strip() or None
                 demands.append(Demand(
                     id=f"ev:{cid}", kind="ev", energy_kwh=float(kwh),
-                    max_power_w=float(cfg.get("ev_max_current")
-                                      or DEFAULT_MAX_CHARGING_CURRENT) * wpa,
-                    min_power_w=float(cfg.get("ev_min_current") or 6) * wpa,
+                    # (#846) sized from the measured table per setpoint —
+                    # on the PROD Zoe the 8 A floor is 3.3 kW, not 8 × W/A
+                    max_power_w=self._ev_watts_for_amps(
+                        cid, cfg, float(cfg.get("ev_max_current")
+                                        or DEFAULT_MAX_CHARGING_CURRENT)),
+                    min_power_w=self._ev_watts_for_amps(
+                        cid, cfg, float(cfg.get("ev_min_current") or 6)),
                     deadline=min(deadline, night_end) if deadline else night_end,
                     # The one list counts 1 = HIGHEST (get_devices_sorted)
                     # and the packer packs LOWEST first — the directions
@@ -9624,6 +9755,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             charger_id=(_primary_cfg.get("id") or "ev_charger"),
             # #576 — the primary charger's slot in the one priority list.
             ev_priority=self._ev_priority_for(_primary_cfg.get("id") or "ev_charger"),
+            wpa_table=self._wpa_table_for(_primary_cfg.get("id") or "ev_charger"),
             charger_cfg=_primary_cfg,
             mode=self._effective_charge_mode_for(_primary_cfg),
             daily_ev_kwh=self._charger_daily_kwh(

@@ -901,6 +901,14 @@ class ChargerView:
     fleet.battery_priority`` AND SOC ≥ reserve floor (#576 P2.2). Defaults to
     999 (bottom) so a view built without it never spuriously reclaims."""
 
+    wpa_table: Mapping[int, float] = field(default_factory=dict)
+    """(#846) Measured watts-per-amp per commanded setpoint for the phase
+    count SEM believes — ``{amps: W/A}``, empty until earned. Every
+    watts→amps conversion in ``decide()`` reads it through
+    ``predict_watts``/``amps_from_watts``: nameplate where the table is
+    silent, the car's own response where it has spoken. A typed field, not
+    a ``config`` key, for the same reason as ``plan`` below."""
+
     plan: PlanVerdict = field(default_factory=PlanVerdict)
     """(#638) What the PLANNING layer decided for this charger this cycle.
 

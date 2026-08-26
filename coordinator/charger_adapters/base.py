@@ -295,8 +295,17 @@ class ChargerAdapter(ABC):
         cid = str(getattr(dev, "charger_id", "") or "")
         if not cid:
             return None
-        believed = (getattr(coord, "_phase_believed", {}) or {}).get(cid)
-        phases = int(believed) if believed in (1, 3) else int(self.phases)
+        # the coordinator owns the rule (config without switching, the
+        # sequencer's belief with it); the adapter's own phases are the
+        # fallback when no coordinator is bound
+        phases = None
+        rule = getattr(coord, "_wpa_phases_for", None)
+        if callable(rule):
+            try:
+                phases, _ok = rule(cid)
+            except Exception:  # noqa: BLE001
+                phases = None
+        phases = int(phases) if phases in (1, 3) else int(self.phases)
         return learner, cid, phases
 
     def nominal_watts_per_amp(self, phases: int | None = None) -> float:
@@ -327,4 +336,5 @@ class ChargerAdapter(ABC):
             return int(watts // (self.phases * self.voltage))
         learner, cid, phases = ctx
         return learner.amps_for_watts(cid, phases, float(watts),
-                                      self.nominal_watts_per_amp(phases))
+                                      self.nominal_watts_per_amp(phases),
+                                      int(self.max_current_a))

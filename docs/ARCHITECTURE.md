@@ -144,6 +144,52 @@ build_charger_view(charger_id) ──► ChargerView (frozen, pure input)
   and the self-resume guard (#315/#346/#353) is one `adapter.is_self_charging()`
   check before applying the new intent.
 
+### Fire → check → adjust — SEM measures the result of its own commands (#846)
+
+The amps SEM offers a charger are SEM's **choice**, so nothing outside SEM
+corrects the arithmetic behind them. Nameplate says 16 A on three phases is
+16 × 3 × 230 = 11.04 kW; the car on PROD takes 10.02 kW at 16 A and only
+3.32 kW at 8 A. A model that never checks its own result is wrong by up to
+40 % on the one decision it re-issues every cycle — and the error feeds the
+surplus→amps math, the night packer's block sizing and the peak guard alike.
+
+So SEM keeps a **measured watts-per-amp table** per charger, per phase
+count, per commanded setpoint (`coordinator/watts_per_amp.py`):
+
+- **fire** — the reconciler writes the setpoint;
+- **check** — the per-charger publication loop offers (setpoint, this
+  charger's draw) to the learner every cycle — only while the setpoint has
+  been steady for two cycles, the phase belief is undisputed, no phase
+  switch is in flight and the car is not tapering. Observer mode never
+  learns: SEM is not commanding, so there is nothing to check;
+- **adjust** — `_ev_watts_for_amps` / the adapter conversions answer "what
+  will X A buy" from the table. Between two measured setpoints the draw is
+  bridged linearly in watts (a bridge, replaced by a measurement the first
+  time SEM stands on that setpoint); outside the measured range it is
+  nameplate. A measurement may only ever LOWER what SEM believes it bought —
+  freeing headroom — never license exceeding a configured cap.
+
+Three properties hold the design honest:
+
+1. **The phase belief anchors the learner, never the reverse.** Without
+   phase switching the configured count is the belief; with it, the
+   sequencer's. A sample that fits a different phase count is refused and
+   named `phase_belief` in the diagnostic — the first serious phase bug must
+   stay visible, not be smoothed into a plausible constant.
+2. **No measurement says why.** `sensor.sem_charging_state` →
+   `ev_watts_per_amp` lists the table, the samples still earning
+   confidence, and every refusal with its reason. "SEM has no measurement"
+   and "SEM measured and refused" are different statements.
+3. **Learned state survives a restart, and a cold start replays itself.**
+   The table persists in SEM's storage; a charger the learner has never
+   been fed for is replayed once at boot from SEM's own recorded series —
+   `sensor.sem_charger_<id>_commanded_current` against
+   `sensor.sem_charger_<id>_power` (`coordinator/wpa_replay.py`). The
+   report is published as `ev_watts_per_amp_replay`.
+
+The same principle is the standing rule for every actuator SEM owns: a
+command is a hypothesis about the world, and the next reading is its test.
+
 ### Decide → actuate → adapter (battery side)
 
 Symmetric to the EV side. Batteries have observed-only and commanded

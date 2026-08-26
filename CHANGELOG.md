@@ -18,6 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exist, so they stayed unticked however well you had configured them. Reported by a user whose dynamic tariff was working perfectly while
   SEM's overview insisted it was not set up.
 
+- ⚡ **The EV offer corrects itself** (#846): SEM now measures what every
+  commanded current actually buys and plans with that, per setpoint — on
+  the PROD Zoe 16 A is 10.0 kW (not the 11.0 kW nameplate) and 8 A is
+  3.3 kW (not 5.5). Learned per charger and phase count, only from steady,
+  undisputed, non-tapering cycles; persisted across restarts, and a fresh
+  install replays a week of its own history at boot so the first session
+  after an upgrade already runs on measured numbers. Diagnostics on
+  `sensor.sem_charging_state` → `ev_watts_per_amp` (table, samples,
+  refusals with reasons) and `ev_watts_per_amp_replay`.
 - 🔋 **Smart battery charge pacing** (#820): opt-in — SEM paces the daytime
   fill by solar forecast minus house forecast so the pack lands full at
   day's end instead of ~11:30, protecting battery longevity and capturing
