@@ -78,17 +78,14 @@ def _f(value) -> Optional[float]:
     return f if f == f else None
 
 
-def measured_capacity(records: Optional[Iterable[dict]]) -> Optional[MeasuredCapacity]:
-    """kWh per SOC-percent, from #800's sealed night records.
-
-    Returns ``None`` while the evidence is thin — deliberately, so a caller
-    can tell "measured" from "assumed" and stay conservative until it knows.
-    """
-    if not records:
-        return None
-
+def _qualifying_ratios(records: Optional[Iterable[dict]]) -> list:
+    """kWh-per-percent of every night that passes the quality gates —
+    trainable, ≥ ``MIN_SOC_SPAN_PCT`` of SOC span, positive drain — one
+    record per date. The verdict and the progress count read the SAME list,
+    so the surface can never say "0 nights" while four already qualify
+    (PROD 26.08, #778)."""
     ratios = []
-    for rec in distinct_nights(records):
+    for rec in distinct_nights(records or []):
         if not isinstance(rec, dict) or not rec.get("trainable"):
             continue
         start = _f(rec.get("soc_start"))
@@ -102,7 +99,25 @@ def measured_capacity(records: Optional[Iterable[dict]]) -> Optional[MeasuredCap
         if drain <= 0:
             continue
         ratios.append(drain / span)
+    return ratios
 
+
+def capacity_progress(records: Optional[Iterable[dict]]) -> int:
+    """How many nights already qualify toward the verdict — the honest
+    "N / MIN_SAMPLES" a person watches while the evidence accrues."""
+    return len(_qualifying_ratios(records))
+
+
+def measured_capacity(records: Optional[Iterable[dict]]) -> Optional[MeasuredCapacity]:
+    """kWh per SOC-percent, from #800's sealed night records.
+
+    Returns ``None`` while the evidence is thin — deliberately, so a caller
+    can tell "measured" from "assumed" and stay conservative until it knows.
+    """
+    if not records:
+        return None
+
+    ratios = _qualifying_ratios(records)
     if len(ratios) < MIN_SAMPLES:
         return None
 

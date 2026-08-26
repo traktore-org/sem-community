@@ -10718,7 +10718,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             """Round for publication, preserving an honest None."""
             return None if value is None else round(float(value), digits)
 
-        from .measured_capacity import measured_capacity
+        from .measured_capacity import measured_capacity, capacity_progress
 
         tracker = getattr(self, "_battery_night", None)
         cap = None
@@ -10854,7 +10854,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             "forecast_d2_available": led.has_horizon(2),
             "battery_measured_capacity_kwh": None if cap is None else cap.usable_kwh,
             "battery_capacity_kwh_per_pct": None if cap is None else cap.kwh_per_pct,
-            "battery_capacity_samples": 0 if cap is None else cap.samples,
+            # (#778) progress counts what already qualifies — the verdict
+            # is None below MIN_SAMPLES and must not drag the count to 0
+            "battery_capacity_samples": capacity_progress(sealed),
             "battery_capacity_drift_pct": (
                 None if drift is None else round(drift * 100.0, 1)),
             "battery_capacity_reason": (
