@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.0.0-beta.18] — 26.08.2026
+
 - 🧭 **The setup checklist can be completed** (#842): three of its rows —
   tariff, battery and load management — tested for settings that do not
   exist, so they stayed unticked however well you had configured them.
