@@ -688,9 +688,7 @@ class SEMConfigCard extends SEMLitBase {
               done: this._bin('heat_pump_registered') },
             { key: 'hw', labelKey: 'config_section_hot_water', icon: 'mdi:water-boiler',
               color: '#5BC8D8', sectionId: 'hot_water',
-              // (#842) opts.hot_water_entity does not exist; hot water
-              // reports through its binary sensor, like the heat pump above.
-              done: this._bin('hot_water_registered') },
+              done: !!opts.hot_water_entity },
             // (#830) The overview stopped at four subsystems while the Config
             // tab has fourteen sections, so "all set up" could read 100% with
             // no tariff configured — SEM cannot cost anything without one, and
@@ -699,23 +697,25 @@ class SEMConfigCard extends SEMLitBase {
             // only useful if reaching the end of it means something.
             { key: 'tariff', labelKey: 'config_section_tariff', icon: 'mdi:cash-multiple',
               color: '#8353d1', sectionId: 'tariff',
-              // (#842) These tested THREE keys that do not exist —
-              // electricity_rate, tariff_provider, tariff_entity — so the
-              // row could never tick, on any install. A tariff is set up
-              // when there is a static rate OR a dynamic price entity.
-              done: !!(opts.electricity_import_rate
-                       || opts.dynamic_tariff_entity) },
+              // (#842) This row arrived with #830 testing three keys that
+              // exist nowhere (electricity_rate, tariff_provider,
+              // tariff_entity), so it never ticked on any install. What
+              // makes a tariff configured depends on the MODE: dynamic
+              // needs the price entity, static needs the rate.
+              done: (opts.tariff_mode === 'dynamic'
+                       ? !!opts.dynamic_tariff_entity
+                       : !!opts.electricity_import_rate) },
             { key: 'battery', labelKey: 'config_section_battery_zones', icon: 'mdi:battery-charging',
               color: '#4db6ac', sectionId: 'battery_zones',
-              // (#842) opts.has_battery does not exist; _hasBattery()
-              // already checks the per-battery count and the SOC/power
-              // sensors, and is what the rest of the card trusts.
+              // (#842, a #830 addition) opts.has_battery is an
+              // Energy-Dashboard reader flag, never an option key —
+              // _hasBattery() is what the rest of the card trusts.
               done: this._hasBattery() },
             { key: 'loads', labelKey: 'config_section_load_management', icon: 'mdi:flash-alert',
               color: '#ff9800', sectionId: 'load_management',
               optional: true,
-              // (#842) opts.managed_devices does not exist; load
-              // management is configured when its flag is on.
+              // (#842, a #830 addition) opts.managed_devices exists
+              // nowhere; load management is configured when its flag is on.
               done: !!opts.load_management_enabled },
         ];
     }
