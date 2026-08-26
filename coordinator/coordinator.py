@@ -4675,8 +4675,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # and non-observer.
             try:
                 await self._run_charge_pacing()
-            except Exception:  # noqa: BLE001 — pacing never costs a cycle
-                _LOGGER.debug("charge pacing skipped", exc_info=True)
+            except Exception as _e:  # noqa: BLE001 — pacing never costs a cycle
+                # (#762 pattern) a feature that dies silently every cycle is
+                # a dead sensor with no explanation — warn ONCE per distinct
+                # error, then stay quiet. This is how the rig's 'unavailable'
+                # was run down on 26.08.
+                _sig = f"{type(_e).__name__}: {_e}"[:160]
+                if _sig != getattr(self, "_charge_pacing_last_error", None):
+                    self._charge_pacing_last_error = _sig
+                    _LOGGER.warning("charge pacing skipped this cycle: %s",
+                                    _sig, exc_info=True)
             # (#755 pillar 4) Last night's verdict, on its OWN key. It has to
             # outlive the plan: ``energy_plan`` empties out in daylight, which
             # is exactly when somebody reads what the night taught.
