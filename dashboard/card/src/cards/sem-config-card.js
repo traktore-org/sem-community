@@ -697,15 +697,26 @@ class SEMConfigCard extends SEMLitBase {
             // only useful if reaching the end of it means something.
             { key: 'tariff', labelKey: 'config_section_tariff', icon: 'mdi:cash-multiple',
               color: '#8353d1', sectionId: 'tariff',
-              done: !!(opts.electricity_rate || opts.tariff_provider
-                       || opts.tariff_entity) },
+              // (#842) This row arrived with #830 testing three keys that
+              // exist nowhere (electricity_rate, tariff_provider,
+              // tariff_entity), so it never ticked on any install. What
+              // makes a tariff configured depends on the MODE: dynamic
+              // needs the price entity, static needs the rate.
+              done: (opts.tariff_mode === 'dynamic'
+                       ? !!opts.dynamic_tariff_entity
+                       : !!opts.electricity_import_rate) },
             { key: 'battery', labelKey: 'config_section_battery_zones', icon: 'mdi:battery-charging',
               color: '#4db6ac', sectionId: 'battery_zones',
-              done: !!opts.has_battery },
+              // (#842, a #830 addition) opts.has_battery is an
+              // Energy-Dashboard reader flag, never an option key —
+              // _hasBattery() is what the rest of the card trusts.
+              done: this._hasBattery() },
             { key: 'loads', labelKey: 'config_section_load_management', icon: 'mdi:flash-alert',
               color: '#ff9800', sectionId: 'load_management',
               optional: true,
-              done: (opts.managed_devices || []).length > 0 },
+              // (#842, a #830 addition) opts.managed_devices exists
+              // nowhere; load management is configured when its flag is on.
+              done: !!opts.load_management_enabled },
         ];
     }
 
