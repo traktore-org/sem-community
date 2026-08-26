@@ -40,6 +40,11 @@ class SEMButton(CoordinatorEntity, ButtonEntity):
         self._attr_unique_id = f"sem_{description.key}"
         self._attr_translation_key = description.key
         self._attr_device_info = coordinator.device_info
+        # Stable id like every other SEM entity (switch.sem_*, number.sem_*):
+        # without it HA derives the id from device + translated name
+        # ("button.garden_sem_rebuild_battery_night_history" on the rig),
+        # which no card, doc or automation can address.
+        self.entity_id = f"button.sem_{description.key}"
 
     async def async_press(self) -> None:
         if self.entity_description.key == "backfill_battery_nights":
