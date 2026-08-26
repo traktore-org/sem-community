@@ -458,6 +458,16 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 - **Battery → grid arbitrage is wired** (#533 still stands: off on every default) — the plan says when, live economics say whether, per-battery mode says may. **Check your grid connection agreement first** — see [Battery export arbitrage](docs/BATTERY_EXPORT_ARBITRAGE.md).
 - **Fresh installs no longer wake up observing** (#777) — an old install's leftover switch state can no longer speak for a new one.
 
+### v2.0 — Trustworthy (2026)
+The 2.0 line adds almost nothing you have to learn. It makes what SEM already did **believable**: the same decisions, no longer changing their mind for reasons nobody can see.
+
+- **SEM stops shouting in your log and your database** — its recorder footprint fell from **25 % to 6.1 %** of Home Assistant's state writes, and at the default log level SEM is quiet. A stop repeated 1800 times, a debug firehose, and a battery setpoint your inverter refuses are all gone.
+- **The numbers reconcile** — the energy diagram balances, per-device breakdowns agree with the fleet total, the Costs tab's year and months agree, and an estimate is never recorded as a measurement. Exported battery energy is attributed and paid once; a bought kWh does not become free by sitting in the battery.
+- **SEM stops fighting hardware it cannot win against** — the stop-war ceasefire holds even against slow-retrying cars, a charger that undoes SEM's stop on a timer is named rather than fought, and a missed poll is no longer read as an unplug.
+- **Setup tells the truth** — every setting has an explanation, settings ranges are declared once, the first-run welcome describes *your* install, and the setup checklist can actually be completed. Hardware detection matches what integrations really publish, so a charger named in your own language is still found.
+- **Repairs offer the next step** — every notice links either the exact troubleshooting section or a bug report with your versions already filled in.
+- **Nothing switches on silently on upgrade**, and a fresh install no longer wakes up observing.
+
 ### v1.7.3 — Reliable EV charging + battery protection (23.06.2026)
 - **EV charger state reconciler** (#392) — the per-cycle imperative actuator (which spammed `keba.disable` and dropped KEBA to 6 A) is replaced by a desired-vs-observed reconciler that issues the *minimum* commands to converge, then leaves the charger alone. Idempotent idle, heartbeat re-writes, failsafe armed once per session. Plus **enable-switch reconciliation + backoff** (#536) for switch-driven chargers (Wallbox etc.).
 - **Solar Gate** (#537) — the home battery only assists the EV when there's real solar surplus ≥ a configurable gate (default **1200 W**), in *any* charging mode; set it to **0 W** to allow battery support everywhere including overnight. Closes the overnight battery-drain-into-the-car class of bug.
