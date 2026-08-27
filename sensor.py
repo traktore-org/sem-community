@@ -2717,6 +2717,16 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "charging_strategy": self.coordinator.data.get("charging_strategy"),
                 "strategy_reason": self.coordinator.data.get("charging_strategy_reason"),
                 "per_charger_states": _per_charger_states,
+                # (#846) fire → check → adjust: the measured watts-per-amp
+                # table, the samples still earning confidence, and every
+                # refusal with its reason — plus the cold-start replay
+                # report. The coordinator published both from the start;
+                # NOTHING exposed them, so the diagnostic the docs promised
+                # did not exist on any entity (found live on PROD 27.08,
+                # after the learner had silently learned 20 samples).
+                "ev_watts_per_amp": self.coordinator.data.get("ev_watts_per_amp"),
+                "ev_watts_per_amp_replay": self.coordinator.data.get(
+                    "ev_watts_per_amp_replay"),
                 # EV charge-target deadline (#246) + tariff-optimized status (#247)
                 "ev_target_time": self.coordinator.data.get("ev_target_time"),
                 "ev_tariff_optimized": self.coordinator.data.get("ev_tariff_optimized"),

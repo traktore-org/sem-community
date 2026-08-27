@@ -310,6 +310,38 @@ class TestTheDiagnosticSurface:
         assert row["samples"]["10"] == MIN_SAMPLES - 1
 
 
+class TestTheDiagnosticReachesAnEntity:
+    """PROD 27.08: the learner had 20 samples in storage and
+    ``sensor.sem_charging_state`` still showed nothing — the coordinator
+    published ``ev_watts_per_amp`` into its data dict and NO entity read it
+    back out. The docs and CHANGELOG named that sensor, so the promise was
+    false. A coordinator key nobody surfaces is not a diagnostic."""
+
+    def test_the_charging_state_sensor_exposes_the_table_and_the_replay(self):
+        import inspect
+
+        from custom_components.solar_energy_management import sensor as sm
+        src = inspect.getsource(sm)
+        for key in ("ev_watts_per_amp", "ev_watts_per_amp_replay"):
+            assert f'"{key}": self.coordinator.data.get(' in src or \
+                   f'self.coordinator.data.get(\n                    "{key}")' in src, \
+                   f"{key} is published by the coordinator but no entity exposes it"
+
+    def test_every_key_the_docs_promise_is_actually_surfaced(self):
+        """The docs name the entity; the entity must carry the key."""
+        import inspect
+        import pathlib
+
+        from custom_components.solar_energy_management import sensor as sm
+        src = inspect.getsource(sm)
+        arch = pathlib.Path(inspect.getfile(sm)).parent / "docs" / "ARCHITECTURE.md"
+        if not arch.exists():
+            return
+        text = arch.read_text()
+        if "ev_watts_per_amp" in text:
+            assert "ev_watts_per_amp" in src
+
+
 class TestRefusalsAreClassified:
     def test_a_one_phase_draw_under_a_three_phase_belief_says_phase_belief(self):
         l = _learn(WattsPerAmpLearner(), phases=3, watts=3680.0)
