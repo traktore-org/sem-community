@@ -7362,8 +7362,18 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     <span><i style="background:#64b5f6"></i>${this._t("zone_legend_surplus")}</span>
                 </div>
             </div>
-        `}_detectionReport(){const e=this._hass?.states?.["sensor.sem_diag_charger_control"];return e?.attributes?.detection_report||null}_detectedHardwareSubtitle(){const e=this._detectionReport();if(!e)return this._t("config_detect_none");const t=(e.chargers||[]).length,i=(e.near_misses||[]).length,s=`${t} ${this._t("config_detect_chargers")}`;return i?`${s} · ${i} ${this._t("config_detect_near_misses")}`:s}_renderDetectedHardware(e){const t=this._detectionReport();if(!t)return W`<div class="setting-help-text">${this._t("config_detect_none")}</div>`;const i=t.chargers||[],s=t.near_misses||[],r=t.prober_candidates||[],a=t.disagreements||[];return W`
+        `}_detectionReport(){const e=this._hass?.states?.["sensor.sem_diag_charger_control"];return e?.attributes?.detection_report||null}_detectedHardwareSubtitle(){const e=this._detectionReport();if(!e)return this._t("config_detect_none");const t=(e.chargers||[]).length,i=(e.near_misses||[]).length,s=((e.census||{}).unknown_energy_domains||[]).length+((e.census||{}).rows_matched_nothing||[]).length;let r=`${t} ${this._t("config_detect_chargers")}`;return i&&(r+=` · ${i} ${this._t("config_detect_near_misses")}`),s&&(r+=` · ${s} ${this._t("config_census_gaps")}`),r}_renderDetectedHardware(e){const t=this._detectionReport();if(!t)return W`<div class="setting-help-text">${this._t("config_detect_none")}</div>`;const i=t.chargers||[],s=t.near_misses||[],r=t.prober_candidates||[],a=t.disagreements||[],o=t.census||{},n=o.unknown_energy_domains||[],l=o.rows_matched_nothing||[];return W`
             <div class="setting-help-text" style="margin:0 0 6px">${this._t("config_detect_intro")}</div>
+            ${n.length?W`
+                <div class="row" style="color:var(--warning-color,#ffa726)">
+                    <span class="lbl">${this._t("config_census_unknown")}</span>
+                    <span style="font-family:monospace">${n.join(", ")}</span>
+                </div>`:q}
+            ${l.length?W`
+                <div class="row" style="color:var(--warning-color,#ffa726)">
+                    <span class="lbl">${this._t("config_census_nomatch")}</span>
+                    <span style="font-family:monospace">${l.join(", ")}</span>
+                </div>`:q}
             ${i.map(e=>W`
                 <div class="row" style="font-weight:600">
                     <span class="lbl">${this._t("config_detect_charger")}: ${e.platform}</span>

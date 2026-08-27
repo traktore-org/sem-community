@@ -13,6 +13,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🧭 **Detection now reads the whole install, not just entity names** (#848):
+  a registry census lists every installed integration, flags energy-shaped
+  ones SEM has no pattern for (the gap list shows on the Config tab), and
+  hardware specs (pack size, kWp, discharge limit) are read registry-first
+  from stable translation keys — German, Dutch or renamed entity ids can no
+  longer hide them.
+- ♨️ **More than one heat pump** (#685): the options flow grows a heat-pump
+  menu — add, edit and remove additional units, each driven independently
+  by its own priority, relays/climate/service and thresholds. The existing
+  single-pump config keeps working untouched as the primary unit.
+- 📞 **SG-Ready as a service call** (#801): heat pumps whose control surface
+  is a command (Buderus via EMS-ESP) can now be driven directly —
+  configure `domain.service` plus a JSON payload with state/relay
+  placeholders, with an optional read-back entity SEM checks after every
+  write. No more template-switch workarounds.
+
 - 💶 **The spendable budget finally has a trigger** (#778): with
   forecast-led spending switched on, SEM now plans one just-in-time sell
   window ending exactly when the night begins and discharges the measured

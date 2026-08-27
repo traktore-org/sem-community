@@ -1553,6 +1553,42 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
     return True
 
 
+def _heat_pump_rows(full_config: dict) -> list[dict]:
+    """#685: one row per heat pump — flat keys are the PRIMARY unit
+    (device_id "heat_pump", full back-compat), the ``heat_pumps`` list
+    holds additional units with the same key names."""
+    rows: list[dict] = [{
+        "id": "heat_pump",
+        "name": full_config.get("heat_pump_name", "Heat Pump"),
+        **{k: full_config.get(k) for k in (
+            "heat_pump_relay1_entity", "heat_pump_relay2_entity",
+            "heat_pump_climate_entity", "heat_pump_power_sensor",
+            "heat_pump_energy_sensor", "heat_pump_temperature_sensor",
+            "heat_pump_rated_power", "heat_pump_priority",
+            "heat_pump_boost_offset", "heat_pump_max_setpoint",
+            "heat_pump_force_on_threshold", "heat_pump_invert_sg_ready",
+            "heat_pump_sg_ready_service", "heat_pump_sg_ready_service_data",
+            "heat_pump_sg_ready_state_entity",
+        ) if full_config.get(k) not in (None, "")},
+    }]
+    for _i, _row in enumerate(full_config.get("heat_pumps") or []):
+        if isinstance(_row, dict):
+            rows.append({"id": _row.get("id") or f"heat_pump_{_i + 2}",
+                         "name": _row.get("name") or f"Heat Pump {_i + 2}",
+                         **_row})
+    return rows
+
+
+def _heat_pump_row_controllable(row: dict) -> bool:
+    """A row is registrable when it has a control path: both SG-Ready
+    relays, a climate entity, or a service call (#801)."""
+    r1 = row.get("heat_pump_relay1_entity")
+    r2 = row.get("heat_pump_relay2_entity")
+    cl = row.get("heat_pump_climate_entity")
+    svc = (row.get("heat_pump_sg_ready_service") or "").strip()
+    return bool(r1 and r2) or bool(cl) or bool(svc)
+
+
 def _derive_charge_mode(
     charger_cfg: dict,
     full_config: dict,
@@ -2251,52 +2287,59 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
         else:
             _LOGGER.debug("EV charger not configured (no power sensor or control method)")
 
-        # Register heat pump SG-Ready controller if configured
+        # Register heat pump SG-Ready controller(s) if configured.
+        # (#685) The flat heat_pump_* keys are the PRIMARY unit (device_id
+        # "heat_pump", untouched compat); additional units come from the
+        # ``heat_pumps`` list, same key names per row.
+        hp_rows = _heat_pump_rows(full_config)
+        hp_registered = 0
+        for _row in hp_rows:
+            if not _heat_pump_row_controllable(_row):
+                continue
+            _r1 = _row.get("heat_pump_relay1_entity")
+            _r2 = _row.get("heat_pump_relay2_entity")
+            _cl = _row.get("heat_pump_climate_entity")
+            _svc = (_row.get("heat_pump_sg_ready_service") or "").strip()
+            from .config_flow import _parse_service_data
+            from .devices.heat_pump_controller import HeatPumpController
+            _svc_data = _parse_service_data(
+                _row.get("heat_pump_sg_ready_service_data")) or {}
+            hp_extra = HeatPumpController(
+                hass=hass,
+                device_id=str(_row["id"]),
+                name=str(_row.get("name") or "Heat Pump"),
+                rated_power=float(_row.get("heat_pump_rated_power", 2000)),
+                priority=int(_row.get("heat_pump_priority", 4)),
+                relay1_entity_id=_r1,
+                relay2_entity_id=_r2,
+                climate_entity_id=_cl,
+                power_entity_id=_row.get("heat_pump_power_sensor"),
+                energy_entity_id=_row.get("heat_pump_energy_sensor"),
+                temperature_entity_id=_row.get("heat_pump_temperature_sensor"),
+                boost_offset=float(_row.get("heat_pump_boost_offset", 2.0)),
+                max_setpoint=float(_row.get("heat_pump_max_setpoint", 55.0)),
+                force_on_threshold=float(_row.get("heat_pump_force_on_threshold", 5000)),
+                invert_sg_ready=bool(_row.get("heat_pump_invert_sg_ready", False)),
+                sg_ready_service=_svc or None,
+                sg_ready_service_data=_svc_data,
+                sg_ready_state_entity=_row.get("heat_pump_sg_ready_state_entity"),
+            )
+            coordinator._surplus_controller.register_device(hp_extra)
+            hp_registered += 1
+            _LOGGER.info(
+                "Heat pump '%s' registered (id=%s, priority=%d, relay1=%s, "
+                "relay2=%s, climate=%s, service=%s)",
+                hp_extra.name, _row["id"], hp_extra.priority,
+                _r1 or "—", _r2 or "—", _cl or "—", _svc or "—",
+            )
+        if hp_registered > 1:
+            _LOGGER.info("#685: %d heat pumps active", hp_registered)
+
+        # Primary-row visibility (kept from the single-unit era, #432/#437)
         hp_relay1 = full_config.get("heat_pump_relay1_entity")
         hp_relay2 = full_config.get("heat_pump_relay2_entity")
         hp_climate = full_config.get("heat_pump_climate_entity")
-        has_sg_ready = bool(hp_relay1 and hp_relay2)
-        has_climate = bool(hp_climate)
-        # #437: registration was gated on (relay1 AND relay2) — too
-        # strict for non-SG-Ready heat pumps (Nibe, Mitsubishi, Daikin
-        # etc.) that only expose a ``climate`` entity. The controller
-        # itself already handles climate-only mode internally (the
-        # ``_set_sg_ready_state`` ``no_relays_configured`` branch is
-        # exercised by the #421 audit telemetry tests). Widen the gate
-        # to (relays) OR (climate) so climate-only installs get
-        # automatic setpoint boost on surplus.
-        if has_sg_ready or has_climate:
-            from .devices.heat_pump_controller import HeatPumpController
-            hp_device = HeatPumpController(
-                hass=hass,
-                device_id="heat_pump",
-                name=full_config.get("heat_pump_name", "Heat Pump"),
-                rated_power=float(full_config.get("heat_pump_rated_power", 2000)),
-                priority=int(full_config.get("heat_pump_priority", 4)),
-                relay1_entity_id=hp_relay1,
-                relay2_entity_id=hp_relay2,
-                climate_entity_id=hp_climate,
-                power_entity_id=full_config.get("heat_pump_power_sensor"),
-                energy_entity_id=full_config.get("heat_pump_energy_sensor"),  # #600
-                temperature_entity_id=full_config.get("heat_pump_temperature_sensor"),
-                boost_offset=float(full_config.get("heat_pump_boost_offset", 2.0)),
-                max_setpoint=float(full_config.get("heat_pump_max_setpoint", 55.0)),
-                force_on_threshold=float(full_config.get("heat_pump_force_on_threshold", 5000)),
-                invert_sg_ready=bool(full_config.get("heat_pump_invert_sg_ready", False)),
-            )
-            coordinator._surplus_controller.register_device(hp_device)
-            mode_label = (
-                "SG-Ready+climate" if has_sg_ready and has_climate
-                else "SG-Ready only" if has_sg_ready
-                else "climate-only setpoint boost"
-            )
-            _LOGGER.info(
-                "Heat pump registered (mode=%s, priority=%d, "
-                "relay1=%s, relay2=%s, climate=%s)",
-                mode_label, hp_device.priority,
-                hp_relay1 or "—", hp_relay2 or "—", hp_climate or "—",
-            )
-        else:
+        if hp_registered == 0:
             # #432: promote from DEBUG to INFO so users self-diagnosing
             # heat-pump setup see this in the standard log view. Mirrors
             # the success-path INFO above. The detailed config values are
@@ -4877,6 +4920,8 @@ async def _async_register_phase_services(
         "heat_pump_max_setpoint", "heat_pump_priority",
         "heat_pump_power_sensor", "heat_pump_temperature_sensor",
         "heat_pump_rated_power", "heat_pump_force_on_threshold",
+        "heat_pump_sg_ready_service", "heat_pump_sg_ready_service_data",
+        "heat_pump_sg_ready_state_entity", "heat_pumps",
     }
     # Hot water — config visibility (controller not currently wired
     # into the production path; v1.7.2-beta.2 surfaces config so

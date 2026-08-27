@@ -467,7 +467,10 @@
           "heat_pump_power_sensor": "功率传感器（可选）",
           "heat_pump_boost_offset": "温度增强偏置 (°C)",
           "heat_pump_max_setpoint": "最高温度设定值 (°C)",
-          "heat_pump_priority": "富余绿电优先级 (1=最高)"
+          "heat_pump_priority": "富余绿电优先级 (1=最高)",
+          "heat_pump_sg_ready_service": "SG-Ready service (domain.service)",
+          "heat_pump_sg_ready_service_data": "SG-Ready service data (JSON; placeholders state, relay1, relay2)",
+          "heat_pump_sg_ready_state_entity": "SG-Ready state read-back entity"
         },
         "data_description": {
           "heat_pump_relay1_entity": "SG-Ready 继电器 1（正常运行信号）的 switch 实体。需与继电器 2 一同设置才能使用 SG-Ready 协议。",
@@ -606,6 +609,35 @@
           "deye_actuation_enabled": "关闭时，即使观察者模式也关闭，SEM 也绝不写入逆变器。发送任何指令前，两道闸门都必须放行。",
           "deye_max_charge_current_a": "SEM 在充电电流实体上下达的安全上限。"
         }
+      },
+      "heat_pump_menu": {
+        "title": "Heat pumps",
+        "description": "Your primary heat pump is configured. Add more units, each driven independently by priority.",
+        "data": {
+          "action": "Action"
+        }
+      },
+      "heat_pump_unit": {
+        "title": "Additional heat pump",
+        "description": "Configure this unit the same way as the primary: SG-Ready relays, a climate entity, or a service call (for command-driven pumps like Buderus over EMS-ESP).",
+        "data": {
+          "name": "Name",
+          "heat_pump_relay1_entity": "SG-Ready relay 1",
+          "heat_pump_relay2_entity": "SG-Ready relay 2",
+          "heat_pump_invert_sg_ready": "Invert SG-Ready relays (NC wiring)",
+          "heat_pump_climate_entity": "Climate entity",
+          "heat_pump_power_sensor": "Power sensor",
+          "heat_pump_energy_sensor": "Energy sensor",
+          "heat_pump_temperature_sensor": "Temperature sensor",
+          "heat_pump_rated_power": "Rated power",
+          "heat_pump_boost_offset": "Boost offset",
+          "heat_pump_max_setpoint": "Maximum setpoint",
+          "heat_pump_force_on_threshold": "Force-on threshold",
+          "heat_pump_priority": "Priority",
+          "heat_pump_sg_ready_service": "SG-Ready service (domain.service)",
+          "heat_pump_sg_ready_service_data": "SG-Ready service data (JSON; placeholders state, relay1, relay2)",
+          "heat_pump_sg_ready_state_entity": "SG-Ready state read-back entity"
+        }
       }
     },
     "error": {
@@ -616,7 +648,10 @@
       "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities.",
       "deye_work_mode_mapping_not_distinct": "Work Mode 控制需要两个不同的选项——一个用于 Load First，一个用于 Battery First。请两者都选，且不要选同一个。",
       "deye_force_charge_work_mode_invalid": "请选择 SEM 强制充电时使用的 Work Mode：Load First 或 Battery First。",
-      "deye_system_work_mode_mapping_not_distinct": "The three System Work Mode labels must be filled in and distinct."
+      "deye_system_work_mode_mapping_not_distinct": "The three System Work Mode labels must be filled in and distinct.",
+      "heat_pump_no_control": "Configure at least one control path: both relays, a climate entity, or a service.",
+      "heat_pump_service_invalid": "The SG-Ready service must be domain.service (e.g. ems_esp.send_command).",
+      "heat_pump_service_data_invalid": "The SG-Ready service data must be a JSON object."
     }
   },
   "entity": {

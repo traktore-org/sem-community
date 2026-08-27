@@ -107,6 +107,25 @@ def _clearable_keys(schema: Any) -> set[str]:
     }
 
 
+def _parse_service_data(raw) -> dict | None:
+    """#801: service data is stored as a JSON string in the flow.
+
+    Returns the dict, {} for empty, None for invalid — the caller turns
+    None into a form error instead of shipping an unusable payload.
+    """
+    if isinstance(raw, dict):
+        return raw
+    text = str(raw or "").strip()
+    if not text:
+        return {}
+    try:
+        import json
+        parsed = json.loads(text)
+    except Exception:  # noqa: BLE001 — invalid JSON is the error case
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
 def _merge_form_input(flow: Any, target: dict, user_input: dict) -> None:
     """Merge a submitted form into ``target``, honouring CLEARED fields.
 
@@ -191,13 +210,83 @@ def _charger_already_installed(discovery: dict, installed: Any) -> bool:
     return any(mine & _charger_entities(c) for c in (installed or []))
 
 
-def _detect_hardware_specs(hass: HomeAssistant) -> Dict[str, float]:
+#: (#848) Per-spec STABLE keys — an integration's ``translation_key`` /
+#: ``unique_id`` suffix never localises and survives renames, unlike the
+#: entity_id the glob fallback below matches. Grounded live on huawei_solar
+#: (a German install: ``sensor.batterien_akkukapazitat`` carries
+#: ``tk=storage_rated_capacity``).
+_SPEC_REGISTRY_KEYS: Dict[str, tuple] = {
+    "battery_capacity_kwh": (
+        "storage_rated_capacity", "battery_capacity", "usable_capacity",
+        "rated_capacity",
+    ),
+    "system_size_kwp": ("rated_power", "nominal_power"),
+    "battery_max_discharge_power": (
+        "storage_maximum_discharging_power", "max_discharge_power",
+        "max_discharging_power",
+    ),
+}
+
+
+def _spec_from_registry(hass: HomeAssistant, registry=None) -> Dict[str, str]:
+    """(#848) entity_id per spec, found by translation_key / unique_id
+    suffix in the entity registry — the language-proof half of the ladder.
+    Returns only the entity ids; the caller reads and converts values."""
+    from homeassistant.helpers import entity_registry as _er
+    if registry is None:
+        try:
+            registry = _er.async_get(hass)
+        except Exception:  # noqa: BLE001 — glob fallback stands alone
+            return {}
+    found: Dict[str, str] = {}
+    for e in registry.entities.values():
+        if getattr(e, "disabled_by", None):
+            continue
+        eid = str(e.entity_id)
+        if not eid.startswith(("sensor.", "number.")):
+            continue
+        tk = str(getattr(e, "translation_key", "") or "")
+        uid = str(getattr(e, "unique_id", "") or "")
+        for spec, keys in _SPEC_REGISTRY_KEYS.items():
+            if spec in found:
+                continue
+            if any(tk == k or uid.endswith(k) for k in keys):
+                found[spec] = eid
+    return found
+
+
+def _detect_hardware_specs(hass: HomeAssistant, registry=None) -> Dict[str, float]:
     """Auto-detect battery capacity, system size, and max discharge from hardware.
 
-    Searches the entity registry for known sensor patterns across inverter brands.
-    Returns a dict of detected values (only includes keys that were found).
+    (#848) Registry-first: stable ``translation_key``/``unique_id`` matches
+    win; the entity_id globs below remain as the last-resort fallback for
+    integrations without stable keys. Returns only the values it found.
     """
     detected: Dict[str, float] = {}
+
+    # ── the registry ladder rung ─────────────────────────────────────
+    for spec, eid in _spec_from_registry(hass, registry=registry).items():
+        state = hass.states.get(eid)
+        if state is None:
+            continue
+        try:
+            val = float(state.state)
+        except (TypeError, ValueError):
+            continue
+        if val <= 0:
+            continue
+        if spec == "battery_capacity_kwh":
+            labelled = bool(normalize_unit(state))
+            val = energy_state_to_kwh(state, default=val)
+            if not labelled and val > 500:
+                val = val / 1000
+            detected[spec] = round(val, 1)
+        elif spec == "system_size_kwp":
+            if val > 100:                      # W → kWp
+                detected[spec] = round(val / 1000, 1)
+        else:                                   # discharge power, W
+            detected["battery_max_discharge_power"] = round(val, 0)
+            detected["battery_assist_max_power"] = round(val, 0)
 
     # Battery capacity (Wh or kWh)
     capacity_patterns = [
@@ -1014,6 +1103,9 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "heat_pump_priority",
     "heat_pump_relay1_entity",
     "heat_pump_relay2_entity",
+    "heat_pump_sg_ready_service",
+    "heat_pump_sg_ready_service_data",
+    "heat_pump_sg_ready_state_entity",
     "initial_current",
     "load_management_enabled",
     "minimum_solar_power",
@@ -2555,11 +2647,17 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             climate = user_input.get("heat_pump_climate_entity")
             has_one_relay = bool(relay1) ^ bool(relay2)
             has_climate = bool(climate)
-            if has_one_relay and not has_climate:
+            service = (user_input.get("heat_pump_sg_ready_service") or "").strip()
+            svc_data_raw = (user_input.get("heat_pump_sg_ready_service_data") or "").strip()
+            if has_one_relay and not has_climate and not service:
                 errors["base"] = "heat_pump_partial_relays"
+            elif service and "." not in service:
+                errors["base"] = "heat_pump_service_invalid"
+            elif svc_data_raw and _parse_service_data(svc_data_raw) is None:
+                errors["base"] = "heat_pump_service_data_invalid"
             else:
                 _merge_form_input(self, self._data, user_input)
-                return await self.async_step_battery_scheduler()
+                return await self.async_step_heat_pump_menu()
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
         _c = lambda key, fb: self._cfg(current_config, key, fb)
@@ -2622,6 +2720,215 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     selector.NumberSelectorConfig(
                         min=1, max=10, step=1, mode="slider"
                     )
+                ),
+                # (#801) SG-Ready as a SERVICE CALL — for heat pumps whose
+                # control surface is a command (Buderus via EMS-ESP), not a
+                # relay pair. domain.service; data is JSON and may use
+                # {state}/{relay1}/{relay2} placeholders.
+                vol.Optional(
+                    "heat_pump_sg_ready_service",
+                    description={"suggested_value": _opt("heat_pump_sg_ready_service")},
+                ): selector.TextSelector(),
+                vol.Optional(
+                    "heat_pump_sg_ready_service_data",
+                    description={"suggested_value": _opt("heat_pump_sg_ready_service_data")},
+                ): selector.TextSelector(),
+                vol.Optional(
+                    "heat_pump_sg_ready_state_entity",
+                    description={"suggested_value": _opt("heat_pump_sg_ready_state_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["sensor", "select", "input_select"])
+                ),
+            }),
+            errors=errors,
+        )
+
+    # ── #685: additional heat pumps ─────────────────────────────────
+    # The flat heat_pump_* keys stay the PRIMARY unit (every existing
+    # reader — diagnose, card, registration — keeps working untouched).
+    # Additional units live in the ``heat_pumps`` list, one dict per
+    # unit with the same key names. Mirrors the ev_chargers menu (#112).
+
+    async def async_step_heat_pump_menu(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Multi-heat-pump menu: add another unit or continue (#685)."""
+        if user_input is not None:
+            action = user_input.get("action", "continue")
+            if action == "add_heat_pump":
+                self._edit_hp_index = None
+                return await self.async_step_heat_pump_unit()
+            if action.startswith("edit_heat_pump:"):
+                self._edit_hp_index = int(action.split(":", 1)[1])
+                return await self.async_step_heat_pump_unit()
+            if action.startswith("remove_heat_pump:"):
+                idx = int(action.split(":", 1)[1])
+                pumps = list(self._data.get("heat_pumps")
+                             or self.config_entry.options.get("heat_pumps") or [])
+                if 0 <= idx < len(pumps):
+                    removed = pumps.pop(idx)
+                    self._data["heat_pumps"] = pumps
+                    _LOGGER.info("Removed heat pump '%s' (%d additional left)",
+                                 removed.get("name", idx), len(pumps))
+                return await self.async_step_heat_pump_menu()
+            return await self.async_step_battery_scheduler()
+
+        pumps = list(self._data.get("heat_pumps")
+                     or self.config_entry.options.get("heat_pumps") or [])
+        options = [{"value": "continue",
+                    "label": f"Continue ({1 + len(pumps)} heat pump"
+                             f"{'s' if pumps else ''} configured)"}]
+        for i, hp in enumerate(pumps):
+            options.append({"value": f"edit_heat_pump:{i}",
+                            "label": f"Edit: {hp.get('name') or f'Heat Pump {i + 2}'}"})
+            options.append({"value": f"remove_heat_pump:{i}",
+                            "label": f"Remove: {hp.get('name') or f'Heat Pump {i + 2}'}"})
+        options.append({"value": "add_heat_pump", "label": "Add another heat pump"})
+        return self.async_show_form(
+            step_id="heat_pump_menu",
+            data_schema=vol.Schema({
+                vol.Required("action", default="continue"): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=options, mode=selector.SelectSelectorMode.LIST)
+                ),
+            }),
+        )
+
+    async def async_step_heat_pump_unit(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Add or edit one ADDITIONAL heat pump (#685)."""
+        errors: dict[str, str] = {}
+        pumps = list(self._data.get("heat_pumps")
+                     or self.config_entry.options.get("heat_pumps") or [])
+        editing = getattr(self, "_edit_hp_index", None)
+        row = pumps[editing] if editing is not None and editing < len(pumps) else {}
+
+        if user_input is not None:
+            relay1 = user_input.get("heat_pump_relay1_entity")
+            relay2 = user_input.get("heat_pump_relay2_entity")
+            climate = user_input.get("heat_pump_climate_entity")
+            service = (user_input.get("heat_pump_sg_ready_service") or "").strip()
+            svc_data_raw = (user_input.get("heat_pump_sg_ready_service_data") or "").strip()
+            if not ((relay1 and relay2) or climate or service):
+                errors["base"] = "heat_pump_no_control"
+            elif bool(relay1) ^ bool(relay2) and not (climate or service):
+                errors["base"] = "heat_pump_partial_relays"
+            elif service and "." not in service:
+                errors["base"] = "heat_pump_service_invalid"
+            elif svc_data_raw and _parse_service_data(svc_data_raw) is None:
+                errors["base"] = "heat_pump_service_data_invalid"
+            else:
+                new_row = {k: v for k, v in user_input.items() if v not in (None, "")}
+                if editing is not None and editing < len(pumps):
+                    new_row.setdefault("id", pumps[editing].get("id", f"heat_pump_{editing + 2}"))
+                    pumps[editing] = new_row
+                else:
+                    new_row.setdefault("id", f"heat_pump_{len(pumps) + 2}")
+                    new_row.setdefault("name", f"Heat Pump {len(pumps) + 2}")
+                    pumps.append(new_row)
+                self._data["heat_pumps"] = pumps
+                self._edit_hp_index = None
+                return await self.async_step_heat_pump_menu()
+
+        def _row(key, fb=None):
+            v = row.get(key)
+            return v if v not in (None, "") else fb
+
+        return self.async_show_form(
+            step_id="heat_pump_unit",
+            data_schema=vol.Schema({
+                vol.Optional(
+                    "name",
+                    description={"suggested_value": _row("name")},
+                ): selector.TextSelector(),
+                vol.Optional(
+                    "heat_pump_relay1_entity",
+                    description={"suggested_value": _row("heat_pump_relay1_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["switch", "input_boolean"])
+                ),
+                vol.Optional(
+                    "heat_pump_relay2_entity",
+                    description={"suggested_value": _row("heat_pump_relay2_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["switch", "input_boolean"])
+                ),
+                vol.Optional(
+                    "heat_pump_invert_sg_ready",
+                    default=bool(_row("heat_pump_invert_sg_ready", False)),
+                ): selector.BooleanSelector(),
+                vol.Optional(
+                    "heat_pump_climate_entity",
+                    description={"suggested_value": _row("heat_pump_climate_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="climate")
+                ),
+                vol.Optional(
+                    "heat_pump_power_sensor",
+                    description={"suggested_value": _row("heat_pump_power_sensor")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class="power")
+                ),
+                vol.Optional(
+                    "heat_pump_energy_sensor",
+                    description={"suggested_value": _row("heat_pump_energy_sensor")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class="energy")
+                ),
+                vol.Optional(
+                    "heat_pump_temperature_sensor",
+                    description={"suggested_value": _row("heat_pump_temperature_sensor")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
+                ),
+                vol.Optional(
+                    "heat_pump_rated_power",
+                    default=float(_row("heat_pump_rated_power", 2000.0)),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=100, max=30000, step=100, unit_of_measurement="W", mode="box")
+                ),
+                vol.Optional(
+                    "heat_pump_boost_offset",
+                    default=float(_row("heat_pump_boost_offset", 2.0)),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=10.0, step=0.5, unit_of_measurement="°C", mode="slider")
+                ),
+                vol.Optional(
+                    "heat_pump_max_setpoint",
+                    default=float(_row("heat_pump_max_setpoint", 55.0)),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=30.0, max=80.0, step=1.0, unit_of_measurement="°C", mode="slider")
+                ),
+                vol.Optional(
+                    "heat_pump_force_on_threshold",
+                    default=float(_row("heat_pump_force_on_threshold", 5000.0)),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=30000, step=100, unit_of_measurement="W", mode="box")
+                ),
+                vol.Optional(
+                    "heat_pump_priority",
+                    default=int(_row("heat_pump_priority", 4)),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=1, max=10, step=1, mode="slider")
+                ),
+                vol.Optional(
+                    "heat_pump_sg_ready_service",
+                    description={"suggested_value": _row("heat_pump_sg_ready_service")},
+                ): selector.TextSelector(),
+                vol.Optional(
+                    "heat_pump_sg_ready_service_data",
+                    description={"suggested_value": _row("heat_pump_sg_ready_service_data")},
+                ): selector.TextSelector(),
+                vol.Optional(
+                    "heat_pump_sg_ready_state_entity",
+                    description={"suggested_value": _row("heat_pump_sg_ready_state_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["sensor", "select", "input_select"])
                 ),
             }),
             errors=errors,

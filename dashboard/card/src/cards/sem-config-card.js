@@ -1040,8 +1040,12 @@ class SEMConfigCard extends SEMLitBase {
         if (!r) return this._t('config_detect_none');
         const n = (r.chargers || []).length;
         const nm = (r.near_misses || []).length;
-        const base = `${n} ${this._t('config_detect_chargers')}`;
-        return nm ? `${base} · ${nm} ${this._t('config_detect_near_misses')}` : base;
+        const gaps = ((r.census || {}).unknown_energy_domains || []).length
+                   + ((r.census || {}).rows_matched_nothing || []).length;
+        let base = `${n} ${this._t('config_detect_chargers')}`;
+        if (nm) base += ` · ${nm} ${this._t('config_detect_near_misses')}`;
+        if (gaps) base += ` · ${gaps} ${this._t('config_census_gaps')}`;
+        return base;
     }
 
     // (#814 Pillar B) Detected hardware with evidence. Read-only view of the
@@ -1061,8 +1065,21 @@ class SEMConfigCard extends SEMLitBase {
                 <span style="font-family:monospace;font-size:0.85em">${v.entity || v.value || '—'}
                     ${v.device_class ? html`<span style="opacity:.6"> · ${v.domain}/${v.device_class}</span>` : nothing}
                 </span></div>`;
+        const census = r.census || {};
+        const unknown = census.unknown_energy_domains || [];
+        const nomatch = census.rows_matched_nothing || [];
         return html`
             <div class="setting-help-text" style="margin:0 0 6px">${this._t('config_detect_intro')}</div>
+            ${unknown.length ? html`
+                <div class="row" style="color:var(--warning-color,#ffa726)">
+                    <span class="lbl">${this._t('config_census_unknown')}</span>
+                    <span style="font-family:monospace">${unknown.join(', ')}</span>
+                </div>` : nothing}
+            ${nomatch.length ? html`
+                <div class="row" style="color:var(--warning-color,#ffa726)">
+                    <span class="lbl">${this._t('config_census_nomatch')}</span>
+                    <span style="font-family:monospace">${nomatch.join(', ')}</span>
+                </div>` : nothing}
             ${chargers.map((c) => html`
                 <div class="row" style="font-weight:600">
                     <span class="lbl">${this._t('config_detect_charger')}: ${c.platform}</span>

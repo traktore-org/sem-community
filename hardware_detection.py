@@ -876,6 +876,124 @@ def probe_charger_candidates(hass: Optional[HomeAssistant] = None,
     return out
 
 
+# ============================================================
+# (#848) Installed-integration census — detection asks what EXISTS
+# before it matches anything. Core and HACS integrations are the same
+# thing here: a domain in the config-entry list, a platform on registry
+# entities. The glob matrix never asked; the census always does.
+# ============================================================
+
+def known_charger_domains() -> frozenset:
+    """Charger domains SEM has a discovery function for. ``mqtt`` is
+    excluded from census bookkeeping on purpose: it is a transport, not a
+    brand — its presence proves nothing and its "row" (JuiceBox) is
+    identity-gated. A function, not a constant: ``_EV_CHARGER_PLATFORMS``
+    is defined further down the module."""
+    return frozenset(p for p, _ in _EV_CHARGER_PLATFORMS if p != "mqtt")
+
+#: Inverter/battery integration domains SEM has read patterns or adapters
+#: for. Deliberately curated and incomplete — the census reports what it
+#: KNOWS; a brand missing here shows up as unknown_energy_domains, which
+#: is the line that files the next detection row.
+KNOWN_INVERTER_DOMAINS = frozenset({
+    "huawei_solar", "fronius", "solaredge", "solaredge_modbus", "sma",
+    "solax", "solax_modbus", "goodwe", "sungrow", "sungrow_modbus",
+    "growatt_server", "growatt", "enphase_envoy", "powerwall", "tesla",
+    "kostal_plenticore", "sonnen", "sonnenbatterie", "victron",
+    "victron_gx", "deye", "solarman", "sun2000", "saj_modbus",
+    "solis", "solis_modbus",
+})
+
+#: Domains that are infrastructure, never hardware brands.
+_CENSUS_IGNORED = frozenset({
+    "solar_energy_management", "mqtt", "sun", "template", "input_boolean",
+    "input_number", "input_select", "automation", "script", "scene",
+    "person", "zone", "schedule",
+})
+
+
+def _census_energy_shaped(dev_entities) -> bool:
+    """Does this domain's entity set look like ENERGY HARDWARE?
+
+    Needs two independent signals: a power/energy sensor alone is any
+    smart plug; the second signal (battery SOC, a controllable current or
+    power number, a plug sensor) is what separates hardware SEM could
+    drive from things that merely measure."""
+    has_power = any(
+        str(e.entity_id).startswith("sensor.")
+        and getattr(e, "original_device_class", None) in ("power", "energy")
+        for e in dev_entities)
+    if not has_power:
+        return False
+    return any(
+        (str(e.entity_id).startswith("sensor.")
+         and getattr(e, "original_device_class", None) == "battery")
+        or (str(e.entity_id).startswith("number.")
+            and getattr(e, "original_device_class", None) in ("current", "power"))
+        or (str(e.entity_id).startswith("binary_sensor.")
+            and getattr(e, "original_device_class", None) == "plug")
+        for e in dev_entities)
+
+
+def build_integration_census(hass=None, registry=None, config_domains=None,
+                             matched_charger_platforms=None) -> Dict[str, Any]:
+    """The census: what is installed, what SEM knows, and the two gaps.
+
+    ``rows_matched_nothing`` — a KNOWN charger platform with registry
+    entities but no discovered charger: a detection bug this install just
+    surfaced. ``unknown_energy_domains`` — an integration with
+    energy-shaped devices SEM has no row for: the next brand row, named
+    by the install instead of waiting for an issue."""
+    if registry is None and hass is not None:
+        registry = entity_registry.async_get(hass)
+    entries = [e for e in (registry.entities.values() if registry else [])
+               if not e.disabled_by]
+    by_domain: Dict[str, list] = {}
+    for e in entries:
+        dom = str(e.platform or "")
+        if dom and dom not in _CENSUS_IGNORED:
+            by_domain.setdefault(dom, []).append(e)
+
+    installed = set(by_domain)
+    if config_domains:
+        installed |= {str(d) for d in config_domains
+                      if str(d) not in _CENSUS_IGNORED}
+    elif hass is not None:
+        try:
+            installed |= {
+                str(en.domain) for en in hass.config_entries.async_entries()
+                if str(en.domain) not in _CENSUS_IGNORED}
+        except Exception:  # noqa: BLE001 — the registry half stands alone
+            pass
+
+    def _canon(dom: str) -> str:
+        # the zaptec_custom tolerance, same rule as the discovery walk
+        return "zaptec" if dom.startswith("zaptec") else dom
+
+    known_chargers = known_charger_domains()
+    chargers_present = sorted(
+        {_canon(d) for d in by_domain if _canon(d) in known_chargers})
+    inverters_present = sorted(d for d in installed
+                               if d in KNOWN_INVERTER_DOMAINS)
+
+    matched = {_canon(str(x)) for x in (matched_charger_platforms or set())}
+    rows_matched_nothing = sorted(d for d in chargers_present
+                                  if d not in matched)
+
+    known = known_chargers | KNOWN_INVERTER_DOMAINS
+    unknown_energy = sorted(
+        dom for dom, ents in by_domain.items()
+        if _canon(dom) not in known and _census_energy_shaped(ents))
+
+    return {
+        "installed": sorted(installed),
+        "known_charger_platforms_present": chargers_present,
+        "known_inverter_domains_present": inverters_present,
+        "rows_matched_nothing": rows_matched_nothing,
+        "unknown_energy_domains": unknown_energy,
+    }
+
+
 def build_detection_report(hass: Optional[HomeAssistant] = None,
                            registry=None) -> Dict[str, Any]:
     """(#814 Pillar B) Detection that shows its work.
@@ -1000,6 +1118,16 @@ def build_detection_report(hass: Optional[HomeAssistant] = None,
         + [{"kind": "brand_only", "platform": p, "device_id": d}
            for (p, d) in sorted(brand_devices - prober_devices, key=str)]
     )
+    # (#848) the census rides every report — what is installed, what SEM
+    # knows, and the two gap lines that turn installs into detection
+    # findings.
+    try:
+        report["census"] = build_integration_census(
+            hass=hass, registry=registry,
+            matched_charger_platforms={
+                c.get("platform") for c in report["chargers"]})
+    except Exception:  # noqa: BLE001 — a census never costs the report
+        report["census"] = None
     return report
 
 

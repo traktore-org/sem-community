@@ -1481,7 +1481,10 @@
     "spend_sell": "Battery spend",
     "spend_selling": "selling",
     "spend_sell_planned": "sell planned",
-    "spend_until": "until"
+    "spend_until": "until",
+    "config_census_unknown": "Installed, unknown to SEM",
+    "config_census_nomatch": "Installed, nothing matched",
+    "config_census_gaps": "detection gaps"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -2965,7 +2968,10 @@
     "spend_sell": "Battery spend",
     "spend_selling": "selling",
     "spend_sell_planned": "sell planned",
-    "spend_until": "until"
+    "spend_until": "until",
+    "config_census_unknown": "Installed, unknown to SEM",
+    "config_census_nomatch": "Installed, nothing matched",
+    "config_census_gaps": "detection gaps"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -4449,7 +4455,10 @@
     "spend_sell": "Batterie-Verkauf",
     "spend_selling": "verkauft",
     "spend_sell_planned": "Verkauf geplant",
-    "spend_until": "bis"
+    "spend_until": "bis",
+    "config_census_unknown": "Installiert, SEM unbekannt",
+    "config_census_nomatch": "Installiert, nichts erkannt",
+    "config_census_gaps": "Erkennungslücken"
   },
   "en": {
     "% of limit": "% of limit",
@@ -5933,7 +5942,10 @@
     "spend_sell": "Battery spend",
     "spend_selling": "selling",
     "spend_sell_planned": "sell planned",
-    "spend_until": "until"
+    "spend_until": "until",
+    "config_census_unknown": "Installed, unknown to SEM",
+    "config_census_nomatch": "Installed, nothing matched",
+    "config_census_gaps": "detection gaps"
   },
   "es": {
     "% of limit": "% del límite",
@@ -7417,7 +7429,10 @@
     "spend_sell": "Battery spend",
     "spend_selling": "selling",
     "spend_sell_planned": "sell planned",
-    "spend_until": "until"
+    "spend_until": "until",
+    "config_census_unknown": "Installed, unknown to SEM",
+    "config_census_nomatch": "Installed, nothing matched",
+    "config_census_gaps": "detection gaps"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -8901,7 +8916,10 @@
     "spend_sell": "Battery spend",
     "spend_selling": "selling",
     "spend_sell_planned": "sell planned",
-    "spend_until": "until"
+    "spend_until": "until",
+    "config_census_unknown": "Installed, unknown to SEM",
+    "config_census_nomatch": "Installed, nothing matched",
+    "config_census_gaps": "detection gaps"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -10385,7 +10403,10 @@
     "spend_sell": "Battery spend",
     "spend_selling": "selling",
     "spend_sell_planned": "sell planned",
-    "spend_until": "until"
+    "spend_until": "until",
+    "config_census_unknown": "Installed, unknown to SEM",
+    "config_census_nomatch": "Installed, nothing matched",
+    "config_census_gaps": "detection gaps"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -11869,7 +11890,10 @@
     "spend_sell": "Battery spend",
     "spend_selling": "selling",
     "spend_sell_planned": "sell planned",
-    "spend_until": "until"
+    "spend_until": "until",
+    "config_census_unknown": "Installed, unknown to SEM",
+    "config_census_nomatch": "Installed, nothing matched",
+    "config_census_gaps": "detection gaps"
   },
   "it": {
     "% of limit": "% del limite",
@@ -13353,7 +13377,10 @@
     "spend_sell": "Battery spend",
     "spend_selling": "selling",
     "spend_sell_planned": "sell planned",
-    "spend_until": "until"
+    "spend_until": "until",
+    "config_census_unknown": "Installed, unknown to SEM",
+    "config_census_nomatch": "Installed, nothing matched",
+    "config_census_gaps": "detection gaps"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -14837,7 +14864,10 @@
     "spend_sell": "Battery spend",
     "spend_selling": "selling",
     "spend_sell_planned": "sell planned",
-    "spend_until": "until"
+    "spend_until": "until",
+    "config_census_unknown": "Installed, unknown to SEM",
+    "config_census_nomatch": "Installed, nothing matched",
+    "config_census_gaps": "detection gaps"
   },
   "no": {
     "% of limit": "% av grense",
@@ -16321,7 +16351,10 @@
     "spend_sell": "Battery spend",
     "spend_selling": "selling",
     "spend_sell_planned": "sell planned",
-    "spend_until": "until"
+    "spend_until": "until",
+    "config_census_unknown": "Installed, unknown to SEM",
+    "config_census_nomatch": "Installed, nothing matched",
+    "config_census_gaps": "detection gaps"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -17805,7 +17838,10 @@
     "spend_sell": "Battery spend",
     "spend_selling": "selling",
     "spend_sell_planned": "sell planned",
-    "spend_until": "until"
+    "spend_until": "until",
+    "config_census_unknown": "Installed, unknown to SEM",
+    "config_census_nomatch": "Installed, nothing matched",
+    "config_census_gaps": "detection gaps"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -19289,7 +19325,10 @@
     "spend_sell": "Battery spend",
     "spend_selling": "selling",
     "spend_sell_planned": "sell planned",
-    "spend_until": "until"
+    "spend_until": "until",
+    "config_census_unknown": "Installed, unknown to SEM",
+    "config_census_nomatch": "Installed, nothing matched",
+    "config_census_gaps": "detection gaps"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -20773,7 +20812,10 @@
     "spend_sell": "Battery spend",
     "spend_selling": "selling",
     "spend_sell_planned": "sell planned",
-    "spend_until": "until"
+    "spend_until": "until",
+    "config_census_unknown": "Installed, unknown to SEM",
+    "config_census_nomatch": "Installed, nothing matched",
+    "config_census_gaps": "detection gaps"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -22257,7 +22299,10 @@
     "spend_sell": "Battery spend",
     "spend_selling": "selling",
     "spend_sell_planned": "sell planned",
-    "spend_until": "until"
+    "spend_until": "until",
+    "config_census_unknown": "Installed, unknown to SEM",
+    "config_census_nomatch": "Installed, nothing matched",
+    "config_census_gaps": "detection gaps"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -23741,6 +23786,9 @@
     "spend_sell": "Battery spend",
     "spend_selling": "selling",
     "spend_sell_planned": "sell planned",
-    "spend_until": "until"
+    "spend_until": "until",
+    "config_census_unknown": "Installed, unknown to SEM",
+    "config_census_nomatch": "Installed, nothing matched",
+    "config_census_gaps": "detection gaps"
   }
 }

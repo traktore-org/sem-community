@@ -467,7 +467,10 @@
           "heat_pump_power_sensor": "Tehoanturi (valinnainen)",
           "heat_pump_boost_offset": "Lämpötilan boost-poikkeama (°C)",
           "heat_pump_max_setpoint": "Suurin lämpötilan asetusarvo (°C)",
-          "heat_pump_priority": "Ylijäämäprioriteetti (1=korkein)"
+          "heat_pump_priority": "Ylijäämäprioriteetti (1=korkein)",
+          "heat_pump_sg_ready_service": "SG-Ready service (domain.service)",
+          "heat_pump_sg_ready_service_data": "SG-Ready service data (JSON; placeholders state, relay1, relay2)",
+          "heat_pump_sg_ready_state_entity": "SG-Ready state read-back entity"
         },
         "data_description": {
           "heat_pump_relay1_entity": "Switch-entiteetti SG-Ready-releelle 1 (normaalikäytön signaali). Aseta yhdessä releen 2 kanssa SG-Ready-protokollaa varten.",
@@ -606,6 +609,35 @@
           "deye_actuation_enabled": "Kun POIS, SEM ei koskaan kirjoita invertteriin, vaikka tarkkailutila olisi myös pois. Molempien porttien on sallittava ennen komennon lähetystä.",
           "deye_max_charge_current_a": "Turvallinen yläraja, jonka SEM komentaa latausvirran entiteetille."
         }
+      },
+      "heat_pump_menu": {
+        "title": "Heat pumps",
+        "description": "Your primary heat pump is configured. Add more units, each driven independently by priority.",
+        "data": {
+          "action": "Action"
+        }
+      },
+      "heat_pump_unit": {
+        "title": "Additional heat pump",
+        "description": "Configure this unit the same way as the primary: SG-Ready relays, a climate entity, or a service call (for command-driven pumps like Buderus over EMS-ESP).",
+        "data": {
+          "name": "Name",
+          "heat_pump_relay1_entity": "SG-Ready relay 1",
+          "heat_pump_relay2_entity": "SG-Ready relay 2",
+          "heat_pump_invert_sg_ready": "Invert SG-Ready relays (NC wiring)",
+          "heat_pump_climate_entity": "Climate entity",
+          "heat_pump_power_sensor": "Power sensor",
+          "heat_pump_energy_sensor": "Energy sensor",
+          "heat_pump_temperature_sensor": "Temperature sensor",
+          "heat_pump_rated_power": "Rated power",
+          "heat_pump_boost_offset": "Boost offset",
+          "heat_pump_max_setpoint": "Maximum setpoint",
+          "heat_pump_force_on_threshold": "Force-on threshold",
+          "heat_pump_priority": "Priority",
+          "heat_pump_sg_ready_service": "SG-Ready service (domain.service)",
+          "heat_pump_sg_ready_service_data": "SG-Ready service data (JSON; placeholders state, relay1, relay2)",
+          "heat_pump_sg_ready_state_entity": "SG-Ready state read-back entity"
+        }
       }
     },
     "error": {
@@ -616,7 +648,10 @@
       "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities.",
       "deye_work_mode_mapping_not_distinct": "Work Mode -ohjaus tarvitsee kaksi eri vaihtoehtoa – yhden Load First- ja yhden Battery First -tilalle. Valitse molemmat, älä samaa kahdesti.",
       "deye_force_charge_work_mode_invalid": "Valitse, mitä Work Mode -tilaa SEM käyttää akun pakkolataukseen: Load First vai Battery First.",
-      "deye_system_work_mode_mapping_not_distinct": "The three System Work Mode labels must be filled in and distinct."
+      "deye_system_work_mode_mapping_not_distinct": "The three System Work Mode labels must be filled in and distinct.",
+      "heat_pump_no_control": "Configure at least one control path: both relays, a climate entity, or a service.",
+      "heat_pump_service_invalid": "The SG-Ready service must be domain.service (e.g. ems_esp.send_command).",
+      "heat_pump_service_data_invalid": "The SG-Ready service data must be a JSON object."
     }
   },
   "entity": {
