@@ -208,11 +208,30 @@ patterns) before committing to an overnight charge.
 
 ## Multiple heat pumps and climate units (#685)
 
-The dedicated **Heat Pump (SG-Ready)** section configures ONE unit — it
-models the SG-Ready relay pair, and most installs have one such interface.
-**Multiple units are supported through climate devices instead**: add each
-unit's `climate.*` entity (an Ecobee, a Nest, any thermostat-controlled
-heat pump or AC) as a surplus device. Every unit then gets, independently:
+The **Heat Pump** section configures the primary unit, and since 2.1 the
+options flow ends in a **heat-pump menu** where further units can be
+added, edited and removed (#685). Every unit — primary or additional —
+supports the same three control paths, in any combination:
+
+- **SG-Ready relays** — the standard two-relay table (NORMAL / BOOST /
+  FORCE_ON), with NC-wiring inversion per unit.
+- **Climate entity** — setpoint boost on surplus for pumps that only
+  expose a thermostat (Nibe, Mitsubishi, Daikin …).
+- **Service call** (#801) — for pumps whose control surface is a
+  *command*, like a Buderus behind EMS-ESP: configure
+  `domain.service` (e.g. `ems_esp.send_command`) plus a JSON payload.
+  The placeholders `state` (1–4), `relay1` and `relay2` (the SG-Ready
+  truth-table booleans, written in braces inside the JSON) are filled
+  in per write. An optional read-back entity lets SEM verify after
+  every write that the command landed; a mismatch is logged, never
+  silently trusted.
+
+Each additional unit carries its own priority, thresholds, sensors and
+name, and competes in the surplus distribution as its own device.
+
+**Thermostat-controlled units can alternatively be added as climate
+devices** (an Ecobee, a Nest, any thermostat-controlled heat pump or AC)
+in the generic device list. Every climate device gets, independently:
 
 - its own priority slot in the one device list,
 - its own comfort band (target / offset / limit) with the learned drift
@@ -225,8 +244,8 @@ heat pump or AC) as a surplus device. Every unit then gets, independently:
   service-registered device drew the generic plug, which made a second unit
   that *was* registered and running look like it had never been added.)
 
-The SG-Ready section and climate devices can coexist: one SG-Ready unit
-plus any number of climate-managed units.
+Heat-pump units and climate devices can coexist: any number of
+menu-configured units plus any number of climate-managed ones.
 
 ### How much did SG-Ready actually shift? (#769)
 
