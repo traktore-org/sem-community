@@ -78,6 +78,10 @@ BOUNDS: dict[str, Range] = {
     # never reported. One row, one answer.
     "battery_capacity_kwh": Range(1, 100, step=0.5, unit="kWh"),
 
+    # ── heat pumps (#685) ────────────────────────────────────────────
+    "heat_pump_rated_power": Range(100, 30000, step=100, unit="W"),
+    "heat_pump_force_on_threshold": Range(0, 30000, step=100, unit="W"),
+
     # ── Deye forced grid charging (#826) ─────────────────────────────
     # The pair that started this: SEM's write ceiling is bounded BY the BMS
     # ceiling (the adapter takes min(entity, this, BMS)), so it can never

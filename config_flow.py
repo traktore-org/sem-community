@@ -1110,10 +1110,16 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "heat_pump_sg_ready_service",
     "heat_pump_sg_ready_service_data",
     "heat_pump_sg_ready_state_entity",
+    "heat_pump_temperature_sensor",
+    "heat_pump_energy_sensor",
+    "heat_pump_rated_power",
+    "heat_pump_force_on_threshold",
+    "heat_pumps",
     "initial_current",
     "load_management_enabled",
     "minimum_solar_power",
     "mobile_notification_service",
+    "name",
     "observer_mode",
     "peak_limit_unlimited",
     "phase_guard_enabled",
@@ -2889,10 +2895,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "heat_pump_rated_power",
                     default=float(_row("heat_pump_rated_power", 2000.0)),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=100, max=30000, step=100, unit_of_measurement="W", mode="box")
-                ),
+                ): bounds_selector("heat_pump_rated_power"),
                 vol.Optional(
                     "heat_pump_boost_offset",
                     default=float(_row("heat_pump_boost_offset", 2.0)),
@@ -2910,10 +2913,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "heat_pump_force_on_threshold",
                     default=float(_row("heat_pump_force_on_threshold", 5000.0)),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=0, max=30000, step=100, unit_of_measurement="W", mode="box")
-                ),
+                ): bounds_selector("heat_pump_force_on_threshold"),
                 vol.Optional(
                     "heat_pump_priority",
                     default=int(_row("heat_pump_priority", 4)),
