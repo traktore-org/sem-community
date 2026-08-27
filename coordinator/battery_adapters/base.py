@@ -53,6 +53,14 @@ class BatteryControlAdapter(ABC):
     #: recovers do so without the user having to restart SEM to find out.
     FORCE_DISCHARGE_RETRY_S: float = 600.0
 
+    @classmethod
+    def expected_operating_modes(cls):
+        """(#845) The inverter operating-policy states SEM's model assumes,
+        or ``None`` when this brand has no known expectation (the watch then
+        publishes the mode and never judges it). Observe-only: nothing in
+        SEM may ever WRITE a policy selector — that boundary is the user's."""
+        return None
+
     def __init__(self, hass, config: dict) -> None:
         self._hass = hass
         self._config = config

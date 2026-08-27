@@ -160,7 +160,8 @@
           "legionella_interval_hours": "Max. óraszám a fertőtlenítési ciklusok között",
           "diagram_style": "Rendszerdiagram stílusa",
           "battery_assist_min_surplus": "Akkumulátor-támogatás – min. napenergia-többlet (W)",
-          "grid_sign_invert": "Hálózati teljesítmény előjelének megfordítása"
+          "grid_sign_invert": "Hálózati teljesítmény előjelének megfordítása",
+          "battery_operating_mode_entity": "Battery operating-mode entity (watched)"
         },
         "data_description": {
           "update_interval": "Milyen gyakran olvassa a koordinátor az érzékelőket és szabályozza a hardvert. A 10 s adja a legpontosabb energiaintegrálást; a 30 s feletti értékek alulmérik az energiát. Tartomány: 10–60 s.",
@@ -185,7 +186,8 @@
           "legionella_target_temp": "Az a hőmérséklet (°C), amelyet a melegvízrendszernek el kell érnie a legionella-fertőtlenítési ciklus során.",
           "legionella_interval_hours": "A legionella-fertőtlenítési ciklusok közötti maximális óraszám, mielőtt a SEM kényszerfelfűtést indít.",
           "battery_assist_min_surplus": "A legkisebb tényleges napenergia-többlet, amely felett a házi akkumulátor segíthet az EV töltésében — bármely töltési módban. Ez alatt az akkumulátor a ház számára van fenntartva (az autó a hálózatból + napenergiából tölt). Alapértelmezés 1200 W. Állítsa 0-ra, hogy az akkumulátor mindenhol támogassa az EV-t, éjszaka is.",
-          "grid_sign_invert": "Csak akkor kapcsold be, ha a hálózati vételezés pozitív értékként jelenik meg (pl. Enphase). A SEM konvenciója szerint negatív = vételezés; ez megfordítja a nyers értéket, és kihagyja az automatikus előjel-felismerést."
+          "grid_sign_invert": "Csak akkor kapcsold be, ha a hálózati vételezés pozitív értékként jelenik meg (pl. Enphase). A SEM konvenciója szerint negatív = vételezés; ez megfordítja a nyers értéket, és kihagyja az automatikus előjel-felismerést.",
+          "battery_operating_mode_entity": "The inverter's operating-policy selector (e.g. Huawei's 'Working mode'). SEM only READS it: the mode is shown beside the battery evidence, and a one-time repair warns when it is not the self-consumption mode SEM's planning assumes. SEM never changes it. Leave empty to disable the watch."
         }
       },
       "settings_ev": {
@@ -1621,6 +1623,10 @@
     "deye_system_work_mode_invalid": {
       "title": "Deye export control cannot be used: {entity_id}",
       "description": "SEM cannot use {entity_id} for export control: {reason}. Check the select entity and the three option labels under Configuration → Battery intelligence."
+    },
+    "battery_operating_mode_unexpected": {
+      "title": "Battery is in '{mode}' — SEM plans as if it were '{expected}'",
+      "description": "The operating-mode selector {entity_id} reads '{mode}'. SEM's overnight model and the spendable budget assume '{expected}'; in other modes the inverter follows its own schedule underneath SEM and the plans may not hold. If this mode is deliberate, dismiss this — SEM will not fight your choice. Otherwise set the inverter back to '{expected}'."
     }
   },
   "selector": {

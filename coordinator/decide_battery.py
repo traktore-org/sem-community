@@ -220,12 +220,19 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
         # ev_connected; the profitability test (export > import÷eff + cycle) is
         # what keeps it sane.
         if state_value == "discharging_arbitrage":
+            # (#778) Two triggers share this branch, distinguished on the
+            # verdict itself: arbitrage (price economics) and the forecast
+            # SPEND (budget economics). Each reads its OWN plan gate and its
+            # OWN master switch — sharing either would let one feature's
+            # switch open the other's valve.
+            _spend = bool(getattr(sched, "from_forecast_spend", False))
             global_arb = bool(cfg.get("battery_grid_arbitrage_enabled", False))
             # (#638 one-gate C6) The plan says WHEN: the live economics
             # verdict alone no longer opens the valve — the stamped plan's
             # sell block must be open (view.arbitrage_sell, fleet-split by
             # the pipeline).
-            _sell = getattr(view, "arbitrage_sell", None)
+            _sell = getattr(
+                view, "forecast_sell" if _spend else "arbitrage_sell", None)
             _sell_open = bool(_sell and _sell[0])
             # (#778) The user's export permission binds here too. Passing it
             # is not optional politeness: without it the "Battery may sell to
@@ -233,7 +240,9 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
             # revokes the permission watches SEM keep selling. Caught by
             # tests/test_knob_wiring.py, which exists for exactly this.
             _perms = getattr(view, "battery_permissions", None)
-            if _sell_open and arbitrage_allowed_for_mode(mode, global_arb, _perms):
+            _gate_flag = (bool(getattr(view, "forecast_spending_enabled", False))
+                          if _spend else global_arb)
+            if _sell_open and arbitrage_allowed_for_mode(mode, _gate_flag, _perms):
                 # BOTH floors bind and the higher wins: the user's backup
                 # reserve AND the verdict's arbitrage_reserve_soc. The old
                 # either/or dropped the arbitrage reserve on every install

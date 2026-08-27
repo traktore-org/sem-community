@@ -13,6 +13,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 💶 **The spendable budget finally has a trigger** (#778): with
+  forecast-led spending switched on, SEM now plans one just-in-time sell
+  window ending exactly when the night begins and discharges the measured
+  surplus to the grid through the same guarded path as arbitrage — three
+  floors, the export permission, the fleet split and the actuation kill
+  switch all bind. Works on a fixed export price, where the arbitrage
+  engine (correctly) never fires. Master switch stays OFF by default.
+- 👁️ **The inverter's operating mode is watched — never written** (#845):
+  point SEM at the policy selector (auto-suggested for Huawei) and the mode
+  appears beside the battery evidence; a one-time repair warns when it is
+  not the self-consumption mode SEM's planning assumes, debounced past
+  modbus dropouts. A deliberate other mode is your choice — SEM names the
+  disagreement and will not fight it.
+- 🎯 **The EV watts-per-amp replay ignores taper tails properly** (#846):
+  a session's wind-down could drag a learned bucket ~6 % low; the replay
+  now truncates a run at the first sub-plateau row.
 - 🔌 **The charger is parked when the car leaves** (park-on-disconnect):
   SEM now disables the charger once, cleanly, on the settled disconnect
   edge — so a KEBA (which auto-starts any plug-in when left enabled) can no

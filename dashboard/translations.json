@@ -1477,7 +1477,11 @@
     "pacing_clip": "pace, opened for clipping",
     "pacing_soc_unknown": "battery level unknown",
     "last_night_surplus": "Last night, safely spendable",
-    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode"
+    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode",
+    "spend_sell": "Battery spend",
+    "spend_selling": "selling",
+    "spend_sell_planned": "sell planned",
+    "spend_until": "until"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -2957,7 +2961,11 @@
     "pacing_clip": "pace, opened for clipping",
     "pacing_soc_unknown": "battery level unknown",
     "last_night_surplus": "Last night, safely spendable",
-    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode"
+    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode",
+    "spend_sell": "Battery spend",
+    "spend_selling": "selling",
+    "spend_sell_planned": "sell planned",
+    "spend_until": "until"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -4437,7 +4445,11 @@
     "pacing_clip": "takten, geöffnet gegen Abregelung",
     "pacing_soc_unknown": "Ladestand unbekannt",
     "last_night_surplus": "Letzte Nacht sicher nutzbar",
-    "rate_set_by_inverter": "Die Entladerate bestimmt in diesem Modus der Wechselrichter"
+    "rate_set_by_inverter": "Die Entladerate bestimmt in diesem Modus der Wechselrichter",
+    "spend_sell": "Batterie-Verkauf",
+    "spend_selling": "verkauft",
+    "spend_sell_planned": "Verkauf geplant",
+    "spend_until": "bis"
   },
   "en": {
     "% of limit": "% of limit",
@@ -5917,7 +5929,11 @@
     "pacing_clip": "pace, opened for clipping",
     "pacing_soc_unknown": "battery level unknown",
     "last_night_surplus": "Last night, safely spendable",
-    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode"
+    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode",
+    "spend_sell": "Battery spend",
+    "spend_selling": "selling",
+    "spend_sell_planned": "sell planned",
+    "spend_until": "until"
   },
   "es": {
     "% of limit": "% del límite",
@@ -7397,7 +7413,11 @@
     "pacing_clip": "pace, opened for clipping",
     "pacing_soc_unknown": "battery level unknown",
     "last_night_surplus": "Last night, safely spendable",
-    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode"
+    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode",
+    "spend_sell": "Battery spend",
+    "spend_selling": "selling",
+    "spend_sell_planned": "sell planned",
+    "spend_until": "until"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -8877,7 +8897,11 @@
     "pacing_clip": "pace, opened for clipping",
     "pacing_soc_unknown": "battery level unknown",
     "last_night_surplus": "Last night, safely spendable",
-    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode"
+    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode",
+    "spend_sell": "Battery spend",
+    "spend_selling": "selling",
+    "spend_sell_planned": "sell planned",
+    "spend_until": "until"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -10357,7 +10381,11 @@
     "pacing_clip": "pace, opened for clipping",
     "pacing_soc_unknown": "battery level unknown",
     "last_night_surplus": "Last night, safely spendable",
-    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode"
+    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode",
+    "spend_sell": "Battery spend",
+    "spend_selling": "selling",
+    "spend_sell_planned": "sell planned",
+    "spend_until": "until"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -11837,7 +11865,11 @@
     "pacing_clip": "pace, opened for clipping",
     "pacing_soc_unknown": "battery level unknown",
     "last_night_surplus": "Last night, safely spendable",
-    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode"
+    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode",
+    "spend_sell": "Battery spend",
+    "spend_selling": "selling",
+    "spend_sell_planned": "sell planned",
+    "spend_until": "until"
   },
   "it": {
     "% of limit": "% del limite",
@@ -13317,7 +13349,11 @@
     "pacing_clip": "pace, opened for clipping",
     "pacing_soc_unknown": "battery level unknown",
     "last_night_surplus": "Last night, safely spendable",
-    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode"
+    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode",
+    "spend_sell": "Battery spend",
+    "spend_selling": "selling",
+    "spend_sell_planned": "sell planned",
+    "spend_until": "until"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -14797,7 +14833,11 @@
     "pacing_clip": "pace, opened for clipping",
     "pacing_soc_unknown": "battery level unknown",
     "last_night_surplus": "Last night, safely spendable",
-    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode"
+    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode",
+    "spend_sell": "Battery spend",
+    "spend_selling": "selling",
+    "spend_sell_planned": "sell planned",
+    "spend_until": "until"
   },
   "no": {
     "% of limit": "% av grense",
@@ -16277,7 +16317,11 @@
     "pacing_clip": "pace, opened for clipping",
     "pacing_soc_unknown": "battery level unknown",
     "last_night_surplus": "Last night, safely spendable",
-    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode"
+    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode",
+    "spend_sell": "Battery spend",
+    "spend_selling": "selling",
+    "spend_sell_planned": "sell planned",
+    "spend_until": "until"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -17757,7 +17801,11 @@
     "pacing_clip": "pace, opened for clipping",
     "pacing_soc_unknown": "battery level unknown",
     "last_night_surplus": "Last night, safely spendable",
-    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode"
+    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode",
+    "spend_sell": "Battery spend",
+    "spend_selling": "selling",
+    "spend_sell_planned": "sell planned",
+    "spend_until": "until"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -19237,7 +19285,11 @@
     "pacing_clip": "pace, opened for clipping",
     "pacing_soc_unknown": "battery level unknown",
     "last_night_surplus": "Last night, safely spendable",
-    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode"
+    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode",
+    "spend_sell": "Battery spend",
+    "spend_selling": "selling",
+    "spend_sell_planned": "sell planned",
+    "spend_until": "until"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -20717,7 +20769,11 @@
     "pacing_clip": "pace, opened for clipping",
     "pacing_soc_unknown": "battery level unknown",
     "last_night_surplus": "Last night, safely spendable",
-    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode"
+    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode",
+    "spend_sell": "Battery spend",
+    "spend_selling": "selling",
+    "spend_sell_planned": "sell planned",
+    "spend_until": "until"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -22197,7 +22253,11 @@
     "pacing_clip": "pace, opened for clipping",
     "pacing_soc_unknown": "battery level unknown",
     "last_night_surplus": "Last night, safely spendable",
-    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode"
+    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode",
+    "spend_sell": "Battery spend",
+    "spend_selling": "selling",
+    "spend_sell_planned": "sell planned",
+    "spend_until": "until"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -23677,6 +23737,10 @@
     "pacing_clip": "pace, opened for clipping",
     "pacing_soc_unknown": "battery level unknown",
     "last_night_surplus": "Last night, safely spendable",
-    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode"
+    "rate_set_by_inverter": "Discharge rate is set by the inverter in this mode",
+    "spend_sell": "Battery spend",
+    "spend_selling": "selling",
+    "spend_sell_planned": "sell planned",
+    "spend_until": "until"
   }
 }

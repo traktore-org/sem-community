@@ -119,6 +119,21 @@ class TestTheShapeRules:
         assert rep["accepted"] == 0 and rep["refused"] == len(s) > 0
         assert l.watts_per_amp("c1", 3, 16) is None
 
+    def test_the_run_is_truncated_at_the_first_sub_plateau_row(self):
+        """PROD 27.08: the 16 A bucket learned 589 W/A against a true ~626 —
+        the taper's EARLY decline (rows between 0.95× and 1.0× plateau)
+        passed the filter. A steady EV draw is flat to ~2 %; the first row
+        3 % under the plateau is the car winding down, and nothing after it
+        may teach — even rows that would individually pass the floor."""
+        rows = _rows(0, 600, 10020)                       # flat plateau
+        rows += _rows(600, 900, lambda t: 10020 - (t - 600) * 2)   # slow slide
+        s = samples_from_history([(0, 16)], rows)
+        assert s, "the plateau itself must still teach"
+        floor = PLATEAU_FRACTION * 10020
+        assert all(w >= floor for _, _, w in s)
+        first_drop = next(t for t, w in rows if w < floor)
+        assert max(t for t, _, _ in s) < first_drop
+
     def test_samples_come_out_in_time_order(self):
         setpoints, powers = prod_day()
         ts = [t for t, _, _ in samples_from_history(setpoints, powers)]

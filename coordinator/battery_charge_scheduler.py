@@ -75,6 +75,12 @@ class SchedulerDecision:
     STOP_FORCE_DISCHARGE, whereas the night scheduler's same-named states stop
     a force-CHARGE. Without this the stop relied on a Huawei-only coincidence
     (its stop-charge service also clears a forcible discharge)."""
+    from_forecast_spend: bool = False
+    """(#778) True on verdicts from ``evaluate_forecast_sell`` — the
+    forecast-led spend trigger. decide_battery then checks the SPEND plan
+    gate (``view.forecast_sell``) and the SPEND master switch
+    (``forecast_spending_enabled``) instead of arbitrage's; everything
+    else (floors, budget cap, permissions, fleet split) is shared."""
     price_forced: bool = False
     """(#638 one-gate C4) True only on the negative-price override —
     being PAID to consume is a reactive price gate, so decide_battery

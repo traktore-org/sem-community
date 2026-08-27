@@ -46,7 +46,11 @@ STEADY_AFTER_S: int = 30
 #: One sample per live cycle — the recorder is denser than the learner.
 SAMPLE_EVERY_S: int = 30
 #: A row must sit within this fraction of its run's p90 to be representative.
-PLATEAU_FRACTION: float = 0.95
+#: 0.95 → 0.97 after the first PROD replay: an EV's draw at a steady setpoint
+#: is flat to ~2 %, so anything 3 % under the plateau is the car winding
+#: down, not noise — the old margin let a taper's early decline drag the
+#: 16 A bucket to 589 W/A against a true ~626.
+PLATEAU_FRACTION: float = 0.97
 #: How far back a cold start looks. Bounded by the recorder's own keep_days
 #: at the call site; a week of sessions is more than one window's worth.
 DEFAULT_LOOKBACK_DAYS: int = 7
@@ -96,7 +100,12 @@ def samples_from_history(setpoints: Series, powers: Series) -> List[Sample]:
         last: Optional[float] = None
         for t, w in settled:
             if w < floor:
-                continue
+                # The first sub-plateau row is where the car left the
+                # plateau — a taper never comes back, so the REST of the
+                # run teaches nothing. ``continue`` here (the first build)
+                # kept sampling the upper band of the decline and biased
+                # the bucket low.
+                break
             if last is not None and t - last < SAMPLE_EVERY_S:
                 continue
             out.append((t, amps, w))

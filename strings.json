@@ -330,7 +330,8 @@
           "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
           "ev_target_soc": "Consider full at (%)",
           "vehicle_soc_entity": "Vehicle Battery SOC",
-          "grid_sign_invert": "Invert grid power sign"
+          "grid_sign_invert": "Invert grid power sign",
+          "battery_operating_mode_entity": "Battery operating-mode entity (watched)"
         },
         "data_description": {
           "update_interval": "How often the coordinator reads sensors and adjusts hardware. 10 s gives the most accurate energy integration; values above 30 s will under-count energy. Range 10–60 s.",
@@ -355,7 +356,8 @@
           "legionella_target_temp": "Temperature (°C) the hot water system must reach during a legionella disinfection cycle.",
           "legionella_interval_hours": "Maximum hours between legionella disinfection cycles before SEM forces a heat-up.",
           "diagram_style": "Choose which system diagram card to use on the Home tab. 'SEM' uses the built-in animated diagram. 'K-Flow' uses the K-Flow HACS card (must be installed separately). Re-run the generate_dashboard service after changing.",
-          "grid_sign_invert": "Turn ON only if grid import shows as a positive value (e.g. Enphase). SEM's convention is negative = import; this negates the raw reading and bypasses sign auto-detection."
+          "grid_sign_invert": "Turn ON only if grid import shows as a positive value (e.g. Enphase). SEM's convention is negative = import; this negates the raw reading and bypasses sign auto-detection.",
+          "battery_operating_mode_entity": "The inverter's operating-policy selector (e.g. Huawei's 'Working mode'). SEM only READS it: the mode is shown beside the battery evidence, and a one-time repair warns when it is not the self-consumption mode SEM's planning assumes. SEM never changes it. Leave empty to disable the watch."
         }
       },
       "settings_ev": {
@@ -1621,6 +1623,10 @@
     "deye_system_work_mode_invalid": {
       "title": "Deye export control cannot be used: {entity_id}",
       "description": "SEM cannot use {entity_id} for export control: {reason}. Check the select entity and the three option labels under Configuration → Battery intelligence."
+    },
+    "battery_operating_mode_unexpected": {
+      "title": "Battery is in '{mode}' — SEM plans as if it were '{expected}'",
+      "description": "The operating-mode selector {entity_id} reads '{mode}'. SEM's overnight model and the spendable budget assume '{expected}'; in other modes the inverter follows its own schedule underneath SEM and the plans may not hold. If this mode is deliberate, dismiss this — SEM will not fight your choice. Otherwise set the inverter back to '{expected}'."
     }
   },
   "selector": {

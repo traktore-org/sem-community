@@ -703,6 +703,15 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     # if empty so config.get() returns "".
                     merged.setdefault("battery_discharge_control_entity", "")
 
+                # (#845) The operating-policy selector, found by vocabulary.
+                merged.setdefault(
+                    "battery_operating_mode_entity",
+                    _suggest_select_with_options(self.hass, [
+                        "maximise_self_consumption",
+                        "fully_fed_to_grid",
+                        "time_of_use_luna2000",
+                    ]) or "")
+
                 # Wrap flat EV keys into ev_chargers list (#112 multi-charger).
                 # #442: ``_install_defaults()`` now sets ``ev_chargers: []`` so
                 # downstream code always finds a list. Treat both "missing" and
@@ -916,6 +925,7 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "battery_charge_scheduler_enabled",
     "battery_cycle_cost",
     "battery_discharge_control_entity",
+    "battery_operating_mode_entity",
     "battery_discharge_protection_enabled",
     "battery_force_charge_negative_price",
     "battery_max_charge_power_w",
@@ -1875,6 +1885,20 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "battery_discharge_control_entity",
                     description={"suggested_value": current_config.get("battery_discharge_control_entity") or None},
                 ): selector.EntitySelector(selector.EntitySelectorConfig(domain="number")),
+                # (#845) Observe-only: the inverter's operating-policy
+                # selector, WATCHED never written. Prefilled by vocabulary
+                # (the Huawei selector identifies itself by its options),
+                # cleared = no watch.
+                vol.Optional(
+                    "battery_operating_mode_entity",
+                    description={"suggested_value": (
+                        current_config.get("battery_operating_mode_entity")
+                        or _suggest_select_with_options(self.hass, [
+                            "maximise_self_consumption",
+                            "fully_fed_to_grid",
+                            "time_of_use_luna2000",
+                        ]))},
+                ): selector.EntitySelector(selector.EntitySelectorConfig(domain="select")),
                 vol.Optional(
                     "diagram_style",
                     default=_c("diagram_style", "sem"),

@@ -4411,6 +4411,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             result["forecast_days_required"] = _pe.get("forecast_days_required")
             result["forecast_d1_available"] = _pe.get("forecast_d1_available")
             result["forecast_d2_available"] = _pe.get("forecast_d2_available")
+            # (#845) the watched operating mode; (#778) the spend status —
+            # exposed on the spendable sensor (assert the ENTITY, not the
+            # dict: the #846 lesson).
+            result["battery_operating_mode"] = getattr(
+                self, "_battery_operating_mode", None)
+            _fss = getattr(self, "_forecast_sell_status", None) or {}
+            result["battery_sell_state"] = _fss.get("state")
+            result["battery_sell_until"] = _fss.get("until")
+            result["battery_sell_rate_w"] = _fss.get("rate_w")
 
             # (#625 phase 3) Diagnostics summary for the System tab —
             # read-only assembly extracted to publish_diag.build_diagnostics.
@@ -6444,6 +6453,55 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # decide_battery actuates it as FORCE_DISCHARGE. The signed export
         # price + cheapest upcoming import price (recharge cost basis) are
         # only looked up when arbitrage is on.
+        # (#845) The inverter's operating-policy selector, WATCHED never
+        # written. Publishes the mode beside the battery evidence and warns
+        # once (a Repair) when it is a mode SEM's model does not expect —
+        # after the reading has held steadily, because this feed is blind
+        # 5 % of wall time on the reference install and a dropout is not a
+        # mode change. A deliberate other mode is the user's choice; the
+        # Repair names the disagreement and nothing fights it.
+        try:
+            _mode_ent = str(self.config.get(
+                "battery_operating_mode_entity") or "")
+            if _mode_ent:
+                _watch = getattr(self, "_battery_mode_watch", None)
+                if _watch is None:
+                    from .battery_mode_watch import BatteryModeWatch
+                    _exp = None
+                    _ad0 = getattr(self, "_battery_adapter", None)
+                    if _ad0 is not None:
+                        _exp = type(_ad0).expected_operating_modes()
+                    elif str(self.config.get(
+                            "battery_charge_platform") or "").lower() == "huawei":
+                        _exp = {"maximise_self_consumption"}
+                    _watch = self._battery_mode_watch = BatteryModeWatch(_exp)
+                _mst = self.hass.states.get(_mode_ent)
+                _watch.feed(getattr(_mst, "state", None))
+                self._battery_operating_mode = _watch.last_mode
+                if _watch.changed:
+                    from .repair_issues import (
+                        clear_battery_operating_mode_unexpected,
+                        raise_battery_operating_mode_unexpected,
+                    )
+                    if _watch.raised:
+                        raise_battery_operating_mode_unexpected(
+                            self.hass, _mode_ent,
+                            mode=str(_watch.last_mode),
+                            expected=", ".join(sorted(_watch.expected or [])))
+                        _LOGGER.warning(
+                            "#845 battery operating mode '%s' is not the "
+                            "expected %s — SEM's plans assume "
+                            "self-consumption; observing only",
+                            _watch.last_mode, sorted(_watch.expected or []))
+                    else:
+                        clear_battery_operating_mode_unexpected(
+                            self.hass, _mode_ent)
+                        _LOGGER.info(
+                            "#845 battery operating mode back to '%s' — "
+                            "repair cleared", _watch.last_mode)
+        except Exception:  # noqa: BLE001 — a watch never costs a cycle
+            _LOGGER.debug("battery mode watch skipped", exc_info=True)
+
         _charge_active = (
             scheduler_decision is not None and scheduler_decision.should_charge
         )
@@ -6532,6 +6590,67 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             _sell_in, _sell_total_w = arbitrage_sell_gate(
                 getattr(self, "_energy_plan_shadow", None), dt_util.now())
         _arb_sell = (_sell_in, _sell_total_w / max(1, _eff_battery_count))
+
+        # (#778) The forecast-led SPEND — same discipline, own switch, own
+        # gate. Behind the SAME #758 kill switch: a kill switch some
+        # callers ask is not a kill switch.
+        _fsell_in, _fsell_total_w = False, 0.0
+        _spend_on = bool(self.config.get("forecast_spending_enabled", False))
+        if _spend_on and getattr(self, "_energy_plan_actuation", False):
+            from .energy_plan_actuation import forecast_sell_gate
+            _fsell_in, _fsell_total_w = forecast_sell_gate(
+                getattr(self, "_energy_plan_shadow", None), dt_util.now())
+        _fsell = (_fsell_in, _fsell_total_w / max(1, _eff_battery_count))
+        _sell_status = None
+        if _spend_on:
+            _arb_fired = (
+                scheduler_decision is not None
+                and getattr(getattr(scheduler_decision, "state", None),
+                            "value", None) == "discharging_arbitrage")
+            if not _charge_active and not _arb_fired:
+                from .forecast_sell import evaluate_forecast_sell
+                _pe0 = getattr(self, "_planning_evidence", {}) or {}
+                _fs = evaluate_forecast_sell(
+                    dt_util.now(), enabled=True, in_block=_fsell_in,
+                    block_w=_fsell[1],
+                    spendable_kwh=float(
+                        _pe0.get("battery_spendable_kwh") or 0.0),
+                    max_discharge_w=float(self.config.get(
+                        "battery_max_discharge_power", 5000.0) or 5000.0),
+                    dynamic_floor_pct=_pe0.get("battery_dynamic_floor_pct"),
+                    reserve_pct=float(self.config.get(
+                        "battery_reserve_soc", 20.0) or 20.0),
+                )
+                if _fs.state.value == "discharging_arbitrage":
+                    scheduler_decision = _fs
+                    if not getattr(self, "_forecast_sell_active", False):
+                        _LOGGER.info("#778 forecast spend OPEN: %s", _fs.reason)
+                    self._forecast_sell_active = True
+                    _sell_status = "selling"
+                elif getattr(self, "_forecast_sell_active", False):
+                    # The window closed or the budget emptied — propagate the
+                    # stop ONCE (never over a planned/active night charge,
+                    # which owns this channel while it runs).
+                    _night = scheduler_decision
+                    _night_charging = _night is not None and (
+                        bool(getattr(_night, "should_charge", False))
+                        or getattr(getattr(_night, "state", None),
+                                   "value", None) == "scheduled")
+                    if not _night_charging:
+                        scheduler_decision = _fs
+                    self._forecast_sell_active = False
+                    _LOGGER.info("#778 forecast spend CLOSED: %s", _fs.reason)
+            _fs_blocks = ((getattr(self, "_energy_plan_shadow", None) or {})
+                          .get("forecast_sell") or {}).get("blocks") or []
+            if _sell_status is None and _fs_blocks:
+                _sell_status = "scheduled"
+            self._forecast_sell_status = {
+                "state": _sell_status,
+                "until": (_fs_blocks[0].get("end") if _fs_blocks else None),
+                "rate_w": round(_fsell[1], 0) if _fsell_in else None,
+            }
+        else:
+            self._forecast_sell_status = None
 
         # Shared fleet context — same for every battery this cycle.
         fleet = FleetContext(
@@ -6712,6 +6831,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 plan_gate=self._energy_plan_gate("battery"),
                 # (#638 one-gate C6) the plan's WHEN for the sell, pre-split.
                 arbitrage_sell=_arb_sell,
+                forecast_sell=_fsell,
             )
 
             # 3. Decide
@@ -8409,7 +8529,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "home_grid_w": round(s.home_grid_w, 1),
                 } for s in rows]
 
-            def _quiet_answer(arb=None, ledger_rows=(), self_cons=None):
+            def _quiet_answer(arb=None, fsell=None, ledger_rows=(), self_cons=None):
                 # "Nothing needs the night" IS a valid 22:00 answer — say it,
                 # WITH the why (a silent shadow is indistinguishable from a
                 # broken one; burned three placement bugs learning that).
@@ -8460,6 +8580,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "slots": list(ledger_rows),
                     "blocks": [],
                     "arbitrage": arb,
+                    "forecast_sell": fsell,
                     "self_consumption": self_cons,
                     "battery_fleet_partial": partial_note,
                     # (night 3, finding 3) a re-stamped night must be
@@ -8711,6 +8832,41 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     ))
             except Exception:  # noqa: BLE001 — advice must never cost a plan
                 arb = None
+            # (#778) The forecast-led SPEND's plan block — the WHEN the
+            # budget never had. One just-in-time block ending at the night
+            # window's start: latest-possible selling lands after the solar
+            # tail by construction and is done the minute the night takes
+            # over. Exists only while the arc's master switch is on;
+            # everything downstream (gate, verdict, decide) is inert
+            # without it.
+            fsell = None
+            try:
+                if bool(self.config.get("forecast_spending_enabled", False)):
+                    from .forecast_sell import forecast_sell_blocks
+                    _pe0 = getattr(self, "_planning_evidence", {}) or {}
+                    _ns_hhmm, _ = self.time_manager.get_night_window()
+                    _night_start0 = self.time_manager.get_offset_time(_ns_hhmm)
+                    _blocks = forecast_sell_blocks(
+                        dt_util.now(), _night_start0,
+                        float(_pe0.get("battery_spendable_kwh") or 0.0),
+                        max_discharge_w)
+                    if _blocks:
+                        fsell = {
+                            "enabled": True,
+                            "kwh": _blocks[0]["kwh"],
+                            "blocks": [
+                                {**b, "start": b["start"].isoformat(),
+                                 "end": b["end"].isoformat()}
+                                for b in _blocks],
+                        }
+                        _LOGGER.info(
+                            "ENERGY-PLAN (%s) forecast spend: %.1f kWh "
+                            "before the night (%s–%s)", tag,
+                            _blocks[0]["kwh"],
+                            _blocks[0]["start"].strftime("%H:%M"),
+                            _blocks[0]["end"].strftime("%H:%M"))
+            except Exception:  # noqa: BLE001 — a spend block never costs a plan
+                fsell = None
             from .self_consumption import predict_self_consumption
             if quiet_night and not demands:
                 # Nothing to pack — but the books are open now, so the quiet
@@ -8719,7 +8875,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # on, the shadow cycle IS tonight's plan and gets packed like
                 # any other demand — that branch used to be unreachable.)
                 self._energy_plan_shadow = _quiet_answer(
-                    arb, _slot_rows(ledger),
+                    arb, fsell, _slot_rows(ledger),
                     predict_self_consumption(ledger, []).as_dict())
                 return True
             plan = pack_night(demands, ledger, floor_kwh=floor_kwh,
@@ -8820,6 +8976,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # numbers — always present on a full plan, None only when
                 # the advisor itself failed (never costs a plan).
                 "arbitrage": arb,
+                "forecast_sell": fsell,
                 # (#755 pillar 2) The share of the horizon's solar this
                 # schedule expects to keep, and how much of the keeping is
                 # the plan's own doing rather than the house being awake.

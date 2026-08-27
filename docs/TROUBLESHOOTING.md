@@ -758,6 +758,26 @@ intended battery export, clear the forcible-discharge entity in SEM's battery
 settings and the notice disappears; if you do want it, check whether your
 inverter's firmware/integration version exposes a working discharge control.
 
+## The battery is in a mode SEM does not expect
+
+SEM's planning — the overnight-need model, the spendable budget, the
+scheduled charging — assumes your inverter's operating-policy selector sits
+in its self-consumption mode (Huawei calls it *Maximise self-consumption*).
+This repair appears when SEM reads a different mode from the selector you
+configured under **Settings → Battery operating-mode entity**.
+
+**If the mode is deliberate** (for example you run *Fully fed to grid* on
+purpose): dismiss the repair. SEM only watches this selector — it never
+changes it, and it will not fight your choice. Be aware that in these modes
+the inverter follows its own schedule, so SEM's battery plans may not hold.
+
+**If it is not deliberate**: set the inverter back to its
+self-consumption mode with the inverter's own app or the select entity in
+Home Assistant, and the repair clears by itself.
+
+The reading is debounced: brief sensor dropouts (an unavailable modbus
+link) never raise or clear it.
+
 ## Deye System Work Mode setup cannot be used
 
 SEM was asked to control your Deye's export policy but the select entity you

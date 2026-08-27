@@ -236,6 +236,8 @@ _DOCS_ANCHORS = {
     "battery_force_discharge_unsupported":
         "the-inverter-refuses-forced-discharge",
     "deye_system_work_mode_invalid": "deye-system-work-mode-setup-cannot-be-used",
+    "battery_operating_mode_unexpected":
+        "the-battery-is-in-a-mode-sem-does-not-expect",
 }
 
 
@@ -318,6 +320,39 @@ def _versions(hass: HomeAssistant) -> dict:
     except Exception:  # noqa: BLE001
         ha_ver = ""
     return {"sem_version": sem, "ha_version": ha_ver if isinstance(ha_ver, str) else ""}
+
+
+def raise_battery_operating_mode_unexpected(hass: HomeAssistant, entity_id: str,
+                                            *, mode: str, expected: str) -> None:
+    """(#845) The inverter's operating-policy selector is in a mode SEM's
+    model does not expect. Observe-only: not fixable in-app, because a
+    deliberate ``fully_fed_to_grid`` is a legitimate choice SEM must not
+    fight — the Repair names the disagreement and the user decides."""
+    try:
+        ir.async_create_issue(
+            hass, domain=DOMAIN,
+            issue_id=f"battery_operating_mode_unexpected_{entity_id}",
+            is_fixable=False, is_persistent=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="battery_operating_mode_unexpected",
+            translation_placeholders={
+                "entity_id": entity_id, "mode": str(mode),
+                "expected": str(expected),
+            },
+            learn_more_url=next_step_url(
+                "docs", "battery_operating_mode_unexpected",
+                **_versions(hass)),
+        )
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.create failed for %s: %s", entity_id, e)
+
+
+def clear_battery_operating_mode_unexpected(hass: HomeAssistant, entity_id: str) -> None:
+    try:
+        ir.async_delete_issue(
+            hass, DOMAIN, f"battery_operating_mode_unexpected_{entity_id}")
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete failed for %s: %s", entity_id, e)
 
 
 def raise_deye_system_work_mode_invalid(hass: HomeAssistant, entity_id: str,

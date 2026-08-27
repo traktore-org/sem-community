@@ -164,6 +164,22 @@ class SEMBatteryCard extends SEMLitBase {
             </div>`;
     }
 
+    // (#778) The spend trigger, visible: what the budget is DOING.
+    _renderSellLine() {
+        const a = this._stateAttrs(`${this._prefix}battery_spendable_kwh`) || {};
+        const st = a.battery_sell_state;
+        if (st !== 'selling' && st !== 'scheduled') return nothing;
+        const until = a.battery_sell_until ? String(a.battery_sell_until).slice(11, 16) : '';
+        const rate = Number(a.battery_sell_rate_w);
+        const kw = Number.isFinite(rate) && rate > 0 ? ` · ${(rate / 1000).toFixed(1)} kW` : '';
+        const what = st === 'selling' ? this._t('spend_selling') : this._t('spend_sell_planned');
+        return html`
+            <div class="tonight-row" style="opacity:.85">
+                <span>${this._t('spend_sell')}</span>
+                <span>${what}${until ? ` · ${this._t('spend_until')} ${until}` : ''}${kw}</span>
+            </div>`;
+    }
+
     // (2.1 audit item 3) The reason to wait, shown while waiting.
     _renderLastNightLine(a) {
         const v = Number(a.last_night_surplus_kwh);
@@ -488,6 +504,7 @@ class SEMBatteryCard extends SEMLitBase {
                     </div>` : nothing}
                 <div class="tonight-why">${a.why || ''}</div>
                 ${this._renderPacingLine()}
+                ${this._renderSellLine()}
                 ${this._renderLastNightLine(a)}
                 ${this._renderRateCaveat(a)}
                 ${rows.length ? html`

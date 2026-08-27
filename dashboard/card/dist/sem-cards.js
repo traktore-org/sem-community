@@ -1500,6 +1500,10 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
             <div class="tonight-row" style="opacity:.85" title="${t.reason||""}">
                 <span>${this._t("charge_pacing")}</span>
                 <span>${o}${n}${l}</span>
+            </div>`}_renderSellLine(){const e=this._stateAttrs(`${this._prefix}battery_spendable_kwh`)||{},t=e.battery_sell_state;if("selling"!==t&&"scheduled"!==t)return q;const i=e.battery_sell_until?String(e.battery_sell_until).slice(11,16):"",s=Number(e.battery_sell_rate_w),r=Number.isFinite(s)&&s>0?` · ${(s/1e3).toFixed(1)} kW`:"",a="selling"===t?this._t("spend_selling"):this._t("spend_sell_planned");return W`
+            <div class="tonight-row" style="opacity:.85">
+                <span>${this._t("spend_sell")}</span>
+                <span>${a}${i?` · ${this._t("spend_until")} ${i}`:""}${r}</span>
             </div>`}_renderLastNightLine(e){const t=Number(e.last_night_surplus_kwh);return Number.isFinite(t)?W`
             <div class="tonight-row" style="opacity:.85">
                 <span>${this._t("last_night_surplus")}</span>
@@ -1628,6 +1632,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     </div>`:q}
                 <div class="tonight-why">${s.why||""}</div>
                 ${this._renderPacingLine()}
+                ${this._renderSellLine()}
                 ${this._renderLastNightLine(s)}
                 ${this._renderRateCaveat(s)}
                 ${u.length?W`

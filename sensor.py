@@ -3006,6 +3006,14 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "last_night_date": d.get("battery_last_night_date"),
                 "nights_sealed": d.get("planning_nights_sealed"),
                 "nights_required": d.get("planning_nights_required"),
+                # (#845) the watched operating mode — observe, warn once,
+                # never write
+                "battery_operating_mode": d.get("battery_operating_mode"),
+                # (#778) the spend trigger's own evidence: a token the card
+                # switches on, the window's end, the block-implied rate
+                "battery_sell_state": d.get("battery_sell_state"),
+                "battery_sell_until": d.get("battery_sell_until"),
+                "battery_sell_rate_w": d.get("battery_sell_rate_w"),
                 "forecast_days_d1": d.get("forecast_days_d1"),
                 "forecast_days_d2": d.get("forecast_days_d2"),
                 "forecast_days_required": d.get("forecast_days_required"),

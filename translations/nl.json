@@ -160,7 +160,8 @@
           "legionella_target_temp": "Legionella desinfectie doeltemperatuur (°C)",
           "legionella_interval_hours": "Maximaal aantal uren tussen desinfectiecycli",
           "diagram_style": "Systeemdiagram stijl",
-          "grid_sign_invert": "Teken van netvermogen omkeren"
+          "grid_sign_invert": "Teken van netvermogen omkeren",
+          "battery_operating_mode_entity": "Battery operating-mode entity (watched)"
         },
         "data_description": {
           "update_interval": "Hoe vaak de coördinator sensoren uitleest en hardware aanstuurt. 10 s geeft de meest nauwkeurige energie-integratie; waarden boven 30 s zullen energie onderschatten. Bereik 10–60 s.",
@@ -185,7 +186,8 @@
           "hot_water_solar_target": "Doeltemperatuur (°C) voor zonnegenereerde warmwaterverwarming. SEM activeert de ketel wanneer er overschot beschikbaar is.",
           "legionella_target_temp": "Temperatuur (°C) die het warmwatersysteem moet bereiken tijdens een legionella-desinfectiecyclus.",
           "legionella_interval_hours": "Maximaal aantal uren tussen legionella-desinfectiecycli voordat SEM een opwarmcyclus forceert.",
-          "grid_sign_invert": "Alleen inschakelen als netafname als positieve waarde wordt weergegeven (bijv. Enphase). SEM's conventie is negatief = afname; dit keert de ruwe meting om en omzeilt de automatische tekenherkenning."
+          "grid_sign_invert": "Alleen inschakelen als netafname als positieve waarde wordt weergegeven (bijv. Enphase). SEM's conventie is negatief = afname; dit keert de ruwe meting om en omzeilt de automatische tekenherkenning.",
+          "battery_operating_mode_entity": "The inverter's operating-policy selector (e.g. Huawei's 'Working mode'). SEM only READS it: the mode is shown beside the battery evidence, and a one-time repair warns when it is not the self-consumption mode SEM's planning assumes. SEM never changes it. Leave empty to disable the watch."
         }
       },
       "settings_ev": {
@@ -1621,6 +1623,10 @@
     "deye_system_work_mode_invalid": {
       "title": "Deye export control cannot be used: {entity_id}",
       "description": "SEM cannot use {entity_id} for export control: {reason}. Check the select entity and the three option labels under Configuration → Battery intelligence."
+    },
+    "battery_operating_mode_unexpected": {
+      "title": "Battery is in '{mode}' — SEM plans as if it were '{expected}'",
+      "description": "The operating-mode selector {entity_id} reads '{mode}'. SEM's overnight model and the spendable budget assume '{expected}'; in other modes the inverter follows its own schedule underneath SEM and the plans may not hold. If this mode is deliberate, dismiss this — SEM will not fight your choice. Otherwise set the inverter back to '{expected}'."
     }
   },
   "selector": {

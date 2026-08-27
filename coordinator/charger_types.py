@@ -420,6 +420,12 @@ class BatteryView:
     already fleet-split by the pipeline. ``None``/closed ⇒ no sell this
     cycle regardless of the live economics verdict."""
 
+    forecast_sell: "Any" = None
+    """(#778) ``(in_block, per_battery_power_w)`` from ``forecast_sell_gate``
+    — the SPEND twin of ``arbitrage_sell``, fleet-split by the pipeline.
+    decide_battery consults THIS gate when the verdict carries
+    ``from_forecast_spend``; arbitrage verdicts never read it."""
+
 
 # ─────────────────────────────────────────────────────────────────
 # Per-charger calendar-reset energy

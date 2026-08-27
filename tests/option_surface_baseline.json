@@ -5,7 +5,7 @@
     "reason; removing one is the point of the issue.",
     "Regenerate:  python3 scripts/audit_options.py --baseline"
   ],
-  "total": 167,
+  "total": 168,
   "first_run_fields": 10,
   "first_run_steps": 3,
   "first_run_fields_best": 10,
@@ -27,6 +27,7 @@
     "battery_max_discharge_power",
     "battery_max_target_soc",
     "battery_min_deficit_kwh",
+    "battery_operating_mode_entity",
     "battery_pessimism_weight",
     "battery_precharge_trigger_hour",
     "battery_prefer_consecutive_window",

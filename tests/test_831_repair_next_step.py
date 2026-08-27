@@ -29,6 +29,7 @@ REPAIR_ISSUES_PY = (
 TROUBLESHOOTING = Path(__file__).resolve().parent.parent / "docs" / "TROUBLESHOOTING.md"
 
 DOCS_SIDE = {
+    "battery_operating_mode_unexpected",
     "sensor_unavailable", "sensor_stale", "no_forecast_integration",
     "no_recorder", "heat_pump_relay_unavailable", "hot_water_entity_unavailable",
     "hot_water_temperature_sensor_unavailable", "heat_pump_partial_sg_ready",
