@@ -173,12 +173,18 @@ def _mock_adapter(max_a=32):
     a.command_current = AsyncMock()
     a.command_max = AsyncMock()
     a.arm_failsafe = AsyncMock()
+    a.command_park_off = AsyncMock()
     a.max_current_a = max_a
     return a
 
 
-def _power(power_w=0.0):
-    return ChargerPower(charger_id="ev_charger", power_w=power_w)
+def _power(power_w=0.0, connected=True):
+    # connected defaults True: these are charge/idle tests with a car
+    # PRESENT. (park-on-disconnect makes the plug state load-bearing —
+    # ChargerPower.connected itself defaults False, so a test that means
+    # "car plugged, just idle" must say connected=True or it now parks.)
+    return ChargerPower(charger_id="ev_charger", power_w=power_w,
+                        connected=connected)
 
 
 @pytest.mark.asyncio
