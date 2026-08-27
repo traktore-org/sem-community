@@ -279,9 +279,9 @@ register_surplus_device:
           device_class: energy
     control_mode:
       name: Control Mode
-      description: "How SEM controls the device: surplus (SEM switches it on solar surplus — the default), peak_only (your own automations run it, SEM only sheds it to protect the grid peak), off (monitor only)."
+      description: "How SEM controls the device: off (monitor only — the default: you opt a device in deliberately, #847), peak_only (your own automations run it, SEM only sheds it to protect the grid peak), surplus (SEM switches it on solar surplus)."
       required: false
-      default: surplus
+      default: "off"
       selector:
         select:
           options:
