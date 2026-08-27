@@ -13,7 +13,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
-
 - 🔌 **The charger is parked when the car leaves** (park-on-disconnect):
   SEM now disables the charger once, cleanly, on the settled disconnect
   edge — so a KEBA (which auto-starts any plug-in when left enabled) can no
@@ -27,7 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 🧭 **The setup checklist can be completed** (#842): three of its rows —
   tariff, battery and load management — tested for settings that do not
-  exist, so they stayed unticked however well you had configured them. Reported by a user whose dynamic tariff was working perfectly while
+  exist, so they stayed unticked however well you had configured them.
+  Reported by a user whose dynamic tariff was working perfectly while
   SEM's overview insisted it was not set up.
 
 - ⚡ **The EV offer corrects itself** (#846): SEM now measures what every
@@ -72,6 +72,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   measurement — caution is counted once, and the audit that judges every
   remaining knob against its measured successor now runs with the option
   audit.
+
+# [2.0.0-beta.17] — 25.08.2026
 
 - ⏸️ **EV phase switching is switched off by default while it is reworked**
   (#804): real-world testing found the shipped model harmful on two charger
