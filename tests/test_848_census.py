@@ -132,3 +132,17 @@ class TestTheReportCarriesTheCensus:
             _ent("sensor.zaptec_something_odd", "zaptec", device_id="z1"),
         ]))
         assert rep["census"]["rows_matched_nothing"] == ["zaptec"]
+
+
+def test_mobile_app_is_never_an_energy_gap():
+    """Live .175 finding (#848): phones census as energy-shaped (battery
+    class + power sensors on some models). mobile_app is ignored outright."""
+    reg = _registry({
+        "mobile_app": [
+            _ent("sensor.pixel_battery_level", device_class="battery"),
+            _ent("sensor.pixel_battery_power", device_class="power"),
+        ],
+    })
+    c = build_integration_census(registry=reg, config_domains={"mobile_app"})
+    assert "mobile_app" not in c["unknown_energy_domains"]
+    assert "mobile_app" not in c["installed"]
