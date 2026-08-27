@@ -2763,6 +2763,57 @@ class CurrentControlDevice(ControllableDevice):
         except Exception as e:
             _LOGGER.error("Failed to start session on %s: %s", self.name, e)
 
+    async def park_off(self) -> None:
+        """(park-on-disconnect) Leave the box actively OFF for the NEXT car.
+
+        Distinct from ``stop_session``: there is no live session to bound
+        (the car is gone), and the quota-hold ``stop_session`` writes would
+        be inherited by the next plug-in as a fresh 1 kWh allowance — the
+        auto-charge this exists to prevent. A gone car gets a plain disable
+        (contactor open) plus the dead-man's-off failsafe, held until SEM
+        next decides to charge (which re-enables via ``start_session``).
+        Guido's pre-SEM automation did exactly this — ``keba.disable`` after
+        every charge — which is why a plug-in never auto-started for him.
+        """
+        domain = (self.charger_service or "").split(".", 1)[0]
+        try:
+            if domain and self.hass.services.has_service(domain, "disable"):
+                await self.hass.services.async_call(
+                    domain, "disable", {}, blocking=True)
+                _LOGGER.info(
+                    "%s: parked OFF on disconnect via %s.disable — the box "
+                    "holds the no until the next charge", self.name, domain)
+            elif self.start_stop_entity:
+                sdomain = self.start_stop_entity.split(".")[0]
+                if sdomain in ("switch", "input_boolean"):
+                    await self.hass.services.async_call(
+                        sdomain, "turn_off",
+                        {"entity_id": self.start_stop_entity}, blocking=True)
+        except Exception as e:  # noqa: BLE001 — surfaced, never fatal
+            _LOGGER.error("park_off(%s): disable failed: %s", self.name, e)
+
+        # SEM is done with this session whether or not every write landed —
+        # set the bookkeeping first so a best-effort failure below cannot
+        # leave the session falsely "active" (a partial box in a unit test,
+        # a dropped UDP packet in the field).
+        self._session_active = False
+        self._current_setpoint = 0.0
+        self._status.state = DeviceState.IDLE
+        self._status.current_consumption_w = 0.0
+        self._last_write_at = 0.0
+
+        # Best-effort: park the stored current low and arm the dead-man's OFF
+        # so the box holds the no even across a SEM outage (#740). Neither is
+        # load-bearing for "parked"; each fails independently.
+        try:
+            await self._set_current(0)
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.debug("park_off(%s): current park skipped: %s", self.name, e)
+        try:
+            await self.arm_failsafe_off()
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.debug("park_off(%s): dead-man arm skipped: %s", self.name, e)
+
     async def stop_session(self) -> None:
         """Stop the charging session.
 

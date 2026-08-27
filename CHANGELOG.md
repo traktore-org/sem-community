@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+
+- 🔌 **The charger is parked when the car leaves** (park-on-disconnect):
+  SEM now disables the charger once, cleanly, on the settled disconnect
+  edge — so a KEBA (which auto-starts any plug-in when left enabled) can no
+  longer begin a charge SEM never asked for. Previously an unwanted plug-in
+  ran to the ~1 kWh quota-hold floor before SEM caught it. Debounced past a
+  UDP unplug blip, re-armed on reconnect, and a plain disable (never a quota
+  the next plug-in would inherit). Generic across brands; a later charge
+  re-enables normally.
 # [2.0.0-beta.18] — 26.08.2026
 
 - 🧭 **The setup checklist can be completed** (#842): three of its rows —

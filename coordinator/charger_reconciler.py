@@ -32,10 +32,16 @@ class DesiredState(Enum):
     CHARGE = auto()  # charging (CHARGE_AT_AMPS / CHARGE_MAX)
 
 
+#: A real unplug persists; a UDP blip is one cycle (project_ev_flap_udp_blip).
+#: Park only after the disconnect has held this many consecutive cycles.
+PARK_ON_DISCONNECT_CYCLES: int = 2
+
+
 class ActionKind(Enum):
     """Minimal hardware action the reconciler may emit."""
     NONE = auto()           # already converged — issue nothing
     DISABLE = auto()        # open the contactor (brand disable service)
+    PARK_OFF = auto()       # car GONE — leave the box disabled+cold so the next plug-in can't auto-start
     WRITE_CURRENT = auto()  # set charging current (amps on the Action)
     START_AND_WRITE = auto()  # open a session + arm failsafe + write (amps)
     ENABLE = auto()         # re-assert the start/stop switch ON (#536 — Wallbox)
@@ -193,6 +199,21 @@ class ChargerReconciler:
         # policy says idle, disable immediately. The grace re-arms on every
         # genuine CHARGE→IDLE transition (the only wind-down there is).
         self._idle_settled: bool = True
+        # (park-on-disconnect) An enabled KEBA auto-starts the NEXT plug-in
+        # on its own — "not drawing" is NOT "off". SEM used to issue nothing
+        # when a car left (the box stayed enabled), so the next plug-in
+        # auto-charged ~1 kWh before the quota-hold caught it (Guido, PROD
+        # 26.08). His pre-SEM automation disabled the box after every charge
+        # for exactly this. So: ONE PARK_OFF on the settled disconnect edge.
+        # ``_seen_connected`` gates it to a real "car LEFT" edge: only a
+        # charger we have observed WITH a car, now gone, is parked on
+        # departure (an empty box at boot has nothing to park). The
+        # ``_disconnect_run`` debounce rides past a single-cycle UDP unplug
+        # blip (project_ev_flap_udp_blip) that would otherwise kill a live
+        # charge.
+        self._seen_connected: bool = False
+        self._parked_off: bool = False
+        self._disconnect_run: int = 0
         # #763 — the stop-war ceasefire, the #536 backoff's mirror. SEM's
         # stop WORKS (contactor opens) but the box re-closes on the car's
         # retry at its stored setpoint; every stop→redraw round-trip aborts
@@ -249,8 +270,23 @@ class ChargerReconciler:
                   observed: ObservedState, now: float) -> List[Action]:
         """Pure decision table (spec rows 1-8, first match wins)."""
         # (#763) Unplugged = the war is over — its other party left.
-        if not observed.connected:
+        # (park-on-disconnect) …and the box must be left actively OFF, not
+        # merely not-drawing: an enabled KEBA auto-starts the NEXT plug-in.
+        # PARK_OFF fires only on a real "car LEFT" edge — a charger SEEN
+        # connected, now gone. A box never observed with a car is not
+        # "parked on departure"; nothing left.
+        if observed.connected:
+            self._seen_connected = True
+            self._disconnect_run = 0
+            self._parked_off = False
+        else:
             self._end_stop_war()
+            self._disconnect_run += 1
+            if (self._seen_connected
+                    and self._disconnect_run >= PARK_ON_DISCONNECT_CYCLES
+                    and not self._parked_off):
+                self._parked_off = True
+                return [Action(ActionKind.PARK_OFF)]
 
         # OFF / IDLE share the convergence target (contactor open). The
         # only difference is the flicker grace, which OFF never gets.
@@ -606,6 +642,12 @@ class ChargerReconciler:
                 await adapter.command_disable()
                 _LOGGER.info("reconcile(%s): DISABLE — %s",
                              self.charger_id, decision.reason)
+            elif action.kind is ActionKind.PARK_OFF:
+                await adapter.command_park_off()
+                _LOGGER.info(
+                    "reconcile(%s): PARK OFF — car disconnected, box left "
+                    "disabled so the next plug-in cannot auto-start",
+                    self.charger_id)
             elif action.kind is ActionKind.START_AND_WRITE:
                 # arm_failsafe() is a no-op unless opted in (#546, evcc-style).
                 await adapter.arm_failsafe()
