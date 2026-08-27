@@ -909,6 +909,10 @@ _CENSUS_IGNORED = frozenset({
     "solar_energy_management", "mqtt", "sun", "template", "input_boolean",
     "input_number", "input_select", "automation", "script", "scene",
     "person", "zone", "schedule",
+    # #848 live finding (.175): companion-app phones report battery class
+    # + occasional power sensors and census as ENERGY-shaped. A phone is
+    # never SEM-drivable hardware.
+    "mobile_app",
 })
 
 
