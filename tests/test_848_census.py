@@ -137,12 +137,13 @@ class TestTheReportCarriesTheCensus:
 def test_mobile_app_is_never_an_energy_gap():
     """Live .175 finding (#848): phones census as energy-shaped (battery
     class + power sensors on some models). mobile_app is ignored outright."""
-    reg = _registry({
-        "mobile_app": [
-            _ent("sensor.pixel_battery_level", device_class="battery"),
-            _ent("sensor.pixel_battery_power", device_class="power"),
-        ],
-    })
+    from custom_components.solar_energy_management.hardware_detection import (
+        build_integration_census,
+    )
+    reg = _registry([
+        _ent("sensor.pixel_battery_level", "mobile_app", device_class="battery"),
+        _ent("sensor.pixel_battery_power", "mobile_app", device_class="power"),
+    ])
     c = build_integration_census(registry=reg, config_domains={"mobile_app"})
     assert "mobile_app" not in c["unknown_energy_domains"]
     assert "mobile_app" not in c["installed"]
