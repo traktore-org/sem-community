@@ -239,7 +239,11 @@ def _spec_from_registry(hass: HomeAssistant, registry=None) -> Dict[str, str]:
         except Exception:  # noqa: BLE001 — glob fallback stands alone
             return {}
     found: Dict[str, str] = {}
-    for e in registry.entities.values():
+    try:
+        entries = list(registry.entities.values())
+    except Exception:  # noqa: BLE001 — un-loaded/mocked registry: globs stand alone
+        return {}
+    for e in entries:
         if getattr(e, "disabled_by", None):
             continue
         eid = str(e.entity_id)

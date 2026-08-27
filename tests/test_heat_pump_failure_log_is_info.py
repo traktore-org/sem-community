@@ -18,20 +18,23 @@ _INIT_PATH = pathlib.Path(__file__).parent.parent / "__init__.py"
 
 
 def _find_heat_pump_log_block(tree: ast.AST) -> ast.If | None:
-    """Find the if/else block that registers the heat pump (the ``if has_sg_ready or
-    has_climate`` branch). Returns the If node containing both branches."""
+    """Find the branch that logs the heat-pump NOT-registered case.
+
+    Since #685 the registration is a loop and the failure surface is the
+    ``if hp_registered == 0:`` block (its BODY holds the log call)."""
     for node in ast.walk(tree):
         if not isinstance(node, ast.If):
             continue
-        # Heuristic: find ``if has_sg_ready or has_climate:`` blocks
         test = node.test
-        if isinstance(test, ast.BoolOp) and isinstance(test.op, ast.Or):
-            names = [
-                v.id for v in test.values
-                if isinstance(v, ast.Name)
-            ]
-            if "has_sg_ready" in names and "has_climate" in names:
-                return node
+        if (
+            isinstance(test, ast.Compare)
+            and isinstance(test.left, ast.Name)
+            and test.left.id == "hp_registered"
+            and len(test.comparators) == 1
+            and isinstance(test.comparators[0], ast.Constant)
+            and test.comparators[0].value == 0
+        ):
+            return node
     return None
 
 
@@ -57,12 +60,12 @@ def test_heat_pump_failure_log_is_info_not_debug():
     tree = ast.parse(_INIT_PATH.read_text())
     block = _find_heat_pump_log_block(tree)
     assert block is not None, (
-        "Could not find the ``if has_sg_ready or has_climate:`` heat-pump "
-        "registration block in __init__.py — has the registration path "
+        "Could not find the ``if hp_registered == 0:`` heat-pump "
+        "not-registered block in __init__.py — has the registration path "
         "moved? Update the AST search heuristic."
     )
 
-    failure_methods = _logger_call_methods(block.orelse)
+    failure_methods = _logger_call_methods(block.body)
     assert "info" in failure_methods, (
         f"#432: the heat-pump NOT-registered branch must log at INFO so "
         f"the user sees it without enabling SEM debug logging. Got: "
