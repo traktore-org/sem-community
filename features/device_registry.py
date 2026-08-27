@@ -2124,13 +2124,27 @@ class UnifiedDeviceRegistry:
                 "Updated %s control mode to %s", device_id, mode,
             )
             # (class-17 sibling, live PROD 2026-07-23) One-shot release on the
-            # transition INTO Off: turn the load off once — regardless of who
-            # started it or whether ownership survived a restart — then SEM
-            # keeps its hands off. Without this, a running load was stranded
+            # transition INTO Off: turn a load SEM is DRIVING off once, then
+            # keep its hands off — without this a SEM-driven load was stranded
             # on forever ("mode off and SEM does not touch the device any
             # more"). The user's explicit mode change overrides the min_on
             # anti-flicker (a deliberate command beats flicker protection).
-            if control_mode is DeviceControlMode.OFF:
+            #
+            # (#847, Hoyte, fresh install) But this release must ONLY touch a
+            # load SEM actually started — gate it on ``_sem_owned``, exactly as
+            # the two steady-state release paths do (``compute_load_intent`` and
+            # the imperative ``update()`` peak/goal pass both read it and both
+            # say "a user-turned-on load stays untouched"). This immediate
+            # handler was the one straggler that ignored ownership, so setting a
+            # peak-management device to Mode=Off switched off loads the USER had
+            # running (default mode is peak_only, which SEM never drives on, so
+            # ``_sem_owned`` is False and there is nothing to strand). #779 made
+            # ``_sem_owned`` the honest answer to "did SEM start this?" (adoption
+            # is gated on SURPLUS mode); a genuinely SEM-driven surplus load is
+            # re-adopted post-restart before any mode change, so the strand case
+            # is still covered while the user's own loads are left exactly as-is.
+            if (control_mode is DeviceControlMode.OFF
+                    and getattr(surplus_device, "_sem_owned", False)):
                 try:
                     obs = surplus_device.observed_on()
                 except Exception:  # noqa: BLE001
