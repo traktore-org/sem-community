@@ -480,6 +480,25 @@ polices before it continues. **Lesson:** audit every `continue`/early-`return` t
 device's iteration — each one is a gate, and the question is the class's own: *who stops the
 device this branch stops watching?*
 
+**Instance 7 — the ownership gate wired into two release paths, missing on the third (#847,
+Hoyte, fresh install).** The inverse hazard to a strand: a stop path that stops a load it does
+*not* own. Mode → Off releases a running load in THREE places — `compute_load_intent` (clause 1),
+the imperative `update()` peak/goal pass, and the *immediate* one-shot in
+`device_registry.update_device_control_mode` fired at the moment the user changes the mode. The
+two loop paths both gate on `_sem_owned` ("a user-turned-on load stays untouched", the instance-5
++ #779 lesson); the immediate handler was the straggler — it fired for *any* observed-on device,
+so setting a peak-management device to Mode=Off switched off loads the USER had running. The
+default mode is `peak_only`, which SEM never drives *on*, so `_sem_owned` is False and there is
+nothing to strand — the release was pure collateral. **Fixed** by adding the same `_sem_owned`
+gate to the immediate handler. **The tell:** a per-user action (mode change) with an actuation
+side-effect that exists in more than one code path — count the actuation sites, and confirm the
+ownership predicate guards *every* one, not just the loop copies. A genuinely SEM-driven surplus
+load is re-adopted (`_adopt_ownership`, gated on SURPLUS) post-restart before any mode change, so
+the strand case (instance-5 lineage) stays covered while the user's own loads are left as-is.
+**Guard:** `tests/test_559_phase0.py::test_mode_off_does_not_touch_user_driven_load` (user-on,
+not owned → not actuated) + `::test_mode_off_transition_releases_running_load` (SEM-owned → still
+released). Refs #559 #779 #847.
+
 ### 18. Forced-marker set in one pass, leaks because another pass didn't clear it — PARTIAL
 **Symptom:** a transient control marker (`_offpeak_forced`, `_batt_overnight_forced`) set when
 one pass activates a load stays `True` after the load stops, so later cycles mis-treat an
