@@ -199,11 +199,23 @@ class KebaAdapter(ChargerAdapter):
         self._last_intent = ChargerIntent.DISABLE
 
     async def command_disable(self) -> None:
-        """User-explicit OFF. Same physical action as
-        ``command_idle`` on KEBA (the firmware doesn't distinguish)
-        but tagged differently so ``is_self_charging`` can detect
-        a self-resume even after the user toggled OFF days ago."""
-        await self._device.stop_session()
+        """User-explicit OFF — a HARD no, not a pause.
+
+        (#853, the other half of #846) This used to route to
+        ``stop_session`` like ``command_idle`` — "the firmware doesn't
+        distinguish" was true before #846 built ``park_off``. It cost a
+        fresh 1 kWh on every plug-in against a zero ask: the quota-hold
+        floors at max(1.0, session+0.3), so "Min = 0" meant "charge 1 kWh,
+        then stop" (live PROD 28.08: plug 18:24:29, quota written 18:25:11,
+        box charged 3.19 kW toward it with the daily target at 0).
+
+        A hard no is what ``park_off`` exists for: clean ``keba.disable``
+        plus the dead-man failsafe, zero allowance. The wake path is
+        intact — ``command_current`` reopens via ``start_session`` the
+        moment SEM next wants to charge. ``command_idle`` (a pause that
+        expects to resume — a solar lull) keeps the quota-hold, which is
+        what it was invented for (#553/#829)."""
+        await self._device.park_off()
         self._last_intent = ChargerIntent.DISABLE
 
     # ─── Observation ───────────────────────────────────────────
