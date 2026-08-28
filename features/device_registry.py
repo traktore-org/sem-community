@@ -2152,18 +2152,31 @@ class UnifiedDeviceRegistry:
                 except Exception:  # noqa: BLE001
                     obs = None
                 if obs is True or (obs is None and surplus_device.is_active):
-                    if getattr(surplus_device, "_status", None) is not None:
-                        surplus_device._status.last_activated = None
-                    await surplus_device.deactivate()
+                    if getattr(surplus_device, "_sem_commanded", False):
+                        # SEM issued the ON: opt-out undoes SEM's own action.
+                        if getattr(surplus_device, "_status", None) is not None:
+                            surplus_device._status.last_activated = None
+                        await surplus_device.deactivate()
+                        _LOGGER.info(
+                            "Mode off: released %s (turned off once — SEM "
+                            "will not touch it again while mode stays off)",
+                            device_id,
+                        )
+                    else:
+                        # (#847 refinement, 2.1) ADOPTED only — a running
+                        # load claimed under Surplus so goal gates could
+                        # stop it, never started by SEM. Opt-out releases
+                        # the claim with ZERO writes.
+                        _LOGGER.info(
+                            "Mode off: released adopted load %s without "
+                            "actuation (#847)", device_id,
+                        )
                     surplus_device._offpeak_forced = False
                     surplus_device._offpeak_forced_date = None
                     surplus_device._batt_overnight_forced = False
                     surplus_device._batt_overnight_forced_date = None
                     surplus_device._sem_owned = False
-                    _LOGGER.info(
-                        "Mode off: released %s (turned off once — SEM will "
-                        "not touch it again while mode stays off)", device_id,
-                    )
+                    surplus_device._sem_commanded = False
 
         # (#649) Keep the load manager's copy in step NOW. It is only rebuilt by
         # the 35 s rediscovery, so until then a device the user has just handed

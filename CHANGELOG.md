@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🙈 **Opt-out undoes only what SEM did** (#847, refinement of the beta.20
+  fix): new devices now start in **Off** — you opt a device in deliberately
+  (the same rule discovered devices already follow). And setting Mode = Off
+  distinguishes a load SEM *started* (stopped once, so it is never stranded
+  running) from one it merely *adopted* while managing (released untouched,
+  zero writes). Existing device configs are unchanged.
+
 - 🧭 **Detection now reads the whole install, not just entity names** (#848):
   a registry census lists every installed integration, flags energy-shaped
   ones SEM has no pattern for (the gap list shows on the Config tab), and
