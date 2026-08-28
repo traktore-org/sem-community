@@ -195,12 +195,16 @@ async def test_register_persists_and_registers(registry):
 
 
 @pytest.mark.asyncio
-async def test_register_defaults_to_surplus(registry):
+async def test_register_defaults_to_off(registry):
+    """(#847) A device registered without a mode choice starts in Off —
+    the user opts it in deliberately (the #805 principle for discovered
+    devices, extended to service/card registrations). Pre-#847 the silent
+    default was surplus, which adopted running loads nobody handed SEM."""
     spec = dict(SPEC)
     del spec["control_mode"]
     await registry.async_register_service_device(spec)
     device = registry._surplus_controller.get_device("kia_socket")
-    assert device.control_mode == DeviceControlMode.SURPLUS
+    assert device.control_mode == DeviceControlMode.OFF
 
 
 CLIMATE_SPEC = {

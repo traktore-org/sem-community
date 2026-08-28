@@ -157,8 +157,17 @@ def compute_load_intent(
         # class-17 sibling caught live (PROD 2026-07-23: mode→off, load stayed
         # on and SEM never touched it again). A load the USER turned on
         # (not _sem_owned) is left exactly as-is.
-        if active and getattr(device, "_sem_owned", False):
-            return LoadIntent(False, 0.0, None, "mode off — releasing SEM-driven load")
+        if active and getattr(device, "_sem_commanded", False):
+            # SEM issued the ON - opt-out undoes SEM's own action.
+            return LoadIntent(False, 0.0, None, "mode off — ending SEM-started run")
+        if getattr(device, "_sem_owned", False):
+            # (#847) ADOPTED only (user/externally started, claimed
+            # under Surplus so goal gates could stop it). Opt-out
+            # releases the claim with ZERO writes - the load stays
+            # exactly as it is (hoyte).
+            device._sem_owned = False
+            device._offpeak_forced = False
+            device._batt_overnight_forced = False
         return LoadIntent(active, held, None, "off — monitor only")
     if mode == DeviceControlMode.PEAK_ONLY:
         # This controller never proactively sheds peak_only loads — the load
@@ -1142,7 +1151,20 @@ class SurplusController:
             # Off means SEM keeps its hands off the user's own choices.
             if (device.control_mode == DeviceControlMode.OFF
                     and getattr(device, "_sem_owned", False)):
-                reason = "mode off — releasing SEM-driven load"
+                if getattr(device, "_sem_commanded", False):
+                    reason = "mode off — ending SEM-started run"
+                else:
+                    # (#847) adopted, not SEM-started: release the
+                    # claim without a write - Off means hands off.
+                    device._sem_owned = False
+                    device._offpeak_forced = False
+                    device._offpeak_forced_date = None
+                    device._batt_overnight_forced = False
+                    device._batt_overnight_forced_date = None
+                    _LOGGER.info(
+                        "%s: mode off — released adopted load "
+                        "without actuation (#847)", device.name,
+                    )
             if reason is None and device._offpeak_forced:
                 stale = (
                     device._offpeak_forced_date is not None

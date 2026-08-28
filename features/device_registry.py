@@ -557,7 +557,9 @@ class UnifiedDeviceRegistry:
             "rated_power": spec.get("rated_power") or 0,
             "power_entity_id": spec.get("power_entity_id"),
             "energy_entity_id": spec.get("energy_entity_id"),  # #600
-            "control_mode": spec.get("control_mode", "surplus"),
+            # (#847) creation default "off" - restore path keeps "surplus"
+            # for legacy stores that predate the persisted mode.
+            "control_mode": spec.get("control_mode", "off"),
             "depends_on": list(spec.get("depends_on") or []),
             # (#569) device kind + climate params — persisted so a climate
             # AC rehydrates as a ClimateDevice (not a SwitchDevice) on restart.
@@ -575,8 +577,8 @@ class UnifiedDeviceRegistry:
         try:
             device.control_mode = DeviceControlMode(stored["control_mode"])
         except ValueError:
-            device.control_mode = DeviceControlMode.SURPLUS
-            stored["control_mode"] = "surplus"
+            device.control_mode = DeviceControlMode.OFF  # (#847)
+            stored["control_mode"] = "off"
         if stored["depends_on"]:
             device.depends_on = list(stored["depends_on"])
         self._apply_goals(device)

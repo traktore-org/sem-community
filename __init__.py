@@ -4135,7 +4135,13 @@ async def _async_register_phase_services(
             # #600 — optional kWh energy counter; SEM autodetects a companion
             # power sensor on the device first, else derives power from this.
             "energy_entity_id": call.data.get("energy_entity_id"),
-            "control_mode": call.data.get("control_mode", "surplus"),
+            # (#847) New devices start UNMANAGED — the user opts them in.
+            # Same principle as #805's DEFAULT_DISCOVERED_CONTROL_MODE: on a
+            # fresh install SEM must not adopt (and later actuate) loads
+            # nobody handed it. hoyte's report: mode→Off on just-added
+            # devices switched them OFF, because "surplus" was the silent
+            # default and running loads were adopted under it.
+            "control_mode": call.data.get("control_mode", "off"),
             "depends_on": call.data.get("depends_on") or [],
             # (#569) climate device support
             "device_type": call.data.get("device_type", "switch"),
@@ -4170,7 +4176,7 @@ async def _async_register_phase_services(
             try:
                 device.control_mode = DeviceControlMode(spec["control_mode"])
             except ValueError:
-                device.control_mode = DeviceControlMode.SURPLUS
+                device.control_mode = DeviceControlMode.OFF  # (#847) creation default
             coordinator._surplus_controller.register_device(device)
             summary = {**spec, "persisted": False,
                        "total_devices": len(coordinator._surplus_controller._devices)}
@@ -4197,7 +4203,8 @@ async def _async_register_phase_services(
             vol.Optional("rated_power"): vol.Coerce(float),
             vol.Optional("power_entity_id"): cv.string,
             vol.Optional("energy_entity_id"): cv.string,  # #600
-            vol.Optional("control_mode", default="surplus"): vol.In(
+            # (#847) default "off" — devices are opted IN, never pre-owned
+            vol.Optional("control_mode", default="off"): vol.In(
                 ["off", "peak_only", "surplus"]
             ),
             vol.Optional("depends_on"): vol.All(cv.ensure_list, [cv.string]),

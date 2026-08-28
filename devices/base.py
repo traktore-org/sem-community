@@ -340,6 +340,7 @@ class ControllableDevice(ABC):
         # automation) changed the physical state, so SEM stops fighting a manual
         # on/off and stops crediting runtime to a load it isn't actually driving.
         self._sem_owned: bool = False
+        self._sem_commanded: bool = False  # (#847) SEM issued the ON
         # Monotonic anchor for the "belief says on but the entity reads off"
         # drift grace window (a transient unavailable/poll gap must not flip us).
         self._observed_off_since: Optional[float] = None
@@ -960,6 +961,10 @@ class ControllableDevice(ABC):
         self._last_activated = datetime.now()
         # (arc) SEM turned this on → SEM owns the on-state.
         self._sem_owned = True
+        # (#847) COMMANDED, not merely adopted: SEM issued the write,
+        # so opt-out (mode Off) may undo it. An adopted claim never
+        # earns this flag - SEM must not actuate what it did not start.
+        self._sem_commanded = True
         self._observed_off_since = None
 
     def _adopt_ownership(self) -> bool:
@@ -984,12 +989,16 @@ class ControllableDevice(ABC):
         """
         owned = self.control_mode == DeviceControlMode.SURPLUS
         self._sem_owned = owned
+        # (#847) adopted != commanded: goal gates may stop this load,
+        # but the mode-Off release must leave it as the user has it.
+        self._sem_commanded = False
         return owned
 
     def record_deactivated(self) -> None:
         """Record deactivation timestamp for anti-cycling."""
         self._last_deactivated = datetime.now()
         self._sem_owned = False
+        self._sem_commanded = False  # (#847)
         self._observed_off_since = None
 
     def mark_reconciled_off(self, cooldown_until: "Optional[datetime]" = None) -> None:
