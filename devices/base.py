@@ -84,7 +84,6 @@ QUOTA_STOP_MARGIN_KWH = 0.3
 _MAX_PLAUSIBLE_LOAD_W = 100_000.0
 
 from ..consts.core import (
-    KEBA_IDLE_GUARD_KWH,
     DEFAULT_DEVICE_RATED_POWER,
     DEFAULT_MAX_CHARGING_CURRENT,
 )
@@ -2906,54 +2905,37 @@ class CurrentControlDevice(ControllableDevice):
                 # rogue session while SEM is DOWN (#553) — and it writes a
                 # target without ever enabling, which is the whole point.
                 if self.hass.services.has_service(domain, "disable"):
-                    await self.hass.services.async_call(domain, "disable", {}, blocking=True)
-                    # (#854) …and give the disable TEETH. #553 invented the
-                    # quota-hold because a bare disable did not hold: the
-                    # firmware retried and the car got back in. #740 later
-                    # built the dead-man OFF — fallback 0 A, persisted — which
-                    # makes the box enforce "off means off" through exactly
-                    # those retries. The stop path was never revisited after
-                    # #740 landed, so it kept paying for a workaround whose
-                    # reason had been fixed. Measured 28.08: plugged in and
-                    # disabled this way, the box drew nothing for 28 minutes.
-                    await self.arm_failsafe_off()
-                    await self._set_current(0)
-                    stop_method = f"{domain}.disable+deadman"
-                    # #553 — BOX-LEVEL runaway cap (#315): KEBA firmware
-                    # auto-restarts a session at its stored setpoint when the
-                    # car retries (~every 10 min), even after keba.disable.
-                    # While SEM is alive its policing (#552) kills each rogue
-                    # start within a cycle; this 1 kWh session-energy target
-                    # (the keba library MINIMUM — smaller values are rejected,
-                    # live-verified) bounds the damage when SEM is NOT
-                    # policing (down/restarting): the box then ends a rogue
-                    # session itself at 1 kWh instead of charging unbounded.
-                    # Every SEM start releases the guard (start_session writes
-                    # the real target, or 0 = no limit). Note: SEM owns this
-                    # register — user-set box limits are overwritten.
+                    # (#854) THE STOP IS ONE CALL. Guido's automation, which
+                    # has run this exact box for two years:
                     #
-                    # Own try (review H1): a set_energy failure must neither
-                    # skip the _session_active reset below nor mask that the
-                    # disable itself succeeded.
-                    if self.hass.services.has_service(domain, "set_energy"):
-                        try:
-                            await self.hass.services.async_call(
-                                domain, "set_energy",
-                                {"energy": KEBA_IDLE_GUARD_KWH}, blocking=True,
-                            )
-                            self._idle_guard_armed = True
-                            _LOGGER.debug(
-                                "stop_session(%s): armed %.1f kWh runaway-cap "
-                                "energy target (#553)", self.name,
-                                KEBA_IDLE_GUARD_KWH,
-                            )
-                        except Exception as guard_err:  # noqa: BLE001
-                            _LOGGER.warning(
-                                "stop_session(%s): idle-guard set_energy "
-                                "failed (%s) — box auto-start protection "
-                                "not armed this stop (#553)",
-                                self.name, guard_err,
-                            )
+                    #     alias: Keba Disable
+                    #     actions: [ {action: keba.disable} ]
+                    #
+                    # Everything SEM added here made it worse, all measured
+                    # on PROD 28.08:
+                    #
+                    #  * the quota-hold ENABLED the box with a 1 kWh target so
+                    #    it would charge into it and suspend. On an idle box
+                    #    that is a START — the whole of "Min = 0 still charges
+                    #    1 kWh", SEM's own command. (energy_target 0.0 → 1.0
+                    #    at 20:00:39; power 0.12 → 3.2 kW at 20:00:56 — the
+                    #    target moved BEFORE the box drew.)
+                    #  * running that against a plain disable on the other
+                    #    intent made SEM alternate enable/disable and report
+                    #    it as "the charger keeps restarting itself against
+                    #    SEM's stop". The charger was innocent.
+                    #  * a session-derived quota walked ahead of the car on
+                    #    every 60 s re-assert (#829's treadmill).
+                    #  * the #553 "idle guard" is not small: the firmware
+                    #    floors any non-zero target at 1.0 kWh (measured
+                    #    0.3 → 1.0, 0.5 → 1.0), so the guard IS an allowance
+                    #    waiting for the next enable to spend.
+                    #
+                    # A disable opens the contactor — measured 3 s to stop a
+                    # drawing box. Nothing else is needed.
+                    await self.hass.services.async_call(
+                        domain, "disable", {}, blocking=True)
+                    stop_method = f"{domain}.disable"
                 else:
                     _LOGGER.warning(
                         "stop_session(%s): charger_service=%s configured but "
@@ -2963,16 +2945,20 @@ class CurrentControlDevice(ControllableDevice):
                         self.name, self.charger_service, domain,
                     )
 
-            if stop_method and stop_method.startswith("quota-hold"):
-                # parked at the viable minimum on purpose — a 0 A write
-                # would re-poison the box's stored current (#545).
-                pass
-            else:
+            # (#854) A KEBA disable IS the stop — send nothing after it.
+            # Guido's automation is one call and has run this hardware for
+            # two years; every extra command SEM sent around it cost energy
+            # or started a fight with itself. The 0 A write and the dead-man
+            # arm stay for the other brands, where a current write IS the
+            # stop mechanism.
+            _stopped_by_disable = bool(
+                stop_method and stop_method.endswith(".disable"))
+            if not _stopped_by_disable:
                 await self._set_current(0)
-            # (#740) whatever stop path fired, leave the box holding a
-            # standing NO: the dead-man's-off failsafe survives SEM's
-            # absence, which per-cycle policing (#552) never could.
-            await self.arm_failsafe_off()
+                # (#740) leave the box holding a standing NO: the
+                # dead-man's-off failsafe survives SEM's absence, which
+                # per-cycle policing (#552) never could.
+                await self.arm_failsafe_off()
             self._session_active = False
             self._status.state = DeviceState.IDLE
             self._status.current_consumption_w = 0.0

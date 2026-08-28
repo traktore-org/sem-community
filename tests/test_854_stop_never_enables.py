@@ -78,12 +78,19 @@ async def test_a_stop_disables_the_box():
 
 
 @pytest.mark.asyncio
-async def test_the_idle_guard_is_still_armed_without_enabling():
-    """#553's protection survives: bound a rogue session while SEM is
-    down, but never turn the box on to do it."""
+async def test_the_stop_is_exactly_one_call():
+    """Guido's automation is the specification:
+
+        alias: Keba Disable
+        actions: [ {action: keba.disable} ]
+
+    No energy target — the #553 "idle guard" wrote 1.0 kWh, and because
+    the firmware floors any non-zero target at 1.0 (measured), that guard
+    IS an allowance waiting for the next enable to spend. No current
+    write, no failsafe. One call."""
     d = _keba_device()
     await d.stop_session()
-    calls = _calls(d)
-    assert ("keba", "set_energy") in calls
-    assert ("keba", "enable") not in calls
-    assert d._idle_guard_armed is True
+    assert _calls(d) == [("keba", "disable")], (
+        f"a stop must be exactly keba.disable, got {_calls(d)}"
+    )
+    d._set_current.assert_not_awaited()

@@ -17,10 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   used to mean *enabling* it with a 1 kWh energy target so it would charge
   into the target and suspend itself. On a box that was already idle that
   is a start, not a stop — which is why "Min = 0" still put ~1 kWh into the
-  car on every plug-in, and why SEM appeared to fight a charger that was
-  only doing what SEM told it. A stop now disables the box and arms the
-  dead-man OFF (#740, which did not exist when that workaround was
-  written); nothing is ever enabled to stop it.
+  car on every plug-in, and why SEM appeared to be fighting a charger that
+  was only doing what SEM told it. The stop is now a single
+  `keba.disable` — the automation the reporter has run on this hardware for
+  two years — with no energy target, no current write and no failsafe
+  around it. Disconnect handling (#846) is unchanged.
 
 - 🔎 **A Wallbox that can't be stopped now says why** (#852): when SEM
   cannot resolve the charger's registry device it could not find the

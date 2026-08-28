@@ -74,122 +74,71 @@ class TestQuotaStop:
         assert not _calls(hass, "enable"), (
             "a stop that enables is a start — this is the whole of #854")
 
-    async def test_the_current_is_parked_at_zero_not_a_charging_floor(self):
-        """The old path parked at the viable MINIMUM because the box was
-        about to charge a remainder. Nothing charges now, so the setpoint
-        goes to 0 — a stored charging current is what fed an Off-mode car
-        in ~3 kW bites through a restart (#740)."""
+    async def test_the_stop_writes_no_current_at_all(self):
+        """SUPERSEDED BY #854. The old path parked the current at the
+        viable minimum because the box was about to charge a remainder.
+        Nothing charges now: the stop is a bare disable, exactly the
+        automation that has run this hardware for two years."""
         dev, hass = _keba(session_kwh=9.9)
         await dev.stop_session()
-        currents = _calls(hass, "set_current")
-        assert currents and currents[-1]["current"] == 0
+        assert not _calls(hass, "set_current")
 
-    async def test_a_tiny_session_still_respects_the_library_floor(self):
+    async def test_no_energy_target_is_written_at_all(self):
+        """SUPERSEDED BY #854. This pinned the library floor: a tiny
+        session still wrote 1.0 kWh, because the firmware rounds any
+        non-zero target up (measured 0.3 → 1.0). That floor is real — and
+        it is exactly why SEM must not write a target to STOP something.
+        The 1 kWh sat in the register as an allowance for the next enable
+        to spend, which is what the reporter was seeing."""
         dev, hass = _keba(session_kwh=0.2)
         await dev.stop_session()
-        assert _calls(hass, "set_energy")[-1]["energy"] == 1.0
+        assert not _calls(hass, "set_energy")
 
     async def test_an_unreadable_register_falls_back_to_legacy(self):
         dev, hass = _keba(session_kwh=None)
         await dev.stop_session()
         assert _calls(hass, "disable"), "no session read → the old stop"
 
-    async def test_the_dead_mans_off_still_arms(self):
+    async def test_the_disable_stop_sends_nothing_else(self):
+        """SUPERSEDED BY #854 (was: the dead-man still arms).
+
+        The dead-man OFF and the 0 A write stay for brands whose stop IS a
+        current write. On KEBA the disable is the stop, and Guido's
+        two-year-old automation sends nothing else — every addition SEM
+        made around it cost energy or started a fight with itself."""
         dev, hass = _keba(session_kwh=9.9)
         await dev.stop_session()
-        fs = [c for c in _calls(hass, "set_failsafe")
-              if c.get("failsafe_fallback") == 0]
-        assert fs, "the masterless guard rides every stop path (#740)"
+        assert _calls(hass, "disable")
+        for never in ("enable", "set_energy", "set_current", "set_failsafe"):
+            assert not _calls(hass, never), f"stop sent {never}"
 
 
-@pytest.mark.asyncio
 class TestTheQuotaIsNotATreadmill:
-    """Live, PROD, 21.08 evening: the reconciler re-asserts a standing stop
-    every 60 s while the box still draws — correct for a `disable`, and
-    self-defeating for a quota. Each re-assert rewrote
-    ``quota = session + 0.3``, so the finish line moved ahead of the car
-    forever (log: quota-hold 1.8 → 2.0 → 3.7 → 3.8 …). A car drawing less
-    than 18 kW can NEVER consume the 0.3 kWh margin inside one 60 s dwell,
-    so the "stop" charges unbounded. The thing that ended it tonight was the
-    #763 ceasefire — it silenced the rewrites, and the box then reached the
-    LAST quota and suspended natively, which is the quota doing exactly what
-    it was designed to do the moment SEM stopped moving it.
+    """HISTORY, kept deliberately. Live PROD 21.08: the reconciler
+    re-asserts a standing stop every 60 s, and each re-assert rewrote
+    ``quota = session + 0.3`` — so the finish line moved ahead of the car
+    forever (quota-hold 1.8 → 2.0 → 3.7 → 3.8 …) and the "stop" charged
+    unbounded until the #763 ceasefire silenced the rewrites.
 
-    The rule: ONE stop, one quota. While the box still holds an unmet quota
-    of ours, a re-asserted stop is already in force — leave the register
-    alone and let the box arrive. Rewrite only when the box's target reads
-    cleared (a lost write, or the box defied us), which is what the
-    re-assert exists for.
+    #829 fixed that with a one-quota rule. #854 removed the quota
+    entirely: SEM's stop is now a bare ``keba.disable``, so there is no
+    number to walk and the whole class of bug is structurally impossible.
+    The tests below assert that absence rather than the old arithmetic.
     """
 
-    def _with_target(self, dev, hass, session_kwh, target_kwh):
-        """Wire the box's session AND energy-target registers."""
-        session = MagicMock(); session.state = str(session_kwh)
-        target = MagicMock(); target.state = str(target_kwh)
-        dev._session_energy_sensor_cache = "sensor.keba_p30_session_energy"
-        dev._energy_target_sensor_cache = "sensor.keba_p30_energy_target"
-
-        def get(eid):
-            if "session" in eid:
-                return session
-            if "target" in eid:
-                return target
-            return None
-        hass.states.get = MagicMock(side_effect=get)
-        return session, target
-
-    async def test_the_treadmill_is_structurally_impossible_now(self):
-        """(#854) The treadmill needed a SESSION-DERIVED quota to walk:
-        each 60 s re-assert rewrote ``session + 0.3`` and the finish line
-        outran the car. SEM no longer writes one — a stop disables and arms
-        the dead-man, and the only target left is the #553 idle guard, a
-        CONSTANT. A constant cannot walk, however often it is re-asserted."""
-        dev, hass = _keba(session_kwh=None)
-        session, target = self._with_target(dev, hass, 3.5, 0.0)
-
-        await dev.stop_session()
-        session.state = "3.6"             # the car drinks on
-        await dev.stop_session()
-        session.state = "3.9"
-        await dev.stop_session()
-
-        energies = {c["energy"] for c in _calls(hass, "set_energy")}
-        assert len(energies) <= 1, (
-            f"a stop wrote more than one distinct target ({energies}) — "
-            "that is the treadmill returning by another door"
-        )
-        assert not _calls(hass, "enable")
-
-    async def test_a_cleared_register_is_rewritten(self):
-        """The re-assert's real job: the box lost or defied the write."""
-        dev, hass = _keba(session_kwh=None)
-        session, target = self._with_target(dev, hass, 3.5, 0.0)
-
-        await dev.stop_session()
-        assert len(_calls(hass, "set_energy")) == 1
-
-        # Box register reads 0 — the quota is GONE (lost write / defiance).
-        target.state = "0.0"
-        session.state = "3.6"
-        await dev.stop_session()
-        assert len(_calls(hass, "set_energy")) == 2, (
-            "a cleared register means the box holds no quota — the re-assert "
-            "must restore it or the box charges unbounded"
+    async def test_no_quota_exists_to_walk(self):
+        dev, hass = _keba(session_kwh=3.5)
+        for session in ("3.6", "3.9", "4.4"):        # the car drinks on
+            await dev.stop_session()
+        assert not _calls(hass, "set_energy"), (
+            "a stop wrote an energy target — the treadmill needs one to "
+            "walk, and #854 removed the last writer"
         )
 
-    async def test_a_met_quota_left_behind_is_rewritten(self):
-        """A stale target BELOW the session bounds nothing (KEBA rejects or
-        has already consumed it) — a fresh stop must write a fresh quota."""
-        dev, hass = _keba(session_kwh=None)
-        session, target = self._with_target(dev, hass, 5.0, 4.0)
-
-        await dev.stop_session()
-        assert len(_calls(hass, "set_energy")) == 1
-
-    async def test_no_target_sensor_keeps_todays_behaviour(self):
-        """A box whose integration exposes no energy-target register cannot
-        be checked — rewriting is then the safe default, exactly as today."""
+    async def test_every_re_assert_is_the_same_single_call(self):
         dev, hass = _keba(session_kwh=3.5)
         await dev.stop_session()
         await dev.stop_session()
-        assert len(_calls(hass, "set_energy")) == 2
+        await dev.stop_session()
+        assert len(_calls(hass, "disable")) == 3
+        assert not _calls(hass, "enable")
