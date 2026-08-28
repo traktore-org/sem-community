@@ -38,6 +38,7 @@ def _make_device(max_current=32, phases=3, voltage=230, session_active=False):
     dev._set_current = AsyncMock()
     dev.start_session = AsyncMock()
     dev.stop_session = AsyncMock()
+    dev.park_off = AsyncMock()  # (#853)
     return dev
 
 
@@ -136,15 +137,17 @@ class TestCommandIdleSemantics:
 
     @pytest.mark.asyncio
     async def test_command_disable_distinct_from_idle(self):
-        """DISABLE and IDLE have the same physical effect on KEBA
-        but different intent tags. The tag matters because
+        """(#853) DISABLE parks the box (zero allowance); IDLE
+        quota-holds (a pause that expects to resume). Distinct intent
+        tags stay load-bearing: The tag matters because
         ``is_self_charging`` consults it — a self-resume after
         DISABLE is still wrong, even hours later."""
         dev = _make_device()
         a = KebaAdapter(dev)
 
         await a.command_disable()
-        dev.stop_session.assert_awaited()
+        dev.park_off.assert_awaited()          # (#853) hard no parks
+        dev.stop_session.assert_not_awaited()  # …and grants no quota
         assert a.last_intent is ChargerIntent.DISABLE
 
         # IDLE call updates the tag
