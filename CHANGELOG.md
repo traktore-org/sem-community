@@ -21,11 +21,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the setting that fixes it. (Diagnosis aid; the underlying report is
   still open.)
 
-- 🔌 **"Min = 0" on a KEBA now means zero** (#853): a plug-in against a hard
-  no (target 0, mode Off, night target reached) used to be granted a fresh
-  1 kWh allowance — the quota-hold stop's floor. A hard no now parks the box
-  (`keba.disable` + failsafe, the #846 mechanism); only a pause that expects
-  to resume keeps the quota-hold. Reported live on PROD the same evening.
 
 # [2.0.0-beta.20] — 27.08.2026
 
