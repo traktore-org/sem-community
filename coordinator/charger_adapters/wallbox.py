@@ -133,6 +133,25 @@ class WallboxAdapter(GenericAdapter):
                 break
 
         if device_id is None:
+            # (#852) SILENT before: this returned None with no trace, so an
+            # install whose entities never resolve to a registry DEVICE looked
+            # identical to one with no pause switch — except it did not even
+            # get the WARNING below. Both end at set_current(0), which some
+            # Wallbox firmware latches at the last setpoint, so "Off" does not
+            # stop the car and nothing in the log says why. Name it.
+            _LOGGER.warning(
+                "Wallbox %s: cannot resolve a registry device from the "
+                "configured entities (current=%s, service_entity=%s, "
+                "start_stop=%s) — the pause/resume switch cannot be found "
+                "without one, so OFF falls back to set_current(0), which "
+                "some Wallbox firmware ignores. Set this charger's "
+                "ev_start_stop_entity to its switch.*_pause_resume "
+                "entity. (#852)",
+                self._device.name,
+                getattr(self._device, "charger_current_entity", None),
+                getattr(self._device, "charger_service_entity_id", None),
+                getattr(self._device, "start_stop_entity", None),
+            )
             return None
 
         # Find a switch in the same device with "pause" or "resume" in the id.

@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔎 **A Wallbox that can't be stopped now says why** (#852): when SEM
+  cannot resolve the charger's registry device it could not find the
+  `pause_resume` switch either, and fell back to `set_current(0)` — which
+  some Pulsar firmware latches, so "Off" didn't stop the car and nothing
+  in the log explained it. That path now names the entities it looked at
+  and the setting that fixes it. (Diagnosis aid; the underlying report is
+  still open.)
+
 - 🔌 **"Min = 0" on a KEBA now means zero** (#853): a plug-in against a hard
   no (target 0, mode Off, night target reached) used to be granted a fresh
   1 kWh allowance — the quota-hold stop's floor. A hard no now parks the box
