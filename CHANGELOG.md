@@ -29,6 +29,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   placeholders, with an optional read-back entity SEM checks after every
   write. No more template-switch workarounds.
 
+# [2.0.0-beta.20] — 27.08.2026
+
+- 🙈 **Mode = Off leaves your own devices alone** (#847): setting a
+  peak-management device to Mode = Off used to switch it off there and then,
+  even a device you had running yourself — because the immediate release fired
+  for any device that was on, not just one SEM was driving. It now only lets go
+  of loads SEM actually started, matching the rest of the control loop, so
+  "hands off this device" no longer touches it. Reported by @hoyte.
+
+# [2.0.0-beta.19] — 27.08.2026
+
+
 - 💶 **The spendable budget finally has a trigger** (#778): with
   forecast-led spending switched on, SEM now plans one just-in-time sell
   window ending exactly when the night begins and discharges the measured
