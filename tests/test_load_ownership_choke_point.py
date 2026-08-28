@@ -44,6 +44,7 @@ class _FakeDevice:
         self.control_mode = DeviceControlMode.SURPLUS
         self._active = False
         self._sem_owned = False
+        self._sem_commanded = False   # (#847) did SEM issue the ON itself?
         self._observed_off_since = None
         self._last_activated = None
         self._last_deactivated = None
@@ -142,7 +143,28 @@ class TestModeOffReleasesEveryStartPath:
 
         intent = sc.compute_load_intent(dev, remaining_surplus_w=0.0)
         assert intent.on is False
-        assert "releasing SEM-driven load" in intent.reason
+        assert "SEM-started" in intent.reason
+
+    async def test_an_adopted_load_is_released_without_a_write(self):
+        """(#847) The third case, between the two below: SEM ADOPTED a load
+        it never started (running at registration / turned on externally
+        while in Surplus — claimed so goal gates could stop it). Mode → Off
+        releases the claim and writes NOTHING: the strand this file guards
+        cannot happen (SEM never started it), and switching off a load the
+        user is running is the harm #847 reported."""
+        dev = _FakeDevice()
+        dev._active = True
+        dev.control_mode = DeviceControlMode.SURPLUS
+        dev._adopt_ownership = ControllableDevice._adopt_ownership.__get__(dev)
+        assert dev._adopt_ownership() is True          # owned, not commanded
+        assert dev._sem_owned and not dev._sem_commanded
+        dev.control_mode = DeviceControlMode.OFF
+
+        intent = sc.compute_load_intent(dev, remaining_surplus_w=0.0)
+        assert intent.on is True                        # left exactly as it is
+        assert intent.reason == "off — monitor only"
+        assert dev._sem_owned is False                  # claim handed back
+        assert dev.deactivate_calls == 0                # and nothing written
 
     async def test_a_user_started_load_is_left_alone(self):
         """The other half of the contract: Off means hands off a load the

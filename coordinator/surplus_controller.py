@@ -751,6 +751,15 @@ class SurplusController:
                     device._status.state = old._status.state
                 if hasattr(old, "_sem_owned"):
                     device._sem_owned = old._sem_owned
+                    # (#847) Carry the COMMANDED half too. A rebuild (ED
+                    # refresh, re-registration) replaces the object while
+                    # the physical load runs; carrying ownership alone would
+                    # land a SEM-STARTED load on the fresh object as merely
+                    # "adopted", and the mode-Off release would then leave it
+                    # running forever — class 17, instance 5, exactly the
+                    # towel heater this transplant exists to prevent.
+                    device._sem_commanded = getattr(
+                        old, "_sem_commanded", False)
             if (getattr(old, "_offpeak_forced", False)
                     or getattr(old, "_batt_overnight_forced", False)):
                 _LOGGER.info(

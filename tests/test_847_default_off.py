@@ -157,3 +157,71 @@ def test_off_mode_user_load_never_owned_stays_untouched():
     intent = compute_load_intent(d, remaining_surplus_w=0.0)
     assert intent.on is True
     assert d._offpeak_forced is True            # nothing touched at all
+
+
+# ── the invariant: commanded ⊆ owned, structurally ──────────────────
+
+def test_commanded_can_never_outlive_the_ownership_it_describes():
+    """(#847) ``_sem_commanded`` is a PROPERTY subordinate to ``_sem_owned``,
+    not a second stored bool. Ownership is released in five places; a
+    stored twin would leak from any one of them (bug class 18) and a stale
+    True would make the mode-Off release actuate a load the USER started —
+    the exact harm #847 reported. Releasing ownership by ANY route must
+    therefore drop the command claim with it."""
+    d = _live_device()
+    d.record_activated()
+    assert d._sem_owned and d._sem_commanded
+    # every release route, one at a time, from a commanded state
+    for release in (
+        lambda dev: setattr(dev, "_sem_owned", False),   # the reconciler's form
+        lambda dev: dev.record_deactivated(),
+        lambda dev: dev.mark_reconciled_off(),
+    ):
+        d = _live_device()
+        d.record_activated()
+        release(d)
+        assert d._sem_commanded is False, (
+            "a command claim survived the release of the ownership it "
+            "describes — it can now stop a load the user started"
+        )
+
+
+def test_adoption_owns_without_commanding():
+    d = _live_device()
+    d._active = True
+    d.control_mode = DeviceControlMode.SURPLUS
+    assert d._adopt_ownership() is True
+    assert d._sem_owned is True
+    assert d._sem_commanded is False
+
+
+# ── the rebuild carry (the defect the choke-point tests exposed) ─────
+
+def test_a_rebuild_carries_the_command_claim_not_just_ownership():
+    """(#847 + class-17 instance 5) ``register_device`` transplants control
+    state when a rebuild (ED refresh, re-registration) replaces the object
+    under a RUNNING load. Carrying ownership alone would land a SEM-STARTED
+    load on the fresh object as merely 'adopted', and the mode-Off release
+    would then never stop it — the towel heater that drew 648 W five
+    minutes after Mode = Off, back again through a side door."""
+    from custom_components.solar_energy_management.coordinator.surplus_controller import (
+        SurplusController,
+    )
+    from custom_components.solar_energy_management.devices.base import (
+        DeviceState,
+    )
+    old = _live_device()
+    old._status.state = DeviceState.ACTIVE      # the load is physically on
+    old.record_activated()                      # and SEM started it
+    assert old.is_active and old._sem_commanded
+
+    fresh = _live_device()
+    ctrl = SurplusController.__new__(SurplusController)
+    ctrl._devices = {old.device_id: old}
+    ctrl.register_device(fresh)
+
+    assert fresh._sem_owned is True
+    assert fresh._sem_commanded is True, (
+        "the rebuild dropped the command claim — mode Off would now leave "
+        "this SEM-started load running forever"
+    )

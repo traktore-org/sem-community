@@ -129,11 +129,12 @@ class TestTheUsersLoadSurvivesTheWalk:
         # Stranding it running forever was the 2026-07-23 PROD bug.
         d = _dev(mode=DeviceControlMode.OFF, state="on", believes_active=True)
         d._sem_owned = True                     # set by SEM's own activate()
+        d._sem_commanded = True                 # (#847) …which COMMANDED it
         intent = compute_load_intent(
             d, remaining_surplus_w=0.0, is_shed_target=False, plan=PlanVerdict(),
         )
         assert intent.on is False
-        assert "releasing" in intent.reason
+        assert "SEM-started" in intent.reason
 
 
 class TestOneWriterForTheClaim:

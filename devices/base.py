@@ -340,7 +340,7 @@ class ControllableDevice(ABC):
         # automation) changed the physical state, so SEM stops fighting a manual
         # on/off and stops crediting runtime to a load it isn't actually driving.
         self._sem_owned: bool = False
-        self._sem_commanded: bool = False  # (#847) SEM issued the ON
+        self._commanded_claim: bool = False  # backing field, see _sem_commanded
         # Monotonic anchor for the "belief says on but the entity reads off"
         # drift grace window (a transient unavailable/poll gap must not flip us).
         self._observed_off_since: Optional[float] = None
@@ -955,6 +955,31 @@ class ControllableDevice(ABC):
             if elapsed < self.min_on_seconds:
                 return False
         return True
+
+    @property
+    def _sem_commanded(self) -> bool:
+        """(#847) Did SEM issue the ON itself, as opposed to adopting one?
+
+        ``_sem_owned`` answers "is this load SEM's to manage" — and adoption
+        makes it True for a load SEM merely SAW running (so goal gates can
+        stop it). That is the right answer for gates and the wrong one for
+        the mode-Off release, which ACTUATES: switching off a load the user
+        started is #847's reported harm, and stranding one SEM started is
+        the class-17 bug on the other side. This flag separates them.
+
+        It is a property, not a second stored bool, because a flag that must
+        stay in sync with another is bug class 18 waiting to happen (set in
+        one pass, leaks because another pass didn't clear it). Ownership is
+        released in five places; making the claim SUBORDINATE means every
+        one of them clears this too, by construction — commanded ⊆ owned.
+        A stale True can therefore never outlive the ownership it describes
+        and mistake a user's own load for SEM's.
+        """
+        return self._commanded_claim and self._sem_owned
+
+    @_sem_commanded.setter
+    def _sem_commanded(self, value: bool) -> None:
+        self._commanded_claim = bool(value)
 
     def record_activated(self) -> None:
         """Record activation timestamp for anti-cycling."""
