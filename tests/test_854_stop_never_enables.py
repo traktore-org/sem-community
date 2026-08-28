@@ -90,7 +90,12 @@ async def test_the_stop_is_exactly_one_call():
     write, no failsafe. One call."""
     d = _keba_device()
     await d.stop_session()
-    assert _calls(d) == [("keba", "disable")], (
-        f"a stop must be exactly keba.disable, got {_calls(d)}"
-    )
+    sent = _calls(d)
+    assert ("keba", "disable") in sent
+    for never in ("enable", "set_energy", "set_current"):
+        assert ("keba", never) not in sent, f"a stop sent {never}: {sent}"
     d._set_current.assert_not_awaited()
+    # set_failsafe MAY appear: #740's dead-man OFF is the counterpart to
+    # the CHARGING failsafe start_session arms. It commands no charge and
+    # grants no energy — without it a SEM restart lands the car on that
+    # charging fallback (PROD 08.08).

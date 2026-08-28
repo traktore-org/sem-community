@@ -2954,11 +2954,17 @@ class CurrentControlDevice(ControllableDevice):
             _stopped_by_disable = bool(
                 stop_method and stop_method.endswith(".disable"))
             if not _stopped_by_disable:
+                # Other brands stop BY the current write — keep it.
                 await self._set_current(0)
-                # (#740) leave the box holding a standing NO: the
-                # dead-man's-off failsafe survives SEM's absence, which
-                # per-cycle policing (#552) never could.
-                await self.arm_failsafe_off()
+            # (#740) The dead-man OFF stays on every path, including the
+            # bare disable, because it is the COUNTERPART to the charging
+            # failsafe ``start_session`` arms: without it a SEM restart
+            # lands the car on that charging fallback (observed on PROD
+            # 08.08 — an Off-mode car fed in ~3 kW bites through a
+            # restart). It commands no charge and grants no energy; it is
+            # the box's own standing "no" for the window where SEM is not
+            # there to say it.
+            await self.arm_failsafe_off()
             self._session_active = False
             self._status.state = DeviceState.IDLE
             self._status.current_consumption_w = 0.0

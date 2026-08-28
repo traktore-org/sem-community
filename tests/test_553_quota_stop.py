@@ -109,8 +109,12 @@ class TestQuotaStop:
         dev, hass = _keba(session_kwh=9.9)
         await dev.stop_session()
         assert _calls(hass, "disable")
-        for never in ("enable", "set_energy", "set_current", "set_failsafe"):
+        for never in ("enable", "set_energy", "set_current"):
             assert not _calls(hass, never), f"stop sent {never}"
+        # set_failsafe is allowed and wanted: #740's dead-man OFF is the
+        # counterpart to the CHARGING failsafe start_session arms. It
+        # commands no charge — it is the box's standing "no" for the
+        # window where SEM is not running to say it.
 
 
 class TestTheQuotaIsNotATreadmill:
