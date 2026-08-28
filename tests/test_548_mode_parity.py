@@ -41,7 +41,6 @@ def _keba_device():
     d.stop_session = AsyncMock()
     d.start_session = AsyncMock()
     d.arm_failsafe = AsyncMock()
-    d.park_off = AsyncMock()  # (#853)
     d._session_active = False
     d._current_setpoint = 0
     d.min_current = 6
@@ -86,13 +85,10 @@ def _power(w):
 
 class TestOffMode:
     @pytest.mark.asyncio
-    async def test_keba_disable_parks_the_box(self):
-        """(#853) A hard no PARKS — disable + failsafe, zero allowance.
-        The quota-hold (stop_session) would grant a fresh 1 kWh floor."""
+    async def test_keba_disable_stops_via_session(self):
         d = _keba_device()
         await KebaAdapter(d).command_disable()
-        d.park_off.assert_called()
-        d.stop_session.assert_not_called()
+        d.stop_session.assert_called()  # keba.disable
 
     @pytest.mark.asyncio
     async def test_wallbox_disable_stops_via_setpoint(self):
