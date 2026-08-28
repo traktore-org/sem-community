@@ -54,22 +54,35 @@ def _calls(hass, service):
 
 @pytest.mark.asyncio
 class TestQuotaStop:
-    async def test_the_stop_is_quota_then_enable_not_disable(self):
+    async def test_the_stop_disables_with_a_deadman_and_never_enables(self):
+        """SUPERSEDED BY #854 — this pinned "quota then enable, not
+        disable" because in #553's day a bare disable did not hold: the
+        firmware retried and the car got back in, so the quota-hold was
+        the only "no" that stuck.
+
+        #740 then built the dead-man OFF (fallback 0 A, persisted), which
+        makes the box enforce off through exactly those retries — and the
+        stop path was never revisited, so SEM kept ENABLING the charger in
+        order to stop it. On a box that was already idle that is a start,
+        and it granted the firmware's 1 kWh floor on every plug-in against
+        a zero ask (Guido's report, 28.08). Measured the same evening:
+        plugged in and disabled with the dead-man armed, the box drew
+        nothing for 28 minutes."""
         dev, hass = _keba(session_kwh=9.9)
         await dev.stop_session()
-        assert _calls(hass, "set_energy")[-1]["energy"] == pytest.approx(
-            9.9 + QUOTA_STOP_MARGIN_KWH, abs=0.01)
-        assert _calls(hass, "enable"), "the quota only governs an enabled box"
-        assert not _calls(hass, "disable"), (
-            "disable is the war — the quota-hold replaces it")
+        assert _calls(hass, "disable")
+        assert not _calls(hass, "enable"), (
+            "a stop that enables is a start — this is the whole of #854")
 
-    async def test_the_current_parks_at_the_viable_minimum(self):
-        """The box's stored 8 A fed the Zoe-cutout churn all evening —
-        any remainder charge runs at a current the car can hold."""
+    async def test_the_current_is_parked_at_zero_not_a_charging_floor(self):
+        """The old path parked at the viable MINIMUM because the box was
+        about to charge a remainder. Nothing charges now, so the setpoint
+        goes to 0 — a stored charging current is what fed an Off-mode car
+        in ~3 kW bites through a restart (#740)."""
         dev, hass = _keba(session_kwh=9.9)
         await dev.stop_session()
         currents = _calls(hass, "set_current")
-        assert currents and currents[-1]["current"] == 10
+        assert currents and currents[-1]["current"] == 0
 
     async def test_a_tiny_session_still_respects_the_library_floor(self):
         dev, hass = _keba(session_kwh=0.2)
@@ -125,24 +138,27 @@ class TestTheQuotaIsNotATreadmill:
         hass.states.get = MagicMock(side_effect=get)
         return session, target
 
-    async def test_a_standing_quota_is_not_rewritten(self):
+    async def test_the_treadmill_is_structurally_impossible_now(self):
+        """(#854) The treadmill needed a SESSION-DERIVED quota to walk:
+        each 60 s re-assert rewrote ``session + 0.3`` and the finish line
+        outran the car. SEM no longer writes one — a stop disables and arms
+        the dead-man, and the only target left is the #553 idle guard, a
+        CONSTANT. A constant cannot walk, however often it is re-asserted."""
         dev, hass = _keba(session_kwh=None)
         session, target = self._with_target(dev, hass, 3.5, 0.0)
 
-        await dev.stop_session()          # first stop: writes the quota
-        assert len(_calls(hass, "set_energy")) == 1
-
-        # The box honoured it (target register carries our quota, session
-        # still below it) — the 60 s re-assert arrives while the car drinks
-        # the margin.
-        target.state = str(_calls(hass, "set_energy")[0]["energy"])
-        session.state = "3.6"
+        await dev.stop_session()
+        session.state = "3.6"             # the car drinks on
+        await dev.stop_session()
+        session.state = "3.9"
         await dev.stop_session()
 
-        assert len(_calls(hass, "set_energy")) == 1, (
-            "the re-assert moved the finish line — this is the treadmill: "
-            "the box can never reach a quota that is rewritten every 60 s"
+        energies = {c["energy"] for c in _calls(hass, "set_energy")}
+        assert len(energies) <= 1, (
+            f"a stop wrote more than one distinct target ({energies}) — "
+            "that is the treadmill returning by another door"
         )
+        assert not _calls(hass, "enable")
 
     async def test_a_cleared_register_is_rewritten(self):
         """The re-assert's real job: the box lost or defied the write."""

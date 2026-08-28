@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🛑 **A stop no longer starts the charger** (#854): telling a KEBA to stop
+  used to mean *enabling* it with a 1 kWh energy target so it would charge
+  into the target and suspend itself. On a box that was already idle that
+  is a start, not a stop — which is why "Min = 0" still put ~1 kWh into the
+  car on every plug-in, and why SEM appeared to fight a charger that was
+  only doing what SEM told it. A stop now disables the box and arms the
+  dead-man OFF (#740, which did not exist when that workaround was
+  written); nothing is ever enabled to stop it.
+
 - 🔎 **A Wallbox that can't be stopped now says why** (#852): when SEM
   cannot resolve the charger's registry device it could not find the
   `pause_resume` switch either, and fell back to `set_current(0)` — which

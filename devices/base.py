@@ -2863,7 +2863,6 @@ class CurrentControlDevice(ControllableDevice):
             elif self.charger_service:
                 # KEBA-style fallback
                 domain = self.charger_service.split(".", 1)[0]
-                _session_kwh = self._box_session_kwh()
                 # (#829, live PROD 21.08 evening) ONE stop, ONE quota. The
                 # reconciler re-asserts a standing stop every 60 s while the
                 # box still draws — right for a `disable`, self-defeating
@@ -2883,46 +2882,43 @@ class CurrentControlDevice(ControllableDevice):
                 # quota is already met/stale. No target sensor → rewrite,
                 # exactly today's behaviour: an unverifiable box gets the
                 # safe default.
-                _standing = self._standing_quota_kwh(_session_kwh)
-                if _standing is not None:
-                    _LOGGER.debug(
-                        "%s: stop re-assert — box already holds an unmet "
-                        "quota (%.1f kWh, session %.1f) — leaving it alone",
-                        self.name, _standing, _session_kwh,
-                    )
-                    return
-                if (_session_kwh is not None
-                        and self.hass.services.has_service(domain, "set_energy")
-                        and self.hass.services.has_service(domain, "enable")):
-                    # THE QUOTA-HOLD STOP (#553/#545, live-proven on the
-                    # real P30 2026-08-08). ``disable`` invites the war:
-                    # the box auto-starts, the car begs, SEM kills, every
-                    # ~90 s all night — and the old guard's set_energy
-                    # AFTER disable never persisted (register 0.0 all
-                    # evening: a silent no-op since #553 shipped). The
-                    # box's own language for "no" is a SATISFIED energy
-                    # target written to an ENABLED session (Guido's own
-                    # script order): park the current at the viable
-                    # minimum (a stored 8 A fed the Zoe-cutout churn),
-                    # write session+margin, enable — the box charges the
-                    # small remainder, suspends itself, and refuses the
-                    # car natively. A fresh plug-in resets the session
-                    # and wakes SEM to re-decide.
-                    quota = max(1.0, round(
-                        _session_kwh + QUOTA_STOP_MARGIN_KWH, 1))
-                    await self._set_current(float(self.min_current))
-                    await self.hass.services.async_call(
-                        domain, "set_energy", {"energy": quota},
-                        blocking=True,
-                    )
-                    await self.hass.services.async_call(
-                        domain, "enable", {}, blocking=True,
-                    )
-                    self._idle_guard_armed = True
-                    stop_method = f"quota-hold({quota:.1f} kWh)"
-                elif self.hass.services.has_service(domain, "disable"):
+                # (#853/#854, Guido 28.08) A STOP MUST NEVER ENABLE.
+                #
+                # The quota-hold did exactly that: set_current(min) +
+                # set_energy(quota) + ENABLE, so the box would charge to a
+                # satisfied target and suspend itself. On a box that is
+                # already idle that sequence is not a stop — it is a START,
+                # and it hands the car the firmware's 1 kWh floor (measured:
+                # any non-zero target under 1 kWh is rounded up to 1.0) that
+                # nobody asked for. That is what "Min = 0 still charges
+                # 1 kWh" always was: SEM's own commands, not the charger.
+                #
+                # It also made SEM fight ITSELF. With the quota-hold on one
+                # intent and a plain disable on the other, the box was
+                # enabled and disabled in turn — logged as a "stop war the
+                # charger keeps restarting itself", which the charger was
+                # not doing. Measured on PROD the same evening: plugged in
+                # and disabled, the box drew nothing for 28 minutes, and
+                # every start in that window followed a SEM enable.
+                #
+                # A disable stops a DRAWING box in ~3 s (measured) and holds
+                # while SEM is alive. The idle guard below still bounds a
+                # rogue session while SEM is DOWN (#553) — and it writes a
+                # target without ever enabling, which is the whole point.
+                if self.hass.services.has_service(domain, "disable"):
                     await self.hass.services.async_call(domain, "disable", {}, blocking=True)
-                    stop_method = f"{domain}.disable"
+                    # (#854) …and give the disable TEETH. #553 invented the
+                    # quota-hold because a bare disable did not hold: the
+                    # firmware retried and the car got back in. #740 later
+                    # built the dead-man OFF — fallback 0 A, persisted — which
+                    # makes the box enforce "off means off" through exactly
+                    # those retries. The stop path was never revisited after
+                    # #740 landed, so it kept paying for a workaround whose
+                    # reason had been fixed. Measured 28.08: plugged in and
+                    # disabled this way, the box drew nothing for 28 minutes.
+                    await self.arm_failsafe_off()
+                    await self._set_current(0)
+                    stop_method = f"{domain}.disable+deadman"
                     # #553 — BOX-LEVEL runaway cap (#315): KEBA firmware
                     # auto-restarts a session at its stored setpoint when the
                     # car retries (~every 10 min), even after keba.disable.
