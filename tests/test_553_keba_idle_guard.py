@@ -17,9 +17,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from custom_components.solar_energy_management.consts.core import (
-    KEBA_IDLE_GUARD_KWH,
-)
 from custom_components.solar_energy_management.devices.base import (
     CurrentControlDevice,
 )

@@ -23,7 +23,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from custom_components.solar_energy_management.devices.base import (
-    QUOTA_STOP_MARGIN_KWH,
     CurrentControlDevice,
 )
 
@@ -132,7 +131,7 @@ class TestTheQuotaIsNotATreadmill:
 
     async def test_no_quota_exists_to_walk(self):
         dev, hass = _keba(session_kwh=3.5)
-        for session in ("3.6", "3.9", "4.4"):        # the car drinks on
+        for _ in ("3.6", "3.9", "4.4"):             # the car drinks on
             await dev.stop_session()
         assert not _calls(hass, "set_energy"), (
             "a stop wrote an energy target — the treadmill needs one to "

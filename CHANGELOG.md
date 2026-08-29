@@ -42,6 +42,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   configure `domain.service` plus a JSON payload with state/relay
   placeholders, with an optional read-back entity SEM checks after every
   write. No more template-switch workarounds.
+# [2.0.0-beta.21] — 29.08.2026
+
 - 🛑 **A stop no longer starts the charger** (#854): telling a KEBA to stop
   used to mean *enabling* it with a 1 kWh energy target so it would charge
   into the target and suspend itself. On a box that was already idle that
