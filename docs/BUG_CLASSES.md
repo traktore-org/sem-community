@@ -2121,3 +2121,165 @@ quantity SEM reads from an external integration, does the integration model that
 entity or as N siblings that must be aggregated — and does the resolver (read AND detection) take the
 first, or all of them? Refs #562 #687 #819 #838.
 
+
+### 52. A summary statistic chosen without asking which tail hurts — GUARDED
+
+**Root shape:** a distribution reduced to its mean when the decision is asymmetric. The mean
+answers "what happens typically"; a decision that is cheap in one direction and expensive in the
+other needs a percentile, and *which* percentile is set by which tail hurts.
+
+**Instance (#778):** `ForecastLedger.trust()` returned `min(1.0, mean_ratio)` — how the forecast
+performs on average. Backfilling .175's own five months of history produced **139 settled
+forecast/actual pairs** and showed the mean was 1.050: an *unbiased* forecast. The spread was
+p10 0.514 / p90 1.502. Under the mean rule SEM would plan against the full forecast and the day
+would deliver less on **58 of 139 days (42 %)** — each one a battery sold against energy that
+never arrived. Now p20, with `accuracy()` keeping the mean as the bias diagnostic it actually is.
+
+**What makes it hard to see:** the mean is not *wrong*. It is a correct answer to a question
+nobody asked. Every unit test passed, the number looked reasonable, and the codebase already
+contained the correct argument for the OTHER side of the same ledger —
+`measured_capacity.NEED_PERCENTILE` takes a high percentile of overnight draw, with a comment
+explaining that "being short is not symmetric with being generous". The mirror image was simply
+never written.
+
+**Why tests miss it:** a test that asserts `trust(uniform_ratios) == expected_mean` passes for
+both rules. Only a REAL distribution — wide, unbiased, skewed — separates them, and the suite had
+no reason to contain one.
+
+**Guard:** `tests/test_778_trust_is_conservative.py` — an unbiased-but-volatile sample must not
+yield full trust, a reliable one must, and the measured .175 shape is pinned as a regression case
+with its own mean asserted so the counter-example cannot silently stop being one.
+
+**Where else to look:** anywhere SEM averages a series to make a spending or safety decision —
+tariff level classification, the dampening factor, EV session estimates, load calibration. The
+question to ask each one is not "is the average right" but *"which direction is expensive, and
+does this statistic protect it?"*
+
+### 53. An arithmetic identity nothing ever checks — GUARDED
+
+**Root shape:** two quantities SEM publishes that are related by physics or definition, with no
+assertion anywhere that the relation holds. Both look plausible alone; only together are they
+impossible.
+
+**Instance (#778):** the battery cannot send out more energy than it discharged, yet .175
+published `daily_battery_discharge_energy = 4.06` alongside outbound flows of
+`9.39 + 0.19 + 4.38 = 13.96` — **3.4× conservation**. PROD, on identical code, read 3.04 ≤ 4.04.
+So the violation was environmental, and *nothing in SEM noticed in either direction*. The damage
+path was silent: #800's night recorder integrates `battery_to_home_w` into `drain_kwh`, #778
+builds its overnight-need envelope from those drains, so an inflated flow inflates what SEM
+believes the house needs, the budget stays at zero, and the card reports **"holding"** — a
+sentence that reads as a considered decision rather than a broken input.
+
+**The fix shape — gate, do not clamp:** a violating night is recorded, is visible, and is not
+`trainable`. Repairing the number would hide a real misconfiguration; the same treatment the
+sampling-gap tolerance already gives an unreliable night.
+
+**Guard:** `coordinator/flow_invariant.py` + `tests/test_778_flow_invariant.py`, with the live
+PROD and .175 readings pinned as the balanced and violating cases.
+
+**Where else to look:** every published identity SEM never asserts — `home = solar + import +
+discharge − ev − export − charge` (the balance the `max(0, …)` clamp hides), per-charger draw
+summing to `ev_power`, daily energies summing to their monthly, flow energies summing to their
+source counter.
+
+### 54. A dict default defeated by a key that exists holding null — GUARDED
+
+**Root shape:** `config.get("key", SAFE_DEFAULT)` returns the default only when the key is
+**absent**. A key that is present holding `None` returns `None`, and the safe default never fires —
+on precisely the installs that never configured the setting, which is the population the default
+exists to protect.
+
+**Instances (#778):** PROD carries `battery_reserve_soc: None`. So
+`config.get("battery_reserve_soc", 20)` handed `spendable_budget` a `None`, which resolved the
+static floor to **0.0** — the user's "never below this, ever" backstop silently absent, on the one
+install with a real battery. Sweeping for siblings found `forecast_pessimism` doing the same in the
+same unsafe direction: missing resolved to `1.0` (no margin) against a documented `1.2`, so an
+install with a null in options quietly spent ~9 % more than one never configured at all.
+`battery_discharge_efficiency` was already correct (`_num(x) or 0.95`) — which is half the value of
+a sweep: *"already correct" is only knowable by looking.*
+
+**Why tests miss it:** every unit test constructs its config explicitly, so the key is either
+present-with-a-value or absent — never present-holding-null. That third state is created by the
+options flow and by `set_option`, i.e. only ever by a real install. The function's own signature
+default (`static_floor_pct=20.0`) reads as protection and provides none, because the caller passes
+an explicit `None` straight past it.
+
+**The distinction that matters:** an explicit `0` is a CHOICE ("spend it all"); `None` is an
+ABSENCE ("nobody said"). Collapsing the second into the first is the whole bug. The fix names what
+silence means, once, in the function — never at each call site, which is how the two drifted apart.
+
+**Found by:** backtesting against a real install's config, not by reading code. The suite was green
+throughout.
+
+**Guard:** `tests/test_778_spendable_budget.py::TestSilenceMeansTheDocumentedDefaultEverywhere` —
+every tunable arriving null must not out-spend an install carrying none of them.
+
+**Where else to look — and the sweep was RUN, 23.08.2026.** The exposure is checkable against real
+data rather than by reading: take a live config entry, list every key holding `None`, and
+cross-reference against every `config.get(k, default)` in the codebase. PROD carries **12 null
+keys**; exactly **4** call sites rely on a default for one of them:
+
+| site | key | verdict |
+|---|---|---|
+| `coordinator.py` (spendable budget) | `battery_reserve_soc` | **HAZARD** — fixed |
+| `coordinator.py` (spendable budget) | `forecast_pessimism` | **HAZARD** — fixed |
+| `coordinator.py:2785` | `vehicle_soc_entity` | safe — default `""`, consumed as `if entity:`, and `None` is equally falsy |
+| `coordinator.py:4237` | `vehicle_range_entity` | safe — same shape |
+
+So the class has **two** live instances and both are closed. The pattern that made the last two
+safe is worth copying: a default that is only ever tested for truthiness cannot be defeated by a
+null, because both fall the same way. The dangerous shape is a default that carries a NUMBER the
+arithmetic then uses.
+
+**Instrument:** `scripts/audit_null_defaults.py --host … --key …` reads a live install's null keys,
+cross-references every `config.get(k, default)` in the tree, and exits non-zero on any hazard — so
+it can gate CI against a reference config. Against PROD on 23.08 it reports **0 hazards, 2 safe**.
+
+Re-run it against any install's config before trusting the table above on a different deployment:
+the null set is per-install, and a key null on one machine may be set on another. That is also why
+this is an instrument rather than a static test — the hazard lives in the CONFIG, not in the code.
+
+### 55. Two measurements compared across different reset windows — GUARDED
+
+**Root shape:** an invariant compares quantity A against quantity B, and the two accumulate over
+different windows. Both are individually correct; the comparison is meaningless. Worse, it usually
+fails in the direction that looks like caution, so the code appears to be working.
+
+**Instance (#778/#800):** `flow_invariant` checked that the night's attributed flows fit inside the
+battery's discharge. The flows accumulated from dusk in `BatteryNightTracker` with **no midnight
+reset**; `daily_battery_discharge` is keyed `f"{category}_{today}"` with `today = now.date()` —
+`energy_calculator.py`'s own comment says *"Midnight-based reset — matches HA Energy Dashboard."*
+Every real night spans midnight. From 00:00 the counter restarts near zero while the tracker keeps
+climbing, so the two diverge by however much discharged before midnight, and a 15 % tolerance trips.
+
+**Why it was invisible:** it **failed safe.** `flows_balanced` latches → `trainable` false →
+`expected_overnight_need` and `measured_capacity` refuse the night → the #778 budget stays at zero
+and the card says *"holding"*. Nothing breaks, nothing errors, no user is harmed today — the
+feature simply never activates, and the sentence it shows while not activating reads like a
+considered decision. A gate written to reject the occasional impossible night would have rejected
+**almost every night**, forever, on real hardware.
+
+**Why tests missed it:** every test passed a **constant** `battery_discharge_kwh`. A constant has no
+reset window, so the mismatch cannot exist in the fixture. The bug lives entirely in the
+*relationship between two clocks*, and a unit test that supplies both sides as literals has quietly
+removed the only thing under test. Live evidence pointed at it (.175 read 4.06 vs 13.96) and was
+misattributed to a mock battery — which was ALSO real, so the arithmetic confirmed a partial
+explanation and the search stopped.
+
+**The fix shape — compare instantaneous, not cumulative.** Power against power, per sample: there is
+no window, so there is nothing to mismatch. The price is a duration tolerance (two sensors read
+microseconds apart disagree constantly, and one bad sample must not condemn a ten-hour night), and
+the gain is strictly more sensitivity when it does fire — a sustained impossible flow appears in
+every sample rather than being averaged into a daily total.
+
+**Guard:** `tests/test_800_flow_invariant_window.py` — a ten-hour simulated night at steady,
+legitimate discharge must stay balanced (the regression), a sustained impossible flow must still be
+rejected (not softened into uselessness), and a single bad sample must not condemn a night.
+
+**Where else to look — anywhere SEM compares an accumulator to another accumulator.** The reset
+windows in this codebase are genuinely different and genuinely undocumented at the comparison sites:
+midnight (`daily_*`), sunset→sunrise (the night tracker), per-charger deadline (`daily_ev_energy`,
+#279), monthly, lifetime (inverter counters), and "since SEM started" (session totals). Any
+assertion, diagnostic or Repair that puts two of those on opposite sides of an inequality is
+suspect. The question to ask is not "are both numbers right" but *"do these two zero at the same
+moment?"*

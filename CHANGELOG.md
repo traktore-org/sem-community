@@ -13,6 +13,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔭 **Every installed forecast source is scored against your actual roof**
+  (#822): SEM now reads what *all* your solar-forecast integrations say, not
+  only the one it uses, and publishes them beside the accuracy each has
+  actually achieved on your own production history. The raw numbers alone
+  would mislead — on the dev rig three sources spanned 6x for the same day
+  because they described differently configured arrays — so the score, not
+  the spread, is what to read. Comparison is read-only: it never re-points
+  the source in use.
+
+- 🌙 **A solar sensor that sleeps at night is no longer reported as frozen**
+  (#851): a cloud or inverter-side integration that powers down at dusk stops
+  reporting altogether, and SEM's frozen-sensor check read that correctly as a
+  stall — filing a warning and a Repair every single night for a healthy
+  system. SEM already knows it is night, so it now decides this for itself: the
+  warning is suppressed only when the sensor's own domain explains the silence
+  (a solar sensor, reading nothing, with the sun down). Everything the check
+  exists to catch still warns — solar frozen in daylight, solar stuck at a
+  non-zero value, and any non-solar sensor.
+
+- 🔌 **One way in to the charger, and observer mode can finally see it**
+  (#855): every command SEM sends a charger now goes through a single seam
+  instead of ~20 scattered call sites, and observer mode cuts *at* that
+  seam rather than above the brand logic. Two consequences: SEM's dry run
+  now reports the exact service calls it withheld — not just the decision
+  it reached — and reproducing a charger problem no longer means switching
+  observer off and commanding real hardware. Behaviour when observer is off
+  is unchanged; every existing contract test passes untouched.
+
+- 🧱 **The generic device layer stops learning new brands** (#855, stage 1):
+  a shrink-only ratchet on brand names in `devices/base.py` — 74 mentions
+  across ten brands today, and the count may now only fall. No behaviour
+  change; it holds the line while charger mechanics move into the adapters,
+  which is what will let observer mode show the commands SEM *would send*
+  instead of only the decision it made.
+
+- 🙈 **Opt-out undoes only what SEM did** (#847, refinement of the beta.20
+  fix): new devices now start in **Off** — you opt a device in deliberately
+  (the same rule discovered devices already follow). And setting Mode = Off
+  distinguishes a load SEM *started* (stopped once, so it is never stranded
+  running) from one it merely *adopted* while managing (released untouched,
+  zero writes). Existing device configs are unchanged.
+
+- 🧭 **Detection now reads the whole install, not just entity names** (#848):
+  a registry census lists every installed integration, flags energy-shaped
+  ones SEM has no pattern for (the gap list shows on the Config tab), and
+  hardware specs (pack size, kWp, discharge limit) are read registry-first
+  from stable translation keys — German, Dutch or renamed entity ids can no
+  longer hide them.
+- ♨️ **More than one heat pump** (#685): the options flow grows a heat-pump
+  menu — add, edit and remove additional units, each driven independently
+  by its own priority, relays/climate/service and thresholds. The existing
+  single-pump config keeps working untouched as the primary unit.
+- 📞 **SG-Ready as a service call** (#801): heat pumps whose control surface
+  is a command (Buderus via EMS-ESP) can now be driven directly —
+  configure `domain.service` plus a JSON payload with state/relay
+  placeholders, with an optional read-back entity SEM checks after every
+  write. No more template-switch workarounds.
 
 # [2.0.0] — 29.08.2026
 
@@ -158,6 +215,22 @@ those people.
 # [2.0.0-beta.19] — 27.08.2026
 
 
+- 💶 **The spendable budget finally has a trigger** (#778): with
+  forecast-led spending switched on, SEM now plans one just-in-time sell
+  window ending exactly when the night begins and discharges the measured
+  surplus to the grid through the same guarded path as arbitrage — three
+  floors, the export permission, the fleet split and the actuation kill
+  switch all bind. Works on a fixed export price, where the arbitrage
+  engine (correctly) never fires. Master switch stays OFF by default.
+- 👁️ **The inverter's operating mode is watched — never written** (#845):
+  point SEM at the policy selector (auto-suggested for Huawei) and the mode
+  appears beside the battery evidence; a one-time repair warns when it is
+  not the self-consumption mode SEM's planning assumes, debounced past
+  modbus dropouts. A deliberate other mode is your choice — SEM names the
+  disagreement and will not fight it.
+- 🎯 **The EV watts-per-amp replay ignores taper tails properly** (#846):
+  a session's wind-down could drag a learned bucket ~6 % low; the replay
+  now truncates a run at the first sub-plateau row.
 - 🔌 **The charger is parked when the car leaves** (park-on-disconnect):
   SEM now disables the charger once, cleanly, on the settled disconnect
   edge — so a KEBA (which auto-starts any plug-in when left enabled) can no
@@ -166,6 +239,7 @@ those people.
   UDP unplug blip, re-armed on reconnect, and a plain disable (never a quota
   the next plug-in would inherit). Generic across brands; a later charge
   re-enables normally.
+
 # [2.0.0-beta.18] — 26.08.2026
 
 - 🧭 **The setup checklist can be completed** (#842): three of its rows —
@@ -173,6 +247,49 @@ those people.
   exist, so they stayed unticked however well you had configured them.
   Reported by a user whose dynamic tariff was working perfectly while
   SEM's overview insisted it was not set up.
+
+- ⚡ **The EV offer corrects itself** (#846): SEM now measures what every
+  commanded current actually buys and plans with that, per setpoint — on
+  the PROD Zoe 16 A is 10.0 kW (not the 11.0 kW nameplate) and 8 A is
+  3.3 kW (not 5.5). Learned per charger and phase count, only from steady,
+  undisputed, non-tapering cycles; persisted across restarts, and a fresh
+  install replays a week of its own history at boot so the first session
+  after an upgrade already runs on measured numbers. Diagnostics on
+  `sensor.sem_charging_state` → `ev_watts_per_amp` (table, samples,
+  refusals with reasons) and `ev_watts_per_amp_replay`.
+- 🔋 **Smart battery charge pacing** (#820): opt-in — SEM paces the daytime
+  fill by solar forecast minus house forecast so the pack lands full at
+  day's end instead of ~11:30, protecting battery longevity and capturing
+  midday sun that would otherwise clip. Point it at your inverter's
+  max-charge-power number, flip the switch; below ~35 % it always charges
+  as fast as the sun allows, an untrusted forecast paces nothing, and the
+  original register value is restored the moment pacing disengages.
+- ☀️ **Deye: System Work Mode is configurable** (#827) — the export-policy
+  selector (Selling First / Zero Export To Load / Zero Export To CT), and
+  with it Deye gains its first battery-export surface: forecast-led
+  spending can now engage Selling First and restore your previous mode
+  afterwards. The discharge rate is set by the inverter in this mode and
+  SEM says so on the card.
+- 🔌 **EV chargers that latch after a stop can come back** (#804): a
+  start/resume *button* is now a first-class control — SEM presses exactly
+  the button you named, paced by its existing retry budget. Wattpilot's
+  force-state select and a resume button are auto-detected; Zaptec installs
+  get their installation's 3→1 phase threshold suggested (with the right
+  values) instead of silently unconfigured.
+- 🛡️ **Per-phase safety knows about phase switching** (#804): after a 3→1
+  switch the whole load sits on one conductor — the phase guard now uses
+  SEM's live phase belief instead of the nameplate, tightening the
+  per-phase clamp the moment a switch lands.
+- 🧭 **Every repair notice offers the next step** (#831): setup-side
+  notices link the exact troubleshooting section; notices that look like
+  SEM's fault link a bug report with your versions and context already
+  filled in, plus a copy-out dialog for anyone without a GitHub account.
+  Nothing is ever sent without you pressing the button.
+- 🎛️ **One less hidden margin** (#830): with measured forecast trust in
+  place, the internal pessimism factor no longer stacks on top of the
+  measurement — caution is counted once, and the audit that judges every
+  remaining knob against its measured successor now runs with the option
+  audit.
 
 # [2.0.0-beta.17] — 25.08.2026
 
@@ -228,6 +345,25 @@ those people.
   while the feature quietly did nothing and wrote a warning to the log every
   ten seconds. Found in a diagnostics download sent about something else
   entirely, reproduced here, and fixed.
+- 🌙 **SEM can now learn overnight battery use from history you already have**
+  (#815): working out how much of your battery is safe to spend needs five
+  good nights of evidence, and recording produces one per day — so a new
+  install waited a week for something its own database usually already proved.
+  The new **"Learn overnight battery use from past history"** action
+  reconstructs those nights from your battery's recorded discharge in one
+  pass. On the development rig it recovered **272 nights** and took the
+  evidence from 1 usable night to 57 immediately. Nights SEM measured live are
+  never overwritten: a live night can tell house use apart from car charging
+  and export, a reconstructed one cannot, so reconstructed nights are treated
+  as an upper bound — which errs toward holding more back, never less.
+- 🌙 **A flaky sensor during the DAY no longer throws away the night before
+  it** (#837): SEM judges whether a night was measured well enough to learn
+  from. That judgement was counting sensor dropouts from the following day
+  against the night, because a night's record is not filed until the next one
+  begins. On a system whose battery sensor blinks during the day — normal for
+  modbus inverters — good nights were being discarded and the battery-spending
+  feature could never gather its evidence. It would have looked like nothing
+  was wrong. A night is now judged on its own hours.
 
 - 🔭 **A forecast source that is still loading is no longer reported as "not
   installed"** (#819): after choosing a source, diagnostics could show a
@@ -270,6 +406,61 @@ those people.
   previously copied the whole repository into your config directory, test
   suite and documentation included; now it installs only what SEM needs to
   run.
+- 🛡️ **Your battery reserve now applies even if you never set one** (#778): if
+  the reserve was left unconfigured, SEM's new forecast-led spending read it as
+  *no reserve at all* rather than the 20% its own default documents. Same for
+  the forecast safety margin, which read as "no margin" instead of its
+  documented value. Both now fall back to the documented default when nothing
+  was ever chosen — an explicit `0` is still respected as a deliberate choice.
+- 📐 **SEM measured how much of the battery is safe to spend, instead of
+  guessing** (#778): the amount held back for the night was set to a
+  conservative estimate picked by judgement. Replaying **211 real nights** of
+  a live system showed what each candidate would actually have cost, and the
+  value shipped is the one that cut the worst overshoot by 70% while keeping
+  84% of the benefit. The tool that measured it ships too, so any installation
+  can check the setting against its own history rather than trusting ours.
+- 📊 **SEM can now learn your forecast's accuracy from history you already
+  have** (#778): forecast-led spending normally watches the forecast forward
+  and needs a week of days before it trusts one. If your system has been
+  running longer, the answer is already in your recorder history — the new
+  **"Learn forecast accuracy from past history"** action reads it and settles
+  the ledger in one pass. Days SEM recorded live are never overwritten. On the
+  development rig this recovered **139 days** of real forecast-vs-actual.
+- ⚖️ **Forecast trust is now measured against the bad days, not the average
+  one** (#778): SEM scored its forecast by the average ratio of actual to
+  forecast. Those 139 recovered days showed why that is not enough — the
+  forecast was **unbiased on average** (1.05) and hugely variable day to day
+  (p10 0.51, p90 1.50). Planning against the average would have over-committed
+  the battery on **42% of days**. SEM now plans against a low percentile of its
+  own track record, so a forecast that is right on average but unreliable in
+  practice earns less trust than one that is simply right.
+- 🔍 **A night whose energy does not add up is no longer treated as evidence**
+  (#778): the battery cannot send out more energy than it discharged. SEM now
+  checks that each night and marks any night that fails it as unusable for
+  learning, instead of quietly folding an impossible number into what it
+  believes your house needs overnight. Found on the development rig, which was
+  reporting 13.96 kWh leaving a battery that had discharged 4.06 — the effect
+  would have been a budget stuck at zero with the dashboard calmly reporting
+  that nothing was spare.
+- 🔋 **SEM can now spend part of your battery tonight when tomorrow's sun will
+  refill it** (#778): the overnight floor stops being a number you type and
+  becomes an answer that changes nightly — 30 % before a sunny day, 90 %+ before
+  a poor one, from the same settings. **Battery tab → "Tonight"** shows the
+  budget, the floor it lands on, and the arithmetic behind it, and the SOC zones
+  bar draws tonight's floor beside your configured one. **Off by default**: turn
+  it on under **Config → Battery charge scheduler → Forecast-led spending**,
+  where two separate switches decide what the budget may be spent on — selling
+  to the grid, and charging the car. They are separate on purpose, so
+  "may sell, may not touch the car" is expressible.
+- 🔍 **SEM now says "still learning" instead of showing nothing** (#778): the
+  new planning sensors published an honest blank while evidence accrued, which
+  Home Assistant renders with the same word it uses for a dead integration. The
+  Battery tab now distinguishes three states — *learning* (with a count of the
+  nights recorded so far), *holding* (enough evidence, and the answer is
+  genuinely nothing spare), and *spending* — and the evidence strip beneath it
+  separates "not enough days yet" from "your forecast provider does not publish
+  this at all", which are different problems and only one of them resolves by
+  waiting.
 
 # [2.0.0-beta.15] — 24.08.2026
 

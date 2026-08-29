@@ -214,8 +214,8 @@ class TestOptionsFlowLabelCoverage737:
         # 18 loop-built program fields must ALL be seen, or the f-string
         # enumeration silently dropped the program group.
         deye = per_step.get(("options", "deye"), set())
-        assert len(deye) == 33, (
-            f"expected 33 deye schema keys (15 scalar + 18 program), saw "
+        assert len(deye) == 38, (  # +5: the #827 System Work Mode block
+            f"expected 38 deye schema keys (20 scalar + 18 program), saw "
             f"{len(deye)} — the comprehension enumeration is broken: {sorted(deye)}"
         )
         assert {f"deye_program_{n}_{k}" for n in range(1, 7)

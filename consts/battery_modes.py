@@ -50,7 +50,9 @@ DEFAULT_BATTERY_MODE: str = "auto"
 DEFAULT_BATTERY_RESERVE_SOC: float = 20.0
 
 
-def arbitrage_allowed_for_mode(mode: str, global_enabled: bool) -> bool:
+def arbitrage_allowed_for_mode(
+    mode: str, global_enabled: bool, permissions: dict = None,
+) -> bool:
     """Whether a battery in ``mode`` may act on a DISCHARGING_ARBITRAGE
     verdict this cycle.
 
@@ -58,9 +60,32 @@ def arbitrage_allowed_for_mode(mode: str, global_enabled: bool) -> bool:
     * ``allow_arbitrage``  → always (per-battery opt-in).
     * ``auto`` / unknown   → follow the global arbitrage toggle.
     """
+    # (#778) The permission axis now owns this question. The mapping below
+    # keeps every existing install behaving exactly as it did — the legacy
+    # values migrate to the permissions they always were — while making
+    # "self-consumption posture AND permitted to sell" expressible, which a
+    # single-select enum never could. See consts/battery_permissions.py.
+    from .battery_permissions import (
+        LEGACY_ARBITRAGE_MODE, effective_permissions, may_export,
+    )
+
     m = (mode or "auto").lower()
-    if m in ("self_consumption", "off"):
-        return False
-    if m == "allow_arbitrage":
+
+    # ``allow_arbitrage`` stays a short-circuit. It is a per-battery opt-in
+    # that overrides the global switch in SHIPPED behaviour, pinned by
+    # tests/test_638_c6_arbitrage_sell.py, and routing it through may_export
+    # would make the global kill switch absolute for it — a real behaviour
+    # change on existing installs, and not the one this fix is for. The two
+    # functions genuinely disagree about whether a per-battery opt-in beats
+    # the master switch; that is worth settling deliberately, not here.
+    if m == LEGACY_ARBITRAGE_MODE:
         return True
-    return bool(global_enabled)
+
+    # Everything else routes through the permission axis — INCLUDING
+    # self_consumption, which used to short-circuit to False and so could
+    # never be granted an explicit may_export. That contradicted the comment
+    # above: "self-consumption posture AND permitted to sell" was the one
+    # thing this arc existed to make expressible, and it was the one
+    # combination still impossible. may_export preserves the legacy meaning
+    # for UNSET (self_consumption never sold), so no existing install moves.
+    return may_export(m, effective_permissions(m, permissions), bool(global_enabled))

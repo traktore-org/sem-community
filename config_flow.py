@@ -107,6 +107,25 @@ def _clearable_keys(schema: Any) -> set[str]:
     }
 
 
+def _parse_service_data(raw) -> dict | None:
+    """#801: service data is stored as a JSON string in the flow.
+
+    Returns the dict, {} for empty, None for invalid — the caller turns
+    None into a form error instead of shipping an unusable payload.
+    """
+    if isinstance(raw, dict):
+        return raw
+    text = str(raw or "").strip()
+    if not text:
+        return {}
+    try:
+        import json
+        parsed = json.loads(text)
+    except Exception:  # noqa: BLE001 — invalid JSON is the error case
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
 def _merge_form_input(flow: Any, target: dict, user_input: dict) -> None:
     """Merge a submitted form into ``target``, honouring CLEARED fields.
 
@@ -191,13 +210,87 @@ def _charger_already_installed(discovery: dict, installed: Any) -> bool:
     return any(mine & _charger_entities(c) for c in (installed or []))
 
 
-def _detect_hardware_specs(hass: HomeAssistant) -> Dict[str, float]:
+#: (#848) Per-spec STABLE keys — an integration's ``translation_key`` /
+#: ``unique_id`` suffix never localises and survives renames, unlike the
+#: entity_id the glob fallback below matches. Grounded live on huawei_solar
+#: (a German install: ``sensor.batterien_akkukapazitat`` carries
+#: ``tk=storage_rated_capacity``).
+_SPEC_REGISTRY_KEYS: Dict[str, tuple] = {
+    "battery_capacity_kwh": (
+        "storage_rated_capacity", "battery_capacity", "usable_capacity",
+        "rated_capacity",
+    ),
+    "system_size_kwp": ("rated_power", "nominal_power"),
+    "battery_max_discharge_power": (
+        "storage_maximum_discharging_power", "max_discharge_power",
+        "max_discharging_power",
+    ),
+}
+
+
+def _spec_from_registry(hass: HomeAssistant, registry=None) -> Dict[str, str]:
+    """(#848) entity_id per spec, found by translation_key / unique_id
+    suffix in the entity registry — the language-proof half of the ladder.
+    Returns only the entity ids; the caller reads and converts values."""
+    from homeassistant.helpers import entity_registry as _er
+    if registry is None:
+        try:
+            registry = _er.async_get(hass)
+        except Exception:  # noqa: BLE001 — glob fallback stands alone
+            return {}
+    found: Dict[str, str] = {}
+    try:
+        entries = list(registry.entities.values())
+    except Exception:  # noqa: BLE001 — un-loaded/mocked registry: globs stand alone
+        return {}
+    for e in entries:
+        if getattr(e, "disabled_by", None):
+            continue
+        eid = str(e.entity_id)
+        if not eid.startswith(("sensor.", "number.")):
+            continue
+        tk = str(getattr(e, "translation_key", "") or "")
+        uid = str(getattr(e, "unique_id", "") or "")
+        for spec, keys in _SPEC_REGISTRY_KEYS.items():
+            if spec in found:
+                continue
+            if any(tk == k or uid.endswith(k) for k in keys):
+                found[spec] = eid
+    return found
+
+
+def _detect_hardware_specs(hass: HomeAssistant, registry=None) -> Dict[str, float]:
     """Auto-detect battery capacity, system size, and max discharge from hardware.
 
-    Searches the entity registry for known sensor patterns across inverter brands.
-    Returns a dict of detected values (only includes keys that were found).
+    (#848) Registry-first: stable ``translation_key``/``unique_id`` matches
+    win; the entity_id globs below remain as the last-resort fallback for
+    integrations without stable keys. Returns only the values it found.
     """
     detected: Dict[str, float] = {}
+
+    # ── the registry ladder rung ─────────────────────────────────────
+    for spec, eid in _spec_from_registry(hass, registry=registry).items():
+        state = hass.states.get(eid)
+        if state is None:
+            continue
+        try:
+            val = float(state.state)
+        except (TypeError, ValueError):
+            continue
+        if val <= 0:
+            continue
+        if spec == "battery_capacity_kwh":
+            labelled = bool(normalize_unit(state))
+            val = energy_state_to_kwh(state, default=val)
+            if not labelled and val > 500:
+                val = val / 1000
+            detected[spec] = round(val, 1)
+        elif spec == "system_size_kwp":
+            if val > 100:                      # W → kWp
+                detected[spec] = round(val / 1000, 1)
+        else:                                   # discharge power, W
+            detected["battery_max_discharge_power"] = round(val, 0)
+            detected["battery_assist_max_power"] = round(val, 0)
 
     # Battery capacity (Wh or kWh)
     capacity_patterns = [
@@ -703,6 +796,15 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     # if empty so config.get() returns "".
                     merged.setdefault("battery_discharge_control_entity", "")
 
+                # (#845) The operating-policy selector, found by vocabulary.
+                merged.setdefault(
+                    "battery_operating_mode_entity",
+                    _suggest_select_with_options(self.hass, [
+                        "maximise_self_consumption",
+                        "fully_fed_to_grid",
+                        "time_of_use_luna2000",
+                    ]) or "")
+
                 # Wrap flat EV keys into ev_chargers list (#112 multi-charger).
                 # #442: ``_install_defaults()`` now sets ``ev_chargers: []`` so
                 # downstream code always finds a list. Treat both "missing" and
@@ -916,9 +1018,12 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "battery_charge_scheduler_enabled",
     "battery_cycle_cost",
     "battery_discharge_control_entity",
+    "battery_operating_mode_entity",
     "battery_discharge_protection_enabled",
     "battery_force_charge_negative_price",
     "battery_max_charge_power_w",
+    "battery_charge_power_limit_entity",
+    "inverter_ac_limit_w",
     "battery_max_discharge_power",
     "battery_max_target_soc",
     "battery_min_deficit_kwh",
@@ -948,6 +1053,11 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "deye_program_groups",
     "deye_work_mode_battery_first_option",
     "deye_work_mode_control",
+    "deye_system_work_mode_control",
+    "deye_system_work_mode_entity",
+    "deye_system_work_mode_selling_option",
+    "deye_system_work_mode_zero_ct_option",
+    "deye_system_work_mode_zero_load_option",
     "deye_work_mode_entity",
     "deye_work_mode_load_first_option",
     "diagram_style",
@@ -978,6 +1088,7 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "ev_phase_switch_entity",
     "ev_phase_switch_value_1p",
     "ev_phase_switch_value_3p",
+    "ev_phase_switching_enabled",
     "ev_start_stop_entity",
     "ev_surplus_priority",
     "ev_target_soc",
@@ -996,10 +1107,19 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "heat_pump_priority",
     "heat_pump_relay1_entity",
     "heat_pump_relay2_entity",
+    "heat_pump_sg_ready_service",
+    "heat_pump_sg_ready_service_data",
+    "heat_pump_sg_ready_state_entity",
+    "heat_pump_temperature_sensor",
+    "heat_pump_energy_sensor",
+    "heat_pump_rated_power",
+    "heat_pump_force_on_threshold",
+    "heat_pumps",
     "initial_current",
     "load_management_enabled",
     "minimum_solar_power",
     "mobile_notification_service",
+    "name",
     "observer_mode",
     "peak_limit_unlimited",
     "phase_guard_enabled",
@@ -1035,6 +1155,47 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "warning_peak_level",
 })
 
+
+
+_CHARGE_LIMIT_HINTS = ("maximale_ladeleistung", "maximum_charging_power",
+                       "max_charge_power", "charge_power_limit",
+                       "max_charging_power", "battery_charge_power")
+
+
+def _suggest_charge_limit_number(hass) -> str | None:
+    """(#820, 2.1 audit) The inverter's standing max-charge-power number,
+    by the names the common integrations give it (Huawei's
+    'Maximale Ladeleistung' / 'maximum_charging_power' first). A suggestion
+    the user confirms — never auto-configured."""
+    if hass is None:
+        return None
+    try:
+        for st in hass.states.async_all("number"):
+            eid = st.entity_id.lower()
+            if any(h in eid for h in _CHARGE_LIMIT_HINTS) and "discharg" not in eid \
+                    and "entlade" not in eid:
+                return st.entity_id
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
+def _suggest_select_with_options(hass, labels) -> str | None:
+    """(#827, 2.1 audit) The select entity whose options contain ALL the
+    given labels — the Deye System Work Mode selector identifies itself by
+    its vocabulary, whatever the integration named the entity. Detection,
+    not asking: the user confirms a prefilled picker instead of hunting."""
+    want = [str(x).strip() for x in labels if str(x or "").strip()]
+    if len(want) < 3 or hass is None:
+        return None
+    try:
+        for st in hass.states.async_all("select"):
+            opts = st.attributes.get("options") or []
+            if all(w in opts for w in want):
+                return st.entity_id
+    except Exception:  # noqa: BLE001 — a suggestion never breaks a form
+        return None
+    return None
 
 class OptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for Solar Energy Management."""
@@ -1313,6 +1474,15 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             c for c in all_discovered if not _charger_already_installed(c, installed)
         ]
         suggestions = new_discoveries[0] if new_discoveries else {}
+        # (#804 B4c) detection may carry a threshold-model phase-switch
+        # SUGGESTION (Zaptec: the installation's 3→1 current). Feed the
+        # entity AND its values into the form's suggested values — the user
+        # still confirms; nothing is auto-configured.
+        _sps = suggestions.get("_suggested_phase_switch")
+        if isinstance(_sps, dict):
+            suggestions.setdefault("ev_phase_switch_entity", _sps.get("entity"))
+            suggestions.setdefault("ev_phase_switch_value_1p", _sps.get("value_1p"))
+            suggestions.setdefault("ev_phase_switch_value_3p", _sps.get("value_3p"))
 
         return self.async_show_form(
             step_id="ev_charger_add",
@@ -1405,6 +1575,14 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 # Required for a select (its option strings are the
                 # device's language — never guessed); number defaults to
                 # 1/3 and switch to off/on when left empty.
+                # (#804, 2.1 audit) The gate that wakes phase switching. It
+                # shipped with NO user interface — a 2.0 user lost the phase
+                # row and could not turn it back on. Default off; one line of
+                # copy says why (the label's description).
+                vol.Optional(
+                    "ev_phase_switching_enabled",
+                    default=False,
+                ): selector.BooleanSelector(),
                 vol.Optional(
                     "ev_phase_switch_value_1p",
                     description={"suggested_value": suggestions.get("ev_phase_switch_value_1p")},
@@ -1597,6 +1775,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         "input_select", "input_number", "input_boolean",
                     ])
                 ),
+                vol.Optional(
+                    "ev_phase_switching_enabled",
+                    default=bool(charger.get("ev_phase_switching_enabled", False)),
+                ): selector.BooleanSelector(),
                 vol.Optional(
                     "ev_phase_switch_value_1p",
                     description={"suggested_value": charger.get("ev_phase_switch_value_1p")},
@@ -1805,6 +1987,20 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "battery_discharge_control_entity",
                     description={"suggested_value": current_config.get("battery_discharge_control_entity") or None},
                 ): selector.EntitySelector(selector.EntitySelectorConfig(domain="number")),
+                # (#845) Observe-only: the inverter's operating-policy
+                # selector, WATCHED never written. Prefilled by vocabulary
+                # (the Huawei selector identifies itself by its options),
+                # cleared = no watch.
+                vol.Optional(
+                    "battery_operating_mode_entity",
+                    description={"suggested_value": (
+                        current_config.get("battery_operating_mode_entity")
+                        or _suggest_select_with_options(self.hass, [
+                            "maximise_self_consumption",
+                            "fully_fed_to_grid",
+                            "time_of_use_luna2000",
+                        ]))},
+                ): selector.EntitySelector(selector.EntitySelectorConfig(domain="select")),
                 vol.Optional(
                     "diagram_style",
                     default=_c("diagram_style", "sem"),
@@ -2461,11 +2657,17 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             climate = user_input.get("heat_pump_climate_entity")
             has_one_relay = bool(relay1) ^ bool(relay2)
             has_climate = bool(climate)
-            if has_one_relay and not has_climate:
+            service = (user_input.get("heat_pump_sg_ready_service") or "").strip()
+            svc_data_raw = (user_input.get("heat_pump_sg_ready_service_data") or "").strip()
+            if has_one_relay and not has_climate and not service:
                 errors["base"] = "heat_pump_partial_relays"
+            elif service and "." not in service:
+                errors["base"] = "heat_pump_service_invalid"
+            elif svc_data_raw and _parse_service_data(svc_data_raw) is None:
+                errors["base"] = "heat_pump_service_data_invalid"
             else:
                 _merge_form_input(self, self._data, user_input)
-                return await self.async_step_battery_scheduler()
+                return await self.async_step_heat_pump_menu()
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
         _c = lambda key, fb: self._cfg(current_config, key, fb)
@@ -2529,6 +2731,209 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         min=1, max=10, step=1, mode="slider"
                     )
                 ),
+                # (#801) SG-Ready as a SERVICE CALL — for heat pumps whose
+                # control surface is a command (Buderus via EMS-ESP), not a
+                # relay pair. domain.service; data is JSON and may use
+                # {state}/{relay1}/{relay2} placeholders.
+                vol.Optional(
+                    "heat_pump_sg_ready_service",
+                    description={"suggested_value": _opt("heat_pump_sg_ready_service")},
+                ): selector.TextSelector(),
+                vol.Optional(
+                    "heat_pump_sg_ready_service_data",
+                    description={"suggested_value": _opt("heat_pump_sg_ready_service_data")},
+                ): selector.TextSelector(),
+                vol.Optional(
+                    "heat_pump_sg_ready_state_entity",
+                    description={"suggested_value": _opt("heat_pump_sg_ready_state_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["sensor", "select", "input_select"])
+                ),
+            }),
+            errors=errors,
+        )
+
+    # ── #685: additional heat pumps ─────────────────────────────────
+    # The flat heat_pump_* keys stay the PRIMARY unit (every existing
+    # reader — diagnose, card, registration — keeps working untouched).
+    # Additional units live in the ``heat_pumps`` list, one dict per
+    # unit with the same key names. Mirrors the ev_chargers menu (#112).
+
+    async def async_step_heat_pump_menu(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Multi-heat-pump menu: add another unit or continue (#685)."""
+        if user_input is not None:
+            action = user_input.get("action", "continue")
+            if action == "add_heat_pump":
+                self._edit_hp_index = None
+                return await self.async_step_heat_pump_unit()
+            if action.startswith("edit_heat_pump:"):
+                self._edit_hp_index = int(action.split(":", 1)[1])
+                return await self.async_step_heat_pump_unit()
+            if action.startswith("remove_heat_pump:"):
+                idx = int(action.split(":", 1)[1])
+                pumps = list(self._data.get("heat_pumps")
+                             or self.config_entry.options.get("heat_pumps") or [])
+                if 0 <= idx < len(pumps):
+                    removed = pumps.pop(idx)
+                    self._data["heat_pumps"] = pumps
+                    _LOGGER.info("Removed heat pump '%s' (%d additional left)",
+                                 removed.get("name", idx), len(pumps))
+                return await self.async_step_heat_pump_menu()
+            return await self.async_step_battery_scheduler()
+
+        pumps = list(self._data.get("heat_pumps")
+                     or self.config_entry.options.get("heat_pumps") or [])
+        options = [{"value": "continue",
+                    "label": f"Continue ({1 + len(pumps)} heat pump"
+                             f"{'s' if pumps else ''} configured)"}]
+        for i, hp in enumerate(pumps):
+            options.append({"value": f"edit_heat_pump:{i}",
+                            "label": f"Edit: {hp.get('name') or f'Heat Pump {i + 2}'}"})
+            options.append({"value": f"remove_heat_pump:{i}",
+                            "label": f"Remove: {hp.get('name') or f'Heat Pump {i + 2}'}"})
+        options.append({"value": "add_heat_pump", "label": "Add another heat pump"})
+        return self.async_show_form(
+            step_id="heat_pump_menu",
+            data_schema=vol.Schema({
+                vol.Required("action", default="continue"): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=options, mode=selector.SelectSelectorMode.LIST)
+                ),
+            }),
+        )
+
+    async def async_step_heat_pump_unit(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Add or edit one ADDITIONAL heat pump (#685)."""
+        errors: dict[str, str] = {}
+        pumps = list(self._data.get("heat_pumps")
+                     or self.config_entry.options.get("heat_pumps") or [])
+        editing = getattr(self, "_edit_hp_index", None)
+        row = pumps[editing] if editing is not None and editing < len(pumps) else {}
+
+        if user_input is not None:
+            relay1 = user_input.get("heat_pump_relay1_entity")
+            relay2 = user_input.get("heat_pump_relay2_entity")
+            climate = user_input.get("heat_pump_climate_entity")
+            service = (user_input.get("heat_pump_sg_ready_service") or "").strip()
+            svc_data_raw = (user_input.get("heat_pump_sg_ready_service_data") or "").strip()
+            if not ((relay1 and relay2) or climate or service):
+                errors["base"] = "heat_pump_no_control"
+            elif bool(relay1) ^ bool(relay2) and not (climate or service):
+                errors["base"] = "heat_pump_partial_relays"
+            elif service and "." not in service:
+                errors["base"] = "heat_pump_service_invalid"
+            elif svc_data_raw and _parse_service_data(svc_data_raw) is None:
+                errors["base"] = "heat_pump_service_data_invalid"
+            else:
+                new_row = {k: v for k, v in user_input.items() if v not in (None, "")}
+                if editing is not None and editing < len(pumps):
+                    new_row.setdefault("id", pumps[editing].get("id", f"heat_pump_{editing + 2}"))
+                    pumps[editing] = new_row
+                else:
+                    new_row.setdefault("id", f"heat_pump_{len(pumps) + 2}")
+                    new_row.setdefault("name", f"Heat Pump {len(pumps) + 2}")
+                    pumps.append(new_row)
+                self._data["heat_pumps"] = pumps
+                self._edit_hp_index = None
+                return await self.async_step_heat_pump_menu()
+
+        def _row(key, fb=None):
+            v = row.get(key)
+            return v if v not in (None, "") else fb
+
+        return self.async_show_form(
+            step_id="heat_pump_unit",
+            data_schema=vol.Schema({
+                vol.Optional(
+                    "name",
+                    description={"suggested_value": _row("name")},
+                ): selector.TextSelector(),
+                vol.Optional(
+                    "heat_pump_relay1_entity",
+                    description={"suggested_value": _row("heat_pump_relay1_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["switch", "input_boolean"])
+                ),
+                vol.Optional(
+                    "heat_pump_relay2_entity",
+                    description={"suggested_value": _row("heat_pump_relay2_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["switch", "input_boolean"])
+                ),
+                vol.Optional(
+                    "heat_pump_invert_sg_ready",
+                    default=bool(_row("heat_pump_invert_sg_ready", False)),
+                ): selector.BooleanSelector(),
+                vol.Optional(
+                    "heat_pump_climate_entity",
+                    description={"suggested_value": _row("heat_pump_climate_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="climate")
+                ),
+                vol.Optional(
+                    "heat_pump_power_sensor",
+                    description={"suggested_value": _row("heat_pump_power_sensor")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class="power")
+                ),
+                vol.Optional(
+                    "heat_pump_energy_sensor",
+                    description={"suggested_value": _row("heat_pump_energy_sensor")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class="energy")
+                ),
+                vol.Optional(
+                    "heat_pump_temperature_sensor",
+                    description={"suggested_value": _row("heat_pump_temperature_sensor")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
+                ),
+                vol.Optional(
+                    "heat_pump_rated_power",
+                    default=float(_row("heat_pump_rated_power", 2000.0)),
+                ): bounds_selector("heat_pump_rated_power"),
+                vol.Optional(
+                    "heat_pump_boost_offset",
+                    default=float(_row("heat_pump_boost_offset", 2.0)),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=10.0, step=0.5, unit_of_measurement="°C", mode="slider")
+                ),
+                vol.Optional(
+                    "heat_pump_max_setpoint",
+                    default=float(_row("heat_pump_max_setpoint", 55.0)),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=30.0, max=80.0, step=1.0, unit_of_measurement="°C", mode="slider")
+                ),
+                vol.Optional(
+                    "heat_pump_force_on_threshold",
+                    default=float(_row("heat_pump_force_on_threshold", 5000.0)),
+                ): bounds_selector("heat_pump_force_on_threshold"),
+                vol.Optional(
+                    "heat_pump_priority",
+                    default=int(_row("heat_pump_priority", 4)),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=1, max=10, step=1, mode="slider")
+                ),
+                vol.Optional(
+                    "heat_pump_sg_ready_service",
+                    description={"suggested_value": _row("heat_pump_sg_ready_service")},
+                ): selector.TextSelector(),
+                vol.Optional(
+                    "heat_pump_sg_ready_service_data",
+                    description={"suggested_value": _row("heat_pump_sg_ready_service_data")},
+                ): selector.TextSelector(),
+                vol.Optional(
+                    "heat_pump_sg_ready_state_entity",
+                    description={"suggested_value": _row("heat_pump_sg_ready_state_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["sensor", "select", "input_select"])
+                ),
             }),
             errors=errors,
         )
@@ -2576,6 +2981,28 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         unit_of_measurement="W",
                         mode=selector.NumberSelectorMode.BOX,
                     )
+                ),
+                # (#820) Where a paced charge cap is WRITTEN — the
+                # inverter's standing max-charge-power number (e.g. Huawei's
+                # "Maximale Ladeleistung"). Suggested, never defaulted: an
+                # unset entity means pacing has nothing to act on and stays
+                # advisory even when its switch is on.
+                # (#820, 2.1 audit) The inverter's AC output limit. Charge
+                # pacing opens its cap wherever solar would exceed this —
+                # captured sun beats an even pace. It was READ and never
+                # DEFINED, so the clipping guard was dead on every install.
+                # 0 = not set (guard off).
+                vol.Optional(
+                    "inverter_ac_limit_w",
+                    default=_c("inverter_ac_limit_w", 0),
+                ): bounds_selector("inverter_ac_limit_w", mode="box"),
+                vol.Optional(
+                    "battery_charge_power_limit_entity",
+                    description={"suggested_value": (
+                        _c("battery_charge_power_limit_entity", None)
+                        or _suggest_charge_limit_number(self.hass))},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="number")
                 ),
                 vol.Optional(
                     "battery_roundtrip_efficiency",
@@ -2708,6 +3135,15 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 battery_first = clean.get(
                     "deye_work_mode_battery_first_option", ""
                 ).strip()
+                if clean.get("deye_system_work_mode_control") is True:
+                    labels = [
+                        clean.get("deye_system_work_mode_selling_option", "").strip(),
+                        clean.get("deye_system_work_mode_zero_load_option", "").strip(),
+                        clean.get("deye_system_work_mode_zero_ct_option", "").strip(),
+                    ]
+                    if any(not v for v in labels) or len(set(labels)) != 3:
+                        errors["deye_system_work_mode_selling_option"] = (
+                            "deye_system_work_mode_mapping_not_distinct")
                 if clean.get("deye_work_mode_control") is True:
                     if not load_first or not battery_first or load_first == battery_first:
                         errors["deye_work_mode_battery_first_option"] = (
@@ -2732,6 +3168,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 self._data["deye_work_mode_control"] = clean.get(
                     "deye_work_mode_control", False,
                 ) is True
+                self._data["deye_system_work_mode_control"] = clean.get(
+                    "deye_system_work_mode_control", False,
+                ) is True
                 # Copy the scalar Deye config terms through.
                 for key in (
                     "deye_grid_charge_switch",
@@ -2745,6 +3184,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "deye_work_mode_load_first_option",
                     "deye_work_mode_battery_first_option",
                     "deye_force_charge_work_mode",
+                    "deye_system_work_mode_entity",
+                    "deye_system_work_mode_selling_option",
+                    "deye_system_work_mode_zero_load_option",
+                    "deye_system_work_mode_zero_ct_option",
                 ):
                     if clean.get(key) is not None:
                         self._data[key] = clean[key]
@@ -2884,6 +3327,45 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                             ],
                             mode=selector.SelectSelectorMode.DROPDOWN,
                         )
+                    ),
+                    # (#827) System Work Mode — the EXPORT-POLICY selector
+                    # (Selling First / Zero Export To Load / Zero Export To
+                    # CT), a different register from the Work Mode above.
+                    # With it configured, #778's spend half gains its first
+                    # Deye actuator.
+                    vol.Optional(
+                        "deye_system_work_mode_control",
+                        default=_c("deye_system_work_mode_control", False),
+                    ): selector.BooleanSelector(),
+                    vol.Optional(
+                        "deye_system_work_mode_entity",
+                        description={"suggested_value": (
+                            _c("deye_system_work_mode_entity", None)
+                            or _suggest_select_with_options(self.hass, (
+                                _c("deye_system_work_mode_selling_option", "Selling First"),
+                                _c("deye_system_work_mode_zero_load_option", "Zero Export To Load"),
+                                _c("deye_system_work_mode_zero_ct_option", "Zero Export To CT"),
+                            )))},
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="select")
+                    ),
+                    vol.Optional(
+                        "deye_system_work_mode_selling_option",
+                        description={"suggested_value": _c("deye_system_work_mode_selling_option", "Selling First")},
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+                    ),
+                    vol.Optional(
+                        "deye_system_work_mode_zero_load_option",
+                        description={"suggested_value": _c("deye_system_work_mode_zero_load_option", "Zero Export To Load")},
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+                    ),
+                    vol.Optional(
+                        "deye_system_work_mode_zero_ct_option",
+                        description={"suggested_value": _c("deye_system_work_mode_zero_ct_option", "Zero Export To CT")},
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
                     ),
                 }
                 | {

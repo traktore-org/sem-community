@@ -186,8 +186,19 @@ class TestPatternsTrigger:
 
     @pytest.mark.asyncio
     async def test_button_start_stop_zaptec(self):
+        """(#804 B4a) This test used to pin the OPPOSITE: stop pressed a
+        button whose id was GUESSED by string-rewriting the resume entity
+        (resume→stop→_stop_charging) — pressing an entity nobody named. The
+        new contract: a button-surface charger stops through the CURRENT
+        path (0 A is a soft pause on this hardware, measured by the #804
+        reporter), and the named button is the RESUME, pressed by
+        ensure_enabled when charging should come back."""
         dev = _device(charger_service="zaptec.set_current",
                       start_stop_entity="button.zaptec_resume_charging")
         a = adapter_for(dev)
         await _stop(dev, a)
+        assert not _fired(dev, "button", "press"), (
+            "stop pressed a guessed button id again (#804 B4a)"
+        )
+        await a.ensure_enabled()
         assert _fired(dev, "button", "press")

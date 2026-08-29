@@ -77,14 +77,14 @@ passing every static check (guarded by `tests/test_card_template_lint.py`).
 ### Testing
 
 Run from a replica of the CI layout, **not** from the repo root — a repo-root `select.py`
-shadows the stdlib `select` module, and Python 3.12+ is required for the `type` statement:
+shadows the stdlib `select` module, and Python 3.13+ is required (the HA 2026.2 floor):
 
 ```bash
 rsync -a --delete --exclude=.git --exclude=node_modules ./ /tmp/ha-config/custom_components/solar_energy_management/
-cd /tmp/ha-config && PYTHONPATH=/tmp/ha-config python3.12 -m pytest custom_components/solar_energy_management/tests/ -q
+cd /tmp/ha-config && PYTHONPATH=/tmp/ha-config python3 -m pytest custom_components/solar_energy_management/tests/ -q
 ```
 
-CI runs the same layout on Python 3.12 and 3.13, plus Hassfest and HACS validation.
+CI runs the same layout on Python 3.13 and 3.14 (the HA floor and what PROD runs — #836 retired the 3.12 rung), plus Hassfest and HACS validation.
 
 ### Deploying
 

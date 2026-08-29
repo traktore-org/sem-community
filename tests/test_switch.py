@@ -35,7 +35,16 @@ class TestSEMSwitches:
         plan into the night signals; default off = pure shadow)."""
         keys = [s.key for s in SWITCH_TYPES]
         assert keys == ["observer_mode", "vacation_mode",
-                        "energy_plan_actuation"]
+                        "energy_plan_actuation",
+                        # #778 — forecast-led spending and the two permissions
+                        # it may spend through. Order is the render order on
+                        # the Config tab: the master switch, then what it is
+                        # allowed to spend on.
+                        "forecast_spending_enabled",
+                        # #820 — charge pacing, asleep by default; sits with
+                        # the battery family it paces.
+                        "battery_charge_pacing_enabled",
+                        "battery_may_export", "battery_may_assist_ev"]
 
     # ``test_night_charging_default_off`` and
     # ``test_night_charging_existing_state_preserved`` removed in

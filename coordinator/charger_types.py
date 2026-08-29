@@ -380,6 +380,20 @@ class BatteryView:
     steady through a bursty car's on/off pulses instead of flickering
     with ``ev_charging`` — which would let the battery drain between
     bursts and then feed the next pull. See decide_battery."""
+
+    # (#778) The forecast budget and its dynamic floor, for the export
+    # sink. Defaults keep every existing install untouched: no master
+    # switch, no budget, and a dynamic floor of None contributes nothing
+    # to the max() rather than being read as a floor of zero.
+    battery_spendable_kwh: float = 0.0
+    forecast_spending_enabled: bool = False
+    dynamic_floor_pct: float = None
+    battery_permissions: "Any" = None
+    """(#778) The user's per-permission choices, tri-state: a key absent means
+    UNSET and the legacy rule decides. ``None`` here is the same as an empty
+    mapping — every existing install keeps today's behaviour. Carried on the
+    view rather than read from config inside ``decide_battery`` because that
+    function is pure: everything it decides on arrives through the view."""
     scheduler_decision: "Any" = None
     """The output of today's ``BatteryChargeScheduler.evaluate()``.
     Typed as ``Any`` so importing scheduler types in this module
@@ -405,6 +419,12 @@ class BatteryView:
     ``(in_block, per_battery_power_w)`` from ``arbitrage_sell_gate``,
     already fleet-split by the pipeline. ``None``/closed ⇒ no sell this
     cycle regardless of the live economics verdict."""
+
+    forecast_sell: "Any" = None
+    """(#778) ``(in_block, per_battery_power_w)`` from ``forecast_sell_gate``
+    — the SPEND twin of ``arbitrage_sell``, fleet-split by the pipeline.
+    decide_battery consults THIS gate when the verdict carries
+    ``from_forecast_spend``; arbitrage verdicts never read it."""
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -708,6 +728,15 @@ class FleetContext:
     bigger EV budget → higher commanded amps → more discharge)."""
 
     battery_assist_min_surplus_w: float = 1200.0
+    # (#778) May the battery be spent on the car at all? Defaults True so an
+    # install that has expressed no opinion behaves exactly as before; the
+    # #537 surplus threshold above remains the separate 'when' question.
+    battery_may_assist_ev: bool = True
+    # (#778 phase 5) The forecast budget, and the master switch that lets it
+    # spend anything at all. Default OFF: this is the first behaviour in the
+    # arc that is not inert, and turning it on for someone is not ours to do.
+    battery_spendable_kwh: float = 0.0
+    forecast_spending_enabled: bool = False
     """Solar-surplus gate for battery assist (``battery_assist_min_surplus``).
     Battery assist only SUPPLEMENTS real solar — below this much pure
     solar surplus the battery is off-limits to the EV, so a sunless
@@ -807,6 +836,9 @@ class FleetCycleState:
     power: "PowerReadings"
     config: "Mapping[str, Any]"
     is_night: bool = False
+    # (#778 phase 5) Tonight's forecast-derived spendable budget, in kWh.
+    # 0.0 until the arc's master switch is on and the evidence exists.
+    battery_spendable_kwh: float = 0.0
     tariff_level: "Optional[str]" = None
     forecast_remaining_kwh: float = 0.0
     # (#747) the load manager's peak posture, resolved once per cycle.
@@ -874,6 +906,14 @@ class ChargerView:
     (charges before the battery) only when ``ev_priority <
     fleet.battery_priority`` AND SOC ≥ reserve floor (#576 P2.2). Defaults to
     999 (bottom) so a view built without it never spuriously reclaims."""
+
+    wpa_table: Mapping[int, float] = field(default_factory=dict)
+    """(#846) Measured watts-per-amp per commanded setpoint for the phase
+    count SEM believes — ``{amps: W/A}``, empty until earned. Every
+    watts→amps conversion in ``decide()`` reads it through
+    ``predict_watts``/``amps_from_watts``: nameplate where the table is
+    silent, the car's own response where it has spoken. A typed field, not
+    a ``config`` key, for the same reason as ``plan`` below."""
 
     plan: PlanVerdict = field(default_factory=PlanVerdict)
     """(#638) What the PLANNING layer decided for this charger this cycle.

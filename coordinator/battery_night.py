@@ -60,6 +60,11 @@ RESERVE_EPS = 1.0
 
 DEFAULT_MAX_NIGHTS = 60
 
+# (#800) Fastest discharge a bridge will believe, as a fraction of the pack per
+# hour. A 1C pack empties in an hour; anything faster across a hole is a sensor
+# re-initialising after a reboot, not a real discharge.
+BRIDGE_MAX_C_RATE = 1.0
+
 # (#800 round 3b) Holes up to this total stay trainable. The first live
 # night's deploy restart priced ~110 s of sensor warm-up as gap — honest —
 # but zero tolerance would have refused a 10-hour night over it, and with
@@ -82,6 +87,12 @@ class Sample:
     # Day-phase house consumption — lets 2.1 decompose a missed refill
     # promise into PV-wrong vs consumption-wrong.
     home_w: float = 0.0
+    # (#778) The pack's own discharge POWER this cycle, if the install
+    # publishes it. Not integrated — only used to check that the attributed
+    # flows above fit inside it, per sample. Energy counters cannot be used
+    # here: the daily one resets at midnight while a night does not, so
+    # comparing them condemned ordinary nights. See flow_invariant.
+    battery_discharge_w: Optional[float] = None
     soc: Optional[float] = None
     soc_available: bool = True
     export_w: float = 0.0
@@ -97,9 +108,16 @@ class BatteryNightTracker:
     """
 
     def __init__(self, reserve_soc: float,
-                 max_nights: int = DEFAULT_MAX_NIGHTS) -> None:
+                 max_nights: int = DEFAULT_MAX_NIGHTS,
+                 capacity_kwh: Optional[float] = None) -> None:
         self.reserve_soc = float(reserve_soc)
         self.max_nights = int(max_nights)
+        # (#800) Needed to convert SOC points into kWh when bridging a
+        # sampling hole. None disables the bridge rather than guessing a pack
+        # size — a fabricated capacity would fabricate the very number the
+        # #778 envelope is built from.
+        self.capacity_kwh = (None if capacity_kwh is None
+                             else float(capacity_kwh))
         self._sealed: List[Dict[str, Any]] = []
         self._reset()
 
@@ -108,9 +126,30 @@ class BatteryNightTracker:
         self._date: Optional[str] = None
         self._last_ts: Optional[float] = None
         self._drain_j = 0.0            # watt-seconds
+        # (#778) False once any night sample showed more energy leaving the
+        # (#800) Energy recovered across sampling holes from the pack's own
+        # SOC, and how much wall time those holes covered.
+        self._bridged_j = 0.0
+        self._bridged_s = 0.0
+        self._bridge_failed = False
+        # (#778) How long the attributed flows exceeded the pack's discharge.
+        # A duration, not a latch: one sample of sensor skew is thirty seconds
+        # of a ten-hour night and must not condemn it.
+        self._flow_violation_s = 0.0
         self._assist_j = 0.0
         self._export_j = 0.0
         self._gap_s = 0.0
+        # (#837) The night's OWN gap/hold, frozen at dawn. gap_s and held_s
+        # keep accumulating through the day phase — they have to, the day is
+        # measured too — but a record does not seal until the NEXT night
+        # opens, so reading the running totals made every night carry the
+        # following day's sensor dropouts as if they were its own. On .175
+        # that meant ~2,750 s of DAYTIME modbus flakiness refusing nights it
+        # never touched, and #778 sat at 1 usable night of 5 indefinitely.
+        # None until dawn: a record sealed straight out of the night phase
+        # (a restart mid-night) still reports the live totals.
+        self._night_gap_s: Optional[float] = None
+        self._night_held_s: Optional[float] = None
         self._reserve_hit = False
         self._soc_start: Optional[float] = None
         self._soc_morning: Optional[float] = None
@@ -155,6 +194,11 @@ class BatteryNightTracker:
         self._last_ts = now
 
         if dt > MAX_SAMPLE_GAP_S:
+            # A restart is a hole in the SAMPLING, not in the physics: the
+            # pack's SOC kept counting the whole time, so ask the pack what
+            # happened rather than writing the interval off. Without this a
+            # reboot silently UNDER-states the drain — and users reboot.
+            self._bridge_hole(dt, s)
             self._gap_s += dt
             dt = 0.0                    # never integrate across a hole
             self._last_good = None      # …and never hold across one
@@ -181,10 +225,25 @@ class BatteryNightTracker:
                 # Morning: freeze the night half, open the day half. The
                 # flip tick's SOC belongs to the DAY — the night's morning
                 # value is whatever its own last tick recorded.
+                #
+                # (#837) Freeze the night's gap/hold here too, for the same
+                # reason and at the same instant. Everything the day spends
+                # unmeasured is the day's business; the trainable gate is a
+                # claim about the night.
+                self._night_gap_s = self._gap_s
+                self._night_held_s = self._held_s
                 self._phase = "day"
                 return
             if s.soc_available and s.soc is not None:
                 self._soc_seen = True
+            if s.battery_discharge_w is not None and dt > 0:
+                from .flow_invariant import flows_balance
+                if not flows_balance(
+                        discharge_w=s.battery_discharge_w,
+                        to_home=s.battery_to_home_w,
+                        to_ev=s.battery_to_ev_w,
+                        to_grid=s.battery_to_grid_w):
+                    self._flow_violation_s += dt
             if dt > 0:
                 self._drain_j += s.battery_to_home_w * dt
                 self._assist_j += s.battery_to_ev_w * dt
@@ -215,6 +274,81 @@ class BatteryNightTracker:
     # ── reads ────────────────────────────────────────────────────
 
     @property
+    def _flows_balanced(self) -> bool:
+        """Did the pack's books balance for long enough to trust this night?
+
+        Derived from the accumulated violation time rather than latched on the
+        first bad sample: sensors read microseconds apart disagree constantly,
+        and a night is ten hours long.
+        """
+        from .flow_invariant import VIOLATION_TOLERANCE_S
+        return self._flow_violation_s <= VIOLATION_TOLERANCE_S
+
+    @_flows_balanced.setter
+    def _flows_balanced(self, value) -> None:
+        # Restoring a persisted verdict: a stored False means the night had
+        # already spent its tolerance, so carry that across the restart.
+        from .flow_invariant import VIOLATION_TOLERANCE_S
+        if not value:
+            self._flow_violation_s = max(
+                getattr(self, "_flow_violation_s", 0.0),
+                VIOLATION_TOLERANCE_S + 1.0)
+
+    def _night_gap(self) -> float:
+        """The gap that belongs to the night (#837) — frozen at dawn, or the
+        live total while the night is still running."""
+        return (self._night_gap_s if self._night_gap_s is not None
+                else self._gap_s)
+
+    def _unbridged_gap_s(self) -> float:
+        """Sampling time no measurement covers — the only kind that should
+        still refuse a night."""
+        return max(0.0, self._night_gap() - self._bridged_s)
+
+    def _bridge_hole(self, dt: float, s: "Sample") -> None:
+        """Recover a sampling hole's energy from the battery's own SOC.
+
+        Only ever ADDS: an SOC that rose across the hole means the pack was
+        charging, which is not negative house demand and must not shrink what
+        the night measured.
+
+        The recovered energy is attributed to the house. When some of it
+        actually went to the car or the grid this over-states the drain — on
+        purpose. A larger drain means a larger reserve and less spending, and
+        of the two ways to be wrong that is the one that cannot strand anyone.
+
+        A hole it cannot measure (no SOC either side, no configured capacity,
+        or an SOC jump too large to be real) leaves the night refused, which is
+        the honest outcome: better an unusable night than a confidently wrong
+        one.
+        """
+        if self._phase != "night":
+            return
+        cap = self.capacity_kwh
+        before = self._soc_morning if self._soc_morning is not None else self._soc_start
+        after = s.soc if s.soc_available else None
+
+        if cap is None or cap <= 0 or before is None or after is None:
+            self._bridge_failed = True
+            return
+
+        drop_pct = float(before) - float(after)
+        if drop_pct <= 0:
+            self._bridged_s += dt      # covered, and nothing left the pack
+            return
+
+        # A pack cannot lose more than a plausible fraction of itself in the
+        # time available. A sensor re-initialising after a reboot looks exactly
+        # like a huge discharge, and believing it would poison the envelope.
+        max_plausible_pct = min(100.0, 100.0 * (dt / 3600.0) * BRIDGE_MAX_C_RATE)
+        if drop_pct > max_plausible_pct:
+            self._bridge_failed = True
+            return
+
+        self._bridged_j += cap * drop_pct / 100.0 * 3.6e6
+        self._bridged_s += dt
+
+    @property
     def phase(self) -> str:
         return self._phase
 
@@ -234,17 +368,34 @@ class BatteryNightTracker:
     def _record(self) -> Dict[str, Any]:
         return {
             "date": self._date,
-            "drain_kwh": round(self._drain_j / 3.6e6, 3),
+            "drain_kwh": round((self._drain_j + self._bridged_j) / 3.6e6, 3),
             "assist_kwh": round(self._assist_j / 3.6e6, 3),
             "export_kwh": round(self._export_j / 3.6e6, 3),
             "soc_start": self._soc_start,
             "soc_morning": self._soc_morning,
             "reserve_hit": self._reserve_hit,
+            # How long the attributed flows exceeded the pack's discharge. On
+            # the record so a rejected night can be argued with rather than
+            # merely disbelieved.
+            "flow_violation_s": round(self._flow_violation_s, 1),
+            "bridged_kwh": round(self._bridged_j / 3.6e6, 3),
+            "bridged_s": round(self._bridged_s, 1),
             "night_grid_kwh": round(self._night_grid_j / 3.6e6, 3),
             "day_home_kwh": round(self._day_home_j / 3.6e6, 3),
-            "gap_s": round(self._gap_s, 1),
-            "held_s": round(self._held_s, 1),
-            "trainable": self._gap_s <= GAP_TOLERANCE_S and self._soc_seen,
+            "gap_s": round(self._night_gap_s if self._night_gap_s is not None
+                           else self._gap_s, 1),
+            "held_s": round(self._night_held_s if self._night_held_s is not None else self._held_s, 1),
+            "flows_balanced": self._flows_balanced,
+            # A night whose books do not balance is recorded and visible, but
+            # is not evidence: its drain is inflated by whatever inflated the
+            # flows, and an inflated drain teaches #778 that the house needs
+            # more overnight than it does.
+            # A hole the pack itself covered is no longer a reason to refuse
+            # the night — that is the whole point of the bridge. Only holes it
+            # could NOT measure still count against the tolerance.
+            "trainable": (self._unbridged_gap_s() <= GAP_TOLERANCE_S
+                          and self._soc_seen and self._flows_balanced
+                          and not self._bridge_failed),
             "refill_full_at": self._refill_full_at,
             "clipped_hours": round(self._clipped_s / 3600.0, 2),
             "forecast_kwh": self._forecast_kwh,
@@ -253,6 +404,17 @@ class BatteryNightTracker:
 
     def sealed(self) -> List[Dict[str, Any]]:
         return list(self._sealed)
+
+    def replace_sealed(self, records: Any) -> None:
+        """(#815) Swap the sealed history wholesale — the backfill's write.
+
+        Pruned by ``max_nights`` exactly as the seal path prunes, so the
+        window is decided in one place regardless of who wrote the records.
+        The night in flight is untouched: this replaces history, never the
+        measurement in progress.
+        """
+        self._sealed = [r for r in (records or []) if isinstance(r, dict)]
+        del self._sealed[:-self.max_nights]
 
     # ── persistence (restart mid-night must not halve the record) ──
 
@@ -272,6 +434,17 @@ class BatteryNightTracker:
             "night_grid_j": self._night_grid_j,
             "day_home_j": self._day_home_j,
             "held_s": self._held_s,
+            "night_gap_s": self._night_gap_s,
+            "night_held_s": self._night_held_s,
+            # (#778/#800) The conservation verdict and the bridge ledger. These
+            # MUST persist: a restart is exactly when they matter, and a
+            # tracker that forgets them re-opens the night believing its books
+            # balanced and no hole was ever covered.
+            "flows_balanced": self._flows_balanced,
+            "flow_violation_s": self._flow_violation_s,
+            "bridged_j": self._bridged_j,
+            "bridged_s": self._bridged_s,
+            "bridge_failed": self._bridge_failed,
             "sealed": list(self._sealed),
         }
 
@@ -286,6 +459,17 @@ class BatteryNightTracker:
         # integrate across the outage instead.
         self._last_ts = d.get("last_ts")
         self._drain_j = float(d.get("drain_j", 0.0) or 0.0)
+        # Default True: a store written before this field existed describes a
+        # night nobody checked, not a night that failed.
+        # Order matters: the duration is the truth and the boolean is only a
+        # fallback for a store written before the duration existed. Setting
+        # the boolean first would be undone by the line after it.
+        self._flow_violation_s = float(d.get("flow_violation_s", 0.0) or 0.0)
+        if "flow_violation_s" not in d:
+            self._flows_balanced = bool(d.get("flows_balanced", True))
+        self._bridged_j = float(d.get("bridged_j", 0.0) or 0.0)
+        self._bridged_s = float(d.get("bridged_s", 0.0) or 0.0)
+        self._bridge_failed = bool(d.get("bridge_failed", False))
         self._assist_j = float(d.get("assist_j", 0.0) or 0.0)
         self._export_j = float(d.get("export_j", 0.0) or 0.0)
         self._gap_s = float(d.get("gap_s", 0.0) or 0.0)
@@ -300,6 +484,18 @@ class BatteryNightTracker:
         self._night_grid_j = float(d.get("night_grid_j", 0.0) or 0.0)
         self._day_home_j = float(d.get("day_home_j", 0.0) or 0.0)
         self._held_s = float(d.get("held_s", 0.0) or 0.0)
+        self._night_gap_s = d.get("night_gap_s")
+        self._night_held_s = d.get("night_held_s")
+        # (#837) One-time migration. A state written before the freeze
+        # existed, restored into the DAY phase, has a night that already
+        # flipped and nothing frozen for it — so it would go on absorbing the
+        # rest of the day exactly as before. Freeze what it has: at worst that
+        # under-counts a gap the old code would have mis-attributed to the
+        # night anyway, and it lets the running instance seal an honest record
+        # tonight instead of a day later.
+        if self._phase == "day" and self._night_gap_s is None:
+            self._night_gap_s = self._gap_s
+            self._night_held_s = self._held_s
         sealed = d.get("sealed")
         if isinstance(sealed, list):
             self._sealed = [r for r in sealed if isinstance(r, dict)]

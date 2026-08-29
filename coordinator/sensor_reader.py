@@ -3252,7 +3252,7 @@ class SensorReader:
             # Wrapped so the audit can NEVER corrupt the read: an exception here
             # would otherwise hit the outer except → a wrong 0.0.
             try:
-                self._audit_sensor_freshness(entity_id, name, state)
+                self._audit_sensor_freshness(entity_id, name, state, value)
             except Exception:  # noqa: BLE001 — freshness must never break a read
                 pass
             return value
@@ -3260,7 +3260,47 @@ class SensorReader:
             _LOGGER.debug(f"Could not parse {entity_id} ({name}): {e}")
             return None if allow_none else 0.0
 
-    def _audit_sensor_freshness(self, entity_id: str, name: str, state) -> None:
+    # (#851) A solar reading at or below this (W) counts as "producing
+    # nothing". Generous enough for an inverter idling on standby draw,
+    # far below anything that could be mistaken for real production.
+    _SOLAR_ASLEEP_W = 25.0
+
+    def _stillness_is_expected(self, name: str, value: float | None) -> bool:
+        """True when the sensor's own domain explains why it stopped reporting.
+
+        #851: RienduPre's Growatt raised the W3 freeze warning + a Repair for
+        three PV sensors every single night. The detector is right that they
+        stopped reporting — a cloud/inverter integration that powers down at
+        dusk does not poll — but at night that is the correct behaviour, and a
+        warning that fires every night for a healthy system trains the user to
+        ignore the one that matters.
+
+        This is deliberately a PREDICATE and not a user-facing exclusion list:
+        SEM already knows it is night, so it should decide this for itself
+        rather than ask. It stays narrow on purpose — all three conditions
+        must hold, so everything the check exists to catch still warns:
+
+        * a NON-solar sensor (the meter and battery keep reporting at night);
+        * solar frozen in daylight (the real modbus/cloud stall);
+        * solar frozen at a non-zero value (a stuck reading, not an inverter
+          asleep — an inverter that is off reads 0, not 4 kW).
+
+        Unknown sun state is never treated as night: missing information must
+        not silence a warning.
+        """
+        if name != "solar":
+            return False
+        if value is None or abs(float(value)) > self._SOLAR_ASLEEP_W:
+            return False
+        try:
+            sun = self.hass.states.get("sun.sun")
+        except Exception:  # noqa: BLE001 — never break a read over the sun
+            return False
+        return sun is not None and getattr(sun, "state", None) == "below_horizon"
+
+    def _audit_sensor_freshness(
+        self, entity_id: str, name: str, state, value: float | None = None,
+    ) -> None:
         """W3 — warn ONCE when a FAST power sensor is available but frozen.
 
         Only ``solar``/``grid``/``battery`` power sensors are checked (they
@@ -3301,6 +3341,9 @@ class SensorReader:
         if not isinstance(age_s, (int, float)) or isinstance(age_s, bool):
             return
         if age_s >= self._STALE_THRESHOLD_S:
+            # (#851) A stall the sensor's own domain explains is not a fault.
+            if self._stillness_is_expected(name, value):
+                return
             if entity_id not in self._frozen_sensors:
                 self._frozen_sensors.add(entity_id)
                 mins = int(age_s // 60)

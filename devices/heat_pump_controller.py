@@ -102,6 +102,9 @@ class HeatPumpController(SetpointDevice):
         daily_min_runtime_sec: int = 0,
         invert_sg_ready: bool = False,
         energy_entity_id: Optional[str] = None,
+        sg_ready_service: Optional[str] = None,
+        sg_ready_service_data: Optional[Dict[str, Any]] = None,
+        sg_ready_state_entity: Optional[str] = None,
     ):
         super().__init__(
             hass=hass,
@@ -126,6 +129,15 @@ class HeatPumpController(SetpointDevice):
         # so the SG-Ready standard map drives the physical contacts the right
         # way. Default off (NO wiring, the common case).
         self.invert_sg_ready = bool(invert_sg_ready)
+        # (#801) SG-Ready via SERVICE CALL — for heat pumps whose control
+        # surface is a command, not a pair of relay switches (Buderus over
+        # EMS-ESP was the report). When set, the service is the actuation
+        # and the relays are not touched. ``sg_ready_service_data`` may use
+        # the placeholders {state} (1–4), {relay1}/{relay2} (the standard
+        # truth-table booleans) in any string value.
+        self.sg_ready_service = (sg_ready_service or "").strip() or None
+        self.sg_ready_service_data = dict(sg_ready_service_data or {})
+        self.sg_ready_state_entity = (sg_ready_state_entity or "").strip() or None
         self.temperature_entity_id = temperature_entity_id
         self.force_on_threshold = force_on_threshold
         self._hp_status = HeatPumpStatus()
@@ -307,6 +319,54 @@ class HeatPumpController(SetpointDevice):
         valid success, the climate setpoint is the actuation.
         """
         relay1_on, relay2_on = self._relays_for(state)
+
+        # (#801) Service-first: a configured SG-Ready service IS the
+        # actuation. Verify-after-write when a state entity is configured
+        # — SEM prefers to check that a command landed over assuming it.
+        if self.sg_ready_service:
+            try:
+                domain, service = self.sg_ready_service.split(".", 1)
+            except ValueError:
+                _LOGGER.error(
+                    "SG-Ready service %r is not domain.service",
+                    self.sg_ready_service)
+                self._last_relay_path = "service_invalid"
+                return False
+            def _render(v):
+                if isinstance(v, str):
+                    return (v.replace("{state}", str(int(state)))
+                             .replace("{relay1}", str(relay1_on).lower())
+                             .replace("{relay2}", str(relay2_on).lower()))
+                return v
+            data = {k: _render(v) for k, v in self.sg_ready_service_data.items()}
+            try:
+            # OBSERVER-GATED: via layer 3 — this device is actuated only
+            # through reconcile_load, whose observer branch
+            # (_reconcile_load_observe) returns before any device method
+            # runs. Nothing IN this file checks observer_mode, so moving
+            # heat-pump control off the reconcile_load path loses the
+            # gate — do not call this from anywhere else.
+                await self.hass.services.async_call(
+                    domain, service, data, blocking=True)
+            except Exception as e:  # noqa: BLE001
+                _LOGGER.error("SG-Ready service call failed: %s", e)
+                self._last_relay_path = "service_failed"
+                return False
+            self._last_relay_path = "service"
+            if self.sg_ready_state_entity:
+                st = self.hass.states.get(self.sg_ready_state_entity)
+                got = str(getattr(st, "state", "")).strip()
+                if got and got not in (str(int(state)), state.name,
+                                       state.name.lower()):
+                    # not a failure — the read-back may lag one poll; say
+                    # so instead of silently trusting either side
+                    _LOGGER.warning(
+                        "SG-Ready read-back %s reports %r after commanding "
+                        "state %d — verify the mapping (#801)",
+                        self.sg_ready_state_entity, got, int(state))
+                    self._last_relay_path = "service_unverified"
+            return True
+
         # Prior relay1 value (for restore on a partial relay2 failure, I3).
         prev_relay1_on, _ = self._relays_for(self._hp_status.sg_ready_state)
         relay1_called = False
@@ -314,6 +374,9 @@ class HeatPumpController(SetpointDevice):
         if self.relay1_entity_id:
             service = "turn_on" if relay1_on else "turn_off"
             try:
+                # OBSERVER-GATED: via layer 3 — see the note at the
+                # service-call path above; the gate is reconcile_load's
+                # observer branch, not this file.
                 await self.hass.services.async_call(
                     "homeassistant", service,
                     {"entity_id": self.relay1_entity_id},
@@ -328,6 +391,9 @@ class HeatPumpController(SetpointDevice):
         if self.relay2_entity_id:
             service = "turn_on" if relay2_on else "turn_off"
             try:
+                # OBSERVER-GATED: via layer 3 — see the note at the
+                # service-call path above; the gate is reconcile_load's
+                # observer branch, not this file.
                 await self.hass.services.async_call(
                     "homeassistant", service,
                     {"entity_id": self.relay2_entity_id},
@@ -347,6 +413,9 @@ class HeatPumpController(SetpointDevice):
                 if relay1_called and relay1_on != prev_relay1_on:
                     try:
                         restore = "turn_on" if prev_relay1_on else "turn_off"
+                        # OBSERVER-GATED: via layer 3 — see the note at the
+                        # service-call path above; the gate is reconcile_load's
+                        # observer branch, not this file.
                         await self.hass.services.async_call(
                             "homeassistant", restore,
                             {"entity_id": self.relay1_entity_id},

@@ -160,7 +160,8 @@
           "legionella_interval_hours": "Maks. antal timer mellem desinfektionscyklusser",
           "diagram_style": "Systemdiagram stil",
           "battery_assist_min_surplus": "Batteristøtte – min. soloverskud (W)",
-          "grid_sign_invert": "Vend fortegn for neteffekt"
+          "grid_sign_invert": "Vend fortegn for neteffekt",
+          "battery_operating_mode_entity": "Battery operating-mode entity (watched)"
         },
         "data_description": {
           "update_interval": "Hvor ofte koordinatoren læser sensorer og justerer hardwaren. 10 s giver den mest præcise energiintegration; værdier over 30 s vil undervurdere energien. Interval 10–60 s.",
@@ -185,7 +186,8 @@
           "legionella_target_temp": "Den temperatur (°C), som varmtvandssystemet skal nå under en legionella-desinfektionscyklus.",
           "legionella_interval_hours": "Det maksimale antal timer mellem legionella-desinfektionscyklusser, før SEM fremtvinger en opvarmning.",
           "battery_assist_min_surplus": "Mindste reelle soloverskud, før husbatteriet må hjælpe med at oplade EV'en — i alle opladningstilstande. Herunder er batteriet reserveret til huset (bilen trækker fra nettet + sol). Standard 1200 W. Sæt til 0 for at lade batteriet understøtte EV'en overalt, også om natten.",
-          "grid_sign_invert": "Slå kun til, hvis netimport vises som en positiv værdi (f.eks. Enphase). SEM's konvention er negativ = import; dette negerer råaflæsningen og springer automatisk fortegnsregistrering over."
+          "grid_sign_invert": "Slå kun til, hvis netimport vises som en positiv værdi (f.eks. Enphase). SEM's konvention er negativ = import; dette negerer råaflæsningen og springer automatisk fortegnsregistrering over.",
+          "battery_operating_mode_entity": "The inverter's operating-policy selector (e.g. Huawei's 'Working mode'). SEM only READS it: the mode is shown beside the battery evidence, and a one-time repair warns when it is not the self-consumption mode SEM's planning assumes. SEM never changes it. Leave empty to disable the watch."
         }
       },
       "settings_ev": {
@@ -304,12 +306,16 @@
           "battery_force_charge_negative_price": "Tvungen opladning ved negativ pris",
           "battery_charge_platform": "Batteriets ladeplatform",
           "battery_replan_interval_min": "Genplanlægningsinterval (min)",
-          "battery_prefer_consecutive_window": "Foretræk et sammenhængende ladevindue"
+          "battery_prefer_consecutive_window": "Foretræk et sammenhængende ladevindue",
+          "battery_charge_power_limit_entity": "Battery charge-power limit entity (for pacing)",
+          "inverter_ac_limit_w": "Inverter AC output limit"
         },
         "data_description": {
           "battery_charge_platform": "Hvilken inverter SEM styrer til planlagt netopladning. Vælg Deye for at vise Deye-ledningstrinnet.",
           "battery_replan_interval_min": "Hvor ofte ladeplanen genberegnes ud fra den nyeste prognose og priser.",
-          "battery_prefer_consecutive_window": "Til: de billige timer i én blok (færre start/stop-cyklusser); fra: de enkeltvis billigste timer, selv spredt."
+          "battery_prefer_consecutive_window": "Til: de billige timer i én blok (færre start/stop-cyklusser); fra: de enkeltvis billigste timer, selv spredt.",
+          "battery_charge_power_limit_entity": "The inverter's max-charge-power number that charge pacing writes to (e.g. Huawei's 'Maximum charging power'). Leave empty to keep pacing advisory-only.",
+          "inverter_ac_limit_w": "Your inverter's maximum AC output in watts. Charge pacing opens its cap wherever solar would exceed this, so clipped sun is captured. 0 = not set."
         }
       },
       "ev_charger_edit": {
@@ -342,7 +348,8 @@
           "vehicle_min_current": "Køretøjets minimumsstrøm (A)",
           "ev_phase_switch_entity": "Faseskift-entitet (valgfrit)",
           "ev_phase_switch_value_1p": "Faseskift: værdi for 1-faset (valgfrit)",
-          "ev_phase_switch_value_3p": "Faseskift: værdi for 3-faset (valgfrit)"
+          "ev_phase_switch_value_3p": "Faseskift: værdi for 3-faset (valgfrit)",
+          "ev_phase_switching_enabled": "Phase switching"
         },
         "data_description": {
           "charger_name": "Visningsnavn for denne lader, som vises i dashboardet.",
@@ -371,7 +378,8 @@
           "vehicle_min_current": "Strømgulv pr. køretøj. Det effektive minimum er det højeste af denne og laderens minimumsstrøm.",
           "ev_phase_switch_entity": "Select/number/switch der skifter laderen mellem 1- og 3-faset ladning (go-e 'psm', KEBA X-serien, openWB). SEM observerer og validerer indtil videre kun — automatisk skift kommer i en senere version.",
           "ev_phase_switch_value_1p": "Hvad der skrives til skifte-entiteten for 1-faset ladning — et selects valgnavn, et numbers værdi eller on/off. Påkrævet for select-entiteter; number-standard 1, switch-standard off.",
-          "ev_phase_switch_value_3p": "Hvad der skrives til skifte-entiteten for 3-faset ladning — et selects valgnavn, et numbers værdi eller on/off. Påkrævet for select-entiteter; number-standard 3, switch-standard on."
+          "ev_phase_switch_value_3p": "Hvad der skrives til skifte-entiteten for 3-faset ladning — et selects valgnavn, et numbers værdi eller on/off. Påkrævet for select-entiteter; number-standard 3, switch-standard on.",
+          "ev_phase_switching_enabled": "Off by default while the 1/3-phase model is reworked (it paused chargers that never resumed on some brands). Turn on to test it on your charger."
         }
       },
       "ev_charger_add": {
@@ -403,7 +411,8 @@
           "ev_min_current": "Minimal ladestrøm (A)",
           "ev_phase_switch_entity": "Faseskift-entitet (valgfrit)",
           "ev_phase_switch_value_1p": "Faseskift: værdi for 1-faset (valgfrit)",
-          "ev_phase_switch_value_3p": "Faseskift: værdi for 3-faset (valgfrit)"
+          "ev_phase_switch_value_3p": "Faseskift: værdi for 3-faset (valgfrit)",
+          "ev_phase_switching_enabled": "Phase switching"
         },
         "data_description": {
           "charger_name": "Visningsnavn for denne lader, som vises i dashboardet.",
@@ -431,7 +440,8 @@
           "ev_min_current": "Under dette sætter SEM opladningen på pause i stedet for at sænke strømmen yderligere.",
           "ev_phase_switch_entity": "Select/number/switch der skifter laderen mellem 1- og 3-faset ladning (go-e 'psm', KEBA X-serien, openWB). SEM observerer og validerer indtil videre kun — automatisk skift kommer i en senere version.",
           "ev_phase_switch_value_1p": "Hvad der skrives til skifte-entiteten for 1-faset ladning — et selects valgnavn, et numbers værdi eller on/off. Påkrævet for select-entiteter; number-standard 1, switch-standard off.",
-          "ev_phase_switch_value_3p": "Hvad der skrives til skifte-entiteten for 3-faset ladning — et selects valgnavn, et numbers værdi eller on/off. Påkrævet for select-entiteter; number-standard 3, switch-standard on."
+          "ev_phase_switch_value_3p": "Hvad der skrives til skifte-entiteten for 3-faset ladning — et selects valgnavn, et numbers værdi eller on/off. Påkrævet for select-entiteter; number-standard 3, switch-standard on.",
+          "ev_phase_switching_enabled": "Off by default while the 1/3-phase model is reworked (it paused chargers that never resumed on some brands). Turn on to test it on your charger."
         }
       },
       "pv_naming": {
@@ -457,7 +467,10 @@
           "heat_pump_power_sensor": "Effektsensor (valgfri)",
           "heat_pump_boost_offset": "Temperatur-boost-offset (°C)",
           "heat_pump_max_setpoint": "Maksimalt temperatursetpunkt (°C)",
-          "heat_pump_priority": "Overskudsprioritet (1=højeste)"
+          "heat_pump_priority": "Overskudsprioritet (1=højeste)",
+          "heat_pump_sg_ready_service": "SG-Ready service (domain.service)",
+          "heat_pump_sg_ready_service_data": "SG-Ready service data (JSON; placeholders state, relay1, relay2)",
+          "heat_pump_sg_ready_state_entity": "SG-Ready state read-back entity"
         },
         "data_description": {
           "heat_pump_relay1_entity": "Switch-entitet til SG-Ready-relæ 1 (signal for normal drift). Angives sammen med relæ 2 for SG-Ready-protokollen.",
@@ -583,13 +596,47 @@
           "deye_program_5_charge": "Program 5 — netopladning-select-entitet",
           "deye_program_6_time": "Program 6 — tidsrum-entitet (time.*)",
           "deye_program_6_soc": "Program 6 — mål-SOC-number-entitet",
-          "deye_program_6_charge": "Program 6 — netopladning-select-entitet"
+          "deye_program_6_charge": "Program 6 — netopladning-select-entitet",
+          "deye_system_work_mode_control": "Control Deye System Work Mode (export policy)",
+          "deye_system_work_mode_entity": "Deye System Work Mode entity",
+          "deye_system_work_mode_selling_option": "Label of the 'Selling First' option",
+          "deye_system_work_mode_zero_load_option": "Label of the 'Zero Export To Load' option",
+          "deye_system_work_mode_zero_ct_option": "Label of the 'Zero Export To CT' option"
         },
         "data_description": {
           "deye_bms_max_charge_current_a": "Valgfrit BMS-pålagt loft. 0 = ingen BMS-grænse — inverterens eget maksimum gælder.",
           "deye_observer_mode": "Når TIL beregner og logger SEM sine Deye-handlinger, men skriver aldrig til inverteren.",
           "deye_actuation_enabled": "Når FRA skriver SEM aldrig til inverteren, selv hvis observatørtilstand også er fra. Begge porte skal tillade det, før en kommando sendes.",
           "deye_max_charge_current_a": "Sikker øvre grænse SEM vil kommandere på ladestrøm-entiteten."
+        }
+      },
+      "heat_pump_menu": {
+        "title": "Heat pumps",
+        "description": "Your primary heat pump is configured. Add more units, each driven independently by priority.",
+        "data": {
+          "action": "Action"
+        }
+      },
+      "heat_pump_unit": {
+        "title": "Additional heat pump",
+        "description": "Configure this unit the same way as the primary: SG-Ready relays, a climate entity, or a service call (for command-driven pumps like Buderus over EMS-ESP).",
+        "data": {
+          "name": "Name",
+          "heat_pump_relay1_entity": "SG-Ready relay 1",
+          "heat_pump_relay2_entity": "SG-Ready relay 2",
+          "heat_pump_invert_sg_ready": "Invert SG-Ready relays (NC wiring)",
+          "heat_pump_climate_entity": "Climate entity",
+          "heat_pump_power_sensor": "Power sensor",
+          "heat_pump_energy_sensor": "Energy sensor",
+          "heat_pump_temperature_sensor": "Temperature sensor",
+          "heat_pump_rated_power": "Rated power",
+          "heat_pump_boost_offset": "Boost offset",
+          "heat_pump_max_setpoint": "Maximum setpoint",
+          "heat_pump_force_on_threshold": "Force-on threshold",
+          "heat_pump_priority": "Priority",
+          "heat_pump_sg_ready_service": "SG-Ready service (domain.service)",
+          "heat_pump_sg_ready_service_data": "SG-Ready service data (JSON; placeholders state, relay1, relay2)",
+          "heat_pump_sg_ready_state_entity": "SG-Ready state read-back entity"
         }
       }
     },
@@ -600,7 +647,11 @@
       "heat_pump_partial_relays": "SG-Ready kræver BEGGE relæentiteter. Angiv begge relæer — eller lad begge stå tomme og konfigurer kun klimaentiteten til setpunkt-boost i klima-kun-tilstand.",
       "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities.",
       "deye_work_mode_mapping_not_distinct": "Work Mode-styring kræver to forskellige valg – ét til Load First og ét til Battery First. Vælg begge, og ikke det samme to gange.",
-      "deye_force_charge_work_mode_invalid": "Vælg hvilken Work Mode SEM skal bruge til tvangsopladning af batteriet: Load First eller Battery First."
+      "deye_force_charge_work_mode_invalid": "Vælg hvilken Work Mode SEM skal bruge til tvangsopladning af batteriet: Load First eller Battery First.",
+      "deye_system_work_mode_mapping_not_distinct": "The three System Work Mode labels must be filled in and distinct.",
+      "heat_pump_no_control": "Configure at least one control path: both relays, a climate entity, or a service.",
+      "heat_pump_service_invalid": "The SG-Ready service must be domain.service (e.g. ems_esp.send_command).",
+      "heat_pump_service_data_invalid": "The SG-Ready service data must be a JSON object."
     }
   },
   "entity": {
@@ -1243,6 +1294,27 @@
       },
       "daily_total_consumption": {
         "name": "I dag samlet forbrug"
+      },
+      "battery_measured_capacity_kwh": {
+        "name": "Målt batterikapacitet"
+      },
+      "battery_capacity_drift_pct": {
+        "name": "Kapacitetsafvigelse"
+      },
+      "forecast_trust_d1": {
+        "name": "Prognosetillid (i morgen)"
+      },
+      "forecast_trust_d2": {
+        "name": "Prognosetillid (i overmorgen)"
+      },
+      "battery_spendable_kwh": {
+        "name": "Tilgængeligt i nat"
+      },
+      "battery_dynamic_floor_pct": {
+        "name": "Dynamisk grænse"
+      },
+      "battery_charge_pacing": {
+        "name": "Battery charge pacing"
       }
     },
     "binary_sensor": {
@@ -1292,6 +1364,18 @@
       },
       "energy_plan_actuation": {
         "name": "Energiplan-udførelse"
+      },
+      "battery_may_export": {
+        "name": "Batteriet må sælge til nettet"
+      },
+      "battery_may_assist_ev": {
+        "name": "Batteriet må lade bilen"
+      },
+      "forecast_spending_enabled": {
+        "name": "Prognosestyret forbrug"
+      },
+      "battery_charge_pacing_enabled": {
+        "name": "Battery charge pacing"
       }
     },
     "number": {
@@ -1433,6 +1517,11 @@
           "3": "3-faset"
         }
       }
+    },
+    "button": {
+      "backfill_battery_nights": {
+        "name": "Rebuild battery-night history"
+      }
     }
   },
   "exceptions": {
@@ -1484,11 +1573,25 @@
     },
     "charger_actuation_failed": {
       "title": "EV-laderen accepterer ikke kommandoer: {name}",
-      "description": "SEM's sidste 3+ strømkommandoer til **{name}** blev afvist: `{error}`. Laderen er IKKE under SEM's kontrol lige nu — den fortsætter med det, den sidst fik besked på (herunder at oplade ved fuld effekt i tilstanden Fra). De hyppigste årsager: laderens styringsentitet er blevet omdøbt af en opdatering af den underliggende integration, eller `ev_charger_service` peger på en tjeneste med et andet parameterskema. Kontrollér laderens styringsentitet/tjeneste i SEM-konfigurationen. Dette problem forsvinder automatisk ved næste vellykkede kommando."
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Report this to SEM",
+            "description": "SEM's sidste 3+ strømkommandoer til **{name}** blev afvist: `{error}`. Laderen er IKKE under SEM's kontrol lige nu — den fortsætter med det, den sidst fik besked på (herunder at oplade ved fuld effekt i tilstanden Fra). De hyppigste årsager: laderens styringsentitet er blevet omdøbt af en opdatering af den underliggende integration, eller `ev_charger_service` peger på en tjeneste med et andet parameterskema. Kontrollér laderens styringsentitet/tjeneste i SEM-konfigurationen. Dette problem forsvinder automatisk ved næste vellykkede kommando.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+          }
+        }
+      }
     },
     "charger_stop_unenforceable": {
       "title": "Laderen kan ikke stoppes: {name}",
-      "description": "SEM har bedt **{name}** om at stoppe, men ingen konfigureret mekanisme kan reelt åbne kontaktoren — bilen trækker stadig {power} W. Den eneste styring, SEM har til denne lader, er `{entity}`, og dens minimum ligger over 0 A, så det gør ingenting at skrive 0 A (SEM skriver aldrig en værdi, som enheden ville afvise). Har du et husbatteri, kommer denne effekt derfra — på ethvert tidspunkt af døgnet. Løsning: konfigurér en start/stop-enhed (`ev_start_stop_entity`), en ladetilstands-enhed eller en stop-service til denne lader i SEM's indstillinger. Advarslen forsvinder, så snart laderen holder op med at trække effekt."
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Report this to SEM",
+            "description": "SEM har bedt **{name}** om at stoppe, men ingen konfigureret mekanisme kan reelt åbne kontaktoren — bilen trækker stadig {power} W. Den eneste styring, SEM har til denne lader, er `{entity}`, og dens minimum ligger over 0 A, så det gør ingenting at skrive 0 A (SEM skriver aldrig en værdi, som enheden ville afvise). Har du et husbatteri, kommer denne effekt derfra — på ethvert tidspunkt af døgnet. Løsning: konfigurér en start/stop-enhed (`ev_start_stop_entity`), en ladetilstands-enhed eller en stop-service til denne lader i SEM's indstillinger. Advarslen forsvinder, så snart laderen holder op med at trække effekt.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+          }
+        }
+      }
     },
     "no_forecast_integration": {
       "title": "Ingen solprognose-integration registreret",
@@ -1520,7 +1623,14 @@
     },
     "soc_cap_unenforceable": {
       "title": "Kan ikke håndhæve opladningsgrænsen på {target} %: {name}",
-      "description": "**{name}** er sat til et opladningsmål i procent, men dit køretøj rapporterer i øjeblikket ikke sin ladetilstand, så SEM kan ikke stoppe *præcis* ved **{target}%**.\n\nDen oplader dog ikke i blinde: fra den seneste rigtige aflæsning i denne session tæller den den energi, der faktisk er leveret, og stopper, når den målte sum når dit mål — overskridelsen er kun det, bilen har taget siden den aflæsning. Er der slet ikke kommet en rigtig aflæsning i denne session (eller genstartede SEM midt i opladningen), mangler referencepunktet, og der oplades, indtil bilen selv skruer ned tæt på fuld.\n\nFor en grænse der rammer plet, tilknyt en **rigtig SOC-sensor for køretøjet** til denne lader (Konfiguration → EV → Køretøjs-SOC-entitet). Batteriprocenten på dashboardet er SEM's *estimerede* SOC, som bevidst ignoreres ved den hårde grænse (den kan drive). Denne reparation forsvinder automatisk, så snart en rigtig SOC-aflæsning er tilgængelig igen."
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Report this to SEM",
+            "description": "**{name}** er sat til et opladningsmål i procent, men dit køretøj rapporterer i øjeblikket ikke sin ladetilstand, så SEM kan ikke stoppe *præcis* ved **{target}%**.\n\nDen oplader dog ikke i blinde: fra den seneste rigtige aflæsning i denne session tæller den den energi, der faktisk er leveret, og stopper, når den målte sum når dit mål — overskridelsen er kun det, bilen har taget siden den aflæsning. Er der slet ikke kommet en rigtig aflæsning i denne session (eller genstartede SEM midt i opladningen), mangler referencepunktet, og der oplades, indtil bilen selv skruer ned tæt på fuld.\n\nFor en grænse der rammer plet, tilknyt en **rigtig SOC-sensor for køretøjet** til denne lader (Konfiguration → EV → Køretøjs-SOC-entitet). Batteriprocenten på dashboardet er SEM's *estimerede* SOC, som bevidst ignoreres ved den hårde grænse (den kan drive). Denne reparation forsvinder automatisk, så snart en rigtig SOC-aflæsning er tilgængelig igen.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+          }
+        }
+      }
     },
     "unmanaged_charger_found": {
       "title": "SEM fandt en ladeboks, den ikke styrer",
@@ -1537,6 +1647,18 @@
     "battery_force_discharge_unsupported": {
       "title": "Battery power setpoint cannot be written: {entity_id}",
       "description": "SEM tried to write **{entity_id}** and the device refused every time: `{error}`.\n\nThe entity exists and SEM is addressing it correctly — the inverter's firmware simply does not implement writing that register. This usually means the entity you picked for *forcible discharge* in SEM's battery settings is readable but not writable on your hardware.\n\nSEM has stopped trying, so this will no longer fill your log. Two things follow: the routine safety write SEM makes when returning the battery to normal operation is skipped (harmless — there was nothing set to clear), and **battery-to-grid export cannot run** on this battery. Charging, discharge limits and everyday operation are unaffected.\n\n**If you do not use battery-to-grid export**, clear the forcible-discharge entity in SEM's battery settings and this notice goes away. **If you expected it to work**, the entity is likely the wrong one — or your inverter does not support commanded export. A restart makes SEM try again, so a firmware update or a corrected entity is picked up on its own."
+    },
+    "charger_failsafe_suspected": {
+      "title": "Your wallbox undoes SEM's stop on a timer: {name}",
+      "description": "**{name}** re-enabled itself **{interval_s} seconds** after SEM stopped it — at least twice, with the same delay to the second, and with no command from SEM in between. That regularity is the signature of a charger-side **failsafe / controller-timeout fallback**, not of a car retrying.\n\nSEM will not fight it: re-issuing stops faster would strobe the contactor and the box would win anyway. Until it is fixed the charger may draw at its stored fallback current (often 6 A) whenever SEM stops it.\n\n**The fix is a one-time change on the wallbox itself.** Look for a failsafe or fallback-current setting in its configuration — on a KEBA these are `Curr FS` (fallback current) and `Tmo FS` (timeout) — and set the **fallback current to 0**, so a quiet controller means *stay off* rather than *charge at 6 A*. If your box is driven over Modbus, the setting usually lives in the same register block the integration already uses."
+    },
+    "deye_system_work_mode_invalid": {
+      "title": "Deye export control cannot be used: {entity_id}",
+      "description": "SEM cannot use {entity_id} for export control: {reason}. Check the select entity and the three option labels under Configuration → Battery intelligence."
+    },
+    "battery_operating_mode_unexpected": {
+      "title": "Battery is in “{mode}” — SEM plans as if it were “{expected}”",
+      "description": "The operating-mode selector {entity_id} reads “{mode}”. SEM's overnight model and the spendable budget assume “{expected}”; in other modes the inverter follows its own schedule underneath SEM and the plans may not hold. If this mode is deliberate, dismiss this — SEM will not fight your choice. Otherwise set the inverter back to “{expected}”."
     }
   },
   "selector": {

@@ -545,7 +545,14 @@ def test_coordinator_wires_one_cycle_evaluation_and_both_actuation_paths():
     for call in calls:
         assert [ast.unparse(arg) for arg in call.args] == ["self", "decision"]
         keywords = {item.arg: ast.unparse(item.value) for item in call.keywords}
-        assert keywords == {"adapter": "adapter", "power": "view.power"}
+        # (#804 B4d) both sites now also feed the live phase belief — a 3→1
+        # switch must tighten the per-phase clamp at once; absent belief
+        # (the legacy path, installs without switching) falls back to the
+        # nameplate, byte-for-byte.
+        assert set(keywords) == {"adapter", "power", "believed_phases"}
+        assert keywords["adapter"] == "adapter"
+        assert keywords["power"] == "view.power"
+        assert "_phase_believed" in keywords["believed_phases"]
 
     updates = [
         node

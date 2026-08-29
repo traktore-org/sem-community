@@ -759,6 +759,24 @@ def discover_all_ev_chargers_from_registry(
                 result["_platform"] = str(device_entities[0].platform or platform)
                 if device_id:
                     result["_device_id"] = device_id
+                # (#804 B4c) Zaptec's phase selector lives on the
+                # INSTALLATION device as a current threshold (EVCC's Go2
+                # path: 32 A → 1-phase, 0 A → 3-phase) — a sibling device
+                # this per-device loop never hands to the discover fn. When
+                # this platform's registry carries one, SUGGEST it: entity +
+                # values, underscore-keyed (report data, not a config role),
+                # never auto-configured — the user confirms it in the flow.
+                if platform == "zaptec":
+                    for _e in entities:
+                        _uid = str(getattr(_e, "unique_id", "") or "").lower()
+                        if (str(_e.entity_id).startswith("number.")
+                                and _uid.endswith(
+                                    "three_to_one_phase_switch_current")):
+                            result["_suggested_phase_switch"] = {
+                                "entity": str(_e.entity_id),
+                                "value_1p": "32", "value_3p": "0",
+                            }
+                            break
                 _LOGGER.info(
                     "Auto-discovered EV charger from %s (device %s): %s",
                     platform,
@@ -858,6 +876,128 @@ def probe_charger_candidates(hass: Optional[HomeAssistant] = None,
     return out
 
 
+# ============================================================
+# (#848) Installed-integration census — detection asks what EXISTS
+# before it matches anything. Core and HACS integrations are the same
+# thing here: a domain in the config-entry list, a platform on registry
+# entities. The glob matrix never asked; the census always does.
+# ============================================================
+
+def known_charger_domains() -> frozenset:
+    """Charger domains SEM has a discovery function for. ``mqtt`` is
+    excluded from census bookkeeping on purpose: it is a transport, not a
+    brand — its presence proves nothing and its "row" (JuiceBox) is
+    identity-gated. A function, not a constant: ``_EV_CHARGER_PLATFORMS``
+    is defined further down the module."""
+    return frozenset(p for p, _ in _EV_CHARGER_PLATFORMS if p != "mqtt")
+
+#: Inverter/battery integration domains SEM has read patterns or adapters
+#: for. Deliberately curated and incomplete — the census reports what it
+#: KNOWS; a brand missing here shows up as unknown_energy_domains, which
+#: is the line that files the next detection row.
+KNOWN_INVERTER_DOMAINS = frozenset({
+    "huawei_solar", "fronius", "solaredge", "solaredge_modbus", "sma",
+    "solax", "solax_modbus", "goodwe", "sungrow", "sungrow_modbus",
+    "growatt_server", "growatt", "enphase_envoy", "powerwall", "tesla",
+    "kostal_plenticore", "sonnen", "sonnenbatterie", "victron",
+    "victron_gx", "deye", "solarman", "sun2000", "saj_modbus",
+    "solis", "solis_modbus",
+})
+
+#: Domains that are infrastructure, never hardware brands.
+_CENSUS_IGNORED = frozenset({
+    "solar_energy_management", "mqtt", "sun", "template", "input_boolean",
+    "input_number", "input_select", "automation", "script", "scene",
+    "person", "zone", "schedule",
+    # #848 live finding (.175): companion-app phones report battery class
+    # + occasional power sensors and census as ENERGY-shaped. A phone is
+    # never SEM-drivable hardware.
+    "mobile_app",
+})
+
+
+def _census_energy_shaped(dev_entities) -> bool:
+    """Does this domain's entity set look like ENERGY HARDWARE?
+
+    Needs two independent signals: a power/energy sensor alone is any
+    smart plug; the second signal (battery SOC, a controllable current or
+    power number, a plug sensor) is what separates hardware SEM could
+    drive from things that merely measure."""
+    has_power = any(
+        str(e.entity_id).startswith("sensor.")
+        and getattr(e, "original_device_class", None) in ("power", "energy")
+        for e in dev_entities)
+    if not has_power:
+        return False
+    return any(
+        (str(e.entity_id).startswith("sensor.")
+         and getattr(e, "original_device_class", None) == "battery")
+        or (str(e.entity_id).startswith("number.")
+            and getattr(e, "original_device_class", None) in ("current", "power"))
+        or (str(e.entity_id).startswith("binary_sensor.")
+            and getattr(e, "original_device_class", None) == "plug")
+        for e in dev_entities)
+
+
+def build_integration_census(hass=None, registry=None, config_domains=None,
+                             matched_charger_platforms=None) -> Dict[str, Any]:
+    """The census: what is installed, what SEM knows, and the two gaps.
+
+    ``rows_matched_nothing`` — a KNOWN charger platform with registry
+    entities but no discovered charger: a detection bug this install just
+    surfaced. ``unknown_energy_domains`` — an integration with
+    energy-shaped devices SEM has no row for: the next brand row, named
+    by the install instead of waiting for an issue."""
+    if registry is None and hass is not None:
+        registry = entity_registry.async_get(hass)
+    entries = [e for e in (registry.entities.values() if registry else [])
+               if not e.disabled_by]
+    by_domain: Dict[str, list] = {}
+    for e in entries:
+        dom = str(e.platform or "")
+        if dom and dom not in _CENSUS_IGNORED:
+            by_domain.setdefault(dom, []).append(e)
+
+    installed = set(by_domain)
+    if config_domains:
+        installed |= {str(d) for d in config_domains
+                      if str(d) not in _CENSUS_IGNORED}
+    elif hass is not None:
+        try:
+            installed |= {
+                str(en.domain) for en in hass.config_entries.async_entries()
+                if str(en.domain) not in _CENSUS_IGNORED}
+        except Exception:  # noqa: BLE001 — the registry half stands alone
+            pass
+
+    def _canon(dom: str) -> str:
+        # the zaptec_custom tolerance, same rule as the discovery walk
+        return "zaptec" if dom.startswith("zaptec") else dom
+
+    known_chargers = known_charger_domains()
+    chargers_present = sorted(
+        {_canon(d) for d in by_domain if _canon(d) in known_chargers})
+    inverters_present = sorted(d for d in installed
+                               if d in KNOWN_INVERTER_DOMAINS)
+
+    matched = {_canon(str(x)) for x in (matched_charger_platforms or set())}
+    rows_matched_nothing = sorted(d for d in chargers_present
+                                  if d not in matched)
+
+    known = known_chargers | KNOWN_INVERTER_DOMAINS
+    unknown_energy = sorted(
+        dom for dom, ents in by_domain.items()
+        if _canon(dom) not in known and _census_energy_shaped(ents))
+
+    return {
+        "installed": sorted(installed),
+        "known_charger_platforms_present": chargers_present,
+        "known_inverter_domains_present": inverters_present,
+        "rows_matched_nothing": rows_matched_nothing,
+        "unknown_energy_domains": unknown_energy,
+    }
+
+
 def build_detection_report(hass: Optional[HomeAssistant] = None,
                            registry=None) -> Dict[str, Any]:
     """(#814 Pillar B) Detection that shows its work.
@@ -912,6 +1052,21 @@ def build_detection_report(hass: Optional[HomeAssistant] = None,
             devices.setdefault(e.device_id, []).append(e)
         for device_id, dev_entities in devices.items():
             mapping = discover_fn(dev_entities) or {}
+            # (#804 B4c) the report path re-runs discovery per DEVICE, so the
+            # installation-sibling threshold scan from the config path never
+            # fires here — attach the same suggestion so the diagnostics
+            # show what the flow will suggest.
+            if mapping and platform == "zaptec":
+                for _e in live:
+                    _uid = str(getattr(_e, "unique_id", "") or "").lower()
+                    if (str(_e.entity_id).startswith("number.")
+                            and _uid.endswith(
+                                "three_to_one_phase_switch_current")):
+                        mapping["_suggested_phase_switch"] = {
+                            "entity": str(_e.entity_id),
+                            "value_1p": "32", "value_3p": "0",
+                        }
+                        break
             by_id = {str(e.entity_id): e for e in dev_entities}
             if not mapping:
                 report["near_misses"].append({
@@ -936,14 +1091,18 @@ def build_detection_report(hass: Optional[HomeAssistant] = None,
             control = (f"service: {control}" if control
                        else "number entity" if mapping.get("ev_current_control_entity")
                        else "see mapping")
-            report["chargers"].append({
+            row = {
                 "platform": str(dev_entities[0].platform or platform),
                 "device_id": device_id,
                 "mapped": mapped,
                 "unmapped": [_describe(e) for e in dev_entities
                              if str(e.entity_id) not in used],
                 "control": control,
-            })
+            }
+            # (#804 B4c) the one underscore key that IS report data.
+            if mapping.get("_suggested_phase_switch"):
+                row["suggested_phase_switch"] = mapping["_suggested_phase_switch"]
+            report["chargers"].append(row)
 
     # (#814 Pillar A) the prober runs beside the brand walk. A candidate on
     # a device no brand function claimed = "prober_only" (a shape we could
@@ -963,6 +1122,16 @@ def build_detection_report(hass: Optional[HomeAssistant] = None,
         + [{"kind": "brand_only", "platform": p, "device_id": d}
            for (p, d) in sorted(brand_devices - prober_devices, key=str)]
     )
+    # (#848) the census rides every report — what is installed, what SEM
+    # knows, and the two gap lines that turn installs into detection
+    # findings.
+    try:
+        report["census"] = build_integration_census(
+            hass=hass, registry=registry,
+            matched_charger_platforms={
+                c.get("platform") for c in report["chargers"]})
+    except Exception:  # noqa: BLE001 — a census never costs the report
+        report["census"] = None
     return report
 
 
@@ -1102,12 +1271,22 @@ def _discover_zaptec(entities) -> Dict[str, str]:
             device_id = entry.device_id
         dc = entry.original_device_class
         eid_lower = eid.lower()
-        if eid.startswith("binary_sensor.") and ("cable" in eid_lower or "connect" in eid_lower):
+        # (#804/#562) unique_id first, entity-id substring as fallback:
+        # entity ids are localised (a Dutch install says kabel/laden, not
+        # cable/charging) while the integration's unique_ids keep fixed
+        # English keys in every language.
+        _uid = str(getattr(entry, "unique_id", "") or "").lower()
+        if eid.startswith("binary_sensor.") and (
+            _uid.endswith("cable_connected") or _uid.endswith("_connected")
+            or "cable" in eid_lower or "connect" in eid_lower
+        ):
             result["ev_connected_sensor"] = eid
-        if eid.startswith("binary_sensor.") and "charg" in eid_lower:
+        if eid.startswith("binary_sensor.") and (
+            _uid.endswith("_charging") or "charg" in eid_lower
+        ):
             result["ev_charging_sensor"] = eid
         if eid.startswith("sensor.") and (
-            dc == "power"
+            dc == "power" or _uid.endswith("charge_power")
             or ("power" in eid_lower and "energy" not in eid_lower and "kwh" not in eid_lower)
         ):
             result["ev_charging_power_sensor"] = eid
@@ -1123,11 +1302,36 @@ def _discover_zaptec(entities) -> Dict[str, str]:
                 result["ev_session_energy_sensor"] = eid
             else:
                 result["ev_total_energy_sensor"] = eid
-        if eid.startswith("number.") and (
-            "current" in eid_lower or "available_current" in eid_lower
+        # (#804) Roles by registry unique_id FIRST — the #562 lesson.
+        # Entity ids are localised and owner-renameable: @coppe218's Dutch
+        # install names its numbers ``…_beschikbare_stroom`` and
+        # ``…_maximale_laadstroom``, so "current" appears in none of them and
+        # the substring fallbacks below see nothing. The integration builds
+        # unique_ids as ``{object_id}_{key}`` with fixed English keys, so the
+        # suffix identifies the role in every language.
+        uid = _uid
+        if eid.startswith("number."):
+            # The throttle is the CHARGER-level max current — measured on the
+            # reporter's hardware: writing 0 is a soft pause and raising it
+            # resumes automatically (his half-hour hold test), which is
+            # exactly SEM's stop=0/start=N model and how EVCC drives the
+            # brand. The INSTALLATION's available_current is deliberately
+            # NOT a candidate: that is the user's per-phase grid guard
+            # (3×25 A on the reporting install), and a write there
+            # constrains every charger on the installation.
+            if uid.endswith("charger_max_current"):
+                result["ev_current_control_entity"] = eid
+            elif ("ev_current_control_entity" not in result
+                    and "current" in eid_lower
+                    and "available_current" not in uid
+                    and "min_current" not in uid
+                    and not uid.endswith("charger_min_current")):
+                # entity-id fallback for integration builds whose unique_ids
+                # differ — still never the installation limit or the min bound
+                result["ev_current_control_entity"] = eid
+        if eid.startswith("button.") and (
+            "resume" in eid_lower or uid.endswith("resume_charging")
         ):
-            result["ev_current_control_entity"] = eid
-        if eid.startswith("button.") and "resume" in eid_lower:
             result["ev_start_stop_entity"] = eid
 
     # Site/installation aggregates commonly contain only power/energy. A real
@@ -1146,12 +1350,15 @@ def _discover_zaptec(entities) -> Dict[str, str]:
     if not state_keys.intersection(result):
         return {}
 
-    # Prefer number entity control if found, otherwise use Zaptec's service.
-    if "ev_current_control_entity" not in result:
-        result["ev_charger_service"] = "zaptec.limit_current"
-        result["ev_service_param_name"] = "available_current"
-        if device_id:
-            result["ev_service_device_id"] = device_id
+    # (#804, 25.08) NO service fallback. ``zaptec.limit_current`` writes the
+    # INSTALLATION's available_current — the user's per-phase grid guard
+    # (3×25 A on the reporting install), shared by every charger on the
+    # installation and, per the reporter's EVCC layering, never SEM's
+    # throttle. A charger without its charger-level max-current number is
+    # honestly reported without control rather than silently steered through
+    # a limit that constrains the whole site. #695/#698: a charger SEM can
+    # command but not read was the discovery class; one SEM commands through
+    # the WRONG SCOPE is worse.
     return result
 
 
@@ -1182,6 +1389,39 @@ _BRAND_HINTS: Dict[str, List[_ROLE]] = {
     # Energy-Dashboard device instead, so the EV tile pointed at the wrong
     # thing until the reporter repaired it by hand. First brand added as a
     # pure data row — no function (#814).
+    # (#816) GARO — proven live in #700/#748 through the generic path; the
+    # entity names below are the reporter's own. The 6 A floor is carried by
+    # the wrapper (_discover_garo), not a rule: it is a hardware constant,
+    # not an entity.
+    "garo": [
+        {"role": "ev_start_stop_entity", "domain": "switch",
+         "names": ("laddbox", "charging", "on_off")},
+        {"role": "ev_current_control_entity", "domain": "number",
+         "device_class": "current"},
+        {"role": "ev_charging_power_sensor", "domain": "sensor",
+         "device_class": "power"},
+        {"role": "ev_charging_sensor", "domain": "sensor",
+         "names": ("status",)},
+        {"role": "ev_total_energy_sensor", "domain": "sensor",
+         "device_class": "energy"},
+    ],
+    # (#816) JuiceBox 48 over JuiceBoxProxy/MQTT (#683/#698). Rides the
+    # generic ``mqtt`` platform, so EVERY rule requires the juicebox naming —
+    # without that, any Shelly plug publishing power over MQTT could become a
+    # charger. Both energy counters are declared; ha_energy_reader already
+    # de-duplicates the pair (#698) and detection must not re-introduce it.
+    "juicebox": [
+        {"role": "ev_charging_power_sensor", "domain": "sensor",
+         "device_class": "power", "names": ("juicebox",)},
+        {"role": "ev_total_energy_sensor", "domain": "sensor",
+         "device_class": "energy", "names": ("juicebox",), "names2": ("lifetime",)},
+        {"role": "ev_session_energy_sensor", "domain": "sensor",
+         "device_class": "energy", "names": ("juicebox",), "names2": ("session",)},
+        {"role": "ev_charging_sensor", "domain": "sensor",
+         "names": ("juicebox",), "names2": ("status",)},
+        {"role": "ev_current_control_entity", "domain": "number",
+         "names": ("juicebox",)},
+    ],
     "wattpilot": [
         {"role": "ev_charging_power_sensor", "domain": "sensor",
          "device_class": "power"},
@@ -1195,6 +1435,17 @@ _BRAND_HINTS: Dict[str, List[_ROLE]] = {
          "device_class": "energy", "names": ("total",)},
         {"role": "ev_session_energy_sensor", "domain": "sensor",
          "device_class": "energy", "names": ("session",)},
+        # (#804 B4b) The go-e firmware family's force-state select — the
+        # surface that latches this box (HorizonKane: every SEM stop left it
+        # paused, no current write clears it). Mirrored from goecharger_mqtt.
+        # Option VALUES stay unconfigured on purpose: the integration's
+        # labels vary by version, and a guessed label is the mangler bug in
+        # select form — the entity is surfaced, the reporter confirms.
+        {"role": "ev_charge_mode_entity", "domain": "select",
+         "names": ("frc", "force_state")},
+        # (#804 B4a/B4b) a start/resume button rides the new press path.
+        {"role": "ev_start_stop_entity", "domain": "button",
+         "names": ("start", "resume")},
     ],
     "heidelberg_energy_control": [
         {"role": "ev_connected_sensor", "domain": "binary_sensor",
@@ -1213,6 +1464,35 @@ _BRAND_HINTS: Dict[str, List[_ROLE]] = {
 }
 
 
+def _discover_garo(entities) -> Dict[str, str]:
+    """(#816) GARO — a data row plus one hardware constant.
+
+    The 6 A floor is why #700 existed: SEM issued stops the hardware cannot
+    honour. It is a property of the brand, not of any entity, so the row
+    carries it into the charger config the same way KEBA's service name
+    travels."""
+    result = _discover_from_hints(entities, _BRAND_HINTS["garo"])
+    if not result.get("ev_current_control_entity")             and not result.get("ev_start_stop_entity"):
+        return {}
+    result["ev_min_current"] = 6
+    return result
+
+
+def _discover_juicebox(entities) -> Dict[str, str]:
+    """(#816) JuiceBox 48 over the generic mqtt platform.
+
+    Identity is deliberately strict: power AND an energy counter, both
+    juicebox-named. The mqtt platform is everyone's platform, and a lone
+    power sensor is an input state, not a charger (#695/#698)."""
+    result = _discover_from_hints(entities, _BRAND_HINTS["juicebox"])
+    if "ev_charging_power_sensor" not in result:
+        return {}
+    if ("ev_total_energy_sensor" not in result
+            and "ev_session_energy_sensor" not in result):
+        return {}
+    return result
+
+
 def _discover_from_hints(entities, hints: List[_ROLE]) -> Dict[str, str]:
     """Apply a brand's data rows: each role takes the LAST matching entity
     (the same last-wins the hand-written loops had), a rule matches on
@@ -1229,6 +1509,12 @@ def _discover_from_hints(entities, hints: List[_ROLE]) -> Dict[str, str]:
                 continue
             names = rule.get("names")
             if names and not any(n in eid for n in names):
+                continue
+            # (#816) an optional SECOND any-of set, ANDed with the first —
+            # "juicebox" AND "lifetime" — because brands on the shared mqtt
+            # platform need conjunctions a single any-of cannot express.
+            names2 = rule.get("names2")
+            if names2 and not any(n in eid for n in names2):
                 continue
             result[rule["role"]] = eid
     return result
@@ -1496,6 +1782,11 @@ _EV_CHARGER_PLATFORMS = [
     # (#802/#814) data-row brands need no function — the generic matcher
     # applies their _BRAND_HINTS rows.
     ("wattpilot", lambda ents: _discover_from_hints(ents, _BRAND_HINTS["wattpilot"])),
+    # (#816) GARO's custom integration domain.
+    ("garo_wallbox", _discover_garo),
+    # (#816) JuiceBoxProxy publishes over plain MQTT — the discover fn's
+    # identity gate is what keeps this from claiming unrelated mqtt devices.
+    ("mqtt", _discover_juicebox),
 ]
 
 

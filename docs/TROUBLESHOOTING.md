@@ -650,3 +650,140 @@ as a device's control surface, and rows an older version wrote retire
 themselves on the next refresh (logged as `#781 dropped load row …`). Entities
 your registry doesn't know (template switches, YAML helpers) are still kept,
 as is anything you registered yourself with `register_surplus_device`.
+
+---
+
+# Repairs explained — what each notice means and what fixes it
+
+Every SEM repair notice links here (or, where SEM itself is the likely
+culprit, to a prefilled bug report). Each section says what the notice means,
+why SEM raised it, and the fix — in that order.
+
+## A configured sensor is unavailable
+
+SEM reads a sensor you named during setup and Home Assistant reports it
+`unavailable`. SEM keeps running on the last usable pipeline but any decision
+that needs this value is degraded. **Fix:** check the integration that
+provides the sensor (Settings → Devices & Services) — restart it if it shows
+an error; if you renamed or removed the entity, point SEM at the replacement
+in the Configuration tab. The notice clears itself when the sensor returns.
+
+## A sensor stopped updating (stale)
+
+The sensor exists and has a state, but it has not changed for far longer than
+its normal cadence — a frozen value is worse than a missing one, because
+every downstream number silently keeps computing on it. **Fix:** the usual
+culprit is the device's connection (Modbus/WiFi/cloud), not Home Assistant.
+Power-cycle or reload the source integration. SEM clears the notice on the
+first fresh update.
+
+## No solar forecast integration found
+
+SEM plans night charging and battery budgets against tomorrow's solar
+forecast, and no supported forecast integration is installed. Everything
+reactive still works; everything *forecast-led* is off. **Fix:** install one
+of Forecast.Solar (no account needed), Open-Meteo Solar Forecast, or Solcast,
+then reload SEM. The Configuration tab's Solar forecast section shows what
+SEM detected.
+
+## The recorder is not available
+
+Home Assistant's recorder (its history database) is disabled or broken, and
+SEM uses it to seed yearly statistics and to learn from history. **Fix:**
+re-enable the default `recorder:` in `configuration.yaml` (or repair the
+database it points at). SEM works without it, but learning features start
+from zero.
+
+## Heat pump SG-Ready relay unavailable
+
+The switch entity SEM drives for an SG-Ready signal is unavailable, so heat
+pump boosting cannot be actuated. **Fix:** check the relay's integration
+(often a Shelly or similar); if the entity was renamed, re-select it in the
+heat pump settings.
+
+## Heat pump: only one SG-Ready relay
+
+SG-Ready encodes four operating states on TWO relays; with one relay SEM can
+only toggle between two states and says so rather than pretending. **Fix:**
+wire and configure the second relay if your heat pump supports the full
+four-state scheme; otherwise this notice is informational and can be
+dismissed.
+
+## Hot water switch unavailable
+
+The switch that starts your hot-water boost is unavailable — SEM cannot run
+its hot-water program. **Fix:** as with any relay: check the providing
+integration, re-select the entity if it changed.
+
+## Hot water temperature sensor unavailable
+
+Without the temperature, SEM cannot tell whether a boost is needed or done,
+so the hot-water program is on hold. **Fix:** restore the sensor (or pick a
+different one in the settings); the program resumes on the next reading.
+
+## A charger control entity is broken
+
+A number/switch SEM uses to command your wallbox exists in the registry but
+rejects writes or reports unavailable — commonly after the charger's
+integration was reinstalled and entity ids changed. **Fix:** open the
+charger's settings in SEM's Configuration tab and re-select the current
+control entity. The repair names the exact entity it means.
+
+## KEBA failsafe is fighting SEM
+
+Your KEBA's failsafe (`Curr FS` / `Tmo FS`) re-applies a fallback current
+whenever SEM goes quiet, undoing SEM's control. SEM normally arms a
+non-tripping failsafe itself; this notice means it could not. **Fix:** in the
+KEBA's web interface or DIP configuration, set the failsafe fallback current
+to `0` (meaning: a quiet controller = stay off), or let SEM manage it by
+granting the needed permissions in the charger settings.
+
+## Your wallbox undoes SEM's stop on a timer
+
+The box re-enabled itself a fixed number of seconds after SEM's stop, at
+least twice, with no command in between — the signature of a charger-side
+failsafe/controller-timeout fallback (any brand, not only KEBA; common on
+Modbus-driven boxes). SEM deliberately does not fight it — re-stopping faster
+would strobe the contactor and the box wins anyway. **Fix:** find the
+failsafe/fallback-current setting on the wallbox and set the fallback current
+to `0`. The notice retires itself once a stop holds.
+
+## The inverter refuses forced discharge
+
+SEM asked your inverter/battery to force-discharge (battery-to-grid export)
+three times and the write was refused each time — this hardware or its
+integration does not support it. SEM stops asking and re-probes quietly every
+ten minutes, so a firmware update recovers on its own. **Fix:** if you never
+intended battery export, clear the forcible-discharge entity in SEM's battery
+settings and the notice disappears; if you do want it, check whether your
+inverter's firmware/integration version exposes a working discharge control.
+
+## The battery is in a mode SEM does not expect
+
+SEM's planning — the overnight-need model, the spendable budget, the
+scheduled charging — assumes your inverter's operating-policy selector sits
+in its self-consumption mode (Huawei calls it *Maximise self-consumption*).
+This repair appears when SEM reads a different mode from the selector you
+configured under **Settings → Battery operating-mode entity**.
+
+**If the mode is deliberate** (for example you run *Fully fed to grid* on
+purpose): dismiss the repair. SEM only watches this selector — it never
+changes it, and it will not fight your choice. Be aware that in these modes
+the inverter follows its own schedule, so SEM's battery plans may not hold.
+
+**If it is not deliberate**: set the inverter back to its
+self-consumption mode with the inverter's own app or the select entity in
+Home Assistant, and the repair clears by itself.
+
+The reading is debounced: brief sensor dropouts (an unavailable modbus
+link) never raise or clear it.
+
+## Deye System Work Mode setup cannot be used
+
+SEM was asked to control your Deye's export policy but the select entity you
+named does not offer the three labels SEM expects (Selling First / Zero Export
+To Load / Zero Export To CT), or it is unavailable. The notice carries the
+exact reason. **Fix:** in Configuration → Battery intelligence, check the
+select entity and the three option labels against what your Deye integration
+actually shows; the labels must match exactly. SEM clears the notice the
+moment the setup validates.

@@ -220,14 +220,29 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
         # ev_connected; the profitability test (export > import÷eff + cycle) is
         # what keeps it sane.
         if state_value == "discharging_arbitrage":
+            # (#778) Two triggers share this branch, distinguished on the
+            # verdict itself: arbitrage (price economics) and the forecast
+            # SPEND (budget economics). Each reads its OWN plan gate and its
+            # OWN master switch — sharing either would let one feature's
+            # switch open the other's valve.
+            _spend = bool(getattr(sched, "from_forecast_spend", False))
             global_arb = bool(cfg.get("battery_grid_arbitrage_enabled", False))
             # (#638 one-gate C6) The plan says WHEN: the live economics
             # verdict alone no longer opens the valve — the stamped plan's
             # sell block must be open (view.arbitrage_sell, fleet-split by
             # the pipeline).
-            _sell = getattr(view, "arbitrage_sell", None)
+            _sell = getattr(
+                view, "forecast_sell" if _spend else "arbitrage_sell", None)
             _sell_open = bool(_sell and _sell[0])
-            if _sell_open and arbitrage_allowed_for_mode(mode, global_arb):
+            # (#778) The user's export permission binds here too. Passing it
+            # is not optional politeness: without it the "Battery may sell to
+            # the grid" switch persists a value nothing reads, and a user who
+            # revokes the permission watches SEM keep selling. Caught by
+            # tests/test_knob_wiring.py, which exists for exactly this.
+            _perms = getattr(view, "battery_permissions", None)
+            _gate_flag = (bool(getattr(view, "forecast_spending_enabled", False))
+                          if _spend else global_arb)
+            if _sell_open and arbitrage_allowed_for_mode(mode, _gate_flag, _perms):
                 # BOTH floors bind and the higher wins: the user's backup
                 # reserve AND the verdict's arbitrage_reserve_soc. The old
                 # either/or dropped the arbitrage reserve on every install
@@ -235,9 +250,21 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
                 # handed the ACTUATOR the lower floor, which a hardware
                 # end-SOC (Huawei) or a setpoint battery honors on its own
                 # between SEM cycles. The #532 drain class, one seam later.
+                # (#778) A THIRD floor joins the two: the forecast-derived
+                # dynamic floor. The static reserves answer "never below this,
+                # ever"; the dynamic one answers "not below this TONIGHT,
+                # because the house still has to get to sunrise on it". The
+                # higher always wins, and an unknown dynamic floor contributes
+                # nothing rather than being read as zero.
+                _dyn = getattr(view, "dynamic_floor_pct", None)
                 floor = max(
                     reserve, float(getattr(sched, "floor_soc", 0.0) or 0.0)
                 )
+                if _dyn is not None:
+                    try:
+                        floor = max(floor, float(_dyn))
+                    except (TypeError, ValueError):
+                        pass
                 soc = rt.last_known_soc
                 # #531: don't sell blind — a setpoint battery has no hardware
                 # reserve-stop, so an unavailable SOC must hold, not discharge.
@@ -250,6 +277,19 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
                     # treatment via effective_battery_count).
                     _cap = float(_sell[1] or 0.0)
                     _sched_w = float(getattr(sched, "discharge_power_w", 0.0) or 0.0)
+                    # (#778) …and the budget caps it too, when the arc's master
+                    # switch is on. Without the switch this is untouched, so an
+                    # install already selling keeps selling exactly as before.
+                    if getattr(view, "forecast_spending_enabled", False):
+                        _budget_kwh = float(
+                            getattr(view, "battery_spendable_kwh", 0.0) or 0.0)
+                        if _budget_kwh <= 0.0:
+                            return BatteryDecision(
+                                battery_id=rt.battery_id,
+                                intent=BatteryIntent.NORMAL,
+                                reason=("export held — tonight's forecast budget "
+                                        "has nothing spendable"),
+                            )
                     return BatteryDecision(
                         battery_id=rt.battery_id,
                         intent=BatteryIntent.FORCE_DISCHARGE,

@@ -52,9 +52,10 @@ def test_off_mode_releases_sem_driven_load():
     DRIVING the load must stop it — not strand it running forever."""
     d = _dev(control_mode=DeviceControlMode.OFF, is_active=True, consumption=900)
     d._sem_owned = True
+    d._sem_commanded = True          # (#847) SEM issued the ON, so Off undoes it
     i = compute_load_intent(d, remaining_surplus_w=5000)
     assert i.on is False
-    assert "releasing" in i.reason
+    assert "SEM-started" in i.reason
 
 def test_peak_only_user_managed_not_shed():
     keep = compute_load_intent(_dev(control_mode=DeviceControlMode.PEAK_ONLY, is_active=True,

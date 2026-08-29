@@ -774,6 +774,59 @@ class ForecastReader:
             return self._sum_power_w(group, default)
         return self._read_power_w(self._entities.get(role), default)
 
+    @staticmethod
+    def _role_ids(groups: Dict[str, list], fallback: Dict[str, str],
+                  role: str) -> list:
+        """Registry group for a role, or the hardcoded fallback's single id
+        (#822)."""
+        found = groups.get(role) or []
+        if found:
+            return list(found)
+        single = fallback.get(role)
+        return [single] if single else []
+
+    def peek_sources(self) -> Dict[str, Dict[str, float]]:
+        """(#822) What EVERY installed forecast integration says right now.
+
+        Read-only: it never re-points the reader, so the source in use is
+        unaffected by being compared. Each entry is that source's own total —
+        summed across its planes exactly as the active path sums them (#838),
+        so a two-plane Forecast.Solar is compared as one roof and not as one
+        of its planes.
+
+        This exists because the obvious comparison is the wrong one. Two
+        integrations disagreeing does NOT mean one forecasts badly: on the
+        dev rig Solcast said 125.6 kWh, Forecast.Solar 47.2 and Open-Meteo
+        20.0 for the same day — a 6x spread that turned out to be three
+        DIFFERENT CONFIGURED ARRAYS (8 kWp against a 15 kW inverter against a
+        cloud site), not three opinions about one roof. SEM cannot see how a
+        third-party integration was configured, so it cannot normalise them
+        and must not pretend to.
+
+        What it CAN do is score each against what the roof actually produced,
+        which is what the #778 ledger already does for the active source. A
+        source configured for the wrong array simply scores badly and says
+        so — no normalisation required, and the answer is measured rather
+        than assumed.
+        """
+        out: Dict[str, Dict[str, float]] = {}
+        for name, (platform, entity_map) in FORECAST_SOURCES.items():
+            fallback = globals().get(entity_map) or {}
+            if not self._locate_integration(platform, fallback):
+                continue
+            groups = self._registry_entity_groups(platform)
+            today_ids = self._role_ids(groups, fallback, "forecast_today")
+            today = self._sum_floats(today_ids, None)
+            if today is None:
+                continue
+            entry = {"today_kwh": round(today, 3), "planes": len(today_ids)}
+            tomorrow = self._sum_floats(
+                self._role_ids(groups, fallback, "forecast_tomorrow"), None)
+            if tomorrow is not None:
+                entry["tomorrow_kwh"] = round(tomorrow, 3)
+            out[name] = entry
+        return out
+
     def plane_breakdown(self) -> list:
         """(#841) Today's forecast per PLANE, for the card.
 

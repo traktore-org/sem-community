@@ -25,6 +25,21 @@ if TYPE_CHECKING:  # pragma: no cover — type-only
     pass
 
 
+
+def _battery_may_assist_ev(config) -> bool:
+    """(#778) Resolve the per-install EV-assist permission.
+
+    UNSET resolves to True — the battery already assists the car today when
+    the #537 surplus gate passes, and defaulting this off would silently
+    remove a working feature. The global battery mode still applies: `off`
+    means SEM is hands-off that battery entirely.
+    """
+    from ..consts.battery_permissions import effective_permissions, may_assist_ev
+
+    mode = (config.get("battery_mode") or "auto")
+    stored = config.get("battery_permissions") or {}
+    return may_assist_ev(mode, effective_permissions(mode, stored))
+
 def build_charger_view(
     fleet_state: FleetCycleState,
     *,
@@ -42,6 +57,7 @@ def build_charger_view(
     soc_ceiling_reached: bool = False,
     ev_priority: int = 999,
     hardware_max_a: Optional[float] = None,
+    wpa_table: Optional[Mapping[int, float]] = None,
 ) -> ChargerView:
     """Construct a ChargerView from a per-cycle FleetCycleState +
     per-charger overrides.
@@ -170,6 +186,11 @@ def build_charger_view(
         battery_assist_min_surplus_w=float(config.get(
             "battery_assist_min_surplus", 1200,
         )),
+        battery_may_assist_ev=_battery_may_assist_ev(config),
+        battery_spendable_kwh=float(
+            getattr(fleet_state, "battery_spendable_kwh", 0.0) or 0.0),
+        forecast_spending_enabled=bool(
+            config.get("forecast_spending_enabled", False)),
         solar_committed_w=float(solar_committed_w),
         forecast_remaining_kwh=fleet_state.forecast_remaining_kwh,
         # The user's "Minimum Solar Power" slider (number entity key
@@ -264,4 +285,5 @@ def build_charger_view(
         night_deliverable_kwh=night_deliverable_kwh,
         soc_ceiling_reached=soc_ceiling_reached,
         ev_priority=ev_priority,
+        wpa_table=dict(wpa_table or {}),
     )

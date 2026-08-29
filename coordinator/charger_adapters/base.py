@@ -13,8 +13,12 @@ adapter properties — different brands report different idle power
 """
 from __future__ import annotations
 
+import logging
+
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
+
+_LOGGER = logging.getLogger(__name__)
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
     from ..charger_types import ChargerPower
@@ -212,15 +216,30 @@ class ChargerAdapter(ABC):
         return (st.state == "on", True)
 
     async def ensure_enabled(self) -> None:
-        """Idempotently turn the start/stop switch ON. No-op for chargers
-        without a ``switch.``/``input_boolean.`` enable entity."""
+        """Idempotently assert the start/stop surface ON.
+
+        ``switch.``/``input_boolean.`` → ``turn_on`` (idempotent by nature).
+        ``button.`` → ``press`` — (#804 B4a) a button start entity used to be
+        INVISIBLE here (early return), while the only presser in the tree
+        string-mangled the entity id and was unreachable after a latching
+        stop. Now the button is a first-class enable surface: SEM presses
+        exactly what the user named, and the reconciler's existing ENABLE
+        retry/backoff budget paces the presses — a press has no readable
+        state, so pacing by observed charging is the whole design.
+        No-op only when no start/stop entity is configured at all."""
         dev = self._device
         ent = getattr(dev, "start_stop_entity", None)
-        if not ent or not str(ent).startswith(("switch.", "input_boolean.")):
+        if not ent:
             return
-        await dev.hass.services.async_call(
-            ent.split(".")[0], "turn_on", {"entity_id": ent}, blocking=True,
-        )
+        ent = str(ent)
+        if ent.startswith(("switch.", "input_boolean.")):
+            await dev.send(ent.split(".")[0], "turn_on", {"entity_id": ent},
+                           why="ensure_enabled")
+        elif ent.startswith("button."):
+            await dev.send("button", "press", {"entity_id": ent},
+                           why="ensure_enabled (#804 resume surface)")
+        else:
+            return
         # Keep SEM's session view consistent with the contactor we just closed.
         dev._session_active = True
 
@@ -231,16 +250,99 @@ class ChargerAdapter(ABC):
         if rec is not None:
             rec(RuntimeError("enable switch unavailable/locked — cannot start charging"))
 
+    async def report_failsafe_suspected(self, interval_s: float) -> None:
+        """(#823) Raise the failsafe Repair for this charger.
+
+        The reconciler recognised a constant-interval self-re-enable after
+        SEM's stop. The fix is a one-time change on the box (a failsafe /
+        controller-timeout fallback setting), so the Repair carries the
+        learned interval and points there. Warn-once is the reconciler's
+        job; this only files the surface (#799: a log line is not one).
+        """
+        try:
+            from ..repair_issues import raise_charger_failsafe_suspected
+            dev = self._device
+            raise_charger_failsafe_suspected(
+                dev.hass, str(getattr(dev, "device_id", "") or
+                              getattr(dev, "charger_id", "charger")),
+                name=str(getattr(dev, "name", None) or "EV charger"),
+                interval_s=float(interval_s),
+            )
+        except Exception as e:  # noqa: BLE001 — a repair never costs a cycle
+            _LOGGER.debug("failsafe repair not raised: %s", e)
+
+    async def clear_failsafe_suspected(self) -> None:
+        """(#823) Retire the failsafe Repair once a stop finally holds."""
+        try:
+            from ..repair_issues import clear_charger_failsafe_suspected
+            dev = self._device
+            clear_charger_failsafe_suspected(
+                dev.hass, str(getattr(dev, "device_id", "") or
+                              getattr(dev, "charger_id", "charger")))
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.debug("failsafe repair not cleared: %s", e)
+
+    # (#846) The ONE place amps and watts convert. Both consult the measured
+    # W/A when one has been earned for the BELIEVED phase count, and fall
+    # back to nameplate otherwise — so the surplus→amps math, the night
+    # planner's block sizing, the peak guard and the phase guard all improve
+    # from a single change rather than each growing its own opinion (#46).
+    def _wpa_context(self):
+        """(learner, charger_id, phases) — or None when nothing can be
+        measured. ``phases`` is the BELIEF where the coordinator has one,
+        nameplate otherwise: the belief anchors this, never the reverse."""
+        dev = self._device
+        coord = getattr(dev, "_coordinator", None) or getattr(dev, "coordinator", None)
+        from ..watts_per_amp import WattsPerAmpLearner
+        learner = getattr(coord, "_wpa_learner", None)
+        # isinstance, not truthiness: a mocked device hands back a Mock for
+        # any attribute, and the conversion then returns a Mock instead of
+        # watts. Type-check the collaborator (test_charger_adapters).
+        if not isinstance(learner, WattsPerAmpLearner):
+            return None
+        cid = str(getattr(dev, "charger_id", "") or "")
+        if not cid:
+            return None
+        # the coordinator owns the rule (config without switching, the
+        # sequencer's belief with it); the adapter's own phases are the
+        # fallback when no coordinator is bound
+        phases = None
+        rule = getattr(coord, "_wpa_phases_for", None)
+        if callable(rule):
+            try:
+                phases, _ok = rule(cid)
+            except Exception:  # noqa: BLE001
+                phases = None
+        phases = int(phases) if phases in (1, 3) else int(self.phases)
+        return learner, cid, phases
+
+    def nominal_watts_per_amp(self, phases: int | None = None) -> float:
+        ph = int(phases) if phases in (1, 3) else int(self.phases)
+        return float(ph) * float(self.voltage)
+
     def watts_for_amps(self, amps: int) -> float:
-        """How much power ``amps`` corresponds to at this charger's
-        phases × voltage."""
-        return float(amps) * self.phases * self.voltage
+        """How much power ``amps`` really buys — measured where known,
+        nameplate otherwise. Never MORE than nameplate (#846)."""
+        ctx = self._wpa_context()
+        if ctx is None:
+            return float(amps) * self.phases * self.voltage
+        learner, cid, phases = ctx
+        return learner.watts_for_amps(cid, phases, float(amps),
+                                      self.nominal_watts_per_amp(phases))
 
     def amps_for_watts(self, watts: float) -> int:
         """Round-toward-zero conversion from watts to amps. The
         actuator should clamp the result to
         ``[min_current_a, max_current_a]`` itself; this is a
-        plain conversion."""
-        if self.phases * self.voltage <= 0:
-            return 0
-        return int(watts // (self.phases * self.voltage))
+        plain conversion — measured W/A where known (#846), and always
+        rounding DOWN, because handing out an amp the car then exceeds is
+        the one direction that can breach a limit."""
+        ctx = self._wpa_context()
+        if ctx is None:
+            if self.phases * self.voltage <= 0:
+                return 0
+            return int(watts // (self.phases * self.voltage))
+        learner, cid, phases = ctx
+        return learner.amps_for_watts(cid, phases, float(watts),
+                                      self.nominal_watts_per_amp(phases),
+                                      int(self.max_current_a))

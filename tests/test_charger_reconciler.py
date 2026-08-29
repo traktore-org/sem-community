@@ -703,6 +703,12 @@ def test_user_off_gets_the_same_protection():
     rec = _rec()
     for t in (10.0, 110.0, 210.0):
         a = rec.reconcile(DesiredState.OFF, 0, _obs(charging=True, power=4100.0), now=t)
+        # (#823) this synthetic war is EXACTLY periodic, so from the second
+        # round it also carries the failsafe advisory — which is correct: a
+        # box returning on a constant interval IS the failsafe signature.
+        # The pin here is the stop behaviour, so filter the advisory.
+        a = [x for x in a
+             if x.kind is not ActionKind.REPORT_FAILSAFE_SUSPECTED]
         assert a == [Action(ActionKind.DISABLE)]
         rec.reconcile(DesiredState.OFF, 0, _obs(charging=False), now=t + 5)
     actions = rec.reconcile(

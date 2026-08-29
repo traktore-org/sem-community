@@ -195,12 +195,16 @@ async def test_register_persists_and_registers(registry):
 
 
 @pytest.mark.asyncio
-async def test_register_defaults_to_surplus(registry):
+async def test_register_defaults_to_off(registry):
+    """(#847) A device registered without a mode choice starts in Off —
+    the user opts it in deliberately (the #805 principle for discovered
+    devices, extended to service/card registrations). Pre-#847 the silent
+    default was surplus, which adopted running loads nobody handed SEM."""
     spec = dict(SPEC)
     del spec["control_mode"]
     await registry.async_register_service_device(spec)
     device = registry._surplus_controller.get_device("kia_socket")
-    assert device.control_mode == DeviceControlMode.SURPLUS
+    assert device.control_mode == DeviceControlMode.OFF
 
 
 CLIMATE_SPEC = {
@@ -309,12 +313,31 @@ async def test_mode_off_transition_releases_running_load(registry):
     device = registry._surplus_controller.get_device("kia_socket")
     device.observed_on = MagicMock(return_value=True)     # entity is ON
     device._sem_owned = True                               # SEM started it
+    device._sem_commanded = True                           # (#847) by command
     device._offpeak_forced = True                          # stale marker
     device.deactivate = AsyncMock()
     await registry.update_device_control_mode("kia_socket", "off")
     device.deactivate.assert_awaited()
     assert device._offpeak_forced is False
     assert device._sem_owned is False
+
+
+@pytest.mark.asyncio
+async def test_mode_off_releases_adopted_load_without_a_write(registry):
+    """(#847 refinement, 2.1) A load SEM merely ADOPTED (user-started,
+    claimed under Surplus so goal gates could stop it) is released on
+    opt-out with zero writes — SEM never actuates what it did not start."""
+    await registry.async_register_service_device(dict(SPEC))
+    device = registry._surplus_controller.get_device("kia_socket")
+    device.observed_on = MagicMock(return_value=True)
+    device._sem_owned = True
+    device._sem_commanded = False                          # adopted, not commanded
+    device._offpeak_forced = True
+    device.deactivate = AsyncMock()
+    await registry.update_device_control_mode("kia_socket", "off")
+    device.deactivate.assert_not_awaited()
+    assert device._sem_owned is False
+    assert device._offpeak_forced is False
 
 
 @pytest.mark.asyncio

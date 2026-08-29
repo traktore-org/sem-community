@@ -160,7 +160,8 @@
           "legionella_interval_hours": "Ore maxime între ciclurile de dezinfecție",
           "diagram_style": "Stilul diagramei de sistem",
           "battery_assist_min_surplus": "Asistență baterie – surplus solar min. (W)",
-          "grid_sign_invert": "Inversează semnul puterii din rețea"
+          "grid_sign_invert": "Inversează semnul puterii din rețea",
+          "battery_operating_mode_entity": "Battery operating-mode entity (watched)"
         },
         "data_description": {
           "update_interval": "Cât de des citește coordonatorul senzorii și reglează hardware-ul. 10 s oferă cea mai precisă integrare a energiei; valorile peste 30 s vor subestima energia. Interval 10–60 s.",
@@ -185,7 +186,8 @@
           "legionella_target_temp": "Temperatura (°C) pe care sistemul de apă caldă trebuie să o atingă în timpul unui ciclu de dezinfecție anti-legionella.",
           "legionella_interval_hours": "Numărul maxim de ore între ciclurile de dezinfecție anti-legionella înainte ca SEM să forțeze o încălzire.",
           "battery_assist_min_surplus": "Surplusul solar real minim înainte ca bateria casei să poată ajuta la încărcarea EV — în orice mod de încărcare. Sub această valoare bateria este rezervată casei (mașina consumă din rețea + solar). Implicit 1200 W. Setați 0 pentru ca bateria să susțină EV oriunde, inclusiv pe timp de noapte.",
-          "grid_sign_invert": "Activează doar dacă importul din rețea apare ca valoare pozitivă (de ex. Enphase). Convenția SEM este negativ = import; aceasta neagă citirea brută și ocolește detectarea automată a semnului."
+          "grid_sign_invert": "Activează doar dacă importul din rețea apare ca valoare pozitivă (de ex. Enphase). Convenția SEM este negativ = import; aceasta neagă citirea brută și ocolește detectarea automată a semnului.",
+          "battery_operating_mode_entity": "The inverter's operating-policy selector (e.g. Huawei's 'Working mode'). SEM only READS it: the mode is shown beside the battery evidence, and a one-time repair warns when it is not the self-consumption mode SEM's planning assumes. SEM never changes it. Leave empty to disable the watch."
         }
       },
       "settings_ev": {
@@ -304,12 +306,16 @@
           "battery_force_charge_negative_price": "Forțează încărcarea la preț negativ",
           "battery_charge_platform": "Platformă de încărcare a bateriei",
           "battery_replan_interval_min": "Interval de replanificare (min)",
-          "battery_prefer_consecutive_window": "Preferă o fereastră de încărcare consecutivă"
+          "battery_prefer_consecutive_window": "Preferă o fereastră de încărcare consecutivă",
+          "battery_charge_power_limit_entity": "Battery charge-power limit entity (for pacing)",
+          "inverter_ac_limit_w": "Inverter AC output limit"
         },
         "data_description": {
           "battery_charge_platform": "Ce invertor comandă SEM pentru încărcarea programată din rețea. Alege Deye pentru a afișa pasul de cablare Deye.",
           "battery_replan_interval_min": "Cât de des este recalculat planul de încărcare pe baza celei mai recente prognoze și prețuri.",
-          "battery_prefer_consecutive_window": "Pornit: orele ieftine într-un singur bloc (mai puține cicluri pornire/oprire); oprit: cele mai ieftine ore individuale, chiar dacă sunt dispersate."
+          "battery_prefer_consecutive_window": "Pornit: orele ieftine într-un singur bloc (mai puține cicluri pornire/oprire); oprit: cele mai ieftine ore individuale, chiar dacă sunt dispersate.",
+          "battery_charge_power_limit_entity": "The inverter's max-charge-power number that charge pacing writes to (e.g. Huawei's 'Maximum charging power'). Leave empty to keep pacing advisory-only.",
+          "inverter_ac_limit_w": "Your inverter's maximum AC output in watts. Charge pacing opens its cap wherever solar would exceed this, so clipped sun is captured. 0 = not set."
         }
       },
       "ev_charger_edit": {
@@ -342,7 +348,8 @@
           "vehicle_min_current": "Curent minim al vehiculului (A)",
           "ev_phase_switch_entity": "Entitate de comutare a fazelor (opțional)",
           "ev_phase_switch_value_1p": "Comutare faze: valoare monofazat (opțional)",
-          "ev_phase_switch_value_3p": "Comutare faze: valoare trifazat (opțional)"
+          "ev_phase_switch_value_3p": "Comutare faze: valoare trifazat (opțional)",
+          "ev_phase_switching_enabled": "Phase switching"
         },
         "data_description": {
           "charger_name": "Numele prietenos al acestui încărcător, afișat în tabloul de bord.",
@@ -371,7 +378,8 @@
           "vehicle_min_current": "Prag minim de curent pe vehicul. Minimul efectiv este cel mai mare dintre acesta și curentul minim al încărcătorului.",
           "ev_phase_switch_entity": "Select/number/switch care comută încărcătorul între încărcare mono și trifazată (go-e 'psm', KEBA seria X, openWB). Deocamdată SEM doar observă și validează — comutarea automată vine într-o versiune viitoare.",
           "ev_phase_switch_value_1p": "Ce se scrie în entitatea de comutare pentru încărcare monofazată — numele opțiunii unui select, valoarea unui number sau on/off. Obligatoriu pentru entități select; implicit number 1, switch off.",
-          "ev_phase_switch_value_3p": "Ce se scrie în entitatea de comutare pentru încărcare trifazată — numele opțiunii unui select, valoarea unui number sau on/off. Obligatoriu pentru entități select; implicit number 3, switch on."
+          "ev_phase_switch_value_3p": "Ce se scrie în entitatea de comutare pentru încărcare trifazată — numele opțiunii unui select, valoarea unui number sau on/off. Obligatoriu pentru entități select; implicit number 3, switch on.",
+          "ev_phase_switching_enabled": "Off by default while the 1/3-phase model is reworked (it paused chargers that never resumed on some brands). Turn on to test it on your charger."
         }
       },
       "ev_charger_add": {
@@ -403,7 +411,8 @@
           "ev_min_current": "Curent minim de încărcare (A)",
           "ev_phase_switch_entity": "Entitate de comutare a fazelor (opțional)",
           "ev_phase_switch_value_1p": "Comutare faze: valoare monofazat (opțional)",
-          "ev_phase_switch_value_3p": "Comutare faze: valoare trifazat (opțional)"
+          "ev_phase_switch_value_3p": "Comutare faze: valoare trifazat (opțional)",
+          "ev_phase_switching_enabled": "Phase switching"
         },
         "data_description": {
           "charger_name": "Numele prietenos al acestui încărcător, afișat în tabloul de bord.",
@@ -431,7 +440,8 @@
           "ev_min_current": "Sub această valoare SEM întrerupe încărcarea în loc să scadă curentul mai mult.",
           "ev_phase_switch_entity": "Select/number/switch care comută încărcătorul între încărcare mono și trifazată (go-e 'psm', KEBA seria X, openWB). Deocamdată SEM doar observă și validează — comutarea automată vine într-o versiune viitoare.",
           "ev_phase_switch_value_1p": "Ce se scrie în entitatea de comutare pentru încărcare monofazată — numele opțiunii unui select, valoarea unui number sau on/off. Obligatoriu pentru entități select; implicit number 1, switch off.",
-          "ev_phase_switch_value_3p": "Ce se scrie în entitatea de comutare pentru încărcare trifazată — numele opțiunii unui select, valoarea unui number sau on/off. Obligatoriu pentru entități select; implicit number 3, switch on."
+          "ev_phase_switch_value_3p": "Ce se scrie în entitatea de comutare pentru încărcare trifazată — numele opțiunii unui select, valoarea unui number sau on/off. Obligatoriu pentru entități select; implicit number 3, switch on.",
+          "ev_phase_switching_enabled": "Off by default while the 1/3-phase model is reworked (it paused chargers that never resumed on some brands). Turn on to test it on your charger."
         }
       },
       "pv_naming": {
@@ -457,7 +467,10 @@
           "heat_pump_power_sensor": "Senzor de putere (opțional)",
           "heat_pump_boost_offset": "Decalaj de stimulare a temperaturii (°C)",
           "heat_pump_max_setpoint": "Setpoint maxim de temperatură (°C)",
-          "heat_pump_priority": "Prioritate surplus (1=cea mai mare)"
+          "heat_pump_priority": "Prioritate surplus (1=cea mai mare)",
+          "heat_pump_sg_ready_service": "SG-Ready service (domain.service)",
+          "heat_pump_sg_ready_service_data": "SG-Ready service data (JSON; placeholders state, relay1, relay2)",
+          "heat_pump_sg_ready_state_entity": "SG-Ready state read-back entity"
         },
         "data_description": {
           "heat_pump_relay1_entity": "Entitate switch pentru releul SG-Ready 1 (semnal de funcționare normală). Setați-o împreună cu releul 2 pentru protocolul SG-Ready.",
@@ -583,13 +596,47 @@
           "deye_program_5_charge": "Program 5 — entitate select încărcare din rețea",
           "deye_program_6_time": "Program 6 — entitate interval orar (time.*)",
           "deye_program_6_soc": "Program 6 — entitate number SOC țintă",
-          "deye_program_6_charge": "Program 6 — entitate select încărcare din rețea"
+          "deye_program_6_charge": "Program 6 — entitate select încărcare din rețea",
+          "deye_system_work_mode_control": "Control Deye System Work Mode (export policy)",
+          "deye_system_work_mode_entity": "Deye System Work Mode entity",
+          "deye_system_work_mode_selling_option": "Label of the 'Selling First' option",
+          "deye_system_work_mode_zero_load_option": "Label of the 'Zero Export To Load' option",
+          "deye_system_work_mode_zero_ct_option": "Label of the 'Zero Export To CT' option"
         },
         "data_description": {
           "deye_bms_max_charge_current_a": "Plafon opțional impus de BMS. 0 înseamnă fără limită BMS — se aplică maximul invertorului.",
           "deye_observer_mode": "Când este PORNIT, SEM calculează și înregistrează acțiunile Deye, dar nu scrie niciodată în invertor.",
           "deye_actuation_enabled": "Când este OPRIT, SEM nu scrie niciodată în invertor, chiar dacă modul observator este de asemenea oprit. Ambele porți trebuie să permită înainte de trimiterea unei comenzi.",
           "deye_max_charge_current_a": "Limita superioară sigură pe care SEM o va comanda pe entitatea curentului de încărcare."
+        }
+      },
+      "heat_pump_menu": {
+        "title": "Heat pumps",
+        "description": "Your primary heat pump is configured. Add more units, each driven independently by priority.",
+        "data": {
+          "action": "Action"
+        }
+      },
+      "heat_pump_unit": {
+        "title": "Additional heat pump",
+        "description": "Configure this unit the same way as the primary: SG-Ready relays, a climate entity, or a service call (for command-driven pumps like Buderus over EMS-ESP).",
+        "data": {
+          "name": "Name",
+          "heat_pump_relay1_entity": "SG-Ready relay 1",
+          "heat_pump_relay2_entity": "SG-Ready relay 2",
+          "heat_pump_invert_sg_ready": "Invert SG-Ready relays (NC wiring)",
+          "heat_pump_climate_entity": "Climate entity",
+          "heat_pump_power_sensor": "Power sensor",
+          "heat_pump_energy_sensor": "Energy sensor",
+          "heat_pump_temperature_sensor": "Temperature sensor",
+          "heat_pump_rated_power": "Rated power",
+          "heat_pump_boost_offset": "Boost offset",
+          "heat_pump_max_setpoint": "Maximum setpoint",
+          "heat_pump_force_on_threshold": "Force-on threshold",
+          "heat_pump_priority": "Priority",
+          "heat_pump_sg_ready_service": "SG-Ready service (domain.service)",
+          "heat_pump_sg_ready_service_data": "SG-Ready service data (JSON; placeholders state, relay1, relay2)",
+          "heat_pump_sg_ready_state_entity": "SG-Ready state read-back entity"
         }
       }
     },
@@ -600,7 +647,11 @@
       "heat_pump_partial_relays": "SG-Ready necesită AMBELE entități de releu. Setați ambele relee — sau lăsați-le pe ambele goale și configurați doar entitatea climate pentru stimularea punctului de referință doar prin climate.",
       "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities.",
       "deye_work_mode_mapping_not_distinct": "Controlul Work Mode are nevoie de două opțiuni diferite – una pentru Load First și una pentru Battery First. Alegeți-le pe amândouă, nu de două ori aceeași.",
-      "deye_force_charge_work_mode_invalid": "Alegeți ce Work Mode trebuie să folosească SEM pentru încărcarea forțată a bateriei: Load First sau Battery First."
+      "deye_force_charge_work_mode_invalid": "Alegeți ce Work Mode trebuie să folosească SEM pentru încărcarea forțată a bateriei: Load First sau Battery First.",
+      "deye_system_work_mode_mapping_not_distinct": "The three System Work Mode labels must be filled in and distinct.",
+      "heat_pump_no_control": "Configure at least one control path: both relays, a climate entity, or a service.",
+      "heat_pump_service_invalid": "The SG-Ready service must be domain.service (e.g. ems_esp.send_command).",
+      "heat_pump_service_data_invalid": "The SG-Ready service data must be a JSON object."
     }
   },
   "entity": {
@@ -1243,6 +1294,27 @@
       },
       "daily_total_consumption": {
         "name": "Consum total azi"
+      },
+      "battery_measured_capacity_kwh": {
+        "name": "Capacitate măsurată a bateriei"
+      },
+      "battery_capacity_drift_pct": {
+        "name": "Abatere de capacitate"
+      },
+      "forecast_trust_d1": {
+        "name": "Încrederea în prognoză (mâine)"
+      },
+      "forecast_trust_d2": {
+        "name": "Încrederea în prognoză (poimâine)"
+      },
+      "battery_spendable_kwh": {
+        "name": "Disponibil la noapte"
+      },
+      "battery_dynamic_floor_pct": {
+        "name": "Prag dinamic"
+      },
+      "battery_charge_pacing": {
+        "name": "Battery charge pacing"
       }
     },
     "binary_sensor": {
@@ -1292,6 +1364,18 @@
       },
       "energy_plan_actuation": {
         "name": "Executarea planului energetic"
+      },
+      "battery_may_export": {
+        "name": "Bateria poate vinde în rețea"
+      },
+      "battery_may_assist_ev": {
+        "name": "Bateria poate încărca mașina"
+      },
+      "forecast_spending_enabled": {
+        "name": "Cheltuire ghidată de prognoză"
+      },
+      "battery_charge_pacing_enabled": {
+        "name": "Battery charge pacing"
       }
     },
     "number": {
@@ -1433,6 +1517,11 @@
           "3": "Trifazat"
         }
       }
+    },
+    "button": {
+      "backfill_battery_nights": {
+        "name": "Rebuild battery-night history"
+      }
     }
   },
   "exceptions": {
@@ -1484,11 +1573,25 @@
     },
     "charger_actuation_failed": {
       "title": "Încărcătorul EV nu acceptă comenzi: {name}",
-      "description": "Ultimele 3+ comenzi de curent trimise de SEM către **{name}** au fost respinse: `{error}`. Încărcătorul NU este sub controlul SEM în acest moment — va continua să facă ce i s-a comandat ultima dată (inclusiv să încarce la putere maximă în modul oprit). Cele mai frecvente cauze: entitatea de control a încărcătorului a fost redenumită de o actualizare a integrării din amonte sau `ev_charger_service` indică un serviciu cu o altă schemă de parametri. Verificați entitatea/serviciul de control al încărcătorului în configurația SEM. Această problemă se șterge automat la următoarea comandă reușită."
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Report this to SEM",
+            "description": "Ultimele 3+ comenzi de curent trimise de SEM către **{name}** au fost respinse: `{error}`. Încărcătorul NU este sub controlul SEM în acest moment — va continua să facă ce i s-a comandat ultima dată (inclusiv să încarce la putere maximă în modul oprit). Cele mai frecvente cauze: entitatea de control a încărcătorului a fost redenumită de o actualizare a integrării din amonte sau `ev_charger_service` indică un serviciu cu o altă schemă de parametri. Verificați entitatea/serviciul de control al încărcătorului în configurația SEM. Această problemă se șterge automat la următoarea comandă reușită.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+          }
+        }
+      }
     },
     "charger_stop_unenforceable": {
       "title": "Încărcătorul nu poate fi oprit: {name}",
-      "description": "SEM i-a comandat lui **{name}** să se oprească, dar niciun mecanism configurat nu poate deschide efectiv contactorul — mașina consumă în continuare {power} W. Singurul control pe care SEM îl are pentru acest încărcător este `{entity}`, iar minimul acestuia este peste 0 A, deci scrierea valorii 0 A nu face nimic (SEM nu scrie niciodată o valoare pe care entitatea ar respinge-o). Dacă ai o baterie de casă, această putere iese din ea — la orice oră din zi sau din noapte. Soluție: configurează pentru acest încărcător, în opțiunile SEM, o entitate pornire/oprire (`ev_start_stop_entity`), o entitate de mod de încărcare sau un serviciu de oprire. Avertismentul dispare de îndată ce încărcătorul nu mai consumă."
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Report this to SEM",
+            "description": "SEM i-a comandat lui **{name}** să se oprească, dar niciun mecanism configurat nu poate deschide efectiv contactorul — mașina consumă în continuare {power} W. Singurul control pe care SEM îl are pentru acest încărcător este `{entity}`, iar minimul acestuia este peste 0 A, deci scrierea valorii 0 A nu face nimic (SEM nu scrie niciodată o valoare pe care entitatea ar respinge-o). Dacă ai o baterie de casă, această putere iese din ea — la orice oră din zi sau din noapte. Soluție: configurează pentru acest încărcător, în opțiunile SEM, o entitate pornire/oprire (`ev_start_stop_entity`), o entitate de mod de încărcare sau un serviciu de oprire. Avertismentul dispare de îndată ce încărcătorul nu mai consumă.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+          }
+        }
+      }
     },
     "no_forecast_integration": {
       "title": "Nu a fost detectată nicio integrare de prognoză solară",
@@ -1520,7 +1623,14 @@
     },
     "soc_cap_unenforceable": {
       "title": "Limita de încărcare de {target}% nu poate fi aplicată: {name}",
-      "description": "**{name}** are setată o țintă de încărcare în procente, dar vehiculul nu îşi raportează starea de încărcare în acest moment, aşa că SEM nu poate opri *exact* la **{target}%**.\n\nTotuşi nu încarcă orbeşte: de la ultima citire reală din această sesiune contorizează energia livrată efectiv şi opreşte în momentul în care acest total măsurat atinge ţinta — depăşirea este doar cât a luat maşina de la acea citire încoace. Dacă în această sesiune nu a sosit nicio citire reală (sau SEM a repornit în timpul încărcării), nu există reper şi încărcarea continuă până când maşina însăşi reduce puterea, aproape plină.\n\nPentru o limită care nimereşte exact, configuraţi un **senzor real de SOC al vehiculului** pentru acest încărcător (Configurare → EV → Entitate SOC vehicul). Procentul bateriei din tabloul de bord este SOC-ul *estimat* de SEM, ignorat în mod deliberat pentru limita fermă (poate devia). Această reparaţie dispare automat de îndată ce o citire reală de SOC este din nou disponibilă."
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Report this to SEM",
+            "description": "**{name}** are setată o țintă de încărcare în procente, dar vehiculul nu îşi raportează starea de încărcare în acest moment, aşa că SEM nu poate opri *exact* la **{target}%**.\n\nTotuşi nu încarcă orbeşte: de la ultima citire reală din această sesiune contorizează energia livrată efectiv şi opreşte în momentul în care acest total măsurat atinge ţinta — depăşirea este doar cât a luat maşina de la acea citire încoace. Dacă în această sesiune nu a sosit nicio citire reală (sau SEM a repornit în timpul încărcării), nu există reper şi încărcarea continuă până când maşina însăşi reduce puterea, aproape plină.\n\nPentru o limită care nimereşte exact, configuraţi un **senzor real de SOC al vehiculului** pentru acest încărcător (Configurare → EV → Entitate SOC vehicul). Procentul bateriei din tabloul de bord este SOC-ul *estimat* de SEM, ignorat în mod deliberat pentru limita fermă (poate devia). Această reparaţie dispare automat de îndată ce o citire reală de SOC este din nou disponibilă.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+          }
+        }
+      }
     },
     "unmanaged_charger_found": {
       "title": "SEM a găsit un încărcător pe care nu îl gestionează",
@@ -1537,6 +1647,18 @@
     "battery_force_discharge_unsupported": {
       "title": "Battery power setpoint cannot be written: {entity_id}",
       "description": "SEM tried to write **{entity_id}** and the device refused every time: `{error}`.\n\nThe entity exists and SEM is addressing it correctly — the inverter's firmware simply does not implement writing that register. This usually means the entity you picked for *forcible discharge* in SEM's battery settings is readable but not writable on your hardware.\n\nSEM has stopped trying, so this will no longer fill your log. Two things follow: the routine safety write SEM makes when returning the battery to normal operation is skipped (harmless — there was nothing set to clear), and **battery-to-grid export cannot run** on this battery. Charging, discharge limits and everyday operation are unaffected.\n\n**If you do not use battery-to-grid export**, clear the forcible-discharge entity in SEM's battery settings and this notice goes away. **If you expected it to work**, the entity is likely the wrong one — or your inverter does not support commanded export. A restart makes SEM try again, so a firmware update or a corrected entity is picked up on its own."
+    },
+    "charger_failsafe_suspected": {
+      "title": "Your wallbox undoes SEM's stop on a timer: {name}",
+      "description": "**{name}** re-enabled itself **{interval_s} seconds** after SEM stopped it — at least twice, with the same delay to the second, and with no command from SEM in between. That regularity is the signature of a charger-side **failsafe / controller-timeout fallback**, not of a car retrying.\n\nSEM will not fight it: re-issuing stops faster would strobe the contactor and the box would win anyway. Until it is fixed the charger may draw at its stored fallback current (often 6 A) whenever SEM stops it.\n\n**The fix is a one-time change on the wallbox itself.** Look for a failsafe or fallback-current setting in its configuration — on a KEBA these are `Curr FS` (fallback current) and `Tmo FS` (timeout) — and set the **fallback current to 0**, so a quiet controller means *stay off* rather than *charge at 6 A*. If your box is driven over Modbus, the setting usually lives in the same register block the integration already uses."
+    },
+    "deye_system_work_mode_invalid": {
+      "title": "Deye export control cannot be used: {entity_id}",
+      "description": "SEM cannot use {entity_id} for export control: {reason}. Check the select entity and the three option labels under Configuration → Battery intelligence."
+    },
+    "battery_operating_mode_unexpected": {
+      "title": "Battery is in “{mode}” — SEM plans as if it were “{expected}”",
+      "description": "The operating-mode selector {entity_id} reads “{mode}”. SEM's overnight model and the spendable budget assume “{expected}”; in other modes the inverter follows its own schedule underneath SEM and the plans may not hold. If this mode is deliberate, dismiss this — SEM will not fight your choice. Otherwise set the inverter back to “{expected}”."
     }
   },
   "selector": {

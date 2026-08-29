@@ -279,9 +279,9 @@ register_surplus_device:
           device_class: energy
     control_mode:
       name: Control Mode
-      description: "How SEM controls the device: surplus (SEM switches it on solar surplus — the default), peak_only (your own automations run it, SEM only sheds it to protect the grid peak), off (monitor only)."
+      description: "How SEM controls the device: off (monitor only — the default: you opt a device in deliberately, #847), peak_only (your own automations run it, SEM only sheds it to protect the grid peak), surplus (SEM switches it on solar surplus)."
       required: false
-      default: surplus
+      default: "off"
       selector:
         select:
           options:
@@ -624,4 +624,56 @@ purge_status_history:
         number:
           min: 0
           max: 365
+          unit_of_measurement: days
+
+backfill_forecast_ledger:
+  name: Learn forecast accuracy from past history
+  description: >-
+    SEM normally learns how accurate your solar forecast is by watching it
+    forward, and needs a week of days before it will trust one. If your system
+    has been running longer than that, the answer is already in your recorder
+    history — this reads it and settles the ledger in one pass, so
+    forecast-led spending can start from what your site has actually done
+    rather than from a week's wait. Days SEM recorded live are never
+    overwritten.
+  fields:
+    days:
+      name: How far back to look
+      description: >-
+        How many days of history to read. More days means a better-grounded
+        answer; a year is plenty.
+      required: false
+      example: 365
+      default: 365
+      selector:
+        number:
+          min: 14
+          max: 730
+          unit_of_measurement: days
+
+backfill_battery_nights:
+  name: Learn overnight battery use from past history
+  description: >-
+    SEM works out how much of your battery is safe to spend by watching how
+    much your house actually draws from it overnight, and it wants five good
+    nights before it will offer a figure. Recording produces one per day, so a
+    new install waits a week for something your own history usually already
+    proves. This reads your battery's recorded discharge and reconstructs
+    those nights in one pass. Nights SEM measured live are never overwritten —
+    a live night can tell house use apart from car charging and export, and a
+    reconstructed one cannot, so reconstructed nights are treated as an upper
+    bound on what the house took.
+  fields:
+    days:
+      name: How far back to look
+      description: >-
+        How many days of history to read. More days means a better-grounded
+        answer; a year is plenty.
+      required: false
+      example: 365
+      default: 365
+      selector:
+        number:
+          min: 14
+          max: 730
           unit_of_measurement: days

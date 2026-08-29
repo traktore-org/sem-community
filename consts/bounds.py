@@ -66,6 +66,9 @@ BOUNDS: dict[str, Range] = {
     "daily_ev_target": Range(0, 200, step=0.5, unit="kWh"),
     "daily_ev_target_max": Range(0, 200, step=0.5, unit="kWh"),
     "ev_battery_capacity_kwh": Range(10, 120, step=5, unit="kWh"),
+    # ── charge pacing (#820, 2.1 audit item 6) ──────────────────────
+    # The inverter's AC output limit; 0 = not set (clipping guard off).
+    "inverter_ac_limit_w": Range(0, 100000, step=100, unit="W"),
     "ev_kwh_per_100km": Range(8, 50, step=0.5, unit="kWh/100km"),
 
     # ── Home battery ─────────────────────────────────────────────────
@@ -74,6 +77,10 @@ BOUNDS: dict[str, Range] = {
     # and 7.5 was not representable on one of them. Found by the #828 audit,
     # never reported. One row, one answer.
     "battery_capacity_kwh": Range(1, 100, step=0.5, unit="kWh"),
+
+    # ── heat pumps (#685) ────────────────────────────────────────────
+    "heat_pump_rated_power": Range(100, 30000, step=100, unit="W"),
+    "heat_pump_force_on_threshold": Range(0, 30000, step=100, unit="W"),
 
     # ── Deye forced grid charging (#826) ─────────────────────────────
     # The pair that started this: SEM's write ceiling is bounded BY the BMS

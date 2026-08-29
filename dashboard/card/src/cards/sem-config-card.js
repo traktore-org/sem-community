@@ -42,7 +42,7 @@ const ESSENTIAL_SECTIONS = new Set([
     'overview',        // what is still missing, and the route to each
     'tariff',          // without a price, every saving SEM reports is zero
     'ev_chargers',     // the main sink on most installs
-    'battery_zones',   // the floors that keep the house covered
+    'battery_zones',   // the floors that keep the house covered,
 ]);
 
 const ESSENTIAL_CONTROLS = new Set([
@@ -138,6 +138,17 @@ const SECTIONS = [
         color: '#f06292',
         titleKey: 'config_section_battery_scheduler',
         subtitleFn: () => '',
+    },
+    {
+        // (2.1 audit, item 2) One home for the four 2.1 switches, the
+        // pacing picker, the AC limit and the Deye export row. An ADVANCED
+        // section: #830's default view stays at four; the Setup overview
+        // routes here.
+        // They were HA entities only, or options-flow pages 11-12.
+        id: 'battery_intelligence',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/USER_GUIDE.md#forecast-led-spending-v21',
+        titleKey: 'config_section_battery_intelligence',
+        subtitleFn: (c) => c._batteryIntelligenceSubtitle(),
     },
     {
         id: 'load_management',
@@ -863,6 +874,8 @@ class SEMConfigCard extends SEMLitBase {
                        vocabulary. Value fields only show once the entity is
                        set; select entities REQUIRE them, number defaults to
                        1/3 and switch to off/on. */}
+                    ${this._renderToggleNested(idx, cid, 'ev_phase_switching_enabled', 'config_ev_phase_switching',
+                        opts, 'config_help_ev_phase_switching')}
                     ${this._renderPickerNested(idx, cid, 'ev_phase_switch_entity', 'config_ev_phase_switch',
                         ['select', 'number', 'switch', 'input_select', 'input_number', 'input_boolean'],
                         null, opts, 'config_help_ev_phase_switch')}
@@ -871,6 +884,17 @@ class SEMConfigCard extends SEMLitBase {
                             opts, 'config_help_ev_phase_values', '1 / off / einphasig')}
                         ${this._renderTextNested(idx, cid, 'ev_phase_switch_value_3p', 'config_ev_phase_3p',
                             opts, 'config_help_ev_phase_values', '3 / on / dreiphasig')}` : nothing}
+                    ${''/* (2.1 audit) start/stop via a charge-mode select
+                       (go-e / Wattpilot force-state). The option labels are
+                       the integration's own vocabulary — never guessed —
+                       so they are typed here, beside the entity. */}
+                    ${this._renderPickerNested(idx, cid, 'ev_charge_mode_entity', 'config_ev_charge_mode',
+                        ['select', 'input_select'], null, opts, 'config_help_ev_charge_mode')}
+                    ${charger.ev_charge_mode_entity ? html`
+                        ${this._renderTextNested(idx, cid, 'ev_charge_mode_start', 'config_ev_charge_mode_start',
+                            opts, 'config_help_ev_charge_mode', 'On / 2')}
+                        ${this._renderTextNested(idx, cid, 'ev_charge_mode_stop', 'config_ev_charge_mode_stop',
+                            opts, 'config_help_ev_charge_mode', 'Off / 1')}` : nothing}
                     ${this._renderPickerNested(idx, cid, 'vehicle_soc_entity', 'config_ev_vehicle_soc',
                         'sensor', null, opts, 'config_help_ev_vehicle_soc')}
                     ${this._renderTargetTypeSelectNested(idx, cid, charger, opts)}
@@ -1016,8 +1040,12 @@ class SEMConfigCard extends SEMLitBase {
         if (!r) return this._t('config_detect_none');
         const n = (r.chargers || []).length;
         const nm = (r.near_misses || []).length;
-        const base = `${n} ${this._t('config_detect_chargers')}`;
-        return nm ? `${base} · ${nm} ${this._t('config_detect_near_misses')}` : base;
+        const gaps = ((r.census || {}).unknown_energy_domains || []).length
+                   + ((r.census || {}).rows_matched_nothing || []).length;
+        let base = `${n} ${this._t('config_detect_chargers')}`;
+        if (nm) base += ` · ${nm} ${this._t('config_detect_near_misses')}`;
+        if (gaps) base += ` · ${gaps} ${this._t('config_census_gaps')}`;
+        return base;
     }
 
     // (#814 Pillar B) Detected hardware with evidence. Read-only view of the
@@ -1037,8 +1065,21 @@ class SEMConfigCard extends SEMLitBase {
                 <span style="font-family:monospace;font-size:0.85em">${v.entity || v.value || '—'}
                     ${v.device_class ? html`<span style="opacity:.6"> · ${v.domain}/${v.device_class}</span>` : nothing}
                 </span></div>`;
+        const census = r.census || {};
+        const unknown = census.unknown_energy_domains || [];
+        const nomatch = census.rows_matched_nothing || [];
         return html`
             <div class="setting-help-text" style="margin:0 0 6px">${this._t('config_detect_intro')}</div>
+            ${unknown.length ? html`
+                <div class="row" style="color:var(--warning-color,#ffa726)">
+                    <span class="lbl">${this._t('config_census_unknown')}</span>
+                    <span style="font-family:monospace">${unknown.join(', ')}</span>
+                </div>` : nothing}
+            ${nomatch.length ? html`
+                <div class="row" style="color:var(--warning-color,#ffa726)">
+                    <span class="lbl">${this._t('config_census_nomatch')}</span>
+                    <span style="font-family:monospace">${nomatch.join(', ')}</span>
+                </div>` : nothing}
             ${chargers.map((c) => html`
                 <div class="row" style="font-weight:600">
                     <span class="lbl">${this._t('config_detect_charger')}: ${c.platform}</span>
@@ -1555,6 +1596,30 @@ class SEMConfigCard extends SEMLitBase {
                 ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
                 ${status === 'ok' ? html`<div class="save-status ok">✓ ${this._t('config_saved')}</div>` : nothing}
                 ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
+            </div>
+        `;
+    }
+
+    // (2.1 audit, item 1) A per-charger boolean — the phase-switching gate
+    // shipped with no UI at all. Saves through the same per-charger field
+    // path as the text/picker rows.
+    _renderToggleNested(chargerIndex, cid, chargerKey, labelKey, opts, helpKey) {
+        const chargers = opts.ev_chargers || [];
+        const cur = !!(chargers[chargerIndex]?.[chargerKey]);
+        const statusKey = `ev_chargers.${chargerIndex}.${chargerKey}`;
+        const status = this._saveStatus[statusKey];
+        return html`
+            <div class="picker-cell">
+                <div class="toggle-row">
+                    <span class="toggle-label">${this._t(labelKey)}${this._helpBtn(helpKey)}</span>
+                    <div class="toggle-track ${cur ? 'on' : ''}"
+                         @click=${() => this._saveChargerField(chargerIndex, cid, chargerKey, !cur, statusKey, opts)}>
+                        <div class="toggle-thumb"></div>
+                    </div>
+                </div>
+                ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
+                ${status === 'ok' ? html`<div class="save-status ok">✓ ${this._t('config_saved')}</div>` : nothing}
+                ${this._helpBlock(helpKey)}
             </div>
         `;
     }
@@ -2083,6 +2148,34 @@ class SEMConfigCard extends SEMLitBase {
         `;
     }
 
+    _batteryIntelligenceSubtitle() {
+        const st = this._hass?.states?.['sensor.sem_battery_spendable_kwh'];
+        const phase = st?.attributes?.phase;
+        return phase ? this._t(`planning_phase_${phase}`) : '';
+    }
+
+    _renderBatteryIntelligence(T) {
+        const opts = this._options || {};
+        const deye = opts.battery_charge_platform === 'deye';
+        return html`
+            ${this._renderToggle('switch.sem_forecast_spending_enabled', 'forecast_spending', T, 'config_help_forecast_spending')}
+            ${this._renderToggle('switch.sem_battery_may_export', 'battery_may_export', T, 'config_help_battery_may_export')}
+            ${this._renderToggle('switch.sem_battery_may_assist_ev', 'battery_may_assist_ev', T, 'config_help_battery_may_assist_ev')}
+            <div style="margin-top:6px;border-top:1px solid ${T.surfaceBorder};padding-top:4px"></div>
+            ${this._renderToggle('switch.sem_battery_charge_pacing_enabled', 'battery_charge_pacing', T, 'config_help_battery_charge_pacing')}
+            ${this._renderPicker('battery_charge_power_limit_entity', 'config_charge_power_limit_entity',
+                'number', null, opts, 'config_help_charge_power_limit_entity')}
+            ${this._renderOptionNumberInput('inverter_ac_limit_w', 'config_inverter_ac_limit',
+                { min: 0, max: 100000, step: 100, unit: 'W', default: 0 }, opts, 'config_help_inverter_ac_limit')}
+            ${deye ? html`
+                <div style="margin-top:6px;border-top:1px solid ${T.surfaceBorder};padding-top:4px"></div>
+                ${this._renderOptionToggle('deye_system_work_mode_control', 'config_deye_system_work_mode',
+                    opts, 'config_help_deye_system_work_mode', false)}
+                ${this._renderPicker('deye_system_work_mode_entity', 'config_deye_system_work_mode_entity',
+                    'select', null, opts, 'config_help_deye_system_work_mode_entity')}` : nothing}
+        `;
+    }
+
     _renderLoadManagement(T) {
         const opts = this._options || {};
         // #716 — read the toggle's STAGED value, not just the persisted one,
@@ -2165,7 +2258,59 @@ class SEMConfigCard extends SEMLitBase {
             ${this._renderPlanesToday(attrs)}
             ${this._renderOptionSelect('solar_forecast_source', 'config_solar_forecast_source',
                 sourceOptions, opts, 'config_help_solar_forecast_source', 'auto')}
+            ${this._renderForecastComparison(attrs, raw)}
             ${raw === 'none' ? html`<div class="overview-help">${this._t('config_forecast_install_hint')}</div>` : nothing}
+        `;
+    }
+
+    // (#822) Side-by-side is not the feature — the SCORE is.
+    //
+    // Two integrations disagreeing does not make either wrong: measured on
+    // the dev rig they read 125.6 / 47.2 / 20.0 kWh for one day, and that
+    // spread was three differently CONFIGURED arrays, not three opinions.
+    // SEM cannot see how a third-party integration was set up, so the table
+    // shows each source's own number NEXT TO how well it has actually
+    // predicted THIS roof, and says "still learning" rather than inventing a
+    // score from thin evidence.
+    _renderForecastComparison(attrs, active) {
+        const now = attrs.sources_now || {};
+        const scores = attrs.source_accuracy || {};
+        const names = Object.keys(now);
+        if (names.length < 2) return nothing;   // nothing to compare against
+
+        const pct = (v) => (v === null || v === undefined
+            ? this._t('forecast_still_learning')
+            : `${Math.round(Number(v) * 100)}%`);
+
+        return html`
+            <div class="readonly-row" style="margin-top:8px">
+                <span class="ctrl-label">${this._t('forecast_compare_title')}</span>
+            </div>
+            <div class="overview-help">${this._t('forecast_compare_help')}</div>
+            <table class="sem-planes">
+                <tr>
+                    <th>${this._t('forecast_compare_source')}</th>
+                    <th>${this._t('forecast_compare_today')}</th>
+                    <th>${this._t('forecast_compare_accuracy')}</th>
+                </tr>
+                ${names.map((n) => {
+                    const row = now[n] || {};
+                    const sc = scores[n] || {};
+                    const days = Number(sc.settled_days || 0);
+                    return html`
+                        <tr class="${n === active ? 'is-total' : ''}">
+                            <td>
+                                ${this._forecastProviderLabel(n)}
+                                ${n === active ? html`<span style="font-size:10px;opacity:.75;margin-left:6px">${this._t('forecast_in_use')}</span>` : nothing}
+                                ${Number(row.planes || 0) > 1 ? html`<span style="font-size:10px;opacity:.6;margin-left:4px">${row.planes}×</span>` : nothing}
+                            </td>
+                            <td class="num">${Number(row.today_kwh || 0).toFixed(1)} kWh</td>
+                            <td class="num" title="${days} ${this._t('forecast_days_of_evidence')}">
+                                ${pct(sc.trust_today)}
+                            </td>
+                        </tr>`;
+                })}
+            </table>
         `;
     }
 
@@ -2649,6 +2794,7 @@ class SEMConfigCard extends SEMLitBase {
             heat_pump: (T) => this._renderHeatPump(T),
             hot_water: (T) => this._renderHotWater(T),
             battery_scheduler: (T) => this._renderBatteryScheduler(T),
+            battery_intelligence: (T) => this._renderBatteryIntelligence(T),
             load_management: (T) => this._renderLoadManagement(T),
             forecast: (T) => this._renderForecast(T),
             pv_strings: (T) => this._renderPvStrings(T),

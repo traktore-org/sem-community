@@ -107,6 +107,11 @@ def _fake_self(devices=()):
         # (#638 finding #3) when the fleet first came up short, or None.
         _shadow_partial_since=None,
     )
+    # (#846) per-setpoint sizing — the fake keeps modelling the no-memo
+    # case: amps × the nameplate W/A above, same as a coordinator whose
+    # learner has never been fed.
+    fake._ev_watts_for_amps = (
+        lambda cid, cfg, amps: float(amps) * fake._ev_watts_per_amp(cid, cfg))
     # The ONE planning-peak accessor (one-gate C1): the fake keeps stubbing
     # the execution authority (_get_peak_limit_w) and the REAL hysteresis
     # math runs on top — the same numbers the old inline ledger block made.

@@ -28,9 +28,20 @@ from pathlib import Path
 
 
 
-EV_CONTROL_PY = (
-    Path(__file__).resolve().parent.parent / "coordinator" / "ev_control.py"
-)
+_COORD = Path(__file__).resolve().parent.parent / "coordinator"
+EV_CONTROL_PY = _COORD / "ev_control.py"
+
+# (2.1 audit) The invariant is not a property of one file — every module that
+# runs per-charger logic can regress the same way. The new per-charger
+# modules the 2.1 branch added are scanned with the same rules; they were
+# clean on arrival, and this keeps them that way.
+SCANNED_FILES = [
+    EV_CONTROL_PY,
+    _COORD / "watts_per_amp.py",
+    _COORD / "wpa_replay.py",
+    _COORD / "charge_pacing.py",
+    _COORD / "charger_reconciler.py",
+]
 
 # Functions whose body is allowed to read ``power.ev_power`` directly.
 # Currently only the helper that DEFINES the fleet-fallback path.
@@ -141,21 +152,21 @@ class TestEvPowerReads:
           one immediately above. Two-lines-above won't satisfy the
           check — keep the annotation visually adjacent.
         """
-        source = EV_CONTROL_PY.read_text()
-        tree = ast.parse(source)
-        lines = source.splitlines()
-
         offenders: list[str] = []
-        for line_no, func in _find_ev_power_reads(tree):
-            if func in EXEMPT_FUNCTIONS:
-                continue
-            if _is_annotated(lines, line_no):
-                continue
-            offenders.append(f"  L{line_no} in {func}()")
+        for path in SCANNED_FILES:
+            source = path.read_text()
+            tree = ast.parse(source)
+            lines = source.splitlines()
+            for line_no, func in _find_ev_power_reads(tree):
+                if func in EXEMPT_FUNCTIONS:
+                    continue
+                if _is_annotated(lines, line_no):
+                    continue
+                offenders.append(f"  {path.name}:L{line_no} in {func}()")
 
         assert not offenders, (
-            "Found unannotated ``power.ev_power`` reads in "
-            "``coordinator/ev_control.py`` outside the sanctioned helper "
+            "Found unannotated ``power.ev_power`` reads in per-charger "
+            "modules outside the sanctioned helper "
             "``_this_charger_power``. In multi-charger setups "
             "``power.ev_power`` is the GLOBAL SUM across all chargers — "
             "reading it directly inside a per-charger code path is the "

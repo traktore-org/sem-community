@@ -264,5 +264,44 @@ def main() -> int:
     return 0
 
 
+
+
+# ── Build 0 (2.1): knob-with-a-measured-successor sweep ──────────────────────
+# A knob retires only when a LIVE measured/learned value does its job better
+# (#830's rule: retire knobs, don't reorg). This table is the judgment record:
+# re-run the audit after each milestone and move entries up as measurements
+# go live. Empty "retire now" is a VALID result — 25.08: it was the result.
+MEASURED_SUCCESSORS = {
+    # knob                        (measured sibling, status 25.08)
+    "battery_capacity_kwh": (
+        "auto_detect_battery_capacity_kwh + measured_capacity (#778)",
+        "KEEP — cold-start input; detection and measurement refine it"),
+    "battery_roundtrip_efficiency": (
+        "no live measurement (battery_night records could derive one)",
+        "KEEP until a measured efficiency exists (#708 lesson)"),
+    "ev_charger_efficiency": (
+        "no live measurement (taper detector could derive one)",
+        "KEEP until measured"),
+    "battery_max_charge_power_w": (
+        "#820 pacing measures the needed cap dynamically",
+        "REVISIT after #820 soaks — scheduler still needs the nameplate"),
+    "ev_phases": (
+        "estimate_active_phases belief (#804 B4d feeds the guard)",
+        "KEEP — nameplate stays the fallback when belief is absent"),
+}
+
+
+def print_successor_sweep() -> None:
+    print("\n  knob-with-a-measured-successor sweep (Build 0):")
+    for knob, (sibling, verdict) in MEASURED_SUCCESSORS.items():
+        print(f"    {knob:<30} {verdict}")
+        print(f"    {'':<30}   sibling: {sibling}")
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    import sys as _sys
+    rc = main()
+    # the sweep is prose — never after the machine-readable --json output
+    if "--json" not in _sys.argv:
+        print_successor_sweep()
+    raise SystemExit(rc)

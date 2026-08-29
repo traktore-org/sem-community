@@ -46,9 +46,14 @@ class TestPlatformEntityCounts:
         add_entities = MagicMock()
         await switch_setup(mock_hass, config_entry, add_entities)
         switches = add_entities.call_args[0][0]
-        assert len(switches) == 3
+        # 6 since #778: observer, vacation, energy-plan actuation, plus the
+        # forecast-spending master switch and its two permissions.
+        assert len(switches) == 7  # +battery_charge_pacing_enabled (#820)
         keys = {s.entity_description.key for s in switches}
-        assert keys == {"observer_mode", "vacation_mode", "energy_plan_actuation"}
+        assert keys == {"observer_mode", "vacation_mode", "energy_plan_actuation",
+                        "battery_charge_pacing_enabled",  # #820
+                        "forecast_spending_enabled",
+                        "battery_may_export", "battery_may_assist_ev"}
 
     @pytest.mark.asyncio
     async def test_number_count(self, mock_hass, config_entry, mock_coordinator):

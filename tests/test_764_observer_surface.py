@@ -147,6 +147,9 @@ class TestTheSwitchCarriesTheMap:
         coord = MagicMock()
         coord.config_entry.options = {}
         coord._surplus_controller.observer_decisions = decisions or {}
+        # (#855) the seam-level half of the surface — a real dict, so the
+        # exact-equality asserts below stay meaningful.
+        coord.observer_withheld_commands = MagicMock(return_value={})
         desc = MagicMock()
         desc.key = "observer_mode"
         sw = SEMSolarSwitch.__new__(SEMSolarSwitch)
@@ -158,11 +161,13 @@ class TestTheSwitchCarriesTheMap:
     def test_observer_on_publishes_the_map(self):
         m = {"sim_heizband": {"action": "activate", "power_w": 1000.0}}
         sw = self._switch(True, m)
-        assert sw.extra_state_attributes == {"would_decisions": m}
+        assert sw.extra_state_attributes == {
+            "would_decisions": m, "withheld_commands": {}}
 
     def test_observer_off_publishes_empty_not_stale(self):
         sw = self._switch(False, {"sim_heizband": {"action": "activate"}})
-        assert sw.extra_state_attributes == {"would_decisions": {}}
+        assert sw.extra_state_attributes == {
+            "would_decisions": {}, "withheld_commands": {}}
 
     def test_other_switches_carry_nothing(self):
         sw = self._switch(True, {"x": {}})

@@ -29,6 +29,17 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
     """Huawei battery control. Delegates forced charge to the
     existing :class:`HuaweiChargeAdapter` for backward compat."""
 
+    @classmethod
+    def expected_operating_modes(cls):
+        """(#845) SEM's whole model assumes the LUNA sits in
+        maximise_self_consumption — the mode where ``forcible_charge`` /
+        ``forcible_discharge_soc`` are proven to override cleanly. The other
+        selector states (fully_fed_to_grid, time_of_use_luna2000,
+        fixed_charge_discharge, adaptive) run the inverter's OWN schedule
+        underneath SEM; whether the force services still bite there is
+        UNVERIFIED (the issue's item 4 — a guided live test, not a guess)."""
+        return {"maximise_self_consumption"}
+
     def __init__(self, hass, config: dict) -> None:
         super().__init__(hass, config)
         # Lazy import the existing forced-charge adapter so this

@@ -38,6 +38,7 @@ from dataclasses import replace
 from typing import Dict, Optional
 
 from ..consts.core import DEFAULT_MAX_CHARGING_CURRENT
+from .watts_per_amp import amps_that_fit, predict_watts
 from .charger_types import (
     ChargerDecision,
     ChargerIntent,
@@ -199,6 +200,14 @@ def battery_assist_budget_w(view: ChargerView) -> float:
 
     f = view.fleet
     surplus = self_consumption_surplus_w(view)
+
+    # (#778) The permission gate. Previously the ONLY way to say "the house may
+    # use my battery, the car may not" was to set the surplus threshold below
+    # absurdly high — a tuning knob doing a permission's job. Unset resolves to
+    # ON, so nothing changes for anyone who has not asked.
+    if not getattr(f, "battery_may_assist_ev", True):
+        return surplus
+
     zone = soc_zone(f.battery_soc, f.auto_start_soc, f.buffer_soc, f.priority_soc)
     if zone < 3:
         return surplus
@@ -207,8 +216,18 @@ def battery_assist_budget_w(view: ChargerView) -> float:
     # off-limits to the EV — a sunless evening/overnight session must
     # never drain the home battery into the car. Falls back to surplus
     # only (the day path then behaves like solar_only → idle).
+    #
+    # (#778 phase 5) …unless the forecast says tonight's spend comes back.
+    # This is the case the maintainer's own PROD night exposed: the pack rode
+    # 53% into a morning whose forecast refilled it anyway, because the ONLY
+    # question anyone asked was "is the sun shining right now". The budget
+    # answers a different one — "will tomorrow put this back" — and it is
+    # measured, floored and permissioned before it gets here. Master switch
+    # OFF by default: this is the first non-inert behaviour in the arc.
     if surplus < f.battery_assist_min_surplus_w:
-        return surplus
+        if not (getattr(f, "forecast_spending_enabled", False)
+                and float(getattr(f, "battery_spendable_kwh", 0.0) or 0.0) > 0.0):
+            return surplus
     potential = battery_assist_potential_w(
         f.battery_soc,
         f.buffer_soc,
@@ -250,11 +269,23 @@ def _relabel(decision: ChargerDecision, mode: str, prefix: str) -> ChargerDecisi
     )
 
 
-def amps_from_watts(watts: float, phases: int, voltage: int) -> int:
+#: The ladder walk's ceiling before the actuator's own clamp — no charger
+#: SEM supports offers more.
+_LADDER_TOP = 80
+
+
+def amps_from_watts(watts: float, phases: int, voltage: int, table=None) -> int:
     """Watts → whole amps (round down). The actuator (Step 4)
-    clamps to ``[min_current_a, max_current_a]``."""
+    clamps to ``[min_current_a, max_current_a]``.
+
+    (#846) With a measured ``{amps: W/A}`` table the answer is the largest
+    setpoint whose MEASURED draw fits — on the PROD Zoe 5.5 kW buys 10 A,
+    not the 7 the nameplate arithmetic hands out. Without one this is the
+    nameplate ``watts // (phases × voltage)`` it always was."""
     denom = max(1, phases * voltage)
-    return int(watts // denom)
+    if not table:
+        return int(watts // denom)
+    return amps_that_fit(table, watts, float(denom), max_amps=_LADDER_TOP)
 
 
 def effective_min_amps(cfg: dict, fallback: int = 6) -> int:
@@ -357,7 +388,8 @@ def _idle_bridgeable(view: ChargerView) -> tuple[bool, str]:
     min_amps = effective_min_amps(cfg, 6)
     phases = int(cfg.get("ev_phases", 3))
     voltage = int(cfg.get("ev_voltage", 230))
-    min_charge_w = min_amps * max(1, phases) * max(1, voltage)
+    min_charge_w = int(predict_watts(view.wpa_table, min_amps,
+                                     max(1, phases) * max(1, voltage)))
     real_surplus_w = self_consumption_surplus_w(view)
     if float(f.battery_soc) < float(f.buffer_soc) and real_surplus_w < min_charge_w:
         return False, (
@@ -516,7 +548,7 @@ class SolarOnlyMode(ModeStrategy):
             if isinstance(cfg, dict) else self.PHASES_FALLBACK
         voltage = int(cfg.get("ev_voltage", self.VOLTAGE_FALLBACK)) \
             if isinstance(cfg, dict) else self.VOLTAGE_FALLBACK
-        min_w = min_amps * phases * voltage
+        min_w = int(predict_watts(view.wpa_table, min_amps, phases * voltage))
 
         if surplus_w < min_w:
             return ChargerDecision(
@@ -532,7 +564,7 @@ class SolarOnlyMode(ModeStrategy):
 
         max_amps = int(cfg.get("ev_max_current", DEFAULT_MAX_CHARGING_CURRENT)) \
             if isinstance(cfg, dict) else DEFAULT_MAX_CHARGING_CURRENT
-        amps = max(min_amps, min(max_amps, amps_from_watts(surplus_w, phases, voltage)))
+        amps = max(min_amps, min(max_amps, amps_from_watts(surplus_w, phases, voltage, view.wpa_table)))
         return ChargerDecision(
             charger_id=cid, mode="solar_only",
             intent=ChargerIntent.CHARGE_AT_AMPS,
@@ -712,7 +744,7 @@ class MinPlusSolarMode(ModeStrategy):
         max_amps = int(cfg.get("ev_max_current", DEFAULT_MAX_CHARGING_CURRENT))
         phases = int(cfg.get("ev_phases", 3))
         voltage = int(cfg.get("ev_voltage", 230))
-        surplus_amps = amps_from_watts(budget_w, phases, voltage)
+        surplus_amps = amps_from_watts(budget_w, phases, voltage, view.wpa_table)
 
         # Need-gated min floor (#501, amends ADR 0010 pattern 1).
         # The mode's Min guarantee lives in the night top-up; the
@@ -909,7 +941,8 @@ def decide(view: ChargerView) -> ChargerDecision:
                    * float(view.config.get("ev_voltage") or 230))
             return replace(
                 result, intent=ChargerIntent.CHARGE_AT_AMPS,
-                commanded_amps=min_a, budget_w=min_a * wpa,
+                commanded_amps=min_a,
+                budget_w=predict_watts(view.wpa_table, min_a, wpa),
                 reason=f"{result.reason} [peak SHEDDING — clamped to {min_a}A]",
             )
     return result

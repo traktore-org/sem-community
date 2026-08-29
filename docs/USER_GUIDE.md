@@ -45,7 +45,7 @@ All settings are accessible via **Settings** > **Devices & Services** > **Solar 
 | `ev_current_sensor` | Current sensor (A) — optional, for actual amperage |
 | `ev_session_energy_sensor` | Session energy (kWh) — optional |
 | `ev_total_energy_sensor` | Cumulative energy (kWh) — optional |
-| `ev_phase_switch_entity` | (#804) Optional — the select/number/switch (helper entities too) that changes the wallbox between 1- and 3-phase charging (go-e `psm`, KEBA X-series, openWB). Naming it enables the **Phase Mode** control; SEM never writes to it unless you set Phase Mode to a fixed 1/3 or Auto. |
+| `ev_phase_switch_entity` | (#804) Optional — the select/number/switch (helper entities too) that changes the wallbox between 1- and 3-phase charging (go-e `psm`, KEBA X-series, openWB). Naming it *plus* turning on **Phase switching** (per charger, off by default in 2.1) enables the **Phase Mode** control; SEM never writes to it unless you set Phase Mode to a fixed 1/3 or Auto. |
 | `ev_phase_switch_value_1p` / `_3p` | The values to write for each position, in the entity's own vocabulary. Required for a `select`; a `number` defaults to 1/3 and a `switch` to off/on. |
 
 ### What SEM detected (#814)
@@ -208,11 +208,30 @@ patterns) before committing to an overnight charge.
 
 ## Multiple heat pumps and climate units (#685)
 
-The dedicated **Heat Pump (SG-Ready)** section configures ONE unit — it
-models the SG-Ready relay pair, and most installs have one such interface.
-**Multiple units are supported through climate devices instead**: add each
-unit's `climate.*` entity (an Ecobee, a Nest, any thermostat-controlled
-heat pump or AC) as a surplus device. Every unit then gets, independently:
+The **Heat Pump** section configures the primary unit, and since 2.1 the
+options flow ends in a **heat-pump menu** where further units can be
+added, edited and removed (#685). Every unit — primary or additional —
+supports the same three control paths, in any combination:
+
+- **SG-Ready relays** — the standard two-relay table (NORMAL / BOOST /
+  FORCE_ON), with NC-wiring inversion per unit.
+- **Climate entity** — setpoint boost on surplus for pumps that only
+  expose a thermostat (Nibe, Mitsubishi, Daikin …).
+- **Service call** (#801) — for pumps whose control surface is a
+  *command*, like a Buderus behind EMS-ESP: configure
+  `domain.service` (e.g. `ems_esp.send_command`) plus a JSON payload.
+  The placeholders `state` (1–4), `relay1` and `relay2` (the SG-Ready
+  truth-table booleans, written in braces inside the JSON) are filled
+  in per write. An optional read-back entity lets SEM verify after
+  every write that the command landed; a mismatch is logged, never
+  silently trusted.
+
+Each additional unit carries its own priority, thresholds, sensors and
+name, and competes in the surplus distribution as its own device.
+
+**Thermostat-controlled units can alternatively be added as climate
+devices** (an Ecobee, a Nest, any thermostat-controlled heat pump or AC)
+in the generic device list. Every climate device gets, independently:
 
 - its own priority slot in the one device list,
 - its own comfort band (target / offset / limit) with the learned drift
@@ -225,8 +244,8 @@ heat pump or AC) as a surplus device. Every unit then gets, independently:
   service-registered device drew the generic plug, which made a second unit
   that *was* registered and running look like it had never been added.)
 
-The SG-Ready section and climate devices can coexist: one SG-Ready unit
-plus any number of climate-managed units.
+Heat-pump units and climate devices can coexist: any number of
+menu-configured units plus any number of climate-managed ones.
 
 ### How much did SG-Ready actually shift? (#769)
 
@@ -415,6 +434,137 @@ The discharge *rate* is not per-battery: **`number.sem_battery_max_discharge_pow
 **Zero-config Huawei:** If you have a Huawei inverter, SEM auto-detects the discharge limit entity and uses it to enforce force-discharge at no extra config.
 
 **Other brands:** set `battery_force_discharge_control_entity` in the options flow to a number entity on your inverter (e.g. Growatt's max discharge power, SolaX's force-discharge current).
+
+### Forecast-Led Spending (v2.1)
+
+By default your battery's overnight floor is a number you type once, and it is
+the same number in June and in December. Forecast-led spending makes it an
+answer instead: SEM works out how much of the pack tonight can actually be
+spared, given what your house really uses overnight and how much tomorrow's sun
+is expected to put back.
+
+Turn it on under **Configuration → Battery intelligence → Forecast-led spending** (the two permissions — *may sell to the grid*, *may assist the car* — sit right beside it).
+It is **off by default**, and while it is off every number below is still
+measured and shown — nothing is spent.
+
+**How the budget is worked out**
+
+```
+spendable = stored now − (what the night needs) − (your configured floor)
+            capped at what tomorrow is expected to refill
+```
+
+Each term is measured rather than assumed:
+
+| Term | Where it comes from |
+|---|---|
+| Stored now | measured pack size × SOC, falling back to the nameplate capacity |
+| What the night needs | the high-percentile envelope of your own recorded nights, not an average |
+| Tomorrow's refill | tomorrow's forecast **after** your house load and any committed EV charge, scaled by how accurate that forecast horizon has actually been |
+| Your floor | `battery_reserve_soc` — the computed floor never goes below it |
+
+**Three states, on the Battery tab**
+
+- **Learning** — SEM has not seen enough nights yet (it needs five). It spends
+  nothing and shows you how many it has. Every new install starts here.
+- **Holding** — there is enough evidence and the answer is genuinely nothing
+  spare: a long winter night against a weak forecast.
+- **Spending** — there is a budget tonight, with the floor it will land on.
+
+The SOC zones bar draws tonight's computed floor in orange beside your
+configured floor, so you can see it move from day to day.
+
+**What the budget may be spent on**
+
+Two switches, and they are deliberately separate rather than one setting:
+
+- **Battery may sell to the grid** — export the budget when the price is high.
+- **Battery may charge the car** — use the budget on the EV in the evening.
+
+A single mode could not express *"may sell, may not touch the car"*. Both
+default to your current behaviour, so turning forecast spending on does not
+silently grant a permission you never gave.
+
+**Starting from history instead of waiting a week**
+
+If SEM has been running on your system for months, it has already recorded how
+good your forecast is — it just never wrote it down in the form the budget
+reads. The action **"Learn forecast accuracy from past history"**
+(`solar_energy_management.backfill_forecast_ledger`) reads your own recorder
+statistics and settles the ledger in one pass, so forecast-led spending can
+start from what your site has actually done. Days SEM recorded live are never
+overwritten by the reconstruction.
+
+The battery half has the same shortcut. SEM wants five good nights of evidence
+before it will say how much of the pack is safe to spend, and recording
+produces one per day. The action **"Learn overnight battery use from past
+history"** (`solar_energy_management.backfill_battery_nights`) reconstructs
+those nights from your battery's recorded discharge, so the answer arrives at
+once rather than a week later.
+
+Two things worth knowing about reconstructed nights. They are read from a
+cumulative energy counter, which keeps counting whether or not SEM was
+watching — so unlike live recording they cannot be spoiled by a sensor that
+drops out. But that counter reports everything the battery sent out, and
+cannot separate what your house used from what went to the car or the grid.
+Reconstructed nights are therefore treated as an **upper bound** on household
+use, which errs toward holding more back rather than less. Nights SEM measured
+live are always kept in preference, because a live night can tell those apart.
+
+**Nights that do not add up are not used**
+
+A battery cannot send out more energy than it discharged. SEM checks that on
+every night it records, and a night that fails is kept and shown but not used
+for learning. This matters more than it sounds: the overnight-need figure is
+built from those nights, and one impossible number inflates what SEM believes
+your house needs — which shows up as a budget of zero and a dashboard calmly
+reporting that nothing is spare. If you see nights marked this way, something
+upstream of SEM is double-counting a flow; the Config tab's sensor sources are
+the place to start.
+
+**Checking the setting against your own history**
+
+The amount SEM holds back for the night is a high percentile of what your house
+has actually drawn — high on purpose, because running short before dawn is
+worse than leaving a little export revenue on the table. The exact percentile
+shipped was chosen by replaying 211 real nights and measuring what each
+candidate would have cost:
+
+| Percentile | Nights it would spend on | Energy spent | Nights it overshot the floor | Worst overshoot |
+|---|---|---|---|---|
+| p80 | 97 | 63.6 kWh | 3 | 400 Wh |
+| **p85 (shipped)** | 90 | 53.5 kWh | 2 | 120 Wh |
+| p90 | 68 | 30.0 kWh | 1 | 50 Wh |
+| p95 | 5 | 0.3 kWh | 0 | — |
+
+p95 looks safest and is the worst answer on the list: the feature effectively
+stops working while still appearing to be switched on.
+
+You can run the same measurement against your own system:
+
+```
+python3 scripts/backtest_budget.py --host root@YOUR_HA --key ~/.ssh/your.key \
+    --capacity 15 --floor 20 --need-pctile 0.85
+```
+
+It replays your recorded nights, asks the budget what it would have spent on
+each, and reports how often that would have left the pack below its floor.
+
+**Why it refuses to spend without evidence**
+
+A forecast that runs high is exactly the case where spending the battery hurts:
+you sell tonight, tomorrow underdelivers, and you buy it back at the evening
+price. So SEM keeps a per-horizon ledger of what it forecast versus what the day
+delivered, and only trusts a horizon after seven settled days. Until then the
+budget is zero and the card says so.
+
+It scores that record against its **bad days, not its average one**. A forecast
+can be perfectly unbiased over a season and still be wrong by half in either
+direction on any given day — and the average hides exactly the days that cost
+you money. Measured on the development system: 139 real days, average ratio
+1.05 (unbiased), but a tenth of the days delivered under half what was
+promised. Planning against the average would have over-committed the battery on
+42% of them.
 
 ### Example: Sunny Day, Battery at 30%, EV Connected
 

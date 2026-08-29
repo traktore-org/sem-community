@@ -557,7 +557,9 @@ class UnifiedDeviceRegistry:
             "rated_power": spec.get("rated_power") or 0,
             "power_entity_id": spec.get("power_entity_id"),
             "energy_entity_id": spec.get("energy_entity_id"),  # #600
-            "control_mode": spec.get("control_mode", "surplus"),
+            # (#847) creation default "off" - restore path keeps "surplus"
+            # for legacy stores that predate the persisted mode.
+            "control_mode": spec.get("control_mode", "off"),
             "depends_on": list(spec.get("depends_on") or []),
             # (#569) device kind + climate params — persisted so a climate
             # AC rehydrates as a ClimateDevice (not a SwitchDevice) on restart.
@@ -575,8 +577,8 @@ class UnifiedDeviceRegistry:
         try:
             device.control_mode = DeviceControlMode(stored["control_mode"])
         except ValueError:
-            device.control_mode = DeviceControlMode.SURPLUS
-            stored["control_mode"] = "surplus"
+            device.control_mode = DeviceControlMode.OFF  # (#847)
+            stored["control_mode"] = "off"
         if stored["depends_on"]:
             device.depends_on = list(stored["depends_on"])
         self._apply_goals(device)
@@ -2150,18 +2152,31 @@ class UnifiedDeviceRegistry:
                 except Exception:  # noqa: BLE001
                     obs = None
                 if obs is True or (obs is None and surplus_device.is_active):
-                    if getattr(surplus_device, "_status", None) is not None:
-                        surplus_device._status.last_activated = None
-                    await surplus_device.deactivate()
+                    if getattr(surplus_device, "_sem_commanded", False):
+                        # SEM issued the ON: opt-out undoes SEM's own action.
+                        if getattr(surplus_device, "_status", None) is not None:
+                            surplus_device._status.last_activated = None
+                        await surplus_device.deactivate()
+                        _LOGGER.info(
+                            "Mode off: released %s (turned off once — SEM "
+                            "will not touch it again while mode stays off)",
+                            device_id,
+                        )
+                    else:
+                        # (#847 refinement, 2.1) ADOPTED only — a running
+                        # load claimed under Surplus so goal gates could
+                        # stop it, never started by SEM. Opt-out releases
+                        # the claim with ZERO writes.
+                        _LOGGER.info(
+                            "Mode off: released adopted load %s without "
+                            "actuation (#847)", device_id,
+                        )
                     surplus_device._offpeak_forced = False
                     surplus_device._offpeak_forced_date = None
                     surplus_device._batt_overnight_forced = False
                     surplus_device._batt_overnight_forced_date = None
                     surplus_device._sem_owned = False
-                    _LOGGER.info(
-                        "Mode off: released %s (turned off once — SEM will "
-                        "not touch it again while mode stays off)", device_id,
-                    )
+                    surplus_device._sem_commanded = False
 
         # (#649) Keep the load manager's copy in step NOW. It is only rebuilt by
         # the 35 s rediscovery, so until then a device the user has just handed

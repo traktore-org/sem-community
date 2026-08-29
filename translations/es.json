@@ -160,7 +160,8 @@
           "legionella_interval_hours": "Horas máximas entre ciclos de desinfección",
           "diagram_style": "Estilo del diagrama del sistema",
           "battery_assist_min_surplus": "Asistencia batería – mín. excedente solar (W)",
-          "grid_sign_invert": "Invertir el signo de la potencia de red"
+          "grid_sign_invert": "Invertir el signo de la potencia de red",
+          "battery_operating_mode_entity": "Battery operating-mode entity (watched)"
         },
         "data_description": {
           "update_interval": "Con qué frecuencia el coordinador lee los sensores y ajusta el hardware. 10 s da la integración de energía más precisa; valores por encima de 30 s subestiman la energía. Rango 10–60 s.",
@@ -185,7 +186,8 @@
           "legionella_target_temp": "Temperatura (°C) que el sistema de agua caliente debe alcanzar durante un ciclo de desinfección antilegionela.",
           "legionella_interval_hours": "Horas máximas entre ciclos de desinfección antilegionela antes de que SEM fuerce un calentamiento.",
           "battery_assist_min_surplus": "Excedente solar real mínimo antes de que la batería doméstica pueda ayudar a cargar el VE — en cualquier modo de carga. Por debajo de este valor la batería queda reservada para la casa (el coche toma de la red + solar). Por defecto 1200 W. Ponlo a 0 para que la batería apoye al VE en todo momento, incluso de noche.",
-          "grid_sign_invert": "Actívalo solo si la importación de red aparece como valor positivo (p. ej. Enphase). La convención de SEM es negativo = importación; esto niega la lectura bruta y omite la detección automática del signo."
+          "grid_sign_invert": "Actívalo solo si la importación de red aparece como valor positivo (p. ej. Enphase). La convención de SEM es negativo = importación; esto niega la lectura bruta y omite la detección automática del signo.",
+          "battery_operating_mode_entity": "The inverter's operating-policy selector (e.g. Huawei's 'Working mode'). SEM only READS it: the mode is shown beside the battery evidence, and a one-time repair warns when it is not the self-consumption mode SEM's planning assumes. SEM never changes it. Leave empty to disable the watch."
         }
       },
       "settings_ev": {
@@ -304,12 +306,16 @@
           "battery_force_charge_negative_price": "Forzar carga con precio negativo",
           "battery_charge_platform": "Plataforma de carga de batería",
           "battery_replan_interval_min": "Intervalo de replanificación (min)",
-          "battery_prefer_consecutive_window": "Preferir una ventana de carga consecutiva"
+          "battery_prefer_consecutive_window": "Preferir una ventana de carga consecutiva",
+          "battery_charge_power_limit_entity": "Battery charge-power limit entity (for pacing)",
+          "inverter_ac_limit_w": "Inverter AC output limit"
         },
         "data_description": {
           "battery_charge_platform": "Qué inversor controla SEM para la carga de red programada. Elige Deye para mostrar el paso de cableado de Deye.",
           "battery_replan_interval_min": "Con qué frecuencia se recalcula el plan de carga según la última previsión y los precios.",
-          "battery_prefer_consecutive_window": "Activado: horas baratas en un solo bloque (menos ciclos de arranque/parada); desactivado: las horas más baratas aunque estén dispersas."
+          "battery_prefer_consecutive_window": "Activado: horas baratas en un solo bloque (menos ciclos de arranque/parada); desactivado: las horas más baratas aunque estén dispersas.",
+          "battery_charge_power_limit_entity": "The inverter's max-charge-power number that charge pacing writes to (e.g. Huawei's 'Maximum charging power'). Leave empty to keep pacing advisory-only.",
+          "inverter_ac_limit_w": "Your inverter's maximum AC output in watts. Charge pacing opens its cap wherever solar would exceed this, so clipped sun is captured. 0 = not set."
         }
       },
       "ev_charger_edit": {
@@ -342,7 +348,8 @@
           "vehicle_min_current": "Corriente mínima del vehículo (A)",
           "ev_phase_switch_entity": "Entidad de conmutación de fases (opcional)",
           "ev_phase_switch_value_1p": "Conmutación de fases: valor monofásico (opcional)",
-          "ev_phase_switch_value_3p": "Conmutación de fases: valor trifásico (opcional)"
+          "ev_phase_switch_value_3p": "Conmutación de fases: valor trifásico (opcional)",
+          "ev_phase_switching_enabled": "Phase switching"
         },
         "data_description": {
           "charger_name": "Nombre descriptivo de este cargador que se muestra en el panel.",
@@ -371,7 +378,8 @@
           "vehicle_min_current": "Límite inferior de corriente por vehículo. El mínimo efectivo es el mayor entre este y la corriente mínima del cargador.",
           "ev_phase_switch_entity": "Select/number/switch que cambia el cargador entre carga mono y trifásica (go-e 'psm', KEBA serie X, openWB). Por ahora SEM solo observa y valida — la conmutación automática llegará en una versión posterior.",
           "ev_phase_switch_value_1p": "Qué se escribe en la entidad de conmutación para carga monofásica — nombre de opción de un select, valor de un number, o on/off. Obligatorio para entidades select; number por defecto 1, switch por defecto off.",
-          "ev_phase_switch_value_3p": "Qué se escribe en la entidad de conmutación para carga trifásica — nombre de opción de un select, valor de un number, o on/off. Obligatorio para entidades select; number por defecto 3, switch por defecto on."
+          "ev_phase_switch_value_3p": "Qué se escribe en la entidad de conmutación para carga trifásica — nombre de opción de un select, valor de un number, o on/off. Obligatorio para entidades select; number por defecto 3, switch por defecto on.",
+          "ev_phase_switching_enabled": "Off by default while the 1/3-phase model is reworked (it paused chargers that never resumed on some brands). Turn on to test it on your charger."
         }
       },
       "ev_charger_add": {
@@ -403,7 +411,8 @@
           "ev_min_current": "Corriente de carga mínima (A)",
           "ev_phase_switch_entity": "Entidad de conmutación de fases (opcional)",
           "ev_phase_switch_value_1p": "Conmutación de fases: valor monofásico (opcional)",
-          "ev_phase_switch_value_3p": "Conmutación de fases: valor trifásico (opcional)"
+          "ev_phase_switch_value_3p": "Conmutación de fases: valor trifásico (opcional)",
+          "ev_phase_switching_enabled": "Phase switching"
         },
         "data_description": {
           "charger_name": "Nombre descriptivo de este cargador que se muestra en el panel.",
@@ -431,7 +440,8 @@
           "ev_min_current": "Por debajo de esto SEM pausa la carga en lugar de bajar más la corriente.",
           "ev_phase_switch_entity": "Select/number/switch que cambia el cargador entre carga mono y trifásica (go-e 'psm', KEBA serie X, openWB). Por ahora SEM solo observa y valida — la conmutación automática llegará en una versión posterior.",
           "ev_phase_switch_value_1p": "Qué se escribe en la entidad de conmutación para carga monofásica — nombre de opción de un select, valor de un number, o on/off. Obligatorio para entidades select; number por defecto 1, switch por defecto off.",
-          "ev_phase_switch_value_3p": "Qué se escribe en la entidad de conmutación para carga trifásica — nombre de opción de un select, valor de un number, o on/off. Obligatorio para entidades select; number por defecto 3, switch por defecto on."
+          "ev_phase_switch_value_3p": "Qué se escribe en la entidad de conmutación para carga trifásica — nombre de opción de un select, valor de un number, o on/off. Obligatorio para entidades select; number por defecto 3, switch por defecto on.",
+          "ev_phase_switching_enabled": "Off by default while the 1/3-phase model is reworked (it paused chargers that never resumed on some brands). Turn on to test it on your charger."
         }
       },
       "pv_naming": {
@@ -457,7 +467,10 @@
           "heat_pump_power_sensor": "Sensor de potencia (opcional)",
           "heat_pump_boost_offset": "Offset de boost de temperatura (°C)",
           "heat_pump_max_setpoint": "Consigna máxima de temperatura (°C)",
-          "heat_pump_priority": "Prioridad de excedente (1=máxima)"
+          "heat_pump_priority": "Prioridad de excedente (1=máxima)",
+          "heat_pump_sg_ready_service": "SG-Ready service (domain.service)",
+          "heat_pump_sg_ready_service_data": "SG-Ready service data (JSON; placeholders state, relay1, relay2)",
+          "heat_pump_sg_ready_state_entity": "SG-Ready state read-back entity"
         },
         "data_description": {
           "heat_pump_relay1_entity": "Entidad switch del relé 1 SG-Ready (señal de funcionamiento normal). Configúrela junto con el relé 2 para el protocolo SG-Ready.",
@@ -583,13 +596,47 @@
           "deye_program_5_charge": "Programa 5 — entidad select de carga de red",
           "deye_program_6_time": "Programa 6 — entidad de franja horaria (time.*)",
           "deye_program_6_soc": "Programa 6 — entidad number de SOC objetivo",
-          "deye_program_6_charge": "Programa 6 — entidad select de carga de red"
+          "deye_program_6_charge": "Programa 6 — entidad select de carga de red",
+          "deye_system_work_mode_control": "Control Deye System Work Mode (export policy)",
+          "deye_system_work_mode_entity": "Deye System Work Mode entity",
+          "deye_system_work_mode_selling_option": "Label of the 'Selling First' option",
+          "deye_system_work_mode_zero_load_option": "Label of the 'Zero Export To Load' option",
+          "deye_system_work_mode_zero_ct_option": "Label of the 'Zero Export To CT' option"
         },
         "data_description": {
           "deye_bms_max_charge_current_a": "Límite opcional impuesto por el BMS. 0 significa sin límite del BMS: se aplica el máximo del inversor.",
           "deye_observer_mode": "Cuando está activado, SEM calcula y registra sus acciones Deye pero nunca escribe en el inversor.",
           "deye_actuation_enabled": "Cuando está desactivado, SEM nunca escribe en el inversor, aunque el modo observador también esté desactivado. Ambas puertas deben permitir antes de enviar cualquier comando.",
           "deye_max_charge_current_a": "Límite superior seguro que SEM ordenará en la entidad de corriente de carga."
+        }
+      },
+      "heat_pump_menu": {
+        "title": "Heat pumps",
+        "description": "Your primary heat pump is configured. Add more units, each driven independently by priority.",
+        "data": {
+          "action": "Action"
+        }
+      },
+      "heat_pump_unit": {
+        "title": "Additional heat pump",
+        "description": "Configure this unit the same way as the primary: SG-Ready relays, a climate entity, or a service call (for command-driven pumps like Buderus over EMS-ESP).",
+        "data": {
+          "name": "Name",
+          "heat_pump_relay1_entity": "SG-Ready relay 1",
+          "heat_pump_relay2_entity": "SG-Ready relay 2",
+          "heat_pump_invert_sg_ready": "Invert SG-Ready relays (NC wiring)",
+          "heat_pump_climate_entity": "Climate entity",
+          "heat_pump_power_sensor": "Power sensor",
+          "heat_pump_energy_sensor": "Energy sensor",
+          "heat_pump_temperature_sensor": "Temperature sensor",
+          "heat_pump_rated_power": "Rated power",
+          "heat_pump_boost_offset": "Boost offset",
+          "heat_pump_max_setpoint": "Maximum setpoint",
+          "heat_pump_force_on_threshold": "Force-on threshold",
+          "heat_pump_priority": "Priority",
+          "heat_pump_sg_ready_service": "SG-Ready service (domain.service)",
+          "heat_pump_sg_ready_service_data": "SG-Ready service data (JSON; placeholders state, relay1, relay2)",
+          "heat_pump_sg_ready_state_entity": "SG-Ready state read-back entity"
         }
       }
     },
@@ -600,7 +647,11 @@
       "heat_pump_partial_relays": "SG-Ready necesita AMBAS entidades de relé. Configure los dos relés — o deje ambos vacíos y configure solo la entidad climate para el boost de consigna en modo solo-climate.",
       "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities.",
       "deye_work_mode_mapping_not_distinct": "El control de Work Mode necesita dos opciones distintas: una para Load First y otra para Battery First. Elija ambas y que no sean la misma.",
-      "deye_force_charge_work_mode_invalid": "Elija con qué Work Mode debe SEM forzar la carga de la batería: Load First o Battery First."
+      "deye_force_charge_work_mode_invalid": "Elija con qué Work Mode debe SEM forzar la carga de la batería: Load First o Battery First.",
+      "deye_system_work_mode_mapping_not_distinct": "The three System Work Mode labels must be filled in and distinct.",
+      "heat_pump_no_control": "Configure at least one control path: both relays, a climate entity, or a service.",
+      "heat_pump_service_invalid": "The SG-Ready service must be domain.service (e.g. ems_esp.send_command).",
+      "heat_pump_service_data_invalid": "The SG-Ready service data must be a JSON object."
     }
   },
   "entity": {
@@ -1243,6 +1294,27 @@
       },
       "daily_total_consumption": {
         "name": "Consumo total hoy"
+      },
+      "battery_measured_capacity_kwh": {
+        "name": "Capacidad medida de la batería"
+      },
+      "battery_capacity_drift_pct": {
+        "name": "Desviación de capacidad"
+      },
+      "forecast_trust_d1": {
+        "name": "Confianza del pronóstico (mañana)"
+      },
+      "forecast_trust_d2": {
+        "name": "Confianza del pronóstico (pasado mañana)"
+      },
+      "battery_spendable_kwh": {
+        "name": "Disponible esta noche"
+      },
+      "battery_dynamic_floor_pct": {
+        "name": "Límite dinámico"
+      },
+      "battery_charge_pacing": {
+        "name": "Battery charge pacing"
       }
     },
     "binary_sensor": {
@@ -1292,6 +1364,18 @@
       },
       "energy_plan_actuation": {
         "name": "Ejecución del plan energético"
+      },
+      "battery_may_export": {
+        "name": "La batería puede vender a la red"
+      },
+      "battery_may_assist_ev": {
+        "name": "La batería puede cargar el coche"
+      },
+      "forecast_spending_enabled": {
+        "name": "Gasto guiado por pronóstico"
+      },
+      "battery_charge_pacing_enabled": {
+        "name": "Battery charge pacing"
       }
     },
     "number": {
@@ -1433,6 +1517,11 @@
           "3": "Trifásico"
         }
       }
+    },
+    "button": {
+      "backfill_battery_nights": {
+        "name": "Rebuild battery-night history"
+      }
     }
   },
   "exceptions": {
@@ -1484,11 +1573,25 @@
     },
     "charger_actuation_failed": {
       "title": "El cargador VE no acepta órdenes: {name}",
-      "description": "Las últimas 3 o más órdenes de corriente enviadas por SEM a **{name}** han sido rechazadas: `{error}`. El cargador NO está bajo el control de SEM en este momento — seguirá haciendo lo último que se le indicó (incluida la carga a plena potencia en modo apagado). Causas más habituales: la entidad de control del cargador fue renombrada por una actualización de la integración origen, o `ev_charger_service` apunta a un servicio con otro esquema de parámetros. Compruebe la entidad de control / el servicio del cargador en la configuración de SEM. Esta incidencia se resuelve automáticamente con la siguiente orden correcta."
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Report this to SEM",
+            "description": "Las últimas 3 o más órdenes de corriente enviadas por SEM a **{name}** han sido rechazadas: `{error}`. El cargador NO está bajo el control de SEM en este momento — seguirá haciendo lo último que se le indicó (incluida la carga a plena potencia en modo apagado). Causas más habituales: la entidad de control del cargador fue renombrada por una actualización de la integración origen, o `ev_charger_service` apunta a un servicio con otro esquema de parámetros. Compruebe la entidad de control / el servicio del cargador en la configuración de SEM. Esta incidencia se resuelve automáticamente con la siguiente orden correcta.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+          }
+        }
+      }
     },
     "charger_stop_unenforceable": {
       "title": "No se puede detener el cargador del vehículo: {name}",
-      "description": "SEM ha ordenado a **{name}** que se detenga, pero ningún mecanismo configurado puede abrir realmente el contactor: el coche sigue consumiendo {power} W. El único control que SEM tiene para este cargador es `{entity}`, y su mínimo es superior a 0 A, por lo que escribir 0 A no hace nada (SEM nunca escribe un valor que la entidad rechazaría). Si tienes una batería doméstica, esta potencia sale de ella, a cualquier hora del día o de la noche. Solución: configura para este cargador, en las opciones de SEM, una entidad de arranque/parada (`ev_start_stop_entity`), una entidad de modo de carga o un servicio de parada. Este aviso desaparece en cuanto el cargador deja de consumir."
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Report this to SEM",
+            "description": "SEM ha ordenado a **{name}** que se detenga, pero ningún mecanismo configurado puede abrir realmente el contactor: el coche sigue consumiendo {power} W. El único control que SEM tiene para este cargador es `{entity}`, y su mínimo es superior a 0 A, por lo que escribir 0 A no hace nada (SEM nunca escribe un valor que la entidad rechazaría). Si tienes una batería doméstica, esta potencia sale de ella, a cualquier hora del día o de la noche. Solución: configura para este cargador, en las opciones de SEM, una entidad de arranque/parada (`ev_start_stop_entity`), una entidad de modo de carga o un servicio de parada. Este aviso desaparece en cuanto el cargador deja de consumir.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+          }
+        }
+      }
     },
     "no_forecast_integration": {
       "title": "No se ha detectado ninguna integración de previsión solar",
@@ -1520,7 +1623,14 @@
     },
     "soc_cap_unenforceable": {
       "title": "No se puede aplicar el límite de carga del {target} %: {name}",
-      "description": "**{name}** tiene un objetivo de carga en porcentaje, pero su vehículo no está informando su estado de carga en este momento, por lo que SEM no puede detenerse *exactamente* en **{target}%**.\n\nAun así no carga a ciegas: desde la última lectura real de esta sesión contabiliza la energía realmente entregada y se detiene en cuanto ese total medido alcanza su objetivo — el exceso es solo lo que el coche haya tomado desde esa lectura. Si en esta sesión no ha llegado ninguna lectura real (o SEM se reinició durante la carga), no hay referencia desde la que contar y la carga continúa hasta que el propio coche reduce potencia, casi lleno.\n\nPara un límite que caiga en el número exacto, configure un **sensor real de SOC del vehículo** para este cargador (Configuración → VE → Entidad de SOC del vehículo). El % de batería del panel es el SOC *estimado* de SEM, que ignora deliberadamente para el límite estricto (puede desviarse). Esta reparación desaparece automáticamente en cuanto vuelva a haber una lectura real de SOC."
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Report this to SEM",
+            "description": "**{name}** tiene un objetivo de carga en porcentaje, pero su vehículo no está informando su estado de carga en este momento, por lo que SEM no puede detenerse *exactamente* en **{target}%**.\n\nAun así no carga a ciegas: desde la última lectura real de esta sesión contabiliza la energía realmente entregada y se detiene en cuanto ese total medido alcanza su objetivo — el exceso es solo lo que el coche haya tomado desde esa lectura. Si en esta sesión no ha llegado ninguna lectura real (o SEM se reinició durante la carga), no hay referencia desde la que contar y la carga continúa hasta que el propio coche reduce potencia, casi lleno.\n\nPara un límite que caiga en el número exacto, configure un **sensor real de SOC del vehículo** para este cargador (Configuración → VE → Entidad de SOC del vehículo). El % de batería del panel es el SOC *estimado* de SEM, que ignora deliberadamente para el límite estricto (puede desviarse). Esta reparación desaparece automáticamente en cuanto vuelva a haber una lectura real de SOC.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+          }
+        }
+      }
     },
     "unmanaged_charger_found": {
       "title": "SEM encontró un cargador que no gestiona",
@@ -1537,6 +1647,18 @@
     "battery_force_discharge_unsupported": {
       "title": "Battery power setpoint cannot be written: {entity_id}",
       "description": "SEM tried to write **{entity_id}** and the device refused every time: `{error}`.\n\nThe entity exists and SEM is addressing it correctly — the inverter's firmware simply does not implement writing that register. This usually means the entity you picked for *forcible discharge* in SEM's battery settings is readable but not writable on your hardware.\n\nSEM has stopped trying, so this will no longer fill your log. Two things follow: the routine safety write SEM makes when returning the battery to normal operation is skipped (harmless — there was nothing set to clear), and **battery-to-grid export cannot run** on this battery. Charging, discharge limits and everyday operation are unaffected.\n\n**If you do not use battery-to-grid export**, clear the forcible-discharge entity in SEM's battery settings and this notice goes away. **If you expected it to work**, the entity is likely the wrong one — or your inverter does not support commanded export. A restart makes SEM try again, so a firmware update or a corrected entity is picked up on its own."
+    },
+    "charger_failsafe_suspected": {
+      "title": "Your wallbox undoes SEM's stop on a timer: {name}",
+      "description": "**{name}** re-enabled itself **{interval_s} seconds** after SEM stopped it — at least twice, with the same delay to the second, and with no command from SEM in between. That regularity is the signature of a charger-side **failsafe / controller-timeout fallback**, not of a car retrying.\n\nSEM will not fight it: re-issuing stops faster would strobe the contactor and the box would win anyway. Until it is fixed the charger may draw at its stored fallback current (often 6 A) whenever SEM stops it.\n\n**The fix is a one-time change on the wallbox itself.** Look for a failsafe or fallback-current setting in its configuration — on a KEBA these are `Curr FS` (fallback current) and `Tmo FS` (timeout) — and set the **fallback current to 0**, so a quiet controller means *stay off* rather than *charge at 6 A*. If your box is driven over Modbus, the setting usually lives in the same register block the integration already uses."
+    },
+    "deye_system_work_mode_invalid": {
+      "title": "Deye export control cannot be used: {entity_id}",
+      "description": "SEM cannot use {entity_id} for export control: {reason}. Check the select entity and the three option labels under Configuration → Battery intelligence."
+    },
+    "battery_operating_mode_unexpected": {
+      "title": "Battery is in “{mode}” — SEM plans as if it were “{expected}”",
+      "description": "The operating-mode selector {entity_id} reads “{mode}”. SEM's overnight model and the spendable budget assume “{expected}”; in other modes the inverter follows its own schedule underneath SEM and the plans may not hold. If this mode is deliberate, dismiss this — SEM will not fight your choice. Otherwise set the inverter back to “{expected}”."
     }
   },
   "selector": {

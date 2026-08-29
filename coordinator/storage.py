@@ -504,6 +504,17 @@ class SEMStorage:
     # 6.9 kW nameplate, found no slot under the peak, and yielded a car
     # that then charged at 4.54 kW. Same rule as the sign locks below:
     # learned state that gates behaviour is not allowed to die at boot.
+    def get_wpa_learner_state(self) -> Dict[str, Any]:
+        """(#846) The per-setpoint watts-per-amp learner's buckets."""
+        return dict(self._energy_data.get("wpa_learner") or {})
+
+    def set_wpa_learner_state(self, state: Dict[str, Any]) -> None:
+        """(#846) Persisted every cycle, saved by the normal throttled
+        cycle. Learned state that gates behaviour is not allowed to die at
+        boot (#638 night 2) — and the cold-start replay from the recorder
+        exists precisely for the boot where this is empty."""
+        self._energy_data["wpa_learner"] = dict(state or {})
+
     def get_energy_plan_state(self) -> Dict[str, Any]:
         """(#638) Tonight's stamped plan + period + demand signature —
         a reboot must not silently reshuffle a night the actuation is
@@ -547,6 +558,23 @@ class SEMStorage:
 
     def set_battery_night_state(self, state: Dict[str, Any]) -> None:
         self._energy_data["battery_nights"] = dict(state)
+
+    # (#778) The forecast ledger — "on day D we said D+h would make X; D+h made
+    # Y", per horizon. Durable for the same reason as the night records: it is a
+    # training set that takes a season to build, and losing it at boot would be
+    # a slow silent regression back to trusting every horizon equally.
+    def get_forecast_ledger_state(self) -> Dict[str, Any]:
+        return self._energy_data.get("forecast_ledger", {})
+
+    def set_forecast_ledger_state(self, state: Dict[str, Any]) -> None:
+        self._energy_data["forecast_ledger"] = dict(state)
+
+    def get_source_ledgers_state(self) -> Dict[str, Any]:
+        """(#822) One forecast ledger per INSTALLED source, keyed by name."""
+        return self._energy_data.get("forecast_source_ledgers", {})
+
+    def set_source_ledgers_state(self, state: Dict[str, Any]) -> None:
+        self._energy_data["forecast_source_ledgers"] = dict(state)
 
     def get_ev_wpa_state(self) -> Dict[str, float]:
         """Get the persisted per-charger measured-W/A EMA."""

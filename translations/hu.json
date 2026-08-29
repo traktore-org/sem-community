@@ -160,7 +160,8 @@
           "legionella_interval_hours": "Max. óraszám a fertőtlenítési ciklusok között",
           "diagram_style": "Rendszerdiagram stílusa",
           "battery_assist_min_surplus": "Akkumulátor-támogatás – min. napenergia-többlet (W)",
-          "grid_sign_invert": "Hálózati teljesítmény előjelének megfordítása"
+          "grid_sign_invert": "Hálózati teljesítmény előjelének megfordítása",
+          "battery_operating_mode_entity": "Battery operating-mode entity (watched)"
         },
         "data_description": {
           "update_interval": "Milyen gyakran olvassa a koordinátor az érzékelőket és szabályozza a hardvert. A 10 s adja a legpontosabb energiaintegrálást; a 30 s feletti értékek alulmérik az energiát. Tartomány: 10–60 s.",
@@ -185,7 +186,8 @@
           "legionella_target_temp": "Az a hőmérséklet (°C), amelyet a melegvízrendszernek el kell érnie a legionella-fertőtlenítési ciklus során.",
           "legionella_interval_hours": "A legionella-fertőtlenítési ciklusok közötti maximális óraszám, mielőtt a SEM kényszerfelfűtést indít.",
           "battery_assist_min_surplus": "A legkisebb tényleges napenergia-többlet, amely felett a házi akkumulátor segíthet az EV töltésében — bármely töltési módban. Ez alatt az akkumulátor a ház számára van fenntartva (az autó a hálózatból + napenergiából tölt). Alapértelmezés 1200 W. Állítsa 0-ra, hogy az akkumulátor mindenhol támogassa az EV-t, éjszaka is.",
-          "grid_sign_invert": "Csak akkor kapcsold be, ha a hálózati vételezés pozitív értékként jelenik meg (pl. Enphase). A SEM konvenciója szerint negatív = vételezés; ez megfordítja a nyers értéket, és kihagyja az automatikus előjel-felismerést."
+          "grid_sign_invert": "Csak akkor kapcsold be, ha a hálózati vételezés pozitív értékként jelenik meg (pl. Enphase). A SEM konvenciója szerint negatív = vételezés; ez megfordítja a nyers értéket, és kihagyja az automatikus előjel-felismerést.",
+          "battery_operating_mode_entity": "The inverter's operating-policy selector (e.g. Huawei's 'Working mode'). SEM only READS it: the mode is shown beside the battery evidence, and a one-time repair warns when it is not the self-consumption mode SEM's planning assumes. SEM never changes it. Leave empty to disable the watch."
         }
       },
       "settings_ev": {
@@ -304,12 +306,16 @@
           "battery_force_charge_negative_price": "Kényszertöltés negatív ár esetén",
           "battery_charge_platform": "Akkumulátor töltési platform",
           "battery_replan_interval_min": "Újratervezési intervallum (min)",
-          "battery_prefer_consecutive_window": "Összefüggő töltési ablak előnyben részesítése"
+          "battery_prefer_consecutive_window": "Összefüggő töltési ablak előnyben részesítése",
+          "battery_charge_power_limit_entity": "Battery charge-power limit entity (for pacing)",
+          "inverter_ac_limit_w": "Inverter AC output limit"
         },
         "data_description": {
           "battery_charge_platform": "Melyik invertert vezérli a SEM az ütemezett hálózati töltéshez. Válaszd a Deye-t a Deye bekötési lépés megjelenítéséhez.",
           "battery_replan_interval_min": "Milyen gyakran számolja újra a töltési ütemtervet a legfrissebb előrejelzés és árak alapján.",
-          "battery_prefer_consecutive_window": "Be: az olcsó órák egy blokkban (kevesebb indítás/leállítás ciklus); ki: az egyenként legolcsóbb órák, akár szétszórtan is."
+          "battery_prefer_consecutive_window": "Be: az olcsó órák egy blokkban (kevesebb indítás/leállítás ciklus); ki: az egyenként legolcsóbb órák, akár szétszórtan is.",
+          "battery_charge_power_limit_entity": "The inverter's max-charge-power number that charge pacing writes to (e.g. Huawei's 'Maximum charging power'). Leave empty to keep pacing advisory-only.",
+          "inverter_ac_limit_w": "Your inverter's maximum AC output in watts. Charge pacing opens its cap wherever solar would exceed this, so clipped sun is captured. 0 = not set."
         }
       },
       "ev_charger_edit": {
@@ -342,7 +348,8 @@
           "vehicle_min_current": "Jármű minimális árama (A)",
           "ev_phase_switch_entity": "Fázisváltó entitás (opcionális)",
           "ev_phase_switch_value_1p": "Fázisváltás: 1 fázisú érték (opcionális)",
-          "ev_phase_switch_value_3p": "Fázisváltás: 3 fázesú érték (opcionális)"
+          "ev_phase_switch_value_3p": "Fázisváltás: 3 fázesú érték (opcionális)",
+          "ev_phase_switching_enabled": "Phase switching"
         },
         "data_description": {
           "charger_name": "A töltő irányítópulton megjelenő, felhasználóbarát neve.",
@@ -371,7 +378,8 @@
           "vehicle_min_current": "Járművenkénti áram-alsóhatár. A tényleges minimum ennek és a töltő minimális áramának a nagyobbika.",
           "ev_phase_switch_entity": "Select/number/switch, amely a töltőt 1 és 3 fázisú töltés között váltja (go-e 'psm', KEBA X-széria, openWB). A SEM egyelőre csak megfigyel és ellenőriz — az automatikus váltás egy későbbi kiadásban érkezik.",
           "ev_phase_switch_value_1p": "Mi kerüljön a váltó entitásba 1 fázisú töltéshez — select opciónév, number érték vagy on/off. Select entitásoknál kötelező; number alapértelmezés 1, switch off.",
-          "ev_phase_switch_value_3p": "Mi kerüljön a váltó entitásba 3 fázisú töltéshez — select opciónév, number érték vagy on/off. Select entitásoknál kötelező; number alapértelmezés 3, switch on."
+          "ev_phase_switch_value_3p": "Mi kerüljön a váltó entitásba 3 fázisú töltéshez — select opciónév, number érték vagy on/off. Select entitásoknál kötelező; number alapértelmezés 3, switch on.",
+          "ev_phase_switching_enabled": "Off by default while the 1/3-phase model is reworked (it paused chargers that never resumed on some brands). Turn on to test it on your charger."
         }
       },
       "ev_charger_add": {
@@ -403,7 +411,8 @@
           "ev_min_current": "Minimális töltőáram (A)",
           "ev_phase_switch_entity": "Fázisváltó entitás (opcionális)",
           "ev_phase_switch_value_1p": "Fázisváltás: 1 fázisú érték (opcionális)",
-          "ev_phase_switch_value_3p": "Fázisváltás: 3 fázesú érték (opcionális)"
+          "ev_phase_switch_value_3p": "Fázisváltás: 3 fázesú érték (opcionális)",
+          "ev_phase_switching_enabled": "Phase switching"
         },
         "data_description": {
           "charger_name": "A töltő irányítópulton megjelenő, felhasználóbarát neve.",
@@ -431,7 +440,8 @@
           "ev_min_current": "Ez alatt a SEM szünetelteti a töltést, ahelyett hogy tovább csökkentené az áramot.",
           "ev_phase_switch_entity": "Select/number/switch, amely a töltőt 1 és 3 fázisú töltés között váltja (go-e 'psm', KEBA X-széria, openWB). A SEM egyelőre csak megfigyel és ellenőriz — az automatikus váltás egy későbbi kiadásban érkezik.",
           "ev_phase_switch_value_1p": "Mi kerüljön a váltó entitásba 1 fázisú töltéshez — select opciónév, number érték vagy on/off. Select entitásoknál kötelező; number alapértelmezés 1, switch off.",
-          "ev_phase_switch_value_3p": "Mi kerüljön a váltó entitásba 3 fázisú töltéshez — select opciónév, number érték vagy on/off. Select entitásoknál kötelező; number alapértelmezés 3, switch on."
+          "ev_phase_switch_value_3p": "Mi kerüljön a váltó entitásba 3 fázisú töltéshez — select opciónév, number érték vagy on/off. Select entitásoknál kötelező; number alapértelmezés 3, switch on.",
+          "ev_phase_switching_enabled": "Off by default while the 1/3-phase model is reworked (it paused chargers that never resumed on some brands). Turn on to test it on your charger."
         }
       },
       "pv_naming": {
@@ -457,7 +467,10 @@
           "heat_pump_power_sensor": "Teljesítmény-érzékelő (opcionális)",
           "heat_pump_boost_offset": "Hőmérséklet-emelés (°C)",
           "heat_pump_max_setpoint": "Maximális célhőmérséklet (°C)",
-          "heat_pump_priority": "Többlet prioritás (1=legmagasabb)"
+          "heat_pump_priority": "Többlet prioritás (1=legmagasabb)",
+          "heat_pump_sg_ready_service": "SG-Ready service (domain.service)",
+          "heat_pump_sg_ready_service_data": "SG-Ready service data (JSON; placeholders state, relay1, relay2)",
+          "heat_pump_sg_ready_state_entity": "SG-Ready state read-back entity"
         },
         "data_description": {
           "heat_pump_relay1_entity": "Switch entitás az SG-Ready 1-es reléhez (normál üzem jelzése). Az SG-Ready protokollhoz a 2-es relével együtt állítsa be.",
@@ -583,13 +596,47 @@
           "deye_program_5_charge": "5. program — hálózati töltés select entitás",
           "deye_program_6_time": "6. program — időzóna entitás (time.*)",
           "deye_program_6_soc": "6. program — cél-SOC number entitás",
-          "deye_program_6_charge": "6. program — hálózati töltés select entitás"
+          "deye_program_6_charge": "6. program — hálózati töltés select entitás",
+          "deye_system_work_mode_control": "Control Deye System Work Mode (export policy)",
+          "deye_system_work_mode_entity": "Deye System Work Mode entity",
+          "deye_system_work_mode_selling_option": "Label of the 'Selling First' option",
+          "deye_system_work_mode_zero_load_option": "Label of the 'Zero Export To Load' option",
+          "deye_system_work_mode_zero_ct_option": "Label of the 'Zero Export To CT' option"
         },
         "data_description": {
           "deye_bms_max_charge_current_a": "Opcionális, a BMS által előírt felső határ. 0 = nincs BMS-korlát; az inverter saját maximuma érvényes.",
           "deye_observer_mode": "Bekapcsolva a SEM kiszámítja és naplózza a Deye-műveleteit, de soha nem ír az inverterbe.",
           "deye_actuation_enabled": "Kikapcsolva a SEM soha nem ír az inverterbe, még ha a megfigyelő mód is ki van kapcsolva. Parancs küldése előtt mindkét kapunak engedélyeznie kell.",
           "deye_max_charge_current_a": "Biztonságos felső határ, amelyet a SEM a töltőáram entitáson beállít."
+        }
+      },
+      "heat_pump_menu": {
+        "title": "Heat pumps",
+        "description": "Your primary heat pump is configured. Add more units, each driven independently by priority.",
+        "data": {
+          "action": "Action"
+        }
+      },
+      "heat_pump_unit": {
+        "title": "Additional heat pump",
+        "description": "Configure this unit the same way as the primary: SG-Ready relays, a climate entity, or a service call (for command-driven pumps like Buderus over EMS-ESP).",
+        "data": {
+          "name": "Name",
+          "heat_pump_relay1_entity": "SG-Ready relay 1",
+          "heat_pump_relay2_entity": "SG-Ready relay 2",
+          "heat_pump_invert_sg_ready": "Invert SG-Ready relays (NC wiring)",
+          "heat_pump_climate_entity": "Climate entity",
+          "heat_pump_power_sensor": "Power sensor",
+          "heat_pump_energy_sensor": "Energy sensor",
+          "heat_pump_temperature_sensor": "Temperature sensor",
+          "heat_pump_rated_power": "Rated power",
+          "heat_pump_boost_offset": "Boost offset",
+          "heat_pump_max_setpoint": "Maximum setpoint",
+          "heat_pump_force_on_threshold": "Force-on threshold",
+          "heat_pump_priority": "Priority",
+          "heat_pump_sg_ready_service": "SG-Ready service (domain.service)",
+          "heat_pump_sg_ready_service_data": "SG-Ready service data (JSON; placeholders state, relay1, relay2)",
+          "heat_pump_sg_ready_state_entity": "SG-Ready state read-back entity"
         }
       }
     },
@@ -600,7 +647,11 @@
       "heat_pump_partial_relays": "Az SG-Ready MINDKÉT relé entitást igényli. Állítsa be mindkét relét — vagy hagyja mindkettőt üresen, és csak a climate entitást konfigurálja a kizárólag climate alapú célhőmérséklet-emeléshez.",
       "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities.",
       "deye_work_mode_mapping_not_distinct": "A Work Mode vezérléshez két különböző opció kell – egy a Load First és egy a Battery First számára. Válassza ki mindkettőt, és ne ugyanazt kétszer.",
-      "deye_force_charge_work_mode_invalid": "Válassza ki, melyik Work Mode móddal töltse a SEM kényszerítve az akkumulátort: Load First vagy Battery First."
+      "deye_force_charge_work_mode_invalid": "Válassza ki, melyik Work Mode móddal töltse a SEM kényszerítve az akkumulátort: Load First vagy Battery First.",
+      "deye_system_work_mode_mapping_not_distinct": "The three System Work Mode labels must be filled in and distinct.",
+      "heat_pump_no_control": "Configure at least one control path: both relays, a climate entity, or a service.",
+      "heat_pump_service_invalid": "The SG-Ready service must be domain.service (e.g. ems_esp.send_command).",
+      "heat_pump_service_data_invalid": "The SG-Ready service data must be a JSON object."
     }
   },
   "entity": {
@@ -1243,6 +1294,27 @@
       },
       "daily_total_consumption": {
         "name": "Ma teljes fogyasztás"
+      },
+      "battery_measured_capacity_kwh": {
+        "name": "Mért akkumulátor-kapacitás"
+      },
+      "battery_capacity_drift_pct": {
+        "name": "Kapacitáseltérés"
+      },
+      "forecast_trust_d1": {
+        "name": "Előrejelzés megbízhatósága (holnap)"
+      },
+      "forecast_trust_d2": {
+        "name": "Előrejelzés megbízhatósága (holnapután)"
+      },
+      "battery_spendable_kwh": {
+        "name": "Ma éjjel elkölthető"
+      },
+      "battery_dynamic_floor_pct": {
+        "name": "Dinamikus küszöb"
+      },
+      "battery_charge_pacing": {
+        "name": "Battery charge pacing"
       }
     },
     "binary_sensor": {
@@ -1292,6 +1364,18 @@
       },
       "energy_plan_actuation": {
         "name": "Energiaterv végrehajtása"
+      },
+      "battery_may_export": {
+        "name": "Az akkumulátor eladhat a hálózatra"
+      },
+      "battery_may_assist_ev": {
+        "name": "Az akkumulátor töltheti az autót"
+      },
+      "forecast_spending_enabled": {
+        "name": "Előrejelzés-vezérelt költés"
+      },
+      "battery_charge_pacing_enabled": {
+        "name": "Battery charge pacing"
       }
     },
     "number": {
@@ -1433,6 +1517,11 @@
           "3": "3 fázisú"
         }
       }
+    },
+    "button": {
+      "backfill_battery_nights": {
+        "name": "Rebuild battery-night history"
+      }
     }
   },
   "exceptions": {
@@ -1484,11 +1573,25 @@
     },
     "charger_actuation_failed": {
       "title": "Az EV-töltő nem fogadja a parancsokat: {name}",
-      "description": "A SEM legutóbbi 3 vagy több áramerősség-parancsát a következő elutasította: **{name}** — `{error}`. A töltő jelenleg NEM áll a SEM vezérlése alatt — továbbra is azt teszi, amit utoljára utasításba kapott (akár teljes teljesítménnyel tölt kikapcsolt módban is). A leggyakoribb okok: a töltő vezérlőentitását átnevezte egy integrációfrissítés, vagy az `ev_charger_service` olyan szolgáltatásra mutat, amelynek eltérő a paraméterséma. Ellenőrizze a töltő vezérlőentitását / szolgáltatását a SEM konfigurációjában. Ez a bejegyzés automatikusan eltűnik a következő sikeres parancs után."
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Report this to SEM",
+            "description": "A SEM legutóbbi 3 vagy több áramerősség-parancsát a következő elutasította: **{name}** — `{error}`. A töltő jelenleg NEM áll a SEM vezérlése alatt — továbbra is azt teszi, amit utoljára utasításba kapott (akár teljes teljesítménnyel tölt kikapcsolt módban is). A leggyakoribb okok: a töltő vezérlőentitását átnevezte egy integrációfrissítés, vagy az `ev_charger_service` olyan szolgáltatásra mutat, amelynek eltérő a paraméterséma. Ellenőrizze a töltő vezérlőentitását / szolgáltatását a SEM konfigurációjában. Ez a bejegyzés automatikusan eltűnik a következő sikeres parancs után.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+          }
+        }
+      }
     },
     "charger_stop_unenforceable": {
       "title": "A töltő nem állítható le: {name}",
-      "description": "A SEM leállítást parancsolt a(z) **{name}** töltőnek, de egyetlen beállított mechanizmus sem tudja ténylegesen bontani a kontaktort — az autó továbbra is {power} W-ot vesz fel. A SEM egyetlen vezérlője ehhez a töltőhöz a(z) `{entity}`, amelynek minimuma 0 A fölött van, így a 0 A kiírása nem csinál semmit (a SEM soha nem ír ki olyan értéket, amelyet az entitás elutasítana). Ha van házi akkumulátorod, ez a teljesítmény onnan jön — a nappal vagy az éjszaka bármely szakában. Megoldás: állíts be ehhez a töltőhöz a SEM beállításaiban egy start/stop entitást (`ev_start_stop_entity`), egy töltési mód entitást vagy egy leállító szolgáltatást. A figyelmeztetés eltűnik, amint a töltő már nem vesz fel teljesítményt."
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Report this to SEM",
+            "description": "A SEM leállítást parancsolt a(z) **{name}** töltőnek, de egyetlen beállított mechanizmus sem tudja ténylegesen bontani a kontaktort — az autó továbbra is {power} W-ot vesz fel. A SEM egyetlen vezérlője ehhez a töltőhöz a(z) `{entity}`, amelynek minimuma 0 A fölött van, így a 0 A kiírása nem csinál semmit (a SEM soha nem ír ki olyan értéket, amelyet az entitás elutasítana). Ha van házi akkumulátorod, ez a teljesítmény onnan jön — a nappal vagy az éjszaka bármely szakában. Megoldás: állíts be ehhez a töltőhöz a SEM beállításaiban egy start/stop entitást (`ev_start_stop_entity`), egy töltési mód entitást vagy egy leállító szolgáltatást. A figyelmeztetés eltűnik, amint a töltő már nem vesz fel teljesítményt.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+          }
+        }
+      }
     },
     "no_forecast_integration": {
       "title": "Nem található napelemes előrejelzés-integráció",
@@ -1520,7 +1623,14 @@
     },
     "soc_cap_unenforceable": {
       "title": "A(z) {target}%-os töltési limit nem érvényesíthető: {name}",
-      "description": "A(z) **{name}** százalékos töltési célra van állítva, de a jármű jelenleg nem jelenti a töltöttségi szintjét, ezért a SEM nem tud *pontosan* **{target}%**-nál megállni.\n\nNem vakon tölt azonban: a munkamenet utolsó valós leolvasásától kezdve számolja a ténylegesen leadott energiát, és leáll, amint ez a mért összeg eléri a célt — a túllépés csak annyi, amennyit az autó az óta a leolvasás óta felvett. Ha ebben a munkamenetben egyáltalán nem érkezett valós leolvasás (vagy a SEM töltés közben újraindult), nincs mihez viszonyítani, és a töltés addig tart, amíg maga az autó nem csökkenti a teljesítményt, majdnem tele állapotban.\n\nA pontos korláthoz állítson be **valós jármű-SOC-érzékelőt** ehhez a töltőhöz (Konfiguráció → EV → Jármű SOC entitás). Az irányítópulton látható akkumulátorszázalék a SEM *becsült* SOC-értéke, amelyet a kemény korlátnál szándékosan figyelmen kívül hagy (elcsúszhat). Ez a javítás automatikusan eltűnik, amint ismét elérhető valós SOC-leolvasás."
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Report this to SEM",
+            "description": "A(z) **{name}** százalékos töltési célra van állítva, de a jármű jelenleg nem jelenti a töltöttségi szintjét, ezért a SEM nem tud *pontosan* **{target}%**-nál megállni.\n\nNem vakon tölt azonban: a munkamenet utolsó valós leolvasásától kezdve számolja a ténylegesen leadott energiát, és leáll, amint ez a mért összeg eléri a célt — a túllépés csak annyi, amennyit az autó az óta a leolvasás óta felvett. Ha ebben a munkamenetben egyáltalán nem érkezett valós leolvasás (vagy a SEM töltés közben újraindult), nincs mihez viszonyítani, és a töltés addig tart, amíg maga az autó nem csökkenti a teljesítményt, majdnem tele állapotban.\n\nA pontos korláthoz állítson be **valós jármű-SOC-érzékelőt** ehhez a töltőhöz (Konfiguráció → EV → Jármű SOC entitás). Az irányítópulton látható akkumulátorszázalék a SEM *becsült* SOC-értéke, amelyet a kemény korlátnál szándékosan figyelmen kívül hagy (elcsúszhat). Ez a javítás automatikusan eltűnik, amint ismét elérhető valós SOC-leolvasás.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+          }
+        }
+      }
     },
     "unmanaged_charger_found": {
       "title": "A SEM talált egy töltőt, amit nem vezérel",
@@ -1537,6 +1647,18 @@
     "battery_force_discharge_unsupported": {
       "title": "Battery power setpoint cannot be written: {entity_id}",
       "description": "SEM tried to write **{entity_id}** and the device refused every time: `{error}`.\n\nThe entity exists and SEM is addressing it correctly — the inverter's firmware simply does not implement writing that register. This usually means the entity you picked for *forcible discharge* in SEM's battery settings is readable but not writable on your hardware.\n\nSEM has stopped trying, so this will no longer fill your log. Two things follow: the routine safety write SEM makes when returning the battery to normal operation is skipped (harmless — there was nothing set to clear), and **battery-to-grid export cannot run** on this battery. Charging, discharge limits and everyday operation are unaffected.\n\n**If you do not use battery-to-grid export**, clear the forcible-discharge entity in SEM's battery settings and this notice goes away. **If you expected it to work**, the entity is likely the wrong one — or your inverter does not support commanded export. A restart makes SEM try again, so a firmware update or a corrected entity is picked up on its own."
+    },
+    "charger_failsafe_suspected": {
+      "title": "Your wallbox undoes SEM's stop on a timer: {name}",
+      "description": "**{name}** re-enabled itself **{interval_s} seconds** after SEM stopped it — at least twice, with the same delay to the second, and with no command from SEM in between. That regularity is the signature of a charger-side **failsafe / controller-timeout fallback**, not of a car retrying.\n\nSEM will not fight it: re-issuing stops faster would strobe the contactor and the box would win anyway. Until it is fixed the charger may draw at its stored fallback current (often 6 A) whenever SEM stops it.\n\n**The fix is a one-time change on the wallbox itself.** Look for a failsafe or fallback-current setting in its configuration — on a KEBA these are `Curr FS` (fallback current) and `Tmo FS` (timeout) — and set the **fallback current to 0**, so a quiet controller means *stay off* rather than *charge at 6 A*. If your box is driven over Modbus, the setting usually lives in the same register block the integration already uses."
+    },
+    "deye_system_work_mode_invalid": {
+      "title": "Deye export control cannot be used: {entity_id}",
+      "description": "SEM cannot use {entity_id} for export control: {reason}. Check the select entity and the three option labels under Configuration → Battery intelligence."
+    },
+    "battery_operating_mode_unexpected": {
+      "title": "Battery is in “{mode}” — SEM plans as if it were “{expected}”",
+      "description": "The operating-mode selector {entity_id} reads “{mode}”. SEM's overnight model and the spendable budget assume “{expected}”; in other modes the inverter follows its own schedule underneath SEM and the plans may not hold. If this mode is deliberate, dismiss this — SEM will not fight your choice. Otherwise set the inverter back to “{expected}”."
     }
   },
   "selector": {

@@ -1,0 +1,23 @@
+{
+  "_comment": [
+    "#855 shrink-only ratchet: brand names in the GENERIC device layer.",
+    "devices/base.py is meant to know about DEVICES, not about brands —",
+    "the adapters in coordinator/charger_adapters/ exist for brand quirks.",
+    "Every entry here is brand knowledge sitting one layer too low.",
+    "ADDING one is how the split got this bad; removing one is the point.",
+    "Regenerate after a move:  python3 scripts/audit_brand_footprint.py --baseline"
+  ],
+  "total": 74,
+  "per_brand": {
+    "chargepoint": 1,
+    "easee": 6,
+    "go-e": 3,
+    "heidelberg": 1,
+    "keba": 48,
+    "openevse": 1,
+    "openwb": 2,
+    "wallbox": 6,
+    "wattpilot": 2,
+    "zaptec": 4
+  }
+}

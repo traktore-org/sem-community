@@ -131,6 +131,12 @@ PER_CHARGER_REPAIRS = {
         "structural — raised from devices/base.py on the device object "
         "whose write just failed (#392)"
     ),
+    "raise_charger_failsafe_suspected": (
+        "structural — raised via ChargerAdapter.report_failsafe_suspected "
+        "from the reconciler's apply loop; the reconciler is instantiated "
+        "per charger and measured THIS charger's stop→re-enable interval, "
+        "and the adapter reads only its own device (#823)"
+    ),
     "raise_charger_control_entity_broken": (
         "structural — raised from coordinator._check_charger_control_entities, "
         "which runs INSIDE the per-charger loop and reads only this "

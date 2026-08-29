@@ -181,6 +181,7 @@ PLATFORMS: list[Platform] = [
     Platform.NUMBER,
     Platform.BINARY_SENSOR,
     Platform.SELECT,
+    Platform.BUTTON,
     Platform.TIME,
 ]
 
@@ -1552,6 +1553,42 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
     return True
 
 
+def _heat_pump_rows(full_config: dict) -> list[dict]:
+    """#685: one row per heat pump — flat keys are the PRIMARY unit
+    (device_id "heat_pump", full back-compat), the ``heat_pumps`` list
+    holds additional units with the same key names."""
+    rows: list[dict] = [{
+        "id": "heat_pump",
+        "name": full_config.get("heat_pump_name", "Heat Pump"),
+        **{k: full_config.get(k) for k in (
+            "heat_pump_relay1_entity", "heat_pump_relay2_entity",
+            "heat_pump_climate_entity", "heat_pump_power_sensor",
+            "heat_pump_energy_sensor", "heat_pump_temperature_sensor",
+            "heat_pump_rated_power", "heat_pump_priority",
+            "heat_pump_boost_offset", "heat_pump_max_setpoint",
+            "heat_pump_force_on_threshold", "heat_pump_invert_sg_ready",
+            "heat_pump_sg_ready_service", "heat_pump_sg_ready_service_data",
+            "heat_pump_sg_ready_state_entity",
+        ) if full_config.get(k) not in (None, "")},
+    }]
+    for _i, _row in enumerate(full_config.get("heat_pumps") or []):
+        if isinstance(_row, dict):
+            rows.append({"id": _row.get("id") or f"heat_pump_{_i + 2}",
+                         "name": _row.get("name") or f"Heat Pump {_i + 2}",
+                         **_row})
+    return rows
+
+
+def _heat_pump_row_controllable(row: dict) -> bool:
+    """A row is registrable when it has a control path: both SG-Ready
+    relays, a climate entity, or a service call (#801)."""
+    r1 = row.get("heat_pump_relay1_entity")
+    r2 = row.get("heat_pump_relay2_entity")
+    cl = row.get("heat_pump_climate_entity")
+    svc = (row.get("heat_pump_sg_ready_service") or "").strip()
+    return bool(r1 and r2) or bool(cl) or bool(svc)
+
+
 def _derive_charge_mode(
     charger_cfg: dict,
     full_config: dict,
@@ -2250,52 +2287,59 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
         else:
             _LOGGER.debug("EV charger not configured (no power sensor or control method)")
 
-        # Register heat pump SG-Ready controller if configured
+        # Register heat pump SG-Ready controller(s) if configured.
+        # (#685) The flat heat_pump_* keys are the PRIMARY unit (device_id
+        # "heat_pump", untouched compat); additional units come from the
+        # ``heat_pumps`` list, same key names per row.
+        hp_rows = _heat_pump_rows(full_config)
+        hp_registered = 0
+        for _row in hp_rows:
+            if not _heat_pump_row_controllable(_row):
+                continue
+            _r1 = _row.get("heat_pump_relay1_entity")
+            _r2 = _row.get("heat_pump_relay2_entity")
+            _cl = _row.get("heat_pump_climate_entity")
+            _svc = (_row.get("heat_pump_sg_ready_service") or "").strip()
+            from .config_flow import _parse_service_data
+            from .devices.heat_pump_controller import HeatPumpController
+            _svc_data = _parse_service_data(
+                _row.get("heat_pump_sg_ready_service_data")) or {}
+            hp_extra = HeatPumpController(
+                hass=hass,
+                device_id=str(_row["id"]),
+                name=str(_row.get("name") or "Heat Pump"),
+                rated_power=float(_row.get("heat_pump_rated_power", 2000)),
+                priority=int(_row.get("heat_pump_priority", 4)),
+                relay1_entity_id=_r1,
+                relay2_entity_id=_r2,
+                climate_entity_id=_cl,
+                power_entity_id=_row.get("heat_pump_power_sensor"),
+                energy_entity_id=_row.get("heat_pump_energy_sensor"),
+                temperature_entity_id=_row.get("heat_pump_temperature_sensor"),
+                boost_offset=float(_row.get("heat_pump_boost_offset", 2.0)),
+                max_setpoint=float(_row.get("heat_pump_max_setpoint", 55.0)),
+                force_on_threshold=float(_row.get("heat_pump_force_on_threshold", 5000)),
+                invert_sg_ready=bool(_row.get("heat_pump_invert_sg_ready", False)),
+                sg_ready_service=_svc or None,
+                sg_ready_service_data=_svc_data,
+                sg_ready_state_entity=_row.get("heat_pump_sg_ready_state_entity"),
+            )
+            coordinator._surplus_controller.register_device(hp_extra)
+            hp_registered += 1
+            _LOGGER.info(
+                "Heat pump '%s' registered (id=%s, priority=%d, relay1=%s, "
+                "relay2=%s, climate=%s, service=%s)",
+                hp_extra.name, _row["id"], hp_extra.priority,
+                _r1 or "—", _r2 or "—", _cl or "—", _svc or "—",
+            )
+        if hp_registered > 1:
+            _LOGGER.info("#685: %d heat pumps active", hp_registered)
+
+        # Primary-row visibility (kept from the single-unit era, #432/#437)
         hp_relay1 = full_config.get("heat_pump_relay1_entity")
         hp_relay2 = full_config.get("heat_pump_relay2_entity")
         hp_climate = full_config.get("heat_pump_climate_entity")
-        has_sg_ready = bool(hp_relay1 and hp_relay2)
-        has_climate = bool(hp_climate)
-        # #437: registration was gated on (relay1 AND relay2) — too
-        # strict for non-SG-Ready heat pumps (Nibe, Mitsubishi, Daikin
-        # etc.) that only expose a ``climate`` entity. The controller
-        # itself already handles climate-only mode internally (the
-        # ``_set_sg_ready_state`` ``no_relays_configured`` branch is
-        # exercised by the #421 audit telemetry tests). Widen the gate
-        # to (relays) OR (climate) so climate-only installs get
-        # automatic setpoint boost on surplus.
-        if has_sg_ready or has_climate:
-            from .devices.heat_pump_controller import HeatPumpController
-            hp_device = HeatPumpController(
-                hass=hass,
-                device_id="heat_pump",
-                name=full_config.get("heat_pump_name", "Heat Pump"),
-                rated_power=float(full_config.get("heat_pump_rated_power", 2000)),
-                priority=int(full_config.get("heat_pump_priority", 4)),
-                relay1_entity_id=hp_relay1,
-                relay2_entity_id=hp_relay2,
-                climate_entity_id=hp_climate,
-                power_entity_id=full_config.get("heat_pump_power_sensor"),
-                energy_entity_id=full_config.get("heat_pump_energy_sensor"),  # #600
-                temperature_entity_id=full_config.get("heat_pump_temperature_sensor"),
-                boost_offset=float(full_config.get("heat_pump_boost_offset", 2.0)),
-                max_setpoint=float(full_config.get("heat_pump_max_setpoint", 55.0)),
-                force_on_threshold=float(full_config.get("heat_pump_force_on_threshold", 5000)),
-                invert_sg_ready=bool(full_config.get("heat_pump_invert_sg_ready", False)),
-            )
-            coordinator._surplus_controller.register_device(hp_device)
-            mode_label = (
-                "SG-Ready+climate" if has_sg_ready and has_climate
-                else "SG-Ready only" if has_sg_ready
-                else "climate-only setpoint boost"
-            )
-            _LOGGER.info(
-                "Heat pump registered (mode=%s, priority=%d, "
-                "relay1=%s, relay2=%s, climate=%s)",
-                mode_label, hp_device.priority,
-                hp_relay1 or "—", hp_relay2 or "—", hp_climate or "—",
-            )
-        else:
+        if hp_registered == 0:
             # #432: promote from DEBUG to INFO so users self-diagnosing
             # heat-pump setup see this in the standard log view. Mirrors
             # the success-path INFO above. The detailed config values are
@@ -2750,6 +2794,128 @@ async def _async_register_services(
             "%s day(s); statistics-bearing sensors untouched",
             len(purged), days,
         )
+
+    async def async_backfill_forecast_ledger_service(call) -> None:
+        """(#778) Recover forecast accuracy from history the install already has.
+
+        The ledger normally learns forward, seven settled days before it will
+        offer a trust figure. An install that has been running for months has
+        already proven how good its forecast is — the statistics are sitting
+        there — so this reads them and settles the ledger in one pass. Days the
+        coordinator recorded live are never overwritten.
+        """
+        from .coordinator.ledger_backfill import DEFAULT_LOOKBACK_DAYS, run_backfill
+
+        days = call.data.get("days") or DEFAULT_LOOKBACK_DAYS
+        ledger = getattr(coordinator, "_forecast_ledger", None)
+        if ledger is None:
+            _LOGGER.warning(
+                "backfill_forecast_ledger: no ledger on the coordinator yet — "
+                "try again once SEM has completed a cycle")
+            return
+        try:
+            report = await run_backfill(hass, ledger, days=int(days))
+        except Exception as err:  # noqa: BLE001 — a service must not kill setup
+            _LOGGER.error("backfill_forecast_ledger failed: %s", err)
+            return
+
+        try:
+            coordinator._storage.set_forecast_ledger_state(ledger.to_dict())
+            await coordinator._storage.async_save_energy_now()
+        except (AttributeError, TypeError, ValueError) as err:
+            _LOGGER.warning("backfilled ledger not persisted: %s", err)
+
+        _LOGGER.info(
+            "Service backfill_forecast_ledger: %d actual day(s) in history; "
+            "added d1=%s d0=%s; trust now d1=%s d0=%s",
+            report.get("actual_days", 0),
+            report.get("added", {}).get(1), report.get("added", {}).get(0),
+            report.get("trust", {}).get(1), report.get("trust", {}).get(0),
+        )
+        await coordinator.async_request_refresh()
+
+    try:
+        hass.services.async_register(
+            DOMAIN, "backfill_forecast_ledger",
+            async_backfill_forecast_ledger_service)
+        _LOGGER.debug("Registered service: %s.backfill_forecast_ledger", DOMAIN)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.error("Failed to register backfill_forecast_ledger: %s", err)
+
+    async def async_backfill_battery_nights_service(call) -> None:
+        """(#815) Recover the battery's night history from statistics.
+
+        #778's need envelope wants five trainable nights and live recording
+        produces one a day, so a fresh install waits a working week to learn
+        what its own database usually already proves. This reads the pack's
+        cumulative discharge counter and reconstructs the nights in one pass.
+
+        Sounder as well as faster: live recording integrates POWER, so a
+        dropped sample loses that energy for good (#837). A counter keeps
+        counting while nobody is looking, so missing hours between the
+        endpoints cost nothing. Nights SEM measured live are never
+        overwritten — live separates house drain from EV assist and export,
+        and this cannot.
+        """
+        from .coordinator.night_backfill import run_backfill as _night_backfill
+
+        days = call.data.get("days") or 365
+        tracker = getattr(coordinator, "_battery_night", None)
+        if tracker is None:
+            _LOGGER.warning(
+                "backfill_battery_nights: no night tracker on the coordinator "
+                "yet — try again once SEM has completed a cycle")
+            return
+        try:
+            report = await _night_backfill(
+                hass, tracker, coordinator.config, days=int(days))
+        except Exception as err:  # noqa: BLE001 — a service must not kill setup
+            _LOGGER.error("backfill_battery_nights failed: %s", err)
+            return
+
+        if report.get("error"):
+            _LOGGER.warning("backfill_battery_nights: %s", report["error"])
+            return
+
+        try:
+            coordinator._storage.set_battery_night_state(tracker.to_dict())
+            await coordinator._storage.async_save_energy_now()
+        except (AttributeError, TypeError, ValueError) as err:
+            _LOGGER.warning("backfilled nights not persisted: %s", err)
+
+        _LOGGER.info(
+            "Service backfill_battery_nights: %d hour(s) of history from %s; "
+            "recovered %d night(s) (%d trainable); history now %d night(s), "
+            "%d usable",
+            report.get("days_of_history", 0), report.get("statistic"),
+            report.get("recovered", 0), report.get("trainable_recovered", 0),
+            report.get("nights_total", 0), report.get("usable_total", 0),
+        )
+        # (2.1 audit, item 8) the result where a person looks, not the log
+        try:
+            from homeassistant.components import persistent_notification
+            persistent_notification.async_create(
+                hass,
+                (f"Recovered {report.get('recovered', 0)} night(s) "
+                 f"({report.get('trainable_recovered', 0)} trainable) from "
+                 f"{report.get('days_of_history', 0)} hour(s) of history. "
+                 f"Battery-night history now holds "
+                 f"{report.get('nights_total', 0)} night(s), "
+                 f"{report.get('usable_total', 0)} usable."),
+                title="SEM: battery-night history rebuilt",
+                notification_id="sem_backfill_battery_nights",
+            )
+        except Exception:  # noqa: BLE001 — a notice never fails the service
+            pass
+        await coordinator.async_request_refresh()
+
+    try:
+        hass.services.async_register(
+            DOMAIN, "backfill_battery_nights",
+            async_backfill_battery_nights_service)
+        _LOGGER.debug("Registered service: %s.backfill_battery_nights", DOMAIN)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.error("Failed to register backfill_battery_nights: %s", err)
 
     try:
         hass.services.async_register(
@@ -3969,7 +4135,13 @@ async def _async_register_phase_services(
             # #600 — optional kWh energy counter; SEM autodetects a companion
             # power sensor on the device first, else derives power from this.
             "energy_entity_id": call.data.get("energy_entity_id"),
-            "control_mode": call.data.get("control_mode", "surplus"),
+            # (#847) New devices start UNMANAGED — the user opts them in.
+            # Same principle as #805's DEFAULT_DISCOVERED_CONTROL_MODE: on a
+            # fresh install SEM must not adopt (and later actuate) loads
+            # nobody handed it. hoyte's report: mode→Off on just-added
+            # devices switched them OFF, because "surplus" was the silent
+            # default and running loads were adopted under it.
+            "control_mode": call.data.get("control_mode", "off"),
             "depends_on": call.data.get("depends_on") or [],
             # (#569) climate device support
             "device_type": call.data.get("device_type", "switch"),
@@ -4004,7 +4176,7 @@ async def _async_register_phase_services(
             try:
                 device.control_mode = DeviceControlMode(spec["control_mode"])
             except ValueError:
-                device.control_mode = DeviceControlMode.SURPLUS
+                device.control_mode = DeviceControlMode.OFF  # (#847) creation default
             coordinator._surplus_controller.register_device(device)
             summary = {**spec, "persisted": False,
                        "total_devices": len(coordinator._surplus_controller._devices)}
@@ -4031,7 +4203,8 @@ async def _async_register_phase_services(
             vol.Optional("rated_power"): vol.Coerce(float),
             vol.Optional("power_entity_id"): cv.string,
             vol.Optional("energy_entity_id"): cv.string,  # #600
-            vol.Optional("control_mode", default="surplus"): vol.In(
+            # (#847) default "off" — devices are opted IN, never pre-owned
+            vol.Optional("control_mode", default="off"): vol.In(
                 ["off", "peak_only", "surplus"]
             ),
             vol.Optional("depends_on"): vol.All(cv.ensure_list, [cv.string]),
@@ -4754,6 +4927,8 @@ async def _async_register_phase_services(
         "heat_pump_max_setpoint", "heat_pump_priority",
         "heat_pump_power_sensor", "heat_pump_temperature_sensor",
         "heat_pump_rated_power", "heat_pump_force_on_threshold",
+        "heat_pump_sg_ready_service", "heat_pump_sg_ready_service_data",
+        "heat_pump_sg_ready_state_entity", "heat_pumps",
     }
     # Hot water — config visibility (controller not currently wired
     # into the production path; v1.7.2-beta.2 surfaces config so

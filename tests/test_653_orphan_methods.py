@@ -61,6 +61,13 @@ _PACKAGES = ("devices", "coordinator", "features")
 #                       Triaging these is follow-up work, not a blocker for
 #                       the ratchet: locking the set stops the bleeding now.
 _BASELINE = {
+    # (#778) `spendable_budget` LEFT this list when phase 3 wired it to the
+    # refill estimate — the guard's staleness check is what forced the removal,
+    # which is the behaviour that keeps a baseline from rotting into a rubber
+    # stamp. `forecast_for` / `actual_for` remain the ledger's read accessors,
+    # used by its tests and by the phase-4 planner feed; remove them when that
+    # lands.
+    "forecast_for", "actual_for",
     # generic-accessor (coordinator/storage.py)
     "clear_daily_accumulators", "clear_monthly_accumulators", "get_accumulator",
     "get_baseline", "get_daily_accumulator", "get_flow_accumulator",
@@ -69,7 +76,6 @@ _BASELINE = {
     "set_daily_accumulator", "set_flow_accumulator", "set_monthly_accumulator",
     "set_previous_value",
     # compat-alias / public API kept deliberately
-    "amps_for_watts", "watts_for_amps",       # adapter unit helpers, symmetric pair
     "deactivate_all",                          # thin wrapper; #656 wired the
                                                # module-level deactivate_devices
     "create_dashboard",                        # generator entry point, service-driven
