@@ -667,11 +667,18 @@ class ChargerReconciler:
                         "restarting itself against SEM's stop (%d stop→redraw "
                         "round-trips). Standing down for %.0f min so the car "
                         "is not strobed into a charging fault; it may charge "
-                        "at the box's stored minimum meanwhile. Likely cause: "
-                        "the wallbox's own auto-start/authorization re-closes "
-                        "the contactor on the car's retry — disable charger-"
-                        "side auto-start, or give SEM a stop mechanism the "
-                        "box respects. — %s",
+                        "at the box's stored minimum meanwhile. Two causes "
+                        "look IDENTICAL from here. (1) The wallbox's own "
+                        "auto-start/authorization re-closes the contactor on "
+                        "the car's retry — disable charger-side auto-start, or "
+                        "give SEM a stop mechanism the box respects. (2) "
+                        "ANOTHER controller is commanding this same charger — "
+                        "a second SEM instance (a test rig sharing the "
+                        "hardware, with observer mode off), an HA automation, "
+                        "or a vendor app. Check that first if one could "
+                        "exist: it is cheap to rule out, and a stop that "
+                        "starts holding the moment the other writer is "
+                        "silenced is the proof. — %s",
                         self.charger_id, self._stop_war_rounds,
                         STOP_WAR_BACKOFF_S / 60.0, decision.reason)
                 else:

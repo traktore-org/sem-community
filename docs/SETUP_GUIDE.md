@@ -164,7 +164,7 @@ solar production, grid import/export, battery charge/discharge, and EV charger.
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| **Observer mode** | Off | When ON, SEM only reads data and provides the dashboard — it will not send any commands to your hardware. Use this for testing, secondary HA instances, or monitoring-only setups. You can toggle it later via `switch.sem_observer_mode`. |
+| **Observer mode** | **On** | A new install observes first: SEM reads your system, builds the dashboard, and publishes the decisions it *would* make — without sending a single command to your hardware. Look at those decisions, and when they match what you'd want, turn observer mode off (`switch.sem_observer_mode`) to let SEM act. Leave it on permanently for test rigs, secondary HA instances that mirror a production one, or monitoring-only setups. |
 
 > **Tip:** If a sensor you expect is missing from the detection summary,
 > check your Energy Dashboard (**Settings > Dashboards > Energy**) and ensure

@@ -6,7 +6,12 @@ DOMAIN: Final = "solar_energy_management"
 # ============================================
 # UPDATE & DELTA THRESHOLDS
 # ============================================
-DEFAULT_OBSERVER_MODE: Final = False  # When True, skip all hardware control (read-only monitoring)
+DEFAULT_OBSERVER_MODE: Final = True  # A new install OBSERVES first — it
+# shows what it WOULD do and waits for one deliberate switch before it
+# commands anything. Was False until 29.08.2026, when a fresh install on
+# a rig wired to a real KEBA became a second controller nobody chose and
+# fed a car ~5 kWh in Off mode. An install default should never be the
+# thing that starts touching someone's hardware.
 DEFAULT_UPDATE_INTERVAL: Final = 10  # seconds - 10 seconds for highly accurate energy integration
 # Missing legacy config must not silently require an inverter/load sensor lane.
 # Grid-only remains fail-closed for the installation's upstream phase limit and

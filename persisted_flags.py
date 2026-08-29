@@ -41,7 +41,9 @@ _LOGGER = logging.getLogger(__name__)
 # is the kill-switch, and a default-off would leave a solar_plus_cheap
 # install with no cheap-window timing at all).
 PERSISTED_FLAG_DEFAULTS: Final[Dict[str, bool]] = {
-    "observer_mode": False,
+    # (29.08.2026) Observe first — see DEFAULT_OBSERVER_MODE. Kept in step
+    # with the constant by tests/test_new_install_observes_first.py.
+    "observer_mode": True,
     "vacation_mode": False,
     "energy_plan_actuation": True,
     # (#778) Forecast-led spending ships INERT: the whole arc measures and
