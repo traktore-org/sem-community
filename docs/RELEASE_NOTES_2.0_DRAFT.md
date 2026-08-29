@@ -92,7 +92,7 @@ They paid for the work *and* did some of it.
 
 Thank you — and thank you equally to everyone who reported something broken and
 then patiently re-tested a fix on a real house. The ✅ column of the
-[supported hardware table](docs/SUPPORTED_HARDWARE.md) is entirely made of
+[supported hardware table](SUPPORTED_HARDWARE.md) is entirely made of
 those people.
 
 ## Requirements
