@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.0.0-beta.21] — 29.08.2026
+
 - 🛑 **A stop no longer starts the charger** (#854): telling a KEBA to stop
   used to mean *enabling* it with a 1 kWh energy target so it would charge
   into the target and suspend itself. On a box that was already idle that
