@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🌙 **A solar sensor that sleeps at night is no longer reported as frozen**
+  (#851): a cloud or inverter-side integration that powers down at dusk stops
+  reporting altogether, and SEM's frozen-sensor check read that correctly as a
+  stall — filing a warning and a Repair every single night for a healthy
+  system. SEM already knows it is night, so it now decides this for itself: the
+  warning is suppressed only when the sensor's own domain explains the silence
+  (a solar sensor, reading nothing, with the sun down). Everything the check
+  exists to catch still warns — solar frozen in daylight, solar stuck at a
+  non-zero value, and any non-solar sensor.
+
 - 🔌 **One way in to the charger, and observer mode can finally see it**
   (#855): every command SEM sends a charger now goes through a single seam
   instead of ~20 scattered call sites, and observer mode cuts *at* that
