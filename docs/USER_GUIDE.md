@@ -941,7 +941,7 @@ Set tariff mode to "Calendar" for custom time-of-use schedules. Define rules lik
 
 ## Solar Forecast
 
-Install [Solcast PV Solar](https://github.com/oziee/ha-solcast-solar), [Forecast.Solar](https://www.home-assistant.io/integrations/forecast_solar/) or [Open-Meteo Solar Forecast](https://github.com/rany2/ha-open-meteo-solar-forecast) for forecast-based features:
+Install [Solcast PV Solar](https://github.com/BJReplay/ha-solcast-solar), [Forecast.Solar](https://www.home-assistant.io/integrations/forecast_solar/) or [Open-Meteo Solar Forecast](https://github.com/rany2/ha-open-meteo-solar-forecast) for forecast-based features:
 
 - `sensor.sem_forecast_today_kwh` — expected total production today (kWh)
 - `sensor.sem_forecast_tomorrow_kwh` — expected total production tomorrow (kWh)

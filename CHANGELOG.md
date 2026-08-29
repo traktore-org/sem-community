@@ -6424,7 +6424,7 @@ Also unblocks #453 by structurally fixing #457 in the same release: the diagram 
 
 ## 🎉 Stable Release
 
-_Consolidates [1.7.2-beta.1](https://github.com/traktore-org/sem-community/releases/tag/v1.7.2-beta.1) through [1.7.2-beta.7](https://github.com/traktore-org/sem-community/releases/tag/v1.7.2-beta.7). 19 commits since [1.7.1](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1). 24 hours of HA-PROD soak with zero errors._
+_Consolidates `1.7.2-beta.1` through [1.7.2-beta.7](https://github.com/traktore-org/sem-community/releases/tag/v1.7.2-beta.7). 19 commits since [1.7.1](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1). 24 hours of HA-PROD soak with zero errors._
 
 ### 🔥 New: Hot Water boiler control (#454)
 
@@ -6823,7 +6823,7 @@ Massive thanks to @RienduPre for the persistent #432 reports — they directly d
 
 ## 🧪 Beta Release
 
-_Changes since [1.7.1-beta.16](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.16)_
+_Changes since `1.7.1-beta.16`_
 
 ### 🔍 Heat-pump observability — diagnose silent registration failures remotely (#432)
 
@@ -6869,7 +6869,7 @@ Full suite: **3239 pass, 9 skipped, 0 fail** (was 3217 — net +22 after the hea
 
 ## 🧪 Beta Release
 
-_Changes since [1.7.1-beta.15](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.15)_
+_Changes since `1.7.1-beta.15`_
 
 ### 🐛 EV charging logic strictly honours `ev_target_type` per charger (#446)
 
@@ -6918,7 +6918,7 @@ PROD had `ev_target_type="soc"` saved but no `vehicle_soc_entity` configured (a 
 
 ## 🧪 Beta Release
 
-_Changes since [1.7.1-beta.14](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.14)_
+_Changes since `1.7.1-beta.14`_
 
 ### 🐛 Reliable home consumption — two-tier hold against sensor-staleness skew (#444)
 
@@ -6946,7 +6946,7 @@ The inconsistency tier only fires when the raw balance is strongly negative — 
 
 ## 🧪 Beta Release
 
-_Changes since [1.7.1-beta.13](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.13)_
+_Changes since `1.7.1-beta.13`_
 
 ### 🐛 Stop KEBA solar-path current oscillation that aborts EV sessions
 
@@ -7014,7 +7014,7 @@ Walked every available charge mode on PROD (target raised from 2 kWh → 10 kWh 
 
 ## 🧪 Beta Release
 
-_Changes since [1.7.1-beta.12](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.12)_
+_Changes since `1.7.1-beta.12`_
 
 ### 🐛 Configuration tab save pipeline — actually works now (#442)
 
@@ -7042,7 +7042,7 @@ Sections covered: tariff (export rate + mode select), heat pump (priority slider
 
 ## 🧪 Beta Release
 
-_Changes since [1.7.1-beta.11](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.11)_
+_Changes since `1.7.1-beta.11`_
 
 ### ✨ Every OptionsFlow step now inline in the Configuration tab (#442)
 
@@ -7098,7 +7098,7 @@ Fresh installs now take **2 forms instead of 3**, and every later tweak lives **
 
 ## 🧪 Beta Release
 
-_Changes since [1.7.1-beta.9](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.9)_
+_Changes since `1.7.1-beta.9`_
 
 ### 🚀 HA Repairs — graceful unavailability channel
 
@@ -7120,7 +7120,7 @@ Honors the HA quality-check feedback "should handle unavailability gracefully in
 
 ## 🧪 Beta Release
 
-_Changes since [1.7.1-beta.8](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.8)_
+_Changes since `1.7.1-beta.8`_
 
 ### 🐛 Bugfix — quiet sensor-recovery log spam (HA quality-check feedback)
 
@@ -7174,7 +7174,7 @@ _Changes since [1.7.1-beta.5](https://github.com/traktore-org/sem-community/rele
 
 ## 🧪 Beta Release
 
-_Changes since [1.7.1-beta.4](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.4)_
+_Changes since `1.7.1-beta.4`_
 
 ### 🚀 Renames + polish
 
@@ -7210,7 +7210,7 @@ _Changes since [1.7.1-beta.3](https://github.com/traktore-org/sem-community/rele
 
 ## 🧪 Beta Release
 
-_Changes since [1.7.1-beta.2](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.2)_
+_Changes since `1.7.1-beta.2`_
 
 ### 🐛 Bugfixes
 
@@ -7224,7 +7224,7 @@ _Changes since [1.7.1-beta.2](https://github.com/traktore-org/sem-community/rele
 
 ## 🧪 Beta Release
 
-_Changes since [1.7.1-beta.1](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.1)_
+_Changes since `1.7.1-beta.1`_
 
 ### 🐛 Bugfixes
 
@@ -7297,7 +7297,7 @@ Following the `classifier_path` pattern introduced in #359, **10 stale modules**
 
 ## 🧪 Beta Release — v1.7.1 audit batch 4
 
-_Changes since [1.7.0-beta.25](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.25)_
+_Changes since `1.7.0-beta.25`_
 
 Two more modules audited beyond the original Top-12, picked up by widening the staleness cutoff from 30 days to 2 weeks. Big-module focus on highest-leverage decisions, medium-module full coverage.
 
@@ -7314,7 +7314,7 @@ Two more modules audited beyond the original Top-12, picked up by widening the s
 
 ## 🧪 Beta Release — v1.7.1 audit batch 3
 
-_Changes since [1.7.0-beta.24](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.24)_
+_Changes since `1.7.0-beta.24`_
 
 Third batch of v1.7.1 audit telemetry. Closes the rest of the Top-12 backlog: two modules get telemetry surfaces, four close as no-change (pure data registries + a stateless translation helper that doesn't fit the path-attribute pattern). Pure additive observability, zero behavior change.
 
@@ -7332,7 +7332,7 @@ Third batch of v1.7.1 audit telemetry. Closes the rest of the Top-12 backlog: tw
 
 ## 🧪 Beta Release — v1.7.1 audit batch 2
 
-_Changes since [1.7.0-beta.23](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.23)_
+_Changes since `1.7.0-beta.23`_
 
 Second batch of v1.7.1 audit telemetry — four modules in one beta because they don't share state. Pure additive observability, zero behavior change in published return values.
 
@@ -7351,7 +7351,7 @@ Second batch of v1.7.1 audit telemetry — four modules in one beta because they
 
 ## 🧪 Beta Release — first v1.7.1 audit
 
-_Changes since [1.7.0-beta.22](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.22)_
+_Changes since `1.7.0-beta.22`_
 
 First behavioral audit of the v1.7.1 stabilization program (umbrella #419). Pure additive observability on `HotWaterController` — zero behavior change.
 
@@ -7456,7 +7456,7 @@ The #404 per-battery direction bug on Sessy installs is **not fixed yet** in thi
 
 ## 🧪 Beta Release
 
-_Changes since [1.7.0-beta.16](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.16)_
+_Changes since `1.7.0-beta.16`_
 
 ### 🐛 Bugfixes
 

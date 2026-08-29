@@ -117,7 +117,7 @@ Before setting up SEM, make sure you have:
 - **Optional but recommended:**
   - Battery SOC (%) and power (W) sensors
   - An EV charger controllable via HA (KEBA, Wallbox, go-eCharger, Easee, Zaptec, ChargePoint, Heidelberg, etc.)
-  - [Solcast PV Solar](https://github.com/oziee/ha-solcast-solar), [Forecast.Solar](https://www.home-assistant.io/integrations/forecast_solar/) or [Open-Meteo Solar Forecast](https://github.com/rany2/ha-open-meteo-solar-forecast) for solar forecasts
+  - [Solcast PV Solar](https://github.com/BJReplay/ha-solcast-solar), [Forecast.Solar](https://www.home-assistant.io/integrations/forecast_solar/) or [Open-Meteo Solar Forecast](https://github.com/rany2/ha-open-meteo-solar-forecast) for solar forecasts
   - Tibber, Nordpool, or aWATTar integration for dynamic tariffs
 
 ---
@@ -627,9 +627,10 @@ checklist is exactly what the review holds you to.
 
 ### How work is tracked
 
-Every open issue and PR carries a state label, mirrored onto the
-[SEM Board](https://github.com/users/traktore-org/projects/2). The label is
-the source of truth.
+Every open issue and PR carries a state label, mirrored onto a maintainer
+project board. **The label is the source of truth** — it is on the issue
+itself, so you can always see the state of anything you reported without
+needing access to the board.
 
 | State | Meaning |
 |---|---|

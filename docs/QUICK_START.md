@@ -18,7 +18,7 @@ Go to **Settings > Dashboards > Energy**. You must have at least a solar product
 
 **2. HACS installed**
 
-SEM is distributed through HACS. If you have not installed HACS, follow the [HACS installation guide](https://hacs.xyz/docs/setup/download/) first.
+SEM is distributed through HACS. If you have not installed HACS, follow the [HACS installation guide](https://hacs.xyz/docs/use/download/download/) first.
 
 **3. No EV charger? That is fine**
 

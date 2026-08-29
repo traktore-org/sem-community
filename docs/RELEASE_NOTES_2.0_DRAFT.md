@@ -1,5 +1,11 @@
 # v2.0.0 — Trustworthy
 
+<!-- NOTE: this file is used verbatim as a GitHub RELEASE BODY, where
+     relative links resolve against the REPO ROOT, not against docs/.
+     Use ABSOLUTE links here even for files in this directory — a
+     relative one passes the docs-link test and then 404s in the
+     published release (hit on v2.0.0). -->
+
 SEM 2.0 adds almost nothing you have to learn. It makes what SEM already did
 **believable**: the same decisions, no longer changing their mind for reasons
 nobody can see.
@@ -92,7 +98,7 @@ They paid for the work *and* did some of it.
 
 Thank you — and thank you equally to everyone who reported something broken and
 then patiently re-tested a fix on a real house. The ✅ column of the
-[supported hardware table](SUPPORTED_HARDWARE.md) is entirely made of
+[supported hardware table](https://github.com/traktore-org/sem-community/blob/main/docs/SUPPORTED_HARDWARE.md) is entirely made of
 those people.
 
 ## Requirements
