@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔌 **One way in to the charger, and observer mode can finally see it**
+  (#855): every command SEM sends a charger now goes through a single seam
+  instead of ~20 scattered call sites, and observer mode cuts *at* that
+  seam rather than above the brand logic. Two consequences: SEM's dry run
+  now reports the exact service calls it withheld — not just the decision
+  it reached — and reproducing a charger problem no longer means switching
+  observer off and commanding real hardware. Behaviour when observer is off
+  is unchanged; every existing contract test passes untouched.
+
 - 🧱 **The generic device layer stops learning new brands** (#855, stage 1):
   a shrink-only ratchet on brand names in `devices/base.py` — 74 mentions
   across ten brands today, and the count may now only fall. No behaviour

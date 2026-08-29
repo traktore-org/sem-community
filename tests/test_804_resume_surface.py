@@ -35,6 +35,14 @@ def _adapter(start_stop="button.zaptec_resume_charging"):
         services=SimpleNamespace(async_call=AsyncMock()),
     )
     dev._session_active = False
+    # (#855) the seam: adapters now issue commands via device.send(), so a
+    # stub device must model it. Forwards to hass.services.async_call so
+    # every assertion in this file keeps asserting the same thing.
+    async def _send(domain, service, data=None, why=""):
+        await dev.hass.services.async_call(
+            domain, service, dict(data or {}), blocking=True)
+        return True
+    dev.send = _send
     a = GenericAdapter.__new__(GenericAdapter)
     a._device = dev
     return a

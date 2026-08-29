@@ -46,6 +46,14 @@ def _make_device(
     device.stop_session = AsyncMock()
     device.start_session = AsyncMock()
     device._session_active = False
+    # (#855) the seam: adapters now issue commands via device.send(), so a
+    # stub device must model it. Forwards to hass.services.async_call so
+    # every assertion in this file keeps asserting the same thing.
+    async def _send(domain, service, data=None, why=""):
+        await device.hass.services.async_call(
+            domain, service, dict(data or {}), blocking=True)
+        return True
+    device.send = _send
     device.min_current = 6
     device.max_current = 32
     device.phases = 3

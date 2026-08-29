@@ -203,9 +203,7 @@ class WallboxAdapter(GenericAdapter):
             return
         service = "turn_on" if turn_on else "turn_off"
         try:
-            await hass.services.async_call(
-                "switch", service, {"entity_id": eid}, blocking=True,
-            )
+            await self._device.send("switch", service, {"entity_id": eid})
         except Exception as exc:  # noqa: BLE001
             _LOGGER.warning(
                 "Wallbox %s switch.%s failed: %s",

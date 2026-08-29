@@ -18,6 +18,8 @@ from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from ..utils.log_gate import log_on_change
+
 # #392: KEBA's failsafe watchdog (and similar device-side timers on other
 # chargers) requires periodic *writes* to refresh — reads alone don't
 # count. SEM's _set_current dedup used to suppress writes when the
@@ -339,6 +341,17 @@ class ControllableDevice(ABC):
         # automation) changed the physical state, so SEM stops fighting a manual
         # on/off and stops crediting runtime to a load it isn't actually driving.
         self._sem_owned: bool = False
+        # (#855) Observer mode, carried on the DEVICE so the single
+        # hardware seam below can honour it. Set by the coordinator each
+        # cycle. Default False: a device nobody told is a device that acts,
+        # which is the safe default for the production path — the
+        # coordinator is the one that knows, and it always tells.
+        self.observer_mode: bool = False
+        # The commands the seam WITHHELD this cycle, oldest first. This is
+        # the observation surface: it names the exact service and payload
+        # that would have gone to the box, which is the thing the old
+        # decision-level WOULD could not say (#854 hid an enable here).
+        self.withheld_commands: list = []
         self._commanded_claim: bool = False  # backing field, see _sem_commanded
         # Monotonic anchor for the "belief says on but the entity reads off"
         # drift grace window (a transient unavailable/poll gap must not flip us).
@@ -855,6 +868,69 @@ class ControllableDevice(ABC):
     def disable(self) -> None:
         """Disable device from surplus control."""
         self._enabled = False
+
+    async def send(self, domain: str, service: str,
+                   data: dict | None = None, *, why: str = "") -> bool:
+        """(#855) THE SINGLE HARDWARE SEAM for a charger.
+
+        Every command SEM sends to a charger goes through here — the stop,
+        the start, the current write, the failsafe, the energy register.
+        Nothing else in the charger path may call
+        ``hass.services.async_call``; ``tests/test_855_one_seam.py`` pins
+        that.
+
+        Guido, 29.08.2026, on what the arc is for:
+
+            "the 2nd layer has one communication string to the 3rd layer
+             for ev charger ... and the observation should not be a matter
+             any more, more a matter of get the work done."
+
+        SEM already had this shape for loads — ``reconcile_load``, whose
+        docstring says the prize out loud: *"a clean layer cut makes
+        [observer mode] a one-line branch in the actuator"*. Chargers never
+        got it, and the cost was concrete:
+
+        * **#854** — a brand's "stop" was a current write + an energy
+          target + an ENABLE: a start wearing a stop's name, ~1 kWh into the
+          car on every plug-in against a zero ask. INVISIBLE in observer
+          mode, because the old cut sat ABOVE the adapter and reported the
+          decision ("WOULD IDLE") while the enable happened below it.
+        * **#804** — phase switching could not be exercised on the rig.
+        * **#852** — a reporter's stop could not be reproduced there.
+
+        Each ended in "turn observer off", which on shared hardware means
+        commanding somebody's real car charger.
+
+        With the cut HERE, observer mode runs the whole decision and brand
+        path and withholds only the send — recording exactly what it
+        withheld. Returns True when the command actually went to hardware.
+        """
+        payload = dict(data or {})
+        # getattr, not attribute access: devices built without __init__
+        # (test fixtures, legacy construction paths) must still SEND. The
+        # documented default is False — "a device nobody told is a device
+        # that acts" — and a missing field means nobody told it.
+        if getattr(self, "observer_mode", False):
+            if not hasattr(self, "withheld_commands"):
+                self.withheld_commands = []
+            self.withheld_commands.append(
+                {"service": f"{domain}.{service}", "data": payload,
+                 "why": why or "-"})
+            # Transition-gated so a steady state is not a stream of
+            # identical lines (#762) — a WOULD that has not changed is not
+            # news, and the surface above carries the current truth anyway.
+            log_on_change(
+                _LOGGER, f"observer:send:{self.device_id}:{domain}.{service}",
+                logging.INFO,
+                "OBSERVER · %s WOULD send %s.%s %s%s",
+                self.name, domain, service, payload,
+                f" — {why}" if why else "",
+            )
+            return False
+        # The one place in the charger path that really talks to HA.
+        await self.hass.services.async_call(
+            domain, service, payload, blocking=True)
+        return True
 
     @abstractmethod
     async def activate(self, available_watts: float) -> float:
@@ -1603,11 +1679,7 @@ class SwitchDevice(ComfortBandMixin, ControllableDevice):
                 return 0.0
 
         try:
-            await self.hass.services.async_call(
-                "homeassistant", "turn_on",
-                {"entity_id": self.entity_id},
-                blocking=True,
-            )
+            await self.send("homeassistant", "turn_on", {"entity_id": self.entity_id})
             self._status.state = DeviceState.ACTIVE
             self._status.current_consumption_w = self.rated_power
             self._status.allocated_power_w = self.rated_power
@@ -1633,11 +1705,7 @@ class SwitchDevice(ComfortBandMixin, ControllableDevice):
                 return
 
         try:
-            await self.hass.services.async_call(
-                "homeassistant", "turn_off",
-                {"entity_id": self.entity_id},
-                blocking=True,
-            )
+            await self.send("homeassistant", "turn_off", {"entity_id": self.entity_id})
             self._status.state = DeviceState.IDLE
             self._status.current_consumption_w = 0.0
             self._status.allocated_power_w = 0.0
@@ -1859,11 +1927,7 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
         # Set the mode first. If THIS fails the unit never turned on — report
         # ERROR and bail.
         try:
-            await self.hass.services.async_call(
-                "climate", "set_hvac_mode",
-                {"entity_id": self.entity_id, "hvac_mode": self.hvac_mode},
-                blocking=True,
-            )
+            await self.send("climate", "set_hvac_mode", {"entity_id": self.entity_id, "hvac_mode": self.hvac_mode})
         except Exception as e:
             _LOGGER.error("Failed to activate %s: %s", self.name, e)
             self._status.state = DeviceState.ERROR
@@ -1883,12 +1947,8 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
 
         if self.target_temperature is not None:
             try:
-                await self.hass.services.async_call(
-                    "climate", "set_temperature",
-                    {"entity_id": self.entity_id,
-                     "temperature": self.target_temperature},
-                    blocking=True,
-                )
+                await self.send("climate", "set_temperature", {"entity_id": self.entity_id,
+                     "temperature": self.target_temperature})
             except Exception as e:
                 # Non-fatal: the unit is running in the right mode, only the
                 # comfort setpoint didn't take. Stay ACTIVE.
@@ -1921,11 +1981,7 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
                 return
 
         try:
-            await self.hass.services.async_call(
-                "climate", "set_hvac_mode",
-                {"entity_id": self.entity_id, "hvac_mode": "off"},
-                blocking=True,
-            )
+            await self.send("climate", "set_hvac_mode", {"entity_id": self.entity_id, "hvac_mode": "off"})
             self._status.state = DeviceState.IDLE
             self._status.current_consumption_w = 0.0
             self._status.allocated_power_w = 0.0
@@ -2326,19 +2382,11 @@ class CurrentControlDevice(ControllableDevice):
             elif _entity_svc_domain in ("number", "input_number"):
                 # Map it to the entity write it was meant to be.
                 target = self.current_entity_id or self.charger_service_entity_id
-                await self.hass.services.async_call(
-                    _entity_svc_domain, "set_value",
-                    {"entity_id": target, "value": current},
-                    blocking=True,
-                )
+                await self.send(_entity_svc_domain, "set_value", {"entity_id": target, "value": current})
             elif _entity_svc_domain == "select":
                 # Amps exposed as a select: options are amp strings.
                 target = self.current_entity_id or self.charger_service_entity_id
-                await self.hass.services.async_call(
-                    "select", "select_option",
-                    {"entity_id": target, "option": str(int(current))},
-                    blocking=True,
-                )
+                await self.send("select", "select_option", {"entity_id": target, "option": str(int(current))})
             elif self.charger_service:
                 # Service-based control — param name varies per integration (#82)
                 domain, service = self.charger_service.split(".", 1)
@@ -2349,18 +2397,10 @@ class CurrentControlDevice(ControllableDevice):
                 # Pass entity_id only if service requires it (non-global services)
                 elif self.charger_service_entity_id and not self.global_services:
                     service_data["entity_id"] = self.charger_service_entity_id
-                await self.hass.services.async_call(
-                    domain, service,
-                    service_data,
-                    blocking=True,
-                )
+                await self.send(domain, service, service_data)
             elif self.current_entity_id:
                 # Number entity control
-                await self.hass.services.async_call(
-                    "number", "set_value",
-                    {"entity_id": self.current_entity_id, "value": current},
-                    blocking=True,
-                )
+                await self.send("number", "set_value", {"entity_id": self.current_entity_id, "value": current})
 
             self._clear_actuation_failure()
 
@@ -2548,12 +2588,8 @@ class CurrentControlDevice(ControllableDevice):
             fallback_a = max(6, int(round(self.min_current)))
             steady = bool(getattr(self, "steady_failsafe", True))
             persist = 1 if steady else 0
-            await self.hass.services.async_call(
-                domain, "set_failsafe",
-                {"failsafe_timeout": FAILSAFE_TIMEOUT_S,
-                 "failsafe_fallback": fallback_a, "failsafe_persist": persist},
-                blocking=True,
-            )
+            await self.send(domain, "set_failsafe", {"failsafe_timeout": FAILSAFE_TIMEOUT_S,
+                 "failsafe_fallback": fallback_a, "failsafe_persist": persist})
             _LOGGER.info(
                 "%s: KEBA failsafe set non-tripping (timeout=%ds, fallback=%dA, "
                 "persist=%d)", self.name, FAILSAFE_TIMEOUT_S, fallback_a, persist,
@@ -2581,12 +2617,8 @@ class CurrentControlDevice(ControllableDevice):
         if not domain or not self.hass.services.has_service(domain, "set_failsafe"):
             return
         try:
-            await self.hass.services.async_call(
-                domain, "set_failsafe",
-                {"failsafe_timeout": FAILSAFE_OFF_TIMEOUT_S,
-                 "failsafe_fallback": 0, "failsafe_persist": 1},
-                blocking=True,
-            )
+            await self.send(domain, "set_failsafe", {"failsafe_timeout": FAILSAFE_OFF_TIMEOUT_S,
+                 "failsafe_fallback": 0, "failsafe_persist": 1})
             _LOGGER.info(
                 "%s: failsafe re-armed as dead-man's OFF (timeout=%ds, "
                 "fallback=0A, persisted) — the box holds the no while "
@@ -2697,9 +2729,7 @@ class CurrentControlDevice(ControllableDevice):
         if not (domain and self.hass.services.has_service(domain, "set_energy")):
             return
         try:
-            await self.hass.services.async_call(
-                domain, "set_energy", {"energy": 0}, blocking=True,
-            )
+            await self.send(domain, "set_energy", {"energy": 0})
             self._idle_guard_armed = False
             _LOGGER.info(
                 "%s: released a STALE energy-target guard the box still held "
@@ -2730,25 +2760,15 @@ class CurrentControlDevice(ControllableDevice):
                 data = dict(self.start_service_data or {})
                 if self.service_device_id:
                     data["device_id"] = self.service_device_id
-                await self.hass.services.async_call(domain, service, data, blocking=True)
+                await self.send(domain, service, data)
             elif self.charge_mode_entity and self.charge_mode_start:
-                await self.hass.services.async_call(
-                    "select", "select_option",
-                    {"entity_id": self.charge_mode_entity, "option": self.charge_mode_start},
-                    blocking=True,
-                )
+                await self.send("select", "select_option", {"entity_id": self.charge_mode_entity, "option": self.charge_mode_start})
             elif self.start_stop_entity:
                 domain = self.start_stop_entity.split(".")[0]
                 if domain in ("switch", "input_boolean"):
-                    await self.hass.services.async_call(
-                        domain, "turn_on",
-                        {"entity_id": self.start_stop_entity}, blocking=True,
-                    )
+                    await self.send(domain, "turn_on", {"entity_id": self.start_stop_entity})
                 elif domain == "button":
-                    await self.hass.services.async_call(
-                        "button", "press",
-                        {"entity_id": self.start_stop_entity}, blocking=True,
-                    )
+                    await self.send("button", "press", {"entity_id": self.start_stop_entity})
             elif self.charger_service:
                 # 2. KEBA-style fallback: probe for enable/disable services
                 domain = self.charger_service.split(".", 1)[0]
@@ -2765,16 +2785,12 @@ class CurrentControlDevice(ControllableDevice):
                 # SEM start must release that guard or the session would end
                 # at 1 Wh. SEM owns the KEBA session-energy register.
                 if self.hass.services.has_service(domain, "set_energy"):
-                    await self.hass.services.async_call(
-                        domain, "set_energy",
-                        {"energy": energy_target_kwh if energy_target_kwh > 0 else 0},
-                        blocking=True,
-                    )
+                    await self.send(domain, "set_energy", {"energy": energy_target_kwh if energy_target_kwh > 0 else 0})
                     self._idle_guard_armed = False
 
                 # Pilot cycle: disable/enable for cars that need fresh signal
                 if self.needs_pilot_cycle and self.hass.services.has_service(domain, "disable"):
-                    await self.hass.services.async_call(domain, "disable", {}, blocking=True)
+                    await self.send(domain, "disable", {})
                     await asyncio.sleep(3)
 
                 # Enable charger. The historically-working sequence
@@ -2789,7 +2805,7 @@ class CurrentControlDevice(ControllableDevice):
                 # IDLE-debounce — see ``actuate.py``), which prevents
                 # ``keba.disable`` from firing on transient solar dips.
                 if self.hass.services.has_service(domain, "enable"):
-                    await self.hass.services.async_call(domain, "enable", {}, blocking=True)
+                    await self.send(domain, "enable", {})
 
             self._session_active = True
             _LOGGER.info("Charging session started for %s", self.name)
@@ -2811,17 +2827,14 @@ class CurrentControlDevice(ControllableDevice):
         domain = (self.charger_service or "").split(".", 1)[0]
         try:
             if domain and self.hass.services.has_service(domain, "disable"):
-                await self.hass.services.async_call(
-                    domain, "disable", {}, blocking=True)
+                await self.send(domain, "disable", {})
                 _LOGGER.info(
                     "%s: parked OFF on disconnect via %s.disable — the box "
                     "holds the no until the next charge", self.name, domain)
             elif self.start_stop_entity:
                 sdomain = self.start_stop_entity.split(".")[0]
                 if sdomain in ("switch", "input_boolean"):
-                    await self.hass.services.async_call(
-                        sdomain, "turn_off",
-                        {"entity_id": self.start_stop_entity}, blocking=True)
+                    await self.send(sdomain, "turn_off", {"entity_id": self.start_stop_entity})
         except Exception as e:  # noqa: BLE001 — surfaced, never fatal
             _LOGGER.error("park_off(%s): disable failed: %s", self.name, e)
 
@@ -2865,22 +2878,15 @@ class CurrentControlDevice(ControllableDevice):
                 data = dict(self.stop_service_data or {})
                 if self.service_device_id:
                     data["device_id"] = self.service_device_id
-                await self.hass.services.async_call(domain, service, data, blocking=True)
+                await self.send(domain, service, data)
                 stop_method = f"stop_service={self.stop_service}"
             elif self.charge_mode_entity and self.charge_mode_stop:
-                await self.hass.services.async_call(
-                    "select", "select_option",
-                    {"entity_id": self.charge_mode_entity, "option": self.charge_mode_stop},
-                    blocking=True,
-                )
+                await self.send("select", "select_option", {"entity_id": self.charge_mode_entity, "option": self.charge_mode_stop})
                 stop_method = f"charge_mode={self.charge_mode_stop}"
             elif self.start_stop_entity:
                 domain = self.start_stop_entity.split(".")[0]
                 if domain in ("switch", "input_boolean"):
-                    await self.hass.services.async_call(
-                        domain, "turn_off",
-                        {"entity_id": self.start_stop_entity}, blocking=True,
-                    )
+                    await self.send(domain, "turn_off", {"entity_id": self.start_stop_entity})
                     stop_method = f"{domain}.turn_off={self.start_stop_entity}"
                 elif domain == "button":
                     # (#804 B4a) The old code GUESSED a stop button by
@@ -2968,8 +2974,7 @@ class CurrentControlDevice(ControllableDevice):
                     #
                     # A disable opens the contactor — measured 3 s to stop a
                     # drawing box. Nothing else is needed.
-                    await self.hass.services.async_call(
-                        domain, "disable", {}, blocking=True)
+                    await self.send(domain, "disable", {})
                     stop_method = f"{domain}.disable"
                 else:
                     _LOGGER.warning(
@@ -3095,11 +3100,7 @@ class SetpointDevice(ControllableDevice):
 
         target = min(self.max_setpoint, self.normal_setpoint + self.boost_offset)
         try:
-            await self.hass.services.async_call(
-                "climate", "set_temperature",
-                {"entity_id": self.climate_entity_id, "temperature": target},
-                blocking=True,
-            )
+            await self.send("climate", "set_temperature", {"entity_id": self.climate_entity_id, "temperature": target})
             self._boosted = True
             self._status.state = DeviceState.ACTIVE
             self._status.current_consumption_w = self.rated_power
@@ -3120,11 +3121,7 @@ class SetpointDevice(ControllableDevice):
             return
 
         try:
-            await self.hass.services.async_call(
-                "climate", "set_temperature",
-                {"entity_id": self.climate_entity_id, "temperature": self.normal_setpoint},
-                blocking=True,
-            )
+            await self.send("climate", "set_temperature", {"entity_id": self.climate_entity_id, "temperature": self.normal_setpoint})
             self._boosted = False
             self._status.state = DeviceState.IDLE
             self._status.current_consumption_w = 0.0
@@ -3231,11 +3228,7 @@ class ScheduleDevice(ControllableDevice):
             return 0.0
 
         try:
-            await self.hass.services.async_call(
-                "homeassistant", "turn_on",
-                {"entity_id": self.entity_id},
-                blocking=True,
-            )
+            await self.send("homeassistant", "turn_on", {"entity_id": self.entity_id})
             self._started = True
             self._start_time = datetime.now()
             self._status.state = DeviceState.ACTIVE

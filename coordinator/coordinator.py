@@ -2519,6 +2519,32 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         observer_state = self.hass.states.get(ENTITY_OBSERVER_MODE_SWITCH)
         if observer_state is not None and observer_state.state in ("on", "off"):
             self._observer_mode = observer_state.state == "on"
+        # getattr: `_sync_observer_mode_from_switch` is exercised on bare
+        # stubs in tests (and the sync must never depend on the push).
+        _push = getattr(self, "_push_observer_mode_to_devices", None)
+        if _push is not None:
+            _push()
+
+    def _push_observer_mode_to_devices(self) -> None:
+        """(#855) Hand the flag DOWN to the single hardware seam.
+
+        ``ControllableDevice.send`` is the one place a charger command
+        reaches HA, and it is where observer mode is now honoured — so the
+        devices have to know. Pushed every cycle rather than read at
+        registration, because the switch can flip at any time and a device
+        holding a stale ``False`` would actuate somebody's car.
+
+        The withheld log is cleared on the same beat: it describes THIS
+        cycle's suppressed commands, and a log that accumulates across
+        cycles stops being an answer to "what would SEM do now".
+        """
+        obs = bool(getattr(self, "_observer_mode", False))
+        for dev in list(getattr(self, "_ev_devices", {}).values()):
+            try:
+                dev.observer_mode = obs
+                dev.withheld_commands = []
+            except Exception:  # noqa: BLE001 — a device that cannot be
+                continue       # told is left as it was, never crashed
 
     def _sync_vacation_mode_from_switch(self) -> None:
         """Backstop the vacation switch flag from the entity each cycle (#594).

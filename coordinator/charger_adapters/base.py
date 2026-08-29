@@ -233,14 +233,11 @@ class ChargerAdapter(ABC):
             return
         ent = str(ent)
         if ent.startswith(("switch.", "input_boolean.")):
-            await dev.hass.services.async_call(
-                ent.split(".")[0], "turn_on", {"entity_id": ent},
-                blocking=True,
-            )
+            await dev.send(ent.split(".")[0], "turn_on", {"entity_id": ent},
+                           why="ensure_enabled")
         elif ent.startswith("button."):
-            await dev.hass.services.async_call(
-                "button", "press", {"entity_id": ent}, blocking=True,
-            )
+            await dev.send("button", "press", {"entity_id": ent},
+                           why="ensure_enabled (#804 resume surface)")
         else:
             return
         # Keep SEM's session view consistent with the contactor we just closed.
