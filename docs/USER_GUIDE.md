@@ -482,6 +482,15 @@ Do not confuse Solar Gate with **Min solar power** (the config floor below which
 > `switch.sem_night_charging` and per-charger `…_night_charging` toggles were
 > removed in v1.6.3 (#277) — one selector now carries the whole intent. Set it
 > per charger with **`select.sem_charger_<id>_charge_mode`**, on the EV tab.
+> The same goes for `switch.sem_smart_night_charging`: the intelligence it
+> switched on is now implied by the mode (see *Smart night charging* below).
+
+> **Not seeing `Solar + cheapest hours` in the list?** That mode is hidden
+> unless a **dynamic tariff** is configured (Configuration tab → Tariff →
+> *Dynamic*, with a price entity). Without live prices the mode has no cheap
+> hours to find and would quietly behave like `Solar only`, so SEM does not
+> offer an option it cannot honour. Configure the tariff and it appears. The
+> other four modes are always available.
 
 | Charge mode | Charges overnight from grid? |
 |---|---|

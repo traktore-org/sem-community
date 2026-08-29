@@ -445,9 +445,28 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 
 ## Recent Improvements
 
-### v2.0 — One gate for the night (15.08.2026)
+### v2.0 — Trustworthy (29.08.2026)
 
 **Why the major number:** this release changes what an existing install does without the user changing anything. Night actuation is **on by default** (the migration writes the choice down and points at the kill-switch; an install that already turned it off is never touched), and the private cheap-window pickers are **gone** — a `solar_plus_cheap` install's night timing now comes from the joint plan rather than the code path it has been running. Same intent, different decision-maker.
+
+The milestone was named *Trustworthy*, and most of the line went on earning that: SEM saying what it will do, doing that and nothing else, and admitting what it does not know.
+
+**The charger does what you told it.** A stop no longer *starts* the charger — on a KEBA, SEM's "stop" used to enable the box with a 1 kWh energy target so it would charge into a stop, which put ~1 kWh into the car on every plug-in against a zero ask (#854). Setting a device to **Mode = Off** no longer switches off a load *you* had running (#847). The charger is **parked when the car leaves**, so the next plug-in cannot auto-start behind SEM's back (#846). A Wallbox whose stop cannot work now **says why** instead of failing silently (#852). And 1↔3-phase switching is **off by default** while it is reworked (#804) — the selector is gated on the same key, so it can never promise what the actuation will not do.
+
+**You choose the solar forecast, and the choice sticks** (#819, #838) — pick which forecast integration SEM reads when several are installed, see the forecast **per PV string**, and stop having peak solar over-stated on a multi-string roof (#841). A sensor that goes quiet no longer reads as "the sun stopped" (#818).
+
+**Settings you can find and understand** (#830) — every setting is named for what it does and carries an explanation; the surface is now on a shrink-only ratchet, so a new knob has to justify itself. The setup checklist can actually be completed (#842), and the first-run welcome describes *your* install rather than a generic one.
+
+**The numbers stop flattering themselves** — ROI no longer presents a guessed install date as a measurement, EV charging cost stops pretending battery energy is free, and the Costs card no longer invites a double count (#767–#776). The battery's night is **written down** and survives a restart, with a morning verdict you can read in one line (#800).
+
+**Hardware SEM has actually seen** — the support matrix is generated from the brand registry and credits what users proved on real systems, with the evidence linked (#814, asked for in #806); Fronius and go-e Wattpilot are auto-detected; detection now reads the whole install rather than guessing from entity names (#848).
+
+**It says what it would do before it does it** — observer mode cuts at the write, not before the decision (#764) — for chargers and batteries too, not just loads — so a dry run reports what SEM would really send.
+
+**Requires Home Assistant 2026.2.0 or newer** (#836), and the suite is tested against the HA versions that matter rather than one.
+
+
+**The planner that started the line** — what v2.0's first beta shipped, and the reason for the major number:
 
 - **The joint energy planner is the only scheduler** (#638) — EV, deferrable loads, comfort bands and the battery are packed into *one* schedule under the shared peak limit, the real price curve and your device priority order. The EV's own cheap-hour pick and the battery scheduler's own window pick are deleted; a CI ratchet keeps them deleted.
 - **Plan owns WHEN, live economics own WHETHER, your settings own MAY.** When a demand runs outside the plan it says so — a translated "reactive — why" chip on the card, in 16 languages, never silence.
