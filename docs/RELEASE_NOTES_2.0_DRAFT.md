@@ -76,6 +76,25 @@ actually stop the car?
   grid connection agreement before enabling it.
 - `switch.sem_overnight_actuation` is now `switch.sem_energy_plan_actuation`.
 
+## 💛 Sponsors
+
+SEM is built and maintained by one person, and these five chose to fund that:
+
+**[@praun](https://github.com/praun) · [@RienduPre](https://github.com/RienduPre) · [@Azlinon](https://github.com/Azlinon) · [@onkelfu](https://github.com/onkelfu) · [@coppe218](https://github.com/coppe218)**
+
+What is striking about that list is that not one of them is only a sponsor.
+Every single one is in the issue threads of this release, testing on their own
+hardware: praun's Deye Sun12k over ESPHome Modbus, RienduPre's Growatt and
+Sessy multi-battery work, Azlinon's heat-pump configuration, onkelfu's
+SolarEdge discharge clamp and thermal comfort, coppe218's 1↔3-phase switching.
+They paid for the work *and* did some of it.
+(Sponsors who chose to stay private aren't named here — the thanks is the same.)
+
+Thank you — and thank you equally to everyone who reported something broken and
+then patiently re-tested a fix on a real house. The ✅ column of the
+[supported hardware table](docs/SUPPORTED_HARDWARE.md) is entirely made of
+those people.
+
 ## Requirements
 
 Home Assistant **2026.2.0** or newer (Python 3.13+).
