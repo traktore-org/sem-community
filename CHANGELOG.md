@@ -64,10 +64,10 @@ actually stop the car?
   used to switch it off there and then, including a load *you* had running.
 - **The box is parked when the car leaves** (#846), so the next plug-in cannot
   auto-start behind SEM's back.
-- **A Wallbox whose stop cannot work now says why** (#852) — if the
-  `pause_resume` switch cannot be found, SEM names the entities it inspected
-  and the setting that fixes it, instead of falling back silently to a 0 A
-  write that some firmware ignores.
+- **A stop that cannot reach the hardware now says so** (#852) — on a Wallbox
+  the real stop is the `pause_resume` switch; if SEM cannot find one it names
+  the entities it inspected rather than failing in silence. A diagnosis aid,
+  so the next report of "Off didn't stop it" arrives with the answer in it.
 
 ## 🧭 Setup tells the truth
 
