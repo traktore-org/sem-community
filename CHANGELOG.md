@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔭 **Every installed forecast source is scored against your actual roof**
+  (#822): SEM now reads what *all* your solar-forecast integrations say, not
+  only the one it uses, and publishes them beside the accuracy each has
+  actually achieved on your own production history. The raw numbers alone
+  would mislead — on the dev rig three sources spanned 6x for the same day
+  because they described differently configured arrays — so the score, not
+  the spread, is what to read. Comparison is read-only: it never re-points
+  the source in use.
+
 - 🌙 **A solar sensor that sleeps at night is no longer reported as frozen**
   (#851): a cloud or inverter-side integration that powers down at dusk stops
   reporting altogether, and SEM's frozen-sensor check read that correctly as a
