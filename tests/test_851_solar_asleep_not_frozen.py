@@ -102,3 +102,33 @@ class TestSolarAsleepAtNight:
         _wire(r, "above_horizon", _state(0, age_s=7200))
         r._read_sensor("sensor.pv_power", "solar")          # dawn: still frozen
         assert "sensor.pv_power" in r._frozen_sensors
+
+
+class TestTheAsleepThresholdItself:
+    """Audit F5: with only 0 and 4000 W exercised, the 25 W threshold could
+    drift an order of magnitude (or flip its comparison) unnoticed — and a
+    genuinely stuck night-time sensor near the line would silently stop
+    being flagged. These pin the boundary on both sides."""
+
+    def test_standby_draw_at_the_threshold_is_asleep(self):
+        r, sun = _reader("below_horizon")
+        _wire(r, sun, _state(25, age_s=7200))
+        r._read_sensor("sensor.pv_power", "solar")
+        assert "sensor.pv_power" not in r._frozen_sensors, (
+            "an inverter idling at its standby draw is asleep, not frozen"
+        )
+
+    def test_just_above_the_threshold_still_warns(self):
+        r, sun = _reader("below_horizon")
+        _wire(r, sun, _state(26, age_s=7200))
+        r._read_sensor("sensor.pv_power", "solar")
+        assert "sensor.pv_power" in r._frozen_sensors, (
+            "26 W at midnight is a reading, not standby — a stuck value "
+            "near the line must still be flagged"
+        )
+
+    def test_the_constant_is_what_the_docs_say(self):
+        from custom_components.solar_energy_management.coordinator.sensor_reader import (
+            SensorReader,
+        )
+        assert SensorReader._SOLAR_ASLEEP_W == 25.0

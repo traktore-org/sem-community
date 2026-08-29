@@ -2525,6 +2525,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         if _push is not None:
             _push()
 
+    def observer_withheld_commands(self) -> dict:
+        """(#855, audit F7) THIS cycle's withheld hardware commands, keyed by
+        device — the "exact service calls it withheld" half of the seam's
+        promise. Collected from both discovery shapes, deduped by identity;
+        devices with nothing withheld are dropped. Read by the observer
+        switch's attributes beside would_decisions."""
+        devs = list((getattr(self, "_ev_devices", None) or {}).values())
+        single = getattr(self, "_ev_device", None)
+        if single is not None and not any(d is single for d in devs):
+            devs.append(single)
+        out: dict = {}
+        for dev in devs:
+            cmds = getattr(dev, "withheld_commands", None)
+            if cmds:
+                out[getattr(dev, "device_id", "?")] = list(cmds)
+        return out
+
     def _push_observer_mode_to_devices(self) -> None:
         """(#855) Hand the flag DOWN to the single hardware seam.
 
@@ -2539,7 +2556,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         cycles stops being an answer to "what would SEM do now".
         """
         obs = bool(getattr(self, "_observer_mode", False))
-        for dev in list(getattr(self, "_ev_devices", {}).values()):
+        # (coverage-audit F3) BOTH discovery shapes: the multi-charger dict
+        # AND the legacy ``_ev_device`` fallback that ``_retry_ev_device_setup``
+        # fills when a charger integration loads after SEM. The retry path
+        # never touches ``_ev_devices``, so iterating only the dict left a
+        # late-discovered charger holding observer_mode=False forever —
+        # masked today by actuate()'s older decision-level gate, which is
+        # exactly the gate #855 wants to retire. Dedupe by identity: on a
+        # normal install the fallback IS an entry of the dict.
+        devs = list((getattr(self, "_ev_devices", None) or {}).values())
+        single = getattr(self, "_ev_device", None)
+        if single is not None and not any(d is single for d in devs):
+            devs.append(single)
+        for dev in devs:
             try:
                 dev.observer_mode = obs
                 dev.withheld_commands = []

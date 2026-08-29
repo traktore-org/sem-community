@@ -390,7 +390,18 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
                 "observer_decisions", {}) or {}
         except Exception:  # noqa: BLE001 — attributes must never break the entity
             decisions = {}
-        return {"would_decisions": dict(decisions) if self._is_on else {}}
+        try:
+            withheld = (self.coordinator.observer_withheld_commands()
+                        if hasattr(self.coordinator,
+                                   "observer_withheld_commands") else {})
+        except Exception:  # noqa: BLE001 — attributes must never break the entity
+            withheld = {}
+        if not self._is_on:
+            return {"would_decisions": {}, "withheld_commands": {}}
+        return {"would_decisions": dict(decisions),
+                # (#855) the seam-level half: the exact service calls
+                # withheld this cycle, keyed by device.
+                "withheld_commands": withheld}
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on."""
