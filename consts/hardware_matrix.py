@@ -30,6 +30,18 @@ tests/test_split_grid_integration.py (A-F); ``ED`` = handled generically
 through the HA Energy Dashboard mapping with sign auto-detection.
 """
 
+
+def charger_watchdog_refresh_map() -> dict:
+    """token -> seconds, from every charger row that declares the quirk
+    (#855 stage 4). This is how ``devices/base.py`` learns which brands
+    need a faster write heartbeat — a new brand adds a ROW here, never a
+    line in the generic layer."""
+    return {
+        r["domain_token"]: float(r["watchdog_refresh_s"])
+        for r in CHARGERS
+        if r.get("domain_token") and r.get("watchdog_refresh_s")
+    }
+
 INVERTERS = [
     {"brand": "Huawei Solar", "integration": "huawei_solar", "pattern": "A",
      "discharge_control": True, "status": "tested-live",
@@ -119,6 +131,12 @@ INVERTERS = [
 
 CHARGERS = [
     {"brand": "KEBA P30/P40", "control": "service: keba.set_current",
+     # Operational quirk (#855 stage 4): the P30's device-side failsafe can
+     # trip under the generic 60 s write heartbeat — PROD showed it reverting
+     # to its 6 A failsafe current in well under 30 s (the 6<->9 A flap), so
+     # steady-state commands are re-asserted every coordinator cycle. The
+     # generic device layer READS this from the row; it hardcodes no brand.
+     "domain_token": "keba", "watchdog_refresh_s": 5.0,
      "status": "tested-live",
      "evidence": "SEM production wallbox, daily; #616/#763 (onkelfu) two "
                  "P30 C driven over plain Modbus, not the KEBA integration"},

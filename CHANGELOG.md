@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🧱 **The generic device layer now learns brands from the registry — stage 4
+  closes the #855 arc**: the last brand knowledge that was *code* in the
+  generic layer (the KEBA watchdog-refresh table and two log strings) moved
+  into the hardware matrix as data on the brand's own row. A future brand
+  with a failsafe quirk adds a row, never a line of generic code. Behaviour
+  is byte-identical — the measured 5 s KEBA heartbeat, the failsafe arming,
+  and the #740 dead-man are all pinned by the existing tests, which pass
+  untouched.
+
 - 🔭 **Every installed forecast source is scored against your actual roof**
   (#822): SEM now reads what *all* your solar-forecast integrations say, not
   only the one it uses, and publishes them beside the accuracy each has

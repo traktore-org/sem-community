@@ -45,9 +45,13 @@ WRITE_HEARTBEAT_INTERVAL_S = DEFAULT_WRITE_HEARTBEAT_INTERVAL_S
 # pausing the car to ~120 W), so 30 s still raced it. Per-cycle re-writes outrun
 # any failsafe with a timeout ≥ ~1 cycle; a box that reverts sub-cycle is a
 # device-side failsafe-config problem SEM cannot out-write.
-_BRAND_WATCHDOG_REFRESH_S = {
-    "keba": 5.0,
-}
+# (#855 stage 4) Built from the hardware matrix — the one brand registry.
+# A brand whose failsafe needs a faster heartbeat declares
+# ``domain_token`` + ``watchdog_refresh_s`` on its CHARGERS row; this file
+# never learns a new brand again.
+from ..consts.hardware_matrix import charger_watchdog_refresh_map
+
+_BRAND_WATCHDOG_REFRESH_S = charger_watchdog_refresh_map()
 
 # #546 — managed-neutralize failsafe timeout. Long enough that the per-cycle
 # current writes never let it trip during normal charging (vs the old 30 s that
@@ -2577,8 +2581,9 @@ class CurrentControlDevice(ControllableDevice):
         disable it. ``steady_failsafe`` (default on) controls persistence."""
         if not bool(getattr(self, "arm_failsafe_enabled", True)):
             _LOGGER.debug(
-                "%s: not arming the charger failsafe (keba_arm_failsafe off) — "
-                "a Repair guides disabling the box's own failsafe", self.name,
+                "%s: not arming the charger failsafe (arm-failsafe option "
+                "off) — a Repair guides disabling the box's own failsafe",
+                self.name,
             )
             return
         domain = (self.charger_service or "").split(".", 1)[0]
@@ -2591,8 +2596,9 @@ class CurrentControlDevice(ControllableDevice):
             await self.send(domain, "set_failsafe", {"failsafe_timeout": FAILSAFE_TIMEOUT_S,
                  "failsafe_fallback": fallback_a, "failsafe_persist": persist})
             _LOGGER.info(
-                "%s: KEBA failsafe set non-tripping (timeout=%ds, fallback=%dA, "
-                "persist=%d)", self.name, FAILSAFE_TIMEOUT_S, fallback_a, persist,
+                "%s: charger failsafe set non-tripping via %s.set_failsafe "
+                "(timeout=%ds, fallback=%dA, persist=%d)", self.name, domain,
+                FAILSAFE_TIMEOUT_S, fallback_a, persist,
             )
         except Exception as e:  # noqa: BLE001
             _LOGGER.warning("Failed to set charger failsafe: %s", e)
@@ -2980,7 +2986,8 @@ class CurrentControlDevice(ControllableDevice):
                     _LOGGER.warning(
                         "stop_session(%s): charger_service=%s configured but "
                         "%s.disable service is not registered — falling back to "
-                        "_set_current(0) which does NOT stop KEBA-style contactors. "
+                        "_set_current(0), which does NOT open a service-"
+                        "controlled contactor. "
                         "Check that the underlying charger integration is loaded.",
                         self.name, self.charger_service, domain,
                     )
