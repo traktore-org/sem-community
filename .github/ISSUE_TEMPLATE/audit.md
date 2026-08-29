@@ -73,7 +73,7 @@ Schema-version bump? **<yes/no>** (only if config-entry shape changes)
 
 ## Gate chain
 
-- [ ] Local syntax (`python3.12 -c "import ast; ..."`)
+- [ ] Local syntax (`python3 -c "import ast; ..."`)
 - [ ] Focused test (`pytest tests/test_<N>_<module>_telemetry.py -q`)
 - [ ] Full suite (`pytest custom_components/solar_energy_management/tests/ -q`)
 - [ ] Reviewer (`ruflo-core:reviewer` over diff)
