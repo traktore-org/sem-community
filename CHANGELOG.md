@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🧱 **The generic device layer stops learning new brands** (#855, stage 1):
+  a shrink-only ratchet on brand names in `devices/base.py` — 74 mentions
+  across ten brands today, and the count may now only fall. No behaviour
+  change; it holds the line while charger mechanics move into the adapters,
+  which is what will let observer mode show the commands SEM *would send*
+  instead of only the decision it made.
+
 - 🙈 **Opt-out undoes only what SEM did** (#847, refinement of the beta.20
   fix): new devices now start in **Off** — you opt a device in deliberately
   (the same rule discovered devices already follow). And setting Mode = Off
