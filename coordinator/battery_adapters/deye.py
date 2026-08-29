@@ -427,6 +427,16 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
         state = self._get_state(self._system_work_mode_entity)
         current = getattr(state, "state", None)
         selling = self._system_work_mode_options["selling_first"]
+        if current == selling:
+            # (#827 follow-up) A spend window holds for HOURS and
+            # ``actuate_battery`` re-issues FORCE_DISCHARGE every cycle, so
+            # writing unconditionally re-hammers a Modbus-backed register
+            # thousands of times for one decision. That is bug class #538,
+            # and this adapter already guards its siblings against it
+            # ("a repeat is pure cost"). Already selling IS the satisfied
+            # intent, so report success without writing — a False here would
+            # read to the caller as "this adapter cannot sell".
+            return True
         if current and current != selling:
             self._system_mode_prior = str(current)
         ok = await self._write_and_verify(
@@ -441,11 +451,27 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
             return False
         if self._observer_mode or self._actuation_enabled is not True:
             return False
+        state = self._get_state(self._system_work_mode_entity)
+        current = getattr(state, "state", None)
+        selling = self._system_work_mode_options["selling_first"]
+        # Not selling means there is nothing to restore. Only a CONFIDENT
+        # reading may skip the write: an unavailable/unknown/unrecognised
+        # state falls through and restores anyway, because the failure this
+        # guard must never cause is a Deye left in Selling First — that
+        # sells the whole pack.
+        if current != selling and current in self._system_work_mode_options.values():
+            self._system_mode_prior = None
+            return True
         target = self._system_mode_prior or \
             self._system_work_mode_options["zero_export_to_load"]
-        self._system_mode_prior = None
         ok = await self._write_and_verify(
             self._system_work_mode_entity, target, "select")
+        if ok:
+            # Cleared only once the restore has LANDED. Clearing first meant
+            # one transient failure permanently forgot the user's real mode
+            # (e.g. Zero Export To CT) and silently downgraded every later
+            # retry to Zero Export To Load.
+            self._system_mode_prior = None
         return bool(ok)
 
     # ─── Capability ────────────────────────────────────────────

@@ -1573,24 +1573,22 @@
     },
     "charger_actuation_failed": {
       "title": "EV charger not accepting commands: {name}",
-      "description": "SEM's last 3+ current commands to **{name}** were rejected: `{error}`. The charger is NOT under SEM control right now — it will keep doing whatever it was last told (including charging at full power in off mode). Most common causes: the charger's control entity was renamed by an upstream integration update, or `ev_charger_service` points at a service with a different parameter schema. Check the charger's control entity / service in the SEM config. This issue clears automatically on the next successful command.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Report this to SEM",
-            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+            "description": "SEM's last 3+ current commands to **{name}** were rejected: `{error}`. The charger is NOT under SEM control right now — it will keep doing whatever it was last told (including charging at full power in off mode). Most common causes: the charger's control entity was renamed by an upstream integration update, or `ev_charger_service` points at a service with a different parameter schema. Check the charger's control entity / service in the SEM config. This issue clears automatically on the next successful command.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
           }
         }
       }
     },
     "charger_stop_unenforceable": {
       "title": "EV charger cannot be stopped: {name}",
-      "description": "SEM has told **{name}** to stop, but no configured mechanism can actually open its contactor — so the car is still drawing {power} W. The only control SEM has for this charger is `{entity}`, whose minimum is above 0 A, so writing 0 A does nothing (SEM never writes a value the entity would reject). If you have a house battery this power is coming out of it, at any hour of the day or night. Fix: configure a start/stop switch entity (`ev_start_stop_entity`), a charge-mode entity, or a stop service for this charger in the SEM options. This issue clears as soon as the charger stops drawing.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Report this to SEM",
-            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+            "description": "SEM has told **{name}** to stop, but no configured mechanism can actually open its contactor — so the car is still drawing {power} W. The only control SEM has for this charger is `{entity}`, whose minimum is above 0 A, so writing 0 A does nothing (SEM never writes a value the entity would reject). If you have a house battery this power is coming out of it, at any hour of the day or night. Fix: configure a start/stop switch entity (`ev_start_stop_entity`), a charge-mode entity, or a stop service for this charger in the SEM options. This issue clears as soon as the charger stops drawing.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
           }
         }
       }
@@ -1625,12 +1623,11 @@
     },
     "soc_cap_unenforceable": {
       "title": "Can't enforce the {target}% charge limit: {name}",
-      "description": "**{name}** is set to a percentage charge target, but your vehicle isn't reporting its state of charge right now, so SEM can't stop *exactly* at **{target}%**.\n\nIt isn't charging blind, though: from the last real reading this session it counts the energy actually delivered and stops once that measured total reaches your target — the overshoot is only what the car took since that reading. If no real reading has arrived at all this session (or SEM restarted mid-charge) there is nothing to count from, and charging runs until the car itself tapers near full.\n\nFor a cap that lands on the number, wire a **real vehicle SOC sensor** for this charger (Configuration → EV → Vehicle SOC entity). The battery % on the dashboard is SEM's *estimated* SOC, which it deliberately ignores for the hard limit (it can drift). This repair clears automatically as soon as a real SOC reading is available again.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Report this to SEM",
-            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+            "description": "**{name}** is set to a percentage charge target, but your vehicle isn't reporting its state of charge right now, so SEM can't stop *exactly* at **{target}%**.\n\nIt isn't charging blind, though: from the last real reading this session it counts the energy actually delivered and stops once that measured total reaches your target — the overshoot is only what the car took since that reading. If no real reading has arrived at all this session (or SEM restarted mid-charge) there is nothing to count from, and charging runs until the car itself tapers near full.\n\nFor a cap that lands on the number, wire a **real vehicle SOC sensor** for this charger (Configuration → EV → Vehicle SOC entity). The battery % on the dashboard is SEM's *estimated* SOC, which it deliberately ignores for the hard limit (it can drift). This repair clears automatically as soon as a real SOC reading is available again.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
           }
         }
       }
@@ -1660,8 +1657,8 @@
       "description": "SEM cannot use {entity_id} for export control: {reason}. Check the select entity and the three option labels under Configuration → Battery intelligence."
     },
     "battery_operating_mode_unexpected": {
-      "title": "Battery is in '{mode}' — SEM plans as if it were '{expected}'",
-      "description": "The operating-mode selector {entity_id} reads '{mode}'. SEM's overnight model and the spendable budget assume '{expected}'; in other modes the inverter follows its own schedule underneath SEM and the plans may not hold. If this mode is deliberate, dismiss this — SEM will not fight your choice. Otherwise set the inverter back to '{expected}'."
+      "title": "Battery is in “{mode}” — SEM plans as if it were “{expected}”",
+      "description": "The operating-mode selector {entity_id} reads “{mode}”. SEM's overnight model and the spendable budget assume “{expected}”; in other modes the inverter follows its own schedule underneath SEM and the plans may not hold. If this mode is deliberate, dismiss this — SEM will not fight your choice. Otherwise set the inverter back to “{expected}”."
     }
   },
   "selector": {

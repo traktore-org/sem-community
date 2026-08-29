@@ -172,7 +172,12 @@ async def run_backfill(hass, tracker, config, *, days: int = 365) -> dict:
     the recorder's purge and SEM's own status retention, which act on state
     rows, so this reaches history the ``history`` API has long dropped.
     """
-    from .ledger_backfill import read_statistics
+    from .ledger_backfill import clamp_lookback_days, read_statistics
+
+    # The bound services.yaml declares (14-730), enforced where it is USED: a
+    # selector is only a UI hint, and a script or the Developer Tools YAML
+    # editor reaches this with any number at all.
+    days = clamp_lookback_days(days)
 
     discharge_id = (config.get("battery_discharge_energy_sensor")
                     or config.get("battery_energy_discharged_sensor"))

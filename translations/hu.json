@@ -1573,24 +1573,22 @@
     },
     "charger_actuation_failed": {
       "title": "Az EV-töltő nem fogadja a parancsokat: {name}",
-      "description": "A SEM legutóbbi 3 vagy több áramerősség-parancsát a következő elutasította: **{name}** — `{error}`. A töltő jelenleg NEM áll a SEM vezérlése alatt — továbbra is azt teszi, amit utoljára utasításba kapott (akár teljes teljesítménnyel tölt kikapcsolt módban is). A leggyakoribb okok: a töltő vezérlőentitását átnevezte egy integrációfrissítés, vagy az `ev_charger_service` olyan szolgáltatásra mutat, amelynek eltérő a paraméterséma. Ellenőrizze a töltő vezérlőentitását / szolgáltatását a SEM konfigurációjában. Ez a bejegyzés automatikusan eltűnik a következő sikeres parancs után.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Report this to SEM",
-            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+            "description": "A SEM legutóbbi 3 vagy több áramerősség-parancsát a következő elutasította: **{name}** — `{error}`. A töltő jelenleg NEM áll a SEM vezérlése alatt — továbbra is azt teszi, amit utoljára utasításba kapott (akár teljes teljesítménnyel tölt kikapcsolt módban is). A leggyakoribb okok: a töltő vezérlőentitását átnevezte egy integrációfrissítés, vagy az `ev_charger_service` olyan szolgáltatásra mutat, amelynek eltérő a paraméterséma. Ellenőrizze a töltő vezérlőentitását / szolgáltatását a SEM konfigurációjában. Ez a bejegyzés automatikusan eltűnik a következő sikeres parancs után.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
           }
         }
       }
     },
     "charger_stop_unenforceable": {
       "title": "A töltő nem állítható le: {name}",
-      "description": "A SEM leállítást parancsolt a(z) **{name}** töltőnek, de egyetlen beállított mechanizmus sem tudja ténylegesen bontani a kontaktort — az autó továbbra is {power} W-ot vesz fel. A SEM egyetlen vezérlője ehhez a töltőhöz a(z) `{entity}`, amelynek minimuma 0 A fölött van, így a 0 A kiírása nem csinál semmit (a SEM soha nem ír ki olyan értéket, amelyet az entitás elutasítana). Ha van házi akkumulátorod, ez a teljesítmény onnan jön — a nappal vagy az éjszaka bármely szakában. Megoldás: állíts be ehhez a töltőhöz a SEM beállításaiban egy start/stop entitást (`ev_start_stop_entity`), egy töltési mód entitást vagy egy leállító szolgáltatást. A figyelmeztetés eltűnik, amint a töltő már nem vesz fel teljesítményt.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Report this to SEM",
-            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+            "description": "A SEM leállítást parancsolt a(z) **{name}** töltőnek, de egyetlen beállított mechanizmus sem tudja ténylegesen bontani a kontaktort — az autó továbbra is {power} W-ot vesz fel. A SEM egyetlen vezérlője ehhez a töltőhöz a(z) `{entity}`, amelynek minimuma 0 A fölött van, így a 0 A kiírása nem csinál semmit (a SEM soha nem ír ki olyan értéket, amelyet az entitás elutasítana). Ha van házi akkumulátorod, ez a teljesítmény onnan jön — a nappal vagy az éjszaka bármely szakában. Megoldás: állíts be ehhez a töltőhöz a SEM beállításaiban egy start/stop entitást (`ev_start_stop_entity`), egy töltési mód entitást vagy egy leállító szolgáltatást. A figyelmeztetés eltűnik, amint a töltő már nem vesz fel teljesítményt.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
           }
         }
       }
@@ -1625,12 +1623,11 @@
     },
     "soc_cap_unenforceable": {
       "title": "A(z) {target}%-os töltési limit nem érvényesíthető: {name}",
-      "description": "A(z) **{name}** százalékos töltési célra van állítva, de a jármű jelenleg nem jelenti a töltöttségi szintjét, ezért a SEM nem tud *pontosan* **{target}%**-nál megállni.\n\nNem vakon tölt azonban: a munkamenet utolsó valós leolvasásától kezdve számolja a ténylegesen leadott energiát, és leáll, amint ez a mért összeg eléri a célt — a túllépés csak annyi, amennyit az autó az óta a leolvasás óta felvett. Ha ebben a munkamenetben egyáltalán nem érkezett valós leolvasás (vagy a SEM töltés közben újraindult), nincs mihez viszonyítani, és a töltés addig tart, amíg maga az autó nem csökkenti a teljesítményt, majdnem tele állapotban.\n\nA pontos korláthoz állítson be **valós jármű-SOC-érzékelőt** ehhez a töltőhöz (Konfiguráció → EV → Jármű SOC entitás). Az irányítópulton látható akkumulátorszázalék a SEM *becsült* SOC-értéke, amelyet a kemény korlátnál szándékosan figyelmen kívül hagy (elcsúszhat). Ez a javítás automatikusan eltűnik, amint ismét elérhető valós SOC-leolvasás.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Report this to SEM",
-            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+            "description": "A(z) **{name}** százalékos töltési célra van állítva, de a jármű jelenleg nem jelenti a töltöttségi szintjét, ezért a SEM nem tud *pontosan* **{target}%**-nál megállni.\n\nNem vakon tölt azonban: a munkamenet utolsó valós leolvasásától kezdve számolja a ténylegesen leadott energiát, és leáll, amint ez a mért összeg eléri a célt — a túllépés csak annyi, amennyit az autó az óta a leolvasás óta felvett. Ha ebben a munkamenetben egyáltalán nem érkezett valós leolvasás (vagy a SEM töltés közben újraindult), nincs mihez viszonyítani, és a töltés addig tart, amíg maga az autó nem csökkenti a teljesítményt, majdnem tele állapotban.\n\nA pontos korláthoz állítson be **valós jármű-SOC-érzékelőt** ehhez a töltőhöz (Konfiguráció → EV → Jármű SOC entitás). Az irányítópulton látható akkumulátorszázalék a SEM *becsült* SOC-értéke, amelyet a kemény korlátnál szándékosan figyelmen kívül hagy (elcsúszhat). Ez a javítás automatikusan eltűnik, amint ismét elérhető valós SOC-leolvasás.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
           }
         }
       }
@@ -1660,8 +1657,8 @@
       "description": "SEM cannot use {entity_id} for export control: {reason}. Check the select entity and the three option labels under Configuration → Battery intelligence."
     },
     "battery_operating_mode_unexpected": {
-      "title": "Battery is in '{mode}' — SEM plans as if it were '{expected}'",
-      "description": "The operating-mode selector {entity_id} reads '{mode}'. SEM's overnight model and the spendable budget assume '{expected}'; in other modes the inverter follows its own schedule underneath SEM and the plans may not hold. If this mode is deliberate, dismiss this — SEM will not fight your choice. Otherwise set the inverter back to '{expected}'."
+      "title": "Battery is in “{mode}” — SEM plans as if it were “{expected}”",
+      "description": "The operating-mode selector {entity_id} reads “{mode}”. SEM's overnight model and the spendable budget assume “{expected}”; in other modes the inverter follows its own schedule underneath SEM and the plans may not hold. If this mode is deliberate, dismiss this — SEM will not fight your choice. Otherwise set the inverter back to “{expected}”."
     }
   },
   "selector": {

@@ -175,8 +175,14 @@ def raise_charger_actuation_failed(
             is_persistent=True,
             severity=ir.IssueSeverity.ERROR,
             translation_key="charger_actuation_failed",
-            data={"copy_context": copy_context(
-                "charger_actuation_failed", reason=str(error or ""), brand=str(name or ""), **_versions(hass))},
+            data={
+                "copy_context": copy_context(
+                    "charger_actuation_failed", reason=str(error or ""),
+                    brand=str(name or ""), **_versions(hass)),
+                # The flow step renders the diagnosis now, so it needs the
+                # same placeholders the issue carries (#831 follow-up).
+                "placeholders": {"name": name, "error": error},
+            },
             learn_more_url=next_step_url(
                 "report", "charger_actuation_failed",
                 reason=str(error or ""), brand=str(name or ""),
@@ -501,8 +507,17 @@ def raise_charger_stop_unenforceable(
             is_persistent=True,
             severity=ir.IssueSeverity.ERROR,
             translation_key="charger_stop_unenforceable",
-            data={"copy_context": copy_context(
-                "charger_stop_unenforceable", reason=f"stop unenforceable at {power_w:.0f} W", brand=str(name or ""), **_versions(hass))},
+            data={
+                "copy_context": copy_context(
+                    "charger_stop_unenforceable",
+                    reason=f"stop unenforceable at {power_w:.0f} W",
+                    brand=str(name or ""), **_versions(hass)),
+                "placeholders": {
+                    "name": name,
+                    "power": f"{power_w:.0f}",
+                    "entity": entity,
+                },
+            },
             learn_more_url=next_step_url(
                 "report", "charger_stop_unenforceable",
                 reason=f"stop unenforceable at {power_w:.0f} W", brand=str(name or ""),
@@ -563,8 +578,16 @@ def raise_soc_cap_unenforceable(
             is_persistent=True,
             severity=ir.IssueSeverity.WARNING,
             translation_key="soc_cap_unenforceable",
-            data={"copy_context": copy_context(
-                "soc_cap_unenforceable", reason=f"SOC cap {target_soc:.0f}% unenforceable", brand=str(name or ""), **_versions(hass))},
+            data={
+                "copy_context": copy_context(
+                    "soc_cap_unenforceable",
+                    reason=f"SOC cap {target_soc:.0f}% unenforceable",
+                    brand=str(name or ""), **_versions(hass)),
+                "placeholders": {
+                    "name": name,
+                    "target": f"{target_soc:.0f}",
+                },
+            },
             learn_more_url=next_step_url(
                 "report", "soc_cap_unenforceable",
                 reason=f"SOC cap {target_soc:.0f}% unenforceable", brand=str(name or ""),

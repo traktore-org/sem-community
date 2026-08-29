@@ -1573,24 +1573,22 @@
     },
     "charger_actuation_failed": {
       "title": "Sähköauton laturi ei hyväksy komentoja: {name}",
-      "description": "SEM:n 3 viimeisintä (tai useampi) virtakomentoa laturille **{name}** hylättiin: `{error}`. Laturi EI ole tällä hetkellä SEM:n ohjauksessa — se jatkaa viimeksi saamansa käskyn mukaan (myös täydellä teholla lataamista off-tilassa). Yleisimmät syyt: laturin ohjausentiteetti nimettiin uudelleen taustaintegraation päivityksessä, tai `ev_charger_service` osoittaa palveluun, jolla on eri parametriskeema. Tarkista laturin ohjausentiteetti tai palvelu SEM:n asetuksista. Tämä ongelma poistuu automaattisesti seuraavan onnistuneen komennon jälkeen.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Report this to SEM",
-            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+            "description": "SEM:n 3 viimeisintä (tai useampi) virtakomentoa laturille **{name}** hylättiin: `{error}`. Laturi EI ole tällä hetkellä SEM:n ohjauksessa — se jatkaa viimeksi saamansa käskyn mukaan (myös täydellä teholla lataamista off-tilassa). Yleisimmät syyt: laturin ohjausentiteetti nimettiin uudelleen taustaintegraation päivityksessä, tai `ev_charger_service` osoittaa palveluun, jolla on eri parametriskeema. Tarkista laturin ohjausentiteetti tai palvelu SEM:n asetuksista. Tämä ongelma poistuu automaattisesti seuraavan onnistuneen komennon jälkeen.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
           }
         }
       }
     },
     "charger_stop_unenforceable": {
       "title": "Latauslaitetta ei voi pysäyttää: {name}",
-      "description": "SEM on käskenyt latauslaitteen **{name}** pysähtyä, mutta mikään määritetty mekanismi ei pysty todella avaamaan kontaktoria — auto ottaa yhä {power} W. Ainoa ohjaus, joka SEM:llä on tälle latauslaitteelle, on `{entity}`, ja sen minimi on yli 0 A, joten 0 A:n kirjoittaminen ei tee mitään (SEM ei koskaan kirjoita arvoa, jonka entiteetti hylkäisi). Jos sinulla on kotiakku, tämä teho tulee siitä — mihin tahansa vuorokaudenaikaan. Ratkaisu: määritä tälle latauslaitteelle SEM:n asetuksissa käynnistys/pysäytys-entiteetti (`ev_start_stop_entity`), lataustila-entiteetti tai pysäytyspalvelu. Ilmoitus poistuu heti, kun latauslaite lakkaa ottamasta tehoa.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Report this to SEM",
-            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+            "description": "SEM on käskenyt latauslaitteen **{name}** pysähtyä, mutta mikään määritetty mekanismi ei pysty todella avaamaan kontaktoria — auto ottaa yhä {power} W. Ainoa ohjaus, joka SEM:llä on tälle latauslaitteelle, on `{entity}`, ja sen minimi on yli 0 A, joten 0 A:n kirjoittaminen ei tee mitään (SEM ei koskaan kirjoita arvoa, jonka entiteetti hylkäisi). Jos sinulla on kotiakku, tämä teho tulee siitä — mihin tahansa vuorokaudenaikaan. Ratkaisu: määritä tälle latauslaitteelle SEM:n asetuksissa käynnistys/pysäytys-entiteetti (`ev_start_stop_entity`), lataustila-entiteetti tai pysäytyspalvelu. Ilmoitus poistuu heti, kun latauslaite lakkaa ottamasta tehoa.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
           }
         }
       }
@@ -1625,12 +1623,11 @@
     },
     "soc_cap_unenforceable": {
       "title": "Latausrajaa {target} % ei voi valvoa: {name}",
-      "description": "**{name}** on asetettu prosentuaaliseen lataustavoitteeseen, mutta ajoneuvo ei juuri nyt raportoi varaustasoaan, joten SEM ei voi pysähtyä *tarkalleen* kohtaan **{target}%**.\n\nSe ei silti lataa sokkona: viimeisimmästä tämän istunnon todellisesta lukemasta lähtien se laskee tosiasiassa toimitetun energian ja pysäyttää latauksen, kun mitattu summa saavuttaa tavoitteesi — ylitys on vain se, minkä auto on ottanut kyseisen lukeman jälkeen. Jos tässä istunnossa ei ole saapunut yhtään todellista lukemaa (tai SEM käynnistyi uudelleen kesken latauksen), vertailukohtaa ei ole ja lataus jatkuu, kunnes auto itse laskee tehoa lähellä täyttä.\n\nJotta raja osuisi kohdalleen, määritä tälle latausasemalle **todellinen ajoneuvon SOC-anturi** (Määritykset → EV → Ajoneuvon SOC-entiteetti). Koontinäytön akkuprosentti on SEM:n *arvioitu* varaustaso, joka jätetään tarkoituksella huomiotta kovassa rajassa (se voi ajautua). Tämä korjaus poistuu automaattisesti heti, kun todellinen SOC-lukema on taas saatavilla.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Report this to SEM",
-            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+            "description": "**{name}** on asetettu prosentuaaliseen lataustavoitteeseen, mutta ajoneuvo ei juuri nyt raportoi varaustasoaan, joten SEM ei voi pysähtyä *tarkalleen* kohtaan **{target}%**.\n\nSe ei silti lataa sokkona: viimeisimmästä tämän istunnon todellisesta lukemasta lähtien se laskee tosiasiassa toimitetun energian ja pysäyttää latauksen, kun mitattu summa saavuttaa tavoitteesi — ylitys on vain se, minkä auto on ottanut kyseisen lukeman jälkeen. Jos tässä istunnossa ei ole saapunut yhtään todellista lukemaa (tai SEM käynnistyi uudelleen kesken latauksen), vertailukohtaa ei ole ja lataus jatkuu, kunnes auto itse laskee tehoa lähellä täyttä.\n\nJotta raja osuisi kohdalleen, määritä tälle latausasemalle **todellinen ajoneuvon SOC-anturi** (Määritykset → EV → Ajoneuvon SOC-entiteetti). Koontinäytön akkuprosentti on SEM:n *arvioitu* varaustaso, joka jätetään tarkoituksella huomiotta kovassa rajassa (se voi ajautua). Tämä korjaus poistuu automaattisesti heti, kun todellinen SOC-lukema on taas saatavilla.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
           }
         }
       }
@@ -1660,8 +1657,8 @@
       "description": "SEM cannot use {entity_id} for export control: {reason}. Check the select entity and the three option labels under Configuration → Battery intelligence."
     },
     "battery_operating_mode_unexpected": {
-      "title": "Battery is in '{mode}' — SEM plans as if it were '{expected}'",
-      "description": "The operating-mode selector {entity_id} reads '{mode}'. SEM's overnight model and the spendable budget assume '{expected}'; in other modes the inverter follows its own schedule underneath SEM and the plans may not hold. If this mode is deliberate, dismiss this — SEM will not fight your choice. Otherwise set the inverter back to '{expected}'."
+      "title": "Battery is in “{mode}” — SEM plans as if it were “{expected}”",
+      "description": "The operating-mode selector {entity_id} reads “{mode}”. SEM's overnight model and the spendable budget assume “{expected}”; in other modes the inverter follows its own schedule underneath SEM and the plans may not hold. If this mode is deliberate, dismiss this — SEM will not fight your choice. Otherwise set the inverter back to “{expected}”."
     }
   },
   "selector": {

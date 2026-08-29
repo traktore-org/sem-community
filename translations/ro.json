@@ -1573,24 +1573,22 @@
     },
     "charger_actuation_failed": {
       "title": "Încărcătorul EV nu acceptă comenzi: {name}",
-      "description": "Ultimele 3+ comenzi de curent trimise de SEM către **{name}** au fost respinse: `{error}`. Încărcătorul NU este sub controlul SEM în acest moment — va continua să facă ce i s-a comandat ultima dată (inclusiv să încarce la putere maximă în modul oprit). Cele mai frecvente cauze: entitatea de control a încărcătorului a fost redenumită de o actualizare a integrării din amonte sau `ev_charger_service` indică un serviciu cu o altă schemă de parametri. Verificați entitatea/serviciul de control al încărcătorului în configurația SEM. Această problemă se șterge automat la următoarea comandă reușită.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Report this to SEM",
-            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+            "description": "Ultimele 3+ comenzi de curent trimise de SEM către **{name}** au fost respinse: `{error}`. Încărcătorul NU este sub controlul SEM în acest moment — va continua să facă ce i s-a comandat ultima dată (inclusiv să încarce la putere maximă în modul oprit). Cele mai frecvente cauze: entitatea de control a încărcătorului a fost redenumită de o actualizare a integrării din amonte sau `ev_charger_service` indică un serviciu cu o altă schemă de parametri. Verificați entitatea/serviciul de control al încărcătorului în configurația SEM. Această problemă se șterge automat la următoarea comandă reușită.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
           }
         }
       }
     },
     "charger_stop_unenforceable": {
       "title": "Încărcătorul nu poate fi oprit: {name}",
-      "description": "SEM i-a comandat lui **{name}** să se oprească, dar niciun mecanism configurat nu poate deschide efectiv contactorul — mașina consumă în continuare {power} W. Singurul control pe care SEM îl are pentru acest încărcător este `{entity}`, iar minimul acestuia este peste 0 A, deci scrierea valorii 0 A nu face nimic (SEM nu scrie niciodată o valoare pe care entitatea ar respinge-o). Dacă ai o baterie de casă, această putere iese din ea — la orice oră din zi sau din noapte. Soluție: configurează pentru acest încărcător, în opțiunile SEM, o entitate pornire/oprire (`ev_start_stop_entity`), o entitate de mod de încărcare sau un serviciu de oprire. Avertismentul dispare de îndată ce încărcătorul nu mai consumă.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Report this to SEM",
-            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+            "description": "SEM i-a comandat lui **{name}** să se oprească, dar niciun mecanism configurat nu poate deschide efectiv contactorul — mașina consumă în continuare {power} W. Singurul control pe care SEM îl are pentru acest încărcător este `{entity}`, iar minimul acestuia este peste 0 A, deci scrierea valorii 0 A nu face nimic (SEM nu scrie niciodată o valoare pe care entitatea ar respinge-o). Dacă ai o baterie de casă, această putere iese din ea — la orice oră din zi sau din noapte. Soluție: configurează pentru acest încărcător, în opțiunile SEM, o entitate pornire/oprire (`ev_start_stop_entity`), o entitate de mod de încărcare sau un serviciu de oprire. Avertismentul dispare de îndată ce încărcătorul nu mai consumă.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
           }
         }
       }
@@ -1625,12 +1623,11 @@
     },
     "soc_cap_unenforceable": {
       "title": "Limita de încărcare de {target}% nu poate fi aplicată: {name}",
-      "description": "**{name}** are setată o țintă de încărcare în procente, dar vehiculul nu îşi raportează starea de încărcare în acest moment, aşa că SEM nu poate opri *exact* la **{target}%**.\n\nTotuşi nu încarcă orbeşte: de la ultima citire reală din această sesiune contorizează energia livrată efectiv şi opreşte în momentul în care acest total măsurat atinge ţinta — depăşirea este doar cât a luat maşina de la acea citire încoace. Dacă în această sesiune nu a sosit nicio citire reală (sau SEM a repornit în timpul încărcării), nu există reper şi încărcarea continuă până când maşina însăşi reduce puterea, aproape plină.\n\nPentru o limită care nimereşte exact, configuraţi un **senzor real de SOC al vehiculului** pentru acest încărcător (Configurare → EV → Entitate SOC vehicul). Procentul bateriei din tabloul de bord este SOC-ul *estimat* de SEM, ignorat în mod deliberat pentru limita fermă (poate devia). Această reparaţie dispare automat de îndată ce o citire reală de SOC este din nou disponibilă.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Report this to SEM",
-            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+            "description": "**{name}** are setată o țintă de încărcare în procente, dar vehiculul nu îşi raportează starea de încărcare în acest moment, aşa că SEM nu poate opri *exact* la **{target}%**.\n\nTotuşi nu încarcă orbeşte: de la ultima citire reală din această sesiune contorizează energia livrată efectiv şi opreşte în momentul în care acest total măsurat atinge ţinta — depăşirea este doar cât a luat maşina de la acea citire încoace. Dacă în această sesiune nu a sosit nicio citire reală (sau SEM a repornit în timpul încărcării), nu există reper şi încărcarea continuă până când maşina însăşi reduce puterea, aproape plină.\n\nPentru o limită care nimereşte exact, configuraţi un **senzor real de SOC al vehiculului** pentru acest încărcător (Configurare → EV → Entitate SOC vehicul). Procentul bateriei din tabloul de bord este SOC-ul *estimat* de SEM, ignorat în mod deliberat pentru limita fermă (poate devia). Această reparaţie dispare automat de îndată ce o citire reală de SOC este din nou disponibilă.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
           }
         }
       }
@@ -1660,8 +1657,8 @@
       "description": "SEM cannot use {entity_id} for export control: {reason}. Check the select entity and the three option labels under Configuration → Battery intelligence."
     },
     "battery_operating_mode_unexpected": {
-      "title": "Battery is in '{mode}' — SEM plans as if it were '{expected}'",
-      "description": "The operating-mode selector {entity_id} reads '{mode}'. SEM's overnight model and the spendable budget assume '{expected}'; in other modes the inverter follows its own schedule underneath SEM and the plans may not hold. If this mode is deliberate, dismiss this — SEM will not fight your choice. Otherwise set the inverter back to '{expected}'."
+      "title": "Battery is in “{mode}” — SEM plans as if it were “{expected}”",
+      "description": "The operating-mode selector {entity_id} reads “{mode}”. SEM's overnight model and the spendable budget assume “{expected}”; in other modes the inverter follows its own schedule underneath SEM and the plans may not hold. If this mode is deliberate, dismiss this — SEM will not fight your choice. Otherwise set the inverter back to “{expected}”."
     }
   },
   "selector": {

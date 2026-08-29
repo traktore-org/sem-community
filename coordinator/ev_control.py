@@ -882,6 +882,12 @@ class EVControlMixin:
                         "#804 %s: switching to %sp via %s.%s %s",
                         cid, r.issue_switch, domain, service, data)
                     try:
+                        # OBSERVER-GATED: the phase switch is commanded from
+                        # the control loop, which sits above the device layer
+                        # and so cannot reach `ControllableDevice.send` (#855).
+                        # The `if self._observer_mode` branch above IS this
+                        # call's seam — keep them together, and never add an
+                        # un-gated hardware call beside it.
                         await self.hass.services.async_call(
                             domain, service, data, blocking=False)
                     except Exception:  # noqa: BLE001 — surfaced, never fatal

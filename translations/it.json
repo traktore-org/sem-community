@@ -1573,24 +1573,22 @@
     },
     "charger_actuation_failed": {
       "title": "Il caricatore VE non accetta comandi: {name}",
-      "description": "Gli ultimi 3+ comandi di corrente inviati da SEM a **{name}** sono stati rifiutati: `{error}`. Il caricatore NON è sotto il controllo di SEM in questo momento — continuerà a fare quanto gli è stato ordinato l'ultima volta (compresa la carica a piena potenza in modalità spento). Cause più comuni: l'entità di controllo del caricatore è stata rinominata da un aggiornamento dell'integrazione a monte, oppure `ev_charger_service` punta a un servizio con uno schema di parametri diverso. Verifica l'entità di controllo / il servizio del caricatore nella configurazione SEM. Questo problema si risolve automaticamente al primo comando riuscito.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Report this to SEM",
-            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+            "description": "Gli ultimi 3+ comandi di corrente inviati da SEM a **{name}** sono stati rifiutati: `{error}`. Il caricatore NON è sotto il controllo di SEM in questo momento — continuerà a fare quanto gli è stato ordinato l'ultima volta (compresa la carica a piena potenza in modalità spento). Cause più comuni: l'entità di controllo del caricatore è stata rinominata da un aggiornamento dell'integrazione a monte, oppure `ev_charger_service` punta a un servizio con uno schema di parametri diverso. Verifica l'entità di controllo / il servizio del caricatore nella configurazione SEM. Questo problema si risolve automaticamente al primo comando riuscito.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
           }
         }
       }
     },
     "charger_stop_unenforceable": {
       "title": "Impossibile fermare la stazione di ricarica: {name}",
-      "description": "SEM ha ordinato a **{name}** di fermarsi, ma nessun meccanismo configurato può realmente aprire il contattore: l'auto sta ancora assorbendo {power} W. L'unico controllo che SEM ha per questa stazione è `{entity}`, e il suo minimo è superiore a 0 A, quindi scrivere 0 A non ha alcun effetto (SEM non scrive mai un valore che l'entità rifiuterebbe). Se hai una batteria domestica, questa potenza esce da lì, a qualsiasi ora del giorno o della notte. Soluzione: configura per questa stazione, nelle opzioni SEM, un'entità di avvio/arresto (`ev_start_stop_entity`), un'entità di modalità di ricarica o un servizio di arresto. Questo avviso scompare non appena la stazione smette di assorbire.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Report this to SEM",
-            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+            "description": "SEM ha ordinato a **{name}** di fermarsi, ma nessun meccanismo configurato può realmente aprire il contattore: l'auto sta ancora assorbendo {power} W. L'unico controllo che SEM ha per questa stazione è `{entity}`, e il suo minimo è superiore a 0 A, quindi scrivere 0 A non ha alcun effetto (SEM non scrive mai un valore che l'entità rifiuterebbe). Se hai una batteria domestica, questa potenza esce da lì, a qualsiasi ora del giorno o della notte. Soluzione: configura per questa stazione, nelle opzioni SEM, un'entità di avvio/arresto (`ev_start_stop_entity`), un'entità di modalità di ricarica o un servizio di arresto. Questo avviso scompare non appena la stazione smette di assorbire.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
           }
         }
       }
@@ -1625,12 +1623,11 @@
     },
     "soc_cap_unenforceable": {
       "title": "Impossibile applicare il limite di carica del {target}%: {name}",
-      "description": "**{name}** è impostato su un obiettivo di carica in percentuale, ma il veicolo al momento non comunica il proprio stato di carica: SEM non può quindi fermarsi *esattamente* a **{target}%**.\n\nNon sta però caricando alla cieca: dall'ultima lettura reale di questa sessione conteggia l'energia effettivamente erogata e si ferma quando quel totale misurato raggiunge l'obiettivo — lo sforamento è solo ciò che l'auto ha assorbito da quella lettura in poi. Se in questa sessione non è arrivata alcuna lettura reale (o SEM è stato riavviato durante la carica) manca il riferimento e la carica prosegue finché è l'auto stessa a ridurre la potenza, quasi piena.\n\nPer un limite che cada sul numero esatto, collega un **sensore reale di SOC del veicolo** a questa stazione (Configurazione → EV → Entità SOC veicolo). La percentuale di batteria sulla dashboard è il SOC *stimato* di SEM, che viene deliberatamente ignorato per il limite rigido (può andare alla deriva). Questa riparazione si risolve automaticamente non appena torna disponibile una lettura reale del SOC.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Report this to SEM",
-            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+            "description": "**{name}** è impostato su un obiettivo di carica in percentuale, ma il veicolo al momento non comunica il proprio stato di carica: SEM non può quindi fermarsi *esattamente* a **{target}%**.\n\nNon sta però caricando alla cieca: dall'ultima lettura reale di questa sessione conteggia l'energia effettivamente erogata e si ferma quando quel totale misurato raggiunge l'obiettivo — lo sforamento è solo ciò che l'auto ha assorbito da quella lettura in poi. Se in questa sessione non è arrivata alcuna lettura reale (o SEM è stato riavviato durante la carica) manca il riferimento e la carica prosegue finché è l'auto stessa a ridurre la potenza, quasi piena.\n\nPer un limite che cada sul numero esatto, collega un **sensore reale di SOC del veicolo** a questa stazione (Configurazione → EV → Entità SOC veicolo). La percentuale di batteria sulla dashboard è il SOC *stimato* di SEM, che viene deliberatamente ignorato per il limite rigido (può andare alla deriva). Questa riparazione si risolve automaticamente non appena torna disponibile una lettura reale del SOC.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
           }
         }
       }
@@ -1660,8 +1657,8 @@
       "description": "SEM cannot use {entity_id} for export control: {reason}. Check the select entity and the three option labels under Configuration → Battery intelligence."
     },
     "battery_operating_mode_unexpected": {
-      "title": "Battery is in '{mode}' — SEM plans as if it were '{expected}'",
-      "description": "The operating-mode selector {entity_id} reads '{mode}'. SEM's overnight model and the spendable budget assume '{expected}'; in other modes the inverter follows its own schedule underneath SEM and the plans may not hold. If this mode is deliberate, dismiss this — SEM will not fight your choice. Otherwise set the inverter back to '{expected}'."
+      "title": "Battery is in “{mode}” — SEM plans as if it were “{expected}”",
+      "description": "The operating-mode selector {entity_id} reads “{mode}”. SEM's overnight model and the spendable budget assume “{expected}”; in other modes the inverter follows its own schedule underneath SEM and the plans may not hold. If this mode is deliberate, dismiss this — SEM will not fight your choice. Otherwise set the inverter back to “{expected}”."
     }
   },
   "selector": {

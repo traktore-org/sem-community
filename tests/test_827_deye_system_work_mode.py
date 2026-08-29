@@ -98,7 +98,18 @@ class TestTheDischargeSurface:
     def test_stop_restores_the_prior_mode(self):
         hass = _hass_with_select(OPTIONS, current="Zero Export To CT")
         a = _adapter(hass=hass)
-        a._write_and_verify = AsyncMock(return_value=True)
+
+        # ``_write_and_verify`` reads the value back, so a successful write
+        # means the entity really is at the new option. Let the mock follow
+        # the write: without this the test asserts on a state the hardware
+        # can never be in (verified as Selling First while still reporting
+        # Zero Export To CT), which the idempotency guards now read as
+        # "not selling — nothing to restore".
+        async def _write(entity, value, domain):
+            hass.states.get.return_value.state = value
+            return True
+        a._write_and_verify = AsyncMock(side_effect=_write)
+
         asyncio.run(a.command_force_discharge(3000.0, floor_soc=20.0))
         asyncio.run(a.command_stop_force_discharge())
         last = a._write_and_verify.await_args_list[-1]

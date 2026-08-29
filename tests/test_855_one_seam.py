@@ -36,7 +36,17 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 CHARGER_PATH = [
     ROOT / "devices" / "base.py",
     *sorted((ROOT / "coordinator" / "charger_adapters").glob("*.py")),
+    # The per-charger control loop commands hardware too (#804's phase
+    # switch). It sits above the device layer and cannot reach the seam,
+    # so its one call carries its own observer gate — and is pinned here
+    # rather than left as an un-guarded exception to the invariant.
+    ROOT / "coordinator" / "ev_control.py",
 ]
+
+# The opt-out, spelled like the codebase's other one (`# FLEET-READ:`): a
+# direct call is allowed only where the source SAYS it is observer-gated.
+# Delete the gate and the annotation goes with it, and CI fails.
+OPT_OUT = "# OBSERVER-GATED:"
 
 
 def _direct_hardware_calls(path: pathlib.Path):
@@ -64,9 +74,20 @@ def test_only_the_seam_talks_to_hardware():
     observer mode — the exact shape that hid #854."""
     offenders = []
     for path in CHARGER_PATH:
+        lines = path.read_text().splitlines()
         for fn, line in _direct_hardware_calls(path):
             if path.name == "base.py" and fn == "send":
                 continue          # the seam itself IS the sanctioned caller
+            # The annotation must sit in the contiguous comment block
+            # immediately above the call, so it cannot drift away from the
+            # thing it excuses.
+            i = line - 2                      # the line above the call
+            block = []
+            while i >= 0 and lines[i].strip().startswith("#"):
+                block.append(lines[i])
+                i -= 1
+            if any(OPT_OUT in b for b in block):
+                continue
             offenders.append(f"{path.name}:{line} in {fn}()")
     assert not offenders, (
         "hardware commands issued outside the seam: " + ", ".join(offenders)

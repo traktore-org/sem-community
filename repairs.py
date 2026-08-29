@@ -38,6 +38,14 @@ class SEMContextCopyFlow(RepairsFlow):
         return self.async_show_form(
             step_id="confirm",
             description_placeholders={
+                # The step renders the issue's diagnosis followed by the
+                # copyable context, so it needs the issue's own placeholders
+                # too — Hassfest rejects an issue that declares both a
+                # `description` and a `fix_flow`, so the text lives here now.
+                # Missing keys render as empty rather than raising: a repair
+                # that cannot be displayed is worse than one missing a word.
+                **{k: ("" if v is None else str(v))
+                   for k, v in (self._data.get("placeholders") or {}).items()},
                 "context": self._data.get("copy_context", ""),
             },
         )

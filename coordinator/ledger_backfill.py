@@ -101,6 +101,30 @@ def backfill_pairs(
 #: query bounded; the ledger prunes to its own window afterwards anyway.
 DEFAULT_LOOKBACK_DAYS: int = 365
 
+# The bounds `services.yaml` declares for both backfill services. A selector
+# is a UI hint only — a script, an automation or the Developer Tools YAML
+# editor reaches the handler with any value at all, and it used to travel
+# straight into a recorder statistics query. Enforced here rather than in the
+# service handlers so every caller is covered.
+MIN_LOOKBACK_DAYS: int = 14
+MAX_LOOKBACK_DAYS: int = 730
+
+
+def clamp_lookback_days(days) -> int:
+    """The requested lookback, held inside the declared range.
+
+    Clamped rather than rejected: someone asking for "all of it" means the
+    maximum, not an error. Anything that is not a finite number at all falls
+    back to the default — a service must not die on a typo.
+    """
+    try:
+        value = int(days)
+    except (TypeError, ValueError, OverflowError):
+        return DEFAULT_LOOKBACK_DAYS
+    if value != value:  # NaN never reaches here (int() raises), belt-and-braces
+        return DEFAULT_LOOKBACK_DAYS
+    return max(MIN_LOOKBACK_DAYS, min(MAX_LOOKBACK_DAYS, value))
+
 
 async def read_statistics(hass, statistic_ids, days: int):
     """``{statistic_id: {datetime: value}}`` from long-term hourly statistics.
@@ -153,6 +177,7 @@ async def run_backfill(hass, ledger, *, entity_prefix="sensor.sem_",
     and horizon 1 (yesterday's forecast for today) are both recoverable; deeper
     horizons are not, because SEM has never published a day-2 figure to record.
     """
+    days = clamp_lookback_days(days)
     fc_today = f"{entity_prefix}forecast_today_kwh"
     fc_tomorrow = f"{entity_prefix}forecast_tomorrow_kwh"
     actual = f"{entity_prefix}daily_solar_energy"

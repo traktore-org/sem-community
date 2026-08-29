@@ -1573,24 +1573,22 @@
     },
     "charger_actuation_failed": {
       "title": "EV-laderen godtar ikke kommandoer: {name}",
-      "description": "SEMs siste 3+ strømkommandoer til **{name}** ble avvist: `{error}`. Laderen er IKKE under SEMs kontroll akkurat nå — den fortsetter med det den sist fikk beskjed om (inkludert lading på full effekt i av-modus). Vanligste årsaker: laderens styringsentitet ble omdøpt av en oppdatering i den underliggende integrasjonen, eller `ev_charger_service` peker på en tjeneste med et annet parameteroppsett. Kontroller laderens styringsentitet / tjeneste i SEM-konfigurasjonen. Denne saken lukkes automatisk ved neste vellykkede kommando.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Report this to SEM",
-            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+            "description": "SEMs siste 3+ strømkommandoer til **{name}** ble avvist: `{error}`. Laderen er IKKE under SEMs kontroll akkurat nå — den fortsetter med det den sist fikk beskjed om (inkludert lading på full effekt i av-modus). Vanligste årsaker: laderens styringsentitet ble omdøpt av en oppdatering i den underliggende integrasjonen, eller `ev_charger_service` peker på en tjeneste med et annet parameteroppsett. Kontroller laderens styringsentitet / tjeneste i SEM-konfigurasjonen. Denne saken lukkes automatisk ved neste vellykkede kommando.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
           }
         }
       }
     },
     "charger_stop_unenforceable": {
       "title": "Laderen kan ikke stoppes: {name}",
-      "description": "SEM har bedt **{name}** om å stoppe, men ingen konfigurert mekanisme kan faktisk åpne kontaktoren — bilen trekker fortsatt {power} W. Den eneste styringen SEM har for denne laderen er `{entity}`, og minimumsverdien ligger over 0 A, så det å skrive 0 A gjør ingenting (SEM skriver aldri en verdi som entiteten ville avvise). Har du et husbatteri, kommer denne effekten derfra — når som helst på døgnet. Løsning: konfigurer en start/stopp-entitet (`ev_start_stop_entity`), en lademodus-entitet eller en stopptjeneste for denne laderen i SEM-innstillingene. Varselet forsvinner så snart laderen slutter å trekke effekt.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Report this to SEM",
-            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+            "description": "SEM har bedt **{name}** om å stoppe, men ingen konfigurert mekanisme kan faktisk åpne kontaktoren — bilen trekker fortsatt {power} W. Den eneste styringen SEM har for denne laderen er `{entity}`, og minimumsverdien ligger over 0 A, så det å skrive 0 A gjør ingenting (SEM skriver aldri en verdi som entiteten ville avvise). Har du et husbatteri, kommer denne effekten derfra — når som helst på døgnet. Løsning: konfigurer en start/stopp-entitet (`ev_start_stop_entity`), en lademodus-entitet eller en stopptjeneste for denne laderen i SEM-innstillingene. Varselet forsvinner så snart laderen slutter å trekke effekt.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
           }
         }
       }
@@ -1625,12 +1623,11 @@
     },
     "soc_cap_unenforceable": {
       "title": "Kan ikke håndheve ladegrensen på {target} %: {name}",
-      "description": "**{name}** er satt til et lademål i prosent, men kjøretøyet rapporterer ikke ladenivået sitt akkurat nå, så SEM kan ikke stoppe *nøyaktig* ved **{target}%**.\n\nDen lader likevel ikke i blinde: fra den siste ekte avlesningen i denne økten teller den energien som faktisk er levert, og stopper når den målte summen når målet ditt — overskridelsen er bare det bilen har tatt siden den avlesningen. Har det ikke kommet noen ekte avlesning i det hele tatt i denne økten (eller startet SEM på nytt midt i ladingen), mangler referansepunktet, og ladingen fortsetter til bilen selv trapper ned nær fullt.\n\nFor en grense som treffer, koble en **ekte SOC-sensor for kjøretøyet** til denne laderen (Konfigurasjon → EV → Kjøretøyets SOC-entitet). Batteriprosenten på dashbordet er SEMs *estimerte* SOC, som bevisst ignoreres for den harde grensen (den kan drifte). Denne reparasjonen forsvinner automatisk så snart en ekte SOC-avlesning er tilgjengelig igjen.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Report this to SEM",
-            "description": "SEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
+            "description": "**{name}** er satt til et lademål i prosent, men kjøretøyet rapporterer ikke ladenivået sitt akkurat nå, så SEM kan ikke stoppe *nøyaktig* ved **{target}%**.\n\nDen lader likevel ikke i blinde: fra den siste ekte avlesningen i denne økten teller den energien som faktisk er levert, og stopper når den målte summen når målet ditt — overskridelsen er bare det bilen har tatt siden den avlesningen. Har det ikke kommet noen ekte avlesning i det hele tatt i denne økten (eller startet SEM på nytt midt i ladingen), mangler referansepunktet, og ladingen fortsetter til bilen selv trapper ned nær fullt.\n\nFor en grense som treffer, koble en **ekte SOC-sensor for kjøretøyet** til denne laderen (Konfigurasjon → EV → Kjøretøyets SOC-entitet). Batteriprosenten på dashbordet er SEMs *estimerte* SOC, som bevisst ignoreres for den harde grensen (den kan drifte). Denne reparasjonen forsvinner automatisk så snart en ekte SOC-avlesning er tilgjengelig igjen.\n\nSEM believes this one is its own fault. If you can, open a bug report with the button on the notice — the form arrives already filled in. If you prefer, copy the context below into an email or forum post instead. Nothing is sent anywhere by this dialog.\n\n```\n{context}\n```\n\nConfirm to dismiss the notice."
           }
         }
       }
@@ -1660,8 +1657,8 @@
       "description": "SEM cannot use {entity_id} for export control: {reason}. Check the select entity and the three option labels under Configuration → Battery intelligence."
     },
     "battery_operating_mode_unexpected": {
-      "title": "Battery is in '{mode}' — SEM plans as if it were '{expected}'",
-      "description": "The operating-mode selector {entity_id} reads '{mode}'. SEM's overnight model and the spendable budget assume '{expected}'; in other modes the inverter follows its own schedule underneath SEM and the plans may not hold. If this mode is deliberate, dismiss this — SEM will not fight your choice. Otherwise set the inverter back to '{expected}'."
+      "title": "Battery is in “{mode}” — SEM plans as if it were “{expected}”",
+      "description": "The operating-mode selector {entity_id} reads “{mode}”. SEM's overnight model and the spendable budget assume “{expected}”; in other modes the inverter follows its own schedule underneath SEM and the plans may not hold. If this mode is deliberate, dismiss this — SEM will not fight your choice. Otherwise set the inverter back to “{expected}”."
     }
   },
   "selector": {
