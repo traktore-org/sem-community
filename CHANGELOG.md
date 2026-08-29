@@ -102,8 +102,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   beneath it — so a string that has stopped reporting is visible, instead of
   quietly shrinking the total.
 
-# [2.0.0-beta.16] — 25.08.2026
-
 - 🔭 **Multiple solar forecasts, one per PV string, are now added together
   instead of read as one** (#838): if you run a separate Forecast.Solar or
   Open-Meteo forecast per string, SEM counted only the first one — so its

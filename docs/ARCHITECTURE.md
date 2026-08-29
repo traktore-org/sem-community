@@ -24,6 +24,15 @@ This document covers the internal architecture of Solar Energy Management (SEM) 
 > - **The energy ledger closes** (#767–#776): every kWh SEM moves has a row,
 >   including exported battery energy.
 
+> **2.0 additions** (see [CHANGELOG](../CHANGELOG.md) `[2.0.0]`) — the 2.0
+> line is about making existing behaviour *believable* rather than adding
+> capability: the recorder footprint fell from 25 % to 6.1 % of HA's state
+> rows, every numeric setting is declared once in `consts/bounds.py`, one
+> plan gate owns WHEN, hardware detection matches registry `unique_id`s
+> rather than entity names, and the stop-war ceasefire stops SEM fighting a
+> charger it cannot win against. Repairs now carry a next step. The
+> architecture below is unchanged in shape.
+>
 > **v1.7.3 additions** (see [CHANGELOG](../CHANGELOG.md) `[1.7.3]`):
 > - **EV charger state reconciler** — `coordinator/charger_reconciler.py` is now the
 >   sole actuation path. A pure desired-vs-observed decision table (DesiredState
