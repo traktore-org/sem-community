@@ -30,6 +30,24 @@ nobody can see.
   named in your own language is still found (#804). Fronius / go-e Wattpilot,
   GARO and JuiceBox 48 are auto-detected (#802, #816).
 
+## 🔌 The charger does what you told it
+
+The last stretch of the line was spent on one question: does SEM's "stop"
+actually stop the car?
+
+- **A stop no longer starts the charger** (#854). On a KEBA, SEM's stop used to
+  *enable* the box with a 1 kWh energy target so it would charge into a stop —
+  which put roughly **1 kWh into the car on every plug-in** even with the daily
+  target at 0. The stop is now a single `keba.disable`.
+- **Mode = Off leaves your own devices alone** (#847). Setting a device to Off
+  used to switch it off there and then, including a load *you* had running.
+- **The box is parked when the car leaves** (#846), so the next plug-in cannot
+  auto-start behind SEM's back.
+- **A Wallbox whose stop cannot work now says why** (#852) — if the
+  `pause_resume` switch cannot be found, SEM names the entities it inspected
+  and the setting that fixes it, instead of falling back silently to a 0 A
+  write that some firmware ignores.
+
 ## 🧭 Setup tells the truth
 
 - Every setting has an explanation, ranges are declared once, and the
