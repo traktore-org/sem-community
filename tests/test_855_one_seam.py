@@ -41,6 +41,12 @@ CHARGER_PATH = [
     # so its one call carries its own observer gate — and is pinned here
     # rather than left as an un-guarded exception to the invariant.
     ROOT / "coordinator" / "ev_control.py",
+    # (2.1 audit INFO-1) The heat pump's hardware writes are observer-gated
+    # one layer UP — reconcile_load's observer branch returns before any
+    # device method runs — and nothing inside the file checks the flag.
+    # Scanning it here means a new un-annotated hardware call in that file
+    # fails CI instead of silently bypassing observer mode.
+    ROOT / "devices" / "heat_pump_controller.py",
 ]
 
 # The opt-out, spelled like the codebase's other one (`# FLEET-READ:`): a

@@ -69,7 +69,7 @@ class BatteryModeWatch:
         if mode in self.expected:
             self._streak = 0
             if self._raised:
-                self._raised = True  # noqa: PLW0127 — readability
+                # Recovery edge: the repair clears and the change is noted.
                 self._raised, self.changed = False, True
             return "ok"
         self._streak += 1

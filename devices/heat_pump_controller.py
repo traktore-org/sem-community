@@ -340,6 +340,12 @@ class HeatPumpController(SetpointDevice):
                 return v
             data = {k: _render(v) for k, v in self.sg_ready_service_data.items()}
             try:
+            # OBSERVER-GATED: via layer 3 — this device is actuated only
+            # through reconcile_load, whose observer branch
+            # (_reconcile_load_observe) returns before any device method
+            # runs. Nothing IN this file checks observer_mode, so moving
+            # heat-pump control off the reconcile_load path loses the
+            # gate — do not call this from anywhere else.
                 await self.hass.services.async_call(
                     domain, service, data, blocking=True)
             except Exception as e:  # noqa: BLE001
@@ -368,6 +374,9 @@ class HeatPumpController(SetpointDevice):
         if self.relay1_entity_id:
             service = "turn_on" if relay1_on else "turn_off"
             try:
+                # OBSERVER-GATED: via layer 3 — see the note at the
+                # service-call path above; the gate is reconcile_load's
+                # observer branch, not this file.
                 await self.hass.services.async_call(
                     "homeassistant", service,
                     {"entity_id": self.relay1_entity_id},
@@ -382,6 +391,9 @@ class HeatPumpController(SetpointDevice):
         if self.relay2_entity_id:
             service = "turn_on" if relay2_on else "turn_off"
             try:
+                # OBSERVER-GATED: via layer 3 — see the note at the
+                # service-call path above; the gate is reconcile_load's
+                # observer branch, not this file.
                 await self.hass.services.async_call(
                     "homeassistant", service,
                     {"entity_id": self.relay2_entity_id},
@@ -401,6 +413,9 @@ class HeatPumpController(SetpointDevice):
                 if relay1_called and relay1_on != prev_relay1_on:
                     try:
                         restore = "turn_on" if prev_relay1_on else "turn_off"
+                        # OBSERVER-GATED: via layer 3 — see the note at the
+                        # service-call path above; the gate is reconcile_load's
+                        # observer branch, not this file.
                         await self.hass.services.async_call(
                             "homeassistant", restore,
                             {"entity_id": self.relay1_entity_id},
