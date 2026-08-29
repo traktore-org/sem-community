@@ -61,6 +61,9 @@ Some EV chargers have limitations that prevent full SEM control:
 - **Myenergi Zappi** — the Zappi has built-in solar diversion logic that conflicts with external surplus control. SEM can monitor the Zappi but cannot control charging current — the Zappi manages surplus charging internally.
 - **KSTAR inverters** — no dedicated HA integration exists. Use [ha-solarman](https://github.com/davidrapan/ha-solarman) with KSTAR YAML profiles for inverter/battery support.
 - **Easee** — the power sensor is disabled by default in the HA Easee integration. It must be manually enabled in **Settings > Devices > Easee** before SEM can detect and configure the charger.
+## EV 1↔3-phase switching is off by default
+
+Automatic phase switching exists but is **dormant unless you switch it on per charger** (`ev_phase_switching_enabled`). Real testing found the shipped model harmful on two of the three brands that tried it: a Wattpilot latches into a paused force-state that a current write cannot clear, and a Zaptec has no phase command at all — it switches implicitly on a current threshold, so the sequence stopped the charger, switched nothing and retried. Making it safe across brands is 2.1 work; until then the entity alone does not activate the path, and the phase-mode selector is gated on the same key so a selector can never promise something the actuation will not do.
 
 ## Heat pump SG-Ready control
 

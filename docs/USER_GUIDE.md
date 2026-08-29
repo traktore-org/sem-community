@@ -632,6 +632,15 @@ Do not confuse Solar Gate with **Min solar power** (the config floor below which
 > `switch.sem_night_charging` and per-charger `…_night_charging` toggles were
 > removed in v1.6.3 (#277) — one selector now carries the whole intent. Set it
 > per charger with **`select.sem_charger_<id>_charge_mode`**, on the EV tab.
+> The same goes for `switch.sem_smart_night_charging`: the intelligence it
+> switched on is now implied by the mode (see *Smart night charging* below).
+
+> **Not seeing `Solar + cheapest hours` in the list?** That mode is hidden
+> unless a **dynamic tariff** is configured (Configuration tab → Tariff →
+> *Dynamic*, with a price entity). Without live prices the mode has no cheap
+> hours to find and would quietly behave like `Solar only`, so SEM does not
+> offer an option it cannot honour. Configure the tariff and it appears. The
+> other four modes are always available.
 
 | Charge mode | Charges overnight from grid? |
 |---|---|
@@ -1082,7 +1091,7 @@ Set tariff mode to "Calendar" for custom time-of-use schedules. Define rules lik
 
 ## Solar Forecast
 
-Install [Solcast PV Solar](https://github.com/oziee/ha-solcast-solar), [Forecast.Solar](https://www.home-assistant.io/integrations/forecast_solar/) or [Open-Meteo Solar Forecast](https://github.com/rany2/ha-open-meteo-solar-forecast) for forecast-based features:
+Install [Solcast PV Solar](https://github.com/BJReplay/ha-solcast-solar), [Forecast.Solar](https://www.home-assistant.io/integrations/forecast_solar/) or [Open-Meteo Solar Forecast](https://github.com/rany2/ha-open-meteo-solar-forecast) for forecast-based features:
 
 - `sensor.sem_forecast_today_kwh` — expected total production today (kWh)
 - `sensor.sem_forecast_tomorrow_kwh` — expected total production tomorrow (kWh)

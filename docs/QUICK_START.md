@@ -18,7 +18,7 @@ Go to **Settings > Dashboards > Energy**. You must have at least a solar product
 
 **2. HACS installed**
 
-SEM is distributed through HACS. If you have not installed HACS, follow the [HACS installation guide](https://hacs.xyz/docs/setup/download/) first.
+SEM is distributed through HACS. If you have not installed HACS, follow the [HACS installation guide](https://hacs.xyz/docs/use/download/download/) first.
 
 **3. No EV charger? That is fine**
 
@@ -137,12 +137,12 @@ Once installed, SEM runs without manual intervention:
 - **Night charging** — *opt-in (off by default)*; when enabled, grid-charges the EV to your daily-target floor
 - **Smart forecast** — if tomorrow is sunny, tonight's grid charging is reduced or skipped
 
-The controls that matter most (v1.7.3):
+The controls that matter most:
 
 | Entity | Default | Purpose |
 |--------|---------|---------|
-| `select.sem_charger_<id>_charge_mode` | `Min + Solar` | Per-charger charging mode (v1.7.3): **Solar only** / **Solar + cheapest hours** / **Min + Solar** (grid minimum 6A + surplus) / **Always max** / **Off**. Pick based on your needs; see [Charging Modes](SETUP_GUIDE.md#8-ev-charging-modes) in the Setup Guide. |
-| `number.sem_battery_assist_min_surplus` | 1200 W | **Solar Gate** (v1.7.3): minimum real solar surplus to enable battery assist for the EV. Set to 0 W to allow battery support everywhere (previous behaviour). Prevents battery drain into the car at night. |
+| `select.sem_charger_<id>_charge_mode` | `Min + Solar` | Per-charger charging mode: **Solar only** / **Solar + cheapest hours** / **Min + Solar** (grid minimum 6A + surplus) / **Always max** / **Off**. Pick based on your needs; see [Charging Modes](SETUP_GUIDE.md#8-ev-charging-modes) in the Setup Guide. |
+| `number.sem_battery_assist_min_surplus` | 1200 W | **Solar Gate**: minimum real solar surplus to enable battery assist for the EV. Set to 0 W to allow battery support everywhere (previous behaviour). Prevents battery drain into the car at night. |
 | `switch.sem_observer_mode` | OFF | Monitor-only, no hardware control |
 
 Everything else is automatic.

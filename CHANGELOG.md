@@ -51,6 +51,118 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   configure `domain.service` plus a JSON payload with state/relay
   placeholders, with an optional read-back entity SEM checks after every
   write. No more template-switch workarounds.
+
+# [2.0.0] — 29.08.2026
+
+> **Stable release.** Consolidates the 2.0 beta line (beta.1 → beta.21,
+> detailed below). The milestone was named *Trustworthy* and that is what it
+> spent itself on: SEM saying what it will do, doing that and nothing else,
+> and admitting what it does not know.
+
+SEM 2.0 adds almost nothing you have to learn. It makes what SEM already did
+**believable**: the same decisions, no longer changing their mind for reasons
+nobody can see.
+
+## 🔇 SEM stops shouting
+
+- Its recorder footprint fell from **25 % to 6.1 %** of Home Assistant's state
+  writes (#829) — SEM was a quarter of everything your database recorded.
+- At the default log level SEM is quiet (#762). A stop repeated 1800 times, a
+  debug firehose, and a battery setpoint your inverter refuses (#840) are gone.
+- You can tell SEM how long to keep its own status history.
+
+## 🧮 The numbers reconcile
+
+- The energy diagram balances, per-device breakdowns agree with the fleet
+  total, and the Costs tab's year and months agree.
+- **An estimate is never recorded as a measurement.** Exported battery energy
+  is attributed and paid once; a bought kWh does not become free by sitting in
+  the battery; EV charging cost stops pretending the battery is free.
+- Every controlled load counts its own kWh, and the residual is audited.
+
+## 🤝 SEM stops fighting your hardware
+
+- The stop-war ceasefire holds even against slow-retrying cars (#763), a
+  charger that undoes SEM's stop on a timer is **named rather than fought**
+  (#823), and a missed poll is no longer read as an unplug.
+- Hardware detection matches what integrations actually publish, so a charger
+  named in your own language is still found (#804). Fronius / go-e Wattpilot,
+  GARO and JuiceBox 48 are auto-detected (#802, #816).
+
+## 🔌 The charger does what you told it
+
+The last stretch of the line was spent on one question: does SEM's "stop"
+actually stop the car?
+
+- **A stop no longer starts the charger** (#854). On a KEBA, SEM's stop used to
+  *enable* the box with a 1 kWh energy target so it would charge into a stop —
+  which put roughly **1 kWh into the car on every plug-in** even with the daily
+  target at 0. The stop is now a single `keba.disable`.
+- **Mode = Off leaves your own devices alone** (#847). Setting a device to Off
+  used to switch it off there and then, including a load *you* had running.
+- **The box is parked when the car leaves** (#846), so the next plug-in cannot
+  auto-start behind SEM's back.
+- **A stop that cannot reach the hardware now says so** (#852) — on a Wallbox
+  the real stop is the `pause_resume` switch; if SEM cannot find one it names
+  the entities it inspected rather than failing in silence. A diagnosis aid,
+  so the next report of "Off didn't stop it" arrives with the answer in it.
+
+## 🧭 Setup tells the truth
+
+- Every setting has an explanation, ranges are declared once, and the
+  first-run welcome describes **your** install (#830).
+- The setup checklist can actually be completed (#842).
+- **Repairs offer the next step** (#831): each notice links either the exact
+  troubleshooting section or a bug report with your versions already filled
+  in — and a copy-out dialog for anyone without a GitHub account. Nothing is
+  ever sent without you pressing the button.
+
+## 🌤️ Forecast and planning
+
+- Multiple solar forecasts, one per PV string, are added together instead of
+  read as one (#838), and you can see the forecast per string (#841).
+- Choosing your forecast source now sticks (#819).
+- One plan gate owns *when*; the battery scheduler owns *what* (#638).
+
+## ⚠️ Upgrade notes
+
+- **Nothing switches on silently on upgrade**, and a fresh install no longer
+  wakes up observing (#777).
+- **EV phase switching is off by default** while the 1/3-phase model is
+  reworked (#804) — it paused chargers that never resumed on some brands.
+  Enable it per charger under *Configuration → EV chargers → Phase switching*.
+- Battery → grid arbitrage remains **off on every default** (#533). Check your
+  grid connection agreement before enabling it.
+- `switch.sem_overnight_actuation` is now `switch.sem_energy_plan_actuation`.
+
+## Requirements
+
+Home Assistant **2026.2.0** or newer (Python 3.13+).
+
+## 💛 Sponsors
+
+SEM is built and maintained by one person, and these five chose to fund that:
+
+**[@praun](https://github.com/praun) · [@RienduPre](https://github.com/RienduPre) · [@Azlinon](https://github.com/Azlinon) · [@onkelfu](https://github.com/onkelfu) · [@coppe218](https://github.com/coppe218)**
+
+What is striking about that list is that not one of them is only a sponsor.
+Every single one is in the issue threads of this release, testing on their own
+hardware: praun's Deye Sun12k over ESPHome Modbus, RienduPre's Growatt and
+Sessy multi-battery work, Azlinon's heat-pump configuration, onkelfu's
+SolarEdge discharge clamp and thermal comfort, coppe218's 1↔3-phase switching.
+They paid for the work *and* did some of it.
+(Sponsors who chose to stay private aren't named here — the thanks is the same.)
+
+Thank you — and thank you equally to everyone who reported something broken and
+then patiently re-tested a fix on a real house. The ✅ column of the
+[supported hardware table](docs/SUPPORTED_HARDWARE.md) is entirely made of
+those people.
+
+### Also in this release
+
+
+
+
 # [2.0.0-beta.21] — 29.08.2026
 
 - 🛑 **A stop no longer starts the charger** (#854): telling a KEBA to stop
@@ -199,8 +311,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Forecast section lists today's forecast for each string with the total
   beneath it — so a string that has stopped reporting is visible, instead of
   quietly shrinking the total.
-
-# [2.0.0-beta.16] — 25.08.2026
 
 - 🔭 **Multiple solar forecasts, one per PV string, are now added together
   instead of read as one** (#838): if you run a separate Forecast.Solar or
@@ -6486,7 +6596,7 @@ Also unblocks #453 by structurally fixing #457 in the same release: the diagram 
 
 ## 🎉 Stable Release
 
-_Consolidates [1.7.2-beta.1](https://github.com/traktore-org/sem-community/releases/tag/v1.7.2-beta.1) through [1.7.2-beta.7](https://github.com/traktore-org/sem-community/releases/tag/v1.7.2-beta.7). 19 commits since [1.7.1](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1). 24 hours of HA-PROD soak with zero errors._
+_Consolidates `1.7.2-beta.1` through [1.7.2-beta.7](https://github.com/traktore-org/sem-community/releases/tag/v1.7.2-beta.7). 19 commits since [1.7.1](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1). 24 hours of HA-PROD soak with zero errors._
 
 ### 🔥 New: Hot Water boiler control (#454)
 
@@ -6885,7 +6995,7 @@ Massive thanks to @RienduPre for the persistent #432 reports — they directly d
 
 ## 🧪 Beta Release
 
-_Changes since [1.7.1-beta.16](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.16)_
+_Changes since `1.7.1-beta.16`_
 
 ### 🔍 Heat-pump observability — diagnose silent registration failures remotely (#432)
 
@@ -6931,7 +7041,7 @@ Full suite: **3239 pass, 9 skipped, 0 fail** (was 3217 — net +22 after the hea
 
 ## 🧪 Beta Release
 
-_Changes since [1.7.1-beta.15](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.15)_
+_Changes since `1.7.1-beta.15`_
 
 ### 🐛 EV charging logic strictly honours `ev_target_type` per charger (#446)
 
@@ -6980,7 +7090,7 @@ PROD had `ev_target_type="soc"` saved but no `vehicle_soc_entity` configured (a 
 
 ## 🧪 Beta Release
 
-_Changes since [1.7.1-beta.14](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.14)_
+_Changes since `1.7.1-beta.14`_
 
 ### 🐛 Reliable home consumption — two-tier hold against sensor-staleness skew (#444)
 
@@ -7008,7 +7118,7 @@ The inconsistency tier only fires when the raw balance is strongly negative — 
 
 ## 🧪 Beta Release
 
-_Changes since [1.7.1-beta.13](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.13)_
+_Changes since `1.7.1-beta.13`_
 
 ### 🐛 Stop KEBA solar-path current oscillation that aborts EV sessions
 
@@ -7076,7 +7186,7 @@ Walked every available charge mode on PROD (target raised from 2 kWh → 10 kWh 
 
 ## 🧪 Beta Release
 
-_Changes since [1.7.1-beta.12](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.12)_
+_Changes since `1.7.1-beta.12`_
 
 ### 🐛 Configuration tab save pipeline — actually works now (#442)
 
@@ -7104,7 +7214,7 @@ Sections covered: tariff (export rate + mode select), heat pump (priority slider
 
 ## 🧪 Beta Release
 
-_Changes since [1.7.1-beta.11](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.11)_
+_Changes since `1.7.1-beta.11`_
 
 ### ✨ Every OptionsFlow step now inline in the Configuration tab (#442)
 
@@ -7160,7 +7270,7 @@ Fresh installs now take **2 forms instead of 3**, and every later tweak lives **
 
 ## 🧪 Beta Release
 
-_Changes since [1.7.1-beta.9](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.9)_
+_Changes since `1.7.1-beta.9`_
 
 ### 🚀 HA Repairs — graceful unavailability channel
 
@@ -7182,7 +7292,7 @@ Honors the HA quality-check feedback "should handle unavailability gracefully in
 
 ## 🧪 Beta Release
 
-_Changes since [1.7.1-beta.8](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.8)_
+_Changes since `1.7.1-beta.8`_
 
 ### 🐛 Bugfix — quiet sensor-recovery log spam (HA quality-check feedback)
 
@@ -7236,7 +7346,7 @@ _Changes since [1.7.1-beta.5](https://github.com/traktore-org/sem-community/rele
 
 ## 🧪 Beta Release
 
-_Changes since [1.7.1-beta.4](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.4)_
+_Changes since `1.7.1-beta.4`_
 
 ### 🚀 Renames + polish
 
@@ -7272,7 +7382,7 @@ _Changes since [1.7.1-beta.3](https://github.com/traktore-org/sem-community/rele
 
 ## 🧪 Beta Release
 
-_Changes since [1.7.1-beta.2](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.2)_
+_Changes since `1.7.1-beta.2`_
 
 ### 🐛 Bugfixes
 
@@ -7286,7 +7396,7 @@ _Changes since [1.7.1-beta.2](https://github.com/traktore-org/sem-community/rele
 
 ## 🧪 Beta Release
 
-_Changes since [1.7.1-beta.1](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.1)_
+_Changes since `1.7.1-beta.1`_
 
 ### 🐛 Bugfixes
 
@@ -7359,7 +7469,7 @@ Following the `classifier_path` pattern introduced in #359, **10 stale modules**
 
 ## 🧪 Beta Release — v1.7.1 audit batch 4
 
-_Changes since [1.7.0-beta.25](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.25)_
+_Changes since `1.7.0-beta.25`_
 
 Two more modules audited beyond the original Top-12, picked up by widening the staleness cutoff from 30 days to 2 weeks. Big-module focus on highest-leverage decisions, medium-module full coverage.
 
@@ -7376,7 +7486,7 @@ Two more modules audited beyond the original Top-12, picked up by widening the s
 
 ## 🧪 Beta Release — v1.7.1 audit batch 3
 
-_Changes since [1.7.0-beta.24](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.24)_
+_Changes since `1.7.0-beta.24`_
 
 Third batch of v1.7.1 audit telemetry. Closes the rest of the Top-12 backlog: two modules get telemetry surfaces, four close as no-change (pure data registries + a stateless translation helper that doesn't fit the path-attribute pattern). Pure additive observability, zero behavior change.
 
@@ -7394,7 +7504,7 @@ Third batch of v1.7.1 audit telemetry. Closes the rest of the Top-12 backlog: tw
 
 ## 🧪 Beta Release — v1.7.1 audit batch 2
 
-_Changes since [1.7.0-beta.23](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.23)_
+_Changes since `1.7.0-beta.23`_
 
 Second batch of v1.7.1 audit telemetry — four modules in one beta because they don't share state. Pure additive observability, zero behavior change in published return values.
 
@@ -7413,7 +7523,7 @@ Second batch of v1.7.1 audit telemetry — four modules in one beta because they
 
 ## 🧪 Beta Release — first v1.7.1 audit
 
-_Changes since [1.7.0-beta.22](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.22)_
+_Changes since `1.7.0-beta.22`_
 
 First behavioral audit of the v1.7.1 stabilization program (umbrella #419). Pure additive observability on `HotWaterController` — zero behavior change.
 
@@ -7518,7 +7628,7 @@ The #404 per-battery direction bug on Sessy installs is **not fixed yet** in thi
 
 ## 🧪 Beta Release
 
-_Changes since [1.7.0-beta.16](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.16)_
+_Changes since `1.7.0-beta.16`_
 
 ### 🐛 Bugfixes
 

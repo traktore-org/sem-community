@@ -117,7 +117,7 @@ Before setting up SEM, make sure you have:
 - **Optional but recommended:**
   - Battery SOC (%) and power (W) sensors
   - An EV charger controllable via HA (KEBA, Wallbox, go-eCharger, Easee, Zaptec, ChargePoint, Heidelberg, etc.)
-  - [Solcast PV Solar](https://github.com/oziee/ha-solcast-solar), [Forecast.Solar](https://www.home-assistant.io/integrations/forecast_solar/) or [Open-Meteo Solar Forecast](https://github.com/rany2/ha-open-meteo-solar-forecast) for solar forecasts
+  - [Solcast PV Solar](https://github.com/BJReplay/ha-solcast-solar), [Forecast.Solar](https://www.home-assistant.io/integrations/forecast_solar/) or [Open-Meteo Solar Forecast](https://github.com/rany2/ha-open-meteo-solar-forecast) for solar forecasts
   - Tibber, Nordpool, or aWATTar integration for dynamic tariffs
 
 ---
@@ -445,9 +445,21 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 
 ## Recent Improvements
 
-### v2.0 — One gate for the night (15.08.2026)
+### v2.0 — Trustworthy (29.08.2026)
+The 2.0 line adds almost nothing you have to learn. It makes what SEM already did **believable**: the same decisions, no longer changing their mind for reasons nobody can see.
+
+- **SEM stops shouting in your log and your database** — its recorder footprint fell from **25 % to 6.1 %** of Home Assistant's state writes, and at the default log level SEM is quiet. A stop repeated 1800 times, a debug firehose, and a battery setpoint your inverter refuses are all gone.
+- **The numbers reconcile** — the energy diagram balances, per-device breakdowns agree with the fleet total, the Costs tab's year and months agree, and an estimate is never recorded as a measurement. Exported battery energy is attributed and paid once; a bought kWh does not become free by sitting in the battery.
+- **SEM stops fighting hardware it cannot win against** — the stop-war ceasefire holds even against slow-retrying cars, a charger that undoes SEM's stop on a timer is named rather than fought, and a missed poll is no longer read as an unplug.
+- **Setup tells the truth** — every setting has an explanation, settings ranges are declared once, the first-run welcome describes *your* install, and the setup checklist can actually be completed. Hardware detection matches what integrations really publish, so a charger named in your own language is still found.
+- **Repairs offer the next step** — every notice links either the exact troubleshooting section or a bug report with your versions already filled in.
+- **Nothing switches on silently on upgrade**, and a fresh install no longer wakes up observing.
+- **The charger does what you told it** — a stop no longer *starts* the charger (on a KEBA, SEM's "stop" used to enable the box with a 1 kWh energy target so it would charge into a stop, putting ~1 kWh into the car on every plug-in against a zero ask, #854); **Mode = Off** no longer switches off a load *you* had running (#847); the box is parked when the car leaves so the next plug-in cannot auto-start behind SEM's back (#846); and a stop that cannot reach the hardware now says so instead of failing silently (#852). 1↔3-phase switching ships **off by default** while it is reworked (#804).
+- **Requires Home Assistant 2026.2.0 or newer** (#836), and the suite runs against the HA versions that matter rather than one.
 
 **Why the major number:** this release changes what an existing install does without the user changing anything. Night actuation is **on by default** (the migration writes the choice down and points at the kill-switch; an install that already turned it off is never touched), and the private cheap-window pickers are **gone** — a `solar_plus_cheap` install's night timing now comes from the joint plan rather than the code path it has been running. Same intent, different decision-maker.
+
+**The planner that started the line** — what v2.0's first beta shipped, and the reason for the major number:
 
 - **The joint energy planner is the only scheduler** (#638) — EV, deferrable loads, comfort bands and the battery are packed into *one* schedule under the shared peak limit, the real price curve and your device priority order. The EV's own cheap-hour pick and the battery scheduler's own window pick are deleted; a CI ratchet keeps them deleted.
 - **Plan owns WHEN, live economics own WHETHER, your settings own MAY.** When a demand runs outside the plan it says so — a translated "reactive — why" chip on the card, in 16 languages, never silence.
@@ -457,6 +469,7 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 - **The energy ledger closes** (#767–#776) — every kWh SEM moves now has a row, including **exported battery energy** (`sensor.sem_flow_battery_to_grid_power`), grid-vs-solar provenance of stored energy, and a true-baseload figure that refuses to count an estimate as a measurement.
 - **Battery → grid arbitrage is wired** (#533 still stands: off on every default) — the plan says when, live economics say whether, per-battery mode says may. **Check your grid connection agreement first** — see [Battery export arbitrage](docs/BATTERY_EXPORT_ARBITRAGE.md).
 - **Fresh installs no longer wake up observing** (#777) — an old install's leftover switch state can no longer speak for a new one.
+
 
 ### v1.7.3 — Reliable EV charging + battery protection (23.06.2026)
 - **EV charger state reconciler** (#392) — the per-cycle imperative actuator (which spammed `keba.disable` and dropped KEBA to 6 A) is replaced by a desired-vs-observed reconciler that issues the *minimum* commands to converge, then leaves the charger alone. Idempotent idle, heartbeat re-writes, failsafe armed once per session. Plus **enable-switch reconciliation + backoff** (#536) for switch-driven chargers (Wallbox etc.).
@@ -614,9 +627,10 @@ checklist is exactly what the review holds you to.
 
 ### How work is tracked
 
-Every open issue and PR carries a state label, mirrored onto the
-[SEM Board](https://github.com/users/traktore-org/projects/2). The label is
-the source of truth.
+Every open issue and PR carries a state label, mirrored onto a maintainer
+project board. **The label is the source of truth** — it is on the issue
+itself, so you can always see the state of anything you reported without
+needing access to the board.
 
 | State | Meaning |
 |---|---|
