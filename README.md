@@ -167,7 +167,7 @@ Key settings you can adjust (all have sensible defaults):
 | Battery buffer SOC | 70% | Above this, battery can help charge the EV |
 | Battery auto-start SOC | 90% | Above this, EV starts even without solar surplus |
 | Min solar power | 500W | Minimum surplus before solar EV charging starts |
-| Observer mode | Off | Read-only mode for test systems (no hardware control) |
+| Observer mode | **On** | SEM watches and shows what it *would* do, commanding nothing. Turn it off when the decisions look right. |
 
 For detailed explanations of all settings, see the [Setup Guide](docs/SETUP_GUIDE.md).
 
@@ -191,7 +191,7 @@ SEM is designed to be mostly automatic. The controls that matter (v1.6.3 — tog
 
 | Entity | Default | What it does |
 |--------|---------|-------------|
-| `switch.sem_observer_mode` | OFF | Read-only mode — SEM monitors but doesn't control hardware (global) |
+| `switch.sem_observer_mode` | **ON** on a new install | Read-only mode — SEM monitors and publishes its would-decisions but sends no commands (global) |
 | `select.sem_charger_<id>_charge_mode` | `Min + Solar` | **Per-charger.** One named selector carries the night-charging, smart-night, and tariff-window intent that used to live on three separate switches. Options: *Solar only* / *Solar + cheapest hours* / *Min + Solar* / *Always (max)* / *Off*. |
 
 EV charge targets, currents, phases and consumption are all **per-charger** entities too (`number.sem_charger_<id>_…`, `select.sem_charger_<id>_…`) — the global EV settings were removed in #255 (per-charger is the source of truth; globals are read-only summaries). Everything else — solar charging, surplus distribution, battery protection, peak management — is fully automatic.

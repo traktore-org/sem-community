@@ -63,9 +63,14 @@ class TestSEMSwitches:
         switch = SEMSolarSwitch(mock_coordinator, description, "test_entry_id")
         assert switch._is_on is True
 
+        # Nothing configured — the switch follows the product default,
+        # read from the constant so this test never freezes it.
+        from custom_components.solar_energy_management.consts.core import (
+            DEFAULT_OBSERVER_MODE,
+        )
         mock_coordinator.config_entry.options = {}
         switch2 = SEMSolarSwitch(mock_coordinator, description, "test_entry_id")
-        assert switch2._is_on is False
+        assert switch2._is_on is DEFAULT_OBSERVER_MODE
 
     @pytest.mark.asyncio
     async def test_switch_is_on(self, mock_coordinator):
@@ -353,9 +358,13 @@ class TestExplicitConfigBeatsGhostRestore777:
         assert sw._is_on is True
 
     def test_no_config_and_no_ghost_is_the_default(self):
+        """#777's floor: nothing recorded anywhere → the product default."""
+        from custom_components.solar_energy_management.consts.core import (
+            DEFAULT_OBSERVER_MODE,
+        )
         sw = _sw("observer_mode")
         sw._apply_restored_state(None)
-        assert sw._is_on is False
+        assert sw._is_on is DEFAULT_OBSERVER_MODE
 
     def test_actuation_ghost_off_yields_to_explicit_config(self):
         """Same precedence for the siblings: an old install's

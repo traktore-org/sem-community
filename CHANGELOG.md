@@ -13,6 +13,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 👀 **A new install observes first.** SEM now starts in observer mode: it
+  reads your system, builds the dashboard and publishes the decisions it
+  *would* make, without sending a single command to your hardware. When those
+  decisions look right, one switch (`switch.sem_observer_mode`) hands it
+  control. **Existing installs are unaffected** — this changes only what a
+  fresh install starts as, and any install that has ever recorded a choice
+  keeps it. The reason is a real incident: a fresh install on a machine wired
+  to a charger that another system was already controlling became a second
+  controller nobody chose, and the two fought over the car. An install default
+  should never be the thing that starts touching your hardware.
+
+- 🕵️ **The stop-war warning names the other likely culprit** — a second
+  controller commanding the same charger (another SEM instance, an automation,
+  a vendor app) looks *identical* from inside SEM to a wallbox re-closing its
+  own contactor. The warning now says so and points at the check that tells
+  them apart, instead of sending you to the hardware first.
+
 - 🧱 **The generic device layer now learns brands from the registry — stage 4
   closes the #855 arc**: the last brand knowledge that was *code* in the
   generic layer (the KEBA watchdog-refresh table and two log strings) moved

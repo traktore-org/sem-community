@@ -141,11 +141,21 @@ class TestSwitchDefaults:
     # ``charge_mode`` default (``min_plus_solar`` permits night;
     # users opting out pick ``solar_only`` / ``off`` in the selector).
 
-    def test_observer_mode_default_off(self, mock_coordinator):
+    def test_observer_mode_defaults_to_the_constant(self, mock_coordinator):
+        """With nothing configured the switch follows DEFAULT_OBSERVER_MODE.
+
+        Asserted against the constant, not a literal: this test pins that
+        the switch READS the product default, and must not freeze whatever
+        that default happened to be when it was written. (It said False
+        until 29.08.2026, when a new install started observing first.)
+        """
+        from custom_components.solar_energy_management.consts.core import (
+            DEFAULT_OBSERVER_MODE,
+        )
         mock_coordinator.config_entry.options = {}
         desc = SWITCH_TYPES[0]  # observer_mode (only remaining global switch)
         switch = SEMSolarSwitch(mock_coordinator, desc, "test")
-        assert switch._is_on is False
+        assert switch._is_on is DEFAULT_OBSERVER_MODE
 
 
 # ============================================================

@@ -467,7 +467,8 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             # Store Energy Dashboard sensor config + the observer_mode toggle
             self._data.update(self._energy_dashboard_config.to_dict())
-            self._data["observer_mode"] = user_input.get("observer_mode", False)
+            self._data["observer_mode"] = user_input.get(
+                "observer_mode", DEFAULT_OBSERVER_MODE)
             # (#777) Record ALL persisted-switch defaults explicitly at
             # install: a key present in entry data means "this install
             # chose", so a dead install's restore-store ghost can never
@@ -538,13 +539,14 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({
-                # Single safety toggle. Defaulted OFF so a real install
-                # actually controls hardware. Set to ON for test/staging
-                # instances that mirror a production HA — observer mode
-                # blocks every outbound service call from SEM.
+                # Single safety toggle, defaulted ON: a new install shows
+                # what it WOULD do and commands nothing until its owner
+                # turns this off. Reads the constant rather than repeating
+                # it — the literal here and the constant elsewhere are how
+                # the two drifted before.
                 vol.Optional(
                     "observer_mode",
-                    default=False,
+                    default=DEFAULT_OBSERVER_MODE,
                 ): selector.BooleanSelector(),
             }),
             description_placeholders={

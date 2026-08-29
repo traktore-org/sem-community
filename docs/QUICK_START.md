@@ -143,7 +143,7 @@ The controls that matter most:
 |--------|---------|---------|
 | `select.sem_charger_<id>_charge_mode` | `Min + Solar` | Per-charger charging mode: **Solar only** / **Solar + cheapest hours** / **Min + Solar** (grid minimum 6A + surplus) / **Always max** / **Off**. Pick based on your needs; see [Charging Modes](SETUP_GUIDE.md#8-ev-charging-modes) in the Setup Guide. |
 | `number.sem_battery_assist_min_surplus` | 1200 W | **Solar Gate**: minimum real solar surplus to enable battery assist for the EV. Set to 0 W to allow battery support everywhere (previous behaviour). Prevents battery drain into the car at night. |
-| `switch.sem_observer_mode` | OFF | Monitor-only, no hardware control |
+| `switch.sem_observer_mode` | **ON** (new installs) | Monitor-only — turn it OFF to let SEM control hardware |
 
 Everything else is automatic.
 
