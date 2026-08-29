@@ -99,10 +99,15 @@ class TestRecipeContract:
         p = _provider_with_recipe(P2)
         assert p.get_tariff_data().price_level is PriceLevel.NORMAL
 
-    def test_classifier_path_is_percentile(self):
+    def test_classifier_path_is_tou_tiers(self):
+        """The ES 2.0TD is a genuine 3-tier fixed ToU (valle/llano/punta)
+        — since #728's second round it classifies by its distinct value
+        tiers, not the rolling percentile window. The intent of this pin
+        is unchanged: the recipe curve must land on an ACTIVE classifier
+        path, never a fallback_* one."""
         p = _provider_with_recipe(P1)
         data = p.get_tariff_data()
-        assert data.classifier_path.startswith("percentile_active"), (
+        assert data.classifier_path.startswith("tou_tiers"), (
             data.classifier_path
         )
 

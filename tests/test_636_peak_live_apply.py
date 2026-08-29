@@ -1,5 +1,5 @@
 """#636 — config-card peak sliders live-apply through the load manager."""
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 

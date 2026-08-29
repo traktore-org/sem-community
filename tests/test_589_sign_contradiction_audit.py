@@ -19,7 +19,6 @@ from __future__ import annotations
 import logging
 from unittest.mock import Mock, MagicMock
 
-import pytest
 
 from custom_components.solar_energy_management.coordinator.sensor_reader import (
     SensorReader,

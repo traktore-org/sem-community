@@ -26,7 +26,7 @@ contract in ``battery_adapters/deye.py``):
 """
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -77,7 +77,9 @@ def _deye_platform_input():
         "deye_actuation_enabled": True,
     }
     for n in range(1, 7):
-        data[f"deye_program_{n}_time"] = f"select.deye_slice_{n}_time"
+        # #807 — the time field is a writable ``time.*`` entity (what the
+        # adapter's _validate_slot requires), not a select.
+        data[f"deye_program_{n}_time"] = f"time.deye_slice_{n}_time"
         data[f"deye_program_{n}_soc"] = f"number.deye_slice_{n}_soc"
         data[f"deye_program_{n}_charge"] = f"select.deye_slice_{n}_charge"
     return data
@@ -104,7 +106,7 @@ def _assert_deye_keys(payload: dict):
     assert isinstance(groups, list)
     assert len(groups) == 6
     for idx, group in enumerate(groups, start=1):
-        assert group["time"] == f"select.deye_slice_{idx}_time"
+        assert group["time"] == f"time.deye_slice_{idx}_time"
         assert group["soc"] == f"number.deye_slice_{idx}_soc"
         assert group["charge"] == f"select.deye_slice_{idx}_charge"
 
@@ -275,3 +277,161 @@ class TestDeyeOptionsFlow:
         assert all(
             not isinstance(v, type) for v in payload.values()
         )  # nothing but plain data
+
+
+def _marker(schema, name):
+    """Return the voluptuous marker for a field in a form's data schema."""
+    return next(k for k in schema.schema if str(k) == name)
+
+
+def _selector_domains(schema, name):
+    """The set of HA entity domains a field's EntitySelector offers."""
+    sel = schema.schema[_marker(schema, name)]
+    domain = sel.config["domain"]
+    return {domain} if isinstance(domain, str) else set(domain)
+
+
+def _suggested(schema, name):
+    """The suggested_value the form pre-fills a field with (None if blank)."""
+    marker = _marker(schema, name)
+    return (marker.description or {}).get("suggested_value")
+
+
+class TestDeye807TimeSlotContract:
+    """#807 — the config-flow entity picker for a program slot must offer only
+    domains the adapter's runtime validation accepts, and reopening the step
+    must re-show the slots the user already saved."""
+
+    @pytest.mark.asyncio
+    async def test_slot_selectors_never_offer_a_domain_the_adapter_rejects(
+        self, mock_hass, config_entry
+    ):
+        """The class guard: every domain the UI offers for time/soc/charge is a
+        domain ``_validate_slot`` accepts — so a user can always satisfy both.
+        The bug shipped a ``select`` picker for the time field while the runtime
+        demanded ``time.*`` (and writes via ``time.set_value``)."""
+        from custom_components.solar_energy_management.coordinator.battery_adapters.deye import (
+            _NUMERIC_DOMAINS,
+            _SELECT_DOMAINS,
+        )
+
+        # What DeyeBatteryAdapter._validate_slot / _write_and_verify accept.
+        accepted = {
+            "time": {"time"},          # split(".")[0] != "time" is rejected
+            "soc": set(_NUMERIC_DOMAINS),
+            "charge": set(_SELECT_DOMAINS),
+        }
+
+        flow = _flow(mock_hass, config_entry)
+        result = await _run_step(flow, "async_step_deye")
+        schema = result["data_schema"]
+        for n in range(1, 7):
+            for kind, ok in accepted.items():
+                offered = _selector_domains(schema, f"deye_program_{n}_{kind}")
+                assert offered, f"slot {n} {kind}: no domain offered"
+                assert offered <= ok, (
+                    f"slot {n} {kind}: picker offers {offered}, adapter "
+                    f"accepts {ok} — user cannot satisfy both"
+                )
+        # And specifically: the time field IS the writable time domain.
+        assert _selector_domains(schema, "deye_program_1_time") == {"time"}
+
+    @pytest.mark.asyncio
+    async def test_reopen_repopulates_saved_program_slots(
+        self, mock_hass, config_entry
+    ):
+        """Reopening the Deye step must pre-fill each slot from the saved
+        ``deye_program_groups`` list. Save stores the list shape; the fields
+        were reading only the never-persisted flat keys, so every slot came
+        back blank."""
+        saved = [
+            {
+                "time": f"time.deye_slice_{n}_time",
+                "soc": f"number.deye_slice_{n}_soc",
+                "charge": f"select.deye_slice_{n}_charge",
+            }
+            for n in range(1, 7)
+        ]
+        config_entry.options = {
+            "battery_charge_platform": "deye",
+            "deye_program_groups": saved,
+        }
+
+        flow = _flow(mock_hass, config_entry)
+        result = await _run_step(flow, "async_step_deye")
+        schema = result["data_schema"]
+        for n in range(1, 7):
+            assert _suggested(schema, f"deye_program_{n}_time") == (
+                f"time.deye_slice_{n}_time"
+            )
+            assert _suggested(schema, f"deye_program_{n}_soc") == (
+                f"number.deye_slice_{n}_soc"
+            )
+            assert _suggested(schema, f"deye_program_{n}_charge") == (
+                f"select.deye_slice_{n}_charge"
+            )
+
+    @pytest.mark.asyncio
+    async def test_reopen_falls_back_to_numbered_keys(
+        self, mock_hass, config_entry
+    ):
+        """When only the numbered-key form was ever stored (no list), reopen
+        still repopulates from those — mirroring the adapter's resolution order
+        so neither storage shape comes back blank."""
+        options = {"battery_charge_platform": "deye"}
+        for n in range(1, 7):
+            options[f"deye_program_{n}_time"] = f"time.slice_{n}"
+            options[f"deye_program_{n}_soc"] = f"number.slice_{n}"
+            options[f"deye_program_{n}_charge"] = f"select.slice_{n}"
+        config_entry.options = options
+
+        flow = _flow(mock_hass, config_entry)
+        result = await _run_step(flow, "async_step_deye")
+        schema = result["data_schema"]
+        assert _suggested(schema, "deye_program_1_time") == "time.slice_1"
+        assert _suggested(schema, "deye_program_6_charge") == "select.slice_6"
+
+    def test_adapter_rejects_a_select_time_entity(self):
+        """Pin the runtime contract the picker must match: a ``select.*`` time
+        entity is invalid, so the fix is to correct the picker (to time.*), not
+        to loosen the validator."""
+        from datetime import datetime, timedelta, timezone
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock
+
+        from custom_components.solar_energy_management.coordinator.battery_adapters.deye import (
+            DeyeBatteryAdapter,
+        )
+
+        now = datetime.now(timezone.utc)
+
+        def st(value, **attrs):
+            return SimpleNamespace(
+                state=str(value), attributes=attrs,
+                last_updated=now - timedelta(seconds=1),
+                last_changed=now - timedelta(seconds=1),
+            )
+
+        class _States:
+            def __init__(self, mapping):
+                self._mapping = mapping
+
+            def get(self, eid):
+                return self._mapping.get(eid)
+
+        hass = MagicMock()
+        hass.states = _States({
+            "select.slice_time": st("01:00:00", options=["01:00:00"]),
+            "number.slice_soc": st(21, unit_of_measurement="%", min=0, max=100),
+            "select.slice_charge": st("Disabled", options=["Disabled", "Grid"]),
+        })
+        adapter = DeyeBatteryAdapter(hass, {"deye_snapshot_store": MagicMock()})
+        reason = adapter._validate_slot(
+            {
+                "time": "select.slice_time",
+                "soc": "number.slice_soc",
+                "charge": "select.slice_charge",
+            },
+            1,
+        )
+        assert "time entity must be time.*" in reason

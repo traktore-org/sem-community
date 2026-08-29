@@ -70,6 +70,8 @@ _DYNAMIC_SWITCH_SELECT_KEYS: dict[str, str] = {
     # select.py per-charger dynamics
     "charger_{cid}_ev_target_type": "ev_target_type",
     "charger_{cid}_charge_mode": "charge_mode",
+    # (#804) phase mode — read by _phase_switch_tick (ev_control.py)
+    "charger_{cid}_phase_mode": "phase_mode",
     # select.py per-battery dynamics + global battery mode
     "battery_{bid}_mode": "battery_mode",
     "battery_mode": "battery_mode",
@@ -106,7 +108,6 @@ class TestSwitchSelectKnobsHaveReaders:
         select/switch key appears in the source, add it to the map (with its
         config key) so the reader contract covers it."""
         import re
-        from pathlib import Path
         src = (
             (_REPO_ROOT / "select.py").read_text()
             + (_REPO_ROOT / "switch.py").read_text()

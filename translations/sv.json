@@ -37,16 +37,14 @@
       },
       "hardware": {
         "title": "Hårdvara",
-        "description": "Two final values that depend on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n• Peak Power Limit — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
+        "description": "One final value depends on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
         "data": {
           "battery_capacity_kwh": "Husbatteriets kapacitet (kWh)",
-          "target_peak_limit": "Effekttoppsgräns (kW)",
           "generate_dashboard_on_install": "Skapa SEM-instrumentpanelen nu (startar om HA)",
           "diagram_style": "Systemdiagram stil"
         },
         "data_description": {
           "battery_capacity_kwh": "Total användbar kapacitet i ditt husbatteri (INTE elbilens) i kWh. Används av den prognosstyrda laddningsstrategin för att uppskatta hur mycket batteriet kan överbrygga ett solunderskott. Se växelriktarens specifikation.",
-          "target_peak_limit": "Maximalt antal kW som ditt nätavtal tillåter innan SEM börjar koppla bort last. För effekttariffer vanligtvis 3–5 kW; annars sätt din huvudsäkrings märkström delat med 4 för att lämna marginal.",
           "generate_dashboard_on_install": "När detta är aktiverat skapar SEM Lovelace-instrumentpanelen direkt efter att det här steget är klart och startar sedan om Home Assistant ca 5 s senare så att den nya instrumentpanelen blir synlig. Du kan alltid köra det manuellt igen senare via tjänsten solar_energy_management.generate_dashboard.",
           "diagram_style": "Välj systemdiagram på fliken Hem. 'SEM' använder det inbyggda animerade diagrammet. 'K-Flow' använder K-Flow HACS-kortet (måste installeras separat)."
         }
@@ -66,7 +64,7 @@
           "mobile_notification_service": "Tjänst för mobilaviseringar",
           "vehicle_soc_entity": "Fordonets batteri-SOC",
           "ev_battery_capacity_kwh": "EV batterikapacitet (kWh)",
-          "ev_target_soc": "EV mål-SOC (%)"
+          "ev_target_soc": "Betrakta som full vid (%)"
         },
         "data_description": {
           "ev_connected_sensor": "Binärsensor som rapporterar om fordonets kontakt är ansluten just nu.",
@@ -80,16 +78,14 @@
           "mobile_notification_service": "HA notify-tjänst för mobil push (t.ex. notify.mobile_app_your_phone).",
           "vehicle_soc_entity": "Valfri sensor som rapporterar fordonets aktuella laddningsnivå (0–100 %).",
           "ev_battery_capacity_kwh": "Total användbar kapacitet i elbilens batteri i kWh. Används för att uppskatta SOC och laddningstid.",
-          "ev_target_soc": "Mål-SOC (%) vid vilken SEM betraktar elbilen som fulladdad."
+          "ev_target_soc": "Härifrån betraktar SEM bilen som laddad. Det är en definition av \"full\", inte en laddgräns."
         }
       }
     },
     "error": {
       "unknown": "Ett oväntat fel uppstod. Försök igen.",
       "entity_not_found": "Entiteten hittades inte. Kontrollera att entitets-ID:t finns.",
-      "service_not_found": "Aviseringstjänsten hittades inte. Kontrollera tjänstens namn (t.ex. notify.mobile_app_your_phone).",
-      "heat_pump_partial_relays": "SG-Ready kräver BÅDA reläentiteterna. Ange båda reläerna — eller lämna båda tomma och konfigurera endast klimatentiteten för börvärdesboost i klimatläge.",
-      "deye_program_groups_incomplete": "Alla sex Deye-programgrupper måste ha entiteter för tid, SOC och nätladdning."
+      "service_not_found": "Aviseringstjänsten hittades inte. Kontrollera tjänstens namn (t.ex. notify.mobile_app_your_phone)."
     },
     "abort": {
       "already_configured": "Solar Energy Management är redan konfigurerat. Bara en instans tillåts.",
@@ -111,9 +107,10 @@
           "ev_total_energy_sensor": "EV totalenergiräknare (valfri)",
           "vehicle_soc_entity": "Sensor för fordonets batteri-SOC (valfri)",
           "ev_battery_capacity_kwh": "EV batterikapacitet (kWh)",
-          "ev_target_soc": "EV mål-SOC (%)",
-          "daily_ev_target_max": "Solladdningsgräns (kWh)",
-          "ev_target_soc_max": "Solladdningsgräns (SOC %)",
+          "ev_charger_efficiency": "Laddarens verkningsgrad (%)",
+          "ev_target_soc": "Betrakta som full vid (%)",
+          "daily_ev_target_max": "Ladda aldrig förbi (kWh)",
+          "ev_target_soc_max": "Ladda aldrig förbi (%)",
           "vehicle_range_entity": "Fordonets räckviddssensor",
           "ev_kwh_per_100km": "Fordonsförbrukning (kWh/100km)"
         },
@@ -126,9 +123,10 @@
           "ev_total_energy_sensor": "Valfri ackumulerad kWh-räknare för energi som levererats till fordonet.",
           "vehicle_soc_entity": "Valfri sensor som rapporterar fordonets aktuella laddningsnivå (0–100 %).",
           "ev_battery_capacity_kwh": "Total användbar kapacitet i elbilens batteri i kWh. Används för att uppskatta SOC och laddningstid.",
-          "ev_target_soc": "Mål-SOC (%) vid vilken SEM betraktar elbilen som fulladdad.",
-          "daily_ev_target_max": "Solöverskott laddar upp till detta och stoppar sedan. Lämna på fullt för att ladda fritt från solen.",
-          "ev_target_soc_max": "Solöverskott laddar upp till denna SOC och stoppar sedan. Lämna på 100 % för att ladda fritt från solen.",
+          "ev_charger_efficiency": "Andel av den uppmätta AC-energin som når batteriet. Sänk värdet om SOC-uppskattningen ligger före bilen. Vanligtvis 85-95 %, lägre vid enfas eller kyla.",
+          "ev_target_soc": "Härifrån betraktar SEM bilen som laddad. Det är en definition av \"full\", inte en laddgräns.",
+          "daily_ev_target_max": "Solöverskottet slutar ladda här. Detta är ett tak, inte ett mål — lämna på fullt för att ladda fritt från solen.",
+          "ev_target_soc_max": "Solöverskottet slutar ladda här. Detta är ett tak, inte ett mål — lämna på 100% för att ladda fritt från solen.",
           "ev_kwh_per_100km": "Används för att uppskatta räckvidden när ingen räckviddssensor är konfigurerad.",
           "vehicle_range_entity": "Valfri verklig räckviddssensor. Annars uppskattas räckvidden från SOC × kapacitet × verkningsgrad."
         }
@@ -140,7 +138,7 @@
           "update_interval": "Uppdateringsintervall (sekunder)",
           "battery_priority_soc": "Batteriprioritets-SOC (%)",
           "min_solar_power": "Minsta soleffekt — rå PV-produktion (W)",
-          "daily_ev_target": "Dagligt EV-mål (kWh)",
+          "daily_ev_target": "Garantera minst (kWh)",
           "battery_assist_max_power": "Batteristöd max effekt (W)",
           "battery_capacity_kwh": "Batterikapacitet (kWh)",
           "battery_discharge_protection_enabled": "Aktivera skydd mot batteriurladdning",
@@ -153,7 +151,7 @@
           "smart_night_charging": "Smart nattladdning",
           "vehicle_soc_entity": "Fordonets batteri-SOC",
           "ev_battery_capacity_kwh": "EV batterikapacitet (kWh)",
-          "ev_target_soc": "EV mål-SOC (%)",
+          "ev_target_soc": "Betrakta som full vid (%)",
           "battery_buffer_soc": "Gräns zon 2/3 — batteribuffert-SOC (%)",
           "battery_auto_start_soc": "Gräns zon 3/4 — batteriets autostart-SOC (%)",
           "battery_discharge_control_entity": "Styrentitet för batteriurladdning (valfri)",
@@ -161,7 +159,8 @@
           "legionella_target_temp": "Måltemperatur för legionelladesinfektion (°C)",
           "legionella_interval_hours": "Max antal timmar mellan desinfektionscykler",
           "diagram_style": "Systemdiagram stil",
-          "battery_assist_min_surplus": "Batteristöd – min. solöverskott (W)"
+          "battery_assist_min_surplus": "Batteristöd – min. solöverskott (W)",
+          "grid_sign_invert": "Invertera näteffektens tecken"
         },
         "data_description": {
           "update_interval": "Hur ofta koordinatorn läser sensorer och justerar hårdvaran. 10 s ger den mest exakta energiintegrationen; värden över 30 s underskattar energin. Intervall 10–60 s.",
@@ -169,7 +168,7 @@
           "battery_buffer_soc": "Gräns mellan zon 2 → zon 3. Över denna SOC får batteriet laddas ur för att överbrygga solunderskott medan elbilen laddas. Standard 70 %.",
           "battery_auto_start_soc": "Gräns mellan zon 3 → zon 4. Över denna SOC kan elbilen börja ladda även utan solöverskott, med uttag från batteriet. Standard 90 %.",
           "min_solar_power": "Golv för rå PV-produktion — paneleffekten under vilken ”solen är aktiv” är falskt: solar_only startar inte och skyddet mot djupt underskott behandlar det som mörker (laddningen stoppas alltså snabbt i stället för att överbrygga via elnätet). Detta är RÅ produktion, INTE överskott — till skillnad från ”Batteristöd – min. solöverskott” (sol − hem), som avgör när hembatteriet får hjälpa till. Standard 1000 W; håll det under laddarens hårdvaruminimum (~4140 W vid 3-fas, ~1380 W vid 1-fas).",
-          "daily_ev_target": "Mål i kWh per dygn för nattladdning från nätet. Sätt till 0 för att inaktivera nattladdning helt.",
+          "daily_ev_target": "SEM fyller på från nätet över natten så att bilen har minst så här mycket på morgonen. Detta är ett golv, inte en gräns — solen kan lägga till mer. 0 = använd aldrig nätet.",
           "battery_assist_max_power": "Maximal effekt som husbatteriet får ladda ur för att hjälpa elbilen i zon 3/4. Standard 4500 W.",
           "battery_capacity_kwh": "Total användbar kapacitet i husbatteriet (INTE elbilens batteri — det är ett separat fält i EV-steget). Används av den prognosstyrda laddningsstrategin.",
           "battery_discharge_protection_enabled": "När detta är PÅ begränsar SEM växelriktarens urladdningsgräns under nattladdning av elbilen, så att husbatteriet bara försörjer huset (inte bilen).",
@@ -185,23 +184,28 @@
           "hot_water_solar_target": "Måltemperatur (°C) för solstödd varmvattenberedning. SEM boostar beredaren när överskott finns.",
           "legionella_target_temp": "Temperatur (°C) som varmvattensystemet måste nå under en legionelladesinfektionscykel.",
           "legionella_interval_hours": "Maximalt antal timmar mellan legionelladesinfektionscykler innan SEM tvingar fram en uppvärmning.",
-          "battery_assist_min_surplus": "Minsta verkliga solöverskott innan husbatteriet får hjälpa till att ladda EV:n — i alla laddningslägen. Under detta är batteriet reserverat för huset (bilen drar från nätet + sol). Standard 1200 W. Ställ in 0 för att låta batteriet stödja EV:n överallt, även nattetid."
+          "battery_assist_min_surplus": "Minsta verkliga solöverskott innan husbatteriet får hjälpa till att ladda EV:n — i alla laddningslägen. Under detta är batteriet reserverat för huset (bilen drar från nätet + sol). Standard 1200 W. Ställ in 0 för att låta batteriet stödja EV:n överallt, även nattetid.",
+          "grid_sign_invert": "Slå på endast om nätimport visas som ett positivt värde (t.ex. Enphase). SEM:s konvention är negativ = import; detta negerar råvärdet och kringgår automatisk teckendetektering."
         }
       },
       "settings_ev": {
         "title": "EV Laddning & Sol",
         "description": "Konfigurera laddningsmål för elbilen och soltrösklar.",
         "data": {
-          "daily_ev_target": "Nattladdningsmål (kWh)",
+          "daily_ev_target": "Garantera minst (kWh)",
           "observer_mode": "Observatörsläge (skrivskyddat, ingen hårdvarustyrning)",
           "smart_night_charging": "Minska nattmålet utifrån morgondagens prognos",
-          "minimum_solar_power": "Minsta soleffekt för att starta EV-laddning (W)"
+          "minimum_solar_power": "Minsta soleffekt för att starta EV-laddning (W)",
+          "curtailment_probe_enabled": "Begränsningssond (skörda begränsad solel)",
+          "export_limit_entity": "Exportgräns-entitet (valfritt)"
         },
         "data_description": {
-          "daily_ev_target": "Mål i kWh att ladda från nätet varje natt. Sätt till 0 för att inaktivera nattladdning från nätet.",
+          "daily_ev_target": "SEM fyller på från nätet över natten så att bilen har minst så här mycket på morgonen. Detta är ett golv, inte en gräns — solen kan lägga till mer. 0 = använd aldrig nätet.",
           "observer_mode": "När detta är PÅ övervakar SEM allt men skickar aldrig kommandon till hårdvaran.",
           "smart_night_charging": "När detta är PÅ minskar SEM nattladdningsmålet när morgondagens solprognos är tillräcklig.",
-          "minimum_solar_power": "Minsta solöverskott (W) som krävs innan SEM startar solladdning av elbilen."
+          "minimum_solar_power": "Minsta solöverskott (W) som krävs innan SEM startar solladdning av elbilen.",
+          "curtailment_probe_enabled": "När växelriktaren begränsar nätexporten (t.ex. vid negativa priser) låses produktionen till förbrukningen och verklig solel förblir osynlig. Opt-in: SEM startar bilen kort på minsta ström och fortsätter bara om produktionen följer med.",
+          "export_limit_entity": "Växelriktarens exportgräns-entitet (autodetekteras för Huawei, GoodWe, SolaX, Victron m.fl. om tom). Skärper detekteringen och förhindrar onödiga sonder."
         }
       },
       "settings_tariff": {
@@ -209,19 +213,23 @@
         "description": "Elpriser och avancerade justeringsparametrar.",
         "data": {
           "electricity_import_rate": "Importpris",
+          "grid_import_surcharge": "Rörlig avgift från nätägaren (valuta/kWh)",
           "electricity_off_peak_rate": "Night tariff rate (if different)",
           "electricity_export_rate": "Exportpris",
           "demand_charge_rate": "Effektavgift",
           "update_interval": "Uppdateringsintervall (s)",
           "tariff_mode": "Tariffläge",
           "dynamic_tariff_entity": "Entitet för dynamiskt pris (detekteras automatiskt om tom)",
-          "dynamic_forecast_entity": "Prognosentitet (valfri, detekteras automatiskt om tom)",
+          "dynamic_forecast_entity": "Entitet för prisprognos (valfritt, identifieras automatiskt om tomt)",
           "dynamic_feedin_entity": "Entitet för överskottsersättning (valfri, för dynamiskt exportpris)",
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
-          "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)"
+          "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
+          "tariff_classification_mode": "Prisklassificeringsläge",
+          "solar_forecast_source": "Källa för solprognos"
         },
         "data_description": {
           "electricity_import_rate": "Dag-/enhetstariff för import (valuta/kWh inkl. moms). Används som reserv när dynamisk prissättning inte är tillgänglig.",
+          "grid_import_surcharge": "Valfri total rörlig nätägaravgift som läggs till varje importerad kWh. Kan kombinera elöverföringsavgift och energiskatt. Använd bara när den dynamiska prisentiteten inte redan innehåller avgifterna. Ingen fast abonnemangsavgift; påverkar inte export.",
           "electricity_off_peak_rate": "Importpris natt/lågtariff (valuta/kWh). Sätt lika med importpriset om du har en enhetstariff.",
           "electricity_export_rate": "Ersättning för överskottsel som betalas av elhandlaren (valuta/kWh).",
           "demand_charge_rate": "Månatlig effektavgift för effekttopp (valuta/kW/månad). Sätt till 0 om ditt avtal inte har någon.",
@@ -231,7 +239,9 @@
           "dynamic_forecast_entity": "Valfri sensor med timvisa prisprognoser som används för smart schemaläggning.",
           "dynamic_feedin_entity": "Valfri sensor som anger aktuellt pris för överskottsel/export för dynamiskt exportpris.",
           "grid_import_power_entity": "Valfri sensor (W) för importerad näteffekt. Detekteras automatiskt från Energi-instrumentpanelen; åsidosätt här vid behov.",
-          "grid_export_power_entity": "Valfri sensor (W) för exporterad näteffekt. Detekteras automatiskt från Energi-instrumentpanelen; åsidosätt här vid behov."
+          "grid_export_power_entity": "Valfri sensor (W) för exporterad näteffekt. Detekteras automatiskt från Energi-instrumentpanelen; åsidosätt här vid behov.",
+          "tariff_classification_mode": "Percentil grupperar priser relativt dagens intervall (rekommenderas). Statisk använder fasta trösklar för billigt/dyrt.",
+          "solar_forecast_source": "Vilken prognosintegration SEM läser. Automatisk identifiering föredrar Solcast, sedan Forecast.Solar, sedan Open-Meteo — välj en själv om du kör flera parallellt."
         }
       },
       "load_management": {
@@ -239,21 +249,23 @@
         "description": "Uppdatera konfigurationen för lasthantering",
         "data": {
           "load_management_enabled": "Aktivera lasthantering",
+          "peak_limit_unlimited": "Ingen nätgräns",
           "target_peak_limit": "Måleffekttoppsgräns (kW)",
           "warning_peak_level": "Varningsnivå för effekttopp (kW)",
           "emergency_peak_level": "Nödnivå för effekttopp (kW)",
           "vehicle_soc_entity": "Fordonets batteri-SOC",
           "ev_battery_capacity_kwh": "EV batterikapacitet (kWh)",
-          "ev_target_soc": "EV mål-SOC (%)"
+          "ev_target_soc": "Betrakta som full vid (%)"
         },
         "data_description": {
           "load_management_enabled": "Aktivera/inaktivera SEM:s automatiska lastbortkoppling för att hålla dig under din effekttoppsgräns.",
+          "peak_limit_unlimited": "Stänger av toppeffekthanteringen helt: SEM dimensionerar inte längre laster efter den målsatta toppgränsen och kopplar aldrig bort för att hålla den. Endast för anslutningar som ingen hushållslast kan hota. Detta är något annat än ”Aktivera lasthantering”, som bara stoppar bortkopplingen men behåller gränsen som dimensioneringstak.",
           "target_peak_limit": "Maximal näteffekt (kW) innan SEM börjar koppla bort styrbara laster.",
-          "warning_peak_level": "Effektnivå (kW) vid vilken SEM utfärdar en varning innan åtgärd vidtas.",
-          "emergency_peak_level": "Effektnivå (kW) vid vilken SEM aggressivt kopplar bort laster för att undvika effektavgifter.",
+          "warning_peak_level": "Effektnivå (kW) vid vilken SEM utfärdar en varning innan åtgärd vidtas. Måste ligga under den målsatta toppgränsen.",
+          "emergency_peak_level": "Effektnivå (kW) vid vilken SEM aggressivt kopplar bort laster för att undvika effektavgifter. Måste ligga över den målsatta toppgränsen.",
           "vehicle_soc_entity": "Valfri sensor som rapporterar fordonets aktuella laddningsnivå (0–100 %).",
           "ev_battery_capacity_kwh": "Total användbar kapacitet i elbilens batteri i kWh.",
-          "ev_target_soc": "Mål-SOC (%) vid vilken SEM betraktar elbilen som fulladdad."
+          "ev_target_soc": "Härifrån betraktar SEM bilen som laddad. Det är en definition av \"full\", inte en laddgräns."
         }
       },
       "notifications": {
@@ -265,7 +277,7 @@
           "mobile_notification_service": "Tjänst för mobilaviseringar",
           "vehicle_soc_entity": "Fordonets batteri-SOC",
           "ev_battery_capacity_kwh": "EV batterikapacitet (kWh)",
-          "ev_target_soc": "EV mål-SOC (%)"
+          "ev_target_soc": "Betrakta som full vid (%)"
         },
         "data_description": {
           "enable_charger_notifications": "Aktivera/inaktivera de permanenta aviseringsbanderollerna på laddarens statuskort.",
@@ -273,7 +285,7 @@
           "mobile_notification_service": "HA notify-tjänst för mobil push (t.ex. notify.mobile_app_your_phone).",
           "vehicle_soc_entity": "Valfri sensor som rapporterar fordonets aktuella laddningsnivå (0–100 %).",
           "ev_battery_capacity_kwh": "Total användbar kapacitet i elbilens batteri i kWh.",
-          "ev_target_soc": "Mål-SOC (%) vid vilken SEM betraktar elbilen som fulladdad."
+          "ev_target_soc": "Härifrån betraktar SEM bilen som laddad. Det är en definition av \"full\", inte en laddgräns."
         }
       },
       "battery_scheduler": {
@@ -289,7 +301,15 @@
           "battery_max_target_soc": "Maximalt mål-SOC",
           "battery_min_deficit_kwh": "Minsta underskottströskel",
           "battery_pessimism_weight": "Prognospessimism",
-          "battery_force_charge_negative_price": "Tvinga laddning vid negativt pris"
+          "battery_force_charge_negative_price": "Tvinga laddning vid negativt pris",
+          "battery_charge_platform": "Batteriets laddplattform",
+          "battery_replan_interval_min": "Omplaneringsintervall (min)",
+          "battery_prefer_consecutive_window": "Föredra ett sammanhängande laddfönster"
+        },
+        "data_description": {
+          "battery_charge_platform": "Vilken växelriktare SEM styr för schemalagd nätladdning. Välj Deye för att visa Deye-kopplingssteget.",
+          "battery_replan_interval_min": "Hur ofta laddschemat räknas om utifrån senaste prognos och priser.",
+          "battery_prefer_consecutive_window": "På: de billiga timmarna i ett block (färre start/stopp-cykler); av: de enskilt billigaste timmarna, även utspridda."
         }
       },
       "ev_charger_edit": {
@@ -309,8 +329,20 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "Överskottsprioritet (1=högst)",
           "ev_current_control_entity": "Strömstyrningsentitet (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Solladdningsgräns (kWh)",
-          "ev_target_soc_max": "Solladdningsgräns (SOC %)"
+          "daily_ev_target_max": "Ladda aldrig förbi (kWh)",
+          "ev_target_soc_max": "Ladda aldrig förbi (%)",
+          "daily_ev_target": "Garantera minst (kWh)",
+          "vehicle_soc_entity": "Sensor för fordonets batteri-SOC (valfri)",
+          "vehicle_range_entity": "Fordonets räckviddssensor",
+          "ev_kwh_per_100km": "Fordonsförbrukning (kWh/100km)",
+          "ev_target_soc": "Betrakta som full vid (%)",
+          "ev_battery_capacity_kwh": "EV batterikapacitet (kWh)",
+          "initial_current": "Startström (A)",
+          "ev_min_current": "Minsta laddström (A)",
+          "vehicle_min_current": "Fordonets minsta ström (A)",
+          "ev_phase_switch_entity": "Fasväxlingsentitet (valfritt)",
+          "ev_phase_switch_value_1p": "Fasväxling: värde för 1-fas (valfritt)",
+          "ev_phase_switch_value_3p": "Fasväxling: värde för 3-fas (valfritt)"
         },
         "data_description": {
           "charger_name": "Visningsnamn för den här laddaren i instrumentpanelen.",
@@ -326,8 +358,20 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "Fördelningsordning för överskott mellan flera laddare. Lägre nummer = högre prioritet.",
           "ev_current_control_entity": "Number-entitet som används för att ställa in laddströmmen (A). För Wallbox, go-eCharger och liknande laddare.",
-          "daily_ev_target_max": "Solöverskott laddar upp till detta och stoppar sedan. Lämna på fullt för att ladda fritt från solen.",
-          "ev_target_soc_max": "Solöverskott laddar upp till denna SOC och stoppar sedan. Lämna på 100 % för att ladda fritt från solen."
+          "daily_ev_target_max": "Solöverskottet slutar ladda här. Detta är ett tak, inte ett mål — lämna på fullt för att ladda fritt från solen.",
+          "ev_target_soc_max": "Solöverskottet slutar ladda här. Detta är ett tak, inte ett mål — lämna på 100% för att ladda fritt från solen.",
+          "daily_ev_target": "SEM fyller på från nätet över natten så att bilen har minst så här mycket på morgonen. Detta är ett golv, inte en gräns — solen kan lägga till mer. 0 = använd aldrig nätet.",
+          "vehicle_soc_entity": "Valfri sensor som rapporterar fordonets aktuella laddningsnivå (0–100 %).",
+          "vehicle_range_entity": "Valfri verklig räckviddssensor. Annars uppskattas räckvidden från SOC × kapacitet × verkningsgrad.",
+          "ev_kwh_per_100km": "Används för att uppskatta räckvidden när ingen räckviddssensor är konfigurerad.",
+          "ev_target_soc": "Härifrån betraktar SEM bilen som laddad. Det är en definition av \"full\", inte en laddgräns.",
+          "ev_battery_capacity_kwh": "Total användbar kapacitet i elbilens batteri i kWh. Används för att uppskatta SOC och laddningstid.",
+          "initial_current": "Laddström som SEM startar med innan den justeras till tillgängligt överskott.",
+          "ev_min_current": "Under detta pausar SEM laddningen i stället för att sänka strömmen ytterligare.",
+          "vehicle_min_current": "Strömgolv per fordon. Det effektiva minimet är det högsta av detta och laddarens minsta ström.",
+          "ev_phase_switch_entity": "Select/number/switch som växlar laddaren mellan 1- och 3-fasladdning (go-e 'psm', KEBA X-serien, openWB). SEM observerar och validerar tills vidare bara — automatisk växling kommer i en senare version.",
+          "ev_phase_switch_value_1p": "Vad som skrivs till växlingsentiteten för 1-fasladdning — ett selects alternativnamn, ett numbers värde eller on/off. Krävs för select-entiteter; number-standard 1, switch-standard off.",
+          "ev_phase_switch_value_3p": "Vad som skrivs till växlingsentiteten för 3-fasladdning — ett selects alternativnamn, ett numbers värde eller on/off. Krävs för select-entiteter; number-standard 3, switch-standard on."
         }
       },
       "ev_charger_add": {
@@ -347,8 +391,19 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "Överskottsprioritet (1=högst)",
           "ev_current_control_entity": "Strömstyrningsentitet (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Solladdningsgräns (kWh)",
-          "ev_target_soc_max": "Solladdningsgräns (SOC %)"
+          "daily_ev_target_max": "Ladda aldrig förbi (kWh)",
+          "ev_target_soc_max": "Ladda aldrig förbi (%)",
+          "daily_ev_target": "Garantera minst (kWh)",
+          "vehicle_soc_entity": "Sensor för fordonets batteri-SOC (valfri)",
+          "vehicle_range_entity": "Fordonets räckviddssensor",
+          "ev_kwh_per_100km": "Fordonsförbrukning (kWh/100km)",
+          "ev_target_soc": "Betrakta som full vid (%)",
+          "ev_battery_capacity_kwh": "EV batterikapacitet (kWh)",
+          "initial_current": "Startström (A)",
+          "ev_min_current": "Minsta laddström (A)",
+          "ev_phase_switch_entity": "Fasväxlingsentitet (valfritt)",
+          "ev_phase_switch_value_1p": "Fasväxling: värde för 1-fas (valfritt)",
+          "ev_phase_switch_value_3p": "Fasväxling: värde för 3-fas (valfritt)"
         },
         "data_description": {
           "charger_name": "Visningsnamn för den här laddaren i instrumentpanelen.",
@@ -364,8 +419,19 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "Fördelningsordning för överskott mellan flera laddare. Lägre nummer = högre prioritet.",
           "ev_current_control_entity": "Number-entitet som används för att ställa in laddströmmen (A). För Wallbox, go-eCharger och liknande laddare.",
-          "daily_ev_target_max": "Solöverskott laddar upp till detta och stoppar sedan. Lämna på fullt för att ladda fritt från solen.",
-          "ev_target_soc_max": "Solöverskott laddar upp till denna SOC och stoppar sedan. Lämna på 100 % för att ladda fritt från solen."
+          "daily_ev_target_max": "Solöverskottet slutar ladda här. Detta är ett tak, inte ett mål — lämna på fullt för att ladda fritt från solen.",
+          "ev_target_soc_max": "Solöverskottet slutar ladda här. Detta är ett tak, inte ett mål — lämna på 100% för att ladda fritt från solen.",
+          "daily_ev_target": "SEM fyller på från nätet över natten så att bilen har minst så här mycket på morgonen. Detta är ett golv, inte en gräns — solen kan lägga till mer. 0 = använd aldrig nätet.",
+          "vehicle_soc_entity": "Valfri sensor som rapporterar fordonets aktuella laddningsnivå (0–100 %).",
+          "vehicle_range_entity": "Valfri verklig räckviddssensor. Annars uppskattas räckvidden från SOC × kapacitet × verkningsgrad.",
+          "ev_kwh_per_100km": "Används för att uppskatta räckvidden när ingen räckviddssensor är konfigurerad.",
+          "ev_target_soc": "Härifrån betraktar SEM bilen som laddad. Det är en definition av \"full\", inte en laddgräns.",
+          "ev_battery_capacity_kwh": "Total användbar kapacitet i elbilens batteri i kWh. Används för att uppskatta SOC och laddningstid.",
+          "initial_current": "Laddström som SEM startar med innan den justeras till tillgängligt överskott.",
+          "ev_min_current": "Under detta pausar SEM laddningen i stället för att sänka strömmen ytterligare.",
+          "ev_phase_switch_entity": "Select/number/switch som växlar laddaren mellan 1- och 3-fasladdning (go-e 'psm', KEBA X-serien, openWB). SEM observerar och validerar tills vidare bara — automatisk växling kommer i en senare version.",
+          "ev_phase_switch_value_1p": "Vad som skrivs till växlingsentiteten för 1-fasladdning — ett selects alternativnamn, ett numbers värde eller on/off. Krävs för select-entiteter; number-standard 1, switch-standard off.",
+          "ev_phase_switch_value_3p": "Vad som skrivs till växlingsentiteten för 3-fasladdning — ett selects alternativnamn, ett numbers värde eller on/off. Krävs för select-entiteter; number-standard 3, switch-standard on."
         }
       },
       "pv_naming": {
@@ -426,18 +492,24 @@
       },
       "settings_phase_guard_topology": {
         "title": "Elektrisk topologi",
-        "description": "Välj hur husets last matas. I en hybridinstallation kan elnätet och växelriktarens Load-/EPS-/Backup-utgång mata huset samtidigt. Husets interna last kan därför vara högre än strömmen genom huvudsäkringen. SEM övervakar de två lastvägarna separat. Den här förhandsversionen är endast diagnostisk och agerar aldrig på resultatet.",
+        "description": "Välj hur husets last matas. I en hybridinstallation kan elnätet och växelriktarens Load-/EPS-/Backup-utgång mata huset samtidigt. Husets interna last kan därför vara högre än strömmen genom huvudsäkringen. SEM övervakar de två lastvägarna separat. Aktiv styrning är ett separat val; verifiera först mätvärdena i Observatörsläge innan EV-styrningen aktiveras.",
         "data": {
-          "phase_guard_topology": "Matningstopologi"
+          "phase_guard_topology": "Matningstopologi",
+          "phase_guard_phase_count": "Antal faser"
         },
         "data_description": {
-          "phase_guard_topology": "Välj Endast elnät för en vanlig installation. Välj Elnät + hybridväxelriktare när laster även matas via en Load-, EPS- eller Backup-utgång."
+          "phase_guard_topology": "Välj Endast elnät för en vanlig installation. Välj Elnät + hybridväxelriktare när laster även matas via en Load-, EPS- eller Backup-utgång.",
+          "phase_guard_phase_count": "Välj 1 för enfasförsörjning eller 3 för trefasförsörjning. Endast de valda faserna krävs och övervakas."
         }
       },
       "settings_phase_guard": {
         "title": "Fasvaktens sensorer",
-        "description": "Koppla sensorer för {topology}. Välj en komplett L1–L3-familj med direkt RMS-ström när den finns; annars beräknas nätströmmen från effektens absolutvärde delat med spänningen. För hybridens Load-/EPS-väg väljer du icke-negativa RMS-strömsensorer. Saknade, gamla, ogiltiga eller negativa värden ger fail-closed. Observatörsläget publicerar bara diagnostik och skickar inga styrkommandon.",
+        "description": "Kartlägg sensorerna för {topology}. För enfasförsörjning krävs endast L1. För trefasförsörjning väljer du en komplett direkt RMS-strömfamilj L1-L3 när sådan finns tillgänglig; annars beräknas nätströmmen som absolut effekt dividerat med spänning. För en hybrid Load/EPS-bana väljer du icke-negativa RMS-strömsensorer för de konfigurerade faserna. Saknade, inaktuella, ogiltiga eller negativa obligatoriska avläsningar misslyckas stängt (fail closed). Observer Mode publicerar endast diagnostik; det skickar inga styrkommandon.",
         "data": {
+          "phase_guard_enforcement_enabled": "Stoppa EV-laddning när fasgränser överskrids",
+          "phase_guard_notifications_enabled": "Skicka fasvaktsnotiser",
+          "phase_guard_recovery_margin_a": "Säkerhetsmarginal under varje fasgräns",
+          "phase_guard_recovery_cycles": "Säkra mätvärden innan laddning återupptas",
           "phase_guard_grid_limit_a": "Huvudsäkringens gräns per fas",
           "phase_guard_inverter_limit_a": "Gräns för inverter Load/EPS per fas",
           "phase_guard_max_age_s": "Högsta sensorålder",
@@ -455,12 +527,15 @@
           "phase_guard_inverter_l3_current_entity": "Inverter Load/EPS RMS-ström L3"
         },
         "data_description": {
+          "phase_guard_enforcement_enabled": "När detta är aktiverat stängs alla EV-laddare som SEM styr omedelbart av vid osäkra eller inaktuella mätvärden för att undvika att huvudsäkringen löser ut. Avstängt som standard så att du först kan verifiera fasvakten i Observatörsläge.",
+          "phase_guard_recovery_margin_a": "Laddningen förblir blockerad tills varje obligatorisk fas ligger minst så här långt under sin egen gräns.",
+          "phase_guard_recovery_cycles": "Så många sammanhängande friska och säkra mätvärden krävs innan EV-laddningen får slås på igen.",
           "phase_guard_grid_limit_a": "Högsta tillåtna nätström per fas, normalt huvudsäkringens märkström.",
           "phase_guard_inverter_limit_a": "Högsta tillåtna RMS-ström per fas på växelriktarens Load-/EPS-/Backup-utgång.",
           "phase_guard_max_age_s": "Ett mätvärde som är äldre än detta behandlas som osäkert.",
-          "phase_guard_grid_l1_current_entity": "Valfri direkt, icke-negativ RMS-nätström i A. Om en direkt källa används måste L1–L3 anges.",
-          "phase_guard_grid_l2_current_entity": "Valfri direkt, icke-negativ RMS-nätström i A. Om en direkt källa används måste L1–L3 anges.",
-          "phase_guard_grid_l3_current_entity": "Valfri direkt, icke-negativ RMS-nätström i A. Om en direkt källa används måste L1–L3 anges.",
+          "phase_guard_grid_l1_current_entity": "Valfri direkt, icke-negativ RMS-nätström i A. Om en direkt källa används måste alla konfigurerade faser anges.",
+          "phase_guard_grid_l2_current_entity": "Valfri direkt, icke-negativ RMS-nätström i A. Om en direkt källa används måste alla konfigurerade faser anges.",
+          "phase_guard_grid_l3_current_entity": "Valfri direkt, icke-negativ RMS-nätström i A. Om en direkt källa används måste alla konfigurerade faser anges.",
           "phase_guard_grid_l1_power_entity": "Signerad näteffekt för L1 i W. Import och export accepteras.",
           "phase_guard_grid_l2_power_entity": "Signerad näteffekt för L2 i W. Import och export accepteras.",
           "phase_guard_grid_l3_power_entity": "Signerad näteffekt för L3 i W. Import och export accepteras.",
@@ -471,7 +546,61 @@
           "phase_guard_inverter_l2_current_entity": "Icke-negativ RMS-ström för inverter Load/EPS L2.",
           "phase_guard_inverter_l3_current_entity": "Icke-negativ RMS-ström för inverter Load/EPS L3."
         }
+      },
+      "deye": {
+        "title": "Deye framtvingad nätladdning",
+        "description": "Anslut en Deye hybridväxelriktare för schemalagd nätladdning. Observatörsläge är PÅ och styrning AV som standard, så inget skrivs till växelriktaren förrän du uttryckligen aktiverar det.",
+        "data": {
+          "deye_grid_charge_switch": "Nätladdningsbrytare (entitet)",
+          "deye_charge_current_entity": "Laddström-number-entitet (A)",
+          "deye_battery_voltage_entity": "Batterispänning-sensor (entitet)",
+          "deye_battery_voltage_max_age_s": "Batterispänning max ålder (s)",
+          "deye_max_charge_current_a": "Max laddström (A)",
+          "deye_bms_max_charge_current_a": "BMS max laddström (A)",
+          "deye_max_discharge_power": "Max urladdningseffekt (W)",
+          "deye_program_control": "Styr programmets tidsluckor",
+          "deye_observer_mode": "Observatörsläge (skrivskyddat)",
+          "deye_actuation_enabled": "Aktivera styrning (skriv till växelriktare)",
+          "deye_work_mode_control": "Styr arbetsläge",
+          "deye_work_mode_entity": "Arbetsläge-select-entitet",
+          "deye_work_mode_load_first_option": "Arbetslägesvärde för Load First",
+          "deye_work_mode_battery_first_option": "Arbetslägesvärde för Battery First",
+          "deye_force_charge_work_mode": "Arbetsläge vid framtvingad laddning",
+          "deye_program_1_time": "Program 1 — tidslucka-entitet (time.*)",
+          "deye_program_1_soc": "Program 1 — mål-SOC-number-entitet",
+          "deye_program_1_charge": "Program 1 — nätladdning-select-entitet",
+          "deye_program_2_time": "Program 2 — tidslucka-entitet (time.*)",
+          "deye_program_2_soc": "Program 2 — mål-SOC-number-entitet",
+          "deye_program_2_charge": "Program 2 — nätladdning-select-entitet",
+          "deye_program_3_time": "Program 3 — tidslucka-entitet (time.*)",
+          "deye_program_3_soc": "Program 3 — mål-SOC-number-entitet",
+          "deye_program_3_charge": "Program 3 — nätladdning-select-entitet",
+          "deye_program_4_time": "Program 4 — tidslucka-entitet (time.*)",
+          "deye_program_4_soc": "Program 4 — mål-SOC-number-entitet",
+          "deye_program_4_charge": "Program 4 — nätladdning-select-entitet",
+          "deye_program_5_time": "Program 5 — tidslucka-entitet (time.*)",
+          "deye_program_5_soc": "Program 5 — mål-SOC-number-entitet",
+          "deye_program_5_charge": "Program 5 — nätladdning-select-entitet",
+          "deye_program_6_time": "Program 6 — tidslucka-entitet (time.*)",
+          "deye_program_6_soc": "Program 6 — mål-SOC-number-entitet",
+          "deye_program_6_charge": "Program 6 — nätladdning-select-entitet"
+        },
+        "data_description": {
+          "deye_bms_max_charge_current_a": "Valfritt tak från BMS. 0 = ingen BMS-gräns — växelriktarens eget maximum gäller.",
+          "deye_observer_mode": "När PÅ beräknar och loggar SEM sina Deye-åtgärder men skriver aldrig till växelriktaren.",
+          "deye_actuation_enabled": "När AV skriver SEM aldrig till växelriktaren, även om observatörsläget också är av. Båda grindarna måste tillåta innan ett kommando skickas.",
+          "deye_max_charge_current_a": "Säker övre gräns som SEM kommenderar på laddström-entiteten."
+        }
       }
+    },
+    "error": {
+      "service_not_found": "Aviseringstjänsten hittades inte. Kontrollera tjänstens namn (t.ex. notify.mobile_app_your_phone).",
+      "peak_warning_not_below_target": "Varningsnivån måste ligga under den målsatta toppgränsen – den är den tidiga varningen om att målet närmar sig.",
+      "peak_emergency_not_above_target": "Nödnivån måste ligga över den målsatta toppgränsen – annars kopplar SEM bort laster innan gränsen den skyddar ens nås.",
+      "heat_pump_partial_relays": "SG-Ready kräver BÅDA reläentiteterna. Ange båda reläerna — eller lämna båda tomma och konfigurera endast klimatentiteten för börvärdesboost i klimatläge.",
+      "deye_program_groups_incomplete": "Alla sex Deye-programgrupper måste ha entiteter för tid, SOC och nätladdning.",
+      "deye_work_mode_mapping_not_distinct": "Work Mode-styrning kräver två olika alternativ – ett för Load First och ett för Battery First. Välj båda, och inte samma två gånger.",
+      "deye_force_charge_work_mode_invalid": "Välj vilket Work Mode SEM ska använda för att tvångsladda batteriet: Load First eller Battery First."
     }
   },
   "entity": {
@@ -542,6 +671,9 @@
       "night_charging_status": {
         "name": "Nattladdning"
       },
+      "energy_plan": {
+        "name": "Energiplan"
+      },
       "battery_priority_status": {
         "name": "Batteriprioritet"
       },
@@ -605,6 +737,9 @@
       "flow_battery_to_home_power": {
         "name": "Batteri till hem"
       },
+      "flow_battery_to_grid_power": {
+        "name": "Batteri till nät"
+      },
       "flow_battery_to_ev_power": {
         "name": "Batteri till EV"
       },
@@ -640,6 +775,9 @@
       },
       "flow_battery_to_home_energy": {
         "name": "Batteri till hem energi"
+      },
+      "flow_battery_to_grid_energy": {
+        "name": "Batteri till nät energi"
       },
       "flow_battery_to_ev_energy": {
         "name": "Batteri till EV energi"
@@ -908,6 +1046,12 @@
       "lifetime_ev_solar_share": {
         "name": "EV solandel totalt"
       },
+      "lifetime_ev_battery_share": {
+        "name": "EV batteriandel totalt"
+      },
+      "lifetime_ev_grid_share": {
+        "name": "EV nätandel totalt"
+      },
       "vehicle_soc": {
         "name": "Fordonets SOC"
       },
@@ -1063,6 +1207,42 @@
       },
       "vpp_event": {
         "name": "VPP-händelse"
+      },
+      "heat_pump_energy_today": {
+        "name": "Värmepump idag"
+      },
+      "heat_pump_energy_month": {
+        "name": "Värmepump denna månad"
+      },
+      "heat_pump_energy_year": {
+        "name": "Värmepump i år"
+      },
+      "heat_pump_energy_total": {
+        "name": "Värmepump totalt"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "Värmepump flyttad idag"
+      },
+      "daily_battery_charge_solar": {
+        "name": "Idag laddning från sol"
+      },
+      "daily_battery_charge_grid": {
+        "name": "Idag laddning från nät"
+      },
+      "daily_battery_grid_cost": {
+        "name": "Idag kostnad nätladdning"
+      },
+      "battery_stored_grid_share": {
+        "name": "Lagrad energi från nät"
+      },
+      "true_baseload_power": {
+        "name": "Verklig baslast"
+      },
+      "daily_true_baseload_energy": {
+        "name": "Verklig baslast idag"
+      },
+      "daily_total_consumption": {
+        "name": "Idag total förbrukning"
       }
     },
     "binary_sensor": {
@@ -1109,6 +1289,9 @@
       },
       "vacation_mode": {
         "name": "Semesterläge"
+      },
+      "energy_plan_actuation": {
+        "name": "Energiplansutförande"
       }
     },
     "number": {
@@ -1199,6 +1382,9 @@
       "ev_min_current": {
         "name": "{charger} Min. ampere"
       },
+      "ev_max_current": {
+        "name": "{charger} Max. ampere"
+      },
       "vehicle_min_current": {
         "name": "{charger} Fordonets min. ampere"
       },
@@ -1237,6 +1423,14 @@
           "min_plus_solar": "Min + Sol",
           "always_max": "Alltid (max)",
           "off": "Av"
+        }
+      },
+      "phase_mode": {
+        "name": "{charger} Fasläge",
+        "state": {
+          "auto": "Auto",
+          "1": "1-fas",
+          "3": "3-fas"
         }
       }
     }
@@ -1280,10 +1474,6 @@
     }
   },
   "issues": {
-    "ev_charger_not_configured": {
-      "title": "EV-laddare ej konfigurerad",
-      "description": "Inga sensorer för EV-laddaren är konfigurerade, så EV-laddningsfunktionerna är inte tillgängliga. Lägg till en ”ansluten”-sensor eller en laddningseffektsensor i integrationsalternativen för att aktivera EV-laddning."
-    },
     "sensor_unavailable": {
       "title": "Sensorn är otillgänglig",
       "description": "Sensorn `{entity_id}` ({friendly_name}) har varit otillgänglig i {minutes}+ minuter. SEM kan inte inkludera den i beräkningarna förrän den återhämtar sig. Kontrollera den underliggande integrationen (Huawei modbus / Solcast / Forecast.Solar / ditt växelriktarnätverk). Detta problem försvinner automatiskt när sensorn nästa gång rapporterar ett giltigt värde."
@@ -1330,7 +1520,23 @@
     },
     "soc_cap_unenforceable": {
       "title": "Kan inte upprätthålla laddgränsen på {target} %: {name}",
-      "description": "**{name}** är inställd på ett procentuellt laddmål, men ditt fordon rapporterar inte sin laddningsnivå just nu, så SEM kan inte stoppa vid **{target} %** — laddningen fortsätter tills bilen själv trappar ner (nästan full).\n\nOm din instrumentpanel visar en batteriprocent är det SEM:s *uppskattade* SOC, som medvetet ignoreras för den hårda gränsen (den kan driva). För att upprätthålla gränsen kopplar du in en **verklig SOC-sensor för fordonet** till denna laddare (Konfiguration → EV → Fordonets SOC-entitet). Denna reparation försvinner automatiskt så snart ett verkligt SOC-värde är tillgängligt igen."
+      "description": "**{name}** är inställd på ett laddmål i procent, men fordonet rapporterar just nu ingen laddningsnivå — SEM kan därför inte stanna *exakt* vid **{target}%**.\n\nDet laddar ändå inte blint: från den senaste riktiga avläsningen under den här sessionen räknar det den energi som faktiskt levererats och stannar när den uppmätta summan når ditt mål — överskridandet är bara det bilen tagit sedan avläsningen. Om ingen riktig avläsning alls har kommit in under sessionen (eller om SEM startades om mitt i laddningen) saknas referenspunkt, och laddningen pågår tills bilen själv drar ner effekten nära fullt.\n\nFör en gräns som träffar rätt, koppla en **riktig SOC-sensor för fordonet** till den här laddaren (Konfiguration → EV → Fordons-SOC-entitet). Batteriprocenten på instrumentpanelen är SEM:s *uppskattade* SOC, som medvetet ignoreras för den hårda gränsen (den kan driva). Den här reparationen försvinner automatiskt så snart en riktig SOC-avläsning finns igen."
+    },
+    "unmanaged_charger_found": {
+      "title": "SEM hittade en laddbox som den inte styr",
+      "description": "Enheten **{name}** ser ut som en laddbox, men ingen är konfigurerad i SEM — så SEM rör den inte ({count} kandidat(er) hittade).\n\nLägg till den under Inställningar → Enheter och tjänster → SEM → Konfigurera för att låta SEM optimera laddning med sol och billiga tariffer. Då dyker även EV-fliken med laddlägen upp.\n\nÄr det ingen laddbox? Ignorera detta — SEM styr den ändå inte."
+    },
+    "lovelace_yaml_mode": {
+      "title": "Lovelace i YAML-läge — lägg till SEM:s kortresurser",
+      "description": "Din Home Assistant kör Lovelace i YAML-läge, så SEM kan inte registrera sina kort automatiskt och panelen visar «Konfigurationsfel»-kort.\n\nLägg till detta i `configuration.yaml` under `lovelace:` → `resources:`, starta om Home Assistant och ladda om webbläsaren (Ctrl+Skift+R):\n\n```yaml\n{resources}\n```\n\nMeddelandet försvinner när resurserna laddats."
+    },
+    "charger_control_entity_broken": {
+      "title": "Laddboxens styrentitet fungerar inte: {name}",
+      "description": "SEM använder **`{entity_id}`** för att {capability} på **{name}**, men den entiteten är `{reason}` — varje kommando försvinner. Kontrollera entiteten i **Utvecklarverktyg → Tillstånd** och åtgärda vid källan, eller peka om SEM via **Inställningar → Enheter och tjänster → SEM → Konfigurera → Laddbox → Redigera**."
+    },
+    "battery_force_discharge_unsupported": {
+      "title": "Battery power setpoint cannot be written: {entity_id}",
+      "description": "SEM tried to write **{entity_id}** and the device refused every time: `{error}`.\n\nThe entity exists and SEM is addressing it correctly — the inverter's firmware simply does not implement writing that register. This usually means the entity you picked for *forcible discharge* in SEM's battery settings is readable but not writable on your hardware.\n\nSEM has stopped trying, so this will no longer fill your log. Two things follow: the routine safety write SEM makes when returning the battery to normal operation is skipped (harmless — there was nothing set to clear), and **battery-to-grid export cannot run** on this battery. Charging, discharge limits and everyday operation are unaffected.\n\n**If you do not use battery-to-grid export**, clear the forcible-discharge entity in SEM's battery settings and this notice goes away. **If you expected it to work**, the entity is likely the wrong one — or your inverter does not support commanded export. A restart makes SEM try again, so a firmware update or a corrected entity is picked up on its own."
     }
   },
   "selector": {

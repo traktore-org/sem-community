@@ -17,7 +17,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
-    from ..charger_types import ChargerIntent, ChargerPower
+    from ..charger_types import ChargerPower
 
 
 class ChargerAdapter(ABC):
@@ -130,6 +130,17 @@ class ChargerAdapter(ABC):
            power. The adapter encapsulates that re-assertion.
 
         Idempotent."""
+
+    async def command_park_off(self) -> None:
+        """(park-on-disconnect) The car is GONE — leave the box OFF and cold
+        so a later plug-in cannot auto-start a charge SEM never asked for.
+
+        Default is ``command_disable`` — right for every brand whose "off"
+        is a held switch / 0 A (Wallbox, Easee, go-e, OCPP). KEBA overrides
+        it: its ``command_disable`` routes through the quota-hold stop, which
+        is meant to bound a DRAWING session and would write a fresh energy
+        quota the next plug-in inherits. A gone car needs a plain disable."""
+        await self.command_disable()
 
     # ─── Observation ───────────────────────────────────────────
 

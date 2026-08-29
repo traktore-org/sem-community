@@ -139,8 +139,10 @@ class SEMOnboardingBanner extends SEMLitBase {
 }
 
 semDefineCard('sem-onboarding-banner', SEMOnboardingBanner, {
-    type: 'custom:sem-onboarding-banner',
+    type: 'sem-onboarding-banner',
     name: 'SEM Onboarding Banner',
     description: 'One-time welcome banner pointing existing users to the new Configuration tab',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-onboarding-banner',
     preview: false,
 });

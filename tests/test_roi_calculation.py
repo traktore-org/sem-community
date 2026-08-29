@@ -4,18 +4,14 @@ Tests the hybrid ROI approach:
 - Past (pre-SEM): lifetime_kWh × 7-day avg rate
 - Future (with SEM): accumulated daily_savings at real rates
 """
-import pytest
-from collections import deque
 from datetime import date, timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from custom_components.solar_energy_management.coordinator.energy_calculator import (
     EnergyCalculator,
 )
 from custom_components.solar_energy_management.coordinator.types import (
-    PowerReadings,
     EnergyTotals,
-    CostData,
 )
 
 
@@ -234,7 +230,7 @@ class TestDynamicTariffROI:
         }
 
         # Simulate 7 days of accumulation
-        for day in range(7):
+        for _day in range(7):
             calc._accumulated_savings += 5.0  # 5 CHF/day
             calc._accumulated_export_revenue += 1.0
             calc._accumulated_self_consumed_kwh += 20.0

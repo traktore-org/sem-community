@@ -22,13 +22,22 @@ The **Solar Gate** (`battery_assist_min_surplus`, default 1200 W) decides how mu
 - The configurable range is **0–5000 W**, so on a very large PV array you cannot require *more* than 5 kW of surplus before the battery assists.
 - The discharge clamp it drives is a hard limit only on inverters that expose a discharge-power `number` entity (see above); on others the gate still governs SEM's *requested* amps but cannot physically cap the inverter's discharge.
 
-## Battery → grid export arbitrage (disabled in this stable)
+## Battery → grid export arbitrage (wired in v2.0, off by default)
 
-Battery → grid export arbitrage (selling stored energy to the grid when the dynamic export price beats the recharge cost) is implemented but **deactivated in v1.7.3 stable** pending more review and soak (#533; still deactivated as of v1.7.5 — re-evaluation planned for a later v1.7.x release). The per-battery modes and code remain, but the arbitrage opt-in is hidden in the UI.
+Battery → grid export arbitrage — selling stored energy back to the grid when the dynamic export price beats the cost of recharging — is **fully wired as of v2.0** (#638): the energy plan owns *when* a sell block may run, the live economics decide *whether* it still pays at that moment, and the per-battery mode decides whether it *may* at all.
+
+It nonetheless stays **dormant on every install unless you turn it on deliberately** (#533 stands): the global opt-in defaults off, each battery's `allow_arbitrage` defaults off, and the v14 migration forces the flag off once so no install inherits it by accident.
+
+Two limits worth knowing before you enable it:
+
+- **Check your grid connection agreement first.** Many contracts permit exporting *solar* but not exporting *stored* energy. SEM cannot know your contract. `sensor.sem_flow_battery_to_grid_power` is the compliance witness — with arbitrage off it should read 0 W at all times.
+- The sell is capped at the **block-implied power** (`kWh ÷ hours`), not the inverter's maximum discharge — SEM sells the planned energy over the planned window rather than dumping the pack at full rate.
+
+Full walkthrough with worked examples: [Battery export arbitrage](BATTERY_EXPORT_ARBITRAGE.md).
 
 ## Sunrise-based meter day
 
-SEM deliberately uses three day boundaries: daily ENERGY totals (solar / home / grid / battery) reset at **midnight**, matching HA's Energy Dashboard and utility billing. The EV daily counter rolls at the charger's **Charge-by deadline** (default 07:00) so an overnight charge lands in one bucket — it will not match a calendar-day comparison. Load **runtime targets** roll at **sunrise**, so an overnight top-up finishes yesterday's hours. Comparing any of the three against a source with a different boundary shows expected offsets, not drift.
+SEM deliberately uses three day boundaries: daily ENERGY totals (solar / home / grid / battery) reset at **midnight**, matching HA's Energy Dashboard and utility billing. The EV daily counter rolls at the **Charge-by deadline** (default 07:00) so an overnight charge lands in one bucket — it will not match a calendar-day comparison. On multi-charger installs this holds for the fleet total only while every charger shares one deadline; with differing *Charge by* times the fleet total rolls at **midnight** (the only boundary all chargers share, #724) while each charger's own counter keeps its own deadline. Load **runtime targets** roll at **sunrise**, so an overnight top-up finishes yesterday's hours. Comparing any of the three against a source with a different boundary shows expected offsets, not drift.
 
 Since v1.7.5 the daily **home** row is derived from the day's reconciled counters rather than integrated (#628) — see the [Troubleshooting entry](TROUBLESHOOTING.md#daily-home-consumption-doesnt-match-my-meter-or-the-other-daily-rows). One consequence worth knowing: **on the day you upgrade to v1.7.5**, the home row keeps the old behaviour for that single calendar day and switches to the balance from the following midnight.
 
@@ -52,6 +61,9 @@ Some EV chargers have limitations that prevent full SEM control:
 - **Myenergi Zappi** — the Zappi has built-in solar diversion logic that conflicts with external surplus control. SEM can monitor the Zappi but cannot control charging current — the Zappi manages surplus charging internally.
 - **KSTAR inverters** — no dedicated HA integration exists. Use [ha-solarman](https://github.com/davidrapan/ha-solarman) with KSTAR YAML profiles for inverter/battery support.
 - **Easee** — the power sensor is disabled by default in the HA Easee integration. It must be manually enabled in **Settings > Devices > Easee** before SEM can detect and configure the charger.
+## EV 1↔3-phase switching is off by default
+
+Automatic phase switching exists but is **dormant unless you switch it on per charger** (`ev_phase_switching_enabled`). Real testing found the shipped model harmful on two of the three brands that tried it: a Wattpilot latches into a paused force-state that a current write cannot clear, and a Zaptec has no phase command at all — it switches implicitly on a current threshold, so the sequence stopped the charger, switched nothing and retried. Making it safe across brands is 2.1 work; until then the entity alone does not activate the path, and the phase-mode selector is gated on the same key so a selector can never promise something the actuation will not do.
 
 ## Heat pump SG-Ready control
 

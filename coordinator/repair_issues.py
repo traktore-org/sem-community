@@ -31,7 +31,7 @@ spamming", 2026-06-06) drove this work.
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Optional
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
@@ -188,6 +188,56 @@ def clear_charger_actuation_failed(hass: HomeAssistant, device_id: str) -> None:
         _LOGGER.debug("issue_registry.delete failed for %s: %s", device_id, e)
 
 
+def _battery_force_discharge_issue_id(entity_id: str) -> str:
+    return f"battery_force_discharge_unsupported_{entity_id}"
+
+
+def raise_battery_force_discharge_unsupported(
+    hass: HomeAssistant,
+    entity_id: str,
+    *,
+    error: str,
+) -> None:
+    """File a repair when the battery refuses the forcible-discharge write.
+
+    (#840) @RienduPre's Growatt exposes the setpoint entity but its firmware
+    does not implement the write, so every attempt was rejected — 2,364 log
+    lines in nineteen hours. SEM now stops asking after three refusals, but
+    stopping quietly would trade one silent failure for another: the user
+    configured battery-to-grid export and it would simply never happen.
+
+    #799's lesson applies — a log line is not a surface. Raised once the
+    capability is withdrawn; cleared the moment a write succeeds again.
+    """
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id=_battery_force_discharge_issue_id(entity_id),
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="battery_force_discharge_unsupported",
+            translation_placeholders={
+                "entity_id": entity_id,
+                "error": error,
+            },
+        )
+    except Exception as e:  # noqa: BLE001 — never fail the cycle over a repair
+        _LOGGER.debug("issue_registry.create failed for %s: %s", entity_id, e)
+
+
+def clear_battery_force_discharge_unsupported(
+    hass: HomeAssistant, entity_id: str,
+) -> None:
+    """Clear it once the device accepts a setpoint again."""
+    try:
+        ir.async_delete_issue(
+            hass, DOMAIN, _battery_force_discharge_issue_id(entity_id))
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete failed for %s: %s", entity_id, e)
+
+
 def _stop_unenforceable_issue_id(device_id: str) -> str:
     return f"charger_stop_unenforceable_{device_id}"
 
@@ -253,13 +303,21 @@ def raise_soc_cap_unenforceable(
 ) -> None:
     """File a repair when an SOC-% charge target can't be enforced (#526).
 
-    A charger set to a ``%`` target needs a readable vehicle SOC to stop at
-    the cap. When the car isn't reporting SOC (asleep / no real sensor — the
-    dashboard may still show an *estimated* SOC, which SEM deliberately
-    ignores for the cap), SEM keeps charging until the car tapers. That
-    surprised RienduPre ("car charged past 80%"). Surface it as a persistent,
-    actionable repair instead of silently overshooting. Cleared the moment a
-    real SOC reading returns (or the target is no longer SOC-based).
+    A charger set to a ``%`` target needs a readable vehicle SOC to stop
+    exactly at the cap. When the car isn't reporting SOC (asleep / no real
+    sensor — the dashboard may still show an *estimated* SOC, which SEM
+    deliberately ignores for the cap), the stop lands approximately: from the
+    last real reading of the session SEM counts delivered energy and stops on
+    that measured total, so the overshoot is only what the car took since the
+    reading. With no reading at all this session (or a restart mid-charge)
+    there is nothing to count from and it runs to the car's own taper — the
+    case that surprised RienduPre ("car charged past 80%"). Surface it as a
+    persistent, actionable repair instead of silently overshooting. Cleared
+    the moment a real SOC reading returns (or the target is no longer
+    SOC-based).
+
+    (#708) Raised per charger and gated on THIS charger's connection state at
+    the call site — see ``coordinator._maybe_warn_soc_cap``.
     """
     try:
         ir.async_create_issue(
@@ -672,7 +730,7 @@ def clear_heat_pump_partial_sg_ready(hass: HomeAssistant) -> None:
 
 # Where the user is sent to fix it (how + why to disable the KEBA failsafe).
 KEBA_FAILSAFE_DOC_URL = (
-    "https://github.com/traktore-org/sem-community/blob/main/docs/KEBA_FAILSAFE.md"
+    "https://github.com/traktore-org/sem-community/blob/develop/docs/KEBA_FAILSAFE.md"
 )
 
 
@@ -742,3 +800,62 @@ def detect_keba_failsafe_state(hass: HomeAssistant) -> Optional[bool]:
     except Exception as e:  # noqa: BLE001
         _LOGGER.debug("detect_keba_failsafe_state failed: %s", e)
         return None
+
+
+def _control_entity_issue_id(device_id: str, entity_id: str) -> str:
+    """Stable per-charger, per-entity issue id."""
+    return f"charger_control_entity_broken_{device_id}_{entity_id}"
+
+
+def raise_charger_control_entity_broken(
+    hass: HomeAssistant,
+    device_id: str,
+    *,
+    name: str,
+    entity_id: str,
+    capability: str,
+    reason: str,
+) -> None:
+    """File a repair when a charger's configured CONTROL entity cannot be
+    commanded (#824).
+
+    Distinct from ``charger_actuation_failed`` on purpose. That one fires
+    after three writes that RAISED — and the case this exists for produces
+    no error at all: @onkelfu's template number carried an unsupported
+    ``mode: slider``, so HA never loaded it (``restored: true``) and every
+    write SEM made landed nowhere, silently, for days. A dead control
+    entity makes SEM look like it is working while the car does whatever
+    it likes, which is why this is a pre-flight check rather than error
+    handling.
+
+    ``reason`` is one of ``wrong_domain`` / ``missing`` / ``unavailable``.
+    """
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id=_control_entity_issue_id(device_id, entity_id),
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.ERROR,
+            translation_key="charger_control_entity_broken",
+            translation_placeholders={
+                "name": name,
+                "entity_id": entity_id,
+                "capability": capability,
+                "reason": reason,
+            },
+        )
+    except Exception as e:  # noqa: BLE001 — never fail the cycle over a repair
+        _LOGGER.debug("issue_registry.create failed for %s: %s", entity_id, e)
+
+
+def clear_charger_control_entity_broken(
+    hass: HomeAssistant, device_id: str, entity_id: str,
+) -> None:
+    """Clear it the moment the entity becomes commandable again."""
+    try:
+        ir.async_delete_issue(
+            hass, DOMAIN, _control_entity_issue_id(device_id, entity_id))
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete failed for %s: %s", entity_id, e)

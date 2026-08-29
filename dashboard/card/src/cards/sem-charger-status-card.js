@@ -272,4 +272,6 @@ semDefineCard('sem-charger-status-card', SEMChargerStatusCard, {
     type: 'sem-charger-status-card',
     name: 'SEM Charger Status',
     description: 'Multi-charger status display with per-charger tiles',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-charger-status-card',
 });

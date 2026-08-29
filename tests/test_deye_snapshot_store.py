@@ -24,7 +24,6 @@ This module locks in the first production slice:
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -303,18 +302,9 @@ class TestCoordinatorWiring:
 
     async def test_run_battery_pipeline_builds_capable_deye(self, fake_store_class):
         """Drive the real pipeline once and inspect the cached adapter."""
-        from custom_components.solar_energy_management.coordinator import (
-            battery_adapters as ba_mod,
-        )
-        from custom_components.solar_energy_management.coordinator.actuate_battery import (
-            actuate_battery,
-        )
         from custom_components.solar_energy_management.coordinator.charger_types import (
             BatteryDecision,
             BatteryIntent,
-        )
-        from custom_components.solar_energy_management.coordinator.decide_battery import (
-            decide_battery,
         )
 
         config, states = _valid_deye_config()
@@ -366,9 +356,6 @@ class TestCoordinatorWiring:
 
     async def _run_pipeline(self, coord, *, decision):
         """Drive ``_run_battery_pipeline`` once with a canned decision."""
-        from custom_components.solar_energy_management.coordinator.decide_battery import (
-            decide_battery,
-        )
 
         power = SimpleNamespace(
             batteries={},

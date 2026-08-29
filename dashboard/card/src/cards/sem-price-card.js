@@ -236,8 +236,10 @@ class SEMPriceCard extends SEMLitBase {
 }
 
 semDefineCard('sem-price-card', SEMPriceCard, {
-    type: 'custom:sem-price-card',
+    type: 'sem-price-card',
     name: 'SEM Price Card',
     description: 'Dynamic electricity price: current price, level, today range, next cheap window, and an hourly price strip (#257)',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-price-card',
     preview: false,
 });

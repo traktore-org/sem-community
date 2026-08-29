@@ -6,7 +6,6 @@ from datetime import datetime, timedelta, timezone
 
 from custom_components.solar_energy_management.coordinator.battery_adapters.deye_schedule import (
     DeyeScheduleError,
-    active_deye_slot,
     compile_deye_charge_window,
 )
 from types import SimpleNamespace
@@ -568,15 +567,11 @@ async def test_work_mode_readback_mismatch_rolls_back_without_success():
 BOUNDARIES = ("01:00", "05:00", "09:00", "13:00", "17:00", "21:00")
 
 
-def test_active_slot_is_deterministic_and_wraps_midnight():
-    assert active_deye_slot(
-        BOUNDARIES, datetime(2026, 8, 1, 0, 30, tzinfo=timezone.utc)
-    ) == 6
-    assert active_deye_slot(
-        BOUNDARIES, datetime(2026, 8, 1, 9, 0, tzinfo=timezone.utc)
-    ) == 3
-
-
+# (#758) The three ``active_deye_slot`` tests went with the function they
+# tested — a public helper the integration never called. What they actually
+# guarded (six strictly-increasing boundaries, a timezone-aware clock) is
+# guarded below against ``compile_deye_charge_window``, which is the one
+# production entry point into this compiler.
 @pytest.mark.parametrize(
     "boundaries",
     [
@@ -586,16 +581,19 @@ def test_active_slot_is_deterministic_and_wraps_midnight():
         ("01:00", "05:00", "bad", "13:00", "17:00", "21:00"),
     ],
 )
-def test_active_slot_rejects_invalid_or_ambiguous_schedules(boundaries):
+def test_compiler_rejects_invalid_or_ambiguous_schedules(boundaries):
     with pytest.raises(DeyeScheduleError):
-        active_deye_slot(
-            boundaries, datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc)
+        compile_deye_charge_window(
+            boundaries, datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc),
+            60, 20.0,
         )
 
 
-def test_active_slot_requires_timezone_aware_now():
+def test_compiler_requires_timezone_aware_now():
     with pytest.raises(DeyeScheduleError, match="timezone-aware"):
-        active_deye_slot(BOUNDARIES, datetime(2026, 8, 1, 10, 0))
+        compile_deye_charge_window(
+            BOUNDARIES, datetime(2026, 8, 1, 10, 0), 60, 20.0,
+        )
 
 
 def test_charge_window_compiler_changes_only_overlapping_slots():

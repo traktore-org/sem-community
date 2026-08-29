@@ -124,7 +124,9 @@ def test_autodiscovered_falls_back_to_live_when_no_rating(registry):
     registry.hass.states.get = lambda e: SimpleNamespace(state="42")
     registry._service_registrations = {}
     result = registry.get_devices_for_sensor()
-    assert result[ud.device_id]["power_rating"] == 42.0
+    # (#829) the fallback is a rating, published in 10 W steps so a
+    # jittering sensor does not write a recorder row per cycle: 42 -> 40.
+    assert result[ud.device_id]["power_rating"] == 40.0
 
 
 # ---------------------------------------------------------------------------
@@ -299,12 +301,14 @@ async def test_control_mode_update_persists_to_spec(registry):
 @pytest.mark.asyncio
 async def test_mode_off_transition_releases_running_load(registry):
     """(class-17 sibling, live PROD 2026-07-23) Setting mode → off must turn a
-    running load off ONCE — regardless of ownership (which a restart may have
-    wiped) — then leave it alone."""
+    load SEM is DRIVING off ONCE — else it strands on forever — then leave it
+    alone. Ownership (``_sem_owned``) is the gate: a genuinely SEM-driven load
+    reads True, and (#779) a surplus load is re-adopted post-restart before any
+    mode change, so this stays correct across restarts."""
     await registry.async_register_service_device(dict(SPEC))
     device = registry._surplus_controller.get_device("kia_socket")
     device.observed_on = MagicMock(return_value=True)     # entity is ON
-    device._sem_owned = False                              # ownership lost (restart)
+    device._sem_owned = True                               # SEM started it
     device._offpeak_forced = True                          # stale marker
     device.deactivate = AsyncMock()
     await registry.update_device_control_mode("kia_socket", "off")
@@ -314,10 +318,28 @@ async def test_mode_off_transition_releases_running_load(registry):
 
 
 @pytest.mark.asyncio
+async def test_mode_off_does_not_touch_user_driven_load(registry):
+    """(#847, Hoyte, fresh install) Setting Mode=Off on a device the USER turned
+    on must NOT switch it off — "when configuring something to be unbothered by
+    SEM it should not do anything with it anymore". SEM never started it, so
+    ``_sem_owned`` is False; the immediate release must gate on that exactly as
+    the two steady-state paths do, or the mode change destructively actuates a
+    load SEM does not own (default mode peak_only is never SEM-driven-on)."""
+    await registry.async_register_service_device(dict(SPEC))
+    device = registry._surplus_controller.get_device("kia_socket")
+    device.observed_on = MagicMock(return_value=True)     # entity is ON (user did it)
+    device._sem_owned = False                              # SEM never started it
+    device.deactivate = AsyncMock()
+    await registry.update_device_control_mode("kia_socket", "off")
+    device.deactivate.assert_not_awaited()                 # left exactly as-is
+
+
+@pytest.mark.asyncio
 async def test_mode_off_transition_leaves_off_load_alone(registry):
     await registry.async_register_service_device(dict(SPEC))
     device = registry._surplus_controller.get_device("kia_socket")
     device.observed_on = MagicMock(return_value=False)     # entity already OFF
+    device._sem_owned = True                               # even if SEM owned it
     device.deactivate = AsyncMock()
     await registry.update_device_control_mode("kia_socket", "off")
     device.deactivate.assert_not_awaited()

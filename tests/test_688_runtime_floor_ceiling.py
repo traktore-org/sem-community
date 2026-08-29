@@ -23,7 +23,7 @@ These tests pin both families to the same contract:
 * ``daily_max_runtime_reached`` stays the hard stop (#620, live-proven on the
   Heizband) and still stops a RUNNING load (bug-class 17).
 """
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 

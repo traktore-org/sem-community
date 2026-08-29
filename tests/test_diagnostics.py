@@ -1,7 +1,6 @@
 """Tests for diagnostics support."""
-import asyncio
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from datetime import timedelta
 
 from custom_components.solar_energy_management.diagnostics import (

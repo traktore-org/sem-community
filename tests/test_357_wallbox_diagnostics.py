@@ -95,7 +95,7 @@ class Test357WallboxAdapterDiagnostics:
         adapter._pause_switch_entity = "switch.wallbox_pulsar_pause_resume"
 
         _diag_coordinator._ev_devices = {"ev_charger": device}
-        _diag_coordinator._ev_adapters = {"ev_charger": adapter}
+        _diag_coordinator._charger_adapters = {"ev_charger": adapter}
         _diag_entry.runtime_data = _diag_coordinator
         _diag_hass.data = {
             "solar_energy_management": {_diag_entry.entry_id: _diag_coordinator},
@@ -139,7 +139,7 @@ class Test357WallboxAdapterDiagnostics:
         adapter._pause_switch_entity = None  # ← discovery couldn't find it
 
         _diag_coordinator._ev_devices = {"ev_charger": device}
-        _diag_coordinator._ev_adapters = {"ev_charger": adapter}
+        _diag_coordinator._charger_adapters = {"ev_charger": adapter}
         _diag_entry.runtime_data = _diag_coordinator
         _diag_hass.data = {
             "solar_energy_management": {_diag_entry.entry_id: _diag_coordinator},
@@ -168,7 +168,7 @@ class Test357WallboxAdapterDiagnostics:
         type(adapter).__name__ = "KebaAdapter"
 
         _diag_coordinator._ev_devices = {"ev_charger": device}
-        _diag_coordinator._ev_adapters = {"ev_charger": adapter}
+        _diag_coordinator._charger_adapters = {"ev_charger": adapter}
         _diag_entry.runtime_data = _diag_coordinator
         _diag_hass.data = {
             "solar_energy_management": {_diag_entry.entry_id: _diag_coordinator},
@@ -193,3 +193,61 @@ class Test357WallboxAdapterDiagnostics:
 
         result = await async_get_config_entry_diagnostics(_diag_hass, _diag_entry)
         assert result["charger_adapters"] == {}
+
+
+class TestItReadsTheCacheTheCoordinatorActuallyWrites:
+    """(#764) Found while proving the observer seam on .175: every real
+    dump reported ``adapter_class: null``, including for a charger SEM was
+    demonstrably driving.
+
+    The diagnostics read ``coordinator._ev_adapters``. Production has never
+    had that attribute — the adapter cache is ``_charger_adapters``
+    (coordinator.py, ev_control.py). So ``adapter_class`` has been null on
+    every install since #357 shipped, and the Wallbox discovery block below
+    it — the entire point of #357 — was unreachable on real hardware.
+
+    The tests above did not catch it because each one ASSIGNED
+    ``_ev_adapters`` to the mock coordinator: they proved the dump could read
+    a field the test itself invented. They now use the real name; these pin
+    it there.
+    """
+
+    @pytest.mark.asyncio
+    async def test_the_adapter_class_comes_from_the_real_cache(
+        self, _diag_hass, _diag_entry, _diag_coordinator,
+    ) -> None:
+        device = MagicMock(name="Keba Charger")
+        device.name = "Keba Charger"
+        device.max_current = 32
+        device.min_current = 6
+        device.charger_service = "keba.set_current"
+        adapter = MagicMock()
+        type(adapter).__name__ = "KebaAdapter"
+
+        _diag_coordinator._ev_devices = {"keba_fa87f74cd3": device}
+        # The name the coordinator actually assigns — nothing else.
+        _diag_coordinator._charger_adapters = {"keba_fa87f74cd3": adapter}
+        del _diag_coordinator._ev_adapters
+        _diag_entry.runtime_data = _diag_coordinator
+        _diag_hass.data = {
+            "solar_energy_management": {_diag_entry.entry_id: _diag_coordinator},
+        }
+
+        result = await async_get_config_entry_diagnostics(_diag_hass, _diag_entry)
+
+        assert result["charger_adapters"]["keba_fa87f74cd3"]["adapter_class"] == (
+            "KebaAdapter"
+        )
+
+    def test_the_dump_names_the_same_attribute_the_coordinator_sets(self):
+        """A rename on either side must break this, not go quiet for a year."""
+        import inspect
+        from custom_components.solar_energy_management import diagnostics
+        from custom_components.solar_energy_management.coordinator import ev_control
+
+        dump = inspect.getsource(diagnostics)
+        writer = inspect.getsource(ev_control)
+        assert "_charger_adapters" in dump, (
+            "diagnostics reads an adapter cache the coordinator never writes"
+        )
+        assert "_charger_adapters" in writer

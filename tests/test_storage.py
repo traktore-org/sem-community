@@ -1,7 +1,7 @@
 """Tests for SEMStorage from coordinator/storage.py."""
 import pytest
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from custom_components.solar_energy_management.coordinator.storage import (
     SEMStorage,
@@ -64,7 +64,7 @@ def test_init(mock_hass):
     with patch(
         "custom_components.solar_energy_management.coordinator.storage.Store"
     ) as MockStore:
-        storage = SEMStorage(mock_hass, "my_entry")
+        SEMStorage(mock_hass, "my_entry")
         assert MockStore.call_count == 2
         calls = MockStore.call_args_list
         assert calls[0][0] == (mock_hass, STORAGE_VERSION, "solar_energy_management_my_entry_energy")

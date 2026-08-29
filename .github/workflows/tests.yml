@@ -1,17 +1,48 @@
 name: Tests
 
+# `release/**` is here because a release branch is a DEVELOPMENT line, not a
+# tag: 2.0 was built on `release/2.0` for weeks with no CI run at all, because
+# the trigger list named only develop and main. Branch protection still gates
+# main; this makes the branch where the work actually happens report green
+# while the work is happening, instead of at the merge.
 on:
   push:
-    branches: [develop, main]
+    branches: [develop, main, "release/**"]
   pull_request:
-    branches: [develop, main]
+    branches: [develop, main, "release/**"]
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    # The matrix is an HA matrix wearing a Python label (#787). Each rung
+    # installs a different pytest-homeassistant-custom-component pin — see
+    # tests/requirements_test.txt — so this list reads:
+    #   3.13 -> HA 2026.2.3  (the hacs.json floor)
+    #   3.14 -> HA 2026.8.2  (what HA-PROD runs)
+    # (#836) The 3.12 -> HA 2025.1.4 rung was removed with the 2025.1 floor:
+    # no SEM user has ever reported an HA below 2026.4, so it verified a
+    # version nobody runs.
+    # Nineteen months of API drift went unverified because both legs used to
+    # install the same HA and nothing in the file said which one.
+    #
+    # The two added rungs were non-blocking on purpose while the drift they
+    # surfaced was triaged. Both flips are now done, and ALL THREE RUNGS
+    # BLOCK — which is the actual close-out of #787.
+    #   (#791) 3.14/HA 2026.8.2 — what PROD runs — blocking as of the
+    #          frame-helper shim + label_entities oracle fix.
+    #   (#835) 3.13/HA 2026.2.3 — blocking as of the event-loop fixture
+    #          override in tests/conftest.py. Its "5,935 errors" were one
+    #          upstream line, not 5,935 broken tests: phacc 0.13.316's
+    #          enable_event_loop_debug is sync, and pytest-asyncio 1.3.0
+    #          leaves no current loop behind, so every sync test after the
+    #          first async one raised at setup.
+    # Do not reintroduce a continue-on-error exemption here. A rung that
+    # cannot fail the board is a rung nobody reads — 3.13 was green-lit as
+    # "advisory" and then never passed once, invisibly, for its whole life.
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.12", "3.13"]
+        python-version: ["3.13", "3.14"]
 
     steps:
       - uses: actions/checkout@v4

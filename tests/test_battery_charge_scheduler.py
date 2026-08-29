@@ -10,8 +10,8 @@ Covers:
 - Edge cases (no forecast, already full, tiny deficit, EV peak conflict)
 """
 import pytest
-from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import timedelta
+from unittest.mock import AsyncMock, MagicMock
 
 from homeassistant.util import dt as dt_util
 
@@ -26,11 +26,9 @@ from custom_components.solar_energy_management.coordinator.battery_adapters.forc
 )
 from custom_components.solar_energy_management.coordinator.battery_charge_scheduler import (
     BatteryChargeScheduler,
-    NightChargeSchedule,
     SchedulerConfig,
     SchedulerDecision,
     SchedulerState,
-    TimeSlot,
 )
 
 
@@ -428,10 +426,12 @@ class TestSchedulerEvaluation:
         # target_soc = 30 + (8/9.5)*100 = 30 + 84.2 → capped at 95
         assert decision.target_soc == 95.0
         assert decision.hours_needed >= 1
-        assert decision.charge_windows == []  # No dynamic tariff
 
-    def test_scheduled_with_dynamic_tariff(self, mock_hass, scheduler_config, mock_tariff_provider):
-        """Profitable deficit with dynamic tariff — picks cheapest hours."""
+    def test_scheduled_never_asks_the_tariff_for_windows(
+            self, mock_hass, scheduler_config, mock_tariff_provider):
+        """(#638 one-gate C4b) The scheduler owns WHAT, the plan owns
+        WHEN — a SCHEDULED verdict must not consult find_cheapest_hours;
+        the provider is only for the replan price fingerprint."""
         scheduler = self._make_scheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
@@ -445,8 +445,7 @@ class TestSchedulerEvaluation:
         )
 
         assert decision.state == SchedulerState.SCHEDULED
-        assert len(decision.charge_windows) > 0
-        mock_tariff_provider.find_cheapest_hours.assert_called_once()
+        mock_tariff_provider.find_cheapest_hours.assert_not_called()
 
     def test_forecast_correction_reduces_deficit(self, mock_hass, scheduler_config):
         """Correction factor < 1 reduces effective forecast (increases deficit)."""
@@ -537,21 +536,18 @@ class TestSchedulerTrigger:
     def test_triggers_at_correct_time(self, mock_hass, scheduler_config):
         scheduler_config.trigger_hour = 21
         scheduler_config.trigger_minute = 0
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         trigger_time = dt_util.now().replace(hour=21, minute=0, second=0)
         assert scheduler.should_trigger_evaluation(trigger_time) is True
 
     def test_does_not_trigger_wrong_time(self, mock_hass, scheduler_config):
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         wrong_time = dt_util.now().replace(hour=15, minute=30, second=0)
         assert scheduler.should_trigger_evaluation(wrong_time) is False
 
     def test_triggers_only_once_per_day(self, mock_hass, scheduler_config):
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         trigger_time = dt_util.now().replace(hour=21, minute=0, second=0)
@@ -667,7 +663,6 @@ class TestSchedulerConfig:
         assert config_str.trigger_hour == 21
         assert config_str.trigger_minute == 30
 
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, config)
         # Must not raise — and inside the window it must trigger, so
         # the call demonstrably reached the production logic.
@@ -727,331 +722,11 @@ class TestSchedulerIntegration:
         assert decision.state == SchedulerState.NOT_NEEDED
 
 
-# ---------------------------------------------------------------------------
-# TimeSlot & NightChargeSchedule Tests
-# ---------------------------------------------------------------------------
-
-class TestTimeSlot:
-    """Test TimeSlot dataclass properties."""
-
-    def test_total_power(self):
-        slot = TimeSlot(
-            start=dt_util.now(),
-            end=dt_util.now() + timedelta(hours=1),
-            battery_power_w=3000,
-            ev_power_w=7000,
-        )
-        assert slot.total_power_w == 10000
-
-    def test_energy_calculation_one_hour(self):
-        now = dt_util.now()
-        slot = TimeSlot(
-            start=now,
-            end=now + timedelta(hours=1),
-            battery_power_w=5000,
-            ev_power_w=11000,
-        )
-        assert slot.battery_energy_kwh == pytest.approx(5.0)
-        assert slot.ev_energy_kwh == pytest.approx(11.0)
-
-    def test_energy_calculation_half_hour(self):
-        now = dt_util.now()
-        slot = TimeSlot(
-            start=now,
-            end=now + timedelta(minutes=30),
-            battery_power_w=4000,
-            ev_power_w=0,
-        )
-        assert slot.battery_energy_kwh == pytest.approx(2.0)
-
-
-class TestNightChargeSchedule:
-    """Test NightChargeSchedule properties and serialization."""
-
-    def test_total_energy(self):
-        schedule = NightChargeSchedule(
-            total_battery_kwh=5.0,
-            total_ev_kwh=11.0,
-        )
-        assert schedule.total_energy_kwh == 16.0
-
-    def test_estimated_cost(self):
-        now = dt_util.now()
-        schedule = NightChargeSchedule(
-            slots=[
-                TimeSlot(
-                    start=now,
-                    end=now + timedelta(hours=1),
-                    battery_power_w=3000,
-                    ev_power_w=7000,
-                    price=0.08,
-                ),
-                TimeSlot(
-                    start=now + timedelta(hours=1),
-                    end=now + timedelta(hours=2),
-                    battery_power_w=3000,
-                    ev_power_w=0,
-                    price=0.10,
-                ),
-            ],
-        )
-        # Slot 1: (3+7) * 0.08 = 0.80, Slot 2: 3 * 0.10 = 0.30
-        assert schedule.estimated_cost == pytest.approx(1.10)
-
-    def test_active_slot(self):
-        now = dt_util.now()
-        s1 = TimeSlot(start=now, end=now + timedelta(hours=1), is_active=False)
-        s2 = TimeSlot(start=now + timedelta(hours=1), end=now + timedelta(hours=2), is_active=True)
-        schedule = NightChargeSchedule(slots=[s1, s2])
-
-        assert schedule.active_slot is s2
-
-    def test_no_active_slot(self):
-        schedule = NightChargeSchedule(slots=[])
-        assert schedule.active_slot is None
-
-    def test_as_dict_serialization(self):
-        now = dt_util.now()
-        schedule = NightChargeSchedule(
-            slots=[
-                TimeSlot(
-                    start=now,
-                    end=now + timedelta(hours=1),
-                    battery_power_w=3000,
-                    ev_power_w=7000,
-                    price=0.08,
-                ),
-            ],
-            total_battery_kwh=3.0,
-            total_ev_kwh=7.0,
-            peak_limit_w=9000,
-        )
-        d = schedule.as_dict()
-
-        assert len(d["slots"]) == 1
-        assert d["slots"][0]["battery_w"] == 3000
-        assert d["slots"][0]["ev_w"] == 7000
-        assert d["slots"][0]["total_w"] == 10000
-        assert d["total_battery_kwh"] == 3.0
-        assert d["total_ev_kwh"] == 7.0
-        assert d["total_kwh"] == 10.0
-        assert d["peak_limit_w"] == 9000
-
-
-# ---------------------------------------------------------------------------
-# Schedule Planning Tests
-# ---------------------------------------------------------------------------
-
-class TestSchedulePlanning:
-    """Test _plan_night_schedule power allocation logic."""
-
-    def _make_scheduler(self, mock_hass, scheduler_config, adapter=None):
-        if adapter is None:
-            adapter = MagicMock(spec=BatteryChargeAdapter)
-            adapter.is_active = False
-        return BatteryChargeScheduler(mock_hass, scheduler_config)
-
-    def test_no_peak_limit_both_at_max(self, mock_hass, scheduler_config):
-        """No peak limit — battery and EV charge simultaneously at full power."""
-        scheduler_config.peak_limit_w = 0  # No limit
-        scheduler_config.battery_max_charge_power_w = 5000
-        scheduler = self._make_scheduler(mock_hass, scheduler_config)
-
-        decision = scheduler.evaluate(
-            current_soc=30.0,
-            forecast_tomorrow_kwh=3.0,
-            expected_consumption_kwh=12.0,
-            off_peak_rate=0.10,
-            peak_rate=0.30,
-            ev_kwh_needed=20.0,
-            ev_max_power_w=11000,
-        )
-
-        assert decision.schedule is not None
-        schedule = decision.schedule
-        assert schedule.total_battery_kwh > 0
-        assert schedule.total_ev_kwh > 0
-        # First slot should have both battery and EV power
-        first_slot = schedule.slots[0]
-        assert first_slot.battery_power_w > 0
-        assert first_slot.ev_power_w > 0
-
-    def test_peak_limit_ev_priority(self, mock_hass, scheduler_config):
-        """With peak limit and EV priority — EV gets power first, battery gets remainder."""
-        scheduler_config.peak_limit_w = 9000
-        scheduler_config.battery_max_charge_power_w = 5000
-        scheduler_config.ev_priority = True
-        scheduler = self._make_scheduler(mock_hass, scheduler_config)
-
-        decision = scheduler.evaluate(
-            current_soc=30.0,
-            forecast_tomorrow_kwh=3.0,
-            expected_consumption_kwh=12.0,
-            off_peak_rate=0.10,
-            peak_rate=0.30,
-            ev_kwh_needed=20.0,
-            ev_max_power_w=7000,  # EV takes 7kW, leaving 2kW for battery
-        )
-
-        assert decision.schedule is not None
-        first_slot = decision.schedule.slots[0]
-        # EV gets its full 7kW (within peak limit)
-        assert first_slot.ev_power_w == 7000
-        # Battery gets remainder: 9000 - 7000 = 2000W
-        assert first_slot.battery_power_w == 2000
-
-    def test_peak_limit_proportional_split(self, mock_hass, scheduler_config):
-        """With peak limit and proportional mode — power split by demand ratio."""
-        scheduler_config.peak_limit_w = 8000
-        scheduler_config.battery_max_charge_power_w = 5000
-        scheduler_config.ev_priority = False  # Proportional
-        scheduler = self._make_scheduler(mock_hass, scheduler_config)
-
-        decision = scheduler.evaluate(
-            current_soc=30.0,
-            forecast_tomorrow_kwh=3.0,
-            expected_consumption_kwh=12.0,
-            off_peak_rate=0.10,
-            peak_rate=0.30,
-            ev_kwh_needed=20.0,
-            ev_max_power_w=11000,
-        )
-
-        assert decision.schedule is not None
-        first_slot = decision.schedule.slots[0]
-        # Total demand = 5000 + 11000 = 16000, peak = 8000
-        # ratio = 0.5, battery = 2500, ev = 5500
-        assert first_slot.total_power_w <= 8000
-        assert first_slot.battery_power_w > 0
-        assert first_slot.ev_power_w > 0
-
-    def test_battery_only_no_ev(self, mock_hass, scheduler_config):
-        """No EV needed — all slots are battery-only."""
-        scheduler = self._make_scheduler(mock_hass, scheduler_config)
-
-        decision = scheduler.evaluate(
-            current_soc=30.0,
-            forecast_tomorrow_kwh=3.0,
-            expected_consumption_kwh=12.0,
-            off_peak_rate=0.10,
-            peak_rate=0.30,
-            ev_kwh_needed=0.0,
-            ev_max_power_w=0,
-        )
-
-        assert decision.schedule is not None
-        for slot in decision.schedule.slots:
-            assert slot.ev_power_w == 0
-            assert slot.battery_power_w > 0
-        assert decision.schedule.total_ev_kwh == 0
-
-    def test_schedule_with_dynamic_tariff_prices(self, mock_hass, scheduler_config, mock_tariff_provider):
-        """Schedule slots inherit prices from tariff provider."""
-        scheduler = self._make_scheduler(mock_hass, scheduler_config)
-
-        decision = scheduler.evaluate(
-            current_soc=50.0,
-            forecast_tomorrow_kwh=5.0,
-            expected_consumption_kwh=10.0,
-            off_peak_rate=0.10,
-            peak_rate=0.30,
-            tariff_provider=mock_tariff_provider,
-            ev_kwh_needed=5.0,
-            ev_max_power_w=7000,
-        )
-
-        assert decision.schedule is not None
-        # Prices should be populated from mock_tariff_provider
-        for slot in decision.schedule.slots:
-            assert slot.price >= 0
-
-    def test_schedule_stops_when_energy_met(self, mock_hass, scheduler_config):
-        """Schedule doesn't create more slots than needed."""
-        scheduler_config.battery_max_charge_power_w = 5000
-        scheduler = self._make_scheduler(mock_hass, scheduler_config)
-
-        # Only need 3 kWh of battery charge at 5kW = ~0.6 hours
-        # Should only create 1 slot even though 8 are available
-        decision = scheduler.evaluate(
-            current_soc=65.0,
-            forecast_tomorrow_kwh=5.0,  # 5*0.8=4
-            expected_consumption_kwh=8.0,  # deficit = 4
-            off_peak_rate=0.10,
-            peak_rate=0.30,
-            ev_kwh_needed=0.0,
-            ev_max_power_w=0,
-        )
-
-        if decision.schedule:
-            total_planned = decision.schedule.total_battery_kwh
-            # Should not massively over-plan
-            actual_needed = (decision.target_soc - 65.0) / 100 * 9.5
-            assert total_planned <= actual_needed + 5.1  # 1 slot = max 5kWh
-
-    def test_schedule_as_dict_for_sensor(self, mock_hass, scheduler_config):
-        """Schedule serializes to dict suitable for HA sensor attributes."""
-        scheduler = self._make_scheduler(mock_hass, scheduler_config)
-
-        decision = scheduler.evaluate(
-            current_soc=30.0,
-            forecast_tomorrow_kwh=3.0,
-            expected_consumption_kwh=12.0,
-            off_peak_rate=0.10,
-            peak_rate=0.30,
-            ev_kwh_needed=10.0,
-            ev_max_power_w=7000,
-        )
-
-        assert decision.schedule is not None
-        d = decision.schedule.as_dict()
-        assert "slots" in d
-        assert "total_battery_kwh" in d
-        assert "total_ev_kwh" in d
-        assert "total_kwh" in d
-        assert "estimated_cost" in d
-        assert "peak_limit_w" in d
-
-    def test_ev_finishes_before_battery(self, mock_hass, scheduler_config):
-        """EV needs less energy — later slots are battery-only."""
-        scheduler_config.peak_limit_w = 0
-        scheduler_config.battery_max_charge_power_w = 3000
-        scheduler = self._make_scheduler(mock_hass, scheduler_config)
-
-        decision = scheduler.evaluate(
-            current_soc=20.0,
-            forecast_tomorrow_kwh=0.0,
-            expected_consumption_kwh=15.0,
-            off_peak_rate=0.08,
-            peak_rate=0.25,
-            ev_kwh_needed=3.0,  # EV done after ~1 slot at 7kW
-            ev_max_power_w=7000,
-        )
-
-        assert decision.schedule is not None
-        slots = decision.schedule.slots
-        assert len(slots) >= 2
-        # First slot: both battery + EV
-        assert slots[0].ev_power_w > 0
-        assert slots[0].battery_power_w > 0
-        # Later slots: battery only (EV done)
-        ev_done = False
-        for slot in slots[1:]:
-            if slot.ev_power_w == 0:
-                ev_done = True
-            if ev_done:
-                assert slot.ev_power_w == 0
-
-
-# ---------------------------------------------------------------------------
-# Feature Toggle Tests
-# ---------------------------------------------------------------------------
-
 class TestFeatureToggle:
     """Test enabled/disabled behavior."""
 
     def test_disabled_evaluate_returns_idle(self, mock_hass, scheduler_config):
         scheduler_config.enabled = False
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
@@ -1067,14 +742,12 @@ class TestFeatureToggle:
 
     def test_disabled_trigger_returns_false(self, mock_hass, scheduler_config):
         scheduler_config.enabled = False
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         trigger_time = dt_util.now().replace(hour=21, minute=0, second=0)
         assert scheduler.should_trigger_evaluation(trigger_time) is False
 
     def test_enabled_property(self, mock_hass, scheduler_config):
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
         assert scheduler.enabled is True
 
@@ -1093,7 +766,6 @@ class TestCycleCost:
     def test_cycle_cost_blocks_unprofitable_charge(self, mock_hass, scheduler_config):
         """High cycle cost makes arbitrage unprofitable."""
         scheduler_config.battery_cycle_cost = 0.10
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
@@ -1110,7 +782,6 @@ class TestCycleCost:
     def test_low_cycle_cost_allows_charge(self, mock_hass, scheduler_config):
         """Low cycle cost still allows profitable charging."""
         scheduler_config.battery_cycle_cost = 0.02
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
@@ -1126,7 +797,6 @@ class TestCycleCost:
     def test_zero_cycle_cost_same_as_before(self, mock_hass, scheduler_config):
         """Zero cycle cost = no degradation check (backward compat)."""
         scheduler_config.battery_cycle_cost = 0.0
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
@@ -1149,7 +819,6 @@ class TestNegativeTariff:
 
     def test_negative_price_forces_full_charge(self, mock_hass, scheduler_config):
         """Negative price -> charge to max SOC regardless of forecast."""
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
@@ -1167,7 +836,6 @@ class TestNegativeTariff:
 
     def test_negative_price_respects_already_full(self, mock_hass, scheduler_config):
         """Already at max SOC -> no charge even with negative price."""
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
@@ -1184,7 +852,6 @@ class TestNegativeTariff:
     def test_negative_price_feature_disabled(self, mock_hass, scheduler_config):
         """Feature disabled -> no force charge on negative price."""
         scheduler_config.force_charge_on_negative_price = False
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
@@ -1208,7 +875,6 @@ class TestForecastFallback:
 
     def test_no_forecast_charges_conservatively(self, mock_hass, scheduler_config):
         """No forecast -> deficit = full consumption."""
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
@@ -1225,7 +891,6 @@ class TestForecastFallback:
 
     def test_stale_forecast_increases_pessimism(self, mock_hass, scheduler_config):
         """Stale forecast (>6h) uses doubled pessimism weight."""
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision_fresh = scheduler.evaluate(
@@ -1255,7 +920,6 @@ class TestForecastFallback:
     def test_fresh_forecast_applies_pessimism_blend(self, mock_hass, scheduler_config):
         """More pessimism -> higher deficit."""
         scheduler_config.pessimism_weight = 0.0
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         decision_optimistic = scheduler.evaluate(
@@ -1289,7 +953,6 @@ class TestReplanTriggers:
     """Test should_replan() conditions."""
 
     def test_soc_deviation_triggers_replan(self, mock_hass, scheduler_config):
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         scheduler.evaluate(
@@ -1304,7 +967,6 @@ class TestReplanTriggers:
         assert scheduler.should_replan(current_soc=50.0, ev_connected=False) is True
 
     def test_ev_connect_triggers_replan(self, mock_hass, scheduler_config):
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         scheduler.evaluate(
@@ -1319,13 +981,11 @@ class TestReplanTriggers:
         assert scheduler.should_replan(current_soc=40.0, ev_connected=True) is True
 
     def test_no_replan_when_idle(self, mock_hass, scheduler_config):
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
         assert scheduler.should_replan(current_soc=50.0, ev_connected=True) is False
 
     def test_ev_replan_disabled(self, mock_hass, scheduler_config):
         scheduler_config.replan_on_ev_change = False
-        adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, scheduler_config)
 
         scheduler.evaluate(

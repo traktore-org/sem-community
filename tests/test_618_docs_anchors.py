@@ -14,7 +14,7 @@ import pytest
 
 _ROOT = Path(__file__).resolve().parents[1]
 _CARD = _ROOT / "dashboard" / "card" / "src" / "cards" / "sem-config-card.js"
-_BASE = "https://github.com/traktore-org/sem-community/blob/main/docs/"
+_BASE = "https://github.com/traktore-org/sem-community/blob/develop/docs/"
 
 
 def _github_slug(heading: str) -> str:
@@ -30,9 +30,21 @@ def _doc_slugs(path: Path) -> set:
     return slugs
 
 
+# (#638 G4) every card that carries a docs deep-link is guarded, not just
+# the config card — the energy plan card links its actuation and
+# arbitrage anchors, the load-priority goal editor its comfort anchor.
+_EXTRA_CARDS = [
+    _ROOT / "dashboard" / "card" / "src" / "cards" / "sem-energy-plan-card.js",
+    _ROOT / "dashboard" / "card" / "src" / "cards" / "sem-load-priority-card.js",
+]
+
+
 def _card_doc_links():
     src = _CARD.read_text()
-    return re.findall(r"docs:\s*'([^']+)'", src)
+    links = re.findall(r"docs:\s*'([^']+)'", src)
+    for card in _EXTRA_CARDS:
+        links += re.findall(r"docs:\s*'([^']+)'", card.read_text())
+    return links
 
 
 @pytest.mark.unit
@@ -221,3 +233,28 @@ class TestIssueTemplateReferences:
                 if m.group(1) not in real:
                     problems.append(f"{f.name}: template={m.group(1)} (have: {sorted(real)})")
         assert not problems, "\n".join(problems)
+
+
+def test_no_absolute_doc_link_points_at_main():
+    """(#813 follow-up, 21.08) Card ``documentationURL``s and repair texts
+    pointed at ``blob/main/docs/…``. Two of those docs only exist on the
+    2.0 line, so every beta user clicking them got a 404 — and we sent one
+    of the broken links to three reporters by hand. ``develop`` always
+    carries every doc a shipped beta references; main catches up at the
+    stable cut. One rule, no per-file exceptions to remember."""
+    import pathlib, re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    offenders = []
+    for pattern in ("*.py", "*.md", "*.yaml", "dashboard/card/src/**/*.js"):
+        for p in root.glob(pattern) if "**" not in pattern else root.glob(pattern):
+            if "node_modules" in str(p) or "/dist/" in str(p):
+                continue
+            try:
+                text = p.read_text()
+            except Exception:
+                continue
+            if re.search(r"blob/main/docs/", text):
+                offenders.append(str(p.relative_to(root)))
+    assert not offenders, (
+        "absolute doc links must use blob/develop (main lags the beta line "
+        f"and 404s): {sorted(set(offenders))}")

@@ -68,7 +68,13 @@ class PlanRow:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "when": self.when.isoformat(),
+            # (#829) Minute resolution. A plan is a minute-grained promise and
+            # the card renders it with an hours:minutes formatter, but the raw
+            # stamp carried seconds AND microseconds — so rows whose ``when``
+            # is "now" (or a jittering projection) re-serialised every 10 s
+            # cycle and made sensor.sem_charging_state write a recorder row
+            # each time, with nothing a human could see having changed.
+            "when": self.when.replace(second=0, microsecond=0).isoformat(),
             "kind": self.kind,
             "label": self.label,
             "detail": self.detail,
@@ -76,13 +82,44 @@ class PlanRow:
         }
 
 
+_DEFAULT_SLOT = timedelta(hours=1)
+
+
+def _slot_duration(points: List[Dict[str, Any]]) -> timedelta:
+    """How long one price point covers, read off the curve's own cadence.
+
+    Most markets post hourly, but 15-minute curves exist, so measure rather
+    than assume. The cadence is the SMALLEST positive gap: a missing slot
+    leaves a double-width gap that must not be read as a wider slot, and a
+    duplicated timestamp leaves a zero gap that would collapse every window
+    onto its own start. One lone point has nothing to measure — fall back to
+    the common case (#729).
+
+    A curve that changes cadence half-way (an hourly day followed by a
+    quarter-hourly one, as markets moving to 15-minute settlement briefly
+    post) is measured by its finer half. No single number describes such a
+    curve; providers post one cadence, and reading the window slightly
+    short beats reading it long.
+    """
+    gaps = [b["t"] - a["t"] for a, b in zip(points, points[1:], strict=False)
+            if b["t"] > a["t"]]
+    return min(gaps) if gaps else _DEFAULT_SLOT
+
+
 def _consecutive_blocks(
     points: List[Dict[str, Any]],
     levels: tuple,
     min_block_len: int = 1,
 ) -> List[Dict[str, Any]]:
-    """Group consecutive `upcoming` points whose level ∈ levels into blocks."""
+    """Group consecutive `upcoming` points whose level ∈ levels into blocks.
+
+    ``end`` is the block's **closing boundary** — one slot past the last
+    matching point, not that point's own timestamp. Cheap slots 00:00
+    through 05:00 mean cheap power until 06:00, and that is what the user
+    needs to read (#729).
+    """
     blocks: List[Dict[str, Any]] = []
+    slot = _slot_duration(points)
     cur_start = None
     cur_prices: List[float] = []
     last_t = None
@@ -94,12 +131,12 @@ def _consecutive_blocks(
             last_t = p["t"]
         else:
             if cur_start and len(cur_prices) >= min_block_len:
-                blocks.append({"start": cur_start, "end": last_t,
+                blocks.append({"start": cur_start, "end": last_t + slot,
                                "prices": list(cur_prices)})
             cur_start = None
             cur_prices = []
     if cur_start and len(cur_prices) >= min_block_len:
-        blocks.append({"start": cur_start, "end": last_t,
+        blocks.append({"start": cur_start, "end": last_t + slot,
                        "prices": list(cur_prices)})
     return blocks
 
@@ -118,6 +155,7 @@ def compose_today_plan(
     ev_tariff_optimized: bool = False,
     ev_tariff_waiting: bool = False,
     ev_next_cheap_window: Optional[datetime] = None,
+    ev_plan_blocks: Optional[list] = None,
     ev_effective_rate_kw: Optional[float] = None,
     # #298 — live ETAs while a session is actually charging / discharging.
     # Pass ``None`` to suppress the row (e.g. when SOC is already at the
@@ -151,6 +189,12 @@ def compose_today_plan(
         ev_tariff_optimized: True if tariff-optimized switch is ON.
         ev_tariff_waiting: True if the planner is currently waiting.
         ev_next_cheap_window: When the next cheap slot opens.
+        ev_plan_blocks: (#742) THIS charger's blocks from the stamped joint
+            plan, passed only when the gate covers the demand. When present
+            the EV rows come from the blocks — one start per future block,
+            min-reached at the last block's end — and the reactive
+            prediction below becomes the uncovered fallback it always
+            should have been. One data source, every surface.
         ev_effective_rate_kw: Realistic peak-managed charge rate, used to
             estimate when Min will be reached.
         currency: Currency suffix for price values.
@@ -232,7 +276,44 @@ def compose_today_plan(
 
     # === EV-specific rows (only when there's actually charging to plan for) ===
     if ev_min_remaining_kwh and ev_min_remaining_kwh > 0.1:
-        if ev_tariff_optimized and ev_tariff_waiting and ev_next_cheap_window:
+        # (#742) When the joint plan covers this charger, its BLOCKS are the
+        # rows — the live 08.08 regression was this strip painting the
+        # reactive prediction while the Energy Plan card said WAITS·00:00.
+        parsed_blocks = []
+        for b in (ev_plan_blocks or []):
+            try:
+                bs = datetime.fromisoformat(str(b["start"]))
+                be = datetime.fromisoformat(str(b["end"]))
+            except (KeyError, TypeError, ValueError):
+                parsed_blocks = []
+                break  # one malformed block distrusts the set (gate rule)
+            parsed_blocks.append((bs, be))
+        if parsed_blocks:
+            parsed_blocks.sort()
+            for bs, _be in parsed_blocks:
+                if now < bs < horizon:
+                    rows.append(PlanRow(
+                        when=bs, kind=KIND_EV_CHARGE_START,
+                        label="plan_ev_charge_start",
+                        detail="plan_ev_charge_joint",
+                    ))
+            last_end = parsed_blocks[-1][1]
+            if now < last_end < horizon:
+                # The plan's own promise — not a rate estimate.
+                rows.append(PlanRow(
+                    when=last_end, kind=KIND_EV_MIN_REACHED,
+                    label="plan_ev_min_reached",
+                ))
+        # (#742) waiting + a window is the honest display signal
+        # REGARDLESS of who produced it: the legacy tariff mode
+        # (solar_plus_cheap) or the joint plan's overlay, which holds
+        # ALL night modes since #638 Stage 1. Gating on
+        # ev_tariff_optimized left a min_plus_solar hold invisible —
+        # the Energy Plan card said WAITS·00:00 while this strip drew
+        # the reactive prediction (live, 08.08 23:10).
+        if parsed_blocks:
+            pass  # the blocks above are the rows — no reactive prediction
+        elif ev_tariff_waiting and ev_next_cheap_window:
             if now < ev_next_cheap_window < horizon:
                 rows.append(PlanRow(
                     when=ev_next_cheap_window,
@@ -248,10 +329,11 @@ def compose_today_plan(
                 detail="plan_ev_charge_night",
             ))
 
-        # Min-reached estimate
-        if ev_effective_rate_kw and ev_effective_rate_kw > 0.3:
+        # Min-reached estimate (legacy fallback — with blocks the last
+        # block's end above is the plan's own promise)
+        if not parsed_blocks and ev_effective_rate_kw and ev_effective_rate_kw > 0.3:
             charge_start = ev_next_cheap_window if (
-                ev_tariff_optimized and ev_tariff_waiting and ev_next_cheap_window
+                ev_tariff_waiting and ev_next_cheap_window
             ) else night_start
             if charge_start and charge_start > now:
                 hours_to_min = ev_min_remaining_kwh / ev_effective_rate_kw

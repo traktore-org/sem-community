@@ -21,9 +21,53 @@ import logging
 import time
 
 from .charger_adapters.base import ChargerAdapter
-from .charger_types import ChargerDecision, ChargerPower
+from .charger_types import ChargerDecision, ChargerPower, commanded_power_w
+from ..utils.log_gate import log_on_change
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _observe(decision: ChargerDecision, adapter: ChargerAdapter,
+             controller=None) -> None:
+    """OBSERVER mode = the layer-3 intercept for chargers, in one place.
+
+    Exactly the cut loads already had in
+    ``surplus_controller._reconcile_load_observe``: ``build_view`` and
+    ``decide`` already ran live against the real sensors and produced
+    ``decision``. Here — the only execution seam — we record and log the
+    command we WOULD send, and touch neither the reconciler nor the box.
+
+    Before this, observer mode cut ABOVE the decision (the coordinator
+    skipped the whole per-charger block), so no adapter was built and there
+    was no charger decision to observe at all.
+    """
+    watts = commanded_power_w(
+        decision,
+        phases=int(getattr(adapter, "phases", 3) or 3),
+        voltage=float(getattr(adapter, "voltage", 230.0) or 230.0),
+        max_current_a=float(getattr(adapter, "max_current_a", 32.0) or 32.0),
+    )
+    if controller is not None:
+        try:
+            controller.publish_observer_decision(
+                key=f"ev:{decision.charger_id}",
+                name=str(decision.charger_id),
+                action=decision.intent.value,
+                power_w=watts,
+                source=decision.mode,
+                reason=decision.reason,
+                kind="charger",
+                amps=int(decision.commanded_amps or 0),
+            )
+        except Exception:  # noqa: BLE001 — the surface must never break the seam
+            pass
+    # (#762) transition-gated: a WOULD that has not changed is not news.
+    log_on_change(
+        _LOGGER, f"observer:ev:{decision.charger_id}", logging.INFO,
+        "OBSERVER · WOULD %s %s @ %.0fW (%dA) [mode=%s] — %s",
+        decision.intent.value.upper(), decision.charger_id, watts,
+        int(decision.commanded_amps or 0), decision.mode, decision.reason,
+    )
 
 
 async def actuate(
@@ -31,6 +75,9 @@ async def actuate(
     adapter: ChargerAdapter,
     power: ChargerPower,
     reconciler,
+    *,
+    observer: bool = False,
+    controller=None,
 ) -> None:
     """Apply a per-charger decision through the reconciler.
 
@@ -43,5 +90,14 @@ async def actuate(
         power: The charger's current power reading.
         reconciler: The per-charger :class:`ChargerReconciler` that
             owns the full convergence decision.
+        observer: Observer mode — cut the trigger. Layers 1+2 still ran
+            for real; this seam only records what it WOULD command
+            (see :func:`_observe`).
+        controller: The :class:`SurplusController` that owns the shared
+            ``observer_decisions`` surface. Optional — bare callers keep
+            the pure behavior.
     """
+    if observer:
+        _observe(decision, adapter, controller=controller)
+        return
     await reconciler.reconcile_and_apply(decision, adapter, power, time.monotonic())

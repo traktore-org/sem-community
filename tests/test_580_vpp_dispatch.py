@@ -17,7 +17,6 @@ from custom_components.solar_energy_management.coordinator.vpp_dispatch import (
     PHASE_EVENT,
     PHASE_IDLE,
     PHASE_PRE_EVENT,
-    VppDecision,
     VppDispatcher,
     evaluate_vpp,
 )

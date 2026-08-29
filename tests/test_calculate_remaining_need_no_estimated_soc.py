@@ -6,6 +6,17 @@ saved ``ev_target_type`` was ``"soc"`` but no real vehicle SOC sensor was
 configured. That leak idled the EV on PROD 2026-06-06 against a
 fictitious SOC. The fix removed the rescue path; this test pins the
 invariant so a future refactor doesn't accidentally reintroduce it.
+
+#708 amendment: the function MAY reach the per-charger taper detector for
+exactly ONE method — ``energy_accounted_soc()`` — the measurement-only
+session estimate (last real sensor value + measured delivered energy)
+that CAPS the stale sensor in the stop decision. That is not the #446
+substitution: the virtual SOC's speculative terms (daily driving decay,
+temperature correction, self-heal) remain banned, ``get_virtual_soc``
+remains banned, and the sensor stays primary (a fresh reading re-anchors
+and wins). This lint therefore still bans ``estimated_soc`` /
+``get_virtual_soc`` outright, and additionally asserts the ONLY method
+ever invoked on a detector-derived name is ``energy_accounted_soc``.
 """
 import ast
 import pathlib
@@ -14,7 +25,8 @@ import pathlib
 _BANNED_ATTRS = {"_estimated_soc", "estimated_soc"}
 _BANNED_NAMES = {"_estimated_soc", "estimated_soc"}
 _BANNED_CALLS = {"get_virtual_soc"}
-_BANNED_DETECTOR_ATTRS = {"_ev_taper_detector", "_ev_taper_detectors"}
+_DETECTOR_ATTRS = {"_ev_taper_detector", "_ev_taper_detectors"}
+_ALLOWED_DETECTOR_METHODS = {"energy_accounted_soc", "get"}
 
 
 def _find_function(tree: ast.AST, name: str) -> ast.FunctionDef:
@@ -24,8 +36,7 @@ def _find_function(tree: ast.AST, name: str) -> ast.FunctionDef:
     raise AssertionError(f"Could not find function {name!r} in source")
 
 
-def test_calculate_remaining_need_never_reads_estimated_soc():
-    """AST-walk ``_calculate_remaining_need`` and assert no banned name appears."""
+def _load_fn() -> ast.FunctionDef:
     source = (
         pathlib.Path(__file__).parent.parent
         / "coordinator"
@@ -33,7 +44,12 @@ def test_calculate_remaining_need_never_reads_estimated_soc():
     )
     assert source.exists(), f"coordinator.py not at expected path: {source}"
     tree = ast.parse(source.read_text())
-    fn = _find_function(tree, "_calculate_remaining_need")
+    return _find_function(tree, "_calculate_remaining_need")
+
+
+def test_calculate_remaining_need_never_reads_estimated_soc():
+    """AST-walk ``_calculate_remaining_need`` and assert no banned name appears."""
+    fn = _load_fn()
 
     for node in ast.walk(fn):
         # ``x.estimated_soc`` or ``x._estimated_soc``
@@ -59,14 +75,48 @@ def test_calculate_remaining_need_never_reads_estimated_soc():
                     f"line {node.lineno}. The taper detector's virtual SOC "
                     "must not enter the budget calculation (#446)."
                 )
-        # ``self._ev_taper_detector`` / ``self._ev_taper_detectors``
-        if (
-            isinstance(node, ast.Attribute)
-            and node.attr in _BANNED_DETECTOR_ATTRS
-        ):
+
+
+def test_detector_access_is_energy_accounted_only():
+    """#708 — detector access exists solely to call ``energy_accounted_soc``.
+
+    Collects every name bound from ``self._ev_taper_detector[s]`` and
+    asserts that every ATTRIBUTE reached on such a name (or directly on the
+    detector attribute) is in the allowlist — whether it's called as a
+    method or just read bare. A future edit that pulls anything else off
+    the detector — the virtual SOC, taper state, session internals — fails
+    here with the #446 history attached.
+
+    (Reviewed 2026-08-03: an earlier version of this test only walked
+    ``ast.Call`` nodes, so a bare attribute read like ``det._soc_anchor_value``
+    — no call, just a lookup — slipped through unnoticed. Walking every
+    ``ast.Attribute`` node closes that gap.)
+    """
+    fn = _load_fn()
+
+    detector_names: set[str] = set()
+    for node in ast.walk(fn):
+        if isinstance(node, ast.Assign) and len(node.targets) == 1:
+            target = node.targets[0]
+            if isinstance(target, ast.Name):
+                for sub in ast.walk(node.value):
+                    if (isinstance(sub, ast.Attribute)
+                            and sub.attr in _DETECTOR_ATTRS):
+                        detector_names.add(target.id)
+
+    for node in ast.walk(fn):
+        if not isinstance(node, ast.Attribute):
+            continue
+        base = node.value
+        is_detector_attr = (
+            (isinstance(base, ast.Name) and base.id in detector_names)
+            or (isinstance(base, ast.Attribute) and base.attr in _DETECTOR_ATTRS)
+        )
+        if is_detector_attr and node.attr not in _ALLOWED_DETECTOR_METHODS:
             raise AssertionError(
-                f"_calculate_remaining_need reads {node.attr!r} at "
-                f"line {node.lineno}. The taper detector is not load-bearing "
-                "for the kWh budget — only the saved config drives the mode "
-                "(#446)."
+                f"_calculate_remaining_need reaches detector attribute "
+                f"{node.attr!r} at line {node.lineno}. Only "
+                f"{sorted(_ALLOWED_DETECTOR_METHODS)} are sanctioned (#708); "
+                "everything else on the detector is the speculative surface "
+                "#446 banned from budgets — whether called or just read."
             )

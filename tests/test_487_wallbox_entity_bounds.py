@@ -8,7 +8,7 @@ window votes, and 413× health-check WARNING spam.
 """
 import logging
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from custom_components.solar_energy_management.devices.base import (
     CurrentControlDevice,

@@ -12,17 +12,14 @@ based on the cycle's current demand) over time. Result: solar that
 flowed to the grid at noon while the EV was idle stays counted as
 solar_to_grid, never re-allocated to a later EV session.
 """
-from datetime import date, timedelta
-from unittest.mock import patch
+from datetime import timedelta
 
-import pytest
 
 from custom_components.solar_energy_management.coordinator.flow_calculator import (
     FlowCalculator,
 )
 from custom_components.solar_energy_management.coordinator.types import (
     PowerFlows,
-    PowerReadings,
 )
 
 

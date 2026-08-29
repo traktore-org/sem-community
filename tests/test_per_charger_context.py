@@ -13,7 +13,6 @@ swap dict at ``coordinator.py:1136-1258``. These tests pin:
    per-cycle invariant.
 """
 
-from datetime import datetime
 from unittest.mock import MagicMock
 
 import pytest

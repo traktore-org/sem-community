@@ -1,7 +1,6 @@
 """Unit tests for the today's plan composer (#282 + #298)."""
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
-import pytest
 
 from custom_components.solar_energy_management.coordinator.today_plan import (
     compose_today_plan,
@@ -12,8 +11,6 @@ from custom_components.solar_energy_management.coordinator.today_plan import (
     KIND_EV_MIN_REACHED,
     KIND_EV_TARGET_REACHED,
     KIND_EV_DEADLINE,
-    KIND_NIGHT_OPEN,
-    KIND_SOLAR_PEAK,
     KIND_BATTERY_FULL,
     KIND_BATTERY_EMPTY,
 )
@@ -114,6 +111,30 @@ class TestComposeTodayPlan:
         assert len(starts) == 1
         assert datetime.fromisoformat(starts[0]["when"]) == cheap_open
         assert starts[0]["detail"] == "plan_ev_charge_tariff"
+
+    def test_a_joint_plan_hold_shows_in_every_night_mode(self):
+        """(#742, live 08.08 23:10) The Energy Plan held a min_plus_solar
+        charger for its 00:00 block (card: WAITS·00:00) while this
+        composer's strip showed the reactive prediction — because the
+        wait display was gated on ev_tariff_optimized, which is True
+        ONLY for solar_plus_cheap. The overlay writes the hold for ALL
+        night modes (#638 Stage 1); waiting + a window is the honest
+        display signal regardless of who produced it."""
+        from datetime import datetime, timedelta
+        cheap_open = NOW + timedelta(hours=2)
+        plan = compose_today_plan(
+            now=NOW,
+            ev_min_remaining_kwh=0.7,
+            ev_deadline=NOW + timedelta(hours=8),
+            night_start=NOW - timedelta(hours=1),   # night already open
+            ev_tariff_optimized=False,               # min_plus_solar
+            ev_tariff_waiting=True,                  # the joint plan's hold
+            ev_next_cheap_window=cheap_open,
+            ev_effective_rate_kw=3.2,
+        )
+        starts = [r for r in plan if r["kind"] == KIND_EV_CHARGE_START]
+        assert len(starts) == 1
+        assert datetime.fromisoformat(starts[0]["when"]) == cheap_open
 
     def test_ev_charge_start_uses_night_when_not_waiting(self):
         # No tariff or tariff but not waiting → charge_start = night window open.

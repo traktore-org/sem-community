@@ -7,14 +7,19 @@ Analyzes usage patterns and generates actionable tips:
 - Overall optimization score (0-100)
 """
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime, date, timedelta
+import time
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
+
+# (#829) How often the energy tip advances. Tips are advice for a human;
+# advancing them every 10 s coordinator cycle only churned the recorder.
+TIP_ROTATION_INTERVAL_S = 300.0
 
 
 @dataclass
@@ -58,6 +63,9 @@ class EnergyAssistant:
         self.hass = hass
         self._tips: List[EnergyTip] = []
         self._tip_rotation_index: int = 0
+        # (#829) rotation is for the eye, not the recorder: per-cycle
+        # rotation wrote 6k rows/day on two sensors.
+        self._last_tip_rotation: float = float('-inf')
         self._last_analysis: Optional[datetime] = None
         self._last_data = EnergyAssistantData()
         self._daily_stats: List[Dict[str, float]] = []
@@ -138,10 +146,13 @@ class EnergyAssistant:
         tip_category = None
         if self._tips:
             self._tips.sort(key=lambda t: t.priority)
-            idx = self._tip_rotation_index % len(self._tips)
+            now_mono = time.monotonic()
+            if now_mono - self._last_tip_rotation >= TIP_ROTATION_INTERVAL_S:
+                self._tip_rotation_index += 1
+                self._last_tip_rotation = now_mono
+            idx = (self._tip_rotation_index - 1) % len(self._tips)
             current_tip = self._tips[idx].description
             tip_category = self._tips[idx].category
-            self._tip_rotation_index += 1
 
         self._last_data = EnergyAssistantData(
             optimization_score=score,

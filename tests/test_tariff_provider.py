@@ -9,7 +9,6 @@ from custom_components.solar_energy_management.tariff.tariff_provider import (
     SpotMarketProvider,
     PriceLevel,
     TariffData,
-    PricePoint,
 )
 
 

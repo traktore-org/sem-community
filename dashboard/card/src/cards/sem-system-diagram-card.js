@@ -27,6 +27,8 @@ import {
     semFormatPower, semFormatTime, semCalcDuration, semDefineCard, SEM_DEVICE_ACCENT,
     semDiscoverPVStrings, semPVStringsCSS, semPVStringStatesKey, semTheme,
 } from '../base/sem-shared.js';
+import { nightArcPos } from '../util/night-arc.js';
+import { formatTemperatureLabel } from '../util/temperature.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
 
@@ -41,6 +43,26 @@ const WATCHED_SUFFIXES = [
     'daily_ev_energy', 'daily_home_energy', 'daily_grid_import_energy', 'daily_grid_export_energy',
     'forecast_today_kwh', 'controllable_devices_count',
 ];
+
+// Synodic month + a known new-moon epoch, used only when sensor.moon isn't
+// present. Accurate to a few hours — far beyond what a ~40px disc resolves
+// (#711).
+const SYNODIC_MONTH_MS = 29.530589 * 86400000;
+const MOON_EPOCH_MS = Date.parse('2000-01-06T18:14:00Z');
+
+// sensor.moon (HA core Moon integration, optional) reports one of these 8
+// discrete phase names. Map each to the illuminated fraction (k) and
+// waxing/waning the two-arc render path needs.
+const MOON_STATE_PHASE = {
+    new_moon:        { k: 0.00, waxing: true },
+    waxing_crescent: { k: 0.25, waxing: true },
+    first_quarter:   { k: 0.50, waxing: true },
+    waxing_gibbous:  { k: 0.75, waxing: true },
+    full_moon:       { k: 1.00, waxing: true },
+    waning_gibbous:  { k: 0.75, waxing: false },
+    last_quarter:    { k: 0.50, waxing: false },
+    waning_crescent: { k: 0.25, waxing: false },
+};
 
 class SEMSystemDiagramCard extends SEMLitBase {
     // Reactive properties exist ONLY for values driven by the rAF counter tick
@@ -151,10 +173,39 @@ class SEMSystemDiagramCard extends SEMLitBase {
         return map[suffix] || null;
     }
 
+    // (#699) The coordinator's ATOMIC balance snapshot — every value taken
+    // from ONE cycle and carried as an attribute on the home sensor.
+    //
+    // Why it exists: the diagram draws the balance as a connected system, so
+    // it is the one view where reading each term off its own entity is
+    // visibly wrong. HA state updates land per-entity, and the hardware feeds
+    // them at wildly different cadences (Huawei modbus ~17-30 s, KEBA ~2 s),
+    // so a render can pair a stale solar reading with a fresh EV reading. The
+    // arrows then don't add up — energy appears from nowhere or vanishes into
+    // it — for as long as the slower sensor lags.
+    //
+    // Prefix mode only: entities mode reads user-supplied sensors that carry
+    // no snapshot. Returns null when the backend predates #699, and every
+    // caller falls back to its per-entity read.
+    _powerSnapshot() {
+        if (this._mode !== 'prefix' || !this._hass) return null;
+        const st = this._hass.states[this._prefix + 'home_consumption_power'];
+        const snap = st && st.attributes && st.attributes.power_snapshot;
+        return (snap && typeof snap === 'object') ? snap : null;
+    }
+
+    _snapNum(v) {
+        const f = parseFloat(v);
+        return isNaN(f) ? 0 : f;
+    }
+
     // ── #455 flow-value helpers — entities-mode semantics mirror
     //    sem-flow-card (split battery, combined grid, reverse/invert
-    //    flags). Prefix mode passes through unchanged. ──
+    //    flags). Prefix mode passes through unchanged, preferring the
+    //    #699 snapshot when the backend publishes one. ──
     _flowSolar() {
+        const snap = this._powerSnapshot();
+        if (snap) return this._snapNum(snap.solar_w);
         const s = this._val('solar_power');
         return this._entities?.solar?.reverse ? -s : s;
     }
@@ -163,6 +214,15 @@ class SEMSystemDiagramCard extends SEMLitBase {
         const e = this._entities;
         if (e?.battery?.charge || e?.battery?.discharge) {
             return this._val('battery_charge_power') - this._val('battery_discharge_power');
+        }
+        // Only trust the snapshot's battery term while the battery source is
+        // actually reporting. ``battery_soc`` is null exactly when it isn't
+        // (_build_power_snapshot overlays SOC fresh and refuses to hold it),
+        // and during a Huawei modbus flicker a raw battery_w of 0 would draw
+        // the pack as idle. The hold in the render path owns that case.
+        const snap = this._powerSnapshot();
+        if (snap && snap.battery_soc !== null && snap.battery_soc !== undefined) {
+            return this._snapNum(snap.battery_w);
         }
         const raw = this._val('battery_power');
         return e?.battery?.reverse ? -raw : raw;
@@ -178,6 +238,13 @@ class SEMSystemDiagramCard extends SEMLitBase {
                 gridExport: Math.max(0, rev ? gp : -gp),
             };
         }
+        const snap = this._powerSnapshot();
+        if (snap) {
+            return {
+                gridImport: this._snapNum(snap.grid_import_w),
+                gridExport: this._snapNum(snap.grid_export_w),
+            };
+        }
         return {
             gridImport: this._val('grid_import_power'),
             gridExport: this._val('grid_export_power'),
@@ -185,11 +252,20 @@ class SEMSystemDiagramCard extends SEMLitBase {
     }
 
     _flowEv() {
+        const snap = this._powerSnapshot();
+        if (snap) return this._snapNum(snap.ev_w);
         const v = this._val('ev_power');
         return this._entities?.ev?.invert ? -v : v;
     }
 
     _flowHome(solar, gridImport, gridExport, battCharge, battDischarge, ev) {
+        // (#699) The snapshot's home_w is the coordinator's own held value
+        // from the same cycle as every other term above — take it first, so
+        // the drawn balance closes exactly.
+        const snap = this._powerSnapshot();
+        if (snap && snap.home_w !== null && snap.home_w !== undefined) {
+            return Math.max(0, this._snapNum(snap.home_w));
+        }
         // Prefer the PUBLISHED home sensor over a client-side residual.
         // The coordinator already bridges the input-update skew — the
         // Huawei inverter refreshes on a ~17-30 s modbus cadence while
@@ -261,6 +337,9 @@ class SEMSystemDiagramCard extends SEMLitBase {
         key += '|' + (sun?.attributes?.elevation ?? '')
              + ':' + (sun?.attributes?.next_rising || '')
              + ':' + (sun?.attributes?.next_setting || '');
+        // #711 — moon phase/arc position depend on sensor.moon too; without
+        // this a phase-only transition (no sun.sun change) can sit stale.
+        key += '|' + (hass?.states['sensor.moon']?.state || '');
 
         if (key === this._lastDiagKey && !localeChanged) return;
         this._lastDiagKey = key;
@@ -301,6 +380,12 @@ class SEMSystemDiagramCard extends SEMLitBase {
     _valStr(suffix) {
         const eid = this._eid(suffix);
         return eid ? this._stateStr(eid) : '';
+    }
+
+    // #727 — the display unit HA attached to a suffix's entity ('' if none).
+    _unitStr(suffix) {
+        const eid = this._eid(suffix);
+        return eid ? this._unitOf(eid) : '';
     }
 
     /**
@@ -463,6 +548,26 @@ class SEMSystemDiagramCard extends SEMLitBase {
                 const todaySunrise = nextRiseTs - 86400000;
                 const dayLength = nextSetTs - todaySunrise;
                 if (dayLength > 0) pos = (now - todaySunrise) / dayLength;
+            } else if (isNight && nextRiseTs && nextSetTs) {
+                // Night clock, not an ephemeris: maps sunset -> next sunrise
+                // onto the same arc, mirroring the day-progress calc above.
+                // sun.sun carries no moonrise/moonset, and a real lunar
+                // ephemeris would often place the moon below the horizon for
+                // much of the night — deliberate simplification (#711). Do
+                // not "fix" this toward real moon times without solving that
+                // problem first.
+                //
+                // Direction is inverted vs. the day calc: the night counts
+                // DOWN from 1 (sunset, right) to 0 (sunrise, left) — the
+                // same anchor points the day-time sun walks 0→1 through.
+                // The dawn/dusk boundary slivers (elevation-gated isNight
+                // vs. limb-crossing next_* attributes), the high-latitude
+                // long-night cases, and the degenerate polar-onset
+                // directional fallback all live in nightArcPos — see
+                // src/util/night-arc.js, pinned by test/night-arc-sliver.
+                // null only on missing attributes (guarded above anyway).
+                const nightPos = nightArcPos(now, nextRiseTs, nextSetTs);
+                if (nightPos !== null) pos = nightPos;
             } else {
                 pos = (nextRiseTs && now < nextRiseTs) ? 0 : 1;
             }
@@ -470,6 +575,28 @@ class SEMSystemDiagramCard extends SEMLitBase {
         }
         const scale = isNight ? 0.7 : (0.7 + 0.6 * Math.min(1, solar / 10000));
         return { pos, scale, isNight, solar };
+    }
+
+    // Pure helper: illuminated fraction {k, waxing}. Prefers sensor.moon (HA
+    // core Moon integration) so this card agrees with any other moon card on
+    // the dashboard; otherwise computes from the date (#711).
+    _computeMoonPhase() {
+        const state = this._hass?.states['sensor.moon']?.state;
+        if (state && MOON_STATE_PHASE[state]) return MOON_STATE_PHASE[state];
+        const age = (((Date.now() - MOON_EPOCH_MS) % SYNODIC_MONTH_MS) + SYNODIC_MONTH_MS) % SYNODIC_MONTH_MS;
+        const p = age / SYNODIC_MONTH_MS;
+        return { k: (1 - Math.cos(2 * Math.PI * p)) / 2, waxing: p < 0.5 };
+    }
+
+    // Pure helper: two-arc SVG path for a moon disc of radius R at
+    // illuminated fraction k (0=new, 1=full). Outer semicircle + terminator
+    // ellipse with rx = R·|1-2k|; sweep flips at the quarters (k=0.5) and
+    // mirrors for waning so the lit limb sits on the correct side (#711).
+    _moonPhasePath(R, k, waxing) {
+        const rx = (R * Math.abs(1 - 2 * k)).toFixed(2);
+        const outerSweep = waxing ? 1 : 0;
+        const termSweep = k < 0.5 ? 1 - outerSweep : outerSweep;
+        return `M 0 ${-R} A ${R} ${R} 0 0 ${outerSweep} 0 ${R} A ${rx} ${R} 0 0 ${termSweep} 0 ${-R} Z`;
     }
 
     // ── Static CSS ──
@@ -537,6 +664,7 @@ class SEMSystemDiagramCard extends SEMLitBase {
         // Sun pose (pure)
         const pose = this._computeSunPose();
         const { isNight } = pose;
+        const moonPhase = isNight ? this._computeMoonPhase() : { k: 0, waxing: true };
         const sunOpacity = isNight ? 0.3 : 0.85;
         const sparkOpacity = solar > 50 ? Math.min(1, 0.3 + solar / 5000) : 0;
 
@@ -613,9 +741,13 @@ class SEMSystemDiagramCard extends SEMLitBase {
         // Blank when there is no inverter-temp source (never fabricated).
         // Use the raw state so a legitimate ≤0 °C reading (cold climates)
         // still shows; blank only when the source is unknown/unavailable.
-        const invTempRaw = this._valStr('inverter_temperature');
-        const invTempStr = invTempRaw !== '' && !isNaN(parseFloat(invTempRaw))
-            ? `${parseFloat(invTempRaw).toFixed(0)}°C` : '';
+        // #727 — label with the unit HA actually attached (°F on US installs,
+        // where HA converts the °C-native sensor), not a hardcoded °C. A
+        // hardcoded °C turned a converted 118 °F into a nonsensical "118°C".
+        const invTempStr = formatTemperatureLabel(
+            this._valStr('inverter_temperature'),
+            this._unitStr('inverter_temperature'),
+        );
         const chargingState = this._valStr('charging_state');
         const maxLen = c ? 22 : 30;
         const invStatusStr = chargingState.length > maxLen
@@ -790,8 +922,14 @@ class SEMSystemDiagramCard extends SEMLitBase {
                         <g style="display:${isNight ? 'block' : 'none'}"
                            transform="${this._moonTransform ?? ''}">
                             <circle cx="${L.sunX}" cy="${L.sunY}" r="${L.sunR}" fill="#1a2540"/>
-                            <circle cx="${L.sunX + L.sunR * 0.38}" cy="${L.sunY - L.sunR * 0.22}"
-                                    r="${L.sunR * 0.78}" fill="#0d1a30"/>
+                            ${moonPhase.k > 0.03 ? svg`<circle cx="${L.sunX}" cy="${L.sunY}"
+                                    r="${(L.sunR + 3 + 5 * moonPhase.k).toFixed(1)}" fill="none"
+                                    stroke="rgba(240,236,216,${(0.09 * moonPhase.k).toFixed(2)})"
+                                    stroke-width="4"/>` : nothing}
+                            <g transform="translate(${L.sunX},${L.sunY})">
+                                <path d="${this._moonPhasePath(L.sunR, moonPhase.k, moonPhase.waxing)}"
+                                      fill="#f0ecd8"/>
+                            </g>
                             <circle cx="${L.sunX}" cy="${L.sunY}" r="${L.sunR}"
                                     fill="none" stroke="rgba(200,220,255,0.5)" stroke-width="1"/>
                         </g>
@@ -1725,4 +1863,6 @@ semDefineCard('sem-system-diagram-card', SEMSystemDiagramCard, {
     type: 'sem-system-diagram-card',
     name: 'SEM System Diagram',
     description: 'Power flow visualization with inline SVG illustrations for each energy component',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-system-diagram-card',
 });

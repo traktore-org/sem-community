@@ -10,14 +10,10 @@ Covers:
 import pytest
 from datetime import datetime, timedelta
 from homeassistant.util import dt as dt_util
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock, AsyncMock
 
 from custom_components.solar_energy_management.devices.hot_water_controller import (
     HotWaterController,
-    DEFAULT_LEGIONELLA_TARGET,
-    DEFAULT_LEGIONELLA_INTERVAL_HOURS,
-    DEFAULT_SOLAR_TARGET_TEMP,
-    LEGIONELLA_HOLD_MINUTES,
 )
 
 
@@ -377,7 +373,7 @@ class TestLegionellaPrevention:
         # Hold started 5 minutes ago (<20 min needed)
         ctrl._legionella_hold_start = datetime.now(tz=dt_util.UTC) - timedelta(minutes=5)
 
-        result = await ctrl.check_legionella_cycle()
+        await ctrl.check_legionella_cycle()
         # Should still be holding (temp at target but not long enough)
         assert ctrl._legionella_cycle_active is True
 

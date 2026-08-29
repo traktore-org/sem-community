@@ -4,10 +4,9 @@ Tests the full setup flow, coordinator lifecycle, and cross-component
 interactions that unit tests don't cover.
 """
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from datetime import date
 
-from homeassistant.config_entries import ConfigEntry
 
 from custom_components.solar_energy_management.const import DOMAIN
 from custom_components.solar_energy_management.switch import (
@@ -19,7 +18,6 @@ from custom_components.solar_energy_management.sensor import (
     async_setup_entry as sensor_setup,
 )
 from custom_components.solar_energy_management.number import (
-    SEMNumberEntity,
     NUMBER_TYPES,
     async_setup_entry as number_setup,
 )
@@ -41,15 +39,16 @@ class TestPlatformEntityCounts:
         """Post-#277 Phase C: ``observer_mode`` is the sole legacy global
         switch (``night_charging`` + ``smart_night_charging`` were removed
         when the named ``charge_mode`` selector took over). #594 added
-        ``vacation_mode``."""
+        ``vacation_mode``; #638 G4 added ``energy_plan_actuation`` (default
+        off — the joint energy plan stays shadow until flipped)."""
         config_entry.runtime_data = mock_coordinator
         mock_hass.data = {DOMAIN: {config_entry.entry_id: mock_coordinator}}
         add_entities = MagicMock()
         await switch_setup(mock_hass, config_entry, add_entities)
         switches = add_entities.call_args[0][0]
-        assert len(switches) == 2
+        assert len(switches) == 3
         keys = {s.entity_description.key for s in switches}
-        assert keys == {"observer_mode", "vacation_mode"}
+        assert keys == {"observer_mode", "vacation_mode", "energy_plan_actuation"}
 
     @pytest.mark.asyncio
     async def test_number_count(self, mock_hass, config_entry, mock_coordinator):

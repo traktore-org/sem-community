@@ -20,6 +20,8 @@ from ..charger_types import BatteryIntent
 from ..power_control import async_write_power_setpoint, prepare_power_setpoint
 from .base import BatteryControlAdapter
 
+from ...utils.log_gate import log_on_change
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -421,21 +423,40 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         # both; only fall through to the charge adapter when not forcing.
         if await self._maybe_clear_startup_orphan():
             self._forcible_charging = False
+            self._last_error = None
             self._last_intent = BatteryIntent.STOP_FORCE_CHARGE
             return
         if await self._stop_forcible():
             self._forcible_charging = False
+            self._last_error = None
             self._last_intent = BatteryIntent.STOP_FORCE_CHARGE
             return
-        await self._charge_adapter.stop_forced_charge()
+        # (#757) Everything above is a real edge — an orphan cleared, a
+        # forcible discharge cancelled. Below is the steady state, and
+        # the steady state is where the storm lived: hours of "stop" for
+        # a battery that stopped at the first one. Ask the shared
+        # predicate, then honour its contract — record the intent ONLY on
+        # a stop that landed, so a dropped Modbus write is retried next
+        # cycle instead of being remembered as a success.
+        if self._force_charge_already_stopped():
+            return
+        from .force_charge import ChargeCommandStatus
+        status = await self._charge_adapter.stop_forced_charge()
+        if getattr(status, "status", None) is ChargeCommandStatus.FAILED:
+            self._last_error = (
+                f"stop_forced_charge failed: {getattr(status, 'message', '')}"
+            )
+            return
         self._forcible_charging = False
+        self._last_error = None
         self._last_intent = BatteryIntent.STOP_FORCE_CHARGE
 
     # ─── Helpers ───────────────────────────────────────────────
 
     async def _apply_discharge_limit(self, watts: float) -> None:
         if not self._discharge_control_entity:
-            _LOGGER.debug(
+            log_on_change(   # (#762) a standing config gap is one line, not 806/day
+                _LOGGER, "no_discharge_entity", logging.DEBUG,
                 "HuaweiBatteryAdapter: no battery_discharge_control_entity "
                 "configured — skipping limit %.0f W", watts,
             )

@@ -16,7 +16,6 @@ import json
 import os
 from unittest.mock import MagicMock
 
-import yaml
 
 from custom_components.solar_energy_management.coordinator.types import SEMData
 from custom_components.solar_energy_management.coordinator.forecast_reader import (
@@ -75,8 +74,6 @@ def test_forecast_card_uses_forecast_preset_not_power():
     chart with a misleading title and no forecast series.
     """
     path = os.path.join(_ROOT, "dashboard", "sem_dashboard_template.yaml")
-    with open(path, encoding="utf-8") as f:
-        text = f.read()
 
     # Locate the card block titled "Forecast vs Actual" and read the preset that
     # immediately precedes it (same list item).

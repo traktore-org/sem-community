@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any
 
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.config_entries import ConfigEntry
@@ -14,7 +13,6 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
 from .coordinator import SEMCoordinator
 
 type SEMConfigEntry = ConfigEntry[SEMCoordinator]
@@ -188,6 +186,30 @@ async def async_setup_entry(
                 charger_cfg.get("charge_mode") or DEFAULT_EV_CHARGE_MODE,
                 cname,
             ))
+            # (#804 Phase B/C) Phase mode: auto / 1 / 3. Exists only for a
+            # charger whose phase-switch capability the user has NAMED
+            # (ev_phase_switch_entity) — no capability, no knob. The
+            # orphan cleanup below retires the select if the entity is
+            # ever un-configured.
+            # (#804) Same gate as the actuation in ev_control — dormant in
+            # 2.0 unless ev_phase_switching_enabled is set. One gate, both
+            # halves: a knob that switches while the actuation is dormant
+            # looks applied and does nothing (#462).
+            if (charger_cfg.get("ev_phase_switch_entity")
+                    and charger_cfg.get("ev_phase_switching_enabled", False)):
+                pm_key = f"charger_{cid}_phase_mode"
+                per_charger_keys.add(pm_key)
+                entities.append(SEMPerChargerSelect(
+                    coordinator,
+                    SelectEntityDescription(
+                        key=pm_key,
+                        options=["auto", "1", "3"],
+                        entity_category=EntityCategory.CONFIG,
+                    ),
+                    entry, cid, "phase_mode",
+                    str(charger_cfg.get("phase_mode") or "auto"),
+                    cname,
+                ))
 
     # Per-battery mode selects (#523). Multi-battery installs (Energy
     # Dashboard battery_power_list ≥ 2) get one ``select.sem_battery_<bid>_mode``

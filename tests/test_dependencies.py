@@ -5,10 +5,9 @@ and multi-level dependency chains.
 """
 import pytest
 from unittest.mock import MagicMock, AsyncMock
-from datetime import datetime
 
 from custom_components.solar_energy_management.devices.base import (
-    ControllableDevice, SwitchDevice, DeviceState,
+    SwitchDevice, DeviceState,
 )
 from custom_components.solar_energy_management.coordinator.surplus_controller import (
     SurplusController,

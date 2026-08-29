@@ -24,7 +24,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, Mock, patch
 
-from custom_components.solar_energy_management.coordinator import sensor_reader as sr
 from custom_components.solar_energy_management.coordinator.sensor_reader import (
     SensorReader,
 )

@@ -134,8 +134,10 @@ class SEMSolarKpiCard extends SEMLitBase {
 }
 
 semDefineCard('sem-solar-kpi-card', SEMSolarKpiCard, {
-    type: 'custom:sem-solar-kpi-card',
+    type: 'sem-solar-kpi-card',
     name: 'SEM Solar KPI Card',
     description: "Prominent Today's Solar Production KPI for the Home tab",
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-solar-kpi-card',
     preview: true,
 });

@@ -16,11 +16,9 @@ display-row site that had no kW rule at all.
 from __future__ import annotations
 
 import ast
-import re
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import pytest
 
 from custom_components.solar_energy_management.coordinator.sensor_reader import (
     SensorReader,

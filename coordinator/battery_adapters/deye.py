@@ -34,7 +34,7 @@ Config shape (documented):
     deye_work_mode_battery_first_option: Battery First
     deye_force_charge_work_mode: battery_first
     deye_program_groups:                   # list of 6 dicts (preferred)
-      - time: select.deye_slice_1_time
+      - time: time.deye_slice_1_time       # HA writable time.* entity
         soc: number.deye_slice_1_soc
         charge: select.deye_slice_1_charge
       # ... 6 entries
@@ -1196,6 +1196,13 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
         self._last_intent = BatteryIntent.FORCE_CHARGE
 
     async def command_stop_force_charge(self) -> None:
+        # (#757) The restore below is a Store read plus a hardware write.
+        # Once it has landed there is nothing left to restore, so a
+        # repeat is pure cost. The intent is only ever set on a
+        # successful restore, so an unsafe latch or a held write never
+        # trips this guard — those paths retry, as they must.
+        if self._force_charge_already_stopped():
+            return
         snapshot = await self._load_snapshot()
         if snapshot is None:
             if self._snapshot_load_failed:

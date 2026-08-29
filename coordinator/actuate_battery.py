@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 
 from .charger_types import BatteryIntent
 from .power_control import prepare_power_setpoint
+from ..utils.log_gate import log_on_change
 
 if TYPE_CHECKING:  # pragma: no cover
     from .battery_adapters.base import BatteryControlAdapter
@@ -24,19 +25,100 @@ if TYPE_CHECKING:  # pragma: no cover
 _LOGGER = logging.getLogger(__name__)
 
 
+def _observe(decision: "BatteryDecision", controller=None) -> None:
+    """OBSERVER mode = the layer-3 intercept for batteries, in one place.
+
+    ``decide_battery`` already ran live; this seam records and logs the
+    command it WOULD dispatch and calls no adapter method. The watts are
+    read off the field the intent actually uses, so the shadow says what
+    the inverter would have been told.
+    """
+    watts = {
+        BatteryIntent.FORCE_CHARGE: decision.charge_power_w,
+        BatteryIntent.FORCE_DISCHARGE: decision.discharge_power_w,
+        BatteryIntent.LIMIT_DISCHARGE: decision.discharge_limit_w,
+    }.get(decision.intent, 0.0)
+    if controller is not None:
+        try:
+            controller.publish_observer_decision(
+                key=f"battery:{decision.battery_id}",
+                name=str(decision.battery_id),
+                action=decision.intent.value,
+                power_w=float(watts or 0.0),
+                reason=decision.reason,
+                kind="battery",
+            )
+        except Exception:  # noqa: BLE001 — the surface must never break the seam
+            pass
+    log_on_change(   # (#762) transition-gated
+        _LOGGER, f"observer:battery:{decision.battery_id}", logging.INFO,
+        "OBSERVER · WOULD %s %s @ %.0fW — %s",
+        decision.intent.value.upper(), decision.battery_id,
+        float(watts or 0.0), decision.reason,
+    )
+
+
+# (#818) The two intents that are decided from POWER numbers — the EV
+# protection clamp and its release. Everything else here is decided
+# from SOC, the plan, a schedule or the user's own mode, none of which
+# a blipping power sensor can move.
+_POWER_DERIVED_INTENTS = frozenset({
+    BatteryIntent.LIMIT_DISCHARGE, BatteryIntent.NORMAL,
+})
+
+
 async def actuate_battery(
     decision: "BatteryDecision",
     adapter: "BatteryControlAdapter",
+    *,
+    observer: bool = False,
+    controller=None,
+    inputs_degraded: bool = False,
 ) -> None:
     """Apply a per-battery decision through the adapter.
 
     Args:
         decision: The output of ``decide_battery(view)`` this cycle.
         adapter: The brand-specific adapter wrapping this battery.
+        observer: Observer mode — cut the trigger. The decision still ran
+            for real; this seam only records what it WOULD command
+            (see :func:`_observe`).
+        controller: The :class:`SurplusController` that owns the shared
+            ``observer_decisions`` surface. Optional.
     """
+    if observer:
+        _observe(decision, controller=controller)
+        return
+
+    # (#818) A cycle that cannot see must not flip the EV protection
+    # clamp. LIMIT_DISCHARGE engages when solar surplus sits below the
+    # assist gate — so on a Huawei modbus install the fabricated 0 W
+    # engaged it, the source recovered 30 s later and it released, ~50
+    # times a day. Each flip is a real modbus write, which is the churn
+    # #538 had to make idempotent in the first place.
+    #
+    # Narrow on purpose: ONLY the power-derived pair, and only a CHANGE
+    # between them. Force charge/discharge, OFF, arbitrage and the
+    # scheduler are decided from SOC, the plan or the user's own mode,
+    # and pass through a dark cycle untouched.
+    if (
+        inputs_degraded
+        and decision.intent in _POWER_DERIVED_INTENTS
+        and getattr(adapter, "last_intent", None) in _POWER_DERIVED_INTENTS
+        and decision.intent is not adapter.last_intent
+    ):
+        log_on_change(
+            _LOGGER, f"degraded:{decision.battery_id}", logging.DEBUG,
+            "actuate_battery(%s): inputs degraded — holding %s, not "
+            "flipping to %s on a blind cycle",
+            decision.battery_id, adapter.last_intent, decision.intent,
+        )
+        return
+
     if decision.intent is BatteryIntent.OFF:
         await adapter.command_off()
-        _LOGGER.debug(
+        log_on_change(   # (#762) transition-gated
+            _LOGGER, f"actuate:{decision.battery_id}", logging.DEBUG,
             "actuate_battery(%s): OFF (hands-off) — %s",
             decision.battery_id, decision.reason,
         )
@@ -44,7 +126,8 @@ async def actuate_battery(
 
     if decision.intent is BatteryIntent.NORMAL:
         await adapter.command_normal()
-        _LOGGER.debug(
+        log_on_change(   # (#762) 1424 identical lines/day on .175
+            _LOGGER, f"actuate:{decision.battery_id}", logging.DEBUG,
             "actuate_battery(%s): NORMAL — %s",
             decision.battery_id, decision.reason,
         )
@@ -52,7 +135,8 @@ async def actuate_battery(
 
     if decision.intent is BatteryIntent.LIMIT_DISCHARGE:
         await adapter.command_limit_discharge(decision.discharge_limit_w)
-        _LOGGER.debug(
+        log_on_change(   # (#762) the watts wobble; the gate strips digits
+            _LOGGER, f"actuate:{decision.battery_id}", logging.DEBUG,
             "actuate_battery(%s): LIMIT_DISCHARGE %.0f W — %s",
             decision.battery_id, decision.discharge_limit_w, decision.reason,
         )
@@ -60,7 +144,8 @@ async def actuate_battery(
 
     if decision.intent is BatteryIntent.FORCE_CHARGE:
         if not adapter.supports_forced_charge:
-            _LOGGER.warning(
+            log_on_change(   # (#762) once per episode, not per cycle
+                _LOGGER, f"actuate:{decision.battery_id}", logging.WARNING,
                 "actuate_battery(%s): adapter does not support forced "
                 "charge — decision dropped (%s)",
                 decision.battery_id, decision.reason,

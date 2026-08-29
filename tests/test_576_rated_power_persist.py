@@ -15,15 +15,20 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from custom_components.solar_energy_management.const import (
+    DEFAULT_DEVICE_RATED_POWER as _DEFAULT_RATED_POWER,
+)
 from custom_components.solar_energy_management.features.device_registry import (
-    UnifiedDeviceRegistry, _DEFAULT_RATED_POWER,
+    UnifiedDeviceRegistry,
 )
 
 
-def _dev(rated=1000.0, sensor="sensor.p", is_ev=False, mpt=0.0):
+def _dev(rated=1000.0, sensor="sensor.p", is_ev=False, mpt=0.0, measured=True):
+    # (#744) ``measured`` is the provenance of ``rated``: False = the 1 kW
+    # placeholder SwitchDevice invents when it has nothing to go on.
     return SimpleNamespace(
         rated_power=rated, power_entity_id=sensor, is_ev=is_ev,
-        min_power_threshold=mpt,
+        min_power_threshold=mpt, rated_power_measured=measured,
     )
 
 
@@ -62,7 +67,9 @@ class TestCaptureCalibratedRatings:
         assert reg._rated_power_overrides["d"] == 1140.0
 
     def test_ignores_the_default_floor(self):
-        reg = _reg({"d": _dev(rated=_DEFAULT_RATED_POWER)})
+        # (#744) ignored because it is the INVENTED placeholder, not because
+        # 1000 is a magic number — a measured 1 kW load would be kept.
+        reg = _reg({"d": _dev(rated=_DEFAULT_RATED_POWER, measured=False)})
         assert reg._capture_calibrated_ratings() is False
         assert "d" not in reg._rated_power_overrides
 
@@ -105,8 +112,11 @@ class TestSeedAndApplyRatings:
         assert reg._rated_power_overrides["d"] == 1144.0
         assert devs["d"].rated_power == 1144.0
 
-    async def test_history_below_floor_is_not_seeded(self):
-        # a genuinely small load keeps the conservative 1 kW floor
+    async def test_history_does_not_lower_a_rating_we_were_given(self):
+        # (#744) 600 W of history is a measurement, but this device's 1 kW is
+        # one too (measured=True) — history only ever raises a known rating.
+        # The placeholder case is the opposite, and lives in
+        # test_744_measured_rating::test_history_seeds_a_small_load.
         devs = {"d": _dev(rated=1000.0)}
         reg = _reg(devs)
         reg._history_max_power = AsyncMock(return_value=600.0)

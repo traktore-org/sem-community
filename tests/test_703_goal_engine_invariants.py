@@ -23,7 +23,7 @@ The contract (docs/MULTI_DEVICE_GUIDE.md + BUG_CLASSES classes 17/18/32):
   I7  runtime accrues on the meter day; the deficit resets exactly once,
       at sunrise
 """
-from datetime import date, timedelta
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -366,7 +366,7 @@ class TestOneMeterDayClass:
     def test_sunrise_boundary_is_stateless_and_restart_proof(self):
         """Before sunrise → yesterday, after → today — on a FRESH instance
         each time (the restart case the latch got wrong)."""
-        from datetime import datetime, timedelta
+        from datetime import timedelta
         from unittest.mock import patch
         from custom_components.solar_energy_management.utils.time_manager import (
             TimeManager,

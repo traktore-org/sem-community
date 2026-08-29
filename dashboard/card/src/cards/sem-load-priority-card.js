@@ -30,11 +30,19 @@ import {
    _dragEnd. SortableJS was removed (#576): an imperative DOM library and
    Lit fought over DOM ownership, causing the reorder/badge desync.  */
 
+// Deep link for the comfort goal section (guarded by
+// tests/test_618_docs_anchors.py — the regex there matches this
+// "docs:" literal, keep the shape).
+const COMFORT_DOCS = {
+    docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/ENERGY_PLANNER.md#comfort-banking',
+};
+
 class SEMLoadPriorityCard extends SEMLitBase {
     constructor() {
         super();
         this.devices = [];
         this.targetPeakLimit = 5.0;
+        this.peakLimitUnlimited = false;  // (#716) explicit opt-out, never inferred
         this.currentPeak = 0;
         this.loadManagementStatus = 'normal';
         this._sortable = null;
@@ -143,11 +151,6 @@ class SEMLoadPriorityCard extends SEMLitBase {
             .mono { font-variant-numeric:tabular-nums; font-weight:500; }
             .bar { width:100%; height:5px; background:var(--divider-color, rgba(128,128,128,0.12)); border-radius:3px; overflow:hidden; margin-top:8px; }
             .bar-fill { height:100%; border-radius:3px; transition:width 0.4s ease, background 0.4s ease; }
-            .target-row { display:flex; align-items:center; gap:8px; margin-top:6px; }
-            .target-row input { width:70px; padding:5px 8px; border:1px solid var(--divider-color, rgba(255,255,255,0.08)); border-radius:8px; background:var(--card-background-color, rgba(0,0,0,0.2)); color:var(--primary-text-color); text-align:center; font-size:1em; }
-            .target-row input:focus { outline:none; border-color:#ff9800; }
-            .target-row button { padding:5px 14px; border:none; border-radius:8px; background:#ff9800; color:#fff; cursor:pointer; font-size:0.95em; }
-            .target-row button:hover { background:#e68900; }
             .section-label { font-size:0.95em; opacity:0.55; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
             .device-list { min-height:40px; }
             .device { display:flex; align-items:stretch; background:var(--secondary-background-color, rgba(255,255,255,0.04)); border:1px solid var(--divider-color, rgba(255,255,255,0.08)); border-radius:12px; margin-bottom:6px; transition:transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease; overflow:hidden; backdrop-filter:blur(8px); }
@@ -205,6 +208,18 @@ class SEMLoadPriorityCard extends SEMLitBase {
             }
             .goal-btn.active { color:#ff9800; border-color:#ff9800; }
             .goal-progress { display:flex; align-items:center; gap:8px; }
+            .comfort-chip { display:inline-flex; align-items:center; gap:4px;
+                margin:2px 0 0 26px; padding:1px 8px; font-size:11.5px;
+                border:1px solid; border-radius:9px; width:fit-content; }
+            .comfort-strip { position:relative; height:18px; margin:6px 4px 2px; }
+            .cs-track { position:absolute; top:8px; left:0; right:0; height:3px;
+                border-radius:2px; background:rgba(255,255,255,0.12); }
+            .cs-zone { position:absolute; top:8px; height:3px; border-radius:2px;
+                background:linear-gradient(90deg,#8DC89255,#ffc10755); }
+            .cs-mark { position:absolute; top:4px; width:3px; height:11px;
+                border-radius:2px; transform:translateX(-50%); }
+            .cs-read { position:absolute; top:-2px; transform:translateX(-50%);
+                font-size:10px; color:var(--primary-text-color,#e0e0e0); }
             .goal-bar {
                 flex:1 1 auto; height:5px; border-radius:3px;
                 background:rgba(128,128,128,0.2); overflow:hidden; max-width:220px;
@@ -262,6 +277,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
             .range-split:hover { background:rgba(0,0,0,0.75); }
             .range-handle-min { border:3px solid #8DC892; }
             .range-handle-max { border:3px solid #ff9800; }
+            .range-handle-peak { border:3px solid #488fc2; }
             /* EV charge-target look (#559 UI merge) */
             .goal-editor {
                 margin:8px 0 4px 28px; padding:10px 12px;
@@ -273,6 +289,11 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 color:var(--secondary-text-color,#999);
                 display:flex; align-items:center; gap:5px; margin-bottom:4px;
             }
+            .ge-docs {
+                display:inline-flex; align-items:center;
+                color:var(--secondary-text-color,#999); opacity:0.55;
+            }
+            .ge-docs:hover { opacity:1; }
             .ge-row {
                 display:flex; align-items:center; min-height:34px; padding:2px 0;
             }
@@ -348,6 +369,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
         const devicesEntity     = this._hass.states[`${this.entityPrefix}controllable_devices_count`];
 
         if (targetPeakEntity)  this.targetPeakLimit      = parseFloat(targetPeakEntity.state)  || 5.0;
+        if (targetPeakEntity)  this.peakLimitUnlimited   = targetPeakEntity.attributes?.peak_limit_unlimited || false;
         if (currentPeakEntity) this.currentPeak          = parseFloat(currentPeakEntity.state) || 0;
         if (statusEntity)      this.loadManagementStatus = statusEntity.state || 'normal';
 
@@ -356,7 +378,12 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 .map(([id, info]) => ({
                     id,
                     name: info.name || id.replace(/^(load_device_|energy_dashboard_)/, '').replace(/_/g, ' '),
-                    power: (info.current_power || 0) / 1000,
+                    // (#829) live power from the device's own entity — the map
+                    // no longer carries current_power (it made the count sensor
+                    // write a row every cycle); older backends still fall back.
+                    power: ((info.power_entity && this._hass?.states?.[info.power_entity])
+                        ? (parseFloat(this._hass.states[info.power_entity].state) || 0)
+                        : (info.current_power || 0)) / 1000,
                     // (#577) self-calibrated rated power (W) — shown dimmed when
                     // the load is off so the row keeps a meaningful number
                     // instead of a bare "OFF".
@@ -365,7 +392,16 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     isOn: info.is_on || false,
                     isShed: info.is_shed || false,
                     shedReason: info.shed_reason || null,
-                    isControllable: info.is_controllable !== false,
+                    // (#780) two axes, two fields. The toggle on this row is
+                    // the user's "SEM may touch this load" permission; the
+                    // handle is a discovery fact the toggle must not erase.
+                    // Older payloads carry only the mixed key.
+                    hasControlHandle: info.has_control_handle !== undefined
+                        ? info.has_control_handle !== false
+                        : info.is_controllable !== false,
+                    isControllable: info.user_hands_off !== undefined
+                        ? info.user_hands_off !== true
+                        : info.is_controllable !== false,
                     isCritical: info.is_critical || false,
                     deviceType: info.device_type || 'unknown',
                     isAvailable: info.is_available || false,
@@ -378,6 +414,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     dependsOn: info.depends_on || [],
                     goals: info.goals || null,
                     progress: info.progress || null,
+                    comfort: info.comfort || null,   // (#705) live band verdict
                     blockedBy: info.blocked_by || null,
                     soc: info.soc,   // (#576) battery row only
                     icon: this._resolveDeviceIcon(info),
@@ -390,9 +427,10 @@ class SEMLoadPriorityCard extends SEMLitBase {
     render() {
         if (!this._config) return nothing;
 
+        const unlimited  = this.peakLimitUnlimited;
         const peakColor  = this._getPeakColor();
         const peakMargin = this.targetPeakLimit - this.currentPeak;
-        const peakPct    = this.targetPeakLimit > 0 ? Math.min((this.currentPeak / this.targetPeakLimit) * 100, 100) : 0;
+        const peakPct    = unlimited ? 0 : (this.targetPeakLimit > 0 ? Math.min((this.currentPeak / this.targetPeakLimit) * 100, 100) : 0);
 
         return html`
             <ha-card>
@@ -403,7 +441,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         <div class="spacer"></div>
                         <span class="dim">${this._t('peak')}</span>
                         <span id="peak-current" class="mono">${this.currentPeak.toFixed(2)} kW</span>
-                        <span class="dim">/ ${this.targetPeakLimit.toFixed(1)}</span>
+                        <span class="dim">/ ${unlimited ? this._t('uncapped') : this.targetPeakLimit.toFixed(1)}</span>
                         <button class="help-btn ${this._showHelp ? 'active' : ''}" data-action="toggle-help"
                                 title="${this._t('help')}">?</button>
                     </div>
@@ -415,12 +453,13 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         </div>
                         <div class="peak-row">
                             <span class="dim">${this._t('target_limit')}</span>
-                            <span id="peak-target" class="mono">${this.targetPeakLimit.toFixed(2)} kW</span>
+                            <span id="peak-target" class="mono">${unlimited ? this._t('uncapped') : this.targetPeakLimit.toFixed(2) + ' kW'}</span>
                         </div>
+                        ${unlimited ? nothing : html`
                         <div class="peak-row">
                             <span class="dim">${this._t('margin')}</span>
                             <span id="peak-margin" class="mono" style="color:${peakMargin > 0 ? '#4caf50' : '#f44336'}">${peakMargin.toFixed(2)} kW</span>
-                        </div>
+                        </div>`}
                         <div class="bar">
                             <div id="peak-bar" class="bar-fill" style="width:${peakPct}%;background:${peakColor}"></div>
                         </div>
@@ -428,11 +467,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
 
                     <div class="peak-box" style="margin-bottom:16px">
                         <span class="dim">${this._t('adjust_target_peak')}</span>
-                        <div class="target-row">
-                            <input type="number" id="targetInput" min="1" max="20" step="0.1" .value="${String(this.targetPeakLimit)}">
-                            <span class="dim">kW</span>
-                            <button id="setTargetBtn">${this._t('set')}</button>
-                        </div>
+                        ${this._renderPeakSlider()}
                     </div>
 
                     ${this._showHelp ? html`
@@ -527,6 +562,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     <div class="status-dot ${onOff ? 'on' : (device.isShed ? 'shed' : '')}" data-field="status-${device.id}"></div>
                     <span class="dim" data-field="onoff-${device.id}">${onOff ? this._t('on') : (device.isShed ? this._t('shed_label') : this._t('off'))}</span>
                     <span class="badge priority" data-field="pri-${device.id}">${priority}</span>
+                    ${isBattery ? nothing : this._renderControlVerdict(device)}
                     <div class="spacer"></div>
                     ${isBattery ? html`<span class="dim" title="${this._t('battery_role_help')}">${this._t('battery_role_label')}</span>` : nothing}
                     ${device.deviceType === 'ev_charger' || device.deviceType === 'ev_charging' || isBattery ? nothing : html`
@@ -562,6 +598,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         <ha-icon icon="mdi:target" style="--mdc-icon-size:16px;pointer-events:none"></ha-icon>
                     </button>`}
                 </div>
+                ${this._renderComfortChip(device)}
                 ${this._renderGoalProgress(device)}
                 ${this._goalOpen[device.id] ? this._renderGoalEditor(device) : nothing}
             </div>
@@ -734,6 +771,67 @@ class SEMLoadPriorityCard extends SEMLitBase {
         window.addEventListener('pointercancel', onUp);
     }
 
+    // Single-handle grid-ceiling slider (#717 redesign) — replaces the old
+    // number-input + Set button. Steel blue (#488fc2) matches CLAUDE.md's
+    // canonical "Grid Import" color since target_peak_limit is a grid-import
+    // ceiling. Reaching the top of the range is the explicit, deliberate
+    // "Unlimited" opt-out (#716) — never inferred from an absent value.
+    _renderPeakSlider() {
+        const MIN_KW = 1, MAX_KW = 80;
+        const drag = this._peakDrag;
+        let kw = this.peakLimitUnlimited ? MAX_KW : Math.min(MAX_KW, Math.max(MIN_KW, this.targetPeakLimit || MIN_KW));
+        if (drag != null) kw = drag;
+        const pct = ((kw - MIN_KW) / (MAX_KW - MIN_KW)) * 100;
+        const atMax = kw >= MAX_KW - 1e-6;
+        const label = atMax ? this._t('uncapped') : `${kw.toFixed(1)} kW`;
+        return html`
+            <div class="range-wrap">
+                <div class="range-labels">
+                    <span>${this._t('target_limit')}</span>
+                    <span><b style="color:#488fc2">${label}</b></span>
+                </div>
+                <div class="range-track">
+                    <div class="range-fill" style="left:0;width:${pct}%;background:#488fc2"></div>
+                    <div class="range-handle range-handle-peak" style="left:${pct}%"
+                         @pointerdown=${(e) => this._peakSliderStart(e)}></div>
+                </div>
+            </div>`;
+    }
+
+    _peakSliderStart(e) {
+        e.stopPropagation();
+        e.preventDefault();
+        const MIN_KW = 1, MAX_KW = 80, STEP_KW = 0.5;
+        const track = e.currentTarget.parentElement;  // handle → .range-track
+        const rect = track.getBoundingClientRect();
+        const toVal = (clientX) => {
+            let frac = (clientX - rect.left) / (rect.width || 1);
+            frac = Math.max(0, Math.min(1, frac));
+            return Math.round((MIN_KW + frac * (MAX_KW - MIN_KW)) / STEP_KW) * STEP_KW;
+        };
+        const apply = (clientX) => {
+            this._peakDrag = toVal(clientX);
+            this.requestUpdate();
+        };
+        apply(e.clientX);
+        const onMove = (ev) => apply(ev.clientX);
+        const onUp = (ev) => {
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+            window.removeEventListener('pointercancel', onUp);
+            const kw = toVal(ev.clientX);
+            this._peakDrag = null;
+            const unlimited = kw >= MAX_KW - 1e-6;
+            this.targetPeakLimit = kw;
+            this.peakLimitUnlimited = unlimited;
+            this._sendTargetPeakUpdate(kw, unlimited);
+            this.requestUpdate();
+        };
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+        window.addEventListener('pointercancel', onUp);
+    }
+
     _onStopEntity(device, e) {
         // <ha-entity-picker> fires value-changed (not change) with the chosen
         // entity in e.detail.value. Persist via the same goal path as the text
@@ -820,6 +918,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     ${this._t('daily_target')}
                 </div>
                 ${this._renderGoalSlider(device)}
+                ${this._renderComfortBand(device)}
                 ${this._renderOvernightPicker(device)}
                 ${this._renderAntiCycle(device)}
                 <div class="ge-row">
@@ -846,6 +945,165 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 </div>
                 <div class="ge-hint">${this._t('stop_condition_hint')}</div>
             </div>`;
+    }
+
+    // ── (#705) thermal comfort — chip + band strip ──────────────────
+    // The band VERDICT comes from the payload (device.comfort), never
+    // re-derived here: a frontend copy of the band logic is how the
+    // published state and the action drift apart. The strip edits the
+    // three goals; the backend answers with the new verdict next cycle.
+
+    _comfortChipMeta(device) {
+        const c = device.comfort;
+        if (!c || !c.state || c.state === 'disengaged') return null;
+        const cooling = (c.hvac || 'cool') === 'cool';
+        const meta = {
+            forced:  { icon: '\u{1F525}', color: '#ffc107',
+                       label: this._t(cooling ? 'chip_cooling_now' : 'chip_heating_now') },
+            willing: { icon: '\u2744',   color: '#8DC892',
+                       label: this._t(cooling ? 'chip_pre_cooling' : 'chip_pre_heating') },
+            banked:  { icon: '\u2713',   color: '#4db6ac',
+                       label: this._t('chip_banked') },
+        }[c.state];
+        return meta || null;
+    }
+
+    _displayTemp(celsius) {
+        // Display in the user's unit; goals are already typed in it, only
+        // the °C reading from the payload converts here.
+        if (celsius == null) return null;
+        const unit = this.hass?.config?.unit_system?.temperature || '°C';
+        const v = unit === '°F' ? celsius * 9 / 5 + 32 : celsius;
+        return `${Math.round(v * 10) / 10}\u00A0${unit}`;
+    }
+
+    // (#798) The control column used to say "Controllable" — one permission
+    // word in front of the two axes #780 split apart, so a row could read
+    // ✓ while SEM was not allowed to touch it (mode Off). Say both plainly:
+    // capability (is there a handle at all?) and permission (may SEM act
+    // right now?). Mockup approved by Guido 21.08.
+    _renderControlVerdict(device) {
+        const mode = this._mergedMode(device);
+        let key, icon, color;
+        if (!device.hasControlHandle) {
+            key = 'control_verdict_none'; icon = 'mdi:minus-circle-outline'; color = '#666';
+        } else if (!device.isControllable || mode === 'off') {
+            key = 'control_verdict_off'; icon = 'mdi:hand-back-left-outline'; color = '#ff9800';
+        } else {
+            key = 'control_verdict_may_act'; icon = 'mdi:check-circle-outline'; color = '#8DC892';
+        }
+        return html`
+            <span class="dim" style="display:inline-flex;align-items:center;gap:3px;color:${color}"
+                  title="${this._t('control_verdict_help')}">
+                <ha-icon icon="${icon}" style="--mdc-icon-size:14px"></ha-icon>${this._t(key)}
+            </span>`;
+    }
+
+    _renderComfortChip(device) {
+        const meta = this._comfortChipMeta(device);
+        if (!meta) return nothing;
+        const temp = this._displayTemp(device.comfort.reading_c);
+        return html`
+            <div class="comfort-chip" style="border-color:${meta.color}55;color:${meta.color}">
+                <span>${meta.icon}</span> ${meta.label}${temp ? html` \u00B7 ${temp}` : nothing}
+            </div>`;
+    }
+
+    _renderComfortBand(device) {
+        // Band-capable = every load that is not an EV charger or a
+        // battery (Phase 2 gave switches the band too). Capability by
+        // EXCLUSION, not by payload: right after register_surplus_device
+        // (or a restart) there is a window where the row exists but the
+        // surplus controller has not materialized the live device yet —
+        // no comfort block on the payload — and the old payload-driven
+        // gate hid the section until the controller caught up, which
+        // read as "the Comfort section appeared later by itself"
+        // (onkelfu, #705 on beta.7). The live VERDICT bits (chip, strip
+        // reading) still key on device.comfort and simply wait.
+        const bandCapable = !['ev_charger', 'ev_charging', 'battery']
+            .includes(device.deviceType);
+        if (!device.comfort && !bandCapable) return nothing;
+        const g = device.goals || {};
+        const unit = this.hass?.config?.unit_system?.temperature || '°C';
+        const target = parseFloat(g.comfort_target) || 0;
+        const offset = parseFloat(g.comfort_offset) || 0;
+        const limit = parseFloat(g.comfort_limit) || 0;
+        const engaged = target > 0 && limit > 0;
+        // Strip geometry — a fixed pad around the configured band.
+        const lo = engaged ? Math.min(target - offset, limit) - 3 : 18;
+        const hi = engaged ? Math.max(target, limit) + 3 : 30;
+        const pct = (v) => Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100));
+        const readC = device.comfort ? device.comfort.reading_c : null;
+        const read = readC == null ? null
+            : (unit === '°F' ? readC * 9 / 5 + 32 : readC);
+        const num = (key, val, step) => html`
+            <input type="number" step="${step}" style="width:56px"
+                   .value="${val ? String(val) : ''}" placeholder="\u2014"
+                   @change=${(e) => {
+                       const v = e.target.value;
+                       if (v === '' || v == null) return;
+                       device.goals = { ...(device.goals || {}), [key]: v };
+                       this._sendDeviceUpdate(device.id, key, String(v));
+                   }}
+                   @click=${(e) => e.stopPropagation()}>`;
+        return html`
+            <div class="ge-title" style="margin-top:10px">
+                <ha-icon icon="mdi:thermometer" style="--mdc-icon-size:14px;color:#4db6ac"></ha-icon>
+                ${this._t('comfort_section')}
+                <a class="ge-docs" href="${COMFORT_DOCS.docs}" target="_blank"
+                   rel="noopener" title="${this._t('config_docs')}"
+                   @click=${(e) => e.stopPropagation()}>
+                    <ha-icon icon="mdi:book-open-variant" style="--mdc-icon-size:12px"></ha-icon>
+                </a>
+            </div>
+            <div class="ge-row">
+                <span class="ge-label">${this._t('comfort_thermometer')}</span>
+                <span class="ge-ctl">
+                    ${this.hass && customElements.get('ha-entity-picker') ? html`
+                    <ha-entity-picker class="ge-entity"
+                           .hass=${this.hass}
+                           .value=${g.comfort_entity || ''}
+                           .includeDomains=${['sensor', 'input_number']}
+                           .placeholder=${this._t('comfort_own_thermometer')}
+                           allow-custom-entity
+                           @value-changed=${(e) => {
+                               const v = e.detail?.value ?? '';
+                               device.goals = { ...(device.goals || {}), comfort_entity: v };
+                               this._sendDeviceUpdate(device.id, 'comfort_entity', v);
+                           }}
+                           @click=${(e) => e.stopPropagation()}></ha-entity-picker>
+                    ` : html`
+                    <input type="text" class="ge-entity"
+                           placeholder="${this._t('comfort_own_thermometer')}"
+                           .value="${g.comfort_entity || ''}"
+                           @change=${(e) => this._sendDeviceUpdate(device.id, 'comfort_entity', e.target.value)}>`}
+                </span>
+            </div>
+            ${engaged ? html`
+            <div class="comfort-strip">
+                <div class="cs-track"></div>
+                <div class="cs-zone" style="left:${pct(Math.min(target - offset, limit))}%;width:${Math.abs(pct(limit) - pct(target - offset))}%"></div>
+                <div class="cs-mark" style="left:${pct(target - offset)}%;background:#8DC892" title="bank"></div>
+                <div class="cs-mark" style="left:${pct(target)}%;background:#4db6ac" title="target"></div>
+                <div class="cs-mark" style="left:${pct(limit)}%;background:#ffc107" title="limit"></div>
+                ${read != null ? html`<div class="cs-read" style="left:${pct(read)}%" title="${this._displayTemp(readC)}">\u25B2</div>` : nothing}
+            </div>` : nothing}
+            <div class="ge-row">
+                <span class="ge-label">${this._t('comfort_keep_at')}</span>
+                <span class="ge-ctl">${num('comfort_target', target, 0.5)}
+                    <span class="ge-unit">${unit}</span></span>
+            </div>
+            <div class="ge-row">
+                <span class="ge-label">${this._t('comfort_precool_by')}</span>
+                <span class="ge-ctl">${num('comfort_offset', offset, 0.5)}
+                    <span class="ge-unit">${unit}</span></span>
+            </div>
+            <div class="ge-row">
+                <span class="ge-label">${this._t('comfort_limit_label')}</span>
+                <span class="ge-ctl">${num('comfort_limit', limit, 0.5)}
+                    <span class="ge-unit">${unit}</span></span>
+            </div>
+            <div class="ge-hint">${this._t('comfort_hint')}</div>`;
     }
 
     _renderAntiCycle(device) {
@@ -966,19 +1224,6 @@ class SEMLoadPriorityCard extends SEMLitBase {
     // ── Event binding (called from firstUpdated + updated) ──
     _bindEvents() {
         const root = this.renderRoot;
-        const setBtn = root.getElementById('setTargetBtn');
-        if (setBtn && !setBtn._semBound) {
-            setBtn._semBound = true;
-            setBtn.addEventListener('click', () => {
-                const input = root.getElementById('targetInput');
-                const val = parseFloat(input?.value);
-                if (val && val > 0 && val <= 20) {
-                    this.targetPeakLimit = val;
-                    this._sendTargetPeakUpdate(val);
-                    this.requestUpdate();
-                }
-            });
-        }
 
         const delegateClick = (e) => {
             const target = e.target.closest('[data-action]');
@@ -1103,10 +1348,11 @@ class SEMLoadPriorityCard extends SEMLitBase {
         });
     }
 
-    _sendTargetPeakUpdate(val) {
+    _sendTargetPeakUpdate(val, unlimited = false) {
         if (!this._hass) return;
         this._hass.callService('solar_energy_management', 'update_target_peak', {
             target_peak_limit: val,
+            peak_limit_unlimited: unlimited,
         });
     }
 
@@ -1236,6 +1482,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
 
     // ── Helpers ──
     _getPeakColor() {
+        if (this.peakLimitUnlimited) return '#4caf50';
         const pct = this.targetPeakLimit > 0 ? (this.currentPeak / this.targetPeakLimit) * 100 : 0;
         if (pct >= 100) return '#f44336';
         if (pct >= 90)  return '#ff9800';
@@ -1280,5 +1527,7 @@ semDefineCard('sem-load-priority-card', SEMLoadPriorityCard, {
     type: 'sem-load-priority-card',
     name: 'SEM Load Priority Card',
     description: 'Drag and drop interface for managing load shedding priorities',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-load-priority-card',
     preview: true,
 });

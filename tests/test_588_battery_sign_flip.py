@@ -12,7 +12,6 @@ Items covered:
 """
 from __future__ import annotations
 
-import pytest
 from unittest.mock import Mock, MagicMock, patch
 
 from custom_components.solar_energy_management.coordinator.sensor_reader import (
@@ -107,8 +106,6 @@ class TestB1UserFlipFleet:
                 "sensor.batt_discharge": _make_state(5.0),
             }.get(eid)
 
-        # Manually set readings to verify flip
-        readings = PowerReadings(battery_power=500.0)
         # simulate fleet path: auto-detect says no negate (SEM convention)
         r._battery_sign_inverted[r._FLEET_BID] = False
         r._battery_sign_detected[r._FLEET_BID] = True
@@ -331,7 +328,7 @@ class TestB2WeightedVoter:
         # 2 SEM votes (charge growing, power positive)
         charge_base = 10.0
         discharge_base = 5.0
-        for i in range(2):
+        for _i in range(2):
             charge_base += 0.5
             r.hass.states.get = lambda eid, cb=charge_base, db=discharge_base: {
                 "sensor.batt_charge": _make_state(cb),
@@ -340,7 +337,7 @@ class TestB2WeightedVoter:
             r._detect_battery_sign_for(bid, 500.0, "sensor.batt_charge", "sensor.batt_discharge")
 
         # Then 3 negate votes (discharge growing, power positive)
-        for i in range(3):
+        for _i in range(3):
             discharge_base += 0.5
             r.hass.states.get = lambda eid, cb=charge_base, db=discharge_base: {
                 "sensor.batt_charge": _make_state(cb),
@@ -704,28 +701,28 @@ class TestM2DiagSerialisation:
     because HA sensor state must be a scalar and the card renders it as text."""
 
     def test_empty_returns_learning(self):
-        from custom_components.solar_energy_management.coordinator.coordinator import (
-            _format_battery_sign_diag,
+        from custom_components.solar_energy_management.coordinator.publish_diag import (
+            format_battery_sign_diag as _format_battery_sign_diag,
         )
         assert _format_battery_sign_diag({}, {}) == "learning"
 
     def test_single_battery_bare_value(self):
-        from custom_components.solar_energy_management.coordinator.coordinator import (
-            _format_battery_sign_diag,
+        from custom_components.solar_energy_management.coordinator.publish_diag import (
+            format_battery_sign_diag as _format_battery_sign_diag,
         )
         out = _format_battery_sign_diag({"__fleet__": True}, {"__fleet__": True})
         assert out == "negated"
         assert isinstance(out, str)
 
     def test_single_battery_learning_suffix(self):
-        from custom_components.solar_energy_management.coordinator.coordinator import (
-            _format_battery_sign_diag,
+        from custom_components.solar_energy_management.coordinator.publish_diag import (
+            format_battery_sign_diag as _format_battery_sign_diag,
         )
         assert _format_battery_sign_diag({"b1": False}, {"b1": False}) == "normal (learning)"
 
     def test_multi_battery_is_string_not_dict(self):
-        from custom_components.solar_energy_management.coordinator.coordinator import (
-            _format_battery_sign_diag,
+        from custom_components.solar_energy_management.coordinator.publish_diag import (
+            format_battery_sign_diag as _format_battery_sign_diag,
         )
         out = _format_battery_sign_diag(
             {"b1": True, "b2": False}, {"b1": True, "b2": True}
@@ -735,8 +732,8 @@ class TestM2DiagSerialisation:
         assert "{" not in out and "[object" not in out
 
     def test_multi_battery_learning_suffix_per_bid(self):
-        from custom_components.solar_energy_management.coordinator.coordinator import (
-            _format_battery_sign_diag,
+        from custom_components.solar_energy_management.coordinator.publish_diag import (
+            format_battery_sign_diag as _format_battery_sign_diag,
         )
         out = _format_battery_sign_diag(
             {"b1": True, "b2": False}, {"b1": True, "b2": False}

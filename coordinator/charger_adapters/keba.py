@@ -186,6 +186,18 @@ class KebaAdapter(ChargerAdapter):
         # ``command_current(max_current_a)``.
         self._last_intent = ChargerIntent.CHARGE_MAX
 
+    async def command_park_off(self) -> None:
+        """(park-on-disconnect) A clean ``keba.disable`` + dead-man's-off
+        failsafe, bypassing the quota-hold. ``command_disable`` →
+        ``stop_session`` quota-holds when a session reads back, and on a
+        DISCONNECTED box the stale session counter would make it write a
+        1 kWh quota the next plug-in inherits as a fresh allowance — the very
+        auto-charge this exists to stop. ``park_off`` disables outright and
+        arms the dead-man OFF, so the box holds the no until SEM next starts
+        a charge (which re-enables via ``start_session``)."""
+        await self._device.park_off()
+        self._last_intent = ChargerIntent.DISABLE
+
     async def command_disable(self) -> None:
         """User-explicit OFF. Same physical action as
         ``command_idle`` on KEBA (the firmware doesn't distinguish)

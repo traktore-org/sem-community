@@ -7,7 +7,7 @@ from custom_components.solar_energy_management.coordinator import (
     ChargingStateMachine,
     ChargingContext,
 )
-from custom_components.solar_energy_management.const import ChargingState, DEFAULT_DAILY_EV_TARGET
+from custom_components.solar_energy_management.const import ChargingState
 from custom_components.solar_energy_management.utils import TimeManager
 
 

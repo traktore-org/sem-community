@@ -32,7 +32,11 @@ from homeassistant.util import dt as dt_util
 import voluptuous as vol
 from homeassistant.helpers import config_validation as cv
 
-from .const import DOMAIN
+from .const import (
+    DOMAIN,
+    MIN_PEAK_LIMIT_KW,
+    MAX_PEAK_LIMIT_KW,
+)
 from .coordinator.sensor_reader import GRID_TRIGGER_HINTS
 from .coordinator import SEMCoordinator
 
@@ -252,6 +256,163 @@ _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
     # force-discharge entity) — read at adapter construction.
     "battery_setpoint_bidirectional",
 })
+
+
+def _warn_missing_charger_entities(hass, charger_name, charger_id, to_check):
+    """Warn about configured charger entity_ids absent from the state
+    registry — DEFERRED past HA's warm-up (#763 beta.7).
+
+    At SEM's setup many upstream integrations have not loaded yet; the
+    old registration-time check declared onkelfu's (perfectly healthy)
+    wallbox switch missing and sent the diagnosis down a dead end. Run
+    after warm-up: entities still missing warn exactly as before —
+    that's the real #315/#357/#462 symptom — and entities that appeared
+    in the meantime log the recovery at DEBUG only. Returns the
+    still-missing pairs.
+    """
+    missing = []
+    for _attr, _eid in to_check:
+        if not _eid:
+            continue
+        if hass.states.get(_eid) is None:
+            missing.append((_attr, _eid))
+    if missing:
+        _LOGGER.warning(
+            "EV charger '%s' (%s): %d configured entity ID(s) "
+            "missing from HA's state registry — SEM commands to "
+            "these silently no-op. Likely cause: the upstream "
+            "integration renamed entities after a version upgrade "
+            "(common with Wallbox/KEBA/Easee on HA core upgrades). "
+            "Affected: %s",
+            charger_name, charger_id, len(missing),
+            ", ".join(f"{a}={e}" for a, e in missing),
+        )
+    else:
+        _LOGGER.debug(
+            "EV charger '%s' (%s): all configured entity IDs present "
+            "after warm-up", charger_name, charger_id,
+        )
+    return missing
+
+
+def build_welcome_message(config: dict) -> str:
+    """The first-run checklist, describing THIS install (#805 fix 2).
+
+    The old text told everyone to "pick an EV charge mode on the EV tab",
+    but #595 removes that tab when no charger is configured — so the one
+    reader who most needed guidance (owns a wallbox, hasn't told SEM about
+    it) was pointed into a void and concluded the controls were missing
+    (#803, they uninstalled). Every line here is either about something
+    this install HAS, or an invitation to add what it lacks.
+
+    It also states plainly what SEM will and will not touch. The previous
+    wording promised "sensible defaults" while SEM was about to manage
+    auto-discovered devices; since #805 those are monitor-only, and saying
+    so is how the user can consent to it.
+    """
+    has_ev = bool(config.get("ev_chargers")
+                  or config.get("ev_charging_power_sensor"))
+    has_battery = bool(config.get("battery_capacity_kwh")
+                       or config.get("battery_soc_sensor")
+                       or config.get("battery_power_sensor"))
+
+    lines = ["1. Confirm solar is reporting on the Energy tab"]
+    if has_ev:
+        lines.append("2. Pick a charge mode on the EV tab "
+                     "(solar only, min + solar, solar + cheap, always max)")
+    else:
+        lines.append("2. Add your EV charger to let SEM manage charging — "
+                     "Settings → Devices & Services → SEM → Configure. "
+                     "Until then SEM leaves it alone.")
+    if has_battery:
+        lines.append("3. Set your battery reserve on the Battery tab")
+    else:
+        lines.append("3. Add your home battery, if you have one — "
+                     "same Configure screen")
+
+    return (
+        "👋 Welcome! Your SEM dashboard is ready at "
+        "[Open the SEM Dashboard](/sem-dashboard/home).\n\n"
+        "**First-day checklist:**\n"
+        + "\n".join(lines)
+        + "\n\n**What SEM does right now:** it watches, and it controls "
+          "only what you have configured. Devices it discovers on its own "
+          "are set to *monitor* until you give them a mode in the device "
+          "list — nothing gets switched behind your back."
+    )
+
+
+# (#805) What "looks like a car charger" means when SEM has to guess.
+# Word-ish matching on purpose: a bare substring test turns the guess into
+# noise (#781 — "charge" would fire on recharge_reminder), so a marker must
+# sit on a word boundary of the object_id.
+CHARGER_NAME_MARKERS = (
+    "wallbox", "keba", "easee", "goe", "go_e", "echarger", "evse",
+    "zaptec", "ladefreigabe", "ladestrom", "chargepoint", "openevse",
+    "openwb", "heidelberg", "peblar", "charger",
+)
+
+
+def charger_shaped_devices(entity_ids) -> list:
+    """Entity ids that look like an EV charger (#805).
+
+    A guess, and labelled as one wherever its result is shown: the point is
+    to turn an invisible import into an offer the user can accept or ignore,
+    never to act on the guess.
+    """
+    import re
+
+    out = []
+    for eid in entity_ids or []:
+        obj = str(eid).split(".", 1)[-1].lower()
+        words = [w for w in re.split(r"[^a-z0-9]+", obj) if w]
+        if any(m in words or any(w.startswith(m) and len(w) - len(m) <= 2
+                                 for w in words)
+               for m in CHARGER_NAME_MARKERS):
+            out.append(eid)
+    return out
+
+
+def unmanaged_charger_repair(config: dict, candidates: list):
+    """Should SEM raise "found a charger it does not manage"? (#805)
+
+    Replaces the blanket ``ev_charger_not_configured`` repair, which fired
+    for every install without a charger — including solar-only homes that
+    own no car — and named nothing. This one fires only when discovery
+    actually found something charger-shaped, and says WHICH device, which
+    is the line that would have prevented #803.
+
+    Returns the repair's translation payload, or None for silence.
+    """
+    if config.get("ev_chargers") or config.get("ev_charging_power_sensor") \
+            or config.get("ev_connected_sensor"):
+        return None
+    if not candidates:
+        return None
+    return {
+        "translation_key": "unmanaged_charger_found",
+        "placeholders": {"name": candidates[0], "count": str(len(candidates))},
+    }
+
+
+def yaml_mode_repair(yaml_mode: bool, urls) -> dict | None:
+    """(#799) Should SEM raise "your Lovelace is YAML-mode"?
+
+    #283 detected the case and logged the resource URLs — but a log line
+    is not a surface: the reporter met a dashboard full of Configuration
+    Error cards, reinstalled twice, and only recovered by finding that one
+    WARNING himself. The Repair says the same thing where a user looks,
+    with the block to paste.
+
+    Returns the repair's translation payload, or None for silence.
+    """
+    if not yaml_mode or not urls:
+        return None
+    block = "\n".join(f"  - url: {u}\n    type: module" for u in urls)
+    return {
+        "translation_key": "lovelace_yaml_mode",
+        "placeholders": {"resources": block},
+    }
 
 
 def _coerce_switch_on(value) -> bool:
@@ -1282,6 +1443,111 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
             )
             return False
 
+    if entry.version < 17:
+        # (#758) v1.8 turns the energy plan into an ACTUATOR: its blocks
+        # drive the EV charger, the battery and the cheap-hours loads. The
+        # kill switch is ``switch.sem_energy_plan_actuation``, and it defaults
+        # to on — correct for a fresh install, where the user chose the
+        # feature, and wrong for an UPGRADE, where nobody chose anything.
+        # RestoreEntity cannot help: the switch is new, so there is no prior
+        # state to restore and every upgrading install lands on the default.
+        #
+        # So the migration writes the value down. Not to change it — the
+        # answer is the same True — but to turn an implied default into a
+        # recorded decision, and to say so once, in the one place a user
+        # reliably reads. An explicit False is never touched: someone who
+        # already turned it off has decided, and a migration that overrides
+        # a decision is worse than one that never ran.
+        try:
+            new_options = {**accumulated_options}
+            announce = "energy_plan_actuation" not in new_options
+            if announce:
+                new_options["energy_plan_actuation"] = True
+            hass.config_entries.async_update_entry(
+                entry, data={**accumulated_data}, options=new_options,
+                version=17, minor_version=1,
+            )
+            accumulated_options = new_options
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s to v17 failed — keeping original "
+                "config: %s", entry.version, e,
+            )
+            return False
+        if announce:
+            # Deliberately OUTSIDE the migration's try: the option is
+            # already written and the entry already bumped. An
+            # announcement that cannot be delivered (no notification
+            # service in a minimal hass, a busy bus) is a missed message,
+            # not a failed migration — failing here would roll a user
+            # back over a notification.
+            try:
+                await hass.services.async_call(
+                    "persistent_notification", "create",
+                    {
+                        "title": "SEM now plans your night",
+                        "message": (
+                            "This version lets the energy plan drive the "
+                            "hardware: your EV charger, battery and "
+                            "cheap-hours devices now run in the windows the "
+                            "plan picks, instead of only being advised.\n\n"
+                            "It is **on**. To go back to the purely reactive "
+                            "behaviour, turn off "
+                            "`switch.sem_energy_plan_actuation` — the plan "
+                            "stays visible on the Energy Plan card either "
+                            "way.\n\n"
+                            "[How to read tonight's plan]"
+                            "(https://github.com/traktore-org/sem-community/"
+                            "blob/develop/docs/ENERGY_PLANNER.md)"
+                        ),
+                        "notification_id": "sem_energy_plan_actuation_v18",
+                    },
+                    blocking=False,
+                )
+            except Exception as e:  # noqa: BLE001
+                _LOGGER.warning(
+                    "#758: energy-plan actuation notice not delivered (%s) — "
+                    "the option is written; the switch is "
+                    "switch.sem_energy_plan_actuation", e,
+                )
+
+    if entry.version < 18:
+        # (#638) The planner was named for the night it started with, and it
+        # outgrew the name — it plans the day too. Renaming the code is free.
+        # Renaming a RECORDED DECISION is not: v17 wrote the actuation answer
+        # under ``overnight_actuation``, and a user who turned actuation off
+        # recorded their "no" there. Read only the new name and that "no"
+        # becomes silence — and silence means the default, which is ON. The
+        # rename would hand their hardware back to the planner.
+        #
+        # So carry the answer across, in both places ``_configured`` looks,
+        # and retire the old key: two names for one decision is the next bug.
+        try:
+            new_data = {**accumulated_data}
+            new_options = {**accumulated_options}
+            carried = False
+            for bag in (new_data, new_options):
+                if "overnight_actuation" in bag:
+                    bag["energy_plan_actuation"] = bag.pop("overnight_actuation")
+                    carried = True
+            hass.config_entries.async_update_entry(
+                entry, data=new_data, options=new_options,
+                version=18, minor_version=1,
+            )
+            accumulated_data, accumulated_options = new_data, new_options
+            if carried:
+                _LOGGER.info(
+                    "#638: carried the actuation choice across the rename — "
+                    "overnight_actuation is now energy_plan_actuation "
+                    "(switch.sem_energy_plan_actuation)"
+                )
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s to v18 failed — keeping original "
+                "config: %s", entry.version, e,
+            )
+            return False
+
     _LOGGER.info("Migration to version %s.%s done", entry.version, entry.minor_version)
     return True
 
@@ -1448,6 +1714,34 @@ def build_discovered_charger_storage(
     )
 
 
+# (#638) The kill-switch's unique_id is ``sem_{key}``, so renaming the
+# planner mints a new identity. Left alone HA would register a SECOND
+# switch and strand the first as an unavailable orphan — the user would
+# see two kill-switches, one of them inert, and the history would stop at
+# the upgrade. Carry the registry entry instead.
+_ACTUATION_UID_WAS = "sem_overnight_actuation"
+_ACTUATION_UID_NOW = "sem_energy_plan_actuation"
+
+
+def _async_rename_actuation_switch(registry) -> None:
+    """Move the actuation switch's registry entry onto its new name."""
+    old = registry.async_get_entity_id("switch", DOMAIN, _ACTUATION_UID_WAS)
+    if not old:
+        return
+    changes = {"new_unique_id": _ACTUATION_UID_NOW}
+    # The entity_id only moves if it is still the one WE picked. A user who
+    # renamed the switch chose that name; carrying the identity keeps their
+    # entity alive, and renaming it anyway would break the automations the
+    # carry was for.
+    if old == f"switch.{_ACTUATION_UID_WAS}":
+        changes["new_entity_id"] = f"switch.{_ACTUATION_UID_NOW}"
+    _LOGGER.info(
+        "#638: carrying the actuation switch across the rename — %s → %s",
+        old, changes.get("new_entity_id", old),
+    )
+    registry.async_update_entity(old, **changes)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     """Set up Solar Energy Management from a config entry.
 
@@ -1541,9 +1835,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     except Exception as exc:  # noqa: BLE001
         _LOGGER.debug("Set-default button cleanup skipped: %s", exc)
 
+    # (#638) Carry the kill-switch across the planner's rename. Idempotent;
+    # only fires on installs that still hold the pre-rename registry entry.
+    try:
+        from homeassistant.helpers import entity_registry as er
+        _async_rename_actuation_switch(er.async_get(hass))
+    except Exception as exc:  # noqa: BLE001
+        _LOGGER.debug("Actuation switch rename skipped: %s", exc)
+
     # Merge entry.data and entry.options for complete configuration
     full_config = {**entry.data, **entry.options}
     _LOGGER.debug("Configuration keys: %s", list(full_config.keys()))
+
+    # The persisted toggles must be resolved BEFORE the coordinator exists.
+    # A legacy install records observer/vacation/actuation only in the
+    # switch's restore store, which the coordinator cannot see — so it was
+    # built on the armed default and stayed armed until the switch platform
+    # attached (the 2026-07-18 unprotected-window class, #777). Reading the
+    # store here and promoting it into the entry closes that window and
+    # ends the install's dependence on a store HA prunes after 7 days.
+    from .persisted_flags import promote_persisted_flags
+    promote_persisted_flags(hass, entry, full_config)
 
     # Create coordinator with error handling
     try:
@@ -1586,6 +1898,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     entry.runtime_data = coordinator
     # Also store in hass.data for backward compatibility with platform setup
     hass.data[DOMAIN][entry.entry_id] = coordinator
+    # (#814) detection evidence report — built once here, refreshed on
+    # late discovery, published every cycle.
+    coordinator.refresh_detection_report()
 
     # Version-change detection (v1.6.14): on first setup after an upgrade
     # — HACS pulled new code, HA restarted with it — fire a one-shot
@@ -1603,19 +1918,34 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     except Exception as err:  # noqa: BLE001 — defensive: never fail setup over this
         _LOGGER.debug("Version-change notification skipped: %s", err)
 
-    # Create repair issue if EV charger is not configured (quality scale: repair-issues)
-    if not full_config.get("ev_connected_sensor") and not full_config.get("ev_charging_power_sensor"):
+    # (#805) Name the charger SEM found but does not manage — and stay
+    # quiet on a solar-only install. The old blanket
+    # ``ev_charger_not_configured`` nagged every install without a charger
+    # and named nothing, so the one reader who owned a wallbox (#803) got
+    # no usable signal from it. Retired here; its id is deleted so an
+    # upgrading install loses the stale warning.
+    ir.async_delete_issue(hass, DOMAIN, "ev_charger_not_configured")
+    try:
+        _cands = charger_shaped_devices(
+            [st.entity_id for st in hass.states.async_all("switch")]
+            + [st.entity_id for st in hass.states.async_all("number")]
+        )
+        _repair = unmanaged_charger_repair(full_config, _cands)
+    except Exception:  # noqa: BLE001 — a repair never costs a setup
+        _repair = None
+    if _repair:
         ir.async_create_issue(
             hass,
             DOMAIN,
-            "ev_charger_not_configured",
+            "unmanaged_charger_found",
             is_fixable=False,
             is_persistent=False,
             severity=ir.IssueSeverity.WARNING,
-            translation_key="ev_charger_not_configured",
+            translation_key=_repair["translation_key"],
+            translation_placeholders=_repair["placeholders"],
         )
     else:
-        ir.async_delete_issue(hass, DOMAIN, "ev_charger_not_configured")
+        ir.async_delete_issue(hass, DOMAIN, "unmanaged_charger_found")
 
     # Initialize load management (optional feature - don't fail setup if it fails)
     try:
@@ -1706,7 +2036,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                     }]
 
         # Register each charger
-        from .devices.base import CurrentControlDevice
+        from .devices.base import CurrentControlDevice, resolve_max_current
         coordinator._ev_devices = {}
 
         # Charger-id sanity (#476): every per-charger write path matches on
@@ -1738,9 +2068,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             _seen_charger_ids.add(charger_id)
             charger_name = charger_cfg.get("name", f"EV Charger {idx + 1}")
 
-            # Resolve config: charger-specific keys, fall back to global config
-            def _cfg(key, default=None):
-                v = charger_cfg.get(key)
+            # Resolve config: charger-specific keys, fall back to global config.
+            # ``_this`` binds the loop variable at definition time — today every
+            # call happens inside the same iteration, but a closure over a loop
+            # variable reads whatever the loop last assigned, so deferring one
+            # of these calls (into a task, a callback, a comprehension consumed
+            # later) would silently resolve the LAST charger's config for every
+            # charger. Bound, that failure is impossible rather than merely
+            # currently-absent.
+            def _cfg(key, default=None, _this=charger_cfg):
+                v = _this.get(key)
                 if v is not None:
                     return v
                 v = full_config.get(key)
@@ -1793,7 +2130,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 name=charger_name,
                 priority=ev_priority,
                 min_current=float(_cfg("ev_min_current", 6)),
-                max_current=float(_cfg("max_charging_current", 32)),
+                # (#746) one resolver, not a literal per site — see
+                # devices.base.resolve_max_current.
+                max_current=resolve_max_current(_cfg),
                 phases=int(_cfg("ev_phases", 3)),
                 voltage=230.0,
                 power_entity_id=ev_power_entity,
@@ -1862,23 +2201,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 ("ev_start_stop_entity", _cfg("ev_start_stop_entity")),
                 ("ev_charge_mode_entity", _cfg("ev_charge_mode_entity")),
             ]
-            _missing = []
-            for _attr, _eid in _to_check:
-                if not _eid:
-                    continue
-                if hass.states.get(_eid) is None:
-                    _missing.append((_attr, _eid))
-            if _missing:
-                _LOGGER.warning(
-                    "EV charger '%s' (%s): %d configured entity ID(s) "
-                    "missing from HA's state registry — SEM commands to "
-                    "these silently no-op. Likely cause: the upstream "
-                    "integration renamed entities after a version upgrade "
-                    "(common with Wallbox/KEBA/Easee on HA core upgrades). "
-                    "Affected: %s",
-                    charger_name, charger_id, len(_missing),
-                    ", ".join(f"{a}={e}" for a, e in _missing),
-                )
+            # (#763 beta.7) Deferred past warm-up: at setup time the
+            # upstream integration may simply not have loaded yet, and a
+            # false "will silently no-op" here sent a real diagnosis down
+            # a dead end. 120 s is comfortably past integration setup.
+            def _deferred_entity_check(_now, _name=charger_name,
+                                       _cid=charger_id,
+                                       _chk=tuple(_to_check)):
+                _warn_missing_charger_entities(hass, _name, _cid, _chk)
+
+            from homeassistant.helpers.event import async_call_later
+            async_call_later(hass, 120, _deferred_entity_check)
 
             # Also register in load management for peak shedding (#436:
             # pass per-charger id + name so each ev_chargers[i] gets its
@@ -1898,6 +2231,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                     charger_service=ev_charger_service,
                     charger_id=charger_id,
                     charger_name=charger_name,
+                    # (#748) hand the stop switch + status sensor to load
+                    # management so pattern discovery excludes them instead of
+                    # rediscovering the stop switch as a smart plug (the third
+                    # duplicate row). Reuse the device's already-resolved values.
+                    start_stop_entity=ev_device.start_stop_entity,
+                    status_entity=(ev_device.charging_status_entity or None),
                 )
 
         # Backward compat: _ev_device points to primary (first) charger
@@ -2072,9 +2411,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     # bouncing on the 263-entity registry. Gated by the same options-flag
     # pattern the install-dashboard one-shot uses just below — survives HA
     # restarts and never re-fires after the user dismisses it. Skipped on
-    # observer mode (test installs don't want notification spam).
+    # observer mode (test installs don't want notification spam) — read from
+    # the RESOLVED config, not entry.data alone: the flag can equally live in
+    # options or, on a legacy install, only in the switch's restore store.
     _welcome_fired = entry.options.get("_welcome_notification_fired", False)
-    if not _welcome_fired and not entry.data.get("observer_mode"):
+    if not _welcome_fired and not full_config.get("observer_mode"):
         try:
             await hass.services.async_call(
                 "persistent_notification",
@@ -2082,16 +2423,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 {
                     "notification_id": "sem_first_install_welcome",
                     "title": "Solar Energy Management installed",
-                    "message": (
-                        "👋 Welcome! Your SEM dashboard is ready at "
-                        "[Open the SEM Dashboard](/sem-dashboard/home).\n\n"
-                        "**First-day checklist:**\n"
-                        "1. Confirm solar is reporting on the Energy tab\n"
-                        "2. Pick an EV charge mode on the EV tab\n"
-                        "3. Set your battery reserve on the Battery tab\n\n"
-                        "Everything else has sensible defaults — tune later "
-                        "via Settings → Devices & Services → SEM → Configure."
-                    ),
+                    "message": build_welcome_message(full_config),
                 },
                 blocking=False,
             )
@@ -2396,6 +2728,42 @@ async def _async_register_services(
     - Clear logging for debugging
     """
 
+    async def async_replan_service(call) -> None:
+        """(#638) Force a fresh energy-day plan on the next cycle."""
+        coordinator.request_replan()
+        _LOGGER.info("Service replan: fresh plan requested")
+
+    async def async_purge_status_history_service(call) -> None:
+        """(#829) Purge SEM's statistics-less status entities.
+
+        Safe by construction: the list is DERIVED from "has no state_class",
+        so anything carrying long-term statistics — every energy and power
+        sensor — is excluded automatically, including sensors added later.
+        """
+        from .coordinator.retention import run_purge
+        days = call.data.get("keep_days")
+        if days is None:
+            days = coordinator.config.get("status_retention_days", 3)
+        purged = await run_purge(hass, days)
+        _LOGGER.info(
+            "Service purge_status_history: %d SEM status entities, keeping "
+            "%s day(s); statistics-bearing sensors untouched",
+            len(purged), days,
+        )
+
+    try:
+        hass.services.async_register(
+            DOMAIN, "purge_status_history", async_purge_status_history_service)
+        _LOGGER.debug("Registered service: %s.purge_status_history", DOMAIN)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.error("Failed to register purge_status_history service: %s", err)
+
+    try:
+        hass.services.async_register(DOMAIN, "replan", async_replan_service)
+        _LOGGER.debug("Registered service: %s.replan", DOMAIN)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.error("Failed to register replan service: %s", err)
+
     # Check if services are already registered (prevents conflicts on reload)
     services_already_registered = hass.services.has_service(DOMAIN, "sync_priorities_from_dashboard")
     if services_already_registered:
@@ -2416,12 +2784,16 @@ async def _async_register_services(
             from homeassistant.helpers.storage import Store
             import shutil
 
-            # Step 1: Install SVG system diagram + card JS files to /config/www/
+            # Step 1: Install card JS files to /config/www/
             # All filesystem ops run in an executor to avoid blocking the event loop.
+            #
+            # (#784) A sem-system-diagram.svg used to be copied here too. It
+            # was dead weight from the original import — no card, template or
+            # doc ever referenced it in the repo's whole history, and the
+            # diagram cards draw inline SVG. Already-installed copies under
+            # /config/www/sem/ are left alone; _cleanup_stale_www only sweeps
+            # sem-*.js from the www root, so nobody's custom card breaks.
             component_dir = os.path.dirname(__file__)
-            svg_source = os.path.join(component_dir, "dashboard", "www", "sem-system-diagram.svg")
-            www_target_dir = os.path.join(hass.config.config_dir, "www", "sem")
-            svg_target = os.path.join(www_target_dir, "sem-system-diagram.svg")
             card_src_dir = os.path.join(component_dir, "dashboard", "card")
             card_www_dir = os.path.join(
                 hass.config.config_dir, "www",
@@ -2438,19 +2810,20 @@ async def _async_register_services(
             # being removed in code).
             CANONICAL_TOP_LEVEL = {
                 "sem-localize.js",
-                "sem-reactive-base.js",
-                "sem-shared.js",
-                "sem-system-diagram-card.js",
             }
-
-            def _install_assets() -> tuple[bool, list[str]]:
+            def _install_assets() -> list[str]:
                 """Sync top-level dashboard assets to /config/www/. Runs in executor."""
-                os.makedirs(www_target_dir, exist_ok=True)
-                svg_installed = False
-                if os.path.exists(svg_source):
-                    shutil.copy2(svg_source, svg_target)
-                    svg_installed = True
-
+                # (#738) the per-language tables the loader lazily injects —
+                # the mirror must carry them or the legacy /local channel 404s
+                # (the #617 vendor/ class). Computed, not hardcoded: a new
+                # language in translations.json rides along automatically.
+                # Computed HERE rather than in the caller because os.listdir
+                # is one of the calls HA's loop guard patches, and the caller
+                # is a coroutine.
+                canonical = CANONICAL_TOP_LEVEL | {
+                    f for f in os.listdir(card_src_dir)
+                    if f.startswith("sem-localize.") and f.endswith(".js")
+                }
                 os.makedirs(card_www_dir, exist_ok=True)
                 cards: list[str] = []
                 shadow_removed: list[str] = []
@@ -2462,7 +2835,7 @@ async def _async_register_services(
                         # sem-cards.js (it shadows the dist bundle) or any
                         # other unrecognised top-level *.js that isn't part
                         # of the canonical set.
-                        if fname not in CANONICAL_TOP_LEVEL:
+                        if fname not in canonical:
                             stale_target = os.path.join(card_www_dir, fname)
                             if os.path.exists(stale_target):
                                 os.remove(stale_target)
@@ -2485,13 +2858,9 @@ async def _async_register_services(
                         "Removed %d shadow card file(s) from %s: %s",
                         len(shadow_removed), card_www_dir, shadow_removed,
                     )
-                return svg_installed, cards
+                return cards
 
-            svg_installed, installed_cards = await hass.async_add_executor_job(_install_assets)
-            if svg_installed:
-                _LOGGER.info("Installed SVG diagram to %s", svg_target)
-            else:
-                _LOGGER.warning("SVG diagram not found at %s", svg_source)
+            installed_cards = await hass.async_add_executor_job(_install_assets)
             if installed_cards:
                 _LOGGER.info("Installed %d card(s) to %s: %s", len(installed_cards), card_www_dir, installed_cards)
 
@@ -2546,20 +2915,56 @@ async def _async_register_services(
                 )
 
             # Cache-busting: per-file content hash + manifest version (#301).
-            # See _content_hash_cache_bust at module level. Inlined into a
-            # closure here so the resolved card_www_dir + manifest version
-            # are captured once per service call.
+            # See _content_hash_cache_bust at module level.
+            #
+            # (#785) Every hash is read in ONE executor hop, before either
+            # loop below asks for one. Calling a helper runs its body right
+            # here on the event loop no matter which module the helper lives
+            # in — HA's guard named __init__.py line 64 (the `open` inside
+            # _content_hash_cache_bust) while this coroutine looked clean,
+            # because the read was two calls away. Only handing work to an
+            # executor moves it off the loop.
             manifest_path_l = os.path.join(component_dir, "manifest.json")
-            try:
-                with open(manifest_path_l) as f:
-                    _mver = json.load(f).get("version", "0")
-            except Exception:
-                _mver = "0"
+
+            installed_bases = {
+                f"/local/custom_components/{DOMAIN}/dashboard/card/{fname}"
+                for fname in installed_cards
+            }
+            # The Lit bundle lives under dist/ so it never appears in the
+            # root-level listdir above; whitelist it explicitly or the orphan
+            # cleanup below would deregister it on every generate_dashboard call.
+            installed_bases.add(
+                f"/local/custom_components/{DOMAIN}/dashboard/card/dist/sem-cards.js"
+            )
+            existing_bases = {item.get("url", "").split("?")[0] for item in resources_data["items"]}
+            # Both loops below bust exactly these: the files we install, plus
+            # the SEM resources already registered that survive the orphan
+            # sweep. Same filter as the sweep itself.
+            bust_urls = set(installed_bases) | {
+                base
+                for base in existing_bases
+                if f"/custom_components/{DOMAIN}/" in base and base.endswith(".js")
+            }
+
+            def _read_asset_versions() -> tuple[str, dict[str, str]]:
+                """Runs in an executor — ``open`` is loop-guarded by HA."""
+                try:
+                    with open(manifest_path_l) as f:
+                        version = json.load(f).get("version", "0")
+                except Exception:
+                    version = "0"
+                return version, {
+                    url: _content_hash_cache_bust(card_www_dir, url, version)
+                    for url in bust_urls
+                }
+
+            _mver, _busts = await hass.async_add_executor_job(_read_asset_versions)
 
             def _cache_bust_for(base_url: str) -> str:
-                return _content_hash_cache_bust(card_www_dir, base_url, _mver)
+                # Bare version if a URL appeared after the hashes were read —
+                # same fallback _content_hash_cache_bust uses for a bad read.
+                return _busts.get(base_url, _mver)
 
-            existing_bases = {item.get("url", "").split("?")[0] for item in resources_data["items"]}
             added_resources = []
             updated_resources = 0
             for fname in installed_cards:
@@ -2573,17 +2978,8 @@ async def _async_register_services(
                     })
                     added_resources.append(base_url)
 
-            # Update ?v= on existing SEM resources and remove orphaned ones
-            installed_bases = {
-                f"/local/custom_components/{DOMAIN}/dashboard/card/{fname}"
-                for fname in installed_cards
-            }
-            # The Lit bundle lives under dist/ so it never appears in the
-            # root-level listdir above; whitelist it explicitly or the orphan
-            # cleanup below would deregister it on every generate_dashboard call.
-            installed_bases.add(
-                f"/local/custom_components/{DOMAIN}/dashboard/card/dist/sem-cards.js"
-            )
+            # Update ?v= on existing SEM resources and remove orphaned ones.
+            # installed_bases is built above, with the cache-bust set.
             cleaned = []
             kept_items = []
             for item in resources_data["items"]:
@@ -3016,7 +3412,7 @@ async def _async_register_services(
         prop = call.data.get("property")
         value = call.data.get("value")
 
-        if prop in ("critical", "controllable"):
+        if prop in ("critical", "controllable", "hands_off"):
             # (#650) Persist via the REGISTRY. Writing only into the
             # LoadManagement dict — as this did pre-fix — lost the flag on the
             # next `_sync_to_load_manager`, which replaces that entry wholesale
@@ -3025,10 +3421,14 @@ async def _async_register_services(
             # The LoadManagement write stays: it takes effect this cycle and it
             # is the ONLY store for devices the registry doesn't build
             # (per-charger `load_device_*` entries, service registrations).
+            #
+            # (#780) ``controllable`` / ``hands_off`` are the SAME toggle under
+            # two names, and ``value`` keeps the card's polarity throughout:
+            # True = "SEM may touch this load".
             if prop == "critical":
                 await coordinator._load_manager.update_device_critical_status(device_id, bool(value))
             else:
-                await coordinator._load_manager.update_device_controllable_status(device_id, bool(value))
+                await coordinator._load_manager.async_set_hands_off(device_id, not bool(value))
             reg = getattr(coordinator, "_device_registry", None)
             if reg is not None:
                 await reg.async_set_device_flag(device_id, prop, bool(value))
@@ -3070,6 +3470,8 @@ async def _async_register_services(
             "battery_eligible_overnight",
             # (#688) per-load anti-cycling (minutes)
             "min_on_time_min", "min_off_time_min",
+            # (#705) thermal comfort band
+            "comfort_entity", "comfort_target", "comfort_offset", "comfort_limit",
         ):
             # (#559/#620) goal engine — persisted + applied live
             registry = getattr(coordinator, "_device_registry", None)
@@ -3095,12 +3497,28 @@ async def _async_register_services(
                 try:
                     if float(value) < 0:
                         raise ValueError
-                except (TypeError, ValueError):
+                except (TypeError, ValueError) as err:
                     raise ServiceValidationError(
                         translation_domain=DOMAIN,
                         translation_key="invalid_device_property",
                         translation_placeholders={"property": f"{prop}={value}"},
-                    )
+                    ) from err
+            # (#705) comfort temperatures are numbers; the offset is also
+            # non-negative (a negative offset would silently widen the band).
+            # Without this a value like "twenty-six" would store, then
+            # _apply_goals' defensive parse would write 0.0 — disabling the
+            # band with no error ever reaching the caller.
+            if prop in ("comfort_target", "comfort_offset", "comfort_limit"):
+                try:
+                    _fv = float(value)
+                    if prop == "comfort_offset" and _fv < 0:
+                        raise ValueError
+                except (TypeError, ValueError) as err:
+                    raise ServiceValidationError(
+                        translation_domain=DOMAIN,
+                        translation_key="invalid_device_property",
+                        translation_placeholders={"property": f"{prop}={value}"},
+                    ) from err
             await registry.async_update_device_goal(device_id, prop, value)
         else:
             raise ServiceValidationError(
@@ -3128,6 +3546,8 @@ async def _async_register_services(
                     "battery_eligible_overnight",
                     # (#688) per-load anti-cycling
                     "min_on_time_min", "min_off_time_min",
+                    # (#705) thermal comfort band
+                    "comfort_entity", "comfort_target", "comfort_offset", "comfort_limit",
                 ]),
                 vol.Required("value"): cv.string,
             }),
@@ -3145,8 +3565,14 @@ async def _async_register_services(
             )
 
         target = call.data.get("target_peak_limit")
-        await coordinator._load_manager.update_target_peak_limit(float(target))
-        _LOGGER.info("Updated target peak limit to %.1f kW", target)
+        unlimited = call.data.get("peak_limit_unlimited")
+        await coordinator._load_manager.update_target_peak_limit(
+            float(target), unlimited=unlimited
+        )
+        _LOGGER.info(
+            "Updated target peak limit to %.1f kW%s", target,
+            "" if unlimited is None else f" (unlimited={unlimited})",
+        )
 
     try:
         hass.services.async_register(
@@ -3154,9 +3580,18 @@ async def _async_register_services(
             "update_target_peak",
             async_update_target_peak,
             schema=vol.Schema({
+                # (#717) Same range as the config flow. A hard-coded 20 kW
+                # here silently rejected any service larger than a European
+                # fuse box even once the form allowed it.
                 vol.Required("target_peak_limit"): vol.All(
-                    vol.Coerce(float), vol.Range(min=1.0, max=20.0)
+                    vol.Coerce(float),
+                    vol.Range(min=MIN_PEAK_LIMIT_KW, max=MAX_PEAK_LIMIT_KW),
                 ),
+                # (#717 redesign) Optional: the Control-tab slider sends this
+                # alongside the target in one atomic write when the drag
+                # lands on the MAX notch. Omitted by callers that only ever
+                # touch the numeric ceiling (e.g. an automation).
+                vol.Optional("peak_limit_unlimited"): cv.boolean,
             }),
         )
         _LOGGER.debug("Registered service: %s.update_target_peak", DOMAIN)
@@ -3182,13 +3617,35 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
 
         static_path = f"/local/custom_components/{DOMAIN}/dashboard"
 
-        # Register static path (may fail on reload if already registered)
+        # Serve the component's dashboard dir so the Lovelace resource URLs
+        # below (the sem-cards.js bundle + sem-localize.js) actually resolve.
+        # MUST be async_register_static_paths: the sync hass.http static-path
+        # register did blocking I/O on the event loop and HA *removed* it in
+        # 2025.7 (deprecated 2024.7). On 2025.7+ the old call raised
+        # AttributeError, the bare ``except Exception: pass`` below swallowed it
+        # as "already registered", the bundle URL went unserved, and EVERY sem-*
+        # card rendered "Custom element doesn't exist" — the whole dashboard was
+        # nothing but Konfigurationsfehler tiles (#799, reporter on HA 2026.8.2).
         try:
-            hass.http.register_static_path(
-                static_path, dashboard_path, cache_headers=False
+            # Imported inside this try (not above it) so a future symbol
+            # rename surfaces at WARNING here rather than being swallowed at
+            # debug by the outer handler — the class-48 shape this fix closes.
+            from homeassistant.components.http import StaticPathConfig
+
+            await hass.http.async_register_static_paths(
+                [StaticPathConfig(static_path, dashboard_path, False)]
             )
-        except Exception:
-            pass  # Already registered from previous load
+        except (RuntimeError, ValueError) as err:
+            # Benign: a reload re-runs setup and the path is already registered
+            # from the previous load.
+            _LOGGER.debug(
+                "SEM static path already registered: %s (%s)", static_path, err
+            )
+        except Exception as err:  # noqa: BLE001
+            # The #799 lesson: never silently swallow a static-path failure as
+            # "already registered" — surface it. But a hiccup here must not
+            # block the Lovelace-resource registration below.
+            _LOGGER.warning("SEM static path registration failed: %s", err)
 
         # Register the JS as Lovelace resources (not add_extra_js_url) so they
         # load into HA's scoped custom-element registry. add_extra_js_url loads
@@ -3228,9 +3685,12 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
                     return base
 
             return {
-                "localize": _token("sem-localize.js"),
+                # (#738) hash the SOURCE, not the loader: the loader's bytes
+                # don't move on a German-only change, but the German sibling
+                # must still be cache-busted — the loader propagates this
+                # token onto every injected sem-localize.<lang>.js URL.
+                "localize": _token("..", "translations.json"),
                 "bundle": _token("dist", "sem-cards.js"),
-                "diagram": _token("sem-system-diagram-card.js"),
             }
 
         asset_v = await hass.async_add_executor_job(_asset_versions)
@@ -3259,7 +3719,14 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
             f"{static_path}/card/sem-shared.js",
             f"{static_path}/card/sem-reactive-base.js",
             f"{static_path}/card/sem-load-priority-card.js",
-            # sem-system-diagram-card.js is NOT in the Lit bundle — keep it registered
+            # (#784) The standalone vanilla diagram card and the SEMBaseCard /
+            # semReady layer it was the last consumer of. Both the standalone
+            # and the bundle defined sem-system-diagram-card, and semDefineCard
+            # is first-wins, so which implementation the user saw came down to
+            # resource load order. 2.0 keeps only the bundled Lit version — the
+            # one the dashboard actually renders. Listed here so upgrading
+            # installs drop the now-404 resource instead of keeping it forever.
+            f"{static_path}/card/sem-system-diagram-card.js",
             f"{static_path}/card/sem-period-selector-card.js",
             f"{static_path}/card/sem-chart-card.js",
             f"{static_path}/card/sem-solar-summary-card.js",
@@ -3305,15 +3772,28 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
                     "registered automatically. Add the following to "
                     "configuration.yaml under `lovelace.resources` and restart:\n"
                     "  - url: %s\n    type: module\n"
-                    "  - url: %s\n    type: module\n"
                     "  - url: %s\n    type: module",
                     cards_bundle_url,
-                    f"{static_path}/card/sem-system-diagram-card.js?v={asset_v['diagram']}",
                     localize_url,
                 )
+                # (#799) …and SAY it where a user looks. The log line has
+                # existed since #283; the reporter still met a dashboard of
+                # Configuration Error cards and reinstalled twice before
+                # finding it. A Repair carries the same URLs into Settings.
+                _repair = yaml_mode_repair(True, [cards_bundle_url, localize_url])
+                if _repair:
+                    ir.async_create_issue(
+                        hass, DOMAIN, "lovelace_yaml_mode",
+                        is_fixable=False, is_persistent=True,
+                        severity=ir.IssueSeverity.ERROR,
+                        translation_key=_repair["translation_key"],
+                        translation_placeholders=_repair["placeholders"],
+                    )
                 # Skip the rest of the registration block — none of the
                 # mutating methods below are callable in YAML mode.
                 raise _SEMYAMLModeSkip()
+            # Storage mode: clear a stale repair from a previous YAML setup.
+            ir.async_delete_issue(hass, DOMAIN, "lovelace_yaml_mode")
 
             # Build lookup: base URL (without query) → resource item
             existing_by_base = {}
@@ -3339,18 +3819,9 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
                 )
                 _LOGGER.info("Updated SEM Lit bundle: %s → %s", bundle_item["url"], cards_bundle_url)
 
-            # Register standalone diagram card (vanilla JS, not in Lit bundle)
-            diagram_base = f"{static_path}/card/sem-system-diagram-card.js"
-            diagram_url = f"{diagram_base}?v={asset_v['diagram']}"
-            diagram_item = existing_by_base.get(diagram_base)
-            if diagram_item is None:
-                await resources.async_create_item({"res_type": "module", "url": diagram_url})
-                _LOGGER.info("Registered SEM diagram card: %s", diagram_url)
-            elif diagram_item["url"] != diagram_url:
-                await resources.async_update_item(
-                    diagram_item["id"], {"res_type": "module", "url": diagram_url}
-                )
-                _LOGGER.info("Updated SEM diagram card: %s → %s", diagram_item["url"], diagram_url)
+            # (#784) The diagram card used to be registered here as a second,
+            # standalone resource. It now ships inside the bundle like every
+            # other card; the retired URL is cleaned up via _legacy_bases.
 
             # Register sem-localize.js as a Lovelace resource (single
             # delivery channel; see #453). Cards constructed before
@@ -3490,7 +3961,10 @@ async def _async_register_phase_services(
             "entity_id": call.data.get("entity_id"),
             "name": call.data.get("name") or call.data.get("device_id"),
             "priority": call.data.get("priority", 5),
-            "rated_power": call.data.get("rated_power", 1000),
+            # (#744) No rating named means no rating — not 1 kW. The device
+            # layer applies (and labels) the placeholder, so the first real
+            # measurement can still replace it downward.
+            "rated_power": call.data.get("rated_power"),
             "power_entity_id": call.data.get("power_entity_id"),
             # #600 — optional kWh energy counter; SEM autodetects a companion
             # power sensor on the device first, else derives power from this.
@@ -3510,6 +3984,8 @@ async def _async_register_phase_services(
                 # (#620) max cap + battery tiers
                 "daily_max_runtime_min", "battery_assist_enabled",
                 "battery_eligible_overnight",
+                # (#705) thermal comfort band
+                "comfort_entity", "comfort_target", "comfort_offset", "comfort_limit",
             )
             if k in call.data
         }
@@ -3549,7 +4025,10 @@ async def _async_register_phase_services(
             vol.Required("entity_id"): cv.string,
             vol.Optional("name"): cv.string,
             vol.Optional("priority", default=5): vol.All(int, vol.Range(min=1, max=10)),
-            vol.Optional("rated_power", default=1000): vol.Coerce(float),
+            # (#744) NO default — a voluptuous default is always filled in, so
+            # every call would arrive carrying 1 kW and the handler could never
+            # see that the caller named no rating at all.
+            vol.Optional("rated_power"): vol.Coerce(float),
             vol.Optional("power_entity_id"): cv.string,
             vol.Optional("energy_entity_id"): cv.string,  # #600
             vol.Optional("control_mode", default="surplus"): vol.In(
@@ -3634,12 +4113,12 @@ async def _async_register_phase_services(
 
         try:
             deadline = datetime.fromisoformat(deadline_str)
-        except (ValueError, TypeError):
+        except (ValueError, TypeError) as err:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="invalid_deadline_format",
                 translation_placeholders={"deadline": str(deadline_str)},
-            )
+            ) from err
 
         # (#653) Normalise to LOCAL-naive. The scheduler compares deadlines
         # against ``datetime.now()``, which is naive, and an HA template
@@ -3851,6 +4330,14 @@ async def _async_register_phase_services(
             "hot_water_minimum_temperature", "hot_water_legionella_target",
             "heat_pump_max_setpoint", "vpp_reserve_soc",
             "mobile_notification_service",
+            # (#819) The coordinator re-applies this to the forecast
+            # reader every cycle (set_preferred_source), so it is a
+            # genuinely live key rather than a construction-time one.
+            "solar_forecast_source",
+            # (#829) The coordinator reads this fresh from config on every
+            # daily-rollover check (retention_is_due), so changing it takes
+            # effect without a reload — a genuinely live key.
+            "status_retention_days",
         }
         # (#637) Some options are backed by number entities under a DIFFERENT
         # name (number.py CONFIG_KEY_MAP, #542) — the naive number.sem_<key>
@@ -4440,7 +4927,6 @@ async def _async_register_phase_services(
         devs = getattr(coordinator, "_ev_devices", {}) or {}
         adapters = getattr(coordinator, "_charger_adapters", {}) or {}
         recs = getattr(coordinator, "_charger_reconcilers", {}) or {}
-        live = (coordinator.data or {}) if coordinator else {}
 
         def _state(eid):
             if not eid:
@@ -4591,6 +5077,14 @@ async def _async_register_phase_services(
             "state": state,
             "recent_logs": recent_logs,
         }
+
+        # (#638 G3) Tonight's shadow plan — the 22:00 answer, inspectable on
+        # demand (journals rotate; this doesn't). None until the first
+        # night-window trigger after startup.
+        shadow_plan = (getattr(coordinator, "_energy_plan_shadow", None)
+                       if coordinator else None)
+        if shadow_plan is not None:
+            payload["energy_plan_shadow"] = shadow_plan
 
         # Layered-trace health summary (1.7.5) — tiny, so EVERY Diagnose
         # button surfaces "is a control layer disagreeing right now?" at a

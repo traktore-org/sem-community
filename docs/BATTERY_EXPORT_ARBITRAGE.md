@@ -1,14 +1,12 @@
 # Battery export arbitrage — selling stored energy when export is high
 
-> ## ⏸️ Deactivated in v1.7.3 — returns in v1.7.4
+> ## 🔒 Wired, tested, and OFF by default (v2.0)
 >
-> Automatic battery→grid arbitrage is **turned off in the stable 1.7.3
-> release** while it gets more review and soak time. The global toggle is
-> forced off, its config section is hidden, and the **`Allow arbitrage`
-> battery mode is removed from the selector**. All other battery control
-> (Auto, Self-consumption, Force charge, Force discharge, Off) is unaffected.
-> Arbitrage returns in **v1.7.4** — tracking issue **#533**. The rest of this
-> page describes the feature as it works once re-enabled.
+> The selling machinery is fully built into the energy plan (the same
+> one-gate that schedules EV and load windows) and covered by a dedicated
+> scenario test matrix — but **every default keeps it dormant** (#533): the
+> global toggle ships off, and the UI opt-ins are still held back until the
+> feature has soaked. Nothing sells unless you deliberately turn it on.
 
 On a dynamic / spot tariff (EPEX, Tibber, Nord Pool, aWATTar, …) the price you
 are paid to export swings hard — often **negative** (you pay to export) and
@@ -19,6 +17,84 @@ grid** when the export price beats the cost of recharging it later.
 
 > **Opt-in. Default OFF.** SEM never force-discharges your battery unless you
 > turn this on.
+
+> ## ⚠️ Check your grid connection agreement first
+>
+> Some grid operators and feed-in schemes **prohibit exporting stored
+> (battery) energy** — the feed-in contract covers PV production only, and
+> exporting from the battery can violate the connection agreement or void a
+> feed-in tariff. **If that applies to you: leave arbitrage OFF and do not
+> use the `Force discharge` battery mode** — both deliberately push battery
+> energy to the grid. Everything else in SEM (charge scheduling,
+> self-consumption, peak shaving, EV solar charging) never exports your
+> battery and is unaffected by such restrictions.
+>
+> The `sensor.sem_flow_battery_to_grid_power` / `…_energy` pair (v2.0)
+> shows exactly how much battery energy went to the grid — on a restricted
+> install it is also your evidence that the answer is **zero**.
+
+## What the mode does — one day in two pictures
+
+The price curve decides everything. SEM charges the battery in the cheapest
+night hours (that part is the normal charge scheduler) and sells stored
+energy back to the grid only inside the **evening price peak**, and only when
+the peak out-earns refilling the battery later:
+
+```text
+ €/kWh   (day-ahead spot price)
+ 0.45 ┤                                            ╭───╮
+ 0.40 ┤                                          ╭─╯▒▒▒╰╮      ▒ SELL block
+ 0.35 ┤                                        ╭─╯▒▒▒▒▒▒╰╮       (18–21 h,
+ 0.30 ┤─╮                                    ╭─╯▒▒▒▒▒▒▒▒▒╰─╮      price peak)
+ 0.25 ┤ ╰─╮                               ╭──╯             ╰───
+ 0.20 ┤   ╰──╮                         ╭──╯
+ 0.15 ┤      ╰──╮                  ╭───╯
+ 0.10 ┤         ╰──╮███████╭───────╯          █ CHARGE block
+ 0.05 ┤            ╰███████╯                    (02–05 h, price valley)
+      └─┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬──→
+        00  02  04  06  08  10  12  14  16  18  20  22   hour
+```
+
+What the battery's state of charge does across that same day:
+
+```text
+ SOC %
+ 100 ┤                 ╭──────────────────────╮
+  80 ┤             ╭───╯   (solar tops up      ╰─╮
+  60 ┤         ╭───╯        during the day)      ╰──╮   selling STOPS at the
+  50 ┤─────────╯                                    ╰────────  arbitrage
+     ┤                                                         reserve (50 %)
+  20 ┤ ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  backup reserve (20 %)
+     └─┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬──→
+       00  02  04  06  08  10  12  14  16  18  20  22   hour
+```
+
+Three things the pictures show:
+
+- **The sell only happens inside a planned block.** The energy plan packs
+  the sell window from the price curve the evening before, next to the EV and
+  load windows, so everything competes for the same night under the same
+  peak-load cap. No block on the plan — no selling, whatever the live price
+  does.
+- **Two reserve floors, and the higher one wins.** Your **backup reserve**
+  (the emergency capacity, default 20 %) is never touched by anything. The
+  **arbitrage reserve** (default 50 %) is the deeper floor selling stops at —
+  so an evening sale keeps half the battery for the normal evening household
+  use that follows it.
+- **The sale must beat the refill.** Selling at 0.40 only makes sense because
+  tomorrow's valley refills at ~0.10. If the spread doesn't cover round-trip
+  losses (~10 %) plus battery wear, the block is simply not planned.
+
+### The three questions every sell answers
+
+| Question | Who answers it | What it checks |
+|---|---|---|
+| **WHEN?** | The stamped energy plan | Is a sell block open *right now*? (Stale or missing plan = closed.) |
+| **WHETHER?** | Live economics, re-checked every cycle | Does the export price *still* beat recharge cost + wear? A price that moved kills the sale mid-block. |
+| **MAY?** | Your settings | Global toggle, this battery's mode (`Self-consumption` never sells), both reserve floors, and the night-actuation kill-switch. |
+
+All three must say yes, every ~10 s cycle. Any single "no" stops the
+discharge cleanly on the next cycle.
 
 ![Battery card showing the Selling to grid state](screenshots/battery-export-arbitrage-selling.png)
 
@@ -33,10 +109,15 @@ It is the mirror of the scheduler's charge-on-cheap decision, using the **same
 economics**, so it can never sell at a loss. Every cycle, while arbitrage is on
 and no charge is planned, SEM sells only when **all** of these hold:
 
-1. **Export price ≥ your “min export price to sell”** — worth cycling the
+1. **A sell block on the energy plan is open right now** — the plan owns
+   the WHEN (see the pictures above).
+2. **Export price ≥ your “min export price to sell”** — worth cycling the
    battery for.
-2. **SOC > your reserve floor** — your backup capacity is never sold.
-3. **The sale beats recharging it later:**
+3. **SOC > both reserve floors** — the higher of your backup reserve and the
+   arbitrage reserve. Your backup capacity is never sold, and the arbitrage
+   reserve keeps a working charge for the evening household. An unavailable
+   SOC sensor **holds** — SEM never discharges blind.
+4. **The sale beats recharging it later:**
 
    ```
    export_now  >  cheapest_upcoming_import ÷ round-trip_efficiency  +  battery_cycle_cost
@@ -114,9 +195,10 @@ LUNA2000s) each battery is controlled independently from the **Battery card**:
 |---|---|
 | **Auto** | Today's behaviour — scheduler / arbitrage / protection decide. |
 | **Self-consumption only** | Charge + power the house, but **never** sell to grid. |
-| **Allow arbitrage** | Sell to grid when profitable, even with the global toggle off. |
 | **Force charge** | Charge to full now. |
 | **Force discharge** | Sell to grid now, down to the **Reserve SOC**. |
+
+> **Note:** a per-battery `Allow arbitrage` opt-in mode is planned but currently held back (#533). For now, which batteries participate follows the global toggle: in `Auto` mode a battery follows the global setting; `Self-consumption only` always suppresses it.
 
 Each battery also has its own **Reserve SOC** floor (never discharged below it),
 and — for multi-battery installs — its own **forcible-discharge entity picker**
@@ -147,42 +229,38 @@ in Configuration → Tariff. One battery can sell while a sibling holds.
 
 ---
 
-## v1.7.4 re-enable checklist (maintainers)
+## Current state on the 2.0 line (maintainers)
 
-The arbitrage decision path was **hardened** ahead of v1.7.4 (view-plumbed
-market signals, a peak-aware export cap, and a clean `STOP_FORCE_DISCHARGE`
-stop that works on every brand — not just Huawei by coincidence). It ships
-**dormant**: three independent gates keep it off (`_any_allow_arb=False` in the
-coordinator, migration v14 forcing `battery_grid_arbitrage_enabled=False`, and
-`allow_arbitrage` removed from the mode selector). To activate in v1.7.4:
+The path is **fully wired through the one-gate plan** (#638 C6) and pinned by
+a dedicated scenario matrix (`tests/test_638_c6_arbitrage_sell.py` — mode ×
+gate × floor, plus the economics honest-bounds suite). What the v1.7.3
+checklist asked for is done:
 
-1. Re-add `allow_arbitrage` to `BATTERY_MODES` (`consts/battery_modes.py`).
-2. Re-expose the global toggle + section in the config flow and the dashboard
-   Config card, and restore `_any_allow_arb` to read the per-battery opt-in
-   (`coordinator/coordinator.py`).
-3. Stop migration v14 from forcing the toggle off (or add a v15 that leaves the
-   user's choice intact).
-4. **Address the two hardening follow-ups deferred from the #533 review:**
-   - **Actuate-layer idempotency (ruflo M1).** Once live, a non-firing arbitrage
-     verdict emits `STOP_FORCE_DISCHARGE` every cycle. The adapters de-dup so
-     there's no bus spam, but add a `last_intent == STOP_FORCE_DISCHARGE`
-     short-circuit at the actuate layer (or in `command_stop_force_discharge`)
-     to skip the redundant `command_normal()` call when already stopped.
-   - **Export-cap default semantics (ruflo L1).** `arbitrage_max_export_w`
-     defaults to the system-wide `max_export_power` (a solar anti-export cap).
-     Document this clearly in the config-flow help, or give arbitrage its own
-     default, so an installer's DNO solar cap doesn't silently throttle battery
-     selling in a surprising way.
-   - **⚠️ Multi-battery N× over-export (BLOCKER for multi-battery fleets).**
-     `decide_battery` hands the scheduler's single `discharge_power_w`
-     (`= max_discharge_power_w`, the global `battery_max_discharge_power`) to
-     **every** arbitrage-enabled battery **unsplit** — an N-battery fleet exports
-     N× that value to the grid. The sibling `LIMIT_DISCHARGE` path already fixed
-     this exact class (#531) by splitting `home/n`. Before re-enabling, decide the
-     config's semantics: *total export* → split `/n` (mirror LIMIT_DISCHARGE using
-     `f.battery_count`); *per-battery cap* → leave unsplit but clamp each unit to
-     its own capability. A ⚠️ guard comment sits at the arbitrage return in
-     `coordinator/decide_battery.py`. Single-battery installs are unaffected.
-5. Soak on the HA-TEST sim rig (`sem_sim_dynamic_export.yaml`) — **never on the
-   shared PROD battery** (#532 was a real LUNA2000 drain). Cover a **two-battery**
-   arbitrage case in the soak so the N× split above is exercised.
+- ✅ **Plan-gated WHEN** — `arbitrage_sell_gate` reads the stamped plan's
+  `discharge_blocks` under the same trust rule as every gate (stale stamp =
+  closed); power is capped at the block-implied watts (avoided-import, never
+  export-at-max), and the kill-switch gates the whole computation (#758).
+- ✅ **N× over-export fixed** — the pipeline splits the block power across
+  the fleet (`effective_battery_count`, the #531/#691 treatment); the
+  `_any_allow_arb=False` v1.7.3 hardcode is gone (per-battery opt-in scan is
+  real again).
+- ✅ **Both reserve floors bind, the higher wins** — the user's backup
+  reserve AND the verdict's `arbitrage_reserve_soc`; the actuator is handed
+  the higher floor (hardware end-SOC / setpoint batteries enforce it on
+  their own between cycles). An unavailable SOC holds, never sells blind
+  (#531).
+- ✅ **Clean brand-agnostic stop** — `STOP_FORCE_DISCHARGE` routed by
+  `from_arbitrage`; a block closing mid-sell falls through to NORMAL, whose
+  idempotent `command_normal()` zeroes the setpoint (#538).
+
+Still deliberately held back (the #533 decision):
+
+1. `allow_arbitrage` stays **out of the battery-mode selector** and the
+   global toggle has **no config-flow section** — enabling today is the
+   expert route (`solar_energy_management.set_option` →
+   `battery_grid_arbitrage_enabled: true`, batteries in `auto` mode).
+2. Migration v14 forces the toggle off **once** on upgrade from ≤ v13; a
+   deliberate re-enable afterwards sticks.
+3. Before re-exposing the UI: a live two-battery arbitrage night on the sim
+   rig — **never a first soak on the shared PROD battery** (#532 was a real
+   LUNA2000 drain).

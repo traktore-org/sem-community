@@ -12,14 +12,12 @@ coverage further down this file.
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.solar_energy_management.config_flow import (
     SolarEnergyManagementConfigFlow,
     OptionsFlowHandler,
 )
-from custom_components.solar_energy_management.const import DOMAIN
 from custom_components.solar_energy_management.ha_energy_reader import EnergyDashboardConfig
 
 

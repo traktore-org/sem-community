@@ -32,14 +32,21 @@ class DesiredState(Enum):
     CHARGE = auto()  # charging (CHARGE_AT_AMPS / CHARGE_MAX)
 
 
+#: A real unplug persists; a UDP blip is one cycle (project_ev_flap_udp_blip).
+#: Park only after the disconnect has held this many consecutive cycles.
+PARK_ON_DISCONNECT_CYCLES: int = 2
+
+
 class ActionKind(Enum):
     """Minimal hardware action the reconciler may emit."""
     NONE = auto()           # already converged — issue nothing
     DISABLE = auto()        # open the contactor (brand disable service)
+    PARK_OFF = auto()       # car GONE — leave the box disabled+cold so the next plug-in can't auto-start
     WRITE_CURRENT = auto()  # set charging current (amps on the Action)
     START_AND_WRITE = auto()  # open a session + arm failsafe + write (amps)
     ENABLE = auto()         # re-assert the start/stop switch ON (#536 — Wallbox)
     REPORT_ENABLE_BLOCKED = auto()  # enable switch unavailable/locked — surface it (#536)
+    REPORT_STOP_WAR = auto()        # box keeps re-starting against our stop — cease fire (#763)
     REPORT_STOP_UNENFORCEABLE = auto()  # no mechanism can open the contactor (#627)
 
 
@@ -66,6 +73,11 @@ class ObservedState:
     unavailable/unknown (Wallbox locked / eco-smart) — SEM can't drive
     it, so charging is silently impossible until surfaced (#536)."""
     stop_controllable: bool = True
+    connected: bool = True
+    """Whether the car is plugged in. Disconnect is the one TRUE end of
+    a stop war (#763) — the handshake partner left, so the war memory
+    resets. Defaults True: a charger that cannot say keeps the old
+    behavior."""
     """False when NO configured mechanism can open the contactor (#627):
     no stop service, no charge-mode select, no start/stop entity, no
     ``<domain>.disable``, and a current entity whose ``min`` is above 0 so
@@ -102,6 +114,31 @@ def desired_from_decision(decision: ChargerDecision) -> Tuple[DesiredState, int]
 # 2026-06-02). Was ``ChargerAdapter.IDLE_DEBOUNCE_THRESHOLD`` until
 # Task 11 moved idle ownership wholly into the reconciler.
 DEFAULT_IDLE_DISABLE_THRESHOLD: int = 4
+
+# #763 — stop-war ceasefire tuning. Rounds are settled→redraw edges; the
+# backoff is deliberately LONG (one aborted handshake per half hour instead
+# of six per minute), and a quiet spell means the box gave up on its own.
+STOP_WAR_ROUNDS: int = 3
+STOP_WAR_BACKOFF_S: float = 1800.0
+# (#763 beta.7 recurrence) 3600, not 600: quiet is exactly what a
+# slow-retrying car looks like BETWEEN retries. onkelfu's Mercedes came
+# back every ~717 s — slower than the old 600 s reset — so every burst
+# counted from zero and the ceasefire never engaged. A war ends on
+# disconnect, on SEM wanting CHARGE, or on an HOUR of true quiet; not on
+# a gap shorter than a car's retry period.
+STOP_WAR_QUIET_RESET_S: float = 3600.0
+# A war that survives its first ceasefire is persistent: each further
+# ceasefire doubles the stand-down (capped), so the handshake-abort rate
+# decays instead of settling at one abort per backoff forever.
+STOP_WAR_BACKOFF_MAX_FACTOR: int = 8
+# (#763 round 3, evcc parity) evcc floors every corrective contactor
+# command at chargerSwitchDuration = 60 s — its syncCharger logs a
+# self-start, re-syncs its own belief, and lets the NEXT control tick
+# re-disable. We re-issued DISABLE every 10-s cycle while a burst
+# lasted: redundant bridge writes, each a fresh chance to abort the
+# car's handshake. One DISABLE per dwell; the war accounting (edges,
+# ceasefire) is unaffected.
+STOP_REASSERT_DWELL_S: float = 60.0
 
 
 class ChargerReconciler:
@@ -162,10 +199,94 @@ class ChargerReconciler:
         # policy says idle, disable immediately. The grace re-arms on every
         # genuine CHARGE→IDLE transition (the only wind-down there is).
         self._idle_settled: bool = True
+        # (park-on-disconnect) An enabled KEBA auto-starts the NEXT plug-in
+        # on its own — "not drawing" is NOT "off". SEM used to issue nothing
+        # when a car left (the box stayed enabled), so the next plug-in
+        # auto-charged ~1 kWh before the quota-hold caught it (Guido, PROD
+        # 26.08). His pre-SEM automation disabled the box after every charge
+        # for exactly this. So: ONE PARK_OFF on the settled disconnect edge.
+        # ``_seen_connected`` gates it to a real "car LEFT" edge: only a
+        # charger we have observed WITH a car, now gone, is parked on
+        # departure (an empty box at boot has nothing to park). The
+        # ``_disconnect_run`` debounce rides past a single-cycle UDP unplug
+        # blip (project_ev_flap_udp_blip) that would otherwise kill a live
+        # charge.
+        self._seen_connected: bool = False
+        self._parked_off: bool = False
+        self._disconnect_run: int = 0
+        # #763 — the stop-war ceasefire, the #536 backoff's mirror. SEM's
+        # stop WORKS (contactor opens) but the box re-closes on the car's
+        # retry at its stored setpoint; every stop→redraw round-trip aborts
+        # one handshake, and ~2 h of that latched a Mercedes' charging
+        # fault (onkelfu, Modbus KEBA #763). After STOP_WAR_ROUNDS
+        # round-trips SEM stands down for STOP_WAR_BACKOFF_S and reports —
+        # a strobing contactor is worse for the car than a few kWh of
+        # unplanned 6 A charge. A round is the settled→drawing EDGE; a
+        # steady draw that never opens is the #627/#548 family, not this.
+        self._stop_war_rounds: int = 0
+        self._stop_war_last_round_at: float = 0.0
+        self._stop_war_backoff_until: float = 0.0
+        self._stop_war_draw_seen: bool = False
+        self._stop_war_reported: bool = False
+        self._stop_war_ceasefires: int = 0
+        self._last_disable_at: float = float("-inf")
+
+    def snapshot_war(self, now: float) -> dict:
+        """(#763 beta.7) The war state for the diagnostics download.
+
+        onkelfu's dump carried the charge-stability giveup fields (all
+        empty — a different mechanism) and nothing from here, so the
+        machinery that owns the stop war was invisible and looked
+        disengaged. Read-only.
+        """
+        return {
+            "rounds": self._stop_war_rounds,
+            "ceasefires": self._stop_war_ceasefires,
+            "backoff_remaining_s": round(
+                max(0.0, self._stop_war_backoff_until - now), 1),
+            "last_round_ago_s": round(
+                now - self._stop_war_last_round_at, 1)
+                if self._stop_war_last_round_at else None,
+            "stop_commanded_while_drawing":
+                self._stop_commanded_while_drawing,
+            "last_desired": self._last_desired,
+            "last_actions": list(self._last_actions),
+        }
+
+    def _gated_disable(self, now: float) -> List[Action]:
+        """One DISABLE per STOP_REASSERT_DWELL_S (#763 round 3)."""
+        if now - self._last_disable_at < STOP_REASSERT_DWELL_S:
+            return [Action(ActionKind.NONE)]
+        self._last_disable_at = now
+        return [Action(ActionKind.DISABLE)]
+
+    def _end_stop_war(self) -> None:
+        self._stop_war_rounds = 0
+        self._stop_war_backoff_until = 0.0
+        self._stop_war_draw_seen = False
+        self._stop_war_ceasefires = 0
 
     def reconcile(self, desired: DesiredState, amps: int,
                   observed: ObservedState, now: float) -> List[Action]:
         """Pure decision table (spec rows 1-8, first match wins)."""
+        # (#763) Unplugged = the war is over — its other party left.
+        # (park-on-disconnect) …and the box must be left actively OFF, not
+        # merely not-drawing: an enabled KEBA auto-starts the NEXT plug-in.
+        # PARK_OFF fires only on a real "car LEFT" edge — a charger SEEN
+        # connected, now gone. A box never observed with a car is not
+        # "parked on departure"; nothing left.
+        if observed.connected:
+            self._seen_connected = True
+            self._disconnect_run = 0
+            self._parked_off = False
+        else:
+            self._end_stop_war()
+            self._disconnect_run += 1
+            if (self._seen_connected
+                    and self._disconnect_run >= PARK_ON_DISCONNECT_CYCLES
+                    and not self._parked_off):
+                self._parked_off = True
+                return [Action(ActionKind.PARK_OFF)]
 
         # OFF / IDLE share the convergence target (contactor open). The
         # only difference is the flicker grace, which OFF never gets.
@@ -184,6 +305,14 @@ class ChargerReconciler:
                 # Row 2 — already converged. THE spam fix: issue nothing.
                 self._consecutive_idle_count = 0
                 self._idle_settled = True  # #552 — wind-down complete
+                # #763 — the draw edge is over; a long quiet spell means
+                # the box gave up on its own and the war is history.
+                self._stop_war_draw_seen = False
+                if (self._stop_war_rounds
+                        and now - self._stop_war_last_round_at
+                        > STOP_WAR_QUIET_RESET_S):
+                    self._stop_war_rounds = 0
+                    self._stop_war_ceasefires = 0
                 return [Action(ActionKind.NONE)]
             if not observed.stop_controllable:
                 # #627 — SEM has no mechanism that can open this contactor.
@@ -194,6 +323,34 @@ class ChargerReconciler:
                 # out of the house batteries either way.
                 return [Action(ActionKind.DISABLE),
                         Action(ActionKind.REPORT_STOP_UNENFORCEABLE)]
+            # #763 — stop-war ceasefire, covering BOTH the OFF row and the
+            # settled-rogue row below (same box, same car, same fault). A
+            # war round is the settled→drawing EDGE: our stop landed, the
+            # box came back. The wind-down flicker grace never counts —
+            # that draw is our own session ending.
+            if desired is DesiredState.OFF or self._idle_settled:
+                if now < self._stop_war_backoff_until:
+                    # Ceasefire holds: no DISABLE, the box may finish its
+                    # 6 A session. Reported once per onset at apply.
+                    return [Action(ActionKind.REPORT_STOP_WAR)]
+                if not self._stop_war_draw_seen:
+                    self._stop_war_draw_seen = True
+                    if (self._stop_war_rounds
+                            and now - self._stop_war_last_round_at
+                            > STOP_WAR_QUIET_RESET_S):
+                        self._stop_war_rounds = 0
+                    self._stop_war_rounds += 1
+                    self._stop_war_last_round_at = now
+                    if self._stop_war_rounds > STOP_WAR_ROUNDS:
+                        self._stop_war_ceasefires += 1
+                        factor = min(
+                            2 ** (self._stop_war_ceasefires - 1),
+                            STOP_WAR_BACKOFF_MAX_FACTOR,
+                        )
+                        self._stop_war_backoff_until = (
+                            now + STOP_WAR_BACKOFF_S * factor)
+                        return [Action(ActionKind.REPORT_STOP_WAR)]
+
             if desired is DesiredState.OFF:
                 if not observed.enable_controllable:
                     # #548 — the contactor is app/cloud-locked (Wallbox
@@ -201,21 +358,26 @@ class ChargerReconciler:
                     # open it. Issuing DISABLE every cycle is futile and
                     # hides the real cause from the user. Surface it.
                     return [Action(ActionKind.REPORT_ENABLE_BLOCKED)]
-                # Row 1 — user-explicit OFF: open immediately, no grace.
-                return [Action(ActionKind.DISABLE)]
+                # Row 1 — user-explicit OFF: open immediately, no grace —
+                # then re-assert at the dwell, not every cycle.
+                return self._gated_disable(now)
             # #552 — draw appeared AFTER idle had settled: not our wind-down
             # but a rogue self-start (KEBA auto-start, #315). Open the
             # contactor immediately, re-asserted every cycle it persists —
             # parity with the OFF row. The grace below stays reserved for
             # winding down a session SEM itself just stopped.
             if self._idle_settled:
-                return [Action(ActionKind.DISABLE)]
+                return self._gated_disable(now)
             # IDLE + drawing — flicker hold then confirm (rows 3-4).
             self._consecutive_idle_count += 1
             self._consecutive_idle_count = min(self._consecutive_idle_count, self._idle_disable_threshold)
             if self._consecutive_idle_count < self._idle_disable_threshold:
                 return [Action(ActionKind.NONE)]
-            return [Action(ActionKind.DISABLE)]
+            return self._gated_disable(now)
+
+        # desired is CHARGE — reset idle grace, and end any stop war: SEM
+        # wanting the box to charge dissolves the disagreement (#763).
+        self._end_stop_war()
 
         # desired is CHARGE — reset idle grace.
         #
@@ -313,7 +475,17 @@ class ChargerReconciler:
         self._last_actions = [a.kind.name for a in actions]
         self._last_apply_at = now
         _drawing = bool(observed.charging or observed.self_charging)
-        if any(a.kind is ActionKind.DISABLE for a in actions) and _drawing:
+        # (#763 round 3) Counts cycles the stop INTENT holds against a
+        # live draw — not emitted DISABLEs. With the reassert dwell, the
+        # write lands once a minute; the box defying it is still one
+        # defiance per cycle, and the "stop is not taking" warning must
+        # keep its ~3-cycle timing.
+        _stop_intent_held = (
+            any(a.kind is ActionKind.DISABLE for a in actions)
+            or (desired in (DesiredState.OFF, DesiredState.IDLE)
+                and now - self._last_disable_at < STOP_REASSERT_DWELL_S)
+        )
+        if _stop_intent_held and _drawing:
             self._stop_commanded_while_drawing += 1
             if self._stop_commanded_while_drawing in (3, 12, 60):
                 _LOGGER.warning(
@@ -393,6 +565,8 @@ class ChargerReconciler:
             # warning so the NEXT unenforceable episode warns again.
             if action.kind is not ActionKind.REPORT_STOP_UNENFORCEABLE:
                 self._stop_unenforceable_warned = False
+            if action.kind is not ActionKind.REPORT_STOP_WAR:
+                self._stop_war_reported = False
             if action.kind is ActionKind.ENABLE:
                 # #536 — re-assert the start/stop switch (idempotent).
                 await adapter.ensure_enabled()
@@ -407,6 +581,30 @@ class ChargerReconciler:
                 report = getattr(adapter, "report_enable_blocked", None)
                 if report is not None:
                     await report()
+            elif action.kind is ActionKind.REPORT_STOP_WAR:
+                # #763 — once per ONSET (the #700 pattern): the ceasefire
+                # holds for half an hour and re-warning every 10 s cycle
+                # would be its own flood. Re-armed below when any other
+                # action lands (the war ended or the intent moved).
+                if not self._stop_war_reported:
+                    self._stop_war_reported = True
+                    _LOGGER.warning(
+                        "reconcile(%s): stop war detected — the charger keeps "
+                        "restarting itself against SEM's stop (%d stop→redraw "
+                        "round-trips). Standing down for %.0f min so the car "
+                        "is not strobed into a charging fault; it may charge "
+                        "at the box's stored minimum meanwhile. Likely cause: "
+                        "the wallbox's own auto-start/authorization re-closes "
+                        "the contactor on the car's retry — disable charger-"
+                        "side auto-start, or give SEM a stop mechanism the "
+                        "box respects. — %s",
+                        self.charger_id, self._stop_war_rounds,
+                        STOP_WAR_BACKOFF_S / 60.0, decision.reason)
+                else:
+                    _LOGGER.debug(
+                        "reconcile(%s): stop-war ceasefire holding (%d rounds)",
+                        self.charger_id, self._stop_war_rounds)
+                continue
             elif action.kind is ActionKind.REPORT_STOP_UNENFORCEABLE:
                 # #627 — the stop is structurally impossible on this config.
                 # (#700) Once per ONSET, not per cycle: the condition persists
@@ -444,6 +642,12 @@ class ChargerReconciler:
                 await adapter.command_disable()
                 _LOGGER.info("reconcile(%s): DISABLE — %s",
                              self.charger_id, decision.reason)
+            elif action.kind is ActionKind.PARK_OFF:
+                await adapter.command_park_off()
+                _LOGGER.info(
+                    "reconcile(%s): PARK OFF — car disconnected, box left "
+                    "disabled so the next plug-in cannot auto-start",
+                    self.charger_id)
             elif action.kind is ActionKind.START_AND_WRITE:
                 # arm_failsafe() is a no-op unless opted in (#546, evcc-style).
                 await adapter.arm_failsafe()
@@ -513,6 +717,7 @@ def observe(adapter, power) -> ObservedState:
         setpoint_a=setpoint,
         self_charging=adapter.is_self_charging(power),
         power_w=float(getattr(power, "power_w", 0.0) or 0.0),
+        connected=bool(getattr(power, "connected", True)),
         enabled=enabled,
         enable_controllable=controllable,
         stop_controllable=stop_ok,

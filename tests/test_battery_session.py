@@ -3,9 +3,8 @@
 Verifies charge/discharge session lifecycle, source attribution,
 cost/savings calculation, and hysteresis-based session end detection.
 """
-import pytest
-from unittest.mock import MagicMock, patch
-from datetime import datetime, timedelta
+from unittest.mock import patch
+from datetime import timedelta
 
 from custom_components.solar_energy_management.coordinator.types import (
     PowerReadings, PowerFlows, BatterySessionData,

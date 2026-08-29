@@ -1,12 +1,10 @@
 """Tests for EnergyAssistant smart recommendations."""
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from datetime import date, datetime, time, timedelta
 
 from custom_components.solar_energy_management.analytics.energy_assistant import (
     EnergyAssistant,
     EnergyAssistantData,
-    EnergyTip,
 )
 
 
@@ -44,7 +42,7 @@ class TestEnergyAssistantAnalyze:
     def test_ev_charging_low_solar_tip(self, mock_hass):
         """solar < 50% of EV -> generates tip."""
         ea = EnergyAssistant(mock_hass)
-        data = ea.analyze(
+        ea.analyze(
             daily_ev_kwh=10.0,
             solar_to_ev_kwh=3.0,  # 30% solar
             grid_to_ev_kwh=7.0,
@@ -58,7 +56,7 @@ class TestEnergyAssistantAnalyze:
     def test_ev_charging_good_forecast_tip(self, mock_hass):
         """forecast > 2x EV need -> generates tip."""
         ea = EnergyAssistant(mock_hass)
-        data = ea.analyze(
+        ea.analyze(
             daily_ev_kwh=5.0,
             solar_to_ev_kwh=1.0,
             grid_to_ev_kwh=4.0,
@@ -189,11 +187,16 @@ class TestOptimizationScore:
 class TestTipRotation:
     """Test tip rotation and sorting."""
 
-    def test_tip_rotation(self, mock_hass):
-        """Multiple calls rotate through tips."""
+    def test_tip_rotation(self, mock_hass, monkeypatch):
+        """Calls spaced past the rotation interval rotate through tips.
+        (#829: rotation is time-based now — per-cycle rotation wrote 6k
+        recorder rows a day, so the test drives the clock explicitly.)"""
+        import custom_components.solar_energy_management.analytics.energy_assistant as ea_mod
+        clock = {"t": 0.0}
+        monkeypatch.setattr(ea_mod.time, "monotonic", lambda: clock["t"])
         ea = EnergyAssistant(mock_hass)
         # First call generates tips
-        data1 = ea.analyze(
+        ea.analyze(
             daily_ev_kwh=10.0,
             solar_to_ev_kwh=2.0,
             grid_to_ev_kwh=8.0,
@@ -201,9 +204,9 @@ class TestTipRotation:
             daily_solar_kwh=10.0,
             daily_grid_export_kwh=3.0,
         )
-        tip1 = data1.current_tip
-        # Second call should potentially rotate
-        data2 = ea.analyze(
+        # Second call, past the interval, rotates
+        clock["t"] += ea_mod.TIP_ROTATION_INTERVAL_S + 1
+        ea.analyze(
             daily_ev_kwh=10.0,
             solar_to_ev_kwh=2.0,
             grid_to_ev_kwh=8.0,

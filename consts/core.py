@@ -8,6 +8,10 @@ DOMAIN: Final = "solar_energy_management"
 # ============================================
 DEFAULT_OBSERVER_MODE: Final = False  # When True, skip all hardware control (read-only monitoring)
 DEFAULT_UPDATE_INTERVAL: Final = 10  # seconds - 10 seconds for highly accurate energy integration
+# Missing legacy config must not silently require an inverter/load sensor lane.
+# Grid-only remains fail-closed for the installation's upstream phase limit and
+# matches the config flow's least-assumptive default.
+DEFAULT_PHASE_GUARD_TOPOLOGY: Final = "grid_only"
 # Cold-start recovery (#274): re-derive Energy Dashboard power sensors for this many
 # update cycles while they're still unresolved (source integration not yet registered),
 # then give up. ~40 cycles ≈ 7-20 min depending on update_interval.
@@ -219,6 +223,33 @@ DEFAULT_TARGET_PEAK_LIMIT: Final = 5.0  # kW - Main target to never exceed
 DEFAULT_WARNING_PEAK_LEVEL: Final = 4.5  # kW - Early warning level
 DEFAULT_EMERGENCY_PEAK_LEVEL: Final = 6.0  # kW - Hard emergency limit
 DEFAULT_PEAK_HYSTERESIS: Final = 0.2  # kW - Prevent rapid cycling
+
+# (#717) The peak levels are a RATIO of the target, not fixed kilowatts.
+# The install flow asks only for the target, and a flat 4.5/6.0 pair is only
+# sensible next to a 5.0 kW target: on a North-American 200 A service (38 kW)
+# it would put the house into EMERGENCY shedding at 6 kW — an oven plus a
+# dryer. These ratios reproduce the two constants above exactly at the 5.0
+# default (5.0 x 0.9 = 4.5, 5.0 x 1.2 = 6.0), so a default install is
+# byte-identical to what it was before.
+WARNING_PEAK_RATIO: Final = 0.9  # warning fires just below the target
+EMERGENCY_PEAK_RATIO: Final = 1.2  # emergency is the hard limit above it
+
+# Grid service sizes vary far more than a European fuse box suggests: a US
+# 400 A split-phase service carries ~77-80 kW continuous, and a 3x100 A
+# European connection ~69 kW. The ceiling is a UI bound, not a
+# recommendation, so it is set to cover every residential service rather
+# than the common case (#717 — was 15 kW, which no US install could use).
+MIN_PEAK_LIMIT_KW: Final = 1.0
+MAX_PEAK_LIMIT_KW: Final = 80.0
+PEAK_LIMIT_STEP_KW: Final = 0.1
+
+# (#716/#717) "My grid connection is not the constraint — stop rationing
+# against it." Deliberately a BOOLEAN and not ``target_peak_limit == 0``:
+# the 0-as-unlimited sentinel is exactly what bit the energy planner
+# (#638 finding #5), where a config key nothing ever wrote read as 0, was
+# taken to mean "no limit", and offered a 10 kW EV slot on a 5 kW house.
+# A missing key must fail CLOSED — absent means "respect the limit".
+DEFAULT_PEAK_LIMIT_UNLIMITED: Final = False
 
 # Load management settings
 DEFAULT_LOAD_MANAGEMENT_ENABLED: Final = True

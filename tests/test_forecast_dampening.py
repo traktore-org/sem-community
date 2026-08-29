@@ -4,15 +4,13 @@ Covers the dampening factor that blends historical correction with live
 intraday performance to handle forecast misses in both directions.
 """
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from datetime import datetime
 
 from custom_components.solar_energy_management.coordinator.forecast_tracker import (
     ForecastTracker,
     DailyForecastRecord,
     MIN_FORECAST_KWH,
-    CONFIDENCE_RAMP_HOURS,
-    MAX_ACTUAL_RATIO,
 )
 
 DT_PATH = "custom_components.solar_energy_management.coordinator.forecast_tracker.dt_util"

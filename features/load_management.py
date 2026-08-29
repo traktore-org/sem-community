@@ -18,18 +18,17 @@ from ..const import (
     DEFAULT_WARNING_PEAK_LEVEL,
     DEFAULT_EMERGENCY_PEAK_LEVEL,
     DEFAULT_PEAK_HYSTERESIS,
+    DEFAULT_PEAK_LIMIT_UNLIMITED,
+    WARNING_PEAK_RATIO,
+    EMERGENCY_PEAK_RATIO,
     DEFAULT_LOAD_MANAGEMENT_ENABLED,
-    DEFAULT_CRITICAL_DEVICE_PROTECTION,
     DEFAULT_LOAD_SHEDDING_DELAY,
     DEFAULT_LOAD_RESTORE_DELAY,
     DEFAULT_MIN_ON_DURATION,
     DEFAULT_MIN_OFF_DURATION,
-    DEFAULT_MIN_CHARGING_CURRENT,
-    DEFAULT_MAX_CHARGING_CURRENT,
-    DEFAULT_VOLTAGE_PER_PHASE,
-    DEFAULT_POWER_FACTOR,
     LoadManagementState,
 )
+from .device_axes import may_actuate
 from .load_device_discovery import LoadDeviceDiscovery
 
 _LOGGER = logging.getLogger(__name__)
@@ -78,6 +77,15 @@ class LoadManagementCoordinator:
         self._hysteresis = _cfg.get(
             "peak_hysteresis", DEFAULT_PEAK_HYSTERESIS
         )
+        # (#716) Explicit "this install has no grid ceiling". Peak shedding
+        # never escalates above NORMAL while this is set. Deliberately NOT
+        # inferred from ``load_management_enabled`` or from a 0 limit: an
+        # unlimited that can be reached by accident is how a 5 kW house got
+        # handed a 10 kW EV slot (#638 finding #5). One boolean, one meaning.
+        self._peak_unlimited = bool(
+            _cfg.get("peak_limit_unlimited", DEFAULT_PEAK_LIMIT_UNLIMITED)
+        )
+        self._logged_ladder_repair = False
 
         # Device management
         self._device_discovery = LoadDeviceDiscovery(hass)
@@ -222,8 +230,15 @@ class LoadManagementCoordinator:
             energy_dashboard_devices = await self._device_discovery.discover_from_energy_dashboard()
             _LOGGER.info("Energy Dashboard discovery: found %s devices", len(energy_dashboard_devices))
 
-            # Then, pattern-based discovery for additional devices
-            pattern_discovered = self._device_discovery.discover_controllable_devices()
+            # Then, pattern-based discovery for additional devices.
+            # (#748) Exclude every entity a configured charger already owns (its
+            # stop switch, current number, power / status sensors) so the
+            # ``switch.*`` smart-switch glob doesn't rediscover the charger's
+            # own start/stop switch as a smart plug — the third duplicate row.
+            excluded_entities = self._charger_claimed_entities()
+            pattern_discovered = self._device_discovery.discover_controllable_devices(
+                excluded_entities=excluded_entities
+            )
             _LOGGER.info("Pattern-based discovery: found %s devices", len(pattern_discovered))
 
             # Merge discoveries - Energy Dashboard takes priority
@@ -243,8 +258,10 @@ class LoadManagementCoordinator:
                     _LOGGER.info("Added new device: %s (%s + %s) [source: %s]", device_id, switch_info, power_info, source)
                 else:
                     # Update availability and power rating, preserve user settings
-                    # NOTE: is_controllable, is_critical, and priority are user-editable —
-                    # never overwrite them from discovery when the user has set them.
+                    # NOTE: the user-editable axes (hands-off, critical,
+                    # priority) are never overwritten from discovery. Capability
+                    # (has_control_handle) IS discovery's to state — but it only
+                    # arrives with a fresh row, so nothing to re-derive here.
                     existing = self._devices[device_id]
                     update = {
                         "is_available": device_info.get("is_available", True),
@@ -273,6 +290,32 @@ class LoadManagementCoordinator:
         except Exception as e:
             _LOGGER.error("Device discovery failed: %s", e, exc_info=True)
 
+    def _charger_claimed_entities(self) -> set:
+        """(#748) Every entity owned by a registered EV charger — its current
+        control / power sensor, its start/stop switch and its status sensor.
+        Pattern discovery excludes these so a charger's own stop switch is not
+        rediscovered as a smart plug. Reads the charger rows registered by
+        ``register_ev_charger`` (device_type ``ev_charger``); an install with
+        no charger yields an empty set (no exclusion). Never raises."""
+        claimed: set = set()
+        try:
+            for info in self._devices.values():
+                if not isinstance(info, dict) or info.get("device_type") != "ev_charger":
+                    continue
+                for key in (
+                    "switch_entity", "power_entity", "charger_service",
+                    "start_stop_entity", "status_entity",
+                ):
+                    ent = info.get(key)
+                    # charger_service is a "domain.service" string, not an
+                    # entity — but it can never match a switch/power entity_id,
+                    # so including it is harmless and keeps the set simple.
+                    if ent:
+                        claimed.add(ent)
+        except Exception:  # pragma: no cover - defensive
+            return claimed
+        return claimed
+
     async def register_ev_charger(
         self,
         current_control_entity: str = None,
@@ -282,6 +325,8 @@ class LoadManagementCoordinator:
         charger_service: str = None,
         charger_id: str = "ev_charger",
         charger_name: str = "EV Charger",
+        start_stop_entity: str = None,
+        status_entity: str = None,
     ):
         """Register EV charger as a load management device.
 
@@ -353,9 +398,20 @@ class LoadManagementCoordinator:
                 "is_available": True,
                 "priority": priority,
                 "is_critical": is_critical,
-                "is_controllable": True,
+                # (#780) a registered charger always has a control handle;
+                # whether SEM may use it is control_mode's question.
+                "has_control_handle": True,
+                "user_hands_off": False,
+                "is_controllable": True,  # LEGACY-WRITE (#780) — derived
                 "control_type": "current",  # Special flag: use current control instead of switch
                 "charger_id": charger_id,  # #436: lets callers / card map back to ev_chargers[i].id
+                # (#748) the charger's stop switch / status sensor. Stored so
+                # pattern discovery can EXCLUDE them: a switch already claimed
+                # as this charger's start/stop is not a smart plug, and without
+                # this it was rediscovered as ``load_device_<slug>`` — the third
+                # duplicate row. Kept even when None so the key always exists.
+                "start_stop_entity": start_stop_entity,
+                "status_entity": status_entity,
             }
 
             # Save configuration
@@ -389,17 +445,95 @@ class LoadManagementCoordinator:
     @callback
     def _trigger_callbacks(self):
         """Trigger all update callbacks."""
-        for callback in self._update_callbacks:
+        # ``cb``, not ``callback`` — the loop name shadowed HA's ``@callback``
+        # decorator imported at module level for the rest of this function.
+        for cb in self._update_callbacks:
             try:
-                callback()
+                cb()
             except Exception as e:
                 _LOGGER.error("Error in load management callback: %s", e)
 
-    async def update_target_peak_limit(self, new_limit: float):
-        """Update the target peak limit and persist to config entry."""
+    def _effective_levels(self) -> Tuple[float, float]:
+        """Warning/emergency levels, repaired into order at READ time (#717).
+
+        The ladder must be ``warning < target < emergency``. The options flow
+        rejects anything else, but that is not the only writer: the
+        ``set_option`` service writes arbitrary keys with no validation, and
+        entries created before the flow validated could already hold an
+        inverted ladder. Repairing here covers every writer plus stored
+        history, and leaves the user's numbers untouched so they can put them
+        back in order themselves.
+
+        The dangerous end is a LOW emergency: ``emergency <= target`` makes the
+        EMERGENCY branch win before SHEDDING is ever considered, so SEM dumps
+        loads the moment the target is touched. A HIGH warning is merely a lost
+        stage (the target check fires first), repaired for symmetry.
+
+        Repair falls back on the same ratios the install flow derives from
+        (#717), not on the target itself: clamping *to* the target would leave
+        ``emergency == target``, and the EMERGENCY branch — which tests ``>=`` —
+        would still win at the target, making SHEDDING unreachable. The ratios
+        put each level back on its own side with a stage's worth of room.
+        """
+        warning = self._warning_level
+        emergency = self._emergency_level
+        if warning >= self._target_peak_limit:
+            warning = round(self._target_peak_limit * WARNING_PEAK_RATIO, 1)
+        if emergency <= self._target_peak_limit:
+            emergency = round(self._target_peak_limit * EMERGENCY_PEAK_RATIO, 1)
+        if not self._logged_ladder_repair and (
+            warning != self._warning_level or emergency != self._emergency_level
+        ):
+            self._logged_ladder_repair = True
+            _LOGGER.warning(
+                "Peak levels out of order (warning %.1f / target %.1f / emergency "
+                "%.1f kW) — using %.1f / %.1f / %.1f for shedding decisions. "
+                "Warning must be below the target and emergency above it; fix "
+                "them under Configure → Load Management.",
+                self._warning_level, self._target_peak_limit,
+                self._emergency_level,
+                warning, self._target_peak_limit, emergency,
+            )
+        return warning, emergency
+
+    async def update_target_peak_limit(
+        self, new_limit: float, unlimited: bool | None = None
+    ):
+        """Update the target peak limit and persist to config entry.
+
+        (#717 redesign) ``unlimited`` is optional so the two existing
+        Configure-flow writers (which set the flag separately via the
+        options flow's own submit path) keep working unchanged. The
+        Control-tab slider is the one caller that passes both in the same
+        atomic write — dragging to the MAX notch and letting go must not
+        leave a half-applied state between two separate service calls.
+        """
         self._target_peak_limit = new_limit
-        # Persist to config_entry.options so value survives restart (#199)
         new_options = {**self.config_entry.options, "target_peak_limit": new_limit}
+        # (#813) Carry the ladder with the target. Raising the target past the
+        # emergency level left the STORED config inverted: the decision path
+        # repairs it in memory (``_effective_levels``) so shedding still
+        # behaves, but the options page — rightly — then refuses to save what
+        # SEM itself wrote, and the user meets "emergency must be above the
+        # target" on a page they never touched (live on PROD at 6.0/6.0).
+        # A writer must leave a state its own form accepts. Same ratios the
+        # in-memory repair uses, so both agree on where the levels land.
+        _warn = float(new_options.get("warning_peak_level",
+                                      DEFAULT_WARNING_PEAK_LEVEL) or 0)
+        _emerg = float(new_options.get("emergency_peak_level",
+                                       DEFAULT_EMERGENCY_PEAK_LEVEL) or 0)
+        if _emerg <= new_limit:
+            new_options["emergency_peak_level"] = round(
+                new_limit * EMERGENCY_PEAK_RATIO, 1)
+            self._emergency_level = new_options["emergency_peak_level"]
+        if _warn >= new_limit:
+            new_options["warning_peak_level"] = round(
+                new_limit * WARNING_PEAK_RATIO, 1)
+            self._warning_level = new_options["warning_peak_level"]
+        if unlimited is not None:
+            self._peak_unlimited = unlimited
+            new_options["peak_limit_unlimited"] = unlimited
+        # Persist to config_entry.options so value survives restart (#199)
         coordinator = getattr(self.config_entry, "runtime_data", None)
         if coordinator:
             # (#636b) the listener honors a SNAPSHOT (dict == new options,
@@ -409,7 +543,10 @@ class LoadManagementCoordinator:
             coordinator._skip_options_reload = dict(new_options)
             coordinator._skip_options_reload_armed_at = dt_util.utcnow().timestamp()
         self.hass.config_entries.async_update_entry(self.config_entry, options=new_options)
-        _LOGGER.info("Updated target peak limit to %skW", new_limit)
+        _LOGGER.info(
+            "Updated target peak limit to %skW%s", new_limit,
+            "" if unlimited is None else f" (unlimited={unlimited})",
+        )
         self._trigger_callbacks()
 
     async def update_warning_peak_level(self, new_level: float):
@@ -459,12 +596,22 @@ class LoadManagementCoordinator:
             await self._save_device_configuration()
             _LOGGER.debug("Updated %s critical status to %s", device_id, is_critical)
 
-    async def update_device_controllable_status(self, device_id: str, is_controllable: bool):
-        """Update device controllable status."""
+    async def async_set_hands_off(self, device_id: str, hands_off: bool):
+        """The user's "never touch this load" toggle (#650) — PERMISSION (#780).
+
+        It writes the permission axis and leaves the discovered capability
+        alone. Pre-#780 it overwrote ``is_controllable``, so the row forgot a
+        switch had ever been found for the appliance and anything asking "can
+        this even be controlled?" got the user's preference back instead. The
+        mixed key is still kept in step, derived, for readers on the old name.
+        """
         if device_id in self._devices:
-            self._devices[device_id]["is_controllable"] = is_controllable
+            row = self._devices[device_id]
+            row["user_hands_off"] = bool(hands_off)
+            row["is_controllable"] = (  # LEGACY-WRITE (#780) — derived
+                may_actuate({**row, "control_mode": None}))
             await self._save_device_configuration()
-            _LOGGER.debug("Updated %s controllable status to %s", device_id, is_controllable)
+            _LOGGER.debug("Updated %s hands-off to %s", device_id, hands_off)
 
     def _update_peak_tracking(self, grid_import_w: float) -> bool:
         """Update 15-minute rolling average peak and monthly maximum.
@@ -644,11 +791,19 @@ class LoadManagementCoordinator:
         Hysteresis applies at SHEDDING→NORMAL transition to prevent rapid cycling.
         If peak drops well below warning level, immediately restore to NORMAL.
         """
+        # (#716) No grid ceiling declared → nothing to defend. Return NORMAL
+        # before any threshold is consulted, so a stale level left in config
+        # can't shed on an install that opted out.
+        if self._peak_unlimited:
+            self._last_state_decision_path = "peak_limit_unlimited_normal"
+            return LoadManagementState.NORMAL
+
+        warning_level, emergency_level = self._effective_levels()
         peak_to_check = current_peak
         restore_threshold = self._target_peak_limit - self._hysteresis
 
         # Emergency state - immediate action required
-        if peak_to_check >= self._emergency_level:
+        if peak_to_check >= emergency_level:
             self._last_state_decision_path = "emergency"
             return LoadManagementState.EMERGENCY
 
@@ -658,7 +813,7 @@ class LoadManagementCoordinator:
             return LoadManagementState.SHEDDING
 
         # In warning zone (between warning and target)
-        elif peak_to_check >= self._warning_level:
+        elif peak_to_check >= warning_level:
             # If we have devices shed and peak is still in warning zone,
             # stay in SHEDDING to allow controlled restoration
             if self._devices_shed:
@@ -770,11 +925,12 @@ class LoadManagementCoordinator:
         """Emergency load shedding - turn off all non-critical loads immediately."""
         devices_to_shed = [
             device_id for device_id, device_info in self._devices.items()
-            if (device_info.get("control_mode") != "off" and
+            # (#780) both axes in one question: a control handle exists AND
+            # the user's mode / hands-off toggle permit us to use it.
+            if (may_actuate(device_info) and
                 # Devices another engine peak-manages are never actuated from
                 # here (#461-peak EV, #649 surplus) — see the helper.
                 not self._peak_managed_elsewhere(device_info) and
-                device_info.get("is_controllable", True) and
                 device_info.get("is_available", False) and
                 not device_info.get("is_critical", False) and
                 device_id not in self._devices_shed and
@@ -875,16 +1031,16 @@ class LoadManagementCoordinator:
         available_devices = []
 
         for device_id, device_info in self._devices.items():
-            # Skip devices in "off" mode — SEM never touches these (#49)
-            if device_info.get("control_mode") == "off":
+            # (#780) Capability AND permission — "off" mode (#49) and the
+            # user's hands-off opt-out (#650) both live in may_actuate now.
+            if not may_actuate(device_info):
                 continue
             # Devices another engine peak-manages (#461-peak EV, #649
             # surplus-mode loads) are never shed from here — see
             # _peak_managed_elsewhere for the full rationale.
             if self._peak_managed_elsewhere(device_info):
                 continue
-            if (device_info.get("is_controllable", True) and
-                not device_info.get("is_critical", False) and
+            if (not device_info.get("is_critical", False) and
                 device_id not in self._devices_shed and
                 device_info.get("is_available", False) and
                 self._can_shed_device(device_id, device_info)):
@@ -1225,10 +1381,14 @@ class LoadManagementCoordinator:
         # much can we shed?" must match what shedding will actually target (a
         # 22 kW EV draw, or a surplus pump the surplus controller owns, is NOT
         # reducible from here).
+        # (#780) ...and the mode: a load the user set to Off is not sheddable,
+        # so counting it here over-reported "how much can we shed?" in exactly
+        # the way the paragraph above says it must not. may_actuate asks both
+        # axes, which is what _get_devices_for_shedding walks.
         controllable_devices = sum(
             1 for d in self._devices.values()
             if not self._peak_managed_elsewhere(d)
-            and d.get("is_controllable", True)
+            and may_actuate(d)
             and d.get("is_available", False)
             and self._is_device_currently_on(d)
         )
@@ -1237,17 +1397,30 @@ class LoadManagementCoordinator:
             self._device_discovery.get_device_current_state(device_info)["current_power"] / 1000
             for device_id, device_info in self._devices.items()
             if (not self._peak_managed_elsewhere(device_info) and
-                device_info.get("is_controllable", True) and
+                may_actuate(device_info) and
                 not device_info.get("is_critical", False) and
                 device_id not in self._devices_shed and
                 self._is_device_currently_on(device_info))
         )
 
+        warning_level, emergency_level = self._effective_levels()
+
         return {
             "state": self._state,
             "target_peak_limit": self._target_peak_limit,
-            "warning_level": self._warning_level,
-            "emergency_level": self._emergency_level,
+            # (#717, found in review) repaired at read time, not the raw
+            # stored values — a consumer of this dict must see the same
+            # ladder _monitor_and_shed() actually shed against, not a stored
+            # ladder that could still be inverted (set_option writes with no
+            # validation; pre-#717 entries could predate the options-flow
+            # ordering check).
+            "warning_level": warning_level,
+            "emergency_level": emergency_level,
+            # (#716) The label, not the number. The stored kW values stay as
+            # they are and keep flowing to the sensors — no consumer of this
+            # dict ever sees an infinity, so nothing downstream can render
+            # NaN. Cards read this flag to show "Unlimited" instead.
+            "peak_limit_unlimited": self._peak_unlimited,
             "total_devices": total_devices,
             "controllable_devices": controllable_devices,
             "devices_shed": len(self._devices_shed),

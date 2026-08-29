@@ -12,24 +12,58 @@ Mixin class providing all EV charging control logic:
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+import math
 from typing import Any, Optional
 
 from homeassistant.util import dt as dt_util
 
 from ..const import (
     ChargingState,
-    DEFAULT_BATTERY_CAPACITY_KWH,
     DEFAULT_EV_TARGET_TIME,
+    DEFAULT_MAX_CHARGING_CURRENT,
+    DEFAULT_PEAK_LIMIT_UNLIMITED,
+    DEFAULT_PHASES,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_VOLTAGE_PER_PHASE,
-    EV_DEADLINE_LOOKAHEAD_HOURS,
 )
 from .types import PowerReadings, PowerFlows, SessionData
 from .ev_tariff_planner import NightChargePlan, plan_night_charge
 from .units import power_state_to_watts
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def amps_from_headroom(
+    headroom_w: float,
+    watts_per_amp: float,
+    min_amps: int,
+    max_amps: int,
+) -> int:
+    """Convert available watts to a charger current, clamped to [min, max].
+
+    The clamp happens BEFORE the round, which is the whole point (#716).
+    An install with no grid ceiling reports ``math.inf`` headroom, and
+    ``round(float('inf'))`` raises ``OverflowError`` — rounding first would
+    crash the EV control loop on exactly the installs the unlimited flag
+    exists to serve. Saturating first also costs nothing on the finite path:
+    a headroom that already exceeds ``max_amps`` was going to be clamped down
+    anyway.
+
+    ``watts_per_amp`` is floored at 1.0 to keep a zero/absent voltage config
+    from dividing by zero.
+    """
+    amps = headroom_w / max(1.0, watts_per_amp)
+    if amps >= max_amps:
+        return max_amps
+    if amps <= min_amps:
+        return min_amps
+    return min(max_amps, max(min_amps, round(amps)))
+
+
+# (#804) Completed switches the measurement contradicted before a manual
+# target is declared not-taking and left alone (until it changes or the car
+# is replugged). Bounds a stop/start cycle a non-switching box would cause.
+PHASE_NOT_TAKING_AFTER = 2
 
 
 class EVControlMixin:
@@ -121,12 +155,32 @@ class EVControlMixin:
             "vehicle_min_current": cfg.get("vehicle_min_current"),
         }
         min_amps = effective_min_amps(_effective_cfg, 6)
-        max_amps = int(self.config.get("ev_max_current", 32))
+        # Hardware limits resolve per-charger-then-fleet, same as everything
+        # else here (#716). Reading ``ev_max_current`` off the fleet plans a
+        # 16 A box as if it were the 32 A one; the device's own rating still
+        # gets the last word below, because config can out-claim the box.
+        max_amps = int(_pc("ev_max_current", DEFAULT_MAX_CHARGING_CURRENT))
         ev = getattr(self, "_ev_device", None)
         if ev is not None:
             max_amps = int(getattr(ev, "max_current", max_amps))
         phases = int(_pc("ev_phases", 3))
-        watts_per_amp = phases * DEFAULT_VOLTAGE_PER_PHASE
+        # ``ev_voltage`` is read by every other watts-per-amp conversion in
+        # the codebase — decide.py, the energy calculator, and
+        # ``_night_deliverable_kwh`` in this very file. This one alone
+        # hardcoded 230, so a 240 V install was planned 4% short (#716).
+        #
+        # A non-positive or unparseable value falls back to the default
+        # rather than through to ``amps_from_headroom``'s 1.0 W/A floor:
+        # that floor would not crash, it would saturate the charger to max
+        # current on a junk config value — the same fails-open shape the
+        # peak limit was hardened against in this issue.
+        try:
+            voltage = float(_pc("ev_voltage", DEFAULT_VOLTAGE_PER_PHASE))
+        except (TypeError, ValueError):
+            voltage = float(DEFAULT_VOLTAGE_PER_PHASE)
+        if voltage <= 0:
+            voltage = float(DEFAULT_VOLTAGE_PER_PHASE)
+        watts_per_amp = phases * voltage
 
         tariff_optimized = self._tariff_optimized_for(cfg)
         target_time = self._charger_target_time(cfg)
@@ -147,7 +201,7 @@ class EVControlMixin:
         # NOT the charger max. Using the learned overnight consumption pattern (or
         # the rolling monthly average) here is what stops the planner waiting for a
         # cheap window it can't fill at the peak-limited rate and then missing Min.
-        peak_limit_w = self._get_peak_limit_w()
+        peak_limit_w = self._planning_peak_w()
         expected_home_w = self._expected_night_home_w(energy, window_h)
         # Subtract draw already committed to higher-priority chargers this cycle
         # so the fleet shares one peak budget (#274/H1).
@@ -161,61 +215,22 @@ class EVControlMixin:
                 committed_w += float(_sc.grid_funded_draw_w() or 0.0)
             except (TypeError, ValueError, AttributeError):
                 pass  # no controller / mock host — no load draw to reserve
-        peak_managed_amps = max(
+        peak_managed_amps = amps_from_headroom(
+            peak_limit_w - expected_home_w - committed_w,
+            watts_per_amp,
             min_amps,
-            min(max_amps, round((peak_limit_w - expected_home_w - committed_w) / watts_per_amp)),
+            max_amps,
         )
-        peak_rate_kw = max(0.1, peak_managed_amps * watts_per_amp / 1000.0)
 
         # Cheapest contiguous window covering the remaining need (block-wise) (#247).
-        # Size the request at the realistic peak-managed rate so we fetch enough
-        # cheap hours to actually cover Min (#274/H2 slot length inferred below).
-        #
-        # Cap the lookahead at hours-to-deadline (#281): otherwise a post-deadline
-        # price dip (e.g. 08:00–10:00 cheapest when deadline is 07:00) can be
-        # selected as "the cheap window". The planner then clips it to 0
-        # deliverable kWh and silently falls back to charge-now — ignoring the
-        # real pre-deadline cheap window. Bound the request to the actual window
-        # we can charge in.
-        cheap_slots = None
-        slot_hours = 1.0
-        if tariff_optimized and remaining_to_min_kwh > 0.1:
-            tariff = getattr(self, "_tariff_provider", None)
-            if tariff is not None and hasattr(tariff, "find_cheapest_hours"):
-                try:
-                    hours_needed = max(1, int(remaining_to_min_kwh / peak_rate_kw + 0.999))
-                    # Pre-deadline horizon — fall back to the global lookahead
-                    # only when the deadline can't be resolved (target_time blank).
-                    from .ev_tariff_planner import resolve_deadline, _hours_between
-                    now = dt_util.now()
-                    deadline_dt = (
-                        resolve_deadline(now, target_time)
-                        or resolve_deadline(now, night_end)
-                    )
-                    if deadline_dt is not None:
-                        hours_to_deadline = max(
-                            1, int(_hours_between(now, deadline_dt) + 0.999),
-                        )
-                        lookahead = min(
-                            int(EV_DEADLINE_LOOKAHEAD_HOURS), hours_to_deadline,
-                        )
-                    else:
-                        lookahead = int(EV_DEADLINE_LOOKAHEAD_HOURS)
-                    points = tariff.find_cheapest_hours(
-                        hours_needed,
-                        within_hours=lookahead,
-                        prefer_consecutive=True,
-                    )
-                    cheap_slots = [p.timestamp for p in points] if points else None
-                    # Infer slot length from the consecutive block (#274/H2):
-                    # 30/15-min markets must not be counted as full hours.
-                    if cheap_slots and len(cheap_slots) >= 2:
-                        gap = (cheap_slots[1] - cheap_slots[0]).total_seconds() / 3600.0
-                        if 0 < gap <= 1.0:
-                            slot_hours = gap
-                except (ValueError, TypeError, AttributeError) as e:
-                    _LOGGER.debug("Tariff cheap-window lookup failed: %s", e)
-
+        # (#638 one-gate C3) The private cheap-window selection is RETIRED.
+        # The joint plan's blocks are the only WHEN for the night — the
+        # overlay (both coordinator sites) is the sole writer of
+        # ``should_wait_for_cheap``/``next_cheap_start``, so an uncovered
+        # night fails open to CHARGING at the deadline/top-up floor. The
+        # dwell hysteresis died with the selector: it damped the selector's
+        # own price flapping, and plan blocks do not flap — the packer's
+        # min_run/min_gap quantization protects the contactor instead.
         plan = plan_night_charge(
             now=dt_util.now(),
             remaining_to_min_kwh=remaining_to_min_kwh,
@@ -225,29 +240,8 @@ class EVControlMixin:
             target_time=target_time,
             night_end=night_end,
             tariff_optimized=tariff_optimized,
-            cheap_slots=cheap_slots,
-            slot_hours=slot_hours,
             peak_managed_amps=peak_managed_amps,
         )
-
-        # Hysteresis (#274/M4): hold the previous wait↔charge decision until the
-        # dwell elapses, so a price hovering at the cheap/expensive boundary
-        # doesn't stop/start the charger (contactor cycling) every cycle.
-        if tariff_optimized:
-            cid = cfg.get("id", "ev_charger")
-            dwell = int(self.config.get("ev_tariff_dwell_seconds", 600))
-            decisions = getattr(self, "_tariff_decision_per_charger", None)
-            if decisions is None:
-                decisions = self._tariff_decision_per_charger = {}
-            now_ts = dt_util.now().timestamp()
-            prev = decisions.get(cid)
-            if (prev is not None
-                    and plan.should_wait_for_cheap != prev[0]
-                    and (now_ts - prev[1]) < dwell):
-                plan.should_wait_for_cheap = prev[0]  # hold within dwell
-            if prev is None or prev[0] != plan.should_wait_for_cheap:
-                decisions[cid] = (plan.should_wait_for_cheap, now_ts)
-
         return plan
 
     def _night_deliverable_kwh(self, charger_cfg: dict) -> float:
@@ -277,12 +271,25 @@ class EVControlMixin:
             deadline_min = int(dh) * 60 + int(dm)
             hours = ((deadline_min - start_min) % (24 * 60)) / 60.0
             hours = min(hours, window_h)
+            # (#789) The same three constants the ceiling above is planned
+            # from. Nothing writes ``ev_max_current`` — there is no config
+            # field for it (#746) — so this fallback IS the normal path, and
+            # it used to read 16 while ``_compute_night_plan`` forty lines up
+            # read 32. On a 32 A charger the night looked half as deliverable
+            # as it is, so SEM started earlier and booked more cheap slots
+            # than the night needed. Same shape as #716, which fixed the
+            # hardcoded 230 in the plan and left its twin here.
             max_a = float(
                 cfg.get("ev_max_current")
-                or self.config.get("ev_max_current", 16)
+                or self.config.get("ev_max_current", DEFAULT_MAX_CHARGING_CURRENT)
             )
-            phases = int(cfg.get("ev_phases") or self.config.get("ev_phases", 3))
-            voltage = float(cfg.get("ev_voltage") or self.config.get("ev_voltage", 230))
+            phases = int(
+                cfg.get("ev_phases") or self.config.get("ev_phases", DEFAULT_PHASES)
+            )
+            voltage = float(
+                cfg.get("ev_voltage")
+                or self.config.get("ev_voltage", DEFAULT_VOLTAGE_PER_PHASE)
+            )
             return hours * max_a * phases * voltage / 1000.0
         except (ValueError, TypeError, AttributeError):
             return float("inf")
@@ -356,7 +363,21 @@ class EVControlMixin:
     }
 
     def _get_peak_limit_w(self) -> float:
-        """Get peak limit in watts from load manager or config."""
+        """Get peak limit in watts from load manager or config.
+
+        Returns ``math.inf`` when the install declared it has no grid ceiling
+        (#716, ``peak_limit_unlimited``). Callers must size against this via
+        :func:`amps_from_headroom`, which saturates before rounding —
+        ``round(float('inf'))`` raises ``OverflowError``.
+
+        Note what does NOT make this unlimited: ``load_management_enabled =
+        False``. That switch governs whether SEM *sheds* to defend the ceiling;
+        the ceiling itself still constrains anything SEM *sizes*. Unlimited is
+        an explicit boolean and never inferred — a limit that fails open is how
+        a 5 kW house got handed a 10 kW EV slot (#638 finding #5).
+        """
+        if self._peak_limit_unlimited():
+            return math.inf
         if self._load_manager:
             try:
                 lm_info = self._load_manager.get_load_management_data()
@@ -364,6 +385,61 @@ class EVControlMixin:
             except Exception:
                 pass
         return self.config.get("target_peak_limit", 5.0) * 1000
+
+    def _planning_peak_w(self) -> float:
+        """The peak level PLANNING may size against — cap minus hysteresis.
+
+        The limit is a SHED THRESHOLD, not a target to sit on (#638 finding
+        #6): LoadManager goes SHEDDING at ``peak >= target`` on the 15-minute
+        rolling average, then sheds down to ``target - hysteresis``. An
+        allocation booked AT the cap is exactly the one execution kills, so
+        everything forward-looking — the night ledger's headroom AND the EV's
+        peak-managed rate — sizes against this ONE number. Two copies of the
+        subtraction is how the plan and the EV drifted a hysteresis band
+        apart (one-gate build, 2026-08-11).
+
+        Semantics carried over from the ledger's inline block:
+        ``math.inf`` (unlimited) passes through; 0 stays 0 (the packer's
+        "no limit configured" sentinel); a cap smaller than the hysteresis
+        clamps at 1 W, never 0 — collapsing to the sentinel would flip a
+        TIGHT house into an unlimited one.
+        """
+        from ..consts.core import DEFAULT_PEAK_HYSTERESIS
+        try:
+            peak_w = float(self._get_peak_limit_w())
+        except Exception:  # noqa: BLE001 — no load manager yet (early startup)
+            peak_w = float(
+                self.config.get("target_peak_limit", 0.0) or 0.0) * 1000.0
+        if peak_w > 0.0 and math.isfinite(peak_w):
+            hyst_w = float(self.config.get(
+                "peak_hysteresis", DEFAULT_PEAK_HYSTERESIS) or 0.0) * 1000.0
+            peak_w = max(1.0, peak_w - hyst_w)
+        return peak_w
+
+    def _peak_limit_unlimited(self) -> bool:
+        """True when this install declared it has no grid ceiling (#716).
+
+        Prefers the live ``LoadManagementCoordinator`` value over
+        ``self.config`` — same reason ``_get_peak_limit_w()`` prefers it for
+        ``target_peak_limit`` three lines above: the Control-tab slider
+        writes through ``update_target_peak_limit()`` and deliberately skips
+        the config-entry reload (to avoid a full coordinator rebuild on
+        every drag), so ``self.config`` can sit stale — in either direction —
+        until the next restart. Reading ``self.config`` only here let the EV
+        controller miss a live "Uncapped" flip, and worse, keep charging
+        past a limit the user had just restored.
+        """
+        if self._load_manager:
+            try:
+                lm_info = self._load_manager.get_load_management_data()
+                return bool(
+                    lm_info.get("peak_limit_unlimited", DEFAULT_PEAK_LIMIT_UNLIMITED)
+                )
+            except Exception:
+                pass
+        return bool(
+            self.config.get("peak_limit_unlimited", DEFAULT_PEAK_LIMIT_UNLIMITED)
+        )
 
     def _get_peak_15min_w(self) -> Optional[float]:
         """Read the rolling 15-min consecutive peak (#288), in watts.
@@ -462,8 +538,7 @@ class EVControlMixin:
             headroom_w = (
                 self._get_peak_limit_w() - power.home_consumption_power - committed_w
             )
-        target = round(headroom_w / max(1.0, watts_per_amp))
-        return min(max_amps, max(min_amps, target))
+        return amps_from_headroom(headroom_w, watts_per_amp, min_amps, max_amps)
 
     # ``_calculate_solar_ev_budget`` removed in Phase D.2 (#282).
     # Was the legacy actuator-side budget formula that ran alongside the
@@ -567,6 +642,274 @@ class EVControlMixin:
         """
         return max(0.0, float(remaining_kwh))
 
+    async def _police_opted_out_charger(
+        self, cid: str, ev_dev, charger_cfg: dict, power,
+    ) -> None:
+        """Police a charger the #193 night gate is about to skip (#740).
+
+        In NIGHT_CHARGING_ACTIVE / TARIFF_WAITING_FOR_CHEAP an ``off`` /
+        ``solar_only`` charger is ``continue``d out of the per-charger
+        loop — before its adapter, reconciler, decide() or actuate()
+        run. "Skip" must mean "no night budget", NOT "no supervision":
+        a box that auto-starts masterless at night (the #740 war) would
+        otherwise draw unpoliced until a day state returns — the
+        gate-blocks-activation-but-doesn't-stop-the-running-device
+        class again.
+
+        This is the minimal reconcile pass: OFF for ``off`` (immediate
+        DISABLE while drawing), IDLE for ``solar_only`` (the #552
+        idle-settled row gives a rogue self-start the same immediate
+        DISABLE). Converged emits nothing — no churn against the
+        quota-hold, which deliberately leaves the box enabled but
+        suspended.
+        """
+        from .actuate import actuate
+        from .charger_reconciler import (
+            DEFAULT_IDLE_DISABLE_THRESHOLD,
+            ChargerReconciler,
+        )
+        from .charger_types import ChargerDecision, ChargerIntent, ChargerPower
+
+        # This charger's draw — build_view's own resolution: the
+        # per-charger reading when sensor_reader has one, else the
+        # fleet sum (single-charger setups: the sum IS this charger).
+        per = getattr(power, "ev_power_per_charger", None) or {}
+        if cid in per:
+            this_w = float(per[cid] or 0.0)
+        else:
+            # FLEET-READ: single-charger fallback, same contract as
+            # build_view.py:95-100 — multi-charger always has a
+            # per-charger entry above.
+            this_w = float(getattr(power, "ev_power", 0.0) or 0.0)
+
+        adapter_cache = getattr(self, "_charger_adapters", None)
+        if adapter_cache is None:
+            adapter_cache = {}
+            self._charger_adapters = adapter_cache
+        adapter = adapter_cache.get(cid)
+        if adapter is None or adapter._device is not ev_dev:
+            from .charger_adapters import adapter_for
+            adapter = adapter_for(ev_dev)
+            adapter_cache[cid] = adapter
+
+        rec_cache = getattr(self, "_charger_reconcilers", None)
+        if rec_cache is None:
+            rec_cache = {}
+            self._charger_reconcilers = rec_cache
+        reconciler = rec_cache.get(cid)
+        if reconciler is None:
+            reconciler = ChargerReconciler(
+                charger_id=cid,
+                heartbeat_s=float(
+                    getattr(ev_dev, "watchdog_refresh_interval_s", 5.0),
+                ),
+                idle_disable_threshold=DEFAULT_IDLE_DISABLE_THRESHOLD,
+            )
+            rec_cache[cid] = reconciler
+
+        mode = str(charger_cfg.get("charge_mode", "off"))
+        intent = (
+            ChargerIntent.DISABLE if mode == "off" else ChargerIntent.IDLE
+        )
+        decision = ChargerDecision(
+            charger_id=cid,
+            mode=mode,
+            intent=intent,
+            reason=f"night gate — {mode} opts out of night charging; "
+                   "policing only (#740)",
+            bridgeable=False,
+        )
+        cp = ChargerPower(
+            charger_id=cid,
+            power_w=this_w,
+            connected=bool(
+                (getattr(power, "ev_connected_per_charger", None) or {})
+                .get(cid, getattr(power, "ev_connected", False)),
+            ),
+            charging=bool(
+                (getattr(power, "ev_charging_per_charger", None) or {})
+                .get(cid, getattr(power, "ev_charging", False)),
+            ),
+        )
+        await actuate(
+            decision, adapter, cp, reconciler,
+            observer=self._observer_mode,
+            controller=self._surplus_controller,
+        )
+
+    async def _phase_switch_tick(self, cid: str, charger_cfg: dict,
+                                 decision, cp, now: float,
+                                 setpoint_a: int = 0):
+        """(#804 Phase B/C) One cycle of the phase model for this charger.
+
+        Returns the decision, replaced with IDLE while the sequencer holds
+        (stop→switch→settle — never switch under load). The capability is
+        the entity the user NAMED; without it this is a pass-through and
+        no per-charger state is even created. The one service call a
+        switch turns into runs behind the same observer seam as every
+        actuation: observer mode logs the WOULD and touches nothing.
+        """
+        entity = charger_cfg.get("ev_phase_switch_entity")
+        if not entity:
+            return decision
+        # (#804, 25.08) DORMANT in 2.0 unless explicitly woken. Real testing
+        # found the shipped model harmful on two of the three brands that
+        # tried it: a Wattpilot latches into a paused force-state that a
+        # current write cannot clear (every switch pauses charging and
+        # nothing resumes it), and a Zaptec has no phase command at all — it
+        # switches implicitly on a current threshold — so the sequence
+        # stopped the charger, switched nothing, and retried forever.
+        # Making it safe is the 2.1 arc: a per-brand resume surface, the
+        # threshold model, stop-eagerness on latching hardware, and the
+        # per-phase current guard (switching down lands the whole load on
+        # one phase, invisible to a kW peak limit). Until that arc lands,
+        # the entity alone must not activate the path — that is exactly how
+        # both reporters walked into it. select.py gates the phase-mode
+        # knob on the same key, because a selector that switches while the
+        # actuation is dormant is the #462 lie.
+        if not charger_cfg.get("ev_phase_switching_enabled", False):
+            return decision
+
+        from dataclasses import replace
+
+        from .charger_types import ChargerIntent
+        from .ev_phase_sequencer import PhaseAutoPlanner, PhaseSwitchSequencer
+        from .ev_phases import (
+            estimate_active_phases, phase_switch_command,
+            resolve_switch_values, validate_phase_switch_entity,
+        )
+
+        _, valid = validate_phase_switch_entity(
+            entity, lambda e: self.hass.states.get(e) is not None)
+        v1, v3, values_ready = resolve_switch_values(entity, charger_cfg)
+        ready = bool(valid) and values_ready
+
+        if getattr(self, "_phase_sequencers", None) is None:
+            self._phase_sequencers = {}
+            self._phase_planners = {}
+            self._phase_believed = {}
+            self._phase_conn_memo = {}
+            self._phase_switch_states = {}
+
+        voltage = float(charger_cfg.get("ev_voltage")
+                        or getattr(self, "config", {}).get("ev_voltage")
+                        or 230)
+        seq = self._phase_sequencers.setdefault(cid, PhaseSwitchSequencer())
+        planner = self._phase_planners.setdefault(
+            cid, PhaseAutoPlanner(
+                min_current_a=int(charger_cfg.get("ev_min_current") or 6),
+                voltage=voltage,
+            ))
+
+        # A replug is a new car (or a new mood) — fresh auto-switch budget,
+        # and a fresh chance for a target the box did not take.
+        if cp.connected and not self._phase_conn_memo.get(cid, False):
+            planner.new_session()
+            if getattr(self, "_phase_contradictions", None):
+                self._phase_contradictions.pop(cid, None)
+        self._phase_conn_memo[cid] = cp.connected
+
+        # Belief: the #716 W/A estimate. Under an amps command the decision
+        # carries the offer; under CHARGE_MAX the adapter's actual setpoint
+        # is the offer (found live on PROD: always_max charged 9.9 kW at a
+        # 16 A setpoint and the belief never learned the exact 3 the emit
+        # already showed).
+        amps_for_estimate = None
+        if decision.intent is ChargerIntent.CHARGE_AT_AMPS:
+            amps_for_estimate = decision.commanded_amps
+        elif decision.intent is ChargerIntent.CHARGE_MAX and setpoint_a:
+            amps_for_estimate = setpoint_a
+        # No measurement while a switch is in flight: the wind-down ramp
+        # (stopping) and the post-switch settle both produce transitional
+        # readings — live on PROD the belief drifted to 2 during the stop
+        # ramp. The plan's settle-window rule applies to stopping too.
+        seq_idle = getattr(self._phase_sequencers.get(cid), "_state", "idle") == "idle"
+        if amps_for_estimate and seq_idle:
+            est = estimate_active_phases(
+                cp.power_w, int(amps_for_estimate), voltage)
+            if est is not None:
+                self._phase_believed[cid] = est
+        believed = self._phase_believed.get(cid)
+
+        # (#804) Contradiction cap — live on PROD a manual "1" on a box whose
+        # switch entity does not actually switch re-triggered the whole
+        # stop→switch→settle→resume cycle every 2 minutes, forever: the
+        # measurement said 3, the target said 1, nothing bounded the retry.
+        # After two completed switches that measurement contradicted, the
+        # target is marked not-taking and left alone until it changes or
+        # the car is replugged; the card shows it.
+        if getattr(self, "_phase_contradictions", None) is None:
+            self._phase_contradictions = {}
+        contra = self._phase_contradictions.setdefault(
+            cid, {"target": None, "count": 0, "last_asserted": None})
+        if contra["last_asserted"] is not None and believed is not None \
+                and seq_idle and believed != contra["last_asserted"]:
+            # a switch completed asserting X, measurement now says != X
+            contra["count"] += 1
+            contra["last_asserted"] = None
+        mode_val = str(charger_cfg.get("phase_mode") or "auto")
+        if mode_val in ("1", "3"):
+            desired = int(mode_val)
+            if contra["target"] != desired:
+                contra["target"], contra["count"] = desired, 0
+            if contra["count"] >= PHASE_NOT_TAKING_AFTER:
+                desired = None          # give up on this target
+        else:
+            contra["target"], contra["count"] = None, 0
+            # auto (Phase C): the planner answers from THIS charger's
+            # allocated budget — sustained starvation scales down,
+            # sustained headroom scales up, caps protect the contactor.
+            desired = planner.desired(
+                now, believed, float(decision.budget_w or 0.0))
+
+        r = seq.tick(now=now, desired_phases=desired,
+                     believed_phases=believed, charging=cp.charging,
+                     capability_ready=ready)
+        self._phase_switch_states[cid] = r.state
+
+        if r.issue_switch is not None:
+            value = v1 if r.issue_switch == 1 else v3
+            cmd = phase_switch_command(entity, value)
+            if cmd is not None:
+                domain, service, data = cmd
+                planner.note_switched(now)
+                if self._observer_mode:
+                    _LOGGER.info(
+                        "OBSERVER · WOULD switch %s to %sp via %s.%s %s "
+                        "(#804)", cid, r.issue_switch, domain, service, data)
+                else:
+                    _LOGGER.info(
+                        "#804 %s: switching to %sp via %s.%s %s",
+                        cid, r.issue_switch, domain, service, data)
+                    try:
+                        await self.hass.services.async_call(
+                            domain, service, data, blocking=False)
+                    except Exception:  # noqa: BLE001 — surfaced, never fatal
+                        _LOGGER.warning(
+                            "#804 %s: phase switch call failed",
+                            cid, exc_info=True)
+
+        if r.believed_phases is not None:
+            self._phase_believed[cid] = r.believed_phases
+            contra["last_asserted"] = r.believed_phases
+        if (contra["count"] >= PHASE_NOT_TAKING_AFTER
+                and str(charger_cfg.get("phase_mode") or "auto") in ("1", "3")):
+            self._phase_switch_states[cid] = "not_taking"
+
+        # Only ever WEAKEN a charge into IDLE — an emergency stop from the
+        # safety gate (DISABLE) must pass through untouched, which is also
+        # why this tick runs after that gate in the loop.
+        # A phase switch is a DELIBERATE stop, not a transient dip: hold as
+        # DISABLE so the reconciler opens the contactor now. Live on PROD the
+        # IDLE hold inherited the #552 flicker grace and the real stop came
+        # ~5 minutes after the command.
+        if r.hold_charging and decision.intent in (
+                ChargerIntent.CHARGE_AT_AMPS, ChargerIntent.CHARGE_MAX):
+            return replace(
+                decision, intent=ChargerIntent.DISABLE, commanded_amps=0,
+                reason=f"phase switch: {r.state} (#804)", bridgeable=False)
+        return decision
+
     def _this_charger_power(self, ev, power) -> float:
         """Return the per-charger power reading in watts (#315 multi-charger fix).
 
@@ -623,6 +966,55 @@ class EVControlMixin:
         # ``ev_charging_power_sensor`` entry (rare).
         return float(getattr(power, "ev_power", 0.0) or 0.0)
 
+    def _confirm_ev_connection(self, power: PowerReadings) -> None:
+        """(#638) Answer the plug question ONCE, for the whole cycle.
+
+        Filters ``power`` in place the cycle it is read: every consumer
+        downstream — the state machine, ``build_charger_view`` → ``decide``,
+        the plan layer, the notification gate, the entities — then reads one
+        answer. Before this, the debounce lived in
+        ``_update_session_tracking`` and its result on
+        ``_last_ev_connected_per_charger``, so only the consumers that read
+        THAT map were protected; everything reading ``power.ev_connected``
+        got the raw sensor. On .175 (15.08) that split showed as
+        ``sensor.sem_charging_state`` flapping to "System ready" — the
+        car-away face, and on real hardware a ``stop_session()`` — while
+        the per-charger connected entity stayed on.
+
+        Per charger, plus the flat fleet flag for installs without a
+        per-charger sensor. The fleet answer is the OR of both: a fleet
+        whose chargers blip in turn never reads "no car".
+        """
+        from .ev_availability import confirm_connection
+
+        if not hasattr(self, "_ev_conn_confirmed"):
+            self._ev_conn_confirmed = {}
+            self._ev_conn_streak = {}
+        import time as _time
+        _boot = getattr(self, "_boot_monotonic", None)
+        in_warmup = (_boot is not None and _time.monotonic() - _boot < 120.0)
+
+        def _one(key: str, raw: bool) -> bool:
+            confirmed, streak = confirm_connection(
+                bool(self._ev_conn_confirmed.get(key, False)), bool(raw),
+                int(self._ev_conn_streak.get(key, 0)), in_warmup,
+            )
+            self._ev_conn_confirmed[key] = confirmed
+            self._ev_conn_streak[key] = streak
+            if confirmed and not raw:
+                _LOGGER.debug(
+                    "Plug %s: missed poll %d/3 — holding connected (#638)",
+                    key or "fleet", streak,
+                )
+            return confirmed
+
+        raw_map = getattr(power, "ev_connected_per_charger", None) or {}
+        confirmed_map = {cid: _one(str(cid), raw) for cid, raw in raw_map.items()}
+        fleet = _one("", bool(getattr(power, "ev_connected", False)))
+        if raw_map:
+            power.ev_connected_per_charger = confirmed_map
+        power.ev_connected = fleet or any(confirmed_map.values())
+
     def _update_session_tracking(self, power: PowerReadings, power_flows: PowerFlows) -> None:
         """Track per-session energy, cost, and source attribution.
 
@@ -637,7 +1029,15 @@ class EVControlMixin:
         update_interval = self.config.get("update_interval", DEFAULT_UPDATE_INTERVAL)
         hours = update_interval / 3600.0
 
-        # Detect session end: EV was connected, now disconnected
+        # Detect session end: EV was connected, now disconnected.
+        # (#753 / #638) ``power.ev_connected`` is already the CONFIRMED
+        # answer — ``_confirm_ev_connection`` debounced it at the top of the
+        # cycle (never inside the boot warm-up: PROD 2026-08-11, a restart's
+        # warm-up 'unplug' finalized a 6 kWh session and restarted it at
+        # 1.6 kWh; and only after three consecutive disconnected cycles,
+        # absorbing the KEBA UDP blip family #35/#595). Debouncing again
+        # here would cost a real unplug six cycles and split the cycle's one
+        # answer back in two, which is the bug that moved it to the source.
         if self._last_ev_connected and not power.ev_connected:
             # Session ended — update lifetime stats and keep data for display
             if self._session_data.active and self._session_data.energy_kwh > 0.1:
@@ -691,9 +1091,16 @@ class EVControlMixin:
             + self._session_data.battery_energy_kwh
         )
 
-        # Cost: grid portion × current import rate
+        # Cost: direct grid at the current import rate, battery-sourced at
+        # what its stored energy cost to put in — the provenance pool's rate,
+        # the same one the battery savings price from. (#793: this increment
+        # was priced at ZERO, so a car charged off a grid-filled battery
+        # looked free while the grid purchase sat in the import cost.)
         import_rate = self._energy_calculator._import_rate
-        self._session_data.cost_chf += grid_increment * import_rate
+        self._session_data.cost_chf += (
+            grid_increment * import_rate
+            + battery_increment * self._energy_calculator.ev_battery_cost_rate()
+        )
 
         # Solar share
         if self._session_data.energy_kwh > 0:

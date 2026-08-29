@@ -82,7 +82,7 @@ def test_all_languages_have_all_keys():
             trans = json.load(f)
 
         missing = []
-        for (domain, key), source in keys.items():
+        for (domain, key), _source in keys.items():
             section = trans.get("entity", {}).get(domain, {})
             if key not in section:
                 missing.append(f"{domain}.{key}")

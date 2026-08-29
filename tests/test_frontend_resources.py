@@ -33,7 +33,10 @@ def _hass_with_resources(resources):
     hass = MagicMock()
     hass.data = {"lovelace": MagicMock(resources=resources)}
     hass.http = MagicMock()
-    hass.http.register_static_path = MagicMock()
+    # The bundle URL only resolves if the component's dashboard dir is served.
+    # This is the CURRENT HA API (async_register_static_paths); the sync
+    # register_static_path was removed in 2025.7 (#799). Must be awaitable.
+    hass.http.async_register_static_paths = AsyncMock()
     # async_add_executor_job runs the callable directly in tests.
     async def _exec(fn, *args):
         return fn(*args)
@@ -97,15 +100,17 @@ class TestYAMLMode:
         # The warning message must:
         #   1. Mention YAML-mode so the user knows what's happening.
         #   2. Contain a `url: ...sem-cards.js...` line so they can paste.
-        #   3. Contain the standalone diagram-card URL.
-        #   4. Contain sem-localize.js (#453 — YAML-mode users lose
+        #   3. Contain sem-localize.js (#453 — YAML-mode users lose
         #      translations without it after dual-channel removal).
-        #   5. Mention configuration.yaml so they know where it goes.
+        #   4. Mention configuration.yaml so they know where it goes.
+        # It must NOT still name the standalone diagram card: that file was
+        # retired in #784 and pasting its URL would give YAML-mode users a
+        # resource pointing at a 404.
         joined = "\n".join(rec.message for rec in caplog.records)
         assert "YAML-mode" in joined or "YAML mode" in joined, joined
         assert "sem-cards.js" in joined, joined
-        assert "sem-system-diagram-card.js" in joined, joined
         assert "sem-localize.js" in joined, joined
+        assert "sem-system-diagram-card.js" not in joined, joined
         assert "configuration.yaml" in joined, joined
 
     @pytest.mark.asyncio
@@ -129,19 +134,69 @@ class TestYAMLMode:
 
 class TestStorageMode:
     @pytest.mark.asyncio
-    async def test_storage_mode_registers_all_three_resources(self):
-        """Bundle + diagram card + sem-localize.js all land as Lovelace
-        resources in storage-mode. The third (localize) is #453 — was on
-        ``add_extra_js_url`` only, then dual-channel, now single Lovelace
-        resource."""
+    async def test_storage_mode_registers_the_bundle_and_localize(self):
+        """Bundle + sem-localize.js land as Lovelace resources in storage
+        mode. Localize is #453 — was on ``add_extra_js_url`` only, then
+        dual-channel, now a single Lovelace resource. The diagram card was a
+        third resource until #784 retired the standalone copy; it now rides
+        in the bundle like every other card."""
         r = _storage_mode_resources(initial_items=[])
         hass = _hass_with_resources(r)
         await _async_register_frontend_resources(hass)
-        assert r.async_create_item.call_count >= 3
+        assert r.async_create_item.call_count >= 2
         urls = [call.args[0]["url"] for call in r.async_create_item.call_args_list]
         assert any("sem-cards.js" in u for u in urls), urls
-        assert any("sem-system-diagram-card.js" in u for u in urls), urls
         assert any("sem-localize.js" in u for u in urls), urls
+        assert not any("card/sem-system-diagram-card.js" in u for u in urls), urls
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Static-path serving via the CURRENT HA API (#799)
+# ──────────────────────────────────────────────────────────────────────
+
+class TestStaticPathServedViaAsyncApi:
+    """The card bundle URL must be *served*, not just *registered*.
+
+    #799 (reporter on HA 2026.8.2, fresh 1.7.5 install): every sem-* card
+    showed "Custom element doesn't exist". Root cause: the component served
+    its dashboard dir with ``hass.http.register_static_path`` — a sync call
+    that did blocking I/O on the event loop and that HA **removed in 2025.7**.
+    On 2025.7+ it raised ``AttributeError``, which a bare ``except Exception:
+    pass`` swallowed as "already registered from previous load"; the static
+    route was never created, the Lovelace resource URL 404'd, and no sem-*
+    element ever defined. The fix moves to ``async_register_static_paths``.
+    """
+
+    @pytest.mark.asyncio
+    async def test_registers_the_dashboard_dir_via_async_static_paths(self):
+        """The dashboard dir is served through the non-removed async API,
+        with a StaticPathConfig whose url_path is the /local bundle prefix."""
+        from custom_components.solar_energy_management.const import DOMAIN
+
+        r = _storage_mode_resources(initial_items=[])
+        hass = _hass_with_resources(r)
+        await _async_register_frontend_resources(hass)
+
+        assert hass.http.async_register_static_paths.await_count >= 1, (
+            "the dashboard dir was never served — the bundle URL will 404"
+        )
+        configs = hass.http.async_register_static_paths.await_args.args[0]
+        url_paths = [c.url_path for c in configs]
+        assert f"/local/custom_components/{DOMAIN}/dashboard" in url_paths, url_paths
+
+    def test_removed_sync_register_static_path_is_not_called(self):
+        """Guard the whole class: the sync ``register_static_path`` was
+        removed in HA 2025.7 — a call to it silently breaks the dashboard on
+        every modern HA. The source must not contain the call form. Mentioning
+        the name in a comment (as the fix does) is fine; the open-paren call is
+        not. Same shape as the ``add_extra_js_url(`` ban below."""
+        source = Path(sem_module.__file__).read_text(encoding="utf-8")
+        assert "register_static_path(" not in source, (
+            "hass.http.register_static_path(...) is back in __init__.py — it "
+            "was removed in HA 2025.7 and its failure is swallowed as "
+            "'already registered', breaking every sem-* card. Use "
+            "async_register_static_paths. See #799."
+        )
 
 
 # ──────────────────────────────────────────────────────────────────────

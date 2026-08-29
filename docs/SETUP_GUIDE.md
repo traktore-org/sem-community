@@ -33,11 +33,24 @@ For developer and architecture details, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ---
 
+## What SEM detected — and how to correct it
+
+After setup, the dashboard **Configuration tab → Detected hardware** shows
+every charger SEM auto-detected, with the evidence for each role (the entity
+and what it is — e.g. `binary_sensor/plug` → connected), the entities on that
+device it left unmapped, and **near-misses**: integrations whose entities SEM
+saw but could not map to any role. A near-miss means your box is *almost*
+supported — please open an issue with the list shown. Wrong rows are fixed
+with the pickers in the charger and sensor-source sections; the same report
+is included in the diagnostics download for bug reports. The full support
+matrix with an honest status per brand lives in
+[SUPPORTED_HARDWARE.md](SUPPORTED_HARDWARE.md).
+
 ## 1. Prerequisites
 
 ### Home Assistant version
 
-SEM requires **Home Assistant 2024.1.0 or newer**. Check your version at
+SEM requires **Home Assistant 2026.2.0 or newer**. Check your version at
 **Settings > System > About**.
 
 ### HACS
@@ -93,7 +106,7 @@ night charging and battery charge scheduling.
 
 ### Checklist
 
-- [ ] HA 2024.1.0 or newer
+- [ ] HA 2026.2.0 or newer
 - [ ] HACS installed
 - [ ] Energy Dashboard configured (solar + grid sensors at minimum)
 - [ ] Battery sensors visible in HA (optional)
@@ -199,7 +212,6 @@ chargers, see [MULTI_DEVICE_GUIDE.md](MULTI_DEVICE_GUIDE.md).
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| **Target peak limit (kW)** | 5.0 kW | Maximum grid import before SEM starts shedding controllable loads. Set to your electricity contract's peak demand limit, or 0 to disable peak management |
 | **Generate dashboard** | On | Creates the SEM Lovelace dashboard in your sidebar immediately after setup. Leave this on unless you want to build your own dashboard |
 | **System diagram style** | SEM | Choose which system diagram card appears on the Home tab. **SEM** uses the built-in illustrated diagram with SVG animations. **K-Flow** uses the third-party K-Flow card (must be installed via HACS separately) |
 
@@ -209,6 +221,14 @@ chargers, see [MULTI_DEVICE_GUIDE.md](MULTI_DEVICE_GUIDE.md).
 
 Click **Submit**. SEM starts running immediately. The SEM dashboard appears
 in your sidebar within a few seconds if dashboard generation is enabled.
+
+Every install starts with a 5.0 kW target peak limit — SEM no longer asks for
+your grid ceiling during setup. Tune it afterward from the **Control** tab's
+Load Management card (drag the slider up to **80 kW**, or all the way to
+**Uncapped** if the connection has no limit worth defending), or type an exact
+kW value on the **Configuration** tab. See
+[Load Management Settings](USER_GUIDE.md#load-management-settings) for the
+full range, the warning/emergency ladder, and the **No grid limit** switch.
 
 ### First-run welcome notification
 
@@ -347,10 +367,13 @@ generated yet. It is organized into these pages:
 | EV solar max SOC (%) — **Max** | 100% | Solar SOC ceiling. Defaults to 100% (charge to full from sun); set to e.g. 80% to cap solar charging for battery longevity while still guaranteeing the Min via grid. |
 | EV battery capacity (kWh) | 40 kWh | Your EV's battery size (10–120 kWh). Used to convert SOC percentage to kWh remaining. Per-charger configurable. Also used for SOC→kWh calculation when a vehicle SOC sensor is configured. |
 | Solar Gate (v1.7.3) | 1200 W | Battery assist threshold — battery only helps EV when real solar surplus ≥ this value (0–5000 W). Set to 0 W to allow battery support everywhere, including night. Prevents overnight battery drain. |
-| Min solar power to start EV charging (W) | 500 W | How much surplus must appear before solar EV charging begins. The default prevents SEM from starting the charger for tiny, transient surplus spikes. Raise it if your surplus is noisy and the charger starts and stops too often. |
+| Min solar power to start EV charging (W) | 1000 W | How much surplus must appear before solar EV charging begins. The default prevents SEM from starting the charger for tiny, transient surplus spikes. Raise it if your surplus is noisy and the charger starts and stops too often. |
 | Max grid import for Min+PV mode (W) | 1380 W | In Min+PV mode the EV runs at minimum current and uses grid to fill the gap. This cap limits how much grid power is used. Lower it to keep Min+PV fully solar; raise it if you want the charger to run continuously even when solar is weak. |
-| Night charging | **Off** | **Opt-in** (#256). When on, SEM charges the EV from the grid overnight (during the cheap-rate window) to reach the daily-target floor. Off by default so a fresh install charges on **solar surplus only** — turn it on if you want grid-assisted overnight charging. Existing installs keep their previous setting on upgrade. |
-| Smart night charging | Off | When on, SEM evaluates whether tonight's grid charge is actually needed. If tomorrow's solar forecast is strong and the battery is reasonably full, SEM reduces or skips the overnight charge. Enable after SEM has been running for a week and you have a calibrated forecast integration. |
+
+Night charging and smart night charging are **not settings here** — since v1.6.3
+(#277) both are carried by the per-charger **Charge mode**
+(`select.sem_charger_<id>_charge_mode`, on the EV tab). See
+[Setting an EV charge target](#setting-an-ev-charge-target) below.
 
 ### Battery SOC Zone settings
 
@@ -382,8 +405,9 @@ generated yet. It is organized into these pages:
   these rates throughout the day. Best for simple flat-rate tariffs.
 - **Dynamic**: SEM reads the current rate from a HA sensor every cycle. Used
   with time-of-use tariffs (Tibber, Octopus Energy, Amber) where prices
-  change hourly. The battery charge scheduler will pick the cheapest hours
-  automatically.
+  change hourly. The [joint energy planner](ENERGY_PLANNER.md) uses the
+  price curve to place every scheduled demand — EV, battery and deferrable
+  loads — in the cheapest hours automatically.
 - **Calendar**: You define cheap/expensive periods via a HA calendar entity.
   Useful for fixed time-of-use tariffs without a dynamic price API.
 
@@ -400,6 +424,17 @@ When tariff mode is **Dynamic**, SEM bucketises every price reading into one of
   `< 0.15 = cheap`, `> 0.35 = expensive`, `> 0.525 = very_expensive`).
   Calibrated for CHF — change to your currency only if you've explicitly opted
   in to this mode in Settings → Configure → Tariff settings.
+
+**Tiered / Time-of-Use plans (#728)**: a plan with a handful of fixed rates —
+US ToU, Spain's 2.0TD, UK Economy 7 — is bucketised by **where each tier's
+hours sit in the day**, not by the tier's price alone. A three-rate plan
+therefore gets three labels: the off-peak tier reads cheap, the mid tier
+`normal`, the on-peak tier expensive — whatever the split between them.
+(Before v1.7.6-beta.3 a tier covering less than about a quarter of the day
+pulled its neighbour in with it, so a reporter's twelve mid-peak hours all
+read `expensive` and `normal` never appeared.) Note that `very_cheap` vs
+`cheap` — and `expensive` vs `very_expensive` — is a display distinction
+only; every SEM control path treats each pair identically.
 
 **Cold start / sparse data (#359)**: in percentile mode, if SEM has fewer than
 4 price points for today (cold start before your dynamic-tariff integration
@@ -431,7 +466,8 @@ The contract, in full:
   of `{start, end, value}` entries (Nordpool shape; several other shapes
   are auto-detected too). With a curve, the **entire** dynamic machinery
   lights up: percentile price levels, cheap-window detection, the
-  overnight cheapest-hours planner and the battery charge scheduler.
+  [joint energy planner](ENERGY_PLANNER.md) and the battery charge
+  scheduler.
   The `tariff_classifier_path` attribute on the price-level sensor shows
   which path/attribute SEM matched — check it if classification looks off.
 - **Minimal variant without a curve**: set *Price classification mode* to
@@ -531,14 +567,28 @@ must be stable for 60 seconds before a notification fires).
 
 ### Forecast settings
 
-SEM auto-detects a solar forecast integration (Solcast, Forecast.Solar,
-[Open-Meteo Solar Forecast](https://github.com/rany2/ha-open-meteo-solar-forecast) or a
-compatible sensor) and uses it for smart night charging, the battery
-scheduler and the recommendation tips.
+SEM reads a solar forecast for smart night charging, the battery scheduler
+and the recommendation tips. **Three integrations are supported**, and SEM
+auto-detects them in this order:
+
+1. [Solcast PV Solar](https://github.com/BJReplay/ha-solcast-solar)
+2. [Forecast.Solar](https://www.home-assistant.io/integrations/forecast_solar/)
+3. [Open-Meteo Solar Forecast](https://github.com/rany2/ha-open-meteo-solar-forecast)
+
+The first one installed wins. If you run several side by side, choose one
+explicitly with **Solar forecast source** below — the picker offers only the
+integrations actually installed on your system.
+
+> There is **no** support for pointing SEM at your own forecast sensor.
+> This section used to imply otherwise, which is what made #819 look like a
+> missing setting rather than a missing feature. If you use a forecast
+> integration that is not one of the three, please open an issue — a named
+> integration is a data row, not a rewrite.
 
 | Setting | Default | What it does and when to change it |
 |---------|---------|-------------------------------------|
-| Forecast entity | Auto | The forecast sensor SEM reads. Auto-detection prefers Solcast; set it manually if you run several forecast integrations or a custom one. |
+| Solar forecast source | Auto | Which forecast **integration** SEM reads. Auto walks Solcast → Forecast.Solar → Open-Meteo and takes the first one installed. Choose one explicitly if you run several side by side — SEM then uses that one and falls back to auto-detection only if it is no longer installed (the fallback is recorded in diagnostics, never silent). |
+| Price forecast entity | Auto | *(Dynamic tariffs only.)* The sensor carrying hourly **price** forecasts. This is a tariff setting, not a solar one — it used to be listed here as "Forecast entity", which is what made #819 look like a missing override. |
 | Weather entity | Auto | Feeds the weather card and forecast dampening. Auto-generated `weather.forecast_*` subentities are skipped (they lack the needed attributes) — any real `weather.*` entity is preferred. |
 
 **Forecast dampening** (#168): SEM continuously compares the forecast against
@@ -722,9 +772,11 @@ EV charger card — one place, per charger, no config-flow round-trips:
   reached. Defaults to full (charge freely from sun); lower it to cap surplus. (Replaces
   the former *Limit surplus* switch.)
 - **Charge mode** (`select.sem_charger_<id>_charge_mode`, v1.6.3): the per-charger
-  intent that carries the night-charging + tariff-window decision. Picking
-  *Min + Solar* (the default) or *Solar + cheapest hours* implicitly enables
-  the night-window top-up to the Min target; picking *Solar only* skips it.
+  intent that carries the night-charging + tariff-window decision. *Min + Solar*
+  (the default), *Solar + cheapest hours* and *Always (max)* top the Min target up
+  overnight; *Solar only* skips it **unless** you set an "At least" floor on this
+  charger, which turns the shortfall into an overnight guarantee (#634/#679);
+  *Off* leaves the charger unmanaged.
 
 These controls compose freely (Target type × Solar-max × Charge mode). The legacy
 `switch.sem_charger_<id>_night_charging`, `..._smart_night_charging`,
@@ -933,9 +985,19 @@ At a configurable daily evaluation time (default 21:00), the scheduler:
    rate (accounting for battery round-trip efficiency) is cheaper than what
    grid electricity would cost during the day
 
-If the break-even check passes, the scheduler picks the cheapest hours in the
-overnight window (using dynamic tariff data if available, or the full window
-on a static tariff) and issues forced charge commands to the battery.
+If the break-even check passes, the scheduler hands its verdict — *how much*
+energy, to *what* target SOC, at *what* power — to the
+[joint energy planner](ENERGY_PLANNER.md), which decides *when*: the
+battery becomes one demand among the EV, the deferrable loads and the comfort
+bands, placed in the cheapest hours of the overnight window (or across the
+full window on a static tariff) under your peak limit and priority order.
+SEM then issues forced charge commands only while that block is open.
+
+> Since v2.0 the scheduler no longer picks its own window (#638). Two
+> consequences: the battery's charge hours now respect the same peak limit
+> and priority order as everything else, and with
+> `switch.sem_energy_plan_actuation` **off** there is no planned pre-charge at
+> all — the switch is the kill-switch for the whole night.
 
 ### Break-even logic
 
@@ -1142,7 +1204,7 @@ To change the server language (affects static labels for all users):
    with the new language
 
 The source of truth for all translations is `dashboard/translations.json`
-(1166 keys across 16 languages). If you want to contribute a translation
+(1341 keys across 16 languages). If you want to contribute a translation
 correction or add a new language, see
 [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md).
 
@@ -1278,6 +1340,20 @@ the EV charger step for a second device. SEM assigns each charger a separate
 ID and tracks sessions, power, and costs per charger. See
 [MULTI_DEVICE_GUIDE.md](MULTI_DEVICE_GUIDE.md) for multi-charger priority
 and surplus distribution details.
+
+The page pre-fills from a charger SEM found in your entity registry and does
+not already manage — a box you have already configured is never offered a
+second time, so the suggestions are always for the *new* charger. If nothing
+was discovered the fields come up empty; fill them in by hand.
+
+**A wrong entity was auto-detected — how do I remove it?**
+
+Clear the field and save. Optional pickers (start/stop switch, current
+sensor, charge-mode select, the `phase_guard_*` sensors, the heat-pump
+relays, the tariff entities) treat an empty field as "this system does not
+have one", and SEM stops using the key. Required fields cannot be emptied —
+point them at the right entity instead. Before v2.0.0-beta.4 an emptied
+field was read as "unchanged" and the old value stayed.
 
 **SEM is using too much CPU on my Raspberry Pi.**
 

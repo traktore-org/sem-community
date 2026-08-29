@@ -163,7 +163,7 @@ class TestFindCheapestHoursSubHourly:
 
         assert len(block) == 8
         # Contiguous 15-min steps
-        for a, b in zip(block, block[1:]):
+        for a, b in zip(block, block[1:], strict=False):
             assert (b.timestamp - a.timestamp) == timedelta(minutes=15)
         assert all(p.price == 0.05 for p in block)
 
@@ -449,10 +449,6 @@ from unittest.mock import AsyncMock  # noqa: E402
 from custom_components.solar_energy_management.tariff.tariff_provider import (  # noqa: E402
     PricePoint,
 )
-from custom_components.solar_energy_management.coordinator.battery_charge_scheduler import (  # noqa: E402
-    BatteryChargeScheduler,
-    SchedulerConfig,
-)
 from homeassistant.util import dt as dt_util  # noqa: E402
 
 
@@ -669,86 +665,6 @@ class TestConfigurableFallbackPrice:
 
 
 # ---------------------------------------------------------------------------
-# Battery scheduler: 15-minute slot awareness in _plan_night_schedule
-# ---------------------------------------------------------------------------
-
-class TestNightScheduleSlotAwareness:
-
-    def _scheduler(self, max_charge_w=5000.0):
-        config = SchedulerConfig(
-            enabled=True,
-            battery_usable_capacity_kwh=10.0,
-            battery_max_charge_power_w=max_charge_w,
-            peak_limit_w=0.0,
-        )
-        return BatteryChargeScheduler(MagicMock(), config)
-
-    def test_15min_slots_use_real_duration(self):
-        """8 quarter-hour slots at 5 kW deliver 10 kWh — the hardcoded
-        1h slot end would have claimed 5 kWh per slot and stopped the
-        plan after 2 slots (30 minutes of real charging)."""
-        now = datetime(2026, 6, 10, 22, 0)
-        cheapest = [
-            PricePoint(timestamp=now + timedelta(minutes=15 * i), price=0.10)
-            for i in range(8)
-        ]
-        scheduler = self._scheduler()
-        schedule = scheduler._plan_night_schedule(
-            battery_kwh_needed=10.0,
-            ev_kwh_needed=0.0,
-            ev_max_power_w=0.0,
-            cheapest_prices=cheapest,
-            now=now,
-        )
-        assert len(schedule.slots) == 8
-        for s in schedule.slots:
-            assert (s.end - s.start) == timedelta(minutes=15)
-            assert s.battery_power_w == pytest.approx(5000)
-        assert schedule.total_battery_kwh == pytest.approx(10.0)
-
-    def test_tail_slot_overshoot_cap_is_slot_aware(self):
-        """Remaining 0.5 kWh in a 15-min slot may be delivered at
-        2 kW — the 1h-shaped cap (500 W) under-allocated 4×."""
-        now = datetime(2026, 6, 10, 22, 0)
-        cheapest = [
-            PricePoint(timestamp=now + timedelta(minutes=15 * i), price=0.10)
-            for i in range(2)
-        ]
-        scheduler = self._scheduler()
-        schedule = scheduler._plan_night_schedule(
-            battery_kwh_needed=1.75,  # 1.25 in slot 1, 0.5 left for slot 2
-            ev_kwh_needed=0.0,
-            ev_max_power_w=0.0,
-            cheapest_prices=cheapest,
-            now=now,
-        )
-        assert len(schedule.slots) == 2
-        assert schedule.slots[0].battery_power_w == pytest.approx(5000)
-        assert schedule.slots[1].battery_power_w == pytest.approx(2000)
-        assert schedule.total_battery_kwh == pytest.approx(1.75)
-
-    def test_hourly_slots_unchanged(self):
-        now = datetime(2026, 6, 10, 22, 0)
-        cheapest = [
-            PricePoint(timestamp=now + timedelta(hours=i), price=0.10)
-            for i in range(2)
-        ]
-        scheduler = self._scheduler()
-        schedule = scheduler._plan_night_schedule(
-            battery_kwh_needed=10.0,
-            ev_kwh_needed=0.0,
-            ev_max_power_w=0.0,
-            cheapest_prices=cheapest,
-            now=now,
-        )
-        assert len(schedule.slots) == 2
-        for s in schedule.slots:
-            assert (s.end - s.start) == timedelta(hours=1)
-        assert schedule.total_battery_kwh == pytest.approx(10.0)
-
-
-# ---------------------------------------------------------------------------
-# #359 / #417 follow-ups from the issue tracker
 # ---------------------------------------------------------------------------
 
 class TestDerivativeEntityDiagnostic:

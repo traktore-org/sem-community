@@ -8,7 +8,6 @@ from custom_components.solar_energy_management.coordinator.flow_calculator impor
 )
 from custom_components.solar_energy_management.coordinator.types import (
     PowerReadings,
-    EnergyTotals,
 )
 
 

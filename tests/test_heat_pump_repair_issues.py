@@ -298,3 +298,10 @@ def test_clear_orphan_hot_water_repairs_handles_no_config(hass):
             currently_configured_temp_sensor=None,
         )
     assert cleared == 2
+    # The count alone would pass on a function that counts and deletes
+    # nothing — assert the sweep actually reached the registry, as the
+    # sibling test above does.
+    assert {call.args[2] for call in delete.call_args_list} == {
+        "hot_water_entity_unavailable_switch.a",
+        "hot_water_temperature_sensor_unavailable_sensor.b",
+    }

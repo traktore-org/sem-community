@@ -16,9 +16,8 @@ These tests pin the debounce against regression — both the
 "transient blip is suppressed" property and the "legitimate
 sustained change does flip after 2 cycles" property.
 """
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-import pytest
 
 from custom_components.solar_energy_management.coordinator.charging_control import (
     ChargingStateMachine,

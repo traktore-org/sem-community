@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import json
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 from homeassistant.components.sensor import (
     RestoreSensor,
-    SensorEntity,
     SensorEntityDescription,
     SensorDeviceClass,
     SensorStateClass,
@@ -31,15 +31,179 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import label_registry as lr
 
-from .const import DOMAIN, STATUS_MESSAGES, ChargingState, SENSOR_LABEL_MAPPING
+from .const import SENSOR_LABEL_MAPPING
 from .consts.labels import SEM_LABELS
 from .coordinator import SEMCoordinator
+from .features.device_axes import (
+    has_control_handle as _has_control_handle,
+    may_actuate as _may_actuate,
+    user_hands_off as _user_hands_off,
+)
 
 type SEMConfigEntry = ConfigEntry[SEMCoordinator]
 
 _LOGGER = logging.getLogger(__name__)
 
 PARALLEL_UPDATES = 0  # Coordinator handles all updates
+
+
+def _energy_plan_state(plan: Any) -> str:
+    """(#638) Collapse tonight's plan to one verdict word.
+
+    ``pending`` — the planner has not answered for tonight yet (before the
+    night window, or still waiting on a not-ready world). ``idle`` — it
+    answered "nothing needs the night", which is a real answer, not a gap.
+    ``fits`` / ``yields`` — everything got its floor, or something did not.
+    """
+    if not isinstance(plan, dict):
+        return "pending"
+    if not plan.get("demands"):
+        return "idle"
+    return "fits" if plan.get("fits") else "yields"
+
+
+# HA's recorder refuses to store a state whose attributes serialize above
+# 16 KiB: it logs a warning and records NO attributes at all, so the plan
+# would silently vanish from history. Stay under it with headroom.
+_PLAN_ATTR_BUDGET_BYTES = 15000
+
+
+def _merge_plan_blocks(blocks: Any) -> List[Dict[str, Any]]:
+    """(#638) Collapse a demand's back-to-back slot allocations into runs.
+
+    The packer allocates per market slot, so a pump running four consecutive
+    quarter-hours arrives as four blocks. The strip draws them as one bar
+    regardless, and on a 15-minute curve those per-slot blocks are the single
+    largest term in the payload — merging them is free to the card and is
+    what keeps a normal 15-min night under the recorder's limit at all.
+
+    ``price`` is dropped rather than carried: a merged run spans slots that
+    may differ in price, and quoting one of them would be a lie. The per-slot
+    prices stay on the ledger rows, and ``diagnose`` still has every original
+    allocation with its own price.
+
+    Grouping by demand id is load-bearing, not tidiness: the packer emits
+    allocations SLOT-major (every demand for 05:00, then every demand for
+    06:00), so a demand's own consecutive blocks are never neighbours in the
+    list. Comparing each block only against the previous one merges nothing
+    at all on real data — verified live on HA-TEST.
+    """
+    by_id: Dict[Any, List[Dict[str, Any]]] = {}
+    for b in blocks or []:
+        if not isinstance(b, dict):
+            continue
+        by_id.setdefault(b.get("id"), []).append({
+            "id": b.get("id"),
+            "start": b.get("start"),
+            "end": b.get("end"),
+            "power_w": b.get("power_w"),
+        })
+    out: List[Dict[str, Any]] = []
+    for rows in by_id.values():
+        rows.sort(key=lambda r: str(r["start"]))
+        run: List[Dict[str, Any]] = []
+        for row in rows:
+            prev = run[-1] if run else None
+            if (prev and prev["power_w"] == row["power_w"]
+                    and prev["end"] == row["start"]):
+                prev["end"] = row["end"]
+                continue
+            run.append(row)
+        out.extend(run)
+    return out
+
+
+def _energy_plan_attrs(
+    plan: Any, extra: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """(#638) Project tonight's stashed plan into entity attributes.
+
+    ``extra`` is for the payloads that ride on the SAME state but do not
+    come from the plan — ``tomorrow``, the #755 ``review``. They belong
+    here rather than at the call site because the byte budget below is
+    the whole point of this function: the recorder weighs the finished
+    state, not the part of it this projection happened to build, and a
+    trim computed before the last two writers is a trim that does not
+    trim (#758). One place adds, one place counts.
+
+    Three things are deliberately not copied wholesale:
+
+    * ``summary`` / ``allocations`` — log prose. The logs quote it and the
+      ``diagnose`` payload carries it; the card reads the structured rows.
+    * the ledger's ``home_w`` and ``soc_kwh`` columns — the strip does not
+      draw them, and they are most of what pushes a 15-minute price curve
+      over a long winter night past the recorder's limit.
+    * per-slot allocations — merged into runs, see ``_merge_plan_blocks``.
+
+    If the projection is *still* too large (a 15-min curve × a large fleet),
+    the timeline is dropped rather than the whole payload: the card falls
+    back to the per-demand list and says the chart was omitted. A visibly
+    reduced card beats an entity whose attributes disappear from history.
+    """
+    if not isinstance(plan, dict):
+        # Daytime: no plan to project, but the review still has to reach the
+        # card — it is the record of LAST night, not of tonight's.
+        return {k: v for k, v in (extra or {}).items() if v}
+    attrs: Dict[str, Any] = {
+        "computed_at": plan.get("computed_at"),
+        "fits": plan.get("fits"),
+        "total_cost": plan.get("total_cost"),
+        "takeover": plan.get("takeover"),
+        "demands": plan.get("demands") or [],
+        "slots": [{
+            "start": s.get("start"), "end": s.get("end"),
+            "price": s.get("price"), "cheap": s.get("cheap"),
+            "home_grid_w": s.get("home_grid_w"),
+        } for s in (plan.get("slots") or [])],
+        "blocks": _merge_plan_blocks(plan.get("blocks")),
+        # A string here means the battery figures behind this plan came from
+        # a SUBSET of the fleet (#638 finding #3) — the card says so rather
+        # than presenting a degraded plan as a healthy one.
+        "battery_fleet_partial": plan.get("battery_fleet_partial"),
+        # (#638 G4) True while the actuation switch is on — the plan's
+        # blocks feed the night signals; the card swaps its shadow chip.
+        "actuation": bool(plan.get("actuation", False)),
+        # (night 3, finding 3) "initial" vs "ask changed" — a re-stamped
+        # night is distinguishable from the first answer on the entity,
+        # not only in container logs (which rotate too fast for evidence).
+        "replan_cause": plan.get("replan_cause"),
+        # (08-08) the idle answer's why — the card shows it so a quiet
+        # plan reads as an answer, never as a disappearance.
+        "why": plan.get("why"),
+        # (#638 C7) what will NOT be done and why — the card's
+        # "not scheduled tonight" list, machine keys the card translates.
+        "not_scheduled": plan.get("not_scheduled") or [],
+        # (#638 C7) the quiet face's machine codes → translated sentences.
+        "why_codes": plan.get("why_codes") or [],
+        # (#638 C7) per-demand plan-vs-reactive attribution, live.
+        "coverage": plan.get("coverage") or {},
+        # (#638, the last string) the shadow arbitrage advisor's verdict
+        # with its numbers — the morning plan-vs-Sankey audit reads it
+        # here. Small by construction (a few blocks at most).
+        "arbitrage": plan.get("arbitrage"),
+    }
+    for key, value in (extra or {}).items():
+        if value:
+            attrs[key] = value
+    def _too_big() -> bool:
+        try:
+            return len(json.dumps(attrs, default=str)) > _PLAN_ATTR_BUDGET_BYTES
+        except (TypeError, ValueError):  # pragma: no cover — defensive
+            return True
+
+    if _too_big():
+        attrs["slots"] = []
+        attrs["blocks"] = []
+        attrs["timeline_omitted"] = True
+    # (#758) The timeline is the biggest term, but it is not the only one,
+    # and going over means the recorder keeps NOTHING. If dropping it was
+    # not enough, drop what rode along and say so — the plan itself is what
+    # this entity is for.
+    if extra and _too_big():
+        for key in extra:
+            attrs.pop(key, None)
+        attrs["extras_omitted"] = True
+    return attrs
 
 
 def _phase_guard_current_description(*, key: str) -> SensorEntityDescription:
@@ -241,6 +405,14 @@ SENSOR_TYPES = [
         key="night_charging_status",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
+    # (#638) The joint energy planner's verdict for tonight. SHADOW: this
+    # reports what the planner WOULD do — nothing here actuates. State is a
+    # stable key (``fits``/``yields``/``idle``/``pending``) so the card and
+    # the tests can branch on it; the plan itself rides as attributes.
+    SensorEntityDescription(
+        key="energy_plan",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
     SensorEntityDescription(
         key="battery_priority_status",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -280,6 +452,16 @@ SENSOR_TYPES = [
         state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
     ),
+    # (#825) home + EV. This is the one that matches HA's Energy
+    # Dashboard "Home" figure; ``daily_home_energy`` above excludes the
+    # car on purpose. Two reporters lost weeks to comparing the wrong
+    # pair, so both now exist and both say what they include.
+    SensorEntityDescription(
+        key="daily_total_consumption",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
     SensorEntityDescription(
         key="daily_grid_import_energy",
         device_class=SensorDeviceClass.ENERGY,
@@ -303,6 +485,58 @@ SENSOR_TYPES = [
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
+    # (#770) The charge, split by origin. One number for free roof energy and
+    # bought valley energy is what made savings and ROI credit a grid-charged
+    # kWh with the full import price it never earned — and the joint planner
+    # made grid charging the norm, not the exception.
+    SensorEntityDescription(
+        key="daily_battery_charge_solar",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
+    SensorEntityDescription(
+        key="daily_battery_charge_grid",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
+    SensorEntityDescription(
+        key="daily_battery_grid_cost",
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement="CHF",  # replaced by hass.config.currency
+        suggested_display_precision=2,
+    ),
+    # What is IN the battery right now, not what went in today — the figure
+    # autarky needs, because a grid-charged discharge is grid supply that was
+    # merely time-shifted.
+    SensorEntityDescription(
+        key="battery_stored_grid_share",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=1,
+    ),
+    # (#773) The audited residual: home minus every controlled load SEM can
+    # see. The house SEM does NOT touch — and therefore the row whose drift
+    # is a free sensor-health check. Both may go NEGATIVE: that is the
+    # diagnostic's sharpest finding (a double-count or sign error), so no
+    # clamp and no non-negative device_class assumptions beyond what HA's
+    # POWER/ENERGY classes already allow.
+    SensorEntityDescription(
+        key="true_baseload_power",
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        suggested_display_precision=0,
+    ),
+    SensorEntityDescription(
+        key="daily_true_baseload_energy",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=1,
     ),
     SensorEntityDescription(
         key="daily_ev_energy",
@@ -632,6 +866,16 @@ SENSOR_TYPES = [
         native_unit_of_measurement=UnitOfPower.WATT,
         suggested_display_precision=0,
     ),
+    # (#776) Exported battery energy — force_discharge / the arbitrage
+    # sell. Doubles as the compliance witness for installs whose grid
+    # contract prohibits selling stored energy: it must read 0 there.
+    SensorEntityDescription(
+        key="flow_battery_to_grid_power",
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        suggested_display_precision=0,
+    ),
     SensorEntityDescription(
         key="flow_battery_to_ev_power",
         device_class=SensorDeviceClass.POWER,
@@ -721,6 +965,12 @@ SENSOR_TYPES = [
     ),
     SensorEntityDescription(
         key="flow_battery_to_ev_energy",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
+    SensorEntityDescription(
+        key="flow_battery_to_grid_energy",
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
@@ -1081,6 +1331,42 @@ SENSOR_TYPES = [
         key="heat_pump_registration_status",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
+    # (#769) The heat pump's ledger row — the same four horizons every other
+    # consumer already had. On a heat-pump house this is the largest
+    # controllable load in the building and until now it had no kWh anywhere:
+    # it vanished into the ``home`` residual (#767). ``shifted_today`` is the
+    # part SEM caused, split out by SG-Ready state, which is what turns
+    # "SG-Ready shifted X kWh" from a claim into a measurement.
+    SensorEntityDescription(
+        key="heat_pump_energy_today",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
+    SensorEntityDescription(
+        key="heat_pump_energy_month",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
+    SensorEntityDescription(
+        key="heat_pump_energy_year",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
+    SensorEntityDescription(
+        key="heat_pump_energy_total",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
+    SensorEntityDescription(
+        key="heat_pump_energy_shifted_today",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    ),
 
     # ============================================================================
     # PV PERFORMANCE (Phase 5)
@@ -1291,6 +1577,21 @@ SENSOR_TYPES = [
         native_unit_of_measurement=PERCENTAGE,
         suggested_display_precision=1,
     ),
+    # (#793) the other two thirds of the split — battery-sourced kWh were in
+    # the solar-share denominator but visible nowhere, so "not solar" and
+    # "charged for" looked like the same number when they were two.
+    SensorEntityDescription(
+        key="lifetime_ev_battery_share",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=1,
+    ),
+    SensorEntityDescription(
+        key="lifetime_ev_grid_share",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=1,
+    ),
     SensorEntityDescription(
         key="vehicle_soc",
         device_class=SensorDeviceClass.BATTERY,
@@ -1368,8 +1669,8 @@ SENSOR_TYPES = [
         key="diag_observer_mode",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
-    # Read-only diagnostics for independent grid and inverter/Load lanes.
-    # Disabled by default — only meaningful once the phase guard is configured.
+    # Diagnostics for the independent grid and inverter/Load lanes plus the
+    # active gate state. Disabled by default — only meaningful once configured.
     SensorEntityDescription(
         key="diag_phase_guard_mode",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -1844,14 +2145,13 @@ async def async_setup_entry(
     _ed = getattr(_sr, "_energy_dashboard_config", None) if _sr is not None else None
     batt_list = list(getattr(_ed, "battery_power_list", []) or []) if _ed is not None else []
     if len(batt_list) > 1:
-        for idx, batt_source_entity in enumerate(batt_list):
+        for idx in range(len(batt_list)):
             bid = f"b{idx + 1}"
-            # Friendly name: the source entity stripped of common
-            # ``sensor.`` / power-suffix noise so the device page
-            # reads "Battery b1 — battery_1_lade_entladeleistung"
-            # rather than a wall of slugs. Card overrides this via
-            # ``friendly_name`` anyway.
-            source_label = batt_source_entity.replace("sensor.", "").rstrip("_")
+            # Names are positional ("Battery b1 Power"), NOT derived from the
+            # source entity. An earlier comment here described a
+            # "Battery b1 — battery_1_lade_entladeleistung" form and computed
+            # the label for it, but no description ever used the value; the
+            # battery card supplies the readable name via ``friendly_name``.
             per_battery_descriptions.extend([
                 SensorEntityDescription(
                     key=f"battery_{bid}_power",
@@ -1945,6 +2245,24 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         # already recorded via its own sensor; recording the bundle again
         # would double the write volume for zero charting value.
         "power_snapshot",
+        # (#829) charging_state carried these as RECORDED attributes, so a new
+        # blob was stored every time any of them wiggled — battery_soc,
+        # calculated_current and available_power are ALREADY their own recorded
+        # entities (duplicated here for the card), and solar_sufficient /
+        # battery_too_low / battery_needs_priority / the strategy strings are
+        # live UI context with no charting value. They stay on the live state
+        # (cards read them); the recorder stops re-storing them.
+        "battery_soc",
+        "calculated_current",
+        "available_power",
+        "solar_sufficient",
+        "battery_too_low",
+        "battery_needs_priority",
+        "charging_strategy",
+        "strategy_reason",
+        "per_charger_phases",
+        "control_entities",
+        "sources_available",
     })
 
     # Sensors disabled by default (not used by dashboard template)
@@ -2016,7 +2334,9 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         if description.key in ["daily_savings", "monthly_savings", "daily_costs", "monthly_costs",
                                "monthly_power_cost", "load_balancing_savings_potential",
                                "daily_battery_savings", "monthly_battery_savings",
-                               "battery_discharge_value"]:
+                               "battery_discharge_value",
+                               # (#770) what today's grid-charging cost
+                               "daily_battery_grid_cost"]:
             self._attr_native_unit_of_measurement = coordinator.hass.config.currency
 
     async def async_added_to_hass(self) -> None:
@@ -2178,6 +2498,12 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             if self.entity_description.key == "charging_state":
                 value = self._format_charging_state(value)
 
+            # (#638) The energy plan's STATE is a verdict key, never the
+            # plan dict itself — a dict here would stringify into a >255-char
+            # state and get rejected. The plan rides as attributes below.
+            elif self.entity_description.key == "energy_plan":
+                value = _energy_plan_state(value)
+
             # Special handling for battery status
             elif self.entity_description.key == "battery_status":
                 battery_status_map = {
@@ -2297,6 +2623,25 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 if k.startswith("charger_") and k.endswith("_today_plan"):
                     cid = k[len("charger_"):-len("_today_plan")]
                     _per_charger_plans[cid] = v or []
+            # (#804 Phase A) Observed phase model per charger: the
+            # measured-W/A phase estimate + the user-named switch
+            # capability's validation verdict. Observe-only surface.
+            _per_charger_phases = {}
+            for k, v in self.coordinator.data.items():
+                if k.startswith("charger_") and k.endswith("_active_phases"):
+                    cid = k[len("charger_"):-len("_active_phases")]
+                    _per_charger_phases[cid] = {
+                        "active_phases": v,
+                        "switch_entity": self.coordinator.data.get(
+                            f"charger_{cid}_phase_switch_entity"),
+                        "switch_valid": self.coordinator.data.get(
+                            f"charger_{cid}_phase_switch_valid"),
+                        # (#804 B/C) sequencer state + held belief
+                        "switch_state": self.coordinator.data.get(
+                            f"charger_{cid}_phase_switch_state"),
+                        "believed_phases": self.coordinator.data.get(
+                            f"charger_{cid}_believed_phases"),
+                    }
             attrs.update({
                 "battery_soc": self.coordinator.data.get("battery_soc"),
                 "calculated_current": self.coordinator.data.get("calculated_current"),
@@ -2319,7 +2664,118 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "today_plan": self.coordinator.data.get("today_plan") or [],
                 # Per-charger plan rows (#464) — {cid: [rows…]}.
                 "per_charger_plans": _per_charger_plans,
+                # Observed phase model (#804 Phase A) — {cid: {active_phases,
+                # switch_entity, switch_valid}}.
+                "per_charger_phases": _per_charger_phases,
             })
+        elif self.entity_description.key in (
+            "roi_payback_years", "roi_annual_savings",
+        ):
+            # (#796) These two depend on the system age. While the install
+            # date is the "Jan 1 this year" fallback rather than detected
+            # from statistics, they are estimates and say so here instead
+            # of presenting a guessed date as a measurement.
+            attrs["install_date_estimated"] = bool(
+                self.coordinator.data.get("roi_install_date_estimated")
+            )
+        elif (self.entity_description.key.startswith("charger_")
+              and self.entity_description.key.endswith("_estimated_soc")):
+            # #708 — the stale-sensor overshoot guard rides as attributes
+            # of the per-charger Estimated SOC sensor (no new entities):
+            # the session energy-accounted SOC, whether it is what
+            # currently holds the charge stopped, and the provenance of the
+            # reading the card's info line quotes.
+            #
+            # The age was originally computed client-side off the
+            # vehicle_soc mirror's own ``last_changed``. That measured the
+            # wrong interval: an entity going unavailable writes a new
+            # state, so a dead sensor dated itself "0 min ago" and the info
+            # line lost the value it was explaining exactly when the
+            # estimate took over the gauge. The server now publishes the
+            # last usable reading and the instant it was taken; the card
+            # still does the subtraction, so nothing here moves per minute.
+            cid_708 = self.entity_description.key[
+                len("charger_"):-len("_estimated_soc")
+            ]
+            attrs.update({
+                "energy_accounted_soc": self.coordinator.data.get(
+                    f"charger_{cid_708}_energy_accounted_soc"
+                ),
+                "estimate_stop_active": self.coordinator.data.get(
+                    f"charger_{cid_708}_estimate_stop_active"
+                ),
+                "vehicle_soc_last": self.coordinator.data.get(
+                    f"charger_{cid_708}_vehicle_soc_last"
+                ),
+                "vehicle_soc_last_at": self.coordinator.data.get(
+                    f"charger_{cid_708}_vehicle_soc_last_at"
+                ),
+            })
+        elif self.entity_description.key == "energy_plan":
+            # (#638) SHADOW — what the joint planner WOULD do this energy
+            # day. sem-energy-plan-card renders these directly; the log
+            # lines and the ``diagnose`` stash carry the same plan in prose.
+            # (#758) ``tomorrow`` and ``review`` go THROUGH the projection,
+            # not around it: they land on this same state, so they have to
+            # be inside the recorder's byte budget, not appended after it.
+            #   tomorrow — (#638 consolidation / #722) the NEXT energy day's
+            #     books for the card's Tomorrow view; live, never stamped.
+            #   review   — (#755 pillar 4) what the record has to say, as
+            #     machine codes the card translates. Survives the daytime
+            #     hours when there is no plan to project.
+            attrs.update(_energy_plan_attrs(
+                self.coordinator.data.get("energy_plan"),
+                extra={
+                    "tomorrow": self.coordinator.data.get(
+                        "energy_plan_tomorrow"),
+                    "review": self.coordinator.data.get("energy_plan_review"),
+                },
+            ))
+        elif self.entity_description.key == "forecast_source":
+            # (#819) Which forecast integrations are installed, so the
+            # Configuration card can offer what is actually there. It
+            # rides this sensor's attributes because the card reads
+            # ENTITY state/attributes — a key that only reaches
+            # coordinator.data is invisible to it, which is how this
+            # nearly shipped inert.
+            attrs["sources_available"] = self.coordinator.data.get(
+                "forecast_sources_available") or []
+            # (#819) What the user ASKED for, and whether they got it. When a
+            # chosen integration cannot be located SEM falls back to the
+            # ladder — correct behaviour, but it used to happen in silence:
+            # the picker went on showing the choice while the source showed
+            # something else, and the only trace was a log line. Two very
+            # different failures ("SEM cannot find your integration" and
+            # "your setting never saved") wore the same face.
+            _fr = getattr(self.coordinator, "_forecast_reader", None)
+            if _fr is not None:
+                attrs["requested_source"] = getattr(_fr, "requested_source", None)
+                attrs["source_honoured"] = getattr(_fr, "honoured", True)
+                # (#841) #838 made the multi-string TOTAL right but published
+                # only the total. The parts are what the owner recognises, and
+                # a string that has stopped reporting is visible in a list and
+                # invisible in a sum.
+                try:
+                    planes = _fr.plane_breakdown()
+                    attrs["planes"] = len(planes)
+                    attrs["planes_today"] = planes
+                except Exception:  # noqa: BLE001
+                    pass
+        elif self.entity_description.key == "diag_charger_control":
+            # (#814 Pillar B) the detection evidence report rides the charger
+            # control diag sensor — the Config tab's Detected-hardware section
+            # and bug reports read it here.
+            attrs["detection_report"] = self.coordinator.data.get("detection_report")
+            # (#824) Per-charger control-entity verdicts ride here too:
+            # a verdict that lives only in coordinator.data is invisible
+            # to the card AND to anyone reading a diagnostics download,
+            # which is the same inert-half trap #819 nearly shipped.
+            attrs["control_entities"] = {
+                k: v for k, v in (self.coordinator.data or {}).items()
+                if k.startswith("charger_")
+                and (k.endswith("_control_valid")
+                     or k.endswith("_control_reason"))
+            }
         elif self.entity_description.key == "vpp_event":
             # #580 — per-event accounting for payment reconciliation.
             d = self.coordinator.data
@@ -2453,7 +2909,11 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                         "name": device_info.get("friendly_name", device_id),
                         "priority": device_info.get("priority", 5),
                         "critical": device_info.get("is_critical", False),
-                        "controllable": device_info.get("is_controllable", True),
+                        # (#780) both axes; ``controllable`` stays for one
+                        # release under its old (mixed) meaning.
+                        "has_control_handle": _has_control_handle(device_info),
+                        "control_mode": device_info.get("control_mode"),
+                        "controllable": _may_actuate(device_info),
                         "power": device_info.get("power_rating", 0),
                         "available": device_info.get("is_available", False),
                     })
@@ -2473,7 +2933,11 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                             device_id: {
                                 "name": info.get("friendly_name", device_id),
                                 "priority": info.get("priority", 5),
-                                "is_controllable": info.get("is_controllable", True),
+                                # (#780) capability and permission, separately
+                                "has_control_handle": _has_control_handle(info),
+                                "user_hands_off": _user_hands_off(info),
+                                "control_mode": info.get("control_mode"),
+                                "is_controllable": _may_actuate(info),
                                 "is_critical": info.get("is_critical", False),
                                 "power_rating": info.get("power_rating", 0),
                                 "power_entity": info.get("power_entity"),
@@ -2487,6 +2951,13 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                         }
             except Exception:
                 pass
+        elif self.entity_description.key == "target_peak_limit":
+            # (#717 redesign) The Control-tab slider needs to know whether
+            # the system is currently unlimited to render its MAX notch as
+            # "Unlimited" instead of a stale 80.0 kW number.
+            attrs["peak_limit_unlimited"] = self.coordinator.data.get(
+                "peak_limit_unlimited", False
+            )
         elif self.entity_description.key == "monthly_consecutive_peak":
             # (#657) The ``top_5_peaks`` / ``top_5_peaks_formatted`` pair used
             # to be built here from ``peak_history_top5`` — a key no producer

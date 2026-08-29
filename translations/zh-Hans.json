@@ -37,16 +37,14 @@
       },
       "hardware": {
         "title": "硬件",
-        "description": "最后一步！设置您的 **峰值功率限制** —— 即您的电网合同允许的最大 kW，超过该值后 SEM 将开始减载。SEM 已自动检测到您的逆变器放电控制实体：{discharge_entity}\n\n保持看板选项为【开启】状态，SEM 将为您自动构建其 Lovelace 看板。**注意：这将在安装完成约 5 秒后触发 Home Assistant 重启。**\n\n其他所有设置都将使用安全默认值，您稍后可以在 SEM 看板全新的 **配置** 标签页中进行调整 —— 包括电动汽车充电桩、热泵、电价以及电池分区。",
+        "description": "最后一步！SEM 已自动检测到您的逆变器放电控制实体：{discharge_entity}\n\n保持看板选项为【开启】状态，SEM 将为您自动构建其 Lovelace 看板。**注意：这将在安装完成约 5 秒后触发 Home Assistant 重启。**\n\n其他所有设置——包括电网峰值功率限制——都将使用安全默认值，您可以在安装完成后立即调整：峰值功率限制通过 **控制** 标签页的滑块调整，其余设置通过 SEM 看板的 **配置** 标签页调整——包括电动汽车充电桩、热泵、电价以及电池分区。",
         "data": {
           "battery_capacity_kwh": "家用蓄电池容量 (kWh)",
-          "target_peak_limit": "峰值功率限制 (kW)",
           "generate_dashboard_on_install": "立即生成 SEM 看板（会重启 HA）",
           "diagram_style": "系统拓扑图样式"
         },
         "data_description": {
           "battery_capacity_kwh": "您家用蓄电池（非电动汽车）的总可用容量 (kWh)。由预测驱动的充电策略用于估算电池可在多大程度上弥补太阳能缺口。请检查您的逆变器规格说明书。",
-          "target_peak_limit": "您的电网合同允许的最大 kW，超过该值后 SEM 将开始负载削减。对于基于需量的电价，通常为 3–5 kW；否则建议设置为您的熔断器额定值除以 4 以留出余量。",
           "generate_dashboard_on_install": "启用时，SEM 将在完成此步骤后立即创建 Lovelace 看板，并在此后约 5 秒重启 Home Assistant，以便让新看板可见。您稍后随时可以通过 solar_energy_management.generate_dashboard 服务手动重新运行此操作。",
           "diagram_style": "选择在“主页”标签页上使用哪种系统拓扑图卡片。“SEM” 使用内置的动效拓扑图。“K-Flow” 使用 K-Flow HACS 卡片（必须单独安装）。"
         }
@@ -66,7 +64,7 @@
           "mobile_notification_service": "手机通知服务",
           "vehicle_soc_entity": "车辆电池电量 (SOC)",
           "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
-          "ev_target_soc": "电动汽车目标电量 (%)"
+          "ev_target_soc": "达到此值视为充满 (%)"
         },
         "data_description": {
           "ev_connected_sensor": "报告车辆插头当前是否已连接的二进制传感器。",
@@ -80,16 +78,14 @@
           "mobile_notification_service": "用于移动端推送的 HA 通知服务 (例如 notify.mobile_app_your_phone)。",
           "vehicle_soc_entity": "可选。报告车辆当前剩余电量的传感器 (0–100%)。",
           "ev_battery_capacity_kwh": "电动汽车电池的总可用容量 (kWh)。用于估算剩余电量 (SOC) 和充电时间。",
-          "ev_target_soc": "SEM 视电动汽车已充满电的目标电量 (%)。"
+          "ev_target_soc": "达到此值后 SEM 视车辆为已充满。这是对\"充满\"的定义，不是充电上限。"
         }
       }
     },
     "error": {
       "unknown": "发生了未知错误。请重试。",
       "entity_not_found": "未找到实体。请确认该实体 ID 确实存在。",
-      "service_not_found": "未找到通知服务。请检查服务名称（例如 notify.mobile_app_your_phone）。",
-      "heat_pump_partial_relays": "SG-Ready 需要【两个】继电器实体。请同时设置两个继电器 —— 或者将两者都留空，仅配置 climate 实体以使用仅温控设定值增强模式。",
-      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities."
+      "service_not_found": "未找到通知服务。请检查服务名称（例如 notify.mobile_app_your_phone）。"
     },
     "abort": {
       "already_configured": "太阳能消纳管理 (SEM) 已经配置过了。只允许存在一个实例。",
@@ -111,9 +107,10 @@
           "ev_total_energy_sensor": "充电桩累计电量计数器（可选）",
           "vehicle_soc_entity": "车辆电池电量 (SOC) 传感器（可选）",
           "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
-          "ev_target_soc": "电动汽车目标电量 (%)",
-          "daily_ev_target_max": "太阳能充电限制量 (kWh)",
-          "ev_target_soc_max": "太阳能充电限制电量 (SOC %)",
+          "ev_charger_efficiency": "充电桩效率 (%)",
+          "ev_target_soc": "达到此值视为充满 (%)",
+          "daily_ev_target_max": "充电不超过 (kWh)",
+          "ev_target_soc_max": "充电不超过 (%)",
           "vehicle_range_entity": "车辆续航里程传感器",
           "ev_kwh_per_100km": "车辆百公里能耗 (kWh/100km)"
         },
@@ -126,9 +123,10 @@
           "ev_total_energy_sensor": "可选。输送给车辆的累计电量 kWh 计数器。",
           "vehicle_soc_entity": "可选。报告车辆当前剩余电量的传感器 (0–100%)。",
           "ev_battery_capacity_kwh": "电动汽车电池的总可用容量 (kWh)。用于估算剩余电量 (SOC) 和充电时间。",
-          "ev_target_soc": "SEM 视电动汽车已充满电的目标电量 (%)。",
-          "daily_ev_target_max": "太阳能富余电量充电达到此值后将停止。保持最大值以允许自由使用太阳能充电。",
-          "ev_target_soc_max": "太阳能富余电量充电达到此剩余电量 (SOC %) 后将停止。保持 100% 以允许自由使用太阳能充电。",
+          "ev_charger_efficiency": "计量的交流电能中真正进入电池的比例。若剩余电量估算超前于车辆，请调低该值。通常为 85-95%，单相充电或低温时更低。",
+          "ev_target_soc": "达到此值后 SEM 视车辆为已充满。这是对\"充满\"的定义，不是充电上限。",
+          "daily_ev_target_max": "光伏余电充到此为止。这是上限而非目标——保持最大值即可自由使用阳光充电。",
+          "ev_target_soc_max": "光伏余电充到此为止。这是上限而非目标——保持 100% 即可自由使用阳光充电。",
           "vehicle_range_entity": "可选。真实的续航里程传感器。若未提供，续航里程将根据 SOC × 容量 × 能效进行估算。",
           "ev_kwh_per_100km": "在未配置续航里程传感器时，用于估算行驶续航里程。"
         }
@@ -140,7 +138,7 @@
           "update_interval": "更新间隔 (秒)",
           "battery_priority_soc": "蓄电池优先电量 (SOC %)",
           "min_solar_power": "最低太阳能功率 — 原始光伏发电量 (W)",
-          "daily_ev_target": "每日电动汽车充电目标 (kWh)",
+          "daily_ev_target": "至少保证 (kWh)",
           "battery_assist_max_power": "蓄电池辅助最大功率 (W)",
           "battery_assist_min_surplus": "蓄电池辅助最低太阳能富余量 (W)",
           "battery_capacity_kwh": "蓄电池容量 (kWh)",
@@ -154,14 +152,15 @@
           "smart_night_charging": "智能夜间充电",
           "vehicle_soc_entity": "车辆电池电量 (SOC)",
           "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
-          "ev_target_soc": "电动汽车目标电量 (%)",
+          "ev_target_soc": "达到此值视为充满 (%)",
           "battery_buffer_soc": "区域 2/3 边界 — 蓄电池缓冲电量 (SOC %)",
           "battery_auto_start_soc": "区域 3/4 边界 — 蓄电池自动启动电量 (SOC %)",
           "battery_discharge_control_entity": "蓄电池放电控制实体（可选）",
           "hot_water_solar_target": "热水太阳能加热目标温度 (°C)",
           "legionella_target_temp": "军团菌消毒目标温度 (°C)",
           "legionella_interval_hours": "消毒周期最大间隔时间 (小时)",
-          "diagram_style": "系统图样式"
+          "diagram_style": "系统图样式",
+          "grid_sign_invert": "反转电网功率符号"
         },
         "data_description": {
           "update_interval": "协调器读取传感器和调整硬件的频率。10 秒可提供最准确的电量统计；超过 30 秒的值会导致电量少计。范围：10–60 秒。",
@@ -169,7 +168,7 @@
           "battery_buffer_soc": "区域 2 → 区域 3 的边界。高于此电量 (SOC) 时，蓄电池可以放电以弥补太阳能不足，从而为电动汽车充电。默认值为 70%。",
           "battery_auto_start_soc": "区域 3 → 区域 4 的边界。高于此电量 (SOC) 时，即使没有太阳能富余，电动汽车也可以开始充电，电能直接从蓄电池中抽取。默认值为 90%。",
           "min_solar_power": "原始光伏发电底线 —— 低于该面板输出功率时，“太阳能可用”状态将转为 false：仅太阳能充电模式不会启动，且深度亏电保护会将其视作黑夜（因此充电会迅速停止，而不会转由电网支撑）。注意这是原始发电量，而不是富余量 —— 区别于“蓄电池辅助最低太阳能富余量”（光伏减去家庭用电），后者决定了家用蓄电池何时可以介入协助。默认值为 1000 W；请保持在电动汽车充电桩的硬件最低功率以下（三相约为 4140 W，单相约为 1380 W）。",
-          "daily_ev_target": "夜间利用电网充电的每日目标 kWh。设置为 0 可完全禁用夜间充电。",
+          "daily_ev_target": "SEM 会在夜间从电网补充，使车辆在早晨至少有这么多电量。这是下限而非上限——阳光可以充得更多。0 = 从不使用电网。",
           "battery_assist_max_power": "在区域 3/4 中，家用蓄电池可以放电协助电动汽车充电的最大功率。默认值为 4500 W。",
           "battery_assist_min_surplus": "在任何充电模式下，家用蓄电池获准协助电动汽车充电前的最低实际太阳能富余量。低于此值时，蓄电池的电量将保留供家庭使用（汽车从电网 + 太阳能抽电）。默认值为 1200 W。设置为 0 可让蓄电池在任何情况下（包括通宵）都支持电动汽车。",
           "battery_capacity_kwh": "家用蓄电池的总可用容量（注意：不是电动汽车电池 —— 汽车电池在电动汽车步骤中是一个单独的字段）。用于基于天气预测的充电策略。",
@@ -185,23 +184,28 @@
           "diagram_style": "选择在主页标签页上使用哪种系统图卡片。“SEM”使用内置的动态图。“K-Flow”使用 K-Flow HACS 卡片（必须单独安装）。修改后需要重新运行 generate_dashboard。",
           "hot_water_solar_target": "太阳能辅助热水加热的目标温度 (°C)。当有富余电量时，SEM 会提高锅炉的加热目标。",
           "legionella_target_temp": "热水系统在军团菌消毒周期中必须达到的温度 (°C)。",
-          "legionella_interval_hours": "在 SEM 强制启动加热之前，两次军团菌消毒周期之间的最大间隔时间（小时）。"
+          "legionella_interval_hours": "在 SEM 强制启动加热之前，两次军团菌消毒周期之间的最大间隔时间（小时）。",
+          "grid_sign_invert": "仅当电网进口显示为正值时开启（例如 Enphase）。SEM 的约定是负值＝进口；此选项会对原始读数取反并跳过符号自动检测。"
         }
       },
       "settings_ev": {
         "title": "电动汽车充电与太阳能",
         "description": "配置电动汽车充电目标和太阳能阈值。",
         "data": {
-          "daily_ev_target": "夜间充电目标量 (kWh)",
+          "daily_ev_target": "至少保证 (kWh)",
           "observer_mode": "观察者模式（只读，无硬件控制）",
           "smart_night_charging": "根据明天的天气预测减少夜间目标量",
-          "minimum_solar_power": "启动电动汽车充电的最低太阳能功率 (W)"
+          "minimum_solar_power": "启动电动汽车充电的最低太阳能功率 (W)",
+          "curtailment_probe_enabled": "限发探测(利用被限制的光伏)",
+          "export_limit_entity": "输出限制实体(可选)"
         },
         "data_description": {
-          "daily_ev_target": "每晚从电网充电的目标 kWh。设置为 0 可禁用夜间电网充电。",
+          "daily_ev_target": "SEM 会在夜间从电网补充，使车辆在早晨至少有这么多电量。这是下限而非上限——阳光可以充得更多。0 = 从不使用电网。",
           "observer_mode": "启用时，SEM 将监控所有数据，但绝不向硬件发送指令。",
           "smart_night_charging": "启用时，当明天的太阳能发电量预测充足时，SEM 将减少夜间充电目标量。",
-          "minimum_solar_power": "SEM 启动太阳能电动汽车充电所需的最低富余太阳能功率 (W)。"
+          "minimum_solar_power": "SEM 启动太阳能电动汽车充电所需的最低富余太阳能功率 (W)。",
+          "curtailment_probe_enabled": "当逆变器限制并网输出(如负电价时),发电量被钳制在消耗水平,真实的光伏潜力不可见。选择启用后:SEM 以最小电流短暂启动电动车充电,仅当发电量随之上升时才继续。",
+          "export_limit_entity": "逆变器的输出限制实体(留空时对华为、GoodWe、SolaX、Victron 等自动检测)。可提高检测精度并避免不必要的探测。"
         }
       },
       "settings_tariff": {
@@ -210,15 +214,18 @@
         "data": {
           "tariff_mode": "电价模式",
           "dynamic_tariff_entity": "动态电价实体（留空则自动检测）",
-          "dynamic_forecast_entity": "预测实体（可选，留空则自动检测）",
+          "dynamic_forecast_entity": "电价预测实体（可选，留空则自动检测）",
           "dynamic_feedin_entity": "上网/馈电电价实体（可选，用于动态出口电价）",
           "electricity_import_rate": "购电电价",
+          "grid_import_surcharge": "电网运营商可变费用（货币/千瓦时）",
           "electricity_off_peak_rate": "谷电电价（若有不同）",
           "electricity_export_rate": "上网/馈电电价",
           "demand_charge_rate": "基本电费/需量电价",
           "update_interval": "更新间隔 (秒)",
           "grid_import_power_entity": "电网购电功率传感器（可选，自动检测）",
-          "grid_export_power_entity": "电网供电功率传感器（可选，自动检测）"
+          "grid_export_power_entity": "电网供电功率传感器（可选，自动检测）",
+          "tariff_classification_mode": "电价分类模式",
+          "solar_forecast_source": "光伏预测数据源"
         },
         "data_description": {
           "tariff_mode": "选择“静态”代表固定费率，“动态”代表实时计价，或选择“日历”代表分时电价计划。",
@@ -226,12 +233,15 @@
           "dynamic_forecast_entity": "可选。包含每小时电价预测的传感器，用于智能调度。",
           "dynamic_feedin_entity": "可选。提供当前上网/馈电电价的传感器，用于动态出口电价。",
           "electricity_import_rate": "白天/固定购电电价（货币单位/kWh，含增值税）。作为动态电价不可用时的备用电价。",
+          "grid_import_surcharge": "可选的总电网可变费用，按每千瓦时进口电量计算。可包含输电费和能源税。无固定订阅费；不影响出口。",
           "electricity_off_peak_rate": "夜间/谷电购电电价（货币单位/kWh）。如果您使用的是固定单一电价，请设置为与购电电价相同。",
           "electricity_export_rate": "电力公司支付的上网/馈电电价（货币单位/kWh）。",
           "demand_charge_rate": "每月最高需求量电费（货币单位/kW/月）。如果您的合同中没有该项，请设置为 0。",
           "update_interval": "SEM 读取传感器和调整硬件的频率（秒）。范围：10–60 秒。",
           "grid_import_power_entity": "可选。用于测量电网购电功率的传感器 (W)。默认从能源看板自动检测；如果需要，可在此处覆盖。",
-          "grid_export_power_entity": "可选。用于测量电网供电功率的传感器 (W)。默认从能源看板自动检测；如果需要，可在此处覆盖。"
+          "grid_export_power_entity": "可选。用于测量电网供电功率的传感器 (W)。默认从能源看板自动检测；如果需要，可在此处覆盖。",
+          "tariff_classification_mode": "“百分位”相对当天价格区间分类（推荐）。“固定”使用固定的便宜/昂贵阈值。",
+          "solar_forecast_source": "SEM 读取哪个预测集成。自动检测优先使用 Solcast，其次 Forecast.Solar，再次 Open-Meteo — 如果同时运行多个，请手动指定一个。"
         }
       },
       "load_management": {
@@ -239,21 +249,23 @@
         "description": "更新负荷管理配置",
         "data": {
           "load_management_enabled": "启用负荷管理",
+          "peak_limit_unlimited": "无电网上限",
           "target_peak_limit": "目标峰值限制 (kW)",
           "warning_peak_level": "预警峰值水平 (kW)",
           "emergency_peak_level": "紧急峰值水平 (kW)",
           "vehicle_soc_entity": "车辆电池电量 (SOC)",
           "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
-          "ev_target_soc": "电动汽车目标电量 (%)"
+          "ev_target_soc": "达到此值视为充满 (%)"
         },
         "data_description": {
           "load_management_enabled": "启用/禁用 SEM 的自动减载功能，以保持在您的电网峰值限制以下。",
+          "peak_limit_unlimited": "完全关闭峰值管理：SEM 不再按目标峰值上限来分配负载功率，也绝不会为守住该上限而卸载。仅适用于任何家用负载都无法造成威胁的大容量进线。这与“启用负载管理”不同——后者只停止卸载，上限仍作为功率分配的天花板。",
           "target_peak_limit": "在 SEM 开始切除可控负荷之前的最大电网功率 (kW)。",
-          "warning_peak_level": "SEM 在采取行动前发出警告的功率水平 (kW)。",
-          "emergency_peak_level": "SEM 为避免产生需量电费而采取激进减载措施的功率水平 (kW)。",
+          "warning_peak_level": "SEM 在采取行动前发出警告的功率水平 (kW)。 必须低于目标峰值上限。",
+          "emergency_peak_level": "SEM 为避免产生需量电费而采取激进减载措施的功率水平 (kW)。 必须高于目标峰值上限。",
           "vehicle_soc_entity": "可选。报告车辆当前剩余电量的传感器 (0–100%)。",
           "ev_battery_capacity_kwh": "电动汽车电池的总可用容量 (kWh)。",
-          "ev_target_soc": "SEM 视电动汽车已充满电的目标电量 (%)。"
+          "ev_target_soc": "达到此值后 SEM 视车辆为已充满。这是对\"充满\"的定义，不是充电上限。"
         }
       },
       "battery_scheduler": {
@@ -269,7 +281,15 @@
           "battery_max_target_soc": "最大目标电量 (SOC)",
           "battery_min_deficit_kwh": "最小缺口阈值",
           "battery_pessimism_weight": "预测悲观权重",
-          "battery_force_charge_negative_price": "负电价时强制充电"
+          "battery_force_charge_negative_price": "负电价时强制充电",
+          "battery_charge_platform": "电池充电平台",
+          "battery_replan_interval_min": "重新规划间隔 (min)",
+          "battery_prefer_consecutive_window": "优先选择连续的充电时段"
+        },
+        "data_description": {
+          "battery_charge_platform": "SEM 用于计划电网充电的逆变器。选择 Deye 可显示 Deye 接线步骤。",
+          "battery_replan_interval_min": "根据最新预测和电价重新计算充电计划的频率。",
+          "battery_prefer_consecutive_window": "开启：将便宜时段集中为一整块（减少启停次数）；关闭：即使分散也选择单独最便宜的小时。"
         }
       },
       "notifications": {
@@ -281,7 +301,7 @@
           "mobile_notification_service": "手机通知服务",
           "vehicle_soc_entity": "车辆电池电量 (SOC)",
           "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
-          "ev_target_soc": "电动汽车目标电量 (%)"
+          "ev_target_soc": "达到此值视为充满 (%)"
         },
         "data_description": {
           "enable_charger_notifications": "启用/禁用充电桩状态卡片上显示的常驻通知条。",
@@ -289,7 +309,7 @@
           "mobile_notification_service": "用于移动端推送的 HA 通知服务 (例如 notify.mobile_app_your_phone)。",
           "vehicle_soc_entity": "可选。报告车辆当前剩余电量的传感器 (0–100%)。",
           "ev_battery_capacity_kwh": "电动汽车电池的总可用容量 (kWh)。",
-          "ev_target_soc": "SEM 视电动汽车已充满电的目标电量 (%)。"
+          "ev_target_soc": "达到此值后 SEM 视车辆为已充满。这是对\"充满\"的定义，不是充电上限。"
         }
       },
       "ev_charger_edit": {
@@ -309,8 +329,20 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "绿电/富余功率优先级 (1=最高)",
           "ev_current_control_entity": "电流控制实体（number 实体 — Wallbox, go-eCharger 等）",
-          "daily_ev_target_max": "太阳能充电上限量 (kWh)",
-          "ev_target_soc_max": "太阳能充电上限电量 (SOC %)"
+          "daily_ev_target_max": "充电不超过 (kWh)",
+          "ev_target_soc_max": "充电不超过 (%)",
+          "daily_ev_target": "至少保证 (kWh)",
+          "vehicle_soc_entity": "车辆电池电量 (SOC) 传感器（可选）",
+          "vehicle_range_entity": "车辆续航里程传感器",
+          "ev_kwh_per_100km": "车辆百公里能耗 (kWh/100km)",
+          "ev_target_soc": "达到此值视为充满 (%)",
+          "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
+          "initial_current": "起始电流 (A)",
+          "ev_min_current": "最小充电电流 (A)",
+          "vehicle_min_current": "车辆最小电流 (A)",
+          "ev_phase_switch_entity": "相位切换实体（可选）",
+          "ev_phase_switch_value_1p": "相位切换：单相值（可选）",
+          "ev_phase_switch_value_3p": "相位切换：三相值（可选）"
         },
         "data_description": {
           "charger_name": "在看板中显示的充电桩友好名称。",
@@ -326,8 +358,20 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "多个充电桩之间的富余绿电分配顺序。数字越小 = 优先级越高。",
           "ev_current_control_entity": "用于设置充电电流 (A) 的数值实体 (number 实体)。适用于 Wallbox、go-eCharger 以及类似的充电桩。",
-          "daily_ev_target_max": "太阳能富余绿电充电达到此数值后将停止充电。保持默认满额则允许不受限地使用太阳能充电。",
-          "ev_target_soc_max": "太阳能富余绿电充电达到此 SOC 后将停止充电。保持 100% 则允许不受限地使用太阳能充电。"
+          "daily_ev_target_max": "光伏余电充到此为止。这是上限而非目标——保持最大值即可自由使用阳光充电。",
+          "ev_target_soc_max": "光伏余电充到此为止。这是上限而非目标——保持 100% 即可自由使用阳光充电。",
+          "daily_ev_target": "SEM 会在夜间从电网补充，使车辆在早晨至少有这么多电量。这是下限而非上限——阳光可以充得更多。0 = 从不使用电网。",
+          "vehicle_soc_entity": "可选。报告车辆当前剩余电量的传感器 (0–100%)。",
+          "vehicle_range_entity": "可选。真实的续航里程传感器。若未提供，续航里程将根据 SOC × 容量 × 能效进行估算。",
+          "ev_kwh_per_100km": "在未配置续航里程传感器时，用于估算行驶续航里程。",
+          "ev_target_soc": "达到此值后 SEM 视车辆为已充满。这是对\"充满\"的定义，不是充电上限。",
+          "ev_battery_capacity_kwh": "电动汽车电池的总可用容量 (kWh)。用于估算剩余电量 (SOC) 和充电时间。",
+          "initial_current": "SEM 开始充电时使用的电流，之后再按可用余量调整。",
+          "ev_min_current": "低于此值时，SEM 会暂停充电，而不是继续降低电流。",
+          "vehicle_min_current": "每辆车的电流下限。实际最小值取此值与充电器最小电流中的较大者。",
+          "ev_phase_switch_entity": "在单相与三相充电之间切换充电桩的 select/number/switch 实体（go-e 'psm'、KEBA X 系列、openWB）。目前 SEM 仅观察和验证该实体——自动切换将在后续版本中提供。",
+          "ev_phase_switch_value_1p": "单相充电时写入相位切换实体的值——select 的选项名、number 的数值或 on/off。select 实体必填；number 默认 1，switch 默认 off。",
+          "ev_phase_switch_value_3p": "三相充电时写入相位切换实体的值——select 的选项名、number 的数值或 on/off。select 实体必填；number 默认 3，switch 默认 on。"
         }
       },
       "ev_charger_add": {
@@ -347,8 +391,19 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "绿电/富余功率优先级 (1=最高)",
           "ev_current_control_entity": "电流控制实体（number 实体 — Wallbox, go-eCharger 等）",
-          "daily_ev_target_max": "太阳能充电上限量 (kWh)",
-          "ev_target_soc_max": "太阳能充电上限电量 (SOC %)"
+          "daily_ev_target_max": "充电不超过 (kWh)",
+          "ev_target_soc_max": "充电不超过 (%)",
+          "daily_ev_target": "至少保证 (kWh)",
+          "vehicle_soc_entity": "车辆电池电量 (SOC) 传感器（可选）",
+          "vehicle_range_entity": "车辆续航里程传感器",
+          "ev_kwh_per_100km": "车辆百公里能耗 (kWh/100km)",
+          "ev_target_soc": "达到此值视为充满 (%)",
+          "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
+          "initial_current": "起始电流 (A)",
+          "ev_min_current": "最小充电电流 (A)",
+          "ev_phase_switch_entity": "相位切换实体（可选）",
+          "ev_phase_switch_value_1p": "相位切换：单相值（可选）",
+          "ev_phase_switch_value_3p": "相位切换：三相值（可选）"
         },
         "data_description": {
           "charger_name": "在看板中显示的充电桩友好名称。",
@@ -364,8 +419,19 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "多个充电桩之间的富余绿电分配顺序。数字越小 = 优先级越高。",
           "ev_current_control_entity": "用于设置充电电流 (A) 的数值实体 (number 实体)。适用于 Wallbox、go-eCharger 以及类似的充电桩。",
-          "daily_ev_target_max": "太阳能富余绿电充电达到此数值后将停止充电。保持默认满额则允许不受限地使用太阳能充电。",
-          "ev_target_soc_max": "太阳能富余绿电充电达到此 SOC 后将停止充电。保持 100% 则允许不受限地使用太阳能充电。"
+          "daily_ev_target_max": "光伏余电充到此为止。这是上限而非目标——保持最大值即可自由使用阳光充电。",
+          "ev_target_soc_max": "光伏余电充到此为止。这是上限而非目标——保持 100% 即可自由使用阳光充电。",
+          "daily_ev_target": "SEM 会在夜间从电网补充，使车辆在早晨至少有这么多电量。这是下限而非上限——阳光可以充得更多。0 = 从不使用电网。",
+          "vehicle_soc_entity": "可选。报告车辆当前剩余电量的传感器 (0–100%)。",
+          "vehicle_range_entity": "可选。真实的续航里程传感器。若未提供，续航里程将根据 SOC × 容量 × 能效进行估算。",
+          "ev_kwh_per_100km": "在未配置续航里程传感器时，用于估算行驶续航里程。",
+          "ev_target_soc": "达到此值后 SEM 视车辆为已充满。这是对\"充满\"的定义，不是充电上限。",
+          "ev_battery_capacity_kwh": "电动汽车电池的总可用容量 (kWh)。用于估算剩余电量 (SOC) 和充电时间。",
+          "initial_current": "SEM 开始充电时使用的电流，之后再按可用余量调整。",
+          "ev_min_current": "低于此值时，SEM 会暂停充电，而不是继续降低电流。",
+          "ev_phase_switch_entity": "在单相与三相充电之间切换充电桩的 select/number/switch 实体（go-e 'psm'、KEBA X 系列、openWB）。目前 SEM 仅观察和验证该实体——自动切换将在后续版本中提供。",
+          "ev_phase_switch_value_1p": "单相充电时写入相位切换实体的值——select 的选项名、number 的数值或 on/off。select 实体必填；number 默认 1，switch 默认 off。",
+          "ev_phase_switch_value_3p": "三相充电时写入相位切换实体的值——select 的选项名、number 的数值或 on/off。select 实体必填；number 默认 3，switch 默认 on。"
         }
       },
       "pv_naming": {
@@ -425,19 +491,25 @@
         }
       },
       "settings_phase_guard_topology": {
-        "title": "Electrical topology",
-        "description": "Choose how the house load is supplied. In a hybrid installation, the grid and the inverter Load/EPS/Backup output can feed the house at the same time. The load inside the house can therefore be higher than the current through the main fuse. SEM monitors the two paths independently. This prerelease is diagnostic only and never acts on the result.",
+        "title": "电气拓扑",
+        "description": "选择住宅的供电方式。在混合安装中，电网和逆变器的 Load/EPS/Backup 输出可以同时为住宅供电。因此，住宅内部的负载可能高于主保险丝的电流。SEM 会独立监测这两条路径。主动干预为可选功能；请在启用 EV 控制之前，先在观察者模式下核对读数。",
         "data": {
-          "phase_guard_topology": "Supply topology"
+          "phase_guard_topology": "供电拓扑",
+          "phase_guard_phase_count": "相数"
         },
         "data_description": {
-          "phase_guard_topology": "Select Grid only for a conventional installation. Select Grid + hybrid inverter when loads are also supplied through a Load, EPS or Backup output."
+          "phase_guard_topology": "对于传统安装，请选择“仅电网”。当负载也通过 Load、EPS 或 Backup 输出供电时，请选择“电网 + 混合逆变器”。",
+          "phase_guard_phase_count": "单相供电请选择 1，三相供电请选择 3。仅所选相会被要求和监测。"
         }
       },
       "settings_phase_guard": {
         "title": "Per-phase guard sensors",
-        "description": "Map the sensors for {topology}. Grid current is calculated per phase from absolute power divided by voltage, so export is handled safely. For a hybrid Load/EPS lane, select non-negative RMS current sensors. Missing, stale, invalid or negative readings fail closed. Observer Mode publishes diagnostics only; it sends no control commands.",
+        "description": "为 {topology} 映射传感器。对于单相供电，仅需要 L1。对于三相供电，在可用时选择完整的 L1-L3 直接 RMS 电流系列；否则电网电流根据绝对功率除以电压计算。对于混合负载/旁路 (Load/EPS) 通道，为配置的相位选择非负 RMS 电流传感器。缺失、过期、无效或负值的必需读数将安全失败（fail closed）。观察者模式 (Observer Mode) 仅发布诊断信息；它不发送任何控制命令。",
         "data": {
+          "phase_guard_enforcement_enabled": "超过相限值时停止电动汽车充电",
+          "phase_guard_notifications_enabled": "发送相位保护警报",
+          "phase_guard_recovery_margin_a": "每相限值下方的安全余量",
+          "phase_guard_recovery_cycles": "恢复充电前所需的安全读数",
           "phase_guard_grid_limit_a": "Main-fuse limit per phase",
           "phase_guard_inverter_limit_a": "Inverter Load/EPS limit per phase",
           "phase_guard_max_age_s": "Maximum sensor age",
@@ -455,12 +527,15 @@
           "phase_guard_inverter_l3_current_entity": "Inverter Load/EPS L3 RMS current"
         },
         "data_description": {
+          "phase_guard_enforcement_enabled": "启用后，如果读数不安全或已过期，所有受管理的电动汽车充电器会立即关闭，以避免总断路器跳闸。默认关闭，以便您先在观察模式下验证相保护。",
+          "phase_guard_recovery_margin_a": "在每个必需相位的读数至少低于其自身限值这一余量之前，充电将保持阻止状态。",
+          "phase_guard_recovery_cycles": "重新允许电动汽车充电前所需的连续有效且安全读数数量。",
           "phase_guard_grid_limit_a": "Maximum permitted grid current on each phase. Normally the main-fuse rating.",
           "phase_guard_inverter_limit_a": "Maximum permitted RMS current on each phase of the inverter Load/EPS/Backup output.",
           "phase_guard_max_age_s": "A reading older than this is treated as unsafe.",
-          "phase_guard_grid_l1_current_entity": "Optional direct non-negative RMS grid current in A. When direct current is used, all of L1-L3 are required.",
-          "phase_guard_grid_l2_current_entity": "Optional direct non-negative RMS grid current in A. When direct current is used, all of L1-L3 are required.",
-          "phase_guard_grid_l3_current_entity": "Optional direct non-negative RMS grid current in A. When direct current is used, all of L1-L3 are required.",
+          "phase_guard_grid_l1_current_entity": "可选、直接、非负的电网 RMS 电流，单位为安培 (A)。如果使用直接来源，则必须提供所有配置的相位。",
+          "phase_guard_grid_l2_current_entity": "可选、直接、非负的电网 RMS 电流，单位为安培 (A)。如果使用直接来源，则必须提供所有配置的相位。",
+          "phase_guard_grid_l3_current_entity": "可选、直接、非负的电网 RMS 电流，单位为安培 (A)。如果使用直接来源，则必须提供所有配置的相位。",
           "phase_guard_grid_l1_power_entity": "Signed grid power for phase L1 in W. Import or export is accepted.",
           "phase_guard_grid_l2_power_entity": "Signed grid power for phase L2 in W. Import or export is accepted.",
           "phase_guard_grid_l3_power_entity": "Signed grid power for phase L3 in W. Import or export is accepted.",
@@ -471,7 +546,61 @@
           "phase_guard_inverter_l2_current_entity": "Non-negative RMS current for inverter Load/EPS phase L2.",
           "phase_guard_inverter_l3_current_entity": "Non-negative RMS current for inverter Load/EPS phase L3."
         }
+      },
+      "deye": {
+        "title": "Deye 强制电网充电",
+        "description": "接入 Deye 混合逆变器以进行计划电网充电。默认开启观察者模式、关闭执行，因此在你明确启用之前不会向逆变器写入任何指令。",
+        "data": {
+          "deye_grid_charge_switch": "电网充电开关实体",
+          "deye_charge_current_entity": "充电电流 number 实体 (A)",
+          "deye_battery_voltage_entity": "电池电压传感器实体",
+          "deye_battery_voltage_max_age_s": "电池电压最大有效期 (s)",
+          "deye_max_charge_current_a": "最大充电电流 (A)",
+          "deye_bms_max_charge_current_a": "BMS 最大充电电流 (A)",
+          "deye_max_discharge_power": "最大放电功率 (W)",
+          "deye_program_control": "控制程序时段",
+          "deye_observer_mode": "观察者模式（只读）",
+          "deye_actuation_enabled": "启用执行（写入逆变器）",
+          "deye_work_mode_control": "控制工作模式",
+          "deye_work_mode_entity": "工作模式 select 实体",
+          "deye_work_mode_load_first_option": "Load First 对应的工作模式取值",
+          "deye_work_mode_battery_first_option": "Battery First 对应的工作模式取值",
+          "deye_force_charge_work_mode": "强制充电时使用的工作模式",
+          "deye_program_1_time": "程序 1 — 时段实体 (time.*)",
+          "deye_program_1_soc": "程序 1 — 目标 SOC number 实体",
+          "deye_program_1_charge": "程序 1 — 电网充电 select 实体",
+          "deye_program_2_time": "程序 2 — 时段实体 (time.*)",
+          "deye_program_2_soc": "程序 2 — 目标 SOC number 实体",
+          "deye_program_2_charge": "程序 2 — 电网充电 select 实体",
+          "deye_program_3_time": "程序 3 — 时段实体 (time.*)",
+          "deye_program_3_soc": "程序 3 — 目标 SOC number 实体",
+          "deye_program_3_charge": "程序 3 — 电网充电 select 实体",
+          "deye_program_4_time": "程序 4 — 时段实体 (time.*)",
+          "deye_program_4_soc": "程序 4 — 目标 SOC number 实体",
+          "deye_program_4_charge": "程序 4 — 电网充电 select 实体",
+          "deye_program_5_time": "程序 5 — 时段实体 (time.*)",
+          "deye_program_5_soc": "程序 5 — 目标 SOC number 实体",
+          "deye_program_5_charge": "程序 5 — 电网充电 select 实体",
+          "deye_program_6_time": "程序 6 — 时段实体 (time.*)",
+          "deye_program_6_soc": "程序 6 — 目标 SOC number 实体",
+          "deye_program_6_charge": "程序 6 — 电网充电 select 实体"
+        },
+        "data_description": {
+          "deye_bms_max_charge_current_a": "可选的 BMS 上限。0 表示无 BMS 限制——采用逆变器自身的最大值。",
+          "deye_observer_mode": "开启时，SEM 会计算并记录其 Deye 操作，但绝不写入逆变器。",
+          "deye_actuation_enabled": "关闭时，即使观察者模式也关闭，SEM 也绝不写入逆变器。发送任何指令前，两道闸门都必须放行。",
+          "deye_max_charge_current_a": "SEM 在充电电流实体上下达的安全上限。"
+        }
       }
+    },
+    "error": {
+      "service_not_found": "未找到通知服务。请检查服务名称（例如 notify.mobile_app_your_phone）。",
+      "peak_warning_not_below_target": "警告级别必须低于目标峰值上限——它是接近目标时的提前预警。",
+      "peak_emergency_not_above_target": "紧急级别必须高于目标峰值上限——否则 SEM 会在达到其保护的上限之前就开始卸载。",
+      "heat_pump_partial_relays": "SG-Ready 需要【两个】继电器实体。请同时设置两个继电器 —— 或者将两者都留空，仅配置 climate 实体以使用仅温控设定值增强模式。",
+      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities.",
+      "deye_work_mode_mapping_not_distinct": "Work Mode 控制需要两个不同的选项——一个用于 Load First，一个用于 Battery First。请两者都选，且不要选同一个。",
+      "deye_force_charge_work_mode_invalid": "请选择 SEM 强制充电时使用的 Work Mode：Load First 或 Battery First。"
     }
   },
   "entity": {
@@ -542,6 +671,9 @@
       "night_charging_status": {
         "name": "夜间谷电充电"
       },
+      "energy_plan": {
+        "name": "能源计划"
+      },
       "battery_priority_status": {
         "name": "蓄电池优先级"
       },
@@ -605,6 +737,9 @@
       "flow_battery_to_home_power": {
         "name": "蓄电池至家庭功率"
       },
+      "flow_battery_to_grid_power": {
+        "name": "蓄电池至电网功率"
+      },
       "flow_battery_to_ev_power": {
         "name": "蓄电池至电动汽车功率"
       },
@@ -640,6 +775,9 @@
       },
       "flow_battery_to_home_energy": {
         "name": "蓄电池至家庭电量"
+      },
+      "flow_battery_to_grid_energy": {
+        "name": "蓄电池至电网电量"
       },
       "flow_battery_to_ev_energy": {
         "name": "蓄电池至电动汽车电量"
@@ -908,6 +1046,12 @@
       "lifetime_ev_solar_share": {
         "name": "累计车充太阳能平均占比"
       },
+      "lifetime_ev_battery_share": {
+        "name": "累计车充电池占比"
+      },
+      "lifetime_ev_grid_share": {
+        "name": "累计车充电网占比"
+      },
       "vehicle_soc": {
         "name": "车辆电量 (SOC)"
       },
@@ -1063,6 +1207,42 @@
       },
       "vpp_event": {
         "name": "VPP 事件"
+      },
+      "heat_pump_energy_today": {
+        "name": "热泵今日"
+      },
+      "heat_pump_energy_month": {
+        "name": "热泵本月"
+      },
+      "heat_pump_energy_year": {
+        "name": "热泵今年"
+      },
+      "heat_pump_energy_total": {
+        "name": "热泵总计"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "热泵今日转移"
+      },
+      "daily_battery_charge_solar": {
+        "name": "今日光伏充电"
+      },
+      "daily_battery_charge_grid": {
+        "name": "今日电网充电"
+      },
+      "daily_battery_grid_cost": {
+        "name": "今日电网充电成本"
+      },
+      "battery_stored_grid_share": {
+        "name": "来自电网的储存电量"
+      },
+      "true_baseload_power": {
+        "name": "真实基础负荷"
+      },
+      "daily_true_baseload_energy": {
+        "name": "今日真实基础负荷"
+      },
+      "daily_total_consumption": {
+        "name": "今日总消耗"
       }
     },
     "binary_sensor": {
@@ -1109,6 +1289,9 @@
       },
       "vacation_mode": {
         "name": "度假模式"
+      },
+      "energy_plan_actuation": {
+        "name": "能源计划执行"
       }
     },
     "number": {
@@ -1199,6 +1382,9 @@
       "ev_min_current": {
         "name": "{charger}最小电流"
       },
+      "ev_max_current": {
+        "name": "{charger}最大电流"
+      },
       "vehicle_min_current": {
         "name": "{charger}车辆最小电流"
       },
@@ -1237,6 +1423,14 @@
           "min_plus_solar": "最低基础电流 + 太阳能",
           "always_max": "始终保持最大功率",
           "off": "关闭"
+        }
+      },
+      "phase_mode": {
+        "name": "{charger} 相位模式",
+        "state": {
+          "auto": "自动",
+          "1": "单相",
+          "3": "三相"
         }
       }
     }
@@ -1280,10 +1474,6 @@
     }
   },
   "issues": {
-    "ev_charger_not_configured": {
-      "title": "电动汽车充电桩未配置",
-      "description": "未配置电动汽车充电桩传感器，因此电动汽车充电相关功能不可用。请在集成选项中添加电动汽车“连接”传感器或充电功率传感器以启用车充功能。"
-    },
     "sensor_unavailable": {
       "title": "传感器不可用",
       "description": "传感器 `{entity_id}` ({friendly_name}) 已持续不可用超过 {minutes} 分钟。在恢复之前，SEM 无法将其纳入核心计算。请检查上游集成（如华为 Modbus / Solcast / Forecast.Solar / 您的逆变器网络通讯）。当该传感器下一次上报有效值时，此问题将自动清除。"
@@ -1330,15 +1520,31 @@
     },
     "soc_cap_unenforceable": {
       "title": "无法执行 {target}% 的充电限制：{name}",
-      "description": "**{name}** 设置了按百分比的充电目标，但您的车辆目前并未上报其剩余电量 (SOC)，因此 SEM 无法在 **{target}%** 时停止充电 —— 充电将持续到车辆自身开始降流（接近充满）为止。\n\n如果看板上显示了电池百分比，那是 SEM *估算* 的 SOC，出于硬性限制的考虑 SEM 会刻意忽略它（该估值可能产生偏差）。要执行此上限，请为该充电桩配置一个 **真实的车辆 SOC 传感器**（配置 → 电动汽车 → 车辆 SOC 实体）。一旦重新获得真实的 SOC 读数，此修复项将自动清除。"
+      "description": "**{name}** 设置了百分比充电目标，但您的车辆当前未上报电量，因此 SEM 无法*恰好*停在 **{target}%**。\n\n不过它并非盲充：SEM 会从本次会话最后一次真实读数开始累计实际输送的电量，并在这个实测总量达到目标时停止——超出的部分仅限于车辆自那次读数以来所取用的电量。如果本次会话根本没有收到任何真实读数（或者 SEM 在充电中途重启过），就没有可依据的基准，充电会一直持续到车辆自己在接近充满时降功率为止。\n\n若要让上限精确命中，请为该充电桩配置**真实的车辆 SOC 传感器**（配置 → 电动车 → 车辆 SOC 实体）。仪表板上的电池百分比是 SEM 的*估算* SOC，出于可能漂移的考虑，硬性上限会刻意忽略它。一旦重新获得真实的 SOC 读数，此修复项将自动消失。"
+    },
+    "unmanaged_charger_found": {
+      "title": "SEM 发现了一个未纳管的充电桩",
+      "description": "设备 **{name}** 看起来像电动车充电桩，但 SEM 中未配置任何充电桩 — 因此 SEM 不会控制它（找到 {count} 个候选）。\n\n若希望 SEM 用光伏和低价电价优化充电，请在 设置 → 设备与服务 → SEM → 配置 中添加。添加后还会出现带充电模式的 EV 标签页。\n\n如果这不是充电桩，请忽略此提示 — SEM 无论如何都不会控制它。"
+    },
+    "lovelace_yaml_mode": {
+      "title": "Lovelace 处于 YAML 模式 — 请添加 SEM 卡片资源",
+      "description": "您的 Home Assistant 以 YAML 模式运行 Lovelace，因此 SEM 无法自动注册其仪表板卡片，面板会显示“配置错误”卡片。\n\n请在 `configuration.yaml` 的 `lovelace:` → `resources:` 下添加以下内容，重启 Home Assistant，然后强制刷新浏览器（Ctrl+Shift+R）：\n\n```yaml\n{resources}\n```\n\n资源加载后此消息会自动消失。"
+    },
+    "charger_control_entity_broken": {
+      "title": "充电桩控制实体无法工作：{name}",
+      "description": "SEM 使用 **`{entity_id}`** 来对 **{name}** 执行{capability}，但该实体处于 `{reason}` 状态——每条指令都会丢失。请在**开发者工具 → 状态**中检查该实体并从源头修复，或在**设置 → 设备与服务 → SEM → 配置 → 充电桩 → 编辑**中重新指定。"
+    },
+    "battery_force_discharge_unsupported": {
+      "title": "Battery power setpoint cannot be written: {entity_id}",
+      "description": "SEM tried to write **{entity_id}** and the device refused every time: `{error}`.\n\nThe entity exists and SEM is addressing it correctly — the inverter's firmware simply does not implement writing that register. This usually means the entity you picked for *forcible discharge* in SEM's battery settings is readable but not writable on your hardware.\n\nSEM has stopped trying, so this will no longer fill your log. Two things follow: the routine safety write SEM makes when returning the battery to normal operation is skipped (harmless — there was nothing set to clear), and **battery-to-grid export cannot run** on this battery. Charging, discharge limits and everyday operation are unaffected.\n\n**If you do not use battery-to-grid export**, clear the forcible-discharge entity in SEM's battery settings and this notice goes away. **If you expected it to work**, the entity is likely the wrong one — or your inverter does not support commanded export. A restart makes SEM try again, so a firmware update or a corrected entity is picked up on its own."
     }
   },
   "selector": {
     "phase_guard_topology": {
       "options": {
-        "disabled": "Disabled",
-        "grid_only": "Grid supply only",
-        "hybrid_load_port": "Grid + hybrid inverter Load/EPS output"
+        "disabled": "已禁用",
+        "grid_only": "仅电网供电",
+        "hybrid_load_port": "电网 + 混合逆变器 Load/EPS 输出"
       }
     }
   }

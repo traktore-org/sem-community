@@ -20,7 +20,6 @@ import pytest
 from custom_components.solar_energy_management.coordinator import (
     FlowCalculator,
     PowerReadings,
-    EnergyTotals,
 )
 
 

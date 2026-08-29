@@ -241,13 +241,24 @@ class TestReconcilerRogueDraw:
                            _obs(charging=True, power=4870.0), now=30.0)
         assert a3 == [Action(ActionKind.DISABLE)]
 
-    def test_rogue_disable_reasserts_every_cycle(self):
+    def test_rogue_disable_reasserts_at_the_dwell(self):
+        # (#763 round 3) The re-assert now floors at the evcc-parity 60 s
+        # dwell — the per-cycle hammering this test used to pin was
+        # redundant bridge writes, each a fresh chance to abort the car's
+        # handshake mid-negotiation. The INTENT stands every cycle; the
+        # WRITE lands once per dwell.
         rec = _rec()
         rec.reconcile(DesiredState.IDLE, 0, _obs(charging=False), now=0.0)
-        for t in (10.0, 20.0, 30.0):
+        actions = rec.reconcile(DesiredState.IDLE, 0,
+                                _obs(charging=True, power=4870.0), now=10.0)
+        assert actions == [Action(ActionKind.DISABLE)]
+        for t in (20.0, 30.0):
             actions = rec.reconcile(DesiredState.IDLE, 0,
                                     _obs(charging=True, power=4870.0), now=t)
-            assert actions == [Action(ActionKind.DISABLE)], f"at t={t}"
+            assert Action(ActionKind.DISABLE) not in actions, f"at t={t}"
+        actions = rec.reconcile(DesiredState.IDLE, 0,
+                                _obs(charging=True, power=4870.0), now=71.0)
+        assert actions == [Action(ActionKind.DISABLE)]
 
     def test_settle_after_rogue_then_new_rogue_still_immediate(self):
         rec = _rec()

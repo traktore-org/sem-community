@@ -17,9 +17,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from custom_components.solar_energy_management.consts.core import (
-    KEBA_IDLE_GUARD_KWH,
-)
 from custom_components.solar_energy_management.devices.base import (
     CurrentControlDevice,
 )
@@ -58,18 +55,27 @@ def _calls(mock_hass, service):
 
 
 @pytest.mark.asyncio
-async def test_stop_session_arms_idle_guard(keba, mock_hass):
+async def test_stop_session_arms_no_idle_guard(keba, mock_hass):
+    """SUPERSEDED BY #854 (was: stop_session must arm the idle guard).
+
+    The guard's intent was to bound a rogue session while SEM is DOWN, by
+    leaving a small energy target the box would stop at. It is not small:
+    the firmware floors any non-zero target at 1.0 kWh (measured on the
+    real P30 — 0.3 → reads 1.0, 0.5 → 1.0). So the "guard" was a stored
+    1 kWh ALLOWANCE, and the moment anything enabled the box — including
+    SEM's own quota-hold stop — the car spent it. That is precisely the
+    "Min = 0 still charges 1 kWh" the reporter saw.
+
+    The stop is now one call, matching the automation that has run this
+    hardware for two years. The RELEASE half of #553 stays live and is
+    exercised by the tests below: a box may still hold a target somebody
+    else wrote, and a start must clear it."""
     await keba.stop_session()
-    se = _calls(mock_hass, "set_energy")
-    assert se, "stop_session must arm the set_energy idle-guard"
-    # the guard value rides in the data dict (3rd positional arg)
-    data = [
-        c.args[2] for c in mock_hass.services.async_call.call_args_list
-        if len(c.args) >= 3 and c.args[1] == "set_energy"
-    ]
-    assert data == [{"energy": KEBA_IDLE_GUARD_KWH}]
-    # and the disable still fired first
-    assert _calls(mock_hass, "disable")
+    assert not _calls(mock_hass, "set_energy"), (
+        "a stop must not leave an energy target behind — it is an "
+        "allowance, not a guard"
+    )
+    assert _calls(mock_hass, "disable"), "the disable IS the stop"
 
 
 @pytest.mark.asyncio
@@ -221,7 +227,6 @@ async def test_guard_sensor_discovery_by_name_when_no_device(keba, mock_hass, mo
     entities (PROD 2026-07-18), so device-registry sibling discovery is
     structurally blind. The name-derivation fallback must find
     <box>_energy_target from the configured <box>_charging_power anchor."""
-    import custom_components.solar_energy_management.devices.base as base_mod
     keba.power_entity_id = "sensor.keba_p30_charging_power"
     # entity registry returns an entry with device_id None
     class _Ent: device_id = None

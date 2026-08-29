@@ -18,16 +18,33 @@ from typing import Dict, Any, Optional
 from dataclasses import dataclass
 
 from homeassistant.core import HomeAssistant
-from homeassistant.util import dt as dt_util
 
 from ..const import (
     ChargingState,
     DEFAULT_BATTERY_PRIORITY_SOC,
-    DEFAULT_DAILY_EV_TARGET,
 )
 from ..utils.time_manager import TimeManager
 
+from ..utils.log_gate import log_on_change
+
 _LOGGER = logging.getLogger(__name__)
+
+
+def _cw(watts) -> int:
+    """(#829) A live watt figure for a REASON string, in 100 W steps.
+
+    Reasons explain a decision; they ride the attributes of
+    ``sensor.sem_charging_state`` and were formatted with the raw reading
+    (``solar=550W < 1000W``), so the text — and therefore the recorder row and
+    the attribute blob — changed every 10 s cycle: 8,641 rows and ~1,400
+    distinct blobs a day on the rig. ``solar=500W < 1000W`` explains exactly
+    as much and changes only when the situation does. The live value itself
+    is on sensor.sem_solar_power, where a chart belongs.
+    """
+    try:
+        return int(round(float(watts or 0.0) / 100.0) * 100)
+    except (TypeError, ValueError):
+        return 0
 
 
 @dataclass
@@ -270,7 +287,8 @@ class ChargingStateMachine:
                     f"EV session allowed"
                 )
             else:
-                _LOGGER.debug(
+                log_on_change(   # (#762) transition-gated
+                    _LOGGER, "solar_wait_batt", logging.DEBUG,
                     f"Solar: Waiting for battery priority ({ctx.battery_soc:.0f}% < {battery_priority_soc}%)"
                 )
                 return ChargingState.SOLAR_WAITING_BATTERY_PRIORITY
@@ -283,9 +301,10 @@ class ChargingStateMachine:
                 return ChargingState.SOLAR_CHARGING_ACTIVE
 
         # Waiting for better solar conditions
-        _LOGGER.debug(
+        log_on_change(   # (#762) 125 near-identical lines/day; digits stripped
+            _LOGGER, "solar_wait", logging.DEBUG,
             f"Solar: Waiting — calculated_current={ctx.calculated_current:.1f}A, "
-            f"excess_solar={ctx.excess_solar:.0f}W, "
+            f"excess_solar={_cw(ctx.excess_solar)}W, "
             f"battery_soc={ctx.battery_soc:.0f}%, "
             f"session_allowed={self._ev_session_allowed}, "
             f"daily_ev={ctx.daily_ev_energy:.1f}kWh, "
@@ -398,7 +417,8 @@ class ChargingStateMachine:
 
         remaining_needed = ctx.night_target_kwh
 
-        _LOGGER.debug(
+        log_on_change(   # (#762) per-cycle at night; the number wobbles
+            _LOGGER, "night_remaining", logging.DEBUG,
             "Night charging: remaining=%.1fkWh",
             remaining_needed,
         )

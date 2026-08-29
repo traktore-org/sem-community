@@ -93,7 +93,21 @@ class TestLabelRegistration670:
         index; the gate in front of it was the missing piece.
         """
         from homeassistant.helpers import entity_registry as er
-        from homeassistant.helpers.template import label_entities
+
+        # (#791) HA 2026.8 moved ``label_entities`` from a module-level
+        # function into the template engine's LabelExtension — the
+        # PUBLIC surface (a rendered template) is the same on every
+        # supported HA, so the oracle goes through it instead of the
+        # implementation's address.
+        try:
+            from homeassistant.helpers.template import label_entities
+        except ImportError:  # 2026.8+ — render the template surface
+            from homeassistant.helpers.template import Template
+
+            def label_entities(hass_, name):
+                return Template(
+                    "{{ label_entities(%r) | list }}" % name, hass_
+                ).async_render()
 
         ent_reg = er.async_get(hass)
         entry = ent_reg.async_get_or_create(

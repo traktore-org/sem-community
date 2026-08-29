@@ -227,6 +227,13 @@ Pick `hvac_mode: heat` (or `heat_cool`) to drive a heat pump the same way in
 winter. Leave `target_temperature` empty to keep the unit's own setpoint and
 only switch the mode.
 
+`device_type` also decides how the unit is drawn in the device list — a
+thermostat glyph for `climate`, a heat-pump glyph for `heat_pump`, a plug for
+a plain `switch`. Before #788 every service-registered device was labelled
+`service_device` on its way to the card and drew the generic plug regardless,
+which made a correctly registered second heat pump look like it had not been
+added at all.
+
 ### The mode ladder — who is in charge
 
 Every device row on the Control tab has **one mode picker** — a 3-step
@@ -234,7 +241,7 @@ ladder:
 
 | Mode (UI) | Behavior |
 |---|---|
-| **Off** | SEM monitors only, never switches the device |
+| **Off** | SEM monitors only, never switches the device — it sees your ON and keeps counting the device's energy, but never records itself as the one who started it — and the daily runtime budget stops accruing, because that budget is SEM's own (#779) |
 | **Peak only** | **Your own automations** run the device; SEM only sheds it to protect the grid peak and restores it afterwards (catch the surplus via the event interface below) |
 | **Surplus** | SEM runs the device on solar surplus; **never grid power** — on a dark day the daily target is simply missed |
 
@@ -246,6 +253,42 @@ but is not surfaced on the generic device card.)
 Devices auto-discovered from the Energy Dashboard default to
 `peak_only`; devices you register via the service default to
 `surplus` (solar-only) — that's what you register them for.
+
+**Lights are not imported.** An Energy-Dashboard consumer whose only
+on/off surface is a `light.*` entity is skipped: lighting is not
+shiftable, not a surplus sink, and shedding a dimmer is hostility for
+savings that round to zero. HA's own Energy Dashboard keeps monitoring
+it — SEM just has no business managing it. A metering *plug* feeding a
+lamp is kept (the plug is a real control surface), and a relay you
+register explicitly with `register_surplus_device` is always kept, even
+if it is exposed as a light: that is your decision, not a guess. The
+skip is logged with the device name, so an absent row is an answer
+rather than a mystery, and it is re-evaluated on every refresh — a light
+imported by an older version disappears by itself after the upgrade.
+
+**Settings are not devices.** A lot of hardware publishes its own knobs
+as switches — a WLED strip's *reverse*, *freeze* and *night light*, a
+washing machine's *child lock*, a router's *status LED*. Home Assistant
+marks those entities **configuration** or **diagnostic**, and SEM reads
+that mark: they are never discovered as loads, never chosen as a
+device's control surface, and rows an older version created for them
+retire themselves on the next refresh. Toggling one draws no watts, so
+managing it can only ever be noise — a peak event flipping your stair
+lights into reverse looking for power that was never there. Two things
+are always kept: an entity your registry doesn't know (a template
+switch, a YAML helper — no mark to read is not evidence against it), and
+anything you registered yourself with `register_surplus_device`.
+
+**A channel keeps its number.** On a multi-channel relay (a Shelly Pro,
+an ESPHome board) the digit in the name *is* the channel, so control
+matching never strips it and never accepts a bare substring:
+`kanal_1` is not `kanal_2`, and it is not `kanal_10` either. A switch is
+bound as a load's control only when it carries the exact same name, or
+that name extended at a word boundary (`…_relay` names the channel, it
+doesn't renumber it). When no such switch exists, SEM reports **no
+control found** and manages the load as monitoring-only — deliberately
+stricter than the power-sensor pairing, because a misbound meter merely
+shows the wrong watts while a misbound relay switches the wrong circuit.
 
 ### Catching the surplus in your own automations (`peak_only`)
 
@@ -312,10 +355,15 @@ data:
 | `top_up_policy` | `solar_only` (default, never grid) or `cheap_hours` (HW/HP off-peak top-up) |
 | `stop_entity` + `stop_at` | External completion condition |
 
-> **Tip — `rated_power`:** give a real value at registration. SEM also
-> **auto-calibrates** it from the switch's power sensor the first time the
-> load runs, so an auto-discovered socket that read 0 W while off won't
-> switch on at a tiny surplus and import the rest from grid.
+> **Tip — `rated_power`:** give a real value at registration if you know one;
+> it is then treated as fact and never overwritten downward. Leave it out and
+> SEM shows a 1 kW placeholder until the load first runs, then
+> **auto-calibrates** from its power sensor — the first real reading replaces
+> the placeholder in either direction (a 8 W bulb becomes 8 W), and from then
+> on the rating only ever climbs to the load's measured peak. A load with no
+> power sensor at all keeps the placeholder: the 1 kW is what stops an
+> unmeasurable socket from switching on at a tiny surplus and importing the
+> rest from grid.
 
 #### What happens when the budget is NOT reached?
 

@@ -22,9 +22,9 @@ Two concerns, one decision per cycle (``plan_night_charge``):
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import Optional
 
 
 @dataclass
@@ -92,12 +92,6 @@ def resolve_deadline(now: datetime, target_time: Optional[str]) -> Optional[date
     return candidate
 
 
-def _is_within_slot(now: datetime, slot_starts: List[datetime], slot_hours: float = 1.0) -> bool:
-    """True when ``now`` falls inside one of the (hour-long) cheap slots."""
-    span = timedelta(hours=slot_hours)
-    return any(s <= now < s + span for s in slot_starts)
-
-
 def _hours_between(start: datetime, end: datetime) -> float:
     """Elapsed hours from ``start`` to ``end``, DST-correct (#274/M2).
 
@@ -123,8 +117,6 @@ def plan_night_charge(
     target_time: Optional[str] = None,
     night_end: Optional[str] = None,
     tariff_optimized: bool = False,
-    cheap_slots: Optional[List[datetime]] = None,
-    slot_hours: float = 1.0,
     peak_managed_amps: Optional[int] = None,
 ) -> NightChargePlan:
     """Decide this cycle's night-charging action for one charger.
@@ -137,10 +129,10 @@ def plan_night_charge(
         target_time: ``HH:MM`` user deadline ("reach Min by"), or None.
         night_end: ``HH:MM`` night-window end, used as the deadline when no
             explicit ``target_time`` is set.
-        tariff_optimized: Whether tariff-optimized timing is enabled.
-        cheap_slots: Sorted hour-start datetimes selected as the cheapest block
-            (from the tariff provider). Empty/None disables tariff gating.
-        slot_hours: Length of each price slot (1.0 = hourly, 0.5 = half-hourly).
+        tariff_optimized: Whether the user opted into tariff-timed
+            charging. Post-retirement (#638 one-gate C3) it gates ONLY the
+            unreachable warning: the WHEN comes from the joint plan's
+            blocks via the overlay, never from this pure function.
         peak_managed_amps: Realistic current (A) the charger can sustain under
             the peak limit given expected (average) home consumption, clamped to
             [min, max]. This is the rate non-forcing night charging actually runs
@@ -228,42 +220,10 @@ def plan_night_charge(
             + ("" if is_forcing else " (peak-limited — raise peak limit or set an earlier deadline)")
         )
 
-    # --- Tariff gating (#247) ------------------------------------------------
-    # Drop slots that have already ended (stale tariff data / past slots that
-    # survived the provider's lookback filter) so they don't inflate the
-    # deliverable estimate or surface a past "next cheap" time (#274/H3).
-    slot_len = timedelta(hours=slot_hours)
-    cheap_slots = sorted(s for s in (cheap_slots or []) if s + slot_len > now)
-    plan.next_cheap_start = cheap_slots[0] if cheap_slots else None
-
-    if tariff_optimized and cheap_slots:
-        now_is_cheap = _is_within_slot(now, cheap_slots, slot_hours)
-        if now_is_cheap:
-            plan.reason = "tariff: in cheap window — charging"
-        elif not plan.reachable:
-            # Can't make the deadline anyway — don't also wait for cheap.
-            plan.reason = "tariff: deadline at risk — charging despite price"
-        else:
-            # Can we still hit Min using only the cheap slots before the deadline,
-            # AT THE RATE WE'LL ACTUALLY CHARGE (peak-managed unless forcing)?
-            # Clip each slot to the time left before the deadline.
-            limit = deadline if deadline is not None else (now + timedelta(hours=24))
-            deliverable_kwh = 0.0
-            for s in cheap_slots:
-                if s >= limit:
-                    continue
-                usable_h = min(slot_hours, max(0.0, _hours_between(max(s, now), limit)))
-                deliverable_kwh += usable_h * effective_rate_kw
-            if deliverable_kwh + 1e-6 >= remaining_to_min_kwh:
-                plan.should_wait_for_cheap = True
-                nxt = plan.next_cheap_start
-                when = nxt.strftime("%H:%M") if nxt else "?"
-                plan.reason = f"tariff: waiting for cheap window (next {when})"
-            else:
-                plan.reason = (
-                    "tariff: not enough cheap hours at the peak-limited rate — "
-                    "charging now to guarantee min"
-                )
+    # (#638 one-gate C3) The tariff-gating block is RETIRED. The pure
+    # planner keeps only guarantee math; ``should_wait_for_cheap`` /
+    # ``next_cheap_start`` keep their defaults (False / None) and are
+    # written EXCLUSIVELY by the plan-gate overlay in the coordinator.
 
     # Only warn the user when they opted into deadline/tariff behaviour (#274/C1):
     # a plain default-deadline night charge that simply can't finish within the

@@ -156,16 +156,54 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
         state_value = getattr(state, "value", state) if state is not None else None
 
         if state_value == "scheduled":
-            in_window = _now_in_window(view)
-            if in_window:
+            # (#638 one-gate C4) The scheduler owns WHAT (deficit, target,
+            # power, economics); the joint plan owns WHEN. The old
+            # ``_now_in_window`` read the scheduler's OWN window pick —
+            # the second selector this build retires.
+            sched_power = float(getattr(sched, "charge_power_w", 0.0) or 0.0)
+            if bool(getattr(sched, "price_forced", False)):
+                # Negative price: being PAID to consume is a reactive
+                # price gate, not window selection — bypasses the plan.
                 return BatteryDecision(
                     battery_id=rt.battery_id,
                     intent=BatteryIntent.FORCE_CHARGE,
                     target_soc=getattr(sched, "target_soc", 0.0),
-                    charge_power_w=getattr(sched, "charge_power_w", 0.0),
+                    charge_power_w=sched_power,
                     duration_min=getattr(sched, "duration_min", 60),
-                    reason=f"scheduler SCHEDULED → force charge in window",
+                    reason="negative price — charging regardless of plan",
                 )
+            gate = view.plan_gate
+            if gate is not None and getattr(gate, "covered", False):
+                if getattr(gate, "in_block", False):
+                    block_w = float(
+                        getattr(gate, "block_power_w", 0.0) or 0.0)
+                    power = min(sched_power, block_w) if block_w > 0 \
+                        else sched_power
+                    return BatteryDecision(
+                        battery_id=rt.battery_id,
+                        intent=BatteryIntent.FORCE_CHARGE,
+                        target_soc=getattr(sched, "target_soc", 0.0),
+                        charge_power_w=power,
+                        duration_min=getattr(sched, "duration_min", 60),
+                        reason="scheduler SCHEDULED → plan block open — "
+                               "force charge",
+                    )
+                nxt = getattr(gate, "next_block_start", None)
+                when = f" (opens {nxt:%H:%M})" if nxt else ""
+                return BatteryDecision(
+                    battery_id=rt.battery_id,
+                    intent=BatteryIntent.STOP_FORCE_CHARGE,
+                    reason="scheduler SCHEDULED — outside the planned "
+                           f"block{when}",
+                )
+            why = getattr(gate, "reason", "") if gate is not None else "no gate"
+            return BatteryDecision(
+                battery_id=rt.battery_id,
+                intent=BatteryIntent.STOP_FORCE_CHARGE,
+                reason=f"scheduled but the plan does not cover the battery "
+                       f"({why or 'uncovered'}) — pre-charge is "
+                       "optimization, not guarantee",
+            )
 
         # Export arbitrage — the scheduler decided to SELL to the grid
         # this cycle (#523). Pure actuation of the scheduler's verdict, the
@@ -183,37 +221,42 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
         # what keeps it sane.
         if state_value == "discharging_arbitrage":
             global_arb = bool(cfg.get("battery_grid_arbitrage_enabled", False))
-            if arbitrage_allowed_for_mode(mode, global_arb):
-                floor = reserve if reserve > 0 else getattr(sched, "floor_soc", 0.0)
+            # (#638 one-gate C6) The plan says WHEN: the live economics
+            # verdict alone no longer opens the valve — the stamped plan's
+            # sell block must be open (view.arbitrage_sell, fleet-split by
+            # the pipeline).
+            _sell = getattr(view, "arbitrage_sell", None)
+            _sell_open = bool(_sell and _sell[0])
+            if _sell_open and arbitrage_allowed_for_mode(mode, global_arb):
+                # BOTH floors bind and the higher wins: the user's backup
+                # reserve AND the verdict's arbitrage_reserve_soc. The old
+                # either/or dropped the arbitrage reserve on every install
+                # with a nonzero backup reserve (i.e. all of them) — and
+                # handed the ACTUATOR the lower floor, which a hardware
+                # end-SOC (Huawei) or a setpoint battery honors on its own
+                # between SEM cycles. The #532 drain class, one seam later.
+                floor = max(
+                    reserve, float(getattr(sched, "floor_soc", 0.0) or 0.0)
+                )
                 soc = rt.last_known_soc
                 # #531: don't sell blind — a setpoint battery has no hardware
                 # reserve-stop, so an unavailable SOC must hold, not discharge.
                 if soc is not None and soc > floor:
-                    # ⚠️ MULTI-BATTERY RE-ACTIVATION GUARD (arbitrage is dormant
-                    # in stable — #533 migration v14 forces it off; _any_allow_arb
-                    # is False and the UI is hidden). ``discharge_power_w`` here is
-                    # the scheduler's single ``max_discharge_power_w`` (the global
-                    # ``battery_max_discharge_power`` config, battery_charge_scheduler
-                    # .py:723). It is handed UNSPLIT to EVERY arbitrage battery, so
-                    # an N-battery fleet exports N× this value.
-                    #
-                    # The sibling LIMIT_DISCHARGE path below (~line 242) already hit
-                    # this exact class (#531) and splits ``home/n``. BEFORE re-enabling
-                    # arbitrage, resolve the intended semantics of the config value
-                    # and apply the matching treatment:
-                    #   • if it means "total battery→grid export" → split ``/n``
-                    #     (``n = max(1, int(getattr(f, "battery_count", 1) or 1))``),
-                    #     mirroring LIMIT_DISCHARGE;
-                    #   • if it means "per-battery export cap" → leave unsplit but
-                    #     clamp each battery to its own capability, not a shared max.
-                    # Left UNSPLIT deliberately for now so the fix lands with the
-                    # design decision, not a guess on dormant code (#523/#533).
+                    # Power discipline (#638 C6): the block-implied watts
+                    # are the cap — the advisor bounded delivery by the
+                    # home's own draw, so this stays an avoided-import
+                    # delivery, never export-at-max. The pipeline already
+                    # split the block power across the fleet (#531/#691
+                    # treatment via effective_battery_count).
+                    _cap = float(_sell[1] or 0.0)
+                    _sched_w = float(getattr(sched, "discharge_power_w", 0.0) or 0.0)
                     return BatteryDecision(
                         battery_id=rt.battery_id,
                         intent=BatteryIntent.FORCE_DISCHARGE,
-                        discharge_power_w=getattr(sched, "discharge_power_w", 0.0),
+                        discharge_power_w=min(_cap, _sched_w) if _sched_w > 0 else _cap,
                         floor_soc=floor,
-                        reason=getattr(sched, "reason", "export arbitrage"),
+                        reason=getattr(sched, "reason", "export arbitrage")
+                               + " — plan sell block open",
                     )
             # Not allowed for this battery (self_consumption / auto-with-
             # global-off) or already at/under its reserve → fall through to
@@ -359,34 +402,3 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
     )
 
 
-def _now_in_window(view: "BatteryView") -> bool:
-    """Whether the current time falls inside a SCHEDULED window.
-
-    Pure: reads ``view.scheduler_decision.schedule`` if populated.
-    The schedule's TimeSlot list is the per-cycle truth — if the
-    scheduler decided SCHEDULED but the time isn't yet inside a
-    slot, we DON'T force-charge yet (this happens in the gap
-    between evaluation at 21:00 and the first charge slot).
-    """
-    sched = view.scheduler_decision
-    if sched is None:
-        return False
-    schedule = getattr(sched, "schedule", None)
-    if schedule is None:
-        # Decision is SCHEDULED but no time-slot data — treat as
-        # "charge whenever scheduler says scheduled" (back-compat
-        # with pre-time-slot scheduler version).
-        return True
-    slots = getattr(schedule, "slots", None) or []
-    if not slots:
-        return True
-    # Pure check: any slot's start <= now <= start + duration?
-    # ``now`` should come from view.fleet, but for simplicity defer
-    # to the schedule's own helper if it has one.
-    helper = getattr(schedule, "is_active_now", None)
-    if callable(helper):
-        try:
-            return bool(helper())
-        except Exception:
-            return False
-    return True

@@ -8,8 +8,8 @@ Metrics:
 - Loss analysis: inverter clipping, curtailment estimation
 """
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime, date
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
@@ -232,7 +232,7 @@ class PVPerformanceAnalyzer:
             by_month.setdefault(record.month, []).append(record)
 
         degradation_rates = []
-        for month, records in by_month.items():
+        for _month, records in by_month.items():
             if len(records) < 2:
                 continue
             records.sort(key=lambda r: r.year)

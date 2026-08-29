@@ -16,7 +16,7 @@ from custom_components.solar_energy_management.coordinator.coordinator import (
     SEMCoordinator,
 )
 from custom_components.solar_energy_management.coordinator.cycle_trace import (
-    TraceCollector, LayerStatus,
+    TraceCollector,
 )
 
 

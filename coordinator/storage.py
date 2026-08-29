@@ -26,6 +26,9 @@ STORAGE_VERSION = 1
 
 # Delayed save interval for energy totals (seconds)
 ENERGY_SAVE_DELAY = 60
+# (#800) How often the energy store may hit disk mid-run for the battery-
+# night record. Bounds unclean-reboot loss of the open night to this window.
+ENERGY_SAVE_INTERVAL = 300
 # Throttle interval for periodic daily-state writes (seconds). The daily store
 # previously only reached disk on a graceful HA stop (async_delay_save resets
 # its timer on every call, so under the continuous coordinator loop it never
@@ -66,6 +69,12 @@ CALCULATOR_STATE_KEYS: tuple[str, ...] = (
     # would look like the upgrade day and suppress the balance for good.
     "midnight_ev_baselines",
     "midnight_ev_since",
+    # (#724) the deadline that opened the running EV day, and the day key it
+    # produced. Both must persist: a restart that re-derives the day from the
+    # CURRENT deadline re-buckets a day the user moved the deadline on, which
+    # is the very thing ``_ev_reset_day`` defers.
+    "ev_day_offset",
+    "ev_day_key",
     # (#668) lifetime running totals, summed at each day rollover. Dropped
     # since they were introduced, so ``lifetime_total_savings`` fell back to a
     # 7-day-average-rate ESTIMATE of the entire history after every restart
@@ -82,6 +91,16 @@ CALCULATOR_STATE_KEYS: tuple[str, ...] = (
     # once-per-year cost seeding flag — both also reset on every restart.
     "rate_history",
     "yearly_cost_seeded",
+    # (#770) the battery's cost basis — which pools of the stored energy came
+    # off the roof and which were bought, and for how much. Without this the
+    # store forgets every purchase at restart and the next discharge is
+    # credited the full import price again, which is the bug the whole row
+    # exists to fix.
+    "battery_provenance",
+    # (#773) the sealed baseload days. Losing them re-arms the drift check's
+    # "too little history" silence for two weeks after every reboot — the
+    # exact window a post-upgrade sensor fault most needs catching in.
+    "baseload_history",
 )
 
 
@@ -375,13 +394,25 @@ class SEMStorage:
     def set_device_runtime(
         self, device_id: str, accumulated_sec: float, meter_day: str,
         accumulated_kwh: float = 0.0,
+        counter_baseline_kwh: Optional[float] = None,
     ) -> None:
-        """Persist a device's daily runtime (+ energy progress, #559)."""
+        """Persist a device's daily runtime and daily energy.
+
+        ``accumulated_kwh`` was a #559 leftover — a slot no caller ever wrote
+        and nothing ever read. #768 fills it: the device's measured (or, when
+        flagged, estimated) energy for the meter day.
+
+        ``counter_baseline_kwh`` is the last reading of the device's own energy
+        counter. Restoring it is what lets a same-day restart book the energy
+        the meter recorded while HA was down instead of re-baselining and
+        losing it.
+        """
         if "device_runtimes" not in self._daily_data:
             self._daily_data["device_runtimes"] = {}
         self._daily_data["device_runtimes"][device_id] = {
             "accumulated_sec": accumulated_sec,
             "accumulated_kwh": accumulated_kwh,
+            "counter_baseline_kwh": counter_baseline_kwh,
             "meter_day": meter_day,
         }
 
@@ -466,6 +497,65 @@ class SEMStorage:
         intel["chargers"] = chargers
         self._energy_data["ev_intelligence"] = intel
 
+    # Measured watts-per-amp persistence (#638 night 2) — the learned
+    # W/A EMA survives restarts so the energy packer never falls back
+    # to nameplate right after a deploy. In-memory only, the 23:36
+    # restart reset it and the 23:46 re-plan sized the EV floor at
+    # 6.9 kW nameplate, found no slot under the peak, and yielded a car
+    # that then charged at 4.54 kW. Same rule as the sign locks below:
+    # learned state that gates behaviour is not allowed to die at boot.
+    def get_energy_plan_state(self) -> Dict[str, Any]:
+        """(#638) Tonight's stamped plan + period + demand signature —
+        a reboot must not silently reshuffle a night the actuation is
+        steering by (Guido's Aug-5 note, made acute 00:20 on 08-09).
+
+        ``overnight_plan`` is the same state under the planner's old name.
+        An upgrade at 23:50 is still a reboot mid-night, and the whole point
+        of persisting the stamp is that such a reboot changes nothing."""
+        return (self._energy_data.get("energy_plan")
+                or self._energy_data.get("overnight_plan", {}))
+
+    def set_energy_plan_state(self, state: Dict[str, Any]) -> None:
+        """(#638) Persist the stamp; saved by the normal delayed-save
+        cycle — an abrupt kill before a save degrades to the old
+        re-plan-on-boot, never to a corrupt night.
+
+        The legacy key is retired on the first write: read once, then gone,
+        so a later boot can never pick up the pre-rename night."""
+        self._energy_data["energy_plan"] = dict(state)
+        self._energy_data.pop("overnight_plan", None)
+
+    # (#755) The third number: what each demand actually DID. Durable on
+    # purpose — a night spans midnight and the daily bucket empties there,
+    # so the per-device runtime accumulators cannot carry a night's outcome.
+    # This is also the learner's only training set, which makes losing it at
+    # boot a slow, silent regression rather than a visible one.
+    def get_demand_outcome_state(self) -> Dict[str, Any]:
+        """(#755) The open night's per-demand record plus night history."""
+        return self._energy_data.get("demand_outcomes", {})
+
+    def set_demand_outcome_state(self, state: Dict[str, Any]) -> None:
+        """(#755) Persist the outcome record; delayed-save like the stamp."""
+        self._energy_data["demand_outcomes"] = dict(state)
+
+    # (#800) The battery's night — drain / refill / clipping series the
+    # #778 budget will consume. Durable for the same reason as the
+    # demand outcomes: a night spans midnight, and this is a training
+    # set whose loss at boot would be a slow silent regression.
+    def get_battery_night_state(self) -> Dict[str, Any]:
+        return self._energy_data.get("battery_nights", {})
+
+    def set_battery_night_state(self, state: Dict[str, Any]) -> None:
+        self._energy_data["battery_nights"] = dict(state)
+
+    def get_ev_wpa_state(self) -> Dict[str, float]:
+        """Get the persisted per-charger measured-W/A EMA."""
+        return self._energy_data.get("ev_wpa_ema", {})
+
+    def set_ev_wpa_state(self, state: Dict[str, float]) -> None:
+        """Persist the per-charger measured-W/A EMA."""
+        self._energy_data["ev_wpa_ema"] = dict(state)
+
     # Sign-detection persistence (#476 item 5) — locked grid/battery
     # sign flags survive restarts so the autodetect can't re-learn a
     # wrong sign from ambiguous post-reboot samples.
@@ -544,7 +634,8 @@ class SEMStorage:
                 }
 
             self._energy_store.async_delay_save(get_data, ENERGY_SAVE_DELAY)
-            _LOGGER.debug("Scheduled delayed save of energy data")
+            # (#762) No heartbeat here: scheduling a save is not an event
+            # (1930 identical lines/day on .175). Saves log on completion/failure.
         except (OSError, TypeError) as e:
             _LOGGER.warning("Failed to schedule energy data save: %s", e)
 
@@ -569,6 +660,23 @@ class SEMStorage:
             _LOGGER.debug("Saved energy data immediately")
         except (OSError, TypeError) as e:
             _LOGGER.warning("Failed to save energy data: %s", e)
+
+    async def async_save_energy_throttled(self) -> None:
+        """Write the energy store to disk, at most once per
+        ENERGY_SAVE_INTERVAL seconds (#800 round 3).
+
+        The battery-night recorder updates its open record every cycle; a
+        record whose whole point is surviving an UNCLEAN reboot cannot be
+        written by ``async_delay_save`` (re-arms on every call → fires only
+        at a graceful stop; see ``async_save_energy_now``'s docstring — the
+        trap this file has now documented three times). Mirrors
+        ``async_save_daily_throttled``: a real write, bounded.
+        """
+        now = time.monotonic()
+        if now - getattr(self, "_last_energy_save_ts", 0.0) < ENERGY_SAVE_INTERVAL:
+            return
+        self._last_energy_save_ts = now
+        await self.async_save_energy_now()
 
     async def async_save_daily(self) -> None:
         """Save daily data immediately."""

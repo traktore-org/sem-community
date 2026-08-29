@@ -13,10 +13,10 @@ import asyncio
 import logging
 import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 # #392: KEBA's failsafe watchdog (and similar device-side timers on other
 # chargers) requires periodic *writes* to refresh — reads alone don't
@@ -54,13 +54,79 @@ _BRAND_WATCHDOG_REFRESH_S = {
 # Persisted so it overwrites the box's short built-in failsafe.
 FAILSAFE_TIMEOUT_S = 600
 
-from ..consts.core import KEBA_IDLE_GUARD_KWH, DEFAULT_DEVICE_RATED_POWER
+# #740 — the dead-man's OFF timeout. When SEM STOPS a session, the failsafe
+# re-arms with fallback 0 A ("disables the running charging process
+# completely" — the documented keba semantics of fallback 0): a masterless,
+# rebooting, or disable-defeating box locks itself off within this window
+# and STAYS off until SEM's next start sequence re-arms the charging
+# failsafe. 10 s is the keba integration's minimum accepted timeout. This
+# is the inversion the #546 live test never tried: the watchdog cannot be
+# turned off over UDP — so point it at 0 instead of fighting it.
+FAILSAFE_OFF_TIMEOUT_S = 10
+
+# #553/#545 — the quota-stop margin. Live-proven on the real P30
+# (2026-08-08): a target just ABOVE the session counter, written before
+# enable, terminates the charge at the target and HOLDS — the box's own
+# firmware refusing the car (ten unpoliced minutes of silence). A target
+# below the counter is rejected; writes after disable never persist
+# (the #553 guard was a silent no-op since it shipped).
+QUOTA_STOP_MARGIN_KWH = 0.3
+
+# #782 — the physics bound on one load's energy counter. NOT a rating: a
+# device's own ``rated_power`` is a learned estimate and must never overrule
+# its meter (#774). This is what any single load on any house circuit could
+# draw — a 3×63 A three-phase feed is ~43 kW, so 100 kW is far above every
+# real appliance and every plausible measurement error scale. It exists to
+# catch counter pathology (a meter that resets to 0 and comes back reads as
+# its whole lifetime consumed in one cycle: onkelfu's 15508.51 kWh = 5.6 GW),
+# and it is measured against the window the delta actually spans, blind
+# seconds included, so a delta bridging an unreadable stretch still books.
+_MAX_PLAUSIBLE_LOAD_W = 100_000.0
+
+from ..consts.core import (
+    DEFAULT_DEVICE_RATED_POWER,
+    DEFAULT_MAX_CHARGING_CURRENT,
+)
 from ..coordinator.units import energy_state_to_kwh, power_state_to_watts
 
 from homeassistant.core import HomeAssistant
-from homeassistant.util import dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def resolve_max_current(cfg_get) -> float:
+    """The one place a charger's configured ceiling is resolved (#746).
+
+    Three call sites build a :class:`CurrentControlDevice`'s ``max_current``:
+    setup, the late-discovery retry, and the refresh-in-place path. They used
+    to each read ``max_charging_current`` with their own literal default —
+    **bug class 46**, a value with one source of truth restated at the site
+    that uses it — which is how #789's thirteen defaults happened.
+
+    ``ev_max_current`` is the key the decision layer reads (``build_view``,
+    ``charge_stability``, ``ev_control``) and, since #746, the key the Max Amps
+    slider writes. ``max_charging_current`` is the pre-#746 key: no config-flow
+    step and no entity ever wrote it — the dashboard's *add charger* skeleton
+    minted it as a literal 32 — so it survives here purely so an upgrade cannot
+    move an existing install's ceiling.
+
+    :param cfg_get: a ``dict.get``-shaped accessor, so each caller keeps its
+        own charger→fleet fallback chain (``__init__._cfg``, ``_cfg_charger``,
+        ``self.config.get``) and only the resolution order lives here.
+    """
+    for key in ("ev_max_current", "max_charging_current"):
+        raw = cfg_get(key, None)
+        if raw is None:
+            continue
+        try:
+            val = float(raw)
+        except (TypeError, ValueError):
+            continue
+        # A stored 0 (or a negative) is a charger that can never start, from a
+        # value no user typed. Fall through rather than ceiling it at zero.
+        if val > 0:
+            return val
+    return float(DEFAULT_MAX_CHARGING_CURRENT)
 
 
 class DeviceState(Enum):
@@ -177,6 +243,48 @@ class ControllableDevice(ABC):
         self._daily_runtime_meter_day: Optional[date] = None
         self._offpeak_forced: bool = False
 
+        # (#768) Daily ENERGY, beside the daily runtime and reset with it.
+        #
+        # Not the surface #559 deleted. That was a daily energy BUDGET —
+        # ``daily_max_energy_kwh`` and friends, knobs the device steered
+        # against, wired to nothing. This is the opposite direction: what the
+        # device actually used, so the energy balance stops absorbing every
+        # controlled load into ``home`` (#767). It gates no decision, and the
+        # freeze guard in test_559_goal_engine stays green.
+        #
+        # ``_daily_energy_source`` is the provenance, and it is the point:
+        # "counter" and "power" are MEASURED, "rated" is an ESTIMATE that may
+        # never be fed back as training data (#755 contract 1), "none" means
+        # the device has no consumption signal at all.
+        self._daily_energy_kwh: float = 0.0
+        self._daily_energy_source: str = "none"
+        # Seconds the chosen MEASURED source could not be read. A sensor that
+        # is unavailable is not a device drawing zero watts — the gap is
+        # recorded rather than silently booked as 0 kWh.
+        self._daily_energy_blind_s: float = 0.0
+        self._energy_counter_last_kwh: Optional[float] = None
+        # (#782) What a counter dropped FROM. The ``delta < 0`` guard re-bases
+        # on a drop and
+        # then forgets — so a counter that comes back to its lifetime total
+        # books that total as one cycle's consumption (onkelfu: 15508.51 kWh,
+        # 5.6 GW). Remembering the high-water mark is what tells a RECOVERED
+        # counter (nothing was consumed) from a REPLACED one (every delta from
+        # zero is real).
+        self._energy_counter_pre_reset_kwh: Optional[float] = None
+        # When the counter's VALUE last changed — the start of the window the
+        # next delta spans. Not "when we last read it": a Shelly that publishes
+        # energy once a minute, a cloud meter that publishes hourly, a sensor
+        # that was unavailable for half an hour (#755 contract 1) and a restart
+        # gap all hand us one delta covering a long window, and every kWh in it
+        # is real. ``None`` means the window is unknown (a baseline restored
+        # from storage) — and an unknown window is never used to refuse.
+        self._energy_counter_last_at: Optional[datetime] = None
+        self._energy_last_power_w: Optional[float] = None
+        # (#769) What the LAST cycle booked. The running total above answers
+        # "how much today"; the ledger needs "how much just now" to file it
+        # under a period and a mode. Never persisted — it describes one cycle.
+        self._last_cycle_energy_kwh: float = 0.0
+
         # (#620) Battery use, two tiers gated by the existing Buffer + Reserve
         # SoC. Tier 1 (``battery_assist_enabled``) = the "Solar + battery" mode:
         # the battery assists this device above the Buffer SoC when real surplus
@@ -209,6 +317,16 @@ class ControllableDevice(ABC):
         # daily target met, or the day rollover.
         self._batt_overnight_forced: bool = False
         self._batt_overnight_forced_date: Optional[date] = None
+
+        # (#744) Is ``rated_power`` a MEASUREMENT or a guess? The same
+        # provenance question ``_daily_energy_source`` asks above, one
+        # attribute further along. A subclass that is HANDED a rating leaves
+        # this True; the one that INVENTS a placeholder when it has none
+        # (SwitchDevice's 1 kW floor) sets it False. Every learning path is
+        # up-only — correct against a measurement, and the reason a 8 W
+        # shower light stayed pinned at 1 kW forever when the "rating" it
+        # was defending was never measured at all. This is how they tell.
+        self.rated_power_measured: bool = True
 
         # Appliance dependencies (#122): device only activates when dependencies are met
         self.depends_on: List[str] = []  # device_ids that must be active
@@ -323,11 +441,22 @@ class ControllableDevice(ABC):
         # Reset on meter day rollover
         if self._daily_runtime_meter_day is not None and meter_day != self._daily_runtime_meter_day:
             _LOGGER.debug(
-                "%s: daily runtime reset (%.0fs) on meter day rollover",
+                "%s: daily runtime reset (%.0fs, %.3f kWh via %s) on meter day rollover",
                 self.name, self._daily_runtime_accumulated_sec,
+                self._daily_energy_kwh, self._daily_energy_source,
             )
             self._daily_runtime_accumulated_sec = 0.0
             self._daily_runtime_last_check = now
+            # (#768) The day's energy goes with the day's runtime. The counter
+            # BASELINE deliberately survives: re-reading it would book the
+            # whole lifetime total into the first cycle of the new day.
+            self._daily_energy_kwh = 0.0
+            self._daily_energy_blind_s = 0.0
+            # (#769) The rollover cycle re-anchors ``_daily_runtime_last_check``
+            # to now, so ``elapsed`` is 0 and the accrual below never runs — the
+            # previous cycle's increment would otherwise survive the day change
+            # and be filed a second time, under the new day.
+            self._last_cycle_energy_kwh = 0.0
         self._daily_runtime_meter_day = meter_day
 
         # Don't accumulate the daily solar budget when SEM isn't managing the
@@ -340,15 +469,245 @@ class ControllableDevice(ABC):
         # no control entity / entity unavailable) falls back to belief, so
         # devices without a readable entity behave exactly as before.
         _really_on = self.is_active and self.observed_on() is not False
-        if self._daily_runtime_last_check is not None and _really_on and _managed:
-            elapsed = (now - self._daily_runtime_last_check).total_seconds()
-            if 0 < elapsed <= 120:  # ignore jumps > 120s (restart recovery)
-                self._daily_runtime_accumulated_sec += elapsed
+        elapsed = 0.0
+        if self._daily_runtime_last_check is not None:
+            _e = (now - self._daily_runtime_last_check).total_seconds()
+            if 0 < _e <= 120:  # ignore jumps > 120s (restart recovery)
+                elapsed = _e
+        if elapsed and _really_on and _managed:
+            self._daily_runtime_accumulated_sec += elapsed
+
+        # (#768) Energy accrues on the SAME tick and the same elapsed window,
+        # but under different gates: runtime answers "did SEM run it", energy
+        # answers "what left the house". A device switched to Off, or running
+        # on its own thermostat, still consumes — and the balance wants that.
+        if elapsed:
+            self._accrue_daily_energy(elapsed, _really_on)
 
         if self.is_active:
             self.calibrate_rated_power()
 
         self._daily_runtime_last_check = now
+
+    def _accrue_daily_energy(self, elapsed_s: float, really_on: bool) -> None:
+        """(#768) Book this cycle's energy, and say where the number came from.
+
+        A fixed order, best evidence first:
+
+        1. the energy counter's delta — MEASURED, and the meter's OWN integral
+        2. the power sensor, integrated over the cycle — MEASURED, but our
+           integral of someone else's instant
+        3. ``rated_power`` × runtime — an ESTIMATE, flagged as one and never
+           usable as training data (#755 contract 1)
+
+        Note this ranking is the REVERSE of ``observed_power_w``'s, on purpose:
+        asked for POWER the sensor is direct and the counter derived; asked for
+        ENERGY the counter is direct and the power sensor derived.
+
+        Sources 1 and 2 accrue regardless of ``control_mode`` and of whether SEM
+        believes the device is running: the energy balance wants what left the
+        house, not what SEM ordered. Only the estimate is gated on the device
+        actually being on — there is nothing to estimate from otherwise.
+        """
+        # (#769) Every cycle starts owing nothing. Whatever gets booked below
+        # is also this cycle's INCREMENT, which is what the ledger files under
+        # a period and an attribution bucket. A cycle that books nothing leaves
+        # this at 0.0 — and a nothing is not a zero measurement, which is why
+        # the blind seconds are counted separately.
+        self._last_cycle_energy_kwh = 0.0
+
+        if self.hass and self.energy_entity_id:
+            self._accrue_from_counter(elapsed_s)
+            return
+        if self.hass and self.power_entity_id:
+            self._accrue_from_power(elapsed_s)
+            return
+
+        rated = getattr(self, "rated_power", None) or 0.0
+        if rated <= 0:
+            # No counter, no power sensor, no plate rating: the device has no
+            # consumption signal at all. Say so rather than book a zero.
+            self._daily_energy_source = "none"
+            return
+        self._daily_energy_source = "rated"
+        if really_on:
+            self._book_energy(rated * elapsed_s / 3_600_000.0)
+
+    def _book_energy(self, kwh: float) -> None:
+        """(#769) The one place energy lands on a device.
+
+        Two numbers, one write: the day's running total and this cycle's
+        increment. They are written together so they cannot disagree — a
+        second accrual path that updated only one of them is exactly the
+        kind of quiet divergence #767 exists to end.
+        """
+        self._daily_energy_kwh += kwh
+        self._last_cycle_energy_kwh += kwh
+
+    def _accrue_from_counter(self, elapsed_s: float) -> None:
+        """The counter delta. Unit-normalized (#641/#708: a Wh counter read raw
+        books 1000x)."""
+        kwh = energy_state_to_kwh(self.hass.states.get(self.energy_entity_id))
+        if kwh is None:
+            # #755 contract 1 — a sensor that can't be read is not a device
+            # drawing zero watts. Record the blindness; book nothing. The
+            # window start is deliberately NOT moved: the delta that eventually
+            # arrives spans this gap and carries its energy.
+            self._daily_energy_blind_s += elapsed_s
+            return
+
+        self._daily_energy_source = "counter"
+        last = self._energy_counter_last_kwh
+        self._energy_counter_last_kwh = kwh
+        now = datetime.now()
+        # The window this delta spans — since the value last CHANGED, so a
+        # counter that publishes once an hour is measured over its hour and a
+        # blind stretch is inside the window, not outside it. ``None`` when the
+        # baseline came from storage: unknown, and never used to refuse.
+        window_s: Optional[float] = None
+        if self._energy_counter_last_at is not None:
+            _w = (now - self._energy_counter_last_at).total_seconds()
+            window_s = _w if _w > 0 else None
+        if last is None or kwh != last:
+            self._energy_counter_last_at = now
+        if last is None:
+            return  # first read of the day/session: a baseline, not a delta
+        delta = kwh - last
+        if delta < 0:
+            # A TOTAL_INCREASING counter that went backwards rebooted; it has
+            # not un-consumed its lifetime energy. Re-baseline (done above),
+            # book nothing — and remember what it fell FROM, so a counter that
+            # comes back is not mistaken for a device that consumed its whole
+            # lifetime in one cycle (#782).
+            self._energy_counter_pre_reset_kwh = max(
+                self._energy_counter_pre_reset_kwh or 0.0, last
+            )
+            _LOGGER.debug(
+                "%s: energy counter %s went backwards (%.3f -> %.3f kWh) — "
+                "re-baselined, no energy booked",
+                self.name, self.energy_entity_id, last, kwh,
+            )
+            return
+        # (#782) The one bound on a delta: what the window could physically
+        # deliver. This is NOT the #774 error — ``rated_power`` is an estimate
+        # about THIS device and must never overrule its meter, so it is not
+        # consulted. ``_MAX_PLAUSIBLE_LOAD_W`` is a bound on any single load on
+        # any house circuit, set far above every real appliance, and the window
+        # is the one the delta actually spans (blind seconds included). So it
+        # catches counter pathology and nothing else.
+        #
+        # An unknown window (``None``: the baseline came back from storage
+        # across a restart, so nothing says how long ago it was read) never
+        # refuses. Booking that delta is the deliberate behaviour — the restart
+        # gap's energy is restored by design (``_restore_device_energy``).
+        if (
+            window_s is None
+            or delta <= _MAX_PLAUSIBLE_LOAD_W * window_s / 3_600_000.0
+        ):
+            if (
+                self._energy_counter_pre_reset_kwh is not None
+                and kwh >= self._energy_counter_pre_reset_kwh
+            ):
+                # The counter climbed honestly back past its old high-water
+                # mark; there is nothing left to disambiguate.
+                self._energy_counter_pre_reset_kwh = None
+            self._book_energy(delta)
+            return
+
+        pre_reset = self._energy_counter_pre_reset_kwh
+        if pre_reset is not None and kwh >= pre_reset:
+            # The counter RECOVERED — it is back at (or past) where it fell
+            # from. Nothing between the two readings was consumed twice; only
+            # what it gained over the old mark is real, and the window it had
+            # to gain it in is the whole outage: the counter's value did not
+            # change while it read zero, so the window start is still the drop.
+            recovered = kwh - pre_reset
+            self._energy_counter_pre_reset_kwh = None
+            if recovered <= _MAX_PLAUSIBLE_LOAD_W * window_s / 3_600_000.0:
+                _LOGGER.warning(
+                    "%s: energy counter %s recovered to %.3f kWh after a reset "
+                    "from %.3f — booking %.3f kWh consumed across the %.0f s "
+                    "outage, not the whole reading",
+                    self.name, self.energy_entity_id, kwh, pre_reset,
+                    recovered, window_s,
+                )
+                self._book_energy(recovered)
+                return
+            _LOGGER.warning(
+                "%s: energy counter %s recovered to %.3f kWh after a reset "
+                "from %.3f — the %.3f kWh gain is more than %.0f s could "
+                "deliver; booking nothing and counting the window blind",
+                self.name, self.energy_entity_id, kwh, pre_reset,
+                recovered, window_s,
+            )
+            self._daily_energy_blind_s += elapsed_s
+            return
+
+        _LOGGER.warning(
+            "%s: energy counter %s jumped %.3f kWh in %.0f s — no window could "
+            "deliver that (%.0f W); re-baselined at %.3f, booking nothing and "
+            "counting the window blind",
+            self.name, self.energy_entity_id, delta, window_s,
+            delta * 3_600_000.0 / window_s, kwh,
+        )
+        self._daily_energy_blind_s += elapsed_s
+
+    def _accrue_from_power(self, elapsed_s: float) -> None:
+        """Trapezoid the power sensor over the cycle."""
+        watts = power_state_to_watts(self.hass.states.get(self.power_entity_id))
+        if watts is None:
+            self._daily_energy_blind_s += elapsed_s
+            self._energy_last_power_w = None  # don't bridge across the gap
+            return
+
+        self._daily_energy_source = "power"
+        previous = self._energy_last_power_w
+        self._energy_last_power_w = watts
+        mean_w = watts if previous is None else (previous + watts) / 2.0
+        self._book_energy(mean_w * elapsed_s / 3_600_000.0)
+
+    @property
+    def daily_energy_kwh(self) -> float:
+        """(#768) Energy this device consumed today, in kWh."""
+        return self._daily_energy_kwh
+
+    @property
+    def daily_energy_source(self) -> str:
+        """Where ``daily_energy_kwh`` came from: counter / power / rated / none."""
+        return self._daily_energy_source
+
+    @property
+    def daily_energy_blind_s(self) -> float:
+        """Seconds today the chosen measured source could not be read."""
+        return self._daily_energy_blind_s
+
+    @property
+    def daily_energy_is_measured(self) -> bool:
+        """True only when a meter produced the number. ``rated`` is an estimate
+        and must never be fed back as a measurement (#755 contract 1)."""
+        return self._daily_energy_source in ("counter", "power")
+
+    @property
+    def last_cycle_energy_kwh(self) -> float:
+        """(#769) What THIS cycle booked, in kWh.
+
+        ``daily_energy_kwh`` is a running total and cannot be filed; the
+        ledger needs the delta, so it can put it under a period and — where
+        the device names one — an attribution bucket.
+        """
+        return self._last_cycle_energy_kwh
+
+    @property
+    def energy_split_label(self) -> Optional[str]:
+        """(#769) The bucket this cycle's energy belongs to, or None.
+
+        A device that has modes worth telling apart names them here and the
+        ledger keeps a sub-total per name beside the device total. The heat
+        pump uses its SG-Ready state, which is what makes "energy SEM shifted"
+        separable from "energy the pump would have used anyway". Ordinary
+        loads have nothing to split and return None.
+        """
+        return None
 
     def observed_power_w(self) -> Optional[float]:
         """#600 — the device's live consumption in W: the power sensor if
@@ -392,10 +751,24 @@ class ControllableDevice(ABC):
         rated = getattr(self, "rated_power", None)
         if rated is None or not self.hass or not self.is_active:
             return
+        # (#744) CALIBRATION ONLY FROM A REAL POWER SENSOR. The energy
+        # deriver is a display/runtime-credit estimate: a 0.01 kWh tick
+        # over a short window reads as ~1 kW instant, and feeding that to
+        # this up-only ratchet climbed a 24 W load to 1 kW geometrically
+        # (the deriver's cap is 2x rated and re-bases on every adoption).
+        # An estimate must never teach the model — the #743/#753 class.
+        if not self.power_entity_id:
+            return
         observed = self.observed_power_w()
         if observed is None:
             return
-        if observed > self.rated_power:
+        # (#744) The up-only ratchet defends a MEASURED peak. It must not
+        # defend an invented one: while ``rated_power`` is still the 1 kW
+        # placeholder, the first real reading REPLACES it — downward too.
+        # That is the whole of Azlinon's "nothing below 1 kW": a 8 W bulb
+        # could never argue its way past a number nobody had measured.
+        first_real = not self.rated_power_measured and observed > 0
+        if first_real or observed > self.rated_power:
             _LOGGER.info(
                 "%s: calibrated rated_power %.0fW -> %.0fW from %s",
                 self.name, self.rated_power, observed,
@@ -403,6 +776,7 @@ class ControllableDevice(ABC):
             )
             self.rated_power = observed
             self.min_power_threshold = observed
+            self.rated_power_measured = True
 
     @property
     def remaining_daily_runtime_sec(self) -> float:
@@ -587,6 +961,30 @@ class ControllableDevice(ABC):
         self._sem_owned = True
         self._observed_off_since = None
 
+    def _adopt_ownership(self) -> bool:
+        """(#779) The one writer for a claim SEM did not earn by acting.
+
+        ``record_activated`` is the other, and it needs no gate: SEM issued
+        the command, so it owns the result by construction. Everything else
+        that sets ``_sem_owned = True`` is *adopting an observation* — a
+        switch that is on, which cannot by itself answer "did SEM start
+        this?". Three paths do that (the one-shot at registration for
+        switches and for climate, and #766's per-cycle twin), each carried
+        the mode gate separately, and the third was written without it. That
+        was #779: under Mode = Off the claim was a fabrication, and
+        ``compute_load_intent``'s class-17 release — built to let go of a
+        load SEM really *was* driving — read it and switched the user's
+        dishwasher off every cycle he turned it back on.
+
+        So the gate lives here, once. Adoption of the BELIEF stays the
+        caller's business and happens at every mode (Off is monitoring, and
+        monitoring means the books stay honest); only the claim is gated.
+        Returns what was claimed, for the caller's log line.
+        """
+        owned = self.control_mode == DeviceControlMode.SURPLUS
+        self._sem_owned = owned
+        return owned
+
     def record_deactivated(self) -> None:
         """Record deactivation timestamp for anti-cycling."""
         self._last_deactivated = datetime.now()
@@ -683,6 +1081,13 @@ class ControllableDevice(ABC):
             "desired_state": self.desired_state,
             "observed_on": obs,
             "sem_owned": self._sem_owned,
+            # (#768) The day's energy, with its provenance attached. Present on
+            # EVERY device, not only ones with runtime goals configured — the
+            # energy balance (#767) needs the unconfigured loads most of all.
+            "daily_energy_kwh": round(self._daily_energy_kwh, 3),
+            "daily_energy_source": self._daily_energy_source,
+            "daily_energy_measured": self.daily_energy_is_measured,
+            "daily_energy_blind_s": round(self._daily_energy_blind_s, 1),
         }
         if (self.daily_min_runtime_sec > 0 or self.daily_max_runtime_sec > 0
                 or self.battery_assist_enabled or self.battery_eligible_overnight):
@@ -709,7 +1114,270 @@ class ControllableDevice(ABC):
         return d
 
 
-class SwitchDevice(ControllableDevice):
+class ComfortBandMixin:
+    """(#705) The thermal comfort band, shared by every device class that
+    can hold a room at a temperature — ClimateDevice (Phase 1) and
+    SwitchDevice heaters (Phase 2).
+
+    A MIXIN rather than per-class copies on purpose: the one-mode-fixed /
+    siblings-left-blind shape is this codebase's most-repeated bug class,
+    and a band duplicated into SwitchDevice would drift the first time a
+    fix lands in one copy.
+
+    Subclass hooks:
+    - ``_comfort_direction()`` — "cool" or "heat". Default heat (switch
+      loads are heaters; a switch-driven cooler is follow-up work).
+      ClimateDevice derives it from ``hvac_mode``.
+    - ``_comfort_fallback_reading()`` — a thermometer of last resort when
+      no ``comfort_entity`` is configured. Default None (a relay has
+      nothing to fall back to); ClimateDevice reads its entity's own
+      ``current_temperature``.
+    """
+
+    # Class-level defaults: a device that never received comfort goals
+    # carries a disengaged band instead of AttributeErrors.
+    comfort_entity: str = ""
+    comfort_target: float = 0.0
+    comfort_offset: float = 0.0
+    comfort_limit: float = 0.0
+    # (#688) extra watts a fresh START needs on top of the threshold.
+    start_reserve_w: float = 0.0
+
+    def _comfort_direction(self) -> str:
+        return "heat"
+
+    def _comfort_fallback_reading(self):
+        return None
+
+    def _comfort_anchor_c(self):
+        """The LIVE anchor the band rides, in °C — or None.
+
+        (#705, Azlinon's review) A thermostat has its own schedule:
+        night setback, presence logic, Ecobee/Nest native pre-cool. An
+        absolute typed into SEM silently fights it the first time the
+        setpoint moves, so where a live setpoint exists it IS the
+        target, and the typed values only contribute their deltas.
+        Default None: a relay heater has no setpoint to ride, and the
+        typed absolutes stay authoritative (ClimateDevice overrides).
+        """
+        return None
+
+    def _install_unit_is_f(self) -> bool:
+        """True when the install's display unit is Fahrenheit.
+
+        Exact °F spellings only — anything unrecognised is assumed °C,
+        the same contract as temperature_state_to_celsius. A substring
+        test here once classified a mock repr as Fahrenheit.
+        """
+        try:
+            unit = str(getattr(getattr(self.hass.config, "units", None),
+                               "temperature_unit", "") or "").strip()
+        except Exception:  # noqa: BLE001 — unit lookup must never kill the band
+            unit = ""
+        return unit in ("°F", "F", "fahrenheit", "Fahrenheit")
+
+    def _comfort_thresholds_c(self):
+        """(target, offset, limit) in °C.
+
+        The user TYPES the thresholds in the install's display unit —
+        HA's own convention for every temperature input; a °F user must
+        never be asked to think in °C. Comparison happens in °C because
+        the readings are normalised there. The offset is a temperature
+        DIFFERENCE and converts linearly (Δ°F × 5/9); converting it
+        affinely like the absolute temperatures would shift the banked
+        bound by −17.8 °C.
+        """
+        t, o, l = self.comfort_target, self.comfort_offset, self.comfort_limit
+        if self._install_unit_is_f():
+            t, o, l = ((t - 32.0) * 5.0 / 9.0,
+                       o * 5.0 / 9.0,
+                       (l - 32.0) * 5.0 / 9.0)
+        # (#705, Azlinon) Ride the live setpoint where one exists: the
+        # typed target/limit contribute only their DELTA, so a schedule
+        # or presence change on the thermostat moves the whole band
+        # without touching SEM config. The delta is computed AFTER unit
+        # conversion — differences convert linearly, absolutes affinely.
+        try:
+            anchor = self._comfort_anchor_c()
+        except Exception:  # noqa: BLE001 — a broken anchor is no anchor
+            anchor = None
+        if anchor is not None:
+            l = anchor + (l - t)
+            t = anchor
+        return (t, o, l)
+
+    def _comfort_reading(self):
+        """The room temperature in °C, or None.
+
+        An explicit ``comfort_entity`` reads that sensor's state (its own
+        unit_of_measurement decides the conversion — the #727 contract);
+        without one the subclass fallback answers, if it has one.
+        """
+        if not self.hass:
+            return None
+        if self.comfort_entity:
+            state = self.hass.states.get(self.comfort_entity)
+            if state is None:
+                return None
+            from ..coordinator.units import temperature_state_to_celsius
+            return temperature_state_to_celsius(state, None)
+        return self._comfort_fallback_reading()
+
+    @property
+    def comfort_state(self) -> str:
+        """forced / willing / banked / disengaged.
+
+        Direction from ``_comfort_direction()``: cool forces ABOVE the
+        limit and banks down to target − offset; heat is the mirror.
+        Boundary readings count as crossed. DISENGAGED — fields unset,
+        thermometer silent, or a band on the wrong side of its target —
+        behaves byte-for-byte like a device without a band: a dead
+        sensor never forces a run and never parks the device.
+        """
+        if not (self.comfort_target and self.comfort_limit):
+            return "disengaged"
+        cooling = self._comfort_direction() == "cool"
+        if ((cooling and self.comfort_limit <= self.comfort_target)
+                or (not cooling and self.comfort_limit >= self.comfort_target)):
+            if not getattr(self, "_comfort_misconfig_warned", False):
+                self._comfort_misconfig_warned = True
+                _LOGGER.warning(
+                    "%s: comfort band misconfigured (direction=%s target=%.1f "
+                    "limit=%.1f) — cool needs limit > target, heat needs "
+                    "limit < target; band disengaged",
+                    self.name, "cool" if cooling else "heat",
+                    self.comfort_target, self.comfort_limit,
+                )
+            return "disengaged"
+        temp = self._comfort_reading()
+        if temp is None:
+            return "disengaged"
+        target_c, offset_c, limit_c = self._comfort_thresholds_c()
+        if cooling:
+            if temp >= limit_c:
+                return "forced"
+            if temp <= target_c - offset_c:
+                return "banked"
+        else:
+            if temp <= limit_c:
+                return "forced"
+            if temp >= target_c + offset_c:
+                return "banked"
+        return "willing"
+
+    # ── (#638 Phase 3) the band becomes PLANNABLE ──────────────────────
+    # The drift learners eat one reading per cycle, split by whether the
+    # device was running. Buffers are created per INSTANCE on first use —
+    # a class-level deque would share one room's history across every
+    # room (the mutable-default trap).
+
+    _COMFORT_SAMPLE_WINDOW_H = 4.0
+
+    def _ensure_comfort_buffers(self) -> None:
+        if getattr(self, "_comfort_on_samples", None) is None:
+            from collections import deque
+            self._comfort_on_samples = deque(maxlen=720)
+            self._comfort_off_samples = deque(maxlen=720)
+
+    def record_comfort_sample(self, now) -> None:
+        """Feed the drift learners from the reading SEM already takes.
+
+        No engaged band or no reading → no sample: an unavailable
+        thermometer must not teach the model a flat line.
+        """
+        if not (self.comfort_target and self.comfort_limit):
+            return
+        temp = self._comfort_reading()
+        if temp is None:
+            return
+        self._ensure_comfort_buffers()
+        buf = (self._comfort_on_samples if self.is_active
+               else self._comfort_off_samples)
+        buf.append((now, temp))
+        cutoff = now - timedelta(hours=self._COMFORT_SAMPLE_WINDOW_H)
+        for b in (self._comfort_on_samples, self._comfort_off_samples):
+            while b and b[0][0] < cutoff:
+                b.popleft()
+
+    def comfort_plan_demand(self, now):
+        """The band's plannable ask: ``{"energy_kwh", "deadline"}`` or None.
+
+        'The room hits the limit at T (free-running drift), banking back
+        to target costs E kWh (learned active rate)' — the deadline-shaped
+        demand the day planner packs into surplus/cheap windows. None on
+        every doubt: forced rooms belong to the reactive layer, banked
+        rooms have nothing to bank, a missing model must never invent a
+        demand.
+        """
+        if self.comfort_state != "willing":
+            return None
+        from ..coordinator.comfort_drift import (
+            banking_energy_kwh, learn_drift, time_to_limit,
+        )
+        off = learn_drift(list(getattr(self, "_comfort_off_samples", None)
+                               or ()))
+        if off is None:
+            return None
+        temp = self._comfort_reading()
+        if temp is None:
+            return None
+        direction = self._comfort_direction()
+        target_c, _offset_c, limit_c = self._comfort_thresholds_c()
+        deadline = time_to_limit(off, current_c=temp, limit_c=limit_c,
+                                 direction=direction, now=now)
+        if deadline is None:
+            return None
+        on = learn_drift(list(getattr(self, "_comfort_on_samples", None)
+                              or ()))
+        if on is None:
+            return None
+        kwh = banking_energy_kwh(
+            current_c=temp, target_c=target_c, direction=direction,
+            # (#705 Ph3) bank the FULL band — the edge is where the run
+            # naturally stops (the state flips to banked there).
+            offset_c=_offset_c,
+            active_rate_c_per_h=on.rate_c_per_h,
+            rated_power_w=float(getattr(self, "rated_power", 0.0) or 0.0))
+        if not kwh:
+            return None
+        return {"energy_kwh": kwh, "deadline": deadline}
+
+    # The band speaks through the three generic properties every surplus
+    # pass already reads — no new controller clauses; peak shed,
+    # anti-cycling, priority and LIFO apply to comfort runs unchanged.
+
+    @property
+    def has_runtime_deficit(self) -> bool:
+        """FORCED reads as a deficit ⇒ the deficit-driven paid passes
+        engage exactly per the user's #620 source-axis opt-ins. The daily
+        max cap outranks the force: a unit that has run its configured
+        maximum is done, breach or no breach."""
+        if super().has_runtime_deficit:
+            return True
+        if self.daily_max_runtime_reached:
+            return False
+        return self._enabled and self.comfort_state == "forced"
+
+    @property
+    def stop_condition_met(self) -> bool:
+        """BANKED reads as the stop condition ⇒ surplus stops feeding a
+        room already conditioned past target ∓ offset. ORs with the
+        existing ``stop_entity`` override — they compose."""
+        if super().stop_condition_met:
+            return True
+        return self.comfort_state == "banked"
+
+    @property
+    def daily_targets_met(self) -> bool:
+        """A met runtime floor must NOT stand the paid sources down while
+        comfort is breached — the floor is about runtime, the breach is
+        about now."""
+        if self.comfort_state == "forced":
+            return False
+        return super().daily_targets_met
+
+
+class SwitchDevice(ComfortBandMixin, ControllableDevice):
     """On/off device (hot water relay, smart plugs, etc.).
 
     When surplus >= min_power_threshold, the switch is turned on.
@@ -752,6 +1420,12 @@ class SwitchDevice(ControllableDevice):
             energy_entity_id=energy_entity_id,
         )
         self.rated_power = rp
+        # (#744) Label the invention. A discovered load is built from its live
+        # power sensor, which reads 0 W for as long as the load is off — so
+        # "0" here means "not measured yet", never "draws nothing", and the
+        # 1 kW above is a placeholder that calibrate_rated_power may replace
+        # in either direction.
+        self.rated_power_measured = bool(rated_power and rated_power > 0)
         # (#644) ONE anti-cycle mechanism: the legacy min_on_time/min_off_time
         # knobs map onto the base-layer min_on_seconds/min_off_seconds, whose
         # epochs (_last_activated/_last_deactivated) are rebuild-transplanted
@@ -787,6 +1461,75 @@ class SwitchDevice(ControllableDevice):
     def device_type(self) -> DeviceType:
         return DeviceType.SWITCH
 
+    # (#766) Domains whose entity state IS an on/off truth. observed_on()'s
+    # climate fallthrough deliberately reads any mode-string as "on", so the
+    # per-cycle belief sync must be stricter: a charger's current-control
+    # number reporting "6.0" is not a running load.
+    _BELIEF_SYNC_DOMAINS = ("switch", "input_boolean", "light", "fan")
+
+    def sync_belief_to_observation(self) -> bool:
+        """(#766) Per-cycle twin of ``adopt_if_running``: belief follows
+        the switch.
+
+        ``is_active`` is SEM's belief, updated only by its own
+        activate()/deactivate() and the one-shot adoption at registration
+        — so a switch turning ON later (an external actuator, a user's
+        hand, a box self-start) was invisible: never seen active, never
+        deactivated, runtime never accrued (the N2 pool ran 00:00→07:50
+        against an idle belief). Called for every load at the top of the
+        surplus walk. Returns True when the belief moved.
+
+        An external ON adopts with ``_sem_owned = True`` — the same
+        semantics ``adopt_if_running`` established for the restart case:
+        the device comes under normal control, so goal gates and force
+        expiry can stop it. An external OFF releases the belief without
+        commanding anything: the user already acted; SEM's books follow.
+
+        (#779) That ownership claim is gated on SURPLUS, exactly as
+        ``adopt_if_running`` is at both its call sites — the one-shot's gate
+        that this per-cycle twin inherited the body of but not the gate.
+        ``_sem_owned`` answers "did SEM start this load?", and observing a
+        switch that is on cannot answer it. Under Mode = Off the claim was a
+        fabrication, and ``compute_load_intent``'s class-17 release — built
+        to let go of a load SEM really *was* driving — read it and switched
+        the user's dishwasher off, every cycle it turned it back on.
+        The BELIEF still follows the switch at every mode: Off is
+        monitoring, and monitoring means the books stay honest.
+        """
+        if not self.entity_id or not self.hass:
+            return False
+        if self.entity_id.split(".", 1)[0] not in self._BELIEF_SYNC_DOMAINS:
+            return False
+        state = self.hass.states.get(self.entity_id)
+        if not state or state.state in ("unavailable", "unknown", None):
+            return False
+        observed = str(state.state).lower()
+        if observed == "on" and not self.is_active:
+            self._status.state = DeviceState.ACTIVE
+            self._status.current_consumption_w = self.rated_power
+            self._status.allocated_power_w = self.rated_power
+            self._status.last_activated = datetime.now()
+            self._last_activated = self._status.last_activated
+            owned = self._adopt_ownership()  # (#779) gated, in one place
+            _LOGGER.info(
+                "%s: switch %s turned ON outside SEM — belief adopted, %s (#766)",
+                self.name, self.entity_id,
+                "under normal control" if owned
+                else f"left to the user (mode {self.control_mode.value})",
+            )
+            return True
+        if observed == "off" and self.is_active:
+            self._status.state = DeviceState.IDLE
+            self._status.current_consumption_w = 0.0
+            self._status.allocated_power_w = 0.0
+            self._last_deactivated = datetime.now()
+            _LOGGER.info(
+                "%s: switch %s turned OFF outside SEM — belief released "
+                "(#766)", self.name, self.entity_id,
+            )
+            return True
+        return False
+
     def adopt_if_running(self) -> bool:
         """(#559) Re-own a switch that is physically ON at (re-)registration.
 
@@ -805,10 +1548,12 @@ class SwitchDevice(ControllableDevice):
         self._status.allocated_power_w = self.rated_power
         self._status.last_activated = datetime.now()
         self._last_activated = self._status.last_activated  # (#644) unified clock
-        self._sem_owned = True  # (arc) re-own on restart → SEM manages it
+        owned = self._adopt_ownership()  # (#779) gated, in one place
         _LOGGER.info(
-            "%s: switch %s was ON at registration — re-owned as active",
+            "%s: switch %s was ON at registration — belief adopted, %s",
             self.name, self.entity_id,
+            "re-owned as active" if owned
+            else f"left to the user (mode {self.control_mode.value})",
         )
         return True
 
@@ -877,7 +1622,7 @@ class SwitchDevice(ControllableDevice):
         return 0.0
 
 
-class ClimateDevice(ControllableDevice):
+class ClimateDevice(ComfortBandMixin, ControllableDevice):
     """On/off surplus control for a ``climate.*`` entity (#569).
 
     An air-conditioner / heat pump exposed only as a ``climate.*`` entity has
@@ -915,6 +1660,11 @@ class ClimateDevice(ControllableDevice):
         battery_assist_enabled: bool = False,  # (#620) Tier 1 — Solar + battery
         battery_eligible_overnight: bool = False,  # (#620) Tier 2 — overnight
         energy_entity_id: Optional[str] = None,
+        comfort_entity: str = "",          # (#705) temp sensor; "" = the
+        comfort_target: float = 0.0,       # climate entity's own thermometer
+        comfort_offset: float = 0.0,
+        comfort_limit: float = 0.0,        # 0.0 = band disabled — a true 0 °C
+                                           # threshold needs 0.1 (sentinel)
     ):
         super().__init__(
             hass, device_id, name, priority,
@@ -927,15 +1677,94 @@ class ClimateDevice(ControllableDevice):
         self.target_temperature = target_temperature
         # (#644) unified anti-cycle knobs (see SwitchDevice)
         self.min_on_seconds = int(min_on_time)
-        self.min_off_seconds = int(min_off_time)
+        self.min_off_seconds = int(min_off_time)  # routes via the property below
         self.daily_min_runtime_sec = daily_min_runtime_sec
         self.daily_max_runtime_sec = daily_max_runtime_sec
         self.battery_assist_enabled = battery_assist_enabled
         self.battery_eligible_overnight = battery_eligible_overnight
+        # (#705) thermal comfort band — the HotWaterController three-
+        # temperature pattern (min/solar-target/max), generalized and
+        # mirrored for cooling. target+limit both set AND a live reading
+        # = engaged; anything less = disengaged = pre-#705 behaviour.
+        self.comfort_entity = comfort_entity or ""
+        self.comfort_target = float(comfort_target or 0.0)
+        self.comfort_offset = float(comfort_offset or 0.0)
+        self.comfort_limit = float(comfort_limit or 0.0)
 
     @property
     def device_type(self) -> DeviceType:
         return DeviceType.CLIMATE
+
+    # (#705) Compressor guard: while the comfort band is engaged, the
+    # off→on gap is floored at 180 s regardless of the configured window.
+    # The band makes cycling TEMPERATURE-driven — sharp edges at
+    # target − offset — and the #569 default of 60 s is below the safe
+    # restart floor for compressor head-pressure equalisation. The
+    # configured value still wins when it is stricter, and a disengaged
+    # band keeps the configured window untouched. CLIMATE-ONLY: resistive
+    # switch heaters (Phase 2) cycle safely and keep their own window.
+    _COMFORT_MIN_OFF_FLOOR_S = 180
+
+    @property
+    def min_off_seconds(self) -> int:
+        base = int(getattr(self, "_min_off_configured", 60))
+        if self.comfort_state != "disengaged":
+            return max(base, self._COMFORT_MIN_OFF_FLOOR_S)
+        return base
+
+    @min_off_seconds.setter
+    def min_off_seconds(self, value) -> None:
+        self._min_off_configured = int(value)
+
+    def _comfort_direction(self) -> str:
+        return "cool" if self.hvac_mode == "cool" else "heat"
+
+    def _comfort_anchor_c(self):
+        """(#705, Azlinon) The thermostat's live setpoint in °C, or None.
+
+        ``temperature`` for single-setpoint units; range units expose
+        ``target_temp_high``/``_low`` — the side this device's direction
+        defends (cool holds the high bound, heat the low). Attributes
+        carry no unit — like ``current_temperature`` they are in the
+        install's display unit.
+        """
+        if not self.entity_id or not self.hass:
+            return None
+        state = self.hass.states.get(self.entity_id)
+        if state is None:
+            return None
+        attrs = state.attributes or {}
+        raw = attrs.get("temperature")
+        if raw is None:
+            raw = attrs.get("target_temp_high"
+                            if self._comfort_direction() == "cool"
+                            else "target_temp_low")
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            return None
+        if self._install_unit_is_f():
+            return (value - 32.0) * 5.0 / 9.0
+        return value
+
+    def _comfort_fallback_reading(self):
+        """Zero-config thermometer: the climate entity's own
+        ``current_temperature``. The attribute carries no unit — it is in
+        the install's display unit, so conversion follows
+        ``hass.config.units``; anything unrecognised is assumed °C."""
+        if not self.entity_id:
+            return None
+        state = self.hass.states.get(self.entity_id)
+        if state is None:
+            return None
+        raw = (state.attributes or {}).get("current_temperature")
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            return None
+        if self._install_unit_is_f():
+            return (value - 32.0) * 5.0 / 9.0
+        return value
 
     def adopt_if_running(self) -> bool:
         """(#559) Re-own a climate unit that SEM is running at (re-)registration.
@@ -960,10 +1789,12 @@ class ClimateDevice(ControllableDevice):
         self._status.allocated_power_w = self.rated_power
         self._status.last_activated = datetime.now()
         self._last_activated = self._status.last_activated  # (#644) unified clock
-        self._sem_owned = True  # (arc) re-own on restart → SEM manages it
+        owned = self._adopt_ownership()  # (#779) gated, in one place
         _LOGGER.info(
-            "%s: climate %s was %s at registration — re-owned as active",
+            "%s: climate %s was %s at registration — belief adopted, %s",
             self.name, self.entity_id, state.state,
+            "re-owned as active" if owned
+            else f"left to the user (mode {self.control_mode.value})",
         )
         return True
 
@@ -1382,6 +2213,20 @@ class CurrentControlDevice(ControllableDevice):
         """Set charging current via entity or service."""
         current = round(current, 0)
 
+        # (#545, reopened 2026-08-08) Min is a floor, enforced at the ONE
+        # emit seam: the start ladder offered 6/8/9 A below a configured
+        # minimum of 10, the stability hold froze 8 A, and the Zoe's
+        # onboard charger cut to 0 W against a command it physically
+        # cannot use. Whatever the layers above compute — ladder, zones,
+        # holds — a NONZERO command never reaches the wire below the
+        # floor. Zero stays zero: it is the stop intent, not a current.
+        if 0 < current < self.min_current:
+            _LOGGER.debug(
+                "%s: lifting below-floor command %.0f A to the configured "
+                "minimum %.0f A (#545)", self.name, current, self.min_current,
+            )
+            current = float(round(self.min_current))
+
         # #392 heartbeat dedup: skip the write only when the value didn't
         # change AND we've written recently. Without the time guard, a long
         # steady-state period (always_max holding 16 A, solar plateau) would
@@ -1558,6 +2403,85 @@ class CurrentControlDevice(ControllableDevice):
         except Exception as exc:  # noqa: BLE001
             _LOGGER.debug("actuation-failure repair clear failed: %s", exc)
 
+    def _session_energy_sensor_id(self):
+        """Entity id of the box's OWN session-energy register sensor
+        (KEBA: ``sensor.*_session_energy``) — same discovery strategy and
+        the same no-negative-caching rule as ``_energy_target_sensor_id``."""
+        cached = getattr(self, "_session_energy_sensor_cache", None)
+        if cached:
+            return cached
+        found = None
+        try:
+            anchor = self.power_entity_id or self.current_sensor_entity_id
+            if anchor and self.hass is not None:
+                from homeassistant.helpers import entity_registry as er
+                reg = er.async_get(self.hass)
+                ent = reg.async_get(anchor)
+                if ent is not None and ent.device_id:
+                    for other in er.async_entries_for_device(reg, ent.device_id):
+                        if other.entity_id.endswith("_session_energy"):
+                            found = other.entity_id
+                            break
+                if not found:
+                    obj = anchor.split(".", 1)[-1]
+                    for suf in ("_charging_power", "_power", "_max_current"):
+                        if obj.endswith(suf):
+                            cand = ("sensor." + obj[: -len(suf)]
+                                    + "_session_energy")
+                            if self.hass.states.get(cand) is not None:
+                                found = cand
+                            break
+                if not found:
+                    prefix = anchor.split(".", 1)[-1].split("_", 1)[0]
+                    cands = [
+                        eid for eid in
+                        self.hass.states.async_entity_ids("sensor")
+                        if eid.endswith("_session_energy")
+                        and eid.split(".", 1)[-1].startswith(prefix)
+                    ]
+                    if len(cands) == 1:
+                        found = cands[0]
+        except Exception:  # noqa: BLE001 — discovery never breaks a stop
+            found = None
+        if found:
+            self._session_energy_sensor_cache = found
+        return found
+
+    def _standing_quota_kwh(self, session_kwh):
+        """(#829) The box's UNMET energy quota from a previous stop, or None.
+
+        None means "no standing quota — write one": no target register to
+        read, a cleared register (0), a quota at/below the session (met or
+        stale), or an unreadable state. Only a target strictly above the
+        current session counts — that is a stop the box is still honouring.
+        """
+        if session_kwh is None:
+            return None
+        sensor = self._energy_target_sensor_id()
+        if not sensor or self.hass is None:
+            return None
+        st = self.hass.states.get(sensor)
+        try:
+            target = float(st.state)
+        except (AttributeError, TypeError, ValueError):
+            return None
+        if target > 0 and target > float(session_kwh):
+            return target
+        return None
+
+    def _box_session_kwh(self):
+        """The box's session counter in kWh, or None. The quota math
+        needs the BOX's number (it persists across enable/disable —
+        live-verified), not SEM's own session bookkeeping."""
+        sensor = self._session_energy_sensor_id()
+        if not sensor or self.hass is None:
+            return None
+        st = self.hass.states.get(sensor)
+        try:
+            return float(st.state)
+        except (AttributeError, TypeError, ValueError):
+            return None
+
     async def arm_failsafe(self) -> None:
         """Arm a NON-TRIPPING managed failsafe (#546 — managed-neutralize).
 
@@ -1602,6 +2526,41 @@ class CurrentControlDevice(ControllableDevice):
             )
         except Exception as e:  # noqa: BLE001
             _LOGGER.warning("Failed to set charger failsafe: %s", e)
+
+    async def arm_failsafe_off(self) -> None:
+        """(#740) Re-arm the failsafe as a dead-man's OFF after a stop.
+
+        The charging arm (``arm_failsafe``) points the fallback at the
+        charging floor so a dead controller mid-charge lands the car on
+        the floor. That same persisted floor is what fed an Off-mode car
+        in ~3 kW bites through a SEM restart (PROD 2026-08-08, #740):
+        masterless, the watchdog re-authorised a CHARGING current. After
+        a SEM-initiated stop the correct dead-man state is OFF —
+        fallback 0 A, short timeout, persisted — so the box itself
+        enforces "off means off" across restarts, UDP loss, and firmware
+        auto-start retries, until the next start sequence re-arms the
+        charging failsafe. Same opt-out as the charging arm.
+        """
+        if not bool(getattr(self, "arm_failsafe_enabled", True)):
+            return
+        domain = (self.charger_service or "").split(".", 1)[0]
+        if not domain or not self.hass.services.has_service(domain, "set_failsafe"):
+            return
+        try:
+            await self.hass.services.async_call(
+                domain, "set_failsafe",
+                {"failsafe_timeout": FAILSAFE_OFF_TIMEOUT_S,
+                 "failsafe_fallback": 0, "failsafe_persist": 1},
+                blocking=True,
+            )
+            _LOGGER.info(
+                "%s: failsafe re-armed as dead-man's OFF (timeout=%ds, "
+                "fallback=0A, persisted) — the box holds the no while "
+                "SEM is away (#740)", self.name, FAILSAFE_OFF_TIMEOUT_S,
+            )
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.warning(
+                "Failed to arm the dead-man's-off failsafe: %s", e)
 
     def _energy_target_sensor_id(self) -> Optional[str]:
         """Entity id of the box's OWN energy-target register sensor, if the
@@ -1803,6 +2762,57 @@ class CurrentControlDevice(ControllableDevice):
         except Exception as e:
             _LOGGER.error("Failed to start session on %s: %s", self.name, e)
 
+    async def park_off(self) -> None:
+        """(park-on-disconnect) Leave the box actively OFF for the NEXT car.
+
+        Distinct from ``stop_session``: there is no live session to bound
+        (the car is gone), and the quota-hold ``stop_session`` writes would
+        be inherited by the next plug-in as a fresh 1 kWh allowance — the
+        auto-charge this exists to prevent. A gone car gets a plain disable
+        (contactor open) plus the dead-man's-off failsafe, held until SEM
+        next decides to charge (which re-enables via ``start_session``).
+        Guido's pre-SEM automation did exactly this — ``keba.disable`` after
+        every charge — which is why a plug-in never auto-started for him.
+        """
+        domain = (self.charger_service or "").split(".", 1)[0]
+        try:
+            if domain and self.hass.services.has_service(domain, "disable"):
+                await self.hass.services.async_call(
+                    domain, "disable", {}, blocking=True)
+                _LOGGER.info(
+                    "%s: parked OFF on disconnect via %s.disable — the box "
+                    "holds the no until the next charge", self.name, domain)
+            elif self.start_stop_entity:
+                sdomain = self.start_stop_entity.split(".")[0]
+                if sdomain in ("switch", "input_boolean"):
+                    await self.hass.services.async_call(
+                        sdomain, "turn_off",
+                        {"entity_id": self.start_stop_entity}, blocking=True)
+        except Exception as e:  # noqa: BLE001 — surfaced, never fatal
+            _LOGGER.error("park_off(%s): disable failed: %s", self.name, e)
+
+        # SEM is done with this session whether or not every write landed —
+        # set the bookkeeping first so a best-effort failure below cannot
+        # leave the session falsely "active" (a partial box in a unit test,
+        # a dropped UDP packet in the field).
+        self._session_active = False
+        self._current_setpoint = 0.0
+        self._status.state = DeviceState.IDLE
+        self._status.current_consumption_w = 0.0
+        self._last_write_at = 0.0
+
+        # Best-effort: park the stored current low and arm the dead-man's OFF
+        # so the box holds the no even across a SEM outage (#740). Neither is
+        # load-bearing for "parked"; each fails independently.
+        try:
+            await self._set_current(0)
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.debug("park_off(%s): current park skipped: %s", self.name, e)
+        try:
+            await self.arm_failsafe_off()
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.debug("park_off(%s): dead-man arm skipped: %s", self.name, e)
+
     async def stop_session(self) -> None:
         """Stop the charging session.
 
@@ -1852,44 +2862,80 @@ class CurrentControlDevice(ControllableDevice):
             elif self.charger_service:
                 # KEBA-style fallback
                 domain = self.charger_service.split(".", 1)[0]
+                # (#829, live PROD 21.08 evening) ONE stop, ONE quota. The
+                # reconciler re-asserts a standing stop every 60 s while the
+                # box still draws — right for a `disable`, self-defeating
+                # here: each re-assert rewrote quota = session + margin, so
+                # the finish line moved ahead of the car forever (log:
+                # quota-hold 1.8 → 2.0 → 3.7 → 3.8 …). A car drawing under
+                # 18 kW can never consume the 0.3 kWh margin inside one 60 s
+                # dwell, so the "stop" charged unbounded — until the #763
+                # ceasefire silenced the rewrites and the box promptly
+                # reached the LAST quota and suspended natively, which is
+                # this mechanism working the moment SEM stopped moving it.
+                #
+                # So: while the box still holds an UNMET quota of ours, the
+                # stop is already in force — touch nothing and let the box
+                # arrive. Rewrite only when the register reads cleared (lost
+                # write / defiance — the re-assert's actual job) or the
+                # quota is already met/stale. No target sensor → rewrite,
+                # exactly today's behaviour: an unverifiable box gets the
+                # safe default.
+                # (#853/#854, Guido 28.08) A STOP MUST NEVER ENABLE.
+                #
+                # The quota-hold did exactly that: set_current(min) +
+                # set_energy(quota) + ENABLE, so the box would charge to a
+                # satisfied target and suspend itself. On a box that is
+                # already idle that sequence is not a stop — it is a START,
+                # and it hands the car the firmware's 1 kWh floor (measured:
+                # any non-zero target under 1 kWh is rounded up to 1.0) that
+                # nobody asked for. That is what "Min = 0 still charges
+                # 1 kWh" always was: SEM's own commands, not the charger.
+                #
+                # It also made SEM fight ITSELF. With the quota-hold on one
+                # intent and a plain disable on the other, the box was
+                # enabled and disabled in turn — logged as a "stop war the
+                # charger keeps restarting itself", which the charger was
+                # not doing. Measured on PROD the same evening: plugged in
+                # and disabled, the box drew nothing for 28 minutes, and
+                # every start in that window followed a SEM enable.
+                #
+                # A disable stops a DRAWING box in ~3 s (measured) and holds
+                # while SEM is alive. The idle guard below still bounds a
+                # rogue session while SEM is DOWN (#553) — and it writes a
+                # target without ever enabling, which is the whole point.
                 if self.hass.services.has_service(domain, "disable"):
-                    await self.hass.services.async_call(domain, "disable", {}, blocking=True)
-                    stop_method = f"{domain}.disable"
-                    # #553 — BOX-LEVEL runaway cap (#315): KEBA firmware
-                    # auto-restarts a session at its stored setpoint when the
-                    # car retries (~every 10 min), even after keba.disable.
-                    # While SEM is alive its policing (#552) kills each rogue
-                    # start within a cycle; this 1 kWh session-energy target
-                    # (the keba library MINIMUM — smaller values are rejected,
-                    # live-verified) bounds the damage when SEM is NOT
-                    # policing (down/restarting): the box then ends a rogue
-                    # session itself at 1 kWh instead of charging unbounded.
-                    # Every SEM start releases the guard (start_session writes
-                    # the real target, or 0 = no limit). Note: SEM owns this
-                    # register — user-set box limits are overwritten.
+                    # (#854) THE STOP IS ONE CALL. Guido's automation, which
+                    # has run this exact box for two years:
                     #
-                    # Own try (review H1): a set_energy failure must neither
-                    # skip the _session_active reset below nor mask that the
-                    # disable itself succeeded.
-                    if self.hass.services.has_service(domain, "set_energy"):
-                        try:
-                            await self.hass.services.async_call(
-                                domain, "set_energy",
-                                {"energy": KEBA_IDLE_GUARD_KWH}, blocking=True,
-                            )
-                            self._idle_guard_armed = True
-                            _LOGGER.debug(
-                                "stop_session(%s): armed %.1f kWh runaway-cap "
-                                "energy target (#553)", self.name,
-                                KEBA_IDLE_GUARD_KWH,
-                            )
-                        except Exception as guard_err:  # noqa: BLE001
-                            _LOGGER.warning(
-                                "stop_session(%s): idle-guard set_energy "
-                                "failed (%s) — box auto-start protection "
-                                "not armed this stop (#553)",
-                                self.name, guard_err,
-                            )
+                    #     alias: Keba Disable
+                    #     actions: [ {action: keba.disable} ]
+                    #
+                    # Everything SEM added here made it worse, all measured
+                    # on PROD 28.08:
+                    #
+                    #  * the quota-hold ENABLED the box with a 1 kWh target so
+                    #    it would charge into it and suspend. On an idle box
+                    #    that is a START — the whole of "Min = 0 still charges
+                    #    1 kWh", SEM's own command. (energy_target 0.0 → 1.0
+                    #    at 20:00:39; power 0.12 → 3.2 kW at 20:00:56 — the
+                    #    target moved BEFORE the box drew.)
+                    #  * running that against a plain disable on the other
+                    #    intent made SEM alternate enable/disable and report
+                    #    it as "the charger keeps restarting itself against
+                    #    SEM's stop". The charger was innocent.
+                    #  * a session-derived quota walked ahead of the car on
+                    #    every 60 s re-assert (#829's treadmill).
+                    #  * the #553 "idle guard" is not small: the firmware
+                    #    floors any non-zero target at 1.0 kWh (measured
+                    #    0.3 → 1.0, 0.5 → 1.0), so the guard IS an allowance
+                    #    waiting for the next enable to spend.
+                    #
+                    # A disable opens the contactor — measured 3 s to stop a
+                    # drawing box. Nothing else is needed.
+                    await self.hass.services.async_call(
+                        domain, "disable", {}, blocking=True)
+                    stop_method = f"{domain}.disable"
                 else:
                     _LOGGER.warning(
                         "stop_session(%s): charger_service=%s configured but "
@@ -1899,7 +2945,26 @@ class CurrentControlDevice(ControllableDevice):
                         self.name, self.charger_service, domain,
                     )
 
-            await self._set_current(0)
+            # (#854) A KEBA disable IS the stop — send nothing after it.
+            # Guido's automation is one call and has run this hardware for
+            # two years; every extra command SEM sent around it cost energy
+            # or started a fight with itself. The 0 A write and the dead-man
+            # arm stay for the other brands, where a current write IS the
+            # stop mechanism.
+            _stopped_by_disable = bool(
+                stop_method and stop_method.endswith(".disable"))
+            if not _stopped_by_disable:
+                # Other brands stop BY the current write — keep it.
+                await self._set_current(0)
+            # (#740) The dead-man OFF stays on every path, including the
+            # bare disable, because it is the COUNTERPART to the charging
+            # failsafe ``start_session`` arms: without it a SEM restart
+            # lands the car on that charging fallback (observed on PROD
+            # 08.08 — an Off-mode car fed in ~3 kW bites through a
+            # restart). It commands no charge and grants no energy; it is
+            # the box's own standing "no" for the window where SEM is not
+            # there to say it.
+            await self.arm_failsafe_off()
             self._session_active = False
             self._status.state = DeviceState.IDLE
             self._status.current_consumption_w = 0.0
@@ -2208,7 +3273,11 @@ def surplus_device_from_spec(
     """
     dtype = (spec.get("device_type") or "switch").lower()
     name = spec.get("name") or device_id
-    rated_power = spec.get("rated_power", 1000)
+    # (#744) A spec with no rating does not mean "1 kW" — it means UNKNOWN.
+    # Pass the absence through so ``SwitchDevice`` applies (and labels) its
+    # own placeholder; only the classes that have none of their own still
+    # take the flat floor below.
+    rated_power = spec.get("rated_power") or 0
     priority = spec.get("priority", 5)
     entity_id = spec.get("entity_id", "")
     power_entity_id = spec.get("power_entity_id")
@@ -2235,13 +3304,18 @@ def surplus_device_from_spec(
             hass=hass,
             device_id=device_id,
             name=name,
-            rated_power=rated_power,
+            rated_power=rated_power or DEFAULT_DEVICE_RATED_POWER,
             priority=priority,
             entity_id=entity_id,
             power_entity_id=power_entity_id,
             energy_entity_id=energy_entity_id,
             hvac_mode=spec.get("hvac_mode", "cool"),
             target_temperature=float(target) if target is not None else None,
+            # (#705) thermal comfort band — optional, 0/"" = disengaged.
+            comfort_entity=str(spec.get("comfort_entity", "") or ""),
+            comfort_target=float(spec.get("comfort_target", 0.0) or 0.0),
+            comfort_offset=float(spec.get("comfort_offset", 0.0) or 0.0),
+            comfort_limit=float(spec.get("comfort_limit", 0.0) or 0.0),
         )
     return SwitchDevice(
         hass=hass,

@@ -8,14 +8,14 @@ Deadline scheduling approach:
 Supports: Home Connect (Bosch/Siemens/Neff), or generic smart plug on/off.
 """
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from .base import ScheduleDevice, DeviceState
+from .base import ScheduleDevice
 
 _LOGGER = logging.getLogger(__name__)
 

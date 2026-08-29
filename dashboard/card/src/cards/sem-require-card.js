@@ -93,8 +93,10 @@ class SEMRequireCard extends SEMLitBase {
 }
 
 semDefineCard('sem-require', SEMRequireCard, {
-    type: 'custom:sem-require',
+    type: 'sem-require',
     name: 'SEM Require Wrapper',
     description: 'Renders a card only when its HACS dependency is installed; otherwise a friendly install notice',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-require',
     preview: false,
 });

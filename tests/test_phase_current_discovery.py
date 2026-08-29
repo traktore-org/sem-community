@@ -42,6 +42,29 @@ def test_rejects_incomplete_or_mixed_current_families():
     assert discover_grid_phase_current_entities(states) == {}
 
 
+def test_discovers_only_l1_for_single_phase_supply():
+    states = [_state("sensor.smart_meter_grid_l1_current")]
+
+    assert discover_grid_phase_current_entities(states, phase_count=1) == {
+        "phase_guard_grid_l1_current_entity": "sensor.smart_meter_grid_l1_current"
+    }
+
+
+def test_single_phase_discovery_is_conservative_when_l1_family_is_ambiguous():
+    states = [
+        _state("sensor.meter_a_grid_l1_current"),
+        _state("sensor.meter_b_grid_l1_current"),
+    ]
+
+    assert discover_grid_phase_current_entities(states, phase_count=1) == {}
+
+
+def test_discovery_rejects_unsupported_phase_count():
+    states = [_state("sensor.smart_meter_grid_l1_current")]
+
+    assert discover_grid_phase_current_entities(states, phase_count=2) == {}
+
+
 def test_rejects_wrong_units_invalid_values_and_non_grid_currents():
     states = [
         _state("sensor.grid_l1_current", value="8000", unit="mA"),

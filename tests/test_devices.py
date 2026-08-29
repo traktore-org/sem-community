@@ -1,11 +1,10 @@
 """Tests for device classes in devices/ module."""
 import pytest
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from custom_components.solar_energy_management.devices.base import (
     ClimateDevice,
-    ControllableDevice,
     CurrentControlDevice,
     DeviceState,
     DeviceType,
@@ -17,7 +16,6 @@ from custom_components.solar_energy_management.devices.base import (
 from custom_components.solar_energy_management.devices.heat_pump_controller import (
     HeatPumpController,
     SGReadyState,
-    SG_READY_RELAY_MAP,
 )
 from custom_components.solar_energy_management.devices.hot_water_controller import (
     HotWaterController,

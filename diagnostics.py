@@ -12,8 +12,47 @@ from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
 from .coordinator import SEMCoordinator
+from .features.device_axes import has_control_handle, may_actuate, user_hands_off
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _load_manager_diagnostics(coordinator: Any) -> dict[str, Any]:
+    """The load-manager block, one row per appliance, both axes named (#780).
+
+    The pre-#780 row printed ``is_controllable`` alone. In #779 that line said
+    ``true`` for a device the reporter had set to Mode: Off while SEM was
+    switching it off — capability true, permission off, both correct, and
+    indistinguishable from the bug we were chasing. It cost real diagnosis time
+    on both sides. Now each row answers *can we?*, *may we?* and *would we?*
+    side by side, so "why didn't SEM shed X" and "why did SEM start X" are each
+    answerable from one line.
+    """
+    load_mgr = getattr(coordinator, "_load_manager", None)
+    if not load_mgr:
+        return {}
+    devices = load_mgr.get_load_management_data().get("devices", {})
+    return {
+        "enabled": load_mgr.is_enabled(),
+        "device_count": len(devices),
+        "devices": {
+            did: {
+                "type": info.get("device_type"),
+                # capability — is there anything to switch?
+                "has_control_handle": has_control_handle(info),
+                # permission — may we, and under which policy?
+                "control_mode": info.get("control_mode"),
+                "user_hands_off": user_hands_off(info),
+                # the verdict both axes produce
+                "may_actuate": may_actuate(info),
+                "is_critical": info.get("is_critical"),
+                "priority": info.get("priority"),
+                "is_on": info.get("is_on"),
+                "current_power": info.get("current_power", 0),
+            }
+            for did, info in devices.items()
+        },
+    }
 
 # Recent-log surface (v1.6.11). When users report a bug via "Copy
 # diagnostics", the dump now also includes the last few SEM-related
@@ -147,6 +186,15 @@ REDACT_CONFIG_KEYS = {
 }
 
 
+def _safe(fn):
+    """Evaluate a diagnostics accessor; a broken internal must never take
+    the whole download down (the download IS the debugging tool)."""
+    try:
+        return fn()
+    except Exception as e:  # noqa: BLE001
+        return f"unavailable ({e})"
+
+
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: SEMConfigEntry
 ) -> dict[str, Any]:
@@ -154,27 +202,41 @@ async def async_get_config_entry_diagnostics(
     coordinator: SEMCoordinator = entry.runtime_data
     data = coordinator.data if coordinator.data else {}
 
-    # Load manager info
-    load_mgr = getattr(coordinator, "_load_manager", None)
-    load_info = {}
-    if load_mgr:
-        lm_data = load_mgr.get_load_management_data()
-        devices = lm_data.get("devices", {})
-        load_info = {
-            "enabled": load_mgr.is_enabled(),
-            "device_count": len(devices),
-            "devices": {
-                did: {
-                    "type": info.get("device_type"),
-                    "is_controllable": info.get("is_controllable"),
-                    "is_critical": info.get("is_critical"),
-                    "priority": info.get("priority"),
-                    "is_on": info.get("is_on"),
-                    "current_power": info.get("current_power", 0),
-                }
-                for did, info in devices.items()
-            },
+    # (#708) EV stop-decision internals — the taper latch, session peak,
+    # SOC anchor (+ age via last_full_at) and the stability give-up
+    # streak/backoff. Promised to @Azlinon: no more guessing from source.
+    ev_stability: dict[str, Any] = {}
+    try:
+        dets = getattr(coordinator, "_ev_taper_detectors", None) or {}
+        single = getattr(coordinator, "_ev_taper_detector", None)
+        if not dets and single is not None:
+            dets = {"primary": single}
+        ev_stability["taper"] = {
+            cid: det.diagnostics_view()
+            for cid, det in dets.items()
+            if hasattr(det, "diagnostics_view")
         }
+        stab = getattr(coordinator, "_charge_stability", None)
+        if stab is not None and hasattr(stab, "snapshot_timers"):
+            import time as _time
+            ev_stability["stability_timers"] = stab.snapshot_timers(
+                _time.monotonic())
+        # (#763 beta.7) The reconciler's stop-war state — the mechanism
+        # that actually owns start/stop cycling. Its absence here sent
+        # the reporter to the (empty) charge-stability giveup fields.
+        recs = getattr(coordinator, "_charger_reconcilers", None) or {}
+        if recs:
+            import time as _time
+            ev_stability["stop_war"] = {
+                cid: rec.snapshot_war(_time.monotonic())
+                for cid, rec in recs.items()
+                if hasattr(rec, "snapshot_war")
+            }
+    except Exception:  # noqa: BLE001 — diagnostics must never fail the download
+        ev_stability["error"] = "collection failed"
+
+    # Load manager info
+    load_info = _load_manager_diagnostics(coordinator)
 
     # Energy dashboard config
     ed_config = getattr(coordinator, "_energy_dashboard_config", None)
@@ -314,7 +376,17 @@ async def async_get_config_entry_diagnostics(
     ev_devices = getattr(coordinator, "_ev_devices", None) or {}
     if ev_devices:
         from .coordinator.ev_control import EVControlMixin  # noqa: F401
-        adapters = getattr(coordinator, "_ev_adapters", {}) or {}
+        # (#764) The cache the coordinator actually writes is
+        # ``_charger_adapters`` (coordinator.py / ev_control.py). This read
+        # said ``_ev_adapters`` — an attribute production has never had — so
+        # ``adapter_class`` came back null on every dump ever taken and the
+        # Wallbox discovery block below was unreachable live. Fall back to the
+        # old name for anything that still sets it.
+        adapters = (
+            getattr(coordinator, "_charger_adapters", None)
+            or getattr(coordinator, "_ev_adapters", None)
+            or {}
+        )
         for cid, dev in ev_devices.items():
             ad = adapters.get(cid)
             entry_info = {
@@ -449,6 +521,13 @@ async def async_get_config_entry_diagnostics(
             "grid_export_kwh": data.get("daily_grid_export_energy"),
             "battery_charge_kwh": data.get("daily_battery_charge_energy"),
             "battery_discharge_kwh": data.get("daily_battery_discharge_energy"),
+            # (#628 visibility) per-category counter-backing today: how many
+            # cycles reconciled against the hardware counters vs skipped on a
+            # partial read. A category absent here has no counters configured
+            # (integration IS the design); one with skipped >> backed names
+            # the unreadable counter as the divergence mechanism in one look.
+            "counter_backing": _safe(
+                lambda: coordinator._energy_calculator.counter_backing_today()),
         },
         "energy_yearly": {
             "solar_kwh": data.get("yearly_solar_yield_energy"),
@@ -484,6 +563,7 @@ async def async_get_config_entry_diagnostics(
         # exact defect this issue fixes.
         "appliance_schedules": data.get("diag_appliance_schedules"),
         "load_management": load_info,
+        "ev_stability": ev_stability,
         "energy_dashboard": ed_info,
         "battery_sign": battery_sign_info,
         "split_grid_discovery": split_grid_info,

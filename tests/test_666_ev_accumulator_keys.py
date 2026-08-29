@@ -40,6 +40,7 @@ from custom_components.solar_energy_management.coordinator.energy_calculator imp
 )
 from custom_components.solar_energy_management.coordinator.types import (
     EnergyTotals,
+    PowerFlows,
     PowerReadings,
     SEMData,
 )
@@ -70,6 +71,14 @@ def _run_one_cycle(calc: EnergyCalculator) -> EnergyTotals:
     Not physically simultaneous (a house does not import and export at once) —
     that is the point: this is a key-plumbing probe, not a scenario. Each
     category must integrate so that a read/write mismatch anywhere shows up.
+
+    ``power_flows`` is passed for the same reason (#770). Categories fed by
+    the flow layer rather than by a raw power reading — the battery
+    charge-origin split is the first — integrate only when it is supplied.
+    Omitting it left them silently at zero, so the sweep below could not have
+    caught a key mismatch in any of them: a guard that cannot fail on half
+    its own parameter set. Same bug class the guard exists to catch, one
+    level up.
     """
     power = PowerReadings(solar_power=5000.0, ev_power=3000.0)
     power.calculate_derived()
@@ -78,7 +87,8 @@ def _run_one_cycle(calc: EnergyCalculator) -> EnergyTotals:
     power.grid_export_power = 3500.0
     power.battery_charge_power = 2500.0
     power.battery_discharge_power = 2000.0
-    return calc.calculate_energy(power)
+    flows = PowerFlows(solar_to_battery=1500.0, grid_to_battery=1000.0)
+    return calc.calculate_energy(power, flows)
 
 
 @pytest.mark.unit
@@ -89,8 +99,13 @@ class TestAccumulatorKeyRoundTrip666:
         nothing, every assertion below would pass vacuously."""
         totals = _run_one_cycle(_make_calc())
         assert totals.daily_solar > 0, "probe integrated nothing — cycle broke"
-        assert len(_categories()) == 7, (
-            f"expected 7 daily categories, found {_categories()} — if a "
+        # 10 since #825 added ``daily_total_consumption`` — home + EV, the
+        # figure HA's Energy Dashboard calls "Home". It is DERIVED from two
+        # accumulators rather than accumulated itself, which is why it has
+        # no monthly/yearly twin; the round-trip test below skips periods
+        # that do not exist, and was confirmed to cover this one.
+        assert len(_categories()) == 10, (
+            f"expected 10 daily categories, found {_categories()} — if a "
             "category was added or removed, confirm the guard still covers it"
         )
 

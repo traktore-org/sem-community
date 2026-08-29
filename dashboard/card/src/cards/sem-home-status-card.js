@@ -327,8 +327,10 @@ class SEMHomeStatusCard extends SEMLitBase {
 }
 
 semDefineCard('sem-home-status-card', SEMHomeStatusCard, {
-    type: 'custom:sem-home-status-card',
+    type: 'sem-home-status-card',
     name: 'SEM Home Status Card',
     description: 'Consolidated status panel for the SEM Home tab',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-home-status-card',
     preview: false,
 });

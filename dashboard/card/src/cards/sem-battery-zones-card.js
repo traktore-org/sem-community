@@ -102,7 +102,7 @@ class SEMBatteryZonesCard extends SEMLitBase {
         const T = this._theme();
         const autostart = this._state(ZONES[0].entity);
         const buffer    = this._state(ZONES[1].entity);
-        const priority  = this._state(ZONES[3].entity);
+        const priority  = this._state(ZONES[2].entity);
         const subtitle  = `${this._t('auto_start_soc')} ${autostart.toFixed(0)}% · Buffer ${buffer.toFixed(0)}% · ${this._t('priority_soc')} ${priority.toFixed(0)}%`;
 
         return html`
@@ -287,8 +287,10 @@ class SEMBatteryZonesCard extends SEMLitBase {
 }
 
 semDefineCard('sem-battery-zones-card', SEMBatteryZonesCard, {
-    type: 'custom:sem-battery-zones-card',
+    type: 'sem-battery-zones-card',
     name: 'SEM Battery Zones Card',
-    description: 'SOC zone configuration for Solar Energy Management',
+    description: 'The three battery SOC thresholds — priority, buffer and auto-start',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-battery-zones-card',
     preview: false,
 });

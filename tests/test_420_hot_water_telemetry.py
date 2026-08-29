@@ -15,16 +15,13 @@ makes that state visible.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import timedelta
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from homeassistant.util import dt as dt_util
 
 from custom_components.solar_energy_management.devices.hot_water_controller import (
-    DEFAULT_LEGIONELLA_INTERVAL_HOURS,
-    DEFAULT_LEGIONELLA_TARGET,
-    DEFAULT_SOLAR_TARGET_TEMP,
     HotWaterController,
 )
 

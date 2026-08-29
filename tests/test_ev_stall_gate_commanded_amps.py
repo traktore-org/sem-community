@@ -15,7 +15,6 @@ top of every per-charger decide-loop.
 """
 from __future__ import annotations
 
-from unittest.mock import MagicMock
 
 
 def _stall_gate(*, ev_connected, ev_charging, ev_power_w,

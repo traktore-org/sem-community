@@ -70,20 +70,21 @@ class SEMCostsCard extends SEMLitBase {
         // it's a cost.
         const netText = (net <= 0 ? '+' : '') + this._fmtCurr(Math.abs(net), curr);
 
+        // (#797) Two blocks, not one column. Cash flow (import/export/net)
+        // and avoided cost (solar/battery savings) were listed as visually
+        // parallel rows, which invites adding them up — a double count,
+        // because the savings are already the reason the net cost is low.
+        // Mockup approved by Guido 21.08: label each block, subtotal each,
+        // and say once that avoided cost is not cash.
+        const avoided = solar + batt;
         return html`
             <div class="section">
                 <div class="section-title">${this._t(labelKey)}</div>
+
+                <div class="block-title">${this._t('cost_block_moved')}</div>
                 <div class="metric-row">
                     <span class="metric-label">${this._t('import_cost')}</span>
                     <span class="metric-val c-import">${this._fmtCurr(imp, curr)}</span>
-                </div>
-                <div class="metric-row">
-                    <span class="metric-label">${this._t('solar_savings')}</span>
-                    <span class="metric-val c-solar">${this._fmtCurr(solar, curr)}</span>
-                </div>
-                <div class="metric-row">
-                    <span class="metric-label">${this._t('battery_savings')}</span>
-                    <span class="metric-val c-battery">${this._fmtCurr(batt, curr)}</span>
                 </div>
                 <div class="metric-row">
                     <span class="metric-label">${this._t('export_revenue')}</span>
@@ -93,6 +94,22 @@ class SEMCostsCard extends SEMLitBase {
                     <span class="metric-label"><strong>${this._t(net <= 0 ? 'net_saving' : 'net_cost')}</strong></span>
                     <span class="metric-val" style="color:${netColor}">${netText}</span>
                 </div>
+
+                <div class="block-title">${this._t('cost_block_avoided')}</div>
+                <div class="metric-row">
+                    <span class="metric-label">${this._t('solar_savings')}</span>
+                    <span class="metric-val c-solar">${this._fmtCurr(solar, curr)}</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">${this._t('battery_savings')}</span>
+                    <span class="metric-val c-battery">${this._fmtCurr(batt, curr)}</span>
+                </div>
+                <div class="metric-row net-row">
+                    <span class="metric-label"><strong>${this._t('cost_block_avoided_total')}</strong></span>
+                    <span class="metric-val c-solar">${this._fmtCurr(avoided, curr)}</span>
+                </div>
+
+                <div class="block-note">${this._t('cost_block_note')}</div>
             </div>
         `;
     }
@@ -244,6 +261,13 @@ class SEMCostsCard extends SEMLitBase {
                 display: flex; justify-content: space-between; align-items: baseline;
                 padding: 2px 0;
             }
+            .block-title {
+                font-size: 12px; letter-spacing: .06em; text-transform: uppercase;
+                opacity: .55; margin: 10px 0 2px;
+            }
+            .block-note {
+                font-size: 12px; opacity: .55; margin-top: 8px; line-height: 1.35;
+            }
             .net-row {
                 margin-top: 4px; padding-top: 4px;
                 border-top: 1px solid var(--divider-color, rgba(255,255,255,0.12));
@@ -277,4 +301,6 @@ semDefineCard('sem-costs-card', SEMCostsCard, {
     type: 'sem-costs-card',
     name: 'SEM Costs',
     description: 'Consolidated financial card with daily/monthly/yearly costs, savings, ROI, and environmental impact',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-costs-card',
 });

@@ -53,7 +53,7 @@ def _find_heat_pump_dict(tree: ast.AST) -> ast.Dict | None:
     key inside the diagnostics return value."""
     for node in ast.walk(tree):
         if isinstance(node, ast.Dict):
-            for k, v in zip(node.keys, node.values):
+            for k, v in zip(node.keys, node.values, strict=False):
                 if (
                     isinstance(k, ast.Constant)
                     and k.value == "heat_pump"
@@ -73,7 +73,7 @@ def _string_keys(d: ast.Dict) -> set[str]:
 
 def _nested_dict(d: ast.Dict, key: str) -> ast.Dict | None:
     """Return the dict-literal value at ``d[key]`` (or None if not a dict)."""
-    for k, v in zip(d.keys, d.values):
+    for k, v in zip(d.keys, d.values, strict=False):
         if isinstance(k, ast.Constant) and k.value == key and isinstance(v, ast.Dict):
             return v
     return None

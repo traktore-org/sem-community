@@ -18,7 +18,7 @@ never adopt someone else's (an EV charger's car SOC as the house battery).
 from __future__ import annotations
 
 from types import MappingProxyType
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 

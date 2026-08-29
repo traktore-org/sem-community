@@ -15,9 +15,9 @@ from __future__ import annotations
 import logging
 import math
 from collections import deque
-from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
-from typing import Any, Dict, List, Optional
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Any, Dict, Optional
 
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.util import dt as dt_util
@@ -624,11 +624,17 @@ class ForecastTracker:
             # (#544) forecast_accuracy_today/_7d, forecast_deviation_kwh,
             # forecast_corrected_tomorrow removed — dead sensors. correction_factor
             # and history_days stay (read by the dampening/correction sensor attrs).
-            "forecast_correction_factor": self.correction_factor,
+            # (#829) 2 dp at the publish seam. These two are the SECOND
+            # publisher of keys SEMData.to_dict also emits, and
+            # ``result.update(tracker_data)`` makes this one win — so
+            # rounding only in to_dict left the entity unrounded and
+            # writing a row every cycle. Caught on the rig, not by the
+            # unit test, which asserted the losing path.
+            "forecast_correction_factor": round(self.correction_factor or 0.0, 2),
             "forecast_weather_category": self.weather_category,
             "forecast_corrected_today": self.apply_correction(self._today_forecast),
             "forecast_history_days": len(self._history),
-            "forecast_dampening_factor": self.dampening_factor,
+            "forecast_dampening_factor": round(self.dampening_factor or 0.0, 2),
             # #416 — diagnostics surface, consumed by the
             # extra_state_attributes branches for ``forecast_dampening_factor``
             # and ``forecast_correction_factor`` in sensor.py.

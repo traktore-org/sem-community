@@ -4,8 +4,7 @@ Tests the main SEMCoordinator class which orchestrates all sub-modules.
 This tests integration between components, not internal implementation.
 """
 import pytest
-from unittest.mock import Mock, patch, AsyncMock
-from datetime import datetime
+from unittest.mock import Mock, patch
 
 from custom_components.solar_energy_management.coordinator import (
     SEMCoordinator,

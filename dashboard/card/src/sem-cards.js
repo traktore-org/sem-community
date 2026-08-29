@@ -33,6 +33,7 @@ import './cards/sem-home-status-card.js';
 import './cards/sem-price-card.js';
 import './cards/sem-system-card.js';
 import './cards/sem-today-plan-card.js';
+import './cards/sem-energy-plan-card.js';
 
 // Complex cards (observers, animations, external libs)
 import './cards/sem-flow-card.js';

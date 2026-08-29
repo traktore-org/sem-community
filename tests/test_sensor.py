@@ -1,6 +1,6 @@
 """Test EMS Solar Optimizer sensors."""
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 from homeassistant.const import UnitOfPower, UnitOfEnergy, PERCENTAGE
 from homeassistant.helpers.entity import EntityCategory

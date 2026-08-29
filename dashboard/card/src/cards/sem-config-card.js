@@ -24,12 +24,46 @@ import { semTheme, semDefineCard, semCardSurfaceCSS } from '../base/sem-shared.j
 // Section index — order = visual order in the rendered tab. Each entry
 // carries a colour-accent that matches the section icon, mirroring the
 // Control card's design language.
+// (#830) What a new install is shown before it asks for more.
+//
+// Guido: "if a user is starting with SEM he is overwhelmed with so many
+// options and stops using it — it is just too much." The Config tab renders
+// about ninety controls; making SEM work needs about eight.
+//
+// The default view is NAMELESS on purpose. Nobody is labelled a beginner —
+// there is simply the configuration, and an "advanced" switch for people who
+// want the rest. Advanced hides nothing: everything is one toggle away.
+//
+// This list is deliberately tiny and is pinned by a shrink-only test. Adding
+// to it has to be argued for, because a default view is only useful while it
+// stays small — and every individually reasonable addition is exactly how
+// ninety happened.
+const ESSENTIAL_SECTIONS = new Set([
+    'overview',        // what is still missing, and the route to each
+    'tariff',          // without a price, every saving SEM reports is zero
+    'ev_chargers',     // the main sink on most installs
+    'battery_zones',   // the floors that keep the house covered
+]);
+
+const ESSENTIAL_CONTROLS = new Set([
+    // Tariff: the one decision, then the two numbers or the one entity.
+    'tariff_mode',
+    'electricity_import_rate',
+    'electricity_export_rate',
+    'dynamic_tariff_entity',
+    // Battery: the safety floor. Everything else in that section is a
+    // sensor override that detection normally supplies.
+    'battery_discharge_protection_enabled',
+]);
+
+const ADV_KEY = 'sem_config_advanced_v1';
+
 const SECTIONS = [
     {
         id: 'overview',
         icon: 'mdi:check-decagram',
         color: '#8DC892',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/README.md',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/README.md',
         titleKey: 'config_section_overview',
         subtitleFn: (c) => c._overviewSubtitle(),
         expanded: true,  // open by default — gives the user a quick status read
@@ -40,15 +74,26 @@ const SECTIONS = [
         // pickers are the escape hatch when a detected sensor is wrong or
         // dead (e.g. inverter CTs dark off-grid → external meter).
         id: 'sensor_sources',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md#sensor-source-overrides',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/SETUP_GUIDE.md#sensor-source-overrides',
         icon: 'mdi:transmission-tower',
         color: '#488fc2',
         titleKey: 'config_section_sensor_sources',
         subtitleFn: (c) => c._sensorSourcesSubtitle(),
     },
     {
+        // (#814 Pillar B) what SEM detected, with evidence — the #803/#802
+        // class made visible: mis-detection shows up here as a reviewable
+        // list, not downstream as broken behavior.
+        id: 'detected_hardware',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/SUPPORTED_HARDWARE.md',
+        icon: 'mdi:radar',
+        color: '#8DC892',
+        titleKey: 'config_section_detected_hardware',
+        subtitleFn: (c) => c._detectedHardwareSubtitle(),
+    },
+    {
         id: 'ev_chargers',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/EV_CHARGING_LOGIC.md#the-five-charge-modes',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/EV_CHARGING_LOGIC.md#the-five-charge-modes',
         icon: 'mdi:ev-station',
         color: '#5BC8D8',
         titleKey: 'config_section_ev_chargers',
@@ -56,7 +101,7 @@ const SECTIONS = [
     },
     {
         id: 'battery_zones',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md#6-soc-zone-strategy',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/SETUP_GUIDE.md#6-soc-zone-strategy',
         icon: 'mdi:battery-charging-medium',
         color: '#4db6ac',
         titleKey: 'config_section_battery_zones',
@@ -64,7 +109,7 @@ const SECTIONS = [
     },
     {
         id: 'tariff',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md#tariff-and-pricing-settings',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/SETUP_GUIDE.md#tariff-and-pricing-settings',
         icon: 'mdi:cash-multiple',
         color: '#96CAEE',
         titleKey: 'config_section_tariff',
@@ -72,7 +117,7 @@ const SECTIONS = [
     },
     {
         id: 'heat_pump',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md#10-heat-pump-and-hot-water',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/SETUP_GUIDE.md#10-heat-pump-and-hot-water',
         icon: 'mdi:heat-pump',
         color: '#4db6ac',
         titleKey: 'config_section_heat_pump',
@@ -80,7 +125,7 @@ const SECTIONS = [
     },
     {
         id: 'hot_water',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md#hot-water-boiler-separate-from-heat-pump',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/SETUP_GUIDE.md#hot-water-boiler-separate-from-heat-pump',
         icon: 'mdi:water-boiler',
         color: '#5BC8D8',
         titleKey: 'config_section_hot_water',
@@ -88,7 +133,7 @@ const SECTIONS = [
     },
     {
         id: 'battery_scheduler',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md#9-battery-charge-scheduler',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/SETUP_GUIDE.md#9-battery-charge-scheduler',
         icon: 'mdi:calendar-clock',
         color: '#f06292',
         titleKey: 'config_section_battery_scheduler',
@@ -96,7 +141,7 @@ const SECTIONS = [
     },
     {
         id: 'load_management',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/LOAD_PRIORITY.md#what-it-does',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/USER_GUIDE.md#load-management-settings',
         icon: 'mdi:flash-alert',
         color: '#ff9800',
         titleKey: 'config_section_load_management',
@@ -104,7 +149,7 @@ const SECTIONS = [
     },
     {
         id: 'forecast',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md#forecast-settings',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/SETUP_GUIDE.md#forecast-settings',
         icon: 'mdi:weather-partly-cloudy',
         color: '#ff9800',
         titleKey: 'config_section_forecast',
@@ -114,7 +159,7 @@ const SECTIONS = [
         // (#566) rename PV strings inline — only rendered when ≥2 strings are
         // detected (see the visibility filter in render()).
         id: 'pv_strings',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/PV_STRINGS.md#what-you-get',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/PV_STRINGS.md#what-you-get',
         icon: 'mdi:solar-panel',
         color: '#ff9800',
         titleKey: 'config_section_pv_strings',
@@ -122,7 +167,7 @@ const SECTIONS = [
     },
     {
         id: 'notifications',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md#notification-settings',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/SETUP_GUIDE.md#notification-settings',
         icon: 'mdi:bell-outline',
         color: '#96CAEE',
         titleKey: 'config_section_notifications',
@@ -130,7 +175,7 @@ const SECTIONS = [
     },
     {
         id: 'advanced',
-        docs: 'https://github.com/traktore-org/sem-community/blob/main/docs/SETUP_GUIDE.md#advanced-settings',
+        docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/SETUP_GUIDE.md#advanced-settings',
         icon: 'mdi:cog-outline',
         color: '#888',
         titleKey: 'config_section_advanced',
@@ -192,7 +237,11 @@ class SEMConfigCard extends SEMLitBase {
     static get properties() {
         return {
             ...super.properties,
+            _retentionBusy: { state: true },
+            _retentionMsg: { state: true },
             _showHelp: { state: true },
+            _advanced: { state: true },
+            _lmAdvancedOpen: { state: true },
             _entryId: { state: true },
             _saveStatus: { state: true },
             // #461 grid-sign fix button transient UI state.
@@ -232,6 +281,14 @@ class SEMConfigCard extends SEMLitBase {
             notifications: true, advanced: true,
         };
         this._showHelp = false;
+        // (#830) A VIEW preference, so it lives per browser like the
+        // onboarding banner's dismissal — not in the config entry, which
+        // would make one person's choice everyone's.
+        this._advanced = (() => {
+            try { return localStorage.getItem(ADV_KEY) === '1'; }
+            catch (e) { return false; }
+        })();
+        this._lmAdvancedOpen = false;  // (#717) warning/emergency ladder disclosure
         this._entryId = '';
         this._saveStatus = {};  // { fieldKey: 'saving' | 'ok' | error-msg }
         this._statusTimers = new Set();  // pending ✓-clear timeouts (#476)
@@ -380,6 +437,21 @@ class SEMConfigCard extends SEMLitBase {
     get hass() { return super.hass; }
 
     _toggleHelp() { this._showHelp = !this._showHelp; }
+
+    _toggleAdvanced() {
+        this._advanced = !this._advanced;
+        try { localStorage.setItem(ADV_KEY, this._advanced ? '1' : '0'); }
+        catch (e) { /* private window / blocked storage — session only */ }
+    }
+
+    /** Should this control appear in the current view? */
+    _showsControl(key) {
+        if (this._advanced) return true;
+        // Entity-backed controls carry their domain; compare on the
+        // config key, which is what the tier list is written in.
+        const k = String(key || '').replace(/^[a-z_]+\.sem_/, '');
+        return ESSENTIAL_CONTROLS.has(k);
+    }
     _toggleSection(id) {
         // `_collapsed` is a plain instance property (not a Lit reactive
         // state) — mutating it does NOT schedule a re-render on its own.
@@ -538,6 +610,10 @@ class SEMConfigCard extends SEMLitBase {
     // delegates to ``_renderZoneKnob`` so all sections (tariff, heat pump,
     // hot water, advanced, per-charger) restyle uniformly with one change.
     _renderStepper(entityId, labelKey, T, helpKey) {
+        // (#830) One choke point for the default view: a control not on
+        // the essential list is simply not rendered until advanced is on.
+        if (!this._showsControl(entityId)) return nothing;
+
         return this._renderZoneKnob(entityId, labelKey, T, helpKey);
     }
 
@@ -613,7 +689,50 @@ class SEMConfigCard extends SEMLitBase {
             { key: 'hw', labelKey: 'config_section_hot_water', icon: 'mdi:water-boiler',
               color: '#5BC8D8', sectionId: 'hot_water',
               done: !!opts.hot_water_entity },
+            // (#830) The overview stopped at four subsystems while the Config
+            // tab has fourteen sections, so "all set up" could read 100% with
+            // no tariff configured — SEM cannot cost anything without one, and
+            // nothing said so. These three are the ones whose absence changes
+            // what SEM can DO, which is the bar for appearing here: a guide is
+            // only useful if reaching the end of it means something.
+            { key: 'tariff', labelKey: 'config_section_tariff', icon: 'mdi:cash-multiple',
+              color: '#8353d1', sectionId: 'tariff',
+              // (#842) This row arrived with #830 testing three keys that
+              // exist nowhere (electricity_rate, tariff_provider,
+              // tariff_entity), so it never ticked on any install. What
+              // makes a tariff configured depends on the MODE: dynamic
+              // needs the price entity, static needs the rate.
+              done: (opts.tariff_mode === 'dynamic'
+                       ? !!opts.dynamic_tariff_entity
+                       : !!opts.electricity_import_rate) },
+            { key: 'battery', labelKey: 'config_section_battery_zones', icon: 'mdi:battery-charging',
+              color: '#4db6ac', sectionId: 'battery_zones',
+              // (#842, a #830 addition) opts.has_battery is an
+              // Energy-Dashboard reader flag, never an option key —
+              // _hasBattery() is what the rest of the card trusts.
+              done: this._hasBattery() },
+            { key: 'loads', labelKey: 'config_section_load_management', icon: 'mdi:flash-alert',
+              color: '#ff9800', sectionId: 'load_management',
+              optional: true,
+              // (#842, a #830 addition) opts.managed_devices exists
+              // nowhere; load management is configured when its flag is on.
+              done: !!opts.load_management_enabled },
         ];
+    }
+
+    /** Has the user already set this subsystem up?
+
+        Reuses the Setup overview's own done-signals rather than a second list:
+        two answers to "is this configured" would drift, and the overview's is
+        the one already shown to the user.
+     */
+    _sectionConfigured(id) {
+        const item = this._setupItems().find(i => i.sectionId === id);
+        if (item) return !!item.done;
+        const opts = this._options || {};
+        if (id === 'battery_scheduler') return !!opts.battery_charge_scheduler_enabled;
+        if (id === 'notifications') return !!opts.enable_mobile_notifications;
+        return false;
     }
 
     _openSection(id) {
@@ -623,8 +742,12 @@ class SEMConfigCard extends SEMLitBase {
 
     _renderOverview(T) {
         const items = this._setupItems();
-        const done = items.filter(i => i.done).length;
-        const total = items.length;
+        // (#830) Optional subsystems do not hold the bar down. A user with no
+        // controllable loads is not 86% set up — they are finished, and a
+        // progress bar that disagrees teaches them to ignore it.
+        const counted = items.filter(i => !i.optional);
+        const done = counted.filter(i => i.done).length;
+        const total = counted.length;
         const allDone = done === total;
         const pct = total ? Math.round((done / total) * 100) : 100;
         return html`
@@ -647,8 +770,10 @@ class SEMConfigCard extends SEMLitBase {
                         @click=${i.done ? undefined : () => this._openSection(i.sectionId)}>
                         <ha-icon icon="${i.icon}" style="--mdc-icon-size:16px;color:${i.color}"></ha-icon>
                         <div class="chip-label">${this._t(i.labelKey)}</div>
-                        <div class="chip-value ${i.done ? 'c-ok' : 'c-warn'}">
-                            ${i.done ? '✓' : this._t('config_setup_action')}
+                        <div class="chip-value ${i.done ? 'c-ok' : (i.optional ? '' : 'c-warn')}">
+                            ${i.done ? '✓'
+                                : (i.optional ? this._t('config_setup_optional')
+                                              : this._t('config_setup_action'))}
                         </div>
                     </div>`)}
             </div>
@@ -733,15 +858,31 @@ class SEMConfigCard extends SEMLitBase {
                           surface to set it. */ ''}
                     ${this._renderPickerNested(idx, cid, 'ev_start_stop_entity', 'config_ev_start_stop',
                         ['switch', 'button'], null, opts, 'config_help_ev_start_stop')}
+                    ${''/* (#804) phase-switch capability: the entity the user
+                       NAMES (never inferred) + the 1p/3p values in its own
+                       vocabulary. Value fields only show once the entity is
+                       set; select entities REQUIRE them, number defaults to
+                       1/3 and switch to off/on. */}
+                    ${this._renderPickerNested(idx, cid, 'ev_phase_switch_entity', 'config_ev_phase_switch',
+                        ['select', 'number', 'switch', 'input_select', 'input_number', 'input_boolean'],
+                        null, opts, 'config_help_ev_phase_switch')}
+                    ${charger.ev_phase_switch_entity ? html`
+                        ${this._renderTextNested(idx, cid, 'ev_phase_switch_value_1p', 'config_ev_phase_1p',
+                            opts, 'config_help_ev_phase_values', '1 / off / einphasig')}
+                        ${this._renderTextNested(idx, cid, 'ev_phase_switch_value_3p', 'config_ev_phase_3p',
+                            opts, 'config_help_ev_phase_values', '3 / on / dreiphasig')}` : nothing}
                     ${this._renderPickerNested(idx, cid, 'vehicle_soc_entity', 'config_ev_vehicle_soc',
                         'sensor', null, opts, 'config_help_ev_vehicle_soc')}
                     ${this._renderTargetTypeSelectNested(idx, cid, charger, opts)}
-                    ${''/* ONE current knob (#536): Min Amps. SEM auto-finds a
-                       fussy car's start current (day AND night) and settles
-                       back here — no Start Amps / Vehicle Min Amps knobs. */}
+                    ${''/* The charger's current RANGE (#536 floor, #746
+                       ceiling). SEM auto-finds a fussy car's start current
+                       (day AND night) and settles back to Min — no Start Amps
+                       / Vehicle Min Amps knobs. Max is what the wallbox is
+                       rated for (or the supply you want to throttle it to);
+                       before #746 it was an invisible 32 A on every install. */}
                     <div class="stepper-pair">
                         ${this._renderStepper(`number.sem_charger_${cid}_minimum_current`, 'min_amps', T, 'tile_help_min_amps')}
-                        ${this._renderStepper(`number.sem_charger_${cid}_ev_battery_capacity_kwh`, 'capacity_kwh', T, 'tile_help_capacity')}
+                        ${this._renderStepper(`number.sem_charger_${cid}_maximum_current`, 'max_amps', T, 'tile_help_max_amps')}
                     </div>
                     ${/* (#576) The Surplus/Shed priority steppers were removed —
                           drag the charger in the Control-tab device-priority
@@ -752,16 +893,22 @@ class SEMConfigCard extends SEMLitBase {
                           actual target + its ceiling (#245 range). */ ''}
                     ${charger.ev_target_type === 'soc' ? html`
                         <div class="stepper-pair">
-                            ${this._renderStepper(`number.sem_charger_${cid}_target_soc`, 'config_ev_target_soc', T, null)}
-                            ${this._renderStepper(`number.sem_charger_${cid}_target_soc_max`, 'config_ev_target_soc_max', T, null)}
+                            ${this._renderStepper(`number.sem_charger_${cid}_target_soc`, 'config_ev_target_soc', T, 'config_help_ev_target_soc')}
+                            ${this._renderStepper(`number.sem_charger_${cid}_target_soc_max`, 'config_ev_target_soc_max', T, 'config_help_ev_target_soc_max')}
                         </div>` : html`
                         <div class="stepper-pair">
-                            ${this._renderStepper(`number.sem_charger_${cid}_daily_ev_target`, 'config_ev_daily_target', T, null)}
-                            ${this._renderStepper(`number.sem_charger_${cid}_daily_ev_target_max`, 'config_ev_daily_target_max', T, null)}
+                            ${this._renderStepper(`number.sem_charger_${cid}_daily_ev_target`, 'config_ev_daily_target', T, 'config_help_ev_daily_target')}
+                            ${this._renderStepper(`number.sem_charger_${cid}_daily_ev_target_max`, 'config_ev_daily_target_max', T, 'config_help_ev_daily_target_max')}
                         </div>`}
+                    ${/* Capacity moved down here when Max Amps took its slot
+                          (#746) — it belongs with the other car properties
+                          anyway, and the current range now reads as a pair. */ ''}
                     <div class="stepper-pair">
-                        ${this._renderStepper(`number.sem_charger_${cid}_ev_kwh_per_100km`, 'config_ev_kwh_per_100km', T, null)}
-                        ${this._renderStepper(`number.sem_charger_${cid}_ev_phases`, 'config_ev_phases', T, null)}
+                        ${this._renderStepper(`number.sem_charger_${cid}_ev_battery_capacity_kwh`, 'capacity_kwh', T, 'tile_help_capacity')}
+                        ${this._renderStepper(`number.sem_charger_${cid}_ev_kwh_per_100km`, 'config_ev_kwh_per_100km', T, 'config_help_ev_kwh_per_100km')}
+                    </div>
+                    <div class="stepper-pair">
+                        ${this._renderStepper(`number.sem_charger_${cid}_ev_phases`, 'config_ev_phases', T, 'config_help_ev_phases')}
                     </div>
                 </div>
             `;})}
@@ -859,6 +1006,66 @@ class SEMConfigCard extends SEMLitBase {
     // unavailable override gets a loud warning row instead of a silent
     // fallback. battery_power_sensor moved here from Battery & zones,
     // solar_production_sensor from Tariff — one concept, one home.
+    _detectionReport() {
+        const st = this._hass?.states?.['sensor.sem_diag_charger_control'];
+        return st?.attributes?.detection_report || null;
+    }
+
+    _detectedHardwareSubtitle() {
+        const r = this._detectionReport();
+        if (!r) return this._t('config_detect_none');
+        const n = (r.chargers || []).length;
+        const nm = (r.near_misses || []).length;
+        const base = `${n} ${this._t('config_detect_chargers')}`;
+        return nm ? `${base} · ${nm} ${this._t('config_detect_near_misses')}` : base;
+    }
+
+    // (#814 Pillar B) Detected hardware with evidence. Read-only view of the
+    // report the coordinator publishes; corrections happen with the existing
+    // pickers in the charger / sensor-source sections.
+    _renderDetectedHardware(T) {
+        const r = this._detectionReport();
+        if (!r) {
+            return html`<div class="setting-help-text">${this._t('config_detect_none')}</div>`;
+        }
+        const chargers = r.chargers || [];
+        const misses = r.near_misses || [];
+        const prober = r.prober_candidates || [];
+        const dis = r.disagreements || [];
+        const roleRow = (k, v) => html`
+            <div class="row"><span class="lbl">${k}</span>
+                <span style="font-family:monospace;font-size:0.85em">${v.entity || v.value || '—'}
+                    ${v.device_class ? html`<span style="opacity:.6"> · ${v.domain}/${v.device_class}</span>` : nothing}
+                </span></div>`;
+        return html`
+            <div class="setting-help-text" style="margin:0 0 6px">${this._t('config_detect_intro')}</div>
+            ${chargers.map((c) => html`
+                <div class="row" style="font-weight:600">
+                    <span class="lbl">${this._t('config_detect_charger')}: ${c.platform}</span>
+                    <span>${c.control}</span>
+                </div>
+                ${Object.entries(c.mapped || {}).map(([k, v]) => roleRow(k, v))}
+                ${(c.unmapped || []).length ? html`
+                    <div class="setting-help-text" style="margin:2px 0 8px">
+                        ${this._t('config_detect_unmapped')}: ${(c.unmapped || []).map((u) => u.entity).join(', ')}
+                    </div>` : nothing}
+            `)}
+            ${misses.map((m) => html`
+                <div class="row" style="color:${T.warn || '#ffb74d'}">
+                    <span class="lbl">⚠ ${m.platform}</span>
+                    <span>${this._t('config_detect_near_miss')}</span>
+                </div>
+                <div class="setting-help-text" style="margin:-2px 0 8px">
+                    ${(m.entities || []).map((e) => e.entity).join(', ')}
+                </div>`)}
+            ${dis.filter((d) => d.kind === 'prober_only').map((d) => html`
+                <div class="row"><span class="lbl">🔎 ${d.platform}</span>
+                    <span>${this._t('config_detect_prober_only')}</span></div>`)}
+            ${(!chargers.length && !misses.length && !prober.length) ? html`
+                <div class="setting-help-text">${this._t('config_detect_nothing')}</div>` : nothing}
+        `;
+    }
+
     _renderSensorSources(T) {
         const opts = this._options || {};
         return html`
@@ -926,6 +1133,30 @@ class SEMConfigCard extends SEMLitBase {
             ${this._renderZoneKnob('number.sem_battery_max_discharge_power', 'battery_max_discharge_power', T, 'config_help_batt_max_discharge')}
             ${this._renderPicker('battery_discharge_control_entity', 'config_batt_discharge_entity',
                 'number', null, opts, 'config_help_batt_discharge_entity')}
+        `;
+    }
+
+    // (#751) a free-text option row — the four power-strategy VALUES a
+    // non-Sessy select needs mapped. Same _saveOption path and status
+    // chrome as every other row; Enter or blur saves.
+    _renderTextOption(key, labelKey, opts, helpKey, placeholder) {
+        const val = opts[key] ?? '';
+        const status = this._saveStatus[key];
+        return html`
+            <div class="row">
+                <span class="lbl" title="${helpKey ? this._t(helpKey) : ''}">${this._t(labelKey)}</span>
+                <input type="text" class="txt-opt" .value=${String(val)}
+                       placeholder="${placeholder || ''}"
+                       @keydown=${(e) => { if (e.key === 'Enter') e.target.blur(); }}
+                       @blur=${(e) => {
+                           const v = e.target.value.trim();
+                           if (v !== String(val)) this._saveOption(key, v, key);
+                       }} />
+                ${status === 'saving' ? html`<span class="sv">…</span>`
+                  : status === 'ok' ? html`<span class="sv ok">✓</span>`
+                  : status === 'err' ? html`<span class="sv err">!</span>`
+                  : nothing}
+            </div>
         `;
     }
 
@@ -1004,7 +1235,21 @@ class SEMConfigCard extends SEMLitBase {
                             'config_help_force_discharge_entity')}
                         ${this._renderPicker('battery_strategy_control_entity',
                             'config_strategy_entity', 'select', null, opts,
-                            'config_help_strategy_entity')}`;
+                            'config_help_strategy_entity')}
+                        ${opts['battery_strategy_control_entity'] ? html`
+                            ${this._renderTextOption('battery_strategy_active_value',
+                                'config_strategy_val_active', opts,
+                                'config_help_strategy_values', 'api')}
+                            ${this._renderTextOption('battery_strategy_idle_value',
+                                'config_strategy_val_idle', opts,
+                                'config_help_strategy_values', 'eco')}
+                            ${this._renderTextOption('battery_strategy_self_consume_value',
+                                'config_strategy_val_selfc', opts,
+                                'config_help_strategy_values', 'nom')}
+                            ${this._renderTextOption('battery_strategy_off_value',
+                                'config_strategy_val_off', opts,
+                                'config_help_strategy_values', 'idle')}
+                        ` : nothing}`;
                 })()}
                 ${this._renderOptionToggle('battery_setpoint_bidirectional',
                     'config_battery_bidirectional', opts,
@@ -1210,7 +1455,12 @@ class SEMConfigCard extends SEMLitBase {
             id,
             name: `${this._t('config_ev_new_charger')} ${existing.length + 1}`,
             ev_min_current: 6,
-            max_charging_current: 32,
+            // (#746) no ceiling literal here. This line was the ONLY writer of
+            // ``max_charging_current`` anywhere in SEM — a hardcoded 32 that
+            // then became every install's un-raisable EVSE cap. The ceiling is
+            // now ``ev_max_current``, seeded from DEFAULT_MAX_CHARGING_CURRENT
+            // by devices.base.resolve_max_current and raised by the Max Amps
+            // slider. Leaving it unset keeps one source of truth (class 46).
             ev_surplus_priority: existing.length + 3,
         };
         this._chargerBusy = true;
@@ -1280,6 +1530,35 @@ class SEMConfigCard extends SEMLitBase {
 
     // Entity picker bound to ev_chargers[index][key] — writes the nested
     // list shape back via config_entries/update.
+    // (#804) free-text field bound to ev_chargers[index][key] — the 1p/3p
+    // positions in the switch entity's own vocabulary. Same nested write
+    // path + status chrome as the pickers; Enter or blur saves.
+    _renderTextNested(chargerIndex, cid, chargerKey, labelKey, opts, helpKey, placeholder) {
+        const chargers = opts.ev_chargers || [];
+        const cur = chargers[chargerIndex]?.[chargerKey] ?? '';
+        const statusKey = `ev_chargers.${chargerIndex}.${chargerKey}`;
+        const status = this._saveStatus[statusKey];
+        return html`
+            <div class="picker-cell">
+                <div class="picker-row">
+                    <span class="picker-label">${this._t(labelKey)}</span>
+                    <input type="text" class="txt-opt" .value=${String(cur)}
+                           placeholder="${placeholder || ''}"
+                           @keydown=${(e) => { if (e.key === 'Enter') e.target.blur(); }}
+                           @blur=${(e) => {
+                               const v = e.target.value.trim();
+                               if (v !== String(cur)) {
+                                   this._saveChargerField(chargerIndex, cid, chargerKey, v, statusKey, opts);
+                               }
+                           }} />
+                </div>
+                ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
+                ${status === 'ok' ? html`<div class="save-status ok">✓ ${this._t('config_saved')}</div>` : nothing}
+                ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
+            </div>
+        `;
+    }
+
     _renderPickerNested(chargerIndex, cid, chargerKey, labelKey, domain, deviceClass, opts, helpKey) {
         const chargers = opts.ev_chargers || [];
         const cur = chargers[chargerIndex]?.[chargerKey] || '';
@@ -1401,6 +1680,10 @@ class SEMConfigCard extends SEMLitBase {
     // Entity picker bound to an entry.options key. Auto-saves via WebSocket
     // on change → SEM update_listener reloads → registered=on within ~1s.
     _renderPicker(optionKey, labelKey, domain, deviceClass, opts, helpKey) {
+        // (#830) One choke point for the default view: a control not on
+        // the essential list is simply not rendered until advanced is on.
+        if (!this._showsControl(optionKey)) return nothing;
+
         const status = this._saveStatus[optionKey];
         // #528: structural (entity-wiring) keys reload the entry — stage the
         // edit locally and commit on Apply so the reload fires once for the
@@ -1620,6 +1903,10 @@ class SEMConfigCard extends SEMLitBase {
     // ``switch.sem_*`` entity exists for the option.
     // Native <select> bound to an entry.options key.
     _renderOptionSelect(optionKey, labelKey, options, opts, helpKey, defaultVal) {
+        // (#830) One choke point for the default view: a control not on
+        // the essential list is simply not rendered until advanced is on.
+        if (!this._showsControl(optionKey)) return nothing;
+
         const sid = 'opt:' + optionKey;
         this._reg(sid);
         const live = opts[optionKey] != null ? opts[optionKey] : defaultVal;
@@ -1650,6 +1937,10 @@ class SEMConfigCard extends SEMLitBase {
     // doesn't fire its own reload and discard a sibling picker's staged edit.
     // Non-structural toggles keep saving live on click (unchanged).
     _renderOptionToggle(optionKey, labelKey, opts, helpKey, defaultVal) {
+        // (#830) One choke point for the default view: a control not on
+        // the essential list is simply not rendered until advanced is on.
+        if (!this._showsControl(optionKey)) return nothing;
+
         const structural = STRUCTURAL_KEYS.has(optionKey);
         const sid = 'opt:' + optionKey;
         if (!structural) this._reg(sid);
@@ -1687,6 +1978,10 @@ class SEMConfigCard extends SEMLitBase {
     // need hundreds of clicks; typing the number is faster. Commits on
     // blur and Enter to avoid one save per keystroke.
     _renderOptionNumberInput(optionKey, labelKey, cfg, opts, helpKey) {
+        // (#830) One choke point for the default view: a control not on
+        // the essential list is simply not rendered until advanced is on.
+        if (!this._showsControl(optionKey)) return nothing;
+
         const sid = 'opt:' + optionKey;
         this._reg(sid);
         const live = opts[optionKey] != null ? opts[optionKey] : cfg.default;
@@ -1722,6 +2017,10 @@ class SEMConfigCard extends SEMLitBase {
     // #528: option-key slider in the same colorful accent style as the
     // entity knob (saves an entry.option live via _saveOption).
     _renderOptionSlider(optionKey, labelKey, cfg, opts, helpKey) {
+        // (#830) One choke point for the default view: a control not on
+        // the essential list is simply not rendered until advanced is on.
+        if (!this._showsControl(optionKey)) return nothing;
+
         const sid = 'opt:' + optionKey;
         this._reg(sid);
         const live = parseFloat(opts[optionKey] != null ? opts[optionKey] : cfg.default) || 0;
@@ -1786,6 +2085,13 @@ class SEMConfigCard extends SEMLitBase {
 
     _renderLoadManagement(T) {
         const opts = this._options || {};
+        // #716 — read the toggle's STAGED value, not just the persisted one,
+        // so the three kW fields disappear the moment it is flipped rather
+        // than one Apply later.
+        const usid = 'opt:peak_limit_unlimited';
+        const unlimited = this._isDirty(usid)
+            ? !!this._staged[usid].value
+            : !!opts.peak_limit_unlimited;
         return html`
             <div class="readonly-row">
                 <span class="ctrl-label">${this._t('load_management_status')}</span>
@@ -1793,24 +2099,103 @@ class SEMConfigCard extends SEMLitBase {
             </div>
             ${this._renderOptionToggle('load_management_enabled', 'config_lm_enabled',
                 opts, 'config_help_lm_enabled', true)}
-            ${this._renderOptionSlider('target_peak_limit', 'config_lm_target_peak',
-                { min: 1.0, max: 15.0, step: 0.5, unit: 'kW', default: 5.0 }, opts, 'config_help_lm_target_peak')}
-            ${this._renderOptionSlider('warning_peak_level', 'config_lm_warning_peak',
-                { min: 1.0, max: 15.0, step: 0.5, unit: 'kW', default: 4.5 }, opts, 'config_help_lm_warning_peak')}
-            ${this._renderOptionSlider('emergency_peak_level', 'config_lm_emergency_peak',
-                { min: 1.0, max: 20.0, step: 0.5, unit: 'kW', default: 6.0 }, opts, 'config_help_lm_emergency_peak')}
+            ${this._renderOptionToggle('peak_limit_unlimited', 'config_lm_unlimited',
+                opts, 'config_help_lm_unlimited', false)}
+            ${unlimited ? html`
+                <div class="readonly-row">
+                    <span class="ctrl-label">${this._t('config_lm_target_peak')}</span>
+                    <span class="readonly-value">${this._t('config_lm_unlimited_value')}</span>
+                </div>
+            ` : html`
+                ${this._renderOptionNumberInput('target_peak_limit', 'config_lm_target_peak',
+                    { min: 1.0, max: 80.0, step: 0.1, unit: 'kW', default: 5.0 }, opts, 'config_help_lm_target_peak')}
+                <div class="advanced-toggle-row" @click=${() => { this._lmAdvancedOpen = !this._lmAdvancedOpen; }}>
+                    <ha-icon class="chevron" icon="mdi:chevron-down"
+                             style="--mdc-icon-size:16px;transform:${this._lmAdvancedOpen ? 'rotate(0deg)' : 'rotate(-90deg)'}"></ha-icon>
+                    <span>${this._t('config_section_advanced')}</span>
+                </div>
+                ${this._lmAdvancedOpen ? html`
+                    ${this._renderOptionNumberInput('warning_peak_level', 'config_lm_warning_peak',
+                        { min: 1.0, max: 80.0, step: 0.1, unit: 'kW', default: 4.5 }, opts, 'config_help_lm_warning_peak')}
+                    ${this._renderOptionNumberInput('emergency_peak_level', 'config_lm_emergency_peak',
+                        { min: 1.0, max: 80.0, step: 0.1, unit: 'kW', default: 6.0 }, opts, 'config_help_lm_emergency_peak')}
+                ` : nothing}
+            `}
         `;
     }
 
     _renderForecast(T) {
         const raw = this._val('forecast_source') || 'none';
         const label = raw === 'none' ? this._t('none') : this._forecastProviderLabel(raw);
+        const opts = this._options || {};
+        // (#819) Running Solcast, Forecast.Solar and Open-Meteo side by side to
+        // compare them used to mean the first one on the ladder always won, and
+        // the only lever was deactivating the others. Auto keeps that ladder.
+        // Only offer what is actually installed: picking an absent source
+        // would silently fall back to auto and look like the setting did
+        // nothing. A stale choice stays listed (marked) so the user can see
+        // WHY their pick is not being used rather than finding it vanished.
+        // Reads the ATTRIBUTE, not a state: _val() resolves
+        // sensor.sem_<suffix>.state, and there is no such entity for a
+        // list. Getting this wrong returns '' and silently re-offers
+        // every source — an inert half that looks fine on screen.
+        const installed = this._hass?.states?.['sensor.sem_forecast_source']
+            ?.attributes?.sources_available || [];
+        const has = (k) => !Array.isArray(installed) || installed.includes(k);
+        const chosen = opts.solar_forecast_source || 'auto';
+        const named = [
+            { value: 'solcast', label: 'Solcast PV Solar' },
+            { value: 'forecast_solar', label: 'Forecast.Solar' },
+            { value: 'open_meteo', label: 'Open-Meteo Solar Forecast' },
+        ];
+        const sourceOptions = [
+            { value: 'auto', label: this._t('config_forecast_source_auto') },
+            ...named
+                .filter((o) => has(o.value) || o.value === chosen)
+                .map((o) => (has(o.value)
+                    ? o
+                    : { ...o, label: `${o.label} — ${this._t('config_forecast_source_missing')}` })),
+        ];
+        const attrs = this._hass?.states?.['sensor.sem_forecast_source']?.attributes || {};
         return html`
             <div class="readonly-row">
                 <span class="ctrl-label">${this._t('forecast_source')}</span>
                 <span class="readonly-value">${label}</span>
             </div>
+            ${this._renderPlanesToday(attrs)}
+            ${this._renderOptionSelect('solar_forecast_source', 'config_solar_forecast_source',
+                sourceOptions, opts, 'config_help_solar_forecast_source', 'auto')}
             ${raw === 'none' ? html`<div class="overview-help">${this._t('config_forecast_install_hint')}</div>` : nothing}
+        `;
+    }
+
+    // (#841) Today's forecast per string.
+    //
+    // #838 made the multi-string total right; this shows the parts. The total
+    // is what SEM plans on, the parts are what the owner recognises — they
+    // built the roof one string at a time — and it is the cheapest check on
+    // the total, because a string reading zero is obvious here and invisible
+    // in a sum.
+    _renderPlanesToday(attrs) {
+        const rows = attrs.planes_today || [];
+        if (!Array.isArray(rows) || rows.length < 2) return nothing;
+        const total = rows.reduce((a, r) => a + Number(r.today_kwh || 0), 0);
+        return html`
+            <table class="sem-planes">
+                <tr>
+                    <th>${this._t('forecast_per_string_title')}</th>
+                    <th>${this._t('forecast_per_string_today')}</th>
+                </tr>
+                ${rows.map((r) => html`
+                    <tr>
+                        <td>${r.name}</td>
+                        <td class="num">${Number(r.today_kwh || 0).toFixed(1)} kWh</td>
+                    </tr>`)}
+                <tr class="is-total">
+                    <td>${this._t('forecast_per_string_total').replace('{n}', String(rows.length))}</td>
+                    <td class="num">${total.toFixed(1)} kWh</td>
+                </tr>
+            </table>
         `;
     }
 
@@ -1926,13 +2311,13 @@ class SEMConfigCard extends SEMLitBase {
             ${this._renderOptionToggle('vpp_observer_mode', 'config_vpp_observer',
                 opts, 'config_help_vpp_observer', true)}
             ${this._renderPicker('vpp_event_active_entity', 'config_vpp_event_entity',
-                ['binary_sensor', 'sensor'], null, opts, null)}
+                ['binary_sensor', 'sensor'], null, opts, 'config_help_vpp_event_active_entity')}
             ${this._renderPicker('vpp_direction_entity', 'config_vpp_direction_entity',
-                ['sensor', 'select', 'input_select'], null, opts, null)}
+                ['sensor', 'select', 'input_select'], null, opts, 'config_help_vpp_direction_entity')}
             ${this._renderPicker('vpp_event_end_entity', 'config_vpp_event_end_entity',
-                'sensor', 'timestamp', opts, null)}
+                'sensor', 'timestamp', opts, 'config_help_vpp_event_end_entity')}
             ${this._renderPicker('vpp_pre_event_entity', 'config_vpp_pre_event_entity',
-                ['binary_sensor', 'sensor'], null, opts, null)}
+                ['binary_sensor', 'sensor'], null, opts, 'config_help_vpp_pre_event_entity')}
             ${this._renderOptionSlider('vpp_reserve_soc', 'config_vpp_reserve_soc',
                 { min: 5, max: 80, step: 5, unit: '%', default: 20 }, opts,
                 'config_help_vpp_reserve_soc')}
@@ -1949,8 +2334,45 @@ class SEMConfigCard extends SEMLitBase {
             <div class="stepper-pair">
                 ${this._renderStepper('number.sem_ev_disable_delay_seconds', 'ev_disable_delay', T, 'config_help_ev_disable_delay')}
             </div>
+            ${this._renderRetention(T)}
             ${this._renderGridSignFix(T)}
         `;
+    }
+
+    // (#829) Retention for SEM's OWN status entities. Safe by construction:
+    // the purge list is derived from "has no state_class", so every charted
+    // sensor - energy, power, anything with long-term statistics - is
+    // excluded automatically, including ones added later.
+    _renderRetention(T) {
+        const opts = this._options || {};
+        return html`
+            <div style="margin-top:6px;border-top:1px solid ${T.surfaceBorder};padding-top:4px"></div>
+            ${this._renderOptionSlider('status_retention_days', 'config_retention_label',
+                { min: 0, max: 14, step: 1,
+                  unit: ' ' + this._t('config_retention_unit_days'), default: 0 },
+                opts, 'config_help_retention')}
+            <div class="action-row">
+                <button class="action-btn" ?disabled=${this._retentionBusy}
+                        @click=${() => this._purgeStatusHistory()}>
+                    ${this._t('config_retention_cleanup')}
+                </button>
+                <span class="readonly-value">${this._retentionMsg || ''}</span>
+            </div>
+        `;
+    }
+
+    async _purgeStatusHistory() {
+        this._retentionBusy = true;
+        this.requestUpdate();
+        try {
+            await this._hass.callService(
+                'solar_energy_management', 'purge_status_history', {});
+            this._retentionMsg = 'OK';
+        } catch (e) {
+            this._retentionMsg = String(e && e.message ? e.message : e).slice(0, 60);
+        }
+        this._retentionBusy = false;
+        this.requestUpdate();
     }
 
     // #461: grid import/export sign — one-tap fix + re-learn. Lives in the
@@ -2220,6 +2642,7 @@ class SEMConfigCard extends SEMLitBase {
         const renderers = {
             overview: (T) => this._renderOverview(T),
             sensor_sources: (T) => this._renderSensorSources(T),
+            detected_hardware: (T) => this._renderDetectedHardware(T),
             ev_chargers: (T) => this._renderEvChargers(T),
             battery_zones: (T) => this._renderBatteryZones(T),
             tariff: (T) => this._renderTariff(T),
@@ -2313,6 +2736,16 @@ class SEMConfigCard extends SEMLitBase {
                     overflow: hidden; text-overflow: ellipsis; margin-right: 4px;
                 }
                 .chevron { transition: transform 0.25s ease; color: var(--secondary-text-color, ${T.textSec}); }
+                /* (#717) inline sub-disclosure for the warning/emergency
+                   ladder — most users never touch it, the target slider on
+                   the Control tab is the one live control that matters. */
+                .advanced-toggle-row {
+                    display: flex; align-items: center; gap: 6px;
+                    padding: 8px 2px; margin-top: 2px; cursor: pointer; user-select: none;
+                    font-size: 0.85em; font-weight: 600;
+                    color: var(--secondary-text-color, ${T.textSec});
+                }
+                .advanced-toggle-row:hover { color: var(--primary-text-color, ${T.text}); }
                 .section-content {
                     max-height: 0; opacity: 0; overflow: hidden;
                     transition: max-height 0.3s ease, opacity 0.2s ease;
@@ -2333,7 +2766,19 @@ class SEMConfigCard extends SEMLitBase {
                 .pv-name-power {
                     font-size: 0.7em; color: var(--secondary-text-color, ${T.textSec});
                 }
-                .pv-name-input {
+                .txt-opt {
+                background: rgba(255, 255, 255, 0.06);
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                border-radius: 6px;
+                color: var(--primary-text-color, #e1e1e1);
+                font-size: 12px;
+                padding: 3px 8px;
+                width: 110px;
+            }
+            .sv { font-size: 11px; }
+            .sv.ok { color: #8DC892; }
+            .sv.err { color: #f06292; }
+            .pv-name-input {
                     flex: 1; min-width: 0;
                     background: var(--secondary-background-color, ${T.surface});
                     border: 1px solid var(--divider-color, ${T.surfaceBorder});
@@ -2369,6 +2814,17 @@ class SEMConfigCard extends SEMLitBase {
                 .c-ok { color: #8DC892; }
                 .c-warn { color: #ff9800; }
                 .overview-help { font-size: 12px; color: var(--secondary-text-color, ${T.textSec}); padding: 4px 0; }
+                /* (#841) Per-string forecast. Tabular numerals so the kWh
+                   column reads as a column, not as ragged text. */
+                .sem-planes { width: 100%; border-collapse: collapse; font-size: 12px; margin: 2px 0 6px; }
+                .sem-planes th { text-align: left; font-weight: 500; padding: 3px 6px 3px 0;
+                    color: var(--secondary-text-color, ${T.textSec}); text-transform: uppercase;
+                    letter-spacing: .04em; font-size: 10px; }
+                .sem-planes td { padding: 3px 6px 3px 0;
+                    border-top: 1px solid var(--divider-color, rgba(127,127,127,.2)); }
+                .sem-planes td.num { text-align: right; font-variant-numeric: tabular-nums; }
+                .sem-planes tr.is-total td { font-weight: 600;
+                    border-top: 1px solid var(--primary-text-color, ${T.text}); }
                 .overview-actions { display: flex; gap: 8px; margin-top: 10px; }
 
                 .empty-state {
@@ -2788,10 +3244,28 @@ class SEMConfigCard extends SEMLitBase {
                             ></ha-icon>
                             <span>${this._t('config_help_label')}</span>
                         </span>
+                        ${/* (#830) The advanced switch sits beside the help
+                            switch because it is the same kind of thing: a view
+                            preference, not a setting. The default view has no
+                            name — nobody is told they are a beginner. */ ''}
+                        <span class="help-toggle-labeled ${this._advanced ? 'on' : ''}"
+                              @click=${() => this._toggleAdvanced()}>
+                            <ha-icon
+                                icon="${this._advanced ? 'mdi:tune-variant' : 'mdi:tune'}"
+                                style="--mdc-icon-size:16px"
+                            ></ha-icon>
+                            <span>${this._t('config_advanced_label')}</span>
+                        </span>
                     </div>
                     ${this._renderApplyBar()}
                     ${SECTIONS
                         .filter(s => s.id !== 'pv_strings' || this._pvStrings().length >= 2)
+                        // (#830) The default view shows what SEM needs to work.
+                        // A subsystem the user has already configured stays
+                        // visible either way — hiding something someone set up
+                        // is not simplification, it is losing their work.
+                        .filter(s => this._advanced || ESSENTIAL_SECTIONS.has(s.id)
+                                     || this._sectionConfigured(s.id))
                         .map(s => this._renderSection(s, renderers[s.id], T))}
                 </div>
             </ha-card>
@@ -2803,8 +3277,10 @@ class SEMConfigCard extends SEMLitBase {
 }
 
 semDefineCard('sem-config-card', SEMConfigCard, {
-    type: 'custom:sem-config-card',
+    type: 'sem-config-card',
     name: 'SEM Configuration Card',
     description: 'In-dashboard SEM configuration surface (replaces the Settings → SEM → Configure flow for most users)',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-config-card',
     preview: false,
 });

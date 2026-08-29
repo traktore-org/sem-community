@@ -12,6 +12,7 @@
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semFormatPower, semGetCurrency, semCardSurfaceCSS, SEM_COLORS, semDefineCard } from '../base/sem-shared.js';
+import { temperatureUnit } from '../util/temperature.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
 
@@ -395,6 +396,9 @@ class SEMBatteryCard extends SEMLitBase {
         const tempEntity = this._hass?.states[`${this._prefix}battery_temperature`];
         const temp = (tempEntity && tempEntity.state !== 'unavailable' && tempEntity.state !== 'unknown')
             ? parseFloat(tempEntity.state) : null;
+        // #727 — label with HA's actual display unit (°F on US installs, where the
+        // °C-native sensor is converted), not a hardcoded °C that mislabels it.
+        const tempUnit = temperatureUnit(tempEntity);
 
         // Charge state. #523: "selling" = the scheduler is exporting the
         // battery to the grid for arbitrage — a distinct gold state.
@@ -733,7 +737,7 @@ class SEMBatteryCard extends SEMLitBase {
                                 <div class="metric-row">
                                     <span class="metric-label">${this._t('temperature')}</span>
                                     <span class="metric-val">
-                                        ${temp != null ? `${this._fmt(temp, 1)} °C` : '—'}
+                                        ${temp != null ? `${this._fmt(temp, 1)} ${tempUnit}` : '—'}
                                     </span>
                                 </div>
                             `}
@@ -850,4 +854,6 @@ semDefineCard('sem-battery-card', SEMBatteryCard, {
     type: 'sem-battery-card',
     name: 'SEM Battery',
     description: 'Lumina-styled battery hero card with SOC arc ring and key metrics',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-battery-card',
 });

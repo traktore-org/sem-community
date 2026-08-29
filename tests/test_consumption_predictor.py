@@ -1,6 +1,6 @@
 """Tests for analytics/consumption_predictor.py."""
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from custom_components.solar_energy_management.analytics.consumption_predictor import (
     HourlyProfile,
@@ -193,7 +193,7 @@ def test_predictor_state_persistence_roundtrip(predictor):
     orig = predictor.predict_consumption_24h(dt)
     restored = new_predictor.predict_consumption_24h(dt)
     assert len(orig) == len(restored)
-    for a, b in zip(orig, restored):
+    for a, b in zip(orig, restored, strict=False):
         assert a == pytest.approx(b)
 
 

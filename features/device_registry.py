@@ -21,15 +21,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
-from homeassistant.helpers import entity_registry as er
 
-from ..ha_energy_reader import read_energy_dashboard_config, get_all_individual_devices
-from .load_device_discovery import LoadDeviceDiscovery
+from ..ha_energy_reader import (
+    read_energy_dashboard_config,
+    get_all_individual_devices,
+    _find_load_power_sensor,
+)
+from .load_device_discovery import LoadDeviceDiscovery, resolve_load_is_on
 from ..devices.base import (
     SwitchDevice,
     CurrentControlDevice,
@@ -37,7 +40,6 @@ from ..devices.base import (
 )
 from ..hardware_detection import discover_ev_charger_from_registry
 from ..const import LOAD_PRIORITY_BASE as _LOAD_PRIORITY_BASE
-from ..const import DEFAULT_DEVICE_RATED_POWER as _DEFAULT_RATED_POWER
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -87,16 +89,35 @@ class UnifiedDevice:
         return f"energy_dashboard_{name}"
 
     @property
-    def is_controllable(self) -> bool:
-        """Device is controllable if it has a control config.
+    def has_control_handle(self) -> bool:
+        """CAPABILITY (#780): a way to control this appliance was found.
 
-        (#650) A stored ``controllable_override`` of ``False`` wins — that's the
-        user saying "never touch this load". See the field's docstring for why
-        ``True`` is not the symmetric case.
+        Pure discovery fact — the user's "hands off" opt-out doesn't reach in
+        here. Before #780 it did, so a load the user had told SEM never to
+        touch reported as if no control had ever been discovered for it, and
+        any consumer asking "can this even be controlled?" got the user's
+        preference back instead. See ``features/device_axes.py``.
         """
-        if self.controllable_override is False:
-            return False
         return self.control is not None
+
+    @property
+    def user_hands_off(self) -> bool:
+        """PERMISSION (#650/#780): the user's explicit "never touch this load".
+
+        ``True`` is not the symmetric case and therefore not an opt-out either
+        — it clears the override back to the derived value rather than
+        inventing controllability. See the field's docstring.
+        """
+        return self.controllable_override is False
+
+    @property
+    def is_controllable(self) -> bool:
+        """DEPRECATED (#780) — the two axes mixed, under a name that reads as
+        only one of them. Kept for one release so outward readers that predate
+        the split keep answering; ask ``has_control_handle`` /
+        ``user_hands_off`` instead.
+        """
+        return self.has_control_handle and not self.user_hands_off
 
     @property
     def control_entity(self) -> Optional[str]:
@@ -110,6 +131,9 @@ class UnifiedDevice:
         return {
             "name": self.name,
             "priority": self.priority,
+            # (#780) both axes, then the mixed legacy key derived from them.
+            "has_control_handle": self.has_control_handle,
+            "user_hands_off": self.user_hands_off,
             "is_controllable": self.is_controllable,
             "is_critical": self.is_critical,
             "power_entity": self.power_sensor,
@@ -120,6 +144,42 @@ class UnifiedDevice:
             "has_manual_mapping": self.has_manual_mapping,
             "device_id": self.device_id,
         }
+
+
+# (#805) What a device SEM discovered BY ITSELF may do before the user has
+# said anything: nothing but be watched. It used to be "peak_only", which
+# load management may shed — so a fresh install could switch hardware the
+# user never configured. #803: a wallbox visible in the Energy Dashboard was
+# discovered as a generic load, shed for peak, and the reporter uninstalled
+# to get his car charging. Discovery is a suggestion, not consent.
+DEFAULT_DISCOVERED_CONTROL_MODE = "off"
+
+# What that default used to be. The upgrade freezes every device it already
+# knows at this value, so an existing install's behaviour does not change.
+LEGACY_DISCOVERED_CONTROL_MODE = "peak_only"
+
+
+def _freeze_known_control_modes(
+    overrides: Dict[str, str], known_ids: List[str],
+) -> List[str]:
+    """Pin already-known devices at the OLD default before it changes (#805).
+
+    Flipping a default silently rewrites every install that never made an
+    explicit choice — their peak shedding would just stop, with no event to
+    explain it. So on upgrade each device already in the roster gets an
+    explicit ``peak_only`` entry: the same behaviour, now written down.
+    Devices discovered afterwards get the new monitor-only default.
+
+    Idempotent by construction: it only ever fills a MISSING key, so a user
+    who later sets a device to ``off`` is not re-frozen on the next boot.
+    Returns the device_ids it froze.
+    """
+    frozen = []
+    for did in known_ids:
+        if did and did not in overrides:
+            overrides[did] = LEGACY_DISCOVERED_CONTROL_MODE
+            frozen.append(did)
+    return frozen
 
 
 def _migrate_control_modes(overrides: Dict[str, str]) -> List[str]:
@@ -261,6 +321,33 @@ class UnifiedDeviceRegistry:
                 # surplus_target in v1.5.9 keeps surplus charging (rather than silently
                 # falling back to peak_only). The "stop at target" intent is now the
                 # separate "Limit surplus to target" switch, which the user can re-enable.
+                # (#805) Freeze what this install already knows at the OLD
+                # default BEFORE the new monitor-only one applies — an
+                # upgrade must not silently stop somebody's peak shedding.
+                # Keyed off the persisted roster, so it can only ever pin
+                # devices this install has actually seen.
+                # Every key in the store that names a device this install
+                # has already seen. Verified against a live 19-device store
+                # (2026-08-19): 7 devices had an explicit mode and 12 were
+                # riding the implicit default — exactly the set that would
+                # have silently stopped being shed. There is no
+                # "known_devices" roster key; these ARE the roster.
+                _known = []
+                for _k in ("priority_overrides", "mappings", "device_goals",
+                           "controllable_overrides", "rated_power_overrides",
+                           "dependencies", "critical_overrides"):
+                    _known.extend(list(data.get(_k, {}) or {}))
+                _frozen = _freeze_known_control_modes(
+                    self._control_mode_overrides, _known)
+                if _frozen:
+                    _LOGGER.info(
+                        "#805 — pinned %d already-known device(s) at "
+                        "'%s' so this upgrade changes nothing; devices "
+                        "discovered from here on are monitor-only until "
+                        "you opt them in: %s",
+                        len(_frozen), LEGACY_DISCOVERED_CONTROL_MODE,
+                        ", ".join(_frozen[:6]),
+                    )
                 migrated = _migrate_control_modes(self._control_mode_overrides)
                 if migrated:
                     _LOGGER.info(
@@ -318,6 +405,12 @@ class UnifiedDeviceRegistry:
         # (#688) per-load anti-cycling (minutes) — overrides the SwitchDevice
         # default window. Absent keeps the constructor default (never 0).
         "min_on_time_min", "min_off_time_min",
+        # (#688, the remaining half) extra watts a fresh start needs on top
+        # of the threshold — 0 (default) = today's behaviour.
+        "start_reserve_w",
+        # (#705) thermal comfort band — Phase 1 consumes them on climate
+        # devices; stored against any device (Phase 2 opens switch loads).
+        "comfort_entity", "comfort_target", "comfort_offset", "comfort_limit",
     )
 
     def _apply_goals(self, device) -> None:
@@ -361,6 +454,18 @@ class UnifiedDeviceRegistry:
             device.min_on_seconds = int(float(goals.get("min_on_time_min") or 0) * 60)
         if "min_off_time_min" in goals:
             device.min_off_seconds = int(float(goals.get("min_off_time_min") or 0) * 60)
+        # (#705) comfort band. Key-present-only (the #688 pattern) so devices
+        # without comfort goals keep their constructor values; plain setattr
+        # so a comfort goal stored against a non-climate device lands as an
+        # unused attribute instead of crashing the rebuild (Phase 2 reads it).
+        if "comfort_entity" in goals:
+            device.comfort_entity = str(goals.get("comfort_entity", "") or "")
+        for _ck in ("comfort_target", "comfort_offset", "comfort_limit"):
+            if _ck in goals:
+                try:
+                    setattr(device, _ck, float(goals.get(_ck) or 0.0))
+                except (TypeError, ValueError):
+                    setattr(device, _ck, 0.0)
 
     def seed_goals(self, device_id: str, goals: "Dict[str, Any]") -> None:
         """Stage goal fields before registration (register_surplus_device
@@ -399,8 +504,12 @@ class UnifiedDeviceRegistry:
             if spec.get("depends_on"):
                 device.depends_on = list(spec["depends_on"])
             self._apply_goals(device)
-            if device.control_mode == DeviceControlMode.SURPLUS:
-                device.adopt_if_running()  # (#559) re-own after restart
+            # (#559) adopt a load that is physically ON after a restart.
+            # (#779) The mode gate that used to sit here now lives inside
+            # _adopt_ownership: the BELIEF is adopted at every mode (Off is
+            # monitoring), only the ownership CLAIM is gated. Two copies of
+            # one policy is how the third copy gets forgotten — it was.
+            device.adopt_if_running()
             self._surplus_controller.register_device(device)
         if self._service_registrations:
             _LOGGER.info(
@@ -441,7 +550,11 @@ class UnifiedDeviceRegistry:
             "entity_id": spec.get("entity_id", ""),
             "name": spec.get("name") or device_id,
             "priority": spec.get("priority", 5),
-            "rated_power": spec.get("rated_power", 1000),
+            # (#744) A caller who gave no rating gets no rating STORED. Baking
+            # 1 kW in here is the guess at its most durable — it outlives the
+            # process that invented it and comes back from disk as fact.
+            # ``surplus_device_from_spec`` applies (and labels) the placeholder.
+            "rated_power": spec.get("rated_power") or 0,
             "power_entity_id": spec.get("power_entity_id"),
             "energy_entity_id": spec.get("energy_entity_id"),  # #600
             "control_mode": spec.get("control_mode", "surplus"),
@@ -523,6 +636,17 @@ class UnifiedDeviceRegistry:
 
     async def async_refresh_devices(self) -> None:
         """Read Energy Dashboard, discover controls, build device list, sync."""
+        # (#748) Reconcile persisted charger-duplicate rows FIRST, before the
+        # early-returns below. A persisted ``load_device_<slug>`` smart-switch
+        # dup is immortal regardless of ED shape (the sync's prune spares every
+        # ``load_device_*`` key), so an install with a charger but NO Energy
+        # Dashboard individual devices — where the two returns below skip the
+        # sync entirely — would otherwise keep its duplicate forever. This pass
+        # depends only on the charger rows + LoadManagement._devices, not on the
+        # ED, so it runs on every refresh (incl. the 35 s rediscovery, by which
+        # time the charger rows are populated).
+        await self._reconcile_charger_dups_and_persist()
+
         energy_config = await read_energy_dashboard_config(self.hass)
         if not energy_config:
             _LOGGER.info("Energy Dashboard not configured, no devices to register")
@@ -547,6 +671,29 @@ class UnifiedDeviceRegistry:
             name = dev_info.get("name", "")
             is_ev = dev_info.get("is_ev", False)
 
+            # (#744) Lights are not imported — see
+            # ``LoadDeviceDiscovery._is_light_fixture`` for the rule and the
+            # why. It was added to that class only, and that class's ED
+            # importer is dead on a live install: its one caller
+            # (``LoadManagement._discover_devices``) early-returns as soon as
+            # ``_unified_registry_active`` is set, which ``__init__.py`` does
+            # right after this registry initializes. So the filter ran once on
+            # the legacy pass and THIS loop — which re-derives the whole roster
+            # from the Energy Dashboard on every refresh — put the lights
+            # straight back (Guido's PROD, beta.1: "Garage / Carport Licht" and
+            # "Girlande" still on the planner card). One rule, applied at the
+            # boundary that actually runs. Because the roster is re-derived,
+            # an already-imported light retires itself on the next refresh —
+            # there is no sweep to get wrong.
+            if not is_ev and self._discovery._is_light_fixture(energy_sensor):
+                _LOGGER.info(
+                    "Skipping Energy Dashboard device '%s' (%s): light "
+                    "fixture — monitored by HA's Energy Dashboard, not "
+                    "imported into SEM (no energy-management use case)",
+                    name, energy_sensor,
+                )
+                continue
+
             # Build a temporary device to get device_id
             temp = UnifiedDevice(
                 energy_sensor=energy_sensor,
@@ -565,6 +712,22 @@ class UnifiedDeviceRegistry:
                 control = self._discovery.discover_control_for_energy_device(
                     energy_sensor, power_sensor
                 )
+
+            # (#744) The Energy Dashboard's individual-device UI collects only the
+            # kWh energy sensor — ``stat_rate``/``stat_power`` is virtually never
+            # set for a load, so ``power_sensor`` is None here and the priority
+            # payload reads 0 W: a power-only Shelly PM mini at 400 W renders
+            # "Off" and shows the 1 kW rated placeholder (@Azlinon, beta.12).
+            # Derive the load's OWN companion power sensor from its HA device,
+            # mirroring solar/grid/battery (``_derive_missing_power_sensors``,
+            # #250) and the #600 load factory. Done AFTER control discovery ON
+            # PURPOSE: control/shed eligibility keys off the ED-configured power
+            # link (brand matching in ``_find_control_by_integration``), so a
+            # DERIVED sensor must never reach it — a display fix must not turn a
+            # load controllable. The derived value feeds the payload, the surplus
+            # sync and the load-manager sync (all read ``device.power_sensor``).
+            if not power_sensor:
+                power_sensor = _find_load_power_sensor(self.hass, energy_sensor)
 
             # Priority override from drag-and-drop wins; else the default seed.
             # (#576) non-EV loads seed BELOW the battery band so the default
@@ -617,7 +780,19 @@ class UnifiedDeviceRegistry:
 
         # Sync to both systems
         self._sync_to_surplus_controller()
-        self._sync_to_load_manager()
+        # (#748) _sync_to_load_manager now also drops charger-duplicate rows
+        # from LoadManagement._devices (the data-layer fold #700 never did) —
+        # including any ED row it just re-added that names a charger entity. If
+        # it removed any, de-persist immediately — the row lives in
+        # LoadManagement's OWN store and is otherwise reloaded on every restart
+        # (its prune spares all load_device_* keys). Without this, the fix only
+        # helps installs that never had the duplicate.
+        if self._sync_to_load_manager():
+            try:
+                await self._load_manager._save_device_configuration()
+            except Exception as e:  # never let a persist hiccup break discovery
+                _LOGGER.debug(
+                    "#748 de-persist after charger-dup prune failed: %s", e)
 
         # (#586) Re-apply the runtime snapshot onto the rebuilt devices.
         self._restore_accrued_runtimes(runtime_snapshot)
@@ -662,10 +837,25 @@ class UnifiedDeviceRegistry:
             if did.startswith("energy_dashboard_") and did not in self._service_registrations:
                 self._surplus_controller.unregister_device(did)
 
+        # (#748 seam) The charger-identity fold has to happen HERE too, not
+        # only in the card payload and the LoadManagement prune. This roster is
+        # what the daytime surplus loop drives AND what the #638 energy
+        # planner packs (``get_devices_sorted()``) — registering a row that
+        # controls a charger's stop switch lets load management reach for the
+        # charger behind the EV controller's back, and plans the same physical
+        # charger twice.
+        charger_entities = self._configured_charger_entities()
+
         for device in self._devices:
             if device.is_ev:
                 continue  # EV charger handled by __init__.py
             if not device.is_controllable:
+                continue
+            if self._is_charger_duplicate(device, charger_entities):
+                _LOGGER.debug(
+                    "#748 not registering %s for surplus — it is a configured "
+                    "charger's own entity", device.device_id,
+                )
                 continue
 
             control = device.control
@@ -716,11 +906,16 @@ class UnifiedDeviceRegistry:
                 )
                 # Apply persisted control mode (#49)
                 from ..devices.base import DeviceControlMode
-                mode_str = self._control_mode_overrides.get(device.device_id, "peak_only")
+                # (#805) No explicit choice → monitor only. See
+                # DEFAULT_DISCOVERED_CONTROL_MODE: SEM does not actuate what
+                # it found by itself until the user opts it in.
+                mode_str = self._control_mode_overrides.get(
+                    device.device_id, DEFAULT_DISCOVERED_CONTROL_MODE)
                 try:
                     surplus_device.control_mode = DeviceControlMode(mode_str)
                 except ValueError:
-                    surplus_device.control_mode = DeviceControlMode.PEAK_ONLY
+                    surplus_device.control_mode = DeviceControlMode(
+                        DEFAULT_DISCOVERED_CONTROL_MODE)
                 # (#122/#576) re-apply the persisted "Requires" link so a
                 # rebuild doesn't wipe it — the root cause of "separated all
                 # the time" (every drag/discovery/restart rebuilds the device).
@@ -728,8 +923,9 @@ class UnifiedDeviceRegistry:
                 if deps:
                     surplus_device.depends_on = list(deps)
                 self._apply_goals(surplus_device)
-                if surplus_device.control_mode == DeviceControlMode.SURPLUS:
-                    surplus_device.adopt_if_running()  # (#559) re-own after restart
+                # (#559/#779) unconditional — the claim's gate is inside
+                # _adopt_ownership, see the twin call site above.
+                surplus_device.adopt_if_running()
                 self._surplus_controller.register_device(surplus_device)
 
             elif control_type == "current":
@@ -757,7 +953,7 @@ class UnifiedDeviceRegistry:
                     device.device_id,
                 )
 
-    def _sync_to_load_manager(self) -> None:
+    def _sync_to_load_manager(self) -> bool:
         """Populate LoadManagement._devices dict from registry devices.
 
         Removes old pattern-discovered / manually-added devices that aren't
@@ -774,14 +970,29 @@ class UnifiedDeviceRegistry:
         ``load_device_*`` key so the multi-charger fix actually sticks.
         """
         if not self._load_manager:
-            return
+            return False
 
-        # Remove old non-registry, non-EV devices
+        # Keep exactly three things: what this registry currently derives, the
+        # per-charger EV rows, and explicit service registrations. Everything
+        # else in LoadManagement's dict is stale.
+        #
+        # (#744) The ``energy_dashboard_`` PREFIX used to be the keep rule,
+        # because it means "registry-managed" — but that stops being true the
+        # moment the registry stops deriving that row. LoadManagement keeps its
+        # own store and reloads it at init, so a row the registry dropped (a
+        # light; an entity the user removed from the Energy Dashboard) was
+        # immortal here: shed-eligible, in diagnostics, forever. The surplus
+        # sync has always healed this by construction — it unregisters every
+        # ``energy_dashboard_*`` device before re-adding the ones it knows —
+        # so this is the same rule on the other side of the seam.
+        derived = {d.device_id for d in self._devices}
         old_ids = [
             did for did in list(self._load_manager._devices.keys())
-            if not did.startswith("energy_dashboard_")
+            if did not in derived
+            # (#436) per-charger EV rows are registered by __init__.py, not here
             and not did.startswith("load_device_")
-            # (#559 Phase 0) never prune service-registered devices
+            # (#559 Phase 0) an explicit registration is a user decision, not a
+            # discovery guess — and it never appears in ``derived``
             and did not in self._service_registrations
         ]
         for did in old_ids:
@@ -806,6 +1017,11 @@ class UnifiedDeviceRegistry:
                 "is_available": True,
                 "priority": device.priority,
                 "is_critical": device.is_critical,
+                # (#780) the registry derives both axes; LoadManagement reads
+                # them rather than keeping its own idea of either. The mixed
+                # key is still written, derived, for readers on the old name.
+                "has_control_handle": device.has_control_handle,
+                "user_hands_off": device.user_hands_off,
                 "is_controllable": device.is_controllable,
                 "is_ev": device.is_ev,
                 "control_mode": self._control_mode_overrides.get(device.device_id, "peak_only"),
@@ -826,9 +1042,287 @@ class UnifiedDeviceRegistry:
 
             self._load_manager._devices[device_id] = device_info
 
+        # (#748) DATA-LAYER charger-duplicate reconcile — the twin of the #700
+        # display fold. #700 suppressed the duplicate only in
+        # get_devices_for_sensor (the card payload); it never removed the row
+        # from LoadManagement._devices, and _sync_to_load_manager's prune above
+        # deliberately SPARES every ``load_device_*`` key (#436) — so a
+        # persisted smart-switch row (``load_device_<slug>``) that shares the
+        # charger's stop switch, and any ED row re-added just above that names a
+        # charger entity, survived here: controllable, sheddable, acting on the
+        # charger behind the EV controller's back. Drop them now, at the
+        # registry (identity) level — the authoritative per-charger rows
+        # (``load_device_<charger_id>``) are kept.
+        charger_pruned = self._prune_charger_duplicate_lm_rows()
+
+        # (#779) The NON-charger twin of the #748 fold, one roster short. The
+        # #436 spare keeps EVERY ``load_device_*`` key so a legacy pattern-
+        # discovered smart-switch row (``load_device_<slug>``, minted by
+        # LoadManagement's own ``discover_controllable_devices`` before the
+        # registry took over) is immortal — but #748 only dropped the ones that
+        # share a CHARGER's entity. A plain smart plug (dishwasher, heat pump,
+        # network gear) shares none, so it survived as a second, separately
+        # actuatable representation of a device the registry now owns as
+        # ``energy_dashboard_<slug>``. The ED row carries the user's Mode
+        # setting (``control_mode``); the ghost carries none, so Mode=Off never
+        # reached it and SEM shed the appliance behind the user's back. Fold it
+        # on the shared CONTROL surface (class 12's closure), not id — and never
+        # on a shareable power/energy sensor (#744 derived/multi-channel), so a
+        # neighbouring load is never folded.
+        ed_pruned = self._prune_ed_duplicate_lm_rows()
+
+        # (#781) The rows that were never loads at all. Same immortality as
+        # above (the #436 spare keeps every ``load_device_*`` key), different
+        # reason: these are a device's own CONFIGURATION knobs, admitted by
+        # pattern discovery because a ``switch.*`` that pairs with a power
+        # sensor was the whole test. Filtering discovery does nothing for an
+        # install that already persisted them — pattern discovery is guarded
+        # off once the registry is active, so nothing re-derives these keys and
+        # nothing else would ever remove them.
+        config_pruned = self._prune_config_surface_lm_rows()
+
         _LOGGER.info(
             "Synced %d devices to LoadManagement", len(self._devices)
         )
+        # (#744) A stale row removed above is also a change the caller must
+        # persist — otherwise LoadManagement's own store reloads it at the next
+        # restart and the row is back. Three independent reasons to persist,
+        # and they compose: a charger twin folded, an ED twin folded, or a row
+        # the registry no longer derives. Any one of them means the store is
+        # now behind the roster.
+        return charger_pruned or ed_pruned or config_pruned or bool(old_ids)
+
+    async def _reconcile_charger_dups_and_persist(self) -> None:
+        """(#748) Drop charger-duplicate LoadManagement rows and de-persist if
+        anything changed. Idempotent — safe to call more than once per refresh.
+        Never raises: a persist hiccup must not break device discovery."""
+        try:
+            if self._prune_charger_duplicate_lm_rows() and self._load_manager:
+                await self._load_manager._save_device_configuration()
+        except Exception as e:  # never let a persist hiccup break discovery
+            _LOGGER.debug("#748 charger-dup reconcile/persist failed: %s", e)
+
+    def _prune_charger_duplicate_lm_rows(self) -> bool:
+        """(#748) Remove LoadManagement rows whose power / control / energy
+        entity belongs to a configured charger — the data-layer version of the
+        #700 identity fold. Everything that shares a charger's declared entity
+        is a duplicate of that charger and is deleted; the authoritative
+        per-charger rows (``load_device_<charger_id>``) ARE the chargers and are
+        kept. Returns True if it removed anything, so the caller can de-persist.
+        Never raises: a bad row must not break the device sync."""
+        lm = self._load_manager
+        if not lm or not self._ev_charger_rows:
+            return False
+        # Fail SAFE, not open: if any charger row lacks an id we cannot build
+        # the protected authoritative set for it, and pruning could then delete
+        # that charger's own load row (it names charger entities by design). A
+        # populated row always carries an id (``_charger_priority_rows`` sets
+        # it); a missing one is a bug upstream — prune nothing rather than risk
+        # shedding the authoritative charger.
+        if any(not c.get("id") for c in self._ev_charger_rows):
+            _LOGGER.debug(
+                "#748 skipping charger-dup prune: a charger row has no id")
+            return False
+        charger_entities = self._configured_charger_entities()
+        # The authoritative rows: one per configured charger, keyed by its id
+        # (register_ev_charger → ``load_device_<charger_id>``). These name a
+        # charger entity BY DESIGN (their own current/power entity) and must
+        # never be pruned as duplicates of themselves.
+        authoritative = {
+            f"load_device_{c.get('id')}" for c in self._ev_charger_rows
+        }
+        removed: List[str] = []
+        for did, info in list(getattr(lm, "_devices", {}).items()):
+            if did in authoritative:
+                continue
+            control = info.get("control") or {}
+            # Direct entity-string identity: any entity the row names that the
+            # charger declares (power sensor, stop switch, current number,
+            # status sensor, control/service).
+            string_candidates = [
+                info.get("power_entity"),
+                info.get("switch_entity"),
+                info.get("energy_entity"),
+                control.get("entity"),
+                control.get("service"),
+            ]
+            # Registry-device identity (same HA device as the charger): kept
+            # NARROW — only the power / energy sensors, exactly like the #700
+            # display fold. A shared-device match on an arbitrary control/switch
+            # entity would be broader than the card path and could catch a
+            # co-located but separate load; the string match above already
+            # covers a switch/number that IS a charger entity.
+            device_candidates = [
+                info.get("power_entity"),
+                info.get("energy_entity"),
+            ]
+            hit = any(e and e in charger_entities for e in string_candidates) or any(
+                self._same_registry_device_as_charger(e)
+                for e in device_candidates if e
+            )
+            if hit:
+                removed.append(did)
+        for did in removed:
+            try:
+                del lm._devices[did]
+            except KeyError:  # pragma: no cover - defensive
+                continue
+            _LOGGER.info(
+                "#748 dropped charger-duplicate load row %s "
+                "(shares a configured charger's entity)", did,
+            )
+        return bool(removed)
+
+    def _registry_owned_control_entities(self) -> set:
+        """(#779) The on/off CONTROL entity of each registry-owned non-EV
+        Energy-Dashboard device — its actuation surface. A ``load_device_<slug>``
+        row whose switch names this exact entity drives the SAME relay, so it is
+        the same physical device, with the ED row authoritative.
+
+        Deliberately NARROW — only the control entity, NOT the power / energy
+        sensors. A load's power sensor can be *derived* (#744) and a
+        multi-channel device (a Shelly 2PM) can present two distinct ED loads
+        that resolve to the SAME whole-device power sensor, so matching on
+        power / energy could fold a legitimate neighbour. The shared control
+        surface is the one signal that cannot false-positive: two rows that
+        actuate the same switch ARE one device. EV rows are excluded — charger
+        duplicates are ``_prune_charger_duplicate_lm_rows``'s job. Never raises.
+        """
+        owned: set = set()
+        try:
+            for dev in self._devices:
+                if getattr(dev, "is_ev", False):
+                    continue
+                ent = getattr(dev, "control_entity", None)
+                if ent:
+                    owned.add(ent)
+        except Exception:  # pragma: no cover - defensive
+            return owned
+        return owned
+
+    def _prune_ed_duplicate_lm_rows(self) -> bool:
+        """(#779) Drop legacy ``load_device_<slug>`` smart-switch rows that
+        DUPLICATE a registry-owned Energy-Dashboard device — dedup on the shared
+        ENTITY, not the id (BUG_CLASSES class 12).
+
+        With the registry active, LoadManagement's own pattern discovery is
+        guarded off (``_unified_registry_active``), so a ``load_device_<slug>``
+        smart-switch row can only be one a pre-2.0 version persisted. When the
+        same physical device is also in the Energy Dashboard, the registry
+        re-adds it as ``energy_dashboard_<slug>`` — the authoritative
+        representation the 2.0 UI shows and the one that carries the user's Mode
+        setting (``control_mode``). The stale ``load_device_*`` twin has no
+        ``control_mode`` (so Mode=Off on the ED row never reaches it) and stays
+        ``is_controllable``/sheddable — SEM switches the appliance off behind
+        the user's back (#779: dishwasher, heat pump, network gear). Drop it, at
+        the data layer, when its switch/control entity is the SAME actuation
+        surface the ED device controls (dedup on the shared CONTROL entity — the
+        one signal that cannot false-positive; see
+        ``_registry_owned_control_entities`` for why power/energy are excluded).
+        A ``load_device_*`` row with NO matching ED twin is the device's ONLY
+        representation and is left untouched (#748's ``load_device_dishwasher``
+        survives because that install had no ED device for it). Authoritative
+        per-charger rows (``device_type == "ev_charger"``) and service
+        registrations are never matched. Returns True if it removed anything.
+        Never raises."""
+        lm = self._load_manager
+        if not lm:
+            return False
+        owned = self._registry_owned_control_entities()
+        if not owned:
+            return False
+        removed: List[str] = []
+        for did, info in list(getattr(lm, "_devices", {}).items()):
+            if not did.startswith("load_device_") or not isinstance(info, dict):
+                continue
+            if info.get("device_type") == "ev_charger":
+                continue  # authoritative charger row
+            if did in self._service_registrations:
+                continue  # explicit service registration
+            control = info.get("control") or {}
+            candidates = [
+                info.get("switch_entity"),
+                control.get("entity"),
+            ]
+            if any(e and e in owned for e in candidates):
+                removed.append(did)
+        for did in removed:
+            try:
+                del lm._devices[did]
+            except KeyError:  # pragma: no cover - defensive
+                pass
+            # A pruned ghost must not linger in the shed list — _restore_loads
+            # indexes _devices[did] and would KeyError on a removed row.
+            shed = getattr(lm, "_devices_shed", None)
+            if isinstance(shed, list) and did in shed:
+                shed.remove(did)
+            _LOGGER.info(
+                "#779 dropped legacy smart-switch ghost load row %s — it "
+                "duplicates a registry-owned Energy-Dashboard device (shared "
+                "entity); the ED row is authoritative", did,
+            )
+        return bool(removed)
+
+    def _prune_config_surface_lm_rows(self) -> bool:
+        """(#781) Drop legacy ``load_device_<slug>`` rows whose control entity
+        is a device's CONFIGURATION knob, not a load.
+
+        onkelfu's diagnostics: 24 of 50 Load-Management rows are
+        ``load_device_wled_*`` — reverse, freeze, nightlight, sync send/receive.
+        Pattern discovery admitted them because it asked only "is this a
+        ``switch.*`` I can pair with a power sensor", and one
+        ``sensor.wled_treppe_power`` pairs with every sibling. Each row landed
+        ``is_controllable`` at ``peak_only``, so a peak event could flip an LED
+        strip's settings looking for watts it never drew (``W = 0``).
+
+        Discovery now refuses them (``LoadDeviceDiscovery.is_config_surface`` —
+        one rule, read from HA's own ``entity_category``), but a filter alone
+        leaves an upgraded install exactly as it was: with the registry active,
+        LoadManagement's pattern discovery is guarded off, so no pass
+        re-derives these keys, and ``_sync_to_load_manager``'s prune spares
+        every ``load_device_*`` key by design (#436). They have to be retired
+        explicitly. The same three spares as the sibling prunes: authoritative
+        per-charger rows, explicit service registrations, and anything the
+        registry itself owns (``energy_dashboard_*`` re-derives every refresh).
+        Returns True if it removed anything. Never raises."""
+        lm = self._load_manager
+        if not lm or not self._discovery:
+            return False
+        authoritative = {
+            f"load_device_{c.get('id')}"
+            for c in self._ev_charger_rows if c.get("id")
+        }
+        removed: List[str] = []
+        try:
+            for did, info in list(getattr(lm, "_devices", {}).items()):
+                if not did.startswith("load_device_") or not isinstance(info, dict):
+                    continue
+                if did in authoritative or info.get("device_type") == "ev_charger":
+                    continue  # authoritative charger row
+                if did in self._service_registrations:
+                    continue  # explicit user registration, not a discovery guess
+                control = info.get("control") or {}
+                candidates = [info.get("switch_entity"), control.get("entity")]
+                if any(self._discovery.is_config_surface(e) for e in candidates):
+                    removed.append(did)
+        except Exception as e:  # pragma: no cover - defensive
+            _LOGGER.debug("#781 config-surface prune skipped: %s", e)
+            return False
+        for did in removed:
+            try:
+                del lm._devices[did]
+            except KeyError:  # pragma: no cover - defensive
+                pass
+            # A pruned row must not linger in the shed list — _restore_loads
+            # indexes _devices[did] and would KeyError on a removed row.
+            shed = getattr(lm, "_devices_shed", None)
+            if isinstance(shed, list) and did in shed:
+                shed.remove(did)
+            _LOGGER.info(
+                "#781 dropped load row %s — its control entity is a "
+                "configuration/diagnostic knob, not a load", did,
+            )
+        return bool(removed)
 
     def get_devices_for_sensor(self) -> Dict[str, Dict[str, Any]]:
         """Return dict formatted for the controllable_devices_count sensor attributes."""
@@ -868,11 +1362,7 @@ class UnifiedDeviceRegistry:
             # its power/energy sensor IS a configured charger's entity or
             # lives on the same HA registry device as one (any entity on
             # the charger's own device is charger telemetry).
-            same_charger = (
-                (device.power_sensor and device.power_sensor in charger_entities)
-                or self._same_registry_device_as_charger(device.power_sensor)
-                or self._same_registry_device_as_charger(device.energy_sensor)
-            )
+            same_charger = self._is_charger_duplicate(device, charger_entities)
             if same_charger or (device.is_ev and chargers_configured):
                 continue
             # (#615) SAME physical appliance already owned by a direct heat
@@ -888,19 +1378,31 @@ class UnifiedDeviceRegistry:
                 continue
             # Get live power reading
             current_power = 0.0
-            is_on = False
             if device.power_sensor:
                 state = self.hass.states.get(device.power_sensor)
                 if state and state.state not in ("unknown", "unavailable"):
                     try:
                         current_power = float(state.state)
-                        is_on = current_power > 0
                     except (ValueError, TypeError):
                         pass
+            # (#745) On/off must prefer the device's OWN control-entity state.
+            # A switch/light idling below its power sensor's reporting floor
+            # still reads 0 W here, so a device that is genuinely ON showed
+            # "Off". load_management already reads the switch (via
+            # get_device_current_state); this card payload had diverged to
+            # power-only — the two on/off predicates drifted. Route both through
+            # resolve_load_is_on so a known switch is authoritative and only a
+            # controlless/number/unavailable row falls back to power.
+            is_on = resolve_load_is_on(
+                self.hass, device.control_entity, current_power)
 
             result[did] = {
                 "name": device.name,
                 "priority": device.priority,
+                # (#780) capability and the user's opt-out, separately — the
+                # card's toggle drives the second one, never the first.
+                "has_control_handle": device.has_control_handle,
+                "user_hands_off": device.user_hands_off,
                 "is_controllable": device.is_controllable,
                 "is_critical": device.is_critical,
                 # (#559) rated_power, not the raw live sensor: the live
@@ -914,7 +1416,8 @@ class UnifiedDeviceRegistry:
                 "switch_entity": device.control_entity,
                 "is_available": True,
                 "is_on": is_on,
-                "current_power": current_power,
+                # (#829) coarse fallback only — cards read live W from power_entity
+                "current_power": self._coarse_w(current_power),
                 "device_type": "ev_charger" if device.is_ev else "individual_device",
                 "has_manual_mapping": device.has_manual_mapping,
                 "control": device.control,
@@ -942,9 +1445,17 @@ class UnifiedDeviceRegistry:
             result[did] = {
                 "name": spec.get("name", did),
                 "priority": spec.get("priority", 5),
+                # (#780) an explicit registration IS the control handle.
+                "has_control_handle": True,
+                "user_hands_off": False,
                 "is_controllable": True,
                 "is_critical": False,
-                "power_rating": spec.get("rated_power", 1000),
+                # (#744) the same accessor the ED rows use: the live device's
+                # self-calibrated rating first, the sensor second. Reading the
+                # spec kept a service-registered 8 W load at "~1.0 kW" on the
+                # card forever, even once it had measured itself.
+                "power_rating": self._rated_power_for(
+                    did, spec.get("power_entity_id")),
                 "power_entity": spec.get("power_entity_id"),
                 # the service accepts energy_entity_id (#600) — emit it
                 # instead of a hardcoded None, else registering a device that
@@ -955,8 +1466,21 @@ class UnifiedDeviceRegistry:
                 "switch_entity": spec.get("entity_id"),
                 "is_available": True,
                 "is_on": is_on,
-                "current_power": current_power,
-                "device_type": "service_device",
+                "current_power": self._coarse_w(current_power),
+                # (#788) the kind the CALLER passed, which
+                # ``async_register_service_device`` normalised into the stored
+                # spec — not a literal. The literal threw it away, and the
+                # card's icon map knows ``climate``/``heat_pump`` but not
+                # ``service_device``, so every service-registered device fell
+                # through to the generic plug: a working second heat pump
+                # rendered as an anonymous socket and read as "not added"
+                # (#685). The sibling row for DIRECTLY registered surplus
+                # devices, ``_surplus_device_row``, always read the real type;
+                # these two were written to mirror each other and drifted.
+                # The old literal stays as the fallback so a registration
+                # persisted before the kind was stored keeps a usable value
+                # instead of becoming None.
+                "device_type": spec.get("device_type") or "service_device",
                 "has_manual_mapping": False,
                 "control": {"type": "switch", "entity": spec.get("entity_id")},
                 "control_mode": spec.get("control_mode", "surplus"),
@@ -1046,6 +1570,10 @@ class UnifiedDeviceRegistry:
         return {
             "name": get_text(self.hass, "home_battery", "Home battery"),
             "priority": self.battery_surplus_priority(),
+            # (#780) the battery has no on/off handle on this list — it
+            # participates by POSITION, not by being switched.
+            "has_control_handle": False,
+            "user_hands_off": False,
             "is_controllable": False,
             "is_critical": False,
             "power_rating": round(charge_w),
@@ -1056,7 +1584,7 @@ class UnifiedDeviceRegistry:
             "is_on": charge_w > 0,          # "on" = currently charging
             # WATTS — the card divides by 1000 then formats. Emitting kW here
             # showed a 2 kW charge as "2 W" (ruflo HIGH; matches the ED rows).
-            "current_power": round(charge_w),
+            "current_power": self._coarse_w(charge_w),
             "device_type": "battery",
             "has_manual_mapping": False,
             "control": {"type": "none"},
@@ -1089,6 +1617,9 @@ class UnifiedDeviceRegistry:
             "name": getattr(dev, "name", did),
             "priority": self.priority_for(
                 did, seed=int(getattr(dev, "priority", 5) or 5)),
+            # (#780) a live surplus device is the handle.
+            "has_control_handle": True,
+            "user_hands_off": False,
             "is_controllable": True,
             "is_critical": False,
             "power_rating": round(float(getattr(dev, "rated_power", 0) or 0)),
@@ -1101,7 +1632,7 @@ class UnifiedDeviceRegistry:
             "is_on": is_on,
             # WATTS (ruflo HIGH — the card divides by 1000; kW here showed
             # milliwatts). Matches the battery / ED rows.
-            "current_power": round(current_w),
+            "current_power": self._coarse_w(current_w),
             "device_type": dtype,
             "has_manual_mapping": False,
             "control": {"type": "surplus"},
@@ -1137,14 +1668,113 @@ class UnifiedDeviceRegistry:
         in :meth:`get_devices_for_sensor` while any charger is configured.
         """
         self._ev_charger_rows = list(chargers or [])
+        # (#748 seam) This is the moment SEM LEARNS which entities belong to a
+        # charger — and the registry's first sync happens before it, at
+        # async_initialize, when the coordinator has not handed a roster over
+        # yet. Without this the fold in _sync_to_surplus_controller has nothing
+        # to match on that first pass, and a duplicate sits registered and
+        # controllable until the 35 s re-discovery: a window on every restart
+        # in which load management can reach the charger's own stop switch.
+        # Re-check the surplus roster when the charger identity set actually
+        # CHANGES — not on each of the 8640 daily cycles handing over the same
+        # list.
+        try:
+            entities = self._configured_charger_entities()
+            if entities != getattr(self, "_last_charger_entity_set", None):
+                self._last_charger_entity_set = set(entities)
+                self._drop_charger_duplicate_surplus_devices(entities)
+        except Exception as e:  # noqa: BLE001 — never break the cycle handover
+            _LOGGER.debug("#748 charger-roster resync skipped: %s", e)
+
+    def _drop_charger_duplicate_surplus_devices(self, charger_entities: set) -> None:
+        """(#748 seam) Unregister any ALREADY-registered surplus device that the
+        current charger roster now identifies as the charger itself.
+
+        Only ever removes; re-adding is :meth:`_sync_to_surplus_controller`'s
+        job. Service-registered devices are left alone — the user named those
+        explicitly, and ownership-by-construction is what #559 established."""
+        if not charger_entities:
+            return
+        for device in list(self._devices):
+            did = device.device_id
+            if did in self._service_registrations:
+                continue
+            if did not in self._surplus_controller._devices:
+                continue
+            if not self._is_charger_duplicate(device, charger_entities):
+                continue
+            self._surplus_controller.unregister_device(did)
+            _LOGGER.info(
+                "#748 unregistered surplus device %s — the charger roster "
+                "identifies it as a configured charger's own entity", did,
+            )
+
+    # (#748) Every row key a configured charger may carry that names a HA
+    # entity BELONGING to the physical charger — not just its power sensor.
+    # A charger is identified by ANY of these; an ED row or a discovered
+    # switch that names one of them is the same physical charger and must
+    # fold. #700's fold looked only at ``power_entity`` and so missed
+    # "Billaddare", whose control entity is the charger's start/stop switch.
+    _CHARGER_ENTITY_KEYS = (
+        "power_entity",
+        "control_entity",
+        "current_entity",
+        "current_sensor_entity",
+        "status_entity",
+        "start_stop_entity",
+        "charge_mode_entity",
+        "service_entity",
+    )
+
+    def _is_charger_duplicate(self, device, charger_entities: set) -> bool:
+        """(#700/#748) Is this discovered row the same physical thing as a
+        configured charger?
+
+        ONE predicate, used everywhere a roster is built — the card payload,
+        the surplus roster (and through it the #638 planner). #700 lived only
+        in the card, which is why the duplicate stayed controllable; keeping
+        the rule in a single place is what stops the next roster from drifting
+        out of agreement with the other two.
+
+        Identity, never names: the row's power / energy sensor or its CONTROL
+        entity IS one the charger declares, or its telemetry sits on the same
+        HA registry device as the charger's. The registry-device fallback stays
+        narrow (power/energy only, never an arbitrary control entity) so a
+        co-located but genuinely separate load isn't swept up."""
+        if not charger_entities and not self._ev_charger_rows:
+            return False
+        return bool(
+            (device.power_sensor and device.power_sensor in charger_entities)
+            # (#748) an ED / manually-mapped row whose CONTROL entity is the
+            # charger's own stop switch / current number is the same physical
+            # charger — the exact "Billaddare" miss #700 left.
+            or (device.control_entity and device.control_entity in charger_entities)
+            or (device.energy_sensor and device.energy_sensor in charger_entities)
+            or self._same_registry_device_as_charger(device.power_sensor)
+            or self._same_registry_device_as_charger(device.energy_sensor)
+        )
 
     def _configured_charger_entities(self) -> set:
-        """Power entities of configured chargers — used to suppress the ED
-        ``is_ev`` duplicate row for the same physical charger."""
-        return {
-            c.get("power_entity") for c in self._ev_charger_rows
-            if c.get("power_entity")
-        }
+        """(#576/#700/#748) EVERY HA entity a configured charger declares —
+        power sensor, start/stop switch, current-limit number, status sensor,
+        charge-mode select and control/service entities. A charger is
+        identified by ANY of these, not only its power sensor: an ED row or a
+        discovered switch naming the charger's *stop* control is the same
+        physical charger and must fold, exactly as one naming its power sensor
+        does. Used both to suppress the ED duplicate row (card) and, at the
+        data layer, to keep the charger's own entities out of load discovery.
+
+        Only populated for the keys the coordinator plumbs into the charger
+        rows (``_charger_priority_rows``, #748) — a legacy row that carries
+        only ``power_entity`` degrades to the old power-only behaviour, never
+        an error."""
+        entities: set = set()
+        for c in self._ev_charger_rows:
+            for key in self._CHARGER_ENTITY_KEYS:
+                ent = c.get(key)
+                if ent:
+                    entities.add(ent)
+        return entities
 
     def _same_registry_device_as_charger(self, entity_id) -> bool:
         """(#700) Does ``entity_id`` live on the same HA registry device as a
@@ -1219,6 +1849,9 @@ class UnifiedDeviceRegistry:
             "name": charger.get("name", cid),
             "priority": self.priority_for(
                 cid, seed=int(charger.get("priority_seed", 3))),
+            # (#780) a configured charger always has a control handle.
+            "has_control_handle": True,
+            "user_hands_off": False,
             "is_controllable": True,
             "is_critical": False,
             # Rating = the charger's MIN power (min_A × phases × voltage) — the
@@ -1235,7 +1868,7 @@ class UnifiedDeviceRegistry:
             "is_on": bool(charger.get("is_on", False)),
             # WATTS (ruflo HIGH — the card divides by 1000; kW here showed
             # milliwatts). Matches the battery / ED rows.
-            "current_power": round(power_w),
+            "current_power": self._coarse_w(power_w),
             "device_type": "ev_charger",
             "has_manual_mapping": False,
             "control": {"type": "current"},
@@ -1271,12 +1904,43 @@ class UnifiedDeviceRegistry:
                 # reload (None ⇒ the card shows the default placeholder).
                 "min_on_time_min": goals.get("min_on_time_min"),
                 "min_off_time_min": goals.get("min_off_time_min"),
+                # (#705) the comfort band — pre-fill for the editor.
+                "comfort_entity": goals.get("comfort_entity", ""),
+                "comfort_target": goals.get("comfort_target", 0),
+                "comfort_offset": goals.get("comfort_offset", 0),
+                "comfort_limit": goals.get("comfort_limit", 0),
             },
             "progress": {
-                "runtime_today_min": round(runtime_min, 1),
+                "runtime_today_min": int(round(runtime_min)),
                 "targets_met": targets_met,
             },
-        }
+        } | self._comfort_payload(live)
+
+    @staticmethod
+    def _comfort_payload(live) -> Dict[str, Any]:
+        """(#705) The live band verdict, published beside the goals.
+
+        The card must never re-derive the band from the goals — a frontend
+        copy of the band logic is how the published state and the action
+        drift apart. Only devices that HAVE a band (ClimateDevice today,
+        switch loads in Phase 2) carry the block; ``disengaged`` is
+        reported rather than omitted, so a climate device with goals set
+        and a dead thermometer does not look identical to one that was
+        never configured.
+        """
+        if live is None or not hasattr(live, "comfort_state"):
+            return {}
+        try:
+            return {"comfort": {
+                "state": str(live.comfort_state),
+                "reading_c": live._comfort_reading(),
+                # so the chip says cooling vs heating without guessing —
+                # from the band's own direction hook, not hvac_mode (a
+                # switch heater has no hvac_mode).
+                "hvac": live._comfort_direction(),
+            }}
+        except Exception:  # noqa: BLE001 — a payload must never break the sensor
+            return {}
 
     async def async_set_manual_mapping(
         self,
@@ -1348,7 +2012,15 @@ class UnifiedDeviceRegistry:
             if info.get("is_critical") is True and did not in self._critical_overrides:
                 self._critical_overrides[did] = True
                 crit += 1
-            if info.get("is_controllable") is False and did not in self._controllable_overrides:
+            # (#780) either spelling of the user's opt-out: the migrated
+            # permission key, or the pre-split mixed flag whose False could
+            # only have come from this same toggle on an ``energy_dashboard_``
+            # row (the registry always derives those rows WITH a handle).
+            hands_off = (
+                info.get("user_hands_off") is True
+                or info.get("is_controllable") is False  # LEGACY-READ (#780)
+            )
+            if hands_off and did not in self._controllable_overrides:
                 self._controllable_overrides[did] = False
                 ctrl += 1
         if crit or ctrl:
@@ -1372,12 +2044,15 @@ class UnifiedDeviceRegistry:
 
         Args:
             device_id: e.g. ``energy_dashboard_pond_pump``
-            flag: ``"critical"`` or ``"controllable"``
+            flag: ``"critical"``, or the hands-off toggle under either name —
+                ``"hands_off"`` (#780, where ``value`` is "SEM may touch it",
+                same polarity as the card has always sent) or the legacy
+                ``"controllable"``.
             value: the toggle's new state.
         """
         if flag == "critical":
             self._critical_overrides[device_id] = bool(value)
-        elif flag == "controllable":
+        elif flag in ("hands_off", "controllable"):
             if value:
                 # Re-enabling means "go back to what the control config says" —
                 # an override of True can't create controllability that isn't
@@ -1449,13 +2124,27 @@ class UnifiedDeviceRegistry:
                 "Updated %s control mode to %s", device_id, mode,
             )
             # (class-17 sibling, live PROD 2026-07-23) One-shot release on the
-            # transition INTO Off: turn the load off once — regardless of who
-            # started it or whether ownership survived a restart — then SEM
-            # keeps its hands off. Without this, a running load was stranded
+            # transition INTO Off: turn a load SEM is DRIVING off once, then
+            # keep its hands off — without this a SEM-driven load was stranded
             # on forever ("mode off and SEM does not touch the device any
             # more"). The user's explicit mode change overrides the min_on
             # anti-flicker (a deliberate command beats flicker protection).
-            if control_mode is DeviceControlMode.OFF:
+            #
+            # (#847, Hoyte, fresh install) But this release must ONLY touch a
+            # load SEM actually started — gate it on ``_sem_owned``, exactly as
+            # the two steady-state release paths do (``compute_load_intent`` and
+            # the imperative ``update()`` peak/goal pass both read it and both
+            # say "a user-turned-on load stays untouched"). This immediate
+            # handler was the one straggler that ignored ownership, so setting a
+            # peak-management device to Mode=Off switched off loads the USER had
+            # running (default mode is peak_only, which SEM never drives on, so
+            # ``_sem_owned`` is False and there is nothing to strand). #779 made
+            # ``_sem_owned`` the honest answer to "did SEM start this?" (adoption
+            # is gated on SURPLUS mode); a genuinely SEM-driven surplus load is
+            # re-adopted post-restart before any mode change, so the strand case
+            # is still covered while the user's own loads are left exactly as-is.
+            if (control_mode is DeviceControlMode.OFF
+                    and getattr(surplus_device, "_sem_owned", False)):
                 try:
                     obs = surplus_device.observed_on()
                 except Exception:  # noqa: BLE001
@@ -1717,10 +2406,30 @@ class UnifiedDeviceRegistry:
         state = self.hass.states.get(power_sensor)
         if state and state.state not in ("unknown", "unavailable"):
             try:
-                return float(state.state)
+                # (#829) a rating is a characterization, not a live reading —
+                # unrounded this mirrored the sensor tick for tick. 10 W
+                # steps: a 37.5->40.1 W jitter stays 40, and a 42 W load
+                # still gets a rating instead of the 0 that 100 W gave it.
+                return float(round(float(state.state) / 10.0) * 10)
             except (ValueError, TypeError):
                 pass
         return 0.0
+
+    @staticmethod
+    def _coarse_w(value) -> int:
+        """(#829) A live power for the device map, in 100 W steps.
+
+        The map rides the attributes of ``sensor.sem_controllable_devices_count``
+        — a count, state "1" all day — and raw watts in it made that sensor
+        write a row EVERY cycle (8,099/day on PROD). Cards read live power from
+        each row's ``power_entity`` (system-diagram precedent); this value is
+        the fallback for rows without one, and 100 W steps change only when
+        the load actually changes.
+        """
+        try:
+            return int(round(float(value or 0.0) / 100.0) * 100)
+        except (TypeError, ValueError):
+            return 0
 
     def _rated_power_for(self, device_id: str, power_sensor: Optional[str]) -> float:
         """(#559) The device's rated power for the Control card.
@@ -1751,8 +2460,15 @@ class UnifiedDeviceRegistry:
     def _capture_calibrated_ratings(self) -> bool:
         """(#576) Snapshot any rating a live device self-calibrated UP to, into
         the persistent overrides — BEFORE ``_sync_to_surplus_controller`` rebuilds
-        the devices and resets ``rated_power`` to the default. Only records real,
-        above-floor values; returns True if anything changed."""
+        the devices and resets ``rated_power`` to the default. Returns True if
+        anything changed.
+
+        (#744) What earns a place in the store is a MEASUREMENT, not a number
+        above 1 kW. The old ``rated > _DEFAULT_RATED_POWER`` test conflated the
+        two: it kept the placeholder out (right) by throwing away every load
+        smaller than the placeholder (wrong), so an 8 W light could never carry
+        its real draw across a rebuild. ``rated_power_measured`` separates them.
+        """
         dirty = False
         for did, dev in getattr(self._surplus_controller, "_devices", {}).items():
             if getattr(dev, "is_ev", False) or not getattr(dev, "power_entity_id", None):
@@ -1760,9 +2476,11 @@ class UnifiedDeviceRegistry:
             rated = getattr(dev, "rated_power", None)
             if rated is None:
                 continue
+            if not getattr(dev, "rated_power_measured", True):
+                continue          # still the invented placeholder — not ours to keep
             rated = float(rated)
             prev = float(self._rated_power_overrides.get(did, 0) or 0)
-            if rated > _DEFAULT_RATED_POWER and rated > prev:
+            if rated > prev:
                 self._rated_power_overrides[did] = rated
                 dirty = True
         return dirty
@@ -1812,17 +2530,27 @@ class UnifiedDeviceRegistry:
             if getattr(dev, "rated_power", None) is None:
                 continue
             override = float(self._rated_power_overrides.get(did, 0) or 0)
-            # (b) one-shot history seed for a device we've never learned.
+            # (#744) Does the rebuilt device hold a real number or the 1 kW
+            # placeholder? Everything below turns on that, not on 1000.
+            measured = bool(getattr(dev, "rated_power_measured", True))
+            rated_now = float(getattr(dev, "rated_power", 0) or 0)
+            # (b) one-shot history seed for a device we've never learned. ANY
+            # real history is a measurement — including 8 W. The old
+            # ``> _DEFAULT_RATED_POWER`` gate discarded exactly the small loads
+            # that needed the correction most (#744).
             if override <= 0 and did not in self._rating_seed_attempted:
                 self._rating_seed_attempted.add(did)
                 hist_max = await self._history_max_power(sensor)
-                if hist_max > _DEFAULT_RATED_POWER:
+                if hist_max > 0 and (not measured or hist_max > rated_now):
                     override = hist_max
                     self._rated_power_overrides[did] = hist_max
                     dirty = True
-            # (a) apply the learned rating if the rebuilt device is below it.
-            if override > 0 and override > float(getattr(dev, "rated_power", 0) or 0):
+            # (a) apply the learned rating if the rebuilt device is below it —
+            # or, while it still holds only the placeholder, in EITHER
+            # direction: a measured 8 W beats an invented 1 kW (#744).
+            if override > 0 and (not measured or override > rated_now):
                 dev.rated_power = override
+                dev.rated_power_measured = True
                 if hasattr(dev, "min_power_threshold"):
                     dev.min_power_threshold = override
         return dirty

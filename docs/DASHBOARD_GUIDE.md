@@ -99,7 +99,7 @@ Battery state and configuration.
 
 | Card | Description |
 |------|-------------|
-| **SOC Gauge** | Radial gauge showing current battery state of charge. Turns **gold with a "Selling to grid" status + live export price** when SEM is exporting the battery for arbitrage (see [Battery export arbitrage](BATTERY_EXPORT_ARBITRAGE.md) — note: arbitrage is **off by default in v1.7.3 stable**, so this state only appears once it is re-enabled) |
+| **SOC Gauge** | Radial gauge showing current battery state of charge. Turns **gold with a "Selling to grid" status + live export price** when SEM is exporting the battery for arbitrage (see [Battery export arbitrage](BATTERY_EXPORT_ARBITRAGE.md) — off by default; the state only appears once you opt in) |
 | **Power Status** | Current charge/discharge power and daily energy totals |
 | **24h Battery Chart** | Charge/discharge power + SOC line over 24 hours |
 | **SOC Zone Config** | Steppers for priority, buffer, auto-start, and assist-floor SOC levels, plus **Solar Gate** (`battery_assist_min_surplus`) and **Assist Max** — the solar surplus required before the battery helps charge the EV, and the cap on that assist |
@@ -178,7 +178,31 @@ The single home for **every changeable setting** (`sem-config-card`),
 organized in collapsible sections: Setup overview, Sensor sources (power-source overrides for grid / solar / battery, #628), EV chargers, Battery zones, Tariff & pricing, Heat pump, Hot water, Battery scheduler, Load management, Solar forecast, PV strings (when 2+ strings are detected), Notifications, and Advanced
 zones, Tariff & pricing, Heat pump, Hot water, Battery scheduler, Load
 management, Solar forecast, Notifications, and Advanced (update
-interval, deltas, min solar power, regulation offset, Observer Mode).
+interval, deltas, min solar power, regulation offset, Observer Mode,
+SEM status history).
+
+##### SEM status history (Advanced)
+
+SEM writes a lot of short-lived status rows — charging state, strategy,
+diagnostics. Those carry **no long-term statistics**, so keeping them for
+weeks only grows your database without giving you anything you can chart.
+
+**"SEM status history"** sets how many days of that status history to keep
+(0 = off, Home Assistant's own policy applies), and **"Clean up now"** applies
+it immediately.
+
+**Your energy history is never affected.** Home Assistant compiles *hourly
+long-term statistics* for every entity that carries a `state_class` — every
+energy and power sensor — and keeps them indefinitely, independently of the
+raw rows. SEM's clean-up derives its list from "has no `state_class`", so a
+sensor with statistics is excluded automatically, including ones added in
+future versions. Nothing that appears in a chart or on the Energy Dashboard
+can be removed by this setting.
+
+If you want to shrink the database further, the bigger lever is Home
+Assistant's own `purge_keep_days` in `configuration.yaml` — lowering it drops
+fine-grained detail while long-term statistics survive untouched. That one is
+yours to set; SEM will not touch your `configuration.yaml`.
 Each section header has a **Diagnose** button that dumps that section's
 live config + state via the `solar_energy_management.diagnose` action —
 attach its output to bug reports. Settings written here apply
@@ -243,19 +267,274 @@ went to zero. Installs that already have those cards are unaffected.
 
 ## Bundled SEM Cards
 
-These ship with the integration — no HACS installation needed:
+All 31 cards ship inside the integration — no HACS installation needed. Each
+one registers itself with Home Assistant's card picker carrying a name, a
+description, and a **help link that lands on its section below**. If you are
+looking at a card in the dashboard editor and want to know what it does, the
+help link is the shortest path.
 
-| Card | Purpose |
-|------|---------|
-| `sem-flow-card` | Animated SVG power flow with daily energy, autarky gauge, visual config editor, tap actions, up to 6 individual devices |
-| `sem-system-diagram-card` | Illustrated SVG energy system diagram with detailed component drawings, animated spark flows, time-based sun arc, clickable nodes, responsive layouts |
-| `sem-solar-card` | Solar production metrics with animated glow ring and forecast |
-| `sem-weather-card` | Live clock, weather conditions, colored temperature forecast bars |
-| `sem-chart-card` | Chart.js-powered charts with 6 presets (costs, savings, energy, power, battery, EV) |
-| `sem-period-selector-card` | Date range picker controlling all chart cards |
-| `sem-load-priority-card` | Drag-and-drop device priority with real-time power display, touch support |
+Resource URLs include `?v={version}-{sha1}` for automatic cache busting.
 
-Resource URLs include `?v={version}` for automatic cache busting.
+Most cards are placed for you by the `generate_dashboard` service. Five are
+built but **not placed** on the generated dashboard — they exist for people
+building their own views, and are marked *manual* below.
+
+### Card reference
+
+Every card has its own section. The heading is the card's element tag, so
+`custom:<tag>` is what you write in YAML.
+
+#### sem-battery-card
+
+**SEM Battery** · *Battery tab*
+
+The battery hero card: an SOC arc ring with charge/discharge power, today's
+throughput, and the current battery state in one glance.
+
+#### sem-battery-zones-card
+
+**SEM Battery Zones** · *Battery tab*
+
+The three SOC thresholds that bound every battery decision — priority,
+buffer, and auto-start. Editing them here is the same as editing them in the
+options flow.
+
+#### sem-charger-status-card
+
+**SEM Charger Status** · *manual*
+
+One tile per EV charger for multi-charger sites: state, current draw, and
+session progress side by side. Add it manually if you run more than one
+charger and want them on a single row.
+
+#### sem-chart-card
+
+**SEM Chart** · *Home, Energy, Battery, EV, Costs, System tabs*
+
+The chart workhorse — a period-reactive Chart.js card with built-in presets
+for costs, savings, energy, power, battery, and EV. It follows whichever
+[`sem-period-selector-card`](#sem-period-selector-card) is on the view.
+
+#### sem-config-card
+
+**SEM Configuration** · *Configuration tab*
+
+The in-dashboard configuration surface. For most users this replaces
+Settings → Devices & Services → SEM → Configure entirely; changes are batched
+and applied together.
+
+#### sem-control-card
+
+**SEM Control** · *Control tab*
+
+The live control panel: peak management and margin, load-shedding status and
+recommendation, heat-pump SG-Ready state, and the observer-mode switch.
+
+#### sem-costs-card
+
+**SEM Costs** · *Costs tab*
+
+Daily, monthly, and yearly cost and savings with return on investment — the
+financial summary.
+
+The yearly figures are the sum of that year's recorded monthly buckets, priced
+at the rates that were in force at the time, so the year and the months on this
+tab always agree. Months from before SEM started tracking cost — anything
+predating the install — are estimated from their recorded energy at an average
+rate, since no price history exists for them.
+
+#### sem-costs-detail-card
+
+**SEM Costs Detail** · *Costs tab*
+
+The breakdown behind the summary: EV charging economics, investment payback,
+demand-charge exposure, and the current tariff rates.
+
+EV charging economics shows the lifetime cost per kWh and the full three-way
+source split — solar, battery, and grid shares. Battery-sourced energy is
+priced by provenance: the portion of the battery that was charged from the
+grid carries the price that was paid for it, while solar-charged energy stays
+free. Cost per kWh and the shares therefore tell one consistent story.
+
+#### sem-energy-impact-card
+
+**SEM Energy Impact** · *Energy tab*
+
+CO₂ avoided and its tree-equivalent, for today, this year, and lifetime.
+
+#### sem-energy-plan-card
+
+**SEM Energy Plan** · *Control tab*
+
+The joint plan for the energy day — when each demand runs, where the battery
+hands over, and, for anything left out, why not. This is the single place to
+see what SEM intends to do tonight. See
+[Energy planner](ENERGY_PLANNER.md) for how the plan is built.
+
+#### sem-ev-progress-card
+
+**SEM EV Progress** · *EV tab*
+
+Today's EV charging progress against target, plus lifetime charging totals.
+
+#### sem-ev-status-card
+
+**SEM EV Status** · *EV tab*
+
+The EV hero card: per-charger state, charge mode, target and deadline, with
+the intelligence readouts (taper, estimated SOC) and settings inline. This is
+the reference card for SEM's UI patterns — see [UI patterns](UI_PATTERNS.md).
+
+#### sem-flow-card
+
+**SEM Flow** · *Home tab, when `diagram_style: flow`*
+
+A schematic animated energy-flow diagram with a visual config editor. Unlike
+the other cards it is **dual-mode**: point it at SEM entities via a prefix, or
+wire it to arbitrary Home Assistant entities and use it on a non-SEM
+dashboard. Holds up to six individual devices, injected automatically from
+your load list.
+
+#### sem-gauge-card
+
+**SEM Gauge** · *Energy tab*
+
+A styled arc gauge for any percentage entity — used for autarky and
+self-consumption, reusable for anything 0–100 %.
+
+#### sem-grid-card
+
+**SEM Grid** · *manual*
+
+Grid import/export with peak management, load control, tariff, and surplus in
+one consolidated card. Not on the generated dashboard — the System tab is
+health and diagnostics only.
+
+#### sem-home-status-card
+
+**SEM Home Status** · *Home tab*
+
+The at-a-glance status strip for the Home tab: what is producing, what is
+consuming, and whether anything needs attention.
+
+#### sem-load-priority-card
+
+**SEM Load Priority** · *Control tab*
+
+The one device list (#576): drag and drop to set the single priority order
+shared by loads, chargers, and the battery, with live power per device and a
+mode picker per row. See [Load priority](LOAD_PRIORITY.md).
+
+#### sem-onboarding-banner
+
+**SEM Onboarding Banner** · *Home tab*
+
+A one-time welcome banner pointing existing users at the Configuration tab.
+Dismisses itself permanently once clicked.
+
+#### sem-period-selector-card
+
+**SEM Period Selector** · *Costs tab*
+
+The date-range picker. Every [`sem-chart-card`](#sem-chart-card) on the same
+view follows it.
+
+#### sem-price-card
+
+**SEM Price** · *Home and Costs tabs*
+
+Dynamic electricity price: the current price and level, today's range, the
+next cheap window, and an hourly price strip. Hides itself when no dynamic
+tariff is configured.
+
+#### sem-require
+
+**SEM Require Wrapper** · *Energy tab*
+
+Not a card of its own — a wrapper. It renders the card inside it only when
+that card's HACS dependency is actually installed, and shows a friendly
+install notice otherwise. This is what makes the dashboard
+zero-prerequisite: an optional card can be referenced without breaking the
+view for people who do not have it.
+
+#### sem-schedule-card
+
+**SEM Schedule** · *manual*
+
+A 24-hour timeline of tariff level, night window, surplus window, and EV
+charging periods on one axis.
+
+#### sem-solar-card
+
+**SEM Solar** · *Home tab*
+
+Solar production with live flows, forecast, and performance metrics, wrapped
+in an animated glow ring.
+
+#### sem-solar-kpi-card
+
+**SEM Solar KPI** · *manual*
+
+Today's solar production as a single prominent number. Superseded on the Home
+tab by [`sem-solar-card`](#sem-solar-card), kept for manual dashboards that
+want the bare KPI.
+
+#### sem-solar-summary-card
+
+**SEM Solar Summary** · *manual*
+
+A compact solar overview — glow ring plus production metrics, without the
+flows and forecast of the full solar card.
+
+#### sem-system-card
+
+**SEM System** · *System tab*
+
+Integration health and diagnostics: version, detected chargers and control
+method, grid mode, battery capacity, Energy Dashboard configuration, sensor
+availability, and update interval. The first place to look when something
+seems wrong.
+
+#### sem-system-diagram-card
+
+**SEM System Diagram** · *Home tab (default `diagram_style: sem`)*
+
+The illustrated energy diagram — drawn solar panels, house, battery, grid
+pole, and EV charger with animated spark flows along each path, a time-based
+sun arc, and clickable nodes. Responsive down to phone width.
+
+#### sem-tab-header
+
+**SEM Tab Header** · *every tab*
+
+The header at the top of each view: glow icon, title, and live stats for that
+tab.
+
+#### sem-title-card
+
+**SEM Title Card** · *Control tab*
+
+A section header with a runtime-translated title and a live Jinja subtitle —
+used to break long views into labelled sections in the user's own language.
+
+#### sem-today-plan-card
+
+**SEM Today's Plan** · *Home tab*
+
+The forward-looking view of the rest of today: tariff, expected solar, and EV
+charging on one strip. The day-shaped companion to
+[`sem-energy-plan-card`](#sem-energy-plan-card).
+
+#### sem-weather-card
+
+**SEM Weather** · *Home tab*
+
+Live clock, current conditions, and colour-coded temperature forecast bars.
+
+> **Note:** `sem-overnight-plan-card` is a back-compatibility alias for
+> [`sem-energy-plan-card`](#sem-energy-plan-card), kept so dashboards
+> generated before the rename keep rendering. It is deliberately absent from
+> the card picker. Re-run `generate_dashboard` to move to the current name.
 
 ### System Diagram Style
 

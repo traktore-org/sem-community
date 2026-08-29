@@ -7,6 +7,8 @@ _ha_config_dir = str(Path(__file__).resolve().parent.parent.parent.parent)
 if _ha_config_dir not in sys.path:
     sys.path.insert(0, _ha_config_dir)
 
+import asyncio
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 from datetime import timedelta
@@ -539,6 +541,66 @@ def charging_state_scenarios():
 
 
 # ============================================================================
+@pytest.fixture(autouse=True)
+def _frame_helper_shim(monkeypatch):
+    """(#791) HA 2026.x's DataUpdateCoordinator.__init__ reports usage
+    through the frame helper, which raises "Frame helper not set up" in
+    every test that builds a real SEMCoordinator on a MagicMock hass —
+    36 of the 3.14 rung's 37 failures, one cause. Setting a mock hass on
+    the helper only moves the crash (report_usage then hops onto
+    ``hass.loop`` via run_callback_threadsafe), so when NOTHING has set
+    the helper up, report_usage itself becomes a no-op: deprecation
+    telemetry has no meaning against a MagicMock. phacc's real ``hass``
+    fixture sets the helper up itself — those tests keep the real
+    report_usage and its guard. On the 3.12/HA 2025.1.4 floor
+    ``__init__`` never calls report_usage and the shim is inert.
+    monkeypatch restores everything per test.
+    """
+    from homeassistant.helpers import frame
+
+    holder = getattr(frame, "_hass", None)
+    if holder is not None and getattr(holder, "hass", "absent") is None:
+        monkeypatch.setattr(
+            frame, "report_usage", lambda *a, **k: None)
+
+
+@pytest.fixture(autouse=True)
+async def enable_event_loop_debug() -> None:
+    """(#835) Override phacc's fixture of the same name, which is broken on
+    the 3.13 rung. A conftest fixture shadows a plugin fixture, so this is
+    the whole fix.
+
+    phacc 0.13.316 — the version the 3.13 rung is pinned to — ships::
+
+        @pytest.fixture(autouse=True)
+        def enable_event_loop_debug() -> None:
+            asyncio.get_event_loop().set_debug(True)
+
+    Synchronous, and that is the bug. ``asyncio.get_event_loop()`` only
+    auto-creates a loop while nobody has *explicitly* set one; the moment
+    something calls ``set_event_loop(None)`` it raises instead. pytest-asyncio
+    1.3.0 does exactly that when it tears a test's loop down — so the first
+    async test in a session poisons every SYNC test after it, and this autouse
+    fixture raises at setup for each one. That is the shape of the failure:
+    1,987 tests pass, then 5,935 error with "There is no current event loop in
+    thread 'MainThread'". Run a file on its own and it passes, which is why
+    this only ever showed in a full-suite run.
+
+    Upstream fixed it in 0.13.356 by making the fixture async and asking for
+    the RUNNING loop — the body below is that fix, verbatim. We cannot simply
+    take it: 0.13.316 is the LAST phacc release supporting Python 3.13 (all 41
+    later releases declare ``requires_python >= 3.14``), so the 3.13 rung is
+    stuck on the release carrying the bug and the correction has to live here.
+
+    Held on every rung rather than guarded by version, because it is what the
+    3.14 rung already runs (identical to its phacc) and the 3.12 floor has an
+    event loop under it either way — pinned by
+    ``tests/test_835_event_loop_fixture.py`` and by all three rungs staying
+    green.
+    """
+    asyncio.get_running_loop().set_debug(True)
+
+
 # pytest-homeassistant-custom-component framework fixtures
 # ============================================================================
 # Legacy MagicMock-based fixture has been renamed ``mock_hass``. New tests

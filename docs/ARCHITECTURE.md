@@ -2,6 +2,37 @@
 
 This document covers the internal architecture of Solar Energy Management (SEM) for developers and contributors.
 
+> **v2.0 — one gate** (see [CHANGELOG](../CHANGELOG.md) `[2.0.0]` and
+> [ENERGY_PLANNER.md](ENERGY_PLANNER.md)). The structural change of
+> this release is that scheduled energy use has **one decision-maker**:
+> - **The plan owns WHEN, the reactive layer owns WHETHER, the user owns MAY.**
+>   The EV's private cheap-window pick and the battery scheduler's own window
+>   pick are deleted; both now read the joint plan's blocks. An AST ratchet
+>   (`tests/test_638_one_selector.py`) keeps `find_cheapest_hours` to its one
+>   home in `tariff/tariff_provider.py`.
+> - **`coordinator/energy_plan_actuation.py`** is the gate: one trust rule
+>   (stamp freshness) feeding per-demand verdicts for EV, loads, comfort,
+>   battery and arbitrage.
+> - **Fail-open direction is per family and deliberate** — EV uncovered
+>   charges at its floor, battery uncovered does not force-charge, and every
+>   verdict change is logged once (`#638 coverage:`) and rendered as a
+>   translated reason on the card.
+> - **The plan is measured against reality** (#755): a per-demand outcome
+>   recorder writes what each demand actually did, split inside/outside the
+>   planned block, with a `measured` flag that refuses to let an estimate be
+>   recorded as a measurement.
+> - **The energy ledger closes** (#767–#776): every kWh SEM moves has a row,
+>   including exported battery energy.
+
+> **2.0 additions** (see [CHANGELOG](../CHANGELOG.md) `[2.0.0]`) — the 2.0
+> line is about making existing behaviour *believable* rather than adding
+> capability: the recorder footprint fell from 25 % to 6.1 % of HA's state
+> rows, every numeric setting is declared once in `consts/bounds.py`, one
+> plan gate owns WHEN, hardware detection matches registry `unique_id`s
+> rather than entity names, and the stop-war ceasefire stops SEM fighting a
+> charger it cannot win against. Repairs now carry a next step. The
+> architecture below is unchanged in shape.
+>
 > **v1.7.3 additions** (see [CHANGELOG](../CHANGELOG.md) `[1.7.3]`):
 > - **EV charger state reconciler** — `coordinator/charger_reconciler.py` is now the
 >   sole actuation path. A pure desired-vs-observed decision table (DesiredState
@@ -455,21 +486,48 @@ updates, forecast refreshes and SOC drift MPC-style.
    re-evaluations recompute the plan against fresh prices/forecasts but never stack
    the deficit on top of charging progress — anchoring on the live SOC would ratchet
    the target toward `max_target_soc` every profitable night.
-7. **Schedule planning** — time-slotted power allocation for battery + EV under peak constraints;
-   slot length comes from the tariff provider's detected market interval (15/30/60 min)
-8. **Cheapest hours** — dynamic tariff: `find_cheapest_hours(N, 12h)` | static: full NT window
+The pipeline stops there. Steps 7–8 used to be the scheduler's own
+time-slotted allocation and its own `find_cheapest_hours` pick; **v2.0
+deleted both** (#638).
+
+### Where the window comes from (v2.0)
+
+The scheduler says **WHAT** — the deficit, the break-even verdict, the
+anchored target SOC, the charge power. The joint energy planner says
+**WHEN**: the battery enters the night ledger as a `battery` demand and the
+packer places it against the EV, the deferrable loads and the comfort
+bands under one shared peak and one price curve.
+
+```
+battery_charge_scheduler   →  WHAT   (deficit, economics, target SOC, power)
+energy plan (#638)      →  WHEN   (the battery block, peak-aware, priced)
+decide_battery             →  gate   (force-charge only inside the block)
+```
+
+Consequences worth knowing:
+
+- `decide_battery` force-charges only while the plan's battery block is
+  open, at `min(charge_power_w, block_power_w)`, and stops when it closes.
+- An **uncovered** battery (no fresh plan) does **not** force-charge — a
+  deliberate fail-closed with a named reason on the card, because
+  pre-charging is an optimization, not a guarantee.
+- The **negative-price override stays reactive** and bypasses the gate
+  entirely (`price_forced`) — a paid-to-charge hour is not a planning
+  question.
+- The `battery_scheduler_schedule` entity is *derived* from the plan's
+  battery blocks and keeps its old dict shape, so nothing downstream
+  broke.
+- The SCHEDULED verdict is persisted beside the plan (`battery_verdict`),
+  so a reboot mid-block resumes instead of waiting for the next planning
+  window.
+- `find_cheapest_hours` now has exactly one home, `tariff/tariff_provider.py`,
+  and an AST ratchet (`tests/test_638_one_selector.py`) fails CI on any new
+  caller anywhere in the tree.
 
 A mid-charge re-evaluation that lands on NOT_NEEDED / NOT_PROFITABLE stops the
 active forced charge instead of leaving the inverter charging unsupervised.
 
-### Night Charge Schedule
-
-Both battery and EV are variable-power loads co-scheduled per hour:
-- **No peak limit**: both charge simultaneously at max power
-- **EV priority mode**: EV gets full demand, battery gets remainder
-- **Proportional mode**: power split by demand ratio
-
-The schedule adapts at runtime when actual EV power differs from planned.
+Full walkthrough: [The joint energy planner](ENERGY_PLANNER.md).
 
 ### Re-plan Triggers
 
@@ -612,20 +670,17 @@ The dispatcher raises `ValueError` on any unknown strategy — silent
 fallthrough was exactly the pre-1.6.0 disagreement root, so the
 unifier is loud.
 
-### Strategy mapping from the legacy decision
+### Strategy selection (post-arch Step 7)
 
-`_determine_charging_strategy` (in `coordinator.py`) returns one of six
-legacy strings. The legacy code returned `"solar_only"` for both Zone-3
-solar_only AND for Zone-2 self_consumption under "Auto" mode, and the
-actuator distinguished them via substring matching on the human-readable
-`charging_strategy_reason` text — brittle, and the proximate cause of
-#282.
-
-`_canonical_strategy_from_legacy(legacy_strategy, legacy_reason)` in
-`coordinator.py` is the bridge: it inspects the reason text when
-necessary and maps onto the canonical enum cleanly. The substring
-matching is now contained in that one helper; downstream consumers
-read the canonical enum.
+`_determine_charging_strategy` / `_canonical_strategy_from_legacy` and
+the zone helpers (`_raw_zone`, `_get_zone`, `_debounce_zone`) were
+removed in PR #358 (arch Step 7). Every per-charger strategy decision
+now flows through `coordinator/decide.py:decide(view)` — a pure
+function over a `ChargerView` snapshot. The old code returned
+`"solar_only"` for both Zone-3 solar_only AND Zone-2 self_consumption,
+distinguished only by substring matching on `charging_strategy_reason`
+(brittle, root cause of #282); `decide()` selects strategies directly
+from the charger's mode and the fleet state.
 
 ### Per-strategy details
 
@@ -822,16 +877,16 @@ class EVTaperData:
 
 @dataclass
 class EVIntelligenceData:
+    # Display/diagnostic fields only (#440: skip-decision fields removed)
     taper: EVTaperData
     estimated_soc_pct: float
     last_full_charge: Optional[str]       # ISO timestamp
     energy_since_full_kwh: float
     predicted_daily_ev_kwh: float
-    nights_until_charge: int
-    charge_needed: bool
     ev_battery_health_pct: float
-    charge_skip_reason: str               # Human-readable explanation
 ```
+
+The fields `nights_until_charge`, `charge_needed`, and `charge_skip_reason` were removed in #440. Charge mode (`select.sem_charger_<id>_charge_mode`) is the sole authority on whether to charge — the skip-decision signals are diagnostic only and do not override the user's stated mode.
 
 ### Taper Detection
 
@@ -895,22 +950,23 @@ Single-device setups are unaffected. The list fields contain exactly one entry, 
 
 v1.4.0 adds active control of multiple EV chargers via `coordinator._ev_devices: Dict[str, CurrentControlDevice]`.
 
-### Architecture Pattern: Context Swap
+### Architecture Pattern: PerChargerContext (#589, v1.7.5)
 
-The coordinator iterates chargers in priority order and **swaps per-charger state** before calling the existing `_execute_ev_control()`:
+The coordinator iterates chargers in priority order using `PerChargerContext` as a context manager. The snapshot/restore "context swap" was retired in #589 — there is no `saved = {...}` dict and nothing to restore.
+
+Durable per-charger state (stall timer, enable-delay timer, etc.) lives on `PerChargerState` objects stored in `coord._pcc_store[cid]` and held **by reference** on the context's `.state` field. The coordinator's `_ev_*` / `_ev_device` / `_cycle_vehicle_soc` names are **properties** that dispatch on `coord._current_pcc` — so a forgotten write-back (the #284/#315/#318 leak class) is structurally unrepresentable.
 
 ```python
 for cid, ev_dev in sorted_chargers:
-    # Save coordinator state, swap in per-charger state
-    self._ev_device = ev_dev
-    self._ev_stalled_since = self._ev_stalled_since_per_charger[cid]
-    self._ev_enable_surplus_since = self._ev_enable_surplus_per_charger[cid]
-    # ... (4 more state variables)
-    await self._execute_ev_control(state, power, energy, context)
-    # Save back per-charger state, restore coordinator state
+    with PerChargerContext.for_charger(coord, cid, ev_dev, power=power) as pcc:
+        if pcc.skipped_for_night:
+            continue
+        view = build_charger_view(coord, cid, ev_dev, pcc, power)
+        decision = decide(view)
+        await actuate(decision, adapter, view.power, ...)
 ```
 
-This minimizes changes to `ev_control.py` — the control logic works identically for each charger.
+Cycle-scoped state (e.g. `vehicle_soc`) lives on the context object and dies with it — no write-back needed.
 
 ### Surplus Distribution
 
@@ -973,7 +1029,7 @@ A household may have the system set to German, but one user's profile set to Eng
 **Translates:** All YAML-based card content — mushroom titles, labels, tab names, template strings
 
 **How it works:**
-1. Loads `dashboard/translations.json` (single source of truth, 1166 keys × 16 languages)
+1. Loads `dashboard/translations.json` (single source of truth, 1341 keys × 16 languages)
 2. Builds a reverse lookup: English text → translated text
 3. Walks the entire dashboard YAML tree
 4. Replaces exact-match English strings in translatable fields: `title`, `subtitle`, `primary`, `secondary`, `name`, `label`, `content`
@@ -994,10 +1050,10 @@ A household may have the system set to German, but one user's profile set to Eng
 **Translates:** All SEM custom card content (labels, status text, error messages)
 
 **How it works:**
-1. `sem-localize.js` is auto-generated from `translations.json` — contains all 1166 keys × 16 languages as a JS object
+1. `sem-localize.js` is auto-generated from `translations.json` — contains all 1341 keys × 16 languages as a JS object
 2. Loaded as a Lovelace resource, exposes `window.semLocalize(key, lang)`
 3. Fires `sem-localize-ready` CustomEvent when loaded
-4. SEM cards extend `SEMBaseCard` (in `sem-shared.js`) which provides `_t(key)` → calls `semLocalize(key, hass.language)`
+4. SEM cards extend `SEMLitBase` (in `src/base/sem-lit-base.js`) which provides `_t(key)` → calls `semLocalize(key, hass.language)`
 5. Cards re-render when the user's language changes (detected in `_checkLocaleChange()`)
 
 **Placeholder pattern:** When Python sensor values contain translatable words (e.g. "tomorrow" in surplus window), the coordinator outputs `{tomorrow}` as a placeholder. Cards replace it with `this._t('tomorrow')` before display. This bridges the server→client translation gap without duplicating translation logic in Python.
@@ -1032,7 +1088,7 @@ A household may have the system set to German, but one user's profile set to Eng
 Both layers read from the same file: **`dashboard/translations.json`**
 
 ```
-dashboard/translations.json          ← single source (1166 keys × 16 languages)
+dashboard/translations.json          ← single source (1341 keys × 16 languages)
     │
     ├──→ dashboard_generator.py      reads at generation time (server-side)
     │
@@ -1047,7 +1103,7 @@ Czech (cs), Danish (da), German (de), English (en), Spanish (es), Finnish (fi), 
 
 ### Adding a New Language
 
-1. Add the language code and all 1116 keys to `dashboard/translations.json`
+1. Add the language code and all 1341 keys to `dashboard/translations.json`
 2. Create `translations/{lang}.json` with config flow and entity translations (mirror `strings.json` structure)
 3. Regenerate `sem-localize.js` from `translations.json`
 4. Deploy and call `generate_dashboard` to apply server-side translations

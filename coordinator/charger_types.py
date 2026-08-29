@@ -37,7 +37,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, Mapping, Optional
+from typing import TYPE_CHECKING, Any, Mapping, Optional
+
+from .plan_verdict import PlanVerdict
+
+if TYPE_CHECKING:
+    # Annotation-only — importing it for real would be circular (#786).
+    from .types import PowerReadings
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -144,8 +150,11 @@ class InverterPower:
     power_w: float = 0.0
     """Instantaneous AC output (W). ≥ 0 by SEM convention."""
 
-    daily_kwh: float = 0.0
-    """Calendar-reset daily AC energy (kWh)."""
+    # (#771) ``daily_kwh`` used to sit here. ``sensor_reader`` builds this
+    # snapshot from an instantaneous power read and has no per-inverter energy
+    # counter to fill it from, so it was 0.0 on every install ever — a
+    # measurement-shaped default, which is #755 contract 1. Per-inverter daily
+    # energy needs a producer before it needs a field.
 
     name: str = ""
     """Human-readable label (e.g. "SUN2000-1") for dashboard display."""
@@ -188,8 +197,8 @@ class BatteryPower:
     """Nameplate capacity for this unit. Used by the fleet SOC
     weighted average + battery_assist budget math."""
 
-    daily_charge_kwh: float = 0.0
-    daily_discharge_kwh: float = 0.0
+    # (#771) ``daily_charge_kwh`` / ``daily_discharge_kwh`` deleted — same
+    # reason as ``InverterPower.daily_kwh``: nothing ever wrote them.
 
     name: str = ""
 
@@ -199,38 +208,21 @@ class BatteryPower:
 # ─────────────────────────────────────────────────────────────────
 #
 # Runtime types are MUTABLE — they hold per-cycle state that evolves
-# across the coordinator's lifetime: daily kWh accumulators,
-# availability flags, last-known values used by smoothing fallbacks.
-# Live in ``SEMCoordinator._per_inverter`` / ``_per_battery`` dicts.
+# across the coordinator's lifetime: availability flags, last-known
+# values used by smoothing fallbacks.
 #
 # Distinct from the FROZEN ``InverterPower`` / ``BatteryPower``
 # types above — those are snapshots of the per-cycle SENSOR reading.
 # The runtime is the persistent record across cycles.
-
-@dataclass
-class InverterRuntime:
-    """Coordinator-level state for ONE inverter.
-
-    Inverters are observed-only in SEM (no command surface — the
-    inverter integration owns its own modes). So the runtime is
-    thin: daily kWh accumulator, last-known availability, name for
-    display. No adapter, no intent, no decide loop — those concepts
-    have no inverter analog.
-    """
-
-    inverter_id: str
-    daily_kwh: float = 0.0
-    daily_kwh_date: str = ""
-    last_known_w: float = 0.0
-    """Last non-zero / non-stale power reading. Used by sensor
-    smoothing when an inverter goes briefly unavailable
-    mid-cycle (sensor lag, MQTT hiccup)."""
-    available: bool = True
-    """False when the inverter's primary sensor is
-    ``unavailable`` / ``unknown``. Drives the
-    ``sensor.sem_inverter_<id>_available`` binary sensor."""
-    name: str = ""
-
+#
+# (#771) There is no ``InverterRuntime``. There was one — declared in the
+# v1.7.0 arch follow-up alongside its per-inverter dict on ``EnergyTotals``,
+# with a daily-kWh accumulator, an availability flag and a docstring claiming
+# it drove a ``sensor.sem_inverter_<id>_available`` binary sensor. Nothing
+# ever constructed one, on any path, so every field on it was dead and the
+# binary sensor never existed. It is deleted rather than wired up: inverters
+# are observed-only, and their fleet total is already reconciled against the
+# per-string breakdown in ``HealthCheck.check_ledger_partitions``.
 
 @dataclass
 class BatteryRuntime:
@@ -244,9 +236,10 @@ class BatteryRuntime:
     """
 
     battery_id: str
-    daily_charge_kwh: float = 0.0
-    daily_discharge_kwh: float = 0.0
-    daily_kwh_date: str = ""
+    # (#771) No ``daily_charge_kwh`` / ``daily_discharge_kwh`` /
+    # ``daily_kwh_date`` — the coordinator builds this runtime from a power
+    # reading (``_run_battery_pipeline``) and never had a per-battery energy
+    # counter to fill them from. The fleet battery rows are the real ledger.
     last_known_soc: float = 0.0
     last_known_w: float = 0.0
     capacity_kwh: float = 0.0
@@ -257,34 +250,29 @@ class BatteryRuntime:
 
 
 # ─────────────────────────────────────────────────────────────────
-# Per-device flow attribution slices (Group A + B Step 5 mirror)
+# (#771) There are no per-inverter / per-battery flow slices
 # ─────────────────────────────────────────────────────────────────
 #
-# Mirror of ``ChargerFlows`` (per-charger EV-side share of the fleet
-# attribution). Strings are SOURCES; inverters are sources too;
-# batteries are bidirectional (source when discharging, destination
-# when charging). The attribution algorithm in
-# ``flow_calculator.calculate_power_flows`` produces these slices
-# in priority order, so the conservation invariant
+# ``InverterFlows`` and ``BatteryFlows`` were declared here as the
+# per-inverter and per-battery mirrors of ``ChargerFlows``, above a
+# comment asserting that
 #   sum(flows.per_inverter[i].solar_to_X) == flows.solar_to_X
-# holds by construction.
-
-@dataclass(frozen=True)
-class InverterFlows:
-    """Per-inverter share of the fleet solar_to_X flows."""
-    inverter_id: str
-    solar_to_home: float = 0.0
-    solar_to_ev: float = 0.0
-    solar_to_battery: float = 0.0
-    solar_to_grid: float = 0.0
-
-
-@dataclass(frozen=True)
-class BatteryFlows:
-    """Per-battery share of battery_to_X flows (discharge side)."""
-    battery_id: str
-    battery_to_home: float = 0.0
-    battery_to_ev: float = 0.0
+# "holds by construction". It did not hold by construction or any
+# other way: ``PowerFlows`` has ``per_charger`` and nothing else, so
+# there was no container for the slices, and ``flow_calculator``
+# never built one. The invariant was a claim about an algorithm that
+# does not exist, and the only tests were frozen-dataclass shape pins
+# — theorems about ``@dataclass(frozen=True)``.
+#
+# That is #771's complaint in its purest form: a per-device row that
+# READS as reconciled against the fleet identity while nothing
+# computes it. Deleted rather than filled in, because filling it in
+# means writing the attribution first and the type after.
+#
+# ``ChargerFlows`` stays and is real: ``flow_calculator`` fills
+# ``PowerFlows.per_charger`` in priority order and integrates it into
+# ``EnergyFlows.per_charger``, which is what
+# ``HealthCheck.check_ledger_partitions`` reconciles.
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -405,6 +393,18 @@ class BatteryView:
     inverter's self-consumption logic covers the load from the battery
     and the Battery/Grid picker choices behave identically
     (observed live, PROD 2026-07-22)."""
+    plan_gate: "Any" = None
+    """(#638 one-gate C4) The joint plan's trust-rule verdict for the
+    ``battery`` demand this cycle (a ``PlanGate``, typed ``Any`` for the
+    same import-lightness reason as ``scheduler_decision``). The
+    scheduler says WHAT (deficit, target, power, economics); this says
+    WHEN. ``None``/uncovered ⇒ no force-charge — pre-charge is
+    optimization, not guarantee."""
+    arbitrage_sell: "Any" = None
+    """(#638 one-gate C6) The plan's WHEN for the arbitrage sell —
+    ``(in_block, per_battery_power_w)`` from ``arbitrage_sell_gate``,
+    already fleet-split by the pipeline. ``None``/closed ⇒ no sell this
+    cycle regardless of the live economics verdict."""
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -546,6 +546,37 @@ def solar_commitment_w(
     return 0.0
 
 
+def commanded_power_w(
+    decision: ChargerDecision,
+    *,
+    phases: int,
+    voltage: float,
+    max_current_a: float,
+) -> float:
+    """Watts this decision commands — the whole commitment, whoever funds it.
+
+    :func:`solar_commitment_w` answers "how much of the shared SOLAR surplus
+    does this charger claim", so it caps at ``budget_w``. This answers the
+    other question: how much power will flow if the actuator applies the
+    decision — grid-funded deadline amps and battery-funded floors included.
+
+    Two callers, one number: the night peak budget's per-charger commitment
+    (which normally reads the setpoint the actuator wrote — and under
+    observer mode nothing writes one), and the WOULD payload that observer
+    mode publishes. A charger that would pull 6.9 kW must say 6.9 kW in
+    both, or a two-charger simulation hands the junior charger phantom
+    headroom.
+    """
+    if decision.intent is ChargerIntent.CHARGE_AT_AMPS:
+        return max(
+            0.0,
+            float(decision.commanded_amps) * float(phases) * float(voltage),
+        )
+    if decision.intent is ChargerIntent.CHARGE_MAX:
+        return max(0.0, float(max_current_a) * float(phases) * float(voltage))
+    return 0.0
+
+
 # ─────────────────────────────────────────────────────────────────
 # Per-charger view (the input to decide())
 # ─────────────────────────────────────────────────────────────────
@@ -586,6 +617,25 @@ class FleetContext:
 
     solar_w: float = 0.0
     """Solar production this cycle (W)."""
+
+    inputs_degraded: bool = False
+    """#818 — one or more of the shared inputs above was UNAVAILABLE this
+    cycle, so its number is ``_read_sensor``'s 0.0 fallback rather than a
+    measurement. On PROD the Huawei modbus blips 8-15 % of the time, which
+    fed ~50 "the sun stopped" cycles a day into the surplus maths.
+
+    SEM does not invent a replacement number (the reader stays honest, and
+    #741/#758/#774 all record what happens when a stale value is trusted
+    like a measured one). The flag exists so the layers that WRITE can
+    decline to move on a cycle they cannot see: ``ChargeStability.filter``
+    holds the committed command. Display is a separate concern and is
+    already handled card-side (``_readWithHold``, 60 s, #237/#444)."""
+
+    curtailment_grant_w: float = 0.0
+    """#743 — bootstrap watts the curtailment probe grants when an
+    export-limited inverter hides real solar behind clamped
+    production. Added to the surplus exactly like measured solar;
+    0.0 whenever the probe is off/idle."""
 
     home_w: float = 0.0
     """Home consumption (W). Pre-priority-attribution this was
@@ -674,6 +724,13 @@ class FleetContext:
     Distinct from ``battery_assist_min_surplus_w`` (an export-surplus
     floor, solar − home); this one is raw production."""
 
+    peak_state: str = "normal"
+    """(#747) The load manager's peak posture this cycle (normal /
+    warning / shedding / emergency). decide() applies a SENIOR clamp on
+    shed levels — the EV throttles before anyone's freezer sheds. The
+    actuation exclusion in load_management stays (#649: one writer per
+    device); this is the other half of its premise, finally real."""
+
     forecast_remaining_kwh: float = 0.0
     """Solar forecast remaining today (kWh), dampened by the
     ``ForecastTracker``. The ``solar_only`` regime uses this to
@@ -752,10 +809,18 @@ class FleetCycleState:
     is_night: bool = False
     tariff_level: "Optional[str]" = None
     forecast_remaining_kwh: float = 0.0
+    # (#747) the load manager's peak posture, resolved once per cycle.
+    peak_state: str = "normal"
     # #576 — fleet-level priority-list inputs (one home battery). Threaded
     # here so every charger's view sees the same slot + command state.
     battery_priority: "Optional[int]" = None
     battery_commanded: bool = False
+    # #743 — the curtailment probe's surplus grant (W). An export-limited
+    # inverter clamps production to consumption, hiding real solar from
+    # the measured surplus; the probe grants bootstrap watts that decide()
+    # treats exactly like measured solar (see coordinator/curtailment.py).
+    # 0.0 = probe off/idle — the entire feature disappears from the math.
+    curtailment_grant_w: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -809,6 +874,21 @@ class ChargerView:
     (charges before the battery) only when ``ev_priority <
     fleet.battery_priority`` AND SOC ≥ reserve floor (#576 P2.2). Defaults to
     999 (bottom) so a view built without it never spuriously reclaims."""
+
+    plan: PlanVerdict = field(default_factory=PlanVerdict)
+    """(#638) What the PLANNING layer decided for this charger this cycle.
+
+    A typed field rather than a key in ``config`` on purpose. Its
+    predecessor travelled as ``config["_tariff_wait"]`` — invisible in
+    this class, therefore invisible to a reader of ``decide()``, therefore
+    consulted by exactly one of the three night-capable modes. On
+    2026-08-06 the car charged an hour early and finished before its own
+    planned window opened, because two modes could not see a signal that
+    was not in the picture they were handed.
+
+    Defaults to no opinion, which every consumer must treat as "no planner
+    exists" — the fail-open contract. Day/night agnostic (see
+    :mod:`.plan_verdict`): a daytime planner fills this same field."""
 
     soc_ceiling_reached: bool = False
     """The car has reached its configured MAX target (SOC % ceiling, or

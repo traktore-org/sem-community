@@ -294,8 +294,10 @@ class SEMEnergyImpactCard extends SEMLitBase {
 }
 
 semDefineCard('sem-energy-impact-card', SEMEnergyImpactCard, {
-    type: 'custom:sem-energy-impact-card',
+    type: 'sem-energy-impact-card',
     name: 'SEM Energy Impact Card',
-    description: 'Environmental impact display for Solar Energy Management',
+    description: 'CO2 avoided and its tree equivalent — today, this year, lifetime',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-energy-impact-card',
     preview: false,
 });

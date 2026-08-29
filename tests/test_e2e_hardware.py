@@ -13,13 +13,10 @@ integration's source code.
 """
 import pytest
 import json
-import os
-from datetime import datetime, timedelta
-from unittest.mock import MagicMock, AsyncMock, patch, PropertyMock
+from unittest.mock import MagicMock, AsyncMock, patch
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
 
-from homeassistant.util import dt as dt_util
 
 
 # ════════════════════════════════════════════
@@ -166,7 +163,6 @@ class E2ETestBase:
             battery_value = -battery_w  # SEM: +charge → inverter: -charge
 
         power_unit = "W"
-        ev_unit = chg.power_unit
 
         states = {
             # Inverter sensors
@@ -403,7 +399,7 @@ class E2ETestBase:
             read_energy_dashboard_config,
         )
 
-        config_dir = self._build_energy_dashboard_file(tmp_path)
+        self._build_energy_dashboard_file(tmp_path)
 
         # Mock hass with config_dir pointing to our temp directory
         hass = MagicMock()
@@ -423,7 +419,6 @@ class E2ETestBase:
     def test_first_coordinator_cycle(self):
         """Step 6: First coordinator cycle completes without exception."""
         from custom_components.solar_energy_management.coordinator.sensor_reader import SensorReader
-        from custom_components.solar_energy_management.coordinator.types import PowerReadings
 
         hass = MagicMock()
         inv = self.inverter

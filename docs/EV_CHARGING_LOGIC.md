@@ -71,7 +71,7 @@ The per-mode detail lives in the same card: **Charge target** (Min / Max kWh),
 | `number.sem_charger_<id>_target_soc` / `_max` | *Minimum SoC* floor / *Up to* ceiling (% target); both **0–100 %** (#680) — floor 0 = no overnight charge |
 | *(picker)* `ev_start_stop_entity` | The `switch`/`button` SEM uses to open the contactor — set on the config card or the Add/Edit-charger dialog (#627). Without it, a `number.*`-only charger may be un-stoppable |
 | `time.sem_charger_<id>_target_time` | *Charge by* deadline (earlier than window end = forcing) |
-| `number.sem_charger_<id>_minimum_current` / max | Current bounds (most cars need ≥ 6 A) |
+| `number.sem_charger_<id>_minimum_current` / `_maximum_current` | The current **range** SEM may offer — floor (most cars need ≥ 6 A) and ceiling (**6–80 A**, #746). Both on the Config tab's charger block; see below |
 | `sensor.sem_charging_strategy` | The live reason string — every decision explains itself here |
 
 ## How a decision becomes amps
@@ -83,6 +83,35 @@ a gentle 6 A offer until a fussy car latches) and the full-car backoff
 (#610: after 3 declined ladders, 20 min quiet) → the **reconciler** issues
 the minimum hardware commands to converge and then leaves the charger alone.
 The strategy sensor narrates every step.
+
+**Where the ceiling comes from.** Two things, and the lower one wins:
+
+1. **Max Amps** (`number.sem_charger_<id>_maximum_current`, 6–80 A) — what you
+   set. Use it to declare what the wallbox is actually rated for, or to throttle
+   it below that when it shares a supply.
+2. **The charger's own limit** (`max_current_a`, which for an entity-controlled
+   box already folds in the control number's own maximum, #536). The adapter
+   clamps every command to it, so the box's rating is the hard limit whatever
+   you set above.
+
+SEM decides against `min(hardware, Max Amps)` — a configured value can ask for
+*less* than the hardware allows, never for more, because deciding above the
+clamp is drift between what SEM plans and what it can command (#627).
+
+Before **#746** there was no Max Amps at all. The ceiling came from
+`max_charging_current`, a config key that no setup step and no entity ever
+wrote — the dashboard's *add charger* button minted it as a literal `32`. Every
+EVSE on every install was therefore capped at 32 A with nothing in the UI to
+explain it, which is two thirds of a 48 A box. Upgrading installs keep the value
+they had: the new slider seeds from the old key.
+
+**#789** was the other half of the same defect. The planner's arithmetic runs
+before any hardware is consulted and falls back to 32 A; that fallback used to
+be written out by hand at thirteen places and five of them said 16 A, so the
+night-charge planner sized the night at half the energy a 32 A charger delivers
+— it started earlier and booked more cheap hours than it needed. The hardware
+was never at risk; the plan was just wrong about it. Both halves now resolve
+through one function (`devices.base.resolve_max_current`) and one constant.
 
 ---
 
@@ -117,9 +146,9 @@ Active in **Solar only** and **Min + Solar** (gated by the Solar Gate + Buffer S
 
 The cheapest-hours behaviour (built into the **Solar + cheapest hours** mode, and available to *Min + Solar* via the per-charger *Cheapest hours* option) changes behaviour in **three** places — not just at night:
 
-| Time | Charging Mode | What tariff_optimized does |
+| Time | Charging Mode | What the cheapest-hours behaviour does |
 |---|---|---|
-| Night | tariff-aware modes | Waits for cheapest contiguous window before charging (subject to Min reachability) |
+| Night | tariff-aware modes | Waits for the [energy plan's](ENERGY_PLANNER.md) charge block — the cheapest hours that also fit under your peak limit and priority order (subject to Min reachability) |
 | Daytime | Min + Solar | **Drops the Min grid guarantee on EXPENSIVE / VERY_EXPENSIVE hours.** Falls back to surplus-only; resumes on price drop or sufficient solar |
 | Daytime | Solar only | No effect (never uses grid anyway) |
 | Anytime | Always (max) / Off | No effect (explicit override) |
@@ -140,20 +169,31 @@ Every 10 s during the night window, for each charger:
 
 3. Compute effective_rate = Max current            if forcing deadline (deadline earlier than window end)
                             peak_managed_amps      otherwise   ← peak-aware (#274/C1)
-   where peak_managed_amps = (peak_limit − avg_overnight_home_W) / watts_per_amp.
+   where peak_managed_amps = (peak_limit − avg_energy_plan_home_W) / watts_per_amp.
 
 4. Reachable? = (remaining_kWh / effective_rate) ≤ hours_left.
 
-5. If cheapest-hours behaviour is on:
-     a. Now is cheap?            → charge.
-     b. Not reachable anyway?    → charge (don't add tariff penalty on top of an already-failing deadline).
-     c. Sum cheap hours BEFORE deadline × effective_rate ≥ remaining_kWh?
-           yes → WAIT (state = tariff_waiting_for_cheap)
-           no  → charge now ("not enough cheap hours at peak-limited rate")
+5. Ask the energy plan (#638) whether this charger is COVERED tonight:
+     a. Covered and inside its block?   → charge.
+     b. Covered and outside its block?  → WAIT (state = tariff_waiting_for_cheap,
+                                          card shows the block's start time).
+     c. UNCOVERED (no fresh plan)?      → charge at deadline / top-up amps.
+                                          Fail-open: the Min floor is a guarantee,
+                                          so a missing plan never costs you the car.
+                                          The card says "reactive — no plan yet".
 
 6. Apply current = max(deadline_amps, gentle_ramp_amps).
    If shared peak budget exceeded (multi-charger), throttle proportionally (#274/H1).
 ```
+
+> **Changed in v2.0 (#638).** Step 5 used to be the charger's *own*
+> cheapest-hours arithmetic — sum the cheap hours before the deadline, wait if
+> they cover the need. That private picker is deleted. The night window now
+> comes from the joint plan, which weighs this charger against the battery, the
+> deferrable loads and the comfort bands under one peak limit and one price
+> curve — so a wait is no longer "these hours are cheap" but "this is your slot".
+> Everything else in the list (the deadline, the Min floor, reachability, the
+> peak-managed rate, the gentle ramp) is unchanged and still reactive.
 
 ---
 
@@ -168,23 +208,22 @@ Every 10 s during the night window, for each charger:
 - Required rate = 8.5 / 9 = 0.94 kW = ~1.4 A at 3-φ
 - Below the 6 A minimum → ramps to 6 A and finishes ~02:00, idles to 07:00.
 
-### Example B — Tariff-optimized, cheap window comfortably covers Min
+### Example B — Tariff-optimized, the plan finds room in the cheap hours
 
 - Same setup but with **cheapest-hours behaviour on** (Solar + cheapest hours mode, or the Cheapest hours option)
-- Cheap window 01:00–05:00 (4 h)
-- effective_rate = peak_managed_amps × 690 W/A ≈ 4.1 kW (assuming 6 A peak headroom)
-- Deliverable in cheap window = 4 × 4.1 = 16.4 kWh > 8.5 kWh ✓
-- SEM idles from 22:00, status = `tariff_waiting_for_cheap`, "Next: 01:00" shown on card
-- At 01:00 it charges; finishes ~03:00; idles to 07:00.
+- Cheapest hours of the night are 01:00–05:00; effective_rate ≈ 4.1 kW at 6 A peak headroom
+- The plan packs 8.5 kWh into 01:00–03:00 — it fits under the peak limit alongside whatever else is scheduled
+- SEM idles from 22:00, status = `tariff_waiting_for_cheap`, "Next: 01:00" shown on the card
+- At 01:00 it charges; finishes ~03:00; idles to 07:00
+- The Energy Plan card shows the block and its reason: *planned — cheapest hours*
 
-### Example C — Tariff override (the case that worried you)
+### Example C — The night is too short to be picky
 
 - 30 kWh Min (almost full charge), deadline 07:00, cheapest-hours on
-- Cheap window 01:00–04:00 (only 3 h)
-- effective_rate = 4.1 kW
-- Deliverable = 3 × 4.1 = 12.3 kWh < 30 kWh ✗
-- SEM **does not wait**. Charges immediately from 22:00 onward; status = `night_charging`.
-- Card reason: *"tariff: not enough cheap hours at the peak-limited rate — charging now to guarantee Min"*
+- The cheapest hours alone can't deliver 30 kWh before 07:00 at the peak-limited rate
+- The plan therefore places the block **from 22:00**, not in the cheap valley — it schedules the hours it actually needs, cheapest-first, until the ask is covered
+- SEM **does not wait**. Charges from 22:00 onward; status = `night_charging`
+- If a plan never arrives at all, the same thing happens for a different reason: uncovered EV demand falls back to deadline amps and the card says *reactive — no plan yet*. The Min floor is a guarantee either way.
 
 ### Example D — Forcing deadline
 
@@ -209,7 +248,7 @@ Each charger has its own daily energy bucket (`daily_ev` for that charger). The 
 
 **Why not at sunrise?** Sunrise can be *earlier* than the night-window end on short summer nights (sunrise 05:30, window end 07:00). A sunrise-based reset would wipe the bucket after Min was met (~03:00) but before the night window closes — making SEM see `remaining = daily_target` again and **re-fire night charging until 07:00**, double-billing the user. The deadline-based boundary closes that window: the bucket only rolls over once today's commitment is done. (#280)
 
-**Multi-charger:** each charger's bucket resets at *its own* deadline. Car A at 07:00 and Car B at 08:00 reset independently — Car B isn't disturbed when Car A's day rolls over.
+**Multi-charger:** each charger's bucket resets at *its own* deadline. Car A at 07:00 and Car B at 08:00 reset independently — Car B isn't disturbed when Car A's day rolls over. The **fleet total** (`sensor.sem_daily_ev_energy`) uses the shared deadline while every charger agrees on one; the moment their *Charge by* times differ there is no fleet deadline to roll on, so the fleet total resets at **midnight** — the only boundary all chargers share (#724). Moving a *Charge by* time never re-keys the day already accumulating; the new boundary applies from the next rollover. Note the shape of a *later* move: the running day is extended once (it does **not** reset at the old time — a midday 07:00 → 23:00 move makes that one EV day up to ~40 h long), then normal rhythm resumes.
 
 **Solar between sunrise and the deadline:** still counted into yesterday's bucket. Harmless, since Min was already hit.
 
@@ -226,7 +265,7 @@ Each charger has its own daily energy bucket (`daily_ev` for that charger). The 
 | "Can't reach target in time" notification | Min too high for the time left at max current | Lower Min, set an earlier deadline, raise Max current, or accept the notification (charges to whatever is possible at max) |
 | Multi-charger: one stays idle | Shared peak budget allocated to higher-priority charger first | Surplus priority + `daily_ev_target` per charger; check coordinator logs for peak-budget allocation |
 | Daytime Min+PV not pulling grid on cloudy day | Cheapest hours ON + price = EXPENSIVE | Either accept the pause or turn Cheapest hours OFF |
-| Daily target counter shows yesterday's number into the morning | Working as intended — bucket only resets at *Charge by* time | `sensor.sem_charger_*_daily_energy`. Pre-#280 reset at sunrise; now at deadline to prevent double-charge race |
+| Daily target counter shows yesterday's number into the morning | Working as intended — bucket only resets at *Charge by* time | `sensor.sem_charger_*_daily_energy`. Pre-#280 reset at sunrise; now at deadline to prevent double-charge race. Note: the FLEET total (`sensor.sem_daily_ev_energy`) behaves this way only while all chargers share one deadline — with differing deadlines it resets at midnight (#724) |
 | EV plugged in, SEM says *"Charging active"*, but real draw is ~0 W with `commanded_current > 0` | **Fixed in #446 (v1.7.1-beta.16+).** Pre-#446 if you had `ev_target_type="soc"` saved without a vehicle SOC sensor, SEM substituted an estimated SOC into the kWh budget which could go to 0 and idle the charger. The v10 → v11 migration auto-resets these to `"kwh"` on first restart after upgrade. If you're seeing this on an OLDER version, manually set `ev_target_type` back to `"kwh"` in the Configuration tab, or upgrade. | Configuration tab → EV chargers → Target type (the SOC option is now disabled when no vehicle SOC sensor is configured) |
 | Heat pump section in dashboard says "No heat pump configured" even though `heat_pump_relay1_entity` / `heat_pump_relay2_entity` are filled | **v1.7.1-beta.17+ exposes the diagnostic surface.** Check `sensor.sem_heat_pump_registration_status` — its state + attributes tell you which of the six possible failure modes applies (`partial_sg_ready_only_relay1`, `entity_missing`, `unavailable`, etc.). When a configured relay entity stays `unavailable` for 5+ minutes a Repair issue files at **Settings → System → Repairs** naming the specific entity. For users wiring SG-Ready via Nibe Modbus rather than physical relays, see "Heat pump — two valid wiring paths" below. | Configuration tab → Heat pump section → status sensor; Settings → System → Repairs |
 | Strategy sensor says *"full-car backoff — car declined N start ladders; next offer in X min"* | **Working as intended (#610).** The car is plugged in with surplus available, but its BMS declined several complete start-offer ladders (gentle 6 A start, auto-raised to ~10 A, held 90 s) without drawing — typically a full battery. Instead of re-offering every few minutes all afternoon, SEM waits ~20 min between offers. The backoff ends instantly when the car draws (e.g. after cabin preconditioning frees headroom), when you unplug/re-plug, or when you change the charge mode. | `sensor.sem_charging_strategy` reason text; nothing to configure |
@@ -272,6 +311,104 @@ Some HEMS tools bundle vendor-specific Modbus templates that write directly to i
 * Click Settings → SEM → ⋮ → Download Diagnostics → the `heat_pump` block in the JSON shows the resolved entity ids + their live states.
 
 ---
+
+## Phase switching — 1↔3‑phase, observed, manual and automatic (#804)
+
+Some wallboxes can switch between 1‑ and 3‑phase charging (go‑e's `psm`
+select, KEBA X‑series via Modbus, openWB's flag). SEM supports them in
+three layers — observation, manual control, and automatic switching:
+
+* **Active‑phase estimate.** While a charger is genuinely drawing power, SEM
+  divides its measured draw by the commanded amps — watts‑per‑amp is
+  volts‑actually‑in‑use, and over ~230 V per phase that reads the number of
+  phases the *car* is actually using (a 3‑phase box feeding a 1‑phase car
+  reads 1). A physical floor keeps it honest: one phase can carry at most
+  `amps × 230 W`, so the estimate never reads fewer phases than the draw
+  proves — a car taking less than the offer reads the lower bound instead
+  of a lie, and the exact count whenever it uses the offer (found live: a
+  Zoe at a 32 A offer drawing 10 kW ≈ 15 A × 3 phases). Exposed per charger
+  as `active_phases` in the `per_charger_phases` attribute on
+  `sensor.sem_charging_state` and as `charger_<id>_active_phases` in the
+  diagnostics download. `null` when the charger isn't drawing enough to
+  measure.
+* **The switch capability is an entity you name, never guessed.** If your
+  wallbox has a phase‑switch control, set **Phase Switch Entity** in the
+  charger's block on the dashboard **Configuration tab** (or in the options
+  flow: Settings → SEM → Configure → EV charger → edit). SEM
+  validates that it exists and is a `select`/`number`/`switch`, and surfaces
+  the verdict (`switch_valid`) beside the estimate. For a `select` you must
+  also fill the **1‑phase value / 3‑phase value** fields with the entity's
+  own option names (they are the device's vocabulary — SEM never guesses);
+  a `number` defaults to `1`/`3` and a `switch` to `off`/`on`, both
+  overridable (go‑e's `psm` number uses `2` for 3‑phase).
+* **Manual switching** — naming the capability creates
+  `select.sem_charger_<id>_phase_mode` (**Auto / 1‑phase / 3‑phase**).
+  Choosing 1 or 3 runs the one safe sequence SEM ever switches with:
+  **stop → switch → settle (60 s) → start**. Never under load — that
+  sequence is what buys away the pauses, ignored commands and hanging cars
+  other projects patch per‑brand. A hard 2‑minute floor separates any two
+  switches. Winter‑pinning a 3‑phase box to 1‑phase for low sun is the
+  classic manual use.
+* **Automatic switching** (`phase_mode: auto`, the default) scales the
+  charger to fit the surplus: down to 1‑phase after **10 sustained
+  minutes** below the 3‑phase minimum (~4.1 kW at 6 A), up to 3‑phase
+  after **5 sustained minutes** of headroom above it (+10 % margin).
+  Hard caps protect the hardware: at most one automatic switch per
+  30 minutes and 4 per charging session — after that the phase stays put
+  until the next plug‑in. The W/A estimate above independently confirms
+  every switch physically took once charging resumes.
+* The live sequence state and SEM's current belief ride the same
+  `per_charger_phases` attribute (`switch_state`, `believed_phases`) and
+  the diagnostics download.
+
+---
+
+## The curtailment probe — harvesting solar an export limit hides
+
+Some inverters cap their grid export — permanently (a regulatory limit) or
+dynamically (dropping to **0 W when the electricity selling price is
+negative**). **The price is only the most common *reason* for the limit — it is
+not part of what SEM detects.** The probe keys on physics alone: an export
+limit that is *active*, whatever put it there. A zero-feed-in install triggers
+it on an ordinary sunny day at an ordinary price. With the limit active, the
+inverter reduces production to match
+local consumption, so SEM's measured surplus honestly reads ~0 while the
+array could deliver kilowatts more. Reading harder cannot fix this — raising
+consumption is the only instrument that reveals the hidden power.
+
+**Options → EV Settings → "Curtailment probe"** (default **off**) turns on
+exactly that instrument:
+
+1. **Suspicion** — the solar forecast says far more than the array delivers,
+   export is pinned at ~0, and production ≈ consumption (the curtailment
+   signature; a merely cloudy day fails the forecast term). The forecast is
+   read **raw**, not dampened — the dampening factor learns from today's
+   measured production, which a curtailed day clamps to consumption, so on
+   exactly the day the probe exists for the dampened value would sink toward
+   what the inverter shows. The probe may also start when the hidden power
+   falls **slightly short of the charger's minimum** (up to 10 % of it):
+   importing ~140 W to unlock 4 kW of otherwise-thrown-away solar is the
+   right trade whenever curtailment is real — negative prices, or a
+   zero-feed-in install at any price. Worst case ≈ 4 ct/h, bounded by
+   design. Brands that
+   publish their export limit sharpen this: SEM auto-detects the limit
+   entity (Huawei active power control, GoodWe grid export limit, SolaX
+   export control, Victron max feed-in, …) — "limit active" fast-tracks the
+   probe, "no limit" suppresses it entirely. The **"Export-limit entity"**
+   field overrides the autodetect for exotic setups.
+2. **Probe** — SEM starts the EV at minimum amps. If production rises to
+   follow within ~2 minutes, the curtailment was real; if not, the probe
+   backs off and won't retry for 15 minutes. A failed probe costs about two
+   minutes of minimum-amps draw — that is the price of asking, and why the
+   feature is opt-in.
+3. **Harvest** — the risen production makes the normal surplus loop
+   self-sustaining. The probe keeps offering one ladder step of headroom so
+   charging climbs toward the forecast — and every step must be followed by
+   production within its window, or the climb stops where the array's real
+   potential ends. No step is ever taken on faith.
+
+A forecast integration (Solcast, Forecast.Solar or Open-Meteo) is required —
+without a "power now" forecast there is nothing to suspect against.
 
 ## Related docs
 

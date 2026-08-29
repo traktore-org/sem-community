@@ -12,7 +12,6 @@ from datetime import datetime
 
 from custom_components.solar_energy_management.analytics.consumption_predictor import (
     ConsumptionPredictor,
-    MIN_TRAINING_DAYS,
 )
 
 
@@ -20,8 +19,6 @@ def _seed(predictor, days, hours_per_day=24, consumption_w=500.0, solar_w=2000.0
     """Feed observations across N days × hours_per_day to advance training_status."""
     for day in range(days):
         for hour in range(hours_per_day):
-            # Spread observations across all 7 weekdays
-            dow = day % 7
             dt = datetime(2026, 1, 1 + day, hour, 0)
             # Manually adjust weekday by offsetting from a known Monday
             # — for the unique_days() heuristic we just need varied (dow, hour=12) bins

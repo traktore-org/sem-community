@@ -26,7 +26,6 @@ These pin both halves in isolation (no full-hass reload needed).
 """
 from __future__ import annotations
 
-from datetime import date
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -118,6 +117,12 @@ class TestRestoreIdempotent:
             is_active=False,
             control_mode=DeviceControlMode.SURPLUS,
             observed_on=lambda: None,
+            # (#768) the rollover now logs and clears the day's ENERGY beside
+            # its runtime, so the stand-in carries those fields too.
+            _daily_energy_kwh=0.0,
+            _daily_energy_source="none",
+            _daily_energy_blind_s=0.0,
+            _energy_counter_last_kwh=None,
         )
         surplus = MagicMock()
         surplus.get_device = lambda did: {_DEVICE_ID: dev}.get(did)

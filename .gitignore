@@ -65,6 +65,10 @@ sankey_*.yaml
 *.sh
 # Exception: live integration tests need their bash scripts tracked (#282).
 !tests/live/*.sh
+# Exception: the HACS release-asset builder is invoked BY CI, so it has to
+# be in the repo the workflow checks out (#834). It is excluded from the
+# published zip itself — see scripts/build_release_zip.sh.
+!scripts/build_release_zip.sh
 
 # IDE
 .vscode/
@@ -79,7 +83,6 @@ Thumbs.db
 # Claude settings (keep local only) — exclude contents, not the dir itself,
 # so we can re-include the shared, version-controlled workflows below.
 .claude/*
-!.claude/workflows/
 CLAUDE.md
 
 # Ruflo / Agent databases (local only, not for distribution)

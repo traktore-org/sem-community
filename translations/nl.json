@@ -37,16 +37,14 @@
       },
       "hardware": {
         "title": "Hardware",
-        "description": "De twee laatste waardes zijn afhankelijk van je installatie:\n\n• Thuis Batterij capaciteit — de bruikbare capaciteit van je thuis batterij.\n• Piek Vermogen Limiet. Het maximale aantal kW dat uw energie leverancier toestaat voordat SEM begint met het afschakelen van de energie verbruikers. — \n\nSEM detecteert automatich je omvormer ontlaad schakelaar entity: {discharge_entity}\n\nLaat deze optie aan staan zodat SEM automatisch je dashboards creeert. **Let op!!: Home Assistant rwordt automatisch opnieuw opgestart na 5 seconden nadat de installatie voltooid is.**\n\nGebruik verder de (veilige) standaard waardes, deze kan je altijd achteraf nog wijzigen.",
+        "description": "Laatste stap! SEM heeft de ontlaad-besturingsentiteit van je omvormer automatisch gedetecteerd: {discharge_entity}\n\nLaat de dashboardoptie AAN staan zodat SEM automatisch je Lovelace-dashboard voor je aanmaakt. **Let op: dit veroorzaakt ongeveer 5 seconden na het voltooien van de installatie een herstart van Home Assistant.**\n\nVoor al het overige — inclusief je piekvermogenlimiet — gebruikt SEM veilige standaardwaardes die je direct na de installatie kunt aanpassen: de piekvermogenlimiet via de schuifregelaar op het tabblad **Besturing**, de rest via het tabblad **Configuratie** van het SEM-dashboard — waaronder EV-laders, warmtepomp, tarief en batterijzones.",
         "data": {
           "battery_capacity_kwh": "Thuis Batterij Capaciteit (kWh)",
-          "target_peak_limit": "Piek Vermogen Limiet (kW)",
           "generate_dashboard_on_install": "Genereer het SEM dashboard nu (HA wordt geherstart)",
           "diagram_style": "Systeemdiagram stijl"
         },
         "data_description": {
           "battery_capacity_kwh": "Totale capaciteit van je thuis batterij in kWh. Wordt gebruikt om voorspellingen te doen ten behoeve van de laad en ontlaad strategie.",
-          "target_peak_limit": "Maximaal aantal kW je maximaal mag gebruiken op je energie aansluiting voordat SEM automatisch apparaten gaat uitschakelen.",
           "generate_dashboard_on_install": "Als je dit aanzet, zal SEM automatisch je dashboard configureren en meteen na deze stap zal Home Assistant opnieuw opstarten. Je kan dit ook handmatig forceren door de service solar_energy_management.generate_dashboard aan te roepen.",
           "diagram_style": "Kies welke systeemdiagramkaart op het Home-tabblad wordt gebruikt. 'SEM' gebruikt het ingebouwde geanimeerde diagram. 'K-Flow' gebruikt de K-Flow HACS-kaart (apart te installeren)."
         }
@@ -66,7 +64,7 @@
           "mobile_notification_service": "Mobiele meldingsservice",
           "vehicle_soc_entity": "Vehicle Batterij SOC",
           "ev_battery_capacity_kwh": "EV Batterij Capaciteit (kWh)",
-          "ev_target_soc": "EV Doel SOC (%)"
+          "ev_target_soc": "Beschouw als vol bij (%)"
         },
         "data_description": {
           "ev_connected_sensor": "Binaire sensor die aangeeft of de stekker momenteel is aangesloten op het voertuig.",
@@ -80,16 +78,14 @@
           "mobile_notification_service": "HA notify-service voor mobiele pushmeldingen (bijv. notify.mobile_app_uw_telefoon).",
           "vehicle_soc_entity": "Optionele sensor die het huidige laadniveau van het voertuig toont (0–100%).",
           "ev_battery_capacity_kwh": "Totale bruikbare capaciteit van de EV-accu in kWh. Wordt gebruikt om het laadniveau en de laadtijd te schatten.",
-          "ev_target_soc": "Doellaadniveau (%) waarbij SEM de EV als volledig geladen beschouwt."
+          "ev_target_soc": "Vanaf hier beschouwt SEM de auto als geladen. Dit is een definitie van \"vol\", geen laadlimiet."
         }
       }
     },
     "error": {
       "unknown": "Er is een onverwachte fout opgetreden. Probeer het opnieuw.",
       "entity_not_found": "Entiteit niet gevonden. Controleer of de entiteit-ID bestaat.",
-      "service_not_found": "Notificatieservice niet gevonden. Controleer de servicenaam (bijv. notify.mobile_app_your_phone).",
-      "heat_pump_partial_relays": "SG-Ready heeft BEIDE relais-entiteiten nodig. Stel beide relais in — of laat beide leeg en configureer alleen de klimaat-entiteit voor een klimaat-only instelpunt-boost.",
-      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities."
+      "service_not_found": "Notificatieservice niet gevonden. Controleer de servicenaam (bijv. notify.mobile_app_your_phone)."
     },
     "abort": {
       "already_configured": "Solar Energy Management is al geconfigureerd. Slechts één instantie is toegestaan.",
@@ -111,9 +107,10 @@
           "ev_total_energy_sensor": "EV totale energieteller (optioneel)",
           "vehicle_soc_entity": "Voertuig-batterij-SOC-sensor (optioneel)",
           "ev_battery_capacity_kwh": "EV-batterijcapaciteit (kWh)",
-          "ev_target_soc": "EV-doel-SOC (%)",
-          "daily_ev_target_max": "Zonne-laadlimiet (kWh)",
-          "ev_target_soc_max": "Zonne-laadlimiet (SOC %)",
+          "ev_charger_efficiency": "Laderrendement (%)",
+          "ev_target_soc": "Beschouw als vol bij (%)",
+          "daily_ev_target_max": "Nooit verder laden dan (kWh)",
+          "ev_target_soc_max": "Nooit verder laden dan (%)",
           "vehicle_range_entity": "Voertuig-bereiksensor",
           "ev_kwh_per_100km": "Voertuigverbruik (kWh/100km)"
         },
@@ -126,9 +123,10 @@
           "ev_total_energy_sensor": "Optionele cumulatieve kWh-teller voor energie geleverd aan het voertuig.",
           "vehicle_soc_entity": "Optionele sensor die het huidige laadniveau van het voertuig toont (0–100%).",
           "ev_battery_capacity_kwh": "Totale bruikbare capaciteit van de EV-accu in kWh. Wordt gebruikt om het laadniveau en de laadtijd te schatten.",
-          "ev_target_soc": "Doellaadniveau (%) waarbij SEM de EV als volledig geladen beschouwt.",
-          "daily_ev_target_max": "Zonne-overschot laadt tot deze waarde en stopt dan. Laat op vol staan om vrij op zon te laden.",
-          "ev_target_soc_max": "Zonne-overschot laadt tot deze SOC en stopt dan. Laat op 100% staan om vrij op zon te laden.",
+          "ev_charger_efficiency": "Deel van de gemeten AC-energie dat de accu bereikt. Verlaag dit als de laadniveauschatting op het voertuig vooruitloopt. Meestal 85-95%, lager bij eenfasig laden of kou.",
+          "ev_target_soc": "Vanaf hier beschouwt SEM de auto als geladen. Dit is een definitie van \"vol\", geen laadlimiet.",
+          "daily_ev_target_max": "Zonneoverschot stopt hier met laden. Dit is een plafond, geen doel — laat het op vol om vrij op zon te laden.",
+          "ev_target_soc_max": "Zonneoverschot stopt hier met laden. Dit is een plafond, geen doel — laat op 100% om vrij op zon te laden.",
           "ev_kwh_per_100km": "Gebruikt om het rijbereik te schatten wanneer er geen bereiksensor is geconfigureerd.",
           "vehicle_range_entity": "Optionele echte bereiksensor. Anders wordt het bereik geschat op basis van SOC × capaciteit × efficiëntie."
         }
@@ -140,7 +138,7 @@
           "update_interval": "Update-interval (seconden)",
           "battery_priority_soc": "Batterij prioriteit SOC (%)",
           "min_solar_power": "Minimaal zonnevermogen — ruwe PV-productie (W)",
-          "daily_ev_target": "Dagelijkse EV-doel (kWh)",
+          "daily_ev_target": "Minimaal garanderen (kWh)",
           "battery_assist_max_power": "Maximaal batterij-ondersteuningsvermogen (W)",
           "battery_assist_min_surplus": "Min. zonne-overschot voor batterij-ondersteuning (W)",
           "battery_capacity_kwh": "Batterijcapaciteit (kWh)",
@@ -154,14 +152,15 @@
           "smart_night_charging": "Slimme nachtelijke laadreductie",
           "vehicle_soc_entity": "Voertuig batterij SOC",
           "ev_battery_capacity_kwh": "EV batterijcapaciteit (kWh)",
-          "ev_target_soc": "EV doel SOC (%)",
+          "ev_target_soc": "Beschouw als vol bij (%)",
           "battery_buffer_soc": "Zone 2/3 grens — batterijbuffer SOC (%)",
           "battery_auto_start_soc": "Zone 3/4 grens — batterij auto-start SOC (%)",
           "battery_discharge_control_entity": "Batterij ontladingsregel-entiteit (optioneel)",
           "hot_water_solar_target": "Doeltemperatuur zonneboiler (°C)",
           "legionella_target_temp": "Legionella desinfectie doeltemperatuur (°C)",
           "legionella_interval_hours": "Maximaal aantal uren tussen desinfectiecycli",
-          "diagram_style": "Systeemdiagram stijl"
+          "diagram_style": "Systeemdiagram stijl",
+          "grid_sign_invert": "Teken van netvermogen omkeren"
         },
         "data_description": {
           "update_interval": "Hoe vaak de coördinator sensoren uitleest en hardware aanstuurt. 10 s geeft de meest nauwkeurige energie-integratie; waarden boven 30 s zullen energie onderschatten. Bereik 10–60 s.",
@@ -169,7 +168,7 @@
           "battery_buffer_soc": "Grens tussen zone 2 en zone 3. Boven deze SOC mag de batterij ontladen om tekorten in zonne-energie op te vangen terwijl de EV wordt geladen. Standaard 70%.",
           "battery_auto_start_soc": "Grens tussen zone 3 en zone 4. Boven deze SOC kan de EV beginnen met laden, zelfs zonder zonne-overschot, gebruikmakend van de batterij. Standaard 90%.",
           "min_solar_power": "Ondergrens voor ruwe PV-productie — het paneelvermogen waaronder 'zon is actief' onwaar is: solar_only start niet en de diepe-tekort-bewaking behandelt het als duisternis (laden stopt dus snel in plaats van te overbruggen op het net). Dit is RUWE productie, GEEN overschot — in tegenstelling tot 'Min. zonne-overschot voor batterij-ondersteuning' (zon − huis), dat bepaalt wanneer de thuisbatterij mag helpen. Standaard 1000 W; houd dit onder het hardware-minimum van de EV-lader (~4140 W bij 3-fase, ~1380 W bij 1-fase).",
-          "daily_ev_target": "Doelwaarde kWh per dag voor nachtelijk laden via het net. Zet op 0 om nachtelijk laden volledig uit te schakelen.",
+          "daily_ev_target": "SEM laadt 's nachts bij uit het net zodat de auto 's ochtends minstens dit heeft. Dit is een ondergrens, geen limiet — de zon kan meer toevoegen. 0 = nooit het net gebruiken.",
           "battery_assist_max_power": "Maximaal vermogen dat de thuisbatterij kan ontladen om de EV te ondersteunen in zone 3/4. Standaard 4500 W.",
           "battery_assist_min_surplus": "Minimaal echt zonne-overschot voordat de thuisbatterij de EV mag helpen laden — in elke laadmodus. Daaronder blijft de batterij voor het huis (de auto laadt uit net + zon). Standaard 1200 W. Zet op 0 om de batterij de EV overal te laten ondersteunen, ook 's nachts.",
           "battery_capacity_kwh": "Totale bruikbare capaciteit van de thuisbatterij (NIET de EV-batterij — dat is een aparte instelling). Wordt gebruikt voor forecast-gestuurd laden.",
@@ -185,23 +184,28 @@
           "diagram_style": "Kies welke systeemdiagramkaart op het Home-tabblad wordt gebruikt. 'SEM' gebruikt het ingebouwde geanimeerde diagram. 'K-Flow' gebruikt de K-Flow HACS-kaart (apart te installeren).",
           "hot_water_solar_target": "Doeltemperatuur (°C) voor zonnegenereerde warmwaterverwarming. SEM activeert de ketel wanneer er overschot beschikbaar is.",
           "legionella_target_temp": "Temperatuur (°C) die het warmwatersysteem moet bereiken tijdens een legionella-desinfectiecyclus.",
-          "legionella_interval_hours": "Maximaal aantal uren tussen legionella-desinfectiecycli voordat SEM een opwarmcyclus forceert."
+          "legionella_interval_hours": "Maximaal aantal uren tussen legionella-desinfectiecycli voordat SEM een opwarmcyclus forceert.",
+          "grid_sign_invert": "Alleen inschakelen als netafname als positieve waarde wordt weergegeven (bijv. Enphase). SEM's conventie is negatief = afname; dit keert de ruwe meting om en omzeilt de automatische tekenherkenning."
         }
       },
       "settings_ev": {
         "title": "EV-laden & Zon",
         "description": "EV-laaddoelen en zonne-energiedrempels configureren.",
         "data": {
-          "daily_ev_target": "Nachtlaaddoel (kWh)",
+          "daily_ev_target": "Minimaal garanderen (kWh)",
           "observer_mode": "Observatiemodus (alleen lezen, geen hardwarebesturing)",
           "smart_night_charging": "Nachtdoel verlagen op basis van voorspelling van morgen",
-          "minimum_solar_power": "Minimaal zonnevermogen om EV-laden te starten (W)"
+          "minimum_solar_power": "Minimaal zonnevermogen om EV-laden te starten (W)",
+          "curtailment_probe_enabled": "Curtailment-sonde (begrensde zonne-energie benutten)",
+          "export_limit_entity": "Exportlimiet-entiteit (optioneel)"
         },
         "data_description": {
-          "daily_ev_target": "Doelverbruik in kWh dat elke nacht van het net wordt geladen. Stel in op 0 om nachtelijk laden via het net uit te schakelen.",
+          "daily_ev_target": "SEM laadt 's nachts bij uit het net zodat de auto 's ochtends minstens dit heeft. Dit is een ondergrens, geen limiet — de zon kan meer toevoegen. 0 = nooit het net gebruiken.",
           "observer_mode": "Wanneer AAN, bewaakt SEM alles maar stuurt nooit opdrachten naar hardware.",
           "smart_night_charging": "Wanneer AAN, verlaagt SEM het nachtlaaddoel wanneer de zonne-energieprognose voor morgen voldoende is.",
-          "minimum_solar_power": "Minimaal zonne-energieoverschot (W) dat vereist is voordat SEM begint met zonneladen voor de EV."
+          "minimum_solar_power": "Minimaal zonne-energieoverschot (W) dat vereist is voordat SEM begint met zonneladen voor de EV.",
+          "curtailment_probe_enabled": "Als de omvormer de netexport begrenst (bijv. bij negatieve prijzen), wordt de productie op het verbruik vastgezet en blijft echte zonne-energie onzichtbaar. Opt-in: SEM start de EV kort op minimale stroom en laadt alleen door als de productie meestijgt.",
+          "export_limit_entity": "De exportlimiet-entiteit van je omvormer (automatisch gedetecteerd voor Huawei, GoodWe, SolaX, Victron e.a. indien leeg). Verscherpt de detectie en voorkomt onnodige sondes."
         }
       },
       "settings_tariff": {
@@ -209,19 +213,23 @@
         "description": "Elektriciteitstarieven en geavanceerde afstemmingsparameters.",
         "data": {
           "electricity_import_rate": "Importtarief",
+          "grid_import_surcharge": "Variabel netbeheerdersoort (valuta/kWh)",
           "electricity_off_peak_rate": "Nachttarief (indien afwijkend)",
           "electricity_export_rate": "Exporttarief",
           "demand_charge_rate": "Vermogenstarief",
           "update_interval": "Update-interval (s)",
           "tariff_mode": "Tarief modus",
           "dynamic_tariff_entity": "Dynamische prijsentiteit (automatisch gedetecteerd indien leeg)",
-          "dynamic_forecast_entity": "Prognose-entiteit (optioneel, automatisch gedetecteerd indien leeg)",
+          "dynamic_forecast_entity": "Prijsprognose-entiteit (optioneel, automatisch gedetecteerd indien leeg)",
           "dynamic_feedin_entity": "Terugleverprijs-entiteit (optioneel, voor dynamisch exporttarief)",
           "grid_import_power_entity": "Netstroom-invoersensor (optioneel, automatisch gedetecteerd via Energiedashboard)",
-          "grid_export_power_entity": "Netstroom-exportssensor (optioneel, automatisch gedetecteerd via Energiedashboard)"
+          "grid_export_power_entity": "Netstroom-exportssensor (optioneel, automatisch gedetecteerd via Energiedashboard)",
+          "tariff_classification_mode": "Prijsclassificatiemodus",
+          "solar_forecast_source": "Bron van de zonneprognose"
         },
         "data_description": {
           "electricity_import_rate": "Dag-/standaard importtarief (valuta/kWh incl. btw). Wordt gebruikt als terugval wanneer dynamische prijzen niet beschikbaar zijn.",
+          "grid_import_surcharge": "Optionele totale variabele netbeheerdersoort toegevoegd aan elke geïmporteerde kWh. Kan elektriciteitstransport en energiebelasting combineren. Geen vast abonnement; geen effect op export.",
           "electricity_off_peak_rate": "Nacht-/dalimporttarief (valuta/kWh). Stel gelijk aan het importtarief in bij een vast tarief.",
           "electricity_export_rate": "Teruglevertarief dat door de energieleverancier wordt vergoed (valuta/kWh).",
           "demand_charge_rate": "Maandelijkse piekvermogensheffing (valuta/kW/maand). Stel in op 0 als uw contract dit niet heeft.",
@@ -231,7 +239,9 @@
           "dynamic_forecast_entity": "Optionele sensor met uurlijkse prijsverwachtingen voor slimme planning.",
           "dynamic_feedin_entity": "Optionele sensor die de actuele teruglever-/exportprijs levert voor dynamisch exporttarief.",
           "grid_import_power_entity": "Optionele sensor (W) voor netstroom-invoervermogen. Automatisch gedetecteerd via het Energiedashboard; overschrijf hier indien nodig.",
-          "grid_export_power_entity": "Optionele sensor (W) voor netstroom-exportvermogen. Automatisch gedetecteerd via het Energiedashboard; overschrijf hier indien nodig."
+          "grid_export_power_entity": "Optionele sensor (W) voor netstroom-exportvermogen. Automatisch gedetecteerd via het Energiedashboard; overschrijf hier indien nodig.",
+          "tariff_classification_mode": "Percentiel deelt prijzen in ten opzichte van het bereik van vandaag (aanbevolen). Statisch gebruikt vaste drempels voor goedkoop/duur.",
+          "solar_forecast_source": "Welke prognose-integratie SEM leest. Automatisch detecteren geeft voorrang aan Solcast, dan Forecast.Solar, dan Open-Meteo — kies er zelf één als je er meerdere naast elkaar draait."
         }
       },
       "load_management": {
@@ -239,21 +249,23 @@
         "description": "Configuratie voor load management bijwerken",
         "data": {
           "load_management_enabled": "Load management inschakelen",
+          "peak_limit_unlimited": "Geen netlimiet",
           "target_peak_limit": "Doel piekvermogen (kW)",
           "warning_peak_level": "Waarschuwingsniveau piekvermogen (kW)",
           "emergency_peak_level": "Noodniveau piekvermogen (kW)",
           "vehicle_soc_entity": "Voertuig batterij SOC",
           "ev_battery_capacity_kwh": "EV batterijcapaciteit (kWh)",
-          "ev_target_soc": "EV doel SOC (%)"
+          "ev_target_soc": "Beschouw als vol bij (%)"
         },
         "data_description": {
           "load_management_enabled": "Schakel SEM's automatische lastafschakeling in of uit om onder uw netpieklimiet te blijven.",
+          "peak_limit_unlimited": "Schakelt piekbeheer volledig uit: SEM dimensioneert verbruikers niet meer op de doel-pieklimiet en schakelt nooit af om die te bewaken. Alleen voor aansluitingen die geen enkele huishoudelijke belasting in gevaar kan brengen. Dit staat los van 'Load management inschakelen': die optie stopt alleen het afschakelen, de limiet blijft als dimensioneringsplafond gelden.",
           "target_peak_limit": "Maximaal netvermogen (kW) waarna SEM begint met het afschakelen van regelbare verbruikers.",
-          "warning_peak_level": "Vermogensniveau (kW) waarbij SEM een waarschuwing geeft voordat actie wordt ondernomen.",
-          "emergency_peak_level": "Vermogensniveau (kW) waarbij SEM agressief verbruikers afschakelt om piekkosten te vermijden.",
+          "warning_peak_level": "Vermogensniveau (kW) waarbij SEM een waarschuwing geeft voordat actie wordt ondernomen. Moet onder de doel-pieklimiet liggen.",
+          "emergency_peak_level": "Vermogensniveau (kW) waarbij SEM agressief verbruikers afschakelt om piekkosten te vermijden. Moet boven de doel-pieklimiet liggen.",
           "vehicle_soc_entity": "Optionele sensor die het huidige laadniveau van het voertuig toont (0–100%).",
           "ev_battery_capacity_kwh": "Totale bruikbare capaciteit van de EV-accu in kWh.",
-          "ev_target_soc": "Doellaadniveau (%) waarbij SEM de EV als volledig geladen beschouwt."
+          "ev_target_soc": "Vanaf hier beschouwt SEM de auto als geladen. Dit is een definitie van \"vol\", geen laadlimiet."
         }
       },
       "notifications": {
@@ -265,7 +277,7 @@
           "mobile_notification_service": "Mobiele meldingsservice",
           "vehicle_soc_entity": "Vehicle Batterij SOC",
           "ev_battery_capacity_kwh": "EV Batterij Capaciteit (kWh)",
-          "ev_target_soc": "EV Doel SOC (%)"
+          "ev_target_soc": "Beschouw als vol bij (%)"
         },
         "data_description": {
           "enable_charger_notifications": "Schakel persistente meldingsbanners op de laadpaalstatuskaart in of uit.",
@@ -273,7 +285,7 @@
           "mobile_notification_service": "HA notify-service voor mobiele pushmeldingen (bijv. notify.mobile_app_uw_telefoon).",
           "vehicle_soc_entity": "Optionele sensor die het huidige laadniveau van het voertuig toont (0–100%).",
           "ev_battery_capacity_kwh": "Totale bruikbare capaciteit van de EV-accu in kWh.",
-          "ev_target_soc": "Doellaadniveau (%) waarbij SEM de EV als volledig geladen beschouwt."
+          "ev_target_soc": "Vanaf hier beschouwt SEM de auto als geladen. Dit is een definitie van \"vol\", geen laadlimiet."
         }
       },
       "battery_scheduler": {
@@ -289,7 +301,15 @@
           "battery_max_target_soc": "Maximale doel SOC",
           "battery_min_deficit_kwh": "Minimale tekortdrempel",
           "battery_pessimism_weight": "Voorspelling pessimisme",
-          "battery_force_charge_negative_price": "Geforceerd laden bij negatieve prijs"
+          "battery_force_charge_negative_price": "Geforceerd laden bij negatieve prijs",
+          "battery_charge_platform": "Batterij-laadplatform",
+          "battery_replan_interval_min": "Herplan-interval (min)",
+          "battery_prefer_consecutive_window": "Aaneengesloten laadvenster verkiezen"
+        },
+        "data_description": {
+          "battery_charge_platform": "Welke omvormer SEM aanstuurt voor geplande netladen. Kies Deye om de Deye-bedradingsstap te tonen.",
+          "battery_replan_interval_min": "Hoe vaak het laadschema opnieuw wordt berekend op basis van de nieuwste voorspelling en prijzen.",
+          "battery_prefer_consecutive_window": "Aan: goedkope uren in één blok (minder start/stop-cycli); uit: de afzonderlijk goedkoopste uren, ook verspreid."
         }
       },
       "ev_charger_edit": {
@@ -309,8 +329,20 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "Overschotprioriteit (1 = hoogste)",
           "ev_current_control_entity": "Number-entiteit voor laadstroom (Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Zonne-laadlimiet (kWh)",
-          "ev_target_soc_max": "Zonne-laadlimiet (SOC %)"
+          "daily_ev_target_max": "Nooit verder laden dan (kWh)",
+          "ev_target_soc_max": "Nooit verder laden dan (%)",
+          "daily_ev_target": "Minimaal garanderen (kWh)",
+          "vehicle_soc_entity": "Voertuig-batterij-SOC-sensor (optioneel)",
+          "vehicle_range_entity": "Voertuig-bereiksensor",
+          "ev_kwh_per_100km": "Voertuigverbruik (kWh/100km)",
+          "ev_target_soc": "Beschouw als vol bij (%)",
+          "ev_battery_capacity_kwh": "EV-batterijcapaciteit (kWh)",
+          "initial_current": "Startstroom (A)",
+          "ev_min_current": "Minimale laadstroom (A)",
+          "vehicle_min_current": "Voertuig minimale stroom (A)",
+          "ev_phase_switch_entity": "Faseomschakelings-entiteit (optioneel)",
+          "ev_phase_switch_value_1p": "Faseomschakeling: waarde voor 1-fase (optioneel)",
+          "ev_phase_switch_value_3p": "Faseomschakeling: waarde voor 3-fase (optioneel)"
         },
         "data_description": {
           "charger_name": "Weergavenaam voor deze laadpaal in het dashboard.",
@@ -326,8 +358,20 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "Volgorde van overschotverdeling over meerdere laadpalen. Lager getal = hogere prioriteit.",
           "ev_current_control_entity": "Number-entiteit die wordt gebruikt om de laadstroom (A) in te stellen. Gebruiken voor Wallbox, go-eCharger en vergelijkbare laadpalen.",
-          "daily_ev_target_max": "Zonne-overschot laadt tot deze waarde en stopt dan. Laat op vol staan om vrij op zon te laden.",
-          "ev_target_soc_max": "Zonne-overschot laadt tot deze SOC en stopt dan. Laat op 100% staan om vrij op zon te laden."
+          "daily_ev_target_max": "Zonneoverschot stopt hier met laden. Dit is een plafond, geen doel — laat het op vol om vrij op zon te laden.",
+          "ev_target_soc_max": "Zonneoverschot stopt hier met laden. Dit is een plafond, geen doel — laat op 100% om vrij op zon te laden.",
+          "daily_ev_target": "SEM laadt 's nachts bij uit het net zodat de auto 's ochtends minstens dit heeft. Dit is een ondergrens, geen limiet — de zon kan meer toevoegen. 0 = nooit het net gebruiken.",
+          "vehicle_soc_entity": "Optionele sensor die het huidige laadniveau van het voertuig toont (0–100%).",
+          "vehicle_range_entity": "Optionele echte bereiksensor. Anders wordt het bereik geschat op basis van SOC × capaciteit × efficiëntie.",
+          "ev_kwh_per_100km": "Gebruikt om het rijbereik te schatten wanneer er geen bereiksensor is geconfigureerd.",
+          "ev_target_soc": "Vanaf hier beschouwt SEM de auto als geladen. Dit is een definitie van \"vol\", geen laadlimiet.",
+          "ev_battery_capacity_kwh": "Totale bruikbare capaciteit van de EV-accu in kWh. Wordt gebruikt om het laadniveau en de laadtijd te schatten.",
+          "initial_current": "Laadstroom waarmee SEM begint voordat het opregelt naar het beschikbare overschot.",
+          "ev_min_current": "Hieronder pauzeert SEM het laden in plaats van de stroom verder te verlagen.",
+          "vehicle_min_current": "Stroomdrempel per voertuig. Het effectieve minimum is de hoogste van deze en de minimale laadstroom.",
+          "ev_phase_switch_entity": "Select/number/switch die de lader tussen 1- en 3-fasig laden omschakelt (go-e 'psm', KEBA X-serie, openWB). SEM observeert en valideert voorlopig alleen — automatisch omschakelen volgt in een latere release.",
+          "ev_phase_switch_value_1p": "Wat voor 1-fasig laden naar de omschakel-entiteit wordt geschreven — een select-optienaam, een getal of on/off. Vereist voor select-entiteiten; number-standaard is 1, switch-standaard off.",
+          "ev_phase_switch_value_3p": "Wat voor 3-fasig laden naar de omschakel-entiteit wordt geschreven — een select-optienaam, een getal of on/off. Vereist voor select-entiteiten; number-standaard is 3, switch-standaard on."
         }
       },
       "ev_charger_add": {
@@ -347,8 +391,19 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "Overschotprioriteit (1 = hoogste)",
           "ev_current_control_entity": "Number-entiteit voor laadstroom (Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Zonne-laadlimiet (kWh)",
-          "ev_target_soc_max": "Zonne-laadlimiet (SOC %)"
+          "daily_ev_target_max": "Nooit verder laden dan (kWh)",
+          "ev_target_soc_max": "Nooit verder laden dan (%)",
+          "daily_ev_target": "Minimaal garanderen (kWh)",
+          "vehicle_soc_entity": "Voertuig-batterij-SOC-sensor (optioneel)",
+          "vehicle_range_entity": "Voertuig-bereiksensor",
+          "ev_kwh_per_100km": "Voertuigverbruik (kWh/100km)",
+          "ev_target_soc": "Beschouw als vol bij (%)",
+          "ev_battery_capacity_kwh": "EV-batterijcapaciteit (kWh)",
+          "initial_current": "Startstroom (A)",
+          "ev_min_current": "Minimale laadstroom (A)",
+          "ev_phase_switch_entity": "Faseomschakelings-entiteit (optioneel)",
+          "ev_phase_switch_value_1p": "Faseomschakeling: waarde voor 1-fase (optioneel)",
+          "ev_phase_switch_value_3p": "Faseomschakeling: waarde voor 3-fase (optioneel)"
         },
         "data_description": {
           "charger_name": "Weergavenaam voor deze laadpaal in het dashboard.",
@@ -364,8 +419,19 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "Volgorde van overschotverdeling over meerdere laadpalen. Lager getal = hogere prioriteit.",
           "ev_current_control_entity": "Number-entiteit die wordt gebruikt om de laadstroom (A) in te stellen. Gebruiken voor Wallbox, go-eCharger en vergelijkbare laadpalen.",
-          "daily_ev_target_max": "Zonne-overschot laadt tot deze waarde en stopt dan. Laat op vol staan om vrij op zon te laden.",
-          "ev_target_soc_max": "Zonne-overschot laadt tot deze SOC en stopt dan. Laat op 100% staan om vrij op zon te laden."
+          "daily_ev_target_max": "Zonneoverschot stopt hier met laden. Dit is een plafond, geen doel — laat het op vol om vrij op zon te laden.",
+          "ev_target_soc_max": "Zonneoverschot stopt hier met laden. Dit is een plafond, geen doel — laat op 100% om vrij op zon te laden.",
+          "daily_ev_target": "SEM laadt 's nachts bij uit het net zodat de auto 's ochtends minstens dit heeft. Dit is een ondergrens, geen limiet — de zon kan meer toevoegen. 0 = nooit het net gebruiken.",
+          "vehicle_soc_entity": "Optionele sensor die het huidige laadniveau van het voertuig toont (0–100%).",
+          "vehicle_range_entity": "Optionele echte bereiksensor. Anders wordt het bereik geschat op basis van SOC × capaciteit × efficiëntie.",
+          "ev_kwh_per_100km": "Gebruikt om het rijbereik te schatten wanneer er geen bereiksensor is geconfigureerd.",
+          "ev_target_soc": "Vanaf hier beschouwt SEM de auto als geladen. Dit is een definitie van \"vol\", geen laadlimiet.",
+          "ev_battery_capacity_kwh": "Totale bruikbare capaciteit van de EV-accu in kWh. Wordt gebruikt om het laadniveau en de laadtijd te schatten.",
+          "initial_current": "Laadstroom waarmee SEM begint voordat het opregelt naar het beschikbare overschot.",
+          "ev_min_current": "Hieronder pauzeert SEM het laden in plaats van de stroom verder te verlagen.",
+          "ev_phase_switch_entity": "Select/number/switch die de lader tussen 1- en 3-fasig laden omschakelt (go-e 'psm', KEBA X-serie, openWB). SEM observeert en valideert voorlopig alleen — automatisch omschakelen volgt in een latere release.",
+          "ev_phase_switch_value_1p": "Wat voor 1-fasig laden naar de omschakel-entiteit wordt geschreven — een select-optienaam, een getal of on/off. Vereist voor select-entiteiten; number-standaard is 1, switch-standaard off.",
+          "ev_phase_switch_value_3p": "Wat voor 3-fasig laden naar de omschakel-entiteit wordt geschreven — een select-optienaam, een getal of on/off. Vereist voor select-entiteiten; number-standaard is 3, switch-standaard on."
         }
       },
       "pv_naming": {
@@ -425,19 +491,25 @@
         }
       },
       "settings_phase_guard_topology": {
-        "title": "Electrical topology",
-        "description": "Choose how the house load is supplied. In a hybrid installation, the grid and the inverter Load/EPS/Backup output can feed the house at the same time. The load inside the house can therefore be higher than the current through the main fuse. SEM monitors the two paths independently. This prerelease is diagnostic only and never acts on the result.",
+        "title": "Elektrische topologie",
+        "description": "Kies hoe de belasting van de woning wordt gevoed. Bij een hybride installatie kunnen het net en de Load/EPS/Backup-uitgang van de omvormer tegelijkertijd de woning voeden. De belasting in huis kan daardoor hoger zijn dan de stroom door de hoofdzekering. SEM bewaakt de twee paden onafhankelijk van elkaar. Actief ingrijpen is optioneel; controleer de metingen in de observatiemodus voordat u EV-regeling inschakelt.",
         "data": {
-          "phase_guard_topology": "Supply topology"
+          "phase_guard_topology": "Voedingstopologie",
+          "phase_guard_phase_count": "Aantal fasen"
         },
         "data_description": {
-          "phase_guard_topology": "Select Grid only for a conventional installation. Select Grid + hybrid inverter when loads are also supplied through a Load, EPS or Backup output."
+          "phase_guard_topology": "Selecteer Alleen net voor een conventionele installatie. Selecteer Net + hybride omvormer wanneer belastingen ook via een Load-, EPS- of Backup-uitgang worden gevoed.",
+          "phase_guard_phase_count": "Selecteer 1 voor een eenfasige voeding of 3 voor een driefasige voeding. Alleen de geselecteerde fasen zijn vereist en worden bewaakt."
         }
       },
       "settings_phase_guard": {
         "title": "Per-phase guard sensors",
-        "description": "Map the sensors for {topology}. Grid current is calculated per phase from absolute power divided by voltage, so export is handled safely. For a hybrid Load/EPS lane, select non-negative RMS current sensors. Missing, stale, invalid or negative readings fail closed. Observer Mode publishes diagnostics only; it sends no control commands.",
+        "description": "Wijs de sensoren toe voor {topology}. Voor een enkelfasige voeding is alleen L1 vereist. Voor een driefasige voeding selecteert u, indien beschikbaar, een volledige directe L1-L3 RMS-stroomfamilie; anders wordt de netstroom berekend als absoluut vermogen gedeeld door spanning. Voor een hybride Load/EPS-baan selecteert u niet-negatieve RMS-stroomsensoren voor de geconfigureerde fasen. Ontbrekende, verouderde, ongeldige of negatieve vereiste metingen falen veilig (fail closed). Observer Mode publiceert alleen diagnostiek; het stuurt geen besturingscommando's.",
         "data": {
+          "phase_guard_enforcement_enabled": "EV-laden stoppen wanneer fasegrenzen worden overschreden",
+          "phase_guard_notifications_enabled": "Fasebewakingsmeldingen verzenden",
+          "phase_guard_recovery_margin_a": "Veiligheidsmarge onder elke fasegrens",
+          "phase_guard_recovery_cycles": "Veilige metingen voordat het laden wordt hervat",
           "phase_guard_grid_limit_a": "Main-fuse limit per phase",
           "phase_guard_inverter_limit_a": "Inverter Load/EPS limit per phase",
           "phase_guard_max_age_s": "Maximum sensor age",
@@ -455,12 +527,15 @@
           "phase_guard_inverter_l3_current_entity": "Inverter Load/EPS L3 RMS current"
         },
         "data_description": {
+          "phase_guard_enforcement_enabled": "Als dit is ingeschakeld, worden alle beheerde EV-laders bij onveilige of verouderde metingen onmiddellijk uitgeschakeld om te voorkomen dat de hoofdzekering doorslaat. Standaard uitgeschakeld, zodat u de fasebewaking eerst in de observatiemodus kunt controleren.",
+          "phase_guard_recovery_margin_a": "Het laden blijft geblokkeerd totdat elke vereiste fase ten minste deze marge onder de eigen limiet ligt.",
+          "phase_guard_recovery_cycles": "Zoveel opeenvolgende geldige en veilige metingen zijn nodig voordat EV-laden weer mag worden ingeschakeld.",
           "phase_guard_grid_limit_a": "Maximum permitted grid current on each phase. Normally the main-fuse rating.",
           "phase_guard_inverter_limit_a": "Maximum permitted RMS current on each phase of the inverter Load/EPS/Backup output.",
           "phase_guard_max_age_s": "A reading older than this is treated as unsafe.",
-          "phase_guard_grid_l1_current_entity": "Optional direct non-negative RMS grid current in A. When direct current is used, all of L1-L3 are required.",
-          "phase_guard_grid_l2_current_entity": "Optional direct non-negative RMS grid current in A. When direct current is used, all of L1-L3 are required.",
-          "phase_guard_grid_l3_current_entity": "Optional direct non-negative RMS grid current in A. When direct current is used, all of L1-L3 are required.",
+          "phase_guard_grid_l1_current_entity": "Optionele directe, niet-negatieve RMS-netstroom in A. Als een directe bron wordt gebruikt, moeten alle geconfigureerde fasen worden opgegeven.",
+          "phase_guard_grid_l2_current_entity": "Optionele directe, niet-negatieve RMS-netstroom in A. Als een directe bron wordt gebruikt, moeten alle geconfigureerde fasen worden opgegeven.",
+          "phase_guard_grid_l3_current_entity": "Optionele directe, niet-negatieve RMS-netstroom in A. Als een directe bron wordt gebruikt, moeten alle geconfigureerde fasen worden opgegeven.",
           "phase_guard_grid_l1_power_entity": "Signed grid power for phase L1 in W. Import or export is accepted.",
           "phase_guard_grid_l2_power_entity": "Signed grid power for phase L2 in W. Import or export is accepted.",
           "phase_guard_grid_l3_power_entity": "Signed grid power for phase L3 in W. Import or export is accepted.",
@@ -471,7 +546,61 @@
           "phase_guard_inverter_l2_current_entity": "Non-negative RMS current for inverter Load/EPS phase L2.",
           "phase_guard_inverter_l3_current_entity": "Non-negative RMS current for inverter Load/EPS phase L3."
         }
+      },
+      "deye": {
+        "title": "Deye geforceerd netladen",
+        "description": "Sluit een Deye hybride omvormer aan voor gepland netladen. Waarnemersmodus staat standaard AAN en aansturing UIT, dus er wordt niets naar de omvormer geschreven tot je dit expliciet inschakelt.",
+        "data": {
+          "deye_grid_charge_switch": "Netladen-schakelaar (entiteit)",
+          "deye_charge_current_entity": "Laadstroom-numberentiteit (A)",
+          "deye_battery_voltage_entity": "Batterijspanning-sensor (entiteit)",
+          "deye_battery_voltage_max_age_s": "Batterijspanning max. leeftijd (s)",
+          "deye_max_charge_current_a": "Max. laadstroom (A)",
+          "deye_bms_max_charge_current_a": "BMS max. laadstroom (A)",
+          "deye_max_discharge_power": "Max. ontlaadvermogen (W)",
+          "deye_program_control": "Programma-tijdvakken beheren",
+          "deye_observer_mode": "Waarnemersmodus (alleen-lezen)",
+          "deye_actuation_enabled": "Aansturing inschakelen (naar omvormer schrijven)",
+          "deye_work_mode_control": "Werkmodus beheren",
+          "deye_work_mode_entity": "Werkmodus-select (entiteit)",
+          "deye_work_mode_load_first_option": "Werkmoduswaarde voor Load First",
+          "deye_work_mode_battery_first_option": "Werkmoduswaarde voor Battery First",
+          "deye_force_charge_work_mode": "Werkmodus tijdens geforceerd laden",
+          "deye_program_1_time": "Programma 1 — tijdvak-entiteit (time.*)",
+          "deye_program_1_soc": "Programma 1 — doel-SOC-numberentiteit",
+          "deye_program_1_charge": "Programma 1 — netladen-select (entiteit)",
+          "deye_program_2_time": "Programma 2 — tijdvak-entiteit (time.*)",
+          "deye_program_2_soc": "Programma 2 — doel-SOC-numberentiteit",
+          "deye_program_2_charge": "Programma 2 — netladen-select (entiteit)",
+          "deye_program_3_time": "Programma 3 — tijdvak-entiteit (time.*)",
+          "deye_program_3_soc": "Programma 3 — doel-SOC-numberentiteit",
+          "deye_program_3_charge": "Programma 3 — netladen-select (entiteit)",
+          "deye_program_4_time": "Programma 4 — tijdvak-entiteit (time.*)",
+          "deye_program_4_soc": "Programma 4 — doel-SOC-numberentiteit",
+          "deye_program_4_charge": "Programma 4 — netladen-select (entiteit)",
+          "deye_program_5_time": "Programma 5 — tijdvak-entiteit (time.*)",
+          "deye_program_5_soc": "Programma 5 — doel-SOC-numberentiteit",
+          "deye_program_5_charge": "Programma 5 — netladen-select (entiteit)",
+          "deye_program_6_time": "Programma 6 — tijdvak-entiteit (time.*)",
+          "deye_program_6_soc": "Programma 6 — doel-SOC-numberentiteit",
+          "deye_program_6_charge": "Programma 6 — netladen-select (entiteit)"
+        },
+        "data_description": {
+          "deye_bms_max_charge_current_a": "Optioneel door het BMS opgelegd maximum. 0 betekent geen BMS-limiet — het maximum van de omvormer geldt.",
+          "deye_observer_mode": "Indien AAN berekent en logt SEM zijn Deye-acties, maar schrijft nooit naar de omvormer.",
+          "deye_actuation_enabled": "Indien UIT schrijft SEM nooit naar de omvormer, zelfs als de waarnemersmodus ook uit staat. Beide poorten moeten toestaan voordat een commando wordt verzonden.",
+          "deye_max_charge_current_a": "Veilige bovengrens die SEM op de laadstroom-entiteit stuurt."
+        }
       }
+    },
+    "error": {
+      "service_not_found": "Notificatieservice niet gevonden. Controleer de servicenaam (bijv. notify.mobile_app_your_phone).",
+      "peak_warning_not_below_target": "Het waarschuwingsniveau moet onder de doel-pieklimiet liggen — het is de vroege waarschuwing dat de doelwaarde wordt benaderd.",
+      "peak_emergency_not_above_target": "Het noodniveau moet boven de doel-pieklimiet liggen — anders schakelt SEM verbruikers uit voordat de te beschermen limiet is bereikt.",
+      "heat_pump_partial_relays": "SG-Ready heeft BEIDE relais-entiteiten nodig. Stel beide relais in — of laat beide leeg en configureer alleen de klimaat-entiteit voor een klimaat-only instelpunt-boost.",
+      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities.",
+      "deye_work_mode_mapping_not_distinct": "Work Mode-aansturing heeft twee verschillende opties nodig — één voor Load First en één voor Battery First. Kies ze allebei, en niet tweemaal dezelfde.",
+      "deye_force_charge_work_mode_invalid": "Kies met welke Work Mode SEM de batterij geforceerd moet laden: Load First of Battery First."
     }
   },
   "entity": {
@@ -542,6 +671,9 @@
       "night_charging_status": {
         "name": "Nachtladen"
       },
+      "energy_plan": {
+        "name": "Energieplan"
+      },
       "battery_priority_status": {
         "name": "Batterijprioriteit"
       },
@@ -605,6 +737,9 @@
       "flow_battery_to_home_power": {
         "name": "Batterij naar Huis"
       },
+      "flow_battery_to_grid_power": {
+        "name": "Batterij naar Net"
+      },
       "flow_battery_to_ev_power": {
         "name": "Batterij naar EV"
       },
@@ -640,6 +775,9 @@
       },
       "flow_battery_to_home_energy": {
         "name": "Batterij naar Huis Energie"
+      },
+      "flow_battery_to_grid_energy": {
+        "name": "Batterij naar Net Energie"
       },
       "flow_battery_to_ev_energy": {
         "name": "Batterij naar EV Energie"
@@ -908,6 +1046,12 @@
       "lifetime_ev_solar_share": {
         "name": "Totaal EV Zonne Aandeel"
       },
+      "lifetime_ev_battery_share": {
+        "name": "Totaal EV Batterij Aandeel"
+      },
+      "lifetime_ev_grid_share": {
+        "name": "Totaal EV Net Aandeel"
+      },
       "vehicle_soc": {
         "name": "Voertuig SOC"
       },
@@ -1063,6 +1207,42 @@
       },
       "vpp_event": {
         "name": "VPP-gebeurtenis"
+      },
+      "heat_pump_energy_today": {
+        "name": "Warmtepomp vandaag"
+      },
+      "heat_pump_energy_month": {
+        "name": "Warmtepomp deze maand"
+      },
+      "heat_pump_energy_year": {
+        "name": "Warmtepomp dit jaar"
+      },
+      "heat_pump_energy_total": {
+        "name": "Warmtepomp totaal"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "Warmtepomp verschoven vandaag"
+      },
+      "daily_battery_charge_solar": {
+        "name": "Vandaag laden uit zon"
+      },
+      "daily_battery_charge_grid": {
+        "name": "Vandaag laden uit net"
+      },
+      "daily_battery_grid_cost": {
+        "name": "Vandaag kosten netladen"
+      },
+      "battery_stored_grid_share": {
+        "name": "Opgeslagen energie uit net"
+      },
+      "true_baseload_power": {
+        "name": "Werkelijke basislast"
+      },
+      "daily_true_baseload_energy": {
+        "name": "Werkelijke basislast vandaag"
+      },
+      "daily_total_consumption": {
+        "name": "Vandaag totaal verbruik"
       }
     },
     "binary_sensor": {
@@ -1109,6 +1289,9 @@
       },
       "vacation_mode": {
         "name": "Vakantiemodus"
+      },
+      "energy_plan_actuation": {
+        "name": "Energieplan-uitvoering"
       }
     },
     "number": {
@@ -1199,6 +1382,9 @@
       "ev_min_current": {
         "name": "{charger} Min. ampère"
       },
+      "ev_max_current": {
+        "name": "{charger} Max. ampère"
+      },
       "vehicle_min_current": {
         "name": "{charger} Voertuig min. ampère"
       },
@@ -1237,6 +1423,14 @@
           "min_plus_solar": "Mininmaal + Zon",
           "always_max": "Altijd (max)",
           "off": "Uit"
+        }
+      },
+      "phase_mode": {
+        "name": "{charger} Fasemodus",
+        "state": {
+          "auto": "Automatisch",
+          "1": "1-fase",
+          "3": "3-fase"
         }
       }
     }
@@ -1280,10 +1474,6 @@
     }
   },
   "issues": {
-    "ev_charger_not_configured": {
-      "title": "EV-lader niet geconfigureerd",
-      "description": "Er zijn geen sensoren voor de EV-lader geconfigureerd, dus EV-laadfuncties zijn niet beschikbaar. Voeg in de integratieopties een “verbonden”-sensor of een laadvermogenssensor toe om EV-laden in te schakelen."
-    },
     "sensor_unavailable": {
       "title": "Sensor niet beschikbaar",
       "description": "De sensor `{entity_id}` ({friendly_name}) is al {minutes}+ minuten niet beschikbaar. SEM kan deze niet meenemen in berekeningen totdat de sensor weer actief is. Controleer de bovenliggende integratie (Huawei modbus / Solcast / Forecast.Solar / uw omvormernetwerk). Deze melding verdwijnt automatisch zodra de sensor weer een geldige waarde rapporteert."
@@ -1330,15 +1520,31 @@
     },
     "soc_cap_unenforceable": {
       "title": "Laadlimiet van {target}% kan niet worden afgedwongen: {name}",
-      "description": "**{name}** is ingesteld op een procentueel laaddoel, maar je voertuig rapporteert op dit moment geen laadniveau, waardoor SEM niet kan stoppen bij **{target}%** — er wordt doorgeladen tot de auto zelf terugregelt (bijna vol).\n\nAls je dashboard een batterijpercentage toont, is dat SEM's *geschatte* SOC, die bewust genegeerd wordt voor de harde limiet (deze kan afwijken). Koppel een **echte voertuig-SOC-sensor** aan deze lader om de limiet af te dwingen (Configuratie → EV → Voertuig-SOC-entiteit). Deze reparatie verdwijnt automatisch zodra er weer een echte SOC-waarde beschikbaar is."
+      "description": "**{name}** heeft een laaddoel in procenten, maar uw voertuig meldt op dit moment geen laadtoestand — SEM kan daardoor niet *precies* bij **{target}%** stoppen.\n\nBlind laden doet SEM echter niet: vanaf de laatste echte meting van deze sessie telt het de werkelijk geleverde energie mee en stopt het zodra dat gemeten totaal uw doel bereikt — de overschrijding is alleen wat de auto sinds die meting heeft opgenomen. Is er in deze sessie helemaal geen echte meting binnengekomen (of is SEM tijdens het laden herstart), dan ontbreekt het ankerpunt en wordt er geladen tot de auto zelf bijna vol terugregelt.\n\nVoor een limiet die exact uitkomt, koppelt u een **echte voertuig-SOC-sensor** aan deze laadpaal (Configuratie → EV → Voertuig-SOC-entiteit). Het batterijpercentage op het dashboard is SEM's *geschatte* SOC, die het voor de harde limiet bewust negeert (die kan afwijken). Deze reparatie verdwijnt automatisch zodra er weer een echte SOC-meting beschikbaar is."
+    },
+    "unmanaged_charger_found": {
+      "title": "SEM vond een laadpunt dat het niet beheert",
+      "description": "Het apparaat **{name}** lijkt op een laadpunt, maar er is geen laadpunt geconfigureerd in SEM — SEM laat het dus met rust ({count} kandidaat(en) gevonden).\n\nVoeg het toe via Instellingen → Apparaten & Diensten → SEM → Configureren om laden met zon en goedkope tarieven te laten optimaliseren. Daarmee verschijnt ook het EV-tabblad met de laadmodi.\n\nIs dit geen laadpunt? Negeer deze melding — SEM stuurt het hoe dan ook niet aan."
+    },
+    "lovelace_yaml_mode": {
+      "title": "Lovelace in YAML-modus — voeg SEM-kaartbronnen toe",
+      "description": "Home Assistant draait Lovelace in YAML-modus, dus SEM kan zijn dashboardkaarten niet automatisch registreren en het SEM-dashboard toont \"Configuratiefout\"-kaarten.\n\nVoeg dit toe in `configuration.yaml` onder `lovelace:` → `resources:`, herstart Home Assistant en doe een harde herlaadbeurt (Ctrl+Shift+R):\n\n```yaml\n{resources}\n```\n\nDeze melding verdwijnt zodra de bronnen geladen zijn."
+    },
+    "charger_control_entity_broken": {
+      "title": "Besturingsentiteit van de laadpaal werkt niet: {name}",
+      "description": "SEM gebruikt **`{entity_id}`** om {capability} op **{name}**, maar die entiteit is `{reason}` — elke opdracht komt nergens aan. Controleer de entiteit in **Ontwikkelhulpmiddelen → Statussen** en herstel deze bij de bron, of wijs SEM opnieuw aan via **Instellingen → Apparaten & diensten → SEM → Configureren → Laadpaal → Bewerken**."
+    },
+    "battery_force_discharge_unsupported": {
+      "title": "Battery power setpoint cannot be written: {entity_id}",
+      "description": "SEM tried to write **{entity_id}** and the device refused every time: `{error}`.\n\nThe entity exists and SEM is addressing it correctly — the inverter's firmware simply does not implement writing that register. This usually means the entity you picked for *forcible discharge* in SEM's battery settings is readable but not writable on your hardware.\n\nSEM has stopped trying, so this will no longer fill your log. Two things follow: the routine safety write SEM makes when returning the battery to normal operation is skipped (harmless — there was nothing set to clear), and **battery-to-grid export cannot run** on this battery. Charging, discharge limits and everyday operation are unaffected.\n\n**If you do not use battery-to-grid export**, clear the forcible-discharge entity in SEM's battery settings and this notice goes away. **If you expected it to work**, the entity is likely the wrong one — or your inverter does not support commanded export. A restart makes SEM try again, so a firmware update or a corrected entity is picked up on its own."
     }
   },
   "selector": {
     "phase_guard_topology": {
       "options": {
-        "disabled": "Disabled",
-        "grid_only": "Grid supply only",
-        "hybrid_load_port": "Grid + hybrid inverter Load/EPS output"
+        "disabled": "Uitgeschakeld",
+        "grid_only": "Alleen netvoeding",
+        "hybrid_load_port": "Net + Load/EPS-uitgang van de hybride omvormer"
       }
     }
   }

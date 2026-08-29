@@ -26,15 +26,10 @@ from custom_components.solar_energy_management.coordinator.battery_adapters impo
 )
 from custom_components.solar_energy_management.coordinator.charger_types import (
     BatteryDecision,
-    BatteryFlows,
     BatteryIntent,
-    BatteryPower,
     BatteryRuntime,
     BatteryView,
     FleetContext,
-    InverterFlows,
-    InverterPower,
-    InverterRuntime,
 )
 from custom_components.solar_energy_management.coordinator.decide_battery import (
     decide_battery,
@@ -82,41 +77,38 @@ def _sched(state, **kw):
 
 
 # ─────────────────────────────────────────────────────────────────
-# I13 — InverterRuntime / BatteryRuntime shape
+# I13 — BatteryRuntime shape
+#
+# (#771) ``InverterRuntime`` is gone, and so are BatteryRuntime's
+# ``daily_charge_kwh`` / ``daily_discharge_kwh``. Nothing ever wrote
+# them: the coordinator builds this runtime from a power reading, and
+# there was no per-battery energy counter behind it. A field that is
+# 0.0 on every install is a measurement-shaped default (#755 contract
+# 1), and a test asserting that default was a theorem about the
+# dataclass, not a check on any behaviour. The pin that the surface
+# stays deleted lives in test_771_ledger_partitions.py.
 # ─────────────────────────────────────────────────────────────────
 
 class TestRuntimeTypes:
-    def test_inverter_runtime_defaults(self):
-        rt = InverterRuntime(inverter_id="sun2000")
-        assert rt.inverter_id == "sun2000"
-        assert rt.daily_kwh == 0.0
-        assert rt.available is True
-
     def test_battery_runtime_defaults(self):
         rt = BatteryRuntime(battery_id="luna")
         assert rt.battery_id == "luna"
-        assert rt.daily_charge_kwh == 0.0
-        assert rt.daily_discharge_kwh == 0.0
         assert rt.capacity_kwh == 0.0
         assert rt.available is True
 
 
 # ─────────────────────────────────────────────────────────────────
 # I15 / I16 — Per-device flow types
+#
+# (#771) ``TestFlowTypes`` is gone with ``InverterFlows`` /
+# ``BatteryFlows``. Its two tests asserted that a frozen dataclass
+# raises FrozenInstanceError on assignment — a property of
+# ``@dataclass(frozen=True)``, not of anything SEM computes. Nothing
+# ever constructed either type in production and ``PowerFlows`` had no
+# field to hold them, so the per-device attribution they advertised was
+# never performed. The live per-device flow slice is ``ChargerFlows``,
+# reconciled against the fleet rows in test_771_ledger_partitions.py.
 # ─────────────────────────────────────────────────────────────────
-
-class TestFlowTypes:
-    def test_inverter_flows_frozen(self):
-        from dataclasses import FrozenInstanceError
-        f = InverterFlows(inverter_id="sun2000", solar_to_home=2000.0)
-        with pytest.raises(FrozenInstanceError):
-            f.solar_to_home = 0.0  # type: ignore[misc]
-
-    def test_battery_flows_frozen(self):
-        from dataclasses import FrozenInstanceError
-        f = BatteryFlows(battery_id="luna", battery_to_home=1500.0)
-        with pytest.raises(FrozenInstanceError):
-            f.battery_to_home = 0.0  # type: ignore[misc]
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -469,56 +461,17 @@ class TestActuateDispatch:
 # Adapter factory
 # ─────────────────────────────────────────────────────────────────
 
-class TestEnergyTotalsViews:
-    """EnergyTotals daily_*_view @property accessors compute from
-    per-device dicts when populated, fall back to legacy fields
-    otherwise."""
-
-    def test_daily_solar_view_empty_dict_falls_back(self):
-        from custom_components.solar_energy_management.coordinator.types import (
-            EnergyTotals,
-        )
-        e = EnergyTotals(daily_solar=15.0)
-        assert e.daily_solar_view == 15.0
-
-    def test_daily_solar_view_sums_inverters(self):
-        from custom_components.solar_energy_management.coordinator.types import (
-            EnergyTotals,
-        )
-        e = EnergyTotals(daily_solar=0.0)
-        e.per_inverter["a"] = InverterRuntime(inverter_id="a", daily_kwh=8.0)
-        e.per_inverter["b"] = InverterRuntime(inverter_id="b", daily_kwh=5.5)
-        assert e.daily_solar_view == pytest.approx(13.5)
-
-    def test_daily_battery_charge_view_sums(self):
-        from custom_components.solar_energy_management.coordinator.types import (
-            EnergyTotals,
-        )
-        e = EnergyTotals(daily_battery_charge=0.0)
-        e.per_battery["a"] = BatteryRuntime(battery_id="a", daily_charge_kwh=4.0)
-        e.per_battery["b"] = BatteryRuntime(battery_id="b", daily_charge_kwh=2.5)
-        assert e.daily_battery_charge_view == pytest.approx(6.5)
-
-    def test_daily_battery_discharge_view_sums(self):
-        from custom_components.solar_energy_management.coordinator.types import (
-            EnergyTotals,
-        )
-        e = EnergyTotals()
-        e.per_battery["a"] = BatteryRuntime(battery_id="a", daily_discharge_kwh=3.0)
-        e.per_battery["b"] = BatteryRuntime(battery_id="b", daily_discharge_kwh=1.2)
-        assert e.daily_battery_discharge_view == pytest.approx(4.2)
-
-    def test_views_invariant_legacy_field_matches_when_consistent(self):
-        """When sensor_reader populates BOTH legacy field + dict
-        consistently, the view equals the field. Pinned so a future
-        refactor can't drift them."""
-        from custom_components.solar_energy_management.coordinator.types import (
-            EnergyTotals,
-        )
-        e = EnergyTotals(daily_solar=20.0)
-        e.per_inverter["a"] = InverterRuntime(inverter_id="a", daily_kwh=12.0)
-        e.per_inverter["b"] = InverterRuntime(inverter_id="b", daily_kwh=8.0)
-        assert e.daily_solar_view == e.daily_solar == 20.0
+# (#771) ``TestEnergyTotalsViews`` lived here and is gone with the
+# surface it tested. The five tests populated ``EnergyTotals.per_inverter``
+# / ``per_battery`` by hand and then asserted the ``daily_*_view``
+# properties summed them — but no production code ever wrote to either
+# dict, so the tests were the only writer and the properties always
+# returned the legacy fallback in the field. #771 asked for the
+# per-device rows to reconcile against the fleet identity; two of the
+# three rows it named had no producer at all, so they were deleted
+# rather than reconciled. See test_771_ledger_partitions.py for the
+# ratchet that keeps them deleted, and for the checks on the rows that
+# ARE real (per-charger, per-string).
 
 
 class TestAdapterFactory:

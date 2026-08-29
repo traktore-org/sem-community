@@ -4,12 +4,11 @@ Pure logic — no HomeAssistant. Covers deadline scaling (short forces higher
 current, impossible warns, min/max clamp) and tariff gating (charge when cheap,
 wait when waiting still meets Min, charge anyway when Min would be missed).
 """
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pytest
 
 from custom_components.solar_energy_management.coordinator.ev_tariff_planner import (
-    NightChargePlan,
     plan_night_charge,
     resolve_deadline,
 )
@@ -153,118 +152,24 @@ class TestDeadlineScaling:
 # --------------------------------------------------------------------------
 # Tariff gating (#247)
 # --------------------------------------------------------------------------
-class TestTariffGating:
-    def test_no_tariff_no_wait(self):
-        cheap = [datetime(2026, 5, 27, h) for h in (1, 2, 3)]
-        p = _plan(tariff_optimized=False, cheap_slots=cheap)
-        assert not p.should_wait_for_cheap
-
-    def test_no_price_data_no_wait(self):
-        p = _plan(tariff_optimized=True, cheap_slots=None)
-        assert not p.should_wait_for_cheap
-
-    def test_now_cheap_charges(self):
-        # 22:00 included in cheap slots → charge now.
-        cheap = [datetime(2026, 5, 26, 22), datetime(2026, 5, 26, 23)]
-        p = _plan(tariff_optimized=True, cheap_slots=cheap)
-        assert not p.should_wait_for_cheap
-        assert "cheap window" in p.reason
-
-    def test_not_cheap_can_wait(self):
-        # Cheap window 01:00-03:00 ahead, only 10 kWh needed → can wait.
-        cheap = [datetime(2026, 5, 27, h) for h in (1, 2, 3)]
-        p = _plan(tariff_optimized=True, cheap_slots=cheap)
-        assert p.should_wait_for_cheap
-        assert p.next_cheap_start == datetime(2026, 5, 27, 1)
-
-    def test_min_guaranteed_when_cheap_insufficient(self):
-        # Only 1 cheap hour at 06:00 (≈22 kWh max), need 30 kWh by 07:00 → can't
-        # wait, must charge now to guarantee Min regardless of price.
-        cheap = [datetime(2026, 5, 27, 6)]
-        p = _plan(remaining_to_min_kwh=30.0, tariff_optimized=True, cheap_slots=cheap)
-        assert not p.should_wait_for_cheap
-        assert "guarantee min" in p.reason
-
-    def test_unreachable_does_not_also_wait(self):
-        cheap = [datetime(2026, 5, 27, h) for h in (1, 2)]
-        p = _plan(
-            remaining_to_min_kwh=100.0, target_time="02:00",
-            tariff_optimized=True, cheap_slots=cheap,
-        )
-        assert not p.should_wait_for_cheap
-        assert not p.reachable
-
-    def test_partial_slot_before_deadline_not_overcounted(self):
-        # One cheap slot starts 02:00 (ends 03:00) but deadline is 02:30 → only
-        # 0.5h usable. At 22A*0.69kW=15.2kW that's ~7.6 kWh deliverable. Need 12
-        # kWh → cannot wait (would miss the deadline). Regression for review #1.
-        now = datetime(2026, 5, 27, 1, 0, 0)  # 01:00
-        cheap = [datetime(2026, 5, 27, 2, 0)]  # 02:00–03:00
-        p = plan_night_charge(
-            now=now, remaining_to_min_kwh=12.0, min_amps=6, max_amps=22,
-            watts_per_amp=WPA, target_time="02:30", night_end="07:00",
-            tariff_optimized=True, cheap_slots=cheap,
-        )
-        assert not p.should_wait_for_cheap
-
-    def test_full_slot_before_deadline_can_wait(self):
-        # Same slot but deadline 03:00 → full 1h usable (~15 kWh) ≥ 12 → can wait.
-        now = datetime(2026, 5, 27, 1, 0, 0)
-        cheap = [datetime(2026, 5, 27, 2, 0)]
-        p = plan_night_charge(
-            now=now, remaining_to_min_kwh=12.0, min_amps=6, max_amps=22,
-            watts_per_amp=WPA, target_time="03:00", night_end="07:00",
-            tariff_optimized=True, cheap_slots=cheap,
-        )
-        assert p.should_wait_for_cheap
-
-    def test_next_cheap_surfaced_even_when_charging(self):
-        # Now cheap but the next window start is still reported for the card.
-        cheap = [datetime(2026, 5, 26, 22), datetime(2026, 5, 27, 2)]
-        p = _plan(tariff_optimized=True, cheap_slots=cheap)
-        assert p.next_cheap_start is not None
-
-
 class TestPeakAwareRate:
-    """#274/C1: wait/reachability sized at the realistic peak-managed rate."""
+    """#274/C1: reachability sized at the realistic peak-managed rate.
 
-    def test_peak_managed_rate_blocks_unfillable_wait(self):
-        # At max rate, 2 cheap hours cover 10 kWh and we'd wait. At the peak-
-        # managed rate (7 A ≈ 4.8 kW), 2 h ≈ 9.6 kWh < 10 → must NOT wait.
-        cheap = [datetime(2026, 5, 27, h) for h in (1, 2)]
-        at_max = _plan(remaining_to_min_kwh=10.0, tariff_optimized=True, cheap_slots=cheap)
-        assert at_max.should_wait_for_cheap
-        peak_aware = _plan(remaining_to_min_kwh=10.0, tariff_optimized=True,
-                           cheap_slots=cheap, peak_managed_amps=7)
-        assert not peak_aware.should_wait_for_cheap
-
-    def test_peak_managed_rate_allows_fillable_wait(self):
-        cheap = [datetime(2026, 5, 27, h) for h in (1, 2, 3)]  # 3h*4.8≈14.5 ≥ 10
-        p = _plan(remaining_to_min_kwh=10.0, tariff_optimized=True,
-                  cheap_slots=cheap, peak_managed_amps=7)
-        assert p.should_wait_for_cheap
+    (#638 one-gate C3) The wait halves of this family died with the
+    tariff-gating block — waiting is the overlay's job now. What remains
+    is the guarantee math: reachability at the peak-managed rate, the
+    opt-in unreachable warning, and the forcing deadline using max.
+    """
 
     def test_non_forcing_unreachable_warns_only_when_opted_in(self):
         # 60 kWh by 07:00 (9h) at 7 A ≈ 4.8 kW → ~43 kWh < 60 → unreachable.
         warned = _plan(remaining_to_min_kwh=60.0, tariff_optimized=True,
-                       cheap_slots=[NOW + timedelta(hours=2)], peak_managed_amps=7)
+                       peak_managed_amps=7)
         assert not warned.reachable
         assert warned.should_warn_unreachable
         quiet = _plan(remaining_to_min_kwh=60.0, tariff_optimized=False, peak_managed_amps=7)
         assert not quiet.reachable
         assert not quiet.should_warn_unreachable  # never opted in → no nag
-
-    def test_stale_past_cheap_slots_dropped(self):
-        past = NOW - timedelta(hours=2)     # 20:00, already ended
-        future = NOW + timedelta(hours=2)   # 00:00 next day
-        p = _plan(remaining_to_min_kwh=5.0, tariff_optimized=True,
-                  cheap_slots=[past, future], peak_managed_amps=10)
-        assert p.next_cheap_start == future
-
-    def test_next_cheap_start_none_when_all_past(self):
-        past = [NOW - timedelta(hours=h) for h in (2, 3)]
-        p = _plan(remaining_to_min_kwh=5.0, tariff_optimized=True, cheap_slots=past)
-        assert p.next_cheap_start is None
 
     def test_forcing_deadline_still_uses_max_rate(self):
         # A forcing deadline overrides peak → reachability uses max, not peak.
@@ -274,38 +179,3 @@ class TestPeakAwareRate:
                   peak_managed_amps=6)
         assert p.deadline_active
         assert p.reachable
-
-
-class TestLookaheadCappedAtDeadline:
-    """#281 / Reviewer D1 — caller must NOT pass cheap slots from past the
-    deadline. Verified at the planner level: when only post-deadline slots
-    arrive, deliverable=0 and the planner correctly falls back to charge-now.
-
-    This pins the *symptom* the caller fix prevents — if anyone re-broadens
-    the lookahead, this test still passes (planner is robust), but the new
-    test_ev_deadline_tariff.py case (`test_cheap_window_capped_pre_deadline`)
-    pins the *caller* behaviour."""
-
-    def test_post_deadline_cheap_slots_dont_block_min(self):
-        # NOW = 22:00 on 2026-05-26, deadline 07:00 on 2026-05-27.
-        # Cheapest hours globally are 08:00–10:00 on 2026-05-27 (post-deadline).
-        # If those leak through, the planner clips them to 0 deliverable kWh
-        # and should_wait_for_cheap must NOT fire — otherwise Min would be missed.
-        tomorrow = NOW.date() + timedelta(days=1)
-        cheap = [
-            datetime.combine(tomorrow, datetime.min.time()).replace(hour=8),
-            datetime.combine(tomorrow, datetime.min.time()).replace(hour=9),
-        ]
-        plan = _plan(
-            remaining_to_min_kwh=8.5,
-            cheap_slots=cheap,
-            tariff_optimized=True,
-        )
-        assert plan.should_wait_for_cheap is False, (
-            "post-deadline-only cheap slots must NOT trigger wait — would "
-            "miss Min entirely"
-        )
-        # Reason should call out the shortage so it's debuggable in logs
-        assert "not enough cheap hours" in plan.reason.lower(), (
-            f"expected shortage reason, got: {plan.reason!r}"
-        )

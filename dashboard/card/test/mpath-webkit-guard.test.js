@@ -29,11 +29,12 @@ import { dirname, join } from 'node:path';
 const here = dirname(fileURLToPath(import.meta.url));
 const cardRoot = join(here, '..');
 
-// All hand-written card sources that emit SVG (the vanilla top-level card and
-// every Lit source under src/). `dist/` is generated, so it's covered
-// transitively — if a source is clean, the built bundle is too.
+// All hand-written card sources that emit SVG — every Lit source under src/.
+// `dist/` is generated, so it's covered transitively: if a source is clean,
+// the built bundle is too. (#784 retired the last vanilla top-level card, so
+// src/ is now the whole surface.)
 function cardSourceFiles() {
-    const files = [join(cardRoot, 'sem-system-diagram-card.js')];
+    const files = [];
     const walk = (dir) => {
         for (const ent of readdirSync(dir, { withFileTypes: true })) {
             const p = join(dir, ent.name);

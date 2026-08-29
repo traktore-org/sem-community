@@ -25,7 +25,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from custom_components.solar_energy_management.hardware_detection import (
     discover_pv_strings_from_registry,

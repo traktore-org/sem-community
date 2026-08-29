@@ -32,7 +32,6 @@ pytestmark = pytest.mark.skipif(
     reason="pytest-homeassistant-custom-component not installed; CI runs these",
 )
 
-import homeassistant.util.dt as dt_util
 
 from custom_components.solar_energy_management.const import DOMAIN
 

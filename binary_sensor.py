@@ -16,10 +16,25 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
 from .coordinator import SEMCoordinator
 
 type SEMConfigEntry = ConfigEntry[SEMCoordinator]
+
+
+def coarse_cycles(n) -> int:
+    """(#829) Exact for the first five cycles (the diagnosis window #589 pins),
+    then rounded DOWN to one significant figure: 5, 10, 20 … 3000. A standing
+    mismatch stops writing a state row per cycle while staying legible."""
+    try:
+        n = int(n or 0)
+    except (TypeError, ValueError):
+        return 0
+    if n <= 5:
+        return n
+    if n < 10:
+        return 5
+    mag = 10 ** (len(str(n)) - 1)
+    return (n // mag) * mag
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -180,7 +195,10 @@ class SEMSolarBinarySensor(CoordinatorEntity, BinarySensorEntity):
             return None
         return {
             "subsystem": self.coordinator.data.get("layer_mismatch_subsystem"),
-            "persisted_cycles": self.coordinator.data.get("layer_mismatch_cycles", 0),
+            # (#829) exact while diagnosing, coarse once standing — a per-cycle
+            # counter on attributes wrote a row every cycle the fault persisted.
+            "persisted_cycles": coarse_cycles(
+                self.coordinator.data.get("layer_mismatch_cycles", 0)),
         }
 
     @property

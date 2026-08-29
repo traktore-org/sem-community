@@ -37,16 +37,14 @@
       },
       "hardware": {
         "title": "Hardware",
-        "description": "Two final values that depend on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n• Peak Power Limit — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
+        "description": "One final value depends on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
         "data": {
           "battery_capacity_kwh": "Capacità batteria domestica (kWh)",
-          "target_peak_limit": "Limite di potenza di picco (kW)",
           "generate_dashboard_on_install": "Genera ora la dashboard SEM (riavvia HA)",
           "diagram_style": "Stile del diagramma di sistema"
         },
         "data_description": {
           "battery_capacity_kwh": "Capacità utilizzabile totale della tua batteria domestica (NON quella del VE) in kWh. Usata dalla strategia di carica basata sulle previsioni per stimare quanta batteria può compensare un deficit solare. Controlla le specifiche del tuo inverter.",
-          "target_peak_limit": "Massimo dei kW consentiti dal tuo contratto di rete prima che SEM inizi il distacco dei carichi. Per le tariffe basate sulla potenza impegnata tipicamente 3–5 kW; altrimenti imposta il valore del tuo interruttore diviso 4 per lasciare margine.",
           "generate_dashboard_on_install": "Se attivata, SEM crea la dashboard Lovelace subito dopo la fine di questo passo e poi riavvia Home Assistant ~5 s dopo, così la nuova dashboard diventa visibile. Puoi sempre rieseguirla manualmente in seguito tramite il servizio solar_energy_management.generate_dashboard.",
           "diagram_style": "Scegli quale diagramma di sistema usare nella scheda Home. 'SEM' usa il diagramma animato integrato. 'K-Flow' usa la scheda K-Flow HACS (da installare separatamente)."
         }
@@ -66,7 +64,7 @@
           "mobile_notification_service": "Servizio di notifica mobile",
           "vehicle_soc_entity": "SOC batteria veicolo",
           "ev_battery_capacity_kwh": "Capacità batteria VE (kWh)",
-          "ev_target_soc": "SOC obiettivo VE (%)"
+          "ev_target_soc": "Considera pieno al (%)"
         },
         "data_description": {
           "ev_connected_sensor": "Sensore binario che riporta se la spina del veicolo è attualmente collegata.",
@@ -80,16 +78,14 @@
           "mobile_notification_service": "Servizio notify di HA per le push mobili (es. notify.mobile_app_your_phone).",
           "vehicle_soc_entity": "Sensore opzionale che riporta lo stato di carica attuale del veicolo (0–100%).",
           "ev_battery_capacity_kwh": "Capacità utilizzabile totale della batteria del VE in kWh. Usata per stimare il SOC e il tempo di carica.",
-          "ev_target_soc": "SOC obiettivo (%) al quale SEM considera il VE completamente carico."
+          "ev_target_soc": "Da qui SEM considera l'auto carica. È una definizione di \"pieno\", non un limite di ricarica."
         }
       }
     },
     "error": {
       "unknown": "Si è verificato un errore imprevisto. Riprova.",
       "entity_not_found": "Entità non trovata. Verifica che l'ID entità esista.",
-      "service_not_found": "Servizio di notifica non trovato. Verifica il nome del servizio (ad es. notify.mobile_app_your_phone).",
-      "heat_pump_partial_relays": "SG-Ready richiede ENTRAMBE le entità relè. Imposta entrambi i relè — oppure lasciali entrambi vuoti e configura solo l'entità climate per il boost del setpoint in modalità solo-climate.",
-      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities."
+      "service_not_found": "Servizio di notifica non trovato. Verifica il nome del servizio (ad es. notify.mobile_app_your_phone)."
     },
     "abort": {
       "already_configured": "Solar Energy Management è già configurato. È consentita una sola istanza.",
@@ -111,9 +107,10 @@
           "ev_total_energy_sensor": "Contatore energia totale VE (opzionale)",
           "vehicle_soc_entity": "Sensore SOC batteria veicolo (opzionale)",
           "ev_battery_capacity_kwh": "Capacità batteria VE (kWh)",
-          "ev_target_soc": "SOC obiettivo VE (%)",
-          "daily_ev_target_max": "Limite di carica solare (kWh)",
-          "ev_target_soc_max": "Limite di carica solare (SOC %)",
+          "ev_charger_efficiency": "Efficienza del caricatore (%)",
+          "ev_target_soc": "Considera pieno al (%)",
+          "daily_ev_target_max": "Non caricare oltre (kWh)",
+          "ev_target_soc_max": "Non caricare oltre (%)",
           "vehicle_range_entity": "Sensore di autonomia del veicolo",
           "ev_kwh_per_100km": "Consumo del veicolo (kWh/100km)"
         },
@@ -126,9 +123,10 @@
           "ev_total_energy_sensor": "Contatore cumulativo opzionale in kWh dell'energia erogata al veicolo.",
           "vehicle_soc_entity": "Sensore opzionale che riporta lo stato di carica attuale del veicolo (0–100%).",
           "ev_battery_capacity_kwh": "Capacità utilizzabile totale della batteria del VE in kWh. Usata per stimare il SOC e il tempo di carica.",
-          "ev_target_soc": "SOC obiettivo (%) al quale SEM considera il VE completamente carico.",
-          "daily_ev_target_max": "Il surplus solare carica fino a questo valore, poi si ferma. Lascia al massimo per caricare liberamente dal sole.",
-          "ev_target_soc_max": "Il surplus solare carica fino a questo SOC, poi si ferma. Lascia al 100% per caricare liberamente dal sole.",
+          "ev_charger_efficiency": "Quota dell'energia CA misurata che arriva alla batteria. Riducila se la stima del SOC anticipa il veicolo. Di norma 85-95%, meno in monofase o con il freddo.",
+          "ev_target_soc": "Da qui SEM considera l'auto carica. È una definizione di \"pieno\", non un limite di ricarica.",
+          "daily_ev_target_max": "Il surplus solare smette di caricare qui. È un tetto, non un obiettivo — lascialo al massimo per caricare liberamente dal sole.",
+          "ev_target_soc_max": "Il surplus solare smette di caricare qui. È un tetto, non un obiettivo — lascia al 100% per caricare liberamente dal sole.",
           "ev_kwh_per_100km": "Usato per stimare l’autonomia quando non è configurato un sensore di autonomia.",
           "vehicle_range_entity": "Sensore di autonomia reale opzionale. Altrimenti l’autonomia è stimata da SOC × capacità × efficienza."
         }
@@ -140,7 +138,7 @@
           "update_interval": "Intervallo di aggiornamento (secondi)",
           "battery_priority_soc": "SOC priorità batteria (%)",
           "min_solar_power": "Potenza solare minima — produzione FV grezza (W)",
-          "daily_ev_target": "Obiettivo giornaliero VE (kWh)",
+          "daily_ev_target": "Garantire almeno (kWh)",
           "battery_assist_max_power": "Potenza max assistenza batteria (W)",
           "battery_capacity_kwh": "Capacità batteria (kWh)",
           "battery_discharge_protection_enabled": "Attiva la protezione da scarica della batteria",
@@ -153,7 +151,7 @@
           "smart_night_charging": "Forecast Night Reduction",
           "vehicle_soc_entity": "SOC batteria veicolo",
           "ev_battery_capacity_kwh": "Capacità batteria VE (kWh)",
-          "ev_target_soc": "SOC obiettivo VE (%)",
+          "ev_target_soc": "Considera pieno al (%)",
           "battery_buffer_soc": "Confine Zona 2/3 — SOC buffer batteria (%)",
           "battery_auto_start_soc": "Confine Zona 3/4 — SOC di auto-avvio batteria (%)",
           "battery_discharge_control_entity": "Entità di controllo scarica batteria (opzionale)",
@@ -161,7 +159,8 @@
           "legionella_target_temp": "Obiettivo disinfezione legionella (°C)",
           "legionella_interval_hours": "Ore massime tra i cicli di disinfezione",
           "diagram_style": "Stile del diagramma di sistema",
-          "battery_assist_min_surplus": "Assistenza batteria – surplus solare min. (W)"
+          "battery_assist_min_surplus": "Assistenza batteria – surplus solare min. (W)",
+          "grid_sign_invert": "Inverti il segno della potenza di rete"
         },
         "data_description": {
           "update_interval": "Ogni quanto il coordinatore legge i sensori e regola l'hardware. 10 s garantisce l'integrazione energetica più accurata; valori superiori a 30 s sottostimano l'energia. Intervallo 10–60 s.",
@@ -169,7 +168,7 @@
           "battery_buffer_soc": "Confine Zona 2 → Zona 3. Sopra questo SOC la batteria può scaricarsi per compensare i deficit solari mentre carica il VE. Predefinito 70 %.",
           "battery_auto_start_soc": "Confine Zona 3 → Zona 4. Sopra questo SOC il VE può iniziare a caricare anche senza eccedenza solare, prelevando dalla batteria. Predefinito 90 %.",
           "min_solar_power": "Soglia di produzione FV grezza — la potenza dei pannelli sotto la quale «il solare è attivo» è falso: solar_only non si avvia e la protezione da deficit profondo la tratta come oscurità (la carica si arresta quindi rapidamente invece di compensare dalla rete). Questa è produzione GREZZA, NON surplus — a differenza di «Assistenza batteria – surplus solare min.» (solare − casa), che decide quando la batteria domestica può aiutare. Predefinito 1000 W; mantenerlo sotto il minimo hardware del caricatore EV (~4140 W trifase, ~1380 W monofase).",
-          "daily_ev_target": "Obiettivo in kWh al giorno per la carica notturna dalla rete. Imposta 0 per disattivare completamente la carica notturna.",
+          "daily_ev_target": "SEM ricarica dalla rete di notte perché l'auto abbia almeno questo al mattino. È un minimo, non un limite — il sole può aggiungere altro. 0 = non usare mai la rete.",
           "battery_assist_max_power": "Potenza massima che la batteria domestica può scaricare per assistere il VE nelle Zone 3/4. Predefinito 4500 W.",
           "battery_capacity_kwh": "Capacità utilizzabile totale della batteria domestica (NON la batteria del VE — quella è un campo separato nel passo VE). Usata dalla strategia di carica basata sulle previsioni.",
           "battery_discharge_protection_enabled": "Se ATTIVA, SEM limita la soglia di scarica dell'inverter durante la carica notturna del VE, così la batteria domestica alimenta solo la casa (non il VE).",
@@ -185,23 +184,28 @@
           "hot_water_solar_target": "Temperatura obiettivo (°C) per il riscaldamento dell'acqua calda assistito dal solare. SEM attiva il boiler quando è disponibile un'eccedenza.",
           "legionella_target_temp": "Temperatura (°C) che l'impianto di acqua calda deve raggiungere durante un ciclo di disinfezione anti-legionella.",
           "legionella_interval_hours": "Ore massime tra i cicli di disinfezione anti-legionella prima che SEM forzi un riscaldamento.",
-          "battery_assist_min_surplus": "Surplus solare reale minimo prima che la batteria domestica possa contribuire a caricare l’EV — in qualsiasi modalità di ricarica. Al di sotto, la batteria è riservata alla casa (l’auto preleva da rete + solare). Predefinito 1200 W. Imposta 0 per far sì che la batteria supporti l’EV ovunque, anche di notte."
+          "battery_assist_min_surplus": "Surplus solare reale minimo prima che la batteria domestica possa contribuire a caricare l’EV — in qualsiasi modalità di ricarica. Al di sotto, la batteria è riservata alla casa (l’auto preleva da rete + solare). Predefinito 1200 W. Imposta 0 per far sì che la batteria supporti l’EV ovunque, anche di notte.",
+          "grid_sign_invert": "Attiva solo se il prelievo dalla rete appare come valore positivo (es. Enphase). La convenzione di SEM è negativo = prelievo; questo nega la lettura grezza e ignora il rilevamento automatico del segno."
         }
       },
       "settings_ev": {
         "title": "Carica VE & Solare",
         "description": "Configurare gli obiettivi di carica VE e le soglie solari.",
         "data": {
-          "daily_ev_target": "Obiettivo carica notturna (kWh)",
+          "daily_ev_target": "Garantire almeno (kWh)",
           "observer_mode": "Modalità osservatore (solo lettura, nessun controllo hardware)",
           "smart_night_charging": "Ridurre obiettivo notturno in base alla previsione di domani",
-          "minimum_solar_power": "Potenza solare minima per avviare la carica VE (W)"
+          "minimum_solar_power": "Potenza solare minima per avviare la carica VE (W)",
+          "curtailment_probe_enabled": "Sonda di limitazione (raccogliere il solare limitato)",
+          "export_limit_entity": "Entità limite di esportazione (opzionale)"
         },
         "data_description": {
-          "daily_ev_target": "Obiettivo in kWh da caricare dalla rete ogni notte. Imposta 0 per disattivare la carica notturna dalla rete.",
+          "daily_ev_target": "SEM ricarica dalla rete di notte perché l'auto abbia almeno questo al mattino. È un minimo, non un limite — il sole può aggiungere altro. 0 = non usare mai la rete.",
           "observer_mode": "Se ATTIVA, SEM monitora tutto ma non invia mai comandi all'hardware.",
           "smart_night_charging": "Se ATTIVA, SEM riduce l'obiettivo di carica notturna quando la previsione solare di domani è sufficiente.",
-          "minimum_solar_power": "Potenza solare in eccedenza minima (W) richiesta prima che SEM avvii la carica solare del VE."
+          "minimum_solar_power": "Potenza solare in eccedenza minima (W) richiesta prima che SEM avvii la carica solare del VE.",
+          "curtailment_probe_enabled": "Quando l'inverter limita l'export in rete (es. prezzi negativi), la produzione si blocca sul consumo e il solare reale resta invisibile. Opt-in: SEM avvia brevemente l'EV alla corrente minima e continua solo se la produzione segue.",
+          "export_limit_entity": "L'entità del limite di esportazione dell'inverter (autorilevata per Huawei, GoodWe, SolaX, Victron e altri se vuota). Affina il rilevamento ed evita sonde inutili."
         }
       },
       "settings_tariff": {
@@ -209,19 +213,23 @@
         "description": "Tariffe elettriche e parametri avanzati di regolazione.",
         "data": {
           "electricity_import_rate": "Tariffa di importazione",
+          "grid_import_surcharge": "Quota variabile rete (valuta/kWh)",
           "electricity_off_peak_rate": "Tariffa notturna (se diversa)",
           "electricity_export_rate": "Tariffa di esportazione",
           "demand_charge_rate": "Tariffa potenza impegnata",
           "update_interval": "Intervallo di aggiornamento (s)",
           "tariff_mode": "Modalità tariffa",
           "dynamic_tariff_entity": "Entità prezzo dinamico (rilevata automaticamente se vuota)",
-          "dynamic_forecast_entity": "Entità di previsione (opzionale, rilevata automaticamente se vuota)",
+          "dynamic_forecast_entity": "Entità di previsione dei prezzi (opzionale, rilevata automaticamente se vuota)",
           "dynamic_feedin_entity": "Entità prezzo di immissione (opzionale, per tariffa di esportazione dinamica)",
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
-          "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)"
+          "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
+          "tariff_classification_mode": "Modalità di classificazione dei prezzi",
+          "solar_forecast_source": "Sorgente della previsione solare"
         },
         "data_description": {
           "electricity_import_rate": "Tariffa di importazione diurna/fissa (valuta/kWh, IVA inclusa). Usata come ripiego quando il prezzo dinamico non è disponibile.",
+          "grid_import_surcharge": "Quota variabile totale facoltativa dell'operatore di rete aggiunta a ogni kWh importato. Può combinare trasporto elettrico e imposta sull'energia. Nessun abbonamento fisso; non incide sull'export.",
           "electricity_off_peak_rate": "Tariffa di importazione notturna/fuori punta (valuta/kWh). Impostala uguale alla tariffa di importazione se hai una tariffa fissa.",
           "electricity_export_rate": "Tariffa di immissione pagata dal fornitore (valuta/kWh).",
           "demand_charge_rate": "Costo mensile per la potenza di picco impegnata (valuta/kW/mese). Imposta 0 se il tuo contratto non lo prevede.",
@@ -231,7 +239,9 @@
           "dynamic_forecast_entity": "Sensore opzionale con le previsioni orarie dei prezzi, usate per la pianificazione intelligente.",
           "dynamic_feedin_entity": "Sensore opzionale che fornisce il prezzo attuale di immissione / esportazione per la tariffa di esportazione dinamica.",
           "grid_import_power_entity": "Sensore opzionale (W) per la potenza di importazione dalla rete. Rilevato automaticamente dalla Dashboard Energia; sovrascrivilo qui se necessario.",
-          "grid_export_power_entity": "Sensore opzionale (W) per la potenza di esportazione dalla rete. Rilevato automaticamente dalla Dashboard Energia; sovrascrivilo qui se necessario."
+          "grid_export_power_entity": "Sensore opzionale (W) per la potenza di esportazione dalla rete. Rilevato automaticamente dalla Dashboard Energia; sovrascrivilo qui se necessario.",
+          "tariff_classification_mode": "Percentile classifica i prezzi rispetto all'intervallo di oggi (consigliato). Statico usa soglie fisse economico/costoso.",
+          "solar_forecast_source": "Quale integrazione di previsione legge SEM. Il rilevamento automatico preferisce Solcast, poi Forecast.Solar, poi Open-Meteo — scegline una se ne usi più di una."
         }
       },
       "load_management": {
@@ -239,21 +249,23 @@
         "description": "Aggiorna la configurazione della gestione dei carichi",
         "data": {
           "load_management_enabled": "Attiva la gestione dei carichi",
+          "peak_limit_unlimited": "Nessun limite di rete",
           "target_peak_limit": "Limite di picco obiettivo (kW)",
           "warning_peak_level": "Livello di picco di avviso (kW)",
           "emergency_peak_level": "Livello di picco di emergenza (kW)",
           "vehicle_soc_entity": "SOC batteria veicolo",
           "ev_battery_capacity_kwh": "Capacità batteria VE (kWh)",
-          "ev_target_soc": "SOC obiettivo VE (%)"
+          "ev_target_soc": "Considera pieno al (%)"
         },
         "data_description": {
           "load_management_enabled": "Attiva/disattiva il distacco automatico dei carichi di SEM per restare sotto il tuo limite di picco di rete.",
+          "peak_limit_unlimited": "Disattiva completamente la gestione dei picchi: SEM smette di dimensionare i carichi sul limite di picco obiettivo e non distacca mai per rispettarlo. Solo per allacciamenti che nessun carico domestico può mettere in crisi. È diverso da «Abilita gestione carichi», che ferma il distacco ma mantiene il limite come tetto di dimensionamento.",
           "target_peak_limit": "Potenza di rete massima (kW) prima che SEM inizi a distaccare i carichi controllabili.",
-          "warning_peak_level": "Livello di potenza (kW) al quale SEM emette un avviso prima di intervenire.",
-          "emergency_peak_level": "Livello di potenza (kW) al quale SEM distacca i carichi in modo aggressivo per evitare costi di potenza impegnata.",
+          "warning_peak_level": "Livello di potenza (kW) al quale SEM emette un avviso prima di intervenire. Deve essere inferiore al limite di picco obiettivo.",
+          "emergency_peak_level": "Livello di potenza (kW) al quale SEM distacca i carichi in modo aggressivo per evitare costi di potenza impegnata. Deve essere superiore al limite di picco obiettivo.",
           "vehicle_soc_entity": "Sensore opzionale che riporta lo stato di carica attuale del veicolo (0–100%).",
           "ev_battery_capacity_kwh": "Capacità utilizzabile totale della batteria del VE in kWh.",
-          "ev_target_soc": "SOC obiettivo (%) al quale SEM considera il VE completamente carico."
+          "ev_target_soc": "Da qui SEM considera l'auto carica. È una definizione di \"pieno\", non un limite di ricarica."
         }
       },
       "notifications": {
@@ -265,7 +277,7 @@
           "mobile_notification_service": "Servizio di notifica mobile",
           "vehicle_soc_entity": "SOC batteria veicolo",
           "ev_battery_capacity_kwh": "Capacità batteria VE (kWh)",
-          "ev_target_soc": "SOC obiettivo VE (%)"
+          "ev_target_soc": "Considera pieno al (%)"
         },
         "data_description": {
           "enable_charger_notifications": "Attiva/disattiva i banner di notifica persistenti sulla scheda di stato del caricatore.",
@@ -273,7 +285,7 @@
           "mobile_notification_service": "Servizio notify di HA per le push mobili (es. notify.mobile_app_your_phone).",
           "vehicle_soc_entity": "Sensore opzionale che riporta lo stato di carica attuale del veicolo (0–100%).",
           "ev_battery_capacity_kwh": "Capacità utilizzabile totale della batteria del VE in kWh.",
-          "ev_target_soc": "SOC obiettivo (%) al quale SEM considera il VE completamente carico."
+          "ev_target_soc": "Da qui SEM considera l'auto carica. È una definizione di \"pieno\", non un limite di ricarica."
         }
       },
       "battery_scheduler": {
@@ -289,7 +301,15 @@
           "battery_max_target_soc": "SOC obiettivo massimo",
           "battery_min_deficit_kwh": "Soglia minima di deficit",
           "battery_pessimism_weight": "Pessimismo della previsione",
-          "battery_force_charge_negative_price": "Forza la carica con prezzo negativo"
+          "battery_force_charge_negative_price": "Forza la carica con prezzo negativo",
+          "battery_charge_platform": "Piattaforma di carica della batteria",
+          "battery_replan_interval_min": "Intervallo di ripianificazione (min)",
+          "battery_prefer_consecutive_window": "Preferisci una finestra di carica consecutiva"
+        },
+        "data_description": {
+          "battery_charge_platform": "Quale inverter SEM comanda per la carica di rete pianificata. Scegli Deye per mostrare il passaggio di cablaggio Deye.",
+          "battery_replan_interval_min": "Con quale frequenza il piano di carica viene ricalcolato in base alle ultime previsioni e prezzi.",
+          "battery_prefer_consecutive_window": "Attivo: ore economiche in un unico blocco (meno cicli avvio/arresto); disattivo: le singole ore più economiche anche se sparse."
         }
       },
       "ev_charger_edit": {
@@ -309,8 +329,20 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "Priorità eccedenza (1=massima)",
           "ev_current_control_entity": "Entità di controllo della corrente (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Limite di carica solare (kWh)",
-          "ev_target_soc_max": "Limite di carica solare (SOC %)"
+          "daily_ev_target_max": "Non caricare oltre (kWh)",
+          "ev_target_soc_max": "Non caricare oltre (%)",
+          "daily_ev_target": "Garantire almeno (kWh)",
+          "vehicle_soc_entity": "Sensore SOC batteria veicolo (opzionale)",
+          "vehicle_range_entity": "Sensore di autonomia del veicolo",
+          "ev_kwh_per_100km": "Consumo del veicolo (kWh/100km)",
+          "ev_target_soc": "Considera pieno al (%)",
+          "ev_battery_capacity_kwh": "Capacità batteria VE (kWh)",
+          "initial_current": "Corrente iniziale (A)",
+          "ev_min_current": "Corrente di carica minima (A)",
+          "vehicle_min_current": "Corrente minima del veicolo (A)",
+          "ev_phase_switch_entity": "Entità di commutazione fasi (opzionale)",
+          "ev_phase_switch_value_1p": "Commutazione fasi: valore monofase (opzionale)",
+          "ev_phase_switch_value_3p": "Commutazione fasi: valore trifase (opzionale)"
         },
         "data_description": {
           "charger_name": "Nome descrittivo di questo caricatore mostrato nella dashboard.",
@@ -326,8 +358,20 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "Ordine di assegnazione dell'eccedenza tra più caricatori. Numero più basso = priorità più alta.",
           "ev_current_control_entity": "Entità Number usata per impostare la corrente di ricarica (A). Per Wallbox, go-eCharger e caricatori simili.",
-          "daily_ev_target_max": "Il surplus solare carica fino a questo valore, poi si ferma. Lascia al massimo per caricare liberamente dal sole.",
-          "ev_target_soc_max": "Il surplus solare carica fino a questo SOC, poi si ferma. Lascia al 100% per caricare liberamente dal sole."
+          "daily_ev_target_max": "Il surplus solare smette di caricare qui. È un tetto, non un obiettivo — lascialo al massimo per caricare liberamente dal sole.",
+          "ev_target_soc_max": "Il surplus solare smette di caricare qui. È un tetto, non un obiettivo — lascia al 100% per caricare liberamente dal sole.",
+          "daily_ev_target": "SEM ricarica dalla rete di notte perché l'auto abbia almeno questo al mattino. È un minimo, non un limite — il sole può aggiungere altro. 0 = non usare mai la rete.",
+          "vehicle_soc_entity": "Sensore opzionale che riporta lo stato di carica attuale del veicolo (0–100%).",
+          "vehicle_range_entity": "Sensore di autonomia reale opzionale. Altrimenti l’autonomia è stimata da SOC × capacità × efficienza.",
+          "ev_kwh_per_100km": "Usato per stimare l’autonomia quando non è configurato un sensore di autonomia.",
+          "ev_target_soc": "Da qui SEM considera l'auto carica. È una definizione di \"pieno\", non un limite di ricarica.",
+          "ev_battery_capacity_kwh": "Capacità utilizzabile totale della batteria del VE in kWh. Usata per stimare il SOC e il tempo di carica.",
+          "initial_current": "Corrente di carica con cui SEM inizia prima di adeguarsi al surplus disponibile.",
+          "ev_min_current": "Sotto questo valore SEM mette in pausa la carica invece di abbassare ulteriormente la corrente.",
+          "vehicle_min_current": "Soglia di corrente per veicolo. Il minimo effettivo è il maggiore tra questo e la corrente minima del caricatore.",
+          "ev_phase_switch_entity": "Select/number/switch che commuta il caricatore tra carica mono e trifase (go-e 'psm', KEBA serie X, openWB). Per ora SEM osserva e convalida soltanto — la commutazione automatica arriverà in una versione futura.",
+          "ev_phase_switch_value_1p": "Cosa scrivere nell'entità di commutazione per la carica monofase — nome opzione di un select, valore di un number, o on/off. Obbligatorio per entità select; number predefinito 1, switch predefinito off.",
+          "ev_phase_switch_value_3p": "Cosa scrivere nell'entità di commutazione per la carica trifase — nome opzione di un select, valore di un number, o on/off. Obbligatorio per entità select; number predefinito 3, switch predefinito on."
         }
       },
       "ev_charger_add": {
@@ -347,8 +391,19 @@
           "ev_charge_mode_stop": "Charge Mode — Stop Value (optional)",
           "ev_surplus_priority": "Priorità eccedenza (1=massima)",
           "ev_current_control_entity": "Entità di controllo della corrente (number — Wallbox, go-eCharger)",
-          "daily_ev_target_max": "Limite di carica solare (kWh)",
-          "ev_target_soc_max": "Limite di carica solare (SOC %)"
+          "daily_ev_target_max": "Non caricare oltre (kWh)",
+          "ev_target_soc_max": "Non caricare oltre (%)",
+          "daily_ev_target": "Garantire almeno (kWh)",
+          "vehicle_soc_entity": "Sensore SOC batteria veicolo (opzionale)",
+          "vehicle_range_entity": "Sensore di autonomia del veicolo",
+          "ev_kwh_per_100km": "Consumo del veicolo (kWh/100km)",
+          "ev_target_soc": "Considera pieno al (%)",
+          "ev_battery_capacity_kwh": "Capacità batteria VE (kWh)",
+          "initial_current": "Corrente iniziale (A)",
+          "ev_min_current": "Corrente di carica minima (A)",
+          "ev_phase_switch_entity": "Entità di commutazione fasi (opzionale)",
+          "ev_phase_switch_value_1p": "Commutazione fasi: valore monofase (opzionale)",
+          "ev_phase_switch_value_3p": "Commutazione fasi: valore trifase (opzionale)"
         },
         "data_description": {
           "charger_name": "Nome descrittivo di questo caricatore mostrato nella dashboard.",
@@ -364,8 +419,19 @@
           "ev_charge_mode_stop": "The option SEM selects to STOP charging. Leave blank if stopping is done by the start/stop entity or by setting 0 A.",
           "ev_surplus_priority": "Ordine di assegnazione dell'eccedenza tra più caricatori. Numero più basso = priorità più alta.",
           "ev_current_control_entity": "Entità Number usata per impostare la corrente di ricarica (A). Per Wallbox, go-eCharger e caricatori simili.",
-          "daily_ev_target_max": "Il surplus solare carica fino a questo valore, poi si ferma. Lascia al massimo per caricare liberamente dal sole.",
-          "ev_target_soc_max": "Il surplus solare carica fino a questo SOC, poi si ferma. Lascia al 100% per caricare liberamente dal sole."
+          "daily_ev_target_max": "Il surplus solare smette di caricare qui. È un tetto, non un obiettivo — lascialo al massimo per caricare liberamente dal sole.",
+          "ev_target_soc_max": "Il surplus solare smette di caricare qui. È un tetto, non un obiettivo — lascia al 100% per caricare liberamente dal sole.",
+          "daily_ev_target": "SEM ricarica dalla rete di notte perché l'auto abbia almeno questo al mattino. È un minimo, non un limite — il sole può aggiungere altro. 0 = non usare mai la rete.",
+          "vehicle_soc_entity": "Sensore opzionale che riporta lo stato di carica attuale del veicolo (0–100%).",
+          "vehicle_range_entity": "Sensore di autonomia reale opzionale. Altrimenti l’autonomia è stimata da SOC × capacità × efficienza.",
+          "ev_kwh_per_100km": "Usato per stimare l’autonomia quando non è configurato un sensore di autonomia.",
+          "ev_target_soc": "Da qui SEM considera l'auto carica. È una definizione di \"pieno\", non un limite di ricarica.",
+          "ev_battery_capacity_kwh": "Capacità utilizzabile totale della batteria del VE in kWh. Usata per stimare il SOC e il tempo di carica.",
+          "initial_current": "Corrente di carica con cui SEM inizia prima di adeguarsi al surplus disponibile.",
+          "ev_min_current": "Sotto questo valore SEM mette in pausa la carica invece di abbassare ulteriormente la corrente.",
+          "ev_phase_switch_entity": "Select/number/switch che commuta il caricatore tra carica mono e trifase (go-e 'psm', KEBA serie X, openWB). Per ora SEM osserva e convalida soltanto — la commutazione automatica arriverà in una versione futura.",
+          "ev_phase_switch_value_1p": "Cosa scrivere nell'entità di commutazione per la carica monofase — nome opzione di un select, valore di un number, o on/off. Obbligatorio per entità select; number predefinito 1, switch predefinito off.",
+          "ev_phase_switch_value_3p": "Cosa scrivere nell'entità di commutazione per la carica trifase — nome opzione di un select, valore di un number, o on/off. Obbligatorio per entità select; number predefinito 3, switch predefinito on."
         }
       },
       "pv_naming": {
@@ -425,19 +491,25 @@
         }
       },
       "settings_phase_guard_topology": {
-        "title": "Electrical topology",
-        "description": "Choose how the house load is supplied. In a hybrid installation, the grid and the inverter Load/EPS/Backup output can feed the house at the same time. The load inside the house can therefore be higher than the current through the main fuse. SEM monitors the two paths independently. This prerelease is diagnostic only and never acts on the result.",
+        "title": "Topologia elettrica",
+        "description": "Scegli come viene alimentato il carico dell'abitazione. In un'installazione ibrida, la rete e l'uscita Load/EPS/Backup dell'inverter possono alimentare la casa contemporaneamente. Il carico all'interno della casa può quindi essere superiore alla corrente che attraversa il fusibile principale. SEM monitora i due percorsi in modo indipendente. L'intervento attivo è facoltativo; verifica le letture in modalità Osservatore prima di abilitare il controllo EV.",
         "data": {
-          "phase_guard_topology": "Supply topology"
+          "phase_guard_topology": "Topologia di alimentazione",
+          "phase_guard_phase_count": "Numero di fasi"
         },
         "data_description": {
-          "phase_guard_topology": "Select Grid only for a conventional installation. Select Grid + hybrid inverter when loads are also supplied through a Load, EPS or Backup output."
+          "phase_guard_topology": "Seleziona Solo rete per un'installazione convenzionale. Seleziona Rete + inverter ibrido quando i carichi sono alimentati anche tramite un'uscita Load, EPS o Backup.",
+          "phase_guard_phase_count": "Seleziona 1 per un'alimentazione monofase o 3 per un'alimentazione trifase. Solo le fasi selezionate sono richieste e monitorate."
         }
       },
       "settings_phase_guard": {
         "title": "Per-phase guard sensors",
-        "description": "Map the sensors for {topology}. Grid current is calculated per phase from absolute power divided by voltage, so export is handled safely. For a hybrid Load/EPS lane, select non-negative RMS current sensors. Missing, stale, invalid or negative readings fail closed. Observer Mode publishes diagnostics only; it sends no control commands.",
+        "description": "Mappare i sensori per {topology}. Per un'alimentazione monofase è richiesta solo L1. Per un'alimentazione trifase, selezionare una famiglia completa di correnti RMS dirette L1-L3 quando disponibile; altrimenti la corrente di rete viene calcolata come potenza assoluta divisa per la tensione. Per una corsia ibrida Load/EPS, selezionare sensori di corrente RMS non negativi per le fasi configurate. Le letture richieste mancanti, obsolete, non valide o negative falliscono in modo sicuro (fail closed). L'Observer Mode pubblica solo diagnostica; non invia comandi di controllo.",
         "data": {
+          "phase_guard_enforcement_enabled": "Interrompi la ricarica EV quando vengono superati i limiti di fase",
+          "phase_guard_notifications_enabled": "Invia avvisi del controllo fasi",
+          "phase_guard_recovery_margin_a": "Margine di sicurezza sotto ogni limite di fase",
+          "phase_guard_recovery_cycles": "Letture sicure prima di riprendere la ricarica",
           "phase_guard_grid_limit_a": "Main-fuse limit per phase",
           "phase_guard_inverter_limit_a": "Inverter Load/EPS limit per phase",
           "phase_guard_max_age_s": "Maximum sensor age",
@@ -455,12 +527,15 @@
           "phase_guard_inverter_l3_current_entity": "Inverter Load/EPS L3 RMS current"
         },
         "data_description": {
+          "phase_guard_enforcement_enabled": "Se attivata, questa opzione spegne immediatamente tutti i caricabatterie EV gestiti in caso di letture non sicure o obsolete, per evitare lo scatto dell’interruttore principale. È disattivata per impostazione predefinita, così da poter verificare prima la protezione di fase in modalità Osservatore.",
+          "phase_guard_recovery_margin_a": "La ricarica rimane bloccata finché ogni fase richiesta non si trova almeno di questo margine sotto il proprio limite.",
+          "phase_guard_recovery_cycles": "Numero di letture valide e sicure consecutive necessarie prima di consentire nuovamente la ricarica EV.",
           "phase_guard_grid_limit_a": "Maximum permitted grid current on each phase. Normally the main-fuse rating.",
           "phase_guard_inverter_limit_a": "Maximum permitted RMS current on each phase of the inverter Load/EPS/Backup output.",
           "phase_guard_max_age_s": "A reading older than this is treated as unsafe.",
-          "phase_guard_grid_l1_current_entity": "Optional direct non-negative RMS grid current in A. When direct current is used, all of L1-L3 are required.",
-          "phase_guard_grid_l2_current_entity": "Optional direct non-negative RMS grid current in A. When direct current is used, all of L1-L3 are required.",
-          "phase_guard_grid_l3_current_entity": "Optional direct non-negative RMS grid current in A. When direct current is used, all of L1-L3 are required.",
+          "phase_guard_grid_l1_current_entity": "Corrente di rete RMS diretta e non negativa opzionale in A. Se si utilizza una fonte diretta, tutte le fasi configurate devono essere fornite.",
+          "phase_guard_grid_l2_current_entity": "Corrente di rete RMS diretta e non negativa opzionale in A. Se si utilizza una fonte diretta, tutte le fasi configurate devono essere fornite.",
+          "phase_guard_grid_l3_current_entity": "Corrente di rete RMS diretta e non negativa opzionale in A. Se si utilizza una fonte diretta, tutte le fasi configurate devono essere fornite.",
           "phase_guard_grid_l1_power_entity": "Signed grid power for phase L1 in W. Import or export is accepted.",
           "phase_guard_grid_l2_power_entity": "Signed grid power for phase L2 in W. Import or export is accepted.",
           "phase_guard_grid_l3_power_entity": "Signed grid power for phase L3 in W. Import or export is accepted.",
@@ -471,7 +546,61 @@
           "phase_guard_inverter_l2_current_entity": "Non-negative RMS current for inverter Load/EPS phase L2.",
           "phase_guard_inverter_l3_current_entity": "Non-negative RMS current for inverter Load/EPS phase L3."
         }
+      },
+      "deye": {
+        "title": "Carica di rete forzata Deye",
+        "description": "Collega un inverter ibrido Deye per la carica di rete pianificata. La modalità osservatore è attiva e l'attuazione disattivata per impostazione predefinita, quindi non viene scritto nulla sull'inverter finché non lo abiliti esplicitamente.",
+        "data": {
+          "deye_grid_charge_switch": "Interruttore carica di rete (entità)",
+          "deye_charge_current_entity": "Entità number corrente di carica (A)",
+          "deye_battery_voltage_entity": "Sensore tensione batteria (entità)",
+          "deye_battery_voltage_max_age_s": "Età max tensione batteria (s)",
+          "deye_max_charge_current_a": "Corrente di carica max (A)",
+          "deye_bms_max_charge_current_a": "Corrente di carica max BMS (A)",
+          "deye_max_discharge_power": "Potenza di scarica max (W)",
+          "deye_program_control": "Controlla le fasce orarie del programma",
+          "deye_observer_mode": "Modalità osservatore (sola lettura)",
+          "deye_actuation_enabled": "Abilita attuazione (scrittura sull'inverter)",
+          "deye_work_mode_control": "Controlla la modalità di lavoro",
+          "deye_work_mode_entity": "Entità select della modalità di lavoro",
+          "deye_work_mode_load_first_option": "Valore modalità per «Load First»",
+          "deye_work_mode_battery_first_option": "Valore modalità per «Battery First»",
+          "deye_force_charge_work_mode": "Modalità di lavoro durante la carica forzata",
+          "deye_program_1_time": "Programma 1 — entità fascia oraria (time.*)",
+          "deye_program_1_soc": "Programma 1 — entità number SOC target",
+          "deye_program_1_charge": "Programma 1 — entità select carica di rete",
+          "deye_program_2_time": "Programma 2 — entità fascia oraria (time.*)",
+          "deye_program_2_soc": "Programma 2 — entità number SOC target",
+          "deye_program_2_charge": "Programma 2 — entità select carica di rete",
+          "deye_program_3_time": "Programma 3 — entità fascia oraria (time.*)",
+          "deye_program_3_soc": "Programma 3 — entità number SOC target",
+          "deye_program_3_charge": "Programma 3 — entità select carica di rete",
+          "deye_program_4_time": "Programma 4 — entità fascia oraria (time.*)",
+          "deye_program_4_soc": "Programma 4 — entità number SOC target",
+          "deye_program_4_charge": "Programma 4 — entità select carica di rete",
+          "deye_program_5_time": "Programma 5 — entità fascia oraria (time.*)",
+          "deye_program_5_soc": "Programma 5 — entità number SOC target",
+          "deye_program_5_charge": "Programma 5 — entità select carica di rete",
+          "deye_program_6_time": "Programma 6 — entità fascia oraria (time.*)",
+          "deye_program_6_soc": "Programma 6 — entità number SOC target",
+          "deye_program_6_charge": "Programma 6 — entità select carica di rete"
+        },
+        "data_description": {
+          "deye_bms_max_charge_current_a": "Limite opzionale imposto dal BMS. 0 = nessun limite BMS; vale il massimo dell'inverter.",
+          "deye_observer_mode": "Se attivo, SEM calcola e registra le sue azioni Deye ma non scrive mai sull'inverter.",
+          "deye_actuation_enabled": "Se disattivato, SEM non scrive mai sull'inverter, anche se la modalità osservatore è pure disattivata. Entrambi i gate devono consentire prima di inviare un comando.",
+          "deye_max_charge_current_a": "Limite superiore sicuro che SEM imposterà sull'entità di corrente di carica."
+        }
       }
+    },
+    "error": {
+      "service_not_found": "Servizio di notifica non trovato. Verifica il nome del servizio (ad es. notify.mobile_app_your_phone).",
+      "peak_warning_not_below_target": "Il livello di avviso deve essere inferiore al limite di picco obiettivo: è l'allerta anticipata che l'obiettivo si sta avvicinando.",
+      "peak_emergency_not_above_target": "Il livello di emergenza deve essere superiore al limite di picco obiettivo, altrimenti SEM staccherebbe i carichi prima di raggiungere il limite che protegge.",
+      "heat_pump_partial_relays": "SG-Ready richiede ENTRAMBE le entità relè. Imposta entrambi i relè — oppure lasciali entrambi vuoti e configura solo l'entità climate per il boost del setpoint in modalità solo-climate.",
+      "deye_program_groups_incomplete": "All six Deye program groups must define time, SOC, and grid-charge entities.",
+      "deye_work_mode_mapping_not_distinct": "Il controllo Work Mode richiede due opzioni diverse: una per Load First e una per Battery First. Selezionale entrambe e non due volte la stessa.",
+      "deye_force_charge_work_mode_invalid": "Scegli con quale Work Mode SEM deve forzare la carica della batteria: Load First o Battery First."
     }
   },
   "entity": {
@@ -542,6 +671,9 @@
       "night_charging_status": {
         "name": "Carica Notturna"
       },
+      "energy_plan": {
+        "name": "Piano energetico"
+      },
       "battery_priority_status": {
         "name": "Priorità Batteria"
       },
@@ -605,6 +737,9 @@
       "flow_battery_to_home_power": {
         "name": "Batteria a Casa"
       },
+      "flow_battery_to_grid_power": {
+        "name": "Batteria a Rete"
+      },
       "flow_battery_to_ev_power": {
         "name": "Batteria a VE"
       },
@@ -640,6 +775,9 @@
       },
       "flow_battery_to_home_energy": {
         "name": "Batteria a Casa Energia"
+      },
+      "flow_battery_to_grid_energy": {
+        "name": "Batteria a Rete Energia"
       },
       "flow_battery_to_ev_energy": {
         "name": "Batteria a VE Energia"
@@ -908,6 +1046,12 @@
       "lifetime_ev_solar_share": {
         "name": "Quota Solare VE Totale"
       },
+      "lifetime_ev_battery_share": {
+        "name": "Quota Batteria VE Totale"
+      },
+      "lifetime_ev_grid_share": {
+        "name": "Quota Rete VE Totale"
+      },
       "vehicle_soc": {
         "name": "SOC Veicolo"
       },
@@ -1063,6 +1207,42 @@
       },
       "vpp_event": {
         "name": "Evento VPP"
+      },
+      "heat_pump_energy_today": {
+        "name": "Pompa di calore oggi"
+      },
+      "heat_pump_energy_month": {
+        "name": "Pompa di calore questo mese"
+      },
+      "heat_pump_energy_year": {
+        "name": "Pompa di calore quest'anno"
+      },
+      "heat_pump_energy_total": {
+        "name": "Pompa di calore totale"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "Pompa di calore spostata oggi"
+      },
+      "daily_battery_charge_solar": {
+        "name": "Carica solare oggi"
+      },
+      "daily_battery_charge_grid": {
+        "name": "Carica da rete oggi"
+      },
+      "daily_battery_grid_cost": {
+        "name": "Costo carica da rete oggi"
+      },
+      "battery_stored_grid_share": {
+        "name": "Energia immagazzinata dalla rete"
+      },
+      "true_baseload_power": {
+        "name": "Carico di base reale"
+      },
+      "daily_true_baseload_energy": {
+        "name": "Carico di base reale oggi"
+      },
+      "daily_total_consumption": {
+        "name": "Consumo totale oggi"
       }
     },
     "binary_sensor": {
@@ -1109,6 +1289,9 @@
       },
       "vacation_mode": {
         "name": "Modalità vacanza"
+      },
+      "energy_plan_actuation": {
+        "name": "Attuazione del piano energetico"
       }
     },
     "number": {
@@ -1199,6 +1382,9 @@
       "ev_min_current": {
         "name": "{charger} Ampere min."
       },
+      "ev_max_current": {
+        "name": "{charger} Ampere max."
+      },
       "vehicle_min_current": {
         "name": "{charger} Ampere min. veicolo"
       },
@@ -1237,6 +1423,14 @@
           "min_plus_solar": "Min + Solare",
           "always_max": "Sempre (max)",
           "off": "Spento"
+        }
+      },
+      "phase_mode": {
+        "name": "{charger} Modalità fasi",
+        "state": {
+          "auto": "Auto",
+          "1": "Monofase",
+          "3": "Trifase"
         }
       }
     }
@@ -1280,10 +1474,6 @@
     }
   },
   "issues": {
-    "ev_charger_not_configured": {
-      "title": "Caricatore EV non configurato",
-      "description": "Nessun sensore del caricatore EV è configurato, quindi le funzioni di ricarica EV non sono disponibili. Aggiungi un sensore «connesso» o un sensore di potenza di ricarica nelle opzioni dell’integrazione per abilitare la ricarica EV."
-    },
     "sensor_unavailable": {
       "title": "Sensore non disponibile",
       "description": "Il sensore `{entity_id}` ({friendly_name}) risulta non disponibile da {minutes}+ minuti. SEM non può includerlo nei calcoli finché non torna disponibile. Controlla l'integrazione a monte (Huawei modbus / Solcast / Forecast.Solar / la rete del tuo inverter). Questo problema si risolve automaticamente quando il sensore riporta di nuovo un valore valido."
@@ -1330,15 +1520,31 @@
     },
     "soc_cap_unenforceable": {
       "title": "Impossibile applicare il limite di carica del {target}%: {name}",
-      "description": "**{name}** è impostato su un obiettivo di carica in percentuale, ma il tuo veicolo al momento non sta riportando il proprio stato di carica, quindi SEM non può fermarsi al **{target}%** — continuerà a caricare finché l'auto stessa non riduce la potenza (quasi piena).\n\nSe la tua dashboard mostra una % di batteria, quello è il SOC *stimato* da SEM, che viene deliberatamente ignorato per il limite rigido (può discostarsi). Per applicare il limite, configura un **sensore SOC reale del veicolo** per questo caricatore (Configurazione → VE → Entità SOC veicolo). Questa riparazione si risolve automaticamente non appena torna disponibile una lettura SOC reale."
+      "description": "**{name}** è impostato su un obiettivo di carica in percentuale, ma il veicolo al momento non comunica il proprio stato di carica: SEM non può quindi fermarsi *esattamente* a **{target}%**.\n\nNon sta però caricando alla cieca: dall'ultima lettura reale di questa sessione conteggia l'energia effettivamente erogata e si ferma quando quel totale misurato raggiunge l'obiettivo — lo sforamento è solo ciò che l'auto ha assorbito da quella lettura in poi. Se in questa sessione non è arrivata alcuna lettura reale (o SEM è stato riavviato durante la carica) manca il riferimento e la carica prosegue finché è l'auto stessa a ridurre la potenza, quasi piena.\n\nPer un limite che cada sul numero esatto, collega un **sensore reale di SOC del veicolo** a questa stazione (Configurazione → EV → Entità SOC veicolo). La percentuale di batteria sulla dashboard è il SOC *stimato* di SEM, che viene deliberatamente ignorato per il limite rigido (può andare alla deriva). Questa riparazione si risolve automaticamente non appena torna disponibile una lettura reale del SOC."
+    },
+    "unmanaged_charger_found": {
+      "title": "SEM ha trovato una wallbox che non gestisce",
+      "description": "Il dispositivo **{name}** sembra una wallbox, ma in SEM non è configurata alcuna wallbox — quindi SEM non la tocca ({count} candidato/i trovato/i).\n\nPer far ottimizzare la ricarica con il solare e le tariffe convenienti, aggiungila in Impostazioni → Dispositivi e servizi → SEM → Configura. Così compare anche la scheda EV con le modalità di ricarica.\n\nSe non è una wallbox, ignora questo avviso — SEM non la controllerà comunque."
+    },
+    "lovelace_yaml_mode": {
+      "title": "Lovelace in modalità YAML — aggiungi le risorse delle schede SEM",
+      "description": "Home Assistant usa Lovelace in modalità YAML, quindi SEM non può registrare le sue schede automaticamente e la dashboard mostra schede «Errore di configurazione».\n\nAggiungi questo in `configuration.yaml` sotto `lovelace:` → `resources:`, riavvia Home Assistant e ricarica il browser (Ctrl+Maiusc+R):\n\n```yaml\n{resources}\n```\n\nQuesto messaggio sparisce una volta caricate le risorse."
+    },
+    "charger_control_entity_broken": {
+      "title": "L'entità di controllo della wallbox non funziona: {name}",
+      "description": "SEM usa **`{entity_id}`** per {capability} su **{name}**, ma quell'entità è `{reason}` — ogni comando si perde. Controlla l'entità in **Strumenti per sviluppatori → Stati** e correggila all'origine, oppure riassegna SEM in **Impostazioni → Dispositivi e servizi → SEM → Configura → Wallbox → Modifica**."
+    },
+    "battery_force_discharge_unsupported": {
+      "title": "Battery power setpoint cannot be written: {entity_id}",
+      "description": "SEM tried to write **{entity_id}** and the device refused every time: `{error}`.\n\nThe entity exists and SEM is addressing it correctly — the inverter's firmware simply does not implement writing that register. This usually means the entity you picked for *forcible discharge* in SEM's battery settings is readable but not writable on your hardware.\n\nSEM has stopped trying, so this will no longer fill your log. Two things follow: the routine safety write SEM makes when returning the battery to normal operation is skipped (harmless — there was nothing set to clear), and **battery-to-grid export cannot run** on this battery. Charging, discharge limits and everyday operation are unaffected.\n\n**If you do not use battery-to-grid export**, clear the forcible-discharge entity in SEM's battery settings and this notice goes away. **If you expected it to work**, the entity is likely the wrong one — or your inverter does not support commanded export. A restart makes SEM try again, so a firmware update or a corrected entity is picked up on its own."
     }
   },
   "selector": {
     "phase_guard_topology": {
       "options": {
-        "disabled": "Disabled",
-        "grid_only": "Grid supply only",
-        "hybrid_load_port": "Grid + hybrid inverter Load/EPS output"
+        "disabled": "Disattivato",
+        "grid_only": "Solo alimentazione di rete",
+        "hybrid_load_port": "Rete + uscita Load/EPS dell'inverter ibrido"
       }
     }
   }

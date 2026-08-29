@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Dict, Optional
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.config_entries import ConfigEntry
@@ -14,8 +14,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
 from .coordinator import SEMCoordinator
+from .persisted_flags import PERSISTED_FLAG_DEFAULTS
 
 type SEMConfigEntry = ConfigEntry[SEMCoordinator]
 
@@ -35,6 +35,16 @@ SWITCH_TYPES = [
         key="vacation_mode",
         entity_category=EntityCategory.CONFIG,
         icon="mdi:beach",
+    ),
+    # #638 G4 — energy plan actuation: while ON, the joint energy plan's
+    # blocks feed the existing signals (EV amps floor / wait, load window
+    # gates). ON since the one-gate build (#638 C8) — this switch IS the
+    # kill-switch, and OFF means pure shadow, log-only. Same persistence
+    # pattern as observer/vacation mode.
+    SwitchEntityDescription(
+        key="energy_plan_actuation",
+        entity_category=EntityCategory.CONFIG,
+        icon="mdi:calendar-clock",
     ),
 ]
 
@@ -141,26 +151,79 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         # Force stable entity ID regardless of HA language
         self.entity_id = f"switch.sem_{description.key}"
 
-        if description.key == "observer_mode":
-            self._is_on = coordinator.config_entry.options.get("observer_mode", False)
-        elif description.key == "vacation_mode":
-            # #594 — same persistence pattern as observer_mode: seed from the
-            # config option, then RestoreEntity takes over across reboots.
-            self._is_on = coordinator.config_entry.options.get("vacation_mode", False)
+        if description.key in self._PERSISTED_DEFAULTS:
+            # (#777) Seed from the EXPLICIT config — options first (every
+            # flip persists there via ``_persist_flag``), then entry data
+            # (the install flow writes there), then the per-key default.
+            # The old seed read options only, so "observer checked at
+            # install" showed an OFF switch while the coordinator
+            # observed.
+            explicit = self._configured(description.key)
+            self._is_on = (explicit if explicit is not None
+                           else self._PERSISTED_DEFAULTS[description.key])
         else:
             self._is_on = False
+
+    # (#777) The three persisted toggles and what a fresh install means by
+    # silence. Defined in ``persisted_flags`` and shared by reference, not
+    # copied: setup resolves the very same flags from the very same three
+    # sources before building the coordinator, and two tables of "what
+    # silence means" is exactly how the two readers drifted apart.
+    _PERSISTED_DEFAULTS = PERSISTED_FLAG_DEFAULTS
+
+    def _configured(self, key: str) -> Optional[bool]:
+        """The explicit config value for ``key`` — None if never recorded.
+
+        options outrank data: a runtime flip (persisted to options the
+        moment it happens) is newer than the install-time choice by
+        construction. Non-mapping sources (bare test stubs) are skipped.
+        """
+        from collections.abc import Mapping
+        entry = self.coordinator.config_entry
+        for src in (getattr(entry, "options", None),
+                    getattr(entry, "data", None)):
+            if isinstance(src, Mapping) and key in src:
+                return bool(src[key])
+        return None
+
+    def _apply_restored_state(self, last_state) -> None:
+        """(#777) Explicit config beats ghost restore.
+
+        ``switch.sem_observer_mode`` has a forced-stable entity id and
+        HA's restore-state store outlives the config entry — so a FRESH
+        install on a machine that ever ran observer-ON restored the dead
+        install's state over this install's explicit config and silently
+        never controlled hardware (reported live, 15.08). Every flip
+        persists to options the moment it happens, so the restore store
+        is only ever a duplicate or a ghost; it is honored solely when
+        neither options nor data carries the key at all — a pre-persist
+        install upgrading, the one case where it is the only record.
+        """
+        key = self.entity_description.key
+        if key not in self._PERSISTED_DEFAULTS:
+            if last_state is not None:
+                self._is_on = last_state.state == "on"
+            return
+        explicit = self._configured(key)
+        if explicit is not None:
+            self._is_on = explicit
+            _LOGGER.info("%s: %s (explicit config)", key,
+                         "ON" if self._is_on else "OFF")
+        elif last_state is not None:
+            self._is_on = last_state.state == "on"
+            _LOGGER.info(
+                "%s: %s (restored — no config record, legacy install)",
+                key, "ON" if self._is_on else "OFF")
+        else:
+            self._is_on = self._PERSISTED_DEFAULTS[key]
+            _LOGGER.info("%s: %s (default)", key,
+                         "ON" if self._is_on else "OFF")
 
     async def async_added_to_hass(self) -> None:
         """Run when entity is added to Home Assistant - restore previous state."""
         await super().async_added_to_hass()
 
-        # Both remaining switches persist across reboots
-        last_state = await self.async_get_last_state()
-        if last_state is not None:
-            self._is_on = last_state.state == "on"
-            _LOGGER.info("Restored %s state to: %s", self.entity_description.key, 'ON' if self._is_on else 'OFF')
-        else:
-            _LOGGER.info("No previous state for %s, using default: %s", self.entity_description.key, 'ON' if self._is_on else 'OFF')
+        self._apply_restored_state(await self.async_get_last_state())
 
         # Observer mode must take hold the instant the entity restores — push the
         # restored state straight onto the coordinator so the very first control
@@ -173,6 +236,10 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         # the first control cycle after a reboot already gates comfort heating.
         if self.entity_description.key == "vacation_mode":
             self.coordinator._vacation_switch_on = self._is_on
+        # #638 G4: actuation must NOT silently arm before the restore lands —
+        # push the restored state so the first night cycle reads the truth.
+        if self.entity_description.key == "energy_plan_actuation":
+            self.coordinator._energy_plan_actuation = self._is_on
 
 
     def _persist_flag(self, value: bool) -> None:
@@ -204,6 +271,24 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         """Return true if switch is on."""
         return self._is_on
 
+    @property
+    def extra_state_attributes(self) -> Optional[Dict[str, Any]]:
+        """(#764) The observer switch carries observer mode's WOULD
+        decisions — the standard simulation surface. A fresh reader gets
+        the current per-device would-state without history; a sim bridge
+        subscribes to the ``solar_energy_management_observer_decision``
+        event for the edges. Empty when observing is off: the map would
+        be stale the moment live actuation resumes."""
+        if self.entity_description.key != "observer_mode":
+            return None
+        try:
+            decisions = getattr(
+                getattr(self.coordinator, "_surplus_controller", None),
+                "observer_decisions", {}) or {}
+        except Exception:  # noqa: BLE001 — attributes must never break the entity
+            decisions = {}
+        return {"would_decisions": dict(decisions) if self._is_on else {}}
+
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on."""
         _LOGGER.info("Turning on %s", self.entity_description.key)
@@ -214,6 +299,8 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
             self.coordinator._observer_mode = True
         if self.entity_description.key == "vacation_mode":
             self.coordinator._vacation_switch_on = True  # #594 — immediate
+        if self.entity_description.key == "energy_plan_actuation":
+            self.coordinator._energy_plan_actuation = True  # #638 G4 — immediate
         # Reload-durable: the flag must survive a config-entry reload (see
         # _persist_flag — the unprotected-window class).
         self._persist_flag(True)
@@ -235,6 +322,8 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
             self.coordinator._observer_mode = False
         if self.entity_description.key == "vacation_mode":
             self.coordinator._vacation_switch_on = False  # #594 — immediate
+        if self.entity_description.key == "energy_plan_actuation":
+            self.coordinator._energy_plan_actuation = False  # #638 G4 — immediate
         self._persist_flag(False)  # reload-durable (see _persist_flag)
         self.async_write_ha_state()  # reflect immediately (#259)
 

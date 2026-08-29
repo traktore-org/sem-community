@@ -429,7 +429,7 @@ class TestFlowInvariants:
     def test_solar_flows_do_not_exceed_solar_production(self):
         """should not route more solar than was produced to any combination of destinations."""
         calc = FlowCalculator()
-        rng = random.Random(SEED + 10)
+        random.Random(SEED + 10)
         violations = []
         for i, p in enumerate(_ALL_SCENARIOS[:NUM_SCENARIOS]):
             flows = calc.calculate_power_flows(p)
@@ -894,7 +894,7 @@ class TestEnergyCalculator24hSimulation:
         """should never accumulate negative energy over a full 24-hour day."""
         calc, _ = self._make_calculator()
         start = datetime(2026, 5, 15, 0, 0, 0)
-        today = date(2026, 5, 15)
+        date(2026, 5, 15)
 
         for tick, p in enumerate(_DAY_SCENARIOS):
             ts = start + timedelta(seconds=30 * tick)
@@ -917,7 +917,7 @@ class TestEnergyCalculator24hSimulation:
         """daily solar should be in a physically plausible kWh range after a sunny day."""
         calc, _ = self._make_calculator()
         start = datetime(2026, 5, 15, 0, 0, 0)
-        today = date(2026, 5, 15)
+        date(2026, 5, 15)
         final_energy = None
 
         for tick, p in enumerate(_DAY_SCENARIOS):
@@ -958,7 +958,7 @@ class TestEnergyCalculator24hSimulation:
     def test_energy_gap_protection_skips_spike_scenarios(self):
         """should skip integration when a gap exceeds 120 s to prevent spikes."""
         calc, _ = self._make_calculator()
-        today = date(2026, 5, 15)
+        date(2026, 5, 15)
         p = PowerReadings(solar_power=10_000.0)
         p.calculate_derived()
 

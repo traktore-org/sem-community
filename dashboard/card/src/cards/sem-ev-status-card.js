@@ -532,6 +532,43 @@ class SEMEVStatusCard extends SEMLitBase {
             this._val(`charger_${id}_estimated_soc`, null),
             this._chargers.length,
         );
+        // #708 — stale-sensor info line (approved Option A): the gauge keeps
+        // showing exactly what the car reports; the session energy-accounted
+        // estimate appears as a separate line with the reading's age, and a
+        // "target reached (estimated)" line explains an estimate-based stop.
+        //
+        // The reading and its instant come from the server. They used to be
+        // read off the live vehicle_soc mirror, which coupled this line to
+        // the very failure it exists to explain: when the sensor goes
+        // unavailable the mirror nulls, so the gauge promoted the estimate
+        // and the line that said WHY vanished in the same frame. Worse, an
+        // unavailable entity rewrites its own last_changed, so the age read
+        // "0 min ago" for a sensor that had been dead for half an hour.
+        // The instant (not a pre-computed age) is what's published, so the
+        // clock still ticks here and the attribute stays recorder-quiet.
+        const estAttrs708 = this._stateAttrs(`sensor.sem_charger_${id}_estimated_soc`);
+        const eaSoc708 = estAttrs708.energy_accounted_soc;
+        const estStop708 = estAttrs708.estimate_stop_active === true;
+        const vSoc708 = this._val(`charger_${id}_vehicle_soc`, null);
+        const lastSoc708 = estAttrs708.vehicle_soc_last ?? vSoc708;
+        let socAge708 = null;
+        const lastAt708 = Date.parse(estAttrs708.vehicle_soc_last_at ?? '');
+        if (!Number.isNaN(lastAt708)) {
+            socAge708 = Math.round((Date.now() - lastAt708) / 60000);
+        }
+        const fmt708 = (key) => (this._t(key) || '')
+            .replace(/\{soc\}/g, lastSoc708 != null ? Math.round(lastSoc708) : '—')
+            .replace(/\{age\}/g, socAge708 != null ? socAge708 : '—')
+            .replace(/\{est\}/g, eaSoc708 != null ? Math.round(eaSoc708) : '—');
+        // Show while the estimate meaningfully leads the last reading and
+        // that reading is actually stale (>= 5 min) — display users see no
+        // change. The lead requirement is waived when the sensor is OFFLINE:
+        // there the provenance IS the message, because the gauge has already
+        // switched to the estimate and nothing else says so.
+        const socOffline708 = vSoc708 == null;
+        const showSocInfo708 = lastSoc708 != null && eaSoc708 != null
+            && socAge708 != null && socAge708 >= 5
+            && ((eaSoc708 - lastSoc708) >= 1 || socOffline708);
         // (#440) nights / chargeNeeded / needsCharge / chargeIcon / chargeColor /
         // chargeText removed — the underlying skip decision is gone.
         const name = this._chargerName(id);
@@ -626,6 +663,37 @@ class SEMEVStatusCard extends SEMLitBase {
         const showCheapHint = chargeMode === 'solar_plus_cheap'
             && nextCheapLabel;
 
+        // (#804) Phase row — exists only for a charger whose phase-switch
+        // capability is configured (the phase_mode select is only created
+        // then). Status prefers the MEASURED phases (W/A estimate), falls
+        // back to the sequencer's belief; a running switch replaces the
+        // status with its sequence state.
+        const phaseModeEntityId = `select.sem_charger_${id}_phase_mode`;
+        const phaseModeExists = !!this._hass?.states?.[phaseModeEntityId];
+        const phaseAttrs = ((csAttrs.per_charger_phases || {})[id]) || {};
+        const phaseMode = this._stateStr(phaseModeEntityId) || 'auto';
+        const phaseOptions = this._stateAttrs(phaseModeEntityId).options
+            || ['auto', '1', '3'];
+        const phaseLabels = {
+            auto: this._t('phase_mode_auto'),
+            '1': this._t('phase_mode_1'),
+            '3': this._t('phase_mode_3'),
+        };
+        let phaseStatus = '';
+        if (phaseAttrs.switch_state === 'stopping') {
+            phaseStatus = this._t('phase_status_stopping');
+        } else if (phaseAttrs.switch_state === 'settling') {
+            phaseStatus = this._t('phase_status_settling');
+        } else if (phaseAttrs.active_phases) {
+            phaseStatus = (this._t('phase_status_measured') || '{n}-phase measured')
+                .replace('{n}', phaseAttrs.active_phases);
+        } else if (phaseAttrs.believed_phases) {
+            phaseStatus = (this._t('phase_status_believed') || '{n}-phase')
+                .replace('{n}', phaseAttrs.believed_phases);
+        } else {
+            phaseStatus = this._t('phase_status_unknown');
+        }
+
         // Range the charge will ADD to reach the Min (guaranteed) target, in km —
         // updates live as the Min handle moves. Solar may add more, up to Max. (#245)
         const minTarget = this._entityVal(minEntityId, isSoc ? 80 : 10);
@@ -679,6 +747,17 @@ class SEMEVStatusCard extends SEMLitBase {
                              authority on whether to charge at night. -->
                     </div>
                 </div>
+
+                ${estStop708 ? html`
+                <div class="soc-info-708 soc-info-708-stop">
+                    <ha-icon icon="mdi:check-circle-outline" style="--mdc-icon-size:14px;color:#8DC892"></ha-icon>
+                    <span>${fmt708('soc_target_reached_est')}<br>
+                        <small>${fmt708('soc_confirms_next_update')}</small></span>
+                </div>` : showSocInfo708 ? html`
+                <div class="soc-info-708">
+                    <ha-icon icon="mdi:information-outline" style="--mdc-icon-size:14px;color:#5BC8D8"></ha-icon>
+                    <span>${fmt708('soc_info_line')}</span>
+                </div>` : nothing}
 
                 <div class="charge-target-group">
                     <div class="ct-title">
@@ -738,6 +817,30 @@ class SEMEVStatusCard extends SEMLitBase {
                             <b style="color:#8DC892">${nextCheapLabel}</b>
                         </div>
                     ` : nothing)}
+                    ${phaseModeExists ? html`
+                    <div class="ct-row">
+                        <span class="ct-label">${this._t('phase_mode')}</span>
+                        <span class="ct-ctl">
+                            <select class="ct-mode-select"
+                                    .value=${phaseMode}
+                                    @click=${(e) => e.stopPropagation()}
+                                    @change=${(e) => this._selectOption(phaseModeEntityId, e.target.value)}>
+                                ${phaseOptions.map(o => html`
+                                    <option value=${o} ?selected=${o === phaseMode}>
+                                        ${phaseLabels[o] || o}
+                                    </option>`)}
+                            </select>
+                        </span>
+                    </div>
+                    <div class="ct-subhint">
+                        <div class="ct-hint-row">
+                            <span class="ct-hint-text">
+                                <ha-icon icon="mdi:sine-wave" style="--mdc-icon-size:12px;color:#8DC892"></ha-icon>
+                                ${phaseStatus}
+                            </span>
+                        </div>
+                    </div>
+                    ` : nothing}
                     <div class="ct-row clickable"
                         @click=${() => this.dispatchEvent(new CustomEvent('hass-more-info',
                             { bubbles: true, composed: true, detail: { entityId: targetTimeId } }))}>
@@ -1185,6 +1288,22 @@ class SEMEVStatusCard extends SEMLitBase {
                 flex: 1;
                 display: flex; flex-direction: column; gap: 2px;
             }
+            /* #708 — stale-sensor estimate info line */
+            .soc-info-708 {
+                display: flex; align-items: flex-start; gap: 6px;
+                margin: 4px 0 2px; padding: 4px 8px;
+                font-size: 11px; line-height: 1.35;
+                color: var(--secondary-text-color, #999);
+                background: rgba(91, 200, 216, 0.08);
+                border-radius: 6px;
+            }
+            .soc-info-708-stop {
+                background: rgba(141, 200, 146, 0.10);
+                color: var(--primary-text-color, #c9d4c9);
+            }
+            .soc-info-708 small {
+                font-size: 10px; opacity: 0.75;
+            }
             .cm-row {
                 display: flex; justify-content: space-between; align-items: baseline;
                 padding: 2px 0;
@@ -1471,4 +1590,6 @@ semDefineCard('sem-ev-status-card', SEMEVStatusCard, {
     type: 'sem-ev-status-card',
     name: 'SEM EV Status',
     description: 'Lumina-styled EV charging hero card with per-charger intelligence and settings',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-ev-status-card',
 });

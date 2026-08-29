@@ -24,8 +24,8 @@
    - 1-phase chargers: ~1380 W (6 A × 230 V)
    - 3-phase chargers: ~4140 W (6 A × 3 × 230 V)
 
-   The `min_solar_power` setting (default 500 W in the Optimization Settings step) is the surplus *floor* below which SEM won't even attempt to start the charger — keep it well **below** the hardware minimum so SEM has headroom to ramp up before the cliff.
-5. For night charging: it is **opt-in (off by default)** — turn on `switch.sem_night_charging` (and the per-charger `…_night_charging` switch in a multi-charger setup), and make sure it's within the night window
+   The `min_solar_power` setting (default 1000 W in the Optimization Settings step) is the surplus *floor* below which SEM won't even attempt to start the charger — keep it well **below** the hardware minimum so SEM has headroom to ramp up before the cliff.
+5. For night charging: check this charger's `select.sem_charger_<id>_charge_mode`. `Min + Solar` (the default), `Solar + cheapest hours` and `Always (max)` charge overnight; `Solar only` does not unless you set an "At least" floor on that charger. Also make sure it's within the night window.
 
 ---
 
@@ -46,17 +46,18 @@ setpoint independently of SEM. Because SEM never started an owned
 session, its `_session_active` flag was False and the disable path
 silently skipped.
 
-**Fix (v1.6.5+):** Upgrade to v1.6.5 or later. SEM now re-asserts the
-per-brand disable service (e.g. `keba.disable`) every coordinator cycle
-(~10 s) whenever Charge mode is **Off** and the charger is actually
-drawing power (> 500 W). Idempotent and KEBA-firmware-safe. Logs will
-show a one-time WARNING per self-resume episode:
+**Fix (v1.6.5+):** Upgrade to v1.6.5 or later. Since v1.7.3-beta.50 (#392)
+the **charger reconciler** owns this: every coordinator cycle it compares the
+desired state against what the box is actually doing, and re-issues the
+per-brand disable (e.g. `keba.disable`) whenever Charge mode is **Off** and
+the charger has self-resumed. It is idempotent — the command only goes out
+while the observation still disagrees — and KEBA-firmware-safe. Logs show:
 
 ```
-Charger <name> self-resumed while mode=off (drawing 4140W). Calling
-stop_session() — will re-assert every cycle until ev_power drops
-below 500W. (#315)
+reconcile(ev_charger): DISABLE — <reason>
 ```
+
+at INFO level (`coordinator.charger_reconciler`) each time it re-asserts.
 
 **Workaround if you're on v1.6.4 or earlier:**
 
@@ -123,13 +124,11 @@ The Repair clears by itself as soon as the charger stops drawing.
 
 ## Car charged overnight when I only wanted solar surplus
 
-**Cause:** Grid-assisted **night charging** is enabled, with a charge target (a daily kWh target or a target SOC %) the car hadn't reached, so SEM topped it up from the grid overnight. On fresh installs this is now off by default, but it stays enabled on upgraded systems that already had it on, and a multi-charger setup tracks an enable switch *per charger*.
+**Cause:** The charger's **Charge mode** allows grid-assisted night charging, and it had a charge target (a daily kWh target or a target SOC %) the car hadn't reached — so SEM topped it up from the grid overnight. The default mode on a fresh install is **`Min + Solar`**, which charges overnight by design.
 
-**Fix:** To make a charger surplus-only, either:
-1. Turn **off** that charger's `…_night_charging` switch (or the global `switch.sem_night_charging` to disable night charging for all chargers), **or**
-2. Set that charger's **Night Target to 0** (kWh mode) / its **Target SOC to its current level** (SOC mode).
+**Fix:** To make a charger surplus-only, set its `select.sem_charger_<id>_charge_mode` to **`Solar only`** *and* leave its **"At least" floor at 0** (kWh mode) / its **Target SOC at its current level** (SOC mode).
 
-With the floor at zero and/or night charging off, the charger only draws solar surplus. *(#256)*
+Both halves matter: `Solar only` with a non-zero floor still tops that floor up from the grid by the Charge-by time — that floor is how you ask for an overnight guarantee without leaving the solar-first mode (#634/#679). With the floor at zero, the charger only ever draws solar surplus.
 
 ---
 
@@ -141,7 +140,7 @@ With the floor at zero and/or night charging off, the charger only draws solar s
 1. Confirm the coordinator is running: `sensor.sem_charging_state` should NOT be `unavailable`. If it is, the integration failed to start — see HA logs.
 2. Verify power sensors have numeric values (not "unknown" or "unavailable")
 3. Check HA logs for SEM errors: **Settings > System > Logs**, filter for `solar_energy_management`
-4. Daily ENERGY values (solar / home / grid / battery) reset at **midnight** — matching HA's Energy Dashboard. Two deliberate exceptions: the EV daily counter rolls at the charger's **Charge-by deadline** (default 07:00, so an overnight charge stays in one bucket), and load **runtime targets** roll at **sunrise** (see MULTI_DEVICE_GUIDE)
+4. Daily ENERGY values (solar / home / grid / battery) reset at **midnight** — matching HA's Energy Dashboard. Two deliberate exceptions: the EV daily counter rolls at the **Charge-by deadline** (default 07:00, so an overnight charge stays in one bucket; on multi-charger installs only while all chargers share one deadline — otherwise the fleet total rolls at midnight, #724), and load **runtime targets** roll at **sunrise** (see MULTI_DEVICE_GUIDE)
 
 ---
 
@@ -181,7 +180,7 @@ card resources cannot be registered automatically. Add the following to
 configuration.yaml under `lovelace.resources` and restart:
   - url: /local/custom_components/solar_energy_management/dashboard/card/dist/sem-cards.js
     type: module
-  - url: /local/custom_components/solar_energy_management/dashboard/card/sem-system-diagram-card.js
+  - url: /local/custom_components/solar_energy_management/dashboard/card/sem-localize.js
     type: module
 ```
 
@@ -210,7 +209,7 @@ lovelace:
   resources:
     - url: /local/custom_components/solar_energy_management/dashboard/card/dist/sem-cards.js
       type: module
-    - url: /local/custom_components/solar_energy_management/dashboard/card/sem-system-diagram-card.js
+    - url: /local/custom_components/solar_energy_management/dashboard/card/sem-localize.js
       type: module
     # plus the HACS cards SEM needs:
     - url: /hacsfiles/lovelace-card-mod/card-mod.js
@@ -295,10 +294,38 @@ read-only by design — SEM can't suppress it), but the cards will load.
 
 **Fix:**
 1. Go to **Settings > Devices & Services > Solar Energy Management > Configure**
-2. Verify `load_management_enabled` is checked
-3. Set a realistic `target_peak_limit` (e.g., 5.0 kW for a typical household)
+2. Verify `load_management_enabled` is checked, and that **No grid limit**
+   (`peak_limit_unlimited`) is **off** — it hides the kW fields and disables
+   peak management entirely, including the ceiling the EV charger sizes against
+3. Set a realistic `target_peak_limit` — your grid connection ceiling, from the
+   supply contract or main breaker (e.g. 5.0 kW for a typical European household,
+   about 38 kW for a 200 A North-American service). The field accepts 1–80 kW.
 4. Check that controllable devices have been discovered: `sensor.sem_controllable_devices_count` should be > 0
 5. The 15-minute rolling average (`sensor.sem_consecutive_peak_15min`) must exceed the target before shedding activates
+
+---
+
+## "Why did SEM touch that device?" — reading a load row in diagnostics
+
+Every load in the diagnostics download (**Settings → Devices & Services → Solar
+Energy Management → ⋮ → Download diagnostics**) carries two *independent*
+answers, and mixing them up is the single most common misreading:
+
+| Field | Question it answers | Comes from |
+|---|---|---|
+| `has_control_handle` | **Can** SEM control it? A switch / number entity / service call was discovered for this appliance. | Discovery. Nothing you set changes it. |
+| `control_mode` | **May** SEM control it, and how? `off` / `peak_only` / `surplus` / `manual`. | The mode dropdown on the Load Priority card. |
+| `user_hands_off` | **May** SEM control it? `true` = you toggled "never touch this load". | The controllable toggle on the Load Priority card. |
+| `may_actuate` | The verdict: **would** SEM act on it right now? | All three above. |
+
+So `has_control_handle: true` on a device you set to **Mode: Off** is correct
+and expected — it says a switch exists, not that SEM is allowed to use it.
+Read `may_actuate` for "would SEM touch this"; if that says `false` and SEM
+still acted, that's a bug worth reporting (#780).
+
+Before v2.0 these were a single field named `is_controllable`, which read like
+permission but meant capability-and-a-bit-of-permission. It is still present,
+derived, so older tooling keeps working.
 
 ---
 
@@ -450,7 +477,21 @@ Update to SEM v1.2.0 or newer. This issue does not occur on v1.2.0+.
 
 ## Debug logging
 
-To enable detailed logging for SEM, add this to your `configuration.yaml`:
+**The easiest way** is Home Assistant's built-in flow — no YAML, no restart:
+
+1. **Settings → Devices & Services → Solar Energy Management → Enable debug logging**
+2. Reproduce the problem.
+3. Click **Disable debug logging** — Home Assistant downloads a log excerpt
+   you can attach to a bug report.
+
+At the normal log level SEM is quiet by design: a healthy install adds
+essentially nothing to your Home Assistant log. Debug logs are
+**transition-based** — SEM logs when a decision *changes* (charging intent,
+battery command, a sensor going silent or coming back), not the same
+unchanged state every cycle. A quiet debug log therefore means the system
+is steady, not that logging is broken.
+
+Alternatively, via `configuration.yaml` (persists across restarts):
 
 ```yaml
 logger:
@@ -458,8 +499,6 @@ logger:
   logs:
     custom_components.solar_energy_management: debug
 ```
-
-Restart Home Assistant after adding this. Debug logs will appear in **Settings > System > Logs**.
 
 To enable logging for a specific module only:
 
@@ -470,6 +509,9 @@ logger:
     custom_components.solar_energy_management.coordinator.charging_control: debug
     custom_components.solar_energy_management.coordinator.surplus_controller: debug
 ```
+
+Levels can also be changed at runtime without a restart via
+**Developer tools → Actions → `logger.set_level`**.
 
 ---
 
@@ -492,6 +534,29 @@ so inflated solar inflates it 1:1.
 
 **Note:** the day the fix lands, the affected day's figures are already banked. Daily values are
 correct from the following midnight; monthly/yearly/lifetime keep the historic inflation.
+
+## "Home" in SEM is much lower than "Home" in the HA Energy Dashboard
+
+**This is usually not a bug — the two numbers answer different questions.**
+
+| Entity | Includes the EV? |
+|---|---|
+| `sensor.sem_daily_home_energy` | **No.** The house *without* the car. SEM keeps the EV separate because every charging decision it makes depends on telling the two apart. |
+| `sensor.sem_daily_total_consumption` | **Yes.** House + car — **this is the one that matches the Energy Dashboard's "Home" figure.** |
+
+HA's Energy Dashboard shows total consumption and draws individually-tracked devices as a *slice*
+of it, not a subtraction from it. So on any day you charge a car, HA's number is larger than SEM's
+`daily_home_energy` by roughly the car's energy, and both are correct.
+
+**The check**, for a completed day:
+
+```jinja
+{{ states('sensor.sem_daily_total_consumption') }}   {# compare THIS to the Energy Dashboard #}
+{{ states('sensor.sem_daily_home_energy') }}         {# house only, excludes the car #}
+```
+
+If `daily_total_consumption` matches your Energy Dashboard and `daily_home_energy` does not, nothing
+is wrong. If the *total* is also off, that is a real divergence — see the section below.
 
 ## Daily home consumption doesn't match my meter (or the other daily rows)
 
@@ -517,6 +582,23 @@ exact residual of the six rows published beside it.
 - The *instantaneous* `sensor.sem_home_consumption_power` is unchanged (see ADR 0004) — only the
   daily energy row moved to the balance.
 
+## Charging stopped before my car app showed the target (slow SOC sensors)
+
+**This is intentional (v1.7.6, #708).** Some car integrations (OnStar and similar) poll the
+vehicle SOC as rarely as every 30 minutes. Steering on such a stale value used to overshoot the
+target by *sensor lag × charge power* — a 60 % target could land at 67 %. SEM now also tracks the
+energy it actually delivered during the session: when *last reading + delivered energy* says the
+target is reached, charging stops even though the car sensor still shows the old value.
+
+- The charger card shows the reasoning live: `Car: 55 % (28 min ago) · est. now ~59 %`, and
+  "Target reached — ~60 % estimated" after the stop. A mobile notification explains it too.
+- When the sensor finally updates: if it confirms the target, nothing happens. If it lands
+  **below** the target, SEM automatically resumes for the difference — you may see one or two
+  short top-ups spaced by the sensor's polling interval. That is the feature keeping your
+  "at least X %" promise, not flapping.
+- The battery gauge always shows exactly what your car reports — the estimate only ever appears
+  in the info line, and only while the sensor is stale during a session.
+
 ## Energy values spiked after integration update or restart
 
 **Cause:** When a hardware integration (e.g. Huawei Solar) restarts or updates, its sensors go `unavailable` briefly. When they come back, SEM's energy integrator could multiply the returned power value by the entire gap duration, producing unrealistic energy spikes (e.g. 40+ kWh battery discharge on a 15 kWh battery).
@@ -531,3 +613,40 @@ Energy integration gap: XXXs > 120s limit — skipping cycle to prevent accumula
 1. The daily accumulators reset at midnight — wait for the next day
 2. For immediate correction: compare SEM values against hardware daily counters (e.g. `sensor.batteries_tagesentladung`) and adjust storage if needed
 3. Restart the integration after corrections: **Settings > Devices & Services > Solar Energy Management > Reload**
+
+## One device's energy today is absurd (thousands of kWh)
+
+**Cause (fixed in 2.0.0):** the device's energy counter reset to zero — a
+firmware update, a re-paired device, a replaced meter — and then climbed back
+to its old reading. SEM caught the drop but not the return, so the lifetime
+total was booked as one cycle's consumption. The tell is the energy-balance
+health check: the members sum to far more than the house total, and exactly
+one member is responsible.
+
+**Now:** SEM remembers the reading the counter fell from and books only what
+it gained over that mark — the real consumption across the outage. A delta no
+window could physically deliver (over 100 kW for a single load) is refused,
+recorded as *blind* rather than as zero, and the meter is trusted again from
+where it now stands. Look for:
+
+```
+energy counter sensor.X recovered to N kWh after a reset from M — booking … kWh consumed across the … s outage, not the whole reading
+```
+
+A figure booked before the upgrade clears at the next day rollover (sunrise).
+
+## Devices & Services shows dozens of loads that are settings, not devices
+
+**Cause (fixed in 2.0.0):** load discovery admitted any `switch.*` it could
+pair with a power sensor. A lot of hardware publishes its own knobs as
+switches — a WLED strip's *reverse* / *freeze* / *night light*, a washing
+machine's child lock, a router's status LED — and one `sensor.*_power` pairs
+with all of a device's siblings, so one strip could contribute a dozen rows,
+each controllable at 0 W.
+
+**Now:** Home Assistant marks those entities **configuration** or
+**diagnostic**, and SEM reads that mark — they are not discovered, not chosen
+as a device's control surface, and rows an older version wrote retire
+themselves on the next refresh (logged as `#781 dropped load row …`). Entities
+your registry doesn't know (template switches, YAML helpers) are still kept,
+as is anything you registered yourself with `register_surplus_device`.

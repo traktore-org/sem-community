@@ -46,9 +46,9 @@ EV charger setup is optional. SEM works as a monitoring and battery management s
 2. Click **+ Add Integration** and search for **Solar Energy Management**.
 3. Select it to open the setup wizard.
 
-The wizard has 3 steps.
+The wizard has 2 steps.
 
-### Step 2a: User (Observer Mode)
+### Step 2a: Confirm sensors (Observer Mode)
 
 SEM displays a summary of the sensors it found in your Energy Dashboard — solar power, grid power, and battery power. Review them to confirm they look correct.
 
@@ -56,29 +56,18 @@ If you want SEM to monitor only and not control any hardware, enable **Observer 
 
 Click **Submit**.
 
-### Step 2b: EV Charger (optional)
-
-If you have an EV charger, select its sensors here:
-
-| Field | What to select |
-|-------|----------------|
-| Connected sensor | Binary sensor that shows when the car is plugged in |
-| Charging sensor | Binary sensor that shows when charging is active |
-| Power sensor | Sensor showing current charging power in watts |
-
-Not sure which entities? Go to **Developer Tools > States** and type your charger brand name in the filter box.
-
-If you have no EV charger, leave the fields empty and click **Submit**.
-
-### Step 2c: Hardware
+### Step 2b: Hardware
 
 | Setting | Default | What it means |
 |---------|---------|---------------|
 | Battery capacity | 10 kWh | Your home battery size |
-| Target peak limit | 5 kW | Maximum grid draw before SEM starts shedding load |
 | Generate dashboard | ON | Auto-create the SEM dashboard — leave this on |
 
-Click **Submit**.
+Click **Submit**. SEM starts at a 5 kW target peak limit; tune it later from
+the Control tab's slider (up to 80 kW, or **Uncapped**) — see
+[Load Management Settings](USER_GUIDE.md#load-management-settings).
+
+EV charger configuration is available after install via the **Configuration tab** or **Settings > Devices & Services > Solar Energy Management > Configure**.
 
 **What you should see:** A success message and the integration listed under **Devices & Services**.
 
@@ -148,12 +137,12 @@ Once installed, SEM runs without manual intervention:
 - **Night charging** — *opt-in (off by default)*; when enabled, grid-charges the EV to your daily-target floor
 - **Smart forecast** — if tomorrow is sunny, tonight's grid charging is reduced or skipped
 
-The controls that matter most (v1.7.3):
+The controls that matter most:
 
 | Entity | Default | Purpose |
 |--------|---------|---------|
-| `select.sem_charger_<id>_charge_mode` | `Min + Solar` | Per-charger charging mode (v1.7.3): **Solar only** / **Solar + cheapest hours** / **Min + Solar** (grid minimum 6A + surplus) / **Always max** / **Off**. Pick based on your needs; see [Charging Modes](SETUP_GUIDE.md#8-ev-charging-modes) in the Setup Guide. |
-| `number.sem_battery_assist_min_surplus` | 1200 W | **Solar Gate** (v1.7.3): minimum real solar surplus to enable battery assist for the EV. Set to 0 W to allow battery support everywhere (previous behaviour). Prevents battery drain into the car at night. |
+| `select.sem_charger_<id>_charge_mode` | `Min + Solar` | Per-charger charging mode: **Solar only** / **Solar + cheapest hours** / **Min + Solar** (grid minimum 6A + surplus) / **Always max** / **Off**. Pick based on your needs; see [Charging Modes](SETUP_GUIDE.md#8-ev-charging-modes) in the Setup Guide. |
+| `number.sem_battery_assist_min_surplus` | 1200 W | **Solar Gate**: minimum real solar surplus to enable battery assist for the EV. Set to 0 W to allow battery support everywhere (previous behaviour). Prevents battery drain into the car at night. |
 | `switch.sem_observer_mode` | OFF | Monitor-only, no hardware control |
 
 Everything else is automatic.

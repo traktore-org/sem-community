@@ -38,7 +38,6 @@ Tests covered:
 """
 from __future__ import annotations
 
-import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 

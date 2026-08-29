@@ -5,15 +5,13 @@ issue number and explain what failure mode the test prevents from returning.
 """
 from __future__ import annotations
 
-import math
 from datetime import date, datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from custom_components.solar_energy_management.coordinator.energy_calculator import (
     EnergyCalculator,
-    MIN_POWER_THRESHOLD,
 )
 from custom_components.solar_energy_management.coordinator.flow_calculator import (
     FlowCalculator,
@@ -23,13 +21,9 @@ from custom_components.solar_energy_management.coordinator.forecast_tracker impo
     SUNRISE_HOUR,
     SUNSET_HOUR,
 )
-from custom_components.solar_energy_management.coordinator.ev_taper_detector import (
-    EVTaperDetector,
-)
 from custom_components.solar_energy_management.coordinator.types import (
     PowerReadings,
     EnergyTotals,
-    CostData,
 )
 
 
@@ -257,8 +251,6 @@ class TestMidnightRolloverSnapshot:
         """should allow re-snapshot when prior snapshot energy_kwh == 0."""
         yesterday = date(2026, 5, 14)
         today = date(2026, 5, 15)
-        month_key = "2026_5"
-        year_key = "2026"
         yesterday_str = str(yesterday)
 
         time_manager.get_current_meter_day_sunrise_based.return_value = today
@@ -323,8 +315,6 @@ class TestMidnightRolloverSnapshot:
         """should capture day's real cost data during normal midnight rollover."""
         day1 = date(2026, 5, 14)
         day2 = date(2026, 5, 15)
-        month_key = "2026_5"
-        year_key = "2026"
 
         time_manager.get_current_meter_day_sunrise_based.return_value = day1
 
@@ -509,11 +499,6 @@ class TestForecastSunriseSunsetFromSunEntity:
         # the same local hours (UTC == local in test)
         tracker.set_hass(hass)
 
-        # Patch DEFAULT_TIME_ZONE so astimezone(tz) is a no-op in UTC
-        import custom_components.solar_energy_management.coordinator.forecast_tracker as ft_mod
-        import zoneinfo
-        original_tz = ft_mod.dt_util.DEFAULT_TIME_ZONE
-
         return tracker
 
     def test_get_sun_hours_uses_sun_entity_when_available(self):
@@ -528,7 +513,6 @@ class TestForecastSunriseSunsetFromSunEntity:
         sun_state.attributes = {"next_rising": rise_iso, "next_setting": set_iso}
         hass.states.get.return_value = sun_state
 
-        import zoneinfo
         with patch(
             "custom_components.solar_energy_management.coordinator.forecast_tracker.dt_util"
         ) as mock_dt:
@@ -693,8 +677,6 @@ class TestSavingsNoDoubleCount:
         now = _freeze(hour=12)
         calculator._import_rate = 0.30
         today = now.date()
-        month_key = "2026_5"
-        year_key = "2026"
 
         # Manually seed known values
         calculator._daily_cost_accumulators[f"cost_savings_{today}"] = 2.40   # solar

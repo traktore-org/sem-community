@@ -33,13 +33,21 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from custom_components.solar_energy_management import _derive_charge_mode
+from custom_components.solar_energy_management.config_flow import (
+    SolarEnergyManagementConfigFlow,
+)
+
+# (#758) These tests are about "every migration hop ran", not about a
+# particular number. Hard-coding the target meant each schema bump
+# rewrote assertions that were never about the bump — the trail of
+# eight stale "# bumped in vN->vN+1" comments this replaces.
+CURRENT = SolarEnergyManagementConfigFlow.VERSION
 from custom_components.solar_energy_management.consts.ev_charge_modes import (
     DEFAULT_EV_CHARGE_MODE,
     EV_CHARGE_MODES,
     MODE_NIGHT_ALLOWED,
     MODE_USES_SMART_NIGHT,
     MODE_USES_TARIFF,
-    effective_charge_mode_for,
 )
 from custom_components.solar_energy_management.coordinator import SEMCoordinator
 from custom_components.solar_energy_management.coordinator.charging_control import (
@@ -411,7 +419,7 @@ class TestMigrateEntryV6:
             ],
         }, hass=hass)
         assert captured["options"]["ev_chargers"][0]["charge_mode"] == "solar_plus_cheap"
-        assert captured["version"] == 16  # bumped in v15→v16 (#604)  # bumped in v14→v15 (#576)  # bumped in v11→v12 (#135)  # bumped in v10→v11 (#446)  # bumped in v9→v10 (#441)  # bumped in v6→v7 (#277 Phase C)
+        assert captured["version"] == CURRENT
 
     async def test_preserves_explicit_min_plus_solar_without_tariff(self):
         """User explicitly picked min_plus_solar in the new selector
@@ -482,7 +490,7 @@ class TestMigrateEntryV6:
 
     async def test_no_chargers_safe_bumps_version(self):
         captured = await self._run(options={})
-        assert captured["version"] == 16  # bumped in v15→v16 (#604)  # bumped in v14→v15 (#576)  # bumped in v11→v12 (#135)  # bumped in v10→v11 (#446)  # bumped in v9→v10 (#441)  # bumped in v6→v7 (#277 Phase C)
+        assert captured["version"] == CURRENT
 
 
 # ──────────────────────────────────────────────────────────────────────

@@ -21,7 +21,6 @@ from .types import (
     ChargerEnergyFlows,
     ChargerFlows,
     EnergyFlows,
-    EnergyTotals,
     PowerFlows,
     PowerReadings,
     StringEnergy,
@@ -335,13 +334,15 @@ class FlowCalculator:
         # - ``grid → grid_export``: a flow-meter sign artefact, not real.
         # - ``battery_discharge → battery_charge``: a battery can't
         #   simultaneously discharge and charge itself.
-        # - ``battery_discharge → grid_export``: SEM doesn't support
-        #   battery-to-grid arbitrage (the few installs that do would
-        #   need a ``battery_to_grid`` flow field — out of scope here).
-        #   In a normal install solar/battery sign-conflicts caused by
-        #   sensor lag are rare; if they happen the leftover battery
-        #   discharge stays unattributed for that cycle, which is a
-        #   small honest under-count rather than a wrong attribution.
+        # (#776) ``battery → grid_export`` used to be a third deliberate
+        # omission ("SEM doesn't support battery-to-grid arbitrage").
+        # That stopped being true: force_discharge mode exports battery
+        # energy from the shipped UI, and #638 C6 wired the plan-gated
+        # arbitrage sell — during a sell the exported watts were
+        # unattributed every cycle, not the rare sensor-lag blip the old
+        # comment described. The pair sits AFTER the solar pairs, so
+        # ``solar_to_grid`` keeps its slack-variable role and the
+        # battery only claims export that solar could not.
         pairs = [
             ("solar", "home"),
             ("solar", "ev"),
@@ -349,6 +350,7 @@ class FlowCalculator:
             ("solar", "grid_export"),
             ("battery", "home"),
             ("battery", "ev"),
+            ("battery", "grid_export"),
             ("grid", "home"),
             ("grid", "ev"),
             ("grid", "battery_charge"),
@@ -360,6 +362,7 @@ class FlowCalculator:
             ("solar", "grid_export"): "solar_to_grid",
             ("battery", "home"): "battery_to_home",
             ("battery", "ev"): "battery_to_ev",
+            ("battery", "grid_export"): "battery_to_grid",
             ("grid", "home"): "grid_to_home",
             ("grid", "ev"): "grid_to_ev",
             ("grid", "battery_charge"): "grid_to_battery",
@@ -461,7 +464,7 @@ class FlowCalculator:
     _ACCUMULATED_ATTRS = (
         "solar_to_home", "solar_to_ev", "solar_to_battery", "solar_to_grid",
         "grid_to_home", "grid_to_ev", "grid_to_battery",
-        "battery_to_home", "battery_to_ev",
+        "battery_to_home", "battery_to_ev", "battery_to_grid",
     )
 
     # v1.6.15: per-charger EV slice. Only the three EV-side flows

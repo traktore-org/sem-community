@@ -157,8 +157,10 @@ class SEMGaugeCard extends SEMLitBase {
 }
 
 semDefineCard('sem-gauge-card', SEMGaugeCard, {
-    type: 'custom:sem-gauge-card',
+    type: 'sem-gauge-card',
     name: 'SEM Gauge Card',
     description: 'Lumina-styled arc gauge for percentage values',
+    documentationURL:
+        'https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-gauge-card',
     preview: false,
 });
