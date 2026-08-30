@@ -89,6 +89,30 @@ def _num(value) -> Optional[float]:
     return f if f == f and f not in (float("inf"), float("-inf")) else None
 
 
+def _floor_pct(reserve_kwh: float, capacity_kwh: float) -> float:
+    """The dynamic floor as a PERCENTAGE OF THE PACK, and therefore ≤ 100.
+
+    ``reserve`` is additive — the night's own draw sits on top of the
+    emergency floor — so on a pack too small for its night the sum exceeds
+    the pack and the raw ratio exceeds 100 %. A reserve of 50 % under a
+    night needing 52 % of a 12.5 kWh pack published **115.7 %** (found by
+    running the assembly across a scenario table, 30.08.2026).
+
+    The CONCLUSION was right and is unchanged — such a night spends nothing,
+    and the reason string says which term binds — but a percentage above 100
+    is not a percentage of anything: it cannot render on a gauge, and it is
+    read as a floor SOC downstream, where no SOC can ever reach it.
+
+    Clamping is behaviour-identical because SOC is itself ≤ 100: a floor of
+    115.7 and a floor of 100 both mean "never discharge". What the clamp
+    removes is a number the surface cannot express; what carries the lost
+    detail is the reason, which already names the binding term.
+    """
+    if not capacity_kwh:
+        return 0.0
+    return round(min(100.0, max(0.0, reserve_kwh / capacity_kwh * 100.0)), 1)
+
+
 def spendable_budget(
     soc_pct,
     usable_capacity_kwh,
@@ -175,7 +199,7 @@ def spendable_budget(
         binding = ("the reserve floor" if static_reserve >= night_reserve
                    else "tonight's own load")
         return SpendableBudget(
-            0.0, round(reserve / cap * 100.0, 1),
+            0.0, _floor_pct(reserve, cap),
             f"nothing spendable — {binding} needs all {stored:.1f} kWh stored",
         )
 
@@ -184,7 +208,7 @@ def spendable_budget(
 
     if spendable <= 0:
         return SpendableBudget(
-            0.0, round(reserve / cap * 100.0, 1),
+            0.0, _floor_pct(reserve, cap),
             "nothing spendable — tomorrow's forecast refills nothing",
         )
 
@@ -203,5 +227,5 @@ def spendable_budget(
     # the reserve alone.
     effective_floor_kwh = stored - spendable
     return SpendableBudget(
-        round(spendable, 2), round(effective_floor_kwh / cap * 100.0, 1), reason,
+        round(spendable, 2), _floor_pct(effective_floor_kwh, cap), reason,
     )

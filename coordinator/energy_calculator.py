@@ -2741,6 +2741,16 @@ class EnergyCalculator:
         key = f"{category}_{month_key}"
         return round(self._monthly_accumulators.get(key, 0.0), 2)
 
+    def monthly_total_for(self, category: str, day) -> float:
+        """(#867) Accumulated ``category`` energy for the month containing
+        ``day`` — the public way to ask about a month that is not today's.
+
+        The rollover sweep deliberately keeps the PREVIOUS month's keys, so
+        the month that just ended is still readable for the first days of the
+        new one. That is the window the degradation recorder runs in.
+        """
+        return self._get_monthly(category, self._month_key(day))
+
     def _get_yearly(self, category: str, year_key: str) -> float:
         """Get yearly accumulated energy."""
         key = f"{category}_{year_key}"

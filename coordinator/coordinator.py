@@ -55,7 +55,7 @@ from .types import (
     HeatPumpSensorData, HotWaterSensorData, PVAnalyticsData, EnergyAssistantSensorData,
     SessionData, BatterySessionData,
 )
-from .health_check import HealthCheck
+from .health_check import home_member_totals, HealthCheck
 from .units import energy_state_to_kwh, power_state_to_watts
 from .distance_units import distance_to_km
 from .ev_availability import operational_ev_connected, operational_night_target
@@ -2686,6 +2686,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # Restore EV session state (survives restarts)
             self._restore_ev_session_state()
 
+            # (#867) Restore the PV monthly history. Degradation compares a
+            # month against the same month a year earlier and needs 13 of
+            # them; a list that starts empty on every restart never gets
+            # there, which is why the verdict read 0.0 on installs with
+            # years of production.
+            self._pv_analyzer.restore_state(
+                self._storage.get_pv_performance_state())
+
             # Restore EV intelligence state (#106)
             ev_intel_state = self._storage.get_ev_intelligence_state()
             self._ev_taper_detector.restore_state(ev_intel_state)
@@ -4078,12 +4086,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # shortfall IS the baseload), and the sealed history feeds
                 # the drift check that asks whether the leftover still
                 # behaves like a house.
-                per_device_daily={
-                    d.device_id: float(
-                        getattr(d, "daily_energy_kwh", 0.0) or 0.0)
-                    for d in self._surplus_controller._devices.values()
-                    if getattr(d, "device_id", None)
-                },
+                # (#872) EV chargers are NOT members of the home row — the
+                # home balance subtracts EV energy, so counting a charger
+                # here compares it against a total it was removed from. Every
+                # install charging a car reported a permanent double-count
+                # that no amount of looking could resolve. One helper, so the
+                # rule lives beside the check that depends on it.
+                per_device_daily=home_member_totals(
+                    self._surplus_controller._devices.values()),
                 baseload_history=getattr(
                     self._energy_calculator, "baseload_history", None,
                 ) if self._energy_calculator else None,
@@ -4824,6 +4834,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # in-memory tracker above — a restart re-initialises the tracker to
             # today and would swallow the rollover.
             self._run_due_daily_decay(now_time, today_date, power)
+            # (#867) …and seal the month that just ended, once. Idempotent,
+            # so running it every cycle costs a dict scan.
+            self._record_completed_month(today_date)
             # (#829) Retention for SEM's own statistics-less status entities.
             # Off by default; the user sets it on the Config tab. Runs at most
             # once a calendar day and never touches an entity that carries
@@ -5020,6 +5033,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 forecast_data.forecast_power_next_hour_w = forecast.power_next_hour_w
                 forecast_data.forecast_peak_power_today_w = forecast.peak_power_today_w
                 forecast_data.forecast_peak_time_today = forecast.peak_time_today or ""
+                forecast_data.forecast_peak_power_path = getattr(
+                    forecast, "peak_power_path", "unsupported_by_source")
                 forecast_data.forecast_source = forecast.source
                 # (#819) carry the install's available sources through to
                 # the dashboard picker
@@ -11282,6 +11297,49 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             "battery_dynamic_floor_pct": budget.floor_pct,
             "battery_spendable_reason": budget.reason,
         }
+
+    def _record_completed_month(self, today) -> None:
+        """(#867) Record the month that just ended, exactly once.
+
+        ``PVPerformanceAnalyzer.record_monthly`` had thirteen call sites and
+        every one of them was a test. Nothing in production had ever recorded
+        a month, so ``_monthly_history`` was empty on every install, so
+        ``_estimate_degradation`` returned 0.0 forever and the card showed
+        "unknown" on systems with years of production. The unit tests passed
+        throughout — they called the recorder themselves.
+
+        Runs on the per-cycle path, so it must be idempotent: ``has_month``
+        is what stops a month being appended once per cycle for a month, which
+        would push the 36-entry window down to a single repeated month.
+
+        A month with no recorded production is SKIPPED rather than stored as
+        zero. Zero is indistinguishable from "the accumulator was swept before
+        we looked", and a fabricated zero reads as total system failure when
+        next year's same month is compared against it.
+        """
+        analyzer = getattr(self, "_pv_analyzer", None)
+        calc = getattr(self, "_energy_calculator", None)
+        if analyzer is None or calc is None:
+            return
+        try:
+            last_month_end = today.replace(day=1) - timedelta(days=1)
+            if analyzer.has_month(last_month_end.year, last_month_end.month):
+                return
+            total = float(calc.monthly_total_for("solar", last_month_end) or 0.0)
+            if total <= 0:
+                return
+            analyzer.record_monthly(
+                last_month_end.year, last_month_end.month, total)
+            if self._storage is not None:
+                self._storage.set_pv_performance_state(analyzer.export_state())
+            _LOGGER.info(
+                "PV degradation: recorded %s-%02d at %.1f kWh (%d month(s) of "
+                "history; %d needed for a verdict)",
+                last_month_end.year, last_month_end.month, total,
+                len(analyzer.get_monthly_history()), 13,
+            )
+        except (AttributeError, TypeError, ValueError) as err:
+            _LOGGER.debug("Monthly PV performance not recorded: %s", err)
 
     def _run_due_daily_decay(self, now_time, today_date, power) -> None:
         """Run the virtual-SOC daily decay if it hasn't run yet today (#645).

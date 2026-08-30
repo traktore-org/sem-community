@@ -75,6 +75,18 @@ FORECAST_SOLAR_UNIQUE_SUFFIXES = {
     "forecast_tomorrow": "_energy_production_tomorrow",
     "forecast_remaining": "_energy_production_today_remaining",
     "power_now": "_power_production_now",
+    # (#867) The peak TIME is on every Forecast.Solar / Open-Meteo install
+    # and was simply not mapped, so the card's peak row sat blank on every
+    # non-Solcast system. Verified on a real install:
+    # ``sensor.power_highest_peak_time_today = 2026-08-30T12:00:00+00``.
+    #
+    # There is deliberately NO ``peak_power_today`` here. These integrations
+    # publish no peak-power sensor and no hourly series to derive one from
+    # (checked: neither power_production_now nor energy_production_today
+    # carries a series attribute). Mapping it to a guess would put a
+    # confident wrong number where an honest absence belongs — see
+    # ``peak_power_path``.
+    "peak_time_today": "_power_highest_peak_time_today",
 }
 # (#687) Open-Meteo Solar Forecast (rany2/ha-open-meteo-solar-forecast)
 # deliberately mirrors core Forecast.Solar: unique_id = ``{entry_id}_{key}``
@@ -123,6 +135,14 @@ class ForecastData:
     power_next_hour_w: float = 0.0
     peak_power_today_w: float = 0.0
     peak_time_today: Optional[str] = None
+    #: (#867) WHY the peak power reads what it reads. ``0.0`` on its own
+    #: asserts "the peak is zero watts", which is how a row that is merely
+    #: unsupported came to look broken beside populated neighbours.
+    #: One of: ``read`` (a real value), ``unsupported_by_source`` (this
+    #: forecast integration publishes no peak power — Forecast.Solar and
+    #: Open-Meteo do not, and expose no series to derive it from), or
+    #: ``no_entity`` (the source should have it and it was not found).
+    peak_power_path: str = "unsupported_by_source"
 
     # Source info
     source: str = "none"
@@ -142,6 +162,7 @@ class ForecastData:
             "forecast_power_now_w": round(self.power_now_w, 0),
             "forecast_peak_power_today_w": round(self.peak_power_today_w, 0),
             "forecast_peak_time_today": self.peak_time_today,
+            "forecast_peak_power_path": self.peak_power_path,
             "forecast_source": self.source,
             "forecast_available": self.available,
         }
@@ -731,6 +752,15 @@ class ForecastReader:
         data.power_next_hour_w = self._read_role_power_w("power_next_hour", 0.0)
         # (#841) NOT _read_role_power_w: that sums, and peaks do not add.
         data.peak_power_today_w = self._read_role_peak_w("peak_power_today", 0.0)
+        # (#867) Say WHICH kind of zero this is. Only Solcast publishes a
+        # peak-power sensor; on the others the honest answer is that the
+        # source cannot supply it, not that the peak is 0 W.
+        if not self._entities.get("peak_power_today"):
+            data.peak_power_path = "unsupported_by_source"
+        elif data.peak_power_today_w > 0:
+            data.peak_power_path = "read"
+        else:
+            data.peak_power_path = "no_entity"
 
         # Peak time — Solcast exposes a full ISO datetime; coordinator
         # and dashboard consumers expect "HH:MM" local time.

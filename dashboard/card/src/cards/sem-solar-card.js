@@ -35,6 +35,7 @@ const ENTITY_SUFFIXES = [
     'forecast_remaining_today_kwh',
     'forecast_peak_power_today_w',
     'forecast_peak_time_today',
+    'forecast_peak_power_path',
     'best_surplus_window',
     'pv_daily_specific_yield',
     'pv_performance_vs_forecast',
@@ -155,6 +156,14 @@ class SEMSolarCard extends SEMLitBase {
         const fcRemaining = this._val('forecast_remaining_today_kwh');
         const peakW       = this._val('forecast_peak_power_today_w');
         const peakTime    = this._valStr('forecast_peak_time_today');
+        // (#867) Only Solcast publishes a peak-power value. Forecast.Solar
+        // and Open-Meteo publish the peak TIME but no peak power, and expose
+        // no series to derive one from - so a dash there means unsupported,
+        // not broken, and the tooltip says which.
+        const peakPath    = this._valStr('forecast_peak_power_path');
+        const peakHint    = peakPath === 'unsupported_by_source'
+            ? this._t('peak_power_unsupported')
+            : '';
         const surplusWin  = this._valStr('best_surplus_window');
 
         // Performance values
@@ -470,7 +479,7 @@ class SEMSolarCard extends SEMLitBase {
                             </div>
                             <div class="metric-row">
                                 <span class="metric-label">${this._t('peak_power')}</span>
-                                <span class="metric-val">
+                                <span class="metric-val" title="${peakHint}">
                                     ${peakW > 0 ? semFormatPower(peakW) : '—'}
                                     <span style="font-size:11px;opacity:0.7;margin-left:4px">${peakTime || '—'}</span>
                                 </span>

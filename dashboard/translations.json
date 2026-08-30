@@ -1492,7 +1492,8 @@
     "zone_legend_assist": "Pomoc EV",
     "zone_legend_buffer": "Buffer",
     "zone_legend_reserve": "Rezerva",
-    "zone_legend_surplus": "Přebytek"
+    "zone_legend_surplus": "Přebytek",
+    "peak_power_unsupported": "Tento zdroj předpovědi neposkytuje hodnotu špičkového výkonu"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -2987,7 +2988,8 @@
     "zone_legend_assist": "EV-hjælp",
     "zone_legend_buffer": "Buffer",
     "zone_legend_reserve": "Reserve",
-    "zone_legend_surplus": "Overskud"
+    "zone_legend_surplus": "Overskud",
+    "peak_power_unsupported": "Denne prognosekilde offentliggør ikke en spidseffektværdi"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -4482,7 +4484,8 @@
     "zone_legend_assist": "EV-Hilfe",
     "zone_legend_buffer": "Puffer",
     "zone_legend_reserve": "Reserve",
-    "zone_legend_surplus": "Überschuss"
+    "zone_legend_surplus": "Überschuss",
+    "peak_power_unsupported": "Diese Prognosequelle liefert keinen Spitzenleistungswert"
   },
   "en": {
     "% of limit": "% of limit",
@@ -5977,7 +5980,8 @@
     "zone_legend_assist": "EV assist",
     "zone_legend_buffer": "Buffer",
     "zone_legend_reserve": "Reserve",
-    "zone_legend_surplus": "Surplus"
+    "zone_legend_surplus": "Surplus",
+    "peak_power_unsupported": "This forecast source does not publish a peak power value"
   },
   "es": {
     "% of limit": "% del límite",
@@ -7472,7 +7476,8 @@
     "zone_legend_assist": "Asist. VE",
     "zone_legend_buffer": "Búfer",
     "zone_legend_reserve": "Reserva",
-    "zone_legend_surplus": "Excedente"
+    "zone_legend_surplus": "Excedente",
+    "peak_power_unsupported": "Esta fuente de previsión no publica un valor de potencia máxima"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -8967,7 +8972,8 @@
     "zone_legend_assist": "EV-apu",
     "zone_legend_buffer": "Puskuri",
     "zone_legend_reserve": "Varaus",
-    "zone_legend_surplus": "Ylijäämä"
+    "zone_legend_surplus": "Ylijäämä",
+    "peak_power_unsupported": "Tämä ennustelähde ei julkaise huipputehon arvoa"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -10462,7 +10468,8 @@
     "zone_legend_assist": "Assist. VE",
     "zone_legend_buffer": "Tampon",
     "zone_legend_reserve": "Réserve",
-    "zone_legend_surplus": "Surplus"
+    "zone_legend_surplus": "Surplus",
+    "peak_power_unsupported": "Cette source de prévision ne publie pas de valeur de puissance de pointe"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -11957,7 +11964,8 @@
     "zone_legend_assist": "EV-segéd",
     "zone_legend_buffer": "Puffer",
     "zone_legend_reserve": "Tartalék",
-    "zone_legend_surplus": "Többlet"
+    "zone_legend_surplus": "Többlet",
+    "peak_power_unsupported": "Ez az előrejelzési forrás nem közöl csúcsteljesítmény-értéket"
   },
   "it": {
     "% of limit": "% del limite",
@@ -13452,7 +13460,8 @@
     "zone_legend_assist": "Assist. VE",
     "zone_legend_buffer": "Buffer",
     "zone_legend_reserve": "Riserva",
-    "zone_legend_surplus": "Surplus"
+    "zone_legend_surplus": "Surplus",
+    "peak_power_unsupported": "Questa fonte di previsione non pubblica un valore di potenza di picco"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -14947,7 +14956,8 @@
     "zone_legend_assist": "EV-hulp",
     "zone_legend_buffer": "Buffer",
     "zone_legend_reserve": "Reserve",
-    "zone_legend_surplus": "Overschot"
+    "zone_legend_surplus": "Overschot",
+    "peak_power_unsupported": "Deze voorspellingsbron publiceert geen piekvermogen"
   },
   "no": {
     "% of limit": "% av grense",
@@ -16442,7 +16452,8 @@
     "zone_legend_assist": "EV-hjelp",
     "zone_legend_buffer": "Buffer",
     "zone_legend_reserve": "Reserve",
-    "zone_legend_surplus": "Overskudd"
+    "zone_legend_surplus": "Overskudd",
+    "peak_power_unsupported": "Denne prognosekilden publiserer ingen toppeffektverdi"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -17937,7 +17948,8 @@
     "zone_legend_assist": "Wsparcie EV",
     "zone_legend_buffer": "Bufor",
     "zone_legend_reserve": "Rezerwa",
-    "zone_legend_surplus": "Nadwyżka"
+    "zone_legend_surplus": "Nadwyżka",
+    "peak_power_unsupported": "To źródło prognozy nie udostępnia wartości mocy szczytowej"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -19432,7 +19444,8 @@
     "zone_legend_assist": "Apoio VE",
     "zone_legend_buffer": "Tampão",
     "zone_legend_reserve": "Reserva",
-    "zone_legend_surplus": "Excedente"
+    "zone_legend_surplus": "Excedente",
+    "peak_power_unsupported": "Esta fonte de previsão não publica um valor de potência de pico"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -20927,7 +20940,8 @@
     "zone_legend_assist": "Asist. EV",
     "zone_legend_buffer": "Tampon",
     "zone_legend_reserve": "Rezervă",
-    "zone_legend_surplus": "Surplus"
+    "zone_legend_surplus": "Surplus",
+    "peak_power_unsupported": "Această sursă de prognoză nu publică o valoare a puterii de vârf"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -22422,7 +22436,8 @@
     "zone_legend_assist": "EV-hjälp",
     "zone_legend_buffer": "Buffert",
     "zone_legend_reserve": "Reserv",
-    "zone_legend_surplus": "Överskott"
+    "zone_legend_surplus": "Överskott",
+    "peak_power_unsupported": "Denna prognoskälla publicerar inget toppeffektvärde"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -23917,6 +23932,7 @@
     "zone_legend_assist": "电动汽车辅助",
     "zone_legend_buffer": "缓冲",
     "zone_legend_reserve": "储备",
-    "zone_legend_surplus": "富余电量"
+    "zone_legend_surplus": "富余电量",
+    "peak_power_unsupported": "此预测来源不提供峰值功率数值"
   }
 }
