@@ -346,3 +346,16 @@ class TestTheNumbersReachTheSurface:
         assert '"peak_slot_used_kwh": self.load_management.peak_slot_used_kwh' in src
         lm = LoadManagementData()
         assert lm.peak_slot_allowed_w is None and lm.peak_slot_used_kwh is None
+
+
+class TestTheGuardOnlySpeaksWhenItBites:
+    def test_allowance_above_hardware_max_leaves_charge_max_alone(self):
+        """Live on .175: end-of-slot allowance 15 kW against a 16 A box —
+        the offer is the hardware max either way, and a reason claiming a
+        clamp would be false."""
+        v = _mk("always_max", allowed_w=15000.0, grid_import_w=0.0,
+                config={"ev_min_current": 6, "ev_phases": 3,
+                        "ev_voltage": 230, "ev_max_current": 16})
+        d = decide(v)
+        assert d.intent == ChargerIntent.CHARGE_MAX
+        assert "peak slot" not in d.reason.lower()

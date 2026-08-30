@@ -946,7 +946,11 @@ def decide(view: ChargerView) -> ChargerDecision:
                      or DEFAULT_MAX_CHARGING_CURRENT)
         _cap_a = max(_min_a, amps_that_fit(
             view.wpa_table, _ev_allow_w, _wpa, _max_a))
-        if (result.intent is ChargerIntent.CHARGE_MAX
+        # Speak only when it BITES: an allowance at or above the hardware
+        # maximum is not a clamp, and a reason claiming one would mislead
+        # the person reading the observer surface (seen live on .175).
+        if _cap_a < _max_a and (
+                result.intent is ChargerIntent.CHARGE_MAX
                 or result.commanded_amps > _cap_a):
             result = replace(
                 result, intent=ChargerIntent.CHARGE_AT_AMPS,
