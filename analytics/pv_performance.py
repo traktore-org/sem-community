@@ -213,9 +213,10 @@ class PVPerformanceAnalyzer:
         )
         self._monthly_history.append(record)
 
-        # Keep last 36 months
-        if len(self._monthly_history) > 36:
-            self._monthly_history = self._monthly_history[-36:]
+        # Keep the retention window — one constant, read by the recorder
+        # and by restore_state, so the two can never disagree.
+        if len(self._monthly_history) > self.MAX_MONTHS:
+            self._monthly_history = self._monthly_history[-self.MAX_MONTHS:]
 
     def _estimate_degradation(self) -> float:
         """Estimate annual degradation from monthly history.
@@ -257,6 +258,66 @@ class PVPerformanceAnalyzer:
         """Reset daily tracking counters."""
         self._daily_peak_power = 0.0
         self._clipping_minutes = 0
+
+    #: Retention for the degradation comparison. 13 months is the minimum
+    #: that can compare a month against itself a year earlier; 36 gives the
+    #: estimate three same-month pairs to average over.
+    MAX_MONTHS = 36
+
+    def export_state(self) -> Dict[str, Any]:
+        """The monthly history, for the store.
+
+        (#867) Without this the list lived only in memory: created empty in
+        ``__init__`` and never written anywhere. Degradation needs 13 months
+        of evidence, and no process that restarts on every upgrade will ever
+        hold 13 months of anything. The verdict was 0.0 on installs with
+        years of production, and would have stayed 0.0 even once something
+        started recording.
+        """
+        return {"monthly_history": [
+            {"year": r.year, "month": r.month, "total_kwh": r.total_kwh,
+             "specific_yield": r.specific_yield, "forecast_kwh": r.forecast_kwh,
+             "performance_ratio": r.performance_ratio}
+            for r in self._monthly_history
+        ]}
+
+    def restore_state(self, state: Optional[Dict[str, Any]]) -> None:
+        """Load the monthly history back.
+
+        Stored state outlives the code that wrote it, so a row that does not
+        parse is SKIPPED rather than fatal — losing one month costs a little
+        precision, and raising here would cost the whole integration its
+        startup. The retention cap is applied on the way in too: a store
+        written by a future version with a larger cap must not smuggle more
+        history past this one's rule.
+        """
+        rows = (state or {}).get("monthly_history")
+        if not isinstance(rows, list):
+            self._monthly_history = []
+            return
+        restored: List[MonthlyPerformance] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            try:
+                restored.append(MonthlyPerformance(
+                    year=int(row["year"]),
+                    month=int(row["month"]),
+                    total_kwh=float(row.get("total_kwh", 0.0)),
+                    specific_yield=float(row.get("specific_yield", 0.0)),
+                    forecast_kwh=float(row.get("forecast_kwh", 0.0)),
+                    performance_ratio=float(row.get("performance_ratio", 0.0)),
+                ))
+            except (KeyError, TypeError, ValueError):
+                continue
+        self._monthly_history = restored[-self.MAX_MONTHS:]
+
+    def has_month(self, year: int, month: int) -> bool:
+        """(#867) Already recorded? The recorder is driven from a per-cycle
+        rollover check, so it must be idempotent: asking this is what keeps a
+        month from being appended once per cycle for a whole month."""
+        return any(r.year == year and r.month == month
+                   for r in self._monthly_history)
 
     def get_monthly_history(self) -> List[Dict[str, Any]]:
         """Get monthly history for frontend display."""

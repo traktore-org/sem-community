@@ -864,7 +864,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                 margin-top: -8px;
                 font-family: 'Segoe UI', 'Roboto', sans-serif;
             }
-        `}getCardSize(){return 3}static getStubConfig(){return{entity:"sensor.sem_self_consumption_rate"}}},{type:"sem-gauge-card",name:"SEM Gauge Card",description:"Lumina-styled arc gauge for percentage values",documentationURL:"https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-gauge-card",preview:!1});const Ue="sensor.sem_",Oe=["solar_power","daily_solar_energy","monthly_solar_yield_energy","yearly_solar_yield_energy","flow_solar_to_home_power","flow_solar_to_battery_power","flow_solar_to_ev_power","flow_solar_to_grid_power","flow_solar_to_home_energy","flow_solar_to_battery_energy","flow_solar_to_ev_energy","flow_solar_to_grid_energy","forecast_today_kwh","forecast_tomorrow_kwh","forecast_remaining_today_kwh","forecast_peak_power_today_w","forecast_peak_time_today","best_surplus_window","pv_daily_specific_yield","pv_performance_vs_forecast","pv_estimated_annual_degradation","pv_degradation_trend","pv_string_pv1_power","pv_string_pv1_daily_energy","pv_string_pv2_power","pv_string_pv2_daily_energy","pv_string_pv3_power","pv_string_pv3_daily_energy","pv_string_pv4_power","pv_string_pv4_daily_energy"];function He(e){return Oe.map(t=>`${e}${t}`)}we("sem-solar-card",class extends Se{static get styles(){return[ke]}static get watchedEntities(){return He(Ue)}setConfig(e){super.setConfig(e),this._prefix=e.entity_prefix||Ue,this._prefix!==Ue&&(this._prevVals={})}set hass(e){this._hass=e;const t=e?.language,i="function"==typeof semLocalize;let s=!1;if((t!==this._lang||i&&!this._localizeReady)&&(this._lang=t,this._localizeReady=i,s=!0),this._isFrozen()&&!s)return;const r=He(this._prefix||Ue);let a=!1;for(const t of r)if(this._prevVals[t]!==e.states[t]?.state){a=!0;break}if(a||s){for(const t of r)this._prevVals[t]=e.states[t]?.state;this._scheduleUpdate()}}get hass(){return this._hass}_val(e,t=0){return this._state(`${this._prefix}${e}`,t)}_valStr(e){return this._stateStr(`${this._prefix}${e}`)}_fmt(e,t=1){return null==e||isNaN(e)?"—":e.toFixed(t)}render(){if(!this._config)return q;const e=this._theme(),t=this._val("solar_power"),i=this._val("daily_solar_energy"),s=this._val("monthly_solar_yield_energy"),r=this._val("yearly_solar_yield_energy"),a=Math.min(Math.max(t/1e4,0),1),o=2*Math.PI*42,n=(o*(1-a)).toFixed(1),l=t>50?"solarPulse 3s ease-in-out infinite":"none",c=this._val("flow_solar_to_home_power"),d=this._val("flow_solar_to_home_energy"),p=this._val("flow_solar_to_battery_power"),h=this._val("flow_solar_to_battery_energy"),_=this._val("flow_solar_to_ev_power"),g=this._val("flow_solar_to_ev_energy"),u=this._val("flow_solar_to_grid_power"),m=this._val("flow_solar_to_grid_energy"),f=this._val("forecast_today_kwh"),v=this._val("forecast_tomorrow_kwh"),y=this._val("forecast_remaining_today_kwh"),b=this._val("forecast_peak_power_today_w"),x=this._valStr("forecast_peak_time_today"),$=this._valStr("best_surplus_window"),w=this._val("pv_daily_specific_yield"),k=this._val("pv_performance_vs_forecast"),S=this._val("pv_estimated_annual_degradation"),C=this._valStr("pv_degradation_trend"),z=0!==k?this._fmt(k,0)+"%":"—",M=k>=0?"#8DC892":"#f06292",D=xe(this._hass,this._prefix);return W`
+        `}getCardSize(){return 3}static getStubConfig(){return{entity:"sensor.sem_self_consumption_rate"}}},{type:"sem-gauge-card",name:"SEM Gauge Card",description:"Lumina-styled arc gauge for percentage values",documentationURL:"https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-gauge-card",preview:!1});const Ue="sensor.sem_",Oe=["solar_power","daily_solar_energy","monthly_solar_yield_energy","yearly_solar_yield_energy","flow_solar_to_home_power","flow_solar_to_battery_power","flow_solar_to_ev_power","flow_solar_to_grid_power","flow_solar_to_home_energy","flow_solar_to_battery_energy","flow_solar_to_ev_energy","flow_solar_to_grid_energy","forecast_today_kwh","forecast_tomorrow_kwh","forecast_remaining_today_kwh","forecast_peak_power_today_w","forecast_peak_time_today","forecast_peak_power_path","best_surplus_window","pv_daily_specific_yield","pv_performance_vs_forecast","pv_estimated_annual_degradation","pv_degradation_trend","pv_string_pv1_power","pv_string_pv1_daily_energy","pv_string_pv2_power","pv_string_pv2_daily_energy","pv_string_pv3_power","pv_string_pv3_daily_energy","pv_string_pv4_power","pv_string_pv4_daily_energy"];function He(e){return Oe.map(t=>`${e}${t}`)}we("sem-solar-card",class extends Se{static get styles(){return[ke]}static get watchedEntities(){return He(Ue)}setConfig(e){super.setConfig(e),this._prefix=e.entity_prefix||Ue,this._prefix!==Ue&&(this._prevVals={})}set hass(e){this._hass=e;const t=e?.language,i="function"==typeof semLocalize;let s=!1;if((t!==this._lang||i&&!this._localizeReady)&&(this._lang=t,this._localizeReady=i,s=!0),this._isFrozen()&&!s)return;const r=He(this._prefix||Ue);let a=!1;for(const t of r)if(this._prevVals[t]!==e.states[t]?.state){a=!0;break}if(a||s){for(const t of r)this._prevVals[t]=e.states[t]?.state;this._scheduleUpdate()}}get hass(){return this._hass}_val(e,t=0){return this._state(`${this._prefix}${e}`,t)}_valStr(e){return this._stateStr(`${this._prefix}${e}`)}_fmt(e,t=1){return null==e||isNaN(e)?"—":e.toFixed(t)}render(){if(!this._config)return q;const e=this._theme(),t=this._val("solar_power"),i=this._val("daily_solar_energy"),s=this._val("monthly_solar_yield_energy"),r=this._val("yearly_solar_yield_energy"),a=Math.min(Math.max(t/1e4,0),1),o=2*Math.PI*42,n=(o*(1-a)).toFixed(1),l=t>50?"solarPulse 3s ease-in-out infinite":"none",c=this._val("flow_solar_to_home_power"),d=this._val("flow_solar_to_home_energy"),p=this._val("flow_solar_to_battery_power"),h=this._val("flow_solar_to_battery_energy"),_=this._val("flow_solar_to_ev_power"),g=this._val("flow_solar_to_ev_energy"),u=this._val("flow_solar_to_grid_power"),m=this._val("flow_solar_to_grid_energy"),f=this._val("forecast_today_kwh"),v=this._val("forecast_tomorrow_kwh"),y=this._val("forecast_remaining_today_kwh"),b=this._val("forecast_peak_power_today_w"),x=this._valStr("forecast_peak_time_today"),$="unsupported_by_source"===this._valStr("forecast_peak_power_path")?this._t("peak_power_unsupported"):"",w=this._valStr("best_surplus_window"),k=this._val("pv_daily_specific_yield"),S=this._val("pv_performance_vs_forecast"),C=this._val("pv_estimated_annual_degradation"),z=this._valStr("pv_degradation_trend"),M=0!==S?this._fmt(S,0)+"%":"—",D=S>=0?"#8DC892":"#f06292",E=xe(this._hass,this._prefix);return W`
             <style>
                 :host { display: block; }
                 .wrap {
@@ -1024,9 +1024,9 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                 <div class="wrap">
 
                     <!-- v1.7.1 / #312: per-PV-string chip strip (auto-shown ≥ 2 strings) -->
-                    ${D.length>=2?W`
+                    ${E.length>=2?W`
                         <div class="pv-strings-row">
-                            ${D.map(e=>W`
+                            ${E.map(e=>W`
                                 <div class="pv-chip"
                                      title="${e.entityId}"
                                      data-entity="${e.entityId}"
@@ -1121,11 +1121,11 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                          tagged template literal, and a stray
                          backtick terminates that template at parse
                          time — see the 0x0 render bug we fixed.) -->
-                    ${D.length>=2?W`
+                    ${E.length>=2?W`
                         <div class="section">
                             <div class="section-title">${this._t("pv_strings_today")||"Per string today"}</div>
                             <div class="flows-grid">
-                                ${D.map(e=>W`
+                                ${E.map(e=>W`
                                     <div class="flow-row"
                                          style="cursor:pointer"
                                          @click=${()=>this._fireMoreInfo?.(e.entityId)}>
@@ -1159,33 +1159,33 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                             </div>
                             <div class="metric-row">
                                 <span class="metric-label">${this._t("peak_power")}</span>
-                                <span class="metric-val">
+                                <span class="metric-val" title="${$}">
                                     ${b>0?ge(b):"—"}
                                     <span style="font-size:11px;opacity:0.7;margin-left:4px">${x||"—"}</span>
                                 </span>
                             </div>
                             <div class="metric-row">
                                 <span class="metric-label">${this._t("best_surplus_window")}</span>
-                                <span class="metric-val" style="color:#ff9800;font-size:11px">${$||"—"}</span>
+                                <span class="metric-val" style="color:#ff9800;font-size:11px">${w||"—"}</span>
                             </div>
                         </div>
                         <div>
                             <div class="section-title">${this._t("performance")}</div>
                             <div class="metric-row">
                                 <span class="metric-label">${this._t("specific_yield")}</span>
-                                <span class="metric-val">${w>0?this._fmt(w,2)+" kWh/kWp":"—"}</span>
+                                <span class="metric-val">${k>0?this._fmt(k,2)+" kWh/kWp":"—"}</span>
                             </div>
                             <div class="metric-row">
                                 <span class="metric-label">${this._t("vs_forecast")}</span>
-                                <span class="metric-val" style="color:${M}">${z}</span>
+                                <span class="metric-val" style="color:${D}">${M}</span>
                             </div>
                             <div class="metric-row">
                                 <span class="metric-label">${this._t("degradation")}</span>
-                                <span class="metric-val">${0!==S?this._fmt(S,2)+"%/yr":"—"}</span>
+                                <span class="metric-val">${0!==C?this._fmt(C,2)+"%/yr":"—"}</span>
                             </div>
                             <div class="metric-row">
                                 <span class="metric-label">${this._t("trend")}</span>
-                                <span class="metric-val">${C?this._t(C):"—"}</span>
+                                <span class="metric-val">${z?this._t(z):"—"}</span>
                             </div>
                         </div>
                     </div>

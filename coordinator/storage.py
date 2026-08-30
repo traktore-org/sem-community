@@ -463,6 +463,26 @@ class SEMStorage:
         self._daily_data["ev_session"] = state
 
     # EV intelligence persistence (survives restarts and daily resets)
+    def get_pv_performance_state(self) -> Dict[str, Any]:
+        """(#867) The PV analyzer's monthly history.
+
+        Degradation compares a month against the same month a year earlier
+        and needs 13 of them. The list used to live only in memory, so no
+        install ever held more than the months since its last restart —
+        which is why the verdict read 0.0 on systems with years of
+        production.
+        """
+        return self._energy_data.get("pv_performance", {})
+
+    def set_pv_performance_state(self, state: Dict[str, Any]) -> None:
+        """Store the PV analyzer's monthly history.
+
+        Mutates the energy data and lets the existing delayed save carry it,
+        exactly as its siblings do — a synchronous write here would fsync on
+        a month boundary for no benefit.
+        """
+        self._energy_data["pv_performance"] = state
+
     def get_ev_intelligence_state(self) -> Dict[str, Any]:
         """Get persisted EV intelligence state (taper, SOC, health)."""
         return self._energy_data.get("ev_intelligence", {

@@ -710,6 +710,12 @@ class ForecastSensorData:
     forecast_power_next_hour_w: float = 0.0
     forecast_peak_power_today_w: float = 0.0
     forecast_peak_time_today: str = ""
+    #: (#867) WHY the peak power reads what it reads — ``read``,
+    #: ``unsupported_by_source`` (Forecast.Solar / Open-Meteo publish no
+    #: peak-power sensor and no series to derive one from) or ``no_entity``.
+    #: Without this a permanent 0.0 is indistinguishable from a real zero,
+    #: and the card's peak row reads as broken rather than unsupported.
+    forecast_peak_power_path: str = "unsupported_by_source"
     forecast_source: str = "none"
     forecast_available: bool = False
     # (#819) Which forecast integrations are installed on this system.
@@ -1337,6 +1343,7 @@ class SEMData:
             "forecast_power_now_w": round(self.forecast.forecast_power_now_w, 0),
             "forecast_peak_power_today_w": self.forecast.forecast_peak_power_today_w,
             "forecast_peak_time_today": self.forecast.forecast_peak_time_today,
+            "forecast_peak_power_path": self.forecast.forecast_peak_power_path,
             "forecast_source": self.forecast.forecast_source,
             # (#819) Which forecast integrations this install actually
             # has, so the dashboard picker offers what is there.

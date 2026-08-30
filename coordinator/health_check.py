@@ -32,6 +32,42 @@ from .types import CostData, EnergyFlows, EnergyTotals, PowerFlows, PowerReading
 _LOGGER = logging.getLogger(__name__)
 
 
+def home_member_totals(devices) -> dict:
+    """(#872) The controlled loads that are genuinely members of the HOME row.
+
+    EV chargers are not. SEM's home row is defined as::
+
+        home = max(0, solar + grid_import + batt_discharge
+                      - ev - grid_export - batt_charge)
+
+    so the EV has already been subtracted out of the total these members are
+    compared against. Counting a charger here puts its energy on one side of
+    a comparison that removed it from the other, and every install charging a
+    car reports a permanent "double count" that no amount of looking can
+    resolve — the message even names a stale id, sending the user hunting for
+    something that does not exist (#872, RienduPre: members 3.34 kWh against
+    a 1.81 kWh home row, repeating for hours, every member live and real;
+    without his ``ev_charger=1.10`` the sum is 2.24 and sits inside the band).
+
+    Chargers are checked against the EV day instead, which is the row they
+    are actually members of.
+
+    A device whose type cannot be read is KEPT: unknown shape means "part of
+    the house", and dropping members on a missing attribute would quietly
+    disable the check this function feeds.
+    """
+    out = {}
+    for dev in devices or []:
+        device_id = getattr(dev, "device_id", None)
+        if not device_id:
+            continue
+        dtype = getattr(dev, "device_type", None)
+        if getattr(dtype, "value", None) == "current_control":
+            continue
+        out[device_id] = float(getattr(dev, "daily_energy_kwh", 0.0) or 0.0)
+    return out
+
+
 class HealthCheck:
     """Validates energy balance and calculation integrity each cycle."""
 

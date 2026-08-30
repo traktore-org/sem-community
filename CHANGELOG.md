@@ -18,6 +18,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > ships while the release hold is in place; 2.0.0 stable remains the current
 > published version.
 
+- ☀️ **Solar degradation and trend actually work now** (#867). Both fields
+  read "unknown" on every install, including systems with years of
+  production — and not because the evidence was thin. The recorder that fills
+  the monthly history had **no caller anywhere in the integration** (thirteen
+  call sites, every one a test), and the history it fills was never saved, so
+  a restart would have emptied it even once something did call it. SEM now
+  seals each completed month and keeps it across restarts. Degradation needs
+  13 months to compare a month against itself a year earlier, so the verdict
+  arrives a season at a time — but it now arrives.
+
+- ☀️ **The solar peak row is no longer blank on Forecast.Solar and
+  Open-Meteo** (#867). The peak *time* was published by both all along and
+  simply not read — it now shows. The peak *power* genuinely is not published
+  by either (and cannot be derived — neither exposes an hourly series), so
+  instead of a permanent `0 W` that claims the peak is zero watts, SEM says
+  the source does not provide it. A blank that means "unsupported" should not
+  look like a blank that means "broken".
+
+- 🏠 **A phantom "load counted twice" warning on every install that charges a
+  car** (#872, reported by @RienduPre). SEM's health check compared its
+  controlled devices against the *home* row — but home is defined with the EV
+  subtracted out of it, and then counted the charger as a member of it. The
+  warning even named a stale device id, sending the reporter hunting for
+  something that did not exist. His figures are the test case: without the
+  charger the members sum to 2.24 kWh against a 1.81 kWh home row, inside the
+  tolerance, and nothing fires.
+
 - 🔭 **Two published battery numbers that could not be true are now
   bounded** (#873). `battery_expected_refill_kwh` reported **35.5 kWh onto a
   12.5 kWh pack** whenever the SOC sensor dropped out — a dark battery *level*
