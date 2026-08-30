@@ -66,14 +66,27 @@ def forecast_sell_blocks(
         return []
     hours = min(MAX_BLOCK_H, kwh / (w / 1000.0))
     hours = max(hours, MIN_BLOCK_MIN / 60.0)
-    start = max(now, night_start - timedelta(hours=hours))
-    span_h = (night_start - start).total_seconds() / 3600.0
-    if span_h * 60.0 < MIN_BLOCK_MIN:
-        return []
-    # kwh trimmed to what the window can actually carry at the cap —
-    # the gate derives the rate as kwh/hours, and an over-stuffed block
-    # would imply a rate above the inverter's own limit.
-    kwh = min(kwh, span_h * w / 1000.0)
+    # ANCHORED to the night, not to ``now``. The block is what the docstring
+    # says it is — [night_start − duration, night_start) — and that interval
+    # does not depend on when you ask.
+    #
+    # It used to be ``start = max(now, …)`` plus a "reject if the remaining
+    # span is under MIN_BLOCK_MIN" guard, which made the window shrink as the
+    # evening advanced and then vanish entirely in its last quarter hour. The
+    # plan is recomputed periodically, so the running block simply
+    # disappeared from the plan and the gate closed. Live on .175 (30.08):
+    # selling at 5009 W until 17:45:21, then nothing, with night_start 18:00
+    # — the sell stopped exactly when "just in time" means to act.
+    #
+    # MIN_BLOCK_MIN governs what may be PLANNED ("a 4-minute sell is
+    # contactor churn, not a plan") and ``hours`` above already enforces it.
+    # Applying the same number to the REMAINING span answered a different
+    # question: whether to CANCEL a block that had already opened.
+    #
+    # Anchoring also keeps ``kwh`` — and so the gate's derived rate
+    # (kwh/hours) — constant across recomputes. A span-trimmed kwh tapered
+    # the sell toward zero as the night approached.
+    start = night_start - timedelta(hours=hours)
     return [{"start": start, "end": night_start, "kwh": round(kwh, 2)}]
 
 

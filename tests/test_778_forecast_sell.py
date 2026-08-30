@@ -47,12 +47,32 @@ class TestThePlanBlocks:
         assert span_min == pytest.approx(26.4, abs=0.5)
         assert blk["kwh"] == pytest.approx(2.2, abs=0.01)
 
-    def test_a_big_budget_is_trimmed_to_the_window(self):
+    def test_a_big_budget_never_implies_a_rate_above_the_cap(self):
+        """A budget too big for the time left sells at the cap, not faster.
+
+        This used to be spelled as a TRIM — ``start`` pinned to ``now`` and
+        ``kwh`` cut to what the remaining window carried. That spelling is
+        what made the window shrink with the clock and vanish inside the
+        last MIN_BLOCK_MIN minutes, stopping the sell exactly when
+        "just in time" means to act (live on .175, 30.08.2026 — see
+        tests/test_778_block_survives_to_night.py).
+
+        The block is now anchored to the night, and the property the trim
+        was protecting holds by construction instead: the gate derives
+        ``kwh / hours``, which for an over-sized budget is exactly the cap.
+        """
         late = NIGHT - timedelta(minutes=30)
         b = forecast_sell_blocks(late, NIGHT, 9.9, 5000.0)
         assert len(b) == 1
-        assert b[0]["start"] == late                     # window is all that's left
-        assert b[0]["kwh"] == pytest.approx(2.5)          # 0.5 h × 5 kW
+        blk = b[0]
+        assert blk["start"] <= late < blk["end"] == NIGHT
+        hours = (blk["end"] - blk["start"]).total_seconds() / 3600.0
+        assert blk["kwh"] / hours * 1000.0 == pytest.approx(5000.0), (
+            "an over-stuffed block would imply a discharge above the "
+            "inverter's own limit"
+        )
+        # …and the half hour that is actually left still carries 2.5 kWh.
+        assert blk["kwh"] / hours * 0.5 == pytest.approx(2.5)
 
     def test_nothing_spendable_means_no_block(self):
         assert forecast_sell_blocks(NOW, NIGHT, MIN_SPEND_KWH - 0.05, 5000.0) == []
