@@ -65,8 +65,17 @@ KNOWN_UNEXECUTED: dict[str, int] = {
 }
 
 
-def _executed_during_a_cycle() -> set[str]:
-    """Method names that actually ran during one instrumented cycle."""
+async def _executed_during_a_cycle() -> set[str]:
+    """Method names that actually ran during one instrumented cycle.
+
+    ASYNC, and awaited under ``pytest.mark.asyncio``, rather than driving a
+    hand-rolled ``asyncio.new_event_loop()``. The manual loop ran the cycle
+    outside the HA test fixtures and CI failed with ``RuntimeError: Frame
+    helper not set up`` on both rungs — while the local run passed, because
+    ``-p no:randomly`` happened to schedule a test that initialises the frame
+    helper first. A test whose result depends on what ran before it is not a
+    ratchet.
+    """
     cls = coordinator_module.SEMCoordinator
     seen: set[str] = set()
     originals: dict[str, object] = {}
@@ -99,13 +108,9 @@ def _executed_during_a_cycle() -> set[str]:
 
         setattr(cls, name, wrap(name, original))
 
-    loop = asyncio.new_event_loop()
     try:
-        loop.run_until_complete(
-            run_cycle(WIRED, _sensors(6000, 2000, 1500, 100), sealed_nights())
-        )
+        await run_cycle(WIRED, _sensors(6000, 2000, 1500, 100), sealed_nights())
     finally:
-        loop.close()
         # Restore unconditionally: a wrapped class leaking out of this
         # helper would follow every later test in the session.
         for name, original in originals.items():
@@ -119,15 +124,16 @@ def _directly_called() -> set[str]:
             if where and not str(where[0]).startswith("via ")}
 
 
-@pytest.fixture(scope="module")
-def uncovered() -> dict[str, int]:
-    ran = _executed_during_a_cycle()
+async def _uncovered() -> dict[str, int]:
+    ran = await _executed_during_a_cycle()
     direct = _directly_called()
     return {name: size for size, name, _, _ in scan(ROOT)
             if name not in ran and name not in direct}
 
 
-def test_no_new_unexecuted_assembly(uncovered):
+@pytest.mark.asyncio
+async def test_no_new_unexecuted_assembly():
+    uncovered = await _uncovered()
     new = set(uncovered) - set(KNOWN_UNEXECUTED)
     assert not new, (
         f"these coordinator methods are over {BIG_METHOD_LINES} lines and "
@@ -141,9 +147,11 @@ def test_no_new_unexecuted_assembly(uncovered):
     )
 
 
-def test_the_ledger_only_shrinks(uncovered):
+@pytest.mark.asyncio
+async def test_the_ledger_only_shrinks():
     """An entry that is now covered must be REMOVED, so the ledger keeps
     describing today rather than the day it was written."""
+    uncovered = await _uncovered()
     stale = set(KNOWN_UNEXECUTED) - set(uncovered)
     assert not stale, (
         f"{sorted(stale)} are executed now — delete them from "
@@ -151,12 +159,13 @@ def test_the_ledger_only_shrinks(uncovered):
     )
 
 
-def test_the_main_cycle_and_what_it_drives_are_executed():
+@pytest.mark.asyncio
+async def test_the_main_cycle_and_what_it_drives_are_executed():
     """The prize: 2236 lines publishing 325 values — every sensor SEM
     exposes, every card field, every decision input — plus the assemblies
     that cycle drives. Thirteen test files mentioned it before #873; all of
     them via ``inspect.getsource``."""
-    ran = _executed_during_a_cycle()
+    ran = await _executed_during_a_cycle()
     for name in ("_async_update_data", "_update_analytics_phases",
                  "_update_ev_intelligence", "_build_charging_context",
                  "_build_system_status", "_record_forecast_horizons"):
