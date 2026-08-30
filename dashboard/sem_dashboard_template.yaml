@@ -80,9 +80,12 @@ views:
             entity: weather.home
 
           # ── 7-Day Summary (sem-chart-card replaces apexcharts) ──
+          # The card's SUBTITLE already carries the period ("Last 7 Days")
+          # from the preset's defaultPeriod, so the title says WHAT is
+          # plotted, not WHEN — it read "Last 7 Days / Last 7 Days" on PROD.
           - type: custom:sem-chart-card
             preset: energy
-            title: Last 7 Days
+            title: Energy Balance
 
           # power-sources-graph removed — redundant with system diagram + 7-day chart
 
@@ -213,16 +216,20 @@ views:
           # ── 24h Power Curves (sem-chart-card replaces apexcharts) ──
           - type: custom:sem-chart-card
             preset: power
-            title: 24h Power
+            title: Power
 
           # ── Energy Impact Card ──
           - type: custom:sem-energy-impact-card
             entity_prefix: sensor.sem_
 
           # ── Self-Consumption Trend (sem-chart-card replaces apexcharts) ──
+          # The ``energy`` preset is fixed at defaultPeriod '7d', so a title
+          # promising 30 days described a chart that plots 7 — the card even
+          # rendered "30 Day Trend" above a "Last 7 Days" subtitle on PROD.
+          # Say what it shows; the subtitle carries the period.
           - type: custom:sem-chart-card
             preset: energy
-            title: Self-Consumption — 30 Day Trend
+            title: Self-Consumption Trend
 
   # ============================================================
   # VIEW 2: BATTERY — SOC zones, charge/discharge, health
@@ -243,7 +250,7 @@ views:
           # ── Battery 24h Chart (sem-chart-card replaces apexcharts) ──
           - type: custom:sem-chart-card
             preset: battery
-            title: Battery 24h
+            title: Battery Power
 
           # ── SOC Zone Settings ──
           - type: custom:sem-battery-zones-card

@@ -18,6 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > ships while the release hold is in place; 2.0.0 stable remains the current
 > published version.
 
+- 📊 **Chart titles say what they plot, not when** — walking the live
+  dashboard found the Home tab rendering "Last 7 Days" as *both* title and
+  subtitle, and the Energy tab promising a "30 Day Trend" above a chart the
+  preset fixes at seven days. Four titles corrected (`Energy Balance`,
+  `Self-Consumption Trend`, `Power`, `Battery Power`); the period still
+  comes from the card's own subtitle, and a test now refuses any chart
+  title that names a period.
+
 - 🛡️ **The peak limit is now enforced before the damage, not after** (#864):
   demand tariffs bill the average import of each fixed 15-minute slot, and
   SEM's defence used to be purely reactive — it shed loads once the rolling
