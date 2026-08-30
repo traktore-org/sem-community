@@ -107,6 +107,8 @@ MUST_COVER: tuple[Cell, ...] = (
          "#247 — Phase 3 tariff-optimized; normal tariff = no boost"),
     Cell("solar_plus_cheap", "night_cheap_window_charges",
          "#247 — Phase 3 tariff-optimized; cheap window triggers night charge"),
+    Cell("solar_plus_cheap", "day_cheap_tariff_tops_up",
+         "#856 — a cheap DAYTIME hour tops the Min floor up from grid"),
     # ``night_expensive_skips`` (#280) is currently blocked at the
     # scenario level — the harness's stub tariff_provider doesn't
     # implement ``find_cheapest_hours`` so ``_compute_night_plan``

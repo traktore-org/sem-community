@@ -18,6 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > ships while the release hold is in place; 2.0.0 stable remains the current
 > published version.
 
+- 💶 **"Solar + cheapest hours" now honours cheap hours by day, not only at
+  night** (#856). The mode's name is a promise about *price*, but by day it
+  fell back to solar-only regardless of price — a near-zero or negative
+  daytime hour was ignored and the car charged only in *Always max*. A cheap
+  daytime hour now tops the Min floor up from grid exactly as the night
+  window does, through the same shared seam (plan gate, deadline floor,
+  peak-managed rate), and solar surplus still wins whenever it offers more.
+  A static tariff never triggers it. With *At least* at 0 kWh there is
+  nothing to fill — the strategy line now says so and names the knob.
+
 - 🛡️ **You can now see SEM riding out a flaky sensor feed** — on an install
   whose inverter drops off the bus dozens of times an hour, SEM already does
   the right thing: a cycle that cannot see holds its committed command rather

@@ -409,6 +409,12 @@ def _build_coordinator(scenario: Dict[str, Any]):
     if scenario_tariff is not None:
         tariff_stub = MagicMock()
         tariff_stub.current_level = str(scenario_tariff)
+        # The coordinator reads ``provider.get_price_level()`` (a PriceLevel
+        # or its string), NOT ``current_level``. With only the attribute set,
+        # a MagicMock answered the call and the fleet tariff_level stayed
+        # None — unnoticed for months because the night path never consults
+        # the level. #856's daytime cheap-hours scenario was the first to.
+        tariff_stub.get_price_level = MagicMock(return_value=str(scenario_tariff))
         tariff_stub.available = True
         coord._tariff_provider = tariff_stub
     coord._sensor_reader = MagicMock()
@@ -509,6 +515,8 @@ async def run_scenario(yaml_path: Path) -> ScenarioRun:
                 provider.available = True
                 coord._tariff_provider = provider
             provider.current_level = str(effective["tariff_level"])
+            provider.get_price_level = MagicMock(
+                return_value=str(effective["tariff_level"]))
         readings = _build_power_readings(effective)
 
         # Record raw + derived

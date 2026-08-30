@@ -10062,6 +10062,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         elif _primary_view.fleet.is_night and _primary_view.mode != "solar_only":
             # min_plus_solar / solar_plus_cheap night top-up uses MIN_PV
             canonical_strategy = EVBudgetStrategy.MIN_PV
+        elif (_primary_view.mode == "solar_plus_cheap"
+              and "day (cheap tariff)" in str(_primary_decision.reason)):
+            # (#856) a cheap DAYTIME hour tops the Min floor up from grid
+            # through the same seam as the night window — it is a grid
+            # top-up, not solar, and the budget sensors must say so.
+            canonical_strategy = EVBudgetStrategy.MIN_PV
         elif _primary_view.mode == "solar_only":
             canonical_strategy = EVBudgetStrategy.SOLAR_ONLY
         else:

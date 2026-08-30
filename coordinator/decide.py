@@ -582,14 +582,20 @@ class SolarOnlyMode(ModeStrategy):
 # min_plus_solar — solar surplus + Min floor at night
 # ─────────────────────────────────────────────────────────────────
 
-def night_top_up_decision(view: "ChargerView", mode_name: str) -> "ChargerDecision":
+def night_top_up_decision(view: "ChargerView", mode_name: str,
+                          phase: str = "night") -> "ChargerDecision":
     """(#634) The shared overnight floor top-up decision — the "At least"
     guarantee. The MODE is the daytime axis; ANY night-capable mode delegates
     here (min_plus_solar always; solar_only when its floor > 0). Overnight
     source is GRID by design — never the home battery (#634 standing rule);
     internally this is the #620 three-source axis with the source
     auto-derived (floor>0 ⇒ grid, floor=0 ⇒ off), no GUI surface.
-    Inherits the #630 peak-managed top-up rate and the deadline sizing."""
+    Inherits the #630 peak-managed top-up rate and the deadline sizing.
+
+    ``phase`` only labels the reason. (#856) The cheapest-hours mode calls
+    this by DAY too — a cheap daytime hour tops the Min floor up exactly as
+    the night window does — so "night:" in a daytime reason would be a lie
+    on the strategy sensor."""
     cid = view.power.charger_id
 
     # Already at Min — idle.
@@ -598,7 +604,7 @@ def night_top_up_decision(view: "ChargerView", mode_name: str) -> "ChargerDecisi
             charger_id=cid, mode=mode_name,
             intent=ChargerIntent.IDLE,
             reason=(
-                f"{mode_name} night: target reached "
+                f"{mode_name} {phase}: target reached "
                 f"(remaining={view.target_kwh:.2f} kWh)"
             ),
         )
@@ -626,7 +632,7 @@ def night_top_up_decision(view: "ChargerView", mode_name: str) -> "ChargerDecisi
         return ChargerDecision(
             charger_id=cid, mode=mode_name,
             intent=ChargerIntent.IDLE,
-            reason=f"{mode_name} night: waiting for the planned window{detail}",
+            reason=f"{mode_name} {phase}: waiting for the planned window{detail}",
         )
 
     cfg = view.config if isinstance(view.config, dict) else {}
@@ -651,7 +657,7 @@ def night_top_up_decision(view: "ChargerView", mode_name: str) -> "ChargerDecisi
             intent=ChargerIntent.CHARGE_AT_AMPS,
             commanded_amps=amps,
             reason=(
-                f"{mode_name} night: deadline floor {amps}A{tag}, "
+                f"{mode_name} {phase}: deadline floor {amps}A{tag}, "
                 f"remaining {view.target_kwh:.1f} kWh"
             ),
         )
@@ -669,7 +675,7 @@ def night_top_up_decision(view: "ChargerView", mode_name: str) -> "ChargerDecisi
         intent=ChargerIntent.CHARGE_AT_AMPS,
         commanded_amps=amps,
         reason=(
-            f"{mode_name} night: top-up at {amps}A"
+            f"{mode_name} {phase}: top-up at {amps}A"
             + (" (peak-managed)" if amps != min_amps else "")
             + f", remaining {remaining_str} kWh"
         ),
@@ -829,8 +835,47 @@ class SolarPlusCheapMode(ModeStrategy):
                 f"→ pausing grid imports",
             )
 
-        # Day, normal/cheap tariff: solar surplus only (same as
-        # min_plus_solar day path).
+        # (#856, hoyte) Day, CHEAP tariff: the mode's name is a promise
+        # about PRICE, not about the clock. Until now a cheap or negative
+        # daytime hour was ignored — the day path was solar-only regardless
+        # of price, so the car charged only in always_max — and the docs
+        # said "Daytime: charges from solar surplus" without a word about
+        # why. A cheap daytime hour now tops the Min floor up from grid
+        # exactly as the night window does: the same shared seam (plan
+        # gate, deadline floor, peak-managed rate), so there is still ONE
+        # copy of that logic. Solar surplus wins whenever it offers more —
+        # a cheap hour must never downgrade a strong sun.
+        #
+        # ``tariff_level`` None is a static/unknown tariff, NOT a cheap one:
+        # only a live dynamic signal may start a grid charge by day.
+        if (not f.is_night and f.tariff_level is not None
+                and f.tariff_level not in _NOT_CHEAP_LEVELS):
+            solar = _relabel(
+                _SOLAR_ONLY.decide(view), "solar_plus_cheap",
+                f"solar_plus_cheap day: tariff={f.tariff_level}",
+            )
+            if view.target_kwh is None or view.target_kwh <= 0.1:
+                # Nothing to fill: the cheap hour has no floor to top up.
+                # Say which knob would change that — hoyte's install had
+                # "At least 0 kWh" and saw a plan that looked wrong.
+                if solar.intent is ChargerIntent.IDLE:
+                    return replace(
+                        solar,
+                        reason=(f"{solar.reason} — cheap hour unused: no Min "
+                                f"target to fill (set 'At least' on the EV card)"),
+                    )
+                return solar
+            grid = night_top_up_decision(
+                view, "solar_plus_cheap", phase="day (cheap tariff)")
+            if (solar.intent is ChargerIntent.CHARGE_AT_AMPS
+                    and grid.intent is ChargerIntent.CHARGE_AT_AMPS
+                    and solar.commanded_amps >= grid.commanded_amps):
+                return replace(
+                    solar, reason=f"{solar.reason} (cheap hour: solar offer wins)")
+            return grid
+
+        # Day, normal tariff: solar surplus only (same as min_plus_solar
+        # day path).
         if not f.is_night:
             return _relabel(
                 _SOLAR_ONLY.decide(view), "solar_plus_cheap",

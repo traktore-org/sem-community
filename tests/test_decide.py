@@ -674,3 +674,70 @@ class TestIdleBridgeable:
                          solar_w=8000, home_w=500))
         assert d.intent is ChargerIntent.IDLE
         assert d.bridgeable is False
+
+
+class TestSolarPlusCheapDaytimeCheapHours:
+    """#856 (hoyte): "Solar + cheapest hours" honoured cheap hours at NIGHT
+    only. By day it fell back to solar-only regardless of price, so a
+    near-zero or negative daytime hour was ignored and the car charged only
+    in `always_max`. The mode's name is a promise about PRICE, not about the
+    clock. Daytime cheap hours now top up the Min floor from grid exactly as
+    the night window does — same plan gate, same peak-managed rate, same
+    "At least" guarantee — and solar surplus still wins when it offers more.
+    """
+
+    def _cheap_day(self, **kw):
+        base = dict(mode="solar_plus_cheap", is_night=False,
+                    tariff_level="very_cheap", target_kwh=6.0,
+                    solar_w=0.0, home_w=500, battery_soc=95)
+        base.update(kw)
+        return _view(**base)
+
+    def test_cheap_daytime_hour_tops_up_from_grid(self):
+        d = decide(self._cheap_day())
+        assert d.intent is ChargerIntent.CHARGE_AT_AMPS
+        assert d.commanded_amps >= 6, "no solar at all, yet it charges — grid"
+        assert "cheap" in d.reason.lower()
+        assert "night" not in d.reason.lower(), "it is day, and the reason must say so"
+
+    def test_negative_price_counts_as_cheap(self):
+        d = decide(self._cheap_day(tariff_level="negative"))
+        assert d.intent is ChargerIntent.CHARGE_AT_AMPS
+
+    def test_static_or_unknown_tariff_never_grid_charges_by_day(self):
+        """`tariff_level None` means no dynamic signal — the mode is hidden
+        without a dynamic tariff, but a stale None must not read as cheap."""
+        d = decide(self._cheap_day(tariff_level=None))
+        assert d.intent is ChargerIntent.IDLE, "no solar, no price signal → nothing"
+
+    def test_normal_daytime_stays_solar_only(self):
+        d = decide(self._cheap_day(tariff_level="normal"))
+        assert d.intent is ChargerIntent.IDLE
+
+    def test_solar_surplus_wins_when_it_offers_more(self):
+        """A cheap hour must never DOWNGRADE a strong solar offer to the
+        grid floor rate."""
+        d = decide(self._cheap_day(solar_w=9000, home_w=500))
+        assert d.intent is ChargerIntent.CHARGE_AT_AMPS
+        assert d.commanded_amps > 6
+
+    def test_no_min_target_means_nothing_to_fill_and_says_so(self):
+        """hoyte's likely state: 'At least 0 kWh'. The cheap window has no
+        floor to fill; the reason must tell the user which knob does."""
+        d = decide(self._cheap_day(target_kwh=0.0))
+        assert d.intent is ChargerIntent.IDLE
+        assert "min" in d.reason.lower() or "at least" in d.reason.lower()
+
+    def test_the_plan_gate_holds_by_day_too(self):
+        from custom_components.solar_energy_management.coordinator.charger_types import (
+            PlanVerdict,
+        )
+        d = decide(self._cheap_day(
+            plan=PlanVerdict(hold=True, reason="planned for 13:00", until=None)))
+        assert d.intent is ChargerIntent.IDLE
+        assert "waiting for the planned window" in d.reason
+
+    def test_expensive_daytime_still_pauses(self):
+        d = decide(self._cheap_day(tariff_level="expensive"))
+        assert d.intent is ChargerIntent.IDLE
+        assert "pausing grid imports" in d.reason
