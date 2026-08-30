@@ -656,488 +656,44 @@
   },
   "entity": {
     "sensor": {
-      "solar_power": {
-        "name": "Putere solară"
-      },
-      "home_consumption_power": {
-        "name": "Putere casă"
-      },
-      "grid_power": {
-        "name": "Putere rețea"
-      },
-      "grid_active_power": {
-        "name": "Putere activă rețea"
-      },
-      "grid_import_power": {
-        "name": "Import din rețea"
-      },
-      "grid_export_power": {
-        "name": "Export în rețea"
-      },
-      "battery_power": {
-        "name": "Putere baterie"
-      },
-      "battery_charge_power": {
-        "name": "Putere de încărcare baterie"
-      },
-      "battery_discharge_power": {
-        "name": "Putere de descărcare baterie"
-      },
-      "ev_power": {
-        "name": "Putere VE"
-      },
-      "available_power": {
-        "name": "Putere disponibilă"
-      },
-      "battery_soc": {
-        "name": "SOC baterie"
-      },
-      "battery_status": {
-        "name": "Stare baterie"
-      },
-      "battery_temperature": {
-        "name": "Temperatura bateriei"
-      },
-      "inverter_temperature": {
-        "name": "Temperatura invertorului"
-      },
-      "battery_cycles_estimated": {
-        "name": "Cicluri baterie (estimate)"
-      },
-      "battery_health_score": {
-        "name": "Scor de sănătate a bateriei"
-      },
-      "calculated_current": {
-        "name": "Curent calculat"
-      },
-      "charging_state": {
-        "name": "Stare de încărcare"
-      },
-      "grid_status": {
-        "name": "Stare rețea"
-      },
-      "solar_charging_status": {
-        "name": "Încărcare solară"
-      },
-      "night_charging_status": {
-        "name": "Încărcare de noapte"
-      },
-      "energy_plan": {
-        "name": "Plan energetic"
-      },
-      "battery_priority_status": {
-        "name": "Prioritate baterie"
-      },
-      "charging_strategy": {
-        "name": "Strategie de încărcare"
-      },
-      "daily_solar_energy": {
-        "name": "Solar azi"
-      },
-      "daily_home_energy": {
-        "name": "Casă azi"
-      },
-      "daily_grid_import_energy": {
-        "name": "Import azi"
-      },
-      "daily_grid_export_energy": {
-        "name": "Export azi"
-      },
-      "daily_battery_charge_energy": {
-        "name": "Încărcare azi"
-      },
-      "daily_battery_discharge_energy": {
-        "name": "Descărcare azi"
-      },
-      "daily_ev_energy": {
-        "name": "VE azi"
-      },
-      "monthly_solar_yield_energy": {
-        "name": "Solar lunar"
-      },
-      "monthly_grid_import_energy": {
-        "name": "Import lunar"
-      },
-      "monthly_grid_export_energy": {
-        "name": "Export lunar"
-      },
-      "monthly_battery_charge_energy": {
-        "name": "Încărcare lunară"
-      },
-      "monthly_battery_discharge_energy": {
-        "name": "Descărcare lunară"
-      },
-      "monthly_home_consumption_energy": {
-        "name": "Casă lunar"
-      },
-      "monthly_ev_consumption_energy": {
-        "name": "VE lunar"
-      },
-      "flow_solar_to_home_power": {
-        "name": "Solar către casă"
-      },
-      "flow_solar_to_battery_power": {
-        "name": "Solar către baterie"
-      },
-      "flow_solar_to_grid_power": {
-        "name": "Solar către rețea"
-      },
-      "flow_solar_to_ev_power": {
-        "name": "Solar către VE"
-      },
-      "flow_battery_to_home_power": {
-        "name": "Baterie către casă"
-      },
-      "flow_battery_to_grid_power": {
-        "name": "Baterie către rețea"
-      },
-      "flow_battery_to_ev_power": {
-        "name": "Baterie către VE"
-      },
-      "flow_grid_to_home_power": {
-        "name": "Rețea către casă"
-      },
-      "flow_grid_to_ev_power": {
-        "name": "Rețea către VE"
-      },
-      "flow_grid_to_battery_power": {
-        "name": "Rețea către baterie"
-      },
-      "flow_solar_to_home_energy": {
-        "name": "Energie solar către casă"
-      },
-      "flow_solar_to_ev_energy": {
-        "name": "Energie solar către VE"
-      },
-      "flow_solar_to_battery_energy": {
-        "name": "Energie solar către baterie"
-      },
-      "flow_solar_to_grid_energy": {
-        "name": "Energie solar către rețea"
-      },
-      "flow_grid_to_home_energy": {
-        "name": "Energie rețea către casă"
-      },
-      "flow_grid_to_ev_energy": {
-        "name": "Energie rețea către VE"
-      },
-      "flow_grid_to_battery_energy": {
-        "name": "Energie rețea către baterie"
-      },
-      "flow_battery_to_home_energy": {
-        "name": "Energie baterie către casă"
-      },
-      "flow_battery_to_grid_energy": {
-        "name": "Energie baterie către rețea"
-      },
-      "flow_battery_to_ev_energy": {
-        "name": "Energie baterie către VE"
-      },
-      "self_consumption_rate": {
-        "name": "Autoconsum"
-      },
       "autarky_rate": {
         "name": "Grad de autonomie"
-      },
-      "daily_savings": {
-        "name": "Economii azi"
-      },
-      "daily_battery_savings": {
-        "name": "Economii baterie zilnice"
-      },
-      "daily_costs": {
-        "name": "Costuri zilnice"
-      },
-      "daily_export_revenue": {
-        "name": "Venit din export zilnic"
-      },
-      "daily_net_cost": {
-        "name": "Cost net zilnic"
-      },
-      "monthly_savings": {
-        "name": "Economii lunare"
-      },
-      "monthly_battery_savings": {
-        "name": "Economii baterie lunare"
-      },
-      "monthly_costs": {
-        "name": "Costuri lunare"
-      },
-      "monthly_export_revenue": {
-        "name": "Venit din export lunar"
-      },
-      "monthly_net_cost": {
-        "name": "Cost net lunar"
-      },
-      "yearly_solar_yield_energy": {
-        "name": "Solar anual"
-      },
-      "lifetime_solar_yield_energy": {
-        "name": "Producție solară totală"
-      },
-      "yearly_grid_import_energy": {
-        "name": "Import din rețea anual"
-      },
-      "yearly_grid_export_energy": {
-        "name": "Export în rețea anual"
-      },
-      "yearly_battery_charge_energy": {
-        "name": "Încărcare baterie anuală"
-      },
-      "yearly_battery_discharge_energy": {
-        "name": "Descărcare baterie anuală"
-      },
-      "yearly_home_consumption_energy": {
-        "name": "Consum casnic anual"
-      },
-      "yearly_ev_energy": {
-        "name": "Energie VE anuală"
-      },
-      "yearly_costs": {
-        "name": "Costuri anuale"
-      },
-      "yearly_savings": {
-        "name": "Economii anuale"
-      },
-      "yearly_battery_savings": {
-        "name": "Economii baterie anuale"
-      },
-      "yearly_export_revenue": {
-        "name": "Venit din export anual"
-      },
-      "yearly_net_cost": {
-        "name": "Cost net anual"
-      },
-      "lifetime_total_savings": {
-        "name": "Economii totale"
-      },
-      "lifetime_grid_cost": {
-        "name": "Cost rețea total"
-      },
-      "roi_percentage": {
-        "name": "Procent ROI"
-      },
-      "roi_payback_years": {
-        "name": "Ani până la amortizare ROI"
-      },
-      "roi_annual_savings": {
-        "name": "Economii anuale ROI"
-      },
-      "forecast_correction_factor": {
-        "name": "Factor de corecție a prognozei"
-      },
-      "forecast_corrected_today": {
-        "name": "Prognoză corectată azi"
-      },
-      "forecast_history_days": {
-        "name": "Zile de istoric al prognozei"
-      },
-      "daily_co2_avoided": {
-        "name": "CO2 evitat azi"
-      },
-      "yearly_co2_avoided": {
-        "name": "CO2 evitat anul acesta"
-      },
-      "yearly_trees_equivalent": {
-        "name": "Echivalent copaci anul acesta"
-      },
-      "lifetime_co2_avoided": {
-        "name": "CO2 evitat total"
-      },
-      "lifetime_trees_equivalent": {
-        "name": "Echivalent copaci total"
-      },
-      "power_charge_cost": {
-        "name": "Cost taxă de putere"
-      },
-      "consecutive_peak_15min": {
-        "name": "Vârf 15 min"
-      },
-      "monthly_consecutive_peak": {
-        "name": "Vârf lunar"
-      },
-      "current_vs_peak_percentage": {
-        "name": "Procent din vârf"
-      },
-      "target_peak_limit": {
-        "name": "Limită de vârf"
-      },
-      "peak_margin": {
-        "name": "Marjă până la vârf"
-      },
-      "load_management_status": {
-        "name": "Gestionare sarcină"
-      },
-      "load_management_recommendation": {
-        "name": "Recomandare sarcină"
-      },
-      "loads_currently_shed": {
-        "name": "Sarcini delestate"
       },
       "available_load_reduction": {
         "name": "Reducere disponibilă"
       },
-      "controllable_devices_count": {
-        "name": "Număr de dispozitive"
+      "available_power": {
+        "name": "Putere disponibilă"
       },
-      "surplus_total_w": {
-        "name": "Surplus total"
+      "battery_capacity_drift_pct": {
+        "name": "Abatere de capacitate"
       },
-      "surplus_distributable_w": {
-        "name": "Surplus distribuibil"
+      "battery_charge_pacing": {
+        "name": "Battery charge pacing"
       },
-      "surplus_allocated_w": {
-        "name": "Surplus alocat"
+      "battery_charge_power": {
+        "name": "Putere de încărcare baterie"
       },
-      "surplus_unallocated_w": {
-        "name": "Surplus nealocat"
+      "battery_cycles_estimated": {
+        "name": "Cicluri baterie (estimate)"
       },
-      "surplus_active_devices": {
-        "name": "Dispozitive active pe surplus"
+      "battery_discharge_power": {
+        "name": "Putere de descărcare baterie"
       },
-      "surplus_total_devices": {
-        "name": "Total dispozitive pe surplus"
+      "battery_dynamic_floor_pct": {
+        "name": "Prag dinamic"
       },
-      "forecast_today_kwh": {
-        "name": "Prognoză azi"
+      "battery_health_score": {
+        "name": "Scor de sănătate a bateriei"
       },
-      "forecast_tomorrow_kwh": {
-        "name": "Prognoză mâine"
+      "battery_measured_capacity_kwh": {
+        "name": "Capacitate măsurată a bateriei"
       },
-      "forecast_remaining_today_kwh": {
-        "name": "Prognoză rămasă azi"
+      "battery_power": {
+        "name": "Putere baterie"
       },
-      "forecast_power_now_w": {
-        "name": "Putere prognozată acum"
-      },
-      "forecast_source": {
-        "name": "Sursa prognozei"
-      },
-      "charging_recommendation": {
-        "name": "Recomandare de încărcare"
-      },
-      "tariff_current_import_rate": {
-        "name": "Prețul energiei electrice"
-      },
-      "tariff_current_export_rate": {
-        "name": "Tarif export"
-      },
-      "tariff_price_level": {
-        "name": "Nivel de preț"
-      },
-      "tariff_provider": {
-        "name": "Furnizor de tarif"
-      },
-      "tariff_next_cheap_start": {
-        "name": "Următoarea fereastră ieftină"
-      },
-      "heat_pump_mode": {
-        "name": "Mod pompă de căldură"
-      },
-      "heat_pump_sg_ready_state": {
-        "name": "Stare SG-Ready pompă de căldură"
-      },
-      "pv_daily_specific_yield": {
-        "name": "Producție specifică PV"
-      },
-      "pv_performance_vs_forecast": {
-        "name": "PV față de prognoză"
-      },
-      "pv_estimated_annual_degradation": {
-        "name": "Degradare anuală PV"
-      },
-      "pv_degradation_trend": {
-        "name": "Tendință de degradare PV"
-      },
-      "energy_optimization_score": {
-        "name": "Scor de optimizare"
-      },
-      "energy_tip": {
-        "name": "Sfat energetic"
-      },
-      "energy_tip_category": {
-        "name": "Categorie sfat energetic"
-      },
-      "energy_ev_solar_percentage": {
-        "name": "Încărcare solară VE %"
-      },
-      "predictor_training_status": {
-        "name": "Stare antrenare predictor"
-      },
-      "predictor_model_accuracy": {
-        "name": "Predictor Accuracy"
-      },
-      "predicted_surplus_window": {
-        "name": "Fereastră de surplus estimată"
-      },
-      "session_energy": {
-        "name": "Energie sesiune"
-      },
-      "session_solar_share": {
-        "name": "Cotă solară sesiune"
-      },
-      "session_cost": {
-        "name": "Cost sesiune"
-      },
-      "session_duration": {
-        "name": "Durată sesiune"
-      },
-      "lifetime_ev_energy": {
-        "name": "Energie VE totală"
-      },
-      "lifetime_ev_solar": {
-        "name": "Energie solară VE totală"
-      },
-      "lifetime_ev_cost": {
-        "name": "Cost VE total"
-      },
-      "lifetime_ev_sessions": {
-        "name": "Sesiuni VE totale"
-      },
-      "lifetime_ev_solar_share": {
-        "name": "Cotă solară VE totală"
-      },
-      "lifetime_ev_battery_share": {
-        "name": "Cotă baterie VE totală"
-      },
-      "lifetime_ev_grid_share": {
-        "name": "Cotă rețea VE totală"
-      },
-      "vehicle_soc": {
-        "name": "SOC vehicul"
-      },
-      "ev_remaining_range": {
-        "name": "Autonomie VE"
-      },
-      "best_surplus_window": {
-        "name": "Cea mai bună fereastră de surplus"
-      },
-      "night_start_time": {
-        "name": "Ora de început a nopții"
-      },
-      "night_end_time": {
-        "name": "Ora de încheiere a nopții"
-      },
-      "night_window_hours": {
-        "name": "Ore fereastră de noapte"
-      },
-      "forecast_peak_power_today_w": {
-        "name": "Putere de vârf prognozată azi"
-      },
-      "forecast_peak_time_today": {
-        "name": "Ora vârfului prognozat azi"
-      },
-      "forecast_surplus_kwh": {
-        "name": "Surplus prognozat"
-      },
-      "forecast_dampening_factor": {
-        "name": "Factor de atenuare a prognozei"
-      },
-      "battery_scheduler_state": {
-        "name": "Stare planificator"
-      },
-      "battery_scheduler_target_soc": {
-        "name": "SOC țintă planificator baterie"
+      "battery_priority_status": {
+        "name": "Prioritate baterie"
       },
       "battery_scheduler_deficit_kwh": {
         "name": "Deficit planificator baterie"
@@ -1145,20 +701,128 @@
       "battery_scheduler_reason": {
         "name": "Motiv planificator baterie"
       },
-      "ev_charger_count": {
-        "name": "Număr de încărcătoare EV"
+      "battery_scheduler_state": {
+        "name": "Stare planificator"
       },
-      "ev_taper_trend": {
-        "name": "Tendință de reducere VE"
+      "battery_scheduler_target_soc": {
+        "name": "SOC țintă planificator baterie"
       },
-      "diag_version": {
-        "name": "Versiune SEM"
+      "battery_session_avg_power": {
+        "name": "Putere medie sesiune baterie"
       },
-      "diag_grid_mode": {
-        "name": "Mod senzor rețea"
+      "battery_session_cost": {
+        "name": "Cost sesiune baterie"
       },
-      "diag_grid_sign": {
-        "name": "Convenția de semn a rețelei"
+      "battery_session_duration": {
+        "name": "Durată sesiune baterie"
+      },
+      "battery_session_energy": {
+        "name": "Energie sesiune baterie"
+      },
+      "battery_session_savings": {
+        "name": "Economii sesiune baterie"
+      },
+      "battery_session_solar_share": {
+        "name": "Cotă solară sesiune baterie"
+      },
+      "battery_session_type": {
+        "name": "Tip sesiune baterie"
+      },
+      "battery_soc": {
+        "name": "SOC baterie"
+      },
+      "battery_spendable_kwh": {
+        "name": "Disponibil la noapte"
+      },
+      "battery_status": {
+        "name": "Stare baterie"
+      },
+      "battery_stored_grid_share": {
+        "name": "Energie stocată din rețea"
+      },
+      "battery_temperature": {
+        "name": "Temperatura bateriei"
+      },
+      "best_surplus_window": {
+        "name": "Cea mai bună fereastră de surplus"
+      },
+      "calculated_current": {
+        "name": "Curent calculat"
+      },
+      "charging_recommendation": {
+        "name": "Recomandare de încărcare"
+      },
+      "charging_state": {
+        "name": "Stare de încărcare"
+      },
+      "charging_strategy": {
+        "name": "Strategie de încărcare"
+      },
+      "consecutive_peak_15min": {
+        "name": "Vârf 15 min"
+      },
+      "controllable_devices_count": {
+        "name": "Număr de dispozitive"
+      },
+      "current_vs_peak_percentage": {
+        "name": "Procent din vârf"
+      },
+      "daily_battery_charge_energy": {
+        "name": "Încărcare azi"
+      },
+      "daily_battery_charge_grid": {
+        "name": "Azi încărcare din rețea"
+      },
+      "daily_battery_charge_solar": {
+        "name": "Azi încărcare din solar"
+      },
+      "daily_battery_discharge_energy": {
+        "name": "Descărcare azi"
+      },
+      "daily_battery_grid_cost": {
+        "name": "Azi cost încărcare din rețea"
+      },
+      "daily_battery_savings": {
+        "name": "Economii baterie zilnice"
+      },
+      "daily_co2_avoided": {
+        "name": "CO2 evitat azi"
+      },
+      "daily_costs": {
+        "name": "Costuri zilnice"
+      },
+      "daily_ev_energy": {
+        "name": "VE azi"
+      },
+      "daily_export_revenue": {
+        "name": "Venit din export zilnic"
+      },
+      "daily_grid_export_energy": {
+        "name": "Export azi"
+      },
+      "daily_grid_import_energy": {
+        "name": "Import azi"
+      },
+      "daily_home_energy": {
+        "name": "Casă azi"
+      },
+      "daily_net_cost": {
+        "name": "Cost net zilnic"
+      },
+      "daily_savings": {
+        "name": "Economii azi"
+      },
+      "daily_solar_energy": {
+        "name": "Solar azi"
+      },
+      "daily_total_consumption": {
+        "name": "Consum total azi"
+      },
+      "daily_true_baseload_energy": {
+        "name": "Sarcina de bază reală azi"
+      },
+      "diag_battery_capacity": {
+        "name": "Capacitatea bateriei (configurată)"
       },
       "diag_battery_sign": {
         "name": "Convenția de semn a bateriei"
@@ -1166,14 +830,11 @@
       "diag_charger_control": {
         "name": "Metoda de control a încărcătorului"
       },
-      "diag_battery_capacity": {
-        "name": "Capacitatea bateriei (configurată)"
+      "diag_charger_count": {
+        "name": "Încărcătoare configurate"
       },
-      "diag_update_interval": {
-        "name": "Interval de actualizare"
-      },
-      "diag_observer_mode": {
-        "name": "Mod observator"
+      "diag_ed_config": {
+        "name": "Configurare panou energie"
       },
       "diag_grid_l1_current_a": {
         "name": "Grid L1 Current"
@@ -1193,6 +854,15 @@
       "diag_grid_l3_margin_a": {
         "name": "Grid L3 Current Margin"
       },
+      "diag_grid_mode": {
+        "name": "Mod senzor rețea"
+      },
+      "diag_grid_sign": {
+        "name": "Convenția de semn a rețelei"
+      },
+      "diag_inputs_degraded": {
+        "name": "Inputs Degraded"
+      },
       "diag_inverter_l1_current_a": {
         "name": "Inverter Load/EPS L1 Current"
       },
@@ -1211,14 +881,17 @@
       "diag_inverter_l3_margin_a": {
         "name": "Inverter Load/EPS L3 Current Margin"
       },
+      "diag_observer_mode": {
+        "name": "Mod observator"
+      },
+      "diag_phase_guard_data_fresh": {
+        "name": "Phase Guard Data Fresh"
+      },
       "diag_phase_guard_mode": {
         "name": "Phase Guard Mode"
       },
       "diag_phase_guard_safe": {
         "name": "Phase Guard Safe"
-      },
-      "diag_phase_guard_data_fresh": {
-        "name": "Phase Guard Data Fresh"
       },
       "diag_phase_guard_stop_reason": {
         "name": "Phase Guard Stop Reason"
@@ -1226,80 +899,134 @@
       "diag_sensors_unavailable": {
         "name": "Senzori indisponibili"
       },
-      "battery_session_type": {
-        "name": "Tip sesiune baterie"
+      "diag_update_interval": {
+        "name": "Interval de actualizare"
       },
-      "battery_session_energy": {
-        "name": "Energie sesiune baterie"
+      "diag_version": {
+        "name": "Versiune SEM"
       },
-      "battery_session_solar_share": {
-        "name": "Cotă solară sesiune baterie"
+      "energy_ev_solar_percentage": {
+        "name": "Încărcare solară VE %"
       },
-      "battery_session_cost": {
-        "name": "Cost sesiune baterie"
+      "energy_optimization_score": {
+        "name": "Scor de optimizare"
       },
-      "battery_session_savings": {
-        "name": "Economii sesiune baterie"
+      "energy_plan": {
+        "name": "Plan energetic"
       },
-      "battery_session_duration": {
-        "name": "Durată sesiune baterie"
+      "energy_tip": {
+        "name": "Sfat energetic"
       },
-      "battery_session_avg_power": {
-        "name": "Putere medie sesiune baterie"
+      "energy_tip_category": {
+        "name": "Categorie sfat energetic"
       },
-      "diag_charger_count": {
-        "name": "Încărcătoare configurate"
+      "ev_charger_count": {
+        "name": "Număr de încărcătoare EV"
       },
-      "diag_ed_config": {
-        "name": "Configurare panou energie"
+      "ev_power": {
+        "name": "Putere VE"
       },
-      "heat_pump_registration_status": {
-        "name": "Stare înregistrare pompă de căldură"
+      "ev_remaining_range": {
+        "name": "Autonomie VE"
       },
-      "vpp_event": {
-        "name": "Eveniment VPP"
+      "ev_taper_trend": {
+        "name": "Tendință de reducere VE"
       },
-      "heat_pump_energy_today": {
-        "name": "Pompă de căldură azi"
+      "flow_battery_to_ev_energy": {
+        "name": "Energie baterie către VE"
       },
-      "heat_pump_energy_month": {
-        "name": "Pompă de căldură luna aceasta"
+      "flow_battery_to_ev_power": {
+        "name": "Baterie către VE"
       },
-      "heat_pump_energy_year": {
-        "name": "Pompă de căldură anul acesta"
+      "flow_battery_to_grid_energy": {
+        "name": "Energie baterie către rețea"
       },
-      "heat_pump_energy_total": {
-        "name": "Pompă de căldură total"
+      "flow_battery_to_grid_power": {
+        "name": "Baterie către rețea"
       },
-      "heat_pump_energy_shifted_today": {
-        "name": "Pompă de căldură mutată azi"
+      "flow_battery_to_home_energy": {
+        "name": "Energie baterie către casă"
       },
-      "daily_battery_charge_solar": {
-        "name": "Azi încărcare din solar"
+      "flow_battery_to_home_power": {
+        "name": "Baterie către casă"
       },
-      "daily_battery_charge_grid": {
-        "name": "Azi încărcare din rețea"
+      "flow_grid_to_battery_energy": {
+        "name": "Energie rețea către baterie"
       },
-      "daily_battery_grid_cost": {
-        "name": "Azi cost încărcare din rețea"
+      "flow_grid_to_battery_power": {
+        "name": "Rețea către baterie"
       },
-      "battery_stored_grid_share": {
-        "name": "Energie stocată din rețea"
+      "flow_grid_to_ev_energy": {
+        "name": "Energie rețea către VE"
       },
-      "true_baseload_power": {
-        "name": "Sarcina de bază reală"
+      "flow_grid_to_ev_power": {
+        "name": "Rețea către VE"
       },
-      "daily_true_baseload_energy": {
-        "name": "Sarcina de bază reală azi"
+      "flow_grid_to_home_energy": {
+        "name": "Energie rețea către casă"
       },
-      "daily_total_consumption": {
-        "name": "Consum total azi"
+      "flow_grid_to_home_power": {
+        "name": "Rețea către casă"
       },
-      "battery_measured_capacity_kwh": {
-        "name": "Capacitate măsurată a bateriei"
+      "flow_solar_to_battery_energy": {
+        "name": "Energie solar către baterie"
       },
-      "battery_capacity_drift_pct": {
-        "name": "Abatere de capacitate"
+      "flow_solar_to_battery_power": {
+        "name": "Solar către baterie"
+      },
+      "flow_solar_to_ev_energy": {
+        "name": "Energie solar către VE"
+      },
+      "flow_solar_to_ev_power": {
+        "name": "Solar către VE"
+      },
+      "flow_solar_to_grid_energy": {
+        "name": "Energie solar către rețea"
+      },
+      "flow_solar_to_grid_power": {
+        "name": "Solar către rețea"
+      },
+      "flow_solar_to_home_energy": {
+        "name": "Energie solar către casă"
+      },
+      "flow_solar_to_home_power": {
+        "name": "Solar către casă"
+      },
+      "forecast_corrected_today": {
+        "name": "Prognoză corectată azi"
+      },
+      "forecast_correction_factor": {
+        "name": "Factor de corecție a prognozei"
+      },
+      "forecast_dampening_factor": {
+        "name": "Factor de atenuare a prognozei"
+      },
+      "forecast_history_days": {
+        "name": "Zile de istoric al prognozei"
+      },
+      "forecast_peak_power_today_w": {
+        "name": "Putere de vârf prognozată azi"
+      },
+      "forecast_peak_time_today": {
+        "name": "Ora vârfului prognozat azi"
+      },
+      "forecast_power_now_w": {
+        "name": "Putere prognozată acum"
+      },
+      "forecast_remaining_today_kwh": {
+        "name": "Prognoză rămasă azi"
+      },
+      "forecast_source": {
+        "name": "Sursa prognozei"
+      },
+      "forecast_surplus_kwh": {
+        "name": "Surplus prognozat"
+      },
+      "forecast_today_kwh": {
+        "name": "Prognoză azi"
+      },
+      "forecast_tomorrow_kwh": {
+        "name": "Prognoză mâine"
       },
       "forecast_trust_d1": {
         "name": "Încrederea în prognoză (mâine)"
@@ -1307,14 +1034,290 @@
       "forecast_trust_d2": {
         "name": "Încrederea în prognoză (poimâine)"
       },
-      "battery_spendable_kwh": {
-        "name": "Disponibil la noapte"
+      "grid_active_power": {
+        "name": "Putere activă rețea"
       },
-      "battery_dynamic_floor_pct": {
-        "name": "Prag dinamic"
+      "grid_export_power": {
+        "name": "Export în rețea"
       },
-      "battery_charge_pacing": {
-        "name": "Battery charge pacing"
+      "grid_import_power": {
+        "name": "Import din rețea"
+      },
+      "grid_power": {
+        "name": "Putere rețea"
+      },
+      "grid_status": {
+        "name": "Stare rețea"
+      },
+      "heat_pump_energy_month": {
+        "name": "Pompă de căldură luna aceasta"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "Pompă de căldură mutată azi"
+      },
+      "heat_pump_energy_today": {
+        "name": "Pompă de căldură azi"
+      },
+      "heat_pump_energy_total": {
+        "name": "Pompă de căldură total"
+      },
+      "heat_pump_energy_year": {
+        "name": "Pompă de căldură anul acesta"
+      },
+      "heat_pump_mode": {
+        "name": "Mod pompă de căldură"
+      },
+      "heat_pump_registration_status": {
+        "name": "Stare înregistrare pompă de căldură"
+      },
+      "heat_pump_sg_ready_state": {
+        "name": "Stare SG-Ready pompă de căldură"
+      },
+      "home_consumption_power": {
+        "name": "Putere casă"
+      },
+      "inverter_temperature": {
+        "name": "Temperatura invertorului"
+      },
+      "lifetime_co2_avoided": {
+        "name": "CO2 evitat total"
+      },
+      "lifetime_ev_battery_share": {
+        "name": "Cotă baterie VE totală"
+      },
+      "lifetime_ev_cost": {
+        "name": "Cost VE total"
+      },
+      "lifetime_ev_energy": {
+        "name": "Energie VE totală"
+      },
+      "lifetime_ev_grid_share": {
+        "name": "Cotă rețea VE totală"
+      },
+      "lifetime_ev_sessions": {
+        "name": "Sesiuni VE totale"
+      },
+      "lifetime_ev_solar": {
+        "name": "Energie solară VE totală"
+      },
+      "lifetime_ev_solar_share": {
+        "name": "Cotă solară VE totală"
+      },
+      "lifetime_grid_cost": {
+        "name": "Cost rețea total"
+      },
+      "lifetime_solar_yield_energy": {
+        "name": "Producție solară totală"
+      },
+      "lifetime_total_savings": {
+        "name": "Economii totale"
+      },
+      "lifetime_trees_equivalent": {
+        "name": "Echivalent copaci total"
+      },
+      "load_management_recommendation": {
+        "name": "Recomandare sarcină"
+      },
+      "load_management_status": {
+        "name": "Gestionare sarcină"
+      },
+      "loads_currently_shed": {
+        "name": "Sarcini delestate"
+      },
+      "monthly_battery_charge_energy": {
+        "name": "Încărcare lunară"
+      },
+      "monthly_battery_discharge_energy": {
+        "name": "Descărcare lunară"
+      },
+      "monthly_battery_savings": {
+        "name": "Economii baterie lunare"
+      },
+      "monthly_consecutive_peak": {
+        "name": "Vârf lunar"
+      },
+      "monthly_costs": {
+        "name": "Costuri lunare"
+      },
+      "monthly_ev_consumption_energy": {
+        "name": "VE lunar"
+      },
+      "monthly_export_revenue": {
+        "name": "Venit din export lunar"
+      },
+      "monthly_grid_export_energy": {
+        "name": "Export lunar"
+      },
+      "monthly_grid_import_energy": {
+        "name": "Import lunar"
+      },
+      "monthly_home_consumption_energy": {
+        "name": "Casă lunar"
+      },
+      "monthly_net_cost": {
+        "name": "Cost net lunar"
+      },
+      "monthly_savings": {
+        "name": "Economii lunare"
+      },
+      "monthly_solar_yield_energy": {
+        "name": "Solar lunar"
+      },
+      "night_charging_status": {
+        "name": "Încărcare de noapte"
+      },
+      "night_end_time": {
+        "name": "Ora de încheiere a nopții"
+      },
+      "night_start_time": {
+        "name": "Ora de început a nopții"
+      },
+      "night_window_hours": {
+        "name": "Ore fereastră de noapte"
+      },
+      "peak_margin": {
+        "name": "Marjă până la vârf"
+      },
+      "power_charge_cost": {
+        "name": "Cost taxă de putere"
+      },
+      "predicted_surplus_window": {
+        "name": "Fereastră de surplus estimată"
+      },
+      "predictor_model_accuracy": {
+        "name": "Predictor Accuracy"
+      },
+      "predictor_training_status": {
+        "name": "Stare antrenare predictor"
+      },
+      "pv_daily_specific_yield": {
+        "name": "Producție specifică PV"
+      },
+      "pv_degradation_trend": {
+        "name": "Tendință de degradare PV"
+      },
+      "pv_estimated_annual_degradation": {
+        "name": "Degradare anuală PV"
+      },
+      "pv_performance_vs_forecast": {
+        "name": "PV față de prognoză"
+      },
+      "roi_annual_savings": {
+        "name": "Economii anuale ROI"
+      },
+      "roi_payback_years": {
+        "name": "Ani până la amortizare ROI"
+      },
+      "roi_percentage": {
+        "name": "Procent ROI"
+      },
+      "self_consumption_rate": {
+        "name": "Autoconsum"
+      },
+      "session_cost": {
+        "name": "Cost sesiune"
+      },
+      "session_duration": {
+        "name": "Durată sesiune"
+      },
+      "session_energy": {
+        "name": "Energie sesiune"
+      },
+      "session_solar_share": {
+        "name": "Cotă solară sesiune"
+      },
+      "solar_charging_status": {
+        "name": "Încărcare solară"
+      },
+      "solar_power": {
+        "name": "Putere solară"
+      },
+      "surplus_active_devices": {
+        "name": "Dispozitive active pe surplus"
+      },
+      "surplus_allocated_w": {
+        "name": "Surplus alocat"
+      },
+      "surplus_distributable_w": {
+        "name": "Surplus distribuibil"
+      },
+      "surplus_total_devices": {
+        "name": "Total dispozitive pe surplus"
+      },
+      "surplus_total_w": {
+        "name": "Surplus total"
+      },
+      "surplus_unallocated_w": {
+        "name": "Surplus nealocat"
+      },
+      "target_peak_limit": {
+        "name": "Limită de vârf"
+      },
+      "tariff_current_export_rate": {
+        "name": "Tarif export"
+      },
+      "tariff_current_import_rate": {
+        "name": "Prețul energiei electrice"
+      },
+      "tariff_next_cheap_start": {
+        "name": "Următoarea fereastră ieftină"
+      },
+      "tariff_price_level": {
+        "name": "Nivel de preț"
+      },
+      "tariff_provider": {
+        "name": "Furnizor de tarif"
+      },
+      "true_baseload_power": {
+        "name": "Sarcina de bază reală"
+      },
+      "vehicle_soc": {
+        "name": "SOC vehicul"
+      },
+      "vpp_event": {
+        "name": "Eveniment VPP"
+      },
+      "yearly_battery_charge_energy": {
+        "name": "Încărcare baterie anuală"
+      },
+      "yearly_battery_discharge_energy": {
+        "name": "Descărcare baterie anuală"
+      },
+      "yearly_battery_savings": {
+        "name": "Economii baterie anuale"
+      },
+      "yearly_co2_avoided": {
+        "name": "CO2 evitat anul acesta"
+      },
+      "yearly_costs": {
+        "name": "Costuri anuale"
+      },
+      "yearly_ev_energy": {
+        "name": "Energie VE anuală"
+      },
+      "yearly_export_revenue": {
+        "name": "Venit din export anual"
+      },
+      "yearly_grid_export_energy": {
+        "name": "Export în rețea anual"
+      },
+      "yearly_grid_import_energy": {
+        "name": "Import din rețea anual"
+      },
+      "yearly_home_consumption_energy": {
+        "name": "Consum casnic anual"
+      },
+      "yearly_net_cost": {
+        "name": "Cost net anual"
+      },
+      "yearly_savings": {
+        "name": "Economii anuale"
+      },
+      "yearly_solar_yield_energy": {
+        "name": "Solar anual"
+      },
+      "yearly_trees_equivalent": {
+        "name": "Echivalent copaci anul acesta"
       }
     },
     "binary_sensor": {

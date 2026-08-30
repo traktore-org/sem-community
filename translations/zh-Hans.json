@@ -656,488 +656,44 @@
   },
   "entity": {
     "sensor": {
-      "solar_power": {
-        "name": "太阳能功率"
-      },
-      "home_consumption_power": {
-        "name": "家庭负荷功率"
-      },
-      "grid_power": {
-        "name": "电网功率"
-      },
-      "grid_active_power": {
-        "name": "电网有功功率"
-      },
-      "grid_import_power": {
-        "name": "电网购电功率"
-      },
-      "grid_export_power": {
-        "name": "电网供电/上网功率"
-      },
-      "battery_power": {
-        "name": "蓄电池功率"
-      },
-      "battery_charge_power": {
-        "name": "蓄电池充电功率"
-      },
-      "battery_discharge_power": {
-        "name": "蓄电池放电功率"
-      },
-      "ev_power": {
-        "name": "电动汽车充电功率"
-      },
-      "available_power": {
-        "name": "可用富余功率"
-      },
-      "battery_soc": {
-        "name": "蓄电池电量 (SOC)"
-      },
-      "battery_status": {
-        "name": "蓄电池状态"
-      },
-      "battery_temperature": {
-        "name": "蓄电池温度"
-      },
-      "inverter_temperature": {
-        "name": "逆变器温度"
-      },
-      "battery_cycles_estimated": {
-        "name": "蓄电池循环次数（预估）"
-      },
-      "battery_health_score": {
-        "name": "蓄电池健康度评分"
-      },
-      "calculated_current": {
-        "name": "计算所得电流"
-      },
-      "charging_state": {
-        "name": "充电状态"
-      },
-      "grid_status": {
-        "name": "电网状态"
-      },
-      "solar_charging_status": {
-        "name": "太阳能绿电充电"
-      },
-      "night_charging_status": {
-        "name": "夜间谷电充电"
-      },
-      "energy_plan": {
-        "name": "能源计划"
-      },
-      "battery_priority_status": {
-        "name": "蓄电池优先级"
-      },
-      "charging_strategy": {
-        "name": "充电策略"
-      },
-      "daily_solar_energy": {
-        "name": "今日太阳能发电量"
-      },
-      "daily_home_energy": {
-        "name": "今日家庭用电量"
-      },
-      "daily_grid_import_energy": {
-        "name": "今日电网购电量"
-      },
-      "daily_grid_export_energy": {
-        "name": "今日电网供电/上网量"
-      },
-      "daily_battery_charge_energy": {
-        "name": "今日蓄电池充电量"
-      },
-      "daily_battery_discharge_energy": {
-        "name": "今日蓄电池放电量"
-      },
-      "daily_ev_energy": {
-        "name": "今日电动汽车充电量"
-      },
-      "monthly_solar_yield_energy": {
-        "name": "本月太阳能发电量"
-      },
-      "monthly_grid_import_energy": {
-        "name": "本月电网购电量"
-      },
-      "monthly_grid_export_energy": {
-        "name": "本月电网供电/上网量"
-      },
-      "monthly_battery_charge_energy": {
-        "name": "本月蓄电池充电量"
-      },
-      "monthly_battery_discharge_energy": {
-        "name": "本月蓄电池放电量"
-      },
-      "monthly_home_consumption_energy": {
-        "name": "本月家庭用电量"
-      },
-      "monthly_ev_consumption_energy": {
-        "name": "本月电动汽车充电量"
-      },
-      "flow_solar_to_home_power": {
-        "name": "太阳能至家庭功率"
-      },
-      "flow_solar_to_battery_power": {
-        "name": "太阳能至蓄电池功率"
-      },
-      "flow_solar_to_grid_power": {
-        "name": "太阳能至电网功率"
-      },
-      "flow_solar_to_ev_power": {
-        "name": "太阳能至电动汽车功率"
-      },
-      "flow_battery_to_home_power": {
-        "name": "蓄电池至家庭功率"
-      },
-      "flow_battery_to_grid_power": {
-        "name": "蓄电池至电网功率"
-      },
-      "flow_battery_to_ev_power": {
-        "name": "蓄电池至电动汽车功率"
-      },
-      "flow_grid_to_home_power": {
-        "name": "电网至家庭功率"
-      },
-      "flow_grid_to_ev_power": {
-        "name": "电网至电动汽车功率"
-      },
-      "flow_grid_to_battery_power": {
-        "name": "电网至蓄电池功率"
-      },
-      "flow_solar_to_home_energy": {
-        "name": "太阳能至家庭电量"
-      },
-      "flow_solar_to_ev_energy": {
-        "name": "太阳能至电动汽车电量"
-      },
-      "flow_solar_to_battery_energy": {
-        "name": "太阳能至蓄电池电量"
-      },
-      "flow_solar_to_grid_energy": {
-        "name": "太阳能至电网电量（上网）"
-      },
-      "flow_grid_to_home_energy": {
-        "name": "电网至家庭电量（购电）"
-      },
-      "flow_grid_to_ev_energy": {
-        "name": "电网至电动汽车电量"
-      },
-      "flow_grid_to_battery_energy": {
-        "name": "电网至蓄电池电量"
-      },
-      "flow_battery_to_home_energy": {
-        "name": "蓄电池至家庭电量"
-      },
-      "flow_battery_to_grid_energy": {
-        "name": "蓄电池至电网电量"
-      },
-      "flow_battery_to_ev_energy": {
-        "name": "蓄电池至电动汽车电量"
-      },
-      "self_consumption_rate": {
-        "name": "自发自用率"
-      },
       "autarky_rate": {
         "name": "自给自足率"
-      },
-      "daily_savings": {
-        "name": "今日节省电费"
-      },
-      "daily_battery_savings": {
-        "name": "今日蓄电池节省电费"
-      },
-      "daily_costs": {
-        "name": "今日电费支出"
-      },
-      "daily_export_revenue": {
-        "name": "今日上网收益"
-      },
-      "daily_net_cost": {
-        "name": "今日净电费电开支"
-      },
-      "monthly_savings": {
-        "name": "本月节省电费"
-      },
-      "monthly_battery_savings": {
-        "name": "本月蓄电池节省电费"
-      },
-      "monthly_costs": {
-        "name": "本月电费支出"
-      },
-      "monthly_export_revenue": {
-        "name": "本月上网收益"
-      },
-      "monthly_net_cost": {
-        "name": "本月净电费开支"
-      },
-      "yearly_solar_yield_energy": {
-        "name": "今年太阳能发电量"
-      },
-      "lifetime_solar_yield_energy": {
-        "name": "累计太阳能总发电量"
-      },
-      "yearly_grid_import_energy": {
-        "name": "今年电网购电量"
-      },
-      "yearly_grid_export_energy": {
-        "name": "今年电网供电/上网量"
-      },
-      "yearly_battery_charge_energy": {
-        "name": "今年蓄电池充电量"
-      },
-      "yearly_battery_discharge_energy": {
-        "name": "今年蓄电池放电量"
-      },
-      "yearly_home_consumption_energy": {
-        "name": "今年家庭用电量"
-      },
-      "yearly_ev_energy": {
-        "name": "今年电动汽车充电量"
-      },
-      "yearly_costs": {
-        "name": "今年电费支出"
-      },
-      "yearly_savings": {
-        "name": "今年节省电费"
-      },
-      "yearly_battery_savings": {
-        "name": "今年蓄电池节省电费"
-      },
-      "yearly_export_revenue": {
-        "name": "今年上网收益"
-      },
-      "yearly_net_cost": {
-        "name": "今年净电费开支"
-      },
-      "lifetime_total_savings": {
-        "name": "累计总节省电费"
-      },
-      "lifetime_grid_cost": {
-        "name": "累计电网电费支出"
-      },
-      "roi_percentage": {
-        "name": "投资回报率 (ROI) 百分比"
-      },
-      "roi_payback_years": {
-        "name": "投资回收年限"
-      },
-      "roi_annual_savings": {
-        "name": "年均节省金额 (ROI)"
-      },
-      "forecast_correction_factor": {
-        "name": "天气预测修正系数"
-      },
-      "forecast_corrected_today": {
-        "name": "今日修正后发电预测"
-      },
-      "forecast_history_days": {
-        "name": "预测历史天数"
-      },
-      "daily_co2_avoided": {
-        "name": "今日减排 CO2"
-      },
-      "yearly_co2_avoided": {
-        "name": "今年减排 CO2"
-      },
-      "yearly_trees_equivalent": {
-        "name": "今年等效植树"
-      },
-      "lifetime_co2_avoided": {
-        "name": "累计减排 CO2"
-      },
-      "lifetime_trees_equivalent": {
-        "name": "累计等效植树"
-      },
-      "power_charge_cost": {
-        "name": "需量/高峰负荷电费"
-      },
-      "consecutive_peak_15min": {
-        "name": "15分钟连续峰值功率"
-      },
-      "monthly_consecutive_peak": {
-        "name": "本月峰值功率"
-      },
-      "current_vs_peak_percentage": {
-        "name": "当前占峰值比例"
-      },
-      "target_peak_limit": {
-        "name": "峰值功率限制"
-      },
-      "peak_margin": {
-        "name": "峰值功率余量"
-      },
-      "load_management_status": {
-        "name": "负荷管理状态"
-      },
-      "load_management_recommendation": {
-        "name": "负荷控制建议"
-      },
-      "loads_currently_shed": {
-        "name": "当前已减载负荷数"
       },
       "available_load_reduction": {
         "name": "可减少负荷容量"
       },
-      "controllable_devices_count": {
-        "name": "可控设备总数"
+      "available_power": {
+        "name": "可用富余功率"
       },
-      "surplus_total_w": {
-        "name": "富余绿电功率总量"
+      "battery_capacity_drift_pct": {
+        "name": "容量偏差"
       },
-      "surplus_distributable_w": {
-        "name": "可分配富余功率"
+      "battery_charge_pacing": {
+        "name": "Battery charge pacing"
       },
-      "surplus_allocated_w": {
-        "name": "已分配富余功率"
+      "battery_charge_power": {
+        "name": "蓄电池充电功率"
       },
-      "surplus_unallocated_w": {
-        "name": "未分配富余功率"
+      "battery_cycles_estimated": {
+        "name": "蓄电池循环次数（预估）"
       },
-      "surplus_active_devices": {
-        "name": "绿电激活设备数"
+      "battery_discharge_power": {
+        "name": "蓄电池放电功率"
       },
-      "surplus_total_devices": {
-        "name": "绿电控制设备总数"
+      "battery_dynamic_floor_pct": {
+        "name": "动态下限"
       },
-      "forecast_today_kwh": {
-        "name": "今日发电量预测"
+      "battery_health_score": {
+        "name": "蓄电池健康度评分"
       },
-      "forecast_tomorrow_kwh": {
-        "name": "明日发电量预测"
+      "battery_measured_capacity_kwh": {
+        "name": "电池实测容量"
       },
-      "forecast_remaining_today_kwh": {
-        "name": "今日剩余发电预测"
+      "battery_power": {
+        "name": "蓄电池功率"
       },
-      "forecast_power_now_w": {
-        "name": "当前预测发电功率"
-      },
-      "forecast_source": {
-        "name": "天气预测数据源"
-      },
-      "charging_recommendation": {
-        "name": "最佳充电建议"
-      },
-      "tariff_current_import_rate": {
-        "name": "当前实时电价"
-      },
-      "tariff_current_export_rate": {
-        "name": "当前上网电价"
-      },
-      "tariff_price_level": {
-        "name": "实时电价等级"
-      },
-      "tariff_provider": {
-        "name": "电价服务商"
-      },
-      "tariff_next_cheap_start": {
-        "name": "下个低电价时段起止"
-      },
-      "heat_pump_mode": {
-        "name": "热泵模式"
-      },
-      "heat_pump_sg_ready_state": {
-        "name": "热泵 SG-Ready 状态"
-      },
-      "pv_daily_specific_yield": {
-        "name": "光伏日等效利用小时数"
-      },
-      "pv_performance_vs_forecast": {
-        "name": "实际发电对比预测偏差"
-      },
-      "pv_estimated_annual_degradation": {
-        "name": "光伏预估年化衰减"
-      },
-      "pv_degradation_trend": {
-        "name": "光伏衰减趋势"
-      },
-      "energy_optimization_score": {
-        "name": "能源优化评分"
-      },
-      "energy_tip": {
-        "name": "节能优化建议"
-      },
-      "energy_tip_category": {
-        "name": "节能优化建议类别"
-      },
-      "energy_ev_solar_percentage": {
-        "name": "车充太阳能占比 %"
-      },
-      "predictor_training_status": {
-        "name": "模型训练状态"
-      },
-      "predictor_model_accuracy": {
-        "name": "模型预测准确度"
-      },
-      "predicted_surplus_window": {
-        "name": "预测绿电富余时段"
-      },
-      "session_energy": {
-        "name": "单次充电电量"
-      },
-      "session_solar_share": {
-        "name": "单次充电太阳能占比"
-      },
-      "session_cost": {
-        "name": "单次充电花费"
-      },
-      "session_duration": {
-        "name": "单次充电时长"
-      },
-      "lifetime_ev_energy": {
-        "name": "累计电动汽车总充电量"
-      },
-      "lifetime_ev_solar": {
-        "name": "累计车充太阳能总量"
-      },
-      "lifetime_ev_cost": {
-        "name": "累计车充总电费开支"
-      },
-      "lifetime_ev_sessions": {
-        "name": "累计车充总次数"
-      },
-      "lifetime_ev_solar_share": {
-        "name": "累计车充太阳能平均占比"
-      },
-      "lifetime_ev_battery_share": {
-        "name": "累计车充电池占比"
-      },
-      "lifetime_ev_grid_share": {
-        "name": "累计车充电网占比"
-      },
-      "vehicle_soc": {
-        "name": "车辆电量 (SOC)"
-      },
-      "ev_remaining_range": {
-        "name": "续航里程"
-      },
-      "best_surplus_window": {
-        "name": "最佳绿电富余时段"
-      },
-      "night_start_time": {
-        "name": "夜间时段开始时间"
-      },
-      "night_end_time": {
-        "name": "夜间时段结束时间"
-      },
-      "night_window_hours": {
-        "name": "夜间低电价总时长"
-      },
-      "forecast_peak_power_today_w": {
-        "name": "今日预测发电峰值功率"
-      },
-      "forecast_peak_time_today": {
-        "name": "今日预测发电峰值时间"
-      },
-      "forecast_surplus_kwh": {
-        "name": "富余电量预测"
-      },
-      "forecast_dampening_factor": {
-        "name": "预测阻尼/衰减系数"
-      },
-      "battery_scheduler_state": {
-        "name": "蓄电池调度状态"
-      },
-      "battery_scheduler_target_soc": {
-        "name": "蓄电池调度目标电量"
+      "battery_priority_status": {
+        "name": "蓄电池优先级"
       },
       "battery_scheduler_deficit_kwh": {
         "name": "蓄电池调度电量缺口"
@@ -1145,32 +701,140 @@
       "battery_scheduler_reason": {
         "name": "蓄电池调度触发原因"
       },
-      "ev_charger_count": {
-        "name": "已配置充电桩数量"
+      "battery_scheduler_state": {
+        "name": "蓄电池调度状态"
       },
-      "ev_taper_trend": {
-        "name": "车充降流末端趋势"
+      "battery_scheduler_target_soc": {
+        "name": "蓄电池调度目标电量"
       },
-      "diag_version": {
-        "name": "SEM 版本"
+      "battery_session_avg_power": {
+        "name": "蓄电池单次循环平均功率"
       },
-      "diag_grid_mode": {
-        "name": "电网传感器模式"
+      "battery_session_cost": {
+        "name": "蓄电池单次循环成本"
       },
-      "diag_grid_sign": {
-        "name": "电网正负符号惯例"
+      "battery_session_duration": {
+        "name": "蓄电池单次循环时长"
       },
-      "diag_charger_control": {
-        "name": "充电桩控制方式"
+      "battery_session_energy": {
+        "name": "蓄电池循环能量"
+      },
+      "battery_session_savings": {
+        "name": "蓄电池单次循环收益"
+      },
+      "battery_session_solar_share": {
+        "name": "蓄电池单次充电太阳能占比"
+      },
+      "battery_session_type": {
+        "name": "蓄电池循环类型"
+      },
+      "battery_soc": {
+        "name": "蓄电池电量 (SOC)"
+      },
+      "battery_spendable_kwh": {
+        "name": "今夜可用电量"
+      },
+      "battery_status": {
+        "name": "蓄电池状态"
+      },
+      "battery_stored_grid_share": {
+        "name": "来自电网的储存电量"
+      },
+      "battery_temperature": {
+        "name": "蓄电池温度"
+      },
+      "best_surplus_window": {
+        "name": "最佳绿电富余时段"
+      },
+      "calculated_current": {
+        "name": "计算所得电流"
+      },
+      "charging_recommendation": {
+        "name": "最佳充电建议"
+      },
+      "charging_state": {
+        "name": "充电状态"
+      },
+      "charging_strategy": {
+        "name": "充电策略"
+      },
+      "consecutive_peak_15min": {
+        "name": "15分钟连续峰值功率"
+      },
+      "controllable_devices_count": {
+        "name": "可控设备总数"
+      },
+      "current_vs_peak_percentage": {
+        "name": "当前占峰值比例"
+      },
+      "daily_battery_charge_energy": {
+        "name": "今日蓄电池充电量"
+      },
+      "daily_battery_charge_grid": {
+        "name": "今日电网充电"
+      },
+      "daily_battery_charge_solar": {
+        "name": "今日光伏充电"
+      },
+      "daily_battery_discharge_energy": {
+        "name": "今日蓄电池放电量"
+      },
+      "daily_battery_grid_cost": {
+        "name": "今日电网充电成本"
+      },
+      "daily_battery_savings": {
+        "name": "今日蓄电池节省电费"
+      },
+      "daily_co2_avoided": {
+        "name": "今日减排 CO2"
+      },
+      "daily_costs": {
+        "name": "今日电费支出"
+      },
+      "daily_ev_energy": {
+        "name": "今日电动汽车充电量"
+      },
+      "daily_export_revenue": {
+        "name": "今日上网收益"
+      },
+      "daily_grid_export_energy": {
+        "name": "今日电网供电/上网量"
+      },
+      "daily_grid_import_energy": {
+        "name": "今日电网购电量"
+      },
+      "daily_home_energy": {
+        "name": "今日家庭用电量"
+      },
+      "daily_net_cost": {
+        "name": "今日净电费电开支"
+      },
+      "daily_savings": {
+        "name": "今日节省电费"
+      },
+      "daily_solar_energy": {
+        "name": "今日太阳能发电量"
+      },
+      "daily_total_consumption": {
+        "name": "今日总消耗"
+      },
+      "daily_true_baseload_energy": {
+        "name": "今日真实基础负荷"
       },
       "diag_battery_capacity": {
         "name": "蓄电池配置容量"
       },
-      "diag_update_interval": {
-        "name": "系统更新间隔"
+      "diag_battery_sign": {
+        "name": "蓄电池正负符号惯例"
       },
-      "diag_observer_mode": {
-        "name": "观察者模式"
+      "diag_charger_control": {
+        "name": "充电桩控制方式"
+      },
+      "diag_charger_count": {
+        "name": "已配充电桩"
+      },
+      "diag_ed_config": {
+        "name": "能源看板配置状态"
       },
       "diag_grid_l1_current_a": {
         "name": "Grid L1 Current"
@@ -1190,6 +854,15 @@
       "diag_grid_l3_margin_a": {
         "name": "Grid L3 Current Margin"
       },
+      "diag_grid_mode": {
+        "name": "电网传感器模式"
+      },
+      "diag_grid_sign": {
+        "name": "电网正负符号惯例"
+      },
+      "diag_inputs_degraded": {
+        "name": "Inputs Degraded"
+      },
       "diag_inverter_l1_current_a": {
         "name": "Inverter Load/EPS L1 Current"
       },
@@ -1208,14 +881,17 @@
       "diag_inverter_l3_margin_a": {
         "name": "Inverter Load/EPS L3 Current Margin"
       },
+      "diag_observer_mode": {
+        "name": "观察者模式"
+      },
+      "diag_phase_guard_data_fresh": {
+        "name": "Phase Guard Data Fresh"
+      },
       "diag_phase_guard_mode": {
         "name": "Phase Guard Mode"
       },
       "diag_phase_guard_safe": {
         "name": "Phase Guard Safe"
-      },
-      "diag_phase_guard_data_fresh": {
-        "name": "Phase Guard Data Fresh"
       },
       "diag_phase_guard_stop_reason": {
         "name": "Phase Guard Stop Reason"
@@ -1223,83 +899,134 @@
       "diag_sensors_unavailable": {
         "name": "不可用传感器列表"
       },
-      "battery_session_type": {
-        "name": "蓄电池循环类型"
+      "diag_update_interval": {
+        "name": "系统更新间隔"
       },
-      "battery_session_energy": {
-        "name": "蓄电池循环能量"
+      "diag_version": {
+        "name": "SEM 版本"
       },
-      "battery_session_solar_share": {
-        "name": "蓄电池单次充电太阳能占比"
+      "energy_ev_solar_percentage": {
+        "name": "车充太阳能占比 %"
       },
-      "battery_session_cost": {
-        "name": "蓄电池单次循环成本"
+      "energy_optimization_score": {
+        "name": "能源优化评分"
       },
-      "battery_session_savings": {
-        "name": "蓄电池单次循环收益"
+      "energy_plan": {
+        "name": "能源计划"
       },
-      "battery_session_duration": {
-        "name": "蓄电池单次循环时长"
+      "energy_tip": {
+        "name": "节能优化建议"
       },
-      "battery_session_avg_power": {
-        "name": "蓄电池单次循环平均功率"
+      "energy_tip_category": {
+        "name": "节能优化建议类别"
       },
-      "diag_charger_count": {
-        "name": "已配充电桩"
+      "ev_charger_count": {
+        "name": "已配置充电桩数量"
       },
-      "diag_ed_config": {
-        "name": "能源看板配置状态"
+      "ev_power": {
+        "name": "电动汽车充电功率"
       },
-      "heat_pump_registration_status": {
-        "name": "热泵注册状态"
+      "ev_remaining_range": {
+        "name": "续航里程"
       },
-      "diag_battery_sign": {
-        "name": "蓄电池正负符号惯例"
+      "ev_taper_trend": {
+        "name": "车充降流末端趋势"
       },
-      "vpp_event": {
-        "name": "VPP 事件"
+      "flow_battery_to_ev_energy": {
+        "name": "蓄电池至电动汽车电量"
       },
-      "heat_pump_energy_today": {
-        "name": "热泵今日"
+      "flow_battery_to_ev_power": {
+        "name": "蓄电池至电动汽车功率"
       },
-      "heat_pump_energy_month": {
-        "name": "热泵本月"
+      "flow_battery_to_grid_energy": {
+        "name": "蓄电池至电网电量"
       },
-      "heat_pump_energy_year": {
-        "name": "热泵今年"
+      "flow_battery_to_grid_power": {
+        "name": "蓄电池至电网功率"
       },
-      "heat_pump_energy_total": {
-        "name": "热泵总计"
+      "flow_battery_to_home_energy": {
+        "name": "蓄电池至家庭电量"
       },
-      "heat_pump_energy_shifted_today": {
-        "name": "热泵今日转移"
+      "flow_battery_to_home_power": {
+        "name": "蓄电池至家庭功率"
       },
-      "daily_battery_charge_solar": {
-        "name": "今日光伏充电"
+      "flow_grid_to_battery_energy": {
+        "name": "电网至蓄电池电量"
       },
-      "daily_battery_charge_grid": {
-        "name": "今日电网充电"
+      "flow_grid_to_battery_power": {
+        "name": "电网至蓄电池功率"
       },
-      "daily_battery_grid_cost": {
-        "name": "今日电网充电成本"
+      "flow_grid_to_ev_energy": {
+        "name": "电网至电动汽车电量"
       },
-      "battery_stored_grid_share": {
-        "name": "来自电网的储存电量"
+      "flow_grid_to_ev_power": {
+        "name": "电网至电动汽车功率"
       },
-      "true_baseload_power": {
-        "name": "真实基础负荷"
+      "flow_grid_to_home_energy": {
+        "name": "电网至家庭电量（购电）"
       },
-      "daily_true_baseload_energy": {
-        "name": "今日真实基础负荷"
+      "flow_grid_to_home_power": {
+        "name": "电网至家庭功率"
       },
-      "daily_total_consumption": {
-        "name": "今日总消耗"
+      "flow_solar_to_battery_energy": {
+        "name": "太阳能至蓄电池电量"
       },
-      "battery_measured_capacity_kwh": {
-        "name": "电池实测容量"
+      "flow_solar_to_battery_power": {
+        "name": "太阳能至蓄电池功率"
       },
-      "battery_capacity_drift_pct": {
-        "name": "容量偏差"
+      "flow_solar_to_ev_energy": {
+        "name": "太阳能至电动汽车电量"
+      },
+      "flow_solar_to_ev_power": {
+        "name": "太阳能至电动汽车功率"
+      },
+      "flow_solar_to_grid_energy": {
+        "name": "太阳能至电网电量（上网）"
+      },
+      "flow_solar_to_grid_power": {
+        "name": "太阳能至电网功率"
+      },
+      "flow_solar_to_home_energy": {
+        "name": "太阳能至家庭电量"
+      },
+      "flow_solar_to_home_power": {
+        "name": "太阳能至家庭功率"
+      },
+      "forecast_corrected_today": {
+        "name": "今日修正后发电预测"
+      },
+      "forecast_correction_factor": {
+        "name": "天气预测修正系数"
+      },
+      "forecast_dampening_factor": {
+        "name": "预测阻尼/衰减系数"
+      },
+      "forecast_history_days": {
+        "name": "预测历史天数"
+      },
+      "forecast_peak_power_today_w": {
+        "name": "今日预测发电峰值功率"
+      },
+      "forecast_peak_time_today": {
+        "name": "今日预测发电峰值时间"
+      },
+      "forecast_power_now_w": {
+        "name": "当前预测发电功率"
+      },
+      "forecast_remaining_today_kwh": {
+        "name": "今日剩余发电预测"
+      },
+      "forecast_source": {
+        "name": "天气预测数据源"
+      },
+      "forecast_surplus_kwh": {
+        "name": "富余电量预测"
+      },
+      "forecast_today_kwh": {
+        "name": "今日发电量预测"
+      },
+      "forecast_tomorrow_kwh": {
+        "name": "明日发电量预测"
       },
       "forecast_trust_d1": {
         "name": "预测可信度（明天）"
@@ -1307,14 +1034,290 @@
       "forecast_trust_d2": {
         "name": "预测可信度（后天）"
       },
-      "battery_spendable_kwh": {
-        "name": "今夜可用电量"
+      "grid_active_power": {
+        "name": "电网有功功率"
       },
-      "battery_dynamic_floor_pct": {
-        "name": "动态下限"
+      "grid_export_power": {
+        "name": "电网供电/上网功率"
       },
-      "battery_charge_pacing": {
-        "name": "Battery charge pacing"
+      "grid_import_power": {
+        "name": "电网购电功率"
+      },
+      "grid_power": {
+        "name": "电网功率"
+      },
+      "grid_status": {
+        "name": "电网状态"
+      },
+      "heat_pump_energy_month": {
+        "name": "热泵本月"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "热泵今日转移"
+      },
+      "heat_pump_energy_today": {
+        "name": "热泵今日"
+      },
+      "heat_pump_energy_total": {
+        "name": "热泵总计"
+      },
+      "heat_pump_energy_year": {
+        "name": "热泵今年"
+      },
+      "heat_pump_mode": {
+        "name": "热泵模式"
+      },
+      "heat_pump_registration_status": {
+        "name": "热泵注册状态"
+      },
+      "heat_pump_sg_ready_state": {
+        "name": "热泵 SG-Ready 状态"
+      },
+      "home_consumption_power": {
+        "name": "家庭负荷功率"
+      },
+      "inverter_temperature": {
+        "name": "逆变器温度"
+      },
+      "lifetime_co2_avoided": {
+        "name": "累计减排 CO2"
+      },
+      "lifetime_ev_battery_share": {
+        "name": "累计车充电池占比"
+      },
+      "lifetime_ev_cost": {
+        "name": "累计车充总电费开支"
+      },
+      "lifetime_ev_energy": {
+        "name": "累计电动汽车总充电量"
+      },
+      "lifetime_ev_grid_share": {
+        "name": "累计车充电网占比"
+      },
+      "lifetime_ev_sessions": {
+        "name": "累计车充总次数"
+      },
+      "lifetime_ev_solar": {
+        "name": "累计车充太阳能总量"
+      },
+      "lifetime_ev_solar_share": {
+        "name": "累计车充太阳能平均占比"
+      },
+      "lifetime_grid_cost": {
+        "name": "累计电网电费支出"
+      },
+      "lifetime_solar_yield_energy": {
+        "name": "累计太阳能总发电量"
+      },
+      "lifetime_total_savings": {
+        "name": "累计总节省电费"
+      },
+      "lifetime_trees_equivalent": {
+        "name": "累计等效植树"
+      },
+      "load_management_recommendation": {
+        "name": "负荷控制建议"
+      },
+      "load_management_status": {
+        "name": "负荷管理状态"
+      },
+      "loads_currently_shed": {
+        "name": "当前已减载负荷数"
+      },
+      "monthly_battery_charge_energy": {
+        "name": "本月蓄电池充电量"
+      },
+      "monthly_battery_discharge_energy": {
+        "name": "本月蓄电池放电量"
+      },
+      "monthly_battery_savings": {
+        "name": "本月蓄电池节省电费"
+      },
+      "monthly_consecutive_peak": {
+        "name": "本月峰值功率"
+      },
+      "monthly_costs": {
+        "name": "本月电费支出"
+      },
+      "monthly_ev_consumption_energy": {
+        "name": "本月电动汽车充电量"
+      },
+      "monthly_export_revenue": {
+        "name": "本月上网收益"
+      },
+      "monthly_grid_export_energy": {
+        "name": "本月电网供电/上网量"
+      },
+      "monthly_grid_import_energy": {
+        "name": "本月电网购电量"
+      },
+      "monthly_home_consumption_energy": {
+        "name": "本月家庭用电量"
+      },
+      "monthly_net_cost": {
+        "name": "本月净电费开支"
+      },
+      "monthly_savings": {
+        "name": "本月节省电费"
+      },
+      "monthly_solar_yield_energy": {
+        "name": "本月太阳能发电量"
+      },
+      "night_charging_status": {
+        "name": "夜间谷电充电"
+      },
+      "night_end_time": {
+        "name": "夜间时段结束时间"
+      },
+      "night_start_time": {
+        "name": "夜间时段开始时间"
+      },
+      "night_window_hours": {
+        "name": "夜间低电价总时长"
+      },
+      "peak_margin": {
+        "name": "峰值功率余量"
+      },
+      "power_charge_cost": {
+        "name": "需量/高峰负荷电费"
+      },
+      "predicted_surplus_window": {
+        "name": "预测绿电富余时段"
+      },
+      "predictor_model_accuracy": {
+        "name": "模型预测准确度"
+      },
+      "predictor_training_status": {
+        "name": "模型训练状态"
+      },
+      "pv_daily_specific_yield": {
+        "name": "光伏日等效利用小时数"
+      },
+      "pv_degradation_trend": {
+        "name": "光伏衰减趋势"
+      },
+      "pv_estimated_annual_degradation": {
+        "name": "光伏预估年化衰减"
+      },
+      "pv_performance_vs_forecast": {
+        "name": "实际发电对比预测偏差"
+      },
+      "roi_annual_savings": {
+        "name": "年均节省金额 (ROI)"
+      },
+      "roi_payback_years": {
+        "name": "投资回收年限"
+      },
+      "roi_percentage": {
+        "name": "投资回报率 (ROI) 百分比"
+      },
+      "self_consumption_rate": {
+        "name": "自发自用率"
+      },
+      "session_cost": {
+        "name": "单次充电花费"
+      },
+      "session_duration": {
+        "name": "单次充电时长"
+      },
+      "session_energy": {
+        "name": "单次充电电量"
+      },
+      "session_solar_share": {
+        "name": "单次充电太阳能占比"
+      },
+      "solar_charging_status": {
+        "name": "太阳能绿电充电"
+      },
+      "solar_power": {
+        "name": "太阳能功率"
+      },
+      "surplus_active_devices": {
+        "name": "绿电激活设备数"
+      },
+      "surplus_allocated_w": {
+        "name": "已分配富余功率"
+      },
+      "surplus_distributable_w": {
+        "name": "可分配富余功率"
+      },
+      "surplus_total_devices": {
+        "name": "绿电控制设备总数"
+      },
+      "surplus_total_w": {
+        "name": "富余绿电功率总量"
+      },
+      "surplus_unallocated_w": {
+        "name": "未分配富余功率"
+      },
+      "target_peak_limit": {
+        "name": "峰值功率限制"
+      },
+      "tariff_current_export_rate": {
+        "name": "当前上网电价"
+      },
+      "tariff_current_import_rate": {
+        "name": "当前实时电价"
+      },
+      "tariff_next_cheap_start": {
+        "name": "下个低电价时段起止"
+      },
+      "tariff_price_level": {
+        "name": "实时电价等级"
+      },
+      "tariff_provider": {
+        "name": "电价服务商"
+      },
+      "true_baseload_power": {
+        "name": "真实基础负荷"
+      },
+      "vehicle_soc": {
+        "name": "车辆电量 (SOC)"
+      },
+      "vpp_event": {
+        "name": "VPP 事件"
+      },
+      "yearly_battery_charge_energy": {
+        "name": "今年蓄电池充电量"
+      },
+      "yearly_battery_discharge_energy": {
+        "name": "今年蓄电池放电量"
+      },
+      "yearly_battery_savings": {
+        "name": "今年蓄电池节省电费"
+      },
+      "yearly_co2_avoided": {
+        "name": "今年减排 CO2"
+      },
+      "yearly_costs": {
+        "name": "今年电费支出"
+      },
+      "yearly_ev_energy": {
+        "name": "今年电动汽车充电量"
+      },
+      "yearly_export_revenue": {
+        "name": "今年上网收益"
+      },
+      "yearly_grid_export_energy": {
+        "name": "今年电网供电/上网量"
+      },
+      "yearly_grid_import_energy": {
+        "name": "今年电网购电量"
+      },
+      "yearly_home_consumption_energy": {
+        "name": "今年家庭用电量"
+      },
+      "yearly_net_cost": {
+        "name": "今年净电费开支"
+      },
+      "yearly_savings": {
+        "name": "今年节省电费"
+      },
+      "yearly_solar_yield_energy": {
+        "name": "今年太阳能发电量"
+      },
+      "yearly_trees_equivalent": {
+        "name": "今年等效植树"
       }
     },
     "binary_sensor": {

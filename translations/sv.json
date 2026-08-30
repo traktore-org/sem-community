@@ -656,488 +656,44 @@
   },
   "entity": {
     "sensor": {
-      "solar_power": {
-        "name": "Soleffekt"
-      },
-      "home_consumption_power": {
-        "name": "Hemeffekt"
-      },
-      "grid_power": {
-        "name": "Näteffekt"
-      },
-      "grid_active_power": {
-        "name": "Nätets aktiva effekt"
-      },
-      "grid_import_power": {
-        "name": "Nätimport"
-      },
-      "grid_export_power": {
-        "name": "Nätexport"
-      },
-      "battery_power": {
-        "name": "Batterieffekt"
-      },
-      "battery_charge_power": {
-        "name": "Batteriets laddeffekt"
-      },
-      "battery_discharge_power": {
-        "name": "Batteriets urladdningseffekt"
-      },
-      "ev_power": {
-        "name": "EV-effekt"
-      },
-      "available_power": {
-        "name": "Tillgänglig effekt"
-      },
-      "battery_soc": {
-        "name": "Batteri-SOC"
-      },
-      "battery_status": {
-        "name": "Batteristatus"
-      },
-      "battery_temperature": {
-        "name": "Batteritemperatur"
-      },
-      "inverter_temperature": {
-        "name": "Växelriktartemperatur"
-      },
-      "battery_cycles_estimated": {
-        "name": "Battericykler (uppskattat)"
-      },
-      "battery_health_score": {
-        "name": "Batteriets hälsopoäng"
-      },
-      "calculated_current": {
-        "name": "Beräknad ström"
-      },
-      "charging_state": {
-        "name": "Laddningstillstånd"
-      },
-      "grid_status": {
-        "name": "Nätstatus"
-      },
-      "solar_charging_status": {
-        "name": "Solladdning"
-      },
-      "night_charging_status": {
-        "name": "Nattladdning"
-      },
-      "energy_plan": {
-        "name": "Energiplan"
-      },
-      "battery_priority_status": {
-        "name": "Batteriprioritet"
-      },
-      "charging_strategy": {
-        "name": "Laddningsstrategi"
-      },
-      "daily_solar_energy": {
-        "name": "Sol idag"
-      },
-      "daily_home_energy": {
-        "name": "Hem idag"
-      },
-      "daily_grid_import_energy": {
-        "name": "Import idag"
-      },
-      "daily_grid_export_energy": {
-        "name": "Export idag"
-      },
-      "daily_battery_charge_energy": {
-        "name": "Laddat idag"
-      },
-      "daily_battery_discharge_energy": {
-        "name": "Urladdat idag"
-      },
-      "daily_ev_energy": {
-        "name": "EV idag"
-      },
-      "monthly_solar_yield_energy": {
-        "name": "Sol denna månad"
-      },
-      "monthly_grid_import_energy": {
-        "name": "Import denna månad"
-      },
-      "monthly_grid_export_energy": {
-        "name": "Export denna månad"
-      },
-      "monthly_battery_charge_energy": {
-        "name": "Laddat denna månad"
-      },
-      "monthly_battery_discharge_energy": {
-        "name": "Urladdat denna månad"
-      },
-      "monthly_home_consumption_energy": {
-        "name": "Hem denna månad"
-      },
-      "monthly_ev_consumption_energy": {
-        "name": "EV denna månad"
-      },
-      "flow_solar_to_home_power": {
-        "name": "Sol till hem"
-      },
-      "flow_solar_to_battery_power": {
-        "name": "Sol till batteri"
-      },
-      "flow_solar_to_grid_power": {
-        "name": "Sol till nät"
-      },
-      "flow_solar_to_ev_power": {
-        "name": "Sol till EV"
-      },
-      "flow_battery_to_home_power": {
-        "name": "Batteri till hem"
-      },
-      "flow_battery_to_grid_power": {
-        "name": "Batteri till nät"
-      },
-      "flow_battery_to_ev_power": {
-        "name": "Batteri till EV"
-      },
-      "flow_grid_to_home_power": {
-        "name": "Nät till hem"
-      },
-      "flow_grid_to_ev_power": {
-        "name": "Nät till EV"
-      },
-      "flow_grid_to_battery_power": {
-        "name": "Nät till batteri"
-      },
-      "flow_solar_to_home_energy": {
-        "name": "Sol till hem energi"
-      },
-      "flow_solar_to_ev_energy": {
-        "name": "Sol till EV energi"
-      },
-      "flow_solar_to_battery_energy": {
-        "name": "Sol till batteri energi"
-      },
-      "flow_solar_to_grid_energy": {
-        "name": "Sol till nät energi"
-      },
-      "flow_grid_to_home_energy": {
-        "name": "Nät till hem energi"
-      },
-      "flow_grid_to_ev_energy": {
-        "name": "Nät till EV energi"
-      },
-      "flow_grid_to_battery_energy": {
-        "name": "Nät till batteri energi"
-      },
-      "flow_battery_to_home_energy": {
-        "name": "Batteri till hem energi"
-      },
-      "flow_battery_to_grid_energy": {
-        "name": "Batteri till nät energi"
-      },
-      "flow_battery_to_ev_energy": {
-        "name": "Batteri till EV energi"
-      },
-      "self_consumption_rate": {
-        "name": "Egenförbrukning"
-      },
       "autarky_rate": {
         "name": "Självförsörjningsgrad"
-      },
-      "daily_savings": {
-        "name": "Besparing idag"
-      },
-      "daily_battery_savings": {
-        "name": "Batteribesparing dagligen"
-      },
-      "daily_costs": {
-        "name": "Kostnader dagligen"
-      },
-      "daily_export_revenue": {
-        "name": "Exportintäkt dagligen"
-      },
-      "daily_net_cost": {
-        "name": "Nettokostnad dagligen"
-      },
-      "monthly_savings": {
-        "name": "Besparing denna månad"
-      },
-      "monthly_battery_savings": {
-        "name": "Batteribesparing månadsvis"
-      },
-      "monthly_costs": {
-        "name": "Kostnader månadsvis"
-      },
-      "monthly_export_revenue": {
-        "name": "Exportintäkt månadsvis"
-      },
-      "monthly_net_cost": {
-        "name": "Nettokostnad månadsvis"
-      },
-      "yearly_solar_yield_energy": {
-        "name": "Sol i år"
-      },
-      "lifetime_solar_yield_energy": {
-        "name": "Total solproduktion"
-      },
-      "yearly_grid_import_energy": {
-        "name": "Nätimport i år"
-      },
-      "yearly_grid_export_energy": {
-        "name": "Nätexport i år"
-      },
-      "yearly_battery_charge_energy": {
-        "name": "Batteriladdning i år"
-      },
-      "yearly_battery_discharge_energy": {
-        "name": "Batteriurladdning i år"
-      },
-      "yearly_home_consumption_energy": {
-        "name": "Hemförbrukning i år"
-      },
-      "yearly_ev_energy": {
-        "name": "EV-energi i år"
-      },
-      "yearly_costs": {
-        "name": "Kostnader i år"
-      },
-      "yearly_savings": {
-        "name": "Besparing i år"
-      },
-      "yearly_battery_savings": {
-        "name": "Batteribesparing i år"
-      },
-      "yearly_export_revenue": {
-        "name": "Exportintäkt i år"
-      },
-      "yearly_net_cost": {
-        "name": "Nettokostnad i år"
-      },
-      "lifetime_total_savings": {
-        "name": "Total besparing"
-      },
-      "lifetime_grid_cost": {
-        "name": "Nätkostnad totalt"
-      },
-      "roi_percentage": {
-        "name": "ROI procent"
-      },
-      "roi_payback_years": {
-        "name": "ROI återbetalningstid (år)"
-      },
-      "roi_annual_savings": {
-        "name": "ROI årlig besparing"
-      },
-      "forecast_correction_factor": {
-        "name": "Prognosens korrigeringsfaktor"
-      },
-      "forecast_corrected_today": {
-        "name": "Korrigerad prognos idag"
-      },
-      "forecast_history_days": {
-        "name": "Prognoshistorik dagar"
-      },
-      "daily_co2_avoided": {
-        "name": "Undviken CO2 idag"
-      },
-      "yearly_co2_avoided": {
-        "name": "Undviken CO2 i år"
-      },
-      "yearly_trees_equivalent": {
-        "name": "Trädmotsvarighet i år"
-      },
-      "lifetime_co2_avoided": {
-        "name": "Undviken CO2 totalt"
-      },
-      "lifetime_trees_equivalent": {
-        "name": "Trädmotsvarighet totalt"
-      },
-      "power_charge_cost": {
-        "name": "Effektavgiftskostnad"
-      },
-      "consecutive_peak_15min": {
-        "name": "15 min effekttopp"
-      },
-      "monthly_consecutive_peak": {
-        "name": "Månadens effekttopp"
-      },
-      "current_vs_peak_percentage": {
-        "name": "Effekttopp procent"
-      },
-      "target_peak_limit": {
-        "name": "Effekttoppsgräns"
-      },
-      "peak_margin": {
-        "name": "Effekttoppsmarginal"
-      },
-      "load_management_status": {
-        "name": "Lasthantering"
-      },
-      "load_management_recommendation": {
-        "name": "Lastrekommendation"
-      },
-      "loads_currently_shed": {
-        "name": "Bortkopplade laster"
       },
       "available_load_reduction": {
         "name": "Tillgänglig lastreduktion"
       },
-      "controllable_devices_count": {
-        "name": "Antal enheter"
+      "available_power": {
+        "name": "Tillgänglig effekt"
       },
-      "surplus_total_w": {
-        "name": "Överskott totalt"
+      "battery_capacity_drift_pct": {
+        "name": "Kapacitetsavvikelse"
       },
-      "surplus_distributable_w": {
-        "name": "Överskott fördelningsbart"
+      "battery_charge_pacing": {
+        "name": "Battery charge pacing"
       },
-      "surplus_allocated_w": {
-        "name": "Överskott tilldelat"
+      "battery_charge_power": {
+        "name": "Batteriets laddeffekt"
       },
-      "surplus_unallocated_w": {
-        "name": "Överskott ej tilldelat"
+      "battery_cycles_estimated": {
+        "name": "Battericykler (uppskattat)"
       },
-      "surplus_active_devices": {
-        "name": "Aktiva överskottsenheter"
+      "battery_discharge_power": {
+        "name": "Batteriets urladdningseffekt"
       },
-      "surplus_total_devices": {
-        "name": "Överskottsenheter totalt"
+      "battery_dynamic_floor_pct": {
+        "name": "Dynamisk gräns"
       },
-      "forecast_today_kwh": {
-        "name": "Prognos idag"
+      "battery_health_score": {
+        "name": "Batteriets hälsopoäng"
       },
-      "forecast_tomorrow_kwh": {
-        "name": "Prognos imorgon"
+      "battery_measured_capacity_kwh": {
+        "name": "Uppmätt batterikapacitet"
       },
-      "forecast_remaining_today_kwh": {
-        "name": "Prognos återstår idag"
+      "battery_power": {
+        "name": "Batterieffekt"
       },
-      "forecast_power_now_w": {
-        "name": "Prognostiserad effekt nu"
-      },
-      "forecast_source": {
-        "name": "Prognoskälla"
-      },
-      "charging_recommendation": {
-        "name": "Laddningsrekommendation"
-      },
-      "tariff_current_import_rate": {
-        "name": "Elpris"
-      },
-      "tariff_current_export_rate": {
-        "name": "Exportpris"
-      },
-      "tariff_price_level": {
-        "name": "Prisnivå"
-      },
-      "tariff_provider": {
-        "name": "Tariffleverantör"
-      },
-      "tariff_next_cheap_start": {
-        "name": "Nästa billiga fönster"
-      },
-      "heat_pump_mode": {
-        "name": "Värmepumpsläge"
-      },
-      "heat_pump_sg_ready_state": {
-        "name": "Värmepump SG-Ready-tillstånd"
-      },
-      "pv_daily_specific_yield": {
-        "name": "PV specifik produktion"
-      },
-      "pv_performance_vs_forecast": {
-        "name": "PV mot prognos"
-      },
-      "pv_estimated_annual_degradation": {
-        "name": "PV årlig degradering"
-      },
-      "pv_degradation_trend": {
-        "name": "PV degraderingstrend"
-      },
-      "energy_optimization_score": {
-        "name": "Optimeringspoäng"
-      },
-      "energy_tip": {
-        "name": "Energitips"
-      },
-      "energy_tip_category": {
-        "name": "Energitips kategori"
-      },
-      "energy_ev_solar_percentage": {
-        "name": "EV solladdning %"
-      },
-      "predictor_training_status": {
-        "name": "Prediktorns träningsstatus"
-      },
-      "predictor_model_accuracy": {
-        "name": "Predictor Accuracy"
-      },
-      "predicted_surplus_window": {
-        "name": "Förutsagt överskottsfönster"
-      },
-      "session_energy": {
-        "name": "Sessionsenergi"
-      },
-      "session_solar_share": {
-        "name": "Sessionens solandel"
-      },
-      "session_cost": {
-        "name": "Sessionskostnad"
-      },
-      "session_duration": {
-        "name": "Sessionslängd"
-      },
-      "lifetime_ev_energy": {
-        "name": "EV-energi totalt"
-      },
-      "lifetime_ev_solar": {
-        "name": "EV solenergi totalt"
-      },
-      "lifetime_ev_cost": {
-        "name": "EV-kostnad totalt"
-      },
-      "lifetime_ev_sessions": {
-        "name": "EV-sessioner totalt"
-      },
-      "lifetime_ev_solar_share": {
-        "name": "EV solandel totalt"
-      },
-      "lifetime_ev_battery_share": {
-        "name": "EV batteriandel totalt"
-      },
-      "lifetime_ev_grid_share": {
-        "name": "EV nätandel totalt"
-      },
-      "vehicle_soc": {
-        "name": "Fordonets SOC"
-      },
-      "ev_remaining_range": {
-        "name": "Elbil räckvidd"
-      },
-      "best_surplus_window": {
-        "name": "Bästa överskottsfönster"
-      },
-      "night_start_time": {
-        "name": "Nattfönstrets starttid"
-      },
-      "night_end_time": {
-        "name": "Nattfönstrets sluttid"
-      },
-      "night_window_hours": {
-        "name": "Nattfönster timmar"
-      },
-      "forecast_peak_power_today_w": {
-        "name": "Prognostiserad toppeffekt idag"
-      },
-      "forecast_peak_time_today": {
-        "name": "Prognostiserad topptid idag"
-      },
-      "forecast_surplus_kwh": {
-        "name": "Prognostiserat överskott"
-      },
-      "forecast_dampening_factor": {
-        "name": "Prognosens dämpningsfaktor"
-      },
-      "battery_scheduler_state": {
-        "name": "Batterischemaläggare status"
-      },
-      "battery_scheduler_target_soc": {
-        "name": "Batterischemaläggare mål-SOC"
+      "battery_priority_status": {
+        "name": "Batteriprioritet"
       },
       "battery_scheduler_deficit_kwh": {
         "name": "Batterischemaläggare underskott"
@@ -1145,20 +701,128 @@
       "battery_scheduler_reason": {
         "name": "Batterischemaläggare orsak"
       },
-      "ev_charger_count": {
-        "name": "Antal EV-laddare"
+      "battery_scheduler_state": {
+        "name": "Batterischemaläggare status"
       },
-      "ev_taper_trend": {
-        "name": "EV nedtrappningstrend"
+      "battery_scheduler_target_soc": {
+        "name": "Batterischemaläggare mål-SOC"
       },
-      "diag_version": {
-        "name": "SEM-version"
+      "battery_session_avg_power": {
+        "name": "Batterisession medeleffekt"
       },
-      "diag_grid_mode": {
-        "name": "Nätsensorläge"
+      "battery_session_cost": {
+        "name": "Batterisession kostnad"
       },
-      "diag_grid_sign": {
-        "name": "Nätets teckenkonvention"
+      "battery_session_duration": {
+        "name": "Batterisession längd"
+      },
+      "battery_session_energy": {
+        "name": "Batterisession energi"
+      },
+      "battery_session_savings": {
+        "name": "Batterisession besparing"
+      },
+      "battery_session_solar_share": {
+        "name": "Batterisession solandel"
+      },
+      "battery_session_type": {
+        "name": "Batterisession typ"
+      },
+      "battery_soc": {
+        "name": "Batteri-SOC"
+      },
+      "battery_spendable_kwh": {
+        "name": "Tillgängligt i natt"
+      },
+      "battery_status": {
+        "name": "Batteristatus"
+      },
+      "battery_stored_grid_share": {
+        "name": "Lagrad energi från nät"
+      },
+      "battery_temperature": {
+        "name": "Batteritemperatur"
+      },
+      "best_surplus_window": {
+        "name": "Bästa överskottsfönster"
+      },
+      "calculated_current": {
+        "name": "Beräknad ström"
+      },
+      "charging_recommendation": {
+        "name": "Laddningsrekommendation"
+      },
+      "charging_state": {
+        "name": "Laddningstillstånd"
+      },
+      "charging_strategy": {
+        "name": "Laddningsstrategi"
+      },
+      "consecutive_peak_15min": {
+        "name": "15 min effekttopp"
+      },
+      "controllable_devices_count": {
+        "name": "Antal enheter"
+      },
+      "current_vs_peak_percentage": {
+        "name": "Effekttopp procent"
+      },
+      "daily_battery_charge_energy": {
+        "name": "Laddat idag"
+      },
+      "daily_battery_charge_grid": {
+        "name": "Idag laddning från nät"
+      },
+      "daily_battery_charge_solar": {
+        "name": "Idag laddning från sol"
+      },
+      "daily_battery_discharge_energy": {
+        "name": "Urladdat idag"
+      },
+      "daily_battery_grid_cost": {
+        "name": "Idag kostnad nätladdning"
+      },
+      "daily_battery_savings": {
+        "name": "Batteribesparing dagligen"
+      },
+      "daily_co2_avoided": {
+        "name": "Undviken CO2 idag"
+      },
+      "daily_costs": {
+        "name": "Kostnader dagligen"
+      },
+      "daily_ev_energy": {
+        "name": "EV idag"
+      },
+      "daily_export_revenue": {
+        "name": "Exportintäkt dagligen"
+      },
+      "daily_grid_export_energy": {
+        "name": "Export idag"
+      },
+      "daily_grid_import_energy": {
+        "name": "Import idag"
+      },
+      "daily_home_energy": {
+        "name": "Hem idag"
+      },
+      "daily_net_cost": {
+        "name": "Nettokostnad dagligen"
+      },
+      "daily_savings": {
+        "name": "Besparing idag"
+      },
+      "daily_solar_energy": {
+        "name": "Sol idag"
+      },
+      "daily_total_consumption": {
+        "name": "Idag total förbrukning"
+      },
+      "daily_true_baseload_energy": {
+        "name": "Verklig baslast idag"
+      },
+      "diag_battery_capacity": {
+        "name": "Batterikapacitet (konfig)"
       },
       "diag_battery_sign": {
         "name": "Batteriets teckenkonvention"
@@ -1166,14 +830,11 @@
       "diag_charger_control": {
         "name": "Laddarens styrmetod"
       },
-      "diag_battery_capacity": {
-        "name": "Batterikapacitet (konfig)"
+      "diag_charger_count": {
+        "name": "Konfigurerade laddare"
       },
-      "diag_update_interval": {
-        "name": "Uppdateringsintervall"
-      },
-      "diag_observer_mode": {
-        "name": "Observatörsläge"
+      "diag_ed_config": {
+        "name": "Energipanel-konfiguration"
       },
       "diag_grid_l1_current_a": {
         "name": "Nät L1 ström"
@@ -1193,6 +854,15 @@
       "diag_grid_l3_margin_a": {
         "name": "Nät L3 strömmarginal"
       },
+      "diag_grid_mode": {
+        "name": "Nätsensorläge"
+      },
+      "diag_grid_sign": {
+        "name": "Nätets teckenkonvention"
+      },
+      "diag_inputs_degraded": {
+        "name": "Inputs Degraded"
+      },
       "diag_inverter_l1_current_a": {
         "name": "Växelriktare Load/EPS L1 ström"
       },
@@ -1211,14 +881,17 @@
       "diag_inverter_l3_margin_a": {
         "name": "Växelriktare Load/EPS L3 strömmarginal"
       },
+      "diag_observer_mode": {
+        "name": "Observatörsläge"
+      },
+      "diag_phase_guard_data_fresh": {
+        "name": "Fasvaktens data aktuell"
+      },
       "diag_phase_guard_mode": {
         "name": "Fasvaktens läge"
       },
       "diag_phase_guard_safe": {
         "name": "Fasvakten säker"
-      },
-      "diag_phase_guard_data_fresh": {
-        "name": "Fasvaktens data aktuell"
       },
       "diag_phase_guard_stop_reason": {
         "name": "Fasvaktens stopporsak"
@@ -1226,80 +899,134 @@
       "diag_sensors_unavailable": {
         "name": "Sensorer otillgängliga"
       },
-      "battery_session_type": {
-        "name": "Batterisession typ"
+      "diag_update_interval": {
+        "name": "Uppdateringsintervall"
       },
-      "battery_session_energy": {
-        "name": "Batterisession energi"
+      "diag_version": {
+        "name": "SEM-version"
       },
-      "battery_session_solar_share": {
-        "name": "Batterisession solandel"
+      "energy_ev_solar_percentage": {
+        "name": "EV solladdning %"
       },
-      "battery_session_cost": {
-        "name": "Batterisession kostnad"
+      "energy_optimization_score": {
+        "name": "Optimeringspoäng"
       },
-      "battery_session_savings": {
-        "name": "Batterisession besparing"
+      "energy_plan": {
+        "name": "Energiplan"
       },
-      "battery_session_duration": {
-        "name": "Batterisession längd"
+      "energy_tip": {
+        "name": "Energitips"
       },
-      "battery_session_avg_power": {
-        "name": "Batterisession medeleffekt"
+      "energy_tip_category": {
+        "name": "Energitips kategori"
       },
-      "diag_charger_count": {
-        "name": "Konfigurerade laddare"
+      "ev_charger_count": {
+        "name": "Antal EV-laddare"
       },
-      "diag_ed_config": {
-        "name": "Energipanel-konfiguration"
+      "ev_power": {
+        "name": "EV-effekt"
       },
-      "heat_pump_registration_status": {
-        "name": "Värmepump registreringsstatus"
+      "ev_remaining_range": {
+        "name": "Elbil räckvidd"
       },
-      "vpp_event": {
-        "name": "VPP-händelse"
+      "ev_taper_trend": {
+        "name": "EV nedtrappningstrend"
       },
-      "heat_pump_energy_today": {
-        "name": "Värmepump idag"
+      "flow_battery_to_ev_energy": {
+        "name": "Batteri till EV energi"
       },
-      "heat_pump_energy_month": {
-        "name": "Värmepump denna månad"
+      "flow_battery_to_ev_power": {
+        "name": "Batteri till EV"
       },
-      "heat_pump_energy_year": {
-        "name": "Värmepump i år"
+      "flow_battery_to_grid_energy": {
+        "name": "Batteri till nät energi"
       },
-      "heat_pump_energy_total": {
-        "name": "Värmepump totalt"
+      "flow_battery_to_grid_power": {
+        "name": "Batteri till nät"
       },
-      "heat_pump_energy_shifted_today": {
-        "name": "Värmepump flyttad idag"
+      "flow_battery_to_home_energy": {
+        "name": "Batteri till hem energi"
       },
-      "daily_battery_charge_solar": {
-        "name": "Idag laddning från sol"
+      "flow_battery_to_home_power": {
+        "name": "Batteri till hem"
       },
-      "daily_battery_charge_grid": {
-        "name": "Idag laddning från nät"
+      "flow_grid_to_battery_energy": {
+        "name": "Nät till batteri energi"
       },
-      "daily_battery_grid_cost": {
-        "name": "Idag kostnad nätladdning"
+      "flow_grid_to_battery_power": {
+        "name": "Nät till batteri"
       },
-      "battery_stored_grid_share": {
-        "name": "Lagrad energi från nät"
+      "flow_grid_to_ev_energy": {
+        "name": "Nät till EV energi"
       },
-      "true_baseload_power": {
-        "name": "Verklig baslast"
+      "flow_grid_to_ev_power": {
+        "name": "Nät till EV"
       },
-      "daily_true_baseload_energy": {
-        "name": "Verklig baslast idag"
+      "flow_grid_to_home_energy": {
+        "name": "Nät till hem energi"
       },
-      "daily_total_consumption": {
-        "name": "Idag total förbrukning"
+      "flow_grid_to_home_power": {
+        "name": "Nät till hem"
       },
-      "battery_measured_capacity_kwh": {
-        "name": "Uppmätt batterikapacitet"
+      "flow_solar_to_battery_energy": {
+        "name": "Sol till batteri energi"
       },
-      "battery_capacity_drift_pct": {
-        "name": "Kapacitetsavvikelse"
+      "flow_solar_to_battery_power": {
+        "name": "Sol till batteri"
+      },
+      "flow_solar_to_ev_energy": {
+        "name": "Sol till EV energi"
+      },
+      "flow_solar_to_ev_power": {
+        "name": "Sol till EV"
+      },
+      "flow_solar_to_grid_energy": {
+        "name": "Sol till nät energi"
+      },
+      "flow_solar_to_grid_power": {
+        "name": "Sol till nät"
+      },
+      "flow_solar_to_home_energy": {
+        "name": "Sol till hem energi"
+      },
+      "flow_solar_to_home_power": {
+        "name": "Sol till hem"
+      },
+      "forecast_corrected_today": {
+        "name": "Korrigerad prognos idag"
+      },
+      "forecast_correction_factor": {
+        "name": "Prognosens korrigeringsfaktor"
+      },
+      "forecast_dampening_factor": {
+        "name": "Prognosens dämpningsfaktor"
+      },
+      "forecast_history_days": {
+        "name": "Prognoshistorik dagar"
+      },
+      "forecast_peak_power_today_w": {
+        "name": "Prognostiserad toppeffekt idag"
+      },
+      "forecast_peak_time_today": {
+        "name": "Prognostiserad topptid idag"
+      },
+      "forecast_power_now_w": {
+        "name": "Prognostiserad effekt nu"
+      },
+      "forecast_remaining_today_kwh": {
+        "name": "Prognos återstår idag"
+      },
+      "forecast_source": {
+        "name": "Prognoskälla"
+      },
+      "forecast_surplus_kwh": {
+        "name": "Prognostiserat överskott"
+      },
+      "forecast_today_kwh": {
+        "name": "Prognos idag"
+      },
+      "forecast_tomorrow_kwh": {
+        "name": "Prognos imorgon"
       },
       "forecast_trust_d1": {
         "name": "Prognosförtroende (imorgon)"
@@ -1307,14 +1034,290 @@
       "forecast_trust_d2": {
         "name": "Prognosförtroende (i övermorgon)"
       },
-      "battery_spendable_kwh": {
-        "name": "Tillgängligt i natt"
+      "grid_active_power": {
+        "name": "Nätets aktiva effekt"
       },
-      "battery_dynamic_floor_pct": {
-        "name": "Dynamisk gräns"
+      "grid_export_power": {
+        "name": "Nätexport"
       },
-      "battery_charge_pacing": {
-        "name": "Battery charge pacing"
+      "grid_import_power": {
+        "name": "Nätimport"
+      },
+      "grid_power": {
+        "name": "Näteffekt"
+      },
+      "grid_status": {
+        "name": "Nätstatus"
+      },
+      "heat_pump_energy_month": {
+        "name": "Värmepump denna månad"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "Värmepump flyttad idag"
+      },
+      "heat_pump_energy_today": {
+        "name": "Värmepump idag"
+      },
+      "heat_pump_energy_total": {
+        "name": "Värmepump totalt"
+      },
+      "heat_pump_energy_year": {
+        "name": "Värmepump i år"
+      },
+      "heat_pump_mode": {
+        "name": "Värmepumpsläge"
+      },
+      "heat_pump_registration_status": {
+        "name": "Värmepump registreringsstatus"
+      },
+      "heat_pump_sg_ready_state": {
+        "name": "Värmepump SG-Ready-tillstånd"
+      },
+      "home_consumption_power": {
+        "name": "Hemeffekt"
+      },
+      "inverter_temperature": {
+        "name": "Växelriktartemperatur"
+      },
+      "lifetime_co2_avoided": {
+        "name": "Undviken CO2 totalt"
+      },
+      "lifetime_ev_battery_share": {
+        "name": "EV batteriandel totalt"
+      },
+      "lifetime_ev_cost": {
+        "name": "EV-kostnad totalt"
+      },
+      "lifetime_ev_energy": {
+        "name": "EV-energi totalt"
+      },
+      "lifetime_ev_grid_share": {
+        "name": "EV nätandel totalt"
+      },
+      "lifetime_ev_sessions": {
+        "name": "EV-sessioner totalt"
+      },
+      "lifetime_ev_solar": {
+        "name": "EV solenergi totalt"
+      },
+      "lifetime_ev_solar_share": {
+        "name": "EV solandel totalt"
+      },
+      "lifetime_grid_cost": {
+        "name": "Nätkostnad totalt"
+      },
+      "lifetime_solar_yield_energy": {
+        "name": "Total solproduktion"
+      },
+      "lifetime_total_savings": {
+        "name": "Total besparing"
+      },
+      "lifetime_trees_equivalent": {
+        "name": "Trädmotsvarighet totalt"
+      },
+      "load_management_recommendation": {
+        "name": "Lastrekommendation"
+      },
+      "load_management_status": {
+        "name": "Lasthantering"
+      },
+      "loads_currently_shed": {
+        "name": "Bortkopplade laster"
+      },
+      "monthly_battery_charge_energy": {
+        "name": "Laddat denna månad"
+      },
+      "monthly_battery_discharge_energy": {
+        "name": "Urladdat denna månad"
+      },
+      "monthly_battery_savings": {
+        "name": "Batteribesparing månadsvis"
+      },
+      "monthly_consecutive_peak": {
+        "name": "Månadens effekttopp"
+      },
+      "monthly_costs": {
+        "name": "Kostnader månadsvis"
+      },
+      "monthly_ev_consumption_energy": {
+        "name": "EV denna månad"
+      },
+      "monthly_export_revenue": {
+        "name": "Exportintäkt månadsvis"
+      },
+      "monthly_grid_export_energy": {
+        "name": "Export denna månad"
+      },
+      "monthly_grid_import_energy": {
+        "name": "Import denna månad"
+      },
+      "monthly_home_consumption_energy": {
+        "name": "Hem denna månad"
+      },
+      "monthly_net_cost": {
+        "name": "Nettokostnad månadsvis"
+      },
+      "monthly_savings": {
+        "name": "Besparing denna månad"
+      },
+      "monthly_solar_yield_energy": {
+        "name": "Sol denna månad"
+      },
+      "night_charging_status": {
+        "name": "Nattladdning"
+      },
+      "night_end_time": {
+        "name": "Nattfönstrets sluttid"
+      },
+      "night_start_time": {
+        "name": "Nattfönstrets starttid"
+      },
+      "night_window_hours": {
+        "name": "Nattfönster timmar"
+      },
+      "peak_margin": {
+        "name": "Effekttoppsmarginal"
+      },
+      "power_charge_cost": {
+        "name": "Effektavgiftskostnad"
+      },
+      "predicted_surplus_window": {
+        "name": "Förutsagt överskottsfönster"
+      },
+      "predictor_model_accuracy": {
+        "name": "Predictor Accuracy"
+      },
+      "predictor_training_status": {
+        "name": "Prediktorns träningsstatus"
+      },
+      "pv_daily_specific_yield": {
+        "name": "PV specifik produktion"
+      },
+      "pv_degradation_trend": {
+        "name": "PV degraderingstrend"
+      },
+      "pv_estimated_annual_degradation": {
+        "name": "PV årlig degradering"
+      },
+      "pv_performance_vs_forecast": {
+        "name": "PV mot prognos"
+      },
+      "roi_annual_savings": {
+        "name": "ROI årlig besparing"
+      },
+      "roi_payback_years": {
+        "name": "ROI återbetalningstid (år)"
+      },
+      "roi_percentage": {
+        "name": "ROI procent"
+      },
+      "self_consumption_rate": {
+        "name": "Egenförbrukning"
+      },
+      "session_cost": {
+        "name": "Sessionskostnad"
+      },
+      "session_duration": {
+        "name": "Sessionslängd"
+      },
+      "session_energy": {
+        "name": "Sessionsenergi"
+      },
+      "session_solar_share": {
+        "name": "Sessionens solandel"
+      },
+      "solar_charging_status": {
+        "name": "Solladdning"
+      },
+      "solar_power": {
+        "name": "Soleffekt"
+      },
+      "surplus_active_devices": {
+        "name": "Aktiva överskottsenheter"
+      },
+      "surplus_allocated_w": {
+        "name": "Överskott tilldelat"
+      },
+      "surplus_distributable_w": {
+        "name": "Överskott fördelningsbart"
+      },
+      "surplus_total_devices": {
+        "name": "Överskottsenheter totalt"
+      },
+      "surplus_total_w": {
+        "name": "Överskott totalt"
+      },
+      "surplus_unallocated_w": {
+        "name": "Överskott ej tilldelat"
+      },
+      "target_peak_limit": {
+        "name": "Effekttoppsgräns"
+      },
+      "tariff_current_export_rate": {
+        "name": "Exportpris"
+      },
+      "tariff_current_import_rate": {
+        "name": "Elpris"
+      },
+      "tariff_next_cheap_start": {
+        "name": "Nästa billiga fönster"
+      },
+      "tariff_price_level": {
+        "name": "Prisnivå"
+      },
+      "tariff_provider": {
+        "name": "Tariffleverantör"
+      },
+      "true_baseload_power": {
+        "name": "Verklig baslast"
+      },
+      "vehicle_soc": {
+        "name": "Fordonets SOC"
+      },
+      "vpp_event": {
+        "name": "VPP-händelse"
+      },
+      "yearly_battery_charge_energy": {
+        "name": "Batteriladdning i år"
+      },
+      "yearly_battery_discharge_energy": {
+        "name": "Batteriurladdning i år"
+      },
+      "yearly_battery_savings": {
+        "name": "Batteribesparing i år"
+      },
+      "yearly_co2_avoided": {
+        "name": "Undviken CO2 i år"
+      },
+      "yearly_costs": {
+        "name": "Kostnader i år"
+      },
+      "yearly_ev_energy": {
+        "name": "EV-energi i år"
+      },
+      "yearly_export_revenue": {
+        "name": "Exportintäkt i år"
+      },
+      "yearly_grid_export_energy": {
+        "name": "Nätexport i år"
+      },
+      "yearly_grid_import_energy": {
+        "name": "Nätimport i år"
+      },
+      "yearly_home_consumption_energy": {
+        "name": "Hemförbrukning i år"
+      },
+      "yearly_net_cost": {
+        "name": "Nettokostnad i år"
+      },
+      "yearly_savings": {
+        "name": "Besparing i år"
+      },
+      "yearly_solar_yield_energy": {
+        "name": "Sol i år"
+      },
+      "yearly_trees_equivalent": {
+        "name": "Trädmotsvarighet i år"
       }
     },
     "binary_sensor": {

@@ -656,488 +656,44 @@
   },
   "entity": {
     "sensor": {
-      "solar_power": {
-        "name": "Aurinkoteho"
-      },
-      "home_consumption_power": {
-        "name": "Kodin teho"
-      },
-      "grid_power": {
-        "name": "Verkkoteho"
-      },
-      "grid_active_power": {
-        "name": "Verkon pätöteho"
-      },
-      "grid_import_power": {
-        "name": "Verkosta osto"
-      },
-      "grid_export_power": {
-        "name": "Verkkoon myynti"
-      },
-      "battery_power": {
-        "name": "Akkuteho"
-      },
-      "battery_charge_power": {
-        "name": "Akun latausteho"
-      },
-      "battery_discharge_power": {
-        "name": "Akun purkuteho"
-      },
-      "ev_power": {
-        "name": "Sähköauton teho"
-      },
-      "available_power": {
-        "name": "Käytettävissä oleva teho"
-      },
-      "battery_soc": {
-        "name": "Akun SOC"
-      },
-      "battery_status": {
-        "name": "Akun tila"
-      },
-      "battery_temperature": {
-        "name": "Akun lämpötila"
-      },
-      "inverter_temperature": {
-        "name": "Invertterin lämpötila"
-      },
-      "battery_cycles_estimated": {
-        "name": "Akun syklit (arvio)"
-      },
-      "battery_health_score": {
-        "name": "Akun kuntopisteet"
-      },
-      "calculated_current": {
-        "name": "Laskettu virta"
-      },
-      "charging_state": {
-        "name": "Lataustila"
-      },
-      "grid_status": {
-        "name": "Verkon tila"
-      },
-      "solar_charging_status": {
-        "name": "Aurinkolataus"
-      },
-      "night_charging_status": {
-        "name": "Yölataus"
-      },
-      "energy_plan": {
-        "name": "Energiasuunnitelma"
-      },
-      "battery_priority_status": {
-        "name": "Akun etusija"
-      },
-      "charging_strategy": {
-        "name": "Latausstrategia"
-      },
-      "daily_solar_energy": {
-        "name": "Tänään aurinko"
-      },
-      "daily_home_energy": {
-        "name": "Tänään koti"
-      },
-      "daily_grid_import_energy": {
-        "name": "Tänään osto"
-      },
-      "daily_grid_export_energy": {
-        "name": "Tänään myynti"
-      },
-      "daily_battery_charge_energy": {
-        "name": "Tänään lataus"
-      },
-      "daily_battery_discharge_energy": {
-        "name": "Tänään purku"
-      },
-      "daily_ev_energy": {
-        "name": "Tänään sähköauto"
-      },
-      "monthly_solar_yield_energy": {
-        "name": "Kuukausi aurinko"
-      },
-      "monthly_grid_import_energy": {
-        "name": "Kuukausi osto"
-      },
-      "monthly_grid_export_energy": {
-        "name": "Kuukausi myynti"
-      },
-      "monthly_battery_charge_energy": {
-        "name": "Kuukausi lataus"
-      },
-      "monthly_battery_discharge_energy": {
-        "name": "Kuukausi purku"
-      },
-      "monthly_home_consumption_energy": {
-        "name": "Kuukausi koti"
-      },
-      "monthly_ev_consumption_energy": {
-        "name": "Kuukausi sähköauto"
-      },
-      "flow_solar_to_home_power": {
-        "name": "Auringosta kotiin"
-      },
-      "flow_solar_to_battery_power": {
-        "name": "Auringosta akkuun"
-      },
-      "flow_solar_to_grid_power": {
-        "name": "Auringosta verkkoon"
-      },
-      "flow_solar_to_ev_power": {
-        "name": "Auringosta sähköautoon"
-      },
-      "flow_battery_to_home_power": {
-        "name": "Akusta kotiin"
-      },
-      "flow_battery_to_grid_power": {
-        "name": "Akusta verkkoon"
-      },
-      "flow_battery_to_ev_power": {
-        "name": "Akusta sähköautoon"
-      },
-      "flow_grid_to_home_power": {
-        "name": "Verkosta kotiin"
-      },
-      "flow_grid_to_ev_power": {
-        "name": "Verkosta sähköautoon"
-      },
-      "flow_grid_to_battery_power": {
-        "name": "Verkosta akkuun"
-      },
-      "flow_solar_to_home_energy": {
-        "name": "Auringosta kotiin (energia)"
-      },
-      "flow_solar_to_ev_energy": {
-        "name": "Auringosta sähköautoon (energia)"
-      },
-      "flow_solar_to_battery_energy": {
-        "name": "Auringosta akkuun (energia)"
-      },
-      "flow_solar_to_grid_energy": {
-        "name": "Auringosta verkkoon (energia)"
-      },
-      "flow_grid_to_home_energy": {
-        "name": "Verkosta kotiin (energia)"
-      },
-      "flow_grid_to_ev_energy": {
-        "name": "Verkosta sähköautoon (energia)"
-      },
-      "flow_grid_to_battery_energy": {
-        "name": "Verkosta akkuun (energia)"
-      },
-      "flow_battery_to_home_energy": {
-        "name": "Akusta kotiin (energia)"
-      },
-      "flow_battery_to_grid_energy": {
-        "name": "Akusta verkkoon (energia)"
-      },
-      "flow_battery_to_ev_energy": {
-        "name": "Akusta sähköautoon (energia)"
-      },
-      "self_consumption_rate": {
-        "name": "Omakäyttöaste"
-      },
       "autarky_rate": {
         "name": "Omavaraisuusaste"
-      },
-      "daily_savings": {
-        "name": "Tänään säästö"
-      },
-      "daily_battery_savings": {
-        "name": "Akkusäästö päivässä"
-      },
-      "daily_costs": {
-        "name": "Kustannukset päivässä"
-      },
-      "daily_export_revenue": {
-        "name": "Myyntitulot päivässä"
-      },
-      "daily_net_cost": {
-        "name": "Nettokustannus päivässä"
-      },
-      "monthly_savings": {
-        "name": "Säästö kuukaudessa"
-      },
-      "monthly_battery_savings": {
-        "name": "Akkusäästö kuukaudessa"
-      },
-      "monthly_costs": {
-        "name": "Kustannukset kuukaudessa"
-      },
-      "monthly_export_revenue": {
-        "name": "Myyntitulot kuukaudessa"
-      },
-      "monthly_net_cost": {
-        "name": "Nettokustannus kuukaudessa"
-      },
-      "yearly_solar_yield_energy": {
-        "name": "Vuosi aurinko"
-      },
-      "lifetime_solar_yield_energy": {
-        "name": "Aurinkotuotanto yhteensä"
-      },
-      "yearly_grid_import_energy": {
-        "name": "Vuosi verkosta osto"
-      },
-      "yearly_grid_export_energy": {
-        "name": "Vuosi verkkoon myynti"
-      },
-      "yearly_battery_charge_energy": {
-        "name": "Vuosi akun lataus"
-      },
-      "yearly_battery_discharge_energy": {
-        "name": "Vuosi akun purku"
-      },
-      "yearly_home_consumption_energy": {
-        "name": "Vuosi kodin kulutus"
-      },
-      "yearly_ev_energy": {
-        "name": "Vuosi sähköauton energia"
-      },
-      "yearly_costs": {
-        "name": "Kustannukset vuodessa"
-      },
-      "yearly_savings": {
-        "name": "Säästö vuodessa"
-      },
-      "yearly_battery_savings": {
-        "name": "Akkusäästö vuodessa"
-      },
-      "yearly_export_revenue": {
-        "name": "Myyntitulot vuodessa"
-      },
-      "yearly_net_cost": {
-        "name": "Nettokustannus vuodessa"
-      },
-      "lifetime_total_savings": {
-        "name": "Kokonaissäästö yhteensä"
-      },
-      "lifetime_grid_cost": {
-        "name": "Verkkosähkön kustannus yhteensä"
-      },
-      "roi_percentage": {
-        "name": "ROI-prosentti"
-      },
-      "roi_payback_years": {
-        "name": "ROI-takaisinmaksuaika (vuotta)"
-      },
-      "roi_annual_savings": {
-        "name": "ROI-vuosisäästö"
-      },
-      "forecast_correction_factor": {
-        "name": "Ennusteen korjauskerroin"
-      },
-      "forecast_corrected_today": {
-        "name": "Korjattu ennuste tänään"
-      },
-      "forecast_history_days": {
-        "name": "Ennustehistorian päivät"
-      },
-      "daily_co2_avoided": {
-        "name": "Vältetty CO2 tänään"
-      },
-      "yearly_co2_avoided": {
-        "name": "Vältetty CO2 tänä vuonna"
-      },
-      "yearly_trees_equivalent": {
-        "name": "Puuvastaavuus tänä vuonna"
-      },
-      "lifetime_co2_avoided": {
-        "name": "Vältetty CO2 yhteensä"
-      },
-      "lifetime_trees_equivalent": {
-        "name": "Puuvastaavuus yhteensä"
-      },
-      "power_charge_cost": {
-        "name": "Tehomaksun kustannus"
-      },
-      "consecutive_peak_15min": {
-        "name": "15 min huippu"
-      },
-      "monthly_consecutive_peak": {
-        "name": "Kuukauden huippu"
-      },
-      "current_vs_peak_percentage": {
-        "name": "Huipun osuus"
-      },
-      "target_peak_limit": {
-        "name": "Huipputehon raja"
-      },
-      "peak_margin": {
-        "name": "Huipun pelivara"
-      },
-      "load_management_status": {
-        "name": "Kuormanhallinta"
-      },
-      "load_management_recommendation": {
-        "name": "Kuormasuositus"
-      },
-      "loads_currently_shed": {
-        "name": "Pudotetut kuormat"
       },
       "available_load_reduction": {
         "name": "Käytettävissä oleva vähennys"
       },
-      "controllable_devices_count": {
-        "name": "Laitteiden määrä"
+      "available_power": {
+        "name": "Käytettävissä oleva teho"
       },
-      "surplus_total_w": {
-        "name": "Ylijäämä yhteensä"
+      "battery_capacity_drift_pct": {
+        "name": "Kapasiteetin poikkeama"
       },
-      "surplus_distributable_w": {
-        "name": "Ylijäämä jaettavissa"
+      "battery_charge_pacing": {
+        "name": "Battery charge pacing"
       },
-      "surplus_allocated_w": {
-        "name": "Ylijäämä jaettu"
+      "battery_charge_power": {
+        "name": "Akun latausteho"
       },
-      "surplus_unallocated_w": {
-        "name": "Ylijäämä jakamatta"
+      "battery_cycles_estimated": {
+        "name": "Akun syklit (arvio)"
       },
-      "surplus_active_devices": {
-        "name": "Ylijäämän aktiiviset laitteet"
+      "battery_discharge_power": {
+        "name": "Akun purkuteho"
       },
-      "surplus_total_devices": {
-        "name": "Ylijäämälaitteita yhteensä"
+      "battery_dynamic_floor_pct": {
+        "name": "Dynaaminen raja"
       },
-      "forecast_today_kwh": {
-        "name": "Ennuste tänään"
+      "battery_health_score": {
+        "name": "Akun kuntopisteet"
       },
-      "forecast_tomorrow_kwh": {
-        "name": "Ennuste huomenna"
+      "battery_measured_capacity_kwh": {
+        "name": "Mitattu akun kapasiteetti"
       },
-      "forecast_remaining_today_kwh": {
-        "name": "Ennuste jäljellä tänään"
+      "battery_power": {
+        "name": "Akkuteho"
       },
-      "forecast_power_now_w": {
-        "name": "Ennustettu teho nyt"
-      },
-      "forecast_source": {
-        "name": "Ennusteen lähde"
-      },
-      "charging_recommendation": {
-        "name": "Lataussuositus"
-      },
-      "tariff_current_import_rate": {
-        "name": "Sähkön hinta"
-      },
-      "tariff_current_export_rate": {
-        "name": "Vientihinta"
-      },
-      "tariff_price_level": {
-        "name": "Hintataso"
-      },
-      "tariff_provider": {
-        "name": "Tariffin tarjoaja"
-      },
-      "tariff_next_cheap_start": {
-        "name": "Seuraava halpa jakso"
-      },
-      "heat_pump_mode": {
-        "name": "Lämpöpumpun tila"
-      },
-      "heat_pump_sg_ready_state": {
-        "name": "Lämpöpumpun SG-Ready-tila"
-      },
-      "pv_daily_specific_yield": {
-        "name": "PV:n ominaistuotto"
-      },
-      "pv_performance_vs_forecast": {
-        "name": "PV vs. ennuste"
-      },
-      "pv_estimated_annual_degradation": {
-        "name": "PV:n vuosittainen heikkeneminen"
-      },
-      "pv_degradation_trend": {
-        "name": "PV:n heikkenemistrendi"
-      },
-      "energy_optimization_score": {
-        "name": "Optimointipisteet"
-      },
-      "energy_tip": {
-        "name": "Energiavinkki"
-      },
-      "energy_tip_category": {
-        "name": "Energiavinkin luokka"
-      },
-      "energy_ev_solar_percentage": {
-        "name": "Sähköauton aurinkolataus-%"
-      },
-      "predictor_training_status": {
-        "name": "Ennustemallin opetustila"
-      },
-      "predictor_model_accuracy": {
-        "name": "Predictor Accuracy"
-      },
-      "predicted_surplus_window": {
-        "name": "Ennustettu ylijäämäjakso"
-      },
-      "session_energy": {
-        "name": "Latausjakson energia"
-      },
-      "session_solar_share": {
-        "name": "Latausjakson aurinko-osuus"
-      },
-      "session_cost": {
-        "name": "Latausjakson kustannus"
-      },
-      "session_duration": {
-        "name": "Latausjakson kesto"
-      },
-      "lifetime_ev_energy": {
-        "name": "Sähköauton energia yhteensä"
-      },
-      "lifetime_ev_solar": {
-        "name": "Sähköauton aurinkoenergia yhteensä"
-      },
-      "lifetime_ev_cost": {
-        "name": "Sähköauton kustannus yhteensä"
-      },
-      "lifetime_ev_sessions": {
-        "name": "Sähköauton latausjaksot yhteensä"
-      },
-      "lifetime_ev_solar_share": {
-        "name": "Sähköauton aurinko-osuus yhteensä"
-      },
-      "lifetime_ev_battery_share": {
-        "name": "Sähköauton akkuosuus yhteensä"
-      },
-      "lifetime_ev_grid_share": {
-        "name": "Sähköauton verkko-osuus yhteensä"
-      },
-      "vehicle_soc": {
-        "name": "Ajoneuvon SOC"
-      },
-      "ev_remaining_range": {
-        "name": "Sähköauton toimintamatka"
-      },
-      "best_surplus_window": {
-        "name": "Paras ylijäämäjakso"
-      },
-      "night_start_time": {
-        "name": "Yöjakson alkamisaika"
-      },
-      "night_end_time": {
-        "name": "Yöjakson päättymisaika"
-      },
-      "night_window_hours": {
-        "name": "Yöjakson tunnit"
-      },
-      "forecast_peak_power_today_w": {
-        "name": "Ennustettu huipputeho tänään"
-      },
-      "forecast_peak_time_today": {
-        "name": "Ennustettu huipun aika tänään"
-      },
-      "forecast_surplus_kwh": {
-        "name": "Ennustettu ylijäämä"
-      },
-      "forecast_dampening_factor": {
-        "name": "Ennusteen vaimennuskerroin"
-      },
-      "battery_scheduler_state": {
-        "name": "Akun ajastimen tila"
-      },
-      "battery_scheduler_target_soc": {
-        "name": "Akun ajastimen tavoite-SOC"
+      "battery_priority_status": {
+        "name": "Akun etusija"
       },
       "battery_scheduler_deficit_kwh": {
         "name": "Akun ajastimen vaje"
@@ -1145,20 +701,128 @@
       "battery_scheduler_reason": {
         "name": "Akun ajastimen syy"
       },
-      "ev_charger_count": {
-        "name": "Sähköauton latureiden määrä"
+      "battery_scheduler_state": {
+        "name": "Akun ajastimen tila"
       },
-      "ev_taper_trend": {
-        "name": "Sähköauton latauksen hiipuminen"
+      "battery_scheduler_target_soc": {
+        "name": "Akun ajastimen tavoite-SOC"
       },
-      "diag_version": {
-        "name": "SEM Versio"
+      "battery_session_avg_power": {
+        "name": "Akkujakson keskiteho"
       },
-      "diag_grid_mode": {
-        "name": "Verkkoanturin tila"
+      "battery_session_cost": {
+        "name": "Akkujakson kustannus"
       },
-      "diag_grid_sign": {
-        "name": "Verkon etumerkkikäytäntö"
+      "battery_session_duration": {
+        "name": "Akkujakson kesto"
+      },
+      "battery_session_energy": {
+        "name": "Akkujakson energia"
+      },
+      "battery_session_savings": {
+        "name": "Akkujakson säästö"
+      },
+      "battery_session_solar_share": {
+        "name": "Akkujakson aurinko-osuus"
+      },
+      "battery_session_type": {
+        "name": "Akkujakson tyyppi"
+      },
+      "battery_soc": {
+        "name": "Akun SOC"
+      },
+      "battery_spendable_kwh": {
+        "name": "Käytettävissä yöllä"
+      },
+      "battery_status": {
+        "name": "Akun tila"
+      },
+      "battery_stored_grid_share": {
+        "name": "Varastoitu energia verkosta"
+      },
+      "battery_temperature": {
+        "name": "Akun lämpötila"
+      },
+      "best_surplus_window": {
+        "name": "Paras ylijäämäjakso"
+      },
+      "calculated_current": {
+        "name": "Laskettu virta"
+      },
+      "charging_recommendation": {
+        "name": "Lataussuositus"
+      },
+      "charging_state": {
+        "name": "Lataustila"
+      },
+      "charging_strategy": {
+        "name": "Latausstrategia"
+      },
+      "consecutive_peak_15min": {
+        "name": "15 min huippu"
+      },
+      "controllable_devices_count": {
+        "name": "Laitteiden määrä"
+      },
+      "current_vs_peak_percentage": {
+        "name": "Huipun osuus"
+      },
+      "daily_battery_charge_energy": {
+        "name": "Tänään lataus"
+      },
+      "daily_battery_charge_grid": {
+        "name": "Tänään lataus verkosta"
+      },
+      "daily_battery_charge_solar": {
+        "name": "Tänään lataus auringosta"
+      },
+      "daily_battery_discharge_energy": {
+        "name": "Tänään purku"
+      },
+      "daily_battery_grid_cost": {
+        "name": "Tänään verkkolatauksen kustannus"
+      },
+      "daily_battery_savings": {
+        "name": "Akkusäästö päivässä"
+      },
+      "daily_co2_avoided": {
+        "name": "Vältetty CO2 tänään"
+      },
+      "daily_costs": {
+        "name": "Kustannukset päivässä"
+      },
+      "daily_ev_energy": {
+        "name": "Tänään sähköauto"
+      },
+      "daily_export_revenue": {
+        "name": "Myyntitulot päivässä"
+      },
+      "daily_grid_export_energy": {
+        "name": "Tänään myynti"
+      },
+      "daily_grid_import_energy": {
+        "name": "Tänään osto"
+      },
+      "daily_home_energy": {
+        "name": "Tänään koti"
+      },
+      "daily_net_cost": {
+        "name": "Nettokustannus päivässä"
+      },
+      "daily_savings": {
+        "name": "Tänään säästö"
+      },
+      "daily_solar_energy": {
+        "name": "Tänään aurinko"
+      },
+      "daily_total_consumption": {
+        "name": "Tänään kokonaiskulutus"
+      },
+      "daily_true_baseload_energy": {
+        "name": "Todellinen peruskuorma tänään"
+      },
+      "diag_battery_capacity": {
+        "name": "Akun kapasiteetti (määritys)"
       },
       "diag_battery_sign": {
         "name": "Akun etumerkkikäytäntö"
@@ -1166,14 +830,11 @@
       "diag_charger_control": {
         "name": "Laturin ohjaustapa"
       },
-      "diag_battery_capacity": {
-        "name": "Akun kapasiteetti (määritys)"
+      "diag_charger_count": {
+        "name": "Määritetyt laturit"
       },
-      "diag_update_interval": {
-        "name": "Päivitysväli"
-      },
-      "diag_observer_mode": {
-        "name": "Tarkkailutila"
+      "diag_ed_config": {
+        "name": "Energianäkymän määritykset"
       },
       "diag_grid_l1_current_a": {
         "name": "Grid L1 Current"
@@ -1193,6 +854,15 @@
       "diag_grid_l3_margin_a": {
         "name": "Grid L3 Current Margin"
       },
+      "diag_grid_mode": {
+        "name": "Verkkoanturin tila"
+      },
+      "diag_grid_sign": {
+        "name": "Verkon etumerkkikäytäntö"
+      },
+      "diag_inputs_degraded": {
+        "name": "Inputs Degraded"
+      },
       "diag_inverter_l1_current_a": {
         "name": "Inverter Load/EPS L1 Current"
       },
@@ -1211,14 +881,17 @@
       "diag_inverter_l3_margin_a": {
         "name": "Inverter Load/EPS L3 Current Margin"
       },
+      "diag_observer_mode": {
+        "name": "Tarkkailutila"
+      },
+      "diag_phase_guard_data_fresh": {
+        "name": "Phase Guard Data Fresh"
+      },
       "diag_phase_guard_mode": {
         "name": "Phase Guard Mode"
       },
       "diag_phase_guard_safe": {
         "name": "Phase Guard Safe"
-      },
-      "diag_phase_guard_data_fresh": {
-        "name": "Phase Guard Data Fresh"
       },
       "diag_phase_guard_stop_reason": {
         "name": "Phase Guard Stop Reason"
@@ -1226,80 +899,134 @@
       "diag_sensors_unavailable": {
         "name": "Anturit ei saatavilla"
       },
-      "battery_session_type": {
-        "name": "Akkujakson tyyppi"
+      "diag_update_interval": {
+        "name": "Päivitysväli"
       },
-      "battery_session_energy": {
-        "name": "Akkujakson energia"
+      "diag_version": {
+        "name": "SEM Versio"
       },
-      "battery_session_solar_share": {
-        "name": "Akkujakson aurinko-osuus"
+      "energy_ev_solar_percentage": {
+        "name": "Sähköauton aurinkolataus-%"
       },
-      "battery_session_cost": {
-        "name": "Akkujakson kustannus"
+      "energy_optimization_score": {
+        "name": "Optimointipisteet"
       },
-      "battery_session_savings": {
-        "name": "Akkujakson säästö"
+      "energy_plan": {
+        "name": "Energiasuunnitelma"
       },
-      "battery_session_duration": {
-        "name": "Akkujakson kesto"
+      "energy_tip": {
+        "name": "Energiavinkki"
       },
-      "battery_session_avg_power": {
-        "name": "Akkujakson keskiteho"
+      "energy_tip_category": {
+        "name": "Energiavinkin luokka"
       },
-      "diag_charger_count": {
-        "name": "Määritetyt laturit"
+      "ev_charger_count": {
+        "name": "Sähköauton latureiden määrä"
       },
-      "diag_ed_config": {
-        "name": "Energianäkymän määritykset"
+      "ev_power": {
+        "name": "Sähköauton teho"
       },
-      "heat_pump_registration_status": {
-        "name": "Lämpöpumpun rekisteröinnin tila"
+      "ev_remaining_range": {
+        "name": "Sähköauton toimintamatka"
       },
-      "vpp_event": {
-        "name": "VPP-tapahtuma"
+      "ev_taper_trend": {
+        "name": "Sähköauton latauksen hiipuminen"
       },
-      "heat_pump_energy_today": {
-        "name": "Lämpöpumppu tänään"
+      "flow_battery_to_ev_energy": {
+        "name": "Akusta sähköautoon (energia)"
       },
-      "heat_pump_energy_month": {
-        "name": "Lämpöpumppu tässä kuussa"
+      "flow_battery_to_ev_power": {
+        "name": "Akusta sähköautoon"
       },
-      "heat_pump_energy_year": {
-        "name": "Lämpöpumppu tänä vuonna"
+      "flow_battery_to_grid_energy": {
+        "name": "Akusta verkkoon (energia)"
       },
-      "heat_pump_energy_total": {
-        "name": "Lämpöpumppu yhteensä"
+      "flow_battery_to_grid_power": {
+        "name": "Akusta verkkoon"
       },
-      "heat_pump_energy_shifted_today": {
-        "name": "Lämpöpumppu siirretty tänään"
+      "flow_battery_to_home_energy": {
+        "name": "Akusta kotiin (energia)"
       },
-      "daily_battery_charge_solar": {
-        "name": "Tänään lataus auringosta"
+      "flow_battery_to_home_power": {
+        "name": "Akusta kotiin"
       },
-      "daily_battery_charge_grid": {
-        "name": "Tänään lataus verkosta"
+      "flow_grid_to_battery_energy": {
+        "name": "Verkosta akkuun (energia)"
       },
-      "daily_battery_grid_cost": {
-        "name": "Tänään verkkolatauksen kustannus"
+      "flow_grid_to_battery_power": {
+        "name": "Verkosta akkuun"
       },
-      "battery_stored_grid_share": {
-        "name": "Varastoitu energia verkosta"
+      "flow_grid_to_ev_energy": {
+        "name": "Verkosta sähköautoon (energia)"
       },
-      "true_baseload_power": {
-        "name": "Todellinen peruskuorma"
+      "flow_grid_to_ev_power": {
+        "name": "Verkosta sähköautoon"
       },
-      "daily_true_baseload_energy": {
-        "name": "Todellinen peruskuorma tänään"
+      "flow_grid_to_home_energy": {
+        "name": "Verkosta kotiin (energia)"
       },
-      "daily_total_consumption": {
-        "name": "Tänään kokonaiskulutus"
+      "flow_grid_to_home_power": {
+        "name": "Verkosta kotiin"
       },
-      "battery_measured_capacity_kwh": {
-        "name": "Mitattu akun kapasiteetti"
+      "flow_solar_to_battery_energy": {
+        "name": "Auringosta akkuun (energia)"
       },
-      "battery_capacity_drift_pct": {
-        "name": "Kapasiteetin poikkeama"
+      "flow_solar_to_battery_power": {
+        "name": "Auringosta akkuun"
+      },
+      "flow_solar_to_ev_energy": {
+        "name": "Auringosta sähköautoon (energia)"
+      },
+      "flow_solar_to_ev_power": {
+        "name": "Auringosta sähköautoon"
+      },
+      "flow_solar_to_grid_energy": {
+        "name": "Auringosta verkkoon (energia)"
+      },
+      "flow_solar_to_grid_power": {
+        "name": "Auringosta verkkoon"
+      },
+      "flow_solar_to_home_energy": {
+        "name": "Auringosta kotiin (energia)"
+      },
+      "flow_solar_to_home_power": {
+        "name": "Auringosta kotiin"
+      },
+      "forecast_corrected_today": {
+        "name": "Korjattu ennuste tänään"
+      },
+      "forecast_correction_factor": {
+        "name": "Ennusteen korjauskerroin"
+      },
+      "forecast_dampening_factor": {
+        "name": "Ennusteen vaimennuskerroin"
+      },
+      "forecast_history_days": {
+        "name": "Ennustehistorian päivät"
+      },
+      "forecast_peak_power_today_w": {
+        "name": "Ennustettu huipputeho tänään"
+      },
+      "forecast_peak_time_today": {
+        "name": "Ennustettu huipun aika tänään"
+      },
+      "forecast_power_now_w": {
+        "name": "Ennustettu teho nyt"
+      },
+      "forecast_remaining_today_kwh": {
+        "name": "Ennuste jäljellä tänään"
+      },
+      "forecast_source": {
+        "name": "Ennusteen lähde"
+      },
+      "forecast_surplus_kwh": {
+        "name": "Ennustettu ylijäämä"
+      },
+      "forecast_today_kwh": {
+        "name": "Ennuste tänään"
+      },
+      "forecast_tomorrow_kwh": {
+        "name": "Ennuste huomenna"
       },
       "forecast_trust_d1": {
         "name": "Ennusteen luotettavuus (huomenna)"
@@ -1307,14 +1034,290 @@
       "forecast_trust_d2": {
         "name": "Ennusteen luotettavuus (ylihuomenna)"
       },
-      "battery_spendable_kwh": {
-        "name": "Käytettävissä yöllä"
+      "grid_active_power": {
+        "name": "Verkon pätöteho"
       },
-      "battery_dynamic_floor_pct": {
-        "name": "Dynaaminen raja"
+      "grid_export_power": {
+        "name": "Verkkoon myynti"
       },
-      "battery_charge_pacing": {
-        "name": "Battery charge pacing"
+      "grid_import_power": {
+        "name": "Verkosta osto"
+      },
+      "grid_power": {
+        "name": "Verkkoteho"
+      },
+      "grid_status": {
+        "name": "Verkon tila"
+      },
+      "heat_pump_energy_month": {
+        "name": "Lämpöpumppu tässä kuussa"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "Lämpöpumppu siirretty tänään"
+      },
+      "heat_pump_energy_today": {
+        "name": "Lämpöpumppu tänään"
+      },
+      "heat_pump_energy_total": {
+        "name": "Lämpöpumppu yhteensä"
+      },
+      "heat_pump_energy_year": {
+        "name": "Lämpöpumppu tänä vuonna"
+      },
+      "heat_pump_mode": {
+        "name": "Lämpöpumpun tila"
+      },
+      "heat_pump_registration_status": {
+        "name": "Lämpöpumpun rekisteröinnin tila"
+      },
+      "heat_pump_sg_ready_state": {
+        "name": "Lämpöpumpun SG-Ready-tila"
+      },
+      "home_consumption_power": {
+        "name": "Kodin teho"
+      },
+      "inverter_temperature": {
+        "name": "Invertterin lämpötila"
+      },
+      "lifetime_co2_avoided": {
+        "name": "Vältetty CO2 yhteensä"
+      },
+      "lifetime_ev_battery_share": {
+        "name": "Sähköauton akkuosuus yhteensä"
+      },
+      "lifetime_ev_cost": {
+        "name": "Sähköauton kustannus yhteensä"
+      },
+      "lifetime_ev_energy": {
+        "name": "Sähköauton energia yhteensä"
+      },
+      "lifetime_ev_grid_share": {
+        "name": "Sähköauton verkko-osuus yhteensä"
+      },
+      "lifetime_ev_sessions": {
+        "name": "Sähköauton latausjaksot yhteensä"
+      },
+      "lifetime_ev_solar": {
+        "name": "Sähköauton aurinkoenergia yhteensä"
+      },
+      "lifetime_ev_solar_share": {
+        "name": "Sähköauton aurinko-osuus yhteensä"
+      },
+      "lifetime_grid_cost": {
+        "name": "Verkkosähkön kustannus yhteensä"
+      },
+      "lifetime_solar_yield_energy": {
+        "name": "Aurinkotuotanto yhteensä"
+      },
+      "lifetime_total_savings": {
+        "name": "Kokonaissäästö yhteensä"
+      },
+      "lifetime_trees_equivalent": {
+        "name": "Puuvastaavuus yhteensä"
+      },
+      "load_management_recommendation": {
+        "name": "Kuormasuositus"
+      },
+      "load_management_status": {
+        "name": "Kuormanhallinta"
+      },
+      "loads_currently_shed": {
+        "name": "Pudotetut kuormat"
+      },
+      "monthly_battery_charge_energy": {
+        "name": "Kuukausi lataus"
+      },
+      "monthly_battery_discharge_energy": {
+        "name": "Kuukausi purku"
+      },
+      "monthly_battery_savings": {
+        "name": "Akkusäästö kuukaudessa"
+      },
+      "monthly_consecutive_peak": {
+        "name": "Kuukauden huippu"
+      },
+      "monthly_costs": {
+        "name": "Kustannukset kuukaudessa"
+      },
+      "monthly_ev_consumption_energy": {
+        "name": "Kuukausi sähköauto"
+      },
+      "monthly_export_revenue": {
+        "name": "Myyntitulot kuukaudessa"
+      },
+      "monthly_grid_export_energy": {
+        "name": "Kuukausi myynti"
+      },
+      "monthly_grid_import_energy": {
+        "name": "Kuukausi osto"
+      },
+      "monthly_home_consumption_energy": {
+        "name": "Kuukausi koti"
+      },
+      "monthly_net_cost": {
+        "name": "Nettokustannus kuukaudessa"
+      },
+      "monthly_savings": {
+        "name": "Säästö kuukaudessa"
+      },
+      "monthly_solar_yield_energy": {
+        "name": "Kuukausi aurinko"
+      },
+      "night_charging_status": {
+        "name": "Yölataus"
+      },
+      "night_end_time": {
+        "name": "Yöjakson päättymisaika"
+      },
+      "night_start_time": {
+        "name": "Yöjakson alkamisaika"
+      },
+      "night_window_hours": {
+        "name": "Yöjakson tunnit"
+      },
+      "peak_margin": {
+        "name": "Huipun pelivara"
+      },
+      "power_charge_cost": {
+        "name": "Tehomaksun kustannus"
+      },
+      "predicted_surplus_window": {
+        "name": "Ennustettu ylijäämäjakso"
+      },
+      "predictor_model_accuracy": {
+        "name": "Predictor Accuracy"
+      },
+      "predictor_training_status": {
+        "name": "Ennustemallin opetustila"
+      },
+      "pv_daily_specific_yield": {
+        "name": "PV:n ominaistuotto"
+      },
+      "pv_degradation_trend": {
+        "name": "PV:n heikkenemistrendi"
+      },
+      "pv_estimated_annual_degradation": {
+        "name": "PV:n vuosittainen heikkeneminen"
+      },
+      "pv_performance_vs_forecast": {
+        "name": "PV vs. ennuste"
+      },
+      "roi_annual_savings": {
+        "name": "ROI-vuosisäästö"
+      },
+      "roi_payback_years": {
+        "name": "ROI-takaisinmaksuaika (vuotta)"
+      },
+      "roi_percentage": {
+        "name": "ROI-prosentti"
+      },
+      "self_consumption_rate": {
+        "name": "Omakäyttöaste"
+      },
+      "session_cost": {
+        "name": "Latausjakson kustannus"
+      },
+      "session_duration": {
+        "name": "Latausjakson kesto"
+      },
+      "session_energy": {
+        "name": "Latausjakson energia"
+      },
+      "session_solar_share": {
+        "name": "Latausjakson aurinko-osuus"
+      },
+      "solar_charging_status": {
+        "name": "Aurinkolataus"
+      },
+      "solar_power": {
+        "name": "Aurinkoteho"
+      },
+      "surplus_active_devices": {
+        "name": "Ylijäämän aktiiviset laitteet"
+      },
+      "surplus_allocated_w": {
+        "name": "Ylijäämä jaettu"
+      },
+      "surplus_distributable_w": {
+        "name": "Ylijäämä jaettavissa"
+      },
+      "surplus_total_devices": {
+        "name": "Ylijäämälaitteita yhteensä"
+      },
+      "surplus_total_w": {
+        "name": "Ylijäämä yhteensä"
+      },
+      "surplus_unallocated_w": {
+        "name": "Ylijäämä jakamatta"
+      },
+      "target_peak_limit": {
+        "name": "Huipputehon raja"
+      },
+      "tariff_current_export_rate": {
+        "name": "Vientihinta"
+      },
+      "tariff_current_import_rate": {
+        "name": "Sähkön hinta"
+      },
+      "tariff_next_cheap_start": {
+        "name": "Seuraava halpa jakso"
+      },
+      "tariff_price_level": {
+        "name": "Hintataso"
+      },
+      "tariff_provider": {
+        "name": "Tariffin tarjoaja"
+      },
+      "true_baseload_power": {
+        "name": "Todellinen peruskuorma"
+      },
+      "vehicle_soc": {
+        "name": "Ajoneuvon SOC"
+      },
+      "vpp_event": {
+        "name": "VPP-tapahtuma"
+      },
+      "yearly_battery_charge_energy": {
+        "name": "Vuosi akun lataus"
+      },
+      "yearly_battery_discharge_energy": {
+        "name": "Vuosi akun purku"
+      },
+      "yearly_battery_savings": {
+        "name": "Akkusäästö vuodessa"
+      },
+      "yearly_co2_avoided": {
+        "name": "Vältetty CO2 tänä vuonna"
+      },
+      "yearly_costs": {
+        "name": "Kustannukset vuodessa"
+      },
+      "yearly_ev_energy": {
+        "name": "Vuosi sähköauton energia"
+      },
+      "yearly_export_revenue": {
+        "name": "Myyntitulot vuodessa"
+      },
+      "yearly_grid_export_energy": {
+        "name": "Vuosi verkkoon myynti"
+      },
+      "yearly_grid_import_energy": {
+        "name": "Vuosi verkosta osto"
+      },
+      "yearly_home_consumption_energy": {
+        "name": "Vuosi kodin kulutus"
+      },
+      "yearly_net_cost": {
+        "name": "Nettokustannus vuodessa"
+      },
+      "yearly_savings": {
+        "name": "Säästö vuodessa"
+      },
+      "yearly_solar_yield_energy": {
+        "name": "Vuosi aurinko"
+      },
+      "yearly_trees_equivalent": {
+        "name": "Puuvastaavuus tänä vuonna"
       }
     },
     "binary_sensor": {

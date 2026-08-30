@@ -656,488 +656,44 @@
   },
   "entity": {
     "sensor": {
-      "solar_power": {
-        "name": "Soleffekt"
-      },
-      "home_consumption_power": {
-        "name": "Hjemmets effekt"
-      },
-      "grid_power": {
-        "name": "Neteffekt"
-      },
-      "grid_active_power": {
-        "name": "Nettets aktive effekt"
-      },
-      "grid_import_power": {
-        "name": "Netimport"
-      },
-      "grid_export_power": {
-        "name": "Neteksport"
-      },
-      "battery_power": {
-        "name": "Batterieffekt"
-      },
-      "battery_charge_power": {
-        "name": "Batteri ladeeffekt"
-      },
-      "battery_discharge_power": {
-        "name": "Batteri afladeeffekt"
-      },
-      "ev_power": {
-        "name": "EV-effekt"
-      },
-      "available_power": {
-        "name": "Tilgængelig effekt"
-      },
-      "battery_soc": {
-        "name": "Batteri SOC"
-      },
-      "battery_status": {
-        "name": "Batteristatus"
-      },
-      "battery_temperature": {
-        "name": "Batteritemperatur"
-      },
-      "inverter_temperature": {
-        "name": "Invertertemperatur"
-      },
-      "battery_cycles_estimated": {
-        "name": "Battericyklusser (estimeret)"
-      },
-      "battery_health_score": {
-        "name": "Batteriets helbredsscore"
-      },
-      "calculated_current": {
-        "name": "Beregnet strøm"
-      },
-      "charging_state": {
-        "name": "Ladestatus"
-      },
-      "grid_status": {
-        "name": "Netstatus"
-      },
-      "solar_charging_status": {
-        "name": "Solopladning"
-      },
-      "night_charging_status": {
-        "name": "Natopladning"
-      },
-      "energy_plan": {
-        "name": "Energiplan"
-      },
-      "battery_priority_status": {
-        "name": "Batteriprioritet"
-      },
-      "charging_strategy": {
-        "name": "Opladningsstrategi"
-      },
-      "daily_solar_energy": {
-        "name": "Sol i dag"
-      },
-      "daily_home_energy": {
-        "name": "Hjem i dag"
-      },
-      "daily_grid_import_energy": {
-        "name": "Import i dag"
-      },
-      "daily_grid_export_energy": {
-        "name": "Eksport i dag"
-      },
-      "daily_battery_charge_energy": {
-        "name": "Opladet i dag"
-      },
-      "daily_battery_discharge_energy": {
-        "name": "Afladet i dag"
-      },
-      "daily_ev_energy": {
-        "name": "EV i dag"
-      },
-      "monthly_solar_yield_energy": {
-        "name": "Sol denne måned"
-      },
-      "monthly_grid_import_energy": {
-        "name": "Import denne måned"
-      },
-      "monthly_grid_export_energy": {
-        "name": "Eksport denne måned"
-      },
-      "monthly_battery_charge_energy": {
-        "name": "Opladet denne måned"
-      },
-      "monthly_battery_discharge_energy": {
-        "name": "Afladet denne måned"
-      },
-      "monthly_home_consumption_energy": {
-        "name": "Hjem denne måned"
-      },
-      "monthly_ev_consumption_energy": {
-        "name": "EV denne måned"
-      },
-      "flow_solar_to_home_power": {
-        "name": "Sol til hjem"
-      },
-      "flow_solar_to_battery_power": {
-        "name": "Sol til batteri"
-      },
-      "flow_solar_to_grid_power": {
-        "name": "Sol til net"
-      },
-      "flow_solar_to_ev_power": {
-        "name": "Sol til EV"
-      },
-      "flow_battery_to_home_power": {
-        "name": "Batteri til hjem"
-      },
-      "flow_battery_to_grid_power": {
-        "name": "Batteri til net"
-      },
-      "flow_battery_to_ev_power": {
-        "name": "Batteri til EV"
-      },
-      "flow_grid_to_home_power": {
-        "name": "Net til hjem"
-      },
-      "flow_grid_to_ev_power": {
-        "name": "Net til EV"
-      },
-      "flow_grid_to_battery_power": {
-        "name": "Net til batteri"
-      },
-      "flow_solar_to_home_energy": {
-        "name": "Sol til hjem energi"
-      },
-      "flow_solar_to_ev_energy": {
-        "name": "Sol til EV energi"
-      },
-      "flow_solar_to_battery_energy": {
-        "name": "Sol til batteri energi"
-      },
-      "flow_solar_to_grid_energy": {
-        "name": "Sol til net energi"
-      },
-      "flow_grid_to_home_energy": {
-        "name": "Net til hjem energi"
-      },
-      "flow_grid_to_ev_energy": {
-        "name": "Net til EV energi"
-      },
-      "flow_grid_to_battery_energy": {
-        "name": "Net til batteri energi"
-      },
-      "flow_battery_to_home_energy": {
-        "name": "Batteri til hjem energi"
-      },
-      "flow_battery_to_grid_energy": {
-        "name": "Batteri til net energi"
-      },
-      "flow_battery_to_ev_energy": {
-        "name": "Batteri til EV energi"
-      },
-      "self_consumption_rate": {
-        "name": "Egetforbrug"
-      },
       "autarky_rate": {
         "name": "Selvforsyningsgrad"
-      },
-      "daily_savings": {
-        "name": "Besparelse i dag"
-      },
-      "daily_battery_savings": {
-        "name": "Batteribesparelse dagligt"
-      },
-      "daily_costs": {
-        "name": "Omkostninger dagligt"
-      },
-      "daily_export_revenue": {
-        "name": "Eksportindtægt dagligt"
-      },
-      "daily_net_cost": {
-        "name": "Nettoomkostning dagligt"
-      },
-      "monthly_savings": {
-        "name": "Besparelse denne måned"
-      },
-      "monthly_battery_savings": {
-        "name": "Batteribesparelse månedligt"
-      },
-      "monthly_costs": {
-        "name": "Omkostninger månedligt"
-      },
-      "monthly_export_revenue": {
-        "name": "Eksportindtægt månedligt"
-      },
-      "monthly_net_cost": {
-        "name": "Nettoomkostning månedligt"
-      },
-      "yearly_solar_yield_energy": {
-        "name": "Sol i år"
-      },
-      "lifetime_solar_yield_energy": {
-        "name": "Solproduktion i alt"
-      },
-      "yearly_grid_import_energy": {
-        "name": "Netimport i år"
-      },
-      "yearly_grid_export_energy": {
-        "name": "Neteksport i år"
-      },
-      "yearly_battery_charge_energy": {
-        "name": "Batteriopladning i år"
-      },
-      "yearly_battery_discharge_energy": {
-        "name": "Batteriafladning i år"
-      },
-      "yearly_home_consumption_energy": {
-        "name": "Hjemmets forbrug i år"
-      },
-      "yearly_ev_energy": {
-        "name": "EV-energi i år"
-      },
-      "yearly_costs": {
-        "name": "Omkostninger i år"
-      },
-      "yearly_savings": {
-        "name": "Besparelse i år"
-      },
-      "yearly_battery_savings": {
-        "name": "Batteribesparelse i år"
-      },
-      "yearly_export_revenue": {
-        "name": "Eksportindtægt i år"
-      },
-      "yearly_net_cost": {
-        "name": "Nettoomkostning i år"
-      },
-      "lifetime_total_savings": {
-        "name": "Samlet besparelse i alt"
-      },
-      "lifetime_grid_cost": {
-        "name": "Netomkostning i alt"
-      },
-      "roi_percentage": {
-        "name": "ROI procent"
-      },
-      "roi_payback_years": {
-        "name": "ROI tilbagebetalingstid (år)"
-      },
-      "roi_annual_savings": {
-        "name": "ROI årlig besparelse"
-      },
-      "forecast_correction_factor": {
-        "name": "Prognose korrektionsfaktor"
-      },
-      "forecast_corrected_today": {
-        "name": "Korrigeret prognose i dag"
-      },
-      "forecast_history_days": {
-        "name": "Prognosehistorik (dage)"
-      },
-      "daily_co2_avoided": {
-        "name": "CO2 undgået i dag"
-      },
-      "yearly_co2_avoided": {
-        "name": "CO2 undgået i år"
-      },
-      "yearly_trees_equivalent": {
-        "name": "Træer svarende til i år"
-      },
-      "lifetime_co2_avoided": {
-        "name": "CO2 undgået i alt"
-      },
-      "lifetime_trees_equivalent": {
-        "name": "Træer svarende til i alt"
-      },
-      "power_charge_cost": {
-        "name": "Effekttarif-omkostning"
-      },
-      "consecutive_peak_15min": {
-        "name": "15 min. spidsbelastning"
-      },
-      "monthly_consecutive_peak": {
-        "name": "Månedens spidsbelastning"
-      },
-      "current_vs_peak_percentage": {
-        "name": "Spidsbelastning i procent"
-      },
-      "target_peak_limit": {
-        "name": "Spidsbelastningsgrænse"
-      },
-      "peak_margin": {
-        "name": "Spidsbelastningsmargin"
-      },
-      "load_management_status": {
-        "name": "Lastbegrænsning"
-      },
-      "load_management_recommendation": {
-        "name": "Lastanbefaling"
-      },
-      "loads_currently_shed": {
-        "name": "Frakoblede laster"
       },
       "available_load_reduction": {
         "name": "Tilgængelig reduktion"
       },
-      "controllable_devices_count": {
-        "name": "Antal enheder"
+      "available_power": {
+        "name": "Tilgængelig effekt"
       },
-      "surplus_total_w": {
-        "name": "Overskud i alt"
+      "battery_capacity_drift_pct": {
+        "name": "Kapacitetsafvigelse"
       },
-      "surplus_distributable_w": {
-        "name": "Overskud til fordeling"
+      "battery_charge_pacing": {
+        "name": "Battery charge pacing"
       },
-      "surplus_allocated_w": {
-        "name": "Overskud tildelt"
+      "battery_charge_power": {
+        "name": "Batteri ladeeffekt"
       },
-      "surplus_unallocated_w": {
-        "name": "Overskud ikke tildelt"
+      "battery_cycles_estimated": {
+        "name": "Battericyklusser (estimeret)"
       },
-      "surplus_active_devices": {
-        "name": "Overskud aktive enheder"
+      "battery_discharge_power": {
+        "name": "Batteri afladeeffekt"
       },
-      "surplus_total_devices": {
-        "name": "Overskud enheder i alt"
+      "battery_dynamic_floor_pct": {
+        "name": "Dynamisk grænse"
       },
-      "forecast_today_kwh": {
-        "name": "Prognose i dag"
+      "battery_health_score": {
+        "name": "Batteriets helbredsscore"
       },
-      "forecast_tomorrow_kwh": {
-        "name": "Prognose i morgen"
+      "battery_measured_capacity_kwh": {
+        "name": "Målt batterikapacitet"
       },
-      "forecast_remaining_today_kwh": {
-        "name": "Prognose resterende i dag"
+      "battery_power": {
+        "name": "Batterieffekt"
       },
-      "forecast_power_now_w": {
-        "name": "Prognose effekt nu"
-      },
-      "forecast_source": {
-        "name": "Prognosekilde"
-      },
-      "charging_recommendation": {
-        "name": "Opladningsanbefaling"
-      },
-      "tariff_current_import_rate": {
-        "name": "Elpris"
-      },
-      "tariff_current_export_rate": {
-        "name": "Eksportpris"
-      },
-      "tariff_price_level": {
-        "name": "Prisniveau"
-      },
-      "tariff_provider": {
-        "name": "Tarifudbyder"
-      },
-      "tariff_next_cheap_start": {
-        "name": "Næste billige vindue"
-      },
-      "heat_pump_mode": {
-        "name": "Varmepumpetilstand"
-      },
-      "heat_pump_sg_ready_state": {
-        "name": "Varmepumpe SG-Ready-tilstand"
-      },
-      "pv_daily_specific_yield": {
-        "name": "PV specifikt udbytte"
-      },
-      "pv_performance_vs_forecast": {
-        "name": "PV vs. prognose"
-      },
-      "pv_estimated_annual_degradation": {
-        "name": "PV årlig degradering"
-      },
-      "pv_degradation_trend": {
-        "name": "PV degraderingstendens"
-      },
-      "energy_optimization_score": {
-        "name": "Optimeringsscore"
-      },
-      "energy_tip": {
-        "name": "Energitip"
-      },
-      "energy_tip_category": {
-        "name": "Energitip-kategori"
-      },
-      "energy_ev_solar_percentage": {
-        "name": "EV solopladning %"
-      },
-      "predictor_training_status": {
-        "name": "Predictor træningsstatus"
-      },
-      "predictor_model_accuracy": {
-        "name": "Predictor Accuracy"
-      },
-      "predicted_surplus_window": {
-        "name": "Forudsagt overskudsvindue"
-      },
-      "session_energy": {
-        "name": "Sessionsenergi"
-      },
-      "session_solar_share": {
-        "name": "Sessionens solandel"
-      },
-      "session_cost": {
-        "name": "Sessionsomkostning"
-      },
-      "session_duration": {
-        "name": "Sessionsvarighed"
-      },
-      "lifetime_ev_energy": {
-        "name": "EV-energi i alt"
-      },
-      "lifetime_ev_solar": {
-        "name": "EV solenergi i alt"
-      },
-      "lifetime_ev_cost": {
-        "name": "EV-omkostning i alt"
-      },
-      "lifetime_ev_sessions": {
-        "name": "EV-sessioner i alt"
-      },
-      "lifetime_ev_solar_share": {
-        "name": "EV solandel i alt"
-      },
-      "lifetime_ev_battery_share": {
-        "name": "EV batteriandel i alt"
-      },
-      "lifetime_ev_grid_share": {
-        "name": "EV netandel i alt"
-      },
-      "vehicle_soc": {
-        "name": "Køretøjets SOC"
-      },
-      "ev_remaining_range": {
-        "name": "Elbil rækkevidde"
-      },
-      "best_surplus_window": {
-        "name": "Bedste overskudsvindue"
-      },
-      "night_start_time": {
-        "name": "Nat starttidspunkt"
-      },
-      "night_end_time": {
-        "name": "Nat sluttidspunkt"
-      },
-      "night_window_hours": {
-        "name": "Natvindue (timer)"
-      },
-      "forecast_peak_power_today_w": {
-        "name": "Prognose maks. effekt i dag"
-      },
-      "forecast_peak_time_today": {
-        "name": "Prognose maks. tidspunkt i dag"
-      },
-      "forecast_surplus_kwh": {
-        "name": "Prognose overskud"
-      },
-      "forecast_dampening_factor": {
-        "name": "Prognose dæmpningsfaktor"
-      },
-      "battery_scheduler_state": {
-        "name": "Batteri planlæggerstatus"
-      },
-      "battery_scheduler_target_soc": {
-        "name": "Batteriplanlægger mål-SOC"
+      "battery_priority_status": {
+        "name": "Batteriprioritet"
       },
       "battery_scheduler_deficit_kwh": {
         "name": "Batteriplanlægger underskud"
@@ -1145,20 +701,128 @@
       "battery_scheduler_reason": {
         "name": "Batteriplanlægger årsag"
       },
-      "ev_charger_count": {
-        "name": "Antal EV-ladere"
+      "battery_scheduler_state": {
+        "name": "Batteri planlæggerstatus"
       },
-      "ev_taper_trend": {
-        "name": "EV nedtrapningstendens"
+      "battery_scheduler_target_soc": {
+        "name": "Batteriplanlægger mål-SOC"
       },
-      "diag_version": {
-        "name": "SEM-version"
+      "battery_session_avg_power": {
+        "name": "Batterisession gns. effekt"
       },
-      "diag_grid_mode": {
-        "name": "Netsensor-tilstand"
+      "battery_session_cost": {
+        "name": "Batterisession omkostning"
       },
-      "diag_grid_sign": {
-        "name": "Nettets fortegnskonvention"
+      "battery_session_duration": {
+        "name": "Batterisession varighed"
+      },
+      "battery_session_energy": {
+        "name": "Batterisession energi"
+      },
+      "battery_session_savings": {
+        "name": "Batterisession besparelse"
+      },
+      "battery_session_solar_share": {
+        "name": "Batterisession solandel"
+      },
+      "battery_session_type": {
+        "name": "Batterisession type"
+      },
+      "battery_soc": {
+        "name": "Batteri SOC"
+      },
+      "battery_spendable_kwh": {
+        "name": "Tilgængeligt i nat"
+      },
+      "battery_status": {
+        "name": "Batteristatus"
+      },
+      "battery_stored_grid_share": {
+        "name": "Lagret energi fra nettet"
+      },
+      "battery_temperature": {
+        "name": "Batteritemperatur"
+      },
+      "best_surplus_window": {
+        "name": "Bedste overskudsvindue"
+      },
+      "calculated_current": {
+        "name": "Beregnet strøm"
+      },
+      "charging_recommendation": {
+        "name": "Opladningsanbefaling"
+      },
+      "charging_state": {
+        "name": "Ladestatus"
+      },
+      "charging_strategy": {
+        "name": "Opladningsstrategi"
+      },
+      "consecutive_peak_15min": {
+        "name": "15 min. spidsbelastning"
+      },
+      "controllable_devices_count": {
+        "name": "Antal enheder"
+      },
+      "current_vs_peak_percentage": {
+        "name": "Spidsbelastning i procent"
+      },
+      "daily_battery_charge_energy": {
+        "name": "Opladet i dag"
+      },
+      "daily_battery_charge_grid": {
+        "name": "I dag opladning fra net"
+      },
+      "daily_battery_charge_solar": {
+        "name": "I dag opladning fra sol"
+      },
+      "daily_battery_discharge_energy": {
+        "name": "Afladet i dag"
+      },
+      "daily_battery_grid_cost": {
+        "name": "I dag omkostning netopladning"
+      },
+      "daily_battery_savings": {
+        "name": "Batteribesparelse dagligt"
+      },
+      "daily_co2_avoided": {
+        "name": "CO2 undgået i dag"
+      },
+      "daily_costs": {
+        "name": "Omkostninger dagligt"
+      },
+      "daily_ev_energy": {
+        "name": "EV i dag"
+      },
+      "daily_export_revenue": {
+        "name": "Eksportindtægt dagligt"
+      },
+      "daily_grid_export_energy": {
+        "name": "Eksport i dag"
+      },
+      "daily_grid_import_energy": {
+        "name": "Import i dag"
+      },
+      "daily_home_energy": {
+        "name": "Hjem i dag"
+      },
+      "daily_net_cost": {
+        "name": "Nettoomkostning dagligt"
+      },
+      "daily_savings": {
+        "name": "Besparelse i dag"
+      },
+      "daily_solar_energy": {
+        "name": "Sol i dag"
+      },
+      "daily_total_consumption": {
+        "name": "I dag samlet forbrug"
+      },
+      "daily_true_baseload_energy": {
+        "name": "Reel grundlast i dag"
+      },
+      "diag_battery_capacity": {
+        "name": "Batterikapacitet (konfig)"
       },
       "diag_battery_sign": {
         "name": "Batteriets fortegnskonvention"
@@ -1166,14 +830,11 @@
       "diag_charger_control": {
         "name": "Laderens styringsmetode"
       },
-      "diag_battery_capacity": {
-        "name": "Batterikapacitet (konfig)"
+      "diag_charger_count": {
+        "name": "Konfigurerede ladere"
       },
-      "diag_update_interval": {
-        "name": "Opdateringsinterval"
-      },
-      "diag_observer_mode": {
-        "name": "Observatørtilstand"
+      "diag_ed_config": {
+        "name": "Energipanel-konfiguration"
       },
       "diag_grid_l1_current_a": {
         "name": "Grid L1 Current"
@@ -1193,6 +854,15 @@
       "diag_grid_l3_margin_a": {
         "name": "Grid L3 Current Margin"
       },
+      "diag_grid_mode": {
+        "name": "Netsensor-tilstand"
+      },
+      "diag_grid_sign": {
+        "name": "Nettets fortegnskonvention"
+      },
+      "diag_inputs_degraded": {
+        "name": "Inputs Degraded"
+      },
       "diag_inverter_l1_current_a": {
         "name": "Inverter Load/EPS L1 Current"
       },
@@ -1211,14 +881,17 @@
       "diag_inverter_l3_margin_a": {
         "name": "Inverter Load/EPS L3 Current Margin"
       },
+      "diag_observer_mode": {
+        "name": "Observatørtilstand"
+      },
+      "diag_phase_guard_data_fresh": {
+        "name": "Phase Guard Data Fresh"
+      },
       "diag_phase_guard_mode": {
         "name": "Phase Guard Mode"
       },
       "diag_phase_guard_safe": {
         "name": "Phase Guard Safe"
-      },
-      "diag_phase_guard_data_fresh": {
-        "name": "Phase Guard Data Fresh"
       },
       "diag_phase_guard_stop_reason": {
         "name": "Phase Guard Stop Reason"
@@ -1226,80 +899,134 @@
       "diag_sensors_unavailable": {
         "name": "Sensorer utilgængelige"
       },
-      "battery_session_type": {
-        "name": "Batterisession type"
+      "diag_update_interval": {
+        "name": "Opdateringsinterval"
       },
-      "battery_session_energy": {
-        "name": "Batterisession energi"
+      "diag_version": {
+        "name": "SEM-version"
       },
-      "battery_session_solar_share": {
-        "name": "Batterisession solandel"
+      "energy_ev_solar_percentage": {
+        "name": "EV solopladning %"
       },
-      "battery_session_cost": {
-        "name": "Batterisession omkostning"
+      "energy_optimization_score": {
+        "name": "Optimeringsscore"
       },
-      "battery_session_savings": {
-        "name": "Batterisession besparelse"
+      "energy_plan": {
+        "name": "Energiplan"
       },
-      "battery_session_duration": {
-        "name": "Batterisession varighed"
+      "energy_tip": {
+        "name": "Energitip"
       },
-      "battery_session_avg_power": {
-        "name": "Batterisession gns. effekt"
+      "energy_tip_category": {
+        "name": "Energitip-kategori"
       },
-      "diag_charger_count": {
-        "name": "Konfigurerede ladere"
+      "ev_charger_count": {
+        "name": "Antal EV-ladere"
       },
-      "diag_ed_config": {
-        "name": "Energipanel-konfiguration"
+      "ev_power": {
+        "name": "EV-effekt"
       },
-      "heat_pump_registration_status": {
-        "name": "Varmepumpe registreringsstatus"
+      "ev_remaining_range": {
+        "name": "Elbil rækkevidde"
       },
-      "vpp_event": {
-        "name": "VPP-hændelse"
+      "ev_taper_trend": {
+        "name": "EV nedtrapningstendens"
       },
-      "heat_pump_energy_today": {
-        "name": "Varmepumpe i dag"
+      "flow_battery_to_ev_energy": {
+        "name": "Batteri til EV energi"
       },
-      "heat_pump_energy_month": {
-        "name": "Varmepumpe denne måned"
+      "flow_battery_to_ev_power": {
+        "name": "Batteri til EV"
       },
-      "heat_pump_energy_year": {
-        "name": "Varmepumpe i år"
+      "flow_battery_to_grid_energy": {
+        "name": "Batteri til net energi"
       },
-      "heat_pump_energy_total": {
-        "name": "Varmepumpe total"
+      "flow_battery_to_grid_power": {
+        "name": "Batteri til net"
       },
-      "heat_pump_energy_shifted_today": {
-        "name": "Varmepumpe flyttet i dag"
+      "flow_battery_to_home_energy": {
+        "name": "Batteri til hjem energi"
       },
-      "daily_battery_charge_solar": {
-        "name": "I dag opladning fra sol"
+      "flow_battery_to_home_power": {
+        "name": "Batteri til hjem"
       },
-      "daily_battery_charge_grid": {
-        "name": "I dag opladning fra net"
+      "flow_grid_to_battery_energy": {
+        "name": "Net til batteri energi"
       },
-      "daily_battery_grid_cost": {
-        "name": "I dag omkostning netopladning"
+      "flow_grid_to_battery_power": {
+        "name": "Net til batteri"
       },
-      "battery_stored_grid_share": {
-        "name": "Lagret energi fra nettet"
+      "flow_grid_to_ev_energy": {
+        "name": "Net til EV energi"
       },
-      "true_baseload_power": {
-        "name": "Reel grundlast"
+      "flow_grid_to_ev_power": {
+        "name": "Net til EV"
       },
-      "daily_true_baseload_energy": {
-        "name": "Reel grundlast i dag"
+      "flow_grid_to_home_energy": {
+        "name": "Net til hjem energi"
       },
-      "daily_total_consumption": {
-        "name": "I dag samlet forbrug"
+      "flow_grid_to_home_power": {
+        "name": "Net til hjem"
       },
-      "battery_measured_capacity_kwh": {
-        "name": "Målt batterikapacitet"
+      "flow_solar_to_battery_energy": {
+        "name": "Sol til batteri energi"
       },
-      "battery_capacity_drift_pct": {
-        "name": "Kapacitetsafvigelse"
+      "flow_solar_to_battery_power": {
+        "name": "Sol til batteri"
+      },
+      "flow_solar_to_ev_energy": {
+        "name": "Sol til EV energi"
+      },
+      "flow_solar_to_ev_power": {
+        "name": "Sol til EV"
+      },
+      "flow_solar_to_grid_energy": {
+        "name": "Sol til net energi"
+      },
+      "flow_solar_to_grid_power": {
+        "name": "Sol til net"
+      },
+      "flow_solar_to_home_energy": {
+        "name": "Sol til hjem energi"
+      },
+      "flow_solar_to_home_power": {
+        "name": "Sol til hjem"
+      },
+      "forecast_corrected_today": {
+        "name": "Korrigeret prognose i dag"
+      },
+      "forecast_correction_factor": {
+        "name": "Prognose korrektionsfaktor"
+      },
+      "forecast_dampening_factor": {
+        "name": "Prognose dæmpningsfaktor"
+      },
+      "forecast_history_days": {
+        "name": "Prognosehistorik (dage)"
+      },
+      "forecast_peak_power_today_w": {
+        "name": "Prognose maks. effekt i dag"
+      },
+      "forecast_peak_time_today": {
+        "name": "Prognose maks. tidspunkt i dag"
+      },
+      "forecast_power_now_w": {
+        "name": "Prognose effekt nu"
+      },
+      "forecast_remaining_today_kwh": {
+        "name": "Prognose resterende i dag"
+      },
+      "forecast_source": {
+        "name": "Prognosekilde"
+      },
+      "forecast_surplus_kwh": {
+        "name": "Prognose overskud"
+      },
+      "forecast_today_kwh": {
+        "name": "Prognose i dag"
+      },
+      "forecast_tomorrow_kwh": {
+        "name": "Prognose i morgen"
       },
       "forecast_trust_d1": {
         "name": "Prognosetillid (i morgen)"
@@ -1307,14 +1034,290 @@
       "forecast_trust_d2": {
         "name": "Prognosetillid (i overmorgen)"
       },
-      "battery_spendable_kwh": {
-        "name": "Tilgængeligt i nat"
+      "grid_active_power": {
+        "name": "Nettets aktive effekt"
       },
-      "battery_dynamic_floor_pct": {
-        "name": "Dynamisk grænse"
+      "grid_export_power": {
+        "name": "Neteksport"
       },
-      "battery_charge_pacing": {
-        "name": "Battery charge pacing"
+      "grid_import_power": {
+        "name": "Netimport"
+      },
+      "grid_power": {
+        "name": "Neteffekt"
+      },
+      "grid_status": {
+        "name": "Netstatus"
+      },
+      "heat_pump_energy_month": {
+        "name": "Varmepumpe denne måned"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "Varmepumpe flyttet i dag"
+      },
+      "heat_pump_energy_today": {
+        "name": "Varmepumpe i dag"
+      },
+      "heat_pump_energy_total": {
+        "name": "Varmepumpe total"
+      },
+      "heat_pump_energy_year": {
+        "name": "Varmepumpe i år"
+      },
+      "heat_pump_mode": {
+        "name": "Varmepumpetilstand"
+      },
+      "heat_pump_registration_status": {
+        "name": "Varmepumpe registreringsstatus"
+      },
+      "heat_pump_sg_ready_state": {
+        "name": "Varmepumpe SG-Ready-tilstand"
+      },
+      "home_consumption_power": {
+        "name": "Hjemmets effekt"
+      },
+      "inverter_temperature": {
+        "name": "Invertertemperatur"
+      },
+      "lifetime_co2_avoided": {
+        "name": "CO2 undgået i alt"
+      },
+      "lifetime_ev_battery_share": {
+        "name": "EV batteriandel i alt"
+      },
+      "lifetime_ev_cost": {
+        "name": "EV-omkostning i alt"
+      },
+      "lifetime_ev_energy": {
+        "name": "EV-energi i alt"
+      },
+      "lifetime_ev_grid_share": {
+        "name": "EV netandel i alt"
+      },
+      "lifetime_ev_sessions": {
+        "name": "EV-sessioner i alt"
+      },
+      "lifetime_ev_solar": {
+        "name": "EV solenergi i alt"
+      },
+      "lifetime_ev_solar_share": {
+        "name": "EV solandel i alt"
+      },
+      "lifetime_grid_cost": {
+        "name": "Netomkostning i alt"
+      },
+      "lifetime_solar_yield_energy": {
+        "name": "Solproduktion i alt"
+      },
+      "lifetime_total_savings": {
+        "name": "Samlet besparelse i alt"
+      },
+      "lifetime_trees_equivalent": {
+        "name": "Træer svarende til i alt"
+      },
+      "load_management_recommendation": {
+        "name": "Lastanbefaling"
+      },
+      "load_management_status": {
+        "name": "Lastbegrænsning"
+      },
+      "loads_currently_shed": {
+        "name": "Frakoblede laster"
+      },
+      "monthly_battery_charge_energy": {
+        "name": "Opladet denne måned"
+      },
+      "monthly_battery_discharge_energy": {
+        "name": "Afladet denne måned"
+      },
+      "monthly_battery_savings": {
+        "name": "Batteribesparelse månedligt"
+      },
+      "monthly_consecutive_peak": {
+        "name": "Månedens spidsbelastning"
+      },
+      "monthly_costs": {
+        "name": "Omkostninger månedligt"
+      },
+      "monthly_ev_consumption_energy": {
+        "name": "EV denne måned"
+      },
+      "monthly_export_revenue": {
+        "name": "Eksportindtægt månedligt"
+      },
+      "monthly_grid_export_energy": {
+        "name": "Eksport denne måned"
+      },
+      "monthly_grid_import_energy": {
+        "name": "Import denne måned"
+      },
+      "monthly_home_consumption_energy": {
+        "name": "Hjem denne måned"
+      },
+      "monthly_net_cost": {
+        "name": "Nettoomkostning månedligt"
+      },
+      "monthly_savings": {
+        "name": "Besparelse denne måned"
+      },
+      "monthly_solar_yield_energy": {
+        "name": "Sol denne måned"
+      },
+      "night_charging_status": {
+        "name": "Natopladning"
+      },
+      "night_end_time": {
+        "name": "Nat sluttidspunkt"
+      },
+      "night_start_time": {
+        "name": "Nat starttidspunkt"
+      },
+      "night_window_hours": {
+        "name": "Natvindue (timer)"
+      },
+      "peak_margin": {
+        "name": "Spidsbelastningsmargin"
+      },
+      "power_charge_cost": {
+        "name": "Effekttarif-omkostning"
+      },
+      "predicted_surplus_window": {
+        "name": "Forudsagt overskudsvindue"
+      },
+      "predictor_model_accuracy": {
+        "name": "Predictor Accuracy"
+      },
+      "predictor_training_status": {
+        "name": "Predictor træningsstatus"
+      },
+      "pv_daily_specific_yield": {
+        "name": "PV specifikt udbytte"
+      },
+      "pv_degradation_trend": {
+        "name": "PV degraderingstendens"
+      },
+      "pv_estimated_annual_degradation": {
+        "name": "PV årlig degradering"
+      },
+      "pv_performance_vs_forecast": {
+        "name": "PV vs. prognose"
+      },
+      "roi_annual_savings": {
+        "name": "ROI årlig besparelse"
+      },
+      "roi_payback_years": {
+        "name": "ROI tilbagebetalingstid (år)"
+      },
+      "roi_percentage": {
+        "name": "ROI procent"
+      },
+      "self_consumption_rate": {
+        "name": "Egetforbrug"
+      },
+      "session_cost": {
+        "name": "Sessionsomkostning"
+      },
+      "session_duration": {
+        "name": "Sessionsvarighed"
+      },
+      "session_energy": {
+        "name": "Sessionsenergi"
+      },
+      "session_solar_share": {
+        "name": "Sessionens solandel"
+      },
+      "solar_charging_status": {
+        "name": "Solopladning"
+      },
+      "solar_power": {
+        "name": "Soleffekt"
+      },
+      "surplus_active_devices": {
+        "name": "Overskud aktive enheder"
+      },
+      "surplus_allocated_w": {
+        "name": "Overskud tildelt"
+      },
+      "surplus_distributable_w": {
+        "name": "Overskud til fordeling"
+      },
+      "surplus_total_devices": {
+        "name": "Overskud enheder i alt"
+      },
+      "surplus_total_w": {
+        "name": "Overskud i alt"
+      },
+      "surplus_unallocated_w": {
+        "name": "Overskud ikke tildelt"
+      },
+      "target_peak_limit": {
+        "name": "Spidsbelastningsgrænse"
+      },
+      "tariff_current_export_rate": {
+        "name": "Eksportpris"
+      },
+      "tariff_current_import_rate": {
+        "name": "Elpris"
+      },
+      "tariff_next_cheap_start": {
+        "name": "Næste billige vindue"
+      },
+      "tariff_price_level": {
+        "name": "Prisniveau"
+      },
+      "tariff_provider": {
+        "name": "Tarifudbyder"
+      },
+      "true_baseload_power": {
+        "name": "Reel grundlast"
+      },
+      "vehicle_soc": {
+        "name": "Køretøjets SOC"
+      },
+      "vpp_event": {
+        "name": "VPP-hændelse"
+      },
+      "yearly_battery_charge_energy": {
+        "name": "Batteriopladning i år"
+      },
+      "yearly_battery_discharge_energy": {
+        "name": "Batteriafladning i år"
+      },
+      "yearly_battery_savings": {
+        "name": "Batteribesparelse i år"
+      },
+      "yearly_co2_avoided": {
+        "name": "CO2 undgået i år"
+      },
+      "yearly_costs": {
+        "name": "Omkostninger i år"
+      },
+      "yearly_ev_energy": {
+        "name": "EV-energi i år"
+      },
+      "yearly_export_revenue": {
+        "name": "Eksportindtægt i år"
+      },
+      "yearly_grid_export_energy": {
+        "name": "Neteksport i år"
+      },
+      "yearly_grid_import_energy": {
+        "name": "Netimport i år"
+      },
+      "yearly_home_consumption_energy": {
+        "name": "Hjemmets forbrug i år"
+      },
+      "yearly_net_cost": {
+        "name": "Nettoomkostning i år"
+      },
+      "yearly_savings": {
+        "name": "Besparelse i år"
+      },
+      "yearly_solar_yield_energy": {
+        "name": "Sol i år"
+      },
+      "yearly_trees_equivalent": {
+        "name": "Træer svarende til i år"
       }
     },
     "binary_sensor": {
