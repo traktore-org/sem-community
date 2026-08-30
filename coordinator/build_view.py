@@ -177,6 +177,9 @@ def build_charger_view(
         peak_state=getattr(fleet_state, "peak_state", "normal"),
         # (#864) so does the slot-budget allowance.
         peak_slot_allowed_w=getattr(fleet_state, "peak_slot_allowed_w", None),
+        # (#864) what higher-priority chargers already claimed this cycle
+        peak_committed_w=float(
+            getattr(fleet_state, "peak_committed_w", 0.0) or 0.0),
         auto_start_soc=float(config.get("battery_auto_start_soc", 90)),
         buffer_soc=float(config.get("battery_buffer_soc", 70)),
         priority_soc=float(config.get("battery_priority_soc", 30)),

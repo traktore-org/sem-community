@@ -240,12 +240,27 @@ class PVPerformanceAnalyzer:
             for i in range(1, len(records)):
                 prev = records[i - 1]
                 curr = records[i]
+                # (#867) Divide by the YEARS BETWEEN them. Comparing
+                # consecutive same-month records treats every pair as exactly
+                # one year apart, but a gap — an outage, a skipped
+                # zero-production month, a pack of history restored from an
+                # older store — makes a multi-year drift price as one year's
+                # rate: three years of a real 1.5 %/yr decline reported as
+                # 4.5 %/yr, a 3x overstatement that the 0-5 % clamp below
+                # hides rather than fixes. Degradation is a number someone may
+                # call an installer about; it must not read a data gap as
+                # decay.
+                span_years = curr.year - prev.year
+                if span_years <= 0:
+                    # A duplicate month (a re-record after a restart) spans no
+                    # time and says nothing about decay.
+                    continue
                 if prev.specific_yield > 0:
-                    yearly_change = (
+                    total_change = (
                         (curr.specific_yield - prev.specific_yield) / prev.specific_yield * 100
                     )
-                    # Negative = degradation
-                    degradation_rates.append(-yearly_change)
+                    # Negative = degradation, per year of actual elapsed time
+                    degradation_rates.append(-total_change / span_years)
 
         if not degradation_rates:
             return 0.0

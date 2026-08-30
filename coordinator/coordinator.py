@@ -2568,6 +2568,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         single = getattr(self, "_ev_device", None)
         if single is not None and not any(d is single for d in devs):
             devs.append(single)
+        # EVERY commandable device, not just the chargers. ``send()`` is the
+        # one seam and it withholds only when the DEVICE knows, so a device
+        # this push skips is a device that acts. Loads, climate and heat
+        # pumps are protected on the per-cycle path by
+        # ``reconcile_load(observer=...)`` one layer up — but the one-shot
+        # Mode→Off handler in features/device_registry.py calls
+        # ``deactivate()`` directly and lands straight on the seam. On .46 and
+        # .175 that means a REAL load switching off while the rig reports it
+        # is only watching, which is the single assumption those rigs rest on.
+        sc = getattr(self, "_surplus_controller", None)
+        for dev in list(getattr(sc, "_devices", {}).values() if sc else []):
+            if not any(d is dev for d in devs):
+                devs.append(dev)
         for dev in devs:
             try:
                 dev.observer_mode = obs
@@ -3233,6 +3246,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # two solar_only chargers don't each think they can have ALL
                 # the surplus.
                 self._solar_committed_w_per_cycle = 0.0
+                # (#864) …and the peak slot's twin. One slot budget serves
+                # the whole house, so a second charger must see what the
+                # first was already offered — without this each charger
+                # claimed the entire allowance and two landed 69 % over
+                # target on review.
+                self._peak_committed_w_per_cycle = 0.0
                 # v1.6.9: per-charger effective states are captured below
                 # so the notification dispatch can fire per charger.
                 # Reset before the loop so a removed charger's stale
@@ -3745,6 +3764,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 voltage=adapter.voltage,
                                 max_current_a=adapter.max_current_a,
                             )
+                            # (#864) The peak slot's twin: what THIS charger
+                            # was offered is unavailable to the next one, and
+                            # it cannot show up in grid_import yet because the
+                            # car has not drawn it. Same accumulator, same
+                            # reset, same reason.
+                            from .charger_types import commanded_power_w as _cpw
+                            self._peak_committed_w_per_cycle += float(_cpw(
+                                decision,
+                                phases=adapter.phases,
+                                voltage=adapter.voltage,
+                                max_current_a=adapter.max_current_a,
+                            ) or 0.0)
                         except (HomeAssistantError, ServiceValidationError) as e:
                             _LOGGER.error("EV control service failed for %s: %s", cid, e)
                         except ValueError as e:
@@ -4806,7 +4837,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # the write additionally needs the master switch, a named entity,
             # and non-observer.
             try:
-                await self._run_charge_pacing()
+                await self._run_charge_pacing(power)
             except Exception as _e:  # noqa: BLE001 — pacing never costs a cycle
                 # (#762 pattern) a feature that dies silently every cycle is
                 # a dead sensor with no explanation — warn ONCE per distinct
@@ -6408,7 +6439,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             return learner.watts_for_amps(cid, phases, amps, nominal)
         return float(amps) * self._ev_watts_per_amp(cid, cfg)
 
-    async def _run_charge_pacing(self) -> None:
+    async def _run_charge_pacing(self, power=None) -> None:
         """(#820) One cycle of charge pacing: decide, maybe write, publish."""
         from .charge_pacing import ChargePacingWriter, paced_charge_cap_w
         if getattr(self, "_charge_pacing_writer", None) is None:
@@ -6422,11 +6453,33 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             self._charge_pacing_last_shape = _shape
             _LOGGER.info("charge pacing tick: %d day slot(s), capacity %.1f kWh",
                          *_shape)
+        # THIS cycle's reading. ``self.data`` is HA's DataUpdateCoordinator
+        # attribute and is reassigned only AFTER _async_update_data returns,
+        # while this runs inside it — so reading it sized the day from the
+        # PREVIOUS cycle, and from the initial dataclass's 0.0 on the first
+        # cycle after every restart. 0 % reads as "empty, fill fast", the
+        # exact opposite of pacing (#820, found on review).
         soc = None
-        try:
-            soc = float(self.data.get("battery_soc"))
-        except (TypeError, ValueError):
-            soc = None
+        if power is not None:
+            # ``battery_soc`` is 0.0 when the SOC sensor is OFFLINE — the
+            # dataclass carries no sentinel, only the twin flag. Reading the
+            # number without the flag would reintroduce, one layer along, the
+            # very fault this argument was added to remove: a dark sensor
+            # reading as "empty, fill fast". None means "unknown", and
+            # paced_charge_cap_w declines to pace on unknown.
+            if not getattr(power, "battery_soc_unavailable", False):
+                raw = getattr(power, "battery_soc", None)
+                if raw is not None:
+                    try:
+                        soc = float(raw)
+                    except (TypeError, ValueError):
+                        soc = None
+        elif self.data:
+            # Bare callers (older paths, tests) keep the published value.
+            try:
+                soc = float(self.data.get("battery_soc"))
+            except (TypeError, ValueError):
+                soc = None
         pe = getattr(self, "_planning_evidence", {}) or {}
         trusted = pe.get("forecast_trust_d1") is not None
         enabled = bool(self.config.get("battery_charge_pacing_enabled", False))
@@ -6455,6 +6508,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             self.hass, entity, cap, observer=self._observer_mode)
         self._charge_pacing_state = {
             "enabled": enabled,
+            # The SOC this decision was actually taken on. Published because
+            # it is the input that determines the cap, and because it is the
+            # value that used to be a cycle stale (and 0.0 on the first cycle
+            # after a restart) with nothing on the surface to show it (#820).
+            "soc": soc,
             "cap_w": decision.cap_w if decision else None,
             "reason": decision.reason if decision else (
                 "pacing idle — outside daylight or no forecast"
@@ -9562,6 +9620,65 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         )
         return max(0, daily_target - consumed)
 
+    def _compute_peak_slot_allowance(self, power) -> None:
+        """(#864) The slot-budget allowance — the PREVENTIVE peak bound.
+
+        The tracker integrates grid import over the current 15-minute clock
+        slot; the allowance is what the rest of the slot may average so the
+        slot lands on target. ``None`` means "no cap", which ``decide`` reads
+        as no cap at all.
+
+        That is why this cannot fail quietly. ``None`` is ALSO what an
+        unlimited install publishes when the Control-tab slider sits at MAX
+        (#717/#830 — one off-switch, no second toggle), so a bug in
+        ``slot_allowed_import_w`` or ``PeakSlotTracker`` produced a state
+        byte-for-byte identical to the user having switched the guard off:
+        a live control decision, on the feature framed as a security layer
+        above every device, with no log line at any level. Found by an audit
+        of the decision path's broad handlers, the day after the guard
+        shipped.
+
+        The old handler was half right — the guard must not kill a cycle, and
+        it still doesn't. What it may not do is VANISH without saying so, so
+        the failure is now loud and attributable, the way the #5090 NameError
+        incident taught this file to treat its own bugs.
+
+        The exception list is the shape of a CODING error (a wrong attribute,
+        a bad conversion, a division by an empty slot). Anything outside it
+        is not something this guard knows how to survive and belongs to the
+        cycle's own circuit breaker.
+        """
+        allowed = None
+        try:
+            from .peak_guard import PeakSlotTracker, slot_allowed_import_w
+            if getattr(self, "_peak_slot_tracker", None) is None:
+                self._peak_slot_tracker = PeakSlotTracker()
+            import homeassistant.util.dt as _dt
+            self._peak_slot_tracker.update(
+                _dt.now(), float(getattr(power, "grid_import_power", 0.0) or 0.0))
+            _lm = self._load_manager
+            # The off-switch is the EXISTING one: the Control-tab slider's
+            # MAX notch sets peak_limit_unlimited atomically (#717), and an
+            # unlimited install computes no allowance — one mechanism, no
+            # second toggle (#830: options are outsourced thinking).
+            if (_lm is not None
+                    and not getattr(_lm, "_peak_unlimited", True)):
+                allowed = slot_allowed_import_w(
+                    float(getattr(_lm, "_target_peak_limit", 0.0) or 0.0),
+                    self._peak_slot_tracker.imported_kwh,
+                    self._peak_slot_tracker.elapsed_s,
+                )
+        except (AttributeError, TypeError, ValueError,
+                ZeroDivisionError, ImportError):
+            _LOGGER.warning(
+                "Peak slot guard FAILED this cycle — the 15-minute peak cap "
+                "is not being applied, and this is NOT the slider's MAX "
+                "off-switch. Charging offers are uncapped until it recovers "
+                "(#864).", exc_info=True,
+            )
+            allowed = None
+        self._peak_slot_allowed_w = allowed
+
     def _build_fleet_cycle_state(
         self, power: PowerReadings, energy: Any,
     ) -> "FleetCycleState":
@@ -9647,38 +9764,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                           or "normal").lower()
 
         # (#864) The slot-budget allowance — the PREVENTIVE peak bound.
-        # The tracker integrates grid import over the current 15-min clock
-        # slot; the allowance is what the rest of the slot may average so
-        # the slot lands on target. None when no limit is configured.
-        _slot_allowed = None
-        try:
-            from .peak_guard import PeakSlotTracker, slot_allowed_import_w
-            if getattr(self, "_peak_slot_tracker", None) is None:
-                self._peak_slot_tracker = PeakSlotTracker()
-            import homeassistant.util.dt as _dt
-            self._peak_slot_tracker.update(
-                _dt.now(), float(getattr(power, "grid_import_power", 0.0) or 0.0))
-            _lm = self._load_manager
-            # The off-switch is the EXISTING one: the Control-tab slider's
-            # MAX notch sets peak_limit_unlimited atomically (#717), and an
-            # unlimited install computes no allowance — one mechanism, no
-            # second toggle (#830: options are outsourced thinking).
-            if (_lm is not None
-                    and not getattr(_lm, "_peak_unlimited", True)):
-                _slot_allowed = slot_allowed_import_w(
-                    float(getattr(_lm, "_target_peak_limit", 0.0) or 0.0),
-                    self._peak_slot_tracker.imported_kwh,
-                    self._peak_slot_tracker.elapsed_s,
-                )
-        except Exception:  # noqa: BLE001 — the guard must never kill a cycle
-            _slot_allowed = None
-        self._peak_slot_allowed_w = _slot_allowed
+        self._compute_peak_slot_allowance(power)
 
         return FleetCycleState(
             power=power,
             config=self.config,
             peak_state=_peak_state,
-            peak_slot_allowed_w=_slot_allowed,
+            peak_slot_allowed_w=self._peak_slot_allowed_w,
+            peak_committed_w=float(
+                getattr(self, "_peak_committed_w_per_cycle", 0.0) or 0.0),
             is_night=self.time_manager.is_night_mode(),
             tariff_level=tariff_level,
             forecast_remaining_kwh=float(forecast_remaining),
@@ -11140,7 +11234,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 _recs = (tracker.sealed() if callable(tracker.sealed)
                          else tracker.sealed)
             cap = measured_capacity(_recs)
-        except Exception:  # noqa: BLE001
+        except (AttributeError, TypeError, ValueError) as err:
+            # NARROWED and LOUD (audit, 30.08). The bug above was caught by
+            # a bare ``except Exception`` that turned it into "no verdict
+            # yet", and the card read "Learning · 7 / 5 Nights" for months
+            # while the verdict silently never resolved. Leaving the same
+            # handler in place ten lines under its own postmortem would keep
+            # the next instance just as quiet — and a recurrence is not
+            # cosmetic: ``usable_kwh`` falls back to the NAMEPLATE, which
+            # spendable_budget's docstring calls failing in the dangerous
+            # direction, selling energy the pack does not have.
+            _LOGGER.warning(
+                "Battery capacity verdict FAILED — falling back to the "
+                "configured nameplate, which sizes every budget against a "
+                "pack that may not exist (#778/#873): %s", err, exc_info=True,
+            )
             cap = None
 
         nameplate = self.config.get("battery_capacity_kwh")
@@ -11155,7 +11263,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         #   refill    — tomorrow's forecast AFTER the house and committed
         #               demands, trust-scaled per horizon, never the raw scalar.
         from .measured_capacity import expected_overnight_need
-        from .refill_estimate import estimate_refill
+        from .refill_estimate import (
+            committed_ev_demand_kwh,
+            estimate_refill,
+        )
         from .spendable_budget import spendable_budget
 
         # `sealed` is a METHOD on BatteryNightTracker, not a property — reading
@@ -11186,7 +11297,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         refill = estimate_refill(
             getattr(forecast_data, "forecast_tomorrow_kwh", None),
             house_tomorrow_kwh=need_kwh,
-            committed_demand_kwh=self.config.get("daily_ev_target") or 0.0,
+            # (#778) The FLEET's claim, not one global key — see
+            # committed_ev_demand_kwh. A multi-charger install used to commit
+            # one car's worth of demand for the whole fleet, overstating what
+            # tomorrow refills and therefore what tonight may spend.
+            committed_demand_kwh=committed_ev_demand_kwh(self.config),
             pack_headroom_kwh=headroom,
             trust=led.trust(1),
         )

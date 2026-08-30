@@ -57,6 +57,56 @@ def _f(value) -> Optional[float]:
     return f if f == f else None
 
 
+#: Below this a booked charge is a rounding crumb, not a claim. Mirrors the
+#: floor ``_compose_tomorrow_preview`` already applies to the same fact.
+_MIN_CLAIM_KWH = 0.05
+
+
+def committed_ev_demand_kwh(config) -> float:
+    """How much of tomorrow's sun the CARS have already claimed.
+
+    (#778) ``estimate_refill`` must count the refill AFTER tomorrow's claims
+    — Guido pinned that before the arc existed: *"will it refill" is not a
+    scalar forecast question; the morning solar is also claimed by tomorrow's
+    packed EV blocks and loads.*
+
+    The budget used to read the single global ``daily_ev_target``. On a
+    multi-charger install that is one car's worth of demand standing in for
+    the fleet's: committed demand undercounted, so the surviving surplus
+    overstated, so the refill overstated, so ``battery_spendable_kwh``
+    overstated — and that number gates the battery→EV assist. It fails in
+    the dangerous direction, spending energy tomorrow will not put back.
+
+    The precedence here is deliberately the SAME as
+    ``_compose_tomorrow_preview``'s (a charger's own target, else the global)
+    because the two are reading one fact, and one fact read two ways is the
+    drift this arc keeps closing.
+
+    Found by mutation testing: replacing the argument with a hardcoded 0.0
+    left all 408 tests of this arc green, because no fixture in the suite had
+    ever configured more than one charger.
+    """
+    cfg = config or {}
+    try:
+        chargers = list(cfg.get("ev_chargers") or [])
+    except (AttributeError, TypeError):
+        return 0.0
+    fallback = _f(cfg.get("daily_ev_target")) or 0.0
+    if not chargers:
+        # A legacy single-charger install has no list at all.
+        return max(0.0, fallback) if fallback > _MIN_CLAIM_KWH else 0.0
+    total = 0.0
+    for entry in chargers:
+        if not isinstance(entry, dict):
+            continue
+        target = _f(entry.get("daily_ev_target"))
+        if target is None:
+            target = fallback
+        if target is not None and target > _MIN_CLAIM_KWH:
+            total += target
+    return round(total, 3)
+
+
 def dawn_headroom_kwh(usable_capacity_kwh, soc_pct,
                       overnight_need_kwh=None) -> Optional[float]:
     """How much tomorrow's sun the pack can actually absorb.

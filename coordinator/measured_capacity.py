@@ -227,6 +227,24 @@ def expected_overnight_need(
         d = _f(rec.get("drain_kwh"))
         if d is None or d < 0:
             continue
+        # (#778) A night the GRID finished is censored DOWNWARD: the battery
+        # hit reserve, the house kept drawing, and ``drain_kwh`` records only
+        # the battery's share. battery_night.py's docstring says so outright
+        # — "the budget's consumer must treat such drains as floors" — and
+        # this consumer did not, so exactly the nights that needed the most
+        # recorded the smallest and dragged the p85 threshold DOWN. The
+        # percentile meant to protect the biggest nights was being lowered
+        # by them.
+        #
+        # No special case is needed: ``drain_kwh`` integrates
+        # battery_to_home_w and ``night_grid_kwh`` integrates grid_to_home_w,
+        # both home-directed with the EV excluded, so their sum is the
+        # house's actual overnight need on EVERY night. On an uncensored
+        # night the grid term is ~0 and this is the drain, unchanged.
+        # Records written before the field existed simply contribute 0.
+        g = _f(rec.get("night_grid_kwh"))
+        if g is not None and g > 0:
+            d += g
         drains.append(d)
     if len(drains) < MIN_NEED_SAMPLES:
         return None

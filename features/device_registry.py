@@ -2154,6 +2154,15 @@ class UnifiedDeviceRegistry:
                 if obs is True or (obs is None and surplus_device.is_active):
                     if getattr(surplus_device, "_sem_commanded", False):
                         # SEM issued the ON: opt-out undoes SEM's own action.
+                        # Clear the UNIFIED clock (#644) — the attribute
+                        # ``deactivate()`` actually gates on. This used to
+                        # clear ``_status.last_activated``, a DIFFERENT
+                        # attribute, so the comment above ("a deliberate
+                        # command beats flicker protection") was not true: a
+                        # Mode→Off inside ``min_on_seconds`` returned at the
+                        # anti-flicker guard and left the load ON, with no
+                        # error and no log.
+                        surplus_device._last_activated = None
                         if getattr(surplus_device, "_status", None) is not None:
                             surplus_device._status.last_activated = None
                         await surplus_device.deactivate()

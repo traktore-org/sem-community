@@ -229,3 +229,52 @@ class TestTheCycleActuallyCallsIt:
             "the main cycle never called _record_completed_month — the "
             "recorder would be as dead as record_monthly was"
         )
+
+
+class TestAGapBetweenYearsIsNotOneYear:
+    """Found on review (30.08.2026), and live for the first time BECAUSE of
+    the fix above — the recorder that finally fills this history is new.
+
+    ``_estimate_degradation`` compares consecutive same-month records sorted
+    by year and treats every pair as exactly one year apart. It never checks
+    ``curr.year - prev.year``. A missing month — an outage, a gap, a skipped
+    zero-production month — makes a multi-year drift price as a single
+    year's rate: a 3-year gap with a real 1.5 %/year decline computes as one
+    4.5 % "yearly change", a 3x overstatement that the 0-5 % clamp hides
+    rather than fixes.
+
+    Degradation is a number a person may spend money on (a panel is failing;
+    call the installer). It must not treat a data gap as decay.
+    """
+
+    def test_a_three_year_gap_is_not_priced_as_one_year(self):
+        a = _analyzer()
+        # 2022 and 2025 only — a three-year gap, ~1.5 %/yr real decline
+        for m in range(1, 13):
+            a.record_monthly(2022, m, 300.0)
+        for m in range(1, 13):
+            a.record_monthly(2025, m, 300.0 * (0.985 ** 3))
+        rate = a._estimate_degradation()
+        assert rate == pytest.approx(1.5, abs=0.3), (
+            f"a 3-year gap priced as {rate:.1f} %/yr — the decline was real "
+            "but it took three years, and reporting it as annual triples it"
+        )
+
+    def test_consecutive_years_are_unchanged(self):
+        a = _analyzer()
+        for m in range(1, 13):
+            a.record_monthly(2024, m, 300.0)
+        for m in range(1, 13):
+            a.record_monthly(2025, m, 285.0)
+        assert a._estimate_degradation() == pytest.approx(5.0, abs=0.2)
+
+    def test_two_records_in_the_same_year_are_not_a_year_apart(self):
+        """A duplicate month (a re-record after a restart) has a zero-year
+        span and must not be divided by zero or counted as a year."""
+        a = _analyzer()
+        for m in range(1, 13):
+            a.record_monthly(2024, m, 300.0)
+        a.record_monthly(2024, 6, 250.0)   # same month, same year, again
+        rate = a._estimate_degradation()
+        assert rate == rate  # not NaN
+        assert 0.0 <= rate <= 5.0

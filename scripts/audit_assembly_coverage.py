@@ -2,6 +2,12 @@
 """(#873) Which large coordinator methods do tests EXECUTE, and which do they
 only READ?
 
+NOTE: this file deliberately does NOT scan for orphaned/unwired methods.
+``tests/test_653_orphan_methods.py`` already does that, as a CI gate with a
+reviewed baseline and a specimen test — strictly better than the duplicate
+that briefly lived here, whose raw output was mostly HA-dispatched entity
+methods (``async_turn_on`` and friends) that HA core calls, not SEM.
+
 SEM guards its big orchestration methods with AST/source inspection —
 `inspect.getsource(...)` plus an `ast` walk asserting that a name is in
 scope, that a method is called and not merely referenced, that a marker is

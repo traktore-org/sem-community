@@ -687,6 +687,12 @@ class FleetContext:
     """``time_manager.is_night_mode()``."""
 
     peak_slot_allowed_w: Optional[float] = None
+    #: (#864) Slot allowance already offered to HIGHER-PRIORITY chargers
+    #: this cycle. One slot budget serves the whole house, so a second
+    #: charger must see what the first took — mirrors the solar cascade's
+    #: ``solar_committed_w``. Without it each charger claimed the entire
+    #: allowance and two landed 69 % over target on review.
+    peak_committed_w: float = 0.0
     """(#864) The PREVENTIVE peak bound: average import (W) the rest of
     the current 15-minute billing slot may carry so the slot lands on the
     target. Computed once per cycle from ``coordinator/peak_guard.py``;
@@ -855,6 +861,12 @@ class FleetCycleState:
     # (#864) the slot-budget allowance, resolved once per cycle; None when
     # no target peak limit is configured.
     peak_slot_allowed_w: Optional[float] = None
+    #: (#864) Slot allowance already offered to HIGHER-PRIORITY chargers
+    #: this cycle. One slot budget serves the whole house, so a second
+    #: charger must see what the first took — mirrors the solar cascade's
+    #: ``solar_committed_w``. Without it each charger claimed the entire
+    #: allowance and two landed 69 % over target on review.
+    peak_committed_w: float = 0.0
     # #576 — fleet-level priority-list inputs (one home battery). Threaded
     # here so every charger's view sees the same slot + command state.
     battery_priority: "Optional[int]" = None

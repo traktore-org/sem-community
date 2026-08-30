@@ -67,7 +67,7 @@ def _sealed(n: int = 40, drain: float = NIGHT_DRAIN_KWH,
 
 def evidence(*, soc, nameplate=NAMEPLATE, forecast_tomorrow=60.0,
              forecast_today=32.0, forecast_d2=None, daily_solar=20.0,
-             records=None, reserve=None) -> dict:
+             records=None, reserve=None, ev_chargers=None) -> dict:
     """Run the REAL assembly and return what it published."""
     coord = SEMCoordinator.__new__(SEMCoordinator)
     coord._storage = None
@@ -77,6 +77,11 @@ def evidence(*, soc, nameplate=NAMEPLATE, forecast_tomorrow=60.0,
     coord.config = {"battery_capacity_kwh": nameplate}
     if reserve is not None:
         coord.config["battery_reserve_soc"] = reserve
+    if ev_chargers is not None:
+        # (#778) Tomorrow's EV claims reach the budget from here. Leaving it
+        # unset is what let a mutation replace the committed-demand argument
+        # with 0.0 and keep 408 tests green.
+        coord.config["ev_chargers"] = ev_chargers
     recs = _sealed() if records is None else records
     coord._battery_night = SimpleNamespace(sealed=lambda: recs)
 

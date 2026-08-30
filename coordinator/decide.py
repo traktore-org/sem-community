@@ -910,6 +910,65 @@ MODE_STRATEGIES: Dict[str, ModeStrategy] = {
 }
 
 
+
+def clamp_to_peak_slot(result, view):
+    """(#864) Tighten a charging offer so the 15-minute slot lands on target.
+
+    FLEET-WIDE. The allowance is one budget for the whole house, so a second
+    charger must see what the first already claimed this cycle — otherwise
+    each computes the full headroom and takes it. Reproduced on review: two
+    idle 3-phase chargers, a 6000 W target and a 500 W baseline, each landing
+    7 A for a combined 10160 W — 69 % over the target the guard defends.
+
+    ``peak_committed_w`` is the running total the per-charger loop
+    accumulates, exactly as ``solar_committed_w`` already does for the solar
+    cascade ("lower-priority chargers see only the surplus this one didn't
+    take"). One budget, one accumulator, same shape.
+
+    Never a proactive idle: the clamp floors at the effective minimum, because
+    stopping cars on a transient is the flap this project spent months
+    killing. The hard stop stays with #747's EMERGENCY, which runs after and
+    wins.
+    """
+    _allowed = getattr(view.fleet, "peak_slot_allowed_w", None)
+    if _allowed is None or result.intent not in (
+            ChargerIntent.CHARGE_AT_AMPS, ChargerIntent.CHARGE_MAX):
+        return result
+    # grid_import includes THIS charger's current draw — credit it back, or
+    # the guard ratchets its own offer to zero cycle over cycle. Only the
+    # grid-fed share can be credited (solar-covered draw never touched the
+    # meter).
+    _this_w = float(getattr(view.power, "power_w", 0.0) or 0.0)
+    _others_w = max(0.0, float(view.fleet.grid_import_w)
+                    - min(_this_w, float(view.fleet.grid_import_w)))
+    # …and what higher-priority chargers have ALREADY been offered this
+    # cycle but have not yet drawn, so it cannot appear in grid_import.
+    _committed_w = max(0.0, float(
+        getattr(view.fleet, "peak_committed_w", 0.0) or 0.0))
+    _ev_allow_w = max(0.0, float(_allowed) - _others_w - _committed_w)
+    _min_a = effective_min_amps(dict(view.config), 6)
+    _wpa = (float(view.config.get("ev_phases") or 3)
+            * float(view.config.get("ev_voltage") or 230))
+    _max_a = int(view.config.get("ev_max_current")
+                 or DEFAULT_MAX_CHARGING_CURRENT)
+    _cap_a = max(_min_a, amps_that_fit(
+        view.wpa_table, _ev_allow_w, _wpa, _max_a))
+    # Speak only when it BITES: an allowance at or above the hardware
+    # maximum is not a clamp, and a reason claiming one would mislead the
+    # person reading the observer surface (seen live on .175).
+    if _cap_a < _max_a and (
+            result.intent is ChargerIntent.CHARGE_MAX
+            or result.commanded_amps > _cap_a):
+        return replace(
+            result, intent=ChargerIntent.CHARGE_AT_AMPS,
+            commanded_amps=_cap_a,
+            budget_w=predict_watts(view.wpa_table, _cap_a, _wpa),
+            reason=(f"{result.reason} [peak slot guard: "
+                    f"{_ev_allow_w:.0f}W headroom → {_cap_a}A]"),
+        )
+    return result
+
+
 def decide(view: ChargerView) -> ChargerDecision:
     """Compute the per-charger per-cycle decision.
 
@@ -973,37 +1032,7 @@ def decide(view: ChargerView) -> ChargerDecision:
     # the effective minimum, never a proactive idle: stopping cars on a
     # transient is the flap this project spent months killing, and the
     # hard stop stays with #747's EMERGENCY, which runs after and wins.
-    _allowed = getattr(view.fleet, "peak_slot_allowed_w", None)
-    if _allowed is not None and result.intent in (
-            ChargerIntent.CHARGE_AT_AMPS, ChargerIntent.CHARGE_MAX):
-        # grid_import includes THIS charger's current draw — credit it
-        # back, or the guard ratchets its own offer to zero cycle over
-        # cycle. Only the grid-fed share can be credited (solar-covered
-        # draw never touched the meter).
-        _this_w = float(getattr(view.power, "power_w", 0.0) or 0.0)
-        _others_w = max(0.0, float(view.fleet.grid_import_w)
-                        - min(_this_w, float(view.fleet.grid_import_w)))
-        _ev_allow_w = max(0.0, float(_allowed) - _others_w)
-        _min_a = effective_min_amps(dict(view.config), 6)
-        _wpa = (float(view.config.get("ev_phases") or 3)
-                * float(view.config.get("ev_voltage") or 230))
-        _max_a = int(view.config.get("ev_max_current")
-                     or DEFAULT_MAX_CHARGING_CURRENT)
-        _cap_a = max(_min_a, amps_that_fit(
-            view.wpa_table, _ev_allow_w, _wpa, _max_a))
-        # Speak only when it BITES: an allowance at or above the hardware
-        # maximum is not a clamp, and a reason claiming one would mislead
-        # the person reading the observer surface (seen live on .175).
-        if _cap_a < _max_a and (
-                result.intent is ChargerIntent.CHARGE_MAX
-                or result.commanded_amps > _cap_a):
-            result = replace(
-                result, intent=ChargerIntent.CHARGE_AT_AMPS,
-                commanded_amps=_cap_a,
-                budget_w=predict_watts(view.wpa_table, _cap_a, _wpa),
-                reason=(f"{result.reason} [peak slot guard: "
-                        f"{_ev_allow_w:.0f}W headroom → {_cap_a}A]"),
-            )
+    result = clamp_to_peak_slot(result, view)
 
     # (#747) PEAK SHED is a guarantee, senior to every mode — always_max
     # included: its "grid backfill expected" promise ends where the house's
