@@ -11158,12 +11158,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         need_kwh = expected_overnight_need(sealed)
         soc_now = getattr(power, "battery_soc", None)
 
-        headroom = None
-        if usable_kwh and soc_now is not None:
-            try:
-                headroom = max(0.0, usable_kwh * (100.0 - float(soc_now)) / 100.0)
-            except (TypeError, ValueError):
-                headroom = None
+        # (#778, found live on .175 30.08) The room that answers "will
+        # tomorrow put the spend back" is the room at DAWN, after the
+        # overnight draw — not the room at sunset. Measuring it now zeroed
+        # the refill for a FULL pack, which is the one case where spending
+        # is provably free, and made spendable non-monotonic in SOC (95 %
+        # spent 0.75 kWh, 100 % spent 0.00). One expression, in one place,
+        # with its own tests: see refill_estimate.dawn_headroom_kwh.
+        from .refill_estimate import dawn_headroom_kwh
+        headroom = dawn_headroom_kwh(usable_kwh, soc_now, need_kwh)
 
         refill = estimate_refill(
             getattr(forecast_data, "forecast_tomorrow_kwh", None),
