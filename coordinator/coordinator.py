@@ -9637,11 +9637,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             self._peak_slot_tracker.update(
                 _dt.now(), float(getattr(power, "grid_import_power", 0.0) or 0.0))
             _lm = self._load_manager
-            # (#864) the guard's own off-switch: peak_slot_guard_enabled
-            # (default ON — it is a security layer). Off → allowance None →
-            # every consumer passes through, reactive shed still stands.
-            _guard_on = bool(self.config.get("peak_slot_guard_enabled", True))
-            if (_guard_on and _lm is not None
+            # The off-switch is the EXISTING one: the Control-tab slider's
+            # MAX notch sets peak_limit_unlimited atomically (#717), and an
+            # unlimited install computes no allowance — one mechanism, no
+            # second toggle (#830: options are outsourced thinking).
+            if (_lm is not None
                     and not getattr(_lm, "_peak_unlimited", True)):
                 _slot_allowed = slot_allowed_import_w(
                     float(getattr(_lm, "_target_peak_limit", 0.0) or 0.0),

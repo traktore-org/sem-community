@@ -28,10 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   feature**: the same slot allowance bounds the battery's cheap-hours grid
   charging and defers a cheap-hours load start that cannot fit the slot's
   remaining budget — the limit lives at the power meter, so everything SEM
-  commands answers to it. One switch (*Enforce the limit within each
-  15-minute slot*, on by default next to the peak settings) turns the
-  preventive guard off for those who want only the reactive behaviour.
-  Installs without a target peak limit are byte-identical. The live numbers
+  commands answers to it. The off-switch is the one that already exists:
+  the Control tab's Target Limit slider at its MAX notch turns peak
+  management off entirely, guard included — no new option. Installs without a target peak limit are byte-identical. The live numbers
   (`peak_slot_allowed_w`, `peak_slot_used_kwh`) ride the load-management
   surface.
 

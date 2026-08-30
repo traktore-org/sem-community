@@ -304,34 +304,27 @@ class TestCheapHoursActivationIsGuarded:
         d.activate.assert_awaited()
 
 
-class TestTheOffSwitch:
-    """The guard's own opt-out (Guido, 30.08): one config key, read where
-    the allowance is computed, so OFF disarms every consumer at once —
-    decide's EV bound, the battery charge clamp, the cheap-hours gate —
-    while the reactive shedding stands untouched."""
+class TestTheOffSwitchIsTheSlider:
+    """No second toggle (Guido, 30.08: the Control-tab slider's MAX notch
+    already turns peak management off — #717 sets peak_limit_unlimited
+    atomically). The guard reads THAT: an unlimited install computes no
+    allowance, every consumer passes through. One mechanism; a dedicated
+    guard toggle would be exactly the #830 option sprawl."""
 
-    def test_the_flow_offers_it_default_on(self):
+    def test_no_dedicated_toggle_exists(self):
         import pathlib
-        src = (pathlib.Path(__file__).resolve().parent.parent
-               / "config_flow.py").read_text()
-        assert '"peak_slot_guard_enabled": _c("peak_slot_guard_enabled", True)' in src
+        root = pathlib.Path(__file__).resolve().parent.parent
+        for f in ("config_flow.py", "strings.json"):
+            assert "peak_slot_guard_enabled" not in (root / f).read_text(), f
 
-    def test_the_coordinator_reads_it_at_the_one_place(self):
+    def test_unlimited_gates_the_allowance(self):
         import inspect
         from custom_components.solar_energy_management.coordinator import (
             coordinator as cm,
         )
         src = inspect.getsource(cm)
-        i = src.index('peak_slot_guard_enabled')
-        window = src[i - 400:i + 400]
-        assert "_peak_slot_allowed_w" in window or "slot_allowed" in window, (
-            "the switch must gate the ALLOWANCE computation — one switch, "
-            "every consumer"
+        i = src.index("slot_allowed_import_w(")
+        window = src[i - 700:i]
+        assert "_peak_unlimited" in window, (
+            "the slider's unlimited flag must be the one off-mechanism"
         )
-
-    def test_strings_describe_it(self):
-        import json, pathlib
-        root = pathlib.Path(__file__).resolve().parent.parent
-        d = json.loads((root / "strings.json").read_text())
-        txt = json.dumps(d)
-        assert "peak_slot_guard_enabled" in txt

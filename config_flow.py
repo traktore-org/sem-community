@@ -1124,7 +1124,6 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "name",
     "observer_mode",
     "peak_limit_unlimited",
-    "peak_slot_guard_enabled",
     "phase_guard_enabled",
     "phase_guard_enforcement_enabled",
     "phase_guard_notifications_enabled",
@@ -2560,7 +2559,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
         data_defaults = {
             "load_management_enabled": _c("load_management_enabled", DEFAULT_LOAD_MANAGEMENT_ENABLED),
-            "peak_slot_guard_enabled": _c("peak_slot_guard_enabled", True),
             "target_peak_limit": _c("target_peak_limit", DEFAULT_TARGET_PEAK_LIMIT),
             "warning_peak_level": _c("warning_peak_level", DEFAULT_WARNING_PEAK_LEVEL),
             "emergency_peak_level": _c("emergency_peak_level", DEFAULT_EMERGENCY_PEAK_LEVEL),
@@ -2584,15 +2582,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Required(
                     "peak_limit_unlimited",
                     default=data_defaults["peak_limit_unlimited"],
-                ): selector.BooleanSelector(),
-                # (#864) The preventive slot guard's own off-switch. ON by
-                # default — it is a security layer above every mode of every
-                # device (the ceiling lives at the power meter). Off keeps
-                # the reactive shedding but lets commands run unclamped
-                # inside a slot, i.e. the pre-#864 behaviour.
-                vol.Required(
-                    "peak_slot_guard_enabled",
-                    default=data_defaults["peak_slot_guard_enabled"],
                 ): selector.BooleanSelector(),
                 # (#717) All three share one range and a box input — see the
                 # install step for why a slider is wrong here. They used to

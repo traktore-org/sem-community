@@ -5,7 +5,7 @@
     "reason; removing one is the point of the issue.",
     "Regenerate:  python3 scripts/audit_options.py --baseline"
   ],
-  "total": 177,
+  "total": 176,
   "first_run_fields": 10,
   "first_run_steps": 3,
   "first_run_fields_best": 10,
@@ -122,7 +122,6 @@
     "name",
     "observer_mode",
     "peak_limit_unlimited",
-    "peak_slot_guard_enabled",
     "phase_guard_enforcement_enabled",
     "phase_guard_grid_l1_current_entity",
     "phase_guard_grid_l1_power_entity",
