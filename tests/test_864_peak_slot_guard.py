@@ -328,3 +328,21 @@ class TestTheOffSwitchIsTheSlider:
         assert "_peak_unlimited" in window, (
             "the slider's unlimited flag must be the one off-mechanism"
         )
+
+
+class TestTheNumbersReachTheSurface:
+    """Caught live on .175: the dataclass had the fields, the explicit
+    to_dict key list did not, so diagnostics showed nothing — the #819
+    'inert half' trap. Pinned at the dict, where it bit."""
+
+    def test_to_dict_carries_the_guard_numbers(self):
+        from custom_components.solar_energy_management.coordinator.types import (
+            LoadManagementData,
+        )
+        import inspect
+        from custom_components.solar_energy_management.coordinator import types
+        src = inspect.getsource(types)
+        assert '"peak_slot_allowed_w": self.load_management.peak_slot_allowed_w' in src
+        assert '"peak_slot_used_kwh": self.load_management.peak_slot_used_kwh' in src
+        lm = LoadManagementData()
+        assert lm.peak_slot_allowed_w is None and lm.peak_slot_used_kwh is None
