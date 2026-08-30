@@ -13,6 +13,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🛡️ **The peak limit is now enforced before the damage, not after** (#864):
+  demand tariffs bill the average import of each fixed 15-minute slot, and
+  SEM's defence used to be purely reactive — it shed loads once the rolling
+  average crossed the target, which is the moment the billed peak is already
+  set. Live proof of the gap: an EV charged at 9.9 kW under a 6.0 kW target
+  with the state reading *normal* throughout. SEM now tracks the current
+  billing slot's import budget and bounds the EV offer by the remaining
+  headroom **before writing it** — in every mode, `always_max` included.
+  Early-slot bursts stay allowed (the average genuinely absorbs them), the
+  offer floors at the minimum current rather than stopping the car on a
+  transient, and the reactive shed/emergency machinery is untouched and
+  senior. And it is a **security layer above every device, not an EV
+  feature**: the same slot allowance bounds the battery's cheap-hours grid
+  charging and defers a cheap-hours load start that cannot fit the slot's
+  remaining budget — the limit lives at the power meter, so everything SEM
+  commands answers to it. One switch (*Enforce the limit within each
+  15-minute slot*, on by default next to the peak settings) turns the
+  preventive guard off for those who want only the reactive behaviour.
+  Installs without a target peak limit are byte-identical. The live numbers
+  (`peak_slot_allowed_w`, `peak_slot_used_kwh`) ride the load-management
+  surface.
+
+- 🔬 **The forecast-spend wiring is now proven by execution, not by reading
+  the source** (#861): the flag-off case runs the real battery pipeline and
+  asserts the spend evaluator is never consulted; the flag-on discriminator
+  proves the same harness reaches it with the planning evidence unmangled.
+  Alongside: the battery-night backfill's report key said `days` while
+  carrying hours — renamed, and the notification content is pinned with
+  real values.
+
 - 👀 **A new install observes first.** SEM now starts in observer mode: it
   reads your system, builds the dashboard and publishes the decisions it
   *would* make, without sending a single command to your hardware. When those

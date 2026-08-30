@@ -5256,6 +5256,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # actuation switch is on AND tonight's plan covers the load.
                 plan_windows=self._energy_plan_load_windows(
                     self._surplus_controller.get_devices_sorted()),
+                # (#864) the security layer's live slot allowance.
+                peak_slot_allowed_w=getattr(self, "_peak_slot_allowed_w", None),
+                grid_import_w=float(getattr(
+                    power, "grid_import_power", 0.0) or 0.0),
             )
             surplus_data.surplus_total_w = allocation.total_surplus_w
             surplus_data.surplus_distributable_w = allocation.distributable_surplus_w
@@ -9620,10 +9624,39 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         _peak_state = str(getattr(_peak_state, "value", _peak_state)
                           or "normal").lower()
 
+        # (#864) The slot-budget allowance — the PREVENTIVE peak bound.
+        # The tracker integrates grid import over the current 15-min clock
+        # slot; the allowance is what the rest of the slot may average so
+        # the slot lands on target. None when no limit is configured.
+        _slot_allowed = None
+        try:
+            from .peak_guard import PeakSlotTracker, slot_allowed_import_w
+            if getattr(self, "_peak_slot_tracker", None) is None:
+                self._peak_slot_tracker = PeakSlotTracker()
+            import homeassistant.util.dt as _dt
+            self._peak_slot_tracker.update(
+                _dt.now(), float(getattr(power, "grid_import_power", 0.0) or 0.0))
+            _lm = self._load_manager
+            # (#864) the guard's own off-switch: peak_slot_guard_enabled
+            # (default ON — it is a security layer). Off → allowance None →
+            # every consumer passes through, reactive shed still stands.
+            _guard_on = bool(self.config.get("peak_slot_guard_enabled", True))
+            if (_guard_on and _lm is not None
+                    and not getattr(_lm, "_peak_unlimited", True)):
+                _slot_allowed = slot_allowed_import_w(
+                    float(getattr(_lm, "_target_peak_limit", 0.0) or 0.0),
+                    self._peak_slot_tracker.imported_kwh,
+                    self._peak_slot_tracker.elapsed_s,
+                )
+        except Exception:  # noqa: BLE001 — the guard must never kill a cycle
+            _slot_allowed = None
+        self._peak_slot_allowed_w = _slot_allowed
+
         return FleetCycleState(
             power=power,
             config=self.config,
             peak_state=_peak_state,
+            peak_slot_allowed_w=_slot_allowed,
             is_night=self.time_manager.is_night_mode(),
             tariff_level=tariff_level,
             forecast_remaining_kwh=float(forecast_remaining),
@@ -12021,6 +12054,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # Get consecutive peak values (15min rolling average)
                 lm_data.consecutive_peak_15min = lm_info.get("consecutive_peak_15min", current_import_kw)
                 lm_data.monthly_consecutive_peak = lm_info.get("monthly_consecutive_peak", 0.0)
+
+                # (#864) The preventive slot guard's live numbers — a guard
+                # invisible in diagnostics is undiagnosable (the #819
+                # inert-half lesson). None when no limit is configured.
+                lm_data.peak_slot_allowed_w = getattr(
+                    self, "_peak_slot_allowed_w", None)
+                _tr = getattr(self, "_peak_slot_tracker", None)
+                lm_data.peak_slot_used_kwh = (
+                    round(_tr.imported_kwh, 3) if _tr is not None else None)
 
                 # (#657) The device table itself. Every other field of
                 # lm_info was copied across; this one wasn't, so the load

@@ -992,6 +992,11 @@ class SurplusController:
         # (#638 G4) device_id → True/False window verdicts from the joint
         # energy plan; None/empty = no trusted plan → today's behaviour.
         plan_windows: Optional[dict] = None,
+        # (#864) the live 15-min slot allowance + current import — the
+        # security layer's preventive gate on grid-backed force starts.
+        # None allowance = no ceiling configured / guard off.
+        peak_slot_allowed_w: Optional[float] = None,
+        grid_import_w: float = 0.0,
     ) -> SurplusAllocationData:
         """Run the surplus allocation algorithm.
 
@@ -1573,6 +1578,26 @@ class SurplusController:
                 # bypassing the reconciler's user-respect cooldown (and the
                 # device min_off anti-flicker).
                 if device.needs_offpeak_activation and device.can_activate():
+                    # (#864) The security layer: a cheap-hours GRID force
+                    # must FIT the billing slot before it starts. Price
+                    # says go; the meter's budget says how much. Refusing
+                    # here is preventive — the load simply waits for a
+                    # slot with headroom (or the reactive shed, which
+                    # stays senior for what SEM did not command).
+                    from .peak_guard import clamp_import_command
+                    _fit_w, _clamped = clamp_import_command(
+                        float(device.min_power_threshold or 0.0),
+                        peak_slot_allowed_w, grid_import_w)
+                    if _clamped and _fit_w < float(device.min_power_threshold or 0.0):
+                        log_on_change(
+                            _LOGGER, f"peakslot:{device.device_id}",
+                            logging.INFO,
+                            "%s: cheap-hours start deferred — needs %.0fW, "
+                            "the billing slot has %.0fW headroom (#864)",
+                            device.name,
+                            float(device.min_power_threshold or 0.0), _fit_w,
+                        )
+                        continue
                     consumed = await _activate_owned(device, device.min_power_threshold)
                     if consumed > 0:
                         device._offpeak_forced = True

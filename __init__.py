@@ -2887,7 +2887,7 @@ async def _async_register_services(
             "Service backfill_battery_nights: %d hour(s) of history from %s; "
             "recovered %d night(s) (%d trainable); history now %d night(s), "
             "%d usable",
-            report.get("days_of_history", 0), report.get("statistic"),
+            report.get("hours_of_history", 0), report.get("statistic"),
             report.get("recovered", 0), report.get("trainable_recovered", 0),
             report.get("nights_total", 0), report.get("usable_total", 0),
         )
@@ -2898,7 +2898,7 @@ async def _async_register_services(
                 hass,
                 (f"Recovered {report.get('recovered', 0)} night(s) "
                  f"({report.get('trainable_recovered', 0)} trainable) from "
-                 f"{report.get('days_of_history', 0)} hour(s) of history. "
+                 f"{report.get('hours_of_history', 0)} hour(s) of history. "
                  f"Battery-night history now holds "
                  f"{report.get('nights_total', 0)} night(s), "
                  f"{report.get('usable_total', 0)} usable."),

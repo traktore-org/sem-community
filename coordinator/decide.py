@@ -917,6 +917,44 @@ def decide(view: ChargerView) -> ChargerDecision:
                 reason=f"{result.reason} [structural: {why}]",
             )
 
+    # (#864) The PREVENTIVE peak bound — the slot budget, applied to the
+    # OFFER before the wire. The reactive machine below (#747) triggers
+    # when the rolling average crosses the target, but by then the billed
+    # slot average IS the peak: the trigger condition equals the damage
+    # condition (live on PROD 29.08: 9.9 kW under a 6.0 kW target, state
+    # 'normal' throughout). This bound follows the bill's own arithmetic —
+    # what may the rest of the CURRENT 15-min slot import so the slot
+    # lands on target — and only ever tightens a charging offer. Floors at
+    # the effective minimum, never a proactive idle: stopping cars on a
+    # transient is the flap this project spent months killing, and the
+    # hard stop stays with #747's EMERGENCY, which runs after and wins.
+    _allowed = getattr(view.fleet, "peak_slot_allowed_w", None)
+    if _allowed is not None and result.intent in (
+            ChargerIntent.CHARGE_AT_AMPS, ChargerIntent.CHARGE_MAX):
+        # grid_import includes THIS charger's current draw — credit it
+        # back, or the guard ratchets its own offer to zero cycle over
+        # cycle. Only the grid-fed share can be credited (solar-covered
+        # draw never touched the meter).
+        _this_w = float(getattr(view.power, "power_w", 0.0) or 0.0)
+        _others_w = max(0.0, float(view.fleet.grid_import_w)
+                        - min(_this_w, float(view.fleet.grid_import_w)))
+        _ev_allow_w = max(0.0, float(_allowed) - _others_w)
+        _min_a = effective_min_amps(dict(view.config), 6)
+        _wpa = (float(view.config.get("ev_phases") or 3)
+                * float(view.config.get("ev_voltage") or 230))
+        _max_a = int(view.config.get("ev_max_current") or 32)
+        _cap_a = max(_min_a, amps_that_fit(
+            view.wpa_table, _ev_allow_w, _wpa, _max_a))
+        if (result.intent is ChargerIntent.CHARGE_MAX
+                or result.commanded_amps > _cap_a):
+            result = replace(
+                result, intent=ChargerIntent.CHARGE_AT_AMPS,
+                commanded_amps=_cap_a,
+                budget_w=predict_watts(view.wpa_table, _cap_a, _wpa),
+                reason=(f"{result.reason} [peak slot guard: "
+                        f"{_ev_allow_w:.0f}W headroom → {_cap_a}A]"),
+            )
+
     # (#747) PEAK SHED is a guarantee, senior to every mode — always_max
     # included: its "grid backfill expected" promise ends where the house's
     # peak defense begins. The load manager's actuation exclusion stays

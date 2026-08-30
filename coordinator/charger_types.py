@@ -686,6 +686,15 @@ class FleetContext:
     is_night: bool = False
     """``time_manager.is_night_mode()``."""
 
+    peak_slot_allowed_w: Optional[float] = None
+    """(#864) The PREVENTIVE peak bound: average import (W) the rest of
+    the current 15-minute billing slot may carry so the slot lands on the
+    target. Computed once per cycle from ``coordinator/peak_guard.py``;
+    ``None`` when no target peak limit is configured (absence of a
+    ceiling is not a ceiling of zero). decide() bounds the EV offer with
+    it BEFORE the wire — the reactive ``peak_state`` machinery stays
+    untouched and senior."""
+
     peak_budget_w: float = 5000.0
     """Total peak-import budget for the fleet (target_peak_limit).
     The multi-charger loop subtracts higher-priority chargers'
@@ -843,6 +852,9 @@ class FleetCycleState:
     forecast_remaining_kwh: float = 0.0
     # (#747) the load manager's peak posture, resolved once per cycle.
     peak_state: str = "normal"
+    # (#864) the slot-budget allowance, resolved once per cycle; None when
+    # no target peak limit is configured.
+    peak_slot_allowed_w: Optional[float] = None
     # #576 — fleet-level priority-list inputs (one home battery). Threaded
     # here so every charger's view sees the same slot + command state.
     battery_priority: "Optional[int]" = None

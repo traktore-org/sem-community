@@ -665,6 +665,9 @@ class LoadManagementData:
     controllable_devices_count: int = 0
     consecutive_peak_15min: float = 0.0  # kW
     monthly_consecutive_peak: float = 0.0  # kW
+    # (#864) the preventive slot guard's live numbers; None = no limit set.
+    peak_slot_allowed_w: Optional[float] = None
+    peak_slot_used_kwh: Optional[float] = None
     current_vs_peak_percentage: float = 0.0
     controlled_tariff_status: str = "unknown"
     load_management_recommendation: str = "none"

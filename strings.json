@@ -430,7 +430,8 @@
           "emergency_peak_level": "Emergency Peak Level (kW)",
           "vehicle_soc_entity": "Vehicle Battery SOC",
           "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "Consider full at (%)"
+          "ev_target_soc": "Consider full at (%)",
+          "peak_slot_guard_enabled": "Enforce the limit within each 15-minute slot"
         },
         "data_description": {
           "load_management_enabled": "Enable/disable SEM's automatic load-shedding to stay under your grid peak limit.",
@@ -440,7 +441,8 @@
           "emergency_peak_level": "Power level (kW) at which SEM aggressively sheds loads to avoid demand charges. Must be above the target peak limit.",
           "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
           "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh.",
-          "ev_target_soc": "SEM stops treating the car as needing charge once it reaches this. It is a definition of \"full\", not a limit on charging."
+          "ev_target_soc": "SEM stops treating the car as needing charge once it reaches this. It is a definition of \"full\", not a limit on charging.",
+          "peak_slot_guard_enabled": "Preventive guard: bounds every command SEM sends — EV offers, battery grid-charging, cheap-hour load starts — by the current billing slot's remaining budget, before the meter records a peak. Off keeps only the reactive shedding (the pre-guard behaviour)."
         }
       },
       "notifications": {
