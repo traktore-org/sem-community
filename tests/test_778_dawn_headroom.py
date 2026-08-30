@@ -99,7 +99,7 @@ class TestTheInversionIsGone:
         """The inversion, stated as the invariant it broke."""
         socs = [50.0, 60.0, 70.0, 80.0, 85.0, 90.0, 95.0, 100.0]
         vals = [_spendable(s) for s in socs]
-        for lo, hi, a, b in zip(socs, socs[1:], vals, vals[1:]):
+        for lo, hi, a, b in zip(socs, socs[1:], vals, vals[1:], strict=False):
             assert b >= a - 1e-9, (
                 f"SOC {hi} spends {b:.2f} kWh but SOC {lo} spends {a:.2f} — "
                 "a fuller pack must never be allowed to spend less"
