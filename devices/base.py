@@ -2413,9 +2413,9 @@ class CurrentControlDevice(ControllableDevice):
             # nothing left the process — so SEM must not claim a setpoint or
             # refresh the write heartbeat. ``commanded_current`` is derived
             # from ``_current_setpoint`` and the coordinator deliberately
-            # zeroes it while observing: in #536 HA-TEST's KEBA bridge
-            # automation drove the REAL charger off a stale setpoint, which
-            # is exactly what publishing the WOULD value here would restore.
+            # zeroes it while observing: in #536 a bridge automation on the
+            # test rig drove the REAL charger off a stale setpoint, which is
+            # exactly what publishing the WOULD value here would restore.
             if not getattr(self, "observer_mode", False):
                 self._current_setpoint = current
                 self._last_write_at = now  # #392: heartbeat tracker

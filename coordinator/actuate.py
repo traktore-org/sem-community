@@ -110,4 +110,15 @@ async def actuate(
     # the other what would have hit the wire.
     if observer:
         _observe(decision, adapter, controller=controller)
+        # Belt and braces. Retiring the gate above means the seam in
+        # ``ControllableDevice.send`` is now the ONLY thing between this
+        # call and somebody's real charger — .46 and .175 are wired to a
+        # real KEBA. ``send`` reads ``observer_mode`` with a getattr whose
+        # documented default is False ("a device nobody told is a device
+        # that acts"), and the flag arrives by a per-cycle push. Do not
+        # depend on that push having reached THIS device: assert the flag
+        # on the way past, at the last point that still knows.
+        _dev = getattr(adapter, "_device", None)
+        if _dev is not None:
+            _dev.observer_mode = True
     await reconciler.reconcile_and_apply(decision, adapter, power, time.monotonic())
