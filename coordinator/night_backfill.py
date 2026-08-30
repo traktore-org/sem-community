@@ -210,7 +210,7 @@ async def run_backfill(hass, tracker, config, *, days: int = 365) -> dict:
     usable = sum(1 for r in merged if r.get("trainable"))
     return {
         "statistic": discharge_id,
-        "days_of_history": len(discharge),
+        "hours_of_history": len(discharge),  # hourly statistic rows — HOURS
         "recovered": len(recovered),
         "trainable_recovered": sum(1 for r in recovered if r.get("trainable")),
         "nights_total": len(merged),

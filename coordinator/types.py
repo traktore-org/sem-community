@@ -665,6 +665,9 @@ class LoadManagementData:
     controllable_devices_count: int = 0
     consecutive_peak_15min: float = 0.0  # kW
     monthly_consecutive_peak: float = 0.0  # kW
+    # (#864) the preventive slot guard's live numbers; None = no limit set.
+    peak_slot_allowed_w: Optional[float] = None
+    peak_slot_used_kwh: Optional[float] = None
     current_vs_peak_percentage: float = 0.0
     controlled_tariff_status: str = "unknown"
     load_management_recommendation: str = "none"
@@ -1286,6 +1289,11 @@ class SEMData:
             "controllable_devices_count": self.load_management.controllable_devices_count,
             "consecutive_peak_15min": self.load_management.consecutive_peak_15min,
             "monthly_consecutive_peak": self.load_management.monthly_consecutive_peak,
+            # (#864) the preventive slot guard's live numbers. This dict is
+            # an EXPLICIT key list — a field added to the dataclass alone
+            # never reaches diagnostics (caught live on .175, the #819 trap).
+            "peak_slot_allowed_w": self.load_management.peak_slot_allowed_w,
+            "peak_slot_used_kwh": self.load_management.peak_slot_used_kwh,
             "current_vs_peak_percentage": self.load_management.current_vs_peak_percentage,
             "controlled_tariff_status": self.load_management.controlled_tariff_status,
             "load_management_recommendation": self.load_management.load_management_recommendation,

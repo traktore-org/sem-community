@@ -175,6 +175,8 @@ def build_charger_view(
         tariff_level=fleet_state.tariff_level,
         # (#747) the peak posture rides the one-place thread.
         peak_state=getattr(fleet_state, "peak_state", "normal"),
+        # (#864) so does the slot-budget allowance.
+        peak_slot_allowed_w=getattr(fleet_state, "peak_slot_allowed_w", None),
         auto_start_soc=float(config.get("battery_auto_start_soc", 90)),
         buffer_soc=float(config.get("battery_buffer_soc", 70)),
         priority_soc=float(config.get("battery_priority_soc", 30)),
