@@ -18,6 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > ships while the release hold is in place; 2.0.0 stable remains the current
 > published version.
 
+- 🩺 **A sensor that is out no longer reads as zero on the System tab** —
+  caught mid-dropout on a live install: the diagnostics line said
+  `Solar 0W · Grid 0W · Battery 0W · SOC 0%` while those sensors were
+  `unavailable`, one row below its own "Unavailable Sensors: 8". On the page
+  people open precisely to ask what is wrong, a fabricated zero is
+  indistinguishable from a real measurement — the sun off, the battery flat.
+  Missing readings now render as **—** in the Health Overview and the
+  Diagnostics lines alike. Arithmetic keeps its 0 fallback (a sum must not
+  become NaN); only display changed, so a healthy install looks identical.
+
 - 📊 **Chart titles say what they plot, not when** — walking the live
   dashboard found the Home tab rendering "Last 7 Days" as *both* title and
   subtitle, and the Energy tab promising a "30 Day Trend" above a chart the

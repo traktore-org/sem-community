@@ -10,6 +10,7 @@
  */
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
+import { fmtNum, MISSING } from '../util/missing-value.js';
 import { semTheme, semFormatPower, semGetCurrency, semCardSurfaceCSS, SEM_COLORS, semDefineCard } from '../base/sem-shared.js';
 
 const SECTIONS = [
@@ -32,8 +33,10 @@ const SECTIONS = [
         color: '#8DC892',
         titleKey: 'health_overview',
         subtitleFn: (c) => {
-            const solar = c._valNum('solar_power').toFixed(0);
-            const soc = c._valNum('battery_soc').toFixed(0);
+            // "—" when the sensor is out; a dropout must not read as 0 W /
+            // 0 % on the page people open to ask what is wrong.
+            const solar = c._valFmt('solar_power');
+            const soc = c._valFmt('battery_soc');
             return `${solar}W solar · SOC ${soc}%`;
         },
     },
@@ -111,6 +114,19 @@ class SEMSystemCard extends SEMLitBase {
     _val(suffix) {
         const e = this._hass?.states[`${this._prefix}${suffix}`];
         return (e && e.state !== 'unavailable' && e.state !== 'unknown') ? e.state : '';
+    }
+
+    /**
+     * Display string for a numeric entity — or "—" when the sensor is out.
+     *
+     * `_valNum` exists for ARITHMETIC and keeps its 0 fallback (a sum must
+     * not become NaN). This is for DISPLAY: found on PROD 30.08 mid-dropout,
+     * the diagnostics line read "Solar 0W · SOC 0%" while both sensors were
+     * unavailable — the same card that was reporting "Unavailable Sensors: 8"
+     * one row above. A hard zero is indistinguishable from a measurement.
+     */
+    _valFmt(suffix, digits = 0) {
+        return fmtNum(this._hass?.states[`${this._prefix}${suffix}`], digits);
     }
 
     /** Numeric state for a sensor.sem_ suffixed entity. */
@@ -365,18 +381,18 @@ class SEMSystemCard extends SEMLitBase {
     }
 
     _renderDiagSection(T) {
-        const solar = this._valNum('solar_power').toFixed(0);
-        const grid = this._valNum('grid_power').toFixed(0);
-        const battery = this._valNum('battery_power').toFixed(0);
-        const soc = this._valNum('battery_soc').toFixed(0);
-        const ev = this._valNum('ev_power').toFixed(0);
+        const solar = this._valFmt('solar_power');
+        const grid = this._valFmt('grid_power');
+        const battery = this._valFmt('battery_power');
+        const soc = this._valFmt('battery_soc');
+        const ev = this._valFmt('ev_power');
         const sourceStr = `Solar ${solar}W · Grid ${grid}W · Battery ${battery}W · SOC ${soc}% · EV ${ev}W`;
 
-        const home = this._valNum('home_consumption_power').toFixed(0);
-        const imp = this._valNum('grid_import_power').toFixed(0);
-        const exp = this._valNum('grid_export_power').toFixed(0);
-        const autarky = this._valNum('autarky_rate').toFixed(0);
-        const selfCons = this._valNum('self_consumption_rate').toFixed(0);
+        const home = this._valFmt('home_consumption_power');
+        const imp = this._valFmt('grid_import_power');
+        const exp = this._valFmt('grid_export_power');
+        const autarky = this._valFmt('autarky_rate');
+        const selfCons = this._valFmt('self_consumption_rate');
         const derivedStr = `Home ${home}W · Import ${imp}W · Export ${exp}W · Autarky ${autarky}% · Self ${selfCons}%`;
 
         // Mode status — overall charging_state covers solar mode/night/tariff;
