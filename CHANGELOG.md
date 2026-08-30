@@ -11,7 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [Unreleased]
+# [Unreleased] — 2.1.0-beta.1 (soaking, not released)
+
+> The manifest on `develop` reads **2.1.0-beta.1** so the build that is
+> soaking is identifiable — it is *not* a release. No tag is cut and no beta
+> ships while the release hold is in place; 2.0.0 stable remains the current
+> published version.
 
 - 🛡️ **The peak limit is now enforced before the damage, not after** (#864):
   demand tariffs bill the average import of each fixed 15-minute slot, and
