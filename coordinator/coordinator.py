@@ -5352,6 +5352,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             pv_data.pv_performance_vs_forecast = pv.performance_vs_forecast
             pv_data.pv_estimated_annual_degradation = pv.estimated_annual_degradation
             pv_data.pv_degradation_trend = pv.degradation_trend
+            # (#422) Carry the attribution across too. Copying four of the
+            # analyzer's thirteen fields is what left "why is degradation
+            # blank?" unanswerable from a diagnostics dump.
+            pv_data.pv_yield_path = pv.yield_path
+            pv_data.pv_performance_path = pv.performance_path
+            pv_data.pv_degradation_path = pv.degradation_path
+            pv_data.pv_system_age_path = pv.system_age_path
         except (ValueError, TypeError, AttributeError) as e:
             _LOGGER.debug("PV analytics update failed: %s", e)
 
@@ -10054,6 +10061,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             canonical_strategy = EVBudgetStrategy.NOW
         elif _primary_view.fleet.is_night and _primary_view.mode != "solar_only":
             # min_plus_solar / solar_plus_cheap night top-up uses MIN_PV
+            canonical_strategy = EVBudgetStrategy.MIN_PV
+        elif (_primary_view.mode == "solar_plus_cheap"
+              and "day (cheap tariff)" in str(_primary_decision.reason)):
+            # (#856) a cheap DAYTIME hour tops the Min floor up from grid
+            # through the same seam as the night window — it is a grid
+            # top-up, not solar, and the budget sensors must say so.
             canonical_strategy = EVBudgetStrategy.MIN_PV
         elif _primary_view.mode == "solar_only":
             canonical_strategy = EVBudgetStrategy.SOLAR_ONLY

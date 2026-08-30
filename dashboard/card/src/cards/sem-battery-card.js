@@ -11,6 +11,8 @@
  */
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
+import { capacityConsequence, horizonLabel, trustConsequence }
+    from '../util/forecast-evidence.js';
 import { semTheme, semFormatPower, semGetCurrency, semCardSurfaceCSS, SEM_COLORS, semDefineCard } from '../base/sem-shared.js';
 import { temperatureUnit } from '../util/temperature.js';
 
@@ -25,6 +27,9 @@ const WATCHED_SUFFIXES = [
     'daily_battery_charge_energy', 'daily_battery_discharge_energy', 'daily_battery_savings',
     'flow_solar_to_battery_energy', 'flow_grid_to_battery_energy',
     'monthly_battery_charge_energy', 'monthly_battery_discharge_energy',
+    // The evidence block reads the spendable attributes and names the active
+    // forecast provider — both must be watched or the cells go stale.
+    'battery_spendable_kwh', 'forecast_source',
 ];
 
 // Phase B of per-battery card mirror — same shape as the EV card
@@ -536,27 +541,35 @@ class SEMBatteryCard extends SEMLitBase {
         const daysNeeded = num(a.forecast_days_required) ?? 7;
         const nightsNeeded = num(a.nights_required) ?? 5;
 
-        const horizon = (trustKey, daysKey, availKey, label) => {
+        // (#dashboard-audit) The label names the PROVIDER and the horizon in
+        // words — "1D"/"2D" read as placeholders to the person who built this
+        // — and the third line says what the evidence BOUGHT. The accuracy is
+        // not decoration: the ledger's p20 over these settled days scales the
+        // refill, and having it is what removes the pessimism margin. A number
+        // whose effect is invisible is a number nobody trusts (#830).
+        const source = this._hass?.states[`${this._prefix}forecast_source`]?.state;
+        const t = (k) => this._t(k);
+
+        const horizon = (trustKey, daysKey, availKey, dayNo) => {
             const trust = num(a[trustKey]);
             const days = num(a[daysKey]) ?? 0;
             const available = a[availKey];
+            const label = horizonLabel(source, dayNo, t);
+            const effect = trustConsequence({
+                available, trust, days, minDays: daysNeeded, t });
             if (available === false) {
-                return { label, value: this._t('no_source'),
-                         sub: this._t('no_source_hint'), dim: true };
+                return { label, value: this._t('no_source'), sub: effect, dim: true };
             }
             if (trust == null) {
-                return { label, value: this._t('learning'),
-                         sub: `${days} / ${daysNeeded} ${this._t('days_settled')}`, dim: true };
+                return { label, value: this._t('learning'), sub: effect, dim: true };
             }
             return { label, value: pct(trust),
-                     sub: `${days} ${this._t('days_settled')}`, dim: false };
+                     sub: `${days} ${this._t('days_settled')} · ${effect}`, dim: false };
         };
 
         const cells = [
-            horizon('forecast_trust_d1', 'forecast_days_d1', 'forecast_d1_available',
-                    `${this._t('forecast_accuracy')} · 1${this._t('day_short')}`),
-            horizon('forecast_trust_d2', 'forecast_days_d2', 'forecast_d2_available',
-                    `${this._t('forecast_accuracy')} · 2${this._t('day_short')}`),
+            horizon('forecast_trust_d1', 'forecast_days_d1', 'forecast_d1_available', 1),
+            horizon('forecast_trust_d2', 'forecast_days_d2', 'forecast_d2_available', 2),
         ];
 
         const cap = num(a.measured_capacity_kwh);
@@ -566,16 +579,18 @@ class SEMBatteryCard extends SEMLitBase {
         if (cap == null) {
             cells.push({
                 label: this._t('measured_pack_size'), value: this._t('learning'),
-                sub: `${samples} / ${nightsNeeded} ${this._t('nights')}` +
-                     (nameplate != null ? ` · ${this._fmt(nameplate, 1)} kWh ${this._t('nameplate')}` : ''),
+                sub: `${samples} / ${nightsNeeded} ${this._t('nights')} · `
+                     + capacityConsequence({ measuredKwh: null,
+                                             nameplateKwh: nameplate, t }),
                 dim: true,
             });
         } else {
             cells.push({
                 label: this._t('measured_pack_size'),
                 value: `${this._fmt(cap, 1)} kWh`,
-                sub: drift == null ? `${samples} ${this._t('nights')}`
-                     : `${drift > 0 ? '+' : ''}${this._fmt(drift, 1)}% ${this._t('vs_nameplate')}`,
+                sub: (drift == null ? `${samples} ${this._t('nights')}`
+                     : `${drift > 0 ? '+' : ''}${this._fmt(drift, 1)}% ${this._t('vs_nameplate')}`)
+                     + ` · ${capacityConsequence({ measuredKwh: cap, nameplateKwh: nameplate, t })}`,
                 dim: false,
             });
         }

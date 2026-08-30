@@ -18,6 +18,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > ships while the release hold is in place; 2.0.0 stable remains the current
 > published version.
 
+- 💶 **"Solar + cheapest hours" now honours cheap hours by day, not only at
+  night** (#856). The mode's name is a promise about *price*, but by day it
+  fell back to solar-only regardless of price — a near-zero or negative
+  daytime hour was ignored and the car charged only in *Always max*. A cheap
+  daytime hour now tops the Min floor up from grid exactly as the night
+  window does, through the same shared seam (plan gate, deadline floor,
+  peak-managed rate), and solar surplus still wins whenever it offers more.
+  A static tariff never triggers it. With *At least* at 0 kWh there is
+  nothing to fill — the strategy line now says so and names the knob.
+
+- 🛡️ **You can now see SEM riding out a flaky sensor feed** — on an install
+  whose inverter drops off the bus dozens of times an hour, SEM already does
+  the right thing: a cycle that cannot see holds its committed command rather
+  than steering on a fabricated zero, and an EV charge runs straight through
+  the outage. That protection was invisible — the flag was computed, used and
+  never published, so the only way to know it worked was to catch a status
+  line inside a 60-second window. `diag_inputs_degraded` now says whether the
+  current cycle was steerable, and `diag_inputs_dark` names which inputs went
+  quiet.
+
+- 🔭 **The forecast evidence explains itself** — the battery card's `1D` /
+  `2D` cells were forecast *horizons*, not placeholders, and nothing said so.
+  They now name your provider and the horizon in words ("Forecast.Solar ·
+  tomorrow"), and each cell says what its evidence **bought**: a measured
+  accuracy means SEM spends against it with no extra safety margin, while a
+  learning one says how far along it is and that a margin applies meanwhile.
+  The pack-size cell names which capacity the maths is actually using. A
+  horizon your provider does not publish now says exactly that instead of
+  "No source". Plus the PV analytics' `*_path` telemetry — built in #422 to
+  explain empty values and dropped before it reached anyone — is published.
+
 - 🔋 **The measured pack size can finally graduate from "Learning"** — the
   battery card read *"7 / 5 Nights"*: seven qualifying nights against a
   requirement of five, still learning. The two numbers came from different

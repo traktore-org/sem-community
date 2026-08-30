@@ -656,488 +656,44 @@
   },
   "entity": {
     "sensor": {
-      "solar_power": {
-        "name": "Potenza Solare"
-      },
-      "home_consumption_power": {
-        "name": "Consumo Casa"
-      },
-      "grid_power": {
-        "name": "Potenza Rete"
-      },
-      "grid_active_power": {
-        "name": "Potenza Attiva Rete"
-      },
-      "grid_import_power": {
-        "name": "Importazione Rete"
-      },
-      "grid_export_power": {
-        "name": "Esportazione Rete"
-      },
-      "battery_power": {
-        "name": "Potenza Batteria"
-      },
-      "battery_charge_power": {
-        "name": "Potenza Carica Batteria"
-      },
-      "battery_discharge_power": {
-        "name": "Potenza Scarica Batteria"
-      },
-      "ev_power": {
-        "name": "Potenza VE"
-      },
-      "available_power": {
-        "name": "Potenza Disponibile"
-      },
-      "battery_soc": {
-        "name": "SOC Batteria"
-      },
-      "battery_status": {
-        "name": "Stato Batteria"
-      },
-      "battery_temperature": {
-        "name": "Temperatura Batteria"
-      },
-      "inverter_temperature": {
-        "name": "Temperatura dell'inverter"
-      },
-      "battery_cycles_estimated": {
-        "name": "Cicli Batteria (Stimati)"
-      },
-      "battery_health_score": {
-        "name": "Salute Batteria"
-      },
-      "calculated_current": {
-        "name": "Corrente Calcolata"
-      },
-      "charging_state": {
-        "name": "Stato di Carica"
-      },
-      "grid_status": {
-        "name": "Stato Rete"
-      },
-      "solar_charging_status": {
-        "name": "Carica Solare"
-      },
-      "night_charging_status": {
-        "name": "Carica Notturna"
-      },
-      "energy_plan": {
-        "name": "Piano energetico"
-      },
-      "battery_priority_status": {
-        "name": "Priorità Batteria"
-      },
-      "charging_strategy": {
-        "name": "Strategia di Carica"
-      },
-      "daily_solar_energy": {
-        "name": "Oggi Solare"
-      },
-      "daily_home_energy": {
-        "name": "Oggi Casa"
-      },
-      "daily_grid_import_energy": {
-        "name": "Oggi Importazione"
-      },
-      "daily_grid_export_energy": {
-        "name": "Oggi Esportazione"
-      },
-      "daily_battery_charge_energy": {
-        "name": "Oggi Carica"
-      },
-      "daily_battery_discharge_energy": {
-        "name": "Oggi Scarica"
-      },
-      "daily_ev_energy": {
-        "name": "Oggi VE"
-      },
-      "monthly_solar_yield_energy": {
-        "name": "Mensile Solare"
-      },
-      "monthly_grid_import_energy": {
-        "name": "Mensile Importazione"
-      },
-      "monthly_grid_export_energy": {
-        "name": "Mensile Esportazione"
-      },
-      "monthly_battery_charge_energy": {
-        "name": "Mensile Carica"
-      },
-      "monthly_battery_discharge_energy": {
-        "name": "Mensile Scarica"
-      },
-      "monthly_home_consumption_energy": {
-        "name": "Mensile Casa"
-      },
-      "monthly_ev_consumption_energy": {
-        "name": "Mensile VE"
-      },
-      "flow_solar_to_home_power": {
-        "name": "Solare a Casa"
-      },
-      "flow_solar_to_battery_power": {
-        "name": "Solare a Batteria"
-      },
-      "flow_solar_to_grid_power": {
-        "name": "Solare a Rete"
-      },
-      "flow_solar_to_ev_power": {
-        "name": "Solare a VE"
-      },
-      "flow_battery_to_home_power": {
-        "name": "Batteria a Casa"
-      },
-      "flow_battery_to_grid_power": {
-        "name": "Batteria a Rete"
-      },
-      "flow_battery_to_ev_power": {
-        "name": "Batteria a VE"
-      },
-      "flow_grid_to_home_power": {
-        "name": "Rete a Casa"
-      },
-      "flow_grid_to_ev_power": {
-        "name": "Rete a VE"
-      },
-      "flow_grid_to_battery_power": {
-        "name": "Rete a Batteria"
-      },
-      "flow_solar_to_home_energy": {
-        "name": "Solare a Casa Energia"
-      },
-      "flow_solar_to_ev_energy": {
-        "name": "Solare a VE Energia"
-      },
-      "flow_solar_to_battery_energy": {
-        "name": "Solare a Batteria Energia"
-      },
-      "flow_solar_to_grid_energy": {
-        "name": "Solare a Rete Energia"
-      },
-      "flow_grid_to_home_energy": {
-        "name": "Rete a Casa Energia"
-      },
-      "flow_grid_to_ev_energy": {
-        "name": "Rete a VE Energia"
-      },
-      "flow_grid_to_battery_energy": {
-        "name": "Rete a Batteria Energia"
-      },
-      "flow_battery_to_home_energy": {
-        "name": "Batteria a Casa Energia"
-      },
-      "flow_battery_to_grid_energy": {
-        "name": "Batteria a Rete Energia"
-      },
-      "flow_battery_to_ev_energy": {
-        "name": "Batteria a VE Energia"
-      },
-      "self_consumption_rate": {
-        "name": "Autoconsumo"
-      },
       "autarky_rate": {
         "name": "Tasso Autarchia"
-      },
-      "daily_savings": {
-        "name": "Risparmio Oggi"
-      },
-      "daily_battery_savings": {
-        "name": "Risparmio Batteria Giornaliero"
-      },
-      "daily_costs": {
-        "name": "Costi Giornalieri"
-      },
-      "daily_export_revenue": {
-        "name": "Ricavo Esportazione Giornaliero"
-      },
-      "daily_net_cost": {
-        "name": "Costo Netto Giornaliero"
-      },
-      "monthly_savings": {
-        "name": "Risparmio Mensile"
-      },
-      "monthly_battery_savings": {
-        "name": "Risparmio Batteria Mensile"
-      },
-      "monthly_costs": {
-        "name": "Costi Mensili"
-      },
-      "monthly_export_revenue": {
-        "name": "Ricavo Esportazione Mensile"
-      },
-      "monthly_net_cost": {
-        "name": "Costo Netto Mensile"
-      },
-      "yearly_solar_yield_energy": {
-        "name": "Annuale Solare"
-      },
-      "lifetime_solar_yield_energy": {
-        "name": "Produzione solare totale"
-      },
-      "yearly_grid_import_energy": {
-        "name": "Annuale Importazione Rete"
-      },
-      "yearly_grid_export_energy": {
-        "name": "Annuale Esportazione Rete"
-      },
-      "yearly_battery_charge_energy": {
-        "name": "Annuale Carica Batteria"
-      },
-      "yearly_battery_discharge_energy": {
-        "name": "Annuale Scarica Batteria"
-      },
-      "yearly_home_consumption_energy": {
-        "name": "Annuale Consumo Casa"
-      },
-      "yearly_ev_energy": {
-        "name": "Annuale Energia VE"
-      },
-      "yearly_costs": {
-        "name": "Costi Annuali"
-      },
-      "yearly_savings": {
-        "name": "Risparmio Annuale"
-      },
-      "yearly_battery_savings": {
-        "name": "Risparmio Batteria Annuale"
-      },
-      "yearly_export_revenue": {
-        "name": "Ricavo Esportazione Annuale"
-      },
-      "yearly_net_cost": {
-        "name": "Costo Netto Annuale"
-      },
-      "lifetime_total_savings": {
-        "name": "Risparmio Totale"
-      },
-      "lifetime_grid_cost": {
-        "name": "Costo Rete Totale"
-      },
-      "roi_percentage": {
-        "name": "ROI Percentuale"
-      },
-      "roi_payback_years": {
-        "name": "ROI Anni Ammortamento"
-      },
-      "roi_annual_savings": {
-        "name": "ROI Risparmio Annuale"
-      },
-      "forecast_correction_factor": {
-        "name": "Fattore Correzione Previsione"
-      },
-      "forecast_corrected_today": {
-        "name": "Previsione Corretta Oggi"
-      },
-      "forecast_history_days": {
-        "name": "Storico Previsione Giorni"
-      },
-      "daily_co2_avoided": {
-        "name": "CO2 Evitato Oggi"
-      },
-      "yearly_co2_avoided": {
-        "name": "CO2 Evitato Quest'Anno"
-      },
-      "yearly_trees_equivalent": {
-        "name": "Equivalente Alberi Quest'Anno"
-      },
-      "lifetime_co2_avoided": {
-        "name": "CO2 Evitato Totale"
-      },
-      "lifetime_trees_equivalent": {
-        "name": "Equivalente Alberi Totale"
-      },
-      "power_charge_cost": {
-        "name": "Costo Potenza Impegnata"
-      },
-      "consecutive_peak_15min": {
-        "name": "Picco 15min"
-      },
-      "monthly_consecutive_peak": {
-        "name": "Picco Mensile"
-      },
-      "current_vs_peak_percentage": {
-        "name": "Percentuale Picco"
-      },
-      "target_peak_limit": {
-        "name": "Limite Picco"
-      },
-      "peak_margin": {
-        "name": "Margine Picco"
-      },
-      "load_management_status": {
-        "name": "Gestione Carichi"
-      },
-      "load_management_recommendation": {
-        "name": "Raccomandazione Carichi"
-      },
-      "loads_currently_shed": {
-        "name": "Carichi Disconnessi"
       },
       "available_load_reduction": {
         "name": "Riduzione Disponibile"
       },
-      "controllable_devices_count": {
-        "name": "Numero Dispositivi"
+      "available_power": {
+        "name": "Potenza Disponibile"
       },
-      "surplus_total_w": {
-        "name": "Eccedenza Totale"
+      "battery_capacity_drift_pct": {
+        "name": "Deriva di capacità"
       },
-      "surplus_distributable_w": {
-        "name": "Eccedenza Distribuibile"
+      "battery_charge_pacing": {
+        "name": "Battery charge pacing"
       },
-      "surplus_allocated_w": {
-        "name": "Eccedenza Allocata"
+      "battery_charge_power": {
+        "name": "Potenza Carica Batteria"
       },
-      "surplus_unallocated_w": {
-        "name": "Eccedenza Non Allocata"
+      "battery_cycles_estimated": {
+        "name": "Cicli Batteria (Stimati)"
       },
-      "surplus_active_devices": {
-        "name": "Eccedenza Dispositivi Attivi"
+      "battery_discharge_power": {
+        "name": "Potenza Scarica Batteria"
       },
-      "surplus_total_devices": {
-        "name": "Eccedenza Dispositivi Totale"
+      "battery_dynamic_floor_pct": {
+        "name": "Soglia dinamica"
       },
-      "forecast_today_kwh": {
-        "name": "Previsione Oggi"
+      "battery_health_score": {
+        "name": "Salute Batteria"
       },
-      "forecast_tomorrow_kwh": {
-        "name": "Previsione Domani"
+      "battery_measured_capacity_kwh": {
+        "name": "Capacità misurata della batteria"
       },
-      "forecast_remaining_today_kwh": {
-        "name": "Previsione Restante Oggi"
+      "battery_power": {
+        "name": "Potenza Batteria"
       },
-      "forecast_power_now_w": {
-        "name": "Potenza Prevista Ora"
-      },
-      "forecast_source": {
-        "name": "Fonte Previsione"
-      },
-      "charging_recommendation": {
-        "name": "Raccomandazione di Carica"
-      },
-      "tariff_current_import_rate": {
-        "name": "Prezzo Elettricità"
-      },
-      "tariff_current_export_rate": {
-        "name": "Tariffa Esportazione"
-      },
-      "tariff_price_level": {
-        "name": "Livello Prezzo"
-      },
-      "tariff_provider": {
-        "name": "Fornitore Tariffa"
-      },
-      "tariff_next_cheap_start": {
-        "name": "Prossima Finestra Economica"
-      },
-      "heat_pump_mode": {
-        "name": "Modalità Pompa di Calore"
-      },
-      "heat_pump_sg_ready_state": {
-        "name": "Pompa di Calore SG-Ready"
-      },
-      "pv_daily_specific_yield": {
-        "name": "Resa Specifica PV"
-      },
-      "pv_performance_vs_forecast": {
-        "name": "PV vs Previsione"
-      },
-      "pv_estimated_annual_degradation": {
-        "name": "Degradazione Annuale PV"
-      },
-      "pv_degradation_trend": {
-        "name": "Tendenza Degradazione PV"
-      },
-      "energy_optimization_score": {
-        "name": "Punteggio Ottimizzazione"
-      },
-      "energy_tip": {
-        "name": "Consiglio Energia"
-      },
-      "energy_tip_category": {
-        "name": "Categoria Consiglio"
-      },
-      "energy_ev_solar_percentage": {
-        "name": "VE Carica Solare %"
-      },
-      "predictor_training_status": {
-        "name": "Stato Addestramento Predittore"
-      },
-      "predictor_model_accuracy": {
-        "name": "Precisione Predittore"
-      },
-      "predicted_surplus_window": {
-        "name": "Finestra Eccedenza Prevista"
-      },
-      "session_energy": {
-        "name": "Energia Sessione"
-      },
-      "session_solar_share": {
-        "name": "Quota Solare Sessione"
-      },
-      "session_cost": {
-        "name": "Costo Sessione"
-      },
-      "session_duration": {
-        "name": "Durata Sessione"
-      },
-      "lifetime_ev_energy": {
-        "name": "Energia VE Totale"
-      },
-      "lifetime_ev_solar": {
-        "name": "Energia VE Solare Totale"
-      },
-      "lifetime_ev_cost": {
-        "name": "Costo VE Totale"
-      },
-      "lifetime_ev_sessions": {
-        "name": "Sessioni VE Totali"
-      },
-      "lifetime_ev_solar_share": {
-        "name": "Quota Solare VE Totale"
-      },
-      "lifetime_ev_battery_share": {
-        "name": "Quota Batteria VE Totale"
-      },
-      "lifetime_ev_grid_share": {
-        "name": "Quota Rete VE Totale"
-      },
-      "vehicle_soc": {
-        "name": "SOC Veicolo"
-      },
-      "ev_remaining_range": {
-        "name": "Autonomia VE"
-      },
-      "best_surplus_window": {
-        "name": "Miglior Finestra Eccedenza"
-      },
-      "night_start_time": {
-        "name": "Inizio Periodo Notturno"
-      },
-      "night_end_time": {
-        "name": "Fine Periodo Notturno"
-      },
-      "night_window_hours": {
-        "name": "Ore Periodo Notturno"
-      },
-      "forecast_peak_power_today_w": {
-        "name": "Potenza Picco Prevista Oggi"
-      },
-      "forecast_peak_time_today": {
-        "name": "Ora Picco Prevista Oggi"
-      },
-      "forecast_surplus_kwh": {
-        "name": "Eccedenza Prevista"
-      },
-      "forecast_dampening_factor": {
-        "name": "Fattore di Attenuazione Previsione"
-      },
-      "battery_scheduler_state": {
-        "name": "Stato pianificatore batteria"
-      },
-      "battery_scheduler_target_soc": {
-        "name": "SOC obiettivo pianificatore"
+      "battery_priority_status": {
+        "name": "Priorità Batteria"
       },
       "battery_scheduler_deficit_kwh": {
         "name": "Deficit pianificatore"
@@ -1145,20 +701,128 @@
       "battery_scheduler_reason": {
         "name": "Motivo pianificatore"
       },
-      "ev_charger_count": {
-        "name": "Numero caricatori VE"
+      "battery_scheduler_state": {
+        "name": "Stato pianificatore batteria"
       },
-      "ev_taper_trend": {
-        "name": "Tendenza riduzione carica VE"
+      "battery_scheduler_target_soc": {
+        "name": "SOC obiettivo pianificatore"
       },
-      "diag_version": {
-        "name": "Versione SEM"
+      "battery_session_avg_power": {
+        "name": "Potenza Media Sessione Batteria"
       },
-      "diag_grid_mode": {
-        "name": "Modalità sensore rete"
+      "battery_session_cost": {
+        "name": "Costo Sessione Batteria"
       },
-      "diag_grid_sign": {
-        "name": "Convenzione di segno rete"
+      "battery_session_duration": {
+        "name": "Durata Sessione Batteria"
+      },
+      "battery_session_energy": {
+        "name": "Energia Sessione Batteria"
+      },
+      "battery_session_savings": {
+        "name": "Risparmio Sessione Batteria"
+      },
+      "battery_session_solar_share": {
+        "name": "Quota Solare Sessione Batteria"
+      },
+      "battery_session_type": {
+        "name": "Tipo Sessione Batteria"
+      },
+      "battery_soc": {
+        "name": "SOC Batteria"
+      },
+      "battery_spendable_kwh": {
+        "name": "Disponibile stanotte"
+      },
+      "battery_status": {
+        "name": "Stato Batteria"
+      },
+      "battery_stored_grid_share": {
+        "name": "Energia immagazzinata dalla rete"
+      },
+      "battery_temperature": {
+        "name": "Temperatura Batteria"
+      },
+      "best_surplus_window": {
+        "name": "Miglior Finestra Eccedenza"
+      },
+      "calculated_current": {
+        "name": "Corrente Calcolata"
+      },
+      "charging_recommendation": {
+        "name": "Raccomandazione di Carica"
+      },
+      "charging_state": {
+        "name": "Stato di Carica"
+      },
+      "charging_strategy": {
+        "name": "Strategia di Carica"
+      },
+      "consecutive_peak_15min": {
+        "name": "Picco 15min"
+      },
+      "controllable_devices_count": {
+        "name": "Numero Dispositivi"
+      },
+      "current_vs_peak_percentage": {
+        "name": "Percentuale Picco"
+      },
+      "daily_battery_charge_energy": {
+        "name": "Oggi Carica"
+      },
+      "daily_battery_charge_grid": {
+        "name": "Carica da rete oggi"
+      },
+      "daily_battery_charge_solar": {
+        "name": "Carica solare oggi"
+      },
+      "daily_battery_discharge_energy": {
+        "name": "Oggi Scarica"
+      },
+      "daily_battery_grid_cost": {
+        "name": "Costo carica da rete oggi"
+      },
+      "daily_battery_savings": {
+        "name": "Risparmio Batteria Giornaliero"
+      },
+      "daily_co2_avoided": {
+        "name": "CO2 Evitato Oggi"
+      },
+      "daily_costs": {
+        "name": "Costi Giornalieri"
+      },
+      "daily_ev_energy": {
+        "name": "Oggi VE"
+      },
+      "daily_export_revenue": {
+        "name": "Ricavo Esportazione Giornaliero"
+      },
+      "daily_grid_export_energy": {
+        "name": "Oggi Esportazione"
+      },
+      "daily_grid_import_energy": {
+        "name": "Oggi Importazione"
+      },
+      "daily_home_energy": {
+        "name": "Oggi Casa"
+      },
+      "daily_net_cost": {
+        "name": "Costo Netto Giornaliero"
+      },
+      "daily_savings": {
+        "name": "Risparmio Oggi"
+      },
+      "daily_solar_energy": {
+        "name": "Oggi Solare"
+      },
+      "daily_total_consumption": {
+        "name": "Consumo totale oggi"
+      },
+      "daily_true_baseload_energy": {
+        "name": "Carico di base reale oggi"
+      },
+      "diag_battery_capacity": {
+        "name": "Capacità batteria (config)"
       },
       "diag_battery_sign": {
         "name": "Convenzione di segno batteria"
@@ -1166,14 +830,11 @@
       "diag_charger_control": {
         "name": "Metodo di controllo caricatore"
       },
-      "diag_battery_capacity": {
-        "name": "Capacità batteria (config)"
+      "diag_charger_count": {
+        "name": "Caricatori configurati"
       },
-      "diag_update_interval": {
-        "name": "Intervallo Aggiornamento"
-      },
-      "diag_observer_mode": {
-        "name": "Modalità Osservatore"
+      "diag_ed_config": {
+        "name": "Configurazione dashboard energia"
       },
       "diag_grid_l1_current_a": {
         "name": "Grid L1 Current"
@@ -1193,6 +854,15 @@
       "diag_grid_l3_margin_a": {
         "name": "Grid L3 Current Margin"
       },
+      "diag_grid_mode": {
+        "name": "Modalità sensore rete"
+      },
+      "diag_grid_sign": {
+        "name": "Convenzione di segno rete"
+      },
+      "diag_inputs_degraded": {
+        "name": "Inputs Degraded"
+      },
       "diag_inverter_l1_current_a": {
         "name": "Inverter Load/EPS L1 Current"
       },
@@ -1211,14 +881,17 @@
       "diag_inverter_l3_margin_a": {
         "name": "Inverter Load/EPS L3 Current Margin"
       },
+      "diag_observer_mode": {
+        "name": "Modalità Osservatore"
+      },
+      "diag_phase_guard_data_fresh": {
+        "name": "Phase Guard Data Fresh"
+      },
       "diag_phase_guard_mode": {
         "name": "Phase Guard Mode"
       },
       "diag_phase_guard_safe": {
         "name": "Phase Guard Safe"
-      },
-      "diag_phase_guard_data_fresh": {
-        "name": "Phase Guard Data Fresh"
       },
       "diag_phase_guard_stop_reason": {
         "name": "Phase Guard Stop Reason"
@@ -1226,80 +899,134 @@
       "diag_sensors_unavailable": {
         "name": "Sensori non disponibili"
       },
-      "battery_session_type": {
-        "name": "Tipo Sessione Batteria"
+      "diag_update_interval": {
+        "name": "Intervallo Aggiornamento"
       },
-      "battery_session_energy": {
-        "name": "Energia Sessione Batteria"
+      "diag_version": {
+        "name": "Versione SEM"
       },
-      "battery_session_solar_share": {
-        "name": "Quota Solare Sessione Batteria"
+      "energy_ev_solar_percentage": {
+        "name": "VE Carica Solare %"
       },
-      "battery_session_cost": {
-        "name": "Costo Sessione Batteria"
+      "energy_optimization_score": {
+        "name": "Punteggio Ottimizzazione"
       },
-      "battery_session_savings": {
-        "name": "Risparmio Sessione Batteria"
+      "energy_plan": {
+        "name": "Piano energetico"
       },
-      "battery_session_duration": {
-        "name": "Durata Sessione Batteria"
+      "energy_tip": {
+        "name": "Consiglio Energia"
       },
-      "battery_session_avg_power": {
-        "name": "Potenza Media Sessione Batteria"
+      "energy_tip_category": {
+        "name": "Categoria Consiglio"
       },
-      "diag_charger_count": {
-        "name": "Caricatori configurati"
+      "ev_charger_count": {
+        "name": "Numero caricatori VE"
       },
-      "diag_ed_config": {
-        "name": "Configurazione dashboard energia"
+      "ev_power": {
+        "name": "Potenza VE"
       },
-      "heat_pump_registration_status": {
-        "name": "Stato registrazione pompa di calore"
+      "ev_remaining_range": {
+        "name": "Autonomia VE"
       },
-      "vpp_event": {
-        "name": "Evento VPP"
+      "ev_taper_trend": {
+        "name": "Tendenza riduzione carica VE"
       },
-      "heat_pump_energy_today": {
-        "name": "Pompa di calore oggi"
+      "flow_battery_to_ev_energy": {
+        "name": "Batteria a VE Energia"
       },
-      "heat_pump_energy_month": {
-        "name": "Pompa di calore questo mese"
+      "flow_battery_to_ev_power": {
+        "name": "Batteria a VE"
       },
-      "heat_pump_energy_year": {
-        "name": "Pompa di calore quest'anno"
+      "flow_battery_to_grid_energy": {
+        "name": "Batteria a Rete Energia"
       },
-      "heat_pump_energy_total": {
-        "name": "Pompa di calore totale"
+      "flow_battery_to_grid_power": {
+        "name": "Batteria a Rete"
       },
-      "heat_pump_energy_shifted_today": {
-        "name": "Pompa di calore spostata oggi"
+      "flow_battery_to_home_energy": {
+        "name": "Batteria a Casa Energia"
       },
-      "daily_battery_charge_solar": {
-        "name": "Carica solare oggi"
+      "flow_battery_to_home_power": {
+        "name": "Batteria a Casa"
       },
-      "daily_battery_charge_grid": {
-        "name": "Carica da rete oggi"
+      "flow_grid_to_battery_energy": {
+        "name": "Rete a Batteria Energia"
       },
-      "daily_battery_grid_cost": {
-        "name": "Costo carica da rete oggi"
+      "flow_grid_to_battery_power": {
+        "name": "Rete a Batteria"
       },
-      "battery_stored_grid_share": {
-        "name": "Energia immagazzinata dalla rete"
+      "flow_grid_to_ev_energy": {
+        "name": "Rete a VE Energia"
       },
-      "true_baseload_power": {
-        "name": "Carico di base reale"
+      "flow_grid_to_ev_power": {
+        "name": "Rete a VE"
       },
-      "daily_true_baseload_energy": {
-        "name": "Carico di base reale oggi"
+      "flow_grid_to_home_energy": {
+        "name": "Rete a Casa Energia"
       },
-      "daily_total_consumption": {
-        "name": "Consumo totale oggi"
+      "flow_grid_to_home_power": {
+        "name": "Rete a Casa"
       },
-      "battery_measured_capacity_kwh": {
-        "name": "Capacità misurata della batteria"
+      "flow_solar_to_battery_energy": {
+        "name": "Solare a Batteria Energia"
       },
-      "battery_capacity_drift_pct": {
-        "name": "Deriva di capacità"
+      "flow_solar_to_battery_power": {
+        "name": "Solare a Batteria"
+      },
+      "flow_solar_to_ev_energy": {
+        "name": "Solare a VE Energia"
+      },
+      "flow_solar_to_ev_power": {
+        "name": "Solare a VE"
+      },
+      "flow_solar_to_grid_energy": {
+        "name": "Solare a Rete Energia"
+      },
+      "flow_solar_to_grid_power": {
+        "name": "Solare a Rete"
+      },
+      "flow_solar_to_home_energy": {
+        "name": "Solare a Casa Energia"
+      },
+      "flow_solar_to_home_power": {
+        "name": "Solare a Casa"
+      },
+      "forecast_corrected_today": {
+        "name": "Previsione Corretta Oggi"
+      },
+      "forecast_correction_factor": {
+        "name": "Fattore Correzione Previsione"
+      },
+      "forecast_dampening_factor": {
+        "name": "Fattore di Attenuazione Previsione"
+      },
+      "forecast_history_days": {
+        "name": "Storico Previsione Giorni"
+      },
+      "forecast_peak_power_today_w": {
+        "name": "Potenza Picco Prevista Oggi"
+      },
+      "forecast_peak_time_today": {
+        "name": "Ora Picco Prevista Oggi"
+      },
+      "forecast_power_now_w": {
+        "name": "Potenza Prevista Ora"
+      },
+      "forecast_remaining_today_kwh": {
+        "name": "Previsione Restante Oggi"
+      },
+      "forecast_source": {
+        "name": "Fonte Previsione"
+      },
+      "forecast_surplus_kwh": {
+        "name": "Eccedenza Prevista"
+      },
+      "forecast_today_kwh": {
+        "name": "Previsione Oggi"
+      },
+      "forecast_tomorrow_kwh": {
+        "name": "Previsione Domani"
       },
       "forecast_trust_d1": {
         "name": "Affidabilità previsione (domani)"
@@ -1307,14 +1034,290 @@
       "forecast_trust_d2": {
         "name": "Affidabilità previsione (dopodomani)"
       },
-      "battery_spendable_kwh": {
-        "name": "Disponibile stanotte"
+      "grid_active_power": {
+        "name": "Potenza Attiva Rete"
       },
-      "battery_dynamic_floor_pct": {
-        "name": "Soglia dinamica"
+      "grid_export_power": {
+        "name": "Esportazione Rete"
       },
-      "battery_charge_pacing": {
-        "name": "Battery charge pacing"
+      "grid_import_power": {
+        "name": "Importazione Rete"
+      },
+      "grid_power": {
+        "name": "Potenza Rete"
+      },
+      "grid_status": {
+        "name": "Stato Rete"
+      },
+      "heat_pump_energy_month": {
+        "name": "Pompa di calore questo mese"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "Pompa di calore spostata oggi"
+      },
+      "heat_pump_energy_today": {
+        "name": "Pompa di calore oggi"
+      },
+      "heat_pump_energy_total": {
+        "name": "Pompa di calore totale"
+      },
+      "heat_pump_energy_year": {
+        "name": "Pompa di calore quest'anno"
+      },
+      "heat_pump_mode": {
+        "name": "Modalità Pompa di Calore"
+      },
+      "heat_pump_registration_status": {
+        "name": "Stato registrazione pompa di calore"
+      },
+      "heat_pump_sg_ready_state": {
+        "name": "Pompa di Calore SG-Ready"
+      },
+      "home_consumption_power": {
+        "name": "Consumo Casa"
+      },
+      "inverter_temperature": {
+        "name": "Temperatura dell'inverter"
+      },
+      "lifetime_co2_avoided": {
+        "name": "CO2 Evitato Totale"
+      },
+      "lifetime_ev_battery_share": {
+        "name": "Quota Batteria VE Totale"
+      },
+      "lifetime_ev_cost": {
+        "name": "Costo VE Totale"
+      },
+      "lifetime_ev_energy": {
+        "name": "Energia VE Totale"
+      },
+      "lifetime_ev_grid_share": {
+        "name": "Quota Rete VE Totale"
+      },
+      "lifetime_ev_sessions": {
+        "name": "Sessioni VE Totali"
+      },
+      "lifetime_ev_solar": {
+        "name": "Energia VE Solare Totale"
+      },
+      "lifetime_ev_solar_share": {
+        "name": "Quota Solare VE Totale"
+      },
+      "lifetime_grid_cost": {
+        "name": "Costo Rete Totale"
+      },
+      "lifetime_solar_yield_energy": {
+        "name": "Produzione solare totale"
+      },
+      "lifetime_total_savings": {
+        "name": "Risparmio Totale"
+      },
+      "lifetime_trees_equivalent": {
+        "name": "Equivalente Alberi Totale"
+      },
+      "load_management_recommendation": {
+        "name": "Raccomandazione Carichi"
+      },
+      "load_management_status": {
+        "name": "Gestione Carichi"
+      },
+      "loads_currently_shed": {
+        "name": "Carichi Disconnessi"
+      },
+      "monthly_battery_charge_energy": {
+        "name": "Mensile Carica"
+      },
+      "monthly_battery_discharge_energy": {
+        "name": "Mensile Scarica"
+      },
+      "monthly_battery_savings": {
+        "name": "Risparmio Batteria Mensile"
+      },
+      "monthly_consecutive_peak": {
+        "name": "Picco Mensile"
+      },
+      "monthly_costs": {
+        "name": "Costi Mensili"
+      },
+      "monthly_ev_consumption_energy": {
+        "name": "Mensile VE"
+      },
+      "monthly_export_revenue": {
+        "name": "Ricavo Esportazione Mensile"
+      },
+      "monthly_grid_export_energy": {
+        "name": "Mensile Esportazione"
+      },
+      "monthly_grid_import_energy": {
+        "name": "Mensile Importazione"
+      },
+      "monthly_home_consumption_energy": {
+        "name": "Mensile Casa"
+      },
+      "monthly_net_cost": {
+        "name": "Costo Netto Mensile"
+      },
+      "monthly_savings": {
+        "name": "Risparmio Mensile"
+      },
+      "monthly_solar_yield_energy": {
+        "name": "Mensile Solare"
+      },
+      "night_charging_status": {
+        "name": "Carica Notturna"
+      },
+      "night_end_time": {
+        "name": "Fine Periodo Notturno"
+      },
+      "night_start_time": {
+        "name": "Inizio Periodo Notturno"
+      },
+      "night_window_hours": {
+        "name": "Ore Periodo Notturno"
+      },
+      "peak_margin": {
+        "name": "Margine Picco"
+      },
+      "power_charge_cost": {
+        "name": "Costo Potenza Impegnata"
+      },
+      "predicted_surplus_window": {
+        "name": "Finestra Eccedenza Prevista"
+      },
+      "predictor_model_accuracy": {
+        "name": "Precisione Predittore"
+      },
+      "predictor_training_status": {
+        "name": "Stato Addestramento Predittore"
+      },
+      "pv_daily_specific_yield": {
+        "name": "Resa Specifica PV"
+      },
+      "pv_degradation_trend": {
+        "name": "Tendenza Degradazione PV"
+      },
+      "pv_estimated_annual_degradation": {
+        "name": "Degradazione Annuale PV"
+      },
+      "pv_performance_vs_forecast": {
+        "name": "PV vs Previsione"
+      },
+      "roi_annual_savings": {
+        "name": "ROI Risparmio Annuale"
+      },
+      "roi_payback_years": {
+        "name": "ROI Anni Ammortamento"
+      },
+      "roi_percentage": {
+        "name": "ROI Percentuale"
+      },
+      "self_consumption_rate": {
+        "name": "Autoconsumo"
+      },
+      "session_cost": {
+        "name": "Costo Sessione"
+      },
+      "session_duration": {
+        "name": "Durata Sessione"
+      },
+      "session_energy": {
+        "name": "Energia Sessione"
+      },
+      "session_solar_share": {
+        "name": "Quota Solare Sessione"
+      },
+      "solar_charging_status": {
+        "name": "Carica Solare"
+      },
+      "solar_power": {
+        "name": "Potenza Solare"
+      },
+      "surplus_active_devices": {
+        "name": "Eccedenza Dispositivi Attivi"
+      },
+      "surplus_allocated_w": {
+        "name": "Eccedenza Allocata"
+      },
+      "surplus_distributable_w": {
+        "name": "Eccedenza Distribuibile"
+      },
+      "surplus_total_devices": {
+        "name": "Eccedenza Dispositivi Totale"
+      },
+      "surplus_total_w": {
+        "name": "Eccedenza Totale"
+      },
+      "surplus_unallocated_w": {
+        "name": "Eccedenza Non Allocata"
+      },
+      "target_peak_limit": {
+        "name": "Limite Picco"
+      },
+      "tariff_current_export_rate": {
+        "name": "Tariffa Esportazione"
+      },
+      "tariff_current_import_rate": {
+        "name": "Prezzo Elettricità"
+      },
+      "tariff_next_cheap_start": {
+        "name": "Prossima Finestra Economica"
+      },
+      "tariff_price_level": {
+        "name": "Livello Prezzo"
+      },
+      "tariff_provider": {
+        "name": "Fornitore Tariffa"
+      },
+      "true_baseload_power": {
+        "name": "Carico di base reale"
+      },
+      "vehicle_soc": {
+        "name": "SOC Veicolo"
+      },
+      "vpp_event": {
+        "name": "Evento VPP"
+      },
+      "yearly_battery_charge_energy": {
+        "name": "Annuale Carica Batteria"
+      },
+      "yearly_battery_discharge_energy": {
+        "name": "Annuale Scarica Batteria"
+      },
+      "yearly_battery_savings": {
+        "name": "Risparmio Batteria Annuale"
+      },
+      "yearly_co2_avoided": {
+        "name": "CO2 Evitato Quest'Anno"
+      },
+      "yearly_costs": {
+        "name": "Costi Annuali"
+      },
+      "yearly_ev_energy": {
+        "name": "Annuale Energia VE"
+      },
+      "yearly_export_revenue": {
+        "name": "Ricavo Esportazione Annuale"
+      },
+      "yearly_grid_export_energy": {
+        "name": "Annuale Esportazione Rete"
+      },
+      "yearly_grid_import_energy": {
+        "name": "Annuale Importazione Rete"
+      },
+      "yearly_home_consumption_energy": {
+        "name": "Annuale Consumo Casa"
+      },
+      "yearly_net_cost": {
+        "name": "Costo Netto Annuale"
+      },
+      "yearly_savings": {
+        "name": "Risparmio Annuale"
+      },
+      "yearly_solar_yield_energy": {
+        "name": "Annuale Solare"
+      },
+      "yearly_trees_equivalent": {
+        "name": "Equivalente Alberi Quest'Anno"
       }
     },
     "binary_sensor": {

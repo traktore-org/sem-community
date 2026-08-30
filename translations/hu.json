@@ -656,488 +656,44 @@
   },
   "entity": {
     "sensor": {
-      "solar_power": {
-        "name": "Napelemes teljesítmény"
-      },
-      "home_consumption_power": {
-        "name": "Házi teljesítmény"
-      },
-      "grid_power": {
-        "name": "Hálózati teljesítmény"
-      },
-      "grid_active_power": {
-        "name": "Hálózati hatásos teljesítmény"
-      },
-      "grid_import_power": {
-        "name": "Hálózati vételezés"
-      },
-      "grid_export_power": {
-        "name": "Hálózati betáplálás"
-      },
-      "battery_power": {
-        "name": "Akkumulátor teljesítménye"
-      },
-      "battery_charge_power": {
-        "name": "Akkumulátor töltési teljesítménye"
-      },
-      "battery_discharge_power": {
-        "name": "Akkumulátor kisütési teljesítménye"
-      },
-      "ev_power": {
-        "name": "EV teljesítmény"
-      },
-      "available_power": {
-        "name": "Elérhető teljesítmény"
-      },
-      "battery_soc": {
-        "name": "Akkumulátor SOC"
-      },
-      "battery_status": {
-        "name": "Akkumulátor állapota"
-      },
-      "battery_temperature": {
-        "name": "Akkumulátor hőmérséklete"
-      },
-      "inverter_temperature": {
-        "name": "Inverter hőmérséklete"
-      },
-      "battery_cycles_estimated": {
-        "name": "Akkumulátor-ciklusok (becsült)"
-      },
-      "battery_health_score": {
-        "name": "Akkumulátor állapotpontszáma"
-      },
-      "calculated_current": {
-        "name": "Számított áramerősség"
-      },
-      "charging_state": {
-        "name": "Töltési állapot"
-      },
-      "grid_status": {
-        "name": "Hálózat állapota"
-      },
-      "solar_charging_status": {
-        "name": "Napelemes töltés"
-      },
-      "night_charging_status": {
-        "name": "Éjszakai töltés"
-      },
-      "energy_plan": {
-        "name": "Energiaterv"
-      },
-      "battery_priority_status": {
-        "name": "Akkumulátor prioritása"
-      },
-      "charging_strategy": {
-        "name": "Töltési stratégia"
-      },
-      "daily_solar_energy": {
-        "name": "Mai napenergia"
-      },
-      "daily_home_energy": {
-        "name": "Mai ház"
-      },
-      "daily_grid_import_energy": {
-        "name": "Mai vételezés"
-      },
-      "daily_grid_export_energy": {
-        "name": "Mai betáplálás"
-      },
-      "daily_battery_charge_energy": {
-        "name": "Mai töltés"
-      },
-      "daily_battery_discharge_energy": {
-        "name": "Mai kisütés"
-      },
-      "daily_ev_energy": {
-        "name": "Mai EV"
-      },
-      "monthly_solar_yield_energy": {
-        "name": "Havi napenergia"
-      },
-      "monthly_grid_import_energy": {
-        "name": "Havi vételezés"
-      },
-      "monthly_grid_export_energy": {
-        "name": "Havi betáplálás"
-      },
-      "monthly_battery_charge_energy": {
-        "name": "Havi töltés"
-      },
-      "monthly_battery_discharge_energy": {
-        "name": "Havi kisütés"
-      },
-      "monthly_home_consumption_energy": {
-        "name": "Havi ház"
-      },
-      "monthly_ev_consumption_energy": {
-        "name": "Havi EV"
-      },
-      "flow_solar_to_home_power": {
-        "name": "Napelemből házba"
-      },
-      "flow_solar_to_battery_power": {
-        "name": "Napelemből akkumulátorba"
-      },
-      "flow_solar_to_grid_power": {
-        "name": "Napelemből hálózatba"
-      },
-      "flow_solar_to_ev_power": {
-        "name": "Napelemből EV-be"
-      },
-      "flow_battery_to_home_power": {
-        "name": "Akkumulátorból házba"
-      },
-      "flow_battery_to_grid_power": {
-        "name": "Akkumulátorból hálózatba"
-      },
-      "flow_battery_to_ev_power": {
-        "name": "Akkumulátorból EV-be"
-      },
-      "flow_grid_to_home_power": {
-        "name": "Hálózatból házba"
-      },
-      "flow_grid_to_ev_power": {
-        "name": "Hálózatból EV-be"
-      },
-      "flow_grid_to_battery_power": {
-        "name": "Hálózatból akkumulátorba"
-      },
-      "flow_solar_to_home_energy": {
-        "name": "Napelemből házba energia"
-      },
-      "flow_solar_to_ev_energy": {
-        "name": "Napelemből EV-be energia"
-      },
-      "flow_solar_to_battery_energy": {
-        "name": "Napelemből akkumulátorba energia"
-      },
-      "flow_solar_to_grid_energy": {
-        "name": "Napelemből hálózatba energia"
-      },
-      "flow_grid_to_home_energy": {
-        "name": "Hálózatból házba energia"
-      },
-      "flow_grid_to_ev_energy": {
-        "name": "Hálózatból EV-be energia"
-      },
-      "flow_grid_to_battery_energy": {
-        "name": "Hálózatból akkumulátorba energia"
-      },
-      "flow_battery_to_home_energy": {
-        "name": "Akkumulátorból házba energia"
-      },
-      "flow_battery_to_grid_energy": {
-        "name": "Akkumulátorból hálózatba energia"
-      },
-      "flow_battery_to_ev_energy": {
-        "name": "Akkumulátorból EV-be energia"
-      },
-      "self_consumption_rate": {
-        "name": "Saját felhasználás"
-      },
       "autarky_rate": {
         "name": "Önellátási arány"
-      },
-      "daily_savings": {
-        "name": "Mai megtakarítás"
-      },
-      "daily_battery_savings": {
-        "name": "Napi akkumulátor-megtakarítás"
-      },
-      "daily_costs": {
-        "name": "Napi költségek"
-      },
-      "daily_export_revenue": {
-        "name": "Napi betáplálási bevétel"
-      },
-      "daily_net_cost": {
-        "name": "Napi nettó költség"
-      },
-      "monthly_savings": {
-        "name": "Havi megtakarítás"
-      },
-      "monthly_battery_savings": {
-        "name": "Havi akkumulátor-megtakarítás"
-      },
-      "monthly_costs": {
-        "name": "Havi költségek"
-      },
-      "monthly_export_revenue": {
-        "name": "Havi betáplálási bevétel"
-      },
-      "monthly_net_cost": {
-        "name": "Havi nettó költség"
-      },
-      "yearly_solar_yield_energy": {
-        "name": "Éves napenergia"
-      },
-      "lifetime_solar_yield_energy": {
-        "name": "Teljes napelemes termelés"
-      },
-      "yearly_grid_import_energy": {
-        "name": "Éves hálózati vételezés"
-      },
-      "yearly_grid_export_energy": {
-        "name": "Éves hálózati betáplálás"
-      },
-      "yearly_battery_charge_energy": {
-        "name": "Éves akkumulátortöltés"
-      },
-      "yearly_battery_discharge_energy": {
-        "name": "Éves akkumulátor-kisütés"
-      },
-      "yearly_home_consumption_energy": {
-        "name": "Éves házi fogyasztás"
-      },
-      "yearly_ev_energy": {
-        "name": "Éves EV-energia"
-      },
-      "yearly_costs": {
-        "name": "Éves költségek"
-      },
-      "yearly_savings": {
-        "name": "Éves megtakarítás"
-      },
-      "yearly_battery_savings": {
-        "name": "Éves akkumulátor-megtakarítás"
-      },
-      "yearly_export_revenue": {
-        "name": "Éves betáplálási bevétel"
-      },
-      "yearly_net_cost": {
-        "name": "Éves nettó költség"
-      },
-      "lifetime_total_savings": {
-        "name": "Összes megtakarítás"
-      },
-      "lifetime_grid_cost": {
-        "name": "Összes hálózati költség"
-      },
-      "roi_percentage": {
-        "name": "ROI százalék"
-      },
-      "roi_payback_years": {
-        "name": "ROI megtérülési évek"
-      },
-      "roi_annual_savings": {
-        "name": "ROI éves megtakarítás"
-      },
-      "forecast_correction_factor": {
-        "name": "Előrejelzés korrekciós tényezője"
-      },
-      "forecast_corrected_today": {
-        "name": "Korrigált előrejelzés ma"
-      },
-      "forecast_history_days": {
-        "name": "Előrejelzés előzményei (nap)"
-      },
-      "daily_co2_avoided": {
-        "name": "Mai elkerült CO2"
-      },
-      "yearly_co2_avoided": {
-        "name": "Idei elkerült CO2"
-      },
-      "yearly_trees_equivalent": {
-        "name": "Idei faegyenérték"
-      },
-      "lifetime_co2_avoided": {
-        "name": "Összes elkerült CO2"
-      },
-      "lifetime_trees_equivalent": {
-        "name": "Összes faegyenérték"
-      },
-      "power_charge_cost": {
-        "name": "Teljesítménydíj költsége"
-      },
-      "consecutive_peak_15min": {
-        "name": "15 perces csúcs"
-      },
-      "monthly_consecutive_peak": {
-        "name": "Havi csúcs"
-      },
-      "current_vs_peak_percentage": {
-        "name": "Csúcs százaléka"
-      },
-      "target_peak_limit": {
-        "name": "Csúcskorlát"
-      },
-      "peak_margin": {
-        "name": "Csúcstartalék"
-      },
-      "load_management_status": {
-        "name": "Terheléskezelés"
-      },
-      "load_management_recommendation": {
-        "name": "Terhelési javaslat"
-      },
-      "loads_currently_shed": {
-        "name": "Lekapcsolt terhelések"
       },
       "available_load_reduction": {
         "name": "Elérhető csökkentés"
       },
-      "controllable_devices_count": {
-        "name": "Eszközök száma"
+      "available_power": {
+        "name": "Elérhető teljesítmény"
       },
-      "surplus_total_w": {
-        "name": "Összes többlet"
+      "battery_capacity_drift_pct": {
+        "name": "Kapacitáseltérés"
       },
-      "surplus_distributable_w": {
-        "name": "Szétosztható többlet"
+      "battery_charge_pacing": {
+        "name": "Battery charge pacing"
       },
-      "surplus_allocated_w": {
-        "name": "Kiosztott többlet"
+      "battery_charge_power": {
+        "name": "Akkumulátor töltési teljesítménye"
       },
-      "surplus_unallocated_w": {
-        "name": "Kiosztatlan többlet"
+      "battery_cycles_estimated": {
+        "name": "Akkumulátor-ciklusok (becsült)"
       },
-      "surplus_active_devices": {
-        "name": "Többletet fogadó aktív eszközök"
+      "battery_discharge_power": {
+        "name": "Akkumulátor kisütési teljesítménye"
       },
-      "surplus_total_devices": {
-        "name": "Többlet-eszközök összesen"
+      "battery_dynamic_floor_pct": {
+        "name": "Dinamikus küszöb"
       },
-      "forecast_today_kwh": {
-        "name": "Előrejelzés ma"
+      "battery_health_score": {
+        "name": "Akkumulátor állapotpontszáma"
       },
-      "forecast_tomorrow_kwh": {
-        "name": "Előrejelzés holnap"
+      "battery_measured_capacity_kwh": {
+        "name": "Mért akkumulátor-kapacitás"
       },
-      "forecast_remaining_today_kwh": {
-        "name": "Előrejelzett hátralévő ma"
+      "battery_power": {
+        "name": "Akkumulátor teljesítménye"
       },
-      "forecast_power_now_w": {
-        "name": "Előrejelzett teljesítmény most"
-      },
-      "forecast_source": {
-        "name": "Előrejelzés forrása"
-      },
-      "charging_recommendation": {
-        "name": "Töltési javaslat"
-      },
-      "tariff_current_import_rate": {
-        "name": "Villamosenergia-ár"
-      },
-      "tariff_current_export_rate": {
-        "name": "Betáplálási ár"
-      },
-      "tariff_price_level": {
-        "name": "Árszint"
-      },
-      "tariff_provider": {
-        "name": "Tarifaszolgáltató"
-      },
-      "tariff_next_cheap_start": {
-        "name": "Következő olcsó időszak"
-      },
-      "heat_pump_mode": {
-        "name": "Hőszivattyú üzemmódja"
-      },
-      "heat_pump_sg_ready_state": {
-        "name": "Hőszivattyú SG-Ready állapota"
-      },
-      "pv_daily_specific_yield": {
-        "name": "PV fajlagos hozam"
-      },
-      "pv_performance_vs_forecast": {
-        "name": "PV az előrejelzéshez képest"
-      },
-      "pv_estimated_annual_degradation": {
-        "name": "PV éves degradáció"
-      },
-      "pv_degradation_trend": {
-        "name": "PV degradációs trend"
-      },
-      "energy_optimization_score": {
-        "name": "Optimalizálási pontszám"
-      },
-      "energy_tip": {
-        "name": "Energiatipp"
-      },
-      "energy_tip_category": {
-        "name": "Energiatipp kategóriája"
-      },
-      "energy_ev_solar_percentage": {
-        "name": "EV napenergiás töltés %"
-      },
-      "predictor_training_status": {
-        "name": "Predictor tanítási állapota"
-      },
-      "predictor_model_accuracy": {
-        "name": "Predictor Accuracy"
-      },
-      "predicted_surplus_window": {
-        "name": "Előrejelzett többletidőszak"
-      },
-      "session_energy": {
-        "name": "Munkamenet energiája"
-      },
-      "session_solar_share": {
-        "name": "Munkamenet napenergia-aránya"
-      },
-      "session_cost": {
-        "name": "Munkamenet költsége"
-      },
-      "session_duration": {
-        "name": "Munkamenet időtartama"
-      },
-      "lifetime_ev_energy": {
-        "name": "Összes EV-energia"
-      },
-      "lifetime_ev_solar": {
-        "name": "Összes EV napenergia"
-      },
-      "lifetime_ev_cost": {
-        "name": "Összes EV-költség"
-      },
-      "lifetime_ev_sessions": {
-        "name": "Összes EV-munkamenet"
-      },
-      "lifetime_ev_solar_share": {
-        "name": "Összes EV napenergia-aránya"
-      },
-      "lifetime_ev_battery_share": {
-        "name": "Összes EV akkumulátor-aránya"
-      },
-      "lifetime_ev_grid_share": {
-        "name": "Összes EV hálózati aránya"
-      },
-      "vehicle_soc": {
-        "name": "Jármű SOC"
-      },
-      "ev_remaining_range": {
-        "name": "EV hatótáv"
-      },
-      "best_surplus_window": {
-        "name": "Legjobb többletidőszak"
-      },
-      "night_start_time": {
-        "name": "Éjszaka kezdete"
-      },
-      "night_end_time": {
-        "name": "Éjszaka vége"
-      },
-      "night_window_hours": {
-        "name": "Éjszakai időszak (óra)"
-      },
-      "forecast_peak_power_today_w": {
-        "name": "Előrejelzett mai csúcsteljesítmény"
-      },
-      "forecast_peak_time_today": {
-        "name": "Előrejelzett mai csúcsidőpont"
-      },
-      "forecast_surplus_kwh": {
-        "name": "Előrejelzett többlet"
-      },
-      "forecast_dampening_factor": {
-        "name": "Előrejelzés csillapítási tényezője"
-      },
-      "battery_scheduler_state": {
-        "name": "Akkutöltő ütemező állapot"
-      },
-      "battery_scheduler_target_soc": {
-        "name": "Akkuütemező cél-SOC"
+      "battery_priority_status": {
+        "name": "Akkumulátor prioritása"
       },
       "battery_scheduler_deficit_kwh": {
         "name": "Akkuütemező hiánya"
@@ -1145,20 +701,128 @@
       "battery_scheduler_reason": {
         "name": "Akkuütemező indoka"
       },
-      "ev_charger_count": {
-        "name": "EV-töltők száma"
+      "battery_scheduler_state": {
+        "name": "Akkutöltő ütemező állapot"
       },
-      "ev_taper_trend": {
-        "name": "EV teljesítménycsökkenési trend"
+      "battery_scheduler_target_soc": {
+        "name": "Akkuütemező cél-SOC"
       },
-      "diag_version": {
-        "name": "SEM Verzió"
+      "battery_session_avg_power": {
+        "name": "Akkumulátor-munkamenet átl. teljesítménye"
       },
-      "diag_grid_mode": {
-        "name": "Hálózati érzékelő módja"
+      "battery_session_cost": {
+        "name": "Akkumulátor-munkamenet költsége"
       },
-      "diag_grid_sign": {
-        "name": "Hálózati előjel-konvenció"
+      "battery_session_duration": {
+        "name": "Akkumulátor-munkamenet időtartama"
+      },
+      "battery_session_energy": {
+        "name": "Akkumulátor-munkamenet energiája"
+      },
+      "battery_session_savings": {
+        "name": "Akkumulátor-munkamenet megtakarítása"
+      },
+      "battery_session_solar_share": {
+        "name": "Akkumulátor-munkamenet napenergia-aránya"
+      },
+      "battery_session_type": {
+        "name": "Akkumulátor-munkamenet típusa"
+      },
+      "battery_soc": {
+        "name": "Akkumulátor SOC"
+      },
+      "battery_spendable_kwh": {
+        "name": "Ma éjjel elkölthető"
+      },
+      "battery_status": {
+        "name": "Akkumulátor állapota"
+      },
+      "battery_stored_grid_share": {
+        "name": "Tárolt energia hálózatról"
+      },
+      "battery_temperature": {
+        "name": "Akkumulátor hőmérséklete"
+      },
+      "best_surplus_window": {
+        "name": "Legjobb többletidőszak"
+      },
+      "calculated_current": {
+        "name": "Számított áramerősség"
+      },
+      "charging_recommendation": {
+        "name": "Töltési javaslat"
+      },
+      "charging_state": {
+        "name": "Töltési állapot"
+      },
+      "charging_strategy": {
+        "name": "Töltési stratégia"
+      },
+      "consecutive_peak_15min": {
+        "name": "15 perces csúcs"
+      },
+      "controllable_devices_count": {
+        "name": "Eszközök száma"
+      },
+      "current_vs_peak_percentage": {
+        "name": "Csúcs százaléka"
+      },
+      "daily_battery_charge_energy": {
+        "name": "Mai töltés"
+      },
+      "daily_battery_charge_grid": {
+        "name": "Ma töltés hálózatról"
+      },
+      "daily_battery_charge_solar": {
+        "name": "Ma töltés napelemből"
+      },
+      "daily_battery_discharge_energy": {
+        "name": "Mai kisütés"
+      },
+      "daily_battery_grid_cost": {
+        "name": "Ma hálózati töltés költsége"
+      },
+      "daily_battery_savings": {
+        "name": "Napi akkumulátor-megtakarítás"
+      },
+      "daily_co2_avoided": {
+        "name": "Mai elkerült CO2"
+      },
+      "daily_costs": {
+        "name": "Napi költségek"
+      },
+      "daily_ev_energy": {
+        "name": "Mai EV"
+      },
+      "daily_export_revenue": {
+        "name": "Napi betáplálási bevétel"
+      },
+      "daily_grid_export_energy": {
+        "name": "Mai betáplálás"
+      },
+      "daily_grid_import_energy": {
+        "name": "Mai vételezés"
+      },
+      "daily_home_energy": {
+        "name": "Mai ház"
+      },
+      "daily_net_cost": {
+        "name": "Napi nettó költség"
+      },
+      "daily_savings": {
+        "name": "Mai megtakarítás"
+      },
+      "daily_solar_energy": {
+        "name": "Mai napenergia"
+      },
+      "daily_total_consumption": {
+        "name": "Ma teljes fogyasztás"
+      },
+      "daily_true_baseload_energy": {
+        "name": "Valós alapterhelés ma"
+      },
+      "diag_battery_capacity": {
+        "name": "Akkumulátor kapacitása (konfig)"
       },
       "diag_battery_sign": {
         "name": "Akkumulátor előjel-konvenciója"
@@ -1166,14 +830,11 @@
       "diag_charger_control": {
         "name": "Töltő vezérlési módja"
       },
-      "diag_battery_capacity": {
-        "name": "Akkumulátor kapacitása (konfig)"
+      "diag_charger_count": {
+        "name": "Konfigurált töltők"
       },
-      "diag_update_interval": {
-        "name": "Frissítési időköz"
-      },
-      "diag_observer_mode": {
-        "name": "Megfigyelő mód"
+      "diag_ed_config": {
+        "name": "Energia-irányítópult konfiguráció"
       },
       "diag_grid_l1_current_a": {
         "name": "Grid L1 Current"
@@ -1193,6 +854,15 @@
       "diag_grid_l3_margin_a": {
         "name": "Grid L3 Current Margin"
       },
+      "diag_grid_mode": {
+        "name": "Hálózati érzékelő módja"
+      },
+      "diag_grid_sign": {
+        "name": "Hálózati előjel-konvenció"
+      },
+      "diag_inputs_degraded": {
+        "name": "Inputs Degraded"
+      },
       "diag_inverter_l1_current_a": {
         "name": "Inverter Load/EPS L1 Current"
       },
@@ -1211,14 +881,17 @@
       "diag_inverter_l3_margin_a": {
         "name": "Inverter Load/EPS L3 Current Margin"
       },
+      "diag_observer_mode": {
+        "name": "Megfigyelő mód"
+      },
+      "diag_phase_guard_data_fresh": {
+        "name": "Phase Guard Data Fresh"
+      },
       "diag_phase_guard_mode": {
         "name": "Phase Guard Mode"
       },
       "diag_phase_guard_safe": {
         "name": "Phase Guard Safe"
-      },
-      "diag_phase_guard_data_fresh": {
-        "name": "Phase Guard Data Fresh"
       },
       "diag_phase_guard_stop_reason": {
         "name": "Phase Guard Stop Reason"
@@ -1226,80 +899,134 @@
       "diag_sensors_unavailable": {
         "name": "Érzékelők nem elérhetők"
       },
-      "battery_session_type": {
-        "name": "Akkumulátor-munkamenet típusa"
+      "diag_update_interval": {
+        "name": "Frissítési időköz"
       },
-      "battery_session_energy": {
-        "name": "Akkumulátor-munkamenet energiája"
+      "diag_version": {
+        "name": "SEM Verzió"
       },
-      "battery_session_solar_share": {
-        "name": "Akkumulátor-munkamenet napenergia-aránya"
+      "energy_ev_solar_percentage": {
+        "name": "EV napenergiás töltés %"
       },
-      "battery_session_cost": {
-        "name": "Akkumulátor-munkamenet költsége"
+      "energy_optimization_score": {
+        "name": "Optimalizálási pontszám"
       },
-      "battery_session_savings": {
-        "name": "Akkumulátor-munkamenet megtakarítása"
+      "energy_plan": {
+        "name": "Energiaterv"
       },
-      "battery_session_duration": {
-        "name": "Akkumulátor-munkamenet időtartama"
+      "energy_tip": {
+        "name": "Energiatipp"
       },
-      "battery_session_avg_power": {
-        "name": "Akkumulátor-munkamenet átl. teljesítménye"
+      "energy_tip_category": {
+        "name": "Energiatipp kategóriája"
       },
-      "diag_charger_count": {
-        "name": "Konfigurált töltők"
+      "ev_charger_count": {
+        "name": "EV-töltők száma"
       },
-      "diag_ed_config": {
-        "name": "Energia-irányítópult konfiguráció"
+      "ev_power": {
+        "name": "EV teljesítmény"
       },
-      "heat_pump_registration_status": {
-        "name": "Hőszivattyú regisztrációs állapota"
+      "ev_remaining_range": {
+        "name": "EV hatótáv"
       },
-      "vpp_event": {
-        "name": "VPP-esemény"
+      "ev_taper_trend": {
+        "name": "EV teljesítménycsökkenési trend"
       },
-      "heat_pump_energy_today": {
-        "name": "Hőszivattyú ma"
+      "flow_battery_to_ev_energy": {
+        "name": "Akkumulátorból EV-be energia"
       },
-      "heat_pump_energy_month": {
-        "name": "Hőszivattyú ebben a hónapban"
+      "flow_battery_to_ev_power": {
+        "name": "Akkumulátorból EV-be"
       },
-      "heat_pump_energy_year": {
-        "name": "Hőszivattyú idén"
+      "flow_battery_to_grid_energy": {
+        "name": "Akkumulátorból hálózatba energia"
       },
-      "heat_pump_energy_total": {
-        "name": "Hőszivattyú összesen"
+      "flow_battery_to_grid_power": {
+        "name": "Akkumulátorból hálózatba"
       },
-      "heat_pump_energy_shifted_today": {
-        "name": "Hőszivattyú áthelyezve ma"
+      "flow_battery_to_home_energy": {
+        "name": "Akkumulátorból házba energia"
       },
-      "daily_battery_charge_solar": {
-        "name": "Ma töltés napelemből"
+      "flow_battery_to_home_power": {
+        "name": "Akkumulátorból házba"
       },
-      "daily_battery_charge_grid": {
-        "name": "Ma töltés hálózatról"
+      "flow_grid_to_battery_energy": {
+        "name": "Hálózatból akkumulátorba energia"
       },
-      "daily_battery_grid_cost": {
-        "name": "Ma hálózati töltés költsége"
+      "flow_grid_to_battery_power": {
+        "name": "Hálózatból akkumulátorba"
       },
-      "battery_stored_grid_share": {
-        "name": "Tárolt energia hálózatról"
+      "flow_grid_to_ev_energy": {
+        "name": "Hálózatból EV-be energia"
       },
-      "true_baseload_power": {
-        "name": "Valós alapterhelés"
+      "flow_grid_to_ev_power": {
+        "name": "Hálózatból EV-be"
       },
-      "daily_true_baseload_energy": {
-        "name": "Valós alapterhelés ma"
+      "flow_grid_to_home_energy": {
+        "name": "Hálózatból házba energia"
       },
-      "daily_total_consumption": {
-        "name": "Ma teljes fogyasztás"
+      "flow_grid_to_home_power": {
+        "name": "Hálózatból házba"
       },
-      "battery_measured_capacity_kwh": {
-        "name": "Mért akkumulátor-kapacitás"
+      "flow_solar_to_battery_energy": {
+        "name": "Napelemből akkumulátorba energia"
       },
-      "battery_capacity_drift_pct": {
-        "name": "Kapacitáseltérés"
+      "flow_solar_to_battery_power": {
+        "name": "Napelemből akkumulátorba"
+      },
+      "flow_solar_to_ev_energy": {
+        "name": "Napelemből EV-be energia"
+      },
+      "flow_solar_to_ev_power": {
+        "name": "Napelemből EV-be"
+      },
+      "flow_solar_to_grid_energy": {
+        "name": "Napelemből hálózatba energia"
+      },
+      "flow_solar_to_grid_power": {
+        "name": "Napelemből hálózatba"
+      },
+      "flow_solar_to_home_energy": {
+        "name": "Napelemből házba energia"
+      },
+      "flow_solar_to_home_power": {
+        "name": "Napelemből házba"
+      },
+      "forecast_corrected_today": {
+        "name": "Korrigált előrejelzés ma"
+      },
+      "forecast_correction_factor": {
+        "name": "Előrejelzés korrekciós tényezője"
+      },
+      "forecast_dampening_factor": {
+        "name": "Előrejelzés csillapítási tényezője"
+      },
+      "forecast_history_days": {
+        "name": "Előrejelzés előzményei (nap)"
+      },
+      "forecast_peak_power_today_w": {
+        "name": "Előrejelzett mai csúcsteljesítmény"
+      },
+      "forecast_peak_time_today": {
+        "name": "Előrejelzett mai csúcsidőpont"
+      },
+      "forecast_power_now_w": {
+        "name": "Előrejelzett teljesítmény most"
+      },
+      "forecast_remaining_today_kwh": {
+        "name": "Előrejelzett hátralévő ma"
+      },
+      "forecast_source": {
+        "name": "Előrejelzés forrása"
+      },
+      "forecast_surplus_kwh": {
+        "name": "Előrejelzett többlet"
+      },
+      "forecast_today_kwh": {
+        "name": "Előrejelzés ma"
+      },
+      "forecast_tomorrow_kwh": {
+        "name": "Előrejelzés holnap"
       },
       "forecast_trust_d1": {
         "name": "Előrejelzés megbízhatósága (holnap)"
@@ -1307,14 +1034,290 @@
       "forecast_trust_d2": {
         "name": "Előrejelzés megbízhatósága (holnapután)"
       },
-      "battery_spendable_kwh": {
-        "name": "Ma éjjel elkölthető"
+      "grid_active_power": {
+        "name": "Hálózati hatásos teljesítmény"
       },
-      "battery_dynamic_floor_pct": {
-        "name": "Dinamikus küszöb"
+      "grid_export_power": {
+        "name": "Hálózati betáplálás"
       },
-      "battery_charge_pacing": {
-        "name": "Battery charge pacing"
+      "grid_import_power": {
+        "name": "Hálózati vételezés"
+      },
+      "grid_power": {
+        "name": "Hálózati teljesítmény"
+      },
+      "grid_status": {
+        "name": "Hálózat állapota"
+      },
+      "heat_pump_energy_month": {
+        "name": "Hőszivattyú ebben a hónapban"
+      },
+      "heat_pump_energy_shifted_today": {
+        "name": "Hőszivattyú áthelyezve ma"
+      },
+      "heat_pump_energy_today": {
+        "name": "Hőszivattyú ma"
+      },
+      "heat_pump_energy_total": {
+        "name": "Hőszivattyú összesen"
+      },
+      "heat_pump_energy_year": {
+        "name": "Hőszivattyú idén"
+      },
+      "heat_pump_mode": {
+        "name": "Hőszivattyú üzemmódja"
+      },
+      "heat_pump_registration_status": {
+        "name": "Hőszivattyú regisztrációs állapota"
+      },
+      "heat_pump_sg_ready_state": {
+        "name": "Hőszivattyú SG-Ready állapota"
+      },
+      "home_consumption_power": {
+        "name": "Házi teljesítmény"
+      },
+      "inverter_temperature": {
+        "name": "Inverter hőmérséklete"
+      },
+      "lifetime_co2_avoided": {
+        "name": "Összes elkerült CO2"
+      },
+      "lifetime_ev_battery_share": {
+        "name": "Összes EV akkumulátor-aránya"
+      },
+      "lifetime_ev_cost": {
+        "name": "Összes EV-költség"
+      },
+      "lifetime_ev_energy": {
+        "name": "Összes EV-energia"
+      },
+      "lifetime_ev_grid_share": {
+        "name": "Összes EV hálózati aránya"
+      },
+      "lifetime_ev_sessions": {
+        "name": "Összes EV-munkamenet"
+      },
+      "lifetime_ev_solar": {
+        "name": "Összes EV napenergia"
+      },
+      "lifetime_ev_solar_share": {
+        "name": "Összes EV napenergia-aránya"
+      },
+      "lifetime_grid_cost": {
+        "name": "Összes hálózati költség"
+      },
+      "lifetime_solar_yield_energy": {
+        "name": "Teljes napelemes termelés"
+      },
+      "lifetime_total_savings": {
+        "name": "Összes megtakarítás"
+      },
+      "lifetime_trees_equivalent": {
+        "name": "Összes faegyenérték"
+      },
+      "load_management_recommendation": {
+        "name": "Terhelési javaslat"
+      },
+      "load_management_status": {
+        "name": "Terheléskezelés"
+      },
+      "loads_currently_shed": {
+        "name": "Lekapcsolt terhelések"
+      },
+      "monthly_battery_charge_energy": {
+        "name": "Havi töltés"
+      },
+      "monthly_battery_discharge_energy": {
+        "name": "Havi kisütés"
+      },
+      "monthly_battery_savings": {
+        "name": "Havi akkumulátor-megtakarítás"
+      },
+      "monthly_consecutive_peak": {
+        "name": "Havi csúcs"
+      },
+      "monthly_costs": {
+        "name": "Havi költségek"
+      },
+      "monthly_ev_consumption_energy": {
+        "name": "Havi EV"
+      },
+      "monthly_export_revenue": {
+        "name": "Havi betáplálási bevétel"
+      },
+      "monthly_grid_export_energy": {
+        "name": "Havi betáplálás"
+      },
+      "monthly_grid_import_energy": {
+        "name": "Havi vételezés"
+      },
+      "monthly_home_consumption_energy": {
+        "name": "Havi ház"
+      },
+      "monthly_net_cost": {
+        "name": "Havi nettó költség"
+      },
+      "monthly_savings": {
+        "name": "Havi megtakarítás"
+      },
+      "monthly_solar_yield_energy": {
+        "name": "Havi napenergia"
+      },
+      "night_charging_status": {
+        "name": "Éjszakai töltés"
+      },
+      "night_end_time": {
+        "name": "Éjszaka vége"
+      },
+      "night_start_time": {
+        "name": "Éjszaka kezdete"
+      },
+      "night_window_hours": {
+        "name": "Éjszakai időszak (óra)"
+      },
+      "peak_margin": {
+        "name": "Csúcstartalék"
+      },
+      "power_charge_cost": {
+        "name": "Teljesítménydíj költsége"
+      },
+      "predicted_surplus_window": {
+        "name": "Előrejelzett többletidőszak"
+      },
+      "predictor_model_accuracy": {
+        "name": "Predictor Accuracy"
+      },
+      "predictor_training_status": {
+        "name": "Predictor tanítási állapota"
+      },
+      "pv_daily_specific_yield": {
+        "name": "PV fajlagos hozam"
+      },
+      "pv_degradation_trend": {
+        "name": "PV degradációs trend"
+      },
+      "pv_estimated_annual_degradation": {
+        "name": "PV éves degradáció"
+      },
+      "pv_performance_vs_forecast": {
+        "name": "PV az előrejelzéshez képest"
+      },
+      "roi_annual_savings": {
+        "name": "ROI éves megtakarítás"
+      },
+      "roi_payback_years": {
+        "name": "ROI megtérülési évek"
+      },
+      "roi_percentage": {
+        "name": "ROI százalék"
+      },
+      "self_consumption_rate": {
+        "name": "Saját felhasználás"
+      },
+      "session_cost": {
+        "name": "Munkamenet költsége"
+      },
+      "session_duration": {
+        "name": "Munkamenet időtartama"
+      },
+      "session_energy": {
+        "name": "Munkamenet energiája"
+      },
+      "session_solar_share": {
+        "name": "Munkamenet napenergia-aránya"
+      },
+      "solar_charging_status": {
+        "name": "Napelemes töltés"
+      },
+      "solar_power": {
+        "name": "Napelemes teljesítmény"
+      },
+      "surplus_active_devices": {
+        "name": "Többletet fogadó aktív eszközök"
+      },
+      "surplus_allocated_w": {
+        "name": "Kiosztott többlet"
+      },
+      "surplus_distributable_w": {
+        "name": "Szétosztható többlet"
+      },
+      "surplus_total_devices": {
+        "name": "Többlet-eszközök összesen"
+      },
+      "surplus_total_w": {
+        "name": "Összes többlet"
+      },
+      "surplus_unallocated_w": {
+        "name": "Kiosztatlan többlet"
+      },
+      "target_peak_limit": {
+        "name": "Csúcskorlát"
+      },
+      "tariff_current_export_rate": {
+        "name": "Betáplálási ár"
+      },
+      "tariff_current_import_rate": {
+        "name": "Villamosenergia-ár"
+      },
+      "tariff_next_cheap_start": {
+        "name": "Következő olcsó időszak"
+      },
+      "tariff_price_level": {
+        "name": "Árszint"
+      },
+      "tariff_provider": {
+        "name": "Tarifaszolgáltató"
+      },
+      "true_baseload_power": {
+        "name": "Valós alapterhelés"
+      },
+      "vehicle_soc": {
+        "name": "Jármű SOC"
+      },
+      "vpp_event": {
+        "name": "VPP-esemény"
+      },
+      "yearly_battery_charge_energy": {
+        "name": "Éves akkumulátortöltés"
+      },
+      "yearly_battery_discharge_energy": {
+        "name": "Éves akkumulátor-kisütés"
+      },
+      "yearly_battery_savings": {
+        "name": "Éves akkumulátor-megtakarítás"
+      },
+      "yearly_co2_avoided": {
+        "name": "Idei elkerült CO2"
+      },
+      "yearly_costs": {
+        "name": "Éves költségek"
+      },
+      "yearly_ev_energy": {
+        "name": "Éves EV-energia"
+      },
+      "yearly_export_revenue": {
+        "name": "Éves betáplálási bevétel"
+      },
+      "yearly_grid_export_energy": {
+        "name": "Éves hálózati betáplálás"
+      },
+      "yearly_grid_import_energy": {
+        "name": "Éves hálózati vételezés"
+      },
+      "yearly_home_consumption_energy": {
+        "name": "Éves házi fogyasztás"
+      },
+      "yearly_net_cost": {
+        "name": "Éves nettó költség"
+      },
+      "yearly_savings": {
+        "name": "Éves megtakarítás"
+      },
+      "yearly_solar_yield_energy": {
+        "name": "Éves napenergia"
+      },
+      "yearly_trees_equivalent": {
+        "name": "Idei faegyenérték"
       }
     },
     "binary_sensor": {

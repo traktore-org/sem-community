@@ -357,9 +357,11 @@ Charges from the grid plus any solar surplus on top. The EV always starts, even 
 
 ### Solar + Cheapest Hours (`solar_plus_cheap`)
 
-**Daytime:** charges from solar surplus (like Solar Only).
+**Daytime:** charges from solar surplus (like Solar Only) — **and, on a cheap or negative price hour, tops the Min floor up from grid** just as the night window does (#856). Solar surplus always wins when it offers more; the mode never downgrades a strong sun to the grid rate. Expensive hours pause grid imports entirely.
 
 **Night:** if tariff mode is "Dynamic", defers charging to the cheapest contiguous price window instead of charging immediately. The Min floor is always guaranteed: if waiting for cheap hours would miss the deadline or there's no price data, SEM charges anyway.
+
+**The Min floor is what a cheap hour fills.** With *At least* set to 0 kWh there is nothing to top up, so a cheap hour — day or night — charges nothing from grid; the strategy line says so. Set *At least* to the energy you want secured at the cheapest price.
 
 Best for: you have a dynamic tariff (Tibber, Octopus, Amber) and want to optimize cost. Picking this mode *is* the opt-in — it is the only mode that consults the tariff, and it is hidden from the selector when no dynamic tariff is configured.
 

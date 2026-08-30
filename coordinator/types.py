@@ -844,6 +844,15 @@ class PVAnalyticsData:
     pv_performance_vs_forecast: float = 0.0
     pv_estimated_annual_degradation: float = 0.0
     pv_degradation_trend: str = "unknown"
+    # (#422, published 30.08) The analyzer records WHICH branch produced each
+    # number — "insufficient_history", "no_size_configured", "computed" — so a
+    # blank explains itself instead of looking broken. It computed these from
+    # the start and the coordinator copied only the four values above, so the
+    # telemetry meant to answer "why is this empty?" never reached anyone.
+    pv_yield_path: str = "uninitialized"
+    pv_performance_path: str = "uninitialized"
+    pv_degradation_path: str = "uninitialized"
+    pv_system_age_path: str = "uninitialized"
 
 
 @dataclass
@@ -1414,6 +1423,10 @@ class SEMData:
             "pv_performance_vs_forecast": self.pv_analytics.pv_performance_vs_forecast,
             "pv_estimated_annual_degradation": self.pv_analytics.pv_estimated_annual_degradation,
             "pv_degradation_trend": self.pv_analytics.pv_degradation_trend,
+            "pv_yield_path": self.pv_analytics.pv_yield_path,
+            "pv_performance_path": self.pv_analytics.pv_performance_path,
+            "pv_degradation_path": self.pv_analytics.pv_degradation_path,
+            "pv_system_age_path": self.pv_analytics.pv_system_age_path,
 
             # Energy assistant (Phase 6)
             "energy_optimization_score": self.energy_assistant.energy_optimization_score,

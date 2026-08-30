@@ -1,0 +1,54 @@
+name: "2026-08-30 #856 solar_plus_cheap — a cheap DAYTIME hour tops the Min floor up from grid"
+
+coverage:
+  - mode: solar_plus_cheap
+    regime: day_cheap_tariff_tops_up
+    issue: "#856"
+
+description: |
+  hoyte (#856): price "around 0", car plugged in by day, mode Solar +
+  cheapest hours — and the car only charged in always_max. The mode honoured
+  cheap hours at NIGHT only; by day it fell back to solar-only regardless of
+  price. Its name is a promise about PRICE, not the clock.
+
+  Inputs: daytime, no solar at all, a very_cheap live tariff level, a Min
+  target still owed. Expected: the shared top-up seam charges from grid at
+  the Min current, and the canonical strategy reads MIN_PV (a grid top-up),
+  not solar_only.
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 70
+  battery_auto_start_soc: 90
+  battery_priority_soc: 30
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  daily_ev_target: 7.0
+  target_peak_limit: 6.0
+  is_night: false
+  tariff_level: "very_cheap"
+  ev_chargers:
+    - id: "ev_charger"
+      charge_mode: "solar_plus_cheap"
+      daily_ev_target: 7.0
+
+cycle_seconds: 30
+
+timeline:
+  - t: 0
+    solar_power: 0               # a dark day: nothing to charge from but grid
+    grid_power: -4500            # -ve = importing, covering the Min current
+    battery_power: 0
+    battery_soc: 50              # Zone 2 — solar path alone would idle
+    ev_power: 4140               # 6 A × 3 × 230 — at Min
+    ev_connected: true
+
+  - t: 60
+  - t: 120
+
+expect:
+  # Daytime + cheap tariff → night_top_up_decision(phase="day (cheap tariff)")
+  # → CHARGE_AT_AMPS; the mapper routes the day-cheap top-up to MIN_PV.
+  strategy_substring: "min_pv"
