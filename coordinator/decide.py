@@ -942,7 +942,8 @@ def decide(view: ChargerView) -> ChargerDecision:
         _min_a = effective_min_amps(dict(view.config), 6)
         _wpa = (float(view.config.get("ev_phases") or 3)
                 * float(view.config.get("ev_voltage") or 230))
-        _max_a = int(view.config.get("ev_max_current") or 32)
+        _max_a = int(view.config.get("ev_max_current")
+                     or DEFAULT_MAX_CHARGING_CURRENT)
         _cap_a = max(_min_a, amps_that_fit(
             view.wpa_table, _ev_allow_w, _wpa, _max_a))
         if (result.intent is ChargerIntent.CHARGE_MAX
