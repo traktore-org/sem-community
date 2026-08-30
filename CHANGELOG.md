@@ -18,6 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > ships while the release hold is in place; 2.0.0 stable remains the current
 > published version.
 
+- 🔋 **The measured pack size can finally graduate from "Learning"** — the
+  battery card read *"7 / 5 Nights"*: seven qualifying nights against a
+  requirement of five, still learning. The two numbers came from different
+  places. The verdict was being handed `tracker.sealed` — the **bound
+  method** rather than the records it returns — which raises on iteration
+  and was swallowed by a blanket `except` into "no verdict yet", while the
+  progress counter read the records correctly. On every install the measured
+  capacity was permanently unavailable and SEM kept falling back to the
+  nameplate figure. Found by reading the dashboard, not the logs.
+
 - 🩺 **A sensor that is out no longer reads as zero on the System tab** —
   caught mid-dropout on a live install: the diagnostics line said
   `Solar 0W · Grid 0W · Battery 0W · SOC 0%` while those sensors were

@@ -11100,7 +11100,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         tracker = getattr(self, "_battery_night", None)
         cap = None
         try:
-            cap = measured_capacity(tracker.sealed) if tracker is not None else None
+            # `sealed` is a METHOD, not a property (the sibling reader 25
+            # lines below says so, having been bitten once already). Passing
+            # it uncalled handed measured_capacity a bound method, which
+            # raises on iteration — and the blanket except below turned that
+            # into "no verdict yet", so the card read "Learning · 7 / 5
+            # Nights" forever: progress counted the real records, the verdict
+            # never saw them. Spotted from the dashboard, 30.08.
+            _recs = None
+            if tracker is not None:
+                _recs = (tracker.sealed() if callable(tracker.sealed)
+                         else tracker.sealed)
+            cap = measured_capacity(_recs)
         except Exception:  # noqa: BLE001
             cap = None
 
