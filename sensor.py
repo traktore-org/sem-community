@@ -1774,6 +1774,12 @@ SENSOR_TYPES = [
         key="diag_sensors_unavailable",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
+    # (#818) True while a steering input is dark — the cycles on which SEM
+    # holds its committed command instead of steering on a fabricated 0.
+    SensorEntityDescription(
+        key="diag_inputs_degraded",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
     SensorEntityDescription(
         key="diag_ed_config",
         entity_category=EntityCategory.DIAGNOSTIC,

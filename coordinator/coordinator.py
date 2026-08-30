@@ -5352,6 +5352,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             pv_data.pv_performance_vs_forecast = pv.performance_vs_forecast
             pv_data.pv_estimated_annual_degradation = pv.estimated_annual_degradation
             pv_data.pv_degradation_trend = pv.degradation_trend
+            # (#422) Carry the attribution across too. Copying four of the
+            # analyzer's thirteen fields is what left "why is degradation
+            # blank?" unanswerable from a diagnostics dump.
+            pv_data.pv_yield_path = pv.yield_path
+            pv_data.pv_performance_path = pv.performance_path
+            pv_data.pv_degradation_path = pv.degradation_path
+            pv_data.pv_system_age_path = pv.system_age_path
         except (ValueError, TypeError, AttributeError) as e:
             _LOGGER.debug("PV analytics update failed: %s", e)
 

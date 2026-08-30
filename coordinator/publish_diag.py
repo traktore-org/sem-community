@@ -141,6 +141,22 @@ def build_diagnostics(coord) -> Dict[str, Any]:
     out["diag_sensors_unavailable"] = sum(
         1 for _ in reader._sensor_unavailable
     )
+
+    # (#818, published 30.08) Whether THIS cycle could be steered on, and
+    # which inputs went dark. The flag already gated every write — a degraded
+    # cycle holds the committed command instead of steering on the reader's
+    # 0.0 fallback — but it was computed, threaded and consumed without ever
+    # being published, so an owner of a flaky feed could only discover SEM was
+    # protecting them by catching a reason string inside a 60-second window.
+    # On the install that prompted this, solar went unavailable 28 times in
+    # half an hour and the charge held through every one.
+    try:
+        _dark = getattr(reader, "_input_dark", {}) or {}
+        out["diag_inputs_dark"] = sorted(k for k, v in _dark.items() if v)
+        out["diag_inputs_degraded"] = bool(out["diag_inputs_dark"])
+    except Exception:  # noqa: BLE001 — diagnostics never break a cycle
+        out["diag_inputs_dark"] = []
+        out["diag_inputs_degraded"] = False
     out["diag_health_violations"] = coord._health_check.total_violations
 
     # (#653) Appliance schedules. Absent on installs that never called the
