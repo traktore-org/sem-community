@@ -77,12 +77,22 @@ class TestDawnHeadroom:
         assert dawn_headroom_kwh(15.0, 100.0, 6.99) > 0.0
 
     @pytest.mark.parametrize("bad", [None, "", "abc", float("nan")])
-    def test_a_dark_input_is_not_permission(self, bad):
-        # Rule 4: unknown spends nothing. None flows to estimate_refill's
-        # "no idea what the pack can hold" branch rather than inventing a
-        # headroom of zero (which would silently mean "refill nothing").
+    def test_an_unknown_pack_says_nothing(self, bad):
+        # Nothing known about the pack: None flows to estimate_refill's
+        # honest "no idea what the pack can hold" branch rather than
+        # inventing a headroom of zero (which would silently mean "refill
+        # nothing").
         assert dawn_headroom_kwh(bad, 100.0, 6.99) is None
-        assert dawn_headroom_kwh(15.0, bad, 6.99) is None
+
+    @pytest.mark.parametrize("bad", [None, "", "abc", float("nan")])
+    def test_an_unknown_LEVEL_still_knows_the_pack_cannot_exceed_itself(self, bad):
+        # A dark SOC sensor does not make the pack bigger. The room is in
+        # [0, cap] and the upper bound is a fact worth reporting: returning
+        # None here sent the caller down the unbounded branch, which
+        # published "35.5 kWh expected back" onto a 12.5 kWh pack.
+        # Rule 4 is untouched — spendable_budget refuses on the dark SOC
+        # itself, not on the refill (see test_778_assembly).
+        assert dawn_headroom_kwh(15.0, bad, 6.99) == pytest.approx(15.0)
 
     def test_an_unknown_night_is_treated_as_no_extra_room(self):
         # Not knowing the overnight draw must not INVENT room; it falls

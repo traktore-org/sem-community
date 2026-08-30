@@ -83,8 +83,24 @@ def dawn_headroom_kwh(usable_capacity_kwh, soc_pct,
     """
     cap = _f(usable_capacity_kwh)
     soc = _f(soc_pct)
-    if cap is None or soc is None or cap <= 0:
+    if cap is None or cap <= 0:
+        # Nothing is known about the pack at all — say so, and let
+        # ``estimate_refill`` take its honest "no idea what the pack can
+        # hold" branch rather than invent a bound.
         return None
+    if soc is None:
+        # The pack's capacity IS known; only its level is dark. The room is
+        # then somewhere in [0, cap], and the upper bound is a fact — so
+        # report it rather than nothing. Reporting nothing sent the caller
+        # down the unbounded branch, which published "35.5 kWh expected
+        # back" onto a 12.5 kWh pack whenever the SOC sensor dropped out
+        # (found by running the assembly across a scenario table,
+        # 30.08.2026). The pack cannot absorb more than itself.
+        #
+        # This does not loosen rule 4: an unknown SOC still spends NOTHING —
+        # ``spendable_budget`` refuses on the dark input itself, not on the
+        # refill. What changes is only the number the surface shows.
+        return cap
     need = _f(overnight_need_kwh)
     need = max(0.0, need) if need is not None else 0.0
     energy_now = cap * max(0.0, min(100.0, soc)) / 100.0

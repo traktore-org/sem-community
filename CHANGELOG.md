@@ -18,6 +18,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > ships while the release hold is in place; 2.0.0 stable remains the current
 > published version.
 
+- 🔭 **Two published battery numbers that could not be true are now
+  bounded** (#873). `battery_expected_refill_kwh` reported **35.5 kWh onto a
+  12.5 kWh pack** whenever the SOC sensor dropped out — a dark battery *level*
+  does not erase a known battery *capacity*, and the pack cannot absorb more
+  than itself. `battery_dynamic_floor_pct` reported **115.7 %** on a night
+  needing more than the pack holds above its reserve; the conclusion was right
+  (such a night spends nothing) but a percentage above 100 cannot render on a
+  gauge and is read downstream as a floor SOC no SOC can reach. Neither
+  changed what SEM *did* — both changed what it *said*, and a number a user
+  cannot explain is one they will not trust.
+
+- 🧪 **The coordinator's main cycle is now covered by tests** (#873). Not a
+  user-facing change, but the reason the three #778 defects above were
+  possible: SEM tested its parts thoroughly and its assembly *structurally* —
+  the 2236-line cycle that publishes all 325 values was guarded by source
+  inspection and never actually run. An AST guard proves a name is in scope; it
+  cannot see a wrong formula, and every one of those defects was a wrong
+  formula with every name correctly in scope. The cycle now runs in tests
+  across nine scenarios, and a ratchet keeps it that way.
+
 - 🔋 **The battery now spends when the pack is FULL — the one case it
   refused** (#778). "How much is spendable tonight" asks whether tomorrow's
   sun can put it back, and the room the pack has for that sun was measured at
