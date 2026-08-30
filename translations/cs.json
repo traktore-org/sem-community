@@ -1662,6 +1662,10 @@
     "battery_operating_mode_unexpected": {
       "title": "Battery is in “{mode}” — SEM plans as if it were “{expected}”",
       "description": "The operating-mode selector {entity_id} reads “{mode}”. SEM's overnight model and the spendable budget assume “{expected}”; in other modes the inverter follows its own schedule underneath SEM and the plans may not hold. If this mode is deliberate, dismiss this — SEM will not fight your choice. Otherwise set the inverter back to “{expected}”."
+    },
+    "battery_force_discharge_entity_unstable": {
+      "title": "Žádaná hodnota výkonu baterie se opakovaně stává nedostupnou: {entity_id}",
+      "description": "SEM přestal zapisovat do **{entity_id}** po opakovaných odmítnutích: `{error}`.\n\nNejde o zařízení, kterému chybí registr. V některých cyklech entita neprošla vlastní kontrolou čitelnosti SEM a v jiných odpověděla na skutečný zápis chybou — tento vzorec znamená, že entita je **občasně nedostupná**, nikoli nezapisovatelná. Obvyklou příčinou je baterie nebo integrace, která ztrácí síť, případně entita publikovaná jen tehdy, když je baterie probuzená.\n\nDokud to trvá, **export z baterie do sítě nemůže běžet**. Nabíjení, limity vybíjení a běžný provoz zůstávají nedotčeny.\n\nOvěřte, že baterie zůstává online a že **{entity_id}** si zachovává jednotku W nebo kW a číselný stav. Restart SEM pokus zopakuje."
     }
   },
   "selector": {

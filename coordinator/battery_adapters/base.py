@@ -100,6 +100,13 @@ class BatteryControlAdapter(ABC):
         self._last_force_discharge_attempt_w: "Optional[float]" = None
         #: Monotonic deadline before the next silent probe (#840).
         self._force_discharge_retry_after: float = 0.0
+        #: (#872) How often SEM's OWN unit check refused a write, as opposed
+        #: to the device refusing one. These are different faults with
+        #: different fixes, and the withdrawal message used to know only
+        #: about the second — so it blamed firmware for a flaky entity.
+        #: Latched-bool logging is fine for volume; a bool is useless as
+        #: evidence, and this is evidence.
+        self._fd_unit_refusals: int = 0
         # de-dup writes. None = never written (so the first write of any sign
         # always goes through; a plain -1.0 sentinel would alias a real
         # negative charge setpoint on a bidirectional entity, #523).
@@ -128,12 +135,20 @@ class BatteryControlAdapter(ABC):
         """True if this brand has a forced-charge service.
         ``Sonnen`` would return False — protection-only adapter."""
 
-    def _raise_force_discharge_repair(self, error: str) -> None:
-        """(#840) Surface the withdrawn capability outside the log."""
+    def _raise_force_discharge_repair(
+        self, error: str, *, unstable: bool = False,
+    ) -> None:
+        """(#840) Surface the withdrawn capability outside the log.
+
+        (#872) ``unstable`` carries the same suspicion the log line now
+        makes — the Repair is the surface, and a surface that contradicts
+        the log is worse than no surface at all.
+        """
         try:
             from ..repair_issues import raise_battery_force_discharge_unsupported
             raise_battery_force_discharge_unsupported(
-                self._hass, self._force_discharge_entity, error=error)
+                self._hass, self._force_discharge_entity, error=error,
+                unstable=unstable)
         except Exception as e:  # noqa: BLE001 — a repair never costs a cycle
             _LOGGER.debug("force-discharge repair not raised: %s", e)
 
@@ -309,6 +324,7 @@ class BatteryControlAdapter(ABC):
         from ..power_control import native_power_scale
         scale = native_power_scale(self._hass, self._force_discharge_entity)
         if scale is None or scale <= 0:
+            self._fd_unit_refusals += 1
             if not getattr(self, "_fd_unit_refused_logged", False):
                 self._fd_unit_refused_logged = True
                 _LOGGER.warning(
@@ -446,19 +462,58 @@ class BatteryControlAdapter(ABC):
             else:
                 # The last word on the subject. Everything after this is
                 # silence, because the answer will not change (#840).
-                _LOGGER.warning(
-                    "Battery: %s refused the forcible-discharge setpoint %d "
-                    "times (%s). Treating battery-to-grid export as "
-                    "unsupported on this device and no longer attempting it. "
-                    "If this is wrong — a renamed entity, or firmware that "
-                    "gained the register — restart SEM to try again.",
-                    self._force_discharge_entity, limit, e,
-                )
+                #
+                # (#872) But say WHICH answer. Two different things refuse a
+                # write in this function, on different cycles: our own unit
+                # check (entity unreadable / wrong unit — returns early, no
+                # strike) and the device (a real exception — one strike). If
+                # BOTH have refused, the device is almost certainly not the
+                # fault: an entity that is readable on some cycles and dark
+                # on others produces exactly this pair. RienduPre read his
+                # log and said so ("a misdirected entity reference rather
+                # than a real hardware limitation") — and our message, which
+                # could see only its own counter, argued him out of it.
+                if self._fd_unit_refusals:
+                    detail = (
+                        f"{e} — but SEM's own unit check ALSO refused "
+                        f"{self._fd_unit_refusals} write(s) to "
+                        f"{self._force_discharge_entity} on other cycles "
+                        f"(unit unreadable or not a power unit). An "
+                        f"INTERMITTENTLY UNAVAILABLE entity produces exactly "
+                        f"this pair, so check the entity before the firmware"
+                    )
+                    _LOGGER.warning(
+                        "Battery: %s refused the forcible-discharge setpoint "
+                        "%d times (%s). Withdrawing battery-to-grid export "
+                        "and no longer attempting it. The likely fault is "
+                        "the ENTITY, not the device: SEM's own unit check "
+                        "refused %d further write(s) to it on other cycles "
+                        "because its unit or state was unreadable — an "
+                        "intermittently unavailable entity looks exactly "
+                        "like this. Check %s stays available with a W/kW "
+                        "unit; restart SEM to try again.",
+                        self._force_discharge_entity, limit, e,
+                        self._fd_unit_refusals, self._force_discharge_entity,
+                    )
+                else:
+                    detail = str(e)
+                    _LOGGER.warning(
+                        "Battery: %s refused the forcible-discharge setpoint "
+                        "%d times (%s). Treating battery-to-grid export as "
+                        "unsupported on this device and no longer attempting "
+                        "it. If this is wrong — a renamed entity, or firmware "
+                        "that gained the register — restart SEM to try again.",
+                        self._force_discharge_entity, limit, e,
+                    )
                 # Start the backoff HERE, at the moment of withdrawal —
                 # otherwise the deadline is still 0.0 and the very next cycle
                 # fires a probe, spending a strike for nothing.
                 import time as _time
                 self._force_discharge_retry_after = (
                     _time.monotonic() + self.FORCE_DISCHARGE_RETRY_S)
-                self._raise_force_discharge_repair(str(e))
+                # (#799) The Repair is the surface, so it carries the same
+                # suspicion — a Repair that says "unsupported device" while
+                # the log says "flaky entity" is worse than no Repair.
+                self._raise_force_discharge_repair(
+                    detail, unstable=bool(self._fd_unit_refusals))
             return False

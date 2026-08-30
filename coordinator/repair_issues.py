@@ -241,6 +241,10 @@ _DOCS_ANCHORS = {
     "charger_failsafe_suspected": "your-wallbox-undoes-sems-stop-on-a-timer",
     "battery_force_discharge_unsupported":
         "the-inverter-refuses-forced-discharge",
+    # (#872) Same withdrawal, different culprit — the entity rather than the
+    # device. Its own section, because the fix is a different one.
+    "battery_force_discharge_entity_unstable":
+        "the-battery-power-setpoint-keeps-going-unavailable",
     "deye_system_work_mode_invalid": "deye-system-work-mode-setup-cannot-be-used",
     "battery_operating_mode_unexpected":
         "the-battery-is-in-a-mode-sem-does-not-expect",
@@ -431,6 +435,7 @@ def raise_battery_force_discharge_unsupported(
     entity_id: str,
     *,
     error: str,
+    unstable: bool = False,
 ) -> None:
     """File a repair when the battery refuses the forcible-discharge write.
 
@@ -442,8 +447,30 @@ def raise_battery_force_discharge_unsupported(
 
     #799's lesson applies — a log line is not a surface. Raised once the
     capability is withdrawn; cleared the moment a write succeeds again.
+
+    (#872) ``unstable`` picks the OTHER story. One repair was covering two
+    faults, and its text asserted the wrong one outright — *"the inverter's
+    firmware simply does not implement writing that register"* — while SEM's
+    own unit check had been refusing the same entity on other cycles. That
+    reads as a verdict, and it sent Rien to his firmware when the actionable
+    fault was an entity going unavailable. Same issue_id either way, so a
+    case that turns out to be the other one REPLACES its repair instead of
+    leaving a contradictory pair on the Repairs page.
     """
     try:
+        # Both keys spelled out: the #831 scanner classifies repairs by
+        # reading the literals in this file, and a computed key is a repair
+        # nobody has decided a next step for.
+        if unstable:
+            _key = "battery_force_discharge_entity_unstable"
+            _url = next_step_url(
+                "docs", "battery_force_discharge_entity_unstable",
+                **_versions(hass))
+        else:
+            _key = "battery_force_discharge_unsupported"
+            _url = next_step_url(
+                "docs", "battery_force_discharge_unsupported",
+                **_versions(hass))
         ir.async_create_issue(
             hass,
             domain=DOMAIN,
@@ -451,8 +478,8 @@ def raise_battery_force_discharge_unsupported(
             is_fixable=False,
             is_persistent=True,
             severity=ir.IssueSeverity.WARNING,
-            translation_key="battery_force_discharge_unsupported",
-            learn_more_url=next_step_url("docs", "battery_force_discharge_unsupported", **_versions(hass)),
+            translation_key=_key,
+            learn_more_url=_url,
             translation_placeholders={
                 "entity_id": entity_id,
                 "error": error,

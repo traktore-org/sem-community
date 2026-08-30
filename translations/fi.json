@@ -1662,6 +1662,10 @@
     "battery_operating_mode_unexpected": {
       "title": "Battery is in “{mode}” — SEM plans as if it were “{expected}”",
       "description": "The operating-mode selector {entity_id} reads “{mode}”. SEM's overnight model and the spendable budget assume “{expected}”; in other modes the inverter follows its own schedule underneath SEM and the plans may not hold. If this mode is deliberate, dismiss this — SEM will not fight your choice. Otherwise set the inverter back to “{expected}”."
+    },
+    "battery_force_discharge_entity_unstable": {
+      "title": "Akun tehon asetusarvo katoaa toistuvasti: {entity_id}",
+      "description": "SEM lopetti kirjoittamisen kohteeseen **{entity_id}** toistuvien hylkäysten jälkeen: `{error}`.\n\nKyse ei ole laitteesta, jolta puuttuu rekisteri. Osalla kierroksista entiteetti ei läpäissyt SEM:n omaa luettavuustarkistusta, ja toisilla se vastasi todelliseen kirjoitukseen virheellä — tämä kuvio tarkoittaa, että entiteetti on **ajoittain saavuttamattomissa**, ei kirjoituskelvoton. Tavallisia syitä ovat verkkoyhteytensä menettävä akku tai integraatio taikka entiteetti, joka julkaistaan vain akun ollessa hereillä.\n\nNiin kauan kuin tilanne jatkuu, **akun syöttö verkkoon ei voi toimia**. Lataus, purkurajat ja tavallinen toiminta eivät häiriinny.\n\nTarkista, että akku pysyy verkossa ja että **{entity_id}** säilyttää W- tai kW-yksikön ja numeerisen tilan. SEM:n uudelleenkäynnistys yrittää uudelleen."
     }
   },
   "selector": {

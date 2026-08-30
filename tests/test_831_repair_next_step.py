@@ -35,6 +35,9 @@ DOCS_SIDE = {
     "hot_water_temperature_sensor_unavailable", "heat_pump_partial_sg_ready",
     "charger_control_entity_broken", "keba_failsafe_active",
     "charger_failsafe_suspected", "battery_force_discharge_unsupported",
+    # (#872) The same raiser files a second, different story when the
+    # evidence says the ENTITY is flaky rather than the device unable.
+    "battery_force_discharge_entity_unstable",
     "deye_system_work_mode_invalid",
 }
 REPORT_SIDE = {
@@ -66,9 +69,11 @@ class TestEveryRaiserOffersANextStep:
     def test_the_split_is_total_and_disjoint(self):
         keys = set()
         for src in _raisers().values():
-            m = re.search(r'translation_key="([a-z0-9_]+)"', src)
-            if m:
-                keys.add(m.group(1))
+            # (#872) findall, not search: a raiser may file more than one
+            # story. One repair covering two faults — and asserting the
+            # wrong one in its text — is exactly the defect Rien hit.
+            keys.update(re.findall(r'translation_key=[^\n]*?"([a-z0-9_]+)"', src))
+            keys.update(re.findall(r'_key = "([a-z0-9_]+)"', src))
         assert keys == DOCS_SIDE | REPORT_SIDE, (
             f"unclassified repair keys: {keys ^ (DOCS_SIDE | REPORT_SIDE)} — "
             "every repair needs a docs-or-report decision (#831)"

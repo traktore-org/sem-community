@@ -758,6 +758,27 @@ intended battery export, clear the forcible-discharge entity in SEM's battery
 settings and the notice disappears; if you do want it, check whether your
 inverter's firmware/integration version exposes a working discharge control.
 
+## The battery power setpoint keeps going unavailable
+
+Same symptom as the section above — battery-to-grid export withdrawn after
+three refusals — but a different cause, and SEM raises this variant when its
+own evidence points at the entity rather than the hardware.
+
+Two different checks refuse this write. SEM's readability check runs first
+and refuses when the entity has no W/kW unit **or no numeric state**; the
+device refuses later, with its integration's own error text. When *both* have
+refused over the same period, the entity was readable on some cycles and not
+on others — which is an availability problem, not a missing register.
+
+**Fix:** confirm the battery stays online (a battery that sleeps, or an
+integration that drops its connection, publishes `unavailable` between polls),
+and confirm the entity you picked under *Forcible-discharge power entity*
+keeps a **W or kW** unit and a numeric state at all times. Some integrations
+expose the setpoint only while the battery is awake — pick an always-published
+entity if one exists. SEM re-probes quietly every ten minutes and clears the
+repair the moment a write lands, so no restart is needed once the entity is
+stable.
+
 ## The battery is in a mode SEM does not expect
 
 SEM's planning — the overnight-need model, the spendable budget, the

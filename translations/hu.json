@@ -1662,6 +1662,10 @@
     "battery_operating_mode_unexpected": {
       "title": "Battery is in “{mode}” — SEM plans as if it were “{expected}”",
       "description": "The operating-mode selector {entity_id} reads “{mode}”. SEM's overnight model and the spendable budget assume “{expected}”; in other modes the inverter follows its own schedule underneath SEM and the plans may not hold. If this mode is deliberate, dismiss this — SEM will not fight your choice. Otherwise set the inverter back to “{expected}”."
+    },
+    "battery_force_discharge_entity_unstable": {
+      "title": "Az akkumulátor teljesítmény-alapjele rendre elérhetetlenné válik: {entity_id}",
+      "description": "A SEM ismételt elutasítások után abbahagyta a **{entity_id}** írását: `{error}`.\n\nNem olyan eszközről van szó, amelyből hiányzik a regiszter. Egyes ciklusokban az entitás megbukott a SEM saját olvashatósági ellenőrzésén, másokban pedig hibával válaszolt egy valódi írásra — ez a minta azt jelenti, hogy az entitás **időszakosan elérhetetlen**, nem pedig írásvédett. Szokásos okok: hálózatot vesztő akkumulátor vagy integráció, illetve olyan entitás, amely csak az akkumulátor ébren léte alatt jelenik meg.\n\nAmíg ez fennáll, **az akkumulátorból a hálózatba történő betáplálás nem működhet**. A töltés, a kisütési korlátok és a mindennapi működés érintetlen.\n\nEllenőrizze, hogy az akkumulátor online marad-e, és hogy a **{entity_id}** megőrzi-e a W vagy kW mértékegységet és a numerikus állapotot. A SEM újraindítása újra megpróbálja."
     }
   },
   "selector": {

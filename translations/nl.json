@@ -1662,6 +1662,10 @@
     "battery_operating_mode_unexpected": {
       "title": "Battery is in “{mode}” — SEM plans as if it were “{expected}”",
       "description": "The operating-mode selector {entity_id} reads “{mode}”. SEM's overnight model and the spendable budget assume “{expected}”; in other modes the inverter follows its own schedule underneath SEM and the plans may not hold. If this mode is deliberate, dismiss this — SEM will not fight your choice. Otherwise set the inverter back to “{expected}”."
+    },
+    "battery_force_discharge_entity_unstable": {
+      "title": "Batterij-vermogenssetpoint valt steeds weg: {entity_id}",
+      "description": "SEM is gestopt met schrijven naar **{entity_id}** na herhaalde weigeringen: `{error}`.\n\nDit is geen apparaat dat het register mist. In sommige cycli haalde de entiteit SEM's eigen leesbaarheidscontrole niet, en in andere beantwoordde ze een echte schrijfactie met een fout — dat patroon betekent dat de entiteit **met tussenpozen onbeschikbaar** is, niet onbeschrijfbaar. Gebruikelijke oorzaken zijn een batterij of integratie die van het netwerk valt, of een entiteit die alleen wordt gepubliceerd zolang de batterij wakker is.\n\nZolang dit speelt, **kan teruglevering vanuit de batterij niet werken**. Laden, ontlaadlimieten en de dagelijkse werking blijven ongemoeid.\n\nControleer of de batterij online blijft en of **{entity_id}** een W- of kW-eenheid en een numerieke status houdt. Na een herstart van SEM wordt het opnieuw geprobeerd."
     }
   },
   "selector": {

@@ -1662,6 +1662,10 @@
     "battery_operating_mode_unexpected": {
       "title": "Battery is in “{mode}” — SEM plans as if it were “{expected}”",
       "description": "The operating-mode selector {entity_id} reads “{mode}”. SEM's overnight model and the spendable budget assume “{expected}”; in other modes the inverter follows its own schedule underneath SEM and the plans may not hold. If this mode is deliberate, dismiss this — SEM will not fight your choice. Otherwise set the inverter back to “{expected}”."
+    },
+    "battery_force_discharge_entity_unstable": {
+      "title": "Punctul de referință al puterii bateriei devine în mod repetat indisponibil: {entity_id}",
+      "description": "SEM a încetat să scrie în **{entity_id}** după refuzuri repetate: `{error}`.\n\nNu este vorba de un dispozitiv căruia îi lipsește registrul. În unele cicluri entitatea nu a trecut propria verificare de lizibilitate a SEM, iar în altele a răspuns unei scrieri reale cu o eroare — acest tipar înseamnă că entitatea este **intermitent indisponibilă**, nu că nu se poate scrie în ea. Cauzele obișnuite sunt o baterie sau o integrare care pierde rețeaua ori o entitate publicată doar cât timp bateria este activă.\n\nCât timp persistă, **exportul din baterie în rețea nu poate funcționa**. Încărcarea, limitele de descărcare și funcționarea zilnică nu sunt afectate.\n\nVerificați dacă bateria rămâne online și dacă **{entity_id}** păstrează o unitate W sau kW și o stare numerică. Repornirea SEM reia încercarea."
     }
   },
   "selector": {

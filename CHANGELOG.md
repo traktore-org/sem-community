@@ -18,6 +18,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > ships while the release hold is in place; 2.0.0 stable remains the current
 > published version.
 
+- 🛡️ **Observer mode now covers every device, not only chargers** (#874).
+  The switch that promises "SEM will not touch your hardware" was pushed to
+  the charger fleet alone, so on an install with controllable loads or a heat
+  pump those kept being commanded for real while the dashboard reported
+  withheld commands. That is the worst shape a safety switch can take —
+  believed, and true of only part of the system. Every commandable device now
+  receives the flag, on startup and whenever the switch is flipped.
+
+- 🔌 **A deliberate Mode → Off now beats the anti-flicker delay** (#874).
+  Turning a device off is meant to be obeyed at once — the code that clears
+  the flicker clock reset a field the guard does not read, so an Off within
+  the minimum-on window was silently deferred to the next cycle. It clears
+  the clock the guard actually consults.
+
+- 🛡️ **The peak-slot guard is now fleet-wide** (#874, on top of #864). The
+  15-minute slot allowance was handed to each charger independently, so on a
+  two-charger install both took the whole remaining budget and the pair could
+  draw well past the target the guard exists to defend. The slot's allowance
+  is now consumed as chargers are served, exactly like the solar surplus
+  cascade above it. Single-charger installs are unchanged.
+
+- 🌙 **The overnight-need model no longer under-reads its neediest nights**
+  (#874). A night is "censored" when the battery ran out and the grid finished
+  the job — the pack's own figure is then a floor, not the need. Those nights
+  were ranked at that floor, pulling the p85 estimate down precisely where the
+  demand was highest. The grid's share is added back, which is what the
+  recorded `night_grid_kwh` was collected for.
+
+- ☀️ **Charge pacing now sizes the day from this cycle's SOC** (#874, on top
+  of #820). It read the *previous* cycle's reading — which after a restart is
+  0 %, so the first pass of every restart planned to fill an empty pack. The
+  SOC it used is also published on the pacing surface, so the number can be
+  checked rather than inferred.
+
+- ☀️ **Degradation across a gap in the record is no longer overstated**
+  (#874, on top of #867). Comparing the same month across years divided the
+  change by one year regardless of how many had actually elapsed, so a
+  three-year gap read as a three-times-too-steep annual decline — on the
+  fields that had just been made real. It divides by the years that passed.
+
+- 🔋 **A withdrawn battery export now names the right suspect** (#872,
+  reported by @RienduPre). Two different things refuse a forcible-discharge
+  write: SEM's own readability check (wrong unit, or an unreadable state) and
+  the battery itself. Only the second was counted, so when both had been
+  refusing — the signature of an entity that keeps going *unavailable* — the
+  message still concluded the hardware lacked the register and sent the
+  reporter to his firmware. He had read the two log lines side by side and
+  said so before we did. SEM now counts both, and when the evidence points at
+  the entity it says so, with its own Repair and its own troubleshooting
+  section instead of a card asserting a firmware verdict that is not true.
+
+- ⚡ **Peak levels can no longer be *stored* out of order** (#872). Raising
+  the warning above the target, or dropping the emergency below it, saved a
+  ladder the options page itself refuses — so SEM repaired it in memory every
+  cycle while the stored copy stayed broken, and the user met a warning about
+  numbers they never typed together. The rule that repairs the ladder was
+  written three times and applied by one writer; it is now one function, used
+  by the decision path and by all three writers, so what is stored and what is
+  used cannot drift apart again.
+
 - ☀️ **Solar degradation and trend actually work now** (#867). Both fields
   read "unknown" on every install, including systems with years of
   production — and not because the evidence was thin. The recorder that fills

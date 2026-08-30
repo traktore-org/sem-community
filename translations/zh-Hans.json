@@ -1662,6 +1662,10 @@
     "battery_operating_mode_unexpected": {
       "title": "Battery is in “{mode}” — SEM plans as if it were “{expected}”",
       "description": "The operating-mode selector {entity_id} reads “{mode}”. SEM's overnight model and the spendable budget assume “{expected}”; in other modes the inverter follows its own schedule underneath SEM and the plans may not hold. If this mode is deliberate, dismiss this — SEM will not fight your choice. Otherwise set the inverter back to “{expected}”."
+    },
+    "battery_force_discharge_entity_unstable": {
+      "title": "电池功率设定值反复不可用：{entity_id}",
+      "description": "在多次被拒绝后，SEM 已停止写入 **{entity_id}**：`{error}`。\n\n这并不是设备缺少该寄存器。在部分周期中，该实体未通过 SEM 自己的可读性检查；而在另一些周期中，它对一次真实写入返回了错误——这种模式说明该实体是**间歇性不可用**，而不是不可写入。常见原因是电池或集成掉线，或者该实体仅在电池唤醒时才发布。\n\n在此期间，**电池向电网的馈电无法运行**。充电、放电限值和日常运行不受影响。\n\n请检查电池是否保持在线，以及 **{entity_id}** 是否保持 W 或 kW 单位和数值状态。重启 SEM 会重新尝试。"
     }
   },
   "selector": {

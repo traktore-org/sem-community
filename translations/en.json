@@ -1662,6 +1662,10 @@
     "battery_operating_mode_unexpected": {
       "title": "Battery is in “{mode}” — SEM plans as if it were “{expected}”",
       "description": "The operating-mode selector {entity_id} reads “{mode}”. SEM's overnight model and the spendable budget assume “{expected}”; in other modes the inverter follows its own schedule underneath SEM and the plans may not hold. If this mode is deliberate, dismiss this — SEM will not fight your choice. Otherwise set the inverter back to “{expected}”."
+    },
+    "battery_force_discharge_entity_unstable": {
+      "title": "Battery power setpoint keeps going unavailable: {entity_id}",
+      "description": "SEM stopped writing **{entity_id}** after repeated refusals: `{error}`.\n\nThis is not a device that lacks the register. On some cycles the entity failed SEM's own readability check, and on others it answered a real write with an error — that pattern means the entity is **intermittently unavailable** rather than unwritable. The usual causes are a battery or integration that drops off the network, or an entity that is only published while the battery is awake.\n\nWhile this stands, **battery-to-grid export cannot run** on this battery. Charging, discharge limits and everyday operation are unaffected.\n\nCheck that the battery stays online and that **{entity_id}** keeps a W or kW unit and a numeric state. Restarting SEM makes it try again."
     }
   },
   "selector": {

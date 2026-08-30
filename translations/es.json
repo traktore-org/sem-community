@@ -1662,6 +1662,10 @@
     "battery_operating_mode_unexpected": {
       "title": "Battery is in “{mode}” — SEM plans as if it were “{expected}”",
       "description": "The operating-mode selector {entity_id} reads “{mode}”. SEM's overnight model and the spendable budget assume “{expected}”; in other modes the inverter follows its own schedule underneath SEM and the plans may not hold. If this mode is deliberate, dismiss this — SEM will not fight your choice. Otherwise set the inverter back to “{expected}”."
+    },
+    "battery_force_discharge_entity_unstable": {
+      "title": "El punto de consigna de potencia de la batería deja de estar disponible: {entity_id}",
+      "description": "SEM dejó de escribir en **{entity_id}** tras rechazos repetidos: `{error}`.\n\nNo se trata de un dispositivo que carezca del registro. En algunos ciclos la entidad no superó la propia comprobación de legibilidad de SEM, y en otros respondió a una escritura real con un error: ese patrón indica que la entidad está **intermitentemente no disponible**, no que no se pueda escribir en ella. Las causas habituales son una batería o integración que pierde la red, o una entidad que solo se publica mientras la batería está despierta.\n\nMientras esto persista, **la exportación de la batería a la red no puede funcionar**. La carga, los límites de descarga y el funcionamiento diario no se ven afectados.\n\nCompruebe que la batería sigue en línea y que **{entity_id}** mantiene una unidad W o kW y un estado numérico. Reiniciar SEM hace que lo intente de nuevo."
     }
   },
   "selector": {

@@ -37,6 +37,36 @@ STORAGE_VERSION = 1
 STORAGE_KEY = "load_management_devices"
 
 
+def repair_ladder(
+    target: float, warning: float, emergency: float
+) -> tuple[float, float]:
+    """The ONE rule for putting an out-of-order peak ladder back in order.
+
+    (#872) #813 established that *a writer must leave a state its own form
+    accepts*, and fixed the target writer. The warning and emergency writers
+    kept storing what the options page then refused to save, so the store and
+    the decision path held two different ladders — which is how RienduPre met
+    a warning about numbers he had never typed together.
+
+    Same repair, one definition, called by ``_effective_levels`` and by every
+    writer, so "what is stored" and "what is used" cannot drift again.
+
+    The dangerous end is a LOW emergency: ``emergency <= target`` makes the
+    EMERGENCY branch win before SHEDDING is ever considered, so SEM dumps
+    loads the moment the target is touched. A HIGH warning is merely a lost
+    stage, repaired for symmetry.
+
+    Repair lands on the install-flow ratios (#717) rather than on the target
+    itself — clamping *to* the target would leave ``emergency == target`` and
+    the ``>=`` branch would still win, making SHEDDING unreachable.
+    """
+    if warning >= target:
+        warning = round(target * WARNING_PEAK_RATIO, 1)
+    if emergency <= target:
+        emergency = round(target * EMERGENCY_PEAK_RATIO, 1)
+    return warning, emergency
+
+
 class LoadManagementCoordinator:
     """Coordinate load management based on target peak limits."""
 
@@ -475,12 +505,9 @@ class LoadManagementCoordinator:
         would still win at the target, making SHEDDING unreachable. The ratios
         put each level back on its own side with a stage's worth of room.
         """
-        warning = self._warning_level
-        emergency = self._emergency_level
-        if warning >= self._target_peak_limit:
-            warning = round(self._target_peak_limit * WARNING_PEAK_RATIO, 1)
-        if emergency <= self._target_peak_limit:
-            emergency = round(self._target_peak_limit * EMERGENCY_PEAK_RATIO, 1)
+        warning, emergency = repair_ladder(
+            self._target_peak_limit, self._warning_level, self._emergency_level
+        )
         if not self._logged_ladder_repair and (
             warning != self._warning_level or emergency != self._emergency_level
         ):
@@ -522,14 +549,15 @@ class LoadManagementCoordinator:
                                       DEFAULT_WARNING_PEAK_LEVEL) or 0)
         _emerg = float(new_options.get("emergency_peak_level",
                                        DEFAULT_EMERGENCY_PEAK_LEVEL) or 0)
-        if _emerg <= new_limit:
-            new_options["emergency_peak_level"] = round(
-                new_limit * EMERGENCY_PEAK_RATIO, 1)
-            self._emergency_level = new_options["emergency_peak_level"]
-        if _warn >= new_limit:
-            new_options["warning_peak_level"] = round(
-                new_limit * WARNING_PEAK_RATIO, 1)
-            self._warning_level = new_options["warning_peak_level"]
+        # (#872) The same one rule the other two writers and the decision
+        # path use — three writers open-coding it was how they drifted.
+        _warn_fixed, _emerg_fixed = repair_ladder(new_limit, _warn, _emerg)
+        if _emerg_fixed != _emerg:
+            new_options["emergency_peak_level"] = _emerg_fixed
+            self._emergency_level = _emerg_fixed
+        if _warn_fixed != _warn:
+            new_options["warning_peak_level"] = _warn_fixed
+            self._warning_level = _warn_fixed
         if unlimited is not None:
             self._peak_unlimited = unlimited
             new_options["peak_limit_unlimited"] = unlimited
@@ -550,7 +578,23 @@ class LoadManagementCoordinator:
         self._trigger_callbacks()
 
     async def update_warning_peak_level(self, new_level: float):
-        """(#636) Live-apply + persist the warning peak level."""
+        """(#636) Live-apply + persist the warning peak level.
+
+        (#872) Through the same repair the decision path uses, so a warning
+        set above the target is never STORED above it — #813's rule, which
+        until now only the target writer honoured.
+        """
+        if not getattr(self, "_peak_unlimited", False):
+            repaired, _ = repair_ladder(
+                self._target_peak_limit, new_level, self._emergency_level)
+            if repaired != new_level:
+                _LOGGER.warning(
+                    "Warning peak level %.1f kW is not below the target "
+                    "%.1f kW — storing %.1f kW instead, which is what "
+                    "shedding would have used anyway.",
+                    new_level, self._target_peak_limit, repaired,
+                )
+                new_level = repaired
         self._warning_level = new_level
         new_options = {**self.config_entry.options, "warning_peak_level": new_level}
         coordinator = getattr(self.config_entry, "runtime_data", None)
@@ -566,7 +610,24 @@ class LoadManagementCoordinator:
         self._trigger_callbacks()
 
     async def update_emergency_peak_level(self, new_level: float):
-        """(#636) Live-apply + persist the emergency peak level."""
+        """(#636) Live-apply + persist the emergency peak level.
+
+        (#872) An emergency at or below the target makes the EMERGENCY branch
+        win before SHEDDING is considered — SEM would dump loads the moment
+        the target is touched. Repaired at the writer, not only in memory.
+        """
+        if not getattr(self, "_peak_unlimited", False):
+            _, repaired = repair_ladder(
+                self._target_peak_limit, self._warning_level, new_level)
+            if repaired != new_level:
+                _LOGGER.warning(
+                    "Emergency peak level %.1f kW is not above the target "
+                    "%.1f kW — storing %.1f kW instead; at or below the "
+                    "target it would shed loads the moment the target is "
+                    "reached.",
+                    new_level, self._target_peak_limit, repaired,
+                )
+                new_level = repaired
         self._emergency_level = new_level
         new_options = {**self.config_entry.options, "emergency_peak_level": new_level}
         coordinator = getattr(self.config_entry, "runtime_data", None)

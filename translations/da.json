@@ -1662,6 +1662,10 @@
     "battery_operating_mode_unexpected": {
       "title": "Battery is in “{mode}” — SEM plans as if it were “{expected}”",
       "description": "The operating-mode selector {entity_id} reads “{mode}”. SEM's overnight model and the spendable budget assume “{expected}”; in other modes the inverter follows its own schedule underneath SEM and the plans may not hold. If this mode is deliberate, dismiss this — SEM will not fight your choice. Otherwise set the inverter back to “{expected}”."
+    },
+    "battery_force_discharge_entity_unstable": {
+      "title": "Batteriets effektsætpunkt bliver gang på gang utilgængeligt: {entity_id}",
+      "description": "SEM holdt op med at skrive til **{entity_id}** efter gentagne afvisninger: `{error}`.\n\nDet er ikke en enhed, der mangler registret. I nogle cyklusser bestod entiteten ikke SEM's egen læsbarhedskontrol, og i andre svarede den på en reel skrivning med en fejl — det mønster betyder, at entiteten er **periodisk utilgængelig** og ikke uskrivbar. De sædvanlige årsager er et batteri eller en integration, der mister netværket, eller en entitet, der kun offentliggøres, mens batteriet er vågent.\n\nSå længe dette står på, **kan batterieksport til nettet ikke køre**. Opladning, afladningsgrænser og daglig drift er upåvirket.\n\nKontrollér, at batteriet forbliver online, og at **{entity_id}** bevarer en W- eller kW-enhed og en numerisk tilstand. En genstart af SEM prøver igen."
     }
   },
   "selector": {
