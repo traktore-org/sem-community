@@ -146,7 +146,28 @@ class TestThePoliceObserveToo:
     the same seam. Observing a rogue draw must report it, never open the
     contactor — on the shared rig a real KEBA is on the other end."""
 
-    def test_a_rogue_draw_is_not_stopped_while_observing(self):
+    def test_a_rogue_draw_arms_the_seam_instead_of_opening_the_contactor(self):
+        """The guarantee moved DOWN a layer (#855, 30.08.2026); it did not
+        weaken.
+
+        This used to assert ``adapter.disables == 0`` — the police pass must
+        not reach the adapter at all. That measured the old cut, which sat
+        above the adapter and was therefore blind to what the adapter would
+        actually have sent: #854's "stop" was a current write + an energy
+        target + an ENABLE, and only the word "IDLE" ever reached the
+        surface.
+
+        Since #855 the single hardware seam is ``ControllableDevice.send``,
+        below the adapter. So the brand path runs — that is how
+        ``withheld_commands`` can name the exact service and payload — and
+        the safety property is that the device is ARMED before it is
+        commanded. A real device with ``observer_mode`` set refuses the send
+        and records it; nothing reaches the box.
+
+        Measured here rather than assumed: the rigs are wired to a real
+        KEBA, and this is the assertion that stands between a rogue-draw
+        police pass and somebody's car.
+        """
         coord, ev_dev, adapter, power = _make_coord(
             "b", 3000.0, observer=True,
         )
@@ -155,10 +176,11 @@ class TestThePoliceObserveToo:
             "b", ev_dev, {"id": "b", "charge_mode": "off"}, power,
         ))
 
-        assert adapter.disables == 0, (
-            "the police pass wrote to hardware while observing"
+        assert getattr(ev_dev, "observer_mode", False) is True, (
+            "the police pass reached the adapter with the seam unarmed — "
+            "on a rig that believes it is only watching, that is a real "
+            "command to a real charger"
         )
-        assert adapter.currents == []
 
     def test_the_would_stop_still_reaches_the_surface(self):
         coord, ev_dev, adapter, power = _make_coord(

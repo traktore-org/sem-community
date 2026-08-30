@@ -2408,8 +2408,17 @@ class CurrentControlDevice(ControllableDevice):
 
             self._clear_actuation_failure()
 
-            self._current_setpoint = current
-            self._last_write_at = now  # #392: heartbeat tracker
+            # (#855) A WITHHELD send is not a write. Observer mode runs this
+            # whole path so the seam can record what it would have sent, but
+            # nothing left the process — so SEM must not claim a setpoint or
+            # refresh the write heartbeat. ``commanded_current`` is derived
+            # from ``_current_setpoint`` and the coordinator deliberately
+            # zeroes it while observing: in #536 a bridge automation on the
+            # test rig drove the REAL charger off a stale setpoint, which is
+            # exactly what publishing the WOULD value here would restore.
+            if not getattr(self, "observer_mode", False):
+                self._current_setpoint = current
+                self._last_write_at = now  # #392: heartbeat tracker
             self._record_power_change()
             consumed = self.current_to_watts(current) if current >= self.min_current else 0.0
             self._status.current_consumption_w = consumed

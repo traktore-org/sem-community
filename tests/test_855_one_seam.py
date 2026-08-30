@@ -47,6 +47,12 @@ CHARGER_PATH = [
     # Scanning it here means a new un-annotated hardware call in that file
     # fails CI instead of silently bypassing observer mode.
     ROOT / "devices" / "heat_pump_controller.py",
+    # The reconciler owns convergence and, since the observer gate in
+    # actuate() was retired (30.08.2026), it RUNS under observer mode — so
+    # a direct hardware call added here would reach a real charger on a rig
+    # that believes it is only watching. It has none today; scanning it
+    # keeps that true.
+    ROOT / "coordinator" / "charger_reconciler.py",
 ]
 
 # The opt-out, spelled like the codebase's other one (`# FLEET-READ:`): a

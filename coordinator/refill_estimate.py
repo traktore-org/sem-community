@@ -57,6 +57,41 @@ def _f(value) -> Optional[float]:
     return f if f == f else None
 
 
+def dawn_headroom_kwh(usable_capacity_kwh, soc_pct,
+                      overnight_need_kwh=None) -> Optional[float]:
+    """How much tomorrow's sun the pack can actually absorb.
+
+    The refill question is "will tomorrow put back what I spend tonight",
+    and the pack does not receive tomorrow's sun at sunset — it receives it
+    after the overnight draw. So the room that counts is the room at DAWN.
+
+    Measuring it NOW (``usable * (100 - soc) / 100``, which is what the
+    caller did until 30.08.2026) inverts the whole feature at the top of the
+    range: a pack sitting full on the eve of a clipping day reports zero
+    headroom, so zero refill, so rule 3 spends nothing — while the estimator
+    below prints "spending that tonight costs nothing, the pack cannot hold
+    it" on the same cycle. Live on .175: SOC 100, 49.3 kWh would be clipped,
+    spendable 0.0. The inversion showed as non-monotonicity — SOC 95 spent
+    0.75 kWh, SOC 100 spent 0.00.
+
+    An unknown night is NOT extra room: it falls back to the room the pack
+    has now, which is the conservative half of the answer. An unknown pack
+    or SOC returns None, which reaches ``estimate_refill``'s honest "no idea
+    what the pack can hold" branch rather than pretending to a headroom of
+    zero — which would silently mean "tomorrow refills nothing" (rule 4: a
+    dark input is not permission).
+    """
+    cap = _f(usable_capacity_kwh)
+    soc = _f(soc_pct)
+    if cap is None or soc is None or cap <= 0:
+        return None
+    need = _f(overnight_need_kwh)
+    need = max(0.0, need) if need is not None else 0.0
+    energy_now = cap * max(0.0, min(100.0, soc)) / 100.0
+    energy_at_dawn = max(0.0, energy_now - need)
+    return max(0.0, cap - energy_at_dawn)
+
+
 def estimate_refill(
     forecast_tomorrow_kwh,
     house_tomorrow_kwh,

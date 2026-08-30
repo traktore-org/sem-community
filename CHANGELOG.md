@@ -18,6 +18,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > ships while the release hold is in place; 2.0.0 stable remains the current
 > published version.
 
+- 🔋 **The battery now spends when the pack is FULL — the one case it
+  refused** (#778). "How much is spendable tonight" asks whether tomorrow's
+  sun can put it back, and the room the pack has for that sun was measured at
+  *sunset* instead of at *dawn*. At 100 % SOC that room is zero by
+  construction, so the answer was always "tomorrow refills nothing" — while
+  the same sensor printed *"spending that tonight costs nothing, the pack
+  cannot hold it"* on the same cycle. A full pack on the eve of a bright day
+  is the textbook case for spending overnight, and it was the only case that
+  returned zero; the bug even made a fuller pack spend *less* than a less-full
+  one (95 % → 0.75 kWh, 100 % → 0.00). Measured after the overnight draw now.
+  Live on the branch rig: 0.0 → 4.64 kWh spendable. The reserve floor and
+  "keep the night" rules are untouched.
+
+- 🔋 **A sell block no longer cancels itself in its final quarter hour**
+  (#778). The just-in-time block ends at the night window and is meant to be
+  the *latest possible* sell — but it anchored its start to *now*, so it shrank
+  as the evening passed and vanished once under 15 minutes remained. Selling
+  stopped exactly when "just in time" means to act. Caught in a compressed
+  evening simulation: selling at 5009 W, then nothing, at precisely
+  `night start − 15 min`. The block is now what it always claimed to be —
+  `[night start − duration, night start)` — stable across recomputes, which
+  also keeps the sell rate steady instead of tapering it toward zero.
+
+- 🔭 **Observer mode now shows the exact commands it withholds** (#855). The
+  observation surface reported the *decision* ("would charge at 13 A") but
+  never the *service calls*, because the cut sat above the brand adapter — so
+  nothing was ever built for the seam to withhold and the withheld list was
+  always empty. That is the same blindness that once let an `enable` hide
+  inside a "stop". Observer now runs the whole brand path and refuses only at
+  the single hardware seam, recording what it refused:
+  `keba.set_current {current: 10}`. SEM still publishes "not commanding" — a
+  withheld send claims no setpoint — and the seam is armed at the actuator so
+  a device can never act on a rig that believes it is only watching.
+
 - 💶 **"Solar + cheapest hours" now honours cheap hours by day, not only at
   night** (#856). The mode's name is a promise about *price*, but by day it
   fell back to solar-only regardless of price — a near-zero or negative

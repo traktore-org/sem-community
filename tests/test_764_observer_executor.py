@@ -94,12 +94,38 @@ def _cpower(w=0.0):
 
 class TestTheChargerSeamCuts:
 
-    async def test_observer_never_reaches_the_reconciler(self):
-        """The reconciler is the only thing that touches the box."""
+    async def test_observer_runs_the_brand_path_and_arms_the_seam(self):
+        """SUPERSEDED BY #855 (30.08.2026), deliberately.
+
+        This test used to read "observer never reaches the reconciler",
+        on the premise stated in its own docstring: *the reconciler is the
+        only thing that touches the box*. #855 moved the box-touching one
+        layer down — ``ControllableDevice.send`` is now the single hardware
+        seam — and with it the cut, because the old premise had a cost:
+
+        * #854 — a brand "stop" that was really a current write + an energy
+          target + an ENABLE. The enable happened BELOW the old cut, so
+          observer mode said "WOULD IDLE" while ~1 kWh went into the car on
+          every plug-in.
+        * ``withheld_commands`` was empty on every observer rig, because
+          nothing was ever built for the seam to withhold (found live on
+          .46, 30.08).
+
+        So the brand path must RUN. What replaces the old guarantee is not
+        weaker for being lower: the reconciler is reached, and the device it
+        will command is forced into observer mode on the way past, so the
+        seam refuses the send even if the per-cycle push never reached that
+        device.
+        """
         rec = _reconciler()
-        await actuate(_cdec(), _charger_adapter(), _cpower(), rec,
+        adapter = _charger_adapter()
+        await actuate(_cdec(), adapter, _cpower(), rec,
                       observer=True, controller=_sc())
-        rec.reconcile_and_apply.assert_not_called()
+        rec.reconcile_and_apply.assert_awaited_once()
+        assert adapter._device.observer_mode is True, (
+            "the seam below is the only remaining guard — actuate must "
+            "arm it rather than trust that somebody else did"
+        )
 
     async def test_live_still_reconciles(self):
         rec = _reconciler()
@@ -149,11 +175,13 @@ class TestTheChargerSeamCuts:
         assert sc.hass.bus.async_fire.call_count == 2
 
     async def test_the_seam_survives_without_a_controller(self):
-        """Bare callers (older paths, unit tests) still get the cut."""
+        """Bare callers (older paths, unit tests) still get the cut — which
+        since #855 means the seam is armed, not that the path is skipped."""
         rec = _reconciler()
-        await actuate(_cdec(), _charger_adapter(), _cpower(), rec,
-                      observer=True)
-        rec.reconcile_and_apply.assert_not_called()
+        adapter = _charger_adapter()
+        await actuate(_cdec(), adapter, _cpower(), rec, observer=True)
+        rec.reconcile_and_apply.assert_awaited_once()
+        assert adapter._device.observer_mode is True
 
 
 class TestCommandedPower:

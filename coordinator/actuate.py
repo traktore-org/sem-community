@@ -97,7 +97,28 @@ async def actuate(
             ``observer_decisions`` surface. Optional — bare callers keep
             the pure behavior.
     """
+    # (#855) The cut is at the SEND, not here. Observer mode runs the whole
+    # brand path and lets ``ControllableDevice.send`` withhold — that is what
+    # makes ``withheld_commands`` name the exact service + payload, and it is
+    # the entire point of the arc: #854's "stop" was a current write + an
+    # energy target + an ENABLE, and the enable was INVISIBLE while the cut
+    # sat above the adapter. Returning here left the withheld list empty on
+    # every observer rig (found live on .46, 30.08.2026).
+    #
+    # ``_observe`` still publishes the DECISION surface (would_decisions);
+    # the two are complements, not alternatives — one says what SEM decided,
+    # the other what would have hit the wire.
     if observer:
         _observe(decision, adapter, controller=controller)
-        return
+        # Belt and braces. Retiring the gate above means the seam in
+        # ``ControllableDevice.send`` is now the ONLY thing between this
+        # call and somebody's real charger — .46 and .175 are wired to a
+        # real KEBA. ``send`` reads ``observer_mode`` with a getattr whose
+        # documented default is False ("a device nobody told is a device
+        # that acts"), and the flag arrives by a per-cycle push. Do not
+        # depend on that push having reached THIS device: assert the flag
+        # on the way past, at the last point that still knows.
+        _dev = getattr(adapter, "_device", None)
+        if _dev is not None:
+            _dev.observer_mode = True
     await reconciler.reconcile_and_apply(decision, adapter, power, time.monotonic())
