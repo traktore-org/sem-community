@@ -583,8 +583,23 @@ class SEMBatteryCard extends SEMLitBase {
             const label = horizonLabel(source, dayNo, t);
             const effect = trustConsequence({
                 available, trust, days, minDays: daysNeeded, t });
-            if (available === false) {
+            // (#884) THREE states, not two. `available === false` was
+            // rendered as "this provider does not publish this horizon" for
+            // a fresh install that simply had no records yet — reported on
+            // all three integrations at once, two of which do publish it.
+            const state = a[`forecast_d${dayNo}_state`];
+            const path = a[`forecast_d${dayNo}_path`];
+            if (state === 'unsupported' || (state == null && available === false)) {
+                // The integration ships the sensor switched off: one toggle
+                // away, so say that instead of telling them to give up.
+                if (path === 'disabled_by_integration') {
+                    return { label, value: this._t('sensor_disabled'),
+                             sub: this._t('enable_horizon_sensor'), dim: true };
+                }
                 return { label, value: this._t('no_source'), sub: effect, dim: true };
+            }
+            if (state === 'learning' && trust == null) {
+                return { label, value: this._t('learning'), sub: effect, dim: true };
             }
             if (trust == null) {
                 return { label, value: this._t('learning'), sub: effect, dim: true };

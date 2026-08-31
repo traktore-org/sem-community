@@ -68,6 +68,13 @@ SOLCAST_UNIQUE_IDS = {
     "power_next_hour": ("power_next_hour",),
     "peak_power_today": ("peak_w_today",),
     "peak_time_today": ("peak_w_time_today",),
+    #: (#884) SOLCAST COUNTS TODAY AS DAY 1, so its ``day_3`` is our **d2**.
+    #: Mapping ``day_2`` here would read TOMORROW and quietly train the
+    #: ledger's day-after-tomorrow horizon on the wrong day — a wrong number
+    #: is worse than the missing one this issue started as. Note the sensor
+    #: ships ``disabled_by=integration``: SEM cannot read it until the user
+    #: enables it, which is a different message from "unsupported".
+    "forecast_d2": ("forecast_day_3", "total_kwh_forecast_day_3"),
 }
 FORECAST_SOLAR_PLATFORM = "forecast_solar"
 FORECAST_SOLAR_UNIQUE_SUFFIXES = {
@@ -97,6 +104,23 @@ FORECAST_SOLAR_UNIQUE_SUFFIXES = {
 # registry path is the only detection route (an empty fallback dict is
 # passed to _locate_integration).
 OPEN_METEO_SOLAR_PLATFORM = "open_meteo_solar_forecast"
+
+#: (#884) Open-Meteo's own unique-id suffixes. It was detected with an EMPTY
+#: role map — ``_locate_integration(OPEN_METEO_SOLAR_PLATFORM, {})`` — which
+#: worked for the roles that happen to share Forecast.Solar's naming and
+#: silently supplied nothing for the one that does not. Its day-after-tomorrow
+#: figure is published and ENABLED (verified on the rig:
+#: ``sensor.<device>_energy_production_d2``, alongside d3–d7) and SEM never
+#: asked for it, then told the user the provider does not publish it.
+OPEN_METEO_UNIQUE_SUFFIXES = {
+    "forecast_today": "_energy_production_today",
+    "forecast_tomorrow": "_energy_production_tomorrow",
+    "forecast_remaining": "_energy_production_today_remaining",
+    "power_now": "_power_production_now",
+    "peak_time_today": "_power_highest_peak_time_today",
+    #: The role this issue is about.
+    "forecast_d2": "_energy_production_d2",
+}
 
 # (#819) The ladder below is an ORDER, not a preference. Someone running
 # several forecast integrations side by side to compare accuracy could
@@ -128,6 +152,11 @@ class ForecastData:
     # Energy forecasts (kWh)
     forecast_today_kwh: float = 0.0
     forecast_tomorrow_kwh: float = 0.0
+    #: (#884) Day after tomorrow. 0.0 means UNREAD, which is not the
+    #: same as unpublished — see ``forecast_d2_path``.
+    forecast_d2_kwh: float = 0.0
+    #: read | disabled_by_integration | unsupported_by_source
+    forecast_d2_path: str = "unsupported_by_source"
     forecast_remaining_today_kwh: float = 0.0
 
     # Power forecasts (W)
@@ -156,6 +185,8 @@ class ForecastData:
         return {
             "forecast_today_kwh": round(self.forecast_today_kwh, 2),
             "forecast_tomorrow_kwh": round(self.forecast_tomorrow_kwh, 2),
+            "forecast_d2_kwh": round(self.forecast_d2_kwh, 2),
+            "forecast_d2_path": self.forecast_d2_path,
             "forecast_remaining_today_kwh": round(self.forecast_remaining_today_kwh, 2),
             # (#575) forecast_power_now_w restored — consumed by the "Forecast vs
             # Actual" chart. forecast_power_next_hour_w stays removed (orphan).
@@ -307,7 +338,17 @@ class ForecastReader:
                     if unique_id in keys and role not in resolved:
                         resolved[role] = [entity_id]
             else:
-                for role, suffix in FORECAST_SOLAR_UNIQUE_SUFFIXES.items():
+                # (#884) Open-Meteo shares most of Forecast.Solar's suffix
+                # naming, which is why it worked at all — and why the one
+                # role it does NOT share was invisible. Forecast.Solar has no
+                # day-2 sensor and must not gain a phantom one, so the maps
+                # are separate rather than merged.
+                _suffixes = (
+                    OPEN_METEO_UNIQUE_SUFFIXES
+                    if platform == OPEN_METEO_SOLAR_PLATFORM
+                    else FORECAST_SOLAR_UNIQUE_SUFFIXES
+                )
+                for role, suffix in _suffixes.items():
                     # Suffix-match per-plane sensor: collect EVERY plane so
                     # the read path can sum them (#838).
                     if unique_id.endswith(suffix) and entity_id not in resolved.get(role, ()):
@@ -729,6 +770,23 @@ class ForecastReader:
 
         # Read forecast tomorrow
         data.forecast_tomorrow_kwh = self._read_role_energy("forecast_tomorrow", 0.0)
+        # (#884) Day after tomorrow, and the REASON when there is none. Three
+        # states, because the user can act on two of them and not the third:
+        #   read                    — a live figure
+        #   disabled_by_integration — the sensor exists but ships disabled
+        #                             (Solcast's forecast_day_3); the fix is
+        #                             one toggle in HA, so say so
+        #   unsupported_by_source   — the provider genuinely has none
+        #                             (Forecast.Solar stops at tomorrow)
+        data.forecast_d2_kwh = self._read_role_energy("forecast_d2", 0.0)
+        if data.forecast_d2_kwh:
+            data.forecast_d2_path = "read"
+        elif self._d2_entity_disabled():
+            data.forecast_d2_path = "disabled_by_integration"
+        elif self._entities.get("forecast_d2"):
+            data.forecast_d2_path = "no_entity"
+        else:
+            data.forecast_d2_path = "unsupported_by_source"
 
         # Read remaining today
         remaining_entity = self._entities.get("forecast_remaining")
@@ -781,6 +839,33 @@ class ForecastReader:
         self._last_data = data
         self._last_read_path = "read_complete"
         return data
+
+    def _d2_entity_disabled(self) -> bool:
+        """(#884) Does a day-2 sensor EXIST but ship disabled?
+
+        Solcast registers ``forecast_day_3`` … ``day_7`` with
+        ``disabled_by=integration``. SEM cannot read a disabled entity, but
+        "your integration ships this switched off" is a different sentence
+        from "your provider does not publish it" — the first is one toggle
+        away, the second is nothing the user can do. Telling someone to give
+        up when a checkbox would fix it is the failure this issue is about.
+        """
+        try:
+            from homeassistant.helpers import entity_registry as er
+            reg = er.async_get(self._hass)
+        except Exception:  # noqa: BLE001 — a hint never costs a read
+            return False
+        wanted = SOLCAST_UNIQUE_IDS.get("forecast_d2") or ()
+        for entry in reg.entities.values():
+            if not entry.disabled_by:
+                continue
+            uid = str(entry.unique_id or "")
+            eid = str(entry.entity_id or "")
+            if any(w in uid or w in eid for w in wanted):
+                return True
+            if eid.endswith("_energy_production_d2"):
+                return True
+        return False
 
     def _read_role_energy(self, role: str, default: float) -> float:
         """Read an energy role, summing across planes when the source
