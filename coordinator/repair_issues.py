@@ -254,6 +254,9 @@ _DOCS_ANCHORS = {
         "sem-cannot-rebuild-your-battery-night-history",
     "battery_night_backfill_incomplete":
         "rebuilt-nights-cannot-see-what-the-grid-contributed",
+    # (#882) A load set to current control aimed at a watt entity.
+    "load_current_control_wrong_unit":
+        "a-load-is-set-to-current-control-but-its-entity-is-in-watts",
 }
 
 
@@ -504,6 +507,60 @@ def clear_battery_force_discharge_unsupported(
             hass, DOMAIN, _battery_force_discharge_issue_id(entity_id))
     except Exception as e:  # noqa: BLE001
         _LOGGER.debug("issue_registry.delete failed for %s: %s", entity_id, e)
+
+
+def _load_unit_issue_id(device_id: str) -> str:
+    return f"load_current_control_wrong_unit_{device_id}"
+
+
+def raise_load_current_control_wrong_unit(
+    hass: HomeAssistant,
+    *,
+    device_id: str,
+    name: str,
+    entity_id: str,
+    unit: str,
+) -> None:
+    """A load set to current control points at a POWER entity (#882).
+
+    ``control_type: "current"`` builds a ``CurrentControlDevice`` — the EV
+    charger class, in amperes, defaulting to 6–32. Aimed at a 0–9000 W
+    setpoint it can never write anything meaningful, and before this it wrote
+    nothing at all and said nothing: @florianhadersbeck read
+    ``Allocated surplus: 0 W`` for days and had to reason his way to the
+    cause. #799's rule — a silent no-op is not an answer.
+
+    The watt-modulating class this user actually needs is #880; this repair
+    exists so that until it lands, the picker's promise is visibly broken
+    rather than quietly.
+    """
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id=_load_unit_issue_id(device_id),
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="load_current_control_wrong_unit",
+            learn_more_url=next_step_url(
+                "docs", "load_current_control_wrong_unit", **_versions(hass)),
+            translation_placeholders={
+                "name": name, "entity_id": entity_id, "unit": unit,
+            },
+        )
+    except Exception as e:  # noqa: BLE001 — never fail setup over a repair
+        _LOGGER.debug("issue_registry.create failed for %s: %s", device_id, e)
+
+
+def clear_load_current_control_wrong_unit(
+    hass: HomeAssistant, device_id: str,
+) -> None:
+    """Cleared once the device is reconfigured."""
+    try:
+        ir.async_delete_issue(hass, DOMAIN, _load_unit_issue_id(device_id))
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete failed for %s: %s", device_id, e)
 
 
 _BACKFILL_ISSUE_ID = "battery_night_backfill_needs_sensors"

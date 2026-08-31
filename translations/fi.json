@@ -1674,6 +1674,10 @@
     "battery_night_backfill_incomplete": {
       "title": "Rakennetut yöt eivät näe verkon osuutta",
       "description": "SEM rakensi historian, mutta **{unbalanced}** palautetusta **{recovered}** yöstä pystyi mittaamaan vain sen, minkä *akku* antoi — ei sitä, minkä *verkko* lisäsi — koska asennuksessa ei ole **{missing}** -anturia.\n\nYönä jolloin akku tyhjenee ja verkko viimeistelee työn, akun luku on vain osa tarinaa. Ilman puuttuvaa mittaria nuo yöt aliarvioivat talon todellisen kulutuksen, joten käytettävissä oleva akku näkyy **pienempänä kuin sen pitäisi**.\n\n**Tee näin:** lisää kumulatiiviset energia-anturit (kWh, ei wattia) kohteelle **{missing}** energianäkymään ja paina uudelleen **Rakenna historiasta** — ilmoitus poistuu, kun jokainen yö voidaan tilittää. Livenä mitatut yöt eivät muutu ja ovat aina etusijalla."
+    },
+    "load_current_control_wrong_unit": {
+      "title": "Kuorma on asetettu virtaohjaukseen, mutta sen entiteetti on wateissa",
+      "description": "**{name}** on määritetty *virta*ohjaukseen, mutta **{entity_id}** odottaa arvoa yksikössä **{unit}**.\n\nVirtaohjaus tarkoittaa **ampeereja** — se on olemassa latureita varten, joille annetaan noin 6–32 A:n virta. Ylijäämän kirjoittaminen ampeereina entiteettiin, joka odottaa watteja, ei voi tarkoittaa sitä mitä tarkoitat, joten SEM ei ohjaa tätä laitetta sen sijaan että kirjoittaisi luvun väärässä yksikössä. Aiemmin laite rekisteröitiin eikä siihen koskaan kirjoitettu — se näkyi latureidesi joukossa ylijäämän jäädessä 0 W:iin.\n\n**Jos laite on todella virtaohjattu**, osoita asetus sen ampeerientiteettiin.\n\n**Jos kyseessä on muuttuvatehoinen kuorma** — AC-THOR, vastus — SEM ei osaa vielä säätää sitä (#880). Käytä sitä sillä välin **päälle/pois**-ylijäämäkuormana kytkinentiteetin kautta."
     }
   },
   "selector": {

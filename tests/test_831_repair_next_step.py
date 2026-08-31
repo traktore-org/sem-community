@@ -42,6 +42,9 @@ DOCS_SIDE = {
     # "your setup needs attention" — a sensor to add, not a SEM bug.
     "battery_night_backfill_blocked",
     "battery_night_backfill_incomplete",
+    # (#882) a load pointed at the wrong kind of entity — the fix is a
+    # setting the card names, not a SEM change.
+    "load_current_control_wrong_unit",
     "deye_system_work_mode_invalid",
 }
 REPORT_SIDE = {

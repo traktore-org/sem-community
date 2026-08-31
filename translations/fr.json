@@ -1674,6 +1674,10 @@
     "battery_night_backfill_incomplete": {
       "title": "Les nuits reconstruites ignorent la part du réseau",
       "description": "SEM a reconstruit l'historique, mais **{unbalanced}** des **{recovered}** nuits récupérées n'ont pu mesurer que ce que la *batterie* a fourni — pas ce que le *réseau* a ajouté — car cette installation n'a pas de capteur **{missing}**.\n\nLa nuit où la batterie s'épuise et où le réseau prend le relais, le chiffre de la batterie ne raconte qu'une partie de l'histoire. Sans le compteur manquant, ces nuits sous-estiment ce que votre maison a réellement consommé, et la batterie disponible s'affiche **plus basse qu'elle ne devrait**.\n\n**À faire :** ajoutez des capteurs d'énergie cumulée (kWh, pas des watts) pour **{missing}** au tableau de bord Énergie, puis relancez **Reconstruire depuis l'historique** — cet avis disparaît dès que chaque nuit peut être comptabilisée. Les nuits mesurées en direct ne sont pas affectées et restent prioritaires."
+    },
+    "load_current_control_wrong_unit": {
+      "title": "Une charge est en contrôle de courant mais son entité est en watts",
+      "description": "**{name}** est configurée en contrôle de *courant*, mais **{entity_id}** attend sa valeur en **{unit}**.\n\nLe contrôle de courant signifie **ampères** — il existe pour les bornes de recharge, auxquelles on impose un courant d'environ 6 à 32 A. Écrire un surplus en ampères dans une entité qui attend des watts ne peut pas signifier ce que vous voulez ; SEM ne pilote donc pas cet appareil plutôt que d'écrire un nombre dans la mauvaise unité. Auparavant l'appareil était enregistré et jamais écrit, apparaissant parmi vos bornes avec un surplus bloqué à 0 W.\n\n**Si l'appareil est réellement piloté en courant**, désignez son entité en ampères.\n\n**S'il s'agit d'une charge à puissance variable** — AC-THOR, résistance — SEM ne sait pas encore la moduler (#880). En attendant, utilisez-la en **tout ou rien** via une entité switch."
     }
   },
   "selector": {

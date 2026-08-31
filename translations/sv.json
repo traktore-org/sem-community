@@ -1674,6 +1674,10 @@
     "battery_night_backfill_incomplete": {
       "title": "Uppbyggda nätter ser inte elnätets andel",
       "description": "SEM byggde upp historiken, men **{unbalanced}** av de **{recovered}** återskapade nätterna kunde bara mäta vad *batteriet* gav — inte vad *elnätet* bidrog med — eftersom installationen saknar en **{missing}**-sensor.\n\nEn natt då batteriet tar slut och nätet gör klart jobbet är batteriets siffra bara en del av bilden. Utan den saknade mätaren underskattar de nätterna vad huset faktiskt tog, så det spenderbara batterivärdet visas **lägre än det borde**.\n\n**Att göra:** lägg till ackumulerade energisensorer (kWh, inte watt) för **{missing}** i energipanelen och tryck på **Bygg upp från historik** igen — meddelandet försvinner när varje natt kan redovisas. Nätter som mätts live påverkas inte och har alltid företräde."
+    },
+    "load_current_control_wrong_unit": {
+      "title": "En last är satt till strömstyrning men dess entitet anges i watt",
+      "description": "**{name}** är konfigurerad för *ström*styrning, men **{entity_id}** förväntar sitt värde i **{unit}**.\n\nStrömstyrning betyder **ampere** — det finns för elbilsladdare, som får en ström på ungefär 6–32 A. Att skriva ett överskott i ampere till en entitet som väntar watt kan inte betyda det du avser, så SEM styr inte denna enhet i stället för att skriva ett tal i fel enhet. Tidigare registrerades enheten och skrevs aldrig till — den dök upp bland dina laddare med överskottet fast på 0 W.\n\n**Är enheten verkligen strömstyrd**, peka inställningen mot dess ampere-entitet.\n\n**Är det en last med variabel effekt** — AC-THOR, elpatron — kan SEM ännu inte modulera den (#880). Använd den under tiden som **på/av**-överskottslast via en switch-entitet."
     }
   },
   "selector": {

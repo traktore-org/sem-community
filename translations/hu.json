@@ -1674,6 +1674,10 @@
     "battery_night_backfill_incomplete": {
       "title": "A felépített éjszakák nem látják a hálózat részét",
       "description": "A SEM felépítette az előzményeket, de a **{recovered}** helyreállított éjszakából **{unbalanced}** csak azt tudta megmérni, amit az *akkumulátor* adott — nem azt, amit a *hálózat* tett hozzá — mert nincs **{missing}** érzékelő.\n\nAzon az éjszakán, amikor az akkumulátor kimerül és a hálózat fejezi be a munkát, az akkumulátor száma csak a történet egy része. A hiányzó mérő nélkül ezek az éjszakák alábecsülik a ház tényleges fogyasztását, így a költhető akkumulátor **a kelleténél alacsonyabbnak** látszik.\n\n**Teendő:** adjon hozzá kumulatív energiaérzékelőket (kWh, nem watt) a **{missing}** számára az Energia irányítópulthoz, majd nyomja meg újra a **Felépítés előzményekből** gombot — az értesítés eltűnik, amint minden éjszaka elszámolható. Az élőben mért éjszakákat ez nem érinti, és mindig elsőbbséget élveznek."
+    },
+    "load_current_control_wrong_unit": {
+      "title": "Egy fogyasztó áramvezérlésre van állítva, de az entitása wattban van",
+      "description": "A **{name}** *áram*vezérlésre van beállítva, de a **{entity_id}** az értéket **{unit}** egységben várja.\n\nAz áramvezérlés **ampert** jelent — elektromos autó töltőkhöz létezik, amelyeknek nagyjából 6–32 A áramot adunk meg. A többletet amperben egy wattot váró entitásba írni nem jelentheti azt, amit szeretne, ezért a SEM nem vezérli ezt az eszközt ahelyett, hogy rossz mértékegységben írna egy számot. Korábban regisztrálta és soha nem írt bele — a töltők között jelent meg, a többlet pedig 0 W-on ragadt.\n\n**Ha az eszköz valóban áramvezérelt**, mutasson a beállítás az amperes entitására.\n\n**Ha változó teljesítményű fogyasztó** — AC-THOR, fűtőbetét — a SEM még nem tudja szabályozni (#880). Addig használja **be/ki** többletfogyasztóként egy kapcsoló entitáson keresztül."
     }
   },
   "selector": {

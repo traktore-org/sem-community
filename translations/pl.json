@@ -1674,6 +1674,10 @@
     "battery_night_backfill_incomplete": {
       "title": "Odtworzone noce nie widzą udziału sieci",
       "description": "SEM odtworzył historię, ale **{unbalanced}** z **{recovered}** odzyskanych nocy zmierzyło tylko to, co dała *bateria* — nie to, co dołożyła *sieć* — ponieważ ta instalacja nie ma czujnika **{missing}**.\n\nW nocy, gdy bateria się wyczerpuje, a sieć kończy pracę, wartość baterii to tylko część obrazu. Bez brakującego licznika te noce zaniżają rzeczywiste zużycie domu, więc dostępna bateria pokazuje **mniej, niż powinna**.\n\n**Co zrobić:** dodaj czujniki energii skumulowanej (kWh, nie waty) dla **{missing}** do panelu Energia i ponownie naciśnij **Odtwórz z historii** — powiadomienie zniknie, gdy każda noc będzie mogła zostać rozliczona. Noce zmierzone na żywo pozostają nienaruszone i zawsze mają pierwszeństwo."
+    },
+    "load_current_control_wrong_unit": {
+      "title": "Odbiornik ustawiono na sterowanie prądem, ale jego encja jest w watach",
+      "description": "**{name}** skonfigurowano do sterowania *prądem*, ale **{entity_id}** oczekuje wartości w **{unit}**.\n\nSterowanie prądem oznacza **ampery** — istnieje dla ładowarek EV, którym zadaje się prąd około 6–32 A. Zapisanie nadwyżki w amperach do encji oczekującej watów nie może oznaczać tego, co zamierzasz, więc SEM nie steruje tym urządzeniem zamiast wpisywać liczbę w złej jednostce. Wcześniej rejestrował je i nigdy nie zapisywał — pojawiało się wśród ładowarek z nadwyżką zatrzymaną na 0 W.\n\n**Jeśli urządzenie naprawdę jest sterowane prądem**, wskaż jego encję w amperach.\n\n**Jeśli to odbiornik o zmiennej mocy** — AC-THOR, grzałka — SEM nie potrafi go jeszcze modulować (#880). Tymczasem używaj go jako odbiornika **wł./wył.** przez encję przełącznika."
     }
   },
   "selector": {

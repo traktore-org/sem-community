@@ -1674,6 +1674,10 @@
     "battery_night_backfill_incomplete": {
       "title": "Las noches reconstruidas no ven la aportación de la red",
       "description": "SEM reconstruyó el historial, pero **{unbalanced}** de las **{recovered}** noches recuperadas solo pudieron medir lo que dio la *batería*, no lo que aportó la *red*, porque esta instalación no tiene un sensor de **{missing}**.\n\nEn una noche en la que la batería se agota y la red termina el trabajo, la cifra de la batería es solo parte de la historia. Sin el contador que falta, esas noches subestiman lo que su casa consumió realmente, y la batería disponible se muestra **más baja de lo que debería**.\n\n**Qué hacer:** añada sensores de energía acumulada (kWh, no vatios) para **{missing}** al panel de Energía y vuelva a pulsar **Reconstruir desde el historial**; este aviso desaparece cuando cada noche pueda contabilizarse. Las noches medidas en directo no se ven afectadas y siempre tienen prioridad."
+    },
+    "load_current_control_wrong_unit": {
+      "title": "Una carga está en control de corriente pero su entidad está en vatios",
+      "description": "**{name}** está configurada para control de *corriente*, pero **{entity_id}** espera su valor en **{unit}**.\n\nEl control de corriente significa **amperios** — existe para cargadores de VE, a los que se les indica una corriente de unos 6–32 A. Escribir un excedente en amperios en una entidad que espera vatios no puede significar lo que usted pretende, así que SEM no controla este dispositivo en lugar de escribir un número en la unidad equivocada. Antes lo registraba y nunca le escribía, apareciendo entre sus cargadores con el excedente fijo en 0 W.\n\n**Si el dispositivo es realmente de corriente**, apunte el ajuste a su entidad en amperios.\n\n**Si es una carga de potencia variable** — AC-THOR, resistencia — SEM aún no puede modularla (#880). Mientras tanto úsela como carga de excedente **on/off** mediante una entidad switch."
     }
   },
   "selector": {

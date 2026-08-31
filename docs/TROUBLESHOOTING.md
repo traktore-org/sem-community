@@ -779,6 +779,31 @@ entity if one exists. SEM re-probes quietly every ten minutes and clears the
 repair the moment a write lands, so no restart is needed once the entity is
 stable.
 
+## A load is set to current control but its entity is in watts
+
+SEM is not driving one of your surplus devices, and its allocated surplus
+stays at 0 W.
+
+**Current control means amperes.** It exists for EV chargers, which are told
+a current between roughly 6 and 32 A. If you point it at an entity that takes
+a value in **watts** — a my-PV AC-THOR, an immersion element, a heat rod, a
+power-limit number on an inverter — nothing SEM could write would mean what
+you intend, so it declines to drive the device rather than writing a number
+into the wrong unit.
+
+Previously it registered the device anyway and simply never wrote to it,
+which showed up as a water heater counted among your EV chargers and a
+surplus allocation stuck at zero with nothing explaining why.
+
+**What to do now:** if the device really is current-controlled, point the
+setting at its **ampere** entity. If it is a variable *power* load — which is
+what most surplus loads of this kind are — SEM cannot modulate it yet: it has
+no device class that means "take exactly 800 W". That is
+[#880](https://github.com/traktore-org/sem-community/issues/880), and it is
+being built. In the meantime you can still use the device as an **on/off**
+surplus load by configuring a switch entity instead, which gives you coarse
+self-consumption rather than none.
+
 ## SEM cannot rebuild your battery-night history
 
 You pressed **Rebuild from history** and SEM answered that it has no battery
