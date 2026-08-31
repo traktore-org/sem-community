@@ -38,6 +38,10 @@ DOCS_SIDE = {
     # (#872) The same raiser files a second, different story when the
     # evidence says the ENTITY is flaky rather than the device unable.
     "battery_force_discharge_entity_unstable",
+    # (#877) The rebuild button's two ways of coming back short. Both are
+    # "your setup needs attention" — a sensor to add, not a SEM bug.
+    "battery_night_backfill_blocked",
+    "battery_night_backfill_incomplete",
     "deye_system_work_mode_invalid",
 }
 REPORT_SIDE = {

@@ -159,3 +159,48 @@ class TestReconstructableOrAbsent:
         assert plain["drain_kwh"] == withc["drain_kwh"]
         assert plain["trainable"] == withc["trainable"]
         assert withc["source"] == "backfill"
+
+
+class TestTheNoEvCaseIsReachable:
+    """The `has_ev=False` branch must be reachable on the installs #877
+    exists for, or it is decoration.
+
+    #876 migrates the five COUNTER keys and deliberately not the dashboard's
+    ``has_*`` flags — those are live steering inputs the coordinator resolves
+    itself. So on a migrated install ``config.get("has_ev")`` is ABSENT, and
+    a default of True turns "this house has no car" into "the EV leg is
+    unknown", which costs the grid term on every reconstructed night. The
+    branch would then only ever fire on installs created after the flags were
+    written — the ones that never needed the backfill.
+
+    SEM already has a canonical test for this, at __init__.py:314:
+
+        has_ev = bool(config.get("ev_chargers")
+                      or config.get("ev_charging_power_sensor"))
+
+    It reads what the USER configured rather than what a dashboard reader
+    happened to record, so it answers correctly on a migrated entry. One
+    question, one test, everywhere.
+    """
+
+    def _run_service_shaped(self, config):
+        """Mirror run_backfill's own resolution without a recorder."""
+        from custom_components.solar_energy_management.coordinator import (
+            night_backfill as nb,
+        )
+        import inspect
+        src = inspect.getsource(nb.run_backfill)
+        return src
+
+    def test_the_ev_test_does_not_rest_on_a_flag_migration_omits(self):
+        src = self._run_service_shaped({})
+        assert 'config.get("has_ev"' not in src, (
+            "has_ev is not carried by the #876 migration, so on exactly the "
+            "old installs this feature is for it is absent and defaults to "
+            "True — the no-EV branch never fires and every reconstructed "
+            "night loses its grid term"
+        )
+        assert 'ev_chargers' in src and 'ev_charging_power_sensor' in src, (
+            "use SEM's canonical has-EV test (__init__.py:314) — what the "
+            "user configured, not what a dashboard reader recorded"
+        )

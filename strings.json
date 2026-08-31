@@ -1666,6 +1666,14 @@
     "battery_force_discharge_entity_unstable": {
       "title": "Battery power setpoint keeps going unavailable: {entity_id}",
       "description": "SEM stopped writing **{entity_id}** after repeated refusals: `{error}`.\n\nThis is not a device that lacks the register. On some cycles the entity failed SEM's own readability check, and on others it answered a real write with an error — that pattern means the entity is **intermittently unavailable** rather than unwritable. The usual causes are a battery or integration that drops off the network, or an entity that is only published while the battery is awake.\n\nWhile this stands, **battery-to-grid export cannot run** on this battery. Charging, discharge limits and everyday operation are unaffected.\n\nCheck that the battery stays online and that **{entity_id}** keeps a W or kW unit and a numeric state. Restarting SEM makes it try again."
+    },
+    "battery_night_backfill_blocked": {
+      "title": "Battery-night history cannot be rebuilt",
+      "description": "SEM could not rebuild your battery-night history, because this install has no **{missing}** sensor.\n\nSEM learns how much of your battery is safe to spend by watching what your house draws from it overnight, and it wants five good nights before it offers a figure. Rebuilding reads the counter's *own* recorded history so you do not have to wait — but it needs that counter to exist.\n\n**What to do:** add a cumulative energy sensor (kWh, not watts) for **{missing}** to Home Assistant's Energy Dashboard, then press **Rebuild from history** on the Battery tab again. Nothing is lost by waiting — SEM reads the counter's history, so it works just as well later. Recording continues meanwhile, one night per day."
+    },
+    "battery_night_backfill_incomplete": {
+      "title": "Rebuilt nights cannot see the grid's share",
+      "description": "SEM rebuilt your battery-night history, but **{unbalanced}** of the **{recovered}** recovered nights could only measure what the *battery* gave — not what the *grid* added — because this install has no **{missing}** sensor.\n\nOn a night when the battery runs out and the grid finishes the job, the battery's own figure is only part of the story. Without the missing counter those nights under-state what your house actually took, so the spendable-battery figure reads **lower than it should**.\n\n**What to do:** add cumulative energy sensors (kWh, not watts) for **{missing}** to Home Assistant's Energy Dashboard, then press **Rebuild from history** again — this notice clears once every night can be accounted for. The nights SEM measured live are unaffected and are always preferred."
     }
   },
   "selector": {

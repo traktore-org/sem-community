@@ -49,6 +49,55 @@ Cost tracking uses either statically configured rates (HT/NT) or a dynamic tarif
 
 Forecast-based features (charging recommendations, battery-assist decisions) require **Solcast PV Solar** (HACS) or **Forecast.Solar** (built-in) to be installed and configured separately. Without a forecast integration, these features are disabled.
 
+## Forecast-led spending needs evidence before it will spend (2.1)
+
+The budget is measured, not assumed, so it will not offer a figure until it
+has the measurements. Two clocks run independently: **five recorded nights**
+of overnight battery use, and **seven settled days** of forecast accuracy for
+the horizon it wants to trust. Until both are met the Battery tab reads
+*Learning* and nothing is spent — which is the intended behaviour, not a
+fault.
+
+Both can be short-circuited from your own recorder history (**Rebuild from
+history** on the battery card, and *Learn forecast accuracy from past
+history*), but only if the counters exist — see below.
+
+## Reconstructed nights are an upper bound, and need four meters (2.1)
+
+Rebuilding overnight history reads cumulative energy counters rather than
+watching power, which is why it can reach back months. Two consequences:
+
+- **The battery's counter reports everything it sent out**, and cannot
+  separate what the house used from what went to the car or the grid. A
+  reconstructed drain is therefore an **upper bound** on household use. That
+  errs toward holding more back, which is the way of being wrong that cannot
+  strand you — but it does mean the estimate reads slightly conservative on an
+  install rebuilt from history rather than measured live.
+- **Closing the night's balance needs four counters** — battery discharge,
+  grid import, battery charge, and the charger's energy if you charge a car.
+  With any of them missing, SEM cannot tell how much of the night the *grid*
+  carried, so those nights report only the battery's share and under-state the
+  house. SEM raises a Repair naming the missing sensor rather than degrading
+  silently, and nights it measured live are always preferred over
+  reconstructed ones.
+
+## The peak slot guard protects the meter, not the wiring (2.1)
+
+The 15-minute slot guard bounds what SEM *commands* against your target peak
+limit. It cannot bound what it does not control: anything you switch by hand,
+another integration's commands, or a load with no SEM device entry still draws
+freely. Two further limits worth knowing:
+
+- **It floors at the charger's minimum current** rather than stopping a car,
+  by design — so a slot can still overrun if the house baseline alone exceeds
+  the target. The reactive EMERGENCY state remains the hard stop.
+- **It steers on the meter reading**, so an install whose grid sensor drops
+  out loses the guard for those cycles; SEM holds its committed command rather
+  than steering on a fabricated zero.
+
+Set the Control tab's Target Limit slider to MAX (*No grid limit*) to disable
+peak management entirely, guard included.
+
 ## Peak load management
 
 Peak load management requires controllable devices with switch entities for shedding. Devices without a discoverable switch entity must be configured manually. The 15-minute rolling average calculation starts fresh after each HA restart.

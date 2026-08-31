@@ -1493,7 +1493,10 @@
     "zone_legend_buffer": "Buffer",
     "zone_legend_reserve": "Rezerva",
     "zone_legend_surplus": "Přebytek",
-    "peak_power_unsupported": "Tento zdroj předpovědi neposkytuje hodnotu špičkového výkonu"
+    "peak_power_unsupported": "Tento zdroj předpovědi neposkytuje hodnotu špičkového výkonu",
+    "rebuild_nights": "Sestavit z historie",
+    "rebuild_nights_hint": "Načte zaznamenanou historii baterie a tyto noci rekonstruuje hned, místo čekání na ně",
+    "rebuild_nights_busy": "Sestavuji…"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -2989,7 +2992,10 @@
     "zone_legend_buffer": "Buffer",
     "zone_legend_reserve": "Reserve",
     "zone_legend_surplus": "Overskud",
-    "peak_power_unsupported": "Denne prognosekilde offentliggør ikke en spidseffektværdi"
+    "peak_power_unsupported": "Denne prognosekilde offentliggør ikke en spidseffektværdi",
+    "rebuild_nights": "Genopbyg fra historik",
+    "rebuild_nights_hint": "Læser batteriets egen registrerede historik og genskaber disse nætter nu i stedet for at vente på dem",
+    "rebuild_nights_busy": "Genopbygger…"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -4485,7 +4491,10 @@
     "zone_legend_buffer": "Puffer",
     "zone_legend_reserve": "Reserve",
     "zone_legend_surplus": "Überschuss",
-    "peak_power_unsupported": "Diese Prognosequelle liefert keinen Spitzenleistungswert"
+    "peak_power_unsupported": "Diese Prognosequelle liefert keinen Spitzenleistungswert",
+    "rebuild_nights": "Aus Verlauf aufbauen",
+    "rebuild_nights_hint": "Liest den aufgezeichneten Verlauf Ihrer Batterie und rekonstruiert diese Nächte sofort, statt auf sie zu warten",
+    "rebuild_nights_busy": "Wird aufgebaut…"
   },
   "en": {
     "% of limit": "% of limit",
@@ -5981,7 +5990,10 @@
     "zone_legend_buffer": "Buffer",
     "zone_legend_reserve": "Reserve",
     "zone_legend_surplus": "Surplus",
-    "peak_power_unsupported": "This forecast source does not publish a peak power value"
+    "peak_power_unsupported": "This forecast source does not publish a peak power value",
+    "rebuild_nights": "Rebuild from history",
+    "rebuild_nights_hint": "Reads your battery's own recorded history and reconstructs these nights now, instead of waiting for them to happen",
+    "rebuild_nights_busy": "Rebuilding…"
   },
   "es": {
     "% of limit": "% del límite",
@@ -7477,7 +7489,10 @@
     "zone_legend_buffer": "Búfer",
     "zone_legend_reserve": "Reserva",
     "zone_legend_surplus": "Excedente",
-    "peak_power_unsupported": "Esta fuente de previsión no publica un valor de potencia máxima"
+    "peak_power_unsupported": "Esta fuente de previsión no publica un valor de potencia máxima",
+    "rebuild_nights": "Reconstruir desde el historial",
+    "rebuild_nights_hint": "Lee el historial registrado de su batería y reconstruye esas noches ahora, en lugar de esperarlas",
+    "rebuild_nights_busy": "Reconstruyendo…"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -8973,7 +8988,10 @@
     "zone_legend_buffer": "Puskuri",
     "zone_legend_reserve": "Varaus",
     "zone_legend_surplus": "Ylijäämä",
-    "peak_power_unsupported": "Tämä ennustelähde ei julkaise huipputehon arvoa"
+    "peak_power_unsupported": "Tämä ennustelähde ei julkaise huipputehon arvoa",
+    "rebuild_nights": "Rakenna historiasta",
+    "rebuild_nights_hint": "Lukee akun oman tallennetun historian ja muodostaa nämä yöt heti sen sijaan, että niitä odotettaisiin",
+    "rebuild_nights_busy": "Rakennetaan…"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -10469,7 +10487,10 @@
     "zone_legend_buffer": "Tampon",
     "zone_legend_reserve": "Réserve",
     "zone_legend_surplus": "Surplus",
-    "peak_power_unsupported": "Cette source de prévision ne publie pas de valeur de puissance de pointe"
+    "peak_power_unsupported": "Cette source de prévision ne publie pas de valeur de puissance de pointe",
+    "rebuild_nights": "Reconstruire depuis l'historique",
+    "rebuild_nights_hint": "Lit l'historique enregistré de votre batterie et reconstruit ces nuits maintenant, au lieu de les attendre",
+    "rebuild_nights_busy": "Reconstruction…"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -11965,7 +11986,10 @@
     "zone_legend_buffer": "Puffer",
     "zone_legend_reserve": "Tartalék",
     "zone_legend_surplus": "Többlet",
-    "peak_power_unsupported": "Ez az előrejelzési forrás nem közöl csúcsteljesítmény-értéket"
+    "peak_power_unsupported": "Ez az előrejelzési forrás nem közöl csúcsteljesítmény-értéket",
+    "rebuild_nights": "Felépítés előzményekből",
+    "rebuild_nights_hint": "Beolvassa az akkumulátor rögzített előzményeit, és most rekonstruálja ezeket az éjszakákat ahelyett, hogy megvárná őket",
+    "rebuild_nights_busy": "Felépítés…"
   },
   "it": {
     "% of limit": "% del limite",
@@ -13461,7 +13485,10 @@
     "zone_legend_buffer": "Buffer",
     "zone_legend_reserve": "Riserva",
     "zone_legend_surplus": "Surplus",
-    "peak_power_unsupported": "Questa fonte di previsione non pubblica un valore di potenza di picco"
+    "peak_power_unsupported": "Questa fonte di previsione non pubblica un valore di potenza di picco",
+    "rebuild_nights": "Ricostruisci dallo storico",
+    "rebuild_nights_hint": "Legge lo storico registrato della batteria e ricostruisce subito queste notti, invece di attenderle",
+    "rebuild_nights_busy": "Ricostruzione…"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -14957,7 +14984,10 @@
     "zone_legend_buffer": "Buffer",
     "zone_legend_reserve": "Reserve",
     "zone_legend_surplus": "Overschot",
-    "peak_power_unsupported": "Deze voorspellingsbron publiceert geen piekvermogen"
+    "peak_power_unsupported": "Deze voorspellingsbron publiceert geen piekvermogen",
+    "rebuild_nights": "Uit historie opbouwen",
+    "rebuild_nights_hint": "Leest de opgeslagen historie van uw batterij en reconstrueert deze nachten nu, in plaats van erop te wachten",
+    "rebuild_nights_busy": "Bezig met opbouwen…"
   },
   "no": {
     "% of limit": "% av grense",
@@ -16453,7 +16483,10 @@
     "zone_legend_buffer": "Buffer",
     "zone_legend_reserve": "Reserve",
     "zone_legend_surplus": "Overskudd",
-    "peak_power_unsupported": "Denne prognosekilden publiserer ingen toppeffektverdi"
+    "peak_power_unsupported": "Denne prognosekilden publiserer ingen toppeffektverdi",
+    "rebuild_nights": "Bygg opp fra historikk",
+    "rebuild_nights_hint": "Leser batteriets egen registrerte historikk og gjenskaper disse nettene nå i stedet for å vente på dem",
+    "rebuild_nights_busy": "Bygger opp…"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -17949,7 +17982,10 @@
     "zone_legend_buffer": "Bufor",
     "zone_legend_reserve": "Rezerwa",
     "zone_legend_surplus": "Nadwyżka",
-    "peak_power_unsupported": "To źródło prognozy nie udostępnia wartości mocy szczytowej"
+    "peak_power_unsupported": "To źródło prognozy nie udostępnia wartości mocy szczytowej",
+    "rebuild_nights": "Odtwórz z historii",
+    "rebuild_nights_hint": "Odczytuje zapisaną historię akumulatora i odtwarza te noce teraz, zamiast na nie czekać",
+    "rebuild_nights_busy": "Odtwarzanie…"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -19445,7 +19481,10 @@
     "zone_legend_buffer": "Tampão",
     "zone_legend_reserve": "Reserva",
     "zone_legend_surplus": "Excedente",
-    "peak_power_unsupported": "Esta fonte de previsão não publica um valor de potência de pico"
+    "peak_power_unsupported": "Esta fonte de previsão não publica um valor de potência de pico",
+    "rebuild_nights": "Reconstruir a partir do histórico",
+    "rebuild_nights_hint": "Lê o histórico registado da sua bateria e reconstrói estas noites agora, em vez de esperar por elas",
+    "rebuild_nights_busy": "A reconstruir…"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -20941,7 +20980,10 @@
     "zone_legend_buffer": "Tampon",
     "zone_legend_reserve": "Rezervă",
     "zone_legend_surplus": "Surplus",
-    "peak_power_unsupported": "Această sursă de prognoză nu publică o valoare a puterii de vârf"
+    "peak_power_unsupported": "Această sursă de prognoză nu publică o valoare a puterii de vârf",
+    "rebuild_nights": "Reconstruiește din istoric",
+    "rebuild_nights_hint": "Citește istoricul înregistrat al bateriei și reconstruiește aceste nopți acum, în loc să le aștepte",
+    "rebuild_nights_busy": "Se reconstruiește…"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -22437,7 +22479,10 @@
     "zone_legend_buffer": "Buffert",
     "zone_legend_reserve": "Reserv",
     "zone_legend_surplus": "Överskott",
-    "peak_power_unsupported": "Denna prognoskälla publicerar inget toppeffektvärde"
+    "peak_power_unsupported": "Denna prognoskälla publicerar inget toppeffektvärde",
+    "rebuild_nights": "Bygg upp från historik",
+    "rebuild_nights_hint": "Läser batteriets egen registrerade historik och återskapar dessa nätter nu i stället för att vänta på dem",
+    "rebuild_nights_busy": "Bygger upp…"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -23933,6 +23978,9 @@
     "zone_legend_buffer": "缓冲",
     "zone_legend_reserve": "储备",
     "zone_legend_surplus": "富余电量",
-    "peak_power_unsupported": "此预测来源不提供峰值功率数值"
+    "peak_power_unsupported": "此预测来源不提供峰值功率数值",
+    "rebuild_nights": "从历史记录重建",
+    "rebuild_nights_hint": "读取电池自身的记录历史并立即重建这些夜晚，而不必等待它们发生",
+    "rebuild_nights_busy": "正在重建…"
   }
 }

@@ -127,7 +127,7 @@ The per-charger `Charge mode` selector replaces the v1.6.x toggle-soup (`Overnig
 | Mode | Behaviour | Typical user |
 |---|---|---|
 | **Solar only** | Surplus only — never imports from grid | Solar maximalist |
-| **Solar + cheapest hours** | Surplus by day, grid only in the cheapest contiguous tariff window at night (hidden if no dynamic tariff is configured) | Dynamic-tariff users |
+| **Solar + cheapest hours** | Surplus first, plus grid whenever the price is genuinely cheap — **day or night** (#856). A cheap/negative daytime hour tops the Min floor up from grid; the night defers to the cheapest contiguous window (hidden if no dynamic tariff is configured) | Dynamic-tariff users |
 | **Min + Solar** (default) | Guarantee Min by deadline (from night top-up), solar adds up to Max. Zone-adaptive during the day. | Daily commuter |
 | **Always (max)** | Charge at max regardless of source | "Just charge the car" / strict legacy `minpv` |
 | **Off** | No charging — SEM monitors but issues no commands | Disabled |
@@ -290,6 +290,31 @@ Every card has its own section. The heading is the card's element tag, so
 
 The battery hero card: an SOC arc ring with charge/discharge power, today's
 throughput, and the current battery state in one glance.
+
+Since 2.1 it also carries the **Tonight** panel — the working behind
+forecast-led spending (#778), in the order a person would check it. It shows
+one of three states:
+
+| State | What it means |
+|---|---|
+| **Learning** | Fewer than five recorded nights. Nothing is spent, and the panel counts the progress. |
+| **Holding** | Enough evidence, and the honest answer is *nothing spare* — a long night against a weak forecast. |
+| **Spending** | There is a budget tonight, shown with the floor it will land on. |
+
+Below the headline sit the terms that produced it — overnight need, expected
+refill, tonight's floor — plus the charge-pacing line (#820) and the sell
+window when one is scheduled. In the **Learning** state the panel also offers
+**Rebuild from history**, which reconstructs those nights from your battery's
+own recorded discharge instead of waiting a week for them to happen:
+
+![The Rebuild from history action on the battery
+card](screenshots/battery-rebuild-from-history.png)
+
+The evidence strip underneath names your forecast provider and each horizon in
+words, and says what that evidence *bought* — a measured accuracy means SEM
+spends against it with no extra safety margin, a learning one says how far
+along it is. A horizon your provider does not publish says exactly that,
+rather than showing a blank that looks like a fault.
 
 #### sem-battery-zones-card
 

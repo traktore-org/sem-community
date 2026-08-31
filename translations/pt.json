@@ -1666,6 +1666,14 @@
     "battery_force_discharge_entity_unstable": {
       "title": "O setpoint de potência da bateria fica indisponível repetidamente: {entity_id}",
       "description": "O SEM deixou de escrever em **{entity_id}** após recusas repetidas: `{error}`.\n\nNão se trata de um dispositivo sem o registo. Em alguns ciclos a entidade falhou a verificação de legibilidade do próprio SEM e noutros respondeu a uma escrita real com um erro — esse padrão indica que a entidade está **intermitentemente indisponível**, e não que não seja gravável. As causas habituais são uma bateria ou integração que perde a rede, ou uma entidade publicada apenas enquanto a bateria está acordada.\n\nEnquanto isto durar, **a exportação da bateria para a rede não pode funcionar**. O carregamento, os limites de descarga e o funcionamento diário não são afetados.\n\nVerifique se a bateria se mantém online e se **{entity_id}** conserva uma unidade W ou kW e um estado numérico. Reiniciar o SEM faz nova tentativa."
+    },
+    "battery_night_backfill_blocked": {
+      "title": "O histórico noturno da bateria não pode ser reconstruído",
+      "description": "O SEM não conseguiu reconstruir o histórico noturno porque esta instalação não tem um sensor de **{missing}**.\n\nO SEM aprende quanto da bateria pode ser gasto com segurança observando o que a casa lhe retira durante a noite, e quer cinco boas noites antes de apresentar um valor. A reconstrução lê o histórico *do próprio* contador para que não tenha de esperar — mas esse contador tem de existir.\n\n**O que fazer:** adicione um sensor de energia acumulada (kWh, não watts) para **{missing}** ao painel de Energia do Home Assistant e prima novamente **Reconstruir a partir do histórico** no separador Bateria. Esperar não custa nada — o SEM lê o histórico do contador, funcionará igualmente bem mais tarde. Entretanto o registo continua, uma noite por dia."
+    },
+    "battery_night_backfill_incomplete": {
+      "title": "As noites reconstruídas não veem a parte da rede",
+      "description": "O SEM reconstruiu o histórico, mas **{unbalanced}** das **{recovered}** noites recuperadas só conseguiram medir o que a *bateria* deu — não o que a *rede* acrescentou — porque esta instalação não tem um sensor de **{missing}**.\n\nNuma noite em que a bateria se esgota e a rede termina o trabalho, o valor da bateria é apenas parte da história. Sem o contador em falta, essas noites subestimam o que a sua casa consumiu, e a bateria disponível aparece **mais baixa do que devia**.\n\n**O que fazer:** adicione sensores de energia acumulada (kWh, não watts) para **{missing}** ao painel de Energia e prima novamente **Reconstruir a partir do histórico** — este aviso desaparece assim que cada noite puder ser contabilizada. As noites medidas ao vivo não são afetadas e têm sempre prioridade."
     }
   },
   "selector": {

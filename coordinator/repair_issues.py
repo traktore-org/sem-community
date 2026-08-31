@@ -248,6 +248,12 @@ _DOCS_ANCHORS = {
     "deye_system_work_mode_invalid": "deye-system-work-mode-setup-cannot-be-used",
     "battery_operating_mode_unexpected":
         "the-battery-is-in-a-mode-sem-does-not-expect",
+    # (#877) Two ways the rebuild button can come back short, two sections —
+    # the fix for each is a different sensor.
+    "battery_night_backfill_blocked":
+        "sem-cannot-rebuild-your-battery-night-history",
+    "battery_night_backfill_incomplete":
+        "rebuilt-nights-cannot-see-what-the-grid-contributed",
 }
 
 
@@ -498,6 +504,92 @@ def clear_battery_force_discharge_unsupported(
             hass, DOMAIN, _battery_force_discharge_issue_id(entity_id))
     except Exception as e:  # noqa: BLE001
         _LOGGER.debug("issue_registry.delete failed for %s: %s", entity_id, e)
+
+
+_BACKFILL_ISSUE_ID = "battery_night_backfill_needs_sensors"
+
+
+def raise_battery_night_backfill_blocked(
+    hass: HomeAssistant,
+    *,
+    missing: str,
+) -> None:
+    """The user pressed the button and SEM cannot rebuild anything (#877).
+
+    A person who presses "Rebuild from history" is asking a direct question
+    and deserves a direct answer that OUTLIVES the moment. A notification is
+    dismissed and gone; the missing sensor is not. Guido, 31.08: *"if a user
+    presses the button and not all requirements are met it should create a
+    repair"* — so the refusal goes where unfinished setup lives, with a docs
+    anchor that says which sensor and why.
+
+    Cleared the moment a rebuild succeeds with every leg accounted for.
+    """
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id=_BACKFILL_ISSUE_ID,
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="battery_night_backfill_blocked",
+            learn_more_url=next_step_url(
+                "docs", "battery_night_backfill_blocked", **_versions(hass)),
+            translation_placeholders={"missing": missing},
+        )
+    except Exception as e:  # noqa: BLE001 — never fail a service over a repair
+        _LOGGER.debug("issue_registry.create failed for backfill: %s", e)
+
+
+def raise_battery_night_backfill_incomplete(
+    hass: HomeAssistant,
+    *,
+    missing: str,
+    unbalanced: int,
+    recovered: int,
+) -> None:
+    """It rebuilt, but the nights under-state the house (#877).
+
+    A DIFFERENT fault from the one above and deliberately a different card:
+    #872 is the lesson that one repair covering two faults ends up asserting
+    the wrong one. Here the rebuild worked — what is missing is the evidence
+    to tell how much of each night the GRID carried, so every reconstructed
+    night reports only what the battery gave. The estimate reads low, which
+    is the unsafe direction, and the user can fix it by adding a sensor.
+
+    Same issue_id as the blocked case: an install that gains its discharge
+    counter and then hits this one REPLACES its card rather than collecting
+    two contradictory ones.
+    """
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id=_BACKFILL_ISSUE_ID,
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="battery_night_backfill_incomplete",
+            learn_more_url=next_step_url(
+                "docs", "battery_night_backfill_incomplete",
+                **_versions(hass)),
+            translation_placeholders={
+                "missing": missing,
+                "unbalanced": str(unbalanced),
+                "recovered": str(recovered),
+            },
+        )
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.create failed for backfill: %s", e)
+
+
+def clear_battery_night_backfill(hass: HomeAssistant) -> None:
+    """Cleared on a rebuild that accounted for every leg."""
+    try:
+        ir.async_delete_issue(hass, DOMAIN, _BACKFILL_ISSUE_ID)
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete failed for backfill: %s", e)
 
 
 def _stop_unenforceable_issue_id(device_id: str) -> str:

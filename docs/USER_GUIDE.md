@@ -504,6 +504,18 @@ history"** (`solar_energy_management.backfill_battery_nights`) reconstructs
 those nights from your battery's recorded discharge, so the answer arrives at
 once rather than a week later.
 
+You do not have to go looking for it. While SEM is still learning, the battery
+card offers it directly under the progress it would otherwise ask you to wait
+out:
+
+![The Rebuild from history action on the battery card, shown while SEM is still
+collecting nights](screenshots/battery-rebuild-from-history.png)
+
+The same action is available as `button.sem_backfill_battery_nights` and as the
+service above, and it never runs on its own — rebuilding is always something
+you ask for. If your system is missing a sensor the rebuild needs, SEM raises a
+**Repair** naming that sensor rather than failing quietly.
+
 Two things worth knowing about reconstructed nights. They are read from a
 cumulative energy counter, which keeps counting whether or not SEM was
 watching — so unlike live recording they cannot be spoiled by a sensor that
@@ -1027,6 +1039,51 @@ SEM monitors rolling 15-minute average power and progressively sheds loads to st
 | **Emergency** | All non-critical loads shed immediately |
 
 When the peak drops back below the target, SEM restores devices **only if they were ON before shedding**. Devices that were already off are not turned on.
+
+### The preventive half: the 15-minute slot guard (2.1, #864)
+
+The states above are **reactive** — they act once the rolling average has
+already crossed your limit. On a demand tariff that is too late by
+definition: you are billed on the average import of each fixed 15-minute
+clock slot, so by the time the average crosses the target, the slot that sets
+your bill is already the expensive one.
+
+The gap was measured, not theorised. An EV charged at **9.9 kW under a 6.0 kW
+target** and the state read `normal` the entire time, because a four-minute
+burst moved the rolling average from 1.68 to 2.04 kW — nowhere near the
+trigger. Sustain it and the average eventually crosses, and only *then* does
+shedding begin, after the damage to the billed peak is recorded.
+
+So SEM now follows the bill's own arithmetic. Each clock slot has a budget
+(`target × ¼ h`), a tracker integrates what the slot has already imported **at
+the meter**, and the allowance is what the remainder may average so the slot
+still lands on target. One allowance per cycle bounds **everything SEM
+commands**:
+
+- the **EV offer in every mode**, `Always (max)` included;
+- the **battery's cheap-hours grid charging**;
+- **cheap-hours load starts** that cannot fit the slot's remaining budget.
+
+Two design choices worth knowing:
+
+- **It never stops a car outright.** The offer floors at the charger's minimum
+  current rather than dropping to zero — stopping on a transient is the
+  flapping this project spent months removing. The hard stop stays with the
+  EMERGENCY state, which runs after this and outranks it.
+- **Early-slot bursts stay allowed.** A short spike at the start of a slot is
+  genuinely absorbed by the average, so the guard permits it; it tightens only
+  as the slot fills.
+
+Because the limit lives at the **power meter**, everything downstream answers
+to it — this is a layer above the devices, not an EV feature.
+
+**Turning it off** uses the control that already exists: set the Control tab's
+**Target Limit** slider to its MAX notch (*No grid limit*). There is no second
+toggle. An install with no target peak limit behaves exactly as it did before.
+
+Live values: `peak_slot_allowed_w` (what the rest of the slot may average) and
+`peak_slot_used_kwh` (what it has taken so far), both on the load-management
+surface.
 
 Enable via **Enable Load Management** on the Configuration tab. Requires controllable devices with switch entities. For the target/warning/emergency range, the Control-tab slider, and the **No grid limit** opt-out, see [Load Management Settings](#load-management-settings).
 

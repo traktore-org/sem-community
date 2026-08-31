@@ -1666,6 +1666,14 @@
     "battery_force_discharge_entity_unstable": {
       "title": "Nastawa mocy baterii wciąż staje się niedostępna: {entity_id}",
       "description": "SEM przestał zapisywać **{entity_id}** po wielokrotnych odmowach: `{error}`.\n\nTo nie jest urządzenie pozbawione rejestru. W części cykli encja nie przeszła własnej kontroli odczytu SEM, a w innych odpowiedziała błędem na rzeczywisty zapis — taki wzorzec oznacza, że encja jest **okresowo niedostępna**, a nie niezapisywalna. Typowe przyczyny to bateria lub integracja tracąca łączność sieciową albo encja publikowana tylko wtedy, gdy bateria jest wybudzona.\n\nDopóki to trwa, **eksport z baterii do sieci nie może działać**. Ładowanie, limity rozładowania i codzienna praca pozostają bez zmian.\n\nSprawdź, czy bateria pozostaje online i czy **{entity_id}** zachowuje jednostkę W lub kW oraz wartość liczbową. Restart SEM ponawia próbę."
+    },
+    "battery_night_backfill_blocked": {
+      "title": "Nie można odtworzyć historii nocnej baterii",
+      "description": "SEM nie mógł odtworzyć historii nocnej, ponieważ ta instalacja nie ma czujnika **{missing}**.\n\nSEM uczy się, ile z baterii można bezpiecznie wydać, obserwując, ile dom pobiera z niej nocą, i chce pięciu dobrych nocy, zanim poda liczbę. Odtwarzanie czyta *własną* zapisaną historię licznika, żebyś nie musiał czekać — ale ten licznik musi istnieć.\n\n**Co zrobić:** dodaj czujnik energii skumulowanej (kWh, nie waty) dla **{missing}** do panelu Energia w Home Assistant, a następnie ponownie naciśnij **Odtwórz z historii** na karcie Bateria. Czekanie nic nie kosztuje — SEM czyta historię licznika, więc później zadziała tak samo dobrze. W międzyczasie rejestracja trwa, jedna noc dziennie."
+    },
+    "battery_night_backfill_incomplete": {
+      "title": "Odtworzone noce nie widzą udziału sieci",
+      "description": "SEM odtworzył historię, ale **{unbalanced}** z **{recovered}** odzyskanych nocy zmierzyło tylko to, co dała *bateria* — nie to, co dołożyła *sieć* — ponieważ ta instalacja nie ma czujnika **{missing}**.\n\nW nocy, gdy bateria się wyczerpuje, a sieć kończy pracę, wartość baterii to tylko część obrazu. Bez brakującego licznika te noce zaniżają rzeczywiste zużycie domu, więc dostępna bateria pokazuje **mniej, niż powinna**.\n\n**Co zrobić:** dodaj czujniki energii skumulowanej (kWh, nie waty) dla **{missing}** do panelu Energia i ponownie naciśnij **Odtwórz z historii** — powiadomienie zniknie, gdy każda noc będzie mogła zostać rozliczona. Noce zmierzone na żywo pozostają nienaruszone i zawsze mają pierwszeństwo."
     }
   },
   "selector": {

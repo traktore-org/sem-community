@@ -506,7 +506,11 @@ class SEMBatteryCard extends SEMLitBase {
                 ${phase === 'learning' ? html`
                     <div class="tonight-prog">
                         ${pips.map((on) => html`<i class="${on ? 'on' : ''}"></i>`)}
-                    </div>` : nothing}
+                    </div>
+                    <button class="tonight-act" @click=${this._rebuildNights}
+                            title=${this._t('rebuild_nights_hint')}>
+                        ${this._t('rebuild_nights')}
+                    </button>` : nothing}
                 <div class="tonight-why">${a.why || ''}</div>
                 ${this._renderPacingLine()}
                 ${this._renderSellLine()}
@@ -519,6 +523,28 @@ class SEMBatteryCard extends SEMLitBase {
                     </div>` : nothing}
             </div>
         `;
+    }
+
+    /* (#877) The wait is announced here, so the way OUT of the wait belongs
+       here too. SEM can usually prove these nights from the recorder the
+       moment it is asked — the service reads the battery's own cumulative
+       counter — but until now the only way to ask was a button on the device
+       page that nothing pointed at. A person told "2 of 5 nights" has no
+       reason to go looking for it. */
+    async _rebuildNights(e) {
+        const btn = e?.currentTarget;
+        if (btn) { btn.disabled = true; btn.textContent = this._t('rebuild_nights_busy'); }
+        try {
+            await this._hass.callService(
+                'solar_energy_management', 'backfill_battery_nights',
+                { days: 365 },
+            );
+        } catch (err) {
+            // The service reports its own result as a notification, including
+            // refusals; a card that swallowed the error would leave the
+            // button stuck pretending to work.
+            if (btn) { btn.disabled = false; btn.textContent = this._t('rebuild_nights'); }
+        }
     }
 
     /* ── (#778) The evidence strip — why the number above deserves belief.
@@ -832,6 +858,30 @@ class SEMBatteryCard extends SEMLitBase {
                     background: rgba(255,255,255,.13);
                 }
                 .tonight-prog i.on { background: var(--tn-accent, #e0a943); }
+                /* (#877) A quiet offer, not a call to action — the wait is
+                   normal and the shortcut is optional. Sits under the pips
+                   it removes. */
+                .tonight-act {
+                    /* .tonight is a column flex with align-items:stretch and
+                       its own 10px gap — so a bare button stretched to the
+                       full 822px card width and carried double spacing. The
+                       layout owns the gap; this only opts out of the
+                       stretch. */
+                    align-self: flex-start;
+                    padding: 5px 11px;
+                    font: inherit;
+                    font-size: 0.78em;
+                    letter-spacing: 0.02em;
+                    color: var(--tn-accent, #e0a943);
+                    background: transparent;
+                    border: 1px solid var(--tn-accent, #e0a943);
+                    border-radius: 999px;
+                    cursor: pointer;
+                    opacity: 0.85;
+                    transition: opacity 0.15s, background 0.15s;
+                }
+                .tonight-act:hover { opacity: 1; background: rgba(255,255,255,0.06); }
+                .tonight-act:disabled { opacity: 0.5; cursor: default; }
                 .tonight-why {
                     font-size: 12.5px;
                     line-height: 1.45;

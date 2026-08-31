@@ -1666,6 +1666,14 @@
     "battery_force_discharge_entity_unstable": {
       "title": "El punto de consigna de potencia de la batería deja de estar disponible: {entity_id}",
       "description": "SEM dejó de escribir en **{entity_id}** tras rechazos repetidos: `{error}`.\n\nNo se trata de un dispositivo que carezca del registro. En algunos ciclos la entidad no superó la propia comprobación de legibilidad de SEM, y en otros respondió a una escritura real con un error: ese patrón indica que la entidad está **intermitentemente no disponible**, no que no se pueda escribir en ella. Las causas habituales son una batería o integración que pierde la red, o una entidad que solo se publica mientras la batería está despierta.\n\nMientras esto persista, **la exportación de la batería a la red no puede funcionar**. La carga, los límites de descarga y el funcionamiento diario no se ven afectados.\n\nCompruebe que la batería sigue en línea y que **{entity_id}** mantiene una unidad W o kW y un estado numérico. Reiniciar SEM hace que lo intente de nuevo."
+    },
+    "battery_night_backfill_blocked": {
+      "title": "El historial nocturno de la batería no se puede reconstruir",
+      "description": "SEM no pudo reconstruir el historial nocturno porque esta instalación no tiene un sensor de **{missing}**.\n\nSEM aprende cuánta batería se puede gastar con seguridad observando lo que su casa le extrae por la noche, y quiere cinco noches buenas antes de dar una cifra. La reconstrucción lee el historial *propio* del contador para que no tenga que esperar, pero ese contador debe existir.\n\n**Qué hacer:** añada un sensor de energía acumulada (kWh, no vatios) para **{missing}** al panel de Energía de Home Assistant y vuelva a pulsar **Reconstruir desde el historial** en la pestaña Batería. Esperar no cuesta nada: SEM lee el historial del contador, así que funcionará igual de bien más tarde. Mientras tanto el registro continúa, una noche por día."
+    },
+    "battery_night_backfill_incomplete": {
+      "title": "Las noches reconstruidas no ven la aportación de la red",
+      "description": "SEM reconstruyó el historial, pero **{unbalanced}** de las **{recovered}** noches recuperadas solo pudieron medir lo que dio la *batería*, no lo que aportó la *red*, porque esta instalación no tiene un sensor de **{missing}**.\n\nEn una noche en la que la batería se agota y la red termina el trabajo, la cifra de la batería es solo parte de la historia. Sin el contador que falta, esas noches subestiman lo que su casa consumió realmente, y la batería disponible se muestra **más baja de lo que debería**.\n\n**Qué hacer:** añada sensores de energía acumulada (kWh, no vatios) para **{missing}** al panel de Energía y vuelva a pulsar **Reconstruir desde el historial**; este aviso desaparece cuando cada noche pueda contabilizarse. Las noches medidas en directo no se ven afectadas y siempre tienen prioridad."
     }
   },
   "selector": {

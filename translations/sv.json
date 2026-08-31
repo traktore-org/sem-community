@@ -1666,6 +1666,14 @@
     "battery_force_discharge_entity_unstable": {
       "title": "Batteriets effektbörvärde blir gång på gång otillgängligt: {entity_id}",
       "description": "SEM slutade skriva till **{entity_id}** efter upprepade avslag: `{error}`.\n\nDetta är inte en enhet som saknar registret. Under vissa cykler klarade entiteten inte SEM:s egen läsbarhetskontroll, och under andra svarade den på en verklig skrivning med ett fel — det mönstret betyder att entiteten är **tidvis otillgänglig**, inte att den inte går att skriva till. Vanliga orsaker är ett batteri eller en integration som tappar nätverket, eller en entitet som bara publiceras medan batteriet är vaket.\n\nSå länge detta kvarstår **kan batteriexport till nätet inte köras**. Laddning, urladdningsgränser och daglig drift påverkas inte.\n\nKontrollera att batteriet förblir online och att **{entity_id}** behåller en W- eller kW-enhet och ett numeriskt tillstånd. En omstart av SEM gör ett nytt försök."
+    },
+    "battery_night_backfill_blocked": {
+      "title": "Batteriets natthistorik kan inte byggas upp",
+      "description": "SEM kunde inte bygga upp natthistoriken eftersom den här installationen saknar en **{missing}**-sensor.\n\nSEM lär sig hur mycket av batteriet som tryggt kan användas genom att se vad huset tar ur det under natten, och vill ha fem bra nätter innan det anger en siffra. Uppbyggnaden läser mätarens *egen* registrerade historik så att du slipper vänta — men mätaren måste finnas.\n\n**Att göra:** lägg till en ackumulerad energisensor (kWh, inte watt) för **{missing}** i Home Assistants energipanel och tryck på **Bygg upp från historik** på Batteri-fliken igen. Att vänta kostar inget — SEM läser mätarens historik, så det fungerar lika bra senare. Under tiden fortsätter registreringen, en natt per dygn."
+    },
+    "battery_night_backfill_incomplete": {
+      "title": "Uppbyggda nätter ser inte elnätets andel",
+      "description": "SEM byggde upp historiken, men **{unbalanced}** av de **{recovered}** återskapade nätterna kunde bara mäta vad *batteriet* gav — inte vad *elnätet* bidrog med — eftersom installationen saknar en **{missing}**-sensor.\n\nEn natt då batteriet tar slut och nätet gör klart jobbet är batteriets siffra bara en del av bilden. Utan den saknade mätaren underskattar de nätterna vad huset faktiskt tog, så det spenderbara batterivärdet visas **lägre än det borde**.\n\n**Att göra:** lägg till ackumulerade energisensorer (kWh, inte watt) för **{missing}** i energipanelen och tryck på **Bygg upp från historik** igen — meddelandet försvinner när varje natt kan redovisas. Nätter som mätts live påverkas inte och har alltid företräde."
     }
   },
   "selector": {

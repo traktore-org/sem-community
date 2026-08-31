@@ -2946,7 +2946,23 @@ async def _async_register_services(
             return
 
         if report.get("error"):
+            # (#877) The user asked a direct question by pressing a button
+            # and the answer outlives the moment: a notification is dismissed
+            # and gone, the missing sensor is not. So the refusal goes where
+            # unfinished setup lives, naming the sensor and linking the docs
+            # section that says why it is needed.
             _LOGGER.warning("backfill_battery_nights: %s", report["error"])
+            try:
+                from .coordinator.repair_issues import (
+                    raise_battery_night_backfill_blocked,
+                )
+                raise_battery_night_backfill_blocked(
+                    hass,
+                    missing=", ".join(report.get("missing_counters")
+                                      or ["battery discharge energy"]),
+                )
+            except Exception:  # noqa: BLE001 — a repair never fails a service
+                pass
             return
 
         try:
@@ -2955,25 +2971,89 @@ async def _async_register_services(
         except (AttributeError, TypeError, ValueError) as err:
             _LOGGER.warning("backfilled nights not persisted: %s", err)
 
+        # (#877) How many reconstructed nights could close the energy
+        # balance. A shortfall is not an error — it is a meter this install
+        # does not keep — but it is the difference between a night comparable
+        # to a measured one and a night that under-reports the house, so it
+        # is said out loud rather than left in a service response nobody
+        # reads.
+        _recovered = report.get("recovered", 0)
+        _balanced = report.get("with_grid_term", 0)
+        # (#877) What matters is the history SEM KEEPS. A 365-day rebuild
+        # recovers several times ``max_nights``; counting the whole haul
+        # reports a shortfall about nights that were pruned seconds later.
+        _unbalanced = int(report.get("kept_without_grid_term", 0) or 0)
+        _missing = report.get("missing_counters") or []
         _LOGGER.info(
             "Service backfill_battery_nights: %d hour(s) of history from %s; "
-            "recovered %d night(s) (%d trainable); history now %d night(s), "
-            "%d usable",
+            "recovered %d night(s) (%d trainable, %d with the grid's share); "
+            "history now %d night(s), %d usable",
             report.get("hours_of_history", 0), report.get("statistic"),
-            report.get("recovered", 0), report.get("trainable_recovered", 0),
+            _recovered, report.get("trainable_recovered", 0), _balanced,
             report.get("nights_total", 0), report.get("usable_total", 0),
         )
+        try:
+            from .coordinator.repair_issues import (
+                clear_battery_night_backfill,
+                raise_battery_night_backfill_incomplete,
+            )
+            if _unbalanced and _missing:
+                # A counter this install does not keep — actionable, so it
+                # gets the card and names the sensor.
+                _LOGGER.warning(
+                    "backfill_battery_nights: %d KEPT night(s) could not "
+                    "account for the grid's share, so they report only what "
+                    "the BATTERY gave and under-state what the house took. "
+                    "Missing: %s. The overnight-need estimate reads low "
+                    "until those exist.",
+                    _unbalanced, ", ".join(_missing),
+                )
+                raise_battery_night_backfill_incomplete(
+                    hass, missing=", ".join(_missing),
+                    unbalanced=_unbalanced,
+                    recovered=report.get("nights_total", _recovered),
+                )
+            elif _unbalanced:
+                # Every counter exists; those particular nights had a gap in
+                # the statistics or a counter reset inside their window.
+                # Nothing to add and nothing to fix — raising a card that
+                # says "add a sensor" would name a cause we have not
+                # established and hand the user an instruction that does not
+                # apply (#872's lesson). Say it once, at INFO, and clear any
+                # stale card.
+                _LOGGER.info(
+                    "backfill_battery_nights: %d of the %d kept night(s) "
+                    "have no grid share — every counter is configured, so "
+                    "those nights had a gap or a counter reset in their "
+                    "window. They are treated as the battery's share alone.",
+                    _unbalanced, report.get("nights_total", 0),
+                )
+                clear_battery_night_backfill(hass)
+            else:
+                # Every leg accounted for — retract any earlier complaint,
+                # including one raised before the user added the sensor.
+                clear_battery_night_backfill(hass)
+        except Exception:  # noqa: BLE001
+            pass
         # (2.1 audit, item 8) the result where a person looks, not the log
         try:
             from homeassistant.components import persistent_notification
             persistent_notification.async_create(
                 hass,
-                (f"Recovered {report.get('recovered', 0)} night(s) "
+                (f"Recovered {_recovered} night(s) "
                  f"({report.get('trainable_recovered', 0)} trainable) from "
                  f"{report.get('hours_of_history', 0)} hour(s) of history. "
                  f"Battery-night history now holds "
                  f"{report.get('nights_total', 0)} night(s), "
-                 f"{report.get('usable_total', 0)} usable."),
+                 f"{report.get('usable_total', 0)} usable."
+                 + ("" if not _unbalanced else
+                    f"\n\n⚠️ {_unbalanced} of them could only measure what "
+                    f"the battery gave, not what the grid added, so they "
+                    f"under-state what your house took overnight — and the "
+                    f"spendable-battery figure will read low. Add "
+                    f"grid-import and battery-charge energy sensors (and "
+                    f"your charger's, if you charge a car) to the Energy "
+                    f"Dashboard, then press the button again.")),
                 title="SEM: battery-night history rebuilt",
                 notification_id="sem_backfill_battery_nights",
             )

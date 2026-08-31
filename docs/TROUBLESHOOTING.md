@@ -779,6 +779,53 @@ entity if one exists. SEM re-probes quietly every ten minutes and clears the
 repair the moment a write lands, so no restart is needed once the entity is
 stable.
 
+## SEM cannot rebuild your battery-night history
+
+You pressed **Rebuild from history** and SEM answered that it has no battery
+discharge energy sensor.
+
+SEM decides how much of your battery is safe to spend by watching how much
+your house draws from it overnight, and it wants five good nights before it
+offers a figure. Rebuilding skips that wait by reading the counter's own
+recorded history — so it needs a **cumulative energy counter**, in kWh, that
+only ever goes up. A power sensor in watts is a different thing and cannot be
+used: it says what the battery is doing *now*, not what it has done.
+
+The button lives on the Battery tab, under the nights-collected progress:
+
+![The Rebuild from history action on the battery
+card](screenshots/battery-rebuild-from-history.png)
+
+**Fix:** add your battery's discharge energy sensor to Home Assistant's
+Energy Dashboard (Settings → Dashboards → Energy → *Home battery storage*),
+then press the button again. Nothing is lost by waiting — SEM reads the
+counter's history, so pressing it a month from now recovers that month too.
+Live recording continues meanwhile at one night per day, so the wait is a
+delay, never a dead end.
+
+## Rebuilt nights cannot see what the grid contributed
+
+The rebuild worked, but some of the recovered nights could only measure what
+the **battery** gave, not what the **grid** added.
+
+This matters on the nights that matter most. When the battery runs down
+before morning and the grid finishes the job, the battery's own figure is
+only part of what your house took — so those nights look smaller than they
+were. They are exactly the big nights the estimate exists to protect against,
+and counting them small pulls the spendable-battery figure **lower than it
+should be**.
+
+SEM closes the night's books instead of guessing: there is no sun at night,
+so what the house took is what the grid and the battery gave, minus what the
+car and the battery absorbed. That needs a cumulative energy counter for each
+of those, which is why one missing sensor leaves the night unaccounted.
+
+**Fix:** add the named sensors to the Energy Dashboard — grid import, battery
+charge, and your charger's energy if you charge a car — and press **Rebuild
+from history** again. The notice clears once every night can be accounted
+for. Nights SEM measured live are unaffected: they carry the grid's share
+already, and SEM always prefers them over a reconstructed one.
+
 ## The battery is in a mode SEM does not expect
 
 SEM's planning — the overnight-need model, the spendable budget, the

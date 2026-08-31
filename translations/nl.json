@@ -1666,6 +1666,14 @@
     "battery_force_discharge_entity_unstable": {
       "title": "Batterij-vermogenssetpoint valt steeds weg: {entity_id}",
       "description": "SEM is gestopt met schrijven naar **{entity_id}** na herhaalde weigeringen: `{error}`.\n\nDit is geen apparaat dat het register mist. In sommige cycli haalde de entiteit SEM's eigen leesbaarheidscontrole niet, en in andere beantwoordde ze een echte schrijfactie met een fout — dat patroon betekent dat de entiteit **met tussenpozen onbeschikbaar** is, niet onbeschrijfbaar. Gebruikelijke oorzaken zijn een batterij of integratie die van het netwerk valt, of een entiteit die alleen wordt gepubliceerd zolang de batterij wakker is.\n\nZolang dit speelt, **kan teruglevering vanuit de batterij niet werken**. Laden, ontlaadlimieten en de dagelijkse werking blijven ongemoeid.\n\nControleer of de batterij online blijft en of **{entity_id}** een W- of kW-eenheid en een numerieke status houdt. Na een herstart van SEM wordt het opnieuw geprobeerd."
+    },
+    "battery_night_backfill_blocked": {
+      "title": "Batterij-nachtgeschiedenis kan niet worden opgebouwd",
+      "description": "SEM kon de batterij-nachtgeschiedenis niet opbouwen, omdat deze installatie geen **{missing}**-sensor heeft.\n\nSEM leert hoeveel van uw batterij veilig besteed kan worden door te kijken wat uw huis er 's nachts uit haalt, en wil vijf goede nachten voordat het een cijfer geeft. Opbouwen leest de *eigen* opgeslagen historie van de teller zodat u niet hoeft te wachten — maar die teller moet wel bestaan.\n\n**Te doen:** voeg een cumulatieve energiesensor (kWh, geen watt) voor **{missing}** toe aan het Energiedashboard van Home Assistant en druk op het Batterij-tabblad opnieuw op **Uit historie opbouwen**. Wachten kost niets — SEM leest de historie van de teller, dus het werkt later net zo goed. Ondertussen loopt de registratie door, één nacht per dag."
+    },
+    "battery_night_backfill_incomplete": {
+      "title": "Opgebouwde nachten zien het aandeel van het net niet",
+      "description": "SEM heeft de batterij-nachtgeschiedenis opgebouwd, maar **{unbalanced}** van de **{recovered}** herstelde nachten konden alleen meten wat de *batterij* leverde — niet wat het *net* bijdroeg — omdat deze installatie geen **{missing}**-sensor heeft.\n\nOp een nacht waarin de batterij leegraakt en het net het afmaakt, is het batterijcijfer maar een deel van het verhaal. Zonder de ontbrekende teller geven die nachten te weinig aan wat uw huis werkelijk verbruikte, waardoor het besteedbare batterijcijfer **lager uitvalt dan het hoort**.\n\n**Te doen:** voeg cumulatieve energiesensoren (kWh, geen watt) voor **{missing}** toe aan het Energiedashboard en druk opnieuw op **Uit historie opbouwen** — deze melding verdwijnt zodra elke nacht volledig verantwoord kan worden. Live gemeten nachten blijven ongemoeid en krijgen altijd voorrang."
     }
   },
   "selector": {

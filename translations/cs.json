@@ -1666,6 +1666,14 @@
     "battery_force_discharge_entity_unstable": {
       "title": "Žádaná hodnota výkonu baterie se opakovaně stává nedostupnou: {entity_id}",
       "description": "SEM přestal zapisovat do **{entity_id}** po opakovaných odmítnutích: `{error}`.\n\nNejde o zařízení, kterému chybí registr. V některých cyklech entita neprošla vlastní kontrolou čitelnosti SEM a v jiných odpověděla na skutečný zápis chybou — tento vzorec znamená, že entita je **občasně nedostupná**, nikoli nezapisovatelná. Obvyklou příčinou je baterie nebo integrace, která ztrácí síť, případně entita publikovaná jen tehdy, když je baterie probuzená.\n\nDokud to trvá, **export z baterie do sítě nemůže běžet**. Nabíjení, limity vybíjení a běžný provoz zůstávají nedotčeny.\n\nOvěřte, že baterie zůstává online a že **{entity_id}** si zachovává jednotku W nebo kW a číselný stav. Restart SEM pokus zopakuje."
+    },
+    "battery_night_backfill_blocked": {
+      "title": "Noční historii baterie nelze sestavit",
+      "description": "SEM nemohl sestavit noční historii, protože tato instalace nemá senzor **{missing}**.\n\nSEM se učí, kolik z baterie lze bezpečně utratit, sledováním toho, kolik z ní dům přes noc odebere, a chce pět dobrých nocí, než uvede číslo. Sestavení čte *vlastní* zaznamenanou historii měřidla, abyste nemuseli čekat — ale to měřidlo musí existovat.\n\n**Co udělat:** přidejte kumulativní senzor energie (kWh, ne watty) pro **{missing}** do panelu Energie v Home Assistantu a na kartě Baterie znovu stiskněte **Sestavit z historie**. Čekáním nic neztratíte — SEM čte historii měřidla, takže to bude fungovat stejně dobře později. Mezitím záznam pokračuje, jedna noc denně."
+    },
+    "battery_night_backfill_incomplete": {
+      "title": "Sestavené noci nevidí podíl sítě",
+      "description": "SEM sestavil historii, ale **{unbalanced}** z **{recovered}** obnovených nocí dokázalo změřit jen to, co dala *baterie* — ne to, co přidala *síť* — protože tato instalace nemá senzor **{missing}**.\n\nV noci, kdy se baterie vyčerpá a práci dokončí síť, je hodnota baterie jen částí příběhu. Bez chybějícího měřidla tyto noci podhodnocují skutečnou spotřebu domu, takže utratitelná baterie ukazuje **méně, než by měla**.\n\n**Co udělat:** přidejte kumulativní senzory energie (kWh, ne watty) pro **{missing}** do panelu Energie a znovu stiskněte **Sestavit z historie** — upozornění zmizí, jakmile bude možné vyúčtovat každou noc. Živě měřené noci zůstávají nedotčené a mají vždy přednost."
     }
   },
   "selector": {

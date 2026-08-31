@@ -1666,6 +1666,14 @@
     "battery_force_discharge_entity_unstable": {
       "title": "Punctul de referință al puterii bateriei devine în mod repetat indisponibil: {entity_id}",
       "description": "SEM a încetat să scrie în **{entity_id}** după refuzuri repetate: `{error}`.\n\nNu este vorba de un dispozitiv căruia îi lipsește registrul. În unele cicluri entitatea nu a trecut propria verificare de lizibilitate a SEM, iar în altele a răspuns unei scrieri reale cu o eroare — acest tipar înseamnă că entitatea este **intermitent indisponibilă**, nu că nu se poate scrie în ea. Cauzele obișnuite sunt o baterie sau o integrare care pierde rețeaua ori o entitate publicată doar cât timp bateria este activă.\n\nCât timp persistă, **exportul din baterie în rețea nu poate funcționa**. Încărcarea, limitele de descărcare și funcționarea zilnică nu sunt afectate.\n\nVerificați dacă bateria rămâne online și dacă **{entity_id}** păstrează o unitate W sau kW și o stare numerică. Repornirea SEM reia încercarea."
+    },
+    "battery_night_backfill_blocked": {
+      "title": "Istoricul nocturn al bateriei nu poate fi reconstruit",
+      "description": "SEM nu a putut reconstrui istoricul nocturn, deoarece această instalare nu are un senzor **{missing}**.\n\nSEM învață cât din baterie poate fi cheltuit în siguranță urmărind ce consumă casa din ea peste noapte și vrea cinci nopți bune înainte de a oferi o cifră. Reconstrucția citește istoricul *propriu* al contorului ca să nu fie nevoie să așteptați — dar acel contor trebuie să existe.\n\n**De făcut:** adăugați un senzor de energie cumulată (kWh, nu wați) pentru **{missing}** în tabloul Energie din Home Assistant, apoi apăsați din nou **Reconstruiește din istoric** pe fila Baterie. Așteptarea nu costă nimic — SEM citește istoricul contorului, deci va funcționa la fel de bine mai târziu. Între timp înregistrarea continuă, o noapte pe zi."
+    },
+    "battery_night_backfill_incomplete": {
+      "title": "Nopțile reconstruite nu văd aportul rețelei",
+      "description": "SEM a reconstruit istoricul, dar **{unbalanced}** din cele **{recovered}** nopți recuperate au putut măsura doar ce a dat *bateria* — nu și ce a adăugat *rețeaua* — pentru că instalarea nu are un senzor **{missing}**.\n\nÎntr-o noapte în care bateria se golește și rețeaua termină treaba, cifra bateriei este doar o parte din poveste. Fără contorul lipsă, acele nopți subestimează cât a consumat efectiv casa, iar bateria disponibilă apare **mai mică decât ar trebui**.\n\n**De făcut:** adăugați senzori de energie cumulată (kWh, nu wați) pentru **{missing}** în tabloul Energie, apoi apăsați din nou **Reconstruiește din istoric** — notificarea dispare când fiecare noapte poate fi contabilizată. Nopțile măsurate în direct nu sunt afectate și au întotdeauna prioritate."
     }
   },
   "selector": {

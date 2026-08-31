@@ -1666,6 +1666,14 @@
     "battery_force_discharge_entity_unstable": {
       "title": "Az akkumulátor teljesítmény-alapjele rendre elérhetetlenné válik: {entity_id}",
       "description": "A SEM ismételt elutasítások után abbahagyta a **{entity_id}** írását: `{error}`.\n\nNem olyan eszközről van szó, amelyből hiányzik a regiszter. Egyes ciklusokban az entitás megbukott a SEM saját olvashatósági ellenőrzésén, másokban pedig hibával válaszolt egy valódi írásra — ez a minta azt jelenti, hogy az entitás **időszakosan elérhetetlen**, nem pedig írásvédett. Szokásos okok: hálózatot vesztő akkumulátor vagy integráció, illetve olyan entitás, amely csak az akkumulátor ébren léte alatt jelenik meg.\n\nAmíg ez fennáll, **az akkumulátorból a hálózatba történő betáplálás nem működhet**. A töltés, a kisütési korlátok és a mindennapi működés érintetlen.\n\nEllenőrizze, hogy az akkumulátor online marad-e, és hogy a **{entity_id}** megőrzi-e a W vagy kW mértékegységet és a numerikus állapotot. A SEM újraindítása újra megpróbálja."
+    },
+    "battery_night_backfill_blocked": {
+      "title": "Az akkumulátor éjszakai előzményei nem építhetők fel",
+      "description": "A SEM nem tudta felépíteni az éjszakai előzményeket, mert ezen a telepítésen nincs **{missing}** érzékelő.\n\nA SEM abból tanulja meg, mennyi akkumulátor költhető el biztonságosan, hogy figyeli, mit vesz ki belőle a ház éjszaka, és öt jó éjszakát szeretne, mielőtt számot mond. A felépítés a mérő *saját* rögzített előzményeit olvassa, hogy ne kelljen várnia — de ennek a mérőnek léteznie kell.\n\n**Teendő:** adjon hozzá egy kumulatív energiaérzékelőt (kWh, nem watt) a **{missing}** számára a Home Assistant Energia irányítópultjához, majd nyomja meg újra a **Felépítés előzményekből** gombot az Akkumulátor lapon. A várakozás nem kerül semmibe — a SEM a mérő előzményeit olvassa, így később ugyanúgy működik. Közben a rögzítés folytatódik, naponta egy éjszaka."
+    },
+    "battery_night_backfill_incomplete": {
+      "title": "A felépített éjszakák nem látják a hálózat részét",
+      "description": "A SEM felépítette az előzményeket, de a **{recovered}** helyreállított éjszakából **{unbalanced}** csak azt tudta megmérni, amit az *akkumulátor* adott — nem azt, amit a *hálózat* tett hozzá — mert nincs **{missing}** érzékelő.\n\nAzon az éjszakán, amikor az akkumulátor kimerül és a hálózat fejezi be a munkát, az akkumulátor száma csak a történet egy része. A hiányzó mérő nélkül ezek az éjszakák alábecsülik a ház tényleges fogyasztását, így a költhető akkumulátor **a kelleténél alacsonyabbnak** látszik.\n\n**Teendő:** adjon hozzá kumulatív energiaérzékelőket (kWh, nem watt) a **{missing}** számára az Energia irányítópulthoz, majd nyomja meg újra a **Felépítés előzményekből** gombot — az értesítés eltűnik, amint minden éjszaka elszámolható. Az élőben mért éjszakákat ez nem érinti, és mindig elsőbbséget élveznek."
     }
   },
   "selector": {

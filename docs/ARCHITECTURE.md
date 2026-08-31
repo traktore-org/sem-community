@@ -153,6 +153,39 @@ build_charger_view(charger_id) ──► ChargerView (frozen, pure input)
   and the self-resume guard (#315/#346/#353) is one `adapter.is_self_charging()`
   check before applying the new intent.
 
+**Two clamps run after the mode strategy, in this order (2.1):**
+
+1. **`clamp_to_peak_slot(result, view)`** (#864) — the *preventive* peak
+   bound. Demand tariffs bill the average import of each fixed 15-minute clock
+   slot, so a defence that waits for the rolling average to cross the target
+   acts after the billed peak is already set. This tightens the offer so the
+   slot still lands on target, floors at `effective_min_amps` (never a
+   proactive idle — stopping on a transient is the flapping the project spent
+   months removing), and speaks in the reason string only when it actually
+   bites.
+
+   It is **fleet-wide**. The slot allowance is one budget for the whole house,
+   so `FleetContext.peak_committed_w` accumulates what higher-priority chargers
+   have already been offered this cycle — exactly as `solar_committed_w`
+   already does for the solar cascade. Without it each charger computed the
+   full headroom and took it: two idle 3-phase chargers under a 6000 W target
+   landed a combined 10160 W.
+
+2. **#747's peak shed** — the reactive EMERGENCY guarantee, senior to every
+   mode including `always_max`. It runs after the clamp and wins.
+
+The same slot allowance bounds the battery's cheap-hours grid charging and
+defers cheap-hours load starts that cannot fit, because the limit lives at the
+**power meter** — this is a layer above the devices, not an EV feature.
+
+**Observer mode cuts at the adapter, not above it** (#855). The observation
+surface used to report the *decision* ("would charge at 13 A") but never the
+service calls, because the cut sat above the brand adapter — so nothing was
+ever built for the seam to withhold. Observer now runs the whole brand path
+and refuses at the single hardware seam, `ControllableDevice.send()`,
+recording exactly what it refused (`keba.set_current {current: 10}`). Every
+commandable device carries the flag, not only chargers.
+
 ### Fire → check → adjust — SEM measures the result of its own commands (#846)
 
 The amps SEM offers a charger are SEM's **choice**, so nothing outside SEM

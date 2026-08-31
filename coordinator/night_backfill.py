@@ -260,7 +260,7 @@ async def run_backfill(hass, tracker, config, *, days: int = 365) -> dict:
                     or config.get("battery_energy_discharged_sensor"))
     if not discharge_id:
         return {"error": "no battery discharge energy sensor configured",
-                "added": 0}
+                "missing_counters": ["battery discharge energy"], "added": 0}
 
     soc_id = config.get("battery_soc_sensor")
     # (#877) The other three legs of the night's energy balance. A
@@ -276,7 +276,17 @@ async def run_backfill(hass, tracker, config, *, days: int = 365) -> dict:
     # An install with no EV contributes E = 0 by construction. Anything else
     # — a charger configured but no counter for it — stays UNKNOWN, and an
     # unknown leg means no grid term rather than a guessed one.
-    has_ev = bool(config.get("has_ev", True) or ev_id)
+    #
+    # SEM's canonical has-EV test (__init__.py:314), deliberately NOT the
+    # Energy Dashboard's ``has_ev`` flag: #876 carries the five counters into
+    # an old entry and not the ``has_*`` flags, so on exactly the installs
+    # this feature exists for that flag is ABSENT — and a default of True
+    # would turn "this house has no car" into "the EV leg is unknown",
+    # costing the grid term on every reconstructed night. Reading what the
+    # USER configured answers correctly on a migrated entry.
+    has_ev = bool(config.get("ev_chargers")
+                  or config.get("ev_charging_power_sensor")
+                  or ev_id)
 
     wanted = [discharge_id]
     wanted += [i for i in (soc_id, grid_id, charge_id, ev_id) if i]
@@ -284,13 +294,26 @@ async def run_backfill(hass, tracker, config, *, days: int = 365) -> dict:
 
     discharge = series.get(discharge_id) or {}
     if not discharge:
-        return {"error": f"no statistics for {discharge_id}", "added": 0}
+        return {"error": f"no recorded history for {discharge_id}",
+                "missing_counters": ["battery discharge energy"], "added": 0}
 
     counters = {
         "grid_import": series.get(grid_id) if grid_id else None,
         "battery_charge": series.get(charge_id) if charge_id else None,
         "ev_energy": series.get(ev_id) if ev_id else None,
     }
+    # (#877) WHICH leg is missing, in the user's own vocabulary. "Some nights
+    # could not be balanced" is not actionable; "you have no grid-import
+    # energy sensor" is. A configured id with no statistics counts as missing
+    # too — the sensor exists but the recorder has nothing for it, and the
+    # night is equally unbalanceable either way.
+    missing_counters = []
+    if not counters["grid_import"]:
+        missing_counters.append("grid import energy")
+    if not counters["battery_charge"]:
+        missing_counters.append("battery charge energy")
+    if has_ev and not counters["ev_energy"]:
+        missing_counters.append("EV charging energy")
 
     existing = list(tracker.sealed())
     recovered = nights_from_statistics(
@@ -320,6 +343,17 @@ async def run_backfill(hass, tracker, config, *, days: int = 365) -> dict:
         # between a night comparable to a measured one and a censored one, so
         # it belongs in the report rather than in a log nobody reads.
         "with_grid_term": sum(1 for r in recovered if "night_grid_kwh" in r),
+        #: The counters whose absence cost the grid term, named for a human.
+        "missing_counters": missing_counters,
+        #: (#877) Judge on what is KEPT, not on everything recovered. A year's
+        #: rebuild recovers far more nights than ``max_nights`` retains, so
+        #: counting the whole haul reports failures about nights SEM has
+        #: already pruned. Live on the rig: 41 of 275 recovered lacked the
+        #: grid term while all 60 KEPT nights had it — a complaint about
+        #: nothing, on a history that was in fact complete.
+        "kept_without_grid_term": sum(
+            1 for r in merged
+            if r.get("source") == "backfill" and "night_grid_kwh" not in r),
         "nights_total": len(merged),
         "usable_total": usable,
         "added": len(merged) - len(existing),
