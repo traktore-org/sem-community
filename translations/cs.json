@@ -1674,6 +1674,10 @@
     "battery_night_backfill_incomplete": {
       "title": "Sestavené noci nevidí podíl sítě",
       "description": "SEM sestavil historii, ale **{unbalanced}** z **{recovered}** obnovených nocí dokázalo změřit jen to, co dala *baterie* — ne to, co přidala *síť* — protože tato instalace nemá senzor **{missing}**.\n\nV noci, kdy se baterie vyčerpá a práci dokončí síť, je hodnota baterie jen částí příběhu. Bez chybějícího měřidla tyto noci podhodnocují skutečnou spotřebu domu, takže utratitelná baterie ukazuje **méně, než by měla**.\n\n**Co udělat:** přidejte kumulativní senzory energie (kWh, ne watty) pro **{missing}** do panelu Energie a znovu stiskněte **Sestavit z historie** — upozornění zmizí, jakmile bude možné vyúčtovat každou noc. Živě měřené noci zůstávají nedotčené a mají vždy přednost."
+    },
+    "load_current_control_wrong_unit": {
+      "title": "Spotřebič je nastaven na řízení proudem, ale jeho entita je ve wattech",
+      "description": "**{name}** je nastaven pro řízení *proudem*, ale **{entity_id}** očekává hodnotu ve **{unit}**.\n\nŘízení proudem znamená **ampéry** — existuje pro nabíječky EV, kterým se zadává proud přibližně 6–32 A. Zápis přebytku v ampérech do entity očekávající watty nemůže znamenat to, co zamýšlíte, takže SEM toto zařízení neřídí, místo aby zapisoval číslo ve špatné jednotce. Dříve zařízení zaregistroval a nikdy do něj nezapsal — objevovalo se mezi nabíječkami s přebytkem stále na 0 W.\n\n**Pokud je zařízení skutečně řízeno proudem**, nasměrujte nastavení na jeho ampérovou entitu.\n\n**Pokud jde o spotřebič s proměnným výkonem** — AC-THOR, topná tyč — SEM jej zatím neumí modulovat (#880). Zatím jej použijte jako **zap./vyp.** spotřebič přes entitu spínače."
     }
   },
   "selector": {

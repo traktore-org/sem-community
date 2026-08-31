@@ -931,20 +931,7 @@ class UnifiedDeviceRegistry:
                 self._surplus_controller.register_device(surplus_device)
 
             elif control_type == "current":
-                entity = control.get("entity", "")
-                surplus_device = CurrentControlDevice(
-                    hass=self.hass,
-                    device_id=device.device_id,
-                    name=device.name,
-                    priority=device.priority,
-                    min_current=float(control.get("min_value", 6)),
-                    max_current=float(control.get("max_value", 32)),
-                    phases=1,
-                    voltage=230.0,
-                    current_entity_id=entity,
-                    power_entity_id=device.power_sensor,
-                )
-                self._surplus_controller.register_device(surplus_device)
+                self._register_current_control(device, control)
 
             elif control_type == "service":
                 # Service-based control (e.g., keba.set_current) — create SwitchDevice
@@ -954,6 +941,91 @@ class UnifiedDeviceRegistry:
                     "Skipping service-based device %s for surplus (EV handled separately)",
                     device.device_id,
                 )
+
+    def _register_current_control(self, device, control) -> None:
+        """Register a current-controlled load — unless its entity is watts.
+
+        (#882) ``CurrentControlDevice`` is the EV-charger class: amperes,
+        defaulting to 6–32. A variable LOAD — a my-PV AC-THOR, an immersion
+        element, a heat rod — publishes a setpoint in WATTS, and aiming the
+        charger class at one produces a device that can never be written a
+        meaningful value. It was not merely wrong, it was silent: no write, no
+        error, ``Allocated surplus: 0 W`` indefinitely, and the load counted
+        as a charger in diagnostics ("Chargers: 1 (number)" on the reporter's
+        install, for a water heater).
+
+        The watt-modulating class this actually needs is #880. Until it
+        exists, refuse the pairing and SAY so — #799's rule that a silent
+        no-op is not an answer.
+
+        Deliberately narrow: only a POWER-native entity is refused.
+        ``native_power_scale`` is the same generic check #749 built for the
+        battery setpoint (one rule, two consumers, no laxer second copy), and
+        it returns None for an ampere entity, an unlabelled number, or one
+        that cannot be read — all of which register exactly as before. An
+        entity that is merely unavailable at setup is not evidence of the
+        wrong unit, and must not cost a working device its registration.
+        """
+        entity = control.get("entity", "") or ""
+        scale = None
+        if entity:
+            try:
+                from ..coordinator.power_control import native_power_scale
+                # require_explicit_unit: only an entity that DECLARES a
+                # power unit is refused. A bare number could just as well be
+                # amperes — plenty of charger integrations publish one — and
+                # refusing those would break working installs to fix a
+                # different fault.
+                scale = native_power_scale(
+                    self.hass, entity, require_explicit_unit=True)
+            except Exception:  # noqa: BLE001 — a probe never costs a setup
+                scale = None
+        if scale is not None:
+            st = self.hass.states.get(entity)
+            unit = ""
+            if st is not None and isinstance(getattr(st, "attributes", None), dict):
+                unit = str(st.attributes.get("unit_of_measurement") or "")
+            _LOGGER.warning(
+                "Load %s (%s) is set to CURRENT control but %s is a POWER "
+                "entity (%s). Current control writes amperes — this pairing "
+                "can never work, so the device is not registered for surplus. "
+                "Watt-modulating loads are #880; see the repair for what to "
+                "do now.",
+                device.name, device.device_id, entity, unit or "no unit",
+            )
+            try:
+                from ..coordinator.repair_issues import (
+                    raise_load_current_control_wrong_unit,
+                )
+                raise_load_current_control_wrong_unit(
+                    self.hass, device_id=device.device_id, name=device.name,
+                    entity_id=entity, unit=unit or "W",
+                )
+            except Exception:  # noqa: BLE001
+                pass
+            return
+
+        try:
+            from ..coordinator.repair_issues import (
+                clear_load_current_control_wrong_unit,
+            )
+            clear_load_current_control_wrong_unit(self.hass, device.device_id)
+        except Exception:  # noqa: BLE001
+            pass
+
+        surplus_device = CurrentControlDevice(
+            hass=self.hass,
+            device_id=device.device_id,
+            name=device.name,
+            priority=device.priority,
+            min_current=float(control.get("min_value", 6)),
+            max_current=float(control.get("max_value", 32)),
+            phases=1,
+            voltage=230.0,
+            current_entity_id=entity,
+            power_entity_id=device.power_sensor,
+        )
+        self._surplus_controller.register_device(surplus_device)
 
     def _sync_to_load_manager(self) -> bool:
         """Populate LoadManagement._devices dict from registry devices.

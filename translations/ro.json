@@ -1674,6 +1674,10 @@
     "battery_night_backfill_incomplete": {
       "title": "Nopțile reconstruite nu văd aportul rețelei",
       "description": "SEM a reconstruit istoricul, dar **{unbalanced}** din cele **{recovered}** nopți recuperate au putut măsura doar ce a dat *bateria* — nu și ce a adăugat *rețeaua* — pentru că instalarea nu are un senzor **{missing}**.\n\nÎntr-o noapte în care bateria se golește și rețeaua termină treaba, cifra bateriei este doar o parte din poveste. Fără contorul lipsă, acele nopți subestimează cât a consumat efectiv casa, iar bateria disponibilă apare **mai mică decât ar trebui**.\n\n**De făcut:** adăugați senzori de energie cumulată (kWh, nu wați) pentru **{missing}** în tabloul Energie, apoi apăsați din nou **Reconstruiește din istoric** — notificarea dispare când fiecare noapte poate fi contabilizată. Nopțile măsurate în direct nu sunt afectate și au întotdeauna prioritate."
+    },
+    "load_current_control_wrong_unit": {
+      "title": "O sarcină este setată pe control de curent, dar entitatea sa este în wați",
+      "description": "**{name}** este configurată pentru control de *curent*, dar **{entity_id}** își așteaptă valoarea în **{unit}**.\n\nControlul de curent înseamnă **amperi** — există pentru stațiile de încărcare, cărora li se impune un curent de aproximativ 6–32 A. A scrie un surplus în amperi într-o entitate care așteaptă wați nu poate însemna ceea ce intenționați, așa că SEM nu comandă acest dispozitiv în loc să scrie un număr în unitatea greșită. Anterior îl înregistra și nu îi scria niciodată — apărea printre stațiile dumneavoastră cu surplusul blocat la 0 W.\n\n**Dacă dispozitivul chiar este comandat în curent**, indicați entitatea sa în amperi.\n\n**Dacă este o sarcină cu putere variabilă** — AC-THOR, rezistență — SEM nu o poate modula încă (#880). Între timp folosiți-o ca sarcină **pornit/oprit** printr-o entitate switch."
     }
   },
   "selector": {

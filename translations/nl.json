@@ -1674,6 +1674,10 @@
     "battery_night_backfill_incomplete": {
       "title": "Opgebouwde nachten zien het aandeel van het net niet",
       "description": "SEM heeft de batterij-nachtgeschiedenis opgebouwd, maar **{unbalanced}** van de **{recovered}** herstelde nachten konden alleen meten wat de *batterij* leverde — niet wat het *net* bijdroeg — omdat deze installatie geen **{missing}**-sensor heeft.\n\nOp een nacht waarin de batterij leegraakt en het net het afmaakt, is het batterijcijfer maar een deel van het verhaal. Zonder de ontbrekende teller geven die nachten te weinig aan wat uw huis werkelijk verbruikte, waardoor het besteedbare batterijcijfer **lager uitvalt dan het hoort**.\n\n**Te doen:** voeg cumulatieve energiesensoren (kWh, geen watt) voor **{missing}** toe aan het Energiedashboard en druk opnieuw op **Uit historie opbouwen** — deze melding verdwijnt zodra elke nacht volledig verantwoord kan worden. Live gemeten nachten blijven ongemoeid en krijgen altijd voorrang."
+    },
+    "load_current_control_wrong_unit": {
+      "title": "Een verbruiker staat op stroomsturing maar zijn entiteit is in watt",
+      "description": "**{name}** is ingesteld op *stroom*sturing, maar **{entity_id}** verwacht zijn waarde in **{unit}**.\n\nStroomsturing betekent **ampère** — het bestaat voor laadpalen, die een stroom van ongeveer 6–32 A krijgen. Een overschotwaarde in ampère schrijven naar een entiteit die watt verwacht kan niet betekenen wat u bedoelt, dus SEM stuurt dit apparaat niet aan in plaats van een getal in de verkeerde eenheid te schrijven. Voorheen werd het apparaat geregistreerd en stilletjes nooit beschreven — het verscheen tussen uw laadpalen en het overschot bleef op 0 W.\n\n**Is het apparaat werkelijk stroomgestuurd**, kies dan zijn ampère-entiteit.\n\n**Is het een variabele vermogensbelasting** — AC-THOR, dompelaar — dan kan SEM die nog niet moduleren (#880). Gebruik hem intussen als **aan/uit**-overschotverbruiker via een schakelentiteit."
     }
   },
   "selector": {

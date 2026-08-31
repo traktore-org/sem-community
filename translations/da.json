@@ -1674,6 +1674,10 @@
     "battery_night_backfill_incomplete": {
       "title": "Genopbyggede nætter ser ikke nettets andel",
       "description": "SEM genopbyggede historikken, men **{unbalanced}** af de **{recovered}** genskabte nætter kunne kun måle, hvad *batteriet* gav — ikke hvad *nettet* bidrog med — fordi installationen ikke har en **{missing}**-sensor.\n\nEn nat hvor batteriet løber tør, og nettet gør arbejdet færdigt, er batteriets tal kun en del af historien. Uden den manglende måler undervurderer de nætter, hvad huset faktisk tog, så den anvendelige batteriværdi vises **lavere, end den burde**.\n\n**Sådan gør du:** tilføj akkumulerede energisensorer (kWh, ikke watt) for **{missing}** til energioversigten, og tryk på **Genopbyg fra historik** igen — beskeden forsvinder, når hver nat kan gøres op. Nætter målt live er upåvirkede og har altid forrang."
+    },
+    "load_current_control_wrong_unit": {
+      "title": "En last er sat til strømstyring, men dens entitet er i watt",
+      "description": "**{name}** er konfigureret til *strøm*styring, men **{entity_id}** forventer sin værdi i **{unit}**.\n\nStrømstyring betyder **ampere** — det findes for elbilladere, som får en strøm på cirka 6–32 A. At skrive et overskud i ampere til en entitet, der forventer watt, kan ikke betyde det, du mener, så SEM styrer ikke denne enhed frem for at skrive et tal i den forkerte enhed. Tidligere blev enheden registreret og aldrig skrevet til — den dukkede op blandt dine ladere med overskuddet fast på 0 W.\n\n**Er enheden virkelig strømstyret**, peg indstillingen mod dens ampere-entitet.\n\n**Er det en last med variabel effekt** — AC-THOR, varmelegeme — kan SEM ikke modulere den endnu (#880). Brug den imens som **til/fra**-overskudslast via en switch-entitet."
     }
   },
   "selector": {

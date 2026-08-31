@@ -1674,6 +1674,10 @@
     "battery_night_backfill_incomplete": {
       "title": "Le notti ricostruite non vedono la quota della rete",
       "description": "SEM ha ricostruito lo storico, ma **{unbalanced}** delle **{recovered}** notti recuperate hanno potuto misurare solo quanto ha dato la *batteria* — non quanto ha aggiunto la *rete* — perché questo impianto non ha un sensore **{missing}**.\n\nNella notte in cui la batteria si esaurisce e la rete completa il lavoro, il dato della batteria è solo una parte. Senza il contatore mancante quelle notti sottostimano quanto ha davvero preso la casa, e la batteria spendibile risulta **più bassa del dovuto**.\n\n**Cosa fare:** aggiungi sensori di energia cumulativa (kWh, non watt) per **{missing}** alla dashboard Energia, poi premi di nuovo **Ricostruisci dallo storico** — l'avviso scompare quando ogni notte può essere contabilizzata. Le notti misurate dal vivo non sono interessate e hanno sempre la precedenza."
+    },
+    "load_current_control_wrong_unit": {
+      "title": "Un carico è in controllo di corrente ma la sua entità è in watt",
+      "description": "**{name}** è configurato per il controllo di *corrente*, ma **{entity_id}** attende il valore in **{unit}**.\n\nIl controllo di corrente significa **ampere** — esiste per le colonnine, a cui si impone una corrente di circa 6–32 A. Scrivere un surplus in ampere su un'entità che attende watt non può significare ciò che intendi, quindi SEM non pilota questo dispositivo invece di scrivere un numero nell'unità sbagliata. Prima lo registrava e non gli scriveva mai, comparendo tra le colonnine con il surplus fermo a 0 W.\n\n**Se il dispositivo è davvero a corrente**, indica la sua entità in ampere.\n\n**Se è un carico a potenza variabile** — AC-THOR, resistenza — SEM non sa ancora modularlo (#880). Nel frattempo usalo come carico **on/off** tramite un'entità switch."
     }
   },
   "selector": {

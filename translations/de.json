@@ -1674,6 +1674,10 @@
     "battery_night_backfill_incomplete": {
       "title": "Aufgebaute Nächte kennen den Netzanteil nicht",
       "description": "SEM hat den Batterie-Nachtverlauf aufgebaut, aber **{unbalanced}** der **{recovered}** wiederhergestellten Nächte konnten nur messen, was die *Batterie* geliefert hat — nicht, was das *Netz* beigesteuert hat — weil diese Installation keinen **{missing}**-Sensor hat.\n\nIn einer Nacht, in der die Batterie leer wird und das Netz übernimmt, ist der Batteriewert nur ein Teil der Geschichte. Ohne den fehlenden Zähler geben diese Nächte zu wenig an, was Ihr Haus tatsächlich verbraucht hat, sodass der verfügbare Batteriewert **niedriger ausfällt als er sollte**.\n\n**Zu tun:** Fügen Sie kumulative Energiesensoren (kWh, nicht Watt) für **{missing}** zum Energie-Dashboard hinzu und drücken Sie erneut **Aus Verlauf aufbauen** — dieser Hinweis verschwindet, sobald jede Nacht vollständig erfasst werden kann. Live gemessene Nächte sind nicht betroffen und haben immer Vorrang."
+    },
+    "load_current_control_wrong_unit": {
+      "title": "Ein Verbraucher ist auf Stromsteuerung gesetzt, seine Entität liefert aber Watt",
+      "description": "**{name}** ist für die *Strom*-Steuerung konfiguriert, aber **{entity_id}** erwartet seinen Wert in **{unit}**.\n\nStromsteuerung bedeutet **Ampere** — sie existiert für Wallboxen, denen ein Strom von etwa 6–32 A vorgegeben wird. Einen Überschusswert in Ampere in eine Entität zu schreiben, die Watt erwartet, kann nicht das bedeuten, was Sie beabsichtigen. Deshalb steuert SEM dieses Gerät nicht, statt eine Zahl in der falschen Einheit zu schreiben. Zuvor wurde das Gerät registriert und still nie beschrieben — es erschien unter Ihren Wallboxen und sein Überschuss blieb bei 0 W.\n\n**Ist das Gerät wirklich stromgesteuert**, wählen Sie seine Ampere-Entität.\n\n**Ist es ein variabler Leistungsverbraucher** — AC-THOR, Heizstab — kann SEM ihn noch nicht modulieren; es fehlt eine Geräteklasse für *„nimm genau 800 W\"*. Das wird gebaut (#880). In der Zwischenzeit können Sie ihn über eine Schalter-Entität als **Ein/Aus**-Überschussverbraucher nutzen."
     }
   },
   "selector": {
