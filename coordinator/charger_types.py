@@ -757,6 +757,15 @@ class FleetContext:
     #: computed, and means "fall back to buffer_soc" — never a
     #: floor of zero, which would license draining to empty.
     dynamic_floor_pct: "Optional[float]" = None
+    #: (#878) Assist watts already offered to HIGHER-PRIORITY chargers
+    #: this cycle. ONE battery serves the whole fleet, so a second
+    #: charger must see what the first took — mirrors
+    #: ``solar_committed_w`` and ``peak_committed_w``. Without it every
+    #: charger computed the same full potential from fleet-wide values
+    #: and added it again: two chargers asked one 5000 W pack for
+    #: 7727 W, and the floor that keeps the house covered was drained
+    #: through twice as fast as its taper could respond.
+    assist_committed_w: float = 0.0
     forecast_spending_enabled: bool = False
     """Solar-surplus gate for battery assist (``battery_assist_min_surplus``).
     Battery assist only SUPPLEMENTS real solar — below this much pure
@@ -862,6 +871,15 @@ class FleetCycleState:
     battery_spendable_kwh: float = 0.0
     #: (#878) rides beside the budget it bounds
     dynamic_floor_pct: "Optional[float]" = None
+    #: (#878) Assist watts already offered to HIGHER-PRIORITY chargers
+    #: this cycle. ONE battery serves the whole fleet, so a second
+    #: charger must see what the first took — mirrors
+    #: ``solar_committed_w`` and ``peak_committed_w``. Without it every
+    #: charger computed the same full potential from fleet-wide values
+    #: and added it again: two chargers asked one 5000 W pack for
+    #: 7727 W, and the floor that keeps the house covered was drained
+    #: through twice as fast as its taper could respond.
+    assist_committed_w: float = 0.0
     tariff_level: "Optional[str]" = None
     forecast_remaining_kwh: float = 0.0
     # (#747) the load manager's peak posture, resolved once per cycle.

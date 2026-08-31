@@ -199,6 +199,9 @@ def build_charger_view(
         # read as a floor of zero — the one reading that licenses draining
         # the pack to empty. It stays None all the way to the formula.
         dynamic_floor_pct=getattr(fleet_state, "dynamic_floor_pct", None),
+        # (#878) what higher-priority chargers already took from the pack
+        assist_committed_w=float(
+            getattr(fleet_state, "assist_committed_w", 0.0) or 0.0),
         forecast_spending_enabled=bool(
             config.get("forecast_spending_enabled", False)),
         solar_committed_w=float(solar_committed_w),

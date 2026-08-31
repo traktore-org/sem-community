@@ -240,6 +240,15 @@ def battery_assist_budget_w(view: ChargerView) -> float:
         # the two sinks disagreed about the same pack.
         dynamic_floor_soc=getattr(f, "dynamic_floor_pct", None),
     )
+    # (#878) ONE battery, one allowance. The potential above is derived from
+    # fleet-wide values — SOC, buffer, floor, cap — so every charger computes
+    # the SAME number. Without subtracting what seniors already claimed, each
+    # one added it again: two chargers asked a 5000 W pack for 7727 W, and a
+    # floor meant to keep the house covered was drained through at twice the
+    # rate its taper assumes. Same cascade as solar_committed_w (#665) and
+    # peak_committed_w (#874).
+    potential = max(0.0, potential - max(
+        0.0, float(getattr(f, "assist_committed_w", 0.0) or 0.0)))
     # #545 / "max out till self-consumption" (user 2026-06-26): once past
     # the solar gate and in the assist band (Zone 3/4, SOC >= buffer),
     # OFFER THE FULL assist potential — let the inverter discharge the

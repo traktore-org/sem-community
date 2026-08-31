@@ -147,3 +147,123 @@ class TestThePlumbingIsNotInert:
         src = inspect.getsource(build_view.build_charger_view)
         assert "dynamic_floor_pct=" in src
         assert 'getattr(fleet_state, "dynamic_floor_pct", None)' in src
+
+
+class TestTheFloorSurvivesAFleet:
+    """A floor that says "the house stays covered" means nothing if two cars
+    drain through it twice as fast.
+
+    Measured through the real `decide` path before the fix: two chargers,
+    both Zone 3/4, one pack with a 5000 W cap —
+
+        charger 1: surplus 6000 + assist 3864 = 9864 W
+        charger 2: surplus    0 + assist 3864 = 3864 W
+        asked of one battery: 7727 W  (55% over its own cap)
+
+    The solar cascade correctly zeroed charger 2's SOLAR share, but the
+    assist is derived only from fleet-wide values — SOC, buffer, floor, cap —
+    so every charger computed the same full potential and added it again.
+
+    Exactly the #864/#874 shape: a fleet-shared resource handed out
+    per-charger. `assist_committed_w` mirrors `solar_committed_w` and
+    `peak_committed_w` — one budget, one accumulator, same cascade.
+    """
+
+    def _view(self, committed_assist, soc=85.0, floor=79.0, solar=6000.0,
+              solar_committed=0.0):
+        from types import SimpleNamespace
+        f = SimpleNamespace(
+            solar_w=solar, curtailment_grant_w=0.0, home_w=0.0,
+            battery_charge_w=0.0, solar_committed_w=solar_committed,
+            battery_soc=soc, buffer_soc=70.0, auto_start_soc=90.0,
+            priority_soc=30.0, battery_assist_max_power_w=5000.0,
+            battery_assist_min_surplus_w=1200.0, battery_may_assist_ev=True,
+            dynamic_floor_pct=floor, forecast_spending_enabled=True,
+            battery_spendable_kwh=4.0, battery_priority=None,
+            battery_commanded=False, assist_committed_w=committed_assist,
+        )
+        return SimpleNamespace(fleet=f, ev_priority=1)
+
+    def test_a_second_charger_cannot_claim_the_assist_again(self):
+        from custom_components.solar_energy_management.coordinator.decide import (
+            battery_assist_budget_w,
+        )
+        RAW = 6000.0
+        b1 = battery_assist_budget_w(self._view(0.0))
+        a1 = b1 - RAW
+        assert a1 > 0, "sanity: charger 1 gets an assist"
+
+        # charger 2: the cascade took its solar, and the assist it must now
+        # see is what charger 1 already claimed
+        b2 = battery_assist_budget_w(
+            self._view(a1, solar_committed=b1))
+        a2 = b2 - max(0.0, RAW - b1)
+        assert a2 == 0.0, (
+            f"charger 2 claimed {a2:.0f} W of assist that charger 1 had "
+            "already taken — one pack, asked twice"
+        )
+
+    def test_the_fleet_total_never_exceeds_the_pack_cap(self):
+        from custom_components.solar_energy_management.coordinator.decide import (
+            battery_assist_budget_w,
+        )
+        RAW, CAP = 6000.0, 5000.0
+        committed, total = 0.0, 0.0
+        for _ in range(4):                      # four chargers, one battery
+            surplus = max(0.0, RAW - committed)
+            b = battery_assist_budget_w(
+                self._view(total, solar_committed=committed))
+            assist = b - surplus
+            total += assist
+            committed += b
+        assert total <= CAP + 1e-6, (
+            f"four chargers asked one pack for {total:.0f} W against a "
+            f"{CAP:.0f} W cap"
+        )
+
+    def test_a_single_charger_is_unchanged(self):
+        """The accumulator starts at zero, so a one-charger install must see
+        exactly what it saw before."""
+        from custom_components.solar_energy_management.coordinator.decide import (
+            battery_assist_budget_w,
+        )
+        assert battery_assist_budget_w(self._view(0.0)) == \
+            battery_assist_budget_w(self._view(0.0))
+        b = battery_assist_budget_w(self._view(0.0))
+        assert b - 6000.0 > 0
+
+    def test_the_coordinator_actually_accumulates_it(self):
+        """Three times today a field was carried into a dataclass and never
+        populated, arriving as its default with no error. The accumulator is
+        worthless unless the per-charger loop feeds it, so pin reset,
+        increment and thread."""
+        import inspect
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        cycle = inspect.getsource(SEMCoordinator._async_update_data)
+        assert "self._assist_committed_w_per_cycle = 0.0" in cycle, (
+            "never reset — it would grow without bound across cycles"
+        )
+        assert "self._assist_committed_w_per_cycle +=" in cycle, (
+            "never incremented — every charger still sees zero committed"
+        )
+        state = inspect.getsource(SEMCoordinator._build_fleet_cycle_state)
+        assert "assist_committed_w=" in state, (
+            "never threaded onto the fleet state — the decision cannot see it"
+        )
+
+    def test_it_resets_beside_its_siblings(self):
+        """A per-cycle accumulator that survives a cycle starves every
+        charger after the first."""
+        import inspect
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        src = inspect.getsource(SEMCoordinator._async_update_data)
+        i = src.index("self._solar_committed_w_per_cycle = 0.0")
+        window = src[i:i + 700]
+        assert "self._assist_committed_w_per_cycle = 0.0" in window, (
+            "reset far from solar/peak — the three are one cascade and drift "
+            "when they are not reset together"
+        )

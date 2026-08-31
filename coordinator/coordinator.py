@@ -3252,6 +3252,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # claimed the entire allowance and two landed 69 % over
                 # target on review.
                 self._peak_committed_w_per_cycle = 0.0
+                # (#878) …and the pack's. One battery serves the fleet,
+                # so the assist a senior charger was offered must not be
+                # offered again to the next.
+                self._assist_committed_w_per_cycle = 0.0
                 # v1.6.9: per-charger effective states are captured below
                 # so the notification dispatch can fire per charger.
                 # Reset before the loop so a removed charger's stale
@@ -3776,6 +3780,24 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 voltage=adapter.voltage,
                                 max_current_a=adapter.max_current_a,
                             ) or 0.0)
+                            # (#878) The share of that commitment the BATTERY
+                            # is funding: whatever the offer exceeds the solar
+                            # this charger could see. Accumulated so the next
+                            # charger's potential is net of it — one pack, one
+                            # allowance.
+                            _committed_w = float(_cpw(
+                                decision,
+                                phases=adapter.phases,
+                                voltage=adapter.voltage,
+                                max_current_a=adapter.max_current_a,
+                            ) or 0.0)
+                            _solar_seen = float(
+                                getattr(view.fleet, "solar_w", 0.0) or 0.0) - \
+                                float(getattr(view.fleet, "home_w", 0.0) or 0.0) - \
+                                float(getattr(view.fleet, "solar_committed_w",
+                                              0.0) or 0.0)
+                            self._assist_committed_w_per_cycle += max(
+                                0.0, _committed_w - max(0.0, _solar_seen))
                         except (HomeAssistantError, ServiceValidationError) as e:
                             _LOGGER.error("EV control service failed for %s: %s", cid, e)
                         except ValueError as e:
@@ -9804,6 +9826,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             dynamic_floor_pct=(
                 (getattr(self, "_planning_evidence", None) or {})
                 .get("battery_dynamic_floor_pct")),
+            assist_committed_w=float(
+                getattr(self, "_assist_committed_w_per_cycle", 0.0) or 0.0),
             battery_priority=battery_priority,
             battery_commanded=self._battery_commanded(),
             curtailment_grant_w=self._curtailment_grant_w(power),
