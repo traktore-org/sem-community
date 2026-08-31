@@ -523,11 +523,36 @@ coincidence of defaults). **Live catches (2026-07-24/25):** the config-card peak
 (unrouted \`set_option\` key → reload-or-nothing, #636); the legionella target (Control card
 wrote the entity, the coordinator read the config option — equal only because both sat at the
 default). **Root shape:** writer and reader bind to different stores/names; name-based routing
+(\`number.sem_<key>\`) misses mapped entities (#542's CONFIG_KEY_MAP). **Third instance (#883,
+2026-08-31) — the mirror clobbers back:** the EV-card Min/Max sliders persist PER-CHARGER
+(\`ev_chargers[0][key]\` via \`persist_per_charger_option\`) and never touch the flat
+\`ev_target_soc\`/\`ev_target_soc_max\`/\`daily_ev_target_max\`/… mirror, so the two diverge the
+moment a slider moves. The primary \`async_step_ev_charger\` options step then sourced its form
+defaults from the stale flat mirror (\`current_config.setdefault(k, v)\` let flat WIN over
+\`ev_chargers[0]\`) AND wrote those defaults back into \`ev_chargers[0]\` on submit — so merely
+opening options and browsing past the EV page reset charger 0's Min charge target to the flat
+100% default. Charger 2+ were spared because \`async_step_ev_charger_edit\` reads the charger
+dict directly. **Closure:** the per-charger dict OVERRIDES the flat mirror when building the
+primary form (\`current_config[k] = v\`), so the one form that both reads and writes
+\`ev_chargers[0]\` round-trips the authoritative store. Fixed every tunable on that page at
+once (target_soc, target_soc_max, daily_ev_target_max, ev_kwh_per_100km, battery capacity,
+efficiency). **Root shape (this variant):** a dual store where the SAME step both reads and
+writes one copy — sourcing the read from the *other* copy makes the write self-corrupting.
+**Root shape (original):** writer and reader bind to different stores/names; name-based routing
 (\`number.sem_<key>\`) misses mapped entities (#542's CONFIG_KEY_MAP). **Guard:**
 \`tests/test_637_live_options.py\` — every card option must declare its routing class
 (LM_LIVE / LIVE_CONFIG / STRUCTURAL_RELOAD / entity-backed), and every LIVE_CONFIG key must
-prove a runtime read exists. **Sweep question:** for every UI control, WHERE does the write
-land and WHO reads that exact store at runtime?
+prove a runtime read exists; \`tests/test_883_charger_target_preserved.py\` pins the
+options-form round-trip (per-charger store wins, charger 2 untouched). **Sweep question:** for
+every UI control, WHERE does the write land and WHO reads that exact store at runtime? — and
+for any step that BOTH reads and writes a dual-stored value, does its read come from the copy
+it writes? **Open guard (for Guido):** an AST lint that a flow step writing \`ev_chargers[i]\`
+on submit must source its form defaults from that same charger dict, not the flat config.
+**Open sibling (for Guido, found in #883 review):** \`EVTaperDetector\` is built with the FLAT
+config (\`coordinator.py\` ~10673) and reads \`ev_target_soc\`/\`ev_battery_capacity_kwh\`/
+\`ev_charger_efficiency\` flat for ALL chargers — while the number entities + coordinator SOC
+paths read per-charger-first. #883 keeps the two copies in sync on every options save (so this
+is mitigated, not live), but a per-charger taper detector should read \`ev_chargers[i]\`.
 
 ### 20. Shadowed decision branch (an always-true earlier branch starves a newer one) — PARTIAL
 **Symptom:** a new decision branch is added, tested in isolation, and never executes in

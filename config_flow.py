@@ -1279,12 +1279,28 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             return await self.async_step_ev_charger_menu()
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
-        # Read from ev_chargers[0] if available (#112 multi-charger)
+        # (#883) The primary charger's slider tunables — target_soc,
+        # target_soc_max, daily_ev_target[_max], ev_kwh_per_100km, battery
+        # capacity — live PER-CHARGER in ev_chargers[0]: that is the store the
+        # EV card writes via persist_per_charger_option, and the number.py
+        # entities + coordinator SOC paths read it first. The flat
+        # ``ev_target_soc`` etc. keys are a legacy mirror the sliders NEVER
+        # touch, so they go stale the moment a user drags a card slider. This
+        # form both READS (defaults) and, on submit, WRITES ev_chargers[0];
+        # sourcing a default from the stale flat mirror silently wrote it back
+        # over the slider value — ``setdefault`` here let the flat mirror win,
+        # resetting charger 0's Min charge target to the flat default (100%) on
+        # every options save while charger 2 (edited via the per-charger step,
+        # which reads the charger dict) was spared. So ev_chargers[0] must
+        # OVERRIDE the flat value, not defer to it (dual-storage class 19).
+        # (Flat-only knobs like ev_charger_efficiency, which this same form
+        # writes to both copies, stay in sync either way — the override is a
+        # no-op for them.)
         ev_chargers = current_config.get("ev_chargers", [])
         if ev_chargers:
             for k, v in ev_chargers[0].items():
                 if k not in ("id", "name") and v is not None:
-                    current_config.setdefault(k, v)
+                    current_config[k] = v
         _c = lambda key, fb: self._cfg(current_config, key, fb)
 
         def _opt(key: str):
