@@ -13,6 +13,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased] — 2.1.0-beta.3
 
+- 🔋 **The car can no longer drain the battery past what the house needs
+  tonight** (#878). Letting the battery help charge the car is a permission
+  you grant; how *deep* it may go was never answered — the car emptied the
+  pack down to your configured buffer and stopped there, the same level in
+  June and in December. It now stops at whichever floor is higher: your
+  buffer, or the level tonight's own measured need says must still be in the
+  pack at dawn. On a 70% buffer against a night computing a 79% floor, the
+  assist was offering the car **2.5–3.3 kW** between 72% and 79% SOC — energy
+  the house then bought back at the evening rate. Above the floor it still
+  assists, tapering from the computed level rather than the buffer; at or
+  above the auto-start SOC nothing changes. A computed floor *below* your
+  buffer changes nothing, and with forecast-led spending off no floor is
+  computed at all — the buffer decides exactly as before.
+
 - ☀️ **"This provider does not publish this horizon" was told to everyone**
   (#884, reported by @ArneGollin1987 on beta.1). The battery card's
   day-after-tomorrow cell said your forecast source has no such figure — on

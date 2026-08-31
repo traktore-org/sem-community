@@ -186,6 +186,56 @@ and refuses at the single hardware seam, `ControllableDevice.send()`,
 recording exactly what it refused (`keba.set_current {current: 10}`). Every
 commandable device carries the flag, not only chargers.
 
+### One assist formula, two floors (#501, #878)
+
+`battery_assist_potential_w` is the single SOC→power curve for the
+battery→EV assist. It exists so the strategy decision (`decide.py`) and the
+canonical budget (`FlowCalculator._calculate_battery_assist_w`) **cannot
+disagree** — that divergence is the #282 class, so both callers change
+together or not at all, pinned by an oracle test rather than two separate
+assertions.
+
+Since #878 it takes two floors and binds on the deeper:
+
+```
+floor = max(buffer_soc, dynamic_floor_pct)
+
+  SOC <  floor                 → 0        (battery off-limits)
+  SOC == floor and floor > buffer → 0     (the computed floor is a HARD stop)
+  SOC >= auto_start            → full cap
+  floor <= SOC < auto_start    → ramp 0.5 → 1.0 × cap across the band
+```
+
+Three details that are not obvious and each cost a test to find:
+
+* **The floor is evaluated before the Zone-4 branch.** A demanding night can
+  compute a floor *above* `auto_start`; checking `auto_start` first would
+  hand out the entire cap below the level the house needs.
+* **The taper runs from the effective floor**, not the buffer. A curve
+  measured from a level the pack may never reach keeps offering power right
+  down to it.
+* **At the floor exactly, the two floors differ.** The configured buffer
+  keeps its historical half-cap edge — harmless, and changing it would alter
+  behaviour on every existing install. The *computed* floor means "this much
+  must still be in the pack at dawn", so anything offered at that level
+  breaches the promise the number was calculated to keep; it is a hard stop.
+
+**Fail-closed, and this is the dangerous direction.** The change only bites
+when the computed floor sits *above* the buffer — so a sign error or a bad
+default does not under-spend, it permits a **deeper** drain than before, on a
+real battery, silently. Hence: `None` means fall back to the buffer and never
+a floor of zero; a lower computed floor never lowers the buffer; NaN and
+unparseable values are ignored rather than obeyed; and the value is carried
+**un-coerced** from `_planning_evidence` through `FleetCycleState` →
+`build_charger_view` → `FleetContext`. An `or 0.0` anywhere on that path
+would turn "no budget computed" into "drain to empty" — its neighbour
+`battery_spendable_kwh` can safely coerce, because 0 kWh spendable is a real
+answer; here 0 is the catastrophic one.
+
+Measured on a rig publishing `dynamic_floor_pct = 79.0` against a 70 % buffer:
+between 72 % and 79 % SOC the assist previously offered **2475–3262 W** into
+the car out of a pack that needed that energy for the house hours later.
+
 ### Fire → check → adjust — SEM measures the result of its own commands (#846)
 
 The amps SEM offers a charger are SEM's **choice**, so nothing outside SEM

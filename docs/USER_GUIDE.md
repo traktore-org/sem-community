@@ -413,7 +413,9 @@ Full battery assist (default 4500W). The EV starts charging even without solar s
 
 ### Assist floor
 
-Battery assist to the EV is gated by the **buffer SOC** (default 70%): above it the battery may help charge the EV, below it assist stops. The buffer is the single assist floor — the separate `battery_assist_floor_soc` knob was removed and folded into it.
+Battery assist to the EV is gated by the **buffer SOC** (default 70%): above it the battery may help charge the EV, below it assist stops. The separate `battery_assist_floor_soc` knob was removed and folded into the buffer.
+
+Since #878 the buffer is the **minimum** assist floor rather than the only one: when forecast-led spending is on and has computed a floor for tonight, the drain stops at whichever of the two is higher — see [How deep the car may drain the battery](#forecast-led-spending-v21). With forecast spending off, the buffer alone decides, exactly as before.
 
 ### Per-Battery Modes (Multi-Battery Systems, v1.7.3)
 
@@ -486,6 +488,61 @@ Two switches, and they are deliberately separate rather than one setting:
 A single mode could not express *"may sell, may not touch the car"*. Both
 default to your current behaviour, so turning forecast spending on does not
 silently grant a permission you never gave.
+
+**How deep the car may drain the battery (#878)**
+
+The permission above answers *whether* the car may have any of the pack. A
+second question follows: **how much?**
+
+Without an answer to that, the car empties the battery down to your
+configured **buffer SOC** and stops there — the same level in June and in
+December, regardless of what tonight actually needs. On a long winter night
+that leaves the house buying back at the evening rate what the car took at
+six o'clock.
+
+So the drain now stops at whichever floor is **higher**:
+
+```
+stop at = max( your buffer SOC , tonight's computed floor )
+```
+
+Tonight's computed floor is the same number the Battery tab shows as the
+floor for the evening: how much must still be in the pack at dawn for the
+house to get through the night on what it has measured itself using. It is
+never lower than your buffer — a computed floor below your buffer changes
+nothing, because your buffer is a hard floor in its own right.
+
+**Worked example.** A 70 % buffer, assist ceiling 4500 W, and a night whose
+measured need computes a floor of **79 %**:
+
+| Battery SOC | Before | Now | Why |
+|---|---|---|---|
+| 65 % | 0 W | 0 W | below the buffer either way — battery off-limits |
+| 72 % | 2475 W | **0 W** | above your buffer, but *below* what tonight needs |
+| 75 % | 2812 W | **0 W** | same — the pack is holding the night's own supply |
+| 79 % | 3262 W | **0 W** | exactly at the floor: stop, do not dip below |
+| 82 % | 3600 W | 2864 W | above the floor, so it assists — but tapers sooner |
+| 95 % | 4500 W | 4500 W | plenty spare, full assist as before |
+
+Read the 72–79 % rows as the point of the change: SEM was offering the car
+**2.5–3.3 kW** out of a pack that needed that energy for the house a few
+hours later.
+
+The taper also now runs from the *computed* floor rather than the buffer —
+at 82 % the offer is 2864 W instead of 3600 W, because 82 % is much closer to
+79 % than it is to 70 %, and the pack has correspondingly less to spare.
+
+**When this changes nothing at all**
+
+- Your battery is at or above the auto-start SOC (default 90 %) — there is
+  plenty spare and the assist runs at full power as before.
+- Tonight's computed floor comes out *below* your buffer — a mild night, so
+  your buffer is still the binding limit.
+- Forecast-led spending is off. Then no floor is computed, and the buffer
+  alone decides, exactly as it always has.
+
+That last case is deliberate: **no computed floor means fall back to your
+buffer**, never "no floor at all".
 
 **Starting from history instead of waiting a week**
 
