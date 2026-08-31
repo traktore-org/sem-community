@@ -248,9 +248,21 @@ class TestTheFloorSurvivesAFleet:
         assert "self._assist_committed_w_per_cycle +=" in cycle, (
             "never incremented — every charger still sees zero committed"
         )
+        # (#885) Threaded PER CHARGER, not onto the cycle state. It rode
+        # FleetCycleState until #885 and was inert there: that state is
+        # frozen and built ONCE, before this loop even resets the
+        # accumulator, so every charger read the same stale number and the
+        # running total could never cascade from one charger to the next.
+        # ``solar_committed_w`` beside it was always a per-call kwarg —
+        # this now matches it.
+        assert "assist_committed_w=(" in cycle, (
+            "never threaded into build_charger_view — the decision cannot "
+            "see what earlier chargers and higher-ranked loads already took"
+        )
         state = inspect.getsource(SEMCoordinator._build_fleet_cycle_state)
-        assert "assist_committed_w=" in state, (
-            "never threaded onto the fleet state — the decision cannot see it"
+        assert "assist_committed_w=" not in state, (
+            "back on the frozen cycle state, where it cannot cascade: that "
+            "object is built once per cycle, before the loop runs"
         )
 
     def test_it_resets_beside_its_siblings(self):

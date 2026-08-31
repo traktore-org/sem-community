@@ -26,19 +26,40 @@ if TYPE_CHECKING:  # pragma: no cover — type-only
 
 
 
-def _battery_may_assist_ev(config) -> bool:
-    """(#778) Resolve the per-install EV-assist permission.
+def _battery_may_assist_ev(config, charger_cfg=None) -> bool:
+    """(#778/#885) Resolve the EV-assist permission for ONE charger.
 
-    UNSET resolves to True — the battery already assists the car today when
-    the #537 surplus gate passes, and defaulting this off would silently
-    remove a working feature. The global battery mode still applies: `off`
-    means SEM is hands-off that battery entirely.
+    Two levels, ANDed, because they answer different questions:
+
+    * **install** (#778) — may the battery be spent on cars at all?
+      ``battery_mode: off`` means SEM is hands-off that battery entirely.
+      UNSET resolves to True: the battery already assists the car when the
+      #537 surplus gate passes, and defaulting it off would silently remove
+      a working feature.
+    * **per charger** (#885) — may it be spent on *this* one? Guido, 31.08:
+      *"on every individual device there is a setting whether it will charge
+      with battery or not, and the same on the charger — therefore not every
+      charger has to be activated."* Loads have had a per-device opt-in since
+      #620 (``battery_assist_enabled`` / ``battery_eligible_overnight``);
+      chargers had a single fleet-wide switch, so a two-charger install could
+      not say "the garage may, the guest charger may not".
+
+    The per-charger key can only RESTRICT — it never overrides an install
+    that said no. Fail-closed, and it keeps one rule ("both must agree")
+    instead of a precedence table nobody can predict. UNSET inherits the
+    install answer, so nothing changes for anyone who has not asked.
     """
     from ..consts.battery_permissions import effective_permissions, may_assist_ev
 
     mode = (config.get("battery_mode") or "auto")
     stored = config.get("battery_permissions") or {}
-    return may_assist_ev(mode, effective_permissions(mode, stored))
+    if not may_assist_ev(mode, effective_permissions(mode, stored)):
+        return False
+    if isinstance(charger_cfg, Mapping):
+        per_charger = charger_cfg.get("ev_battery_may_assist")
+        if per_charger is not None:
+            return bool(per_charger)
+    return True
 
 def build_charger_view(
     fleet_state: FleetCycleState,
@@ -53,6 +74,7 @@ def build_charger_view(
     top_up_amps: int = 0,
     plan: PlanVerdict = NO_OPINION,
     solar_committed_w: float = 0.0,
+    assist_committed_w: float = 0.0,
     night_deliverable_kwh: float = float("inf"),
     soc_ceiling_reached: bool = False,
     ev_priority: int = 999,
@@ -95,6 +117,10 @@ def build_charger_view(
             the #247 tariff planner, which speaks through the same
             type). Defaults to no opinion, meaning "behave as though no
             planner exists".
+        assist_committed_w: Battery assist already committed this cycle —
+            higher-priority chargers' draws plus any pack watts
+            reserved for Tier-1 loads that outrank this charger
+            in the one device list (#885).
         solar_committed_w: Solar already committed to higher-priority
             chargers in this cycle.
 
@@ -191,7 +217,7 @@ def build_charger_view(
         battery_assist_min_surplus_w=float(config.get(
             "battery_assist_min_surplus", 1200,
         )),
-        battery_may_assist_ev=_battery_may_assist_ev(config),
+        battery_may_assist_ev=_battery_may_assist_ev(config, charger_cfg),
         battery_spendable_kwh=float(
             getattr(fleet_state, "battery_spendable_kwh", 0.0) or 0.0),
         # (#878) NOT coerced to a float with a 0.0 fallback like its
@@ -200,8 +226,14 @@ def build_charger_view(
         # the pack to empty. It stays None all the way to the formula.
         dynamic_floor_pct=getattr(fleet_state, "dynamic_floor_pct", None),
         # (#878) what higher-priority chargers already took from the pack
-        assist_committed_w=float(
-            getattr(fleet_state, "assist_committed_w", 0.0) or 0.0),
+        # (#885) PER-CHARGER, like ``solar_committed_w`` beside it — not
+        # read off ``fleet_state``. That state is built ONCE per cycle
+        # (frozen, before the loop), so every charger saw the same number
+        # and the running total could never cascade from one charger to
+        # the next: the netting was there but inert. The loop threads the
+        # live accumulator (plus what higher-ranked Tier-1 loads have
+        # reserved) through here instead.
+        assist_committed_w=float(assist_committed_w),
         forecast_spending_enabled=bool(
             config.get("forecast_spending_enabled", False)),
         solar_committed_w=float(solar_committed_w),

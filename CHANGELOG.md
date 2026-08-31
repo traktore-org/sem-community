@@ -27,6 +27,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   buffer changes nothing, and with forecast-led spending off no floor is
   computed at all — the buffer decides exactly as before.
 
+- 🔋 **One battery, spent in the order you dragged** (#885). Two subsystems
+  each held a private copy of `Battery assist max power` and each treated it
+  as its own full budget, so a 5 kW pack could be offered 5 kW to the cars
+  **and** 5 kW to the loads in the same cycle — measured, two chargers alone
+  asked one pack for 7.7 kW. And because every charger is decided before the
+  load pass runs, a prio-9 charger took battery power ahead of a prio-1 hot
+  water tank: dragging that tank to the top of the list changed nothing.
+  There is now one allowance, and devices that outrank a charger have their
+  share set aside before it is offered the pack — the next device down runs
+  on solar and grid, which is what the list always promised. Only opted-in
+  devices take part: a load needs its "Solar + battery" mode, and a charger
+  can now be excluded on its own with **Battery may assist this charger**, so
+  a two-charger install can say "the garage may, the guest charger may not".
+  "Finish overnight from → Battery" loads reserve nothing against a car —
+  they run below the buffer, in a band the car's floor forbids it from
+  entering, so the two never compete for the same energy. The loads also now
+  respect the #878 dynamic floor the car has honoured since it shipped; a
+  floor kept by one consumer and ignored by the other was not a floor.
+
 - ☀️ **"This provider does not publish this horizon" was told to everyone**
   (#884, reported by @ArneGollin1987 on beta.1). The battery card's
   day-after-tomorrow cell said your forecast source has no such figure — on

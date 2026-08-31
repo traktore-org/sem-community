@@ -135,10 +135,20 @@ idle while the EV grid-charged.
 |---|---|
 | **Battery buffer SoC** (e.g. 70 %) | Floor of the assist band — the battery only assists the EV above this, and discharge into the car stops here (self-consumption reserve). |
 | **Battery assist min surplus** (Solar Gate, #537) | Real solar surplus (solar − home) required before the battery assists, in every mode. |
-| **Battery assist max power** | Discharge cap when assisting. |
+| **Battery assist max power** | Discharge cap when assisting. **One allowance for the whole house** (#885) — cars and battery-assisted loads spend it between them, in device-list order, not one budget each. |
+| **Battery may assist this charger** (per charger, 2.1 / #885) | Excludes a single charger from the pack. Defaults on, inherits the install-wide battery permission, and can only *restrict* — it never overrides a battery you have declared off-limits to cars. Lets a two-charger install say "the garage may, the guest charger may not". |
 
 > The separate *Battery assist floor SoC* knob was removed (folded into the
 > Buffer SoC) — see CHANGELOG v1.7.3-beta.59.
+
+> **Who spends it first (#885).** The pack is one resource, so the one device
+> list decides the order: a load you dragged above a charger has its share set
+> aside before that charger is offered anything, and the charger runs on solar
+> and grid from there. Loads set to *Finish overnight from → Battery* are the
+> exception — they draw *below* the Buffer SoC, a band the car's assist floor
+> forbids it from entering, so they reserve nothing against a car and a car
+> never eats their overnight window. See
+> [LOAD_PRIORITY.md](LOAD_PRIORITY.md#spending-the-battery-follows-the-same-list-too-21-885).
 
 Active in **Solar only** and **Min + Solar** (gated by the Solar Gate + Buffer SoC in both). Not in **Always (max)** — that mode takes everything from anywhere by definition. Pure amps — SEM issues no battery command; the inverter's own self-consumption does the discharge.
 

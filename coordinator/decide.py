@@ -164,12 +164,20 @@ def self_consumption_surplus_w(view: ChargerView) -> float:
     return max(0.0, available)
 
 
-def battery_assist_budget_w(view: ChargerView) -> float:
-    """Budget for Zone 3/4 battery-assist charging.
+def _battery_assist_split(view: ChargerView) -> tuple[float, float]:
+    """(#885) The Zone 3/4 budget, kept SPLIT into its two parts:
+    ``(surplus, assist)`` — what the sun is giving and what the pack is.
 
-    Called exclusively from ``MinPlusSolarMode._decide_day()`` (the
-    Zone 3/4 path) — ``solar_plus_cheap`` delegates its day path to
-    ``solar_only`` and ``always_max`` ignores any budget. When the
+    ``battery_assist_budget_w`` below sums them and is what callers that
+    only want the total keep using. The split exists so the battery share
+    can be STAMPED on the decision (``assist_w``) rather than re-derived
+    downstream from the commitment — one computation, two readers, no
+    drift (#282).
+
+    Reached from ``MinPlusSolarMode._decide_day()`` (the Zone 3/4 path),
+    directly for the split and via ``battery_assist_budget_w`` for the
+    total — ``solar_plus_cheap`` delegates its day path to ``solar_only``
+    and ``always_max`` ignores any budget. When the
     home battery is high enough (Zone 3 or 4), it can discharge to
     bridge the gap between solar surplus and EV demand.
 
@@ -206,11 +214,11 @@ def battery_assist_budget_w(view: ChargerView) -> float:
     # absurdly high — a tuning knob doing a permission's job. Unset resolves to
     # ON, so nothing changes for anyone who has not asked.
     if not getattr(f, "battery_may_assist_ev", True):
-        return surplus
+        return surplus, 0.0
 
     zone = soc_zone(f.battery_soc, f.auto_start_soc, f.buffer_soc, f.priority_soc)
     if zone < 3:
-        return surplus
+        return surplus, 0.0
     # Solar gate: assist only SUPPLEMENTS real solar. Below the
     # configured surplus threshold (default 1200 W) the battery is
     # off-limits to the EV — a sunless evening/overnight session must
@@ -227,7 +235,7 @@ def battery_assist_budget_w(view: ChargerView) -> float:
     if surplus < f.battery_assist_min_surplus_w:
         if not (getattr(f, "forecast_spending_enabled", False)
                 and float(getattr(f, "battery_spendable_kwh", 0.0) or 0.0) > 0.0):
-            return surplus
+            return surplus, 0.0
     potential = battery_assist_potential_w(
         f.battery_soc,
         f.buffer_soc,
@@ -266,7 +274,17 @@ def battery_assist_budget_w(view: ChargerView) -> float:
     # charger max. Supersedes the #501 "top up to EV minimum only" cap.
     # Confirmed live 2026-06-26 that the car follows a higher offer
     # (Zoe: 8A→3.4kW vs 10A→5.3kW).
-    return surplus + potential
+    return surplus, potential
+
+
+def battery_assist_budget_w(view: ChargerView) -> float:
+    """Total Zone 3/4 budget — solar surplus plus the battery assist.
+
+    Thin sum over :func:`_battery_assist_split`; see that function for
+    the gates, the #545 full-potential rationale and the #878 floor.
+    """
+    surplus, assist = _battery_assist_split(view)
+    return surplus + assist
 
 
 def _relabel(decision: ChargerDecision, mode: str, prefix: str) -> ChargerDecision:
@@ -759,13 +777,31 @@ class MinPlusSolarMode(ModeStrategy):
         # The budget uses the battery's POTENTIAL (never gated on
         # currently-flowing discharge — that was the #439
         # chicken-and-egg) capped at ``battery_assist_max_power``.
-        budget_w = battery_assist_budget_w(view)
+        # (#885) Keep the two funders APART. ``budget_w`` is still their
+        # sum (every downstream reader is unchanged), but knowing which
+        # part the pack is funding lets the decision report its own
+        # battery draw instead of the coordinator reconstructing it from
+        # fleet totals afterwards.
+        surplus_w, assist_avail_w = _battery_assist_split(view)
+        budget_w = surplus_w + assist_avail_w
         cfg = view.config if isinstance(view.config, dict) else {}
         min_amps = effective_min_amps(cfg, 6)
         max_amps = int(cfg.get("ev_max_current", DEFAULT_MAX_CHARGING_CURRENT))
         phases = int(cfg.get("ev_phases", 3))
         voltage = int(cfg.get("ev_voltage", 230))
         surplus_amps = amps_from_watts(budget_w, phases, voltage, view.wpa_table)
+
+        def _assist_share(commanded_amps: int) -> float:
+            """(#885) Watts of the PACK this commitment actually spends.
+
+            Solar funds first, the battery covers the gap, grid takes the
+            rest — so a charger commanded 6 A under a fat budget draws far
+            less battery than it was offered. Mirrors
+            :func:`solar_commitment_w`'s plain amps x phases x voltage so
+            the two fleet accumulators measure commitments the same way.
+            """
+            commanded_w = float(commanded_amps) * float(phases) * float(voltage)
+            return max(0.0, min(assist_avail_w, commanded_w - surplus_w))
 
         # Need-gated min floor (#501, amends ADR 0010 pattern 1).
         # The mode's Min guarantee lives in the night top-up; the
@@ -788,6 +824,7 @@ class MinPlusSolarMode(ModeStrategy):
                 charger_id=cid, mode="min_plus_solar",
                 intent=ChargerIntent.CHARGE_AT_AMPS,
                 commanded_amps=amps, budget_w=budget_w,
+                assist_w=_assist_share(amps),
                 reason=(
                     f"min_plus_solar day Zone {zone}: Min floor engaged "
                     f"({remaining:.1f} kWh remaining > "
@@ -801,6 +838,7 @@ class MinPlusSolarMode(ModeStrategy):
                 charger_id=cid, mode="min_plus_solar",
                 intent=ChargerIntent.CHARGE_AT_AMPS,
                 commanded_amps=amps, budget_w=budget_w,
+                assist_w=_assist_share(amps),
                 reason=(
                     f"min_plus_solar day Zone {zone}: budget={_cw(budget_w)}W "
                     f"→ {amps}A (solar surplus + capped battery assist)"

@@ -515,6 +515,19 @@ class ChargerDecision:
     contract: 'All fields are computed once in decide … no re-derivation
     downstream.'"""
 
+    assist_w: float = 0.0
+    """(#885) The share of ``budget_w`` the home BATTERY is funding —
+    the post-netting Zone 3/4 assist potential, 0.0 everywhere else.
+
+    Carried here because the coordinator has to know what this charger
+    took out of the one pack allowance, so the next charger and the
+    load pass both see a budget net of it. It was briefly RE-DERIVED at
+    the call site (commitment minus the solar this charger could see),
+    which is exactly the second-implementation-drifts class ``#282``
+    exists to prevent: ``decide`` already computed this number, so
+    ``decide`` reports it. Honours the dataclass contract: 'All fields
+    are computed once in decide … no re-derivation downstream.'"""
+
 
 def solar_commitment_w(
     decision: ChargerDecision,
@@ -871,15 +884,6 @@ class FleetCycleState:
     battery_spendable_kwh: float = 0.0
     #: (#878) rides beside the budget it bounds
     dynamic_floor_pct: "Optional[float]" = None
-    #: (#878) Assist watts already offered to HIGHER-PRIORITY chargers
-    #: this cycle. ONE battery serves the whole fleet, so a second
-    #: charger must see what the first took — mirrors
-    #: ``solar_committed_w`` and ``peak_committed_w``. Without it every
-    #: charger computed the same full potential from fleet-wide values
-    #: and added it again: two chargers asked one 5000 W pack for
-    #: 7727 W, and the floor that keeps the house covered was drained
-    #: through twice as fast as its taper could respond.
-    assist_committed_w: float = 0.0
     tariff_level: "Optional[str]" = None
     forecast_remaining_kwh: float = 0.0
     # (#747) the load manager's peak posture, resolved once per cycle.

@@ -47,11 +47,116 @@ class BatteryTierContext:
     buffer_soc: float
     reserve_soc: float
     assist_budget_w: float
+    #: (#885/#878) The floor the tier-1 assist actually stops at:
+    #: ``max(buffer_soc, dynamic_floor_pct)``. Separate from ``buffer_soc``
+    #: so the configured value stays readable as itself — the EV side and
+    #: this one now compute it through the SAME helper, so they cannot
+    #: disagree about how deep the pack may go.
+    effective_floor_soc: float = 0.0
 
 
-def build_battery_tier_context(config, battery_soc, true_surplus_w) -> BatteryTierContext:
+def tier1_battery_reserved_w(devices, *, below_priority, allowance_w) -> float:
+    """(#885) Pack watts claimed by Tier-1 loads that OUTRANK a charger.
+
+    Guido, 31.08: *"The order tells who is first and gets power from the
+    battery. The next will get powered from the grid if there is nothing
+    left."* The one priority axis is
+    :meth:`UnifiedDeviceRegistry.priority_for` — loads, the battery and
+    every charger read their slot from it. But the cycle SPENDS the pack in
+    call order: every charger commits in the per-charger loop, and the load
+    pass only runs afterwards. So a prio-9 charger took battery power ahead
+    of a prio-1 hot-water load, and dragging that load to the top of the
+    list changed nothing.
+
+    This is the missing half: before a charger is offered the pack, set
+    aside what higher-ranked Tier-1 loads are going to want from it.
+
+    Deliberately narrow about who counts:
+
+    * **Tier 1 only** (``battery_assist_enabled``). Tier 2
+      (``battery_eligible_overnight``) draws BELOW the buffer, down to the
+      hard Reserve — a band the charger's floor
+      (``max(buffer, dynamic_floor)``) forbids it from entering. The two
+      are not competing for the same watts, so a "finish overnight from
+      battery" load must reserve NOTHING against a charger.
+    * **Not opted in, not counted.** The default is off for both flags; a
+      load nobody enrolled must never push a car onto the grid.
+    * **Strictly higher rank.** Equal or lower priority yields to the
+      charger, which is the whole point of the ordering.
+    * **Not already running.** An active device's draw is already inside
+      ``home_consumption_power``, so it has ALREADY reduced the surplus
+      every charger sees. Reserving for it again would bill the same watts
+      twice and starve the car for power nobody is going to take.
+
+    The claim itself is an ESTIMATE — the device's learned ``rated_power``
+    where it has one, else the threshold it needs to switch on at all. A
+    load that then draws less simply leaves the remainder in the pool on
+    the next cycle. Self-correcting, and far closer to the user's stated
+    intent than "whoever the cycle happens to call first wins".
+
+    Args:
+        devices: The registered surplus devices (any iterable).
+        below_priority: This charger's slot in the one list. Loads must
+            rank strictly above it (a LOWER number) to reserve.
+        allowance_w: The pack's assist cap — the reservation can never
+            exceed the whole allowance.
+
+    Returns:
+        Watts to withhold from this charger, ``0.0`` if nothing outranks it.
+    """
+    try:
+        rank = int(below_priority)
+    except (TypeError, ValueError):
+        return 0.0
+    cap = max(0.0, float(allowance_w or 0.0))
+    if cap <= 0.0:
+        return 0.0
+
+    reserved = 0.0
+    for device in devices or ():
+        if not getattr(device, "battery_assist_enabled", False):
+            continue
+        if getattr(device, "is_active", False):
+            continue
+        try:
+            if int(getattr(device, "priority", 99)) >= rank:
+                continue
+        except (TypeError, ValueError):
+            continue
+        claim = float(getattr(device, "rated_power", 0.0) or 0.0)
+        if claim <= 0.0:
+            claim = float(getattr(device, "min_power_threshold", 0.0) or 0.0)
+        reserved += max(0.0, claim)
+        if reserved >= cap:
+            return cap
+    return min(cap, reserved)
+
+
+def build_battery_tier_context(
+    config, battery_soc, true_surplus_w,
+    assist_committed_w: float = 0.0,
+    dynamic_floor_pct=None,
+) -> BatteryTierContext:
     """(#625, extracted from the coordinator's update cycle) Pure computation
-    of the battery-tier context handed to :meth:`SurplusController.update`."""
+    of the battery-tier context handed to :meth:`SurplusController.update`.
+
+    (#885) Two arguments that make the pack ONE resource instead of two.
+
+    ``assist_committed_w`` — what the EV chargers have already been offered
+    from the battery this cycle. Before it, this function returned the FULL
+    ``battery_assist_max_power`` regardless, so on a 5000 W pack the chargers
+    could be offered 5000 W and the loads another 5000 W in the same cycle.
+    Guido, 31.08: *"The order tells who is first and gets power from the
+    battery. The next will get powered from the grid if there is nothing
+    left."* Netting the budget is that sentence.
+
+    ``dynamic_floor_pct`` — the level tonight's measured need says must
+    remain at dawn (#878). The EV side has honoured it since #878; this path
+    still gated on ``buffer_soc`` alone, so the loads drained straight
+    through a floor the chargers were respecting. A floor kept by one
+    consumer and ignored by the other is not a floor. ``None`` falls back to
+    the buffer — never to no floor at all.
+    """
     from ..consts.core import (
         DEFAULT_BATTERY_ASSIST_MAX_POWER as _DEF_ASSIST,
         DEFAULT_BATTERY_BUFFER_SOC as _DEF_BUFFER,
@@ -60,15 +165,25 @@ def build_battery_tier_context(config, battery_soc, true_surplus_w) -> BatteryTi
     buffer_soc = float(config.get("battery_buffer_soc", _DEF_BUFFER) or _DEF_BUFFER)
     reserve_soc = float(config.get("battery_priority_soc", 30) or 30)
     solar_gate = float(config.get("battery_assist_min_surplus", _DEF_GATE) or _DEF_GATE)
+    # (#885/#878) The SAME effective floor the EV side uses — one function,
+    # so the two consumers cannot disagree about how deep the pack may go.
+    from .flow_calculator import _effective_assist_floor
+    effective_floor = _effective_assist_floor(buffer_soc, dynamic_floor_pct)
+    cap = float(config.get("battery_assist_max_power", _DEF_ASSIST) or _DEF_ASSIST)
+    # (#885) net of what the chargers already took: one pack, one allowance,
+    # consumed in device order. Never negative — an over-commitment upstream
+    # must leave zero here, not a negative budget that reads as a credit.
+    remaining = max(0.0, cap - max(0.0, float(assist_committed_w or 0.0)))
     assist_budget = (
-        float(config.get("battery_assist_max_power", _DEF_ASSIST) or _DEF_ASSIST)
-        if (battery_soc is not None and battery_soc > buffer_soc
+        remaining
+        if (battery_soc is not None and battery_soc > effective_floor
             and true_surplus_w >= solar_gate)
         else 0.0
     )
     return BatteryTierContext(
         soc=battery_soc, buffer_soc=buffer_soc,
         reserve_soc=reserve_soc, assist_budget_w=assist_budget,
+        effective_floor_soc=effective_floor,
     )
 
 
@@ -657,6 +772,7 @@ class SurplusController:
         # (#620) battery context, refreshed each update(); inert defaults so a
         # helper called before the first update() is a no-op.
         self._batt_soc: Optional[float] = None
+        #: (#885) The tier-1 assist floor — max(buffer, dynamic floor).
         self._batt_buffer_soc: float = 100.0
         self._batt_reserve_soc: float = 100.0
         self._batt_assist_budget_w: float = 0.0

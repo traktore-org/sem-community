@@ -1080,6 +1080,7 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "emergency_peak_level",
     "enable_charger_notifications",
     "enable_mobile_notifications",
+    "ev_battery_may_assist",
     "ev_battery_capacity_kwh",
     "ev_charge_mode_entity",
     "ev_charge_mode_start",
@@ -1627,6 +1628,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=1, max=10, step=1, mode="slider")
                 ),
+                # (#885) May the home battery be spent on THIS charger?
+                # Defaults to the install-wide answer; can only restrict.
+                vol.Optional(
+                    "ev_battery_may_assist",
+                    default=True,
+                ): selector.BooleanSelector(),
                 # Per-charger night charging settings (#193)
                 vol.Optional(
                     "daily_ev_target",
@@ -1824,6 +1831,17 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=1, max=10, step=1, mode="slider")
                 ),
+                # (#885) May the HOME BATTERY be spent on this charger?
+                # Loads have had a per-device opt-in since #620; chargers
+                # had one fleet-wide switch, so a two-charger install could
+                # not say "the garage may, the guest charger may not".
+                # Defaults to the install-wide answer — this can only
+                # RESTRICT, never override a battery the user has already
+                # declared off-limits to cars.
+                vol.Optional(
+                    "ev_battery_may_assist",
+                    default=charger.get("ev_battery_may_assist", True),
+                ): selector.BooleanSelector(),
                 # Per-charger night charging settings (#193)
                 vol.Optional(
                     "daily_ev_target",
