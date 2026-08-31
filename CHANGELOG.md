@@ -11,10 +11,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [Unreleased]
+# [Unreleased] — 2.1.0-beta.3
 
-> Nothing here yet. Entries added under this header ship in the next beta —
-> the daily cut refuses to run on an empty section, which is deliberate.
+- ☀️ **"This provider does not publish this horizon" was told to everyone**
+  (#884, reported by @ArneGollin1987 on beta.1). The battery card's
+  day-after-tomorrow cell said your forecast source has no such figure — on
+  Open-Meteo, Forecast.Solar *and* Solcast alike. A verdict that fires for
+  every provider is not a verdict. Checked against a system carrying all
+  three: Open-Meteo publishes that figure and has it switched on, Solcast
+  publishes it but ships the sensor **disabled**, and only Forecast.Solar
+  genuinely lacks it. SEM had never asked any of them for it, and then
+  reported the absence as the provider's limitation. It now reads the figure
+  where there is one, and where there is not it says which of the two reasons
+  applies — a sensor your integration ships switched off is one toggle away,
+  and telling you to give up instead was the real fault. A brand-new install
+  now reads *learning* rather than *unsupported*: having no records yet is
+  evidence of nothing.
+
+- 🔌 **A surplus load pointed at a watts entity is refused out loud instead of
+  doing nothing** (#882, from @florianhadersbeck's report in #880). Choosing
+  *Number entity* as a device's control type hands it to the machinery built
+  for EV chargers, which speaks in amperes — so a water heater with a
+  0–9000 W setpoint could never be given a value that meant anything, and
+  silently never was: no error, no log, allocated surplus sitting at 0 W
+  indefinitely. SEM now checks what the entity actually measures, declines
+  the pairing, and raises a Repair naming the entity and what to do. Devices
+  genuinely controlled in amperes are untouched. This does not yet let SEM
+  modulate a variable power load — that is #880 — but it stops the setting
+  from pretending it does.
+
+# [2.1.0-beta.2] — 31.08.2026
+
+> Cut by the issue autopilot for #883, same day as beta.1 — a bug fix ships
+> when it is ready rather than waiting for the next batch. 2.0.0 remains the
+> current stable.
+
+- 🔌 **Opening SEM settings no longer resets the first charger's minimum
+  charge target** (#883). On a multi-charger install, merely opening
+  *Settings → Devices & services → Integrations → SEM* and browsing past the
+  EV-charger page silently reset Charger 1's "Minimum" charge target from
+  whatever you had set (e.g. 50%) back to 100% ("Up to Full") — a full grid
+  charge instead of the partial solar charge you asked for. The card's
+  sliders save each charger's target on the charger itself, but the settings
+  page was reading its starting values from a stale legacy copy those sliders
+  never update, then writing that stale copy back over your choice on the way
+  out. Only the first charger was hit; the others were already read from the
+  right place. The page now reads each charger's own saved target, so
+  browsing your settings can no longer change them.
 
 # [2.1.0-beta.1] — 31.08.2026
 
