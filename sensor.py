@@ -3027,6 +3027,16 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 # from thin evidence: only one of the two resolves by waiting.
                 "forecast_d1_available": d.get("forecast_d1_available"),
                 "forecast_d2_available": d.get("forecast_d2_available"),
+                # (#884) The three-state answer. `available` is a boolean to
+                # a question with three answers, and the card rendered the
+                # harshest: a fresh install with no records yet was told its
+                # provider does not publish the horizon. `state` separates
+                # learning from unsupported; `path` separates a sensor the
+                # integration ships DISABLED (one toggle away) from one that
+                # does not exist.
+                "forecast_d1_state": d.get("forecast_d1_state"),
+                "forecast_d2_state": d.get("forecast_d2_state"),
+                "forecast_d2_path": d.get("forecast_d2_path"),
                 "capacity_samples": d.get("battery_capacity_samples"),
                 "capacity_drift_pct": d.get("battery_capacity_drift_pct"),
                 "nameplate_capacity_kwh": self.coordinator.config.get(

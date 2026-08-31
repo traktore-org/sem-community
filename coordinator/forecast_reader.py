@@ -74,7 +74,12 @@ SOLCAST_UNIQUE_IDS = {
     #: is worse than the missing one this issue started as. Note the sensor
     #: ships ``disabled_by=integration``: SEM cannot read it until the user
     #: enables it, which is a different message from "unsupported".
-    "forecast_d2": ("forecast_day_3", "total_kwh_forecast_day_3"),
+    #: Verified on the rig, because the obvious guess was wrong: the
+    #: entity is ``sensor.solcast_pv_forecast_forecast_day_3`` but its
+    #: unique_id is ``total_kwh_forecast_d3`` — "day_3" in the entity id,
+    #: "d3" in the unique id. The grouper matches unique_ids EXACTLY, so the
+    #: guessed name would never have resolved even with the sensor enabled.
+    "forecast_d2": ("total_kwh_forecast_d3", "forecast_d3"),
 }
 FORECAST_SOLAR_PLATFORM = "forecast_solar"
 FORECAST_SOLAR_UNIQUE_SUFFIXES = {
@@ -156,7 +161,8 @@ class ForecastData:
     #: same as unpublished — see ``forecast_d2_path``.
     forecast_d2_kwh: float = 0.0
     #: read | disabled_by_integration | unsupported_by_source
-    forecast_d2_path: str = "unsupported_by_source"
+    #: Default "unknown", never a real verdict — see types.py.
+    forecast_d2_path: str = "unknown"
     forecast_remaining_today_kwh: float = 0.0
 
     # Power forecasts (W)
@@ -852,19 +858,37 @@ class ForecastReader:
         """
         try:
             from homeassistant.helpers import entity_registry as er
-            reg = er.async_get(self._hass)
-        except Exception:  # noqa: BLE001 — a hint never costs a read
+            reg = er.async_get(self.hass)
+        except Exception as e:  # noqa: BLE001 — a hint never costs a read
+            # Was `self._hass` (the reader uses `self.hass`), and this handler
+            # turned the AttributeError into a silent False — so Solcast's
+            # merely-DISABLED day-3 sensor reported as unsupported, which is
+            # the very conflation this method exists to prevent. Say it once.
+            if not getattr(self, "_d2_probe_warned", False):
+                self._d2_probe_warned = True
+                _LOGGER.debug("d2 disabled-probe unavailable: %s", e)
             return False
-        wanted = SOLCAST_UNIQUE_IDS.get("forecast_d2") or ()
+        # Both spellings, because Solcast uses different ones in the two
+        # places: "day_3" in the entity_id, "d3" in the unique_id. Matching
+        # only the guessed unique_id found nothing on a rig where the sensor
+        # was sitting right there, disabled.
+        needles = ("forecast_day_3", "forecast_d3", "_energy_production_d2")
+        seen = 0
         for entry in reg.entities.values():
             if not entry.disabled_by:
                 continue
-            uid = str(entry.unique_id or "")
-            eid = str(entry.entity_id or "")
-            if any(w in uid or w in eid for w in wanted):
+            seen += 1
+            hay = f"{entry.unique_id or ''} {entry.entity_id or ''}"
+            if any(n in hay for n in needles):
                 return True
-            if eid.endswith("_energy_production_d2"):
-                return True
+        # One line, once: this probe decides between two very different
+        # sentences shown to the user, and it failed silently twice while
+        # being built (wrong attribute, then a guessed unique_id).
+        if not getattr(self, "_d2_probe_logged", False):
+            self._d2_probe_logged = True
+            _LOGGER.debug(
+                "#884 d2 probe: no disabled day-2 sensor among %d disabled "
+                "entities (needles=%s)", seen, needles)
         return False
 
     def _read_role_energy(self, role: str, default: float) -> float:

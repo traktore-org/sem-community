@@ -705,6 +705,14 @@ class ForecastSensorData:
     """Forecast data for coordinator sensors."""
     forecast_today_kwh: float = 0.0
     forecast_tomorrow_kwh: float = 0.0
+    #: (#884) Day after tomorrow, and why it is missing when it is.
+    #: The default is "unknown", NOT "unsupported_by_source": a
+    #: default that is indistinguishable from a real computed answer
+    #: is how this shipped broken — the value never arrived and the
+    #: default said "your provider does not publish it", confidently
+    #: and wrongly, on every install.
+    forecast_d2_kwh: float = 0.0
+    forecast_d2_path: str = "unknown"
     forecast_remaining_today_kwh: float = 0.0
     forecast_power_now_w: float = 0.0
     forecast_power_next_hour_w: float = 0.0

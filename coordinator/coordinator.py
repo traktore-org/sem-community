@@ -4507,6 +4507,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             result["forecast_days_required"] = _pe.get("forecast_days_required")
             result["forecast_d1_available"] = _pe.get("forecast_d1_available")
             result["forecast_d2_available"] = _pe.get("forecast_d2_available")
+            # (#884) THIRD copy of the same value. A field computed in the
+            # ledger reaches a user only after being named in three separate
+            # allowlists — here, then sensor.py's attribute dict, then the
+            # card. Miss any one and it is silently None, which is how #867's
+            # *_path telemetry was built and never seen by anyone.
+            result["forecast_d1_state"] = _pe.get("forecast_d1_state")
+            result["forecast_d2_state"] = _pe.get("forecast_d2_state")
+            result["forecast_d2_path"] = _pe.get("forecast_d2_path")
             # (#845) the watched operating mode; (#778) the spend status —
             # exposed on the spendable sensor (assert the ENTITY, not the
             # dict: the #846 lesson).
@@ -5059,6 +5067,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             if forecast.available:
                 forecast_data.forecast_today_kwh = forecast.forecast_today_kwh
                 forecast_data.forecast_tomorrow_kwh = forecast.forecast_tomorrow_kwh
+                # (#884) The day-2 figure and WHY it is absent. Carried
+                # explicitly because ForecastSensorData is hand-copied from
+                # ForecastData field by field — a fourth place a new value
+                # must be named before it reaches anyone.
+                forecast_data.forecast_d2_kwh = forecast.forecast_d2_kwh
+                forecast_data.forecast_d2_path = forecast.forecast_d2_path
                 forecast_data.forecast_remaining_today_kwh = forecast.forecast_remaining_today_kwh
                 forecast_data.forecast_power_now_w = forecast.power_now_w
                 forecast_data.forecast_power_next_hour_w = forecast.power_next_hour_w
@@ -11393,7 +11407,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             "forecast_d1_state": led.horizon_state(1),
             "forecast_d2_state": led.horizon_state(2),
             "forecast_d2_path": getattr(
-                forecast_data, "forecast_d2_path", "unsupported_by_source"),
+                forecast_data, "forecast_d2_path", "unknown"),
             "battery_measured_capacity_kwh": None if cap is None else cap.usable_kwh,
             "battery_capacity_kwh_per_pct": None if cap is None else cap.kwh_per_pct,
             # (#778) progress counts what already qualifies — the verdict
