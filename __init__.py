@@ -680,6 +680,20 @@ def _heal_ev_chargers_options(
     return healed
 
 
+#: (#876) The Energy-Dashboard ENERGY COUNTERS, and only those.
+#: ``EnergyDashboardConfig.to_dict()`` also carries power sensors and
+#: ``has_*`` flags; those are live steering inputs the coordinator resolves
+#: itself every cycle, and a migration that silently rewrote them would be a
+#: far larger promise than the one being made here.
+_ENERGY_COUNTER_KEYS = (
+    "solar_energy_sensor",
+    "grid_import_energy_sensor",
+    "grid_export_energy_sensor",
+    "battery_charge_energy_sensor",
+    "battery_discharge_energy_sensor",
+)
+
+
 async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     """Migrate old config entry data to current schema.
 
@@ -1548,6 +1562,64 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
                 "config: %s", entry.version, e,
             )
             return False
+
+    if entry.version == 18 and entry.minor_version < 2:
+        # (#876) The Energy-Dashboard COUNTER keys are written by the config
+        # flow when an entry is CREATED and by nothing else, so an entry that
+        # predates that merge never acquires them — and no migration between
+        # v1 and v18 added them.
+        #
+        # It hides in plain sight because the coordinator re-reads the Energy
+        # Dashboard every cycle, so live operation is unaffected. Only code
+        # that reads the ENTRY breaks, and there is one that matters:
+        # ``night_backfill.py`` looks up ``battery_discharge_energy_sensor``
+        # and, not finding it, answers "no battery discharge energy sensor
+        # configured" and writes nothing. The service that exists to spare a
+        # new install the five-night wait was dead on precisely the OLDEST
+        # installs — the ones whose history was worth recovering. Measured:
+        # PROD's entry (created 2025-11-10, never re-installed) carried 35
+        # data keys against the branch rig's 40 on identical hardware, the
+        # difference being exactly these five, with every counter present and
+        # years deep in the recorder.
+        #
+        # Additive only. A key already set — in data OR in options, because
+        # options shadow data and the coordinator reads the merged view — is
+        # the user's own answer and is left alone.
+        try:
+            merged = {**accumulated_data, **accumulated_options}
+            missing = [k for k in _ENERGY_COUNTER_KEYS if not merged.get(k)]
+            new_data = {**accumulated_data}
+            filled: dict = {}
+            if missing:
+                from .ha_energy_reader import read_energy_dashboard_config
+                ed = await read_energy_dashboard_config(hass, quiet=True)
+                if ed is not None:
+                    found = ed.to_dict()
+                    filled = {k: found[k] for k in missing if found.get(k)}
+                    new_data.update(filled)
+            hass.config_entries.async_update_entry(
+                entry, data=new_data, options=accumulated_options,
+                version=18, minor_version=2,
+            )
+            accumulated_data = new_data
+            if filled:
+                _LOGGER.info(
+                    "#876: filled %d Energy-Dashboard counter(s) this entry "
+                    "never received (%s) — battery-night backfill can now "
+                    "read this install's own history",
+                    len(filled), ", ".join(sorted(filled)),
+                )
+        except Exception as e:  # noqa: BLE001
+            # Deliberately NOT a failed migration, and deliberately NOT
+            # bumped: the Energy Dashboard may simply not be readable this
+            # early. Leaving the entry at 18.1 means HA calls us again next
+            # restart, which is the retry. Setup proceeds either way — an
+            # install must never fail to load over a key it has lived
+            # without for months.
+            _LOGGER.warning(
+                "#876: could not read the Energy Dashboard to fill the "
+                "counter keys (will retry on next restart): %s", e,
+            )
 
     _LOGGER.info("Migration to version %s.%s done", entry.version, entry.minor_version)
     return True

@@ -392,6 +392,14 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     #     and announce it once. The v1.8 plan drives hardware; the default
     #     is on, and a default nobody was told about is not consent.
     VERSION = 18
+    # v18.2 (#876): fill the Energy-Dashboard COUNTER keys into entries that
+    #     predate the config-flow merge at ``_async_step_energy_source``.
+    #     A minor bump, because it only ADDS keys — but it has to be declared
+    #     here or HA never calls async_migrate_entry at all: an entry at 18.1
+    #     already matches a handler that declares no MINOR_VERSION, so the
+    #     migration would sit in the file and never run. PROD sat at 18.1 for
+    #     nine months with the backfill dead behind one missing key.
+    MINOR_VERSION = 2
 
     @staticmethod
     @callback
