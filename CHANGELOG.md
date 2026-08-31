@@ -11,12 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [Unreleased] — 2.1.0-beta.1 (soaking, not released)
+# [Unreleased]
 
-> The manifest on `develop` reads **2.1.0-beta.1** so the build that is
-> soaking is identifiable — it is *not* a release. No tag is cut and no beta
-> ships while the release hold is in place; 2.0.0 stable remains the current
-> published version.
+> Nothing here yet. Entries added under this header ship in the next beta —
+> the daily cut refuses to run on an empty section, which is deliberate.
+
+# [2.1.0-beta.1] — 31.08.2026
+
+> First 2.1 beta, published as a pre-release. 2.0.0 remains the current
+> stable. Everything new in this line is **off by default**: the numbers are
+> measured and shown before anything is allowed to act on them.
 
 - 🔋 **A reconstructed night now knows what the grid contributed** (#877).
   Recovered nights recorded only the battery's share, so every one of them

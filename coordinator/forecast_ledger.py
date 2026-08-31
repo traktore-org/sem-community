@@ -168,6 +168,29 @@ class ForecastLedger:
             return False
         return any(h in (rec.get("f") or {}) for rec in self._days.values())
 
+    def horizon_state(self, horizon_days) -> str:
+        """(#884) ``learning`` | ``present`` | ``unsupported``.
+
+        ``has_horizon`` answers a boolean to a question with three answers,
+        and the card rendered the harshest one: a brand-new install, which
+        has no records at ANY horizon yet, was told its provider does not
+        publish this one. @ArneGollin1987 saw that on all three integrations
+        at once — two of which do publish it.
+
+        An empty ledger is evidence of nothing. Only once days have been
+        recorded WITHOUT this horizon appearing is "the source does not
+        supply it" a claim the ledger can support.
+        """
+        try:
+            h = int(horizon_days)
+        except (TypeError, ValueError):
+            return "unsupported"
+        if not self._days:
+            return "learning"
+        if any(h in (rec.get("f") or {}) for rec in self._days.values()):
+            return "present"
+        return "unsupported"
+
     def trust(self, horizon_days: int) -> Optional[float]:
         """A factor to scale a forecast at this horizon, or None if unknown.
 

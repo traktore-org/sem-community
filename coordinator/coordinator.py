@@ -11386,6 +11386,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # that never resolves by waiting, unlike thin evidence.
             "forecast_d1_available": led.has_horizon(1),
             "forecast_d2_available": led.has_horizon(2),
+            # (#884) The three-state answer the card needs. `available`
+            # is kept for older cards, but it cannot tell "no records
+            # yet" from "this source has none" — which is how a fresh
+            # install got told its provider does not publish d2.
+            "forecast_d1_state": led.horizon_state(1),
+            "forecast_d2_state": led.horizon_state(2),
+            "forecast_d2_path": getattr(
+                forecast_data, "forecast_d2_path", "unsupported_by_source"),
             "battery_measured_capacity_kwh": None if cap is None else cap.usable_kwh,
             "battery_capacity_kwh_per_pct": None if cap is None else cap.kwh_per_pct,
             # (#778) progress counts what already qualifies — the verdict

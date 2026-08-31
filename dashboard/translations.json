@@ -1496,7 +1496,9 @@
     "peak_power_unsupported": "Tento zdroj předpovědi neposkytuje hodnotu špičkového výkonu",
     "rebuild_nights": "Sestavit z historie",
     "rebuild_nights_hint": "Načte zaznamenanou historii baterie a tyto noci rekonstruuje hned, místo čekání na ně",
-    "rebuild_nights_busy": "Sestavuji…"
+    "rebuild_nights_busy": "Sestavuji…",
+    "sensor_disabled": "Senzor vypnutý",
+    "enable_horizon_sensor": "Vaše integrace dodává tento senzor predikce vypnutý — zapněte jej v Home Assistantu a SEM se začne tento horizont učit"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -2995,7 +2997,9 @@
     "peak_power_unsupported": "Denne prognosekilde offentliggør ikke en spidseffektværdi",
     "rebuild_nights": "Genopbyg fra historik",
     "rebuild_nights_hint": "Læser batteriets egen registrerede historik og genskaber disse nætter nu i stedet for at vente på dem",
-    "rebuild_nights_busy": "Genopbygger…"
+    "rebuild_nights_busy": "Genopbygger…",
+    "sensor_disabled": "Sensor slået fra",
+    "enable_horizon_sensor": "Din integration leverer denne prognosesensor deaktiveret — aktivér den i Home Assistant, så begynder SEM at lære denne horisont"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -4494,7 +4498,9 @@
     "peak_power_unsupported": "Diese Prognosequelle liefert keinen Spitzenleistungswert",
     "rebuild_nights": "Aus Verlauf aufbauen",
     "rebuild_nights_hint": "Liest den aufgezeichneten Verlauf Ihrer Batterie und rekonstruiert diese Nächte sofort, statt auf sie zu warten",
-    "rebuild_nights_busy": "Wird aufgebaut…"
+    "rebuild_nights_busy": "Wird aufgebaut…",
+    "sensor_disabled": "Sensor aus",
+    "enable_horizon_sensor": "Ihre Integration liefert diesen Prognosesensor deaktiviert — aktivieren Sie ihn in Home Assistant, dann lernt SEM diesen Horizont"
   },
   "en": {
     "% of limit": "% of limit",
@@ -5993,7 +5999,9 @@
     "peak_power_unsupported": "This forecast source does not publish a peak power value",
     "rebuild_nights": "Rebuild from history",
     "rebuild_nights_hint": "Reads your battery's own recorded history and reconstructs these nights now, instead of waiting for them to happen",
-    "rebuild_nights_busy": "Rebuilding…"
+    "rebuild_nights_busy": "Rebuilding…",
+    "sensor_disabled": "Sensor off",
+    "enable_horizon_sensor": "Your integration ships this forecast sensor disabled — enable it in Home Assistant and SEM will start learning this horizon"
   },
   "es": {
     "% of limit": "% del límite",
@@ -7492,7 +7500,9 @@
     "peak_power_unsupported": "Esta fuente de previsión no publica un valor de potencia máxima",
     "rebuild_nights": "Reconstruir desde el historial",
     "rebuild_nights_hint": "Lee el historial registrado de su batería y reconstruye esas noches ahora, en lugar de esperarlas",
-    "rebuild_nights_busy": "Reconstruyendo…"
+    "rebuild_nights_busy": "Reconstruyendo…",
+    "sensor_disabled": "Sensor apagado",
+    "enable_horizon_sensor": "Su integración entrega este sensor de previsión desactivado — actívelo en Home Assistant y SEM aprenderá este horizonte"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -8991,7 +9001,9 @@
     "peak_power_unsupported": "Tämä ennustelähde ei julkaise huipputehon arvoa",
     "rebuild_nights": "Rakenna historiasta",
     "rebuild_nights_hint": "Lukee akun oman tallennetun historian ja muodostaa nämä yöt heti sen sijaan, että niitä odotettaisiin",
-    "rebuild_nights_busy": "Rakennetaan…"
+    "rebuild_nights_busy": "Rakennetaan…",
+    "sensor_disabled": "Anturi pois",
+    "enable_horizon_sensor": "Integraatiosi toimittaa tämän ennusteanturin poistettuna käytöstä — ota se käyttöön Home Assistantissa, niin SEM alkaa oppia tämän horisontin"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -10490,7 +10502,9 @@
     "peak_power_unsupported": "Cette source de prévision ne publie pas de valeur de puissance de pointe",
     "rebuild_nights": "Reconstruire depuis l'historique",
     "rebuild_nights_hint": "Lit l'historique enregistré de votre batterie et reconstruit ces nuits maintenant, au lieu de les attendre",
-    "rebuild_nights_busy": "Reconstruction…"
+    "rebuild_nights_busy": "Reconstruction…",
+    "sensor_disabled": "Capteur désactivé",
+    "enable_horizon_sensor": "Votre intégration livre ce capteur de prévision désactivé — activez-le dans Home Assistant et SEM apprendra cet horizon"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -11989,7 +12003,9 @@
     "peak_power_unsupported": "Ez az előrejelzési forrás nem közöl csúcsteljesítmény-értéket",
     "rebuild_nights": "Felépítés előzményekből",
     "rebuild_nights_hint": "Beolvassa az akkumulátor rögzített előzményeit, és most rekonstruálja ezeket az éjszakákat ahelyett, hogy megvárná őket",
-    "rebuild_nights_busy": "Felépítés…"
+    "rebuild_nights_busy": "Felépítés…",
+    "sensor_disabled": "Érzékelő kikapcsolva",
+    "enable_horizon_sensor": "Az integrációja letiltva szállítja ezt az előrejelzés-érzékelőt — kapcsolja be a Home Assistantban, és a SEM tanulni kezdi ezt a horizontot"
   },
   "it": {
     "% of limit": "% del limite",
@@ -13488,7 +13504,9 @@
     "peak_power_unsupported": "Questa fonte di previsione non pubblica un valore di potenza di picco",
     "rebuild_nights": "Ricostruisci dallo storico",
     "rebuild_nights_hint": "Legge lo storico registrato della batteria e ricostruisce subito queste notti, invece di attenderle",
-    "rebuild_nights_busy": "Ricostruzione…"
+    "rebuild_nights_busy": "Ricostruzione…",
+    "sensor_disabled": "Sensore spento",
+    "enable_horizon_sensor": "La tua integrazione fornisce questo sensore di previsione disattivato — attivalo in Home Assistant e SEM imparerà questo orizzonte"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -14987,7 +15005,9 @@
     "peak_power_unsupported": "Deze voorspellingsbron publiceert geen piekvermogen",
     "rebuild_nights": "Uit historie opbouwen",
     "rebuild_nights_hint": "Leest de opgeslagen historie van uw batterij en reconstrueert deze nachten nu, in plaats van erop te wachten",
-    "rebuild_nights_busy": "Bezig met opbouwen…"
+    "rebuild_nights_busy": "Bezig met opbouwen…",
+    "sensor_disabled": "Sensor uit",
+    "enable_horizon_sensor": "Uw integratie levert deze prognosesensor uitgeschakeld — zet hem aan in Home Assistant en SEM gaat deze horizon leren"
   },
   "no": {
     "% of limit": "% av grense",
@@ -16486,7 +16506,9 @@
     "peak_power_unsupported": "Denne prognosekilden publiserer ingen toppeffektverdi",
     "rebuild_nights": "Bygg opp fra historikk",
     "rebuild_nights_hint": "Leser batteriets egen registrerte historikk og gjenskaper disse nettene nå i stedet for å vente på dem",
-    "rebuild_nights_busy": "Bygger opp…"
+    "rebuild_nights_busy": "Bygger opp…",
+    "sensor_disabled": "Sensor av",
+    "enable_horizon_sensor": "Integrasjonen din leverer denne prognosesensoren deaktivert — aktiver den i Home Assistant, så begynner SEM å lære denne horisonten"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -17985,7 +18007,9 @@
     "peak_power_unsupported": "To źródło prognozy nie udostępnia wartości mocy szczytowej",
     "rebuild_nights": "Odtwórz z historii",
     "rebuild_nights_hint": "Odczytuje zapisaną historię akumulatora i odtwarza te noce teraz, zamiast na nie czekać",
-    "rebuild_nights_busy": "Odtwarzanie…"
+    "rebuild_nights_busy": "Odtwarzanie…",
+    "sensor_disabled": "Czujnik wyłączony",
+    "enable_horizon_sensor": "Twoja integracja dostarcza ten czujnik prognozy wyłączony — włącz go w Home Assistant, a SEM zacznie uczyć się tego horyzontu"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -19484,7 +19508,9 @@
     "peak_power_unsupported": "Esta fonte de previsão não publica um valor de potência de pico",
     "rebuild_nights": "Reconstruir a partir do histórico",
     "rebuild_nights_hint": "Lê o histórico registado da sua bateria e reconstrói estas noites agora, em vez de esperar por elas",
-    "rebuild_nights_busy": "A reconstruir…"
+    "rebuild_nights_busy": "A reconstruir…",
+    "sensor_disabled": "Sensor desligado",
+    "enable_horizon_sensor": "A sua integração fornece este sensor de previsão desativado — ative-o no Home Assistant e o SEM aprenderá este horizonte"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -20983,7 +21009,9 @@
     "peak_power_unsupported": "Această sursă de prognoză nu publică o valoare a puterii de vârf",
     "rebuild_nights": "Reconstruiește din istoric",
     "rebuild_nights_hint": "Citește istoricul înregistrat al bateriei și reconstruiește aceste nopți acum, în loc să le aștepte",
-    "rebuild_nights_busy": "Se reconstruiește…"
+    "rebuild_nights_busy": "Se reconstruiește…",
+    "sensor_disabled": "Senzor oprit",
+    "enable_horizon_sensor": "Integrarea dvs. livrează acest senzor de prognoză dezactivat — activați-l în Home Assistant și SEM va învăța acest orizont"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -22482,7 +22510,9 @@
     "peak_power_unsupported": "Denna prognoskälla publicerar inget toppeffektvärde",
     "rebuild_nights": "Bygg upp från historik",
     "rebuild_nights_hint": "Läser batteriets egen registrerade historik och återskapar dessa nätter nu i stället för att vänta på dem",
-    "rebuild_nights_busy": "Bygger upp…"
+    "rebuild_nights_busy": "Bygger upp…",
+    "sensor_disabled": "Sensor av",
+    "enable_horizon_sensor": "Din integration levererar denna prognossensor avstängd — aktivera den i Home Assistant så börjar SEM lära sig denna horisont"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -23981,6 +24011,8 @@
     "peak_power_unsupported": "此预测来源不提供峰值功率数值",
     "rebuild_nights": "从历史记录重建",
     "rebuild_nights_hint": "读取电池自身的记录历史并立即重建这些夜晚，而不必等待它们发生",
-    "rebuild_nights_busy": "正在重建…"
+    "rebuild_nights_busy": "正在重建…",
+    "sensor_disabled": "传感器已禁用",
+    "enable_horizon_sensor": "您的集成默认禁用了该预测传感器——在 Home Assistant 中启用它，SEM 便会开始学习该时段"
   }
 }
