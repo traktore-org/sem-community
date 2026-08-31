@@ -11,12 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [Unreleased] — 2.1.0-beta.1 (soaking, not released)
+# [Unreleased] — 2.1.0-beta.2 (soaking, not released)
 
-> The manifest on `develop` reads **2.1.0-beta.1** so the build that is
-> soaking is identifiable — it is *not* a release. No tag is cut and no beta
-> ships while the release hold is in place; 2.0.0 stable remains the current
-> published version.
+> The manifest on `develop` reads **2.1.0-beta.2** so the build that is
+> soaking is identifiable — it is *not* a release. 2.0.0 stable remains the
+> current published version; the soak reaches PROD via the soak owner's
+> branch redeploy, not from here.
+
+- 🔌 **Opening SEM settings no longer resets the first charger's minimum
+  charge target** (#883). On a multi-charger install, merely opening
+  *Settings → Devices & services → Integrations → SEM* and browsing past the
+  EV-charger page silently reset Charger 1's "Minimum" charge target from
+  whatever you had set (e.g. 50%) back to 100% ("Up to Full") — a full grid
+  charge instead of the partial solar charge you asked for. The card's
+  sliders save each charger's target on the charger itself, but the settings
+  page was reading its starting values from a stale legacy copy those sliders
+  never update, then writing that stale copy back over your choice on the way
+  out. Only the first charger was hit; the others were already read from the
+  right place. The page now reads each charger's own saved target, so
+  browsing your settings can no longer change them.
 
 - 🔋 **A reconstructed night now knows what the grid contributed** (#877).
   Recovered nights recorded only the battery's share, so every one of them
