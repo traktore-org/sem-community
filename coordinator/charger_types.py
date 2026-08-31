@@ -751,6 +751,12 @@ class FleetContext:
     # spend anything at all. Default OFF: this is the first behaviour in the
     # arc that is not inert, and turning it on for someone is not ours to do.
     battery_spendable_kwh: float = 0.0
+    #: (#878) The level tonight's own measured need says the pack
+    #: must still hold at dawn. The budget unlocked the assist;
+    #: this bounds HOW DEEP it may go. ``None`` = no budget was
+    #: computed, and means "fall back to buffer_soc" — never a
+    #: floor of zero, which would license draining to empty.
+    dynamic_floor_pct: "Optional[float]" = None
     forecast_spending_enabled: bool = False
     """Solar-surplus gate for battery assist (``battery_assist_min_surplus``).
     Battery assist only SUPPLEMENTS real solar — below this much pure
@@ -854,6 +860,8 @@ class FleetCycleState:
     # (#778 phase 5) Tonight's forecast-derived spendable budget, in kWh.
     # 0.0 until the arc's master switch is on and the evidence exists.
     battery_spendable_kwh: float = 0.0
+    #: (#878) rides beside the budget it bounds
+    dynamic_floor_pct: "Optional[float]" = None
     tariff_level: "Optional[str]" = None
     forecast_remaining_kwh: float = 0.0
     # (#747) the load manager's peak posture, resolved once per cycle.

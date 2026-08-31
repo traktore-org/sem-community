@@ -233,6 +233,12 @@ def battery_assist_budget_w(view: ChargerView) -> float:
         f.buffer_soc,
         f.auto_start_soc,
         f.battery_assist_max_power_w,
+        # (#878) The budget was the KEY — "may the car have any of the pack?"
+        # This is the CEILING: how deep it may go before the house stops
+        # being covered overnight. The sell sink has taken the same floor
+        # since #778; this one was still stopping at the static buffer, so
+        # the two sinks disagreed about the same pack.
+        dynamic_floor_soc=getattr(f, "dynamic_floor_pct", None),
     )
     # #545 / "max out till self-consumption" (user 2026-06-26): once past
     # the solar gate and in the assist band (Zone 3/4, SOC >= buffer),

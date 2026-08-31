@@ -194,6 +194,11 @@ def build_charger_view(
         battery_may_assist_ev=_battery_may_assist_ev(config),
         battery_spendable_kwh=float(
             getattr(fleet_state, "battery_spendable_kwh", 0.0) or 0.0),
+        # (#878) NOT coerced to a float with a 0.0 fallback like its
+        # neighbour: None here means "no budget computed", and 0.0 would be
+        # read as a floor of zero — the one reading that licenses draining
+        # the pack to empty. It stays None all the way to the formula.
+        dynamic_floor_pct=getattr(fleet_state, "dynamic_floor_pct", None),
         forecast_spending_enabled=bool(
             config.get("forecast_spending_enabled", False)),
         solar_committed_w=float(solar_committed_w),

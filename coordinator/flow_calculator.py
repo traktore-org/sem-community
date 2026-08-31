@@ -197,11 +197,37 @@ def battery_redirect_w(
         return 0
 
 
+def _effective_assist_floor(buffer_soc: float, dynamic_floor_soc) -> float:
+    """(#878) The deeper of the two floors, fail-closed.
+
+    ``dynamic_floor_soc`` is the level tonight's own measured need says the
+    pack must still hold at dawn (#778). It is ``None`` whenever no budget
+    was computed — and ``None`` must mean "fall back to the buffer", NEVER
+    "a floor of zero", which would license draining the pack to empty.
+
+    Only ever RAISES the floor. The configured buffer is a hard floor in its
+    own right and a lower computed floor must not lower it. Anything
+    unparseable is ignored rather than obeyed: this value bounds a real
+    battery, so garbage-in must not widen the permission.
+    """
+    floor = float(buffer_soc)
+    if dynamic_floor_soc is None:
+        return floor
+    try:
+        dyn = float(dynamic_floor_soc)
+    except (TypeError, ValueError):
+        return floor
+    if dyn != dyn:            # NaN
+        return floor
+    return max(floor, dyn)
+
+
 def battery_assist_potential_w(
     battery_soc: float,
     battery_buffer_soc: float,
     battery_auto_start_soc: float,
     battery_assist_max_power_w: float,
+    dynamic_floor_soc=None,
 ) -> float:
     """SOC-based POTENTIAL battery-assist power for the EV (#501).
 
@@ -228,13 +254,32 @@ def battery_assist_potential_w(
       * buffer ≤ SOC < auto_start   → ramp 0.5 → 1.0 × cap across the band
       * SOC < buffer (Zone 1/2)     → 0 (battery off-limits)
     """
+    # (#878) The floor is checked FIRST, before the Zone-4 full-power
+    # branch. A demanding night can compute a floor above ``auto_start``, and
+    # testing auto_start first would hand out the whole cap below the level
+    # the house needs — the full-power branch must not out-rank the floor.
+    floor = _effective_assist_floor(battery_buffer_soc, dynamic_floor_soc)
+    if battery_soc < floor:
+        return 0.0
+    # AT the floor exactly: historically the ramp starts at 0.5x cap here,
+    # so the pack is offered power at precisely its buffer and dips just
+    # below before the next cycle catches it. Harmless for a configured
+    # buffer, and left alone so no existing install changes behaviour.
+    #
+    # Not harmless for the DYNAMIC floor, whose whole meaning is "this much
+    # must still be in the pack at dawn" — offering anything at that level
+    # breaches the promise the number was computed to keep. When the dynamic
+    # floor is the binding one, it is a hard stop.
+    if battery_soc <= floor and floor > float(battery_buffer_soc):
+        return 0.0
     if battery_soc >= battery_auto_start_soc:
         return battery_assist_max_power_w
-    if battery_soc >= battery_buffer_soc:
-        band = max(1.0, battery_auto_start_soc - battery_buffer_soc)
-        ratio = (battery_soc - battery_buffer_soc) / band
-        return battery_assist_max_power_w * (0.5 + 0.5 * ratio)
-    return 0.0
+    # The taper runs from the EFFECTIVE floor, not the configured buffer:
+    # a curve measured from a level the pack may not reach would keep
+    # offering power right down to it.
+    band = max(1.0, battery_auto_start_soc - floor)
+    ratio = (battery_soc - floor) / band
+    return battery_assist_max_power_w * (0.5 + 0.5 * ratio)
 
 
 class FlowCalculator:
@@ -708,6 +753,8 @@ class FlowCalculator:
         forecast_remaining_kwh: float = 0.0,
         battery_auto_start_soc: float = 90.0,
         battery_buffer_soc: float = 70.0,
+        #: (#878) None = no budget computed -> buffer alone. Never 0.0.
+        dynamic_floor_pct=None,
         battery_assist_max_power_w: float = 4500.0,
         battery_assist_min_surplus_w: float = 1200.0,
         min_power_floor_w: float = 0.0,
@@ -852,6 +899,7 @@ class FlowCalculator:
                 power, battery_soc,
                 battery_auto_start_soc, battery_buffer_soc,
                 battery_assist_max_power_w,
+                dynamic_floor_pct=dynamic_floor_pct,
             )
             # Solar gate: assist only SUPPLEMENTS real solar. Below the
             # configured surplus threshold (default 1200 W) the battery
@@ -915,6 +963,7 @@ class FlowCalculator:
         battery_auto_start_soc: float,
         battery_buffer_soc: float,
         battery_assist_max_power_w: float,
+        dynamic_floor_pct=None,
     ) -> float:
         """How much battery power to attribute to EV in battery_assist mode.
 
@@ -929,9 +978,13 @@ class FlowCalculator:
         call-site compatibility (and future per-battery splits).
         """
         del power  # #501 — measured discharge intentionally unused
+        # (#878) The canonical budget and decide() take the SAME floor.
+        # This function exists so the two cannot disagree (#282) — a change
+        # to one that is not made to the other recreates exactly that bug.
         return battery_assist_potential_w(
             battery_soc,
             battery_buffer_soc,
             battery_auto_start_soc,
             battery_assist_max_power_w,
+            dynamic_floor_soc=dynamic_floor_pct,
         )

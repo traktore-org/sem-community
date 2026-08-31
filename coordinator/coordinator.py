@@ -9795,6 +9795,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             battery_spendable_kwh=float(
                 (getattr(self, "_planning_evidence", None) or {})
                 .get("battery_spendable_kwh") or 0.0),
+            # (#878) The ceiling that rides beside that budget. Deliberately
+            # NOT `or 0.0` like its neighbour: None means "no budget was
+            # computed" and must fall back to the configured buffer, whereas
+            # 0.0 would read as a floor of zero and license draining the pack
+            # to empty. The sibling can safely coerce because 0 kWh spendable
+            # is a real answer; here it is the dangerous one.
+            dynamic_floor_pct=(
+                (getattr(self, "_planning_evidence", None) or {})
+                .get("battery_dynamic_floor_pct")),
             battery_priority=battery_priority,
             battery_commanded=self._battery_commanded(),
             curtailment_grant_w=self._curtailment_grant_w(power),
