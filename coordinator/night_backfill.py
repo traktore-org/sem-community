@@ -85,6 +85,65 @@ def _decreased_within(series: Mapping[datetime.datetime, float],
     return any(b[1] < a[1] - 1e-9 for a, b in zip(inside, inside[1:], strict=False))
 
 
+def _window_delta(series: Optional[Mapping[datetime.datetime, float]],
+                  start: datetime.datetime, end: datetime.datetime):
+    """(#877) A cumulative counter's rise across the night, or ``None``.
+
+    ``None`` means "cannot say", never "zero" — the two are different answers
+    and the caller must not confuse them. Refused when either endpoint is out
+    of tolerance, when the counter went BACKWARDS inside the window (a reset,
+    a unit swap: the delta is then a plausible-looking fiction, the same
+    reason ``_decreased_within`` refuses a drain), or when the rise is
+    negative across the endpoints.
+    """
+    if not series:
+        return None
+    first = _nearest(series, start, ENDPOINT_TOLERANCE_H)
+    last = _nearest(series, end, ENDPOINT_TOLERANCE_H)
+    if first is None or last is None:
+        return None
+    if _decreased_within(series, first[1], last[1]):
+        return None
+    delta = last[0] - first[0]
+    return delta if delta >= 0 else None
+
+
+def _house_need_kwh(counters, drain: float, start, end, *, has_ev: bool):
+    """(#877) The house's overnight need, from the night's energy balance.
+
+    There is no solar at night, so over the window
+
+        G + D = H + E + C      =>      H = G + D - E - C
+
+    (grid import + battery discharge = house + EV + battery charge). Every
+    term is a cumulative counter the Energy Dashboard already names, and #876
+    makes them reachable on the long-lived installs this exists for.
+
+    ``H`` is exactly what a live record stores as ``drain + night_grid``, so
+    reconstructing it makes a backfilled night comparable to a measured one
+    instead of systematically low.
+
+    Reconstructable or nothing: a missing counter returns ``None`` and the
+    record simply carries no grid term. The one term we may supply ourselves
+    is ``E`` on an install with no EV — that is zero by construction, not
+    unknown, and treating it as unknown would throw away a night we could
+    have read.
+    """
+    if not counters:
+        return None
+    grid = _window_delta(counters.get("grid_import"), start, end)
+    charge = _window_delta(counters.get("battery_charge"), start, end)
+    if grid is None or charge is None:
+        return None
+    if has_ev:
+        ev = _window_delta(counters.get("ev_energy"), start, end)
+        if ev is None:
+            return None
+    else:
+        ev = 0.0
+    return grid + drain - ev - charge
+
+
 def nights_from_statistics(
     discharge: Optional[Mapping[datetime.datetime, float]],
     soc: Optional[Mapping[datetime.datetime, float]] = None,
@@ -94,6 +153,8 @@ def nights_from_statistics(
     reserve_soc: Optional[float] = None,
     capacity_kwh: Optional[float] = None,
     known_dates: Optional[Set[str]] = None,
+    counters: Optional[Mapping[str, Mapping]] = None,
+    has_ev: bool = True,
 ) -> List[Dict]:
     """Reconstruct sealed-night records from a cumulative discharge counter.
 
@@ -134,7 +195,7 @@ def nights_from_statistics(
             if lows:
                 reserve_hit = min(lows) <= float(reserve_soc) + RESERVE_EPS
 
-        out.append({
+        record = {
             "date": key,
             "drain_kwh": round(drain, 3),
             "trainable": trainable,
@@ -142,7 +203,23 @@ def nights_from_statistics(
             # Provenance, so a stricter reader can tell this from live
             # evidence — and so "why does it already know?" has an answer.
             "source": "backfill",
-        })
+        }
+        # (#877) The grid's share of the night, so this record answers the
+        # same question a live one does. Without it every reconstructed night
+        # is censored downward — #874's exact fault — and a year of them would
+        # dilute the handful of correct live nights back to the old under-read
+        # (measured on PROD: 5.11 vs 6.28 kWh).
+        #
+        # ``max(0, H - drain)`` makes ``drain + night_grid`` reproduce
+        # ``max(D, H)``. The counter's total discharge carries EV assist and
+        # export that the house never saw, so D can exceed H; taking the
+        # larger keeps this module's stated choice — an upper bound on need,
+        # "the one way to be wrong that cannot strand anyone".
+        need = _house_need_kwh(counters, drain, first[1], last[1],
+                               has_ev=has_ev)
+        if need is not None:
+            record["night_grid_kwh"] = round(max(0.0, need - drain), 3)
+        out.append(record)
     return out
 
 
@@ -186,12 +263,34 @@ async def run_backfill(hass, tracker, config, *, days: int = 365) -> dict:
                 "added": 0}
 
     soc_id = config.get("battery_soc_sensor")
-    wanted = [discharge_id] + ([soc_id] if soc_id else [])
+    # (#877) The other three legs of the night's energy balance. A
+    # reconstructed night that reports only the battery's share is censored
+    # downward — the exact fault #874 fixed for live records — so a year of
+    # them would dilute the correct ones back to the old under-read. With
+    # these, ``H = G + D - E - C`` is exact, and the EV term is what keeps a
+    # 20 kWh car charge from being booked as house need.
+    grid_id = config.get("grid_import_energy_sensor")
+    charge_id = config.get("battery_charge_energy_sensor")
+    ev_id = (config.get("ev_energy_sensor")
+             or config.get("ev_total_energy_sensor"))
+    # An install with no EV contributes E = 0 by construction. Anything else
+    # — a charger configured but no counter for it — stays UNKNOWN, and an
+    # unknown leg means no grid term rather than a guessed one.
+    has_ev = bool(config.get("has_ev", True) or ev_id)
+
+    wanted = [discharge_id]
+    wanted += [i for i in (soc_id, grid_id, charge_id, ev_id) if i]
     series = await read_statistics(hass, wanted, days)
 
     discharge = series.get(discharge_id) or {}
     if not discharge:
         return {"error": f"no statistics for {discharge_id}", "added": 0}
+
+    counters = {
+        "grid_import": series.get(grid_id) if grid_id else None,
+        "battery_charge": series.get(charge_id) if charge_id else None,
+        "ev_energy": series.get(ev_id) if ev_id else None,
+    }
 
     existing = list(tracker.sealed())
     recovered = nights_from_statistics(
@@ -202,6 +301,8 @@ async def run_backfill(hass, tracker, config, *, days: int = 365) -> dict:
         reserve_soc=config.get("battery_reserve_soc"),
         capacity_kwh=config.get("battery_capacity_kwh"),
         known_dates={r.get("date") for r in existing if r.get("date")},
+        counters=counters,
+        has_ev=has_ev,
     )
     merged = merge_nights(existing, recovered,
                           max_nights=getattr(tracker, "max_nights", 60))
@@ -213,6 +314,12 @@ async def run_backfill(hass, tracker, config, *, days: int = 365) -> dict:
         "hours_of_history": len(discharge),  # hourly statistic rows — HOURS
         "recovered": len(recovered),
         "trainable_recovered": sum(1 for r in recovered if r.get("trainable")),
+        # (#877) How many reconstructed nights could close the energy balance.
+        # A gap between this and ``recovered`` is not a failure — it is a
+        # counter this install does not keep — but it is the difference
+        # between a night comparable to a measured one and a censored one, so
+        # it belongs in the report rather than in a log nobody reads.
+        "with_grid_term": sum(1 for r in recovered if "night_grid_kwh" in r),
         "nights_total": len(merged),
         "usable_total": usable,
         "added": len(merged) - len(existing),

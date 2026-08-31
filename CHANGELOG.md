@@ -18,6 +18,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > ships while the release hold is in place; 2.0.0 stable remains the current
 > published version.
 
+- 🔋 **A reconstructed night now knows what the grid contributed** (#877).
+  Recovered nights recorded only the battery's share, so every one of them
+  was censored downward — the same fault fixed for live records this
+  release — and a year of recovered history would have diluted the correct
+  nights straight back to the old under-read. The obvious repair, adding the
+  grid meter's rise, is worse than none: it counts a car charging overnight
+  as household demand, and one 20 kWh charge would distort the estimate for
+  as long as the record survives. Instead SEM closes the night's energy
+  balance — there is no sun at night, so the house's share is what the grid
+  and the battery gave minus what the car and the pack took, and every one of
+  those is a meter reading already on disk. Where a meter is missing the
+  night simply carries no grid figure rather than a guessed one, a meter that
+  was reset or replaced voids it, and an install with no car contributes a
+  known zero instead of an unknown. The service now reports how many
+  recovered nights it could balance.
+
+- 🔋 **"Learn overnight battery use from past history" could never run on an
+  install older than a few weeks** (#876). The service exists to spare a new
+  install the five-night wait by reading its own recorder — and it answered
+  *"no battery discharge energy sensor configured"* and did nothing on
+  precisely the OLDEST installs, the ones whose history was worth recovering.
+  The counter names are written into the config entry when the entry is
+  *created*, and by nothing else; no migration between v1 and v18 ever added
+  them, so an entry from before that merge stayed permanently without keys a
+  new one gets for free. It hid because SEM re-reads the Energy Dashboard
+  every cycle, so nothing about day-to-day operation looked wrong. Measured
+  on two machines with identical hardware and the same auto-detection
+  setting: the rig created in August carried all five, the install created
+  last November carried none, with every counter present in Home Assistant
+  and years deep in the recorder. An upgrade now fills in only the keys that
+  are absent — a counter you chose yourself is never touched — and the
+  handler finally advertises the version that makes the upgrade run at all,
+  which is the half that had kept even a written migration from firing.
+
 - 🛡️ **Observer mode now covers every device, not only chargers** (#874).
   The switch that promises "SEM will not touch your hardware" was pushed to
   the charger fleet alone, so on an install with controllable loads or a heat
