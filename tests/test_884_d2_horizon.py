@@ -209,3 +209,37 @@ class TestTheDisabledProbeActuallyRuns:
         with patch("homeassistant.helpers.entity_registry.async_get",
                    return_value=reg):
             assert r._d2_entity_disabled() is False
+
+
+class TestTheProbeCannotBreakTheRead:
+    """It could, and did: the try wrapped only `er.async_get`, leaving
+    `reg.entities` outside the net. A registry stub without that attribute
+    raised straight through `read_forecast` and failed 8 unrelated tests.
+
+    A diagnostic may never break the thing it is diagnosing."""
+
+    def test_a_registry_without_entities_does_not_raise(self):
+        from unittest.mock import MagicMock, patch
+        from custom_components.solar_energy_management.coordinator import (
+            forecast_reader as fr,
+        )
+        r = fr.ForecastReader.__new__(fr.ForecastReader)
+        r.hass = MagicMock()
+
+        class _NoEntities:  # exactly the shape that broke it
+            pass
+
+        with patch("homeassistant.helpers.entity_registry.async_get",
+                   return_value=_NoEntities()):
+            assert r._d2_entity_disabled() is False
+
+    def test_a_raising_registry_does_not_raise(self):
+        from unittest.mock import MagicMock, patch
+        from custom_components.solar_energy_management.coordinator import (
+            forecast_reader as fr,
+        )
+        r = fr.ForecastReader.__new__(fr.ForecastReader)
+        r.hass = MagicMock()
+        with patch("homeassistant.helpers.entity_registry.async_get",
+                   side_effect=RuntimeError("no registry here")):
+            assert r._d2_entity_disabled() is False

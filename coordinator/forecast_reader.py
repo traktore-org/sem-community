@@ -856,31 +856,36 @@ class ForecastReader:
         away, the second is nothing the user can do. Telling someone to give
         up when a checkbox would fix it is the failure this issue is about.
         """
-        try:
-            from homeassistant.helpers import entity_registry as er
-            reg = er.async_get(self.hass)
-        except Exception as e:  # noqa: BLE001 — a hint never costs a read
-            # Was `self._hass` (the reader uses `self.hass`), and this handler
-            # turned the AttributeError into a silent False — so Solcast's
-            # merely-DISABLED day-3 sensor reported as unsupported, which is
-            # the very conflation this method exists to prevent. Say it once.
-            if not getattr(self, "_d2_probe_warned", False):
-                self._d2_probe_warned = True
-                _LOGGER.debug("d2 disabled-probe unavailable: %s", e)
-            return False
         # Both spellings, because Solcast uses different ones in the two
         # places: "day_3" in the entity_id, "d3" in the unique_id. Matching
         # only the guessed unique_id found nothing on a rig where the sensor
         # was sitting right there, disabled.
         needles = ("forecast_day_3", "forecast_d3", "_energy_production_d2")
         seen = 0
-        for entry in reg.entities.values():
-            if not entry.disabled_by:
-                continue
-            seen += 1
-            hay = f"{entry.unique_id or ''} {entry.entity_id or ''}"
-            if any(n in hay for n in needles):
-                return True
+        # The WHOLE probe is guarded, iteration included. Guarding only the
+        # registry lookup left `reg.entities` outside the net, and a stub
+        # registry without that attribute took the forecast read down with
+        # it — 8 tests, caught by the suite before this shipped. A diagnostic
+        # may never break the thing it is diagnosing.
+        try:
+            from homeassistant.helpers import entity_registry as er
+            reg = er.async_get(self.hass)
+            for entry in (getattr(reg, "entities", None) or {}).values():
+                if not entry.disabled_by:
+                    continue
+                seen += 1
+                hay = f"{entry.unique_id or ''} {entry.entity_id or ''}"
+                if any(n in hay for n in needles):
+                    return True
+        except Exception as e:  # noqa: BLE001 — a hint never costs a read
+            # Previously `self._hass` (the reader has `self.hass`), and this
+            # handler turned that AttributeError into a silent False — the
+            # probe that separates "disabled" from "unsupported" quietly
+            # reporting "not disabled". It leaves a trace now.
+            if not getattr(self, "_d2_probe_warned", False):
+                self._d2_probe_warned = True
+                _LOGGER.debug("d2 disabled-probe unavailable: %s", e)
+            return False
         # One line, once: this probe decides between two very different
         # sentences shown to the user, and it failed silently twice while
         # being built (wrong attribute, then a guessed unique_id).
