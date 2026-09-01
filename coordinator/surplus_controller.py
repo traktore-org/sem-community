@@ -55,7 +55,8 @@ class BatteryTierContext:
     effective_floor_soc: float = 0.0
 
 
-def tier1_battery_reserved_w(devices, *, below_priority, allowance_w) -> float:
+def tier1_battery_reserved_w(devices, *, below_priority, allowance_w,
+                             exclude_ids=()) -> float:
     """(#885) Pack watts claimed by Tier-1 loads that OUTRANK a charger.
 
     Guido, 31.08: *"The order tells who is first and gets power from the
@@ -126,11 +127,12 @@ def tier1_battery_reserved_w(devices, *, below_priority, allowance_w) -> float:
     """
     return _reserved_for_seniors(
         devices, below_priority=below_priority, cap_w=allowance_w,
-        axis="battery",
+        axis="battery", exclude_ids=exclude_ids,
     )
 
 
-def surplus_reserved_w(devices, *, below_priority, available_w) -> float:
+def surplus_reserved_w(devices, *, below_priority, available_w,
+                       exclude_ids=()) -> float:
     """(#885) SOLAR watts claimed by loads that OUTRANK a charger.
 
     The battery axis was only half the problem. ``solar_committed_w`` cascades
@@ -155,17 +157,36 @@ def surplus_reserved_w(devices, *, below_priority, available_w) -> float:
     """
     return _reserved_for_seniors(
         devices, below_priority=below_priority, cap_w=available_w,
-        axis="solar",
+        axis="solar", exclude_ids=exclude_ids,
     )
 
 
-def _reserved_for_seniors(devices, *, below_priority, cap_w, axis) -> float:
+def _reserved_for_seniors(devices, *, below_priority, cap_w, axis,
+                          exclude_ids=()) -> float:
     """The shared priority walk behind both reservations.
 
     ONE implementation on purpose: two copies of "who outranks this charger"
     would drift, and drifting duplicates of a single computed value are the
     class this branch already had to remove once (#282).
+
+    ``exclude_ids`` — the EV chargers. They MUST NOT be reserved for here:
+    a charger's claim already cascades through ``solar_committed_w`` /
+    ``assist_committed_w``, so counting it again as if it were a load bills
+    the same watts twice and can consume the entire allowance.
+
+    ``get_devices_sorted()`` is supposed to filter chargers out via
+    ``managed_externally``, and both registration sites do set it — but that
+    invariant is enforced in other files, so this walk no longer depends on
+    it. Passing the ids costs nothing and cannot silently regress.
+
+    (Provenance, because the comment first written here was wrong: this was
+    added while chasing a ``budget=0W`` on .175 that I attributed to a
+    charger being reserved against its sibling. It was not — that budget is
+    ``self_consumption_surplus_w`` correctly subtracting battery charge
+    because the pack outranks the charger in the one list (#576 P2.2). The
+    exclusion is still right, on its own merits and not on that evidence.)
     """
+    excluded = frozenset(exclude_ids or ())
     try:
         rank = int(below_priority)
     except (TypeError, ValueError):
@@ -176,6 +197,8 @@ def _reserved_for_seniors(devices, *, below_priority, cap_w, axis) -> float:
 
     reserved = 0.0
     for device in devices or ():
+        if getattr(device, "device_id", None) in excluded:
+            continue
         try:
             if int(getattr(device, "priority", 99)) >= rank:
                 continue

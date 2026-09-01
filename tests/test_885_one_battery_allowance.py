@@ -177,7 +177,7 @@ def _load(priority, *, tier1=False, tier2=False, active=False,
     """
     from types import SimpleNamespace
     return SimpleNamespace(
-        name=name, priority=priority, is_active=active,
+        device_id=name, name=name, priority=priority, is_active=active,
         battery_assist_enabled=tier1, battery_eligible_overnight=tier2,
         rated_power=rated, min_power_threshold=min_w,
         _tier1_batt_w=batt_w, control_mode=mode,
@@ -694,4 +694,69 @@ class TestTheReservationOnlySeesRealLoads:
         assert "BATTERY_SURPLUS_DEVICE_ID" not in coord, (
             "the synthetic battery row reached the coordinator — check it is "
             "not being registered as a surplus device"
+        )
+
+
+class TestAChargerIsNeverReservedForAsALoad:
+    """A charger's claim already cascades through ``solar_committed_w`` /
+    ``assist_committed_w``. Reserving for it AGAIN as if it were a load would
+    bill the same watts twice — and a charger's rated power is large enough
+    to consume the whole allowance on its own, starving its own sibling.
+
+    The numbers below are .175's real device list. They are a WORKED CASE,
+    not a reproduction of a live failure: this guard was written while
+    chasing a ``budget=0W`` on that rig which I wrongly attributed to it.
+    That budget was ``self_consumption_surplus_w`` correctly subtracting
+    battery charge, because the pack outranks the charger in the one list.
+    The guard stands anyway — ``managed_externally`` is set in files this
+    walk does not own, and one charger eating its sibling's whole budget is
+    too quiet a failure to leave resting on that.
+    """
+
+    def _solar(self, devices, exclude=()):
+        from custom_components.solar_energy_management.coordinator.surplus_controller import (
+            surplus_reserved_w,
+        )
+        return surplus_reserved_w(
+            devices, below_priority=6, available_w=3058.0, exclude_ids=exclude,
+        )
+
+    def _batt(self, devices, exclude=()):
+        from custom_components.solar_energy_management.coordinator.surplus_controller import (
+            tier1_battery_reserved_w,
+        )
+        return tier1_battery_reserved_w(
+            devices, below_priority=6, allowance_w=5000.0, exclude_ids=exclude,
+        )
+
+    def test_a_charger_would_eat_the_whole_allowance(self):
+        charger = _load(3, rated=4140.0, name="keba_fa87f74cd3")
+        loads = [_load(2, rated=1000.0, name="sim_heizband"),
+                 _load(5, rated=1083.0, name="heizkoerper_maenner"),
+                 _load(5, rated=500.0, name="test_heizband_600")]
+        without = self._solar(loads)
+        assert without == 2583.0, "the genuine load reservation"
+
+        # charger included -> saturates the cap, junior charger gets nothing
+        assert self._solar(loads + [charger]) == 3058.0
+        # excluded -> the junior charger keeps its real headroom
+        assert self._solar(loads + [charger],
+                           exclude={"keba_fa87f74cd3"}) == 2583.0
+
+    def test_chargers_are_excluded_on_the_battery_axis_too(self):
+        charger = _load(3, tier1=True, rated=4140.0, name="keba_fa87f74cd3")
+        assert self._batt([charger]) == 4140.0
+        assert self._batt([charger], exclude={"keba_fa87f74cd3"}) == 0.0
+
+    def test_the_loop_passes_every_charger_id(self):
+        import inspect
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        src = inspect.getsource(SEMCoordinator._async_update_data)
+        assert "_charger_ids = set((self._ev_devices or {}).keys())" in src, (
+            "the loop does not collect the charger ids"
+        )
+        assert src.count("exclude_ids=_charger_ids") == 2, (
+            "both reservations must exclude chargers — solar AND battery"
         )

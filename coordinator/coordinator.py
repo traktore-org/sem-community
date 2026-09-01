@@ -3278,6 +3278,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 _tier1_devices = (
                     _sc.get_devices_sorted() if _sc is not None else ()
                 )
+                # (#885) Every charger id, so the reservation walk cannot
+                # count a CHARGER as a load. A charger's claim already
+                # cascades through solar_committed_w / assist_committed_w;
+                # reserving for it as well bills the same watts twice.
+                # get_devices_sorted() filters them via managed_externally
+                # and both registration sites set it — but that invariant
+                # lives in other files, so this does not rely on it.
+                _charger_ids = set((self._ev_devices or {}).keys())
+                _legacy_ev = getattr(self, "_ev_device", None)
+                if _legacy_ev is not None:
+                    _charger_ids.add(getattr(_legacy_ev, "device_id", None))
                 # (#885) The sun a senior load may still claim. Capped at the
                 # real headroom so a reservation can never exceed what the
                 # roof is producing; an active load is already inside
@@ -3628,6 +3639,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                     _tier1_devices,
                                     below_priority=self._ev_priority_for(cid),
                                     available_w=_solar_headroom_w,
+                                    exclude_ids=_charger_ids,
                                 )
                             ),
                             # (#885) One pack, spent in the ONE device
@@ -3650,6 +3662,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                     _tier1_devices,
                                     below_priority=self._ev_priority_for(cid),
                                     allowance_w=_assist_allowance_w,
+                                    exclude_ids=_charger_ids,
                                 )
                             ),
                             night_deliverable_kwh=self._night_deliverable_kwh(charger_cfg),
