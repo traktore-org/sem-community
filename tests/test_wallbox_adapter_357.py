@@ -3,7 +3,8 @@
 Confirms:
 - The adapter factory picks ``WallboxAdapter`` for Wallbox-like devices.
 - ``command_idle`` / ``command_disable`` call the pause-resume switch
-  in addition to ``_set_current(0)`` + ``stop_session``.
+  in addition to the generic stop (``stop_session`` owns the single 0 A
+  write — #894; the adapter no longer writes 0 A a second time itself).
 - Discovery is cached (no per-cycle registry lookup).
 - Missing pause switch is a silent no-op (falls back to generic
   behaviour) — does not crash.
@@ -110,9 +111,10 @@ class TestWallboxPauseSwitch:
 
         await adapter.command_disable()
 
-        # Generic path fired set_current(0) + stop_session.
-        device._set_current.assert_called_with(0)
+        # Generic path fired the stop via stop_session (its single 0 A
+        # write) — NOT a second direct _set_current(0) (#894 double-send).
         device.stop_session.assert_called()
+        device._set_current.assert_not_called()
 
         # Wallbox-specific addition: switch.turn_off on the pause switch.
         calls = device.hass.services.async_call.call_args_list
@@ -219,8 +221,7 @@ class TestWallboxPauseSwitch:
     @pytest.mark.asyncio
     async def test_no_pause_switch_silent_noop(self):
         """When no pause switch is discovered, the adapter still
-        fires the generic ``_set_current(0)`` + ``stop_session`` path
-        and does NOT crash."""
+        fires the generic ``stop_session`` stop path and does NOT crash."""
         device = _make_device()
         adapter = WallboxAdapter(device)
         # Discovery returns nothing.
@@ -229,8 +230,8 @@ class TestWallboxPauseSwitch:
 
         await adapter.command_disable()
 
-        device._set_current.assert_called_with(0)
         device.stop_session.assert_called()
+        device._set_current.assert_not_called()  # #894: no redundant 0 A
         # No switch.turn_off call.
         calls = device.hass.services.async_call.call_args_list
         switch_calls = [
@@ -242,7 +243,7 @@ class TestWallboxPauseSwitch:
     @pytest.mark.asyncio
     async def test_pause_switch_failure_does_not_propagate(self):
         """If the switch service call raises, the disable path still
-        completes — set_current(0) and stop_session both ran. The
+        completes — stop_session (the primary stop) still ran. The
         primary stop mechanism must succeed even if the auxiliary
         switch is offline."""
         device = _make_device()
@@ -256,8 +257,8 @@ class TestWallboxPauseSwitch:
         # Must not raise.
         await adapter.command_disable()
 
-        device._set_current.assert_called_with(0)
         device.stop_session.assert_called()
+        device._set_current.assert_not_called()  # #894: no redundant 0 A
         assert adapter.last_intent is ChargerIntent.DISABLE
 
     def test_discovery_cached_after_first_call(self):

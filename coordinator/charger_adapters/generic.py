@@ -90,11 +90,17 @@ class GenericAdapter(ChargerAdapter):
         self._last_intent = ChargerIntent.CHARGE_AT_AMPS
 
     async def command_idle(self) -> None:
-        # Generic: setting current to 0 is the canonical stop.
-        # Also call stop_session() so any session-level cleanup runs.
-        await self._device._set_current(0)
+        # Generic: setting current to 0 is the canonical stop. When a session
+        # is open, stop_session() ALREADY writes 0 A (its no-brand-mechanism
+        # fallback) on top of the session-level cleanup — so writing it here
+        # too emitted the stop TWICE within milliseconds (#894, @DigitalOptics:
+        # an HA automation watching for the 0 A write fired twice). Delegate
+        # the 0 A to stop_session; write it directly only when there is no
+        # session to tear down. KebaAdapter has always delegated this way.
         if getattr(self._device, "_session_active", False):
             await self._device.stop_session()
+        else:
+            await self._device._set_current(0)
         self._last_intent = ChargerIntent.IDLE
 
     async def command_max(self) -> None:
@@ -102,7 +108,10 @@ class GenericAdapter(ChargerAdapter):
         self._last_intent = ChargerIntent.CHARGE_MAX
 
     async def command_disable(self) -> None:
-        await self._device._set_current(0)
+        # stop_session() is the canonical stop: it dispatches the brand's stop
+        # mechanism and, for a generic brand with none, writes 0 A itself. The
+        # extra _set_current(0) here duplicated that write — two 0 A dispatches
+        # a few ms apart (#894). stop_session owns the stop, exactly as KEBA.
         await self._device.stop_session()
         self._last_intent = ChargerIntent.DISABLE
 
