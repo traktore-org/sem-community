@@ -411,6 +411,14 @@ The battery begins discharging to supplement solar for the EV. The assist power 
 
 Full battery assist (default 4500W). The EV starts charging even without solar surplus — the battery alone can push the EV above its minimum threshold.
 
+### When the battery SOC is unknown
+
+Right after a Home Assistant restart the battery SOC sensor can take a minute or two to report its first value (Huawei: up to ~3 minutes). Until it does, SEM has **no** SOC — and an unknown battery is treated as **neither a source nor a blocker** (2.1, #875): the EV charges on pure solar surplus as in Zone 2, gets no battery assist, and the battery is protected from discharging into the car as if it were below the buffer. Before 2.1 that window was steered as Zone 1 — "battery priority", EV blocked — on a 0 % reading that had never been measured.
+
+The same applies to an install with **no battery SOC sensor at all**: SEM then never enters Zone 1, so a battery-less install in *Min + Solar* charges the car on surplus during the day instead of waiting for a battery that does not exist.
+
+A sensor that goes dark **after** it has reported is different: SEM keeps steering on the last value it read, so a short gap never looks like an empty pack.
+
 ### Assist floor
 
 Battery assist to the EV is gated by the **buffer SOC** (default 70%): above it the battery may help charge the EV, below it assist stops. The buffer is the single assist floor — the separate `battery_assist_floor_soc` knob was removed and folded into it.

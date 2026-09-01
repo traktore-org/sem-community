@@ -6810,6 +6810,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             solar_w=float(getattr(power, "solar_power", 0.0) or 0.0),
             home_w=float(getattr(power, "home_consumption_power", 0.0) or 0.0),
             battery_soc=float(getattr(power, "battery_soc", 0.0) or 0.0),
+            # (#875) a never-read SOC is not a 0 % pack.
+            battery_soc_known=bool(getattr(power, "battery_soc_known", True)),
             is_night=self.time_manager.is_night_mode(),
             # #531: split per-battery LIMIT_DISCHARGE across the real fleet
             # (#691: effective consumers, not configured rows).

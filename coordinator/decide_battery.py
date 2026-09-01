@@ -377,7 +377,9 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
         # fallen below the buffer. Above the buffer with real surplus the
         # battery is free to assist (#545). buffer=0 disables the SoC arm.
         buffer_soc = float(getattr(f, "buffer_soc", 70.0))
-        below_buffer = float(f.battery_soc) < buffer_soc
+        # (#875) a SOC never read lands on the protective side too.
+        below_buffer = (float(f.battery_soc) < buffer_soc
+                        or not getattr(f, "battery_soc_known", True))
         if surplus_w < gate_w or below_buffer:
             # #531: split the home budget across the fleet — N batteries each
             # told to inject the FULL home load over-injects N× and leaks the

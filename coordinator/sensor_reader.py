@@ -405,8 +405,10 @@ class SensorReader:
             {"solar", "grid", "grid_import", "grid_export", "battery"}
         )
         self._STALE_THRESHOLD_S = 600  # 10 min: a fast power sensor stale this long is frozen
-        # Cache last valid SOC to avoid 0% during sensor gaps
-        self._last_valid_soc: float = 0.0
+        # Cache last valid SOC to avoid 0% during sensor gaps. (#875) None
+        # until the first successful read: a hold needs something to hold,
+        # and 0.0 before the first report was published as an empty pack.
+        self._last_valid_soc: Optional[float] = None
         # EV flap fix (2026-07-10): the KEBA charging-power sensor polls over
         # UDP and blips to ~0 for a cycle while the car is really drawing 10 kW.
         # ``ev_power`` feeds the home energy balance (``home = solar + grid −
@@ -2138,9 +2140,7 @@ class SensorReader:
             readings.battery_soc = soc_val
             self._last_valid_soc = soc_val
         else:
-            # Use last known SOC to avoid charging logic seeing 0% during sensor gaps
-            readings.battery_soc = self._last_valid_soc
-            readings.battery_soc_unavailable = True
+            self._hold_battery_soc(readings)
 
         # EV power — sum all chargers if multi-charger (#193), else single sensor.
         # v1.6.9 also populates ``ev_power_per_charger`` so the flow calculator
@@ -2210,6 +2210,22 @@ class SensorReader:
         self._read_inverter_temperature(readings)
 
         return readings
+
+    def _hold_battery_soc(self, readings: PowerReadings) -> None:
+        """The SOC sensor is dark this cycle: hold the last value read so the
+        charging logic never sees 0 % during a sensor gap.
+
+        (#875) Before the first successful read there is nothing to hold.
+        The field stays 0.0 for the callers that need a number, and
+        ``battery_soc_known`` says it is not a measurement — the charger
+        path then treats the pack as UNKNOWN (neither a source nor a
+        blocker) instead of as empty, which is what a held 0.0 used to
+        say for up to a few minutes after every restart."""
+        readings.battery_soc_unavailable = True
+        if self._last_valid_soc is None:
+            readings.battery_soc_known = False
+            return
+        readings.battery_soc = self._last_valid_soc
 
     def _read_battery_temperature(self, readings) -> None:
         """(#564) Fill battery_temperature honestly.
@@ -3039,17 +3055,20 @@ class SensorReader:
                 self.config.battery_power_sensor, "battery"
             )
 
-        # Battery SOC — use allow_none to distinguish 0% from unavailable
+        # Battery SOC — use allow_none to distinguish 0% from unavailable.
+        # (#875) No sensor configured is the same "nothing measured" as a
+        # dark one — the Energy-Dashboard path already says so; this path
+        # published 0.0 as a measurement.
+        soc_val = None
         if self.config.battery_soc_sensor:
             soc_val = self._read_sensor(
                 self.config.battery_soc_sensor, "battery_soc", allow_none=True,
             )
-            if soc_val is not None:
-                readings.battery_soc = soc_val
-                self._last_valid_soc = soc_val
-            else:
-                readings.battery_soc = self._last_valid_soc
-                readings.battery_soc_unavailable = True
+        if soc_val is not None:
+            readings.battery_soc = soc_val
+            self._last_valid_soc = soc_val
+        else:
+            self._hold_battery_soc(readings)
 
         # Battery temperature (#564: configured sensor, else device sibling)
         self._read_battery_temperature(readings)
