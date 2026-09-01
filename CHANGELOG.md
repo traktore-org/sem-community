@@ -11,7 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [Unreleased] — 2.1.0-beta.3
+# [Unreleased] — 2.1.0-beta.4
+
+- 🔌 **JuiceBox was driven through its *offline* current limit, not the live
+  one** (#886, reported by @Azlinon on 2.1.0-beta.3). Auto-detection bound
+  `number.juicebox_max_current_offline_wanted` as the current control — the
+  register the charger honours only when it has lost its server, and a
+  limited-write one at that — where the *online* twin belongs. The matcher took
+  the last `number.juicebox*` it saw, so entity ordering silently decided which
+  connection mode SEM commanded. SEM now refuses any `*_offline_*` register as
+  a charger's current control across every brand, swapping to the online twin;
+  installs that already adopted the offline binding self-heal to the online one
+  on upgrade. Root-caused as a recurring class (a mode-qualified fallback bound
+  as the live control surface) and guarded at the single discovery choke point,
+  so the next brand cannot repeat it.
+
+# [2.1.0-beta.3] — 31.08.2026
 
 - ☀️ **"This provider does not publish this horizon" was told to everyone**
   (#884, reported by @ArneGollin1987 on beta.1). The battery card's
