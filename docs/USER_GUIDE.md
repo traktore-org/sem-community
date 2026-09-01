@@ -143,7 +143,7 @@ See [Multi-Device Guide](MULTI_DEVICE_GUIDE.md) for examples.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `load_management_enabled` | false | Enable peak load management |
+| `load_management_enabled` | false | Enable peak load management — **off on a fresh install**; SEM never sheds a circuit you did not ask it to defend |
 | `peak_limit_unlimited` | false | **No grid limit** — turn peak management off entirely |
 | `target_peak_limit` | 5 kW | Maximum grid power SEM stays under (1–80 kW) |
 | `warning_peak_level` | 90% of target | Warning threshold — must be **below** the target (1–80 kW) |
@@ -1085,7 +1085,7 @@ Live values: `peak_slot_allowed_w` (what the rest of the slot may average) and
 `peak_slot_used_kwh` (what it has taken so far), both on the load-management
 surface.
 
-Enable via **Enable Load Management** on the Configuration tab. Requires controllable devices with switch entities. For the target/warning/emergency range, the Control-tab slider, and the **No grid limit** opt-out, see [Load Management Settings](#load-management-settings).
+Off on a fresh install: SEM sheds nothing until you enable it. Enable via **Enable Load Management** on the Configuration tab — the toggle and the target limit sit together in the Load Management section (reach it from the Setup overview's *Load management* chip; the section is not hidden behind *Advanced*). Requires controllable devices with switch entities. For the target/warning/emergency range, the Control-tab slider, and the **No grid limit** opt-out, see [Load Management Settings](#load-management-settings).
 
 ---
 

@@ -175,7 +175,8 @@ For detailed explanations of all settings, see the [Setup Guide](docs/SETUP_GUID
 
 ### Step 6: Load Management (Optional)
 
-Enable peak load management if your utility bills based on peak demand. Tune
+Off on a fresh install. Enable peak load management on the Configuration tab
+if your utility bills based on peak demand. Tune
 the target peak limit from the Control tab's slider (1–80 kW, or drag to
 **Uncapped** if your connection has no limit worth defending) — warning (90%)
 and emergency (120%) are derived from it automatically and sit behind an

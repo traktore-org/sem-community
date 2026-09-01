@@ -54,6 +54,13 @@ const ESSENTIAL_CONTROLS = new Set([
     // Battery: the safety floor. Everything else in that section is a
     // sensor override that detection normally supplies.
     'battery_discharge_protection_enabled',
+    // (#897) Load management: the arm switch and the number it defends.
+    // The shedder switches off house circuits; hiding its on/off behind
+    // Advanced is how a first install shed a Span panel circuit by circuit
+    // at a 5 kW ceiling nobody chose (forum #30). Enabling it and setting
+    // the ceiling are one act in one place, so both are reachable here.
+    'load_management_enabled',
+    'target_peak_limit',
 ]);
 
 const ADV_KEY = 'sem_config_advanced_v1';
@@ -398,6 +405,9 @@ class SEMConfigCard extends SEMLitBase {
     // Cached options dict from the SEM entry — refreshed on entryId
     // lookup and after any save. Reads are synchronous in render().
     _options = {};
+    // (#897) Sections the user routed to from the Setup overview this
+    // session — shown in the default view even while unconfigured.
+    _revealed = new Set();
 
     async _refreshOptions() {
         if (!this._hass) return;
@@ -747,6 +757,12 @@ class SEMConfigCard extends SEMLitBase {
     }
 
     _openSection(id) {
+        // (#897) A Setup-overview chip routes here. In the default view the
+        // section filter shows essentials and configured subsystems only —
+        // which is exactly what an unconfigured optional one (load
+        // management off, no heat pump yet) is not, so the route led to a
+        // section that was not rendered. What the user asked to see is shown.
+        this._revealed = new Set([...this._revealed, id]);
         this._collapsed = { ...this._collapsed, [id]: false };
         this.requestUpdate();
     }
@@ -2191,7 +2207,7 @@ class SEMConfigCard extends SEMLitBase {
                 <span class="readonly-value">${this._val('load_management_status') || '—'}</span>
             </div>
             ${this._renderOptionToggle('load_management_enabled', 'config_lm_enabled',
-                opts, 'config_help_lm_enabled', true)}
+                opts, 'config_help_lm_enabled', false)}
             ${this._renderOptionToggle('peak_limit_unlimited', 'config_lm_unlimited',
                 opts, 'config_help_lm_unlimited', false)}
             ${unlimited ? html`
@@ -3411,7 +3427,8 @@ class SEMConfigCard extends SEMLitBase {
                         // visible either way — hiding something someone set up
                         // is not simplification, it is losing their work.
                         .filter(s => this._advanced || ESSENTIAL_SECTIONS.has(s.id)
-                                     || this._sectionConfigured(s.id))
+                                     || this._sectionConfigured(s.id)
+                                     || this._revealed.has(s.id))
                         .map(s => this._renderSection(s, renderers[s.id], T))}
                 </div>
             </ha-card>

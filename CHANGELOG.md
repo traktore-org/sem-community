@@ -13,6 +13,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🛡️ **A first install no longer sheds house circuits it was never told to
+  defend** (#895, #897 — forum report: a Span panel and a backup battery
+  switched off circuit by circuit, HA's own supply included). Two defects.
+  The #805 "monitor-only until you say otherwise" default reached the
+  surplus side but not the shedder: three readers each carried their own
+  `peak_only` literal, so emergency shedding still received every discovered
+  device as fair game. One resolver now answers all three, and a source
+  ratchet keeps the literals out. And load management itself was **on** by
+  default at a 5 kW ceiling nobody chose, while the User Guide said `false`
+  and the arm switch was hidden behind *Advanced* — the options wizard
+  re-armed it on any unrelated save. It is now **off on a fresh install**
+  (existing installs keep their own value), the enable toggle and the
+  target limit are in the default Config view side by side, and a Setup
+  overview chip routes to a section the default view actually shows.
+
 - 🔧 **The battery-night backfill button heals its entity id on upgrade**
   (#815 follow-up). `button.sem_backfill_battery_nights` is only honoured at
   first registration; an install that registered the button before that id

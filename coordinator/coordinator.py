@@ -38,6 +38,7 @@ from ..const import (
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_BATTERY_CAPACITY_KWH,
     DEFAULT_MAX_CHARGING_CURRENT,
+    DEFAULT_LOAD_MANAGEMENT_ENABLED,
     ED_RESOLVE_MAX_ATTEMPTS,
     ChargingState,
     ENTITY_OBSERVER_MODE_SWITCH,
@@ -1963,7 +1964,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
     async def async_initialize_load_management(self, config_entry: ConfigEntry) -> None:
         """Initialize load management after coordinator is set up."""
-        load_management_enabled = self.config.get("load_management_enabled", True)
+        # (#897) The constant, never a literal: a private fallback here kept
+        # building a shedder after the install default was lowered.
+        load_management_enabled = self.config.get(
+            "load_management_enabled", DEFAULT_LOAD_MANAGEMENT_ENABLED)
 
         _LOGGER.debug("async_initialize_load_management called: enabled=%s", load_management_enabled)
 
