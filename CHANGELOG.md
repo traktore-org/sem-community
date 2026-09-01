@@ -11,7 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [Unreleased] — 2.1.0-beta.5
+# [Unreleased]
+
+# [2.1.0-beta.5] — 01.09.2026
 
 - ☁️ **A passing cloud no longer hard-stops a solar charging session whenever
   electricity isn't cheap** (#893, reported by @DigitalOptics on 2.0.0). The
