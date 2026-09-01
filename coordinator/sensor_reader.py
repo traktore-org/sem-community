@@ -303,6 +303,16 @@ class SensorReader:
         self._prev_solar_w: Optional[float] = None
         self._prev_grid_raw_w: Optional[float] = None
         self._SOLAR_SWING_MIN_W: float = 500.0
+        # (#889) A vote is an OBSERVATION of the grid answering solar. A
+        # cycle in which the meter moved less than this share of the solar
+        # swing did not show that answer — the register is stale (polled
+        # Huawei modbus lands the inverter and meter reads in different
+        # cycles) or the swing went somewhere the voter cannot see — and
+        # casts nothing. ``(d_grid * d_solar) < 0`` is False at d_grid == 0,
+        # so without this every stale-meter cycle was a full-weight
+        # "normal" vote: four of them locked SEM convention on an
+        # HA-convention meter at confidence 1.00.
+        self._SOLAR_GRID_ANSWER_MIN_RATIO: float = 0.25
         self._SOLAR_SIGN_MIN_SAMPLES: int = 4
         self._SOLAR_SIGN_MIN_CONFIDENCE: float = 0.80
         # Battery-quiet filter: a charging/discharging battery intercepts
@@ -1312,7 +1322,10 @@ class SensorReader:
           * grid falls as solar rises  → +import meter (HA)  → negate
 
         Only large solar swings (``_SOLAR_SWING_MIN_W``) vote, so the
-        solar-driven component of Δgrid dominates home-load jitter. Locks
+        solar-driven component of Δgrid dominates home-load jitter — and
+        only cycles in which the meter ANSWERED the swing (#889): a dark
+        steering input or a grid delta below ``_SOLAR_GRID_ANSWER_MIN_RATIO``
+        of the solar delta is not an observation and casts nothing. Locks
         the sign before the counter path for solar installs, and can
         OVERRIDE a wrong counter-derived lock once it is highly confident
         and sustained — a correctly-signed install computes the same sign
@@ -1326,6 +1339,17 @@ class SensorReader:
         if not isinstance(solar, (int, float)) or isinstance(solar, bool):
             return
         if not isinstance(grid_raw, (int, float)) or isinstance(grid_raw, bool):
+            return
+
+        # (#889) A dark steering input this cycle reads as 0.0 W (#818), so
+        # this cycle is neither a sample nor a baseline: the delta INTO it
+        # and the delta OUT of it are both artefacts (a solar dropout looks
+        # like a ±4 kW swing; a dark battery looks quiet while it absorbs
+        # the swing). Drop the baseline; the next clean cycle re-arms it.
+        if any(self._input_dark.values()):
+            self._prev_solar_w = None
+            self._prev_grid_raw_w = None
+            self._prev_batt_w = None
             return
 
         batt = getattr(readings, "battery_power", None)
@@ -1353,6 +1377,14 @@ class SensorReader:
         if batt_q >= self._SOLAR_BATTERY_QUIET_W or (
             prev_batt_q is not None and prev_batt_q >= self._SOLAR_BATTERY_QUIET_W
         ):
+            return
+        # (#889) The grid must have ANSWERED the swing. A meter that did not
+        # move (a stale polled register) or moved only marginally has shown
+        # nothing about its sign; the skewed-poll cycle that carries the
+        # answer arrives with Δsolar = 0 and abstains on the swing gate.
+        # No vote is the right verdict — the counter voter is not gated on
+        # a lock that was never made.
+        if abs(d_grid) < self._SOLAR_GRID_ANSWER_MIN_RATIO * abs(d_solar):
             return
 
         # product > 0 → grid co-moves with solar → SEM (no negate);

@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔧 **The solar grid-sign voter only counts cycles in which the meter
+  answered** (#889). On a polled inverter (Huawei modbus on the test rig) the
+  inverter and meter registers land in different 10-s cycles, and a solar
+  `unavailable` reads as 0 W — both look like a big solar swing with the grid
+  standing still. Each such cycle was a full-weight "normal" vote; four of
+  them locked SEM convention on an HA-convention meter at confidence 1.00,
+  and the counter voter never got a turn. A cycle with a dark steering input
+  is now neither a sample nor a baseline, and a swing the meter did not
+  answer (moved less than a quarter of it) casts nothing. Installs that
+  locked the wrong sign on a stale cycle: tap **Reset sign detection** once.
 - 🔧 **The battery-night backfill button heals its entity id on upgrade**
   (#815 follow-up). `button.sem_backfill_battery_nights` is only honoured at
   first registration; an install that registered the button before that id
