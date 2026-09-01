@@ -3260,6 +3260,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # the ceiling on what chargers AND Tier-1 loads may take
                 # between them, and the cap on any single reservation.
                 from .surplus_controller import (
+                    surplus_reserved_w as _surplus_reserved_w,
                     tier1_battery_reserved_w as _tier1_reserved_w,
                 )
                 from ..consts.core import (
@@ -3277,6 +3278,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 _tier1_devices = (
                     _sc.get_devices_sorted() if _sc is not None else ()
                 )
+                # (#885) The sun a senior load may still claim. Capped at the
+                # real headroom so a reservation can never exceed what the
+                # roof is producing; an active load is already inside
+                # ``home_consumption_power`` and so is already subtracted.
+                _solar_headroom_w = max(0.0, float(
+                    getattr(power, "solar_power", 0.0) or 0.0)
+                    - float(getattr(power, "home_consumption_power", 0.0) or 0.0))
                 # v1.6.9: per-charger effective states are captured below
                 # so the notification dispatch can fire per charger.
                 # Reset before the loop so a removed charger's stale
@@ -3607,7 +3615,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             # per-charger dict that never carries the key and
                             # falls back to 32 A, over-crediting the cascade.
                             hardware_max_a=getattr(adapter, "max_current_a", None),
-                            solar_committed_w=self._solar_committed_w_per_cycle,
+                            # (#885) Solar in the ONE device order too. The
+                            # accumulator carries what higher-priority
+                            # CHARGERS took; the reservation carries what
+                            # higher-ranked LOADS are about to take. Without
+                            # the second term the load pass simply ran later
+                            # in the cycle, so a junior charger spent the sun
+                            # before a senior load was ever asked.
+                            solar_committed_w=(
+                                float(self._solar_committed_w_per_cycle)
+                                + _surplus_reserved_w(
+                                    _tier1_devices,
+                                    below_priority=self._ev_priority_for(cid),
+                                    available_w=_solar_headroom_w,
+                                )
+                            ),
                             # (#885) One pack, spent in the ONE device
                             # order. Two things are already claimed before
                             # this charger may touch the battery: what
@@ -3618,6 +3640,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             # evaluated later in the cycle, so every
                             # charger drained the pack first regardless of
                             # the slot the user dragged it to.
+                            # (#864/#885) the slot cascade, now per-charger
+                            # for the same reason as its two siblings.
+                            peak_committed_w=float(
+                                self._peak_committed_w_per_cycle),
                             assist_committed_w=(
                                 float(self._assist_committed_w_per_cycle)
                                 + _tier1_reserved_w(
@@ -9854,8 +9880,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             config=self.config,
             peak_state=_peak_state,
             peak_slot_allowed_w=self._peak_slot_allowed_w,
-            peak_committed_w=float(
-                getattr(self, "_peak_committed_w_per_cycle", 0.0) or 0.0),
             is_night=self.time_manager.is_night_mode(),
             tariff_level=tariff_level,
             forecast_remaining_kwh=float(forecast_remaining),

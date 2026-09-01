@@ -75,6 +75,7 @@ def build_charger_view(
     plan: PlanVerdict = NO_OPINION,
     solar_committed_w: float = 0.0,
     assist_committed_w: float = 0.0,
+    peak_committed_w: float = 0.0,
     night_deliverable_kwh: float = float("inf"),
     soc_ceiling_reached: bool = False,
     ev_priority: int = 999,
@@ -117,6 +118,8 @@ def build_charger_view(
             the #247 tariff planner, which speaks through the same
             type). Defaults to no opinion, meaning "behave as though no
             planner exists".
+        peak_committed_w: Watts higher-priority chargers have already
+            claimed against this 15-minute peak slot (#864).
         assist_committed_w: Battery assist already committed this cycle —
             higher-priority chargers' draws plus any pack watts
             reserved for Tier-1 loads that outrank this charger
@@ -203,9 +206,18 @@ def build_charger_view(
         peak_state=getattr(fleet_state, "peak_state", "normal"),
         # (#864) so does the slot-budget allowance.
         peak_slot_allowed_w=getattr(fleet_state, "peak_slot_allowed_w", None),
-        # (#864) what higher-priority chargers already claimed this cycle
-        peak_committed_w=float(
-            getattr(fleet_state, "peak_committed_w", 0.0) or 0.0),
+        # (#864/#885) what higher-priority chargers already claimed this
+        # cycle — PER-CHARGER, like its two siblings above. It rode the
+        # frozen ``fleet_state`` until #885: that object is built once,
+        # BEFORE the loop resets the accumulator and runs, so every charger
+        # read the same stale total and the cascade the peak guard depends
+        # on never happened. Two chargers connecting in the same cycle each
+        # saw 0 committed and both claimed the whole slot; a SOLO charger
+        # read its own previous commitment as a rival's and either floored
+        # itself or oscillated. ``test_874_peak_guard_is_fleet_wide``
+        # hand-injects this value into the view, so it proved the clamp
+        # correct and could not see that nothing produced its input.
+        peak_committed_w=float(peak_committed_w),
         auto_start_soc=float(config.get("battery_auto_start_soc", 90)),
         buffer_soc=float(config.get("battery_buffer_soc", 70)),
         priority_soc=float(config.get("battery_priority_soc", 30)),

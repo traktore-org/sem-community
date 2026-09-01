@@ -282,6 +282,13 @@ def battery_assist_budget_w(view: ChargerView) -> float:
 
     Thin sum over :func:`_battery_assist_split`; see that function for
     the gates, the #545 full-potential rationale and the #878 floor.
+
+    Production reads the SPLIT (it needs the battery share separately, to
+    stamp ``ChargerDecision.assist_w``); this total-only form is what the
+    test suite and the docs refer to. It carries no logic of its own, so it
+    cannot drift from the split — and
+    ``test_the_split_sums_to_the_public_budget`` pins that identity so a
+    future edit cannot make it.
     """
     surplus, assist = _battery_assist_split(view)
     return surplus + assist

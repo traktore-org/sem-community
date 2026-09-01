@@ -148,7 +148,7 @@ idle while the EV grid-charged.
 > exception — they draw *below* the Buffer SoC, a band the car's assist floor
 > forbids it from entering, so they reserve nothing against a car and a car
 > never eats their overnight window. See
-> [LOAD_PRIORITY.md](LOAD_PRIORITY.md#spending-the-battery-follows-the-same-list-too-21-885).
+> [LOAD_PRIORITY.md](LOAD_PRIORITY.md#spending-the-battery--and-the-sun--follows-the-same-list-too-21-885).
 
 Active in **Solar only** and **Min + Solar** (gated by the Solar Gate + Buffer SoC in both). Not in **Always (max)** — that mode takes everything from anywhere by definition. Pure amps — SEM issues no battery command; the inverter's own self-consumption does the discharge.
 

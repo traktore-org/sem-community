@@ -27,6 +27,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   buffer changes nothing, and with forecast-led spending off no floor is
   computed at all — the buffer decides exactly as before.
 
+- ⚡ **The peak-slot guard was only working by coincidence** (#864/#874, found
+  by audit). The "what have higher-priority chargers already claimed" value
+  rode a state object built once per cycle — *before* the charger loop resets
+  and runs — so every charger read the same stale total and the cascade never
+  happened. Two chargers connecting in the same cycle each saw zero committed
+  and both claimed the whole slot, reproducing the original #874 overshoot;
+  a **single** charger read its own previous commitment as a rival's and
+  either pinned itself a step low or oscillated between offers. It looked
+  correct in steady two-charger tests because both chargers end up pinned to
+  the guard's floor either way, and the unit test hand-fed the value the
+  coordinator never actually produced. It is now passed per charger like its
+  two siblings. Also fixes `peak_committed_w` being declared **twice** on the
+  same dataclass, where the second silently won and the first had captured
+  the documentation belonging to a different field.
+
+- ☀️ **Solar follows the device order too** (#885). Same defect as the battery
+  half, on the bigger resource: nothing carried a load's claim across the
+  charger/load boundary, because the load pass simply runs later in the cycle
+  than the charger loop. A hot water tank at the top of your list could be
+  left running on grid because a charger at the bottom had already spent the
+  sun. Loads that outrank a charger now have their share set aside before it
+  is offered anything. **Note the visible change**: if you have loads dragged
+  above a charger, that charger will now be offered less solar than before —
+  which is what the list was always supposed to mean.
+
 - 🔋 **One battery, spent in the order you dragged** (#885). Two subsystems
   each held a private copy of `Battery assist max power` and each treated it
   as its own full budget, so a 5 kW pack could be offered 5 kW to the cars

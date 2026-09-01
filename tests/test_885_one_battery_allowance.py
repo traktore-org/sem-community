@@ -168,13 +168,25 @@ class TestIndividualDevicesStopAtTheFloor:
 # ---------------------------------------------------------------------------
 
 def _load(priority, *, tier1=False, tier2=False, active=False,
-          rated=1200.0, min_w=800.0, name="load"):
-    """A surplus device as the reservation walk sees it."""
+          rated=1200.0, min_w=800.0, name="load", batt_w=0.0,
+          mode="surplus", capped=False):
+    """A surplus device as the reservation walk sees it.
+
+    ``batt_w`` is ``_tier1_batt_w`` — the watts the last surplus walk measured
+    the PACK funding for this device. Only meaningful while it is running.
+    """
     from types import SimpleNamespace
     return SimpleNamespace(
         name=name, priority=priority, is_active=active,
         battery_assist_enabled=tier1, battery_eligible_overnight=tier2,
         rated_power=rated, min_power_threshold=min_w,
+        _tier1_batt_w=batt_w, control_mode=mode,
+        daily_max_runtime_reached=capped, _external_off_until=None,
+        # If the walk ever calls this, the dwell clock gets started from the
+        # wrong place — see _would_start. Blow up loudly instead.
+        can_activate=lambda: (_ for _ in ()).throw(
+            AssertionError("can_activate() must not be called by the "
+                           "reservation walk — it mutates _surplus_since")),
     )
 
 
@@ -270,12 +282,37 @@ class TestOnlyOptedInDevicesReserve:
         both = _load(1, tier1=True, tier2=True, rated=1500.0)
         assert self._reserve([both]) == 1500.0
 
-    def test_an_already_running_load_reserves_nothing(self):
-        """Its draw is already inside ``home_consumption_power``, so it has
-        ALREADY reduced the surplus every charger sees. Reserving again
-        bills the same watts twice."""
-        running = _load(1, tier1=True, active=True, rated=1200.0)
+    def test_a_running_battery_funded_load_keeps_its_claim(self):
+        """REGRESSION — the flip-flop.
+
+        The first cut skipped active devices, reasoning their draw was
+        already inside ``home_consumption_power``. True of the SOLAR ledger,
+        false of the battery one: ``battery_assist_potential_w`` is a pure
+        SOC number and does not shrink because a load is drawing from the
+        pack. So the load started, stopped reserving, the charger's ceiling
+        sprang back to the full allowance, the load's own budget went to
+        zero and it was commanded off — then reserved again next cycle.
+
+        A running battery-funded load must keep exactly the claim the walk
+        measured for it.
+        """
+        running = _load(1, tier1=True, active=True, rated=1200.0, batt_w=900.0)
+        assert self._reserve([running]) == 900.0, (
+            "an active battery-funded load stopped reserving — it will be "
+            "switched off next cycle and flap"
+        )
+
+    def test_a_running_solar_funded_load_reserves_nothing(self):
+        """The other half: measured 0 from the pack means it needs nothing
+        from the pack, and must not hold any back from the car."""
+        running = _load(1, tier1=True, active=True, rated=1200.0, batt_w=0.0)
         assert self._reserve([running]) == 0.0
+
+    def test_the_claim_is_measured_not_rated_once_running(self):
+        """A 1200 W device actually drawing 300 W from the pack reserves 300,
+        not its nameplate."""
+        running = _load(1, tier1=True, active=True, rated=1200.0, batt_w=300.0)
+        assert self._reserve([running]) == 300.0
 
     def test_the_threshold_stands_in_when_no_rating_is_known(self):
         unrated = _load(1, tier1=True, rated=0.0, min_w=800.0)
@@ -452,3 +489,158 @@ class TestTheCoordinatorSpendsItInOrder:
         window = src[i:i + 500]
         assert "_assist_committed_w_per_cycle" in window
         assert "_tier1_reserved_w(" in window
+
+
+# ---------------------------------------------------------------------------
+# The SOLAR axis — the same ordering defect, the other resource
+# ---------------------------------------------------------------------------
+
+class TestSolarFollowsTheOrderToo:
+    """The battery axis was only half of it. ``solar_committed_w`` cascaded
+    from charger to charger, but nothing carried a LOAD's claim across the
+    charger/load boundary: the load pass simply runs later in the cycle than
+    the per-charger loop, so a prio-9 charger spent the sun before a prio-1
+    tank was consulted and the tank then ran on grid.
+    """
+
+    def _reserve(self, devices, priority=5, available=4000.0):
+        from custom_components.solar_energy_management.coordinator.surplus_controller import (
+            surplus_reserved_w,
+        )
+        return surplus_reserved_w(
+            devices, below_priority=priority, available_w=available,
+        )
+
+    def test_a_senior_load_reserves_the_sun(self):
+        assert self._reserve([_load(1, rated=2000.0)]) == 2000.0
+
+    def test_it_does_not_need_the_battery_opt_in(self):
+        """Solar is not the battery. Any load that would switch on competes
+        for it, whatever its battery setting says."""
+        assert self._reserve([_load(1, tier1=False, rated=2000.0)]) == 2000.0
+
+    def test_a_junior_load_reserves_nothing(self):
+        assert self._reserve([_load(9, rated=2000.0)]) == 0.0
+
+    def test_a_running_load_reserves_nothing_here(self):
+        """OPPOSITE of the battery axis, and the reason matters: a running
+        device is already inside ``home_consumption_power``, and a charger's
+        surplus is ``solar - home - committed`` — so it has ALREADY shrunk
+        what every charger sees. Reserving again double-counts it."""
+        assert self._reserve([_load(1, rated=2000.0, active=True)]) == 0.0
+
+    def test_a_peak_only_device_reserves_nothing(self):
+        """It never proactively switches on, so it is not about to take
+        anything."""
+        assert self._reserve([_load(1, rated=2000.0, mode="peak_only")]) == 0.0
+
+    def test_a_capped_out_device_reserves_nothing(self):
+        """Done for today — it is not about to take anything."""
+        assert self._reserve([_load(1, rated=2000.0, capped=True)]) == 0.0
+
+    def test_the_walk_never_calls_can_activate(self):
+        """``can_activate()`` looks like a predicate and is not: its
+        sustained-surplus branch STARTS the dwell clock
+        (``_surplus_since = datetime.now()``). This walk runs once per
+        charger, before the load pass, so calling it would start that clock
+        when a CHARGER asked about the device rather than when surplus
+        actually appeared — letting loads activate ahead of their own
+        debounce, several times a cycle. The fake raises if it is touched.
+        """
+        self._reserve([_load(1, rated=2000.0)])          # must not raise
+        self._reserve([_load(9, rated=2000.0)])
+        self._reserve([_load(1, rated=2000.0, active=True)])
+
+    def test_the_reservation_is_capped_by_real_headroom(self):
+        """A reservation can never exceed what the roof is producing."""
+        assert self._reserve([_load(1, rated=9000.0)], available=4000.0) == 4000.0
+
+    def test_no_headroom_reserves_nothing(self):
+        assert self._reserve([_load(1, rated=2000.0)], available=0.0) == 0.0
+
+
+class TestTheTwoAxesShareOneWalk:
+    """One implementation of "who outranks this charger". Two copies would
+    drift, which is the class this branch already had to remove once (#282)."""
+
+    def test_both_reservations_go_through_the_same_walker(self):
+        import inspect
+        from custom_components.solar_energy_management.coordinator import (
+            surplus_controller as SC,
+        )
+        for fn in (SC.tier1_battery_reserved_w, SC.surplus_reserved_w):
+            src = inspect.getsource(fn)
+            assert "_reserved_for_seniors(" in src, (
+                f"{fn.__name__} walks the device list itself instead of "
+                f"sharing the one walker"
+            )
+
+    def test_the_axes_disagree_about_active_devices_on_purpose(self):
+        """Pin the asymmetry so a future 'cleanup' cannot quietly unify it:
+        the battery ledger has no home_w term, the solar ledger does."""
+        running = _load(1, tier1=True, active=True, rated=1200.0, batt_w=900.0)
+        from custom_components.solar_energy_management.coordinator.surplus_controller import (
+            surplus_reserved_w, tier1_battery_reserved_w,
+        )
+        assert tier1_battery_reserved_w(
+            [running], below_priority=5, allowance_w=5000.0) == 900.0
+        assert surplus_reserved_w(
+            [running], below_priority=5, available_w=5000.0) == 0.0
+
+
+class TestThePeakSlotCascadeIsPerCharger:
+    """#864/#874. The peak guard had the identical frozen-state defect this
+    branch fixed for ``assist_committed_w``: the value was read off the
+    once-per-cycle ``FleetCycleState``, built BEFORE the loop resets the
+    accumulator and runs, so every charger saw the same stale total.
+
+    ``test_874_peak_guard_is_fleet_wide`` hand-injects the value into the
+    view, so it proved the clamp correct and could not see that nothing
+    produced its input.
+    """
+
+    def test_build_charger_view_takes_it_per_call(self):
+        import inspect
+        from custom_components.solar_energy_management.coordinator.build_view import (
+            build_charger_view,
+        )
+        params = inspect.signature(build_charger_view).parameters
+        for name in ("solar_committed_w", "assist_committed_w", "peak_committed_w"):
+            assert name in params, (
+                f"{name} is not a per-charger kwarg — it can only come from "
+                f"the frozen cycle state, where it cannot cascade"
+            )
+
+    def test_it_is_no_longer_read_off_the_frozen_state(self):
+        import inspect
+        from custom_components.solar_energy_management.coordinator import (
+            build_view as BV,
+        )
+        src = inspect.getsource(BV.build_charger_view)
+        assert 'getattr(fleet_state, "peak_committed_w"' not in src, (
+            "back on the frozen cycle state — built once per cycle, before "
+            "the loop, so the cascade cannot happen"
+        )
+
+    def test_the_loop_threads_it(self):
+        import inspect
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        src = inspect.getsource(SEMCoordinator._async_update_data)
+        assert "peak_committed_w=float(" in src, (
+            "the per-charger loop never passes it, so every charger sees 0"
+        )
+
+    def test_the_field_is_declared_once(self):
+        """It was declared TWICE on FleetContext; the second silently won and
+        the first had captured the docstring belonging to
+        ``peak_slot_allowed_w``, leaving that field undocumented."""
+        import inspect
+        from custom_components.solar_energy_management.coordinator import (
+            charger_types as CT,
+        )
+        src = inspect.getsource(CT.FleetContext)
+        assert src.count("peak_committed_w: float") == 1, (
+            "declared more than once — the later declaration silently wins"
+        )

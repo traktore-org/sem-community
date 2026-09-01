@@ -1632,7 +1632,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 # Defaults to the install-wide answer; can only restrict.
                 vol.Optional(
                     "ev_battery_may_assist",
-                    default=True,
+                    description={"suggested_value": True},
                 ): selector.BooleanSelector(),
                 # Per-charger night charging settings (#193)
                 vol.Optional(
@@ -1838,9 +1838,15 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 # Defaults to the install-wide answer — this can only
                 # RESTRICT, never override a battery the user has already
                 # declared off-limits to cars.
+                # ``description=`` not ``default=``: a voluptuous default is
+                # PERSISTED on submit, which would bake an explicit True into
+                # every charger the first time anyone opened this page and
+                # quietly destroy the "unset inherits the install answer"
+                # contract in _battery_may_assist_ev.
                 vol.Optional(
                     "ev_battery_may_assist",
-                    default=charger.get("ev_battery_may_assist", True),
+                    description={
+                        "suggested_value": charger.get("ev_battery_may_assist", True)},
                 ): selector.BooleanSelector(),
                 # Per-charger night charging settings (#193)
                 vol.Optional(

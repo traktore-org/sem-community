@@ -73,20 +73,40 @@ def tier1_battery_reserved_w(devices, *, below_priority, allowance_w) -> float:
 
     Deliberately narrow about who counts:
 
-    * **Tier 1 only** (``battery_assist_enabled``). Tier 2
-      (``battery_eligible_overnight``) draws BELOW the buffer, down to the
-      hard Reserve — a band the charger's floor
-      (``max(buffer, dynamic_floor)``) forbids it from entering. The two
-      are not competing for the same watts, so a "finish overnight from
-      battery" load must reserve NOTHING against a charger.
+    * **Tier 1 only** (``battery_assist_enabled``). A "finish overnight from
+      battery" load (``battery_eligible_overnight``) reserves NOTHING here.
+
+      Two things make that safe, and neither is the one first written down.
+      It is NOT that the SOC bands cannot overlap: ``_tier2_overnight_eligible``
+      gates only on the opt-in and ``soc > reserve``, with no upper bound tying
+      it below the buffer. What actually separates them is
+      (a) **time** — Tier 2 runs in the overnight pass while the charger's
+      Zone 3/4 assist exists only in ``_decide_day``, and ``decide`` dispatches
+      night and day exclusively; and (b) **ledger** — a Tier-2 draw never
+      decrements ``_tier1_budget_left``, so it is not spending this allowance
+      in the first place.
+
+      Recorded precisely because the plausible-sounding reason is the wrong
+      one: if someone later gives Tier 2 an upper SOC gate, or starts billing
+      it against this budget, the invariant this comment protects moves.
     * **Not opted in, not counted.** The default is off for both flags; a
       load nobody enrolled must never push a car onto the grid.
     * **Strictly higher rank.** Equal or lower priority yields to the
       charger, which is the whole point of the ordering.
-    * **Not already running.** An active device's draw is already inside
-      ``home_consumption_power``, so it has ALREADY reduced the surplus
-      every charger sees. Reserving for it again would bill the same watts
-      twice and starve the car for power nobody is going to take.
+    * **Already running — reserve what the PACK is actually funding.** The
+      first cut skipped active devices entirely, reasoning that their draw
+      is already inside ``home_consumption_power``. That is true of the
+      SOLAR ledger and false of the battery one, which is the ledger this
+      function exists to ration: ``battery_assist_potential_w`` is a pure
+      SOC number and does not shrink because a load is drawing from the
+      pack. Skipping them flip-flopped — the load starts, stops reserving,
+      the charger's ceiling springs back to the full allowance, the load's
+      own budget goes to zero and it is commanded off, whereupon it
+      reserves again. So an active device reserves ``_tier1_batt_w``: the
+      watts the walk measured the pack funding for it last cycle. A
+      solar-funded load records 0 and correctly reserves nothing; a
+      battery-funded one keeps exactly its claim. Measured, not
+      re-derived — the same rule ``ChargerDecision.assist_w`` follows.
 
     The claim itself is an ESTIMATE — the device's learned ``rated_power``
     where it has one, else the threshold it needs to switch on at all. A
@@ -104,32 +124,135 @@ def tier1_battery_reserved_w(devices, *, below_priority, allowance_w) -> float:
     Returns:
         Watts to withhold from this charger, ``0.0`` if nothing outranks it.
     """
+    return _reserved_for_seniors(
+        devices, below_priority=below_priority, cap_w=allowance_w,
+        axis="battery",
+    )
+
+
+def surplus_reserved_w(devices, *, below_priority, available_w) -> float:
+    """(#885) SOLAR watts claimed by loads that OUTRANK a charger.
+
+    The battery axis was only half the problem. ``solar_committed_w`` cascades
+    from charger to charger, but nothing carried a LOAD's claim across the
+    charger/load boundary — the load pass simply runs later in the cycle
+    (``_surplus_controller.update``) than the per-charger loop, so a prio-9
+    charger spent the sun before a prio-1 hot water tank was ever consulted,
+    and the tank then ran on grid. The drag list decided nothing.
+
+    Same fix, same seam: set aside what higher-ranked loads will take before a
+    charger is offered the surplus.
+
+    **The ``is_active`` rule is the OPPOSITE of the battery axis, and for a
+    real reason.** A running device's draw is already inside
+    ``home_consumption_power``, and the charger's surplus is
+    ``solar - home - committed`` — so an active load has ALREADY reduced what
+    every charger sees. Reserving for it again would bill the same watts
+    twice. The battery ceiling has no such term: it is a pure SOC number, so
+    there an active load must keep reserving. One walk, two axes, opposite
+    rules — stated here because the asymmetry looks like a bug until you know
+    which ledger each one is protecting.
+    """
+    return _reserved_for_seniors(
+        devices, below_priority=below_priority, cap_w=available_w,
+        axis="solar",
+    )
+
+
+def _reserved_for_seniors(devices, *, below_priority, cap_w, axis) -> float:
+    """The shared priority walk behind both reservations.
+
+    ONE implementation on purpose: two copies of "who outranks this charger"
+    would drift, and drifting duplicates of a single computed value are the
+    class this branch already had to remove once (#282).
+    """
     try:
         rank = int(below_priority)
     except (TypeError, ValueError):
         return 0.0
-    cap = max(0.0, float(allowance_w or 0.0))
+    cap = max(0.0, float(cap_w or 0.0))
     if cap <= 0.0:
         return 0.0
 
     reserved = 0.0
     for device in devices or ():
-        if not getattr(device, "battery_assist_enabled", False):
-            continue
-        if getattr(device, "is_active", False):
-            continue
         try:
             if int(getattr(device, "priority", 99)) >= rank:
                 continue
         except (TypeError, ValueError):
             continue
-        claim = float(getattr(device, "rated_power", 0.0) or 0.0)
-        if claim <= 0.0:
-            claim = float(getattr(device, "min_power_threshold", 0.0) or 0.0)
+        active = bool(getattr(device, "is_active", False))
+
+        if axis == "battery":
+            if not getattr(device, "battery_assist_enabled", False):
+                continue
+            if active:
+                # Running: reserve the MEASURED pack draw, not a rated guess.
+                # 0.0 means the walk funded it from solar — it needs nothing
+                # from the battery and must not hold any back.
+                claim = float(getattr(device, "_tier1_batt_w", 0.0) or 0.0)
+            else:
+                claim = _rated_claim(device)
+        else:
+            # Solar. An active device is already inside ``home_w`` and has
+            # therefore already shrunk every charger's surplus — reserving
+            # again would double-count it.
+            if active:
+                continue
+            # Only a device the allocator would actually switch on competes:
+            # ``peak_only`` never proactively starts, and one that cannot
+            # activate (cap reached, anti-cycle, unmet dependency) is not
+            # about to take anything.
+            mode = getattr(device, "control_mode", None)
+            if getattr(mode, "value", mode) != "surplus":
+                continue
+            if not _would_start(device):
+                continue
+            claim = _rated_claim(device)
+
         reserved += max(0.0, claim)
         if reserved >= cap:
             return cap
     return min(cap, reserved)
+
+
+def _would_start(device) -> bool:
+    """Cheap, READ-ONLY "is this device even a candidate to switch on".
+
+    Deliberately NOT ``device.can_activate()``. That method looks like a
+    predicate and is not: its sustained-surplus branch **starts the dwell
+    clock** as a side effect (``self._surplus_since = datetime.now()``, see
+    ``devices/base.py``). This walk runs once per charger, before the load
+    pass, so calling it here would start that clock when a CHARGER asked
+    about the device rather than when real surplus appeared — letting loads
+    activate ahead of their own debounce, several times per cycle.
+
+    So: only the two conditions that are genuinely read-only and genuinely
+    mean "not today". Everything else (dependencies, anti-cycle, dwell) is
+    left to the load pass, which is the only place allowed to evaluate them.
+    Erring toward reserving is the safe direction here — it protects the
+    senior device, which is the whole point of the walk.
+    """
+    if getattr(device, "daily_max_runtime_reached", False):
+        return False
+    until = getattr(device, "_external_off_until", None)
+    if until is not None:
+        try:
+            from datetime import datetime as _dt
+            if _dt.now() < until:
+                return False
+        except (TypeError, ValueError):
+            pass
+    return True
+
+
+def _rated_claim(device) -> float:
+    """What a not-yet-running device is expected to draw: its learned rating,
+    else the threshold it needs to switch on at all."""
+    claim = float(getattr(device, "rated_power", 0.0) or 0.0)
+    if claim <= 0.0:
+        claim = float(getattr(device, "min_power_threshold", 0.0) or 0.0)
+    return claim
 
 
 def build_battery_tier_context(
@@ -1043,6 +1166,10 @@ class SurplusController:
             if intent.on and intent.source in ("solar", "tier1_battery"):
                 if intent.source == "tier1_battery":
                     batt = max(0.0, intent.power_w - max(0.0, remaining))
+                    # (#885) Record what the PACK actually funded for this
+                    # device, so the next cycle's charger loop reserves the
+                    # measured number instead of re-deriving it.
+                    device._tier1_batt_w = batt
                     self._tier1_budget_left = max(0.0, self._tier1_budget_left - batt)
                 remaining = max(0.0, remaining - intent.power_w)
         return intents
@@ -1241,6 +1368,12 @@ class SurplusController:
         # budget ONCE, not once per device. Decremented as each battery-assist
         # load draws from it, so N loads can't each claim the full budget.
         self._tier1_budget_left = self._batt_assist_budget_w
+        # (#885) Clear each device's recorded battery draw before the walk
+        # re-measures it. This is what the per-charger reservation reads for
+        # loads that are ALREADY RUNNING, so a stale value would keep
+        # reserving for a device that has since stopped.
+        for _d in self._devices.values():
+            _d._tier1_batt_w = 0.0
 
         # (desired-state) Delegate to the single declarative path when enabled
         # for actuation (``_use_desired_state``) OR whenever we're observing.
@@ -1476,6 +1609,7 @@ class SurplusController:
                         if headroom > 0:
                             shortfall = max(0.0, consumed - max(0.0, remaining_surplus))
                             assist = min(headroom, shortfall)
+                            device._tier1_batt_w = assist   # (#885)
                             self._tier1_budget_left = max(
                                 0.0, self._tier1_budget_left - assist)
                     remaining_surplus -= max(0.0, consumed - assist)
@@ -1509,6 +1643,7 @@ class SurplusController:
                     if headroom > 0:
                         shortfall = max(0.0, consumed - max(0.0, remaining_surplus))
                         assist = min(headroom, shortfall)
+                        device._tier1_batt_w = assist   # (#885)
                         self._tier1_budget_left = max(
                             0.0, self._tier1_budget_left - assist)
                 remaining_surplus -= max(0.0, consumed - assist)

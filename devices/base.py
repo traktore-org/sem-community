@@ -322,6 +322,12 @@ class ControllableDevice(ABC):
         # every cycle. Tier 2 expires on its own terms: the Reserve floor, the
         # daily target met, or the day rollover.
         self._batt_overnight_forced: bool = False
+        # (#885) Watts the PACK funded for this device on the last
+        # surplus walk. Re-measured every cycle by SurplusController;
+        # read by the per-charger reservation so a load that is already
+        # running keeps its claim on the battery instead of silently
+        # handing it to a lower-ranked charger.
+        self._tier1_batt_w: float = 0.0
         self._batt_overnight_forced_date: Optional[date] = None
 
         # (#744) Is ``rated_power`` a MEASUREMENT or a guess? The same
