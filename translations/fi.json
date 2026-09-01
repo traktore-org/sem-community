@@ -1510,6 +1510,7 @@
         "name": "{charger} Lataustila",
         "state": {
           "solar_only": "Vain aurinko",
+          "solar_plus_battery": "Aurinko + akku",
           "solar_plus_cheap": "Aurinko + halvimmat tunnit",
           "min_plus_solar": "Min + Aurinko",
           "always_max": "Aina (max)",

@@ -24,6 +24,13 @@ if TYPE_CHECKING:  # pragma: no cover — type-only
 # Order matters: it's the order shown in the HA select UI.
 EV_CHARGE_MODES: dict[str, str] = {
     "solar_only": "Solar only",
+    # (#885 matrix) The restored legacy ``pv`` mode: PV surplus plus the
+    # home battery, and nothing else. #277 collapsed the pv /
+    # self_consumption split and folded battery assist into
+    # ``min_plus_solar`` alone — so letting the pack help the car ALSO
+    # meant committing to a Min floor and grid backfill. Loads kept the
+    # distinction (#620); this gives chargers the same choice back.
+    "solar_plus_battery": "Solar + battery",
     "solar_plus_cheap": "Solar + cheapest hours",
     "min_plus_solar": "Min + Solar",
     "always_max": "Always (max)",
@@ -50,6 +57,7 @@ MODE_USES_SMART_NIGHT: frozenset[str] = frozenset({
 })
 MODE_TO_LEGACY_CHARGING_MODE: dict[str, str] = {
     "solar_only":       "auto",
+    "solar_plus_battery": "pv",   # (#885) literally the legacy mode it restores
     "solar_plus_cheap": "auto",
     "min_plus_solar":   "minpv",
     "always_max":       "now",
@@ -132,8 +140,11 @@ def mode_allows_night_charging(
     mode = effective_charge_mode_for(None, full_config, charger_cfg)  # type: ignore[arg-type]
     if mode in MODE_NIGHT_ALLOWED:
         return True
-    if mode != "solar_only":
+    if mode not in ("solar_only", "solar_plus_battery"):
         return False
+    # (#885) solar_plus_battery inherits solar_only's night contract
+    # wholesale — never grids unless THIS charger carries an explicit
+    # "At least" floor (#679: a seeded global default is not an opt-in).
     return solar_only_night_floor(charger_cfg) > 0.1
 
 

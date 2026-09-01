@@ -9967,7 +9967,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             from ..consts.ev_charge_modes import effective_charge_mode_for
             from .sensor_reader import parse_export_limited
 
-            solar_modes = ("solar_only", "min_plus_solar", "solar_plus_cheap")
+            solar_modes = ("solar_only", "solar_plus_battery",
+                           "min_plus_solar", "solar_plus_cheap")
             chargers = [
                 c for c in (self.config.get("ev_chargers") or [])
                 if isinstance(c, dict)
@@ -10297,7 +10298,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             canonical_strategy = EVBudgetStrategy.IDLE
         elif _primary_decision.intent is _CI.CHARGE_MAX:
             canonical_strategy = EVBudgetStrategy.NOW
-        elif _primary_view.fleet.is_night and _primary_view.mode != "solar_only":
+        elif (_primary_view.fleet.is_night
+              and _primary_view.mode not in (
+                  # (#885) solar_plus_battery shares solar_only's night
+                  # contract — its night decision is the same floor
+                  # top-up or idle, never the MIN_PV night lane.
+                  "solar_only", "solar_plus_battery")):
             # min_plus_solar / solar_plus_cheap night top-up uses MIN_PV
             canonical_strategy = EVBudgetStrategy.MIN_PV
         elif (_primary_view.mode == "solar_plus_cheap"

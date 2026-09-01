@@ -1510,6 +1510,7 @@
         "name": "{charger} Töltési mód",
         "state": {
           "solar_only": "Csak nap",
+          "solar_plus_battery": "Nap + akkumulátor",
           "solar_plus_cheap": "Nap + legolcsóbb órák",
           "min_plus_solar": "Min + Nap",
           "always_max": "Mindig (max)",

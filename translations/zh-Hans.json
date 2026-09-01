@@ -1510,6 +1510,7 @@
         "name": "{charger}充电模式",
         "state": {
           "solar_only": "纯太阳能绿电",
+          "solar_plus_battery": "太阳能 + 电池",
           "solar_plus_cheap": "太阳能 + 低谷电价时段",
           "min_plus_solar": "最低基础电流 + 太阳能",
           "always_max": "始终保持最大功率",

@@ -1510,6 +1510,7 @@
         "name": "{charger} Modo de carga",
         "state": {
           "solar_only": "Solo solar",
+          "solar_plus_battery": "Solar + batería",
           "solar_plus_cheap": "Solar + horas más baratas",
           "min_plus_solar": "Mín + Solar",
           "always_max": "Siempre (máx)",

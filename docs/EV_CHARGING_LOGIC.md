@@ -29,13 +29,19 @@ whole intent (the pre-v1.6.3 toggle collection is retired; see the
 [archived legacy reference](archive/EV_CHARGING_LOGIC_LEGACY.md) if you're
 migrating old automations):
 
-| Mode | Grid use | What it does |
-|---|---|---|
-| **Solar only** | Never, unless *you* set a floor | Pure surplus charging; the home battery may assist above the Buffer SoC (Solar Gate permitting). Idles at night. |
-| **Solar + cheapest hours** | Only in cheap tariff windows | Surplus by day; grid only when the dynamic price is cheap. Hidden without a price source. |
-| **Min + Solar** *(default)* | Up to the Min guarantee | Guarantees *At least X kWh* by the *Charge by* deadline (night top-up when needed); solar adds up to Max on top. |
-| **Always (max)** | Whatever it takes | Charge at maximum immediately. Explicit override — ignores solar, tariff and night logic. |
-| **Off** | Never | No charging; SEM keeps the charger idle. |
+| Mode | Grid use | Home battery | What it does |
+|---|---|---|---|
+| **Solar only** | Never, unless *you* set a floor | **Never discharges for the car** | Pure surplus charging. Idles at night. |
+| **Solar + battery** *(2.1, #885)* | Never, unless *you* set a floor | Assists above the Buffer SoC (Solar Gate permitting) | Surplus plus the pack — the charger twin of a load's "Solar + battery" mode, restoring the legacy `pv` / `self_consumption` split. Idles at night. Works from day one; the forecast-led bypass and the dynamic floor wake once the battery learner completes (the card says so while it's still gathering). |
+| **Solar + cheapest hours** | Only in cheap tariff windows | Never | Surplus by day; grid only when the dynamic price is cheap. Always listed — shown disabled with the reason when no dynamic tariff is configured. |
+| **Min + Solar** *(default)* | Up to the Min guarantee | Assists above the Buffer SoC | Guarantees *At least X kWh* by the *Charge by* deadline (night top-up when needed); solar adds up to Max on top. |
+| **Always (max)** | Whatever it takes | — | Charge at maximum immediately. Explicit override — ignores solar, tariff and night logic. |
+| **Off** | Never | — | No charging; SEM keeps the charger idle. |
+
+> Earlier versions of this table said Solar only's battery "may assist" — it
+> never did. `solar_only` only *redirects* power that would have charged the
+> pack; the discharge assist lived in Min + Solar alone, which is exactly the
+> gap **Solar + battery** closes.
 
 The per-mode detail lives in the same card: **Charge target** (Min / Max kWh),
 **Charge by** deadline, **Min / Max current**, and **Set as default**.
@@ -150,7 +156,7 @@ idle while the EV grid-charged.
 > never eats their overnight window. See
 > [LOAD_PRIORITY.md](LOAD_PRIORITY.md#spending-the-battery--and-the-sun--follows-the-same-list-too-21-885).
 
-Active in **Solar only** and **Min + Solar** (gated by the Solar Gate + Buffer SoC in both). Not in **Always (max)** — that mode takes everything from anywhere by definition. Pure amps — SEM issues no battery command; the inverter's own self-consumption does the discharge.
+Active in **Solar + battery** and **Min + Solar** (gated by the Solar Gate + Buffer SoC in both — *not* Solar only, which never discharges the pack for the car). Not in **Always (max)** — that mode takes everything from anywhere by definition. Pure amps — SEM issues no battery command; the inverter's own self-consumption does the discharge.
 
 ### Cheapest hours (tariff-aware charging)
 

@@ -1510,6 +1510,7 @@
         "name": "{charger} Lademodus",
         "state": {
           "solar_only": "Nur Solar",
+          "solar_plus_battery": "Solar + Batterie",
           "solar_plus_cheap": "Solar + günstigste Stunden",
           "min_plus_solar": "Min. + Solar",
           "always_max": "Immer (max)",

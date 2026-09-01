@@ -27,6 +27,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   buffer changes nothing, and with forecast-led spending off no floor is
   computed at all — the buffer decides exactly as before.
 
+- 🔌 **Two charge modes were missing from the picker — one restored, one
+  un-hidden** (#885 matrix). Chargers get **Solar + battery**: PV surplus plus
+  the home pack, and nothing else — the charger twin of a load's
+  "Solar + battery" mode, and the return of the legacy `pv` /
+  `self_consumption` split that the #277 consolidation collapsed (since then,
+  letting the pack help the car also meant committing to a Min floor and grid
+  backfill via Min + Solar). Same Zone 3/4 arithmetic as Min + Solar — one
+  implementation, the floor branch switched off — and `solar_only`'s night
+  contract verbatim: never grid-charges (#346), At-least floor is the only
+  exception (#679, per-charger-explicit). Purely additive: nobody's existing
+  mode changes. While the battery learner is still gathering nights, the mode
+  works from live surplus and the card says so — forecast-led spending and the
+  dynamic floor wake on graduation. And **Solar + cheapest hours** is no longer
+  hidden on installs without a dynamic tariff: it is listed disabled with the
+  reason, keeping #277's cannot-be-mis-picked protection while becoming
+  discoverable — the maintainer looked for it and could not find it.
+
 - ⚡ **The peak-slot guard was only working by coincidence** (#864/#874, found
   by audit). The "what have higher-priority chargers already claimed" value
   rode a state object built once per cycle — *before* the charger loop resets

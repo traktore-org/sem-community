@@ -1510,6 +1510,7 @@
         "name": "{charger} Mod de încărcare",
         "state": {
           "solar_only": "Doar solar",
+          "solar_plus_battery": "Solar + baterie",
           "solar_plus_cheap": "Solar + cele mai ieftine ore",
           "min_plus_solar": "Min + solar",
           "always_max": "Întotdeauna (max)",

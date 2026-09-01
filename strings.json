@@ -1513,6 +1513,7 @@
           "min_plus_solar": "Min + Solar",
           "off": "Off",
           "solar_only": "Solar only",
+          "solar_plus_battery": "Solar + battery",
           "solar_plus_cheap": "Solar + cheapest hours"
         }
       },

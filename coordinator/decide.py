@@ -748,28 +748,36 @@ class MinPlusSolarMode(ModeStrategy):
     def _decide_night(self, view: ChargerView) -> ChargerDecision:
         return night_top_up_decision(view, "min_plus_solar")
 
-    def _decide_day(self, view: ChargerView) -> ChargerDecision:
-        """Daytime min_plus_solar: Zone-aware battery assist on top
-        of solar surplus. Zone 4 (SOC≥90) drains battery to EV;
-        Zone 3 (SOC≥70) discharges battery if it's already; Zone 2
-        is pure solar (same as solar_only); Zone 1 idles."""
+    def _decide_day(self, view: ChargerView,
+                    mode_name: str = "min_plus_solar",
+                    allow_min_floor: bool = True) -> ChargerDecision:
+        """Daytime Zone-aware battery assist on top of solar surplus.
+        Zone 4 (SOC≥90) drains battery to EV; Zone 3 (SOC≥70)
+        discharges battery if it's already; Zone 2 is pure solar
+        (same as solar_only); Zone 1 idles.
+
+        (#885 matrix) Parameterized so ``solar_plus_battery`` — the
+        restored legacy ``pv`` mode: PV + pack, no grid — runs the SAME
+        Zone 3/4 body with ``allow_min_floor=False`` instead of carrying
+        a hand-copied twin. One implementation, two modes; the #282
+        drift class is exactly two copies of this arithmetic."""
         f = view.fleet
         cid = view.power.charger_id
         if not view.power.connected:
             return ChargerDecision(
-                charger_id=cid, mode="min_plus_solar",
+                charger_id=cid, mode=mode_name,
                 intent=ChargerIntent.IDLE,
-                reason="min_plus_solar day: EV disconnected",
+                reason=f"{mode_name} day: EV disconnected",
             )
         zone = soc_zone(f.battery_soc, f.auto_start_soc, f.buffer_soc, f.priority_soc)
         # Zone 1: battery priority — never charge EV from anywhere
         # when battery is below priority_soc.
         if zone == 1:
             return ChargerDecision(
-                charger_id=cid, mode="min_plus_solar",
+                charger_id=cid, mode=mode_name,
                 intent=ChargerIntent.IDLE,
                 reason=(
-                    f"min_plus_solar day: Zone 1 "
+                    f"{mode_name} day: Zone 1 "
                     f"(SOC={f.battery_soc:.0f}% < priority="
                     f"{f.priority_soc:.0f}%) — battery priority"
                 ),
@@ -777,8 +785,8 @@ class MinPlusSolarMode(ModeStrategy):
         # Zone 2: pure solar (same as solar_only).
         if zone == 2:
             return _relabel(
-                _SOLAR_ONLY.decide(view), "min_plus_solar",
-                f"min_plus_solar day Zone 2 (SOC={f.battery_soc:.0f}%)",
+                _SOLAR_ONLY.decide(view), mode_name,
+                f"{mode_name} day Zone 2 (SOC={f.battery_soc:.0f}%)",
             )
         # Zone 3 / 4: surplus + capped SOC-based battery assist (#501).
         # The budget uses the battery's POTENTIAL (never gated on
@@ -821,19 +829,20 @@ class MinPlusSolarMode(ModeStrategy):
         # the floor even applied after Min was already met.
         remaining = view.target_kwh
         floor_needed = (
-            remaining is not None
+            allow_min_floor
+            and remaining is not None
             and remaining > 0.1
             and remaining > view.night_deliverable_kwh
         )
         if floor_needed:
             amps = max(min_amps, min(max_amps, surplus_amps))
             return ChargerDecision(
-                charger_id=cid, mode="min_plus_solar",
+                charger_id=cid, mode=mode_name,
                 intent=ChargerIntent.CHARGE_AT_AMPS,
                 commanded_amps=amps, budget_w=budget_w,
                 assist_w=_assist_share(amps),
                 reason=(
-                    f"min_plus_solar day Zone {zone}: Min floor engaged "
+                    f"{mode_name} day Zone {zone}: Min floor engaged "
                     f"({remaining:.1f} kWh remaining > "
                     f"{view.night_deliverable_kwh:.1f} kWh night-deliverable) "
                     f"→ {amps}A (budget={_cw(budget_w)}W, floor={min_amps}A)"
@@ -842,23 +851,31 @@ class MinPlusSolarMode(ModeStrategy):
         if surplus_amps >= min_amps:
             amps = min(max_amps, surplus_amps)
             return ChargerDecision(
-                charger_id=cid, mode="min_plus_solar",
+                charger_id=cid, mode=mode_name,
                 intent=ChargerIntent.CHARGE_AT_AMPS,
                 commanded_amps=amps, budget_w=budget_w,
                 assist_w=_assist_share(amps),
                 reason=(
-                    f"min_plus_solar day Zone {zone}: budget={_cw(budget_w)}W "
+                    f"{mode_name} day Zone {zone}: budget={_cw(budget_w)}W "
                     f"→ {amps}A (solar surplus + capped battery assist)"
                 ),
             )
         remaining_str = f"{remaining:.1f}" if remaining is not None else "?"
+        # The idle tail differs per mode: min_plus_solar reassures about the
+        # Min guarantee; solar_plus_battery HAS no Min concept, so promising
+        # a night window would be a lie about what the mode does.
+        tail = (
+            f"— Min ({remaining_str} kWh) is covered by the night window, "
+            f"staying self-consumption-only"
+            if allow_min_floor else
+            "— staying idle (this mode spends solar and the pack only)"
+        )
         return ChargerDecision(
-            charger_id=cid, mode="min_plus_solar",
+            charger_id=cid, mode=mode_name,
             intent=ChargerIntent.IDLE,
             reason=(
-                f"min_plus_solar day Zone {zone}: budget={_cw(budget_w)}W "
-                f"below {min_amps}A min — Min ({remaining_str} kWh) is "
-                f"covered by the night window, staying self-consumption-only"
+                f"{mode_name} day Zone {zone}: budget={_cw(budget_w)}W "
+                f"below {min_amps}A min {tail}"
             ),
         )
 
@@ -866,6 +883,55 @@ class MinPlusSolarMode(ModeStrategy):
 # ─────────────────────────────────────────────────────────────────
 # solar_plus_cheap — solar + cheap-tariff windows at night
 # ─────────────────────────────────────────────────────────────────
+
+class SolarPlusBatteryMode(ModeStrategy):
+    """PV surplus plus the home battery — and nothing else. (#885 matrix)
+
+    The restored half of the legacy ``pv`` / ``self_consumption`` split
+    that the #277 consolidation collapsed: since then the ONLY way to let
+    the pack help the car was ``min_plus_solar``, which also commits the
+    user to a Min floor and grid backfill. Loads kept the distinction
+    (#620: "Solar only" vs "Solar + battery"); this gives chargers the
+    same choice back.
+
+    Day: the exact ``min_plus_solar`` Zone 3/4 body with the Min-floor
+    branch off — one implementation, see ``_decide_day``.
+    Night: ``solar_only``'s contract, verbatim — never grid-charges
+    (#346), and the #634 "At least" floor remains the mode-independent
+    overnight guarantee (per-charger-explicit, per #679, which gates this
+    mode exactly like ``solar_only`` in ``mode_allows_night_charging``).
+    """
+
+    def decide(self, view: ChargerView) -> ChargerDecision:
+        f = view.fleet
+        cid = view.power.charger_id
+
+        if not view.power.connected:
+            return ChargerDecision(
+                charger_id=cid, mode="solar_plus_battery",
+                intent=ChargerIntent.IDLE,
+                reason="solar_plus_battery but EV disconnected",
+            )
+
+        if f.is_night:
+            # Same shape as SolarOnlyMode: an explicit "At least" floor is
+            # the only thing that may grid at night; without one, idle.
+            if view.target_kwh is not None and view.target_kwh > 0.1:
+                return night_top_up_decision(view, "solar_plus_battery")
+            return ChargerDecision(
+                charger_id=cid, mode="solar_plus_battery",
+                intent=ChargerIntent.IDLE,
+                reason=(
+                    "solar_plus_battery night: no At-least floor set — "
+                    "this mode never grid-charges (#346 contract, same "
+                    "as solar_only)"
+                ),
+            )
+
+        return _MIN_PLUS_SOLAR._decide_day(
+            view, mode_name="solar_plus_battery", allow_min_floor=False,
+        )
+
 
 class SolarPlusCheapMode(ModeStrategy):
     """During day: solar_only behaviour, but pauses during
@@ -959,12 +1025,14 @@ _OFF = OffMode()
 _ALWAYS_MAX = AlwaysMaxMode()
 _SOLAR_ONLY = SolarOnlyMode()
 _MIN_PLUS_SOLAR = MinPlusSolarMode()
+_SOLAR_PLUS_BATTERY = SolarPlusBatteryMode()
 _SOLAR_PLUS_CHEAP = SolarPlusCheapMode()
 
 MODE_STRATEGIES: Dict[str, ModeStrategy] = {
     "off": _OFF,
     "always_max": _ALWAYS_MAX,
     "solar_only": _SOLAR_ONLY,
+    "solar_plus_battery": _SOLAR_PLUS_BATTERY,
     "min_plus_solar": _MIN_PLUS_SOLAR,
     "solar_plus_cheap": _SOLAR_PLUS_CHEAP,
 }

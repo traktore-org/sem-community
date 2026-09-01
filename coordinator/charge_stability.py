@@ -64,7 +64,10 @@ _LOGGER = logging.getLogger(__name__)
 # Modes whose DAY decisions are surplus-driven and therefore flicker
 # with the solar signal. Night decisions (floors, cheap windows) and
 # always_max are deliberate, not flicker — they bypass the filter.
-SURPLUS_DAY_MODES = frozenset({"solar_only", "min_plus_solar", "solar_plus_cheap"})
+SURPLUS_DAY_MODES = frozenset({
+        "solar_only", "solar_plus_battery", "min_plus_solar",
+        "solar_plus_cheap",
+    })
 
 DEFAULT_ENABLE_DELAY_S = 60   # evcc enable.delay = 1 min
 DEFAULT_DISABLE_DELAY_S = 180  # evcc disable.delay = 3 min (was 300)

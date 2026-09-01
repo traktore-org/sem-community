@@ -459,14 +459,38 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
         if self._config_key == "ev_charging_mode":
             return list(EV_CHARGING_MODES.keys())
         if self._config_key == "charge_mode":
-            has_dyn_tariff = (
-                self.coordinator.config.get("tariff_mode") == "dynamic"
-            )
-            return [
-                m for m in EV_CHARGE_MODES.keys()
-                if has_dyn_tariff or m != "solar_plus_cheap"
-            ]
+            # (#885 matrix, decision 3) ALL modes are always listed. #277 Q1
+            # hid ``solar_plus_cheap`` on tariff-less installs so nobody
+            # picked an option that silently degrades — but hiding made it
+            # undiscoverable, and Guido looked for it and could not find
+            # it. The protection moves to the CARD: it reads
+            # ``tariff_available`` below and renders the option disabled
+            # with the reason, which keeps both properties (cannot be
+            # mis-picked, can still be seen).
+            return list(EV_CHARGE_MODES.keys())
         return list(self.entity_description.options or [])
+
+    @property
+    def extra_state_attributes(self):
+        """(#885) Prerequisite state for the mode list, read by the card.
+
+        One rule, two severities: a mode that CANNOT function without its
+        prerequisite is disabled in the UI (``solar_plus_cheap`` without a
+        dynamic tariff has no cheap windows to use); a mode that functions
+        PARTIALLY shows an info instead (``solar_plus_battery`` assists on
+        live surplus from day one — the forecast-led bypass and the #878
+        dynamic floor stay dormant until the #800 learner graduates, and
+        the card reads that progress straight off
+        ``sensor.sem_battery_spendable_kwh``).
+        """
+        if self._config_key != "charge_mode":
+            return None
+        return {
+            "tariff_available": (
+                self.coordinator.config.get("tariff_mode") == "dynamic"
+            ),
+            "modes_needing_tariff": ["solar_plus_cheap"],
+        }
 
     @property
     def current_option(self) -> str | None:
