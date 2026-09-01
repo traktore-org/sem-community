@@ -9273,12 +9273,29 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         fall back to the fleet-level call — identical behaviour to
         v1.6.8.
         """
+        def _clamp_state(text, limit=255):
+            """State values only — attributes are unlimited and keep the
+            full reason."""
+            t = str(text) if text is not None else None
+            if t is None or len(t) <= limit:
+                return t
+            return t[: limit - 1] + "\u2026"
+
         common_data = {
             "battery_soc": power.battery_soc,
             "calculated_current": calculated_current,
             "available_power": available_power,
             "daily_ev_energy": energy.daily_ev,
-            "charging_strategy": charging_context.charging_strategy,
+            # HA rejects any state longer than 255 chars OUTRIGHT — the
+            # sensor falls back to "unknown" and homeassistant.core logs an
+            # ERROR every cycle. The composed strategy (stability prefix +
+            # mode reason + structural suffix) crossed that line live on
+            # .175 the first time real hardware stacked all three. The STATE
+            # is a display string, so clamp it here at its single writer;
+            # the FULL text rides charging_strategy_reason, which becomes an
+            # attribute and has no such limit.
+            "charging_strategy": _clamp_state(
+                charging_context.charging_strategy),
             "charging_strategy_reason": charging_context.charging_strategy_reason,
             "canonical_strategy": charging_context.canonical_strategy,
             "discharge_limit": discharge_limit,

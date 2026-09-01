@@ -201,3 +201,32 @@ class TestEveryModeIsFullyTranslatedEverywhere:
         assert set(EV_CHARGE_MODES) <= set(st), (
             f"missing entity state names: {set(EV_CHARGE_MODES) - set(st)}"
         )
+
+
+class TestTheStrategyStateNeverOverflows:
+    """Found live on .175 the first time real hardware stacked all three
+    reason layers (stability prefix + mode reason + structural suffix):
+    HA rejects a state longer than 255 chars outright — the sensor read
+    ``unknown`` and homeassistant.core logged an ERROR every ten seconds.
+    The state is clamped at its single writer; the full text lives in
+    ``charging_strategy_reason``, which becomes an attribute (no limit)."""
+
+    def test_the_writer_clamps(self):
+        import inspect
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        src = inspect.getsource(SEMCoordinator)
+        assert '"charging_strategy": _clamp_state(' in src, (
+            "the strategy state is written unclamped — a long composed "
+            "reason blanks the sensor and spams core ERRORs"
+        )
+
+    def test_clamp_semantics(self):
+        """255 stays intact; 256 clamps to 255 ending in an ellipsis."""
+        limit = 255
+        def clamp(t):
+            return t if len(t) <= limit else t[: limit - 1] + "…"
+        assert clamp("x" * 255) == "x" * 255
+        out = clamp("x" * 300)
+        assert len(out) == 255 and out.endswith("…")
