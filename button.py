@@ -14,6 +14,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
+from .sensor import _fix_entity_ids
 
 BUTTONS: tuple[ButtonEntityDescription, ...] = (
     ButtonEntityDescription(
@@ -29,6 +30,12 @@ async def async_setup_entry(
 ) -> None:
     coordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities(SEMButton(coordinator, d) for d in BUTTONS)
+    # ``self.entity_id`` below is honoured only at FIRST registration; an
+    # install that registered the button before the #815 id line existed
+    # keeps the derived id (the .175 rig held
+    # ``button.garden_sem_rebuild_battery_night_history`` on 01.09.2026).
+    # Same registry repair switch/number/sensor run at setup.
+    _fix_entity_ids(hass, entry, list(BUTTONS), "button")
 
 
 class SEMButton(CoordinatorEntity, ButtonEntity):

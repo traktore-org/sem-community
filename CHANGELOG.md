@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔧 **The battery-night backfill button heals its entity id on upgrade**
+  (#815 follow-up). `button.sem_backfill_battery_nights` is only honoured at
+  first registration; an install that registered the button before that id
+  existed kept the derived `button.<device>_rebuild_battery_night_history`
+  and the stable id was "Entity not found". The button platform now runs the
+  same registry repair switch/number/sensor already do.
+
 # [2.1.0-beta.5] — 01.09.2026
 
 - ☁️ **A passing cloud no longer hard-stops a solar charging session whenever
