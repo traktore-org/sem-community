@@ -11,7 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [Unreleased] — 2.1.0-beta.4
+# [Unreleased] — 2.1.0-beta.5
+
+- 🔌 **The EV charging stop was sent twice** (#894, reported by @DigitalOptics
+  on 2.0.0). With no start/stop entity configured, SEM stops the charger by
+  writing 0 A — but the generic adapter wrote that 0 A directly *and* then
+  called the session stop, which writes 0 A again as its no-mechanism
+  fallback, so a single stop hit the wire twice within milliseconds. On
+  installs where the stop is realised by an automation watching for the 0 A
+  write, that automation fired twice and produced a burst of SEM warnings. The
+  stop is now issued exactly once — the session stop owns it, matching how KEBA
+  has always worked. Root-caused as a recurring class (a wrapper that actuates
+  *and* delegates to a layer that actuates the same command again) and guarded.
+
+# [2.1.0-beta.4] — 01.09.2026
 
 - 🔌 **JuiceBox was driven through its *offline* current limit, not the live
   one** (#886, reported by @Azlinon on 2.1.0-beta.3). Auto-detection bound
