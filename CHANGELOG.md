@@ -13,6 +13,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased] — 2.1.0-beta.5
 
+- ☁️ **A passing cloud no longer hard-stops a solar charging session whenever
+  electricity isn't cheap** (#893, reported by @DigitalOptics on 2.0.0). The
+  anti-flap bridge — the 3-minute hold that carries a session through a solar
+  dip instead of cycling the contactor — was being cancelled by the tariff:
+  any daytime idle during a not-cheap price window was classed as a
+  structural stop, in **every** mode. For most tariffs that is most of the
+  day, so each cloud stopped the session outright and the charger switched
+  with the weather. The tariff veto now applies only to the mode that
+  actually prices its grid use (*Solar + cheapest hours*); for solar modes
+  the hold is funded by your own surplus and your battery above its buffer,
+  and the price is nobody's business. The one case the old rule genuinely
+  protected — a hold that could only be grid-fed — is still refused, now
+  also when the battery is *forbidden* from assisting rather than merely
+  below its buffer.
+
+- 🔁 **A fussy car's start-current floor is now remembered — the all-night
+  contactor churn ends** (#893). Some cars latch at a higher current than the
+  minimum but refuse the minimum itself (live on the test rig 31.08: drew
+  3.1 kW at 8 A, 0.13 kW at 6 A). The start ladder found 8 A, then settled
+  back to the 6 A budget, the car dropped, and the ladder started over —
+  a contactor click every ~3 minutes, all night. SEM now learns the
+  demonstrated latch floor for the session: a budget below it holds off
+  quietly instead of re-laddering, the next start begins at the floor rather
+  than re-poking a current the car already refused, a draw at lower amps
+  decays the floor (appetite changes are honoured), and unplugging clears
+  it. An active draw is never interrupted by the floor guard.
+
 - 🔌 **The EV charging stop was sent twice** (#894, reported by @DigitalOptics
   on 2.0.0). With no start/stop entity configured, SEM stops the charger by
   writing 0 A — but the generic adapter wrote that 0 A directly *and* then
