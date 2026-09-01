@@ -230,6 +230,10 @@ read-only by design — SEM can't suppress it), but the cards will load.
 
 **How SEM detects grid direction:** SEM reads the grid power sensor from your HA Energy Dashboard configuration. It then compares the power sensor's sign against the import/export energy counters (also from the Energy Dashboard) to automatically detect the sign convention. This works because the energy counters always increase in the correct direction — if the import counter is growing while the power sensor is positive, SEM knows positive means import and will correct accordingly.
 
+On a solar install a second voter runs first: solar production has no sign ambiguity, so when solar jumps by ≥ 500 W and the meter **answers** in the same cycle (moves at least a quarter of the swing, battery idle), the direction of that answer reveals the convention. A cycle in which the meter did not move is not an observation and casts no vote (2.1, #889): on polled inverters — Huawei modbus in particular — the inverter and meter registers are read seconds apart, so the solar step and the meter's answer often land in *different* 10-s cycles, and a solar sensor that goes `unavailable` reads as 0 W, which looks like a 4 kW swing while the meter holds still. Before #889 every such cycle was a full-weight "normal" vote and four of them locked SEM convention on an HA-convention meter. When no clean co-movement is ever seen, the solar voter simply stays silent and the counter voter above decides.
+
+**If SEM locked the wrong sign before 2.1** (you upgraded from a version that voted on stale cycles): the lock is persisted, so tap **Reset sign detection** once (Control tab → Advanced → Grid Sign). Detection re-runs with the corrected voter; if you had set the **Grid sign flip** switch as a workaround, turn it off afterwards so auto-detection is in charge again.
+
 **Requirements:**
 - HA Energy Dashboard must be configured with grid import AND export energy sensors
 - Both energy sensors must be available (not "unknown" or "unavailable")

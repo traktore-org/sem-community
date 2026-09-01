@@ -941,7 +941,7 @@ SEM automatically detects whether your grid meter reports **positive = import** 
 | Huawei, SMA, Victron, Sungrow | + = export, − = import | Exporting 2000 W shows as `+2000` |
 | Fronius, Enphase, Powerwall, Kostal | + = import, − = export | Importing 2000 W shows as `+2000` |
 
-SEM detects this automatically during startup by comparing your grid sensor against the Energy Dashboard import/export counters. In rare cases (P1 meters, CT sensors, or brand-unknown inverters), the auto-detection may guess wrong.
+SEM detects this automatically during startup by comparing your grid sensor against the Energy Dashboard import/export counters. On a solar install it first watches solar swings: a ≥ 500 W solar step that the meter answers in the same cycle reveals the convention directly. A cycle in which the meter did not move — the registers were polled seconds apart, or the solar sensor briefly read `unavailable` — is not an observation and casts no vote (2.1, #889); the counter comparison decides instead. In rare cases (P1 meters, CT sensors, or brand-unknown inverters), the auto-detection may guess wrong.
 
 ### Symptoms of wrong grid sign
 
