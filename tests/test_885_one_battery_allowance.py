@@ -644,3 +644,54 @@ class TestThePeakSlotCascadeIsPerCharger:
         assert src.count("peak_committed_w: float") == 1, (
             "declared more than once — the later declaration silently wins"
         )
+
+
+class TestTheReservationOnlySeesRealLoads:
+    """The walk is fed ``SurplusController.get_devices_sorted()``. Two things
+    must never appear in it, or the reservation double-counts:
+
+    * **EV chargers.** They are registered into the controller and then
+      immediately marked ``managed_externally`` (`coordinator.py`), which
+      that accessor filters out. If one ever slipped through, it would be
+      reserved for as a load AND counted by the charger cascade — the same
+      watts twice, against itself.
+    * **The battery row.** ``home_battery`` is a synthetic row the priority
+      CARD renders; it is never registered as a controllable device. It
+      orders battery *charging*, which is a different question.
+    """
+
+    def test_managed_externally_devices_are_filtered_by_the_source(self):
+        import inspect
+        from custom_components.solar_energy_management.coordinator.surplus_controller import (
+            SurplusController,
+        )
+        src = inspect.getsource(SurplusController.get_devices_sorted)
+        assert "managed_externally" in src, (
+            "the reservation's device source stopped excluding externally "
+            "managed devices — a charger can now reserve against itself"
+        )
+
+    def test_chargers_are_marked_managed_externally_on_registration(self):
+        import inspect
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        src = inspect.getsource(SEMCoordinator)
+        i = src.index("self._surplus_controller.register_device(ev_device)")
+        window = src[i:i + 300]
+        assert "managed_externally = True" in window, (
+            "an EV device is registered into the surplus controller without "
+            "being marked managed_externally — it will be reserved for as a "
+            "load and counted by the charger cascade"
+        )
+
+    def test_the_battery_row_is_not_a_controllable_device(self):
+        """It is a card row, not a load. If it were registered it would
+        reserve solar from every charger below it."""
+        from pathlib import Path
+        root = Path(__file__).resolve().parent.parent
+        coord = (root / "coordinator" / "coordinator.py").read_text()
+        assert "BATTERY_SURPLUS_DEVICE_ID" not in coord, (
+            "the synthetic battery row reached the coordinator — check it is "
+            "not being registered as a surplus device"
+        )
