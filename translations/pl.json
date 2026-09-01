@@ -1678,6 +1678,10 @@
     "load_current_control_wrong_unit": {
       "title": "Odbiornik ustawiono na sterowanie prądem, ale jego encja jest w watach",
       "description": "**{name}** skonfigurowano do sterowania *prądem*, ale **{entity_id}** oczekuje wartości w **{unit}**.\n\nSterowanie prądem oznacza **ampery** — istnieje dla ładowarek EV, którym zadaje się prąd około 6–32 A. Zapisanie nadwyżki w amperach do encji oczekującej watów nie może oznaczać tego, co zamierzasz, więc SEM nie steruje tym urządzeniem zamiast wpisywać liczbę w złej jednostce. Wcześniej rejestrował je i nigdy nie zapisywał — pojawiało się wśród ładowarek z nadwyżką zatrzymaną na 0 W.\n\n**Jeśli urządzenie naprawdę jest sterowane prądem**, wskaż jego encję w amperach.\n\n**Jeśli to odbiornik o zmiennej mocy** — AC-THOR, grzałka — SEM nie potrafi go jeszcze modulować (#880). Tymczasem używaj go jako odbiornika **wł./wył.** przez encję przełącznika."
+    },
+    "load_shed_futile": {
+      "title": "Szczyt poboru z sieci powoduje odbiornik, którego SEM nie kontroluje",
+      "description": "Licznik wskazuje **{grid_import_kw} kW** wobec celu **{target_kw} kW** — i nawet gdyby wszystko, co SEM może wyłączyć, było już wyłączone, pozostałoby **{uncontrolled_kw} kW**. Ten pobór należy do czegoś, czym SEM nie zarządza: auto elektryczne na ładowarce, której SEM nie zna, piekarnik, pompa ciepła z własnym sterownikiem.\n\nZrzucanie obciążenia domu nie usunie tego szczytu, więc SEM **niczego** nie wyłącza, dopóki to trwa (wcześniejsza wersja wyłączała obwód za obwodem, aż dom pogrążył się w ciemności).\n\n**Co zrobić:** przekazać odbiornik do SEM (dodać ładowarkę w *Ładowarki EV* lub urządzenie z encją sterującą), podnieść cel, jeśli nie jest to naprawdę limit z umowy, albo zaakceptować szczyt dla odbiornika, który musi pracować. To zgłoszenie znika samo, gdy szczyt znów będzie osiągalny."
     }
   },
   "selector": {

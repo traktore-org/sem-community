@@ -1678,6 +1678,10 @@
     "load_current_control_wrong_unit": {
       "title": "Een verbruiker staat op stroomsturing maar zijn entiteit is in watt",
       "description": "**{name}** is ingesteld op *stroom*sturing, maar **{entity_id}** verwacht zijn waarde in **{unit}**.\n\nStroomsturing betekent **ampère** — het bestaat voor laadpalen, die een stroom van ongeveer 6–32 A krijgen. Een overschotwaarde in ampère schrijven naar een entiteit die watt verwacht kan niet betekenen wat u bedoelt, dus SEM stuurt dit apparaat niet aan in plaats van een getal in de verkeerde eenheid te schrijven. Voorheen werd het apparaat geregistreerd en stilletjes nooit beschreven — het verscheen tussen uw laadpalen en het overschot bleef op 0 W.\n\n**Is het apparaat werkelijk stroomgestuurd**, kies dan zijn ampère-entiteit.\n\n**Is het een variabele vermogensbelasting** — AC-THOR, dompelaar — dan kan SEM die nog niet moduleren (#880). Gebruik hem intussen als **aan/uit**-overschotverbruiker via een schakelentiteit."
+    },
+    "load_shed_futile": {
+      "title": "De netpiek wordt veroorzaakt door een verbruiker die SEM niet regelt",
+      "description": "De meter staat op **{grid_import_kw} kW** tegenover een doel van **{target_kw} kW** — en zelfs als alles wat SEM mag uitschakelen al uit zou zijn, blijft er **{uncontrolled_kw} kW** over. Dat verbruik hoort bij iets dat SEM niet beheert: een EV aan een lader die SEM niet kent, een oven, een warmtepomp met eigen regeling.\n\nHet afschakelen van het huis kan deze piek niet oplossen, dus SEM schakelt **niets** af zolang dit geldt (een eerdere versie bleef groep na groep uitschakelen tot het huis donker was).\n\n**Wat te doen:** geef SEM de verbruiker (voeg de lader toe onder *EV-laders*, of het apparaat met een bedieningsentiteit), verhoog het doel als het niet echt de grens van je contract is, of accepteer de piek voor een verbruiker die moet draaien. Deze melding verdwijnt vanzelf zodra de piek weer haalbaar is."
     }
   },
   "selector": {

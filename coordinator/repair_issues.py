@@ -257,6 +257,8 @@ _DOCS_ANCHORS = {
     # (#882) A load set to current control aimed at a watt entity.
     "load_current_control_wrong_unit":
         "a-load-is-set-to-current-control-but-its-entity-is-in-watts",
+    # (#896) The peak is driven by a load SEM does not control.
+    "load_shed_futile": "the-grid-peak-is-driven-by-a-load-sem-does-not-control",
 }
 
 
@@ -788,6 +790,38 @@ def clear_soc_cap_unenforceable(hass: HomeAssistant, device_id: str) -> None:
 # ---------------------------------------------------------------------------
 # Setup-time integration checks (once per setup)
 # ---------------------------------------------------------------------------
+
+
+def raise_load_shed_futile(hass: HomeAssistant, *, grid_import_kw: float,
+                           target_kw: float, uncontrolled_kw: float) -> None:
+    """(#896) Shedding everything SEM may shed would still leave the meter
+    above the target: the peak belongs to a load SEM does not control. Filed
+    once per episode instead of shedding the house (forum #30)."""
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id="load_shed_futile",
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="load_shed_futile",
+            learn_more_url=next_step_url("docs", "load_shed_futile", **_versions(hass)),
+            translation_placeholders={
+                "grid_import_kw": f"{grid_import_kw:.1f}",
+                "target_kw": f"{target_kw:.1f}",
+                "uncontrolled_kw": f"{uncontrolled_kw:.1f}",
+            },
+        )
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.create load_shed_futile failed: %s", e)
+
+
+def clear_load_shed_futile(hass: HomeAssistant) -> None:
+    try:
+        ir.async_delete_issue(hass, DOMAIN, "load_shed_futile")
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete load_shed_futile failed: %s", e)
 
 
 def raise_no_forecast_integration(hass: HomeAssistant) -> None:

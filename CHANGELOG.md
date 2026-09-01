@@ -28,6 +28,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   target limit are in the default Config view side by side, and a Setup
   overview chip routes to a section the default view actually shows.
 
+- 🛡️ **Load shedding is bounded by what the meter says and by what SEM
+  controls** (#896 — the same forum incident: an EV SEM did not manage held
+  the 15-minute average over the emergency level, and emergency shedding
+  walked one circuit after another until the house was dark). The average
+  decides the *state* — that is what a demand tariff bills — but each shed
+  is now judged against the **live meter**: no switch can move a rolling
+  average for minutes, so judging the next shed against it meant shedding
+  every cycle. Under the aim SEM holds; above it, Emergency sheds exactly
+  what the need takes and Shedding one load per pass. Before the first
+  switch SEM adds up everything it *may* shed; if the meter minus all of it
+  would still sit above the target, the peak belongs to a load SEM does not
+  control — it sheds **nothing** and files a Repair naming the uncontrolled
+  kilowatts (cleared the first pass the peak is reachable again). A shed is
+  never silent any more: a persistent notification per episode, dismissed
+  when the last load is back. And what SEM switched off SEM now restores —
+  the shed list had evicted every SEM-shed load on the next cycle as
+  "finished on its own" (#40), so the restore pass never had anything to
+  restore. The dead `DEFAULT_CRITICAL_DEVICE_PROTECTION` is gone; *critical*
+  on the Load Priorities card is the one protection, and the only one there
+  ever was.
+
 - 🔧 **The battery-night backfill button heals its entity id on upgrade**
   (#815 follow-up). `button.sem_backfill_battery_nights` is only honoured at
   first registration; an install that registered the button before that id

@@ -804,6 +804,31 @@ being built. In the meantime you can still use the device as an **on/off**
 surplus load by configuring a switch entity instead, which gives you coarse
 self-consumption rather than none.
 
+## The grid peak is driven by a load SEM does not control
+
+SEM raised the Repair *"The grid peak is driven by a load SEM does not
+control"*. It means: the meter is above your target, and even if SEM switched
+off **everything it is allowed to switch off**, the meter would still be above
+the target. The uncontrolled kilowatts named in the Repair are the draw of
+something SEM does not manage — an EV on a charger SEM was not given, an oven,
+a sauna, a heat pump on its own controller.
+
+Shedding the house cannot fix that peak, so SEM sheds nothing while this holds
+(an earlier version kept shedding one circuit after another until the house was
+dark). Your options:
+
+- **Give SEM the load.** If it is an EV charger, add it in *Configure → EV
+  Chargers*; SEM then paces it under the same peak allowance as everything
+  else. If it is a switchable load, add it as a device with a control entity
+  and a mode other than *Off*.
+- **Raise the target** if the ceiling is not really your contract's. The target
+  is your connection ceiling — see [Load Management Settings](USER_GUIDE.md#load-management-settings).
+- **Accept the peak** for loads that must run — the Repair clears by itself the
+  moment the peak becomes reachable again.
+
+Everything SEM *can* shed is listed on the Load Priorities card; a load marked
+*critical* or set to *Off* is never counted, by design.
+
 ## SEM cannot rebuild your battery-night history
 
 You pressed **Rebuild from history** and SEM answered that it has no battery

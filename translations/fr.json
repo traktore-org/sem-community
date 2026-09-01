@@ -1678,6 +1678,10 @@
     "load_current_control_wrong_unit": {
       "title": "Une charge est en contrôle de courant mais son entité est en watts",
       "description": "**{name}** est configurée en contrôle de *courant*, mais **{entity_id}** attend sa valeur en **{unit}**.\n\nLe contrôle de courant signifie **ampères** — il existe pour les bornes de recharge, auxquelles on impose un courant d'environ 6 à 32 A. Écrire un surplus en ampères dans une entité qui attend des watts ne peut pas signifier ce que vous voulez ; SEM ne pilote donc pas cet appareil plutôt que d'écrire un nombre dans la mauvaise unité. Auparavant l'appareil était enregistré et jamais écrit, apparaissant parmi vos bornes avec un surplus bloqué à 0 W.\n\n**Si l'appareil est réellement piloté en courant**, désignez son entité en ampères.\n\n**S'il s'agit d'une charge à puissance variable** — AC-THOR, résistance — SEM ne sait pas encore la moduler (#880). En attendant, utilisez-la en **tout ou rien** via une entité switch."
+    },
+    "load_shed_futile": {
+      "title": "Le pic réseau est causé par une charge que SEM ne contrôle pas",
+      "description": "Le compteur affiche **{grid_import_kw} kW** pour une cible de **{target_kw} kW** — et même si tout ce que SEM peut couper était déjà éteint, il resterait **{uncontrolled_kw} kW**. Cette consommation appartient à quelque chose que SEM ne gère pas : un VE sur une borne inconnue de SEM, un four, une pompe à chaleur avec son propre régulateur.\n\nDélester la maison ne peut pas corriger ce pic, SEM ne délestera donc **rien** tant que cela dure (une version précédente coupait circuit après circuit jusqu'à plonger la maison dans le noir).\n\n**Que faire :** confier la charge à SEM (ajouter la borne dans *Bornes VE*, ou l'appareil avec une entité de commande), relever la cible si ce n'est pas vraiment le plafond de votre contrat, ou accepter le pic pour une charge qui doit fonctionner. Ce problème disparaît de lui-même dès que le pic redevient atteignable."
     }
   },
   "selector": {

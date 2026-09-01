@@ -148,7 +148,6 @@ See [Multi-Device Guide](MULTI_DEVICE_GUIDE.md) for examples.
 | `target_peak_limit` | 5 kW | Maximum grid power SEM stays under (1–80 kW) |
 | `warning_peak_level` | 90% of target | Warning threshold — must be **below** the target (1–80 kW) |
 | `emergency_peak_level` | 120% of target | Emergency shedding threshold — must be **above** the target (1–80 kW) |
-| `critical_device_protection` | — | Protect critical loads from shedding |
 
 `target_peak_limit` is your **grid connection ceiling**, not a tariff preference —
 take it from your supply contract or main breaker. Around 3–5 kW on a
@@ -1035,10 +1034,23 @@ SEM monitors rolling 15-minute average power and progressively sheds loads to st
 |-------|----------|
 | **Normal** | No action — all devices run freely |
 | **Warning** | Alert — approaching peak limit |
-| **Shedding** | Automatic device shedding by reverse priority |
-| **Emergency** | All non-critical loads shed immediately |
+| **Shedding** | One load per pass, highest priority number first, until the meter is back under the aim |
+| **Emergency** | As many loads as the meter's need takes, in one pass — and not one more |
 
-When the peak drops back below the target, SEM restores devices **only if they were ON before shedding**. Devices that were already off are not turned on.
+When the peak drops back below the target, SEM restores devices **only if they were ON before shedding**. Devices that were already off are not turned on. A load SEM switched off stays on SEM's restore list until SEM switches it back on; if somebody switches it on by hand in the meantime and it later finishes on its own, SEM lets it be.
+
+### What bounds a shed (2.1, #896)
+
+The states above are read from the **15-minute rolling average**, because that is what a demand tariff bills. Each individual shed, though, is judged against the **live meter** — a switch thrown now cannot move a rolling average for minutes, and judging the next shed against the average is how an earlier version switched off one circuit after another until the house was dark (an EV SEM did not manage was holding the average up). Two rules now hold before any switch is thrown:
+
+1. **The need is what the meter says.** `need = grid import − (target − hysteresis)`. Under the aim, SEM holds — whatever the average still reads. Above it, SEM sheds in priority order until the shed draw covers the need, then stops. Emergency differs from Shedding only in pace: several switches in one pass instead of one, still bounded by the need.
+2. **The peak must be SEM's to fix.** Before the first switch, SEM adds up everything it *may* shed — loads it is allowed to control, available, not critical, not owned by another engine (EV chargers, surplus loads), and currently drawing. If the meter minus all of that would **still** sit above the target, shedding the house cannot fix the peak: the load driving it is one SEM does not control. SEM then sheds **nothing** and files a Repair — *The grid peak is driven by a load SEM does not control* — naming the uncontrolled kilowatts. The Repair clears on its own the first pass the peak becomes reachable again.
+
+A shed is never silent: the first shed of an episode raises a persistent notification (*Peak load shedding*) listing what was switched off and the meter reading against the target; it updates with each further shed and is dismissed when the last load is restored. The same episode fires a `solar_energy_management_notification` event (`event: load_shed`) for automations.
+
+The numbers behind each decision are on the load-management sensor: `shed_path` (the verdict — `held:under_aim`, `shed:N`, `futile`, `waiting:anti_flicker`), `shed_need_w`, `shed_sheddable_w`, `uncontrolled_w` and `shed_futile`.
+
+**Critical loads** are the only protection from shedding, and the only one there is: mark the circuit feeding your network gear or the HA host *critical* on the Load Priorities card and SEM never sheds it. (An earlier constants entry `critical_device_protection` promised a second layer; nothing ever read it, and it is gone.)
 
 ### The preventive half: the 15-minute slot guard (2.1, #864)
 

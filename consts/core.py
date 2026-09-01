@@ -262,7 +262,6 @@ DEFAULT_PEAK_LIMIT_UNLIMITED: Final = False
 # by circuit at a 5 kW ceiling nobody chose). Existing installs carry their
 # own value: the install flow has seeded the key since v1.0.0.
 DEFAULT_LOAD_MANAGEMENT_ENABLED: Final = False
-DEFAULT_CRITICAL_DEVICE_PROTECTION: Final = True
 DEFAULT_LOAD_SHEDDING_DELAY: Final = 5  # seconds - Delay before shedding
 DEFAULT_LOAD_RESTORE_DELAY: Final = 30  # seconds - Delay before restoring
 DEFAULT_MIN_ON_DURATION: Final = 300  # seconds - Minimum time device stays on (anti-flicker)

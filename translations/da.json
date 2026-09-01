@@ -1678,6 +1678,10 @@
     "load_current_control_wrong_unit": {
       "title": "En last er sat til strømstyring, men dens entitet er i watt",
       "description": "**{name}** er konfigureret til *strøm*styring, men **{entity_id}** forventer sin værdi i **{unit}**.\n\nStrømstyring betyder **ampere** — det findes for elbilladere, som får en strøm på cirka 6–32 A. At skrive et overskud i ampere til en entitet, der forventer watt, kan ikke betyde det, du mener, så SEM styrer ikke denne enhed frem for at skrive et tal i den forkerte enhed. Tidligere blev enheden registreret og aldrig skrevet til — den dukkede op blandt dine ladere med overskuddet fast på 0 W.\n\n**Er enheden virkelig strømstyret**, peg indstillingen mod dens ampere-entitet.\n\n**Er det en last med variabel effekt** — AC-THOR, varmelegeme — kan SEM ikke modulere den endnu (#880). Brug den imens som **til/fra**-overskudslast via en switch-entitet."
+    },
+    "load_shed_futile": {
+      "title": "Nettoppen skyldes en last, som SEM ikke styrer",
+      "description": "Måleren viser **{grid_import_kw} kW** mod et mål på **{target_kw} kW** — og selv hvis alt, hvad SEM må slukke, allerede var slukket, ville der stadig være **{uncontrolled_kw} kW**. Det forbrug hører til noget, SEM ikke styrer: en elbil på en lader, SEM ikke kender, en ovn, en varmepumpe med sin egen styring.\n\nAt koble huset fra kan ikke løse denne top, så SEM kobler **intet** fra, så længe det gælder (en tidligere version blev ved med at slukke kreds efter kreds, indtil huset var mørkt).\n\n**Hvad du kan gøre:** giv SEM lasten (tilføj laderen under *Elbilsladere*, eller enheden med en styringsentitet), hæv målet, hvis det ikke reelt er din aftales loft, eller acceptér toppen for en last, der skal køre. Denne sag forsvinder af sig selv, så snart toppen igen kan nås."
     }
   },
   "selector": {

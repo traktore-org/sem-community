@@ -89,6 +89,7 @@ class TestSheddingSelection649:
         lm649._devices["pump"] = _info()
         lm649._devices["boiler"] = _info(control_mode="peak_only")
         lm649._shed_device = AsyncMock()
+        lm649._last_grid_import_w = 5500.0  # (#896) the plan reads the meter
         await lm649._emergency_load_shedding()
         shed = [c.args[0] for c in lm649._shed_device.await_args_list]
         assert shed == ["boiler"]
