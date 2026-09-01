@@ -192,7 +192,7 @@ class TestPersistedInstallHeal:
         chargers = [{"id": "ev_charger", "ev_current_control_entity": _ONLINE}]
         with patch(
             "homeassistant.helpers.entity_registry.async_get",
-            return_value=MagicMock(),
+            return_value=self._registry(entries),
         ):
             assert _heal_offline_current_control_in_list(hass, chargers) is None
 
