@@ -495,6 +495,8 @@ class UnifiedDeviceRegistry:
         from ..devices.base import DeviceControlMode
         for device_id, spec in self._service_registrations.items():
             device = surplus_device_from_spec(self.hass, device_id, spec)
+            # (#890) the spec is the SEED; a persisted drag outranks it.
+            device.priority = self._service_device_priority(device_id, spec)
             try:
                 device.control_mode = DeviceControlMode(
                     spec.get("control_mode", "surplus")
@@ -574,6 +576,9 @@ class UnifiedDeviceRegistry:
         # under the same id.
         from ..devices.base import DeviceControlMode
         device = surplus_device_from_spec(self.hass, device_id, stored)
+        # (#890) A re-registration must not undo the user's drag: the spec
+        # priority is the seed, the override store is the slot.
+        device.priority = self._service_device_priority(device_id, stored)
         try:
             device.control_mode = DeviceControlMode(stored["control_mode"])
         except ValueError:
@@ -592,7 +597,8 @@ class UnifiedDeviceRegistry:
             "device_id": device_id,
             "name": stored["name"],
             "entity_id": stored["entity_id"],
-            "priority": stored["priority"],
+            # (#890) the EFFECTIVE slot — what the allocator will use
+            "priority": device.priority,
             "rated_power": stored["rated_power"],
             "control_mode": stored["control_mode"],
             "device_type": stored["device_type"],
@@ -1533,7 +1539,8 @@ class UnifiedDeviceRegistry:
             current_power = round(live.get_current_consumption()) if is_on and live else 0.0
             result[did] = {
                 "name": spec.get("name", did),
-                "priority": spec.get("priority", 5),
+                # (#890) the one axis, not the spec — a drag must show here
+                "priority": self._service_device_priority(did, spec),
                 # (#780) an explicit registration IS the control handle.
                 "has_control_handle": True,
                 "user_hands_off": False,
@@ -1733,16 +1740,27 @@ class UnifiedDeviceRegistry:
             **self._goal_payload(did),
         }
 
+    def _service_device_priority(self, device_id: str, spec: Dict[str, Any]) -> int:
+        """(#890) The slot of a service-registered device: the one axis,
+        seeded by the priority the ``register_surplus_device`` call gave.
+
+        Every reader of a service device's priority — the live object at
+        registration and at boot, the card payload — goes through here, so
+        a drag override reaches all of them or none. Before this the spec
+        was read directly in three places and the override in none."""
+        return self.priority_for(
+            device_id, seed=int(spec.get("priority", 5) or 5))
+
     def refresh_direct_device_priorities(self) -> None:
-        """(#576) Make the drag store authoritative for directly-registered
-        surplus devices (heat pump / hot water / climate) too — mirrors the EV
-        charger refresh. ED / service devices already resolve via the registry
-        sync; this covers the ones registered straight into the controller so
-        their list position governs the walk (not just the card row)."""
+        """(#576) Make the drag store authoritative for every surplus device
+        the ED rebuild does not re-create — heat pump / hot water / climate
+        registered straight into the controller AND (#890) service-registered
+        devices, which the sync deliberately leaves alone (ownership by
+        construction, #559) and which therefore had no other path from the
+        override store to the live object. ED rows get theirs from the
+        rebuild, chargers from the coordinator's own refresh."""
         for did, dev in getattr(self._surplus_controller, "_devices", {}).items():
             if did.startswith("energy_dashboard_") or getattr(dev, "is_ev", False):
-                continue
-            if did in self._service_registrations:
                 continue
             dev.priority = self.priority_for(
                 did, seed=int(getattr(dev, "priority", 5) or 5))
@@ -2183,6 +2201,12 @@ class UnifiedDeviceRegistry:
                 self._priority_overrides[device_id] = int(priority)
 
         await self._save_storage()
+        # (#890) Apply to the live objects the ED rebuild below does not
+        # re-create (direct + service-registered devices) — and apply NOW,
+        # not on the next cycle: the rebuild returns early on an install
+        # without an Energy Dashboard, and the service response is read as
+        # "it took".
+        self.refresh_direct_device_priorities()
         await self.async_refresh_devices()
 
     async def update_device_control_mode(self, device_id: str, mode: str) -> None:
