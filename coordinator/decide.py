@@ -432,7 +432,7 @@ def _idle_bridgeable(view: ChargerView) -> tuple[bool, str]:
     )
     if battery_cannot_assist and real_surplus_w < min_charge_w:
         return False, (
-            f"no battery assist (SoC {f.battery_soc:.0f}% < buffer "
+            f"no battery assist (SoC {f.soc_label} < buffer "
             f"{f.buffer_soc:.0f}%) + EV surplus {_cw(real_surplus_w)}W "
             f"< min charge {_cw(min_charge_w)}W"
         )
@@ -777,7 +777,7 @@ class MinPlusSolarMode(ModeStrategy):
         if zone == 2:
             return _relabel(
                 _SOLAR_ONLY.decide(view), "min_plus_solar",
-                f"min_plus_solar day Zone 2 (SOC={f.battery_soc:.0f}%)",
+                f"min_plus_solar day Zone 2 (SOC={f.soc_label})",
             )
         # Zone 3 / 4: surplus + capped SOC-based battery assist (#501).
         # The budget uses the battery's POTENTIAL (never gated on

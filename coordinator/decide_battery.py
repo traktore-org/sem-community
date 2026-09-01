@@ -391,7 +391,7 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
             home_w = max(0.0, view.home_consumption_w - gf_w) / n
             if below_buffer:
                 why = (
-                    f"ev plugged in + battery SoC {f.battery_soc:.0f}% < buffer "
+                    f"ev plugged in + battery SoC {f.soc_label} < buffer "
                     f"{buffer_soc:.0f}% (self-consumption floor)"
                 )
             else:
