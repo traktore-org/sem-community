@@ -1823,6 +1823,64 @@ def build_discovered_charger_storage(
     )
 
 
+def _online_twin_from_registry(hass, offline_eid: str):
+    """(#886) The online current-control twin of a persisted offline register,
+    resolved through the entity registry (same device). ``None`` when the
+    device is gone or exposes no live counterpart. The registry is persisted,
+    so the twin is found regardless of the charger integration's load order."""
+    from homeassistant.helpers import entity_registry as er
+    from .hardware_detection import _online_current_control
+    reg = er.async_get(hass)
+    ent = reg.async_get(offline_eid)
+    if ent is None or not getattr(ent, "device_id", None):
+        return None
+    siblings = [e for e in reg.entities.values()
+                if e.device_id == ent.device_id]
+    return _online_current_control(offline_eid, siblings)
+
+
+def _heal_offline_current_control_in_list(hass, chargers):
+    """(#886, bug class 56) Repair chargers already PERSISTED with an offline
+    fallback register as ``ev_current_control_entity`` — bound by pre-fix
+    detection. Detection only re-runs when NO charger is configured, so an
+    adopted install never self-corrects; this heals the stored list once, at
+    setup, idempotently. Returns a new list if anything changed, else ``None``.
+
+    Unlike the detection-time guard (which may drop the binding — it is only
+    choosing whether to configure control at all), the heal ONLY swaps to a
+    found online twin. It never drops: silently disabling an already-working
+    charger's control on a registry read would be a heavier, harder-to-notice
+    change than the mis-binding it repairs. In practice the twin is always
+    present (the reporter's JuiceBox exposes both), so the swap is clean."""
+    if not chargers:
+        return None
+    changed = False
+    healed = []
+    for c in chargers:
+        if not isinstance(c, dict):
+            healed.append(c)
+            continue
+        eid = c.get("ev_current_control_entity")
+        if not eid or "offline" not in str(eid).lower():
+            healed.append(c)
+            continue
+        online = _online_twin_from_registry(hass, str(eid))
+        if online:
+            new_c = dict(c)
+            new_c["ev_current_control_entity"] = online
+            healed.append(new_c)
+            changed = True
+        else:
+            _LOGGER.warning(
+                "Charger %s binds an offline current-control register (%s) and "
+                "no online twin was found in the registry — leaving it in place; "
+                "re-run charger auto-detection to fix (#886).",
+                c.get("id", "?"), eid,
+            )
+            healed.append(c)
+    return healed if changed else None
+
+
 # (#638) The kill-switch's unique_id is ``sem_{key}``, so renaming the
 # planner mints a new identity. Left alone HA would register a SECOND
 # switch and strand the first as an unavailable orphan — the user would
@@ -1925,6 +1983,33 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             hass.config_entries.async_update_entry(
                 entry, options={**entry.options, "ev_chargers": _healed},
             )
+
+    # (#886) Repair a charger persisted with its OFFLINE fallback register as
+    # ev_current_control_entity (pre-fix JuiceBox detection bound
+    # number.*_max_current_offline_* where the online twin belongs). Detection
+    # re-runs only when NO charger is configured, so an already-adopted install
+    # never self-corrects — swap to the online twin here, once, idempotently.
+    try:
+        _off_data = _heal_offline_current_control_in_list(
+            hass, (entry.data or {}).get("ev_chargers"))
+        _off_opts = _heal_offline_current_control_in_list(
+            hass, (entry.options or {}).get("ev_chargers"))
+        if _off_data is not None or _off_opts is not None:
+            _new_data = dict(entry.data or {})
+            _new_options = dict(entry.options or {})
+            if _off_data is not None:
+                _new_data["ev_chargers"] = _off_data
+            if _off_opts is not None:
+                _new_options["ev_chargers"] = _off_opts
+            _LOGGER.warning(
+                "Healed offline EV current-control binding(s) to the online "
+                "twin (see #886).",
+            )
+            hass.config_entries.async_update_entry(
+                entry, data=_new_data, options=_new_options,
+            )
+    except Exception as exc:  # noqa: BLE001 — a heal must never block setup
+        _LOGGER.debug("Offline current-control heal skipped: %s", exc)
 
     # Remove orphaned per-charger set-default button entities — the
     # button itself was retired in v1.7.0-beta.11 (#355 follow-up).

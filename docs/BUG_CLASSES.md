@@ -2308,3 +2308,40 @@ midnight (`daily_*`), sunset→sunrise (the night tracker), per-charger deadline
 assertion, diagnostic or Repair that puts two of those on opposite sides of an inequality is
 suspect. The question to ask is not "are both numbers right" but *"do these two zero at the same
 moment?"*
+
+### 56. A mode-qualified fallback register bound as the live control surface — GUARDED
+**Symptom:** SEM drives a charger through a register the hardware only honours when it is
+DISCONNECTED — a limited-write "offline" fallback — instead of the live "online" limit, so every
+current command lands on a knob not meant for frequent writes (and on some firmware is ignored until
+the box loses its server). No error: the offline register is a real, writable `number.*`, correctly
+united, and the charger accepts the write — it simply governs the wrong connection MODE.
+**Live catch (#886, @Azlinon, 2.1.0-beta.3):** JuiceBox over JuiceBoxProxy/MQTT exposes TWO
+current-limit numbers — `number.juicebox_max_current_online_wanted` and `..._offline_wanted`. The
+`ev_current_control_entity` brand-hint matched every `number.juicebox*` and took the LAST match
+(`_discover_from_hints` is last-wins), so entity ORDERING decided which mode SEM drove; the
+reporter's install bound the offline one.
+**Root shape:** a detection matcher resolves an ACTUATION entity by a name/shape test too loose to
+separate two siblings that differ only by a MODE qualifier (`online`/`offline`, `boot`, `failsafe`),
+then picks by ordering (first-/last-wins). Cousin of class 42's control half — *the acceptable
+false-positive rate of a name match is set by what happens when it is wrong, and a mis-bound control
+actuates*; here it actuates the disconnected-mode fallback. Cousin of class 47 — one register name
+carries two axes (which limit AND which connection mode) and the matcher reads the axis it expected.
+**Where it lives:** every `ev_current_control_entity` resolver in `hardware_detection.py` — the
+`_BRAND_HINTS` rows (juicebox, garo, wattpilot, heidelberg) AND the hand-written brand functions
+(go-e, OpenWB, OCPP, Wallbox, Peblar, …), all of which pick a `number.*` on a loose `current`/`amp`
+substring; any integration that also publishes an offline/failsafe limit is exposed.
+**Closure:** one brand-agnostic guard, `_reject_offline_current_control`, at the single choke point
+every brand's config flows through (`discover_all_ev_chargers_from_registry`), mirrored on the
+diagnostics report path and the generic prober: if the bound current control names an `offline`
+fallback, swap it to the `online` twin among the same device's numbers, else DROP the binding —
+monitor-only beats driving the wrong knob (fail-closed, the actuation-path rule). The JuiceBox hint
+also now requires the number to name a current (`current`/`amp`), so a non-current juicebox number
+can never be bound as the control. Because the guard is at the choke point and knows nothing about
+JuiceBox, the whole class is closed for every current matcher, hand-written or hinted, and for the
+next brand. **Guard:** `tests/test_886_offline_current_control.py` — the reporter's two-number
+JuiceBox binds `online` regardless of registry order; an offline-only charger drops the binding
+rather than actuating it; a plain single `max_current` is untouched (no #816 regression); and the
+guard holds for a hand-written brand shape too, so the closure is at the class level, not the
+instance. **Sweep question:** for every entity a detector binds to an actuation role, can the
+integration expose a SECOND entity that fits the same shape but governs a different mode/state — and
+does the matcher separate them, or pick by ordering? Refs #886 #816 #683 #698.
