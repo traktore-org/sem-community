@@ -2345,3 +2345,33 @@ guard holds for a hand-written brand shape too, so the closure is at the class l
 instance. **Sweep question:** for every entity a detector binds to an actuation role, can the
 integration expose a SECOND entity that fits the same shape but governs a different mode/state — and
 does the matcher separate them, or pick by ordering? Refs #886 #816 #683 #698.
+
+### 57. Belt-and-suspenders actuation — a wrapper does the action AND delegates to a layer that does it again — GUARDED
+**Symptom:** one logical actuation reaches the hardware TWICE, a few milliseconds apart. No error, no
+wrong value — the SAME correct command, sent twice. It surfaces only where a downstream watcher is
+edge-sensitive: an HA automation that stops the car on SEM's 0 A write fires twice, and the second
+fire (or SEM's own duplicate-detection) produces a burst of warnings. **Root shape:** the exact
+MIRROR of class 25 (mutual delegation → *neither* layer acts). Here a wrapper performs the primitive
+itself AND then calls a higher-level method that performs the same primitive as its own universal
+fallback — so *both* fire. Each is individually defensible ("set 0 A to stop" / "stop_session tidies
+up the session"), and reviewing either in isolation reads as correct; the defect is in the
+composition. A same-value de-dup that *looks* like it would collapse the second write can be silently
+inert — here `_set_current`'s heartbeat de-dup is gated on `is_active` (`_status.state == ACTIVE`),
+which the EV reconciler path never sets, so the guard was always False during a stop. Relying on that
+de-dup would itself be a workaround; the fix removes the redundant call so ONE layer owns the action.
+**Live catch (#894, @DigitalOptics, Fronius / "Other" charger, 2.0.0):** with no start/stop entity,
+`GenericAdapter.command_disable` / `command_idle` wrote `_set_current(0)` directly AND called
+`stop_session()`, which — finding no brand stop mechanism — falls back to `_set_current(0)` itself.
+Two 0 A dispatches per stop. `KebaAdapter` was always correct: it delegates to `stop_session()` alone.
+**Where it lives:** the charger adapters' stop paths (`coordinator/charger_adapters/generic.py`
+`command_idle`/`command_disable`, inherited by `WallboxAdapter`); the same shape is latent anywhere a
+`command_*` wrapper both actuates and calls a session/teardown method that re-actuates. **Closure:**
+`stop_session()` is the single owner of the stop — `command_disable` delegates to it outright (like
+KEBA), and `command_idle` delegates when a session is open, writing 0 A directly ONLY when there is no
+session to tear down (the two are mutually exclusive, never sequential). **Guard:**
+`tests/test_894_stop_sent_once.py` — one stop call → exactly one 0 A dispatch, asserted end-to-end
+through the REAL `command_disable`→`stop_session` composition (spying `_set_current`), for generic AND
+KEBA, plus a branch-safe AST check that `command_disable` never calls `_set_current` directly.
+**Sweep question:** for every actuation wrapper, does it perform the hardware action itself *and* call
+a method (`stop_session`, `park_off`, a teardown/cleanup) that performs the same action — and if a
+de-dup is supposed to save you, is its gating predicate ever actually true on this path? Refs #894 #25 #315 #487 #627.

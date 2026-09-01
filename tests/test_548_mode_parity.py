@@ -91,13 +91,18 @@ class TestOffMode:
         d.stop_session.assert_called()  # keba.disable
 
     @pytest.mark.asyncio
-    async def test_wallbox_disable_stops_via_setpoint(self):
+    async def test_wallbox_disable_stops_via_stop_session(self):
         d = _wallbox_device()
         a = WallboxAdapter(d)
         a._pause_switch_entity = "input_boolean.mock_wallbox_pause"
         a._pause_switch_searched = True
         await a.command_disable()
-        d._set_current.assert_called_with(0)  # contactor open
+        # #894: the generic/Wallbox stop now delegates to stop_session (the
+        # single owner of the 0 A write), exactly like KEBA above — no second
+        # direct _set_current(0). stop_session opens the contactor; the
+        # pause-switch toggle is asserted in test_wallbox_adapter_357.py.
+        d.stop_session.assert_called()
+        d._set_current.assert_not_called()
 
 
 # ── always_max → CHARGE_MAX: both command hardware max ────────────────
