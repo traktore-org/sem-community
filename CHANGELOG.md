@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔧 **Dragging a service-registered device in the priority list now
+  moves it** (#890). A load added with `register_surplus_device` took its
+  slot from the stored spec in three places — the live object at
+  registration and at boot, and the card row — while the per-cycle refresh
+  carved it out with a comment saying it was covered elsewhere. The drag
+  persisted an override nothing read: `update_device_priorities` answered
+  200, the log said "Updated priorities", and the allocator kept the old
+  order for good. One resolver now seeds every reader from the spec and
+  lets the drag outrank it, the refresh covers service devices like every
+  other direct device, and the drag applies the moment it is stored rather
+  than through an Energy-Dashboard rebuild that returns early on an install
+  without one.
+
 - 🔧 **The battery-night backfill button heals its entity id on upgrade**
   (#815 follow-up). `button.sem_backfill_battery_nights` is only honoured at
   first registration; an install that registered the button before that id

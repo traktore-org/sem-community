@@ -35,6 +35,7 @@ def _registry_fixture():
     reg._control_mode_overrides = {}
     reg._device_goals = {}
     reg._dependency_overrides = {}
+    reg._priority_overrides = {}  # (#890) service devices read the one axis
     reg._surplus_controller = MagicMock()
     reg._surplus_controller._devices = {}
     reg._dependency_would_cycle = MagicMock(return_value=False)
