@@ -34,6 +34,7 @@ from custom_components.solar_energy_management.coordinator.build_view import (
 )
 from custom_components.solar_energy_management.coordinator.decide import (
     _ev_reclaims,
+    _idle_bridgeable,
     battery_assist_budget_w,
     decide,
 )
@@ -198,6 +199,30 @@ class TestUnknownSocOnTheChargerPath:
 
 
 @pytest.mark.unit
+class TestTheReasonSaysUnknownNotZero:
+    """The action being right is half the fix: the reason the reporter reads
+    (observer ``would_decisions``, the card) must not print the 0 % that is
+    not a measurement — that line IS what #875 quoted."""
+
+    def test_the_zone_2_reason(self):
+        d = decide(_view(soc=0.0, known=False))
+        assert "SOC=unknown" in d.reason, d.reason
+        assert "SOC=0%" not in d.reason, d.reason
+
+    def test_the_idle_bridge_reason(self):
+        v = _view("min_plus_solar", soc=0.0, known=False, solar_w=2000.0)
+        ok, why = _idle_bridgeable(v)
+        assert ok is False
+        assert "SoC unknown" in why, why
+        assert "SoC 0%" not in why, why
+
+    def test_the_known_reason_keeps_its_number(self):
+        v = _view("min_plus_solar", soc=40.0, known=True, solar_w=2000.0)
+        _, why = _idle_bridgeable(v)
+        assert "SoC 40%" in why, why
+
+
+@pytest.mark.unit
 def test_the_discharge_clamp_protects_an_unknown_pack():
     """decide_battery keys the EV discharge clamp on ``soc < buffer``. An
     unknown SOC must land on the protective side even when 0.0 is not what
@@ -219,3 +244,5 @@ def test_the_discharge_clamp_protects_an_unknown_pack():
     )
     d = decide_battery(view)
     assert d.intent == BatteryIntent.LIMIT_DISCHARGE, d.reason
+    assert "SoC unknown" in d.reason, d.reason
+    assert "SoC 95%" not in d.reason and "SoC 0%" not in d.reason, d.reason

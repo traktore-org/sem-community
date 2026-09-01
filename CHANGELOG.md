@@ -82,7 +82,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now has an honest never-read state (`battery_soc_known`) and the charger
   view carries it: an unknown battery is neither a source nor a blocker —
   the car charges on surplus (Zone 2), gets no assist, reclaims nothing, and
-  the discharge clamp protects the pack. A gap AFTER the first read keeps
+  the discharge clamp protects the pack — and every reason that prints the
+  SOC (`Zone 2 (SOC=unknown)`, `SoC unknown < buffer`) says so instead of
+  quoting the 0 % that was never measured. A gap AFTER the first read keeps
   the held value, as before. **Behaviour change:** an install with no SOC
   sensor at all is now "unknown" on both config paths — it no longer sits in
   Zone 1 forever, so a battery-less *Min + Solar* install charges the car on
