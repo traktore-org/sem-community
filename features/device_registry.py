@@ -911,8 +911,7 @@ class UnifiedDeviceRegistry:
                 # (#805) No explicit choice → monitor only. See
                 # DEFAULT_DISCOVERED_CONTROL_MODE: SEM does not actuate what
                 # it found by itself until the user opts it in.
-                mode_str = self._control_mode_overrides.get(
-                    device.device_id, DEFAULT_DISCOVERED_CONTROL_MODE)
+                mode_str = self.control_mode_for(device.device_id)
                 try:
                     surplus_device.control_mode = DeviceControlMode(mode_str)
                 except ValueError:
@@ -1027,6 +1026,20 @@ class UnifiedDeviceRegistry:
         )
         self._surplus_controller.register_device(surplus_device)
 
+    def control_mode_for(self, device_id: str) -> str:
+        """What a device may do: the user's choice, else the discovery default.
+
+        (#895) The ONE answer for every reader — the surplus sync, the load-
+        manager sync and the card payload. #805 lowered the default to
+        monitor-only, but each reader carried its own ``"peak_only"``
+        literal, so the change reached the surplus side and missed the
+        shedder: a first install still fed every discovered device to
+        emergency shedding (forum #30 — a Span panel and a backup battery
+        switched off circuit by circuit, HA's own supply included).
+        """
+        return self._control_mode_overrides.get(
+            device_id, DEFAULT_DISCOVERED_CONTROL_MODE)
+
     def _sync_to_load_manager(self) -> bool:
         """Populate LoadManagement._devices dict from registry devices.
 
@@ -1098,7 +1111,9 @@ class UnifiedDeviceRegistry:
                 "user_hands_off": device.user_hands_off,
                 "is_controllable": device.is_controllable,
                 "is_ev": device.is_ev,
-                "control_mode": self._control_mode_overrides.get(device.device_id, "peak_only"),
+                # (#895) the same default the surplus side applies — the
+                # shedder used to carry its own "peak_only" literal here.
+                "control_mode": self.control_mode_for(device.device_id),
                 # (#649) Is this device driven by the surplus controller? Only
                 # then may load_management stand down from shedding it — a
                 # surplus-mode device with no live controller object (e.g. a
@@ -1495,7 +1510,7 @@ class UnifiedDeviceRegistry:
                 "device_type": "ev_charger" if device.is_ev else "individual_device",
                 "has_manual_mapping": device.has_manual_mapping,
                 "control": device.control,
-                "control_mode": self._control_mode_overrides.get(did, "peak_only"),
+                "control_mode": self.control_mode_for(did),
                 # (#122/#576) the "Requires" link — read from the persistent
                 # store so it both survives rebuilds AND shows on the card
                 # (pre-fix it was never emitted, so the card couldn't display it).

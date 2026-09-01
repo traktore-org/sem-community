@@ -408,6 +408,7 @@ class TestEmergencyShedding:
             return_value={"is_on": True, "current_power": 2000}
         )
 
+        lm._last_grid_import_w = 6000.0  # (#896) the plan reads the meter
         await lm._emergency_load_shedding()
 
         # Non-critical device should be shed
@@ -433,6 +434,7 @@ class TestEmergencyShedding:
             return_value={"is_on": True, "current_power": 2000}
         )
 
+        lm._last_grid_import_w = 6000.0  # (#896) the plan reads the meter
         await lm._emergency_load_shedding()
         # Should still only appear once
         assert lm._devices_shed.count("dev_a") == 1
@@ -464,6 +466,7 @@ class TestEmergencyShedding:
             return_value={"is_on": True, "current_power": 2000}
         )
 
+        lm._last_grid_import_w = 6000.0  # (#896) the plan reads the meter
         await lm._emergency_load_shedding()
         assert "dev_active" in lm._devices_shed
         assert "dev_disabled" not in lm._devices_shed
@@ -494,6 +497,7 @@ class TestEmergencyShedding:
             return_value={"is_on": True, "current_power": 2000}
         )
 
+        lm._last_grid_import_w = 6000.0  # (#896) the plan reads the meter
         await lm._emergency_load_shedding()
         assert "dev_avail" in lm._devices_shed
         assert "dev_unavail" not in lm._devices_shed
@@ -532,6 +536,7 @@ class TestProgressiveShedding:
         )
 
         # current_peak=5.5, target=5.0, hysteresis=0.3 => need to reduce 0.8kW
+        lm._last_grid_import_w = 6000.0  # (#896) the plan reads the meter
         await lm._progressive_load_shedding(5.5, 5.5)
 
         # At least one device should be shed (the highest priority number first)
@@ -637,6 +642,7 @@ class TestEvNotShedByLoadManager:
         )
         shed = []
         lm._shed_device = AsyncMock(side_effect=lambda did, r: shed.append(did))
+        lm._last_grid_import_w = 8000.0  # (#896) the plan reads the meter
         await lm._emergency_load_shedding()
         assert "load_device_wb" not in shed       # EV not emergency-shed
         assert "load_device_heater" in shed

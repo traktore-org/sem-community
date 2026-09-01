@@ -304,7 +304,8 @@ class TestSolarEnergyManagementConfigFlow:
         assert data["update_interval"] == 10  # DEFAULT_UPDATE_INTERVAL
         assert data["daily_ev_target"] == 10  # DEFAULT_DAILY_EV_TARGET
         assert data["enable_charger_notifications"] is True
-        assert data["load_management_enabled"] is True
+        # (#897) Off on a fresh install: a shedder is armed by the user.
+        assert data["load_management_enabled"] is False
         # Energy Dashboard sensors are still present
         assert data["solar_power_sensor"] == "sensor.solar_power"
         # EV inputs from previous step

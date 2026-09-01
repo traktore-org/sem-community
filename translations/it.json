@@ -1678,6 +1678,10 @@
     "load_current_control_wrong_unit": {
       "title": "Un carico è in controllo di corrente ma la sua entità è in watt",
       "description": "**{name}** è configurato per il controllo di *corrente*, ma **{entity_id}** attende il valore in **{unit}**.\n\nIl controllo di corrente significa **ampere** — esiste per le colonnine, a cui si impone una corrente di circa 6–32 A. Scrivere un surplus in ampere su un'entità che attende watt non può significare ciò che intendi, quindi SEM non pilota questo dispositivo invece di scrivere un numero nell'unità sbagliata. Prima lo registrava e non gli scriveva mai, comparendo tra le colonnine con il surplus fermo a 0 W.\n\n**Se il dispositivo è davvero a corrente**, indica la sua entità in ampere.\n\n**Se è un carico a potenza variabile** — AC-THOR, resistenza — SEM non sa ancora modularlo (#880). Nel frattempo usalo come carico **on/off** tramite un'entità switch."
+    },
+    "load_shed_futile": {
+      "title": "Il picco di rete è causato da un carico che SEM non controlla",
+      "description": "Il contatore segna **{grid_import_kw} kW** contro un obiettivo di **{target_kw} kW** — e anche con tutto ciò che SEM può spegnere già spento, resterebbero **{uncontrolled_kw} kW**. Quel consumo appartiene a qualcosa che SEM non gestisce: un'auto elettrica su una colonnina che SEM non conosce, un forno, una pompa di calore con il proprio controller.\n\nDistaccare la casa non può risolvere questo picco, quindi SEM non distacca **nulla** finché la situazione persiste (una versione precedente continuava a spegnere un circuito dopo l'altro fino a lasciare la casa al buio).\n\n**Cosa fare:** affidare il carico a SEM (aggiungere la colonnina in *Caricatori EV*, o il dispositivo con un'entità di controllo), alzare l'obiettivo se non è davvero il limite del contratto, oppure accettare il picco per un carico che deve funzionare. Questo avviso si chiude da solo appena il picco torna raggiungibile."
     }
   },
   "selector": {

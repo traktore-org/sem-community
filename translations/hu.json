@@ -1678,6 +1678,10 @@
     "load_current_control_wrong_unit": {
       "title": "Egy fogyasztó áramvezérlésre van állítva, de az entitása wattban van",
       "description": "A **{name}** *áram*vezérlésre van beállítva, de a **{entity_id}** az értéket **{unit}** egységben várja.\n\nAz áramvezérlés **ampert** jelent — elektromos autó töltőkhöz létezik, amelyeknek nagyjából 6–32 A áramot adunk meg. A többletet amperben egy wattot váró entitásba írni nem jelentheti azt, amit szeretne, ezért a SEM nem vezérli ezt az eszközt ahelyett, hogy rossz mértékegységben írna egy számot. Korábban regisztrálta és soha nem írt bele — a töltők között jelent meg, a többlet pedig 0 W-on ragadt.\n\n**Ha az eszköz valóban áramvezérelt**, mutasson a beállítás az amperes entitására.\n\n**Ha változó teljesítményű fogyasztó** — AC-THOR, fűtőbetét — a SEM még nem tudja szabályozni (#880). Addig használja **be/ki** többletfogyasztóként egy kapcsoló entitáson keresztül."
+    },
+    "load_shed_futile": {
+      "title": "A hálózati csúcsot olyan fogyasztó okozza, amelyet a SEM nem vezérel",
+      "description": "A mérő **{grid_import_kw} kW**-ot mutat a **{target_kw} kW** cél mellett — és még ha minden, amit a SEM lekapcsolhat, már ki is lenne kapcsolva, **{uncontrolled_kw} kW** akkor is maradna. Ez a fogyasztás olyasmihez tartozik, amit a SEM nem kezel: egy elektromos autó a SEM által nem ismert töltőn, egy sütő, egy saját vezérlésű hőszivattyú.\n\nA ház fogyasztóinak lekapcsolása nem oldja meg ezt a csúcsot, ezért a SEM **semmit** sem kapcsol le, amíg ez fennáll (egy korábbi verzió áramkört áramkör után kapcsolt le, amíg a ház sötét nem lett).\n\n**Mi a teendő:** add át a fogyasztót a SEM-nek (add hozzá a töltőt az *EV-töltők* alatt, vagy az eszközt egy vezérlő entitással), emeld a célt, ha az valójában nem a szerződésed felső határa, vagy fogadd el a csúcsot egy fogyasztónál, amelynek működnie kell. Ez a jelzés magától eltűnik, amint a csúcs újra elérhető."
     }
   },
   "selector": {

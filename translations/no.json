@@ -1678,6 +1678,10 @@
     "load_current_control_wrong_unit": {
       "title": "En last er satt til strømstyring, men entiteten er i watt",
       "description": "**{name}** er konfigurert for *strøm*styring, men **{entity_id}** forventer verdien i **{unit}**.\n\nStrømstyring betyr **ampere** — det finnes for elbilladere, som får en strøm på omtrent 6–32 A. Å skrive et overskudd i ampere til en entitet som venter watt kan ikke bety det du mener, så SEM styrer ikke denne enheten framfor å skrive et tall i feil enhet. Tidligere ble enheten registrert og aldri skrevet til — den dukket opp blant laderne dine med overskuddet fast på 0 W.\n\n**Er enheten virkelig strømstyrt**, pek innstillingen mot ampere-entiteten.\n\n**Er det en last med variabel effekt** — AC-THOR, varmekolbe — kan SEM ikke modulere den ennå (#880). Bruk den i mellomtiden som **på/av**-overskuddslast via en switch-entitet."
+    },
+    "load_shed_futile": {
+      "title": "Nettoppen skyldes en last som SEM ikke styrer",
+      "description": "Måleren viser **{grid_import_kw} kW** mot et mål på **{target_kw} kW** — og selv om alt SEM kan slå av allerede var av, ville **{uncontrolled_kw} kW** gjenstå. Det forbruket tilhører noe SEM ikke håndterer: en elbil på en lader SEM ikke kjenner, en ovn, en varmepumpe med egen styring.\n\nÅ koble ut huset kan ikke løse denne toppen, så SEM kobler ut **ingenting** så lenge dette gjelder (en tidligere versjon fortsatte å slå av kurs etter kurs til huset var mørkt).\n\n**Hva du kan gjøre:** gi SEM lasten (legg til laderen under *Elbilladere*, eller enheten med en styringsentitet), hev målet hvis det ikke egentlig er avtalens tak, eller godta toppen for en last som må gå. Denne saken forsvinner av seg selv så snart toppen igjen kan nås."
     }
   },
   "selector": {
