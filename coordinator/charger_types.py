@@ -674,6 +674,15 @@ class FleetContext:
     surplus-only chargers; above ``auto_start_soc`` enables
     battery-assist."""
 
+    battery_soc_known: bool = True
+    """(#875) False while the SOC has never been read this process —
+    the restart-to-first-report window. Then ``battery_soc`` is 0.0
+    because nothing was measured, not because the pack is empty, and
+    an UNKNOWN battery is neither a source nor a blocker: the charger
+    charges the car on surplus (Zone 2), gets no assist, reclaims
+    nothing, and the discharge clamp protects the pack. Carried the
+    way ``BatteryRuntime.available`` carries the per-unit read."""
+
     battery_count: int = 1
     """How many batteries SEM controls. #531: a per-battery
     LIMIT_DISCHARGE must split the home-consumption budget across the

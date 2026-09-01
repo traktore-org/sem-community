@@ -218,6 +218,13 @@ class PowerReadings:
     # Battery state
     battery_soc: float = 0.0
     battery_soc_unavailable: bool = False  # True when SOC sensor is offline
+    # (#875) False only while the SOC has NEVER been read this process —
+    # the window between a restart and the sensor's first report. Then
+    # ``battery_soc`` is 0.0 because nothing was ever measured, not
+    # because the pack is empty; the charger path treats it as unknown
+    # (neither a source nor a blocker). A later gap keeps this True: the
+    # held value IS a measurement and stays steerable.
+    battery_soc_known: bool = True
     # (#638 finding #3) On a multi-battery install the fleet SOC is the
     # average of the units that could be READ. When one unit's sensors are
     # still warming (boot) or offline, that average silently becomes a

@@ -169,6 +169,8 @@ def build_charger_view(
         battery_charge_w=float(getattr(power_reading, "battery_charge_power", 0.0) or 0.0),
         battery_discharge_w=float(getattr(power_reading, "battery_discharge_power", 0.0) or 0.0),
         battery_soc=float(getattr(power_reading, "battery_soc", 0.0) or 0.0),
+        # (#875) a never-read SOC is not a 0 % pack.
+        battery_soc_known=bool(getattr(power_reading, "battery_soc_known", True)),
         grid_import_w=float(getattr(power_reading, "grid_import_power", 0.0) or 0.0),
         grid_export_w=float(getattr(power_reading, "grid_export_power", 0.0) or 0.0),
         is_night=fleet_state.is_night,

@@ -586,6 +586,17 @@ exact residual of the six rows published beside it.
 - The *instantaneous* `sensor.sem_home_consumption_power` is unchanged (see ADR 0004) — only the
   daily energy row moved to the balance.
 
+## The EV paused for "Zone 1 — battery priority" right after a restart
+
+**Fixed in 2.1 (#875).** The battery SOC sensor reports its first value some time after a restart
+(a Huawei LUNA2000 needs up to ~3 minutes). SEM used to steer that window on a 0 % SOC that had
+never been read — the charger card said "Zone 1 (SOC=0% < priority=30%) — battery priority" and the
+car waited on a pack that was actually fine. An unread SOC is now **unknown**, not 0 %: the car charges
+on solar surplus (Zone 2 behaviour), no battery assist is offered, and the battery is protected from
+discharging into the car until the first real reading arrives. Nothing to configure. If you still
+see a Zone 1 reason with `SOC=0%` more than a few minutes after a restart, the SOC sensor itself is
+not reporting — check it under **Settings → Entities**.
+
 ## Charging stopped before my car app showed the target (slow SOC sensors)
 
 **This is intentional (v1.7.6, #708).** Some car integrations (OnStar and similar) poll the

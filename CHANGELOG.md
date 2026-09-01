@@ -73,6 +73,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is now neither a sample nor a baseline, and a swing the meter did not
   answer (moved less than a quarter of it) casts nothing. Installs that
   locked the wrong sign on a stale cycle: tap **Reset sign detection** once.
+
+- 🔋 **A battery SOC that was never read is unknown, not 0 %** (#875). Between a
+  restart and the SOC sensor's first report (up to ~3 min on a Huawei) the
+  hold that carries the SOC across sensor gaps had nothing to hold and
+  published 0.0 — the charger path steered those cycles as Zone 1, "battery
+  priority, EV blocked", on an empty pack that was never measured. The hold
+  now has an honest never-read state (`battery_soc_known`) and the charger
+  view carries it: an unknown battery is neither a source nor a blocker —
+  the car charges on surplus (Zone 2), gets no assist, reclaims nothing, and
+  the discharge clamp protects the pack. A gap AFTER the first read keeps
+  the held value, as before. **Behaviour change:** an install with no SOC
+  sensor at all is now "unknown" on both config paths — it no longer sits in
+  Zone 1 forever, so a battery-less *Min + Solar* install charges the car on
+  surplus during the day; and its VPP/night-recorder inputs see "no SOC"
+  instead of a 0 % measurement.
 - 🔧 **The battery-night backfill button heals its entity id on upgrade**
   (#815 follow-up). `button.sem_backfill_battery_nights` is only honoured at
   first registration; an install that registered the button before that id
