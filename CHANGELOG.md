@@ -11,7 +11,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [Unreleased] — 2.1.0-beta.3
+# [Unreleased]
+
+# [2.1.0-beta.5] — 01.09.2026
+
+- ☁️ **A passing cloud no longer hard-stops a solar charging session whenever
+  electricity isn't cheap** (#893, reported by @DigitalOptics on 2.0.0). The
+  anti-flap bridge — the 3-minute hold that carries a session through a solar
+  dip instead of cycling the contactor — was being cancelled by the tariff:
+  any daytime idle during a not-cheap price window was classed as a
+  structural stop, in **every** mode. For most tariffs that is most of the
+  day, so each cloud stopped the session outright and the charger switched
+  with the weather. The tariff veto now applies only to the mode that
+  actually prices its grid use (*Solar + cheapest hours*); for solar modes
+  the hold is funded by your own surplus and your battery above its buffer,
+  and the price is nobody's business. The one case the old rule genuinely
+  protected — a hold that could only be grid-fed — is still refused, now
+  also when the battery is *forbidden* from assisting rather than merely
+  below its buffer.
+
+- 🔁 **A fussy car's start-current floor is now remembered — the all-night
+  contactor churn ends** (#893). Some cars latch at a higher current than the
+  minimum but refuse the minimum itself (live on the test rig 31.08: drew
+  3.1 kW at 8 A, 0.13 kW at 6 A). The start ladder found 8 A, then settled
+  back to the 6 A budget, the car dropped, and the ladder started over —
+  a contactor click every ~3 minutes, all night. SEM now learns the
+  demonstrated latch floor for the session: a budget below it holds off
+  quietly instead of re-laddering, the next start begins at the floor rather
+  than re-poking a current the car already refused, a draw at lower amps
+  decays the floor (appetite changes are honoured), and unplugging clears
+  it. An active draw is never interrupted by the floor guard.
+
+- 🔌 **The EV charging stop was sent twice** (#894, reported by @DigitalOptics
+  on 2.0.0). With no start/stop entity configured, SEM stops the charger by
+  writing 0 A — but the generic adapter wrote that 0 A directly *and* then
+  called the session stop, which writes 0 A again as its no-mechanism
+  fallback, so a single stop hit the wire twice within milliseconds. On
+  installs where the stop is realised by an automation watching for the 0 A
+  write, that automation fired twice and produced a burst of SEM warnings. The
+  stop is now issued exactly once — the session stop owns it, matching how KEBA
+  has always worked. Root-caused as a recurring class (a wrapper that actuates
+  *and* delegates to a layer that actuates the same command again) and guarded.
+
+# [2.1.0-beta.4] — 01.09.2026
+
+- 🔌 **JuiceBox was driven through its *offline* current limit, not the live
+  one** (#886, reported by @Azlinon on 2.1.0-beta.3). Auto-detection bound
+  `number.juicebox_max_current_offline_wanted` as the current control — the
+  register the charger honours only when it has lost its server, and a
+  limited-write one at that — where the *online* twin belongs. The matcher took
+  the last `number.juicebox*` it saw, so entity ordering silently decided which
+  connection mode SEM commanded. SEM now refuses any `*_offline_*` register as
+  a charger's current control across every brand, swapping to the online twin;
+  installs that already adopted the offline binding self-heal to the online one
+  on upgrade. Root-caused as a recurring class (a mode-qualified fallback bound
+  as the live control surface) and guarded at the single discovery choke point,
+  so the next brand cannot repeat it.
+
+# [2.1.0-beta.3] — 31.08.2026
 
 - 🔋 **The car can no longer drain the battery past what the house needs
   tonight** (#878). Letting the battery help charge the car is a permission

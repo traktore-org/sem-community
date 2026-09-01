@@ -623,10 +623,18 @@ class TestIdleBridgeable:
         assert ok is False
         assert "sun gone" in why
 
-    def test_not_cheap_tariff_is_structural(self):
+    def test_not_cheap_tariff_is_structural_only_for_tariff_modes(self):
+        """(#893) supersedes the blanket clause this test used to pin. A
+        not-cheap window is structural ONLY for the modes that price their
+        grid use — for a solar mode, a cloud dip's hold is funded by the
+        user's own surplus and pack, and the old blanket rule hard-stopped
+        the session with every cloud whenever electricity wasn't cheap
+        (DigitalOptics, most tariffs = most of the day)."""
+        ok, why = _idle_bridgeable(_view(
+            "solar_plus_cheap", solar_w=5000, tariff_level="normal"))
+        assert ok is False and "not-cheap tariff" in why
         ok, why = _idle_bridgeable(_view(solar_w=5000, tariff_level="normal"))
-        assert ok is False
-        assert "not-cheap tariff" in why
+        assert ok is True, f"a solar-mode cloud dip went structural: {why}"
 
     def test_no_assist_no_surplus_is_structural(self):
         # solar 3000, home 2500 → real surplus 500 < 4140 min charge; battery

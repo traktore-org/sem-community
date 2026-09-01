@@ -708,6 +708,47 @@ HardwareDetector = EVChargerDetector
 # Queries the entity registry for entities belonging to supported
 # EV charger integrations and maps them to config keys.
 
+
+def _online_current_control(offline_eid: str, entities) -> Optional[str]:
+    """(#886) The ONLINE twin of an offline current-limit register, among the
+    same device's ``number.*`` entities. Prefer the exact twin (``offline`` →
+    ``online`` in the id), then any number naming ``online`` and not
+    ``offline``. Returns None when the device exposes no live counterpart."""
+    numbers = [str(e.entity_id) for e in entities
+               if str(e.entity_id).startswith("number.")]
+    twin = offline_eid.replace("offline", "online")
+    if twin != offline_eid and twin in numbers:
+        return twin
+    for eid in numbers:
+        low = eid.lower()
+        if "online" in low and "offline" not in low:
+            return eid
+    return None
+
+
+def _reject_offline_current_control(result: Dict[str, str], entities) -> None:
+    """(#886, bug class 56) An ``*_offline_*`` current limit is a
+    disconnected-mode FALLBACK — the register the charger honours only when it
+    has lost its server — not the live surface SEM drives every cycle
+    (Azlinon's JuiceBox: ``number.juicebox_max_current_offline_wanted`` was
+    bound where the ONLINE twin belongs). ``ev_current_control_entity`` is an
+    ACTUATION path, so a wrong bind is not a stale-read guess: SEM would write
+    frequent current updates to a limited-write register that must not receive
+    them. Never bind offline — swap to the online twin, else DROP the binding
+    (monitor-only beats driving the wrong knob; the actuation-path rule of
+    class 42). Brand-agnostic on purpose: every current matcher, hand-written
+    or hinted, funnels through the discovery choke point, so the class cannot
+    recur unnoticed in the next brand."""
+    eid = result.get("ev_current_control_entity")
+    if not eid or "offline" not in str(eid).lower():
+        return
+    online = _online_current_control(str(eid), entities)
+    if online:
+        result["ev_current_control_entity"] = online
+    else:
+        result.pop("ev_current_control_entity", None)
+
+
 def discover_all_ev_chargers_from_registry(
     hass: HomeAssistant,
 ) -> List[Dict[str, str]]:
@@ -753,6 +794,9 @@ def discover_all_ev_chargers_from_registry(
         for device_id, device_entities in devices.items():
             result = discover_fn(device_entities)
             if result:
+                # (#886) never drive a charger through its offline fallback
+                # register — swap to the online twin or drop the binding.
+                _reject_offline_current_control(result, device_entities)
                 # Preserve the registry's real domain for diagnostics/stable
                 # migration metadata (e.g. zaptec_custom), not just the
                 # canonical matcher name.
@@ -851,6 +895,9 @@ def probe_charger_candidates(hass: Optional[HomeAssistant] = None,
                 evidence.append(f"{eid}: switch → start/stop (candidate)")
             elif dom == "sensor" and dc == "energy":
                 evidence.append(f"{eid}: sensor/energy → metered energy (not a charger mark)")
+        # (#886) the prober is advisory, but must not suggest an offline
+        # fallback register as the control the config path will bind.
+        _reject_offline_current_control(roles, dev_entities)
         has_power = "ev_charging_power_sensor" in roles
         # Live on the rig: smart plugs (Shelly-class, kitchen toaster, carport
         # light) expose power + a binary with device_class=power — the same
@@ -1052,6 +1099,9 @@ def build_detection_report(hass: Optional[HomeAssistant] = None,
             devices.setdefault(e.device_id, []).append(e)
         for device_id, dev_entities in devices.items():
             mapping = discover_fn(dev_entities) or {}
+            # (#886) mirror the config path's offline-fallback guard so the
+            # diagnostics report shows the entity SEM will actually drive.
+            _reject_offline_current_control(mapping, dev_entities)
             # (#804 B4c) the report path re-runs discovery per DEVICE, so the
             # installation-sibling threshold scan from the config path never
             # fires here — attach the same suggestion so the diagnostics
@@ -1419,8 +1469,12 @@ _BRAND_HINTS: Dict[str, List[_ROLE]] = {
          "device_class": "energy", "names": ("juicebox",), "names2": ("session",)},
         {"role": "ev_charging_sensor", "domain": "sensor",
          "names": ("juicebox",), "names2": ("status",)},
+        # (#886) the control must actually name a current limit — a bare
+        # ``names=("juicebox",)`` would bind ANY juicebox number as the control.
+        # The online/offline split among these is resolved by
+        # _reject_offline_current_control at the discovery choke point.
         {"role": "ev_current_control_entity", "domain": "number",
-         "names": ("juicebox",)},
+         "names": ("juicebox",), "names2": ("current", "amp")},
     ],
     "wattpilot": [
         {"role": "ev_charging_power_sensor", "domain": "sensor",

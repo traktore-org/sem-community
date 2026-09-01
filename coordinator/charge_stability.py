@@ -178,6 +178,18 @@ class ChargeStability:
         # the current start offer being climbed toward a latch.
         self._start_since: Dict[str, float] = {}
         self._start_offer: Dict[str, int] = {}
+        # (#893) The car's DEMONSTRATED latch floor for this session. The
+        # start ladder climbs until the car draws, then settles back to the
+        # budget minimum — assuming a latched car keeps drawing there. A
+        # fussy vehicle does not (live on .175, 01.09: latched and drew
+        # 3.1 kW at 8 A, refused 6 A at 0.13 kW standby), so every settle
+        # re-ran the whole cycle: ladder up, draw, settle, un-latch — a
+        # contactor click every ~3 minutes for as long as the budget sat
+        # under the car's floor. Un-latching after a settle to LOWER amps
+        # teaches the floor (= the amps it was last drawing at); a draw at
+        # lower amps decays it; a disconnect clears it (new car, new floor).
+        self._car_floor_a: Dict[str, int] = {}
+        self._draw_amps: Dict[str, int] = {}
         # Last time the car was observed drawing — latch hysteresis.
         self._latched: Dict[str, float] = {}
         # #610 — consecutive no-latch give-ups and the full-car backoff
@@ -416,6 +428,8 @@ class ChargeStability:
             # that should re-open start offers.
             self._giveup_streak.pop(cid, None)
             self._giveup_backoff_until.pop(cid, None)
+            self._car_floor_a.pop(cid, None)   # (#893) new plug, new floor
+            self._draw_amps.pop(cid, None)
             return decision
 
         cfg = view.config if isinstance(view.config, dict) else {}
@@ -546,6 +560,43 @@ class ChargeStability:
             target = max(min_amps, min(max_amps, med_amps))
             if drawing:
                 self._latched[cid] = now
+                # (#893) remember the amps the car is ACTUALLY drawing at,
+                # and let a draw at lower amps decay a learned floor.
+                _drawn = int(self._last_amps.get(cid) or 0)
+                if _drawn > 0:
+                    self._draw_amps[cid] = _drawn
+                    _f = self._car_floor_a.get(cid)
+                    if _f is not None and _drawn < _f:
+                        self._car_floor_a[cid] = _drawn
+            else:
+                # (#893) not drawing while the last recorded draw sat ABOVE
+                # this cycle's target = the car told us its floor — both the
+                # un-latch right after a settle to lower amps, and a stale
+                # draw record from the previous same-plug session (each
+                # give-up round used to re-poke 6 A and click the contactor;
+                # re-flooring immediately keeps the whole night quiet).
+                _ld = self._draw_amps.get(cid)
+                if _ld and _ld > target:
+                    self._car_floor_a[cid] = _ld
+            _floor = self._car_floor_a.get(cid)
+            if _floor and target < _floor and not drawing:
+                # Offering sub-floor amps is a stop this car executes and a
+                # click the contactor pays for; laddering back up just to
+                # settle below the floor again is the churn. Hold off until
+                # the budget clears the floor (or the night lane sizes it).
+                # NEVER while the car is drawing: easing an active draw is
+                # _adjust's job, and the ease-below-floor is the one probe
+                # that lets the floor DECAY when the car's appetite changes.
+                self._reset(cid)
+                return replace(
+                    decision, intent=ChargerIntent.IDLE, commanded_amps=0,
+                    reason=(
+                        f"stability: budget {target}A is below this car's "
+                        f"demonstrated {_floor}A latch floor — holding off "
+                        f"instead of cycling the contactor (#893) — "
+                        f"{decision.reason}"
+                    ),
+                )
             # Latch hysteresis: once a car has drawn, a single low/zero power
             # reading is almost always a transient (the car blips, a sensor
             # hiccup) — NOT a reason to re-start at a different current. Any
@@ -586,13 +637,20 @@ class ChargeStability:
                 held = now - since
                 if night or held >= max(0.0, float(enable_delay_s)):
                     self._surplus_since.pop(cid, None)
+                    # (#893) same as the ladder default: a known latch
+                    # floor starts AT the floor, not at a min the car
+                    # already refused. Guard above ensures target >= floor.
+                    start_a = max(
+                        min_amps,
+                        min(max_amps, int(self._car_floor_a.get(cid, min_amps))),
+                    )
                     self._start_since[cid] = now
-                    self._start_offer[cid] = min_amps
-                    self._commit_amps(cid, min_amps, now)
+                    self._start_offer[cid] = start_a
+                    self._commit_amps(cid, start_a, now)
                     return replace(
                         decision, intent=ChargerIntent.CHARGE_AT_AMPS,
-                        commanded_amps=min_amps,
-                        reason=(f"stability: starting at {min_amps}A "
+                        commanded_amps=start_a,
+                        reason=(f"stability: starting at {start_a}A "
                                 f"(auto-raises if no draw) — {decision.reason}"),
                     )
                 return replace(
@@ -620,7 +678,16 @@ class ChargeStability:
             # capped at the charger max. Protects the grid from a sudden
             # high-current latch and stops a refusing car being held at 32 A.
             kick_ceiling = min(max_amps, max(target, START_KICK_MAX_A))
-            offer = int(self._start_offer.get(cid, min_amps))
+            # (#893) A car that demonstrated a latch floor gets offered
+            # that floor straight away — poking it at 6 A again is a
+            # handshake we already know it refuses (one wasted grace
+            # period per start, live on the 31.08 KEBA night). The floor
+            # guard above guarantees target >= floor whenever we get here.
+            _start_default = max(
+                min_amps,
+                min(kick_ceiling, int(self._car_floor_a.get(cid, min_amps))),
+            )
+            offer = int(self._start_offer.get(cid, _start_default))
             s0 = self._start_since.setdefault(cid, now)
             if offer < kick_ceiling and (now - s0) >= START_KICK_GRACE_S:
                 offer = min(kick_ceiling, offer + START_KICK_STEP_A)

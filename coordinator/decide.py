@@ -422,7 +422,21 @@ def _idle_bridgeable(view: ChargerView) -> tuple[bool, str]:
         return False, (
             f"sun gone (solar {_cw(f.solar_w)}W < {_cw(f.min_solar_w)}W)"
         )
-    if f.tariff_level in _NOT_CHEAP_LEVELS:
+    # (#893) The tariff clause is scoped to the modes that PRICE their
+    # grid use. It used to apply to EVERY mode, which made each daytime
+    # solar dip STRUCTURAL whenever electricity was not cheap — i.e. for
+    # most tariffs, most of the day: a passing cloud hard-stopped a
+    # solar_only session instead of bridging, and the charger cycled with
+    # the weather ("switches rapidly because of clouds", DigitalOptics,
+    # Fronius + number-entity charger). A bridge in a solar mode is funded
+    # by remaining surplus and the battery above its buffer — the user's
+    # own stored energy, priced by nobody. The case #524 actually meant —
+    # a hold that would knowingly import grid — is exactly what the
+    # funding clause below already catches, now also when the battery is
+    # forbidden from assisting rather than merely below its buffer.
+    from ..consts.ev_charge_modes import MODE_USES_TARIFF
+    if (view.mode in MODE_USES_TARIFF
+            and f.tariff_level in _NOT_CHEAP_LEVELS):
         return False, f"not-cheap tariff ({f.tariff_level})"
     cfg = view.config if isinstance(view.config, dict) else {}
     min_amps = effective_min_amps(cfg, 6)
@@ -431,7 +445,11 @@ def _idle_bridgeable(view: ChargerView) -> tuple[bool, str]:
     min_charge_w = int(predict_watts(view.wpa_table, min_amps,
                                      max(1, phases) * max(1, voltage)))
     real_surplus_w = self_consumption_surplus_w(view)
-    if float(f.battery_soc) < float(f.buffer_soc) and real_surplus_w < min_charge_w:
+    battery_cannot_assist = (
+        float(f.battery_soc) < float(f.buffer_soc)
+        or not getattr(f, "battery_may_assist_ev", True)
+    )
+    if battery_cannot_assist and real_surplus_w < min_charge_w:
         return False, (
             f"no battery assist (SoC {f.battery_soc:.0f}% < buffer "
             f"{f.buffer_soc:.0f}%) + EV surplus {_cw(real_surplus_w)}W "
