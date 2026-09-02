@@ -1129,9 +1129,9 @@ A household may have the system set to German, but one user's profile set to Eng
 **Translates:** All SEM custom card content (labels, status text, error messages)
 
 **How it works:**
-1. `sem-localize.js` is auto-generated from `translations.json` — contains all 1341 keys × 16 languages as a JS object
-2. Loaded as a Lovelace resource, exposes `window.semLocalize(key, lang)`
-3. Fires `sem-localize-ready` CustomEvent when loaded
+1. `sem-localize.js` is auto-generated from `translations.json`. Since the #738 split it carries English inline as the fallback floor and lazily injects the viewer's own language as a sibling `sem-localize.<lang>.js`
+2. Loaded as a Lovelace resource, exposes `window.semLocalize(key, lang)`. **Only the loader is a resource** — the per-language siblings are assets it fetches over `/local`, and registering them as resources is a bug (#901): the table then arrives from two URLs with different cache keys, and every language loads on every page
+3. Fires `sem-localize-ready` CustomEvent when loaded (and again after a language table is injected, so cards re-render)
 4. SEM cards extend `SEMLitBase` (in `src/base/sem-lit-base.js`) which provides `_t(key)` → calls `semLocalize(key, hass.language)`
 5. Cards re-render when the user's language changes (detected in `_checkLocaleChange()`)
 

@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from typing import TYPE_CHECKING, Any, Dict, List
 
 from homeassistant.config_entries import ConfigEntry
@@ -44,6 +45,39 @@ if TYPE_CHECKING:
     from .devices.base import ControllableDevice
 
 _LOGGER = logging.getLogger(__name__)
+
+
+# (#901) ``sem-localize.<lang>.js`` is an ASSET, never a Lovelace resource.
+# Since the #738 split, ``sem-localize.js`` is a loader that injects the
+# user's own language on demand over ``/local``; the siblings must be copied
+# to ``/config/www`` so that fetch resolves, and registered nowhere.
+#
+# Upgraded installs still carried 15 of them, registered by the pre-#738
+# generate_dashboard path and refreshed by nothing (HA-PROD on 2.1.0-beta.5
+# had the bundle and the loader at the current version and every sibling
+# still pinned at 1.7.6-beta.13). Two costs: the same language table gets
+# written from two URLs — the stale resource and the loader's fresh
+# injection, last write wins — which is the #240 stale-cache class reopened
+# for the siblings; and every registered resource loads at frontend boot, so
+# ~1.3 MB of language tables was fetched per page for a user who needs one.
+#
+# One predicate, used by BOTH registration paths, so neither can re-register
+# what the other just swept.
+_LOCALIZE_SIBLING_RE = re.compile(r"sem-localize\.[A-Za-z]{2,3}(?:-[A-Za-z]+)?\.js$")
+
+
+def _is_localize_sibling(name: str) -> bool:
+    """True for ``sem-localize.<lang>.js`` — never for the loader itself.
+
+    Accepts a bare filename, a path or a full resource URL with its ``?v=``
+    cache-bust suffix, because the two call sites hold different shapes.
+    """
+    return bool(_LOCALIZE_SIBLING_RE.search(str(name).split("?")[0]))
+
+
+def _registrable_card_files(fnames: "list[str]") -> "list[str]":
+    """The installed card files that may become Lovelace resources."""
+    return [f for f in fnames if not _is_localize_sibling(f)]
 
 
 def _content_hash_cache_bust(card_root: str, base_url: str, version: str) -> str:
@@ -3329,9 +3363,14 @@ async def _async_register_services(
             # executor moves it off the loop.
             manifest_path_l = os.path.join(component_dir, "manifest.json")
 
+            # (#901) The per-language siblings are COPIED above (the loader
+            # fetches them over /local) but never registered — so they are
+            # absent from installed_bases too, and the orphan sweep below
+            # removes any an older version left behind.
+            registrable_cards = _registrable_card_files(installed_cards)
             installed_bases = {
                 f"/local/custom_components/{DOMAIN}/dashboard/card/{fname}"
-                for fname in installed_cards
+                for fname in registrable_cards
             }
             # The Lit bundle lives under dist/ so it never appears in the
             # root-level listdir above; whitelist it explicitly or the orphan
@@ -3370,7 +3409,7 @@ async def _async_register_services(
 
             added_resources = []
             updated_resources = 0
-            for fname in installed_cards:
+            for fname in registrable_cards:
                 base_url = f"/local/custom_components/{DOMAIN}/dashboard/card/{fname}"
                 if base_url not in existing_bases:
                     import uuid as _uuid
@@ -4210,6 +4249,20 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
                 if legacy_item:
                     await resources.async_delete_item(legacy_item["id"])
                     _LOGGER.info("Removed legacy SEM resource (now in Lit bundle): %s", legacy_base)
+
+            # (#901) Sweep per-language localize siblings. They cannot be
+            # named in _legacy_bases — the language set is whatever
+            # translations.json holds — so they are matched by shape. An
+            # install that never had them registered sees no delete at all,
+            # which is why this reads the store instead of writing blindly.
+            for sibling_base, sibling_item in existing_by_base.items():
+                if not _is_localize_sibling(sibling_base):
+                    continue
+                await resources.async_delete_item(sibling_item["id"])
+                _LOGGER.info(
+                    "Removed per-language localize resource (the loader "
+                    "injects it on demand since #738): %s", sibling_base
+                )
 
             # Register single Lit bundle
             bundle_item = existing_by_base.get(cards_bundle_base)

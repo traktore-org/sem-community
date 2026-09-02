@@ -13,6 +13,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🧹 **An upgraded install stops carrying 15 stale translation resources**
+  (#901). Since the #738 split, `sem-localize.js` is a loader that fetches
+  only the viewer's own language; the per-language files are assets it
+  injects, not Lovelace resources. Installs that had them registered by an
+  older version kept them forever — on a system running 2.1.0-beta.5 the
+  bundle and the loader carried the current cache-busting token and all 15
+  siblings were still pinned at `1.7.6-beta.13`. That is the stale-cache bug
+  (#240) reopened for the siblings: the same language table arrives from two
+  URLs — a possibly months-old cached copy and the loader's fresh one — and
+  whichever executes last wins, so a German or French dashboard could quietly
+  show 1.7.6-era strings. It also fetched roughly 1.3 MB of language tables on
+  every page load for a viewer who needs one of them. One rule now answers
+  "may this file be a Lovelace resource" for both registration paths, and a
+  restart deregisters whatever an older version left behind — nothing for a
+  clean install to do, and nothing for the user to do on an upgraded one.
+
 - 🛡️ **A first install no longer sheds house circuits it was never told to
   defend** (#895, #897 — forum report: a Span panel and a backup battery
   switched off circuit by circuit, HA's own supply included). Two defects.
