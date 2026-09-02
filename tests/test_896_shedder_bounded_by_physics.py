@@ -539,3 +539,147 @@ def test_the_dead_critical_protection_constant_is_deleted():
     assert not hasattr(core, "DEFAULT_CRITICAL_DEVICE_PROTECTION")
     from custom_components.solar_energy_management import const
     assert not hasattr(const, "DEFAULT_CRITICAL_DEVICE_PROTECTION")
+
+
+# ---------------------------------------------------------------------------
+# 7. The verdict reaches the sensor
+# ---------------------------------------------------------------------------
+#
+# ``LoadManager.get_load_management_data()`` is a rich dict and
+# ``_build_load_management_data`` copies a HAND-PICKED subset of it into
+# ``LoadManagementData`` — so every telemetry key added to the dict since has
+# died at that hop. #657 found ``devices`` dead there; #433's four
+# ``*_path`` keys ("Four new keys on sensor.sem_load_management_status", the
+# CHANGELOG says) never reached a sensor either; the #896 verdict would have
+# followed. The USER_GUIDE tells the user to read ``shed_path`` off the
+# load-management sensor — this is what makes that sentence true.
+
+from custom_components.solar_energy_management.coordinator import SEMCoordinator  # noqa: E402
+from custom_components.solar_energy_management.coordinator.types import (  # noqa: E402
+    PowerReadings,
+    SEMData,
+)
+
+# What the LM dict reports and the sensor must carry. The verdict strings are
+# low-churn (they change on transitions) and worth a history row; the watt
+# figures wiggle every cycle of an episode and stay live-only (#829).
+_VERDICT_KEYS = ("shed_path", "shed_futile",
+                 "state_decision_path", "process_path", "action_path", "last_error")
+_LIVE_ONLY_KEYS = ("shed_need_w", "shed_sheddable_w", "uncontrolled_w")
+_TELEMETRY_KEYS = _VERDICT_KEYS + _LIVE_ONLY_KEYS
+
+# LM-dict keys that are published under another name, or on purpose not at
+# all. A key that is neither here nor in ``to_dict()`` is the #657/#433 bug
+# again — add it to the copy, not to this list.
+_RENAMED = {
+    "state": "load_management_status",
+    "controllable_devices": "controllable_devices_count",
+    "devices_shed_list": "loads_currently_shed",
+    "devices": "load_management_devices",
+}
+_NOT_PUBLISHED = {
+    "warning_level": "config — diagnose's option set carries warning_peak_level",
+    "emergency_level": "config — diagnose's option set carries emergency_peak_level",
+    "enabled": "config — diagnose's option set carries load_management_enabled",
+    "total_devices": "len(devices); the card counts the table it is given",
+    "devices_shed": "len(devices_shed_list); the sensor joins the list",
+}
+
+
+def _coordinator_over(lm):
+    with patch.object(SEMCoordinator, "__init__", return_value=None):
+        coord = SEMCoordinator.__new__(SEMCoordinator)
+    coord.config = {}
+    coord.hass = MagicMock()
+    coord._load_manager = lm
+    return coord
+
+
+class TestTheVerdictReachesTheSensor:
+
+    @pytest.mark.asyncio
+    async def test_the_coordinator_publishes_the_verdict(self, lm):
+        """A futile pass on the real shedder → the same verdict and numbers
+        on ``coordinator.data``, under the names the docs use."""
+        _load(lm, "pool_pump", priority=9, power_w=2000)
+        _load(lm, "dryer", priority=8, power_w=1500)
+        with patch(f"{IR}.async_create_issue"):
+            await _pass(lm, LoadManagementState.EMERGENCY, avg_kw=8.0, import_w=9000)
+
+        lm_data = _coordinator_over(lm)._build_load_management_data(PowerReadings())
+        published = SEMData(load_management=lm_data).to_dict()
+
+        assert published["shed_path"] == "futile"
+        assert published["shed_futile"] is True
+        assert published["shed_need_w"] == pytest.approx(9000 - 4700)
+        assert published["shed_sheddable_w"] == pytest.approx(3500)
+        assert published["uncontrolled_w"] == pytest.approx(5500)
+        # #433's telemetry rides the same copy. ``_pass`` enters below the
+        # state machine, so only the action path is decided here; the
+        # ratchet below pins the other three.
+        assert published["action_path"] == "emergency_shedding"
+        assert published["last_error"] is None
+
+    def test_every_key_the_load_manager_reports_is_published(self, lm):
+        """The ratchet: a key ``get_load_management_data()`` returns is either
+        on ``coordinator.data`` (same name or a listed rename) or listed here
+        with the reason it stays behind."""
+        reported = set(lm.get_load_management_data())
+        published = set(SEMData(
+            load_management=_coordinator_over(lm)._build_load_management_data(
+                PowerReadings())
+        ).to_dict())
+        dead = sorted(
+            k for k in reported
+            if k not in published
+            and _RENAMED.get(k) not in published
+            and k not in _NOT_PUBLISHED
+        )
+        assert dead == [], f"reported by the load manager, published by nobody: {dead}"
+
+    def test_the_sensor_carries_the_verdict(self, mock_coordinator):
+        from homeassistant.components.sensor import SensorEntityDescription
+        from custom_components.solar_energy_management.sensor import SEMSolarSensor
+
+        mock_coordinator.data = {
+            "load_management_status": "emergency",
+            "shed_path": "futile", "shed_futile": True,
+            "shed_need_w": 4300, "shed_sheddable_w": 3500, "uncontrolled_w": 5500,
+            "state_decision_path": "emergency", "process_path": "state_stable:emergency",
+            "action_path": "emergency_shedding", "last_error": None,
+        }
+        sensor = SEMSolarSensor(
+            coordinator=mock_coordinator,
+            description=SensorEntityDescription(
+                key="load_management_status", name="lm", icon="mdi:flash"),
+            entry_id="test_entry_id",
+        )
+        attrs = sensor.extra_state_attributes
+        for key in _TELEMETRY_KEYS:
+            assert attrs[key] == mock_coordinator.data[key], key
+        for key in _VERDICT_KEYS:
+            assert key not in sensor._unrecorded_attributes, key
+        for key in _LIVE_ONLY_KEYS:
+            assert key in sensor._unrecorded_attributes, key
+
+    def test_diagnose_lists_the_verdict(self):
+        """The Diagnose modal renders ONLY what its slicer lists. The set is
+        a local of ``async_setup_entry``, so read the literal out of the
+        source (the #454 pattern)."""
+        import ast
+        import pathlib
+        import re
+        src = (pathlib.Path(__file__).resolve().parent.parent
+               / "__init__.py").read_text(encoding="utf-8")
+        m = re.search(r"_DIAGNOSE_LOAD_MGMT_STATE = (\{.*?\})", src, re.S)
+        assert m, "retarget this scan — the slicer moved"
+        listed = ast.literal_eval(m.group(1))
+        missing = sorted(set(_TELEMETRY_KEYS) - listed)
+        assert missing == [], f"not in the Diagnose modal's load_management section: {missing}"
+
+    def test_the_user_guide_names_the_sensor_it_is_on(self):
+        import pathlib
+        guide = (pathlib.Path(__file__).resolve().parent.parent
+                 / "docs" / "USER_GUIDE.md").read_text(encoding="utf-8")
+        assert "`sensor.sem_load_management_status`" in guide
+        assert "`shed_path`" in guide

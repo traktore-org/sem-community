@@ -60,7 +60,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   surplus controller leaves peak-only loads to load management, and load
   management had been built from the Energy Dashboard list alone — so its
   toggle was a promise nothing kept and its kilowatts counted as
-  uncontrolled.
+  uncontrolled. Finally, the verdict is somewhere a user can read it:
+  `shed_path`, `shed_need_w`, `shed_sheddable_w`, `shed_futile` and
+  `uncontrolled_w` are attributes of `sensor.sem_load_management_status`
+  and in the Diagnose modal — and so, for the first time, are #433's
+  `state_decision_path` / `process_path` / `action_path` / `last_error`,
+  which the load manager had reported since 1.5 and the coordinator's
+  hand-picked copy had dropped at the same hop that lost the device
+  table in #657. A test now pins that every key the load manager reports
+  is published or listed with the reason it is not.
 
 - 🔧 **Dragging a service-registered device in the priority list now
   moves it** (#890). A load added with `register_surplus_device` took its

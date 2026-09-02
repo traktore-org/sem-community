@@ -688,6 +688,20 @@ class LoadManagementData:
     # its device table was permanently empty. Excluded from the recorder by
     # the sensor (see #581) — it's a live-only structure.
     devices: Dict[str, dict] = field(default_factory=dict)
+    # (#896) The load manager's own telemetry. ``get_load_management_data()``
+    # has reported these since #433 (the four ``*_path`` keys) and #896 (the
+    # shed verdict), and the hand-picked copy in ``_build_load_management_
+    # data`` dropped every one of them — the #657 hop again. Pinned by
+    # ``test_896 … test_every_key_the_load_manager_reports_is_published``.
+    state_decision_path: str = "uninitialized"
+    process_path: str = "uninitialized"
+    action_path: str = "uninitialized"
+    last_error: Optional[str] = None
+    shed_path: str = "uninitialized"
+    shed_need_w: float = 0.0
+    shed_sheddable_w: float = 0.0
+    shed_futile: bool = False
+    uncontrolled_w: float = 0.0
 
 
 @dataclass
@@ -1331,6 +1345,16 @@ class SEMData:
             "peak_trend": self.load_management.peak_trend,
             "tariff_type": self.load_management.tariff_type,
             "load_management_devices": self.load_management.devices,
+            # (#896) the load manager's telemetry — see LoadManagementData.
+            "state_decision_path": self.load_management.state_decision_path,
+            "process_path": self.load_management.process_path,
+            "action_path": self.load_management.action_path,
+            "last_error": self.load_management.last_error,
+            "shed_path": self.load_management.shed_path,
+            "shed_need_w": self.load_management.shed_need_w,
+            "shed_sheddable_w": self.load_management.shed_sheddable_w,
+            "shed_futile": self.load_management.shed_futile,
+            "uncontrolled_w": self.load_management.uncontrolled_w,
 
             # Timestamp
             "last_update": self.last_update,

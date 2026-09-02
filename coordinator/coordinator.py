@@ -12299,6 +12299,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # may report ``{"devices": None}``, and the card iterates this.
                 lm_data.devices = lm_info.get("devices") or {}
 
+                # (#896) The load manager's telemetry — the #433 paths and
+                # the shed verdict. Same hop as ``devices``: reported by the
+                # load manager for releases, copied by nobody.
+                for key in (
+                    "state_decision_path", "process_path", "action_path",
+                    "last_error", "shed_path", "shed_need_w",
+                    "shed_sheddable_w", "shed_futile", "uncontrolled_w",
+                ):
+                    if key in lm_info:
+                        setattr(lm_data, key, lm_info[key])
+
                 # Tariff info
                 lm_data.controlled_tariff_status = lm_info.get("controlled_tariff_status", "unknown")
                 lm_data.tariff_type = lm_info.get("tariff_type", "unknown")
