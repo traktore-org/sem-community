@@ -15,6 +15,7 @@ import { capacityConsequence, horizonLabel, trustConsequence }
     from '../util/forecast-evidence.js';
 import { semTheme, semFormatPower, semGetCurrency, semCardSurfaceCSS, SEM_COLORS, semDefineCard } from '../base/sem-shared.js';
 import { temperatureUnit } from '../util/temperature.js';
+import { socDisplay } from '../util/missing-value.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
 
@@ -656,7 +657,10 @@ class SEMBatteryCard extends SEMLitBase {
         const circumferenceFixed = circumference.toFixed(1);
 
         // State reads
-        const soc = this._val('battery_soc', 0);
+        // null, not 0, when the sensor is out: an absent SOC renders as the
+        // em-dash with an empty gauge, never as a flat pack (PROD 02.09).
+        const soc = this._val('battery_soc', null);
+        const socShown = socDisplay(soc);
         const power = this._val('battery_power', 0);
         const chargePower = this._val('battery_charge_power', 0);
         const dischargePower = this._val('battery_discharge_power', 0);
@@ -701,7 +705,7 @@ class SEMBatteryCard extends SEMLitBase {
         const arcAnim = (isCharging || isDischarging || isSelling) ? 'socPulse 2s ease-in-out infinite' : 'none';
 
         // SOC arc
-        const pct = Math.min(Math.max(soc / 100, 0), 1);
+        const pct = socShown.fraction;
         const arcOffset = (circumference * (1 - pct)).toFixed(1);
 
         // Solar attribution
@@ -1125,7 +1129,7 @@ class SEMBatteryCard extends SEMLitBase {
                                         fill="#FCD170" opacity="${isCharging ? 0.95 : 0}"/>
                                 </svg>
                                 <div class="soc-value" style="color:${arcColor}">
-                                    ${soc.toFixed(0)}%
+                                    ${socShown.label}
                                 </div>
                             </div>
                         </div>

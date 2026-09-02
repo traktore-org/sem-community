@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **A battery SOC that is not being read no longer shows as 0 %** (#903).
+  PROD, mid-dropout: the Home diagram's battery cell read `0 %` with an empty
+  fill, right under `— W` and `sensor unavailable` — the card knew the reading
+  was gone and still printed the fallback zero as the state of charge (the
+  pack was at 97 %). The Home status chip and the Battery tab's gauge did the
+  same, without even a hold, on every dropout. 0 % is a flat pack, a real and
+  alarming measurement, and the one thing an absent reading must never look
+  like. One helper now turns a SOC into its label and fill; absent renders
+  as `—` and an empty cell. A genuine 0 % still says 0 %.
 - 🧹 **An upgraded install stops carrying 15 stale translation resources**
   (#901). Since the #738 split, `sem-localize.js` is a loader that fetches
   only the viewer's own language; the per-language files are assets it
