@@ -110,7 +110,7 @@ def _battery_view(
 # EV pipeline — every mode × zone × time × solar
 # ─────────────────────────────────────────────────────────────────
 
-# Off mode: always DISABLE regardless of any other dimension.
+# Off mode: always RELEASE (#898 — hands-off) regardless of any other dimension.
 @pytest.mark.parametrize("zone", [1, 2, 3, 4])
 @pytest.mark.parametrize("is_night", [False, True])
 @pytest.mark.parametrize("solar_w", [0.0, 4500.0, 10000.0])
@@ -119,7 +119,8 @@ def test_off_mode_always_disables(zone, is_night, solar_w):
         mode="off", solar_w=solar_w, soc=_zone_to_soc(zone),
         is_night=is_night,
     ))
-    assert d.intent is ChargerIntent.DISABLE
+    assert d.intent is ChargerIntent.RELEASE
+    assert d.commanded_amps == 0 and d.budget_w == 0.0
 
 
 # Always-max: always CHARGE_MAX when connected, regardless of solar/zone.
@@ -417,12 +418,14 @@ class TestEndToEndActuation:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("mode,solar_w,soc,is_night,drawing,expected_intent,expected_cmd", [
-        # OFF + drawing box → DISABLE intent, reconciler force-disables.
-        ("off",            5000.0, 50.0, False, True,  ChargerIntent.DISABLE,       "command_disable"),
-        ("off",            5000.0, 50.0, True,  True,  ChargerIntent.DISABLE,       "command_disable"),
+        # (#898) OFF + drawing box SEM never started → RELEASE, hands-off:
+        # the reconciler issues nothing (a fresh reconciler has no session
+        # of its own to end).
+        ("off",            5000.0, 50.0, False, True,  ChargerIntent.RELEASE,       None),
+        ("off",            5000.0, 50.0, True,  True,  ChargerIntent.RELEASE,       None),
         # OFF + already-open contactor → DISABLE intent but reconciler emits
         # NONE (idempotent — the production no-spam case).
-        ("off",               0.0, 95.0, False, False, ChargerIntent.DISABLE,       None),
+        ("off",               0.0, 95.0, False, False, ChargerIntent.RELEASE,       None),
         # ALWAYS_MAX: CHARGE_MAX → reconciler START_AND_WRITE → command_current(max).
         ("always_max",        0.0, 50.0, True,  False, ChargerIntent.CHARGE_MAX,    "command_current"),
         ("always_max",    10000.0, 50.0, False, False, ChargerIntent.CHARGE_MAX,    "command_current"),
@@ -558,7 +561,7 @@ class TestJointDecisionCoherence:
         bat = decide_battery(_battery_view(
             charging_state="solar_idle", ev_charging=False, soc=80.0,
         ))
-        assert ev.intent is ChargerIntent.DISABLE
+        assert ev.intent is ChargerIntent.RELEASE   # (#898) hands-off
         assert bat.intent is BatteryIntent.NORMAL
 
     def test_solar_only_sunny_zone_4_ev_charging_battery_normal(self):

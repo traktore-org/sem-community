@@ -263,6 +263,24 @@ On a solar install a second voter runs first: solar production has no sign ambig
 
 ---
 
+## The battery platform is pinned to generic
+
+**Symptom:** a Repair says the battery platform is set to *generic* although a
+brand integration (Huawei, GoodWe, Deye, …) is loaded, and the battery
+controls behave crudely — the discharge limit is rewritten every cycle, or
+force charge/discharge is refused.
+
+**Cause (#900):** older versions of the options wizard offered only
+*generic* / *deye* on its platform page and **defaulted to generic** — one
+walk through that page pinned a brand install to the generic adapter. The
+setting is `battery_charge_platform` in the integration options.
+
+**Fix:** open *Settings → Devices & Services → SEM → Configure*, go to the
+battery page and set the platform to **auto** (SEM detects the brand from the
+loaded integration) or to the brand itself. The wizard now offers every
+platform it knows and keeps the stored value. The Repair clears on the next
+cycle.
+
 ## Battery charge/discharge values are swapped
 
 **Symptom:** SEM shows battery charging when it's actually discharging (or vice versa). The `sensor.sem_battery_power` sign is opposite of what the hardware reports.

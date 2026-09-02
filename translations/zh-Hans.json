@@ -1682,6 +1682,10 @@
     "load_shed_futile": {
       "title": "电网峰值由 SEM 不控制的负载造成",
       "description": "电表读数为 **{grid_import_kw} kW**，目标为 **{target_kw} kW** —— 即使 SEM 可以关闭的一切都已关闭，仍会剩下 **{uncontrolled_kw} kW**。这部分用电属于 SEM 未管理的设备：SEM 不知道的充电桩上的电动车、烤箱、带自身控制器的热泵。\n\n切断家中负载无法解决这个峰值，因此在此期间 SEM **不会**切断任何负载（早期版本会一路切断回路，直到整栋房子断电）。\n\n**该怎么做：** 把该负载交给 SEM（在 *EV 充电桩* 下添加充电桩，或添加带控制实体的设备），若目标并非您合同的真实上限则调高目标，或者对必须运行的负载接受该峰值。一旦峰值重新可达，此问题会自动消失。"
+    },
+    "battery_platform_pinned_generic": {
+      "title": "Battery platform pinned to Generic on a {brand} install",
+      "description": "SEM's battery platform is set to **Generic / other**, but the {brand} integration is loaded. Earlier versions of the options wizard offered only Generic and Deye and defaulted to Generic, so walking through that page once demoted a {brand} install to the generic adapter — no forcible charge, no idempotent register writes. Open **Settings → Integrations → SEM → Configure → Battery scheduler** and set **Battery charge platform** to **Auto-detect**. If Generic is a deliberate choice (a battery with its own control entities), set that entity and this notice goes away."
     }
   },
   "selector": {

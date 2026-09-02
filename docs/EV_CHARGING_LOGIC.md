@@ -50,6 +50,19 @@ The per-mode detail lives in the same card: **Charge target** (Min / Max kWh),
 > night-capable modes do follow the global, since for them the overnight top-up is the
 > mode's whole purpose.
 
+> **Charge mode Off is hands-off (#898).** SEM sends nothing to a charger in
+> *Off* — no stop, no park-on-disconnect, no failsafe. A session you start
+> elsewhere in Home Assistant runs untouched; switching to Off while SEM's
+> own charge runs ends that charge once. The VPP export pause stops the car
+> with its own explicit stop, not by borrowing Off.
+>
+> **`solar_only` and the battery "redirect" (#899).** Part of the measured
+> battery charge may be credited to the car on the assumption that the
+> inverter yields it. A commanded pack (forced / scheduled charge) is never
+> credited, and the redirect counts only while the meter agrees: three
+> cycles of sustained grid import with a redirect in the budget veto it for
+> the rest of the plug-in.
+>
 > **Turning overnight charging off — set the floor to 0 (#680).** The *At least* floor is
 > the single control for night charging: SEM tops up the gap between surplus and that
 > target, so **a floor of 0 means no overnight charge** (in any mode). There is **no

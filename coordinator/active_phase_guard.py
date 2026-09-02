@@ -162,6 +162,10 @@ class ActivePhaseGuard:
             return decision
         if decision.intent is ChargerIntent.DISABLE:
             return decision
+        if decision.intent is ChargerIntent.RELEASE:
+            # (#898) hands-off is never converted into a stop: an off charger
+            # is not SEM's to police, authorised or not.
+            return decision
         if not self.control_authorized:
             return self._disable_decision(decision, self._block_reason)
         if decision.intent is ChargerIntent.IDLE:
@@ -222,6 +226,15 @@ class ActivePhaseGuard:
                 f"{decision.reason}; phase guard clamped to {target_a}A "
                 f"(headroom {available_increase_a:.2f}A)"
             ),
+        )
+
+    def filter(self, decision: ChargerDecision, *, adapter: Any = None,
+               power: Any = None, believed_phases: Any = None) -> ChargerDecision:
+        """Alias of :meth:`filter_decision` — the name the other decision
+        filters use (``ChargeStability.filter``), so callers and tests can
+        treat the guard as one more filter in the chain."""
+        return self.filter_decision(
+            decision, adapter=adapter, power=power, believed_phases=believed_phases,
         )
 
     @staticmethod

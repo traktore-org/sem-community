@@ -118,7 +118,10 @@ def _view(
 # ─────────────────────────────────────────────────────────────────
 
 class TestI1_OffModeAlwaysDisable:
-    """The #315 / #346 invariant promoted to a contract."""
+    """The #315 / #346 invariant promoted to a contract — and re-cut by
+    #898: Off is HANDS-OFF (RELEASE). SEM sends nothing to an off charger;
+    the reconciler ends SEM's own running session once on the way in. The
+    invariant that survives: off mode never CHARGES, in any dimension."""
 
     @pytest.mark.parametrize("solar_w", SOLAR_VALUES)
     @pytest.mark.parametrize("battery_soc", SOC_VALUES)
@@ -128,10 +131,11 @@ class TestI1_OffModeAlwaysDisable:
             mode="off", solar_w=solar_w,
             battery_soc=battery_soc, is_night=is_night,
         ))
-        assert d.intent is ChargerIntent.DISABLE, (
+        assert d.intent is ChargerIntent.RELEASE, (
             f"off mode produced {d.intent} at solar={solar_w}, "
             f"soc={battery_soc}, night={is_night}: {d.reason}"
         )
+        assert d.commanded_amps == 0 and d.budget_w == 0.0
 
 
 # ─────────────────────────────────────────────────────────────────

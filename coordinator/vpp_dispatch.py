@@ -369,3 +369,25 @@ class VppDispatcher:
             "vpp_last_event": dict(closed[-1]) if closed else None,
             "vpp_events": [dict(e) for e in self._events[-5:]],
         }
+
+
+def vpp_pause_override(decision, paused: bool):
+    """(#898) The VPP export pause used to borrow charge mode ``off`` to stop
+    the car (#580). Off is hands-off now and stops nothing, so the pause
+    carries its own explicit DISABLE — applied to the decision AFTER the
+    mode has decided, so the user's mode stays what it is and the pause is
+    visible as a pause in the reason line. A no-op when not paused (returns
+    the same object)."""
+    if not paused:
+        return decision
+    from dataclasses import replace
+    from .charger_types import ChargerIntent
+    if decision.intent in (ChargerIntent.CHARGE_AT_AMPS, ChargerIntent.CHARGE_MAX,
+                           ChargerIntent.IDLE):
+        return replace(
+            decision, intent=ChargerIntent.DISABLE, commanded_amps=0,
+            budget_w=0.0, bridgeable=False,
+            reason=f"VPP export pause — EV stopped for the event (#580) — {decision.reason}",
+        )
+    return decision
+

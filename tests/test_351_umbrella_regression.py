@@ -316,8 +316,8 @@ class TestM5_OffModeChargerConsumesNoSurplus:
 
         # Charger A is off and goes first in priority order.
         d_a = decide(_view("a", "off", 0.0))
-        assert d_a.intent is ChargerIntent.DISABLE, (
-            f"M5 regression — an off-mode charger must decide DISABLE, "
+        assert d_a.intent is ChargerIntent.RELEASE, (
+            f"M5 regression — an off-mode charger must decide RELEASE (#898), "
             f"got {d_a.intent}"
         )
 

@@ -938,8 +938,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # the moment the event ends and the user's mode resumes. Routed here
         # (the single mode read-point, #277) so no second veto path exists.
         _vpp_ev = getattr(self, "_vpp_ev_override", None)
-        if _vpp_ev == "pause":
-            return "off"
+        # (#898) "pause" no longer borrows mode ``off`` — Off is hands-off
+        # and would stop nothing. The pause is applied to the DECISION by
+        # ``vpp_pause_override`` at every decide site instead.
         if _vpp_ev == "boost":
             return "always_max"
         from ..consts.ev_charge_modes import effective_charge_mode_for
@@ -3574,6 +3575,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             # override wins immediately via the priority store).
                             ev_priority=self._ev_priority_for(cid),
                             wpa_table=self._wpa_table_for(cid),
+                            # (#899) a redirect the meter contradicted stays
+                            # off for the rest of this plug-in.
+                            redirect_allowed=not bool(getattr(
+                                getattr(pcc, "state", None), "redirect_vetoed", False)),
                             charger_cfg=charger_cfg,
                             mode=per_mode,
                             daily_ev_kwh=self._charger_daily_kwh(cid, energy),
@@ -3599,6 +3604,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             soc_ceiling_reached=per_target_reached,
                         )
                         decision = decide_v2(view)
+                        from .vpp_dispatch import vpp_pause_override
+                        decision = vpp_pause_override(
+                            decision, getattr(self, "_vpp_ev_override", None) == "pause")
                         # Hysteresis stability layer (#461 flapping):
                         # median smoothing + ramp limit + delta/debounce
                         # guards + enable/disable delays. Applied BEFORE
@@ -3684,7 +3692,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         )
                         if effective_state not in _NIGHT_STATES:
                             from .charger_types import ChargerIntent as _CI
-                            if decision.intent is _CI.DISABLE:
+                            if decision.intent in (_CI.DISABLE, _CI.RELEASE):
                                 effective_state = ChargingState.SOLAR_IDLE
                             elif decision.intent is _CI.IDLE:
                                 # #548 — an IDLE caused by the max-SOC ceiling
@@ -3725,6 +3733,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 _no_draw.pop(cid, None)
                         pcc.effective_state = effective_state
 
+                        # (#899) Commit-then-measure: the redirect counts only
+                        # while the meter agrees. Import above tolerance with
+                        # a redirect in the budget means the pack did not
+                        # yield; three strikes veto it for the session.
+                        _pstate = getattr(pcc, "state", None)
+                        if _pstate is not None:
+                            from .per_charger_context import note_redirect_outcome
+                            if not view.power.connected:
+                                _pstate.reset_session()
+                            else:
+                                note_redirect_outcome(
+                                    _pstate,
+                                    redirect_w=float(getattr(decision, "redirect_w", 0.0) or 0.0),
+                                    grid_import_w=float(getattr(view.fleet, "grid_import_w", 0.0) or 0.0),
+                                    charging=bool(view.power.charging),
+                                )
                         try:
                             await actuate(
                                 decision, adapter, view.power,
@@ -6579,7 +6603,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         keyed by ``"primary"``.
         """
         from .actuate_battery import actuate_battery
-        from .battery_adapters import adapter_for, _integration_loaded
+        from .battery_adapters import adapter_for, _integration_loaded, pinned_generic_brand
         from .charger_types import (
             BatteryIntent, BatteryRuntime, BatteryView,
             FleetContext,
@@ -6895,6 +6919,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 _pbc = self._battery_adapter_context(battery_id, batt_idx, _bat_count)
                 self._warn_battery_entity_collision(battery_id, _pbc)
                 adapter = adapter_for(self.hass, _pbc)
+                # (#900) An explicit ``generic`` on a brand install is the old
+                # wizard default, not a choice — say so where the user reads.
+                from . import repair_issues as _ri_pin
+                _pinned = pinned_generic_brand(self.hass, _pbc)
+                if _pinned:
+                    _ri_pin.raise_battery_platform_pinned_generic(self.hass, brand=_pinned)
+                    log_on_change(
+                        _LOGGER, f"pinned-generic:{battery_id}", logging.WARNING,
+                        "battery %s: platform is 'generic' but the %s integration "
+                        "is loaded — set Battery charge platform to Auto-detect "
+                        "(#900)", battery_id, _pinned,
+                    )
+                else:
+                    _ri_pin.clear_battery_platform_pinned_generic(self.hass)
                 # H2 (review): share one orphan-stop guard across the fleet so a
                 # multi-battery setup behind one inverter issues a single
                 # stop_forcible_charge per device on restart (#532).
@@ -10172,6 +10210,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             hardware_max_a=self._primary_hardware_max_a(_primary_cfg),
         )
         _primary_decision = _decide(_primary_view)
+        from .vpp_dispatch import vpp_pause_override as _vpp_pause
+        _primary_decision = _vpp_pause(
+            _primary_decision, getattr(self, "_vpp_ev_override", None) == "pause")
         strategy = _primary_decision.intent.value
         reason = _primary_decision.reason
 
@@ -10195,7 +10236,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         # Map ChargerIntent → EVBudgetStrategy for the canonical budget
         # consumer (sem_available_power, sem_calculated_current).
-        if _primary_decision.intent is _CI.DISABLE:
+        if _primary_decision.intent in (_CI.DISABLE, _CI.RELEASE):
             canonical_strategy = EVBudgetStrategy.IDLE
         elif _primary_decision.intent is _CI.IDLE:
             canonical_strategy = EVBudgetStrategy.IDLE

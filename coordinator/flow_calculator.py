@@ -151,6 +151,7 @@ def battery_redirect_w(
     battery_soc: float,
     battery_capacity_kwh: float,
     forecast_remaining_kwh: float,
+    battery_commanded: bool = False,
 ) -> float:
     """How much battery charge power can be redirected to EV.
 
@@ -171,6 +172,12 @@ def battery_redirect_w(
     scenario this restores.
     """
     if battery_charge_w <= 0:
+        return 0
+    # (#899) A COMMANDED pack (force / scheduled / arbitrage charge) keeps
+    # its watts — parity with ``energy_reclaim.reclaimable_battery_w``. The
+    # inverter will not self-consume around a command, so crediting the
+    # car with those watts makes the meter fund them.
+    if battery_commanded:
         return 0
 
     battery_need_kwh = max(0, (100 - battery_soc) / 100 * battery_capacity_kwh)
