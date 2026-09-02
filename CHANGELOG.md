@@ -50,7 +50,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "finished on its own" (#40), so the restore pass never had anything to
   restore. The dead `DEFAULT_CRITICAL_DEVICE_PROTECTION` is gone; *critical*
   on the Load Priorities card is the one protection, and the only one there
-  ever was.
+  ever was. The shedder's estimate of what a switch would free is now the
+  rating the Control card shows (an energy-only load — a Shelly with a kWh
+  counter and no power entity — read 0 W and had silently fallen off the
+  shed list); a measured 0 W stays 0 W. In observer mode the verdict reads
+  `observer:withheld:N` instead of a shed delay that was never the reason.
 
 - 🔧 **Dragging a service-registered device in the priority list now
   moves it** (#890). A load added with `register_surplus_device` took its

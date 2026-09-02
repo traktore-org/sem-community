@@ -428,8 +428,9 @@ class LoadManagementCoordinator:
                         "friendly_name", charger_name or "EV Charger",
                     )
 
-            # EV charger can draw up to 22kW (32A × 3 phases × 230V)
-            max_power = 22.0  # kW
+            # EV charger can draw up to 22 kW (32 A × 3 phases × 230 V).
+            # WATTS — the LM row's one unit (#896), as the registry rows.
+            max_power = 22000.0
 
             # Register as load management device
             self._devices[device_id] = {
@@ -1079,8 +1080,16 @@ class LoadManagementCoordinator:
             if not device_info.get("is_available", False):
                 continue
             state = self._device_discovery.get_device_current_state(device_info)
+            if not state.get("is_on"):
+                continue
             draw_w = float(state.get("current_power") or 0.0)
-            if not state.get("is_on") or draw_w <= 0:
+            if not state.get("power_known", True):
+                # Energy-only load, or a power entity that is dark right now:
+                # ON is ON, and the rating is the best estimate of what the
+                # switch would free. A MEASURED 0 (thermostat idle) stays 0
+                # — the rating is no substitute for a reading that exists.
+                draw_w = float(device_info.get("power_rating") or 0.0)
+            if draw_w <= 0:
                 continue
             sheddable_w += draw_w
             if self._peak_managed_elsewhere(device_info):
@@ -1143,6 +1152,23 @@ class LoadManagementCoordinator:
 
         if plan["need_w"] <= 0:
             self._shed_path = "held:under_aim"
+            return
+
+        if self._observer_mode and plan["candidates"]:
+            # The plan is made; the switch is not thrown. Name what was
+            # withheld — a rig in observer mode must read as "withheld",
+            # never as a shed delay that was not the reason.
+            would, would_w = [], 0.0
+            for device_id, _info, draw_w in plan["candidates"]:
+                would.append(device_id)
+                would_w += draw_w
+                if would_w >= plan["need_w"] or reason != "EMERGENCY":
+                    break
+            self._shed_path = f"observer:withheld:{len(would)}"
+            _LOGGER.info(
+                "Observer mode: %s shedding would turn off %s (need %.0f W)",
+                reason, ", ".join(would), plan["need_w"],
+            )
             return
 
         shed_w = 0.0

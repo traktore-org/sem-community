@@ -929,11 +929,17 @@ class LoadDeviceDiscovery:
 
         is_on = False
         current_power = 0.0
+        # (#896) Whether that 0 came from a meter or from the absence of one.
+        # An energy-only load (a switch and a kWh counter, no power entity)
+        # reads 0 here whatever it draws; the shed plan needs to know the
+        # difference between "measured idle" and "nobody is measuring".
+        power_known = False
 
         # Get current power first (needed for is_on fallback)
         if power_state and power_state.state not in ("unknown", "unavailable"):
             try:
                 current_power = float(power_state.state)
+                power_known = True
             except (ValueError, TypeError):
                 pass
 
@@ -965,6 +971,7 @@ class LoadDeviceDiscovery:
         return {
             "is_on": is_on,
             "current_power": current_power,
+            "power_known": power_known,
             "is_available": self._is_device_available(switch_entity, power_entity),
             "last_updated": last_updated
         }

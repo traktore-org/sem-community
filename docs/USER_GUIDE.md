@@ -1056,7 +1056,7 @@ The states above are read from the **15-minute rolling average**, because that i
 
 A shed is never silent: the first shed of an episode raises a persistent notification (*Peak load shedding*) listing what was switched off and the meter reading against the target; it updates with each further shed and is dismissed when the last load is restored. The same episode fires a `solar_energy_management_notification` event (`event: load_shed`) for automations.
 
-The numbers behind each decision are on the load-management sensor: `shed_path` (the verdict — `held:under_aim`, `shed:N`, `futile`, `waiting:anti_flicker`, `waiting:surplus_controller` when the only sheddable draw is a surplus-mode load the surplus controller is shedding, `nothing_sheddable`), `shed_need_w`, `shed_sheddable_w`, `uncontrolled_w` and `shed_futile`.
+The numbers behind each decision are on the load-management sensor: `shed_path` (the verdict — `held:under_aim`, `shed:N`, `futile`, `waiting:anti_flicker`, `waiting:surplus_controller` when the only sheddable draw is a surplus-mode load the surplus controller is shedding, `nothing_sheddable`, `observer:withheld:N` when observer mode kept the N switches the plan would have thrown), `shed_need_w`, `shed_sheddable_w`, `uncontrolled_w` and `shed_futile`.
 
 **Critical loads** are the only protection from shedding, and the only one there is: mark the circuit feeding your network gear or the HA host *critical* on the Load Priorities card and SEM never sheds it. (An earlier constants entry `critical_device_protection` promised a second layer; nothing ever read it, and it is gone.)
 

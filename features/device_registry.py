@@ -1129,7 +1129,12 @@ class UnifiedDeviceRegistry:
                 "device_type": "ev_charger" if device.is_ev else "individual_device",
                 "description": f"Energy Dashboard: {device.name}",
                 "source": "unified_registry",
-                "power_rating": self._get_power_rating(device.power_sensor),
+                # (#896) WATTS, and the RATING — the same accessor the Control
+                # card reads, so the shedder's estimate of what a switch
+                # would free is the number the user sees. The live sensor
+                # tick that sat here read 0 W for a load that is off and 0 W
+                # forever for an energy-only load.
+                "power_rating": self._rated_power_for(device_id, device.power_sensor),
                 "is_available": True,
                 "priority": device.priority,
                 "is_critical": device.is_critical,
@@ -2597,7 +2602,10 @@ class UnifiedDeviceRegistry:
         power sensor, which reads 0 W whenever the load is off. Falls back to the
         live sensor reading when no device is registered (or its rating is 0).
         """
-        live = self._surplus_controller.get_device(device_id)
+        # (#896) the LM sync reads this too, and it already tolerates a
+        # registry with no surplus controller — so must the accessor.
+        sc = self._surplus_controller
+        live = sc.get_device(device_id) if sc is not None else None
         rated = float(getattr(live, "rated_power", 0) or 0) if live else 0.0
         if rated > 0:
             return rated
