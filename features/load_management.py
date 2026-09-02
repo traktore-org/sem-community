@@ -1039,9 +1039,14 @@ class LoadManagementCoordinator:
           is the past, and no switch can undo the past. Under the aim → no
           need, whatever the average still says.
         * ``sheddable_w`` — the draw of everything SEM MAY shed: permitted,
-          available, not critical, not owned by another engine, not already
-          shed, and on. Anti-flicker-blocked loads count — they are still
-          ours, just not yet.
+          available, not critical, not already shed, and on. Anti-flicker-
+          blocked loads count — they are still ours, just not yet. So do
+          **surplus-managed** loads: the surplus controller sheds its own
+          actives on the same SHEDDING/EMERGENCY state (#649 — one per
+          cycle, then all of them). They are SEM's authority through the
+          other engine; leaving them out filed a Repair naming kilowatts SEM
+          was switching off on the very same cycle. ``surplus_engine_w`` is
+          that share, so the path can say who is answering.
         * ``futile`` — even with all of that off the meter would sit above
           the TARGET. Then the peak belongs to a load SEM does not control
           (forum #30: an unmanaged EV) and shedding the house cannot fix
@@ -1056,12 +1061,16 @@ class LoadManagementCoordinator:
         need_w = max(0.0, grid_import_w - aim_w)
 
         sheddable_w = 0.0
+        surplus_engine_w = 0.0
         candidates: List[Tuple[str, Dict, float]] = []
         can_shed_now = {did for did, _ in self._get_devices_for_shedding()}
         for device_id, device_info in self._devices.items():
             if not may_actuate(device_info):
                 continue
-            if self._peak_managed_elsewhere(device_info):
+            # A charger's peak is decide()'s (#461-peak) and never drawn
+            # from here; a surplus-managed load IS shed on this state, by the
+            # surplus controller — its draw is authority, not a candidate.
+            if device_info.get("device_type") == "ev_charger":
                 continue
             if device_info.get("is_critical", False):
                 continue
@@ -1074,7 +1083,9 @@ class LoadManagementCoordinator:
             if not state.get("is_on") or draw_w <= 0:
                 continue
             sheddable_w += draw_w
-            if device_id in can_shed_now:
+            if self._peak_managed_elsewhere(device_info):
+                surplus_engine_w += draw_w
+            elif device_id in can_shed_now:
                 candidates.append((device_id, device_info, draw_w))
         candidates.sort(key=lambda c: c[1].get("priority", 5), reverse=True)
 
@@ -1084,6 +1095,7 @@ class LoadManagementCoordinator:
             "target_w": target_w,
             "need_w": need_w,
             "sheddable_w": sheddable_w,
+            "surplus_engine_w": surplus_engine_w,
             "uncontrolled_w": uncontrolled_w,
             "futile": need_w > 0 and uncontrolled_w > target_w,
             "candidates": candidates,
@@ -1147,9 +1159,12 @@ class LoadManagementCoordinator:
             self._shed_path = f"shed:{shed_n}"
             self._announce_shed_episode(plan)
         elif not plan["candidates"]:
-            self._shed_path = (
-                "waiting:anti_flicker" if plan["sheddable_w"] > 0 else "nothing_sheddable"
-            )
+            if plan["sheddable_w"] > plan["surplus_engine_w"]:
+                self._shed_path = "waiting:anti_flicker"
+            elif plan["surplus_engine_w"] > 0:
+                self._shed_path = "waiting:surplus_controller"
+            else:
+                self._shed_path = "nothing_sheddable"
         else:
             self._shed_path = "waiting:shed_delay"
         _LOGGER.debug(

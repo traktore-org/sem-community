@@ -40,7 +40,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   switch SEM adds up everything it *may* shed; if the meter minus all of it
   would still sit above the target, the peak belongs to a load SEM does not
   control — it sheds **nothing** and files a Repair naming the uncontrolled
-  kilowatts (cleared the first pass the peak is reachable again). A shed is
+  kilowatts (cleared the first pass the peak is reachable again). A
+  surplus-mode load counts as SEM's in that sum — the surplus controller
+  switches it off on the same peak state — so the Repair never names
+  kilowatts SEM is shedding through its other engine. A shed is
   never silent any more: a persistent notification per episode, dismissed
   when the last load is back. And what SEM switched off SEM now restores —
   the shed list had evicted every SEM-shed load on the next cycle as

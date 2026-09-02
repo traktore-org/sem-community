@@ -229,6 +229,43 @@ async def test_anti_flicker_blocked_loads_still_count_as_authority(lm):
     assert data["shed_sheddable_w"] == pytest.approx(3000)
 
 
+@pytest.mark.asyncio
+async def test_a_surplus_managed_load_is_sem_authority_not_uncontrolled(lm):
+    """The surplus controller sheds its own actives on SHEDDING/EMERGENCY
+    (#649: one per cycle, then all of them). A 3 kW surplus-mode heat rod
+    is therefore SEM's to shed — through the other engine, not this one —
+    and 7 kW at the meter is NOT futile: a dark house sits at 4 kW, under
+    the 5 kW target. Counting it as "uncontrolled" filed a Repair naming
+    kilowatts SEM was switching off on the very same cycle."""
+    _load(lm, "heat_rod", priority=9, power_w=3000)
+    lm._devices["heat_rod"]["control_mode"] = "surplus"
+    lm._devices["heat_rod"]["surplus_managed"] = True
+    with patch(f"{IR}.async_create_issue") as create:
+        await _pass(lm, LoadManagementState.EMERGENCY, avg_kw=6.5, import_w=7000)
+    # Never thrown from here — the surplus controller owns that switch.
+    assert lm._devices_shed == []
+    lm._device_discovery.turn_off_device.assert_not_awaited()
+    create.assert_not_called()
+    data = lm.get_load_management_data()
+    assert data["shed_futile"] is False
+    assert data["shed_sheddable_w"] == pytest.approx(3000)
+    assert data["uncontrolled_w"] == pytest.approx(4000)
+    assert data["shed_path"] == "waiting:surplus_controller"
+
+
+@pytest.mark.asyncio
+async def test_surplus_authority_does_not_hide_a_real_futility(lm):
+    """Same heat rod, 9 kW at the meter: even with the rod off the house
+    sits at 6 kW, above target — that IS a load SEM does not control."""
+    _load(lm, "heat_rod", priority=9, power_w=3000)
+    lm._devices["heat_rod"]["control_mode"] = "surplus"
+    lm._devices["heat_rod"]["surplus_managed"] = True
+    with patch(f"{IR}.async_create_issue") as create:
+        await _pass(lm, LoadManagementState.EMERGENCY, avg_kw=8.0, import_w=9000)
+    create.assert_called_once()
+    assert create.call_args.kwargs["translation_placeholders"]["uncontrolled_kw"] == "6.0"
+
+
 # ---------------------------------------------------------------------------
 # 4. A shed is never silent
 # ---------------------------------------------------------------------------
