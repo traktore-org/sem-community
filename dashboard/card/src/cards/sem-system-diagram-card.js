@@ -29,6 +29,7 @@ import {
 } from '../base/sem-shared.js';
 import { nightArcPos } from '../util/night-arc.js';
 import { formatTemperatureLabel } from '../util/temperature.js';
+import { socDisplay } from '../util/missing-value.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
 
@@ -656,6 +657,13 @@ class SEMSystemDiagramCard extends SEMLitBase {
         const { value: soc, stale: socStale } =
             this._readWithHold('battery_soc', 'this._lastBattSoc', 60000);
         const battSensorStale = battStale || socStale;
+        // An expired SOC hold carries value 0 — that is an ABSENT reading,
+        // not a flat pack. socDisplay() turns it into the em-dash and an
+        // empty cell; the label and the fill below both come from here so
+        // the two cannot disagree (PROD 02.09: "0 %" under "sensor
+        // unavailable"). Keyed on the SOC's own staleness: a known SOC is
+        // still shown (dimmed) when only the power sensor is out.
+        const socShown = socDisplay(soc, socStale);
         const battCharge = Math.max(0, battery);
         const battDischarge = Math.max(0, -battery);
 
@@ -693,7 +701,7 @@ class SEMSystemDiagramCard extends SEMLitBase {
         const battBH = 64 * battS;
         const battInnerH = battBH - 12 * battS;
         const battInnerY = L.B.cy - battBH / 2 + 8 * battS;
-        const socFillH = Math.max(0, Math.min(battInnerH, battInnerH * (soc / 100)));
+        const socFillH = battInnerH * socShown.fraction;
         const socFillY = battInnerY + battInnerH - socFillH;
         const battFillColor = battCharge > 10 ? '#f06292' : 'url(#battFillGrad)';
         const showBattBolt = battCharge > 10;
@@ -1025,7 +1033,7 @@ class SEMSystemDiagramCard extends SEMLitBase {
                     ${this._showBattery ? svg`<g filter="url(#glowBattery)" class="clickable"
                        opacity="${battSensorStale ? 0.35 : 1}"
                        @click=${() => this._showMoreInfo('battery_soc')}>
-                        ${this._illustrationBattery(L.B.cx, L.B.cy, L.B.r, socFillH, socFillY, battFillColor, showBattBolt, soc)}
+                        ${this._illustrationBattery(L.B.cx, L.B.cy, L.B.r, socFillH, socFillY, battFillColor, showBattBolt, socShown.label)}
                     </g>
                     <text x="${L.B.cx}" y="${L.B.labelY}" text-anchor="middle"
                           font-family="${F}" font-size="${fl}" font-weight="700"
@@ -1227,10 +1235,12 @@ class SEMSystemDiagramCard extends SEMLitBase {
 
     /**
      * Battery — tall storage unit with SOC fill bar.
-     * Updated signature: fill geometry + color + bolt visibility + SOC% text
-     * come from the caller (reactive), no imperative writes anywhere.
+     * Updated signature: fill geometry + color + bolt visibility + SOC label
+     * come from the caller (reactive), no imperative writes anywhere. The
+     * label is already a string ("97%" or the em-dash) — this function
+     * never sees a number it could mistake for a measurement.
      */
-    _illustrationBattery(cx, cy, r, socFillH, socFillY, battFillColor, showBolt, socPct) {
+    _illustrationBattery(cx, cy, r, socFillH, socFillY, battFillColor, showBolt, socLabel) {
         const s = r / 50;
         const bw = 40 * s, bh = 64 * s;
         const x = cx - bw / 2, y = cy - bh / 2;
@@ -1268,7 +1278,7 @@ class SEMSystemDiagramCard extends SEMLitBase {
             <text x="${cx}" y="${showBolt ? cy + 15*s : cy + 4*s}"
                   text-anchor="middle" font-family="'Segoe UI','Roboto',sans-serif"
                   font-size="${14*s}" font-weight="900" fill="#fff"
-                  stroke="rgba(0,0,0,0.6)" stroke-width="${1.5*s}" paint-order="stroke">${socPct.toFixed(0)}%</text>
+                  stroke="rgba(0,0,0,0.6)" stroke-width="${1.5*s}" paint-order="stroke">${socLabel}</text>
 
             ${showBolt ? svg`
                 <g>

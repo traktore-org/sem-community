@@ -601,10 +601,30 @@ class SEMEVStatusCard extends SEMLitBase {
         const chargeModeAttrs = this._stateAttrs(chargeModeEntityId);
         const chargeMode = this._stateStr(chargeModeEntityId) || 'min_plus_solar';
         const chargeModeOptions = chargeModeAttrs.options || [
-            'solar_only', 'min_plus_solar', 'always_max', 'off',
+            'solar_only', 'solar_plus_battery', 'solar_plus_cheap',
+            'min_plus_solar', 'always_max', 'off',
         ];
+        // (#885 matrix, decision 3) One rule, two severities. A mode that
+        // CANNOT function without its prerequisite is DISABLED with the
+        // reason (solar_plus_cheap without a dynamic tariff has no cheap
+        // windows to use — the #277 Q1 ghost-option protection, kept, but
+        // visible instead of hidden). A mode that functions PARTIALLY gets
+        // an INFO below instead (solar_plus_battery works on live surplus
+        // from day one; the forecast bypass and dynamic floor wake when
+        // the #800 learner graduates).
+        const tariffAvailable = chargeModeAttrs.tariff_available !== false;
+        const modesNeedingTariff = chargeModeAttrs.modes_needing_tariff || [];
+        const modeDisabled = (o) =>
+            !tariffAvailable && modesNeedingTariff.includes(o);
+        const spendableAttrs =
+            this._stateAttrs('sensor.sem_battery_spendable_kwh');
+        const learnerLearning = spendableAttrs.phase === 'learning';
+        const learnerInfo = (this._t('charge_mode_battery_learning_info') || '')
+            .replace(/\{n\}/g, spendableAttrs.nights_sealed ?? '?')
+            .replace(/\{total\}/g, spendableAttrs.nights_required ?? '?');
         const chargeModeLabels = {
             solar_only:       this._t('charge_mode_solar_only'),
+            solar_plus_battery: this._t('charge_mode_solar_plus_battery'),
             solar_plus_cheap: this._t('charge_mode_solar_plus_cheap'),
             min_plus_solar:   this._t('charge_mode_min_plus_solar'),
             always_max:       this._t('charge_mode_always_max'),
@@ -784,12 +804,21 @@ class SEMEVStatusCard extends SEMLitBase {
                                     @click=${(e) => e.stopPropagation()}
                                     @change=${(e) => this._selectOption(chargeModeEntityId, e.target.value)}>
                                 ${chargeModeOptions.map(o => html`
-                                    <option value=${o} ?selected=${o === chargeMode}>
-                                        ${chargeModeLabels[o] || o}
+                                    <option value=${o} ?selected=${o === chargeMode}
+                                            ?disabled=${modeDisabled(o)}>
+                                        ${chargeModeLabels[o] || o}${modeDisabled(o) ? ` — ${this._t('charge_mode_needs_tariff')}` : ''}
                                     </option>`)}
                             </select>
                         </span>
                     </div>
+                    ${chargeMode === 'solar_plus_battery' && learnerLearning ? html`
+                    <div class="ct-subhint">
+                        <div class="ct-hint-row">
+                            <ha-icon icon="mdi:school-outline" style="--mdc-icon-size:13px;color:#5BC8D8"></ha-icon>
+                            <span class="ct-hint-text">${learnerInfo}</span>
+                        </div>
+                    </div>
+                    ` : nothing}
                     ${this._showHelp ? html`
                     <div class="ct-subhint">
                         <div class="ct-hint-row">

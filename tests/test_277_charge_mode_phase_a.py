@@ -168,26 +168,28 @@ def _build_charge_mode_select(
 class TestChargeModeOptions:
     """Q1: ``solar_plus_cheap`` only appears when tariff_mode == 'dynamic'."""
 
-    def test_solar_plus_cheap_hidden_without_dynamic_tariff(self):
-        sel = _build_charge_mode_select(tariff_mode="static")
-        opts = sel.options
-        assert "solar_plus_cheap" not in opts, (
-            "solar_plus_cheap must hide when no dynamic tariff (Q1)"
-        )
-        # All other modes still present
-        for m in ("solar_only", "min_plus_solar", "always_max", "off"):
-            assert m in opts
+    def test_solar_plus_cheap_always_listed_gate_moved_to_attribute(self):
+        """(#885 matrix, decision 3) supersedes the #277 Q1 HIDE rule.
 
-    def test_solar_plus_cheap_hidden_with_calendar_tariff(self):
-        """calendar tariff is not 'dynamic' — same hide rule."""
-        sel = _build_charge_mode_select(tariff_mode="calendar")
-        assert "solar_plus_cheap" not in sel.options
+        Hiding kept the ghost option un-pickable but also undiscoverable —
+        Guido looked for the mode and could not find it. The protection
+        moved: the option is ALWAYS listed and the ``tariff_available``
+        attribute tells the card to render it disabled with the reason.
+        Both properties survive: cannot be mis-picked, can be seen.
+        """
+        for tariff_mode in ("static", "calendar", "dynamic"):
+            sel = _build_charge_mode_select(tariff_mode=tariff_mode)
+            assert "solar_plus_cheap" in sel.options, tariff_mode
+            assert set(sel.options) == set(EV_CHARGE_MODES.keys()), tariff_mode
 
-    def test_solar_plus_cheap_visible_with_dynamic_tariff(self):
-        sel = _build_charge_mode_select(tariff_mode="dynamic")
-        opts = sel.options
-        assert "solar_plus_cheap" in opts
-        assert len(opts) == 5
+    def test_the_tariff_gate_now_lives_on_the_attribute(self):
+        for tariff_mode, avail in (("static", False), ("calendar", False),
+                                   ("dynamic", True)):
+            sel = _build_charge_mode_select(tariff_mode=tariff_mode)
+            a = sel.extra_state_attributes
+            assert a is not None, tariff_mode
+            assert a.get("tariff_available") is avail, (tariff_mode, a)
+            assert "solar_plus_cheap" in a.get("modes_needing_tariff", []), a
 
     def test_valid_value_set_always_full(self):
         """Universe of valid values is always the 5 — only the UI list
@@ -197,11 +199,11 @@ class TestChargeModeOptions:
         sel = _build_charge_mode_select(tariff_mode="static")
         assert sel._valid_value_set() == set(EV_CHARGE_MODES.keys())
 
-    def test_current_option_clamps_when_stored_solar_plus_cheap_loses_tariff(self):
+    def test_stored_solar_plus_cheap_survives_losing_the_tariff(self):
         """User had dynamic tariff + ``solar_plus_cheap`` mode, then
-        switched to a static tariff. The selector's ``options`` no
-        longer includes ``solar_plus_cheap`` (Q1 hide rule); the
-        ``current_option`` then clamps to ``options[0]`` (``solar_only``).
+        switched to a static tariff. Pre-#885 the Q1 hide rule removed the
+        option and ``current_option`` clamped to ``solar_only``; now the
+        option stays listed (disabled in the card) and stays selected.
 
         **Critical for Phase B:** ``self._value`` MUST stay
         ``solar_plus_cheap`` in storage — re-enabling the tariff later
@@ -214,10 +216,14 @@ class TestChargeModeOptions:
         sel = _build_charge_mode_select(
             tariff_mode="static", stored_value="solar_plus_cheap",
         )
-        # UI options exclude solar_plus_cheap
-        assert "solar_plus_cheap" not in sel.options
-        # current_option clamps to options[0] (the first remaining mode)
-        assert sel.current_option == sel.options[0] == "solar_only"
+        # (#885 decision 3) The option is no longer removed, so nothing
+        # clamps: the stored mode stays SELECTED and visible — the card
+        # greys the entry via ``tariff_available`` and the mode itself
+        # degrades gracefully (its day path delegates to solar_only when
+        # no cheap window is in effect). The original point of this test
+        # survives below: stored intent is never silently rewritten.
+        assert "solar_plus_cheap" in sel.options
+        assert sel.current_option == "solar_plus_cheap"
         # Stored intent preserved — Phase B must read this, not current_option
         assert sel._value == "solar_plus_cheap"
 

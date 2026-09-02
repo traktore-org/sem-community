@@ -76,6 +76,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   discharge to the house — the car drew grid under a line that said battery
   assist. One gate, two readers; the clamp also honours tonight's dynamic
   floor, not only the static buffer.
+- 🐛 **A battery SOC that is not being read no longer shows as 0 %** (#903).
+  PROD, mid-dropout: the Home diagram's battery cell read `0 %` with an empty
+  fill, right under `— W` and `sensor unavailable` — the card knew the reading
+  was gone and still printed the fallback zero as the state of charge (the
+  pack was at 97 %). The Home status chip and the Battery tab's gauge did the
+  same, without even a hold, on every dropout. 0 % is a flat pack, a real and
+  alarming measurement, and the one thing an absent reading must never look
+  like. One helper now turns a SOC into its label and fill; absent renders
+  as `—` and an empty cell. A genuine 0 % still says 0 %.
 - 🧹 **An upgraded install stops carrying 15 stale translation resources**
   (#901). Since the #738 split, `sem-localize.js` is a loader that fetches
   only the viewer's own language; the per-language files are assets it
@@ -204,60 +213,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the stable id was "Entity not found". The button platform now runs the
   same registry repair switch/number/sensor already do.
 
-# [2.1.0-beta.5] — 01.09.2026
+- 🔋 **The car can no longer drain the battery past what the house needs
+  tonight** (#878). Letting the battery help charge the car is a permission
+  you grant; how *deep* it may go was never answered — the car emptied the
+  pack down to your configured buffer and stopped there, the same level in
+  June and in December. It now stops at whichever floor is higher: your
+  buffer, or the level tonight's own measured need says must still be in the
+  pack at dawn. On a 70% buffer against a night computing a 79% floor, the
+  assist was offering the car **2.5–3.3 kW** between 72% and 79% SOC — energy
+  the house then bought back at the evening rate. Above the floor it still
+  assists, tapering from the computed level rather than the buffer; at or
+  above the auto-start SOC nothing changes. A computed floor *below* your
+  buffer changes nothing, and with forecast-led spending off no floor is
+  computed at all — the buffer decides exactly as before.
 
-- ☁️ **A passing cloud no longer hard-stops a solar charging session whenever
-  electricity isn't cheap** (#893, reported by @DigitalOptics on 2.0.0). The
-  anti-flap bridge — the 3-minute hold that carries a session through a solar
-  dip instead of cycling the contactor — was being cancelled by the tariff:
-  any daytime idle during a not-cheap price window was classed as a
-  structural stop, in **every** mode. For most tariffs that is most of the
-  day, so each cloud stopped the session outright and the charger switched
-  with the weather. The tariff veto now applies only to the mode that
-  actually prices its grid use (*Solar + cheapest hours*); for solar modes
-  the hold is funded by your own surplus and your battery above its buffer,
-  and the price is nobody's business. The one case the old rule genuinely
-  protected — a hold that could only be grid-fed — is still refused, now
-  also when the battery is *forbidden* from assisting rather than merely
-  below its buffer.
+- 🔌 **Two charge modes were missing from the picker — one restored, one
+  un-hidden** (#885 matrix). Chargers get **Solar + battery**: PV surplus plus
+  the home pack, and nothing else — the charger twin of a load's
+  "Solar + battery" mode, and the return of the legacy `pv` /
+  `self_consumption` split that the #277 consolidation collapsed (since then,
+  letting the pack help the car also meant committing to a Min floor and grid
+  backfill via Min + Solar). Same Zone 3/4 arithmetic as Min + Solar — one
+  implementation, the floor branch switched off — and `solar_only`'s night
+  contract verbatim: never grid-charges (#346), At-least floor is the only
+  exception (#679, per-charger-explicit). Purely additive: nobody's existing
+  mode changes. While the battery learner is still gathering nights, the mode
+  works from live surplus and the card says so — forecast-led spending and the
+  dynamic floor wake on graduation. And **Solar + cheapest hours** is no longer
+  hidden on installs without a dynamic tariff: it is listed disabled with the
+  reason, keeping #277's cannot-be-mis-picked protection while becoming
+  discoverable — the maintainer looked for it and could not find it.
 
-- 🔁 **A fussy car's start-current floor is now remembered — the all-night
-  contactor churn ends** (#893). Some cars latch at a higher current than the
-  minimum but refuse the minimum itself (live on the test rig 31.08: drew
-  3.1 kW at 8 A, 0.13 kW at 6 A). The start ladder found 8 A, then settled
-  back to the 6 A budget, the car dropped, and the ladder started over —
-  a contactor click every ~3 minutes, all night. SEM now learns the
-  demonstrated latch floor for the session: a budget below it holds off
-  quietly instead of re-laddering, the next start begins at the floor rather
-  than re-poking a current the car already refused, a draw at lower amps
-  decays the floor (appetite changes are honoured), and unplugging clears
-  it. An active draw is never interrupted by the floor guard.
+- ⚡ **The peak-slot guard was only working by coincidence** (#864/#874, found
+  by audit). The "what have higher-priority chargers already claimed" value
+  rode a state object built once per cycle — *before* the charger loop resets
+  and runs — so every charger read the same stale total and the cascade never
+  happened. Two chargers connecting in the same cycle each saw zero committed
+  and both claimed the whole slot, reproducing the original #874 overshoot;
+  a **single** charger read its own previous commitment as a rival's and
+  either pinned itself a step low or oscillated between offers. It looked
+  correct in steady two-charger tests because both chargers end up pinned to
+  the guard's floor either way, and the unit test hand-fed the value the
+  coordinator never actually produced. It is now passed per charger like its
+  two siblings. Also fixes `peak_committed_w` being declared **twice** on the
+  same dataclass, where the second silently won and the first had captured
+  the documentation belonging to a different field.
 
-- 🔌 **The EV charging stop was sent twice** (#894, reported by @DigitalOptics
-  on 2.0.0). With no start/stop entity configured, SEM stops the charger by
-  writing 0 A — but the generic adapter wrote that 0 A directly *and* then
-  called the session stop, which writes 0 A again as its no-mechanism
-  fallback, so a single stop hit the wire twice within milliseconds. On
-  installs where the stop is realised by an automation watching for the 0 A
-  write, that automation fired twice and produced a burst of SEM warnings. The
-  stop is now issued exactly once — the session stop owns it, matching how KEBA
-  has always worked. Root-caused as a recurring class (a wrapper that actuates
-  *and* delegates to a layer that actuates the same command again) and guarded.
+- ☀️ **Solar follows the device order too** (#885). Same defect as the battery
+  half, on the bigger resource: nothing carried a load's claim across the
+  charger/load boundary, because the load pass simply runs later in the cycle
+  than the charger loop. A hot water tank at the top of your list could be
+  left running on grid because a charger at the bottom had already spent the
+  sun. Loads that outrank a charger now have their share set aside before it
+  is offered anything. **Note the visible change**: if you have loads dragged
+  above a charger, that charger will now be offered less solar than before —
+  which is what the list was always supposed to mean.
 
-# [2.1.0-beta.4] — 01.09.2026
+- 🔋 **One battery, spent in the order you dragged** (#885). Two subsystems
+  each held a private copy of `Battery assist max power` and each treated it
+  as its own full budget, so a 5 kW pack could be offered 5 kW to the cars
+  **and** 5 kW to the loads in the same cycle — measured, two chargers alone
+  asked one pack for 7.7 kW. And because every charger is decided before the
+  load pass runs, a prio-9 charger took battery power ahead of a prio-1 hot
+  water tank: dragging that tank to the top of the list changed nothing.
+  There is now one allowance, and devices that outrank a charger have their
+  share set aside before it is offered the pack — the next device down runs
+  on solar and grid, which is what the list always promised. Only opted-in
+  devices take part: a load needs its "Solar + battery" mode, and a charger
+  can now be excluded on its own with **Battery may assist this charger**, so
+  a two-charger install can say "the garage may, the guest charger may not".
+  "Finish overnight from → Battery" loads reserve nothing against a car —
+  they run below the buffer, in a band the car's floor forbids it from
+  entering, so the two never compete for the same energy. The loads also now
+  respect the #878 dynamic floor the car has honoured since it shipped; a
+  floor kept by one consumer and ignored by the other was not a floor.
 
-- 🔌 **JuiceBox was driven through its *offline* current limit, not the live
-  one** (#886, reported by @Azlinon on 2.1.0-beta.3). Auto-detection bound
-  `number.juicebox_max_current_offline_wanted` as the current control — the
-  register the charger honours only when it has lost its server, and a
-  limited-write one at that — where the *online* twin belongs. The matcher took
-  the last `number.juicebox*` it saw, so entity ordering silently decided which
-  connection mode SEM commanded. SEM now refuses any `*_offline_*` register as
-  a charger's current control across every brand, swapping to the online twin;
-  installs that already adopted the offline binding self-heal to the online one
-  on upgrade. Root-caused as a recurring class (a mode-qualified fallback bound
-  as the live control surface) and guarded at the single discovery choke point,
-  so the next brand cannot repeat it.
 
 # [2.1.0-beta.3] — 31.08.2026
 

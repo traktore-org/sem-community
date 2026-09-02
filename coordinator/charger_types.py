@@ -535,6 +535,19 @@ class ChargerDecision:
     contract: 'All fields are computed once in decide … no re-derivation
     downstream.'"""
 
+    assist_w: float = 0.0
+    """(#885) The share of ``budget_w`` the home BATTERY is funding —
+    the post-netting Zone 3/4 assist potential, 0.0 everywhere else.
+
+    Carried here because the coordinator has to know what this charger
+    took out of the one pack allowance, so the next charger and the
+    load pass both see a budget net of it. It was briefly RE-DERIVED at
+    the call site (commitment minus the solar this charger could see),
+    which is exactly the second-implementation-drifts class ``#282``
+    exists to prevent: ``decide`` already computed this number, so
+    ``decide`` reports it. Honours the dataclass contract: 'All fields
+    are computed once in decide … no re-derivation downstream.'"""
+
 
 def solar_commitment_w(
     decision: ChargerDecision,
@@ -731,12 +744,6 @@ class FleetContext:
     """``time_manager.is_night_mode()``."""
 
     peak_slot_allowed_w: Optional[float] = None
-    #: (#864) Slot allowance already offered to HIGHER-PRIORITY chargers
-    #: this cycle. One slot budget serves the whole house, so a second
-    #: charger must see what the first took — mirrors the solar cascade's
-    #: ``solar_committed_w``. Without it each charger claimed the entire
-    #: allowance and two landed 69 % over target on review.
-    peak_committed_w: float = 0.0
     """(#864) The PREVENTIVE peak bound: average import (W) the rest of
     the current 15-minute billing slot may carry so the slot lands on the
     target. Computed once per cycle from ``coordinator/peak_guard.py``;
@@ -750,6 +757,16 @@ class FleetContext:
     The multi-charger loop subtracts higher-priority chargers'
     commits before each charger's decide() runs."""
 
+    #: (#864) Slot allowance already offered to HIGHER-PRIORITY chargers
+    #: this cycle. One slot budget serves the whole house, so a second
+    #: charger must see what the first took — mirrors the solar cascade's
+    #: ``solar_committed_w``. Without it each charger claimed the entire
+    #: allowance and two landed 69 % over target on review.
+    #:
+    #: (#885) DECLARED ONCE. This field was declared TWICE in this
+    #: dataclass — the second silently won, and the first had captured the
+    #: docstring belonging to ``peak_slot_allowed_w`` above, leaving that
+    #: field undocumented and this one described as something it is not.
     peak_committed_w: float = 0.0
     """Watts already committed to higher-priority chargers in
     this cycle (the #274/H1 share-one-peak-budget invariant)."""
@@ -795,6 +812,21 @@ class FleetContext:
     # spend anything at all. Default OFF: this is the first behaviour in the
     # arc that is not inert, and turning it on for someone is not ours to do.
     battery_spendable_kwh: float = 0.0
+    #: (#878) The level tonight's own measured need says the pack
+    #: must still hold at dawn. The budget unlocked the assist;
+    #: this bounds HOW DEEP it may go. ``None`` = no budget was
+    #: computed, and means "fall back to buffer_soc" — never a
+    #: floor of zero, which would license draining to empty.
+    dynamic_floor_pct: "Optional[float]" = None
+    #: (#878) Assist watts already offered to HIGHER-PRIORITY chargers
+    #: this cycle. ONE battery serves the whole fleet, so a second
+    #: charger must see what the first took — mirrors
+    #: ``solar_committed_w`` and ``peak_committed_w``. Without it every
+    #: charger computed the same full potential from fleet-wide values
+    #: and added it again: two chargers asked one 5000 W pack for
+    #: 7727 W, and the floor that keeps the house covered was drained
+    #: through twice as fast as its taper could respond.
+    assist_committed_w: float = 0.0
     forecast_spending_enabled: bool = False
     """Solar-surplus gate for battery assist (``battery_assist_min_surplus``).
     Battery assist only SUPPLEMENTS real solar — below this much pure
@@ -898,6 +930,8 @@ class FleetCycleState:
     # (#778 phase 5) Tonight's forecast-derived spendable budget, in kWh.
     # 0.0 until the arc's master switch is on and the evidence exists.
     battery_spendable_kwh: float = 0.0
+    #: (#878) rides beside the budget it bounds
+    dynamic_floor_pct: "Optional[float]" = None
     tariff_level: "Optional[str]" = None
     forecast_remaining_kwh: float = 0.0
     # (#747) the load manager's peak posture, resolved once per cycle.
@@ -905,12 +939,6 @@ class FleetCycleState:
     # (#864) the slot-budget allowance, resolved once per cycle; None when
     # no target peak limit is configured.
     peak_slot_allowed_w: Optional[float] = None
-    #: (#864) Slot allowance already offered to HIGHER-PRIORITY chargers
-    #: this cycle. One slot budget serves the whole house, so a second
-    #: charger must see what the first took — mirrors the solar cascade's
-    #: ``solar_committed_w``. Without it each charger claimed the entire
-    #: allowance and two landed 69 % over target on review.
-    peak_committed_w: float = 0.0
     # #576 — fleet-level priority-list inputs (one home battery). Threaded
     # here so every charger's view sees the same slot + command state.
     battery_priority: "Optional[int]" = None

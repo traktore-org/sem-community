@@ -169,23 +169,64 @@ class TestCoordinatorStillRunsTheLoop:
     def test_the_running_total_is_threaded_into_each_view(self):
         # Accumulating a number nobody reads is the same as not
         # accumulating it.
-        threaded = [
+        #
+        # (#885) Matches the accumulator ANYWHERE inside the argument, not
+        # only as the whole of it: solar_committed_w is now
+        # ``float(self._solar_committed_w_per_cycle) + surplus_reserved_w(...)``
+        # — the charger cascade plus what higher-ranked LOADS have reserved,
+        # because the load pass runs later in the cycle than this loop and a
+        # junior charger was spending the sun before a senior load was asked.
+        # The invariant this test defends is unchanged: the running total
+        # must reach the view.
+        def _mentions(value, attr):
+            return any(
+                isinstance(n, ast.Attribute) and n.attr == attr
+                for n in ast.walk(value)
+            )
+
+        calls = [
             node for node in ast.walk(_coordinator_tree())
             if isinstance(node, ast.Call)
             and getattr(node.func, "id", getattr(node.func, "attr", None))
             == "build_charger_view"
-            and any(
+        ]
+        threaded = [
+            node for node in calls
+            if any(
                 kw.arg == "solar_committed_w"
-                and isinstance(kw.value, ast.Attribute)
-                and kw.value.attr == "_solar_committed_w_per_cycle"
+                and _mentions(kw.value, "_solar_committed_w_per_cycle")
                 for kw in node.keywords
             )
         ]
         assert threaded, (
-            "No build_charger_view call passes "
-            "solar_committed_w=self._solar_committed_w_per_cycle. The "
+            "No build_charger_view call threads "
+            "self._solar_committed_w_per_cycle into solar_committed_w. The "
             "cascade is accumulated but never consumed — each charger "
             "sees the full surplus again."
+        )
+
+        # (#885) …and the other half of the same order: a load dragged above
+        # a charger must have its share set aside before that charger is
+        # offered anything.
+        reserved = [
+            node for node in threaded
+            if any(
+                kw.arg == "solar_committed_w"
+                and any(
+                    isinstance(n, ast.Call)
+                    and getattr(n.func, "id",
+                                getattr(n.func, "attr", None))
+                    in ("surplus_reserved_w", "_surplus_reserved_w")
+                    for n in ast.walk(kw.value)
+                )
+                for kw in node.keywords
+            )
+        ]
+        assert reserved, (
+            "solar_committed_w carries only the charger-to-charger cascade. "
+            "Higher-ranked LOADS reserve nothing, so a prio-9 charger still "
+            "spends the sun ahead of a prio-1 load and the drag list means "
+            "nothing across the charger/load boundary."
         )
 
 

@@ -3257,6 +3257,50 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # claimed the entire allowance and two landed 69 % over
                 # target on review.
                 self._peak_committed_w_per_cycle = 0.0
+                # (#878) …and the pack's. One battery serves the fleet,
+                # so the assist a senior charger was offered must not be
+                # offered again to the next.
+                self._assist_committed_w_per_cycle = 0.0
+                # (#885) The pack's assist cap for this cycle, read once —
+                # the ceiling on what chargers AND Tier-1 loads may take
+                # between them, and the cap on any single reservation.
+                from .surplus_controller import (
+                    surplus_reserved_w as _surplus_reserved_w,
+                    tier1_battery_reserved_w as _tier1_reserved_w,
+                )
+                from ..consts.core import (
+                    DEFAULT_BATTERY_ASSIST_MAX_POWER as _DEF_ASSIST_MAX,
+                )
+                _assist_allowance_w = float(
+                    self.config.get("battery_assist_max_power")
+                    or self.config.get("super_charger_power")
+                    or _DEF_ASSIST_MAX
+                )
+                # Same ``getattr`` guard every other reader of the
+                # controller uses — a partially-built coordinator in a
+                # test must reserve nothing rather than raise.
+                _sc = getattr(self, "_surplus_controller", None)
+                _tier1_devices = (
+                    _sc.get_devices_sorted() if _sc is not None else ()
+                )
+                # (#885) Every charger id, so the reservation walk cannot
+                # count a CHARGER as a load. A charger's claim already
+                # cascades through solar_committed_w / assist_committed_w;
+                # reserving for it as well bills the same watts twice.
+                # get_devices_sorted() filters them via managed_externally
+                # and both registration sites set it — but that invariant
+                # lives in other files, so this does not rely on it.
+                _charger_ids = set((self._ev_devices or {}).keys())
+                _legacy_ev = getattr(self, "_ev_device", None)
+                if _legacy_ev is not None:
+                    _charger_ids.add(getattr(_legacy_ev, "device_id", None))
+                # (#885) The sun a senior load may still claim. Capped at the
+                # real headroom so a reservation can never exceed what the
+                # roof is producing; an active load is already inside
+                # ``home_consumption_power`` and so is already subtracted.
+                _solar_headroom_w = max(0.0, float(
+                    getattr(power, "solar_power", 0.0) or 0.0)
+                    - float(getattr(power, "home_consumption_power", 0.0) or 0.0))
                 # v1.6.9: per-charger effective states are captured below
                 # so the notification dispatch can fire per charger.
                 # Reset before the loop so a removed charger's stale
@@ -3597,7 +3641,45 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             # per-charger dict that never carries the key and
                             # falls back to 32 A, over-crediting the cascade.
                             hardware_max_a=getattr(adapter, "max_current_a", None),
-                            solar_committed_w=self._solar_committed_w_per_cycle,
+                            # (#885) Solar in the ONE device order too. The
+                            # accumulator carries what higher-priority
+                            # CHARGERS took; the reservation carries what
+                            # higher-ranked LOADS are about to take. Without
+                            # the second term the load pass simply ran later
+                            # in the cycle, so a junior charger spent the sun
+                            # before a senior load was ever asked.
+                            solar_committed_w=(
+                                float(self._solar_committed_w_per_cycle)
+                                + _surplus_reserved_w(
+                                    _tier1_devices,
+                                    below_priority=self._ev_priority_for(cid),
+                                    available_w=_solar_headroom_w,
+                                    exclude_ids=_charger_ids,
+                                )
+                            ),
+                            # (#885) One pack, spent in the ONE device
+                            # order. Two things are already claimed before
+                            # this charger may touch the battery: what
+                            # higher-priority CHARGERS took (the running
+                            # accumulator), and what Tier-1 LOADS ranked
+                            # above it in the same drag list are going to
+                            # want. Before this the loads were simply
+                            # evaluated later in the cycle, so every
+                            # charger drained the pack first regardless of
+                            # the slot the user dragged it to.
+                            # (#864/#885) the slot cascade, now per-charger
+                            # for the same reason as its two siblings.
+                            peak_committed_w=float(
+                                self._peak_committed_w_per_cycle),
+                            assist_committed_w=(
+                                float(self._assist_committed_w_per_cycle)
+                                + _tier1_reserved_w(
+                                    _tier1_devices,
+                                    below_priority=self._ev_priority_for(cid),
+                                    allowance_w=_assist_allowance_w,
+                                    exclude_ids=_charger_ids,
+                                )
+                            ),
                             night_deliverable_kwh=self._night_deliverable_kwh(charger_cfg),
                             # #548 — max-SOC ceiling (bound="max"); stops surplus
                             # charging at the car's max SOC, in every mode.
@@ -3810,6 +3892,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 voltage=adapter.voltage,
                                 max_current_a=adapter.max_current_a,
                             ) or 0.0)
+                            # (#878/#885) The share of that commitment the
+                            # BATTERY is funding, accumulated so the next
+                            # charger's potential — and the load pass that
+                            # runs later — are net of it. One pack, one
+                            # allowance, spent in device order.
+                            #
+                            # Read from the decision, NOT recomputed here.
+                            # This briefly subtracted a locally-reconstructed
+                            # "solar this charger could see" from the
+                            # commitment; ``decide`` had already computed the
+                            # same number with the real surplus in hand, and a
+                            # second implementation of one value is the #282
+                            # class that drifts. ``decide`` computes, ``decide``
+                            # reports.
+                            self._assist_committed_w_per_cycle += max(
+                                0.0, float(getattr(decision, "assist_w", 0.0) or 0.0))
                         except (HomeAssistantError, ServiceValidationError) as e:
                             _LOGGER.error("EV control service failed for %s: %s", cid, e)
                         except ValueError as e:
@@ -5318,6 +5416,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # pure computation extracted to build_battery_tier_context.
             btc = build_battery_tier_context(
                 self.config, getattr(power, "battery_soc", None), true_surplus_w,
+                # (#885) The charger loop ran earlier this cycle and has
+                # already been offered its share of the pack; the loads see
+                # what is left, and the same floor the EV side respects.
+                assist_committed_w=float(
+                    getattr(self, "_assist_committed_w_per_cycle", 0.0) or 0.0),
+                dynamic_floor_pct=(
+                    (getattr(self, "_planning_evidence", None) or {})
+                    .get("battery_dynamic_floor_pct")),
             )
             # (#653) Tick the appliance scheduler BEFORE allocation.
             #
@@ -5340,7 +5446,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 reclaim_w=reclaim_w,
                 battery_priority=battery_priority,
                 battery_soc=btc.soc,
-                battery_buffer_soc=btc.buffer_soc,
+                # (#885) the EFFECTIVE floor, not the raw buffer: each
+                # load stops where the house's overnight need begins.
+                battery_buffer_soc=btc.effective_floor_soc,
                 battery_reserve_soc=btc.reserve_soc,
                 battery_assist_budget_w=btc.assist_budget_w,
                 observer=self._observer_mode,
@@ -9215,12 +9323,29 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         fall back to the fleet-level call — identical behaviour to
         v1.6.8.
         """
+        def _clamp_state(text, limit=255):
+            """State values only — attributes are unlimited and keep the
+            full reason."""
+            t = str(text) if text is not None else None
+            if t is None or len(t) <= limit:
+                return t
+            return t[: limit - 1] + "\u2026"
+
         common_data = {
             "battery_soc": power.battery_soc,
             "calculated_current": calculated_current,
             "available_power": available_power,
             "daily_ev_energy": energy.daily_ev,
-            "charging_strategy": charging_context.charging_strategy,
+            # HA rejects any state longer than 255 chars OUTRIGHT — the
+            # sensor falls back to "unknown" and homeassistant.core logs an
+            # ERROR every cycle. The composed strategy (stability prefix +
+            # mode reason + structural suffix) crossed that line live on
+            # .175 the first time real hardware stacked all three. The STATE
+            # is a display string, so clamp it here at its single writer;
+            # the FULL text rides charging_strategy_reason, which becomes an
+            # attribute and has no such limit.
+            "charging_strategy": _clamp_state(
+                charging_context.charging_strategy),
             "charging_strategy_reason": charging_context.charging_strategy_reason,
             "canonical_strategy": charging_context.canonical_strategy,
             "discharge_limit": discharge_limit,
@@ -9839,8 +9964,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             config=self.config,
             peak_state=_peak_state,
             peak_slot_allowed_w=self._peak_slot_allowed_w,
-            peak_committed_w=float(
-                getattr(self, "_peak_committed_w_per_cycle", 0.0) or 0.0),
             is_night=self.time_manager.is_night_mode(),
             tariff_level=tariff_level,
             forecast_remaining_kwh=float(forecast_remaining),
@@ -9849,6 +9972,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             battery_spendable_kwh=float(
                 (getattr(self, "_planning_evidence", None) or {})
                 .get("battery_spendable_kwh") or 0.0),
+            # (#878) The ceiling that rides beside that budget. Deliberately
+            # NOT `or 0.0` like its neighbour: None means "no budget was
+            # computed" and must fall back to the configured buffer, whereas
+            # 0.0 would read as a floor of zero and license draining the pack
+            # to empty. The sibling can safely coerce because 0 kWh spendable
+            # is a real answer; here it is the dangerous one.
+            dynamic_floor_pct=(
+                (getattr(self, "_planning_evidence", None) or {})
+                .get("battery_dynamic_floor_pct")),
             battery_priority=battery_priority,
             battery_commanded=self._battery_commanded(),
             curtailment_grant_w=self._curtailment_grant_w(power),
@@ -9906,7 +10038,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             from ..consts.ev_charge_modes import effective_charge_mode_for
             from .sensor_reader import parse_export_limited
 
-            solar_modes = ("solar_only", "min_plus_solar", "solar_plus_cheap")
+            solar_modes = ("solar_only", "solar_plus_battery",
+                           "min_plus_solar", "solar_plus_cheap")
             chargers = [
                 c for c in (self.config.get("ev_chargers") or [])
                 if isinstance(c, dict)
@@ -10242,7 +10375,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             canonical_strategy = EVBudgetStrategy.IDLE
         elif _primary_decision.intent is _CI.CHARGE_MAX:
             canonical_strategy = EVBudgetStrategy.NOW
-        elif _primary_view.fleet.is_night and _primary_view.mode != "solar_only":
+        elif (_primary_view.fleet.is_night
+              and _primary_view.mode not in (
+                  # (#885) solar_plus_battery shares solar_only's night
+                  # contract — its night decision is the same floor
+                  # top-up or idle, never the MIN_PV night lane.
+                  "solar_only", "solar_plus_battery")):
             # min_plus_solar / solar_plus_cheap night top-up uses MIN_PV
             canonical_strategy = EVBudgetStrategy.MIN_PV
         elif (_primary_view.mode == "solar_plus_cheap"

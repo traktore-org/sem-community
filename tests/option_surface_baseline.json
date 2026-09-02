@@ -5,7 +5,7 @@
     "reason; removing one is the point of the issue.",
     "Regenerate:  python3 scripts/audit_options.py --baseline"
   ],
-  "total": 176,
+  "total": 177,
   "first_run_fields": 10,
   "first_run_steps": 3,
   "first_run_fields_best": 10,
@@ -71,6 +71,7 @@
     "enable_charger_notifications",
     "enable_mobile_notifications",
     "ev_battery_capacity_kwh",
+    "ev_battery_may_assist",
     "ev_charge_mode_entity",
     "ev_charge_mode_start",
     "ev_charge_mode_stop",

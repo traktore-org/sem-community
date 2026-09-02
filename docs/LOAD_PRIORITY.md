@@ -106,6 +106,57 @@ and the battery:
   you drag one above the battery; the `Battery priority SOC` reserve floor stays an
   absolute override (below it, the battery charges first regardless of position).
 
+### Spending the battery — and the sun — follows the same list too (2.1, #885)
+
+Everything above is about who yields while the battery **charges**. The mirror
+questions — who gets to **spend** the pack when it discharges, and who gets the
+**sun** — used to ignore the list entirely.
+
+Two subsystems each held a private copy of `Battery assist max power` and each
+treated it as its own full budget: the EV path and the load path. Nothing
+reconciled them, so a 5 kW pack could be offered 5 kW to the cars *and* 5 kW to
+the loads in the same cycle. And because every charger is decided before the
+load pass runs, a **prio-9 charger took battery power ahead of a prio-1 hot
+water tank** — dragging that tank to the top changed nothing.
+
+Now there is **one allowance, spent in list order**:
+
+- Devices that outrank a charger have their share set aside *before* the
+  charger is offered the pack. What is left goes to the charger; the next
+  device down runs on solar and grid.
+- Only devices that **opted in** take part. A load reserves nothing unless its
+  Mode includes battery ("Solar + battery"), and — new in 2.1 — a charger can
+  be excluded on its own with **Battery may assist this charger**, so a
+  two-charger install can say "the garage may, the guest charger may not". The
+  install-wide battery permission still applies on top: a per-charger toggle
+  can only restrict, never override a battery you have declared off-limits.
+- **"Finish overnight from → Battery" loads reserve nothing against a car.**
+  They run *below* the buffer, down to the hard reserve — a band the car's
+  assist floor forbids it from entering. The two are not competing for the same
+  energy, so an overnight tank never starves the car and the car never eats the
+  tank's overnight window.
+
+> The reservation is an estimate — a device's learned rating, or the threshold
+> it needs to switch on. A device that then draws less simply leaves the
+> remainder in the pool on the next cycle.
+
+**The same now applies to solar.** Chargers are decided earlier in the cycle
+than loads, so before 2.1 a charger at the *bottom* of your list could spend
+the sun before a load at the top was ever asked — and that load then ran on
+grid. Loads ranked above a charger now have their share of the surplus set
+aside first.
+
+If you have loads dragged above a charger, **that charger will now be offered
+less solar than it used to be**. That is the intended change: it is what the
+order was always supposed to mean.
+
+One asymmetry worth knowing, because it looks like an inconsistency: a load
+that is *already running* reserves nothing further from the sun (its draw is
+already inside the house-consumption figure every charger subtracts), but it
+does keep reserving from the battery (the battery ceiling is a state-of-charge
+number and has no such term). Without that, a battery-backed load would switch
+itself off and on repeatedly.
+
 ### How position interacts with battery mode
 
 | Battery mode | Effect |

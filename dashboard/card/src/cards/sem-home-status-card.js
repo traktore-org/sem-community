@@ -15,6 +15,7 @@
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semFormatPower, semDefineCard } from '../base/sem-shared.js';
+import { socDisplay } from '../util/missing-value.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
 
@@ -86,7 +87,9 @@ class SEMHomeStatusCard extends SEMLitBase {
         if (!this._config || !this._hass) return nothing;
 
         const solar = this._val('solar_power');
-        const soc = this._val('battery_soc');
+        // An unavailable SOC is an absent reading, not a flat pack: the chip
+        // shows the em-dash, never a fallback 0 % (PROD 02.09, mid-dropout).
+        const soc = socDisplay(this._val('battery_soc', null));
         const autarky = this._val('autarky_rate');
         const evPower = this._val('ev_power');
         const score = this._val('energy_optimization_score');
@@ -110,7 +113,7 @@ class SEMHomeStatusCard extends SEMLitBase {
                 <!-- 1. Status Chips -->
                 <div class="chips-row">
                     ${this._renderChip('mdi:solar-power', '#ff9800', semFormatPower(solar))}
-                    ${this._renderChip('mdi:battery', '#4db6ac', `${soc.toFixed(0)}%`)}
+                    ${this._renderChip('mdi:battery', '#4db6ac', soc.label)}
                     ${this._renderChip('mdi:leaf', '#8DC892', `${autarky.toFixed(0)}%`)}
                     ${this._renderChip('mdi:car-electric', '#8DC892', evPower > 0 ? semFormatPower(evPower) : '—')}
                     <div class="chip">

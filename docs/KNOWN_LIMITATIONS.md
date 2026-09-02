@@ -16,6 +16,23 @@ The EV charger must be controllable via a supported HA integration (KEBA, Easee,
 
 Battery discharge protection requires a Huawei Solar inverter (or compatible) that exposes a `number` entity for the battery discharge power limit. Other inverters without this entity cannot have their discharge actively clamped.
 
+## The car's drain floor is only as good as the night estimate (#878)
+
+When forecast-led spending is on, the battery→EV assist stops at whichever is
+higher — your buffer SOC, or the floor computed from what your house has
+actually used overnight. Two honest limits on that second number:
+
+- **It is an estimate from your own history**, a high percentile of measured
+  nights rather than a forecast of tonight specifically. An unusually cold or
+  busy night can still exceed it, and the pack will then finish lower than
+  the floor intended. The buffer underneath is the hard backstop.
+- **It needs evidence.** Until five good nights are recorded the budget stays
+  in *Learning*, no floor is computed, and the buffer alone decides — exactly
+  as it did before. That is the intended fallback, not a fault.
+
+Turning forecast-led spending off restores the old behaviour completely: no
+floor is computed and the buffer is the only limit.
+
 ## Solar Gate (battery → EV assist)
 
 The **Solar Gate** (`battery_assist_min_surplus`, default 1200 W) decides how much *real solar surplus* must exist before the home battery is allowed to assist EV charging, in any mode (set 0 W to allow battery support everywhere, including overnight). Notes:
