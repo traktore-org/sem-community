@@ -1678,6 +1678,10 @@
     "load_current_control_wrong_unit": {
       "title": "Una carga está en control de corriente pero su entidad está en vatios",
       "description": "**{name}** está configurada para control de *corriente*, pero **{entity_id}** espera su valor en **{unit}**.\n\nEl control de corriente significa **amperios** — existe para cargadores de VE, a los que se les indica una corriente de unos 6–32 A. Escribir un excedente en amperios en una entidad que espera vatios no puede significar lo que usted pretende, así que SEM no controla este dispositivo en lugar de escribir un número en la unidad equivocada. Antes lo registraba y nunca le escribía, apareciendo entre sus cargadores con el excedente fijo en 0 W.\n\n**Si el dispositivo es realmente de corriente**, apunte el ajuste a su entidad en amperios.\n\n**Si es una carga de potencia variable** — AC-THOR, resistencia — SEM aún no puede modularla (#880). Mientras tanto úsela como carga de excedente **on/off** mediante una entidad switch."
+    },
+    "load_shed_futile": {
+      "title": "El pico de red lo provoca una carga que SEM no controla",
+      "description": "El contador marca **{grid_import_kw} kW** frente a un objetivo de **{target_kw} kW** — e incluso con todo lo que SEM puede apagar ya apagado, quedarían **{uncontrolled_kw} kW**. Ese consumo pertenece a algo que SEM no gestiona: un VE en un cargador que SEM no conoce, un horno, una bomba de calor con su propio controlador.\n\nDesconectar la casa no puede corregir este pico, así que SEM no desconecta **nada** mientras se mantenga (una versión anterior seguía apagando un circuito tras otro hasta dejar la casa a oscuras).\n\n**Qué hacer:** entregar la carga a SEM (añadir el cargador en *Cargadores VE*, o el dispositivo con una entidad de control), subir el objetivo si no es realmente el límite de su contrato, o aceptar el pico para una carga que debe funcionar. Este aviso desaparece solo en cuanto el pico vuelve a ser alcanzable."
     }
   },
   "selector": {

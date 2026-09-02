@@ -5264,6 +5264,10 @@ async def _async_register_phase_services(
         "loads_currently_shed", "controllable_devices_count",
         "consecutive_peak_15min", "monthly_consecutive_peak",
         "current_vs_peak_percentage", "available_load_reduction",
+        # (#433, #896) why: the state machine's paths and the shed verdict
+        "state_decision_path", "process_path", "action_path", "last_error",
+        "shed_path", "shed_need_w", "shed_sheddable_w", "shed_futile",
+        "uncontrolled_w",
     }
     # Forecast
     _DIAGNOSE_FORECAST_OPTION = {

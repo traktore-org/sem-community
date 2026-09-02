@@ -46,6 +46,9 @@ DOCS_SIDE = {
     # setting the card names, not a SEM change.
     "load_current_control_wrong_unit",
     "deye_system_work_mode_invalid",
+    # (#896) the peak is somebody else's load — the next step is giving
+    # SEM that load or raising the target, both settings, not a SEM bug.
+    "load_shed_futile",
 }
 REPORT_SIDE = {
     "charger_actuation_failed", "charger_stop_unenforceable",

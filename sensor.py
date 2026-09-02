@@ -2316,6 +2316,12 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         # already recorded via its own sensor; recording the bundle again
         # would double the write volume for zero charting value.
         "power_snapshot",
+        # (#896) the shed plan's watt figures on load_management_status —
+        # they move every cycle of an episode; the verdict beside them
+        # (``shed_path`` / ``shed_futile``) is recorded, these are not.
+        "shed_need_w",
+        "shed_sheddable_w",
+        "uncontrolled_w",
         # (#829) charging_state carried these as RECORDED attributes, so a new
         # blob was stored every time any of them wiggled — battery_soc,
         # calculated_current and available_power are ALREADY their own recorded
@@ -3070,6 +3076,17 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "history_days": d.get("forecast_history_days"),
             })
         elif self.entity_description.key == "load_management_status":
+            # (#433, #896) why the shedder did what it did: the state
+            # machine's paths and the plan's verdict. The verdict strings
+            # change on transitions and earn a history row; the watt
+            # figures move every cycle of an episode and stay live-only
+            # (``_unrecorded_attributes``, #829).
+            for key in (
+                "state_decision_path", "process_path", "action_path",
+                "last_error", "shed_path", "shed_futile",
+                "shed_need_w", "shed_sheddable_w", "uncontrolled_w",
+            ):
+                attrs[key] = self.coordinator.data.get(key)
             # Add device list details for dashboard table
             devices = self.coordinator.data.get("load_management_devices", {})
             if devices:

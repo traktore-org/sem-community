@@ -674,6 +674,25 @@ class FleetContext:
     surplus-only chargers; above ``auto_start_soc`` enables
     battery-assist."""
 
+    battery_soc_known: bool = True
+    """(#875) False while the SOC has never been read this process —
+    the restart-to-first-report window. Then ``battery_soc`` is 0.0
+    because nothing was measured, not because the pack is empty, and
+    an UNKNOWN battery is neither a source nor a blocker: the charger
+    charges the car on surplus (Zone 2), gets no assist, reclaims
+    nothing, and the discharge clamp protects the pack. Carried the
+    way ``BatteryRuntime.available`` carries the per-unit read."""
+
+    @property
+    def soc_label(self) -> str:
+        """(#875) The SOC as a word for a reason string — ``"65%"``, or
+        ``"unknown"`` while it was never read. Every reason that prints
+        the SOC goes through here so none can quote the 0.0 that is not
+        a measurement (the line #875 was reported from)."""
+        if not self.battery_soc_known:
+            return "unknown"
+        return f"{float(self.battery_soc):.0f}%"
+
     battery_count: int = 1
     """How many batteries SEM controls. #531: a per-battery
     LIMIT_DISCHARGE must split the home-consumption budget across the

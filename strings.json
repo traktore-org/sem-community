@@ -1678,6 +1678,10 @@
     "load_current_control_wrong_unit": {
       "title": "A load is set to current control but its entity is in watts",
       "description": "**{name}** is configured for *current* control, but **{entity_id}** takes its value in **{unit}**.\n\nCurrent control means **amperes** — it exists for EV chargers, which are told a current of roughly 6–32 A. Writing a surplus figure in amperes into an entity that expects watts cannot mean what you intend, so SEM is not driving this device rather than writing a number into the wrong unit. Before this it registered the device and silently never wrote to it, which showed up as the load being counted among your EV chargers with its surplus stuck at 0 W.\n\n**If the device really is current-controlled**, point the setting at its ampere entity.\n\n**If it is a variable power load** — an AC-THOR, an immersion element, a heat rod — SEM cannot modulate it yet; it has no device class meaning *\"take exactly 800 W\"*. That is being built (#880). Meanwhile you can still use it as an **on/off** surplus load by configuring a switch entity, which gives coarse self-consumption rather than none."
+    },
+    "load_shed_futile": {
+      "title": "The grid peak is driven by a load SEM does not control",
+      "description": "The meter reads **{grid_import_kw} kW** against a **{target_kw} kW** target — and even with everything SEM may switch off already off, **{uncontrolled_kw} kW** would remain. That draw belongs to something SEM does not manage: an EV on a charger SEM was not given, an oven, a heat pump on its own controller.\n\nShedding the house cannot fix this peak, so SEM sheds **nothing** while it holds (an earlier version kept switching off one circuit after another until the house was dark).\n\n**What to do:** give SEM the load (add the charger under *EV Chargers*, or the device with a control entity), raise the target if it is not really your contract's ceiling, or accept the peak for a load that must run. This issue clears by itself the moment the peak becomes reachable again."
     }
   },
   "selector": {

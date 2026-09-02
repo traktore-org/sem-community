@@ -38,6 +38,7 @@ from ..const import (
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_BATTERY_CAPACITY_KWH,
     DEFAULT_MAX_CHARGING_CURRENT,
+    DEFAULT_LOAD_MANAGEMENT_ENABLED,
     ED_RESOLVE_MAX_ATTEMPTS,
     ChargingState,
     ENTITY_OBSERVER_MODE_SWITCH,
@@ -1963,7 +1964,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
     async def async_initialize_load_management(self, config_entry: ConfigEntry) -> None:
         """Initialize load management after coordinator is set up."""
-        load_management_enabled = self.config.get("load_management_enabled", True)
+        # (#897) The constant, never a literal: a private fallback here kept
+        # building a shedder after the install default was lowered.
+        load_management_enabled = self.config.get(
+            "load_management_enabled", DEFAULT_LOAD_MANAGEMENT_ENABLED)
 
         _LOGGER.debug("async_initialize_load_management called: enabled=%s", load_management_enabled)
 
@@ -6810,6 +6814,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             solar_w=float(getattr(power, "solar_power", 0.0) or 0.0),
             home_w=float(getattr(power, "home_consumption_power", 0.0) or 0.0),
             battery_soc=float(getattr(power, "battery_soc", 0.0) or 0.0),
+            # (#875) a never-read SOC is not a 0 % pack.
+            battery_soc_known=bool(getattr(power, "battery_soc_known", True)),
             is_night=self.time_manager.is_night_mode(),
             # #531: split per-battery LIMIT_DISCHARGE across the real fleet
             # (#691: effective consumers, not configured rows).
@@ -12292,6 +12298,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # ``or {}`` on purpose: a LoadManager with no managed devices
                 # may report ``{"devices": None}``, and the card iterates this.
                 lm_data.devices = lm_info.get("devices") or {}
+
+                # (#896) The load manager's telemetry — the #433 paths and
+                # the shed verdict. Same hop as ``devices``: reported by the
+                # load manager for releases, copied by nobody.
+                for key in (
+                    "state_decision_path", "process_path", "action_path",
+                    "last_error", "shed_path", "shed_need_w",
+                    "shed_sheddable_w", "shed_futile", "uncontrolled_w",
+                ):
+                    if key in lm_info:
+                        setattr(lm_data, key, lm_info[key])
 
                 # Tariff info
                 lm_data.controlled_tariff_status = lm_info.get("controlled_tariff_status", "unknown")

@@ -155,6 +155,21 @@ class LoadManagementCoordinator:
         self._last_action_path: str = "uninitialized"
         self._last_error_message: Optional[str] = None
 
+        # (#896) The shed plan reads the LIVE meter, never the 15-minute
+        # average the state machine reads: a shed cannot move a rolling
+        # average for minutes, and judging the next shed against it is how
+        # one circuit after another went dark (forum #30). ``process_peak_
+        # update`` stores the reading every cycle; the plan's verdict and
+        # numbers are telemetry beside ``action_path``.
+        self._last_grid_import_w: float = 0.0
+        self._shed_path: str = "uninitialized"
+        self._shed_need_w: float = 0.0
+        self._shed_sheddable_w: float = 0.0
+        self._shed_futile: bool = False
+        self._uncontrolled_w: float = 0.0
+        self._futile_repair_open: bool = False
+        self._shed_notified: bool = False
+
     async def async_initialize(self):
         """Initialize the load management system."""
         try:
@@ -413,8 +428,9 @@ class LoadManagementCoordinator:
                         "friendly_name", charger_name or "EV Charger",
                     )
 
-            # EV charger can draw up to 22kW (32A × 3 phases × 230V)
-            max_power = 22.0  # kW
+            # EV charger can draw up to 22 kW (32 A × 3 phases × 230 V).
+            # WATTS — the LM row's one unit (#896), as the registry rows.
+            max_power = 22000.0
 
             # Register as load management device
             self._devices[device_id] = {
@@ -744,6 +760,9 @@ class LoadManagementCoordinator:
             self._last_process_path = "disabled_skip"
             return
 
+        # (#896) The live meter is what the shed plan is judged against.
+        self._last_grid_import_w = float(grid_import_w or 0.0)
+
         # Update rolling peak tracking from actual grid import
         peak_changed = self._update_peak_tracking(grid_import_w)
         if peak_changed:
@@ -793,11 +812,20 @@ class LoadManagementCoordinator:
         return self._state
 
     def _cleanup_shed_list(self):
-        """Remove devices from the shed list if they are already off naturally.
+        """Drop shed-list entries that are no longer ours to restore.
 
-        Devices may power off on their own (e.g., a cycle completes, user turns
-        them off manually). Keeping them in _devices_shed blocks state
-        transitions and prevents correct accounting.
+        A device may be removed from the list, or power off on its own (a
+        cycle completes, the user turns it off). Keeping those in
+        _devices_shed blocks state transitions and prevents correct
+        accounting.
+
+        (#896) "Off" alone is NOT "powered off on its own": a load SEM shed
+        reads off — that is the shed working. #40's version evicted every
+        shed load on the next cycle, so ``_restore_loads`` never had anything
+        to restore and what SEM switched off stayed off (forum #30). A load
+        is ours until it has RUN again since the shed (somebody switched it
+        back on — ``_ran_since_shed``); a load that ran and then stopped on
+        its own has nothing left for us to restore.
         """
         if not self._devices_shed:
             return
@@ -822,14 +850,21 @@ class LoadManagementCoordinator:
                 continue
 
             device_state = self._device_discovery.get_device_current_state(device_info)
-            if not device_state["is_on"] and device_state["current_power"] <= 0:
+            if device_state["is_on"]:
+                device_info["_ran_since_shed"] = True
+            elif device_state["current_power"] <= 0 and device_info.get("_ran_since_shed"):
                 stale.append(device_id)
 
         for device_id in stale:
             self._devices_shed.remove(device_id)
+            if device_id in self._devices:
+                self._devices[device_id].pop("_ran_since_shed", None)
             _LOGGER.debug(
-                "Cleaned %s from shed list (device is off / removed)", device_id
+                "Cleaned %s from shed list (ran and stopped on its own / removed)",
+                device_id,
             )
+        if stale and not self._devices_shed:
+            self._end_shed_episode()
 
     def _determine_load_management_state(self, current_peak: float, consecutive_peak: float) -> str:
         """Determine the appropriate load management state.
@@ -983,49 +1018,234 @@ class LoadManagementCoordinator:
         )
 
     async def _emergency_load_shedding(self):
-        """Emergency load shedding - turn off all non-critical loads immediately."""
-        devices_to_shed = [
-            device_id for device_id, device_info in self._devices.items()
-            # (#780) both axes in one question: a control handle exists AND
-            # the user's mode / hands-off toggle permit us to use it.
-            if (may_actuate(device_info) and
-                # Devices another engine peak-manages are never actuated from
-                # here (#461-peak EV, #649 surplus) — see the helper.
-                not self._peak_managed_elsewhere(device_info) and
-                device_info.get("is_available", False) and
-                not device_info.get("is_critical", False) and
-                device_id not in self._devices_shed and
-                self._is_device_currently_on(device_info))
-        ]
-
-        for device_id in devices_to_shed:
-            await self._shed_device(device_id, "EMERGENCY")
+        """EMERGENCY: shed toward the aim in one pass — several switches if
+        the need says so, none if it does not. Bounded by the need, never by
+        a timer (#896)."""
+        await self._shed_toward("EMERGENCY")
 
     async def _progressive_load_shedding(self, current_peak: float, consecutive_peak: float):
-        """Progressive load shedding based on priority and power reduction needed."""
-        # Calculate how much power we need to reduce based on current peak only
-        power_reduction_needed = current_peak - self._target_peak_limit + self._hysteresis
+        """SHEDDING: one switch per pass, then let the meter answer (#896).
 
-        if power_reduction_needed <= 0:
+        ``current_peak`` is the 15-minute average the state machine reads;
+        the plan itself reads the live meter — see ``_shed_plan``."""
+        await self._shed_toward("PROGRESSIVE")
+
+    def _shed_plan(self) -> Dict[str, Any]:
+        """What the meter asks for, and what SEM can answer with (#896).
+
+        Three numbers, one verdict:
+
+        * ``need_w`` — live grid import above the aim (target − hysteresis).
+          Read from the METER, not from the 15-minute average: the average
+          is the past, and no switch can undo the past. Under the aim → no
+          need, whatever the average still says.
+        * ``sheddable_w`` — the draw of everything SEM MAY shed: permitted,
+          available, not critical, not already shed, and on. Anti-flicker-
+          blocked loads count — they are still ours, just not yet. So do
+          **surplus-managed** loads: the surplus controller sheds its own
+          actives on the same SHEDDING/EMERGENCY state (#649 — one per
+          cycle, then all of them). They are SEM's authority through the
+          other engine; leaving them out filed a Repair naming kilowatts SEM
+          was switching off on the very same cycle. ``surplus_engine_w`` is
+          that share, so the path can say who is answering.
+        * ``futile`` — even with all of that off the meter would sit above
+          the TARGET. Then the peak belongs to a load SEM does not control
+          (forum #30: an unmanaged EV) and shedding the house cannot fix
+          it. Shed nothing; say so.
+
+        ``candidates`` is the subset that can be thrown right now, highest
+        priority number first — the order the drag list gives.
+        """
+        target_w = float(self._target_peak_limit) * 1000.0
+        aim_w = (float(self._target_peak_limit) - float(self._hysteresis)) * 1000.0
+        grid_import_w = float(self._last_grid_import_w)
+        need_w = max(0.0, grid_import_w - aim_w)
+
+        sheddable_w = 0.0
+        surplus_engine_w = 0.0
+        candidates: List[Tuple[str, Dict, float]] = []
+        can_shed_now = {did for did, _ in self._get_devices_for_shedding()}
+        for device_id, device_info in self._devices.items():
+            if not may_actuate(device_info):
+                continue
+            # A charger's peak is decide()'s (#461-peak) and never drawn
+            # from here; a surplus-managed load IS shed on this state, by the
+            # surplus controller — its draw is authority, not a candidate.
+            if device_info.get("device_type") == "ev_charger":
+                continue
+            if device_info.get("is_critical", False):
+                continue
+            if device_id in self._devices_shed:
+                continue
+            if not device_info.get("is_available", False):
+                continue
+            state = self._device_discovery.get_device_current_state(device_info)
+            if not state.get("is_on"):
+                continue
+            draw_w = float(state.get("current_power") or 0.0)
+            if not state.get("power_known", True):
+                # Energy-only load, or a power entity that is dark right now:
+                # ON is ON, and the rating is the best estimate of what the
+                # switch would free. A MEASURED 0 (thermostat idle) stays 0
+                # — the rating is no substitute for a reading that exists.
+                draw_w = float(device_info.get("power_rating") or 0.0)
+            if draw_w <= 0:
+                continue
+            sheddable_w += draw_w
+            if self._peak_managed_elsewhere(device_info):
+                surplus_engine_w += draw_w
+            elif device_id in can_shed_now:
+                candidates.append((device_id, device_info, draw_w))
+        candidates.sort(key=lambda c: c[1].get("priority", 5), reverse=True)
+
+        uncontrolled_w = grid_import_w - sheddable_w
+        return {
+            "grid_import_w": grid_import_w,
+            "target_w": target_w,
+            "need_w": need_w,
+            "sheddable_w": sheddable_w,
+            "surplus_engine_w": surplus_engine_w,
+            "uncontrolled_w": uncontrolled_w,
+            "futile": need_w > 0 and uncontrolled_w > target_w,
+            "candidates": candidates,
+        }
+
+    async def _shed_toward(self, reason: str) -> None:
+        """Shed until the meter's need is covered — and not one switch more.
+
+        EMERGENCY throws as many switches as the need takes in one pass;
+        PROGRESSIVE throws one and waits for the meter (the inter-shed delay
+        inside ``_shed_device``). Both stop the moment the shed draw covers
+        the need. A futile plan sheds nothing and files the Repair; the
+        Repair is withdrawn the first pass the plan is not futile.
+        """
+        plan = self._shed_plan()
+        self._shed_need_w = plan["need_w"]
+        self._shed_sheddable_w = plan["sheddable_w"]
+        self._uncontrolled_w = plan["uncontrolled_w"]
+        self._shed_futile = plan["futile"]
+
+        if plan["futile"]:
+            self._shed_path = "futile"
+            if not self._futile_repair_open:
+                self._futile_repair_open = True
+                from ..coordinator.repair_issues import raise_load_shed_futile
+                raise_load_shed_futile(
+                    self.hass,
+                    grid_import_kw=plan["grid_import_w"] / 1000.0,
+                    target_kw=plan["target_w"] / 1000.0,
+                    uncontrolled_kw=plan["uncontrolled_w"] / 1000.0,
+                )
+                _LOGGER.warning(
+                    "Load shedding is futile: %.1f kW at the meter, %.1f kW is "
+                    "everything SEM may shed — %.1f kW belongs to a load SEM does "
+                    "not control (target %.1f kW). Shedding nothing.",
+                    plan["grid_import_w"] / 1000.0, plan["sheddable_w"] / 1000.0,
+                    plan["uncontrolled_w"] / 1000.0, plan["target_w"] / 1000.0,
+                )
             return
 
-        # Get available devices for shedding (sorted by priority, highest first)
-        available_devices = self._get_devices_for_shedding()
+        if self._futile_repair_open:
+            self._futile_repair_open = False
+            from ..coordinator.repair_issues import clear_load_shed_futile
+            clear_load_shed_futile(self.hass)
 
-        power_reduced = 0.0
-        for device_id, device_info in available_devices:
-            if power_reduced >= power_reduction_needed:
+        if plan["need_w"] <= 0:
+            self._shed_path = "held:under_aim"
+            return
+
+        if self._observer_mode and plan["candidates"]:
+            # The plan is made; the switch is not thrown. Name what was
+            # withheld — a rig in observer mode must read as "withheld",
+            # never as a shed delay that was not the reason.
+            would, would_w = [], 0.0
+            for device_id, _info, draw_w in plan["candidates"]:
+                would.append(device_id)
+                would_w += draw_w
+                if would_w >= plan["need_w"] or reason != "EMERGENCY":
+                    break
+            self._shed_path = f"observer:withheld:{len(would)}"
+            _LOGGER.info(
+                "Observer mode: %s shedding would turn off %s (need %.0f W)",
+                reason, ", ".join(would), plan["need_w"],
+            )
+            return
+
+        shed_w = 0.0
+        shed_n = 0
+        for device_id, _info, draw_w in plan["candidates"]:
+            if shed_w >= plan["need_w"]:
                 break
-
-            device_state = self._device_discovery.get_device_current_state(device_info)
-            if device_state["is_on"] and device_state["current_power"] > 0:
-                await self._shed_device(device_id, "PROGRESSIVE")
-                power_reduced += device_state["current_power"] / 1000  # Convert to kW
-
+            if await self._shed_device(device_id, reason):
+                shed_w += draw_w
+                shed_n += 1
+                if reason != "EMERGENCY":
+                    break  # one per pass — the meter answers before the next
+        if shed_n:
+            self._shed_path = f"shed:{shed_n}"
+            self._announce_shed_episode(plan)
+        elif not plan["candidates"]:
+            if plan["sheddable_w"] > plan["surplus_engine_w"]:
+                self._shed_path = "waiting:anti_flicker"
+            elif plan["surplus_engine_w"] > 0:
+                self._shed_path = "waiting:surplus_controller"
+            else:
+                self._shed_path = "nothing_sheddable"
+        else:
+            self._shed_path = "waiting:shed_delay"
         _LOGGER.debug(
-            "Progressive shedding: needed %skW, achieved %skW",
-            round(power_reduction_needed, 2), round(power_reduced, 2),
+            "%s shedding: need %.0f W, sheddable %.0f W, shed %.0f W (%d) → %s",
+            reason, plan["need_w"], plan["sheddable_w"], shed_w, shed_n, self._shed_path,
         )
+
+    # -- a shed is never silent (#896) ------------------------------------
+
+    def _announce_shed_episode(self, plan: Dict[str, Any]) -> None:
+        """One persistent notification per episode, updated in place with
+        every further shed, dismissed when the last load is restored; plus
+        the bus event the mobile/notification layer listens on."""
+        names = [
+            self._devices.get(did, {}).get("friendly_name", did)
+            for did in self._devices_shed
+        ]
+        grid_kw = plan["grid_import_w"] / 1000.0
+        target_kw = plan["target_w"] / 1000.0
+        message = (
+            f"SEM switched off {', '.join(names)} to hold the grid peak: "
+            f"{grid_kw:.1f} kW at the meter against a {target_kw:.1f} kW target. "
+            f"Loads come back one at a time once the peak has passed."
+        )
+        try:
+            from homeassistant.components import persistent_notification
+            persistent_notification.async_create(
+                self.hass, message,
+                title="Peak load shedding",
+                notification_id="sem_load_shed",
+            )
+            self._shed_notified = True
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.debug("shed notification failed: %s", e)
+        try:
+            self.hass.bus.async_fire(f"{DOMAIN}_notification", {
+                "category": "alerts",
+                "event": "load_shed",
+                "devices": list(self._devices_shed),
+                "grid_import_kw": round(grid_kw, 2),
+                "target_kw": round(target_kw, 2),
+            })
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.debug("shed event failed: %s", e)
+
+    def _end_shed_episode(self) -> None:
+        """The last shed load is back (or gone): take the notification down."""
+        if not self._shed_notified:
+            return
+        self._shed_notified = False
+        try:
+            from homeassistant.components import persistent_notification
+            persistent_notification.async_dismiss(self.hass, "sem_load_shed")
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.debug("shed notification dismiss failed: %s", e)
 
     async def _restore_loads(self):
         """Restore loads that were shed."""
@@ -1120,21 +1340,25 @@ class LoadManagementCoordinator:
         device_state = self._device_discovery.get_device_current_state(device_info)
         return device_state["is_on"]
 
-    async def _shed_device(self, device_id: str, reason: str):
-        """Turn off a device for load shedding.
+    async def _shed_device(self, device_id: str, reason: str) -> bool:
+        """Turn off a device for load shedding. True when the switch was thrown.
 
         Uses the 'control' config from device discovery to determine how to shed:
         - switch: Turn off the switch entity
         - current: Set number entity to 0A (EV chargers)
         - service: Call service with shed_value (e.g., keba.set_current)
         - input_boolean: Turn off the input_boolean
+
+        (#896) The inter-shed delay is PROGRESSIVE's: one switch, then let
+        the meter answer. EMERGENCY is bounded by the plan's need instead —
+        several switches in one pass when the need says so.
         """
         if self._observer_mode:
             _LOGGER.debug("Observer mode: skipping shed of %s", device_id)
-            return
+            return False
 
         if device_id not in self._devices:
-            return
+            return False
 
         # Single-writer guard (#461-peak EV, #649 surplus): the side-channel
         # write would fight the owning engine's heartbeat. Belt-and-braces with
@@ -1144,20 +1368,20 @@ class LoadManagementCoordinator:
                 "Skipping load-manager shed of %s — peak-managed by another "
                 "writer (#461-peak / #649)", device_id,
             )
-            return
+            return False
 
         device_info = self._devices[device_id]
 
         # Check anti-flicker constraint
         if not self._can_shed_device(device_id, device_info):
             _LOGGER.debug("Cannot shed %s: anti-flicker protection active", device_id)
-            return
+            return False
 
         # Check if enough time has passed since last shedding
-        if (self._last_shedding_time and
+        if (reason != "EMERGENCY" and self._last_shedding_time and
             dt_util.now() - self._last_shedding_time < timedelta(seconds=DEFAULT_LOAD_SHEDDING_DELAY)):
             _LOGGER.debug("Cannot shed %s: shedding delay active", device_id)
-            return
+            return False
 
         # RACE CONDITION FIX: Update shedding time BEFORE executing action
         # This prevents multiple concurrent calls from passing the time check
@@ -1277,6 +1501,7 @@ class LoadManagementCoordinator:
                 self._devices_shed.append(device_id)
                 self._devices[device_id]["last_turned_off"] = dt_util.now()
                 self._devices[device_id]["shed_reason"] = reason
+                self._devices[device_id].pop("_ran_since_shed", None)
                 _LOGGER.info(
                     "Shed device %s (%s load shedding)",
                     device_info.get('friendly_name', device_id), reason,
@@ -1284,6 +1509,7 @@ class LoadManagementCoordinator:
 
         except Exception as e:
             _LOGGER.error("Failed to shed device %s: %s", device_id, e)
+        return success
 
     async def _restore_device(self, device_id: str):
         """Restore a device that was shed.
@@ -1425,7 +1651,10 @@ class LoadManagementCoordinator:
                 self._last_restore_time = dt_util.now()
                 self._devices[device_id]["last_turned_on"] = dt_util.now()
                 self._devices[device_id].pop("shed_reason", None)
+                self._devices[device_id].pop("_ran_since_shed", None)
                 _LOGGER.info("Restored device %s", device_info.get('friendly_name', device_id))
+                if not self._devices_shed:
+                    self._end_shed_episode()
 
         except Exception as e:
             _LOGGER.error("Failed to restore device %s: %s", device_id, e)
@@ -1501,6 +1730,14 @@ class LoadManagementCoordinator:
             "process_path": self._last_process_path,
             "action_path": self._last_action_path,
             "last_error": self._last_error_message,
+            # (#896) The plan's verdict and its numbers: what the meter asked
+            # for, what SEM could answer with, and whether the peak was ours
+            # to fix at all.
+            "shed_path": self._shed_path,
+            "shed_need_w": round(self._shed_need_w),
+            "shed_sheddable_w": round(self._shed_sheddable_w),
+            "shed_futile": self._shed_futile,
+            "uncontrolled_w": round(self._uncontrolled_w),
         }
 
     def get_peak_margin(self, current_peak: float) -> float:

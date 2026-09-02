@@ -303,6 +303,16 @@ class SensorReader:
         self._prev_solar_w: Optional[float] = None
         self._prev_grid_raw_w: Optional[float] = None
         self._SOLAR_SWING_MIN_W: float = 500.0
+        # (#889) A vote is an OBSERVATION of the grid answering solar. A
+        # cycle in which the meter moved less than this share of the solar
+        # swing did not show that answer — the register is stale (polled
+        # Huawei modbus lands the inverter and meter reads in different
+        # cycles) or the swing went somewhere the voter cannot see — and
+        # casts nothing. ``(d_grid * d_solar) < 0`` is False at d_grid == 0,
+        # so without this every stale-meter cycle was a full-weight
+        # "normal" vote: four of them locked SEM convention on an
+        # HA-convention meter at confidence 1.00.
+        self._SOLAR_GRID_ANSWER_MIN_RATIO: float = 0.25
         self._SOLAR_SIGN_MIN_SAMPLES: int = 4
         self._SOLAR_SIGN_MIN_CONFIDENCE: float = 0.80
         # Battery-quiet filter: a charging/discharging battery intercepts
@@ -405,8 +415,10 @@ class SensorReader:
             {"solar", "grid", "grid_import", "grid_export", "battery"}
         )
         self._STALE_THRESHOLD_S = 600  # 10 min: a fast power sensor stale this long is frozen
-        # Cache last valid SOC to avoid 0% during sensor gaps
-        self._last_valid_soc: float = 0.0
+        # Cache last valid SOC to avoid 0% during sensor gaps. (#875) None
+        # until the first successful read: a hold needs something to hold,
+        # and 0.0 before the first report was published as an empty pack.
+        self._last_valid_soc: Optional[float] = None
         # EV flap fix (2026-07-10): the KEBA charging-power sensor polls over
         # UDP and blips to ~0 for a cycle while the car is really drawing 10 kW.
         # ``ev_power`` feeds the home energy balance (``home = solar + grid −
@@ -1312,7 +1324,10 @@ class SensorReader:
           * grid falls as solar rises  → +import meter (HA)  → negate
 
         Only large solar swings (``_SOLAR_SWING_MIN_W``) vote, so the
-        solar-driven component of Δgrid dominates home-load jitter. Locks
+        solar-driven component of Δgrid dominates home-load jitter — and
+        only cycles in which the meter ANSWERED the swing (#889): a dark
+        steering input or a grid delta below ``_SOLAR_GRID_ANSWER_MIN_RATIO``
+        of the solar delta is not an observation and casts nothing. Locks
         the sign before the counter path for solar installs, and can
         OVERRIDE a wrong counter-derived lock once it is highly confident
         and sustained — a correctly-signed install computes the same sign
@@ -1326,6 +1341,17 @@ class SensorReader:
         if not isinstance(solar, (int, float)) or isinstance(solar, bool):
             return
         if not isinstance(grid_raw, (int, float)) or isinstance(grid_raw, bool):
+            return
+
+        # (#889) A dark steering input this cycle reads as 0.0 W (#818), so
+        # this cycle is neither a sample nor a baseline: the delta INTO it
+        # and the delta OUT of it are both artefacts (a solar dropout looks
+        # like a ±4 kW swing; a dark battery looks quiet while it absorbs
+        # the swing). Drop the baseline; the next clean cycle re-arms it.
+        if any(self._input_dark.values()):
+            self._prev_solar_w = None
+            self._prev_grid_raw_w = None
+            self._prev_batt_w = None
             return
 
         batt = getattr(readings, "battery_power", None)
@@ -1353,6 +1379,14 @@ class SensorReader:
         if batt_q >= self._SOLAR_BATTERY_QUIET_W or (
             prev_batt_q is not None and prev_batt_q >= self._SOLAR_BATTERY_QUIET_W
         ):
+            return
+        # (#889) The grid must have ANSWERED the swing. A meter that did not
+        # move (a stale polled register) or moved only marginally has shown
+        # nothing about its sign; the skewed-poll cycle that carries the
+        # answer arrives with Δsolar = 0 and abstains on the swing gate.
+        # No vote is the right verdict — the counter voter is not gated on
+        # a lock that was never made.
+        if abs(d_grid) < self._SOLAR_GRID_ANSWER_MIN_RATIO * abs(d_solar):
             return
 
         # product > 0 → grid co-moves with solar → SEM (no negate);
@@ -2138,9 +2172,7 @@ class SensorReader:
             readings.battery_soc = soc_val
             self._last_valid_soc = soc_val
         else:
-            # Use last known SOC to avoid charging logic seeing 0% during sensor gaps
-            readings.battery_soc = self._last_valid_soc
-            readings.battery_soc_unavailable = True
+            self._hold_battery_soc(readings)
 
         # EV power — sum all chargers if multi-charger (#193), else single sensor.
         # v1.6.9 also populates ``ev_power_per_charger`` so the flow calculator
@@ -2210,6 +2242,22 @@ class SensorReader:
         self._read_inverter_temperature(readings)
 
         return readings
+
+    def _hold_battery_soc(self, readings: PowerReadings) -> None:
+        """The SOC sensor is dark this cycle: hold the last value read so the
+        charging logic never sees 0 % during a sensor gap.
+
+        (#875) Before the first successful read there is nothing to hold.
+        The field stays 0.0 for the callers that need a number, and
+        ``battery_soc_known`` says it is not a measurement — the charger
+        path then treats the pack as UNKNOWN (neither a source nor a
+        blocker) instead of as empty, which is what a held 0.0 used to
+        say for up to a few minutes after every restart."""
+        readings.battery_soc_unavailable = True
+        if self._last_valid_soc is None:
+            readings.battery_soc_known = False
+            return
+        readings.battery_soc = self._last_valid_soc
 
     def _read_battery_temperature(self, readings) -> None:
         """(#564) Fill battery_temperature honestly.
@@ -3039,17 +3087,20 @@ class SensorReader:
                 self.config.battery_power_sensor, "battery"
             )
 
-        # Battery SOC — use allow_none to distinguish 0% from unavailable
+        # Battery SOC — use allow_none to distinguish 0% from unavailable.
+        # (#875) No sensor configured is the same "nothing measured" as a
+        # dark one — the Energy-Dashboard path already says so; this path
+        # published 0.0 as a measurement.
+        soc_val = None
         if self.config.battery_soc_sensor:
             soc_val = self._read_sensor(
                 self.config.battery_soc_sensor, "battery_soc", allow_none=True,
             )
-            if soc_val is not None:
-                readings.battery_soc = soc_val
-                self._last_valid_soc = soc_val
-            else:
-                readings.battery_soc = self._last_valid_soc
-                readings.battery_soc_unavailable = True
+        if soc_val is not None:
+            readings.battery_soc = soc_val
+            self._last_valid_soc = soc_val
+        else:
+            self._hold_battery_soc(readings)
 
         # Battery temperature (#564: configured sensor, else device sibling)
         self._read_battery_temperature(readings)

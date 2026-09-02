@@ -96,7 +96,7 @@ def _add_device(lm_coord, device_id, priority=5, is_critical=False, is_on=True, 
         "switch_entity": f"switch.{device_id}",
         "power_entity": f"sensor.{device_id}_power",
         "friendly_name": device_id.replace("_", " ").title(),
-        "power_rating": power / 1000,
+        "power_rating": power,  # W
         "is_available": True,
         "priority": priority,
         "is_critical": is_critical,
@@ -386,7 +386,7 @@ class TestEmergencyShedding:
             "switch_entity": "switch.dev_high",
             "power_entity": "sensor.dev_high_power",
             "friendly_name": "High Priority",
-            "power_rating": 2.0,
+            "power_rating": 2000,
             "is_available": True,
             "priority": 8,
             "is_critical": False,
@@ -396,7 +396,7 @@ class TestEmergencyShedding:
             "switch_entity": "switch.dev_critical",
             "power_entity": "sensor.dev_critical_power",
             "friendly_name": "Critical Device",
-            "power_rating": 1.0,
+            "power_rating": 1000,
             "is_available": True,
             "priority": 1,
             "is_critical": True,
@@ -408,6 +408,7 @@ class TestEmergencyShedding:
             return_value={"is_on": True, "current_power": 2000}
         )
 
+        lm._last_grid_import_w = 6000.0  # (#896) the plan reads the meter
         await lm._emergency_load_shedding()
 
         # Non-critical device should be shed
@@ -421,7 +422,7 @@ class TestEmergencyShedding:
         lm._devices["dev_a"] = {
             "switch_entity": "switch.dev_a",
             "friendly_name": "Device A",
-            "power_rating": 2.0,
+            "power_rating": 2000,
             "is_available": True,
             "priority": 8,
             "is_critical": False,
@@ -433,6 +434,7 @@ class TestEmergencyShedding:
             return_value={"is_on": True, "current_power": 2000}
         )
 
+        lm._last_grid_import_w = 6000.0  # (#896) the plan reads the meter
         await lm._emergency_load_shedding()
         # Should still only appear once
         assert lm._devices_shed.count("dev_a") == 1
@@ -443,7 +445,7 @@ class TestEmergencyShedding:
         lm._devices["dev_active"] = {
             "switch_entity": "switch.dev_active",
             "friendly_name": "Active Device",
-            "power_rating": 2.0,
+            "power_rating": 2000,
             "is_available": True,
             "priority": 8,
             "is_critical": False,
@@ -452,7 +454,7 @@ class TestEmergencyShedding:
         lm._devices["dev_disabled"] = {
             "switch_entity": "switch.dev_disabled",
             "friendly_name": "Disabled Device",
-            "power_rating": 3.0,
+            "power_rating": 3000,
             "is_available": True,
             "priority": 8,
             "is_critical": False,
@@ -464,6 +466,7 @@ class TestEmergencyShedding:
             return_value={"is_on": True, "current_power": 2000}
         )
 
+        lm._last_grid_import_w = 6000.0  # (#896) the plan reads the meter
         await lm._emergency_load_shedding()
         assert "dev_active" in lm._devices_shed
         assert "dev_disabled" not in lm._devices_shed
@@ -474,7 +477,7 @@ class TestEmergencyShedding:
         lm._devices["dev_avail"] = {
             "switch_entity": "switch.dev_avail",
             "friendly_name": "Available",
-            "power_rating": 2.0,
+            "power_rating": 2000,
             "is_available": True,
             "priority": 8,
             "is_critical": False,
@@ -483,7 +486,7 @@ class TestEmergencyShedding:
         lm._devices["dev_unavail"] = {
             "switch_entity": "switch.dev_unavail",
             "friendly_name": "Unavailable",
-            "power_rating": 3.0,
+            "power_rating": 3000,
             "is_available": False,
             "priority": 8,
             "is_critical": False,
@@ -494,6 +497,7 @@ class TestEmergencyShedding:
             return_value={"is_on": True, "current_power": 2000}
         )
 
+        lm._last_grid_import_w = 6000.0  # (#896) the plan reads the meter
         await lm._emergency_load_shedding()
         assert "dev_avail" in lm._devices_shed
         assert "dev_unavail" not in lm._devices_shed
@@ -510,7 +514,7 @@ class TestProgressiveShedding:
             "switch_entity": "switch.dev_low_pri",
             "power_entity": "sensor.dev_low_pri_power",
             "friendly_name": "Low Priority",
-            "power_rating": 1.5,
+            "power_rating": 1500,
             "is_available": True,
             "priority": 3,
             "is_critical": False,
@@ -520,7 +524,7 @@ class TestProgressiveShedding:
             "switch_entity": "switch.dev_high_pri",
             "power_entity": "sensor.dev_high_pri_power",
             "friendly_name": "High Priority",
-            "power_rating": 2.0,
+            "power_rating": 2000,
             "is_available": True,
             "priority": 8,
             "is_critical": False,
@@ -532,6 +536,7 @@ class TestProgressiveShedding:
         )
 
         # current_peak=5.5, target=5.0, hysteresis=0.3 => need to reduce 0.8kW
+        lm._last_grid_import_w = 6000.0  # (#896) the plan reads the meter
         await lm._progressive_load_shedding(5.5, 5.5)
 
         # At least one device should be shed (the highest priority number first)
@@ -547,7 +552,7 @@ class TestRestoreLoads:
         lm._devices["dev_a"] = {
             "switch_entity": "switch.dev_a",
             "friendly_name": "Device A",
-            "power_rating": 2.0,
+            "power_rating": 2000,
             "is_available": True,
             "priority": 5,
             "is_critical": False,
@@ -577,7 +582,7 @@ class TestRestoreLoads:
         lm._devices["dev_a"] = {
             "switch_entity": "switch.dev_a",
             "friendly_name": "Device A",
-            "power_rating": 2.0,
+            "power_rating": 2000,
             "is_available": True,
             "priority": 5,
             "is_critical": False,
@@ -637,6 +642,7 @@ class TestEvNotShedByLoadManager:
         )
         shed = []
         lm._shed_device = AsyncMock(side_effect=lambda did, r: shed.append(did))
+        lm._last_grid_import_w = 8000.0  # (#896) the plan reads the meter
         await lm._emergency_load_shedding()
         assert "load_device_wb" not in shed       # EV not emergency-shed
         assert "load_device_heater" in shed

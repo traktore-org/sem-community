@@ -1678,6 +1678,10 @@
     "load_current_control_wrong_unit": {
       "title": "En last är satt till strömstyrning men dess entitet anges i watt",
       "description": "**{name}** är konfigurerad för *ström*styrning, men **{entity_id}** förväntar sitt värde i **{unit}**.\n\nStrömstyrning betyder **ampere** — det finns för elbilsladdare, som får en ström på ungefär 6–32 A. Att skriva ett överskott i ampere till en entitet som väntar watt kan inte betyda det du avser, så SEM styr inte denna enhet i stället för att skriva ett tal i fel enhet. Tidigare registrerades enheten och skrevs aldrig till — den dök upp bland dina laddare med överskottet fast på 0 W.\n\n**Är enheten verkligen strömstyrd**, peka inställningen mot dess ampere-entitet.\n\n**Är det en last med variabel effekt** — AC-THOR, elpatron — kan SEM ännu inte modulera den (#880). Använd den under tiden som **på/av**-överskottslast via en switch-entitet."
+    },
+    "load_shed_futile": {
+      "title": "Nättoppen orsakas av en last som SEM inte styr",
+      "description": "Mätaren visar **{grid_import_kw} kW** mot ett mål på **{target_kw} kW** — och även om allt SEM får stänga av redan vore av skulle **{uncontrolled_kw} kW** återstå. Den förbrukningen hör till något SEM inte hanterar: en elbil på en laddare SEM inte känner till, en ugn, en värmepump med egen styrning.\n\nAtt koppla bort huset kan inte lösa den här toppen, så SEM kopplar bort **ingenting** så länge det gäller (en tidigare version fortsatte stänga av krets efter krets tills huset var mörkt).\n\n**Vad du kan göra:** ge SEM lasten (lägg till laddaren under *Elbilsladdare*, eller enheten med en styrentitet), höj målet om det inte verkligen är abonnemangets gräns, eller acceptera toppen för en last som måste gå. Det här ärendet försvinner av sig självt så snart toppen går att nå igen."
     }
   },
   "selector": {

@@ -1678,6 +1678,10 @@
     "load_current_control_wrong_unit": {
       "title": "Spotřebič je nastaven na řízení proudem, ale jeho entita je ve wattech",
       "description": "**{name}** je nastaven pro řízení *proudem*, ale **{entity_id}** očekává hodnotu ve **{unit}**.\n\nŘízení proudem znamená **ampéry** — existuje pro nabíječky EV, kterým se zadává proud přibližně 6–32 A. Zápis přebytku v ampérech do entity očekávající watty nemůže znamenat to, co zamýšlíte, takže SEM toto zařízení neřídí, místo aby zapisoval číslo ve špatné jednotce. Dříve zařízení zaregistroval a nikdy do něj nezapsal — objevovalo se mezi nabíječkami s přebytkem stále na 0 W.\n\n**Pokud je zařízení skutečně řízeno proudem**, nasměrujte nastavení na jeho ampérovou entitu.\n\n**Pokud jde o spotřebič s proměnným výkonem** — AC-THOR, topná tyč — SEM jej zatím neumí modulovat (#880). Zatím jej použijte jako **zap./vyp.** spotřebič přes entitu spínače."
+    },
+    "load_shed_futile": {
+      "title": "Špičku odběru ze sítě způsobuje spotřebič, který SEM neřídí",
+      "description": "Elektroměr ukazuje **{grid_import_kw} kW** oproti cíli **{target_kw} kW** — a i kdyby vše, co SEM smí vypnout, už bylo vypnuté, zbývalo by **{uncontrolled_kw} kW**. Tento odběr patří něčemu, co SEM nespravuje: elektromobilu na nabíječce, kterou SEM nezná, troubě, tepelnému čerpadlu s vlastním regulátorem.\n\nOdpojování domácnosti tuto špičku nevyřeší, proto SEM neodpojí **nic**, dokud to trvá (dřívější verze vypínala okruh za okruhem, dokud nebyl dům potmě).\n\n**Co dělat:** předat spotřebič SEM (přidat nabíječku v *Nabíječky EV* nebo zařízení s ovládací entitou), zvýšit cíl, pokud to opravdu není limit vaší smlouvy, nebo špičku pro spotřebič, který musí běžet, přijmout. Toto hlášení zmizí samo, jakmile bude špička opět dosažitelná."
     }
   },
   "selector": {

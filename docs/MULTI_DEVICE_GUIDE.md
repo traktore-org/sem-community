@@ -201,6 +201,15 @@ power and OFF when the surplus is gone (anti-flicker: min 5 min on /
 1 min off). Remove it again with
 `solar_energy_management.unregister_surplus_device`.
 
+The `priority` in the call is the device's **starting** slot. Once it is
+in the one device list it is ordered like every other row: drag it on the
+Load Priorities card (or call `update_device_priorities`) and the new slot
+governs the surplus walk, the plan and the card — immediately, and across
+restarts. Re-registering the device with a different `priority` does not
+undo a drag; the drag is the slot, the call is only the seed. (Up to #890
+the drag was stored and then ignored for service-registered devices —
+the allocator kept the seed while the call reported success.)
+
 ### Air-conditioners / heat pumps via `climate.*` (#569)
 
 A unit exposed only as a `climate.*` entity (no switch, no `number`) can be

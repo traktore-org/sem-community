@@ -43,6 +43,7 @@ from .charger_types import (
     ChargerDecision,
     ChargerIntent,
     ChargerView,
+    FleetContext,
 )
 from .energy_reclaim import ev_reclaims_battery_charge
 
@@ -68,8 +69,11 @@ def _cw(watts) -> int:
 
 def _ev_reclaims(view: ChargerView) -> bool:
     """#576 P2.2 — does this charger reclaim battery-charge power? (Above the
-    battery in the one list, SOC ≥ reserve floor, battery not commanded.)"""
+    battery in the one list, SOC ≥ reserve floor, battery not commanded.)
+    (#875) Never from a pack whose SOC has not been read."""
     f = view.fleet
+    if not getattr(f, "battery_soc_known", True):
+        return False
     return ev_reclaims_battery_charge(
         soc=f.battery_soc,
         priority_soc=f.priority_soc,
@@ -131,6 +135,22 @@ def soc_zone(soc: float, auto_start: float, buffer: float, priority: float) -> i
     if soc >= priority:
         return 2
     return 1
+
+
+def fleet_soc_zone(f: FleetContext) -> int:
+    """The fleet's zone this cycle — ``soc_zone`` over the view's SOC.
+
+    (#875) A SOC that has never been read is not 0 %: the reader holds
+    0.0 in the field because nothing was measured, and the old code
+    read that as Zone 1 for every cycle between a restart and the
+    sensor's first report — the car paused on a "battery priority" the
+    battery never asked for. An UNKNOWN pack is neither a source nor a
+    blocker, so it answers Zone 2: charge the car on surplus, offer no
+    battery assist.
+    """
+    if not getattr(f, "battery_soc_known", True):
+        return 2
+    return soc_zone(f.battery_soc, f.auto_start_soc, f.buffer_soc, f.priority_soc)
 
 
 def self_consumption_surplus_w(view: ChargerView) -> float:
@@ -208,7 +228,7 @@ def battery_assist_budget_w(view: ChargerView) -> float:
     if not getattr(f, "battery_may_assist_ev", True):
         return surplus
 
-    zone = soc_zone(f.battery_soc, f.auto_start_soc, f.buffer_soc, f.priority_soc)
+    zone = fleet_soc_zone(f)
     if zone < 3:
         return surplus
     # Solar gate: assist only SUPPLEMENTS real solar. Below the
@@ -407,11 +427,12 @@ def _idle_bridgeable(view: ChargerView) -> tuple[bool, str]:
     real_surplus_w = self_consumption_surplus_w(view)
     battery_cannot_assist = (
         float(f.battery_soc) < float(f.buffer_soc)
+        or not getattr(f, "battery_soc_known", True)  # (#875) never read
         or not getattr(f, "battery_may_assist_ev", True)
     )
     if battery_cannot_assist and real_surplus_w < min_charge_w:
         return False, (
-            f"no battery assist (SoC {f.battery_soc:.0f}% < buffer "
+            f"no battery assist (SoC {f.soc_label} < buffer "
             f"{f.buffer_soc:.0f}%) + EV surplus {_cw(real_surplus_w)}W "
             f"< min charge {_cw(min_charge_w)}W"
         )
@@ -739,7 +760,7 @@ class MinPlusSolarMode(ModeStrategy):
                 intent=ChargerIntent.IDLE,
                 reason="min_plus_solar day: EV disconnected",
             )
-        zone = soc_zone(f.battery_soc, f.auto_start_soc, f.buffer_soc, f.priority_soc)
+        zone = fleet_soc_zone(f)
         # Zone 1: battery priority — never charge EV from anywhere
         # when battery is below priority_soc.
         if zone == 1:
@@ -756,7 +777,7 @@ class MinPlusSolarMode(ModeStrategy):
         if zone == 2:
             return _relabel(
                 _SOLAR_ONLY.decide(view), "min_plus_solar",
-                f"min_plus_solar day Zone 2 (SOC={f.battery_soc:.0f}%)",
+                f"min_plus_solar day Zone 2 (SOC={f.soc_label})",
             )
         # Zone 3 / 4: surplus + capped SOC-based battery assist (#501).
         # The budget uses the battery's POTENTIAL (never gated on
