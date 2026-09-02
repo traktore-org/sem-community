@@ -3445,6 +3445,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                         min_amps=int(charger_cfg.get("ev_min_current") or 6),
                                         max_amps=int(charger_cfg.get("ev_max_current")
                                                        or DEFAULT_MAX_CHARGING_CURRENT),
+                                        # (#904) block watts → amps by the
+                                        # learned ladder, not one bucket.
+                                        wpa_table=self._wpa_table_for(cid),
+                                        nominal_wpa=(
+                                            float(charger_cfg.get("ev_phases") or 3)
+                                            * float(charger_cfg.get("ev_voltage") or 230)),
                                     )
                                     if _wait:
                                         plan.should_wait_for_cheap = True
@@ -9674,8 +9680,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             if getattr(self, "_peak_slot_tracker", None) is None:
                 self._peak_slot_tracker = PeakSlotTracker()
             import homeassistant.util.dt as _dt
-            self._peak_slot_tracker.update(
-                _dt.now(), float(getattr(power, "grid_import_power", 0.0) or 0.0))
+            # (#906) an unreadable meter is a BLIND sample (None), never 0.
+            _grid_w = (
+                None if getattr(power, "grid_power_unavailable", False)
+                else float(getattr(power, "grid_import_power", 0.0) or 0.0))
+            self._peak_slot_tracker.update(_dt.now(), _grid_w)
             _lm = self._load_manager
             # The off-switch is the EXISTING one: the Control-tab slider's
             # MAX notch sets peak_limit_unlimited atomically (#717), and an
@@ -9687,6 +9696,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     float(getattr(_lm, "_target_peak_limit", 0.0) or 0.0),
                     self._peak_slot_tracker.imported_kwh,
                     self._peak_slot_tracker.elapsed_s,
+                    blind=bool(getattr(self._peak_slot_tracker, "blind", False)),
                 )
         except (AttributeError, TypeError, ValueError,
                 ZeroDivisionError, ImportError):
@@ -10089,6 +10099,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     reachable=night_plan.reachable,
                     deadline_active=night_plan.deadline_active,
                     watts_per_amp=_wpa,
+                    wpa_table=self._wpa_table_for(_pcid),   # (#904)
+                    nominal_wpa=(float(_primary_cfg.get("ev_phases") or 3)
+                                 * float(_primary_cfg.get("ev_voltage") or 230)),
                     min_amps=int(_primary_cfg.get("ev_min_current") or 6),
                     max_amps=int(_primary_cfg.get("ev_max_current")
                                    or DEFAULT_MAX_CHARGING_CURRENT),

@@ -106,7 +106,10 @@ class TestTheTableTravelsAsATypedField:
         from custom_components.solar_energy_management.coordinator import coordinator as cm
         assert "wpa_table=dict(wpa_table or {})" in inspect.getsource(bv)
         src = inspect.getsource(cm)
-        assert src.count("build_charger_view(") == src.count("wpa_table=self._wpa_table_for(")
+        # Every view build passes the table — and since #904 so does every
+        # plan-overlay call (block watts → amps by the same ladder).
+        assert src.count("wpa_table=self._wpa_table_for(") == (
+            src.count("build_charger_view(") + src.count("ev_overlay("))
 
     def test_the_coordinator_hands_over_the_believed_phase_table(self):
         from custom_components.solar_energy_management.tests.test_846_measured_wpa import (

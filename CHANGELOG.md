@@ -13,6 +13,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🛡️ **The night plan's floor current comes from the learned W/A ladder, not
+  one bucket** (#904). PROD 02.09: a 5.3 kW plan block was converted with the
+  16 A bucket's W/A (389 — a genuine car-side taper) into a 14 A ask that the
+  same table says buys 8.7 kW. The overlay now walks the ladder the slot guard
+  already uses: the largest setpoint whose *predicted* draw fits the block
+  (10 A here). Without a learned table the nameplate ceil stays as it was.
+- 🛡️ **A limit lowering the current lands in the same cycle** (#905). The
+  slot guard's cap and a peak shed order were ramped 2 A per cycle, debounced
+  30 s, out-voted by the median smoother and held through dropouts like any
+  setpoint change — 10 A asked at 20:45:14 reached the wire at 20:47:44 while
+  the billed 15-minute average crossed the limit. A limit is not a
+  preference: capped downward moves are written immediately; the ramp still
+  governs the way back up.
+- 🛡️ **A blind meter is not a light slot** (#906). The slot tracker counted an
+  unreadable grid sensor as 0 W; two modbus dropouts inside a slot averaging
+  8 kW manufactured enough headroom for the guard to release at 5.9 of 6.0 kW.
+  The tracker now holds the last valid import across a gap, the allowance is
+  capped at the target while blind, and the guard charges the house's own
+  draw against the allowance instead of reading a vanished house as 0.
+- 🔋 **A night top-up stops at its target even while the inverter drops out**
+  (#907). The degraded-inputs hold ("a cycle that cannot see must not steer")
+  rewrote a *target reached* idle back into a charge on every dropout; the
+  stop was never issued and the car drew grid for minutes past its "At least"
+  in a mode that never grid-charges at night. The hold is now a day-only
+  device, and at night the planner's raw verdict is honoured without the
+  median delay — same rule the deficit bridge already followed.
+- 🔋 **The battery's discharge clamp reads the forecast-spending gate** (#885).
+  With forecast spending on and a spendable budget, the charger side offered
+  battery assist below the solar gate while the battery side still pinned
+  discharge to the house — the car drew grid under a line that said battery
+  assist. One gate, two readers; the clamp also honours tonight's dynamic
+  floor, not only the static buffer.
 - 🧹 **An upgraded install stops carrying 15 stale translation resources**
   (#901). Since the #738 split, `sem-localize.js` is a loader that fetches
   only the viewer's own language; the per-language files are assets it
