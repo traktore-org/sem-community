@@ -225,6 +225,8 @@ _ENTITY_ID_RE = re.compile(
 #: heading, the #219 lesson shape.
 _DOCS_ANCHORS = {
     "sensor_unavailable": "a-configured-sensor-is-unavailable",
+    # (#900) the options wizard pinned a brand install to the generic adapter
+    "battery_platform_pinned_generic": "the-battery-platform-is-pinned-to-generic",
     "sensor_stale": "a-sensor-stopped-updating-stale",
     "no_forecast_integration": "no-solar-forecast-integration-found",
     "no_recorder": "the-recorder-is-not-available",
