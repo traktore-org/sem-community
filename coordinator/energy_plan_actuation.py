@@ -203,8 +203,17 @@ def ev_overlay(
     watts_per_amp: float,
     min_amps: int,
     max_amps: int,
+    wpa_table=None,
+    nominal_wpa=None,
 ) -> Tuple[bool, int]:
     """The EV's joint-plan overlay → ``(wait, floor_amps)``.
+
+    ``wpa_table`` (#904): this charger's learned ``{amps: W/A}`` ladder.
+    With it, block watts become the LARGEST setpoint whose predicted draw
+    fits the block — the same walk the slot guard makes — never a division
+    by one bucket's W/A. PROD 02.09: 5262 W ÷ the 16 A bucket's 389 W/A
+    asked 14 A, which that very table says buys 8.7 kW; the ladder says
+    10 A. Without a table the nameplate ceil stays as it was.
 
     Feeds the two signals the night path already consumes: ``wait`` maps
     onto ``NightChargePlan.should_wait_for_cheap`` (the existing
@@ -230,7 +239,16 @@ def ev_overlay(
         return (False, 0)
     if gate.in_block:
         wpa = max(1.0, float(watts_per_amp))
-        amps = int(math.ceil(gate.block_power_w / wpa))
+        if wpa_table:
+            from .watts_per_amp import amps_that_fit
+            # The ladder's ceiling is the NAMEPLATE (phases × voltage), never
+            # the single measured number — predict_watts caps at ``a × nominal``,
+            # and a low bucket's W/A as the cap would walk the ladder wrong.
+            nominal = float(nominal_wpa) if nominal_wpa else wpa
+            amps = amps_that_fit(wpa_table, gate.block_power_w, max(1.0, nominal),
+                                 int(max_amps))
+        else:
+            amps = int(math.ceil(gate.block_power_w / wpa))
         return (False, max(int(min_amps), min(int(max_amps), amps)))
     if gate.remaining_kwh + _EPS_KWH >= max(0.0, float(remaining_kwh)):
         return (True, 0)

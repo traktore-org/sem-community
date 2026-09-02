@@ -500,6 +500,13 @@ class ChargerDecision:
     'off mode — explicit user disable', 'night mode + min_plus_solar
     floor, deadline 06:00'."""
 
+    capped_by_limit: bool = False
+    """(#905) True when a LIMIT — the #864 slot guard, a peak shed — bounded
+    ``commanded_amps`` below what the mode asked for. The stability layer
+    lands a capped DOWNWARD move in the same cycle (no ramp, no debounce,
+    never held above it by a blind-cycle hold): a limit is not a preference.
+    PROD 02.09: the guard said 10 A, the wire carried 14→12 A for two more
+    minutes and the slot set the month's peak."""
     bridgeable: bool = True
     """For an IDLE decision: is this a TRANSIENT dip worth holding the
     contactor through (a passing cloud while real surplus / battery
@@ -714,6 +721,11 @@ class FleetContext:
 
     grid_import_w: float = 0.0
     grid_export_w: float = 0.0
+    grid_import_known: bool = True
+    """(#906) False when the grid sensor was unreadable this cycle — then
+    ``grid_import_w`` is the reader's 0.0 fallback, not a measurement. The
+    slot guard must not credit a house that "vanished": it charges the
+    house's own draw against the allowance instead of reading it as 0."""
 
     is_night: bool = False
     """``time_manager.is_night_mode()``."""

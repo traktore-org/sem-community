@@ -377,10 +377,29 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
         # fallen below the buffer. Above the buffer with real surplus the
         # battery is free to assist (#545). buffer=0 disables the SoC arm.
         buffer_soc = float(getattr(f, "buffer_soc", 70.0))
+        # (#885) The floor the charger side respects is the EFFECTIVE one —
+        # buffer, or tonight's dynamic floor when it sits higher (#878).
+        floor_soc = buffer_soc
+        _dyn = getattr(view, "dynamic_floor_pct", None)
+        if _dyn is not None:
+            try:
+                floor_soc = max(floor_soc, float(_dyn))
+            except (TypeError, ValueError):
+                pass
         # (#875) a SOC never read lands on the protective side too.
-        below_buffer = (float(f.battery_soc) < buffer_soc
+        below_buffer = (float(f.battery_soc) < floor_soc
                         or not getattr(f, "battery_soc_known", True))
-        if surplus_w < gate_w or below_buffer:
+        # (#885) The charger side opens the #537 solar gate when forecast
+        # spending is on and tonight's budget has something spendable
+        # (#778 phase 5). This clamp is the other reader of the same gate:
+        # left closed, the charger offered assist amps the pack was pinned
+        # from delivering and the car drew grid under a line that said
+        # battery assist (PROD 02.09). One gate, two readers.
+        spend_open = (
+            bool(getattr(view, "forecast_spending_enabled", False))
+            and float(getattr(view, "battery_spendable_kwh", 0.0) or 0.0) > 0.0
+        )
+        if (surplus_w < gate_w and not spend_open) or below_buffer:
             # #531: split the home budget across the fleet — N batteries each
             # told to inject the FULL home load over-injects N× and leaks the
             # surplus to the EV, defeating the protection. Each gets home/N.
@@ -391,8 +410,10 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
             home_w = max(0.0, view.home_consumption_w - gf_w) / n
             if below_buffer:
                 why = (
-                    f"ev plugged in + battery SoC {f.soc_label} < buffer "
-                    f"{buffer_soc:.0f}% (self-consumption floor)"
+                    f"ev plugged in + battery SoC {f.soc_label} < "
+                    + (f"tonight's floor {floor_soc:.1f}%"
+                       if floor_soc > buffer_soc else
+                       f"buffer {buffer_soc:.0f}% (self-consumption floor)")
                 )
             else:
                 why = (

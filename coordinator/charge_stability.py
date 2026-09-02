@@ -463,6 +463,25 @@ class ChargeStability:
         # threshold compare. A 1-cycle dip or spike never reaches the
         # timers below.
         med_amps = self._median_amps(cid, raw_amps, smooth_window)
+        # (#905) A limit's cap is not a flicker for the median to out-vote:
+        # one capped sample against a window of higher ones left "delta
+        # guard — holding 14A" on the wire while the guard said 10 (PROD
+        # 02.09 20:45:14). Take the capped value now and re-seat the window
+        # on it, so the way back up starts from the cap, not from the past.
+        if (getattr(decision, "capped_by_limit", False)
+                and decision.intent is ChargerIntent.CHARGE_AT_AMPS
+                and raw_amps < med_amps):
+            med_amps = raw_amps
+            hist = self._amps_history.get(cid)
+            if hist:
+                self._amps_history[cid] = [raw_amps] * len(hist)
+        # (#907) At night the planner's verdict is steady by construction —
+        # a deadline floor, a peak-managed rate, target reached. The median
+        # exists for solar wobble; at night it only delays the planner's
+        # own idle by half a window ("delta guard — holding 8A" on a
+        # target-reached cycle, PROD 02.09 21:26). Honour the raw verdict.
+        if night:
+            med_amps = raw_amps
         charge_wanted = med_amps >= min_amps
 
         # "Charging" = the adapter last commanded a charge OR the EV is
@@ -497,10 +516,24 @@ class ChargeStability:
         #     precisely a hold that preserved a floor-violating value;
         #   - DISABLE, disconnect and non-surplus modes never arrive here
         #     (returned above) — a stop must never wait for a sensor.
-        if view.fleet.inputs_degraded and charging:
+        # (#907) …and only by DAY. A night verdict — target reached, a
+        # deadline floor, a planned wait — comes from the charger's own
+        # counter and the planner; no blind modbus sensor can move it. Held
+        # anyway, a night idle turned back into CHARGE on every dropout,
+        # the reconciler's idle grace never completed, and the car drew
+        # grid for minutes past its target (PROD 02.09). Same rule the
+        # deficit bridge below already follows: the night planner owns
+        # start/stop, honour whatever it decided.
+        if view.fleet.inputs_degraded and charging and not night:
             held = self._last_amps.get(cid)
             if held is not None:
                 held = max(min_amps, min(max_amps, int(held)))
+                # (#905) never above a limit's cap — a blind cycle may keep
+                # a command, not overrule the peak guard that just lowered it.
+                if (getattr(decision, "capped_by_limit", False)
+                        and decision.intent is ChargerIntent.CHARGE_AT_AMPS
+                        and int(decision.commanded_amps) < held):
+                    held = max(min_amps, int(decision.commanded_amps))
                 # Feed the smoothed stream too, so a dark stretch leaves no
                 # hole for the median to snap through on recovery.
                 self._median_amps(cid, held, smooth_window)
@@ -918,6 +951,25 @@ class ChargeStability:
                 reason=f"stability: smoothed → {target}A — {decision.reason}",
             )
 
+        # (#905) A LIMIT lowering the current lands NOW. The ramp and the
+        # debounce exist for the car's sake — steadiness on the way up and
+        # on budget wobble. A slot-guard cap or a shed order is not a
+        # preference: every cycle spent above it is billed. PROD 02.09: the
+        # guard said 10 A at 20:45:14, the wire carried 14→12 A until
+        # 20:47:44, and that slot set the month's peak.
+        if getattr(decision, "capped_by_limit", False) and target < last:
+            self._commit_amps(cid, target, now)
+            if decision.commanded_amps == target \
+                    and decision.intent is ChargerIntent.CHARGE_AT_AMPS:
+                return replace(
+                    decision,
+                    reason=f"stability: limit clamp → {target}A — {decision.reason}",
+                )
+            return replace(
+                decision, intent=ChargerIntent.CHARGE_AT_AMPS,
+                commanded_amps=target,
+                reason=f"stability: limit clamp → {target}A — {decision.reason}",
+            )
         ramp = max(1, int(ramp_amps))
         ramped = max(last - ramp, min(last + ramp, target))
         suppressed = None

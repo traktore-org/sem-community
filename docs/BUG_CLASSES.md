@@ -2375,3 +2375,61 @@ KEBA, plus a branch-safe AST check that `command_disable` never calls `_set_curr
 **Sweep question:** for every actuation wrapper, does it perform the hardware action itself *and* call
 a method (`stop_session`, `park_off`, a teardown/cleanup) that performs the same action — and if a
 de-dup is supposed to save you, is its gating predicate ever actually true on this path? Refs #894 #25 #315 #487 #627.
+
+### 58. A blind input read as zero in the OPTIMISTIC direction — GUARDED
+**Symptom:** a security layer relaxes precisely when it is blind. The peak slot tracker integrated an
+`unavailable` grid sensor as 0 W (`float(x or 0.0)`), so two modbus dropouts inside a slot averaging
+8 kW *manufactured* headroom and the guard released at 5.9 of 6.0 kW; the same reader's 0.0 made the
+guard's "grid minus this charger" credit read the whole house as absent. **Root shape:** classes 12/
+#875/#902 already say "unread is not zero"; this class is the sub-case where zero is not merely
+wrong but *permissive* — the fallback lands on the side that lets the defended limit be breached.
+A hold ("keep doing what you were doing") is the honest fallback for a steering read; for an
+INTEGRAL the honest fallback is zero-order hold of the last valid sample plus a tighter cap while
+blind, never zero. **Live catch (#906, PROD 02.09):** slot 20:45–21:00, month peak 1.11 → 6.59 kW.
+**Closure:** `PeakSlotTracker.update(now, None)` holds `_last_w` across the gap and flags `blind`;
+`slot_allowed_import_w(..., blind=True)` caps at the target; `FleetContext.grid_import_known` lets
+the guard charge the house's held draw against the allowance. **Guard:**
+`tests/test_906_blind_meter_slot_guard.py`. **Sweep question:** for every fallback value, ask which
+DIRECTION it errs in — does the default open a gate, widen a budget, or lower a floor? Refs #906 #875
+#902 #818.
+
+### 59. A limit smoothed like a preference — GUARDED
+**Symptom:** the guard says 10 A, the wire carries 14 → 12 → 12 → 10 over two minutes. **Root
+shape:** offer-steadiness (median window, 2 A ramp, 30 s debounce, dropout hold) is applied to every
+setpoint change regardless of *why* it changed. Steadiness protects the car from budget wobble; a
+limit-driven DOWNWARD move (slot guard cap, shed order) is billed for every cycle it is late, and the
+smoothing turned a one-cycle clamp into a two-minute overrun that set the month's peak. **Live catch
+(#905, PROD 02.09).** **Closure:** `ChargerDecision.capped_by_limit`, stamped by `clamp_to_peak_slot`
+and the shedding clamp; `ChargeStability` writes a capped downward target in the same cycle (no
+median, no ramp, no debounce, never held above it by the blind-cycle hold); the ramp governs only the
+way back up. **Guard:** `tests/test_905_limit_clamp_lands_now.py`. **Sweep question:** wherever a
+smoother sits between a decision and an actuator, can it tell a *preference* from a *limit* — and
+does it let the limit through? Refs #905 #864 #747.
+
+### 60. One number for a per-setpoint quantity — GUARDED
+**Symptom:** the plan asks 14 A for a 5.3 kW block on a car whose own measured table says 14 A buys
+8.7 kW. **Root shape:** #846 established that a car's W/A is a function of the SETPOINT (8 A → 394,
+16 A → 389 on a tapering car), and built a per-bucket ladder with `amps_that_fit`. One consumer
+(`ev_overlay`) kept converting with a single W/A lifted from the max-amps bucket — `ceil(watts /
+wpa)` — so a low bucket at 16 A produced an over-ask the table itself contradicted. The slot guard
+used the ladder; the plan floor did not; the guard then had to undo the plan's arithmetic every
+cycle. **Live catch (#904, PROD 02.09).** **Closure:** `ev_overlay(..., wpa_table, nominal_wpa)`
+walks the ladder (largest setpoint whose predicted draw fits the block); nameplate ceil remains the
+no-table fallback. **Guard:** `tests/test_904_overlay_walks_the_ladder.py` + the #846 structural
+test now counts the overlay sites. **Sweep question:** for every `x / watts_per_amp` or
+`amps × wpa`, is the W/A the bucket for THOSE amps, or one number standing in for the curve? Refs
+#904 #846 #716.
+
+### 61. A hold that cannot tell a steering read from a verdict — GUARDED
+**Symptom:** target reached, decide says idle, and "inputs degraded — holding 8A" re-issues the charge
+on every dropout; the reconciler's 4-consecutive-idle grace never completes; the car charges past
+its target from the grid in a mode that never grid-charges at night. **Root shape:** the #818 hold
+("a cycle that cannot see must not steer") assumed every decision it overrides was DERIVED from the
+blind inputs. A night verdict is derived from the charger's own energy counter and the planner; the
+hold rewrote it anyway, and the median smoother delayed the idle by half a window on top. **Live
+catch (#907, PROD 02.09).** **Closure:** the hold is a day-only device (`and not night`); at night
+the planner's raw verdict bypasses the median — the same rule the deficit bridge already followed.
+**Guard:** `tests/test_907_night_idle_survives_a_blind_cycle.py`. **Sweep question:** for every
+"hold the last value" fallback, which decisions can reach it that do NOT depend on the missing
+input — and are they exempt? Refs #907 #818 #552.
+

@@ -1150,6 +1150,22 @@ Two design choices worth knowing:
 - **Early-slot bursts stay allowed.** A short spike at the start of a slot is
   genuinely absorbed by the average, so the guard permits it; it tightens only
   as the slot fills.
+- **A clamp lands in the same cycle** (#905). The offer-steadiness layer
+  ramps current 2 A per cycle and debounces changes — right for the car on
+  the way up and for budget wobble. A limit lowering the current (this guard,
+  a shed order) is not a preference: it is written immediately, and the ramp
+  governs only the way back up afterwards.
+- **A blind meter is not a light slot** (#906). When the grid sensor drops
+  out mid-slot, the tracker holds the last valid import across the gap
+  instead of counting 0 W, and the allowance is capped at the target until
+  the meter is readable again. The burst allowance is for slots SEM has
+  actually watched.
+- **Night verdicts pass through a blind cycle** (#907). By day a cycle that
+  cannot see holds the committed current rather than steering on a
+  fabricated zero. At night the planner's decision — a deadline floor,
+  *target reached* — comes from the charger's own counter and is honoured
+  as-is, so a top-up that has delivered its "At least" stops even while the
+  inverter is dropping out.
 
 Because the limit lives at the **power meter**, everything downstream answers
 to it — this is a layer above the devices, not an EV feature.

@@ -44,12 +44,17 @@ _ALLOWANCE_CAP_FACTOR: float = 3.0
 
 def slot_allowed_import_w(
     target_kw: float, imported_kwh: float, elapsed_s: float,
-    slot_s: float = SLOT_S,
+    slot_s: float = SLOT_S, blind: bool = False,
 ) -> Optional[float]:
     """Average import (W) the rest of the slot may carry to land on target.
 
     ``None`` when no positive target is configured — absence of a ceiling
     is not a ceiling of zero (`peak_limit_unlimited` installs).
+
+    ``blind`` (#906): the meter could not be read this cycle, so the
+    integral is a held estimate. A slot SEM cannot see may never be
+    allowed MORE than the target itself — the burst allowance is for a
+    slot the tracker actually watched. Spent stays spent either way.
     """
     if target_kw is None or target_kw <= 0:
         return None
@@ -59,7 +64,8 @@ def slot_allowed_import_w(
         return 0.0
     remaining_s = max(1.0, slot_s - max(0.0, float(elapsed_s)))
     allowed_w = remaining_kwh * 3600.0 * 1000.0 / remaining_s
-    return min(allowed_w, float(target_kw) * 1000.0 * _ALLOWANCE_CAP_FACTOR)
+    cap = float(target_kw) * 1000.0 * (1.0 if blind else _ALLOWANCE_CAP_FACTOR)
+    return min(allowed_w, cap)
 
 
 class PeakSlotTracker:
@@ -75,6 +81,9 @@ class PeakSlotTracker:
         self._last_w: float = 0.0
         self._slot_start: Optional[datetime] = None
         self.imported_kwh: float = 0.0
+        #: (#906) True while the latest sample was unreadable — the integral
+        #: is carrying the last VALID import across the gap (ZOH), not a 0.
+        self.blind: bool = False
 
     @staticmethod
     def _slot_of(t: datetime) -> datetime:
@@ -86,7 +95,13 @@ class PeakSlotTracker:
             return 0.0
         return max(0.0, (self._last_t - self._slot_start).total_seconds())
 
-    def update(self, now: datetime, grid_import_w: float) -> None:
+    def update(self, now: datetime, grid_import_w: Optional[float]) -> None:
+        """``grid_import_w=None`` (#906) is a BLIND sample: the meter was
+        unreadable. The last valid import is held across the gap — an
+        unread meter is not a meter reading zero, and for the budget that
+        defends the bill, zero is the optimistic direction (PROD 02.09: two
+        dropouts inside a slot averaging 8 kW manufactured enough headroom
+        for the guard to release at 5.9/6.0 kW)."""
         slot = self._slot_of(now)
         if self._slot_start is None:
             self._slot_start = slot
@@ -104,7 +119,11 @@ class PeakSlotTracker:
                 else:
                     self.imported_kwh += w * step / 3600.0 / 1000.0
         self._last_t = now
-        self._last_w = float(grid_import_w or 0.0)
+        if grid_import_w is None:
+            self.blind = True          # hold ``_last_w`` — ZOH over the gap
+        else:
+            self.blind = False
+            self._last_w = float(grid_import_w or 0.0)
 
 
 def clamp_import_command(

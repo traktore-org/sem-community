@@ -1106,8 +1106,16 @@ def clamp_to_peak_slot(result, view):
     # grid-fed share can be credited (solar-covered draw never touched the
     # meter).
     _this_w = float(getattr(view.power, "power_w", 0.0) or 0.0)
-    _others_w = max(0.0, float(view.fleet.grid_import_w)
-                    - min(_this_w, float(view.fleet.grid_import_w)))
+    if getattr(view.fleet, "grid_import_known", True):
+        _others_w = max(0.0, float(view.fleet.grid_import_w)
+                        - min(_this_w, float(view.fleet.grid_import_w)))
+    else:
+        # (#906) The meter is blind this cycle: ``grid_import_w`` is the
+        # reader's 0.0, so "grid minus this charger" would read the whole
+        # house as absent and hand the EV the entire allowance (PROD 02.09:
+        # headroom GREW inside a slot averaging 8 kW). The house's own held
+        # draw is the honest estimate of what else the slot is carrying.
+        _others_w = max(0.0, float(getattr(view.fleet, "home_w", 0.0) or 0.0))
     # …and what higher-priority chargers have ALREADY been offered this
     # cycle but have not yet drawn, so it cannot appear in grid_import.
     _committed_w = max(0.0, float(
@@ -1130,6 +1138,7 @@ def clamp_to_peak_slot(result, view):
             result, intent=ChargerIntent.CHARGE_AT_AMPS,
             commanded_amps=_cap_a,
             budget_w=predict_watts(view.wpa_table, _cap_a, _wpa),
+            capped_by_limit=True,   # (#905) lands in one cycle
             reason=(f"{result.reason} [peak slot guard: "
                     f"{_ev_allow_w:.0f}W headroom → {_cap_a}A]"),
         )
@@ -1227,6 +1236,7 @@ def decide(view: ChargerView) -> ChargerDecision:
                 result, intent=ChargerIntent.CHARGE_AT_AMPS,
                 commanded_amps=min_a,
                 budget_w=predict_watts(view.wpa_table, min_a, wpa),
+                capped_by_limit=True,   # (#905) a shed order is not a preference
                 reason=f"{result.reason} [peak SHEDDING — clamped to {min_a}A]",
             )
     return result

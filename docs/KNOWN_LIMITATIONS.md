@@ -108,9 +108,12 @@ freely. Two further limits worth knowing:
 - **It floors at the charger's minimum current** rather than stopping a car,
   by design — so a slot can still overrun if the house baseline alone exceeds
   the target. The reactive EMERGENCY state remains the hard stop.
-- **It steers on the meter reading**, so an install whose grid sensor drops
-  out loses the guard for those cycles; SEM holds its committed command rather
-  than steering on a fabricated zero.
+- **It steers on the meter reading.** When the grid sensor drops out
+  mid-slot the tracker carries the last valid import across the gap and the
+  allowance is capped at the target until the meter is readable again
+  (#906) — the guard stays on, but it cannot see a load that starts *during*
+  the gap. An install whose meter is blind for minutes at a time still relies
+  on the reactive EMERGENCY stop for that window.
 
 Set the Control tab's Target Limit slider to MAX (*No grid limit*) to disable
 peak management entirely, guard included.

@@ -199,7 +199,13 @@ Every 10 s during the night window, for each charger:
                                           so a missing plan never costs you the car.
                                           The card says "reactive — no plan yet".
 
-6. Apply current = max(deadline_amps, gentle_ramp_amps).
+6. Apply current = max(deadline_amps, gentle_ramp_amps). When tonight's plan
+   places the charge in a block, the block's watts become amps by the
+   charger's **learned W/A ladder** (#904) — the largest setpoint whose
+   predicted draw fits the block — never by dividing by a single bucket's
+   W/A, which on a car that tapers at high setpoints asked 14 A for a 5.3 kW
+   block. A limit lowering the current (slot guard, shed) is written in the
+   same cycle (#905); a night verdict is honoured through a blind cycle (#907).
    If shared peak budget exceeded (multi-charger), throttle proportionally (#274/H1).
 ```
 

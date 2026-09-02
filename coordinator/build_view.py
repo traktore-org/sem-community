@@ -202,6 +202,9 @@ def build_charger_view(
         battery_soc_known=bool(getattr(power_reading, "battery_soc_known", True)),
         grid_import_w=float(getattr(power_reading, "grid_import_power", 0.0) or 0.0),
         grid_export_w=float(getattr(power_reading, "grid_export_power", 0.0) or 0.0),
+        # (#906) unread is not zero — the guard needs to know.
+        grid_import_known=not bool(
+            getattr(power_reading, "grid_power_unavailable", False)),
         is_night=fleet_state.is_night,
         tariff_level=fleet_state.tariff_level,
         # (#747) the peak posture rides the one-place thread.
