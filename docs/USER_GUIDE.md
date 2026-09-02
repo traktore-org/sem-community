@@ -1036,7 +1036,7 @@ When using dynamic tariffs (Tibber, Nordpool, aWATTar), surplus distribution bec
 
 ![Control Tab](images/sem_control_tab.png)
 
-SEM monitors rolling 15-minute average power and progressively sheds loads to stay under your target peak limit. Only devices in `peak_only` or `surplus` mode can be shed. Devices in `off` mode are never touched.
+SEM monitors rolling 15-minute average power and progressively sheds loads to stay under your target peak limit. Only devices in `peak_only` or `surplus` mode can be shed. Devices in `off` mode are never touched. The shed roster is the roster the Load Priorities card shows — Energy Dashboard devices and devices added with `register_surplus_device` alike; a `surplus`-mode device is shed by the surplus controller, a `peak_only` device by load management.
 
 | State | Behavior |
 |-------|----------|

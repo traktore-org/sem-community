@@ -55,6 +55,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   counter and no power entity — read 0 W and had silently fallen off the
   shed list); a measured 0 W stays 0 W. In observer mode the verdict reads
   `observer:withheld:N` instead of a shed delay that was never the reason.
+  And the shed roster is the roster the card shows: a device added with
+  `register_surplus_device` and set to *Peak only* was shed by nobody — the
+  surplus controller leaves peak-only loads to load management, and load
+  management had been built from the Energy Dashboard list alone — so its
+  toggle was a promise nothing kept and its kilowatts counted as
+  uncontrolled.
 
 - 🔧 **Dragging a service-registered device in the priority list now
   moves it** (#890). A load added with `register_surplus_device` took its

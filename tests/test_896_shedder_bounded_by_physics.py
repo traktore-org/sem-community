@@ -369,6 +369,98 @@ async def test_observer_mode_names_what_it_withheld(lm):
     assert data["shed_sheddable_w"] == pytest.approx(3000)
 
 
+class TestTheShedderKnowsEveryConsentedLoad:
+    """``peak_only`` means "SEM may shed this to protect the peak". The surplus
+    controller never sheds a peak_only load ("the load manager owns their
+    peak shedding") — and the load manager's roster was built from the
+    Energy Dashboard list alone, so a load added with
+    ``register_surplus_device`` and set to peak_only was shed by NOBODY. Its
+    toggle was a promise nothing kept, and the plan counted its kilowatts as
+    uncontrolled. The roster the shedder sees is the roster the card shows."""
+
+    SPEC = {
+        "entity_id": "switch.heizband",
+        "name": "Heizband",
+        "priority": 7,
+        "rated_power": 500,
+        "power_entity_id": None,
+        "energy_entity_id": "sensor.heizband_energy",
+        "control_mode": "peak_only",
+        "depends_on": [],
+        "device_type": "switch",
+    }
+
+    def _reg(self, spec=None):
+        from .test_895_consent_reaches_the_shedder import _registry
+
+        reg = _registry()
+        reg._service_registrations = {"test_heizband": dict(spec or self.SPEC)}
+        reg._control_mode_overrides["test_heizband"] = (spec or self.SPEC)["control_mode"]
+        reg._priority_overrides = {}
+        return reg
+
+    def test_a_service_registered_peak_only_load_is_on_the_roster(self):
+        from custom_components.solar_energy_management.features.device_axes import may_actuate
+
+        reg = self._reg()
+        reg._sync_to_load_manager()
+        row = reg._load_manager._devices["test_heizband"]
+        assert row["switch_entity"] == "switch.heizband"
+        assert row["control"] == {"type": "switch", "entity": "switch.heizband"}
+        assert row["control_mode"] == "peak_only"
+        assert may_actuate(row) is True
+        assert row["energy_entity"] == "sensor.heizband_energy"
+        assert row["priority"] == 7
+        assert row["power_rating"] == 1000.0, "the card's rating, in watts"
+        assert row["surplus_managed"] is False, "no live surplus object → the LM sheds it"
+
+    def test_the_row_carries_the_users_drag(self):
+        reg = self._reg()
+        reg._priority_overrides = {"test_heizband": 2}
+        reg._sync_to_load_manager()
+        assert reg._load_manager._devices["test_heizband"]["priority"] == 2
+
+    def test_an_ed_row_for_the_same_switch_is_folded_into_the_registration(self):
+        """The card already suppresses the ED twin of a service-registered
+        switch; two LM rows on one switch would be two shedders on one load."""
+        from custom_components.solar_energy_management.features.device_registry import UnifiedDevice
+
+        reg = self._reg()
+        reg._devices = [
+            UnifiedDevice(
+                energy_sensor="sensor.heizband_energy",
+                power_sensor=None,
+                name="Heizband (ED)",
+                priority=5,
+                control={"type": "switch", "entity": "switch.heizband"},
+            )
+        ]
+        reg._sync_to_load_manager()
+        rows = reg._load_manager._devices
+        assert "test_heizband" in rows
+        assert [d for d in rows if d.startswith("energy_dashboard_")] == []
+
+    def test_a_stale_ed_twin_is_pruned_on_the_next_sync(self):
+        """A row the sync no longer derives must not survive from an earlier
+        pass — the prune is keyed on what THIS pass wrote."""
+        from custom_components.solar_energy_management.features.device_registry import UnifiedDevice
+
+        reg = self._reg()
+        reg._devices = [
+            UnifiedDevice(
+                energy_sensor="sensor.heizband_energy",
+                power_sensor=None,
+                name="Heizband (ED)",
+                priority=5,
+                control={"type": "switch", "entity": "switch.heizband"},
+            )
+        ]
+        reg._load_manager._devices["energy_dashboard_heizband"] = {"stale": True}
+        changed = reg._sync_to_load_manager()
+        assert "energy_dashboard_heizband" not in reg._load_manager._devices
+        assert changed is True
+
+
 # ---------------------------------------------------------------------------
 # 4. A shed is never silent
 # ---------------------------------------------------------------------------

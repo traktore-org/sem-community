@@ -1066,6 +1066,14 @@ class UnifiedDeviceRegistry:
         emergency shedding (forum #30 — a Span panel and a backup battery
         switched off circuit by circuit, HA's own supply included).
         """
+        # (#896) A service registration's mode lives in its spec — that is
+        # what the live object is built from at boot and what the card row
+        # shows. The override map mirrors it from the same writers; a legacy
+        # spec that predates the mirror would otherwise read as "off" here
+        # while running as "surplus" there.
+        spec = self._service_registrations.get(device_id)
+        if spec is not None:
+            return spec.get("control_mode", "surplus")
         return self._control_mode_overrides.get(
             device_id, DEFAULT_DISCOVERED_CONTROL_MODE)
 
@@ -1101,23 +1109,30 @@ class UnifiedDeviceRegistry:
         # sync has always healed this by construction — it unregisters every
         # ``energy_dashboard_*`` device before re-adding the ones it knows —
         # so this is the same rule on the other side of the seam.
-        derived = {d.device_id for d in self._devices}
-        old_ids = [
-            did for did in list(self._load_manager._devices.keys())
-            if did not in derived
-            # (#436) per-charger EV rows are registered by __init__.py, not here
-            and not did.startswith("load_device_")
-            # (#559 Phase 0) an explicit registration is a user decision, not a
-            # discovery guess — and it never appears in ``derived``
-            and did not in self._service_registrations
-        ]
-        for did in old_ids:
-            del self._load_manager._devices[did]
-            _LOGGER.debug("Removed old device from load manager: %s", did)
+        # (#896) The roster the shedder sees is the roster the card shows.
+        # An explicit ``register_surplus_device`` registration owns its
+        # switch: the ED twin for the same entity is folded into it (as the
+        # card payload already does), and the registration itself gets a
+        # row — below, after the ED loop, so it wins an id collision too.
+        # Before this the roster was the ED list alone: a service-registered
+        # load set to peak_only was shed by NOBODY (the surplus controller
+        # leaves peak_only to the load manager, and the load manager had
+        # never heard of it) and the plan counted its kilowatts as
+        # uncontrolled.
+        service_entities = {
+            spec.get("entity_id")
+            for spec in self._service_registrations.values()
+            if spec.get("entity_id")
+        }
+        written: set = set()
 
         for device in self._devices:
             device_id = device.device_id
             control = device.control
+            if device_id in self._service_registrations:
+                continue  # the registration's own row is written below
+            if device.control_entity and device.control_entity in service_entities:
+                continue  # one switch, one row — the registration's
 
             # Build device info dict compatible with LoadManagementCoordinator
             device_info = {
@@ -1164,6 +1179,25 @@ class UnifiedDeviceRegistry:
                 device_info["switch_entity"] = control.get("entity")
 
             self._load_manager._devices[device_id] = device_info
+            written.add(device_id)
+
+        for did, spec in self._service_registrations.items():
+            self._load_manager._devices[did] = self._service_lm_row(did, spec)
+            written.add(did)
+
+        # Keep exactly two things: what this pass wrote (ED rows and service
+        # registrations) and the per-charger EV rows. Everything else in
+        # LoadManagement's dict is stale — including a row this registry
+        # derived on an EARLIER pass and folded on this one.
+        old_ids = [
+            did for did in list(self._load_manager._devices.keys())
+            if did not in written
+            # (#436) per-charger EV rows are registered by __init__.py, not here
+            and not did.startswith("load_device_")
+        ]
+        for did in old_ids:
+            del self._load_manager._devices[did]
+            _LOGGER.debug("Removed old device from load manager: %s", did)
 
         # (#748) DATA-LAYER charger-duplicate reconcile — the twin of the #700
         # display fold. #700 suppressed the duplicate only in
@@ -1778,6 +1812,40 @@ class UnifiedDeviceRegistry:
         was read directly in three places and the override in none."""
         return self.priority_for(
             device_id, seed=int(spec.get("priority", 5) or 5))
+
+    def _service_lm_row(self, device_id: str, spec: Dict[str, Any]) -> Dict[str, Any]:
+        """(#896) The load-manager row of a service-registered device — the
+        same axes the ED rows carry, read from the same resolvers (mode,
+        priority, rating), so the shedder's roster matches the card's."""
+        entity = spec.get("entity_id") or None
+        live = (
+            self._surplus_controller.get_device(device_id)
+            if self._surplus_controller is not None else None
+        )
+        return {
+            "power_entity": spec.get("power_entity_id"),
+            "energy_entity": spec.get("energy_entity_id"),
+            "switch_entity": entity,
+            "control": {"type": "switch", "entity": entity} if entity else None,
+            "friendly_name": spec.get("name", device_id),
+            "device_type": "individual_device",
+            "description": f"Registered device: {spec.get('name', device_id)}",
+            "source": "service_registration",
+            "power_rating": self._rated_power_for(device_id, spec.get("power_entity_id")),
+            "is_available": True,
+            "priority": self._service_device_priority(device_id, spec),
+            "is_critical": bool(self._critical_overrides.get(device_id, False)),
+            # (#780) an explicit registration IS the control handle.
+            "has_control_handle": entity is not None,
+            "user_hands_off": False,
+            "is_controllable": entity is not None,
+            "is_ev": False,
+            "control_mode": self.control_mode_for(device_id),
+            # (#649) as the ED rows: a live controller object exists. Whether
+            # it sheds the load is the mode's question (surplus → the surplus
+            # controller's; peak_only → this row is the shedder's).
+            "surplus_managed": live is not None,
+        }
 
     def refresh_direct_device_priorities(self) -> None:
         """(#576) Make the drag store authoritative for every surplus device
