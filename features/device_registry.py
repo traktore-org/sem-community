@@ -854,6 +854,17 @@ class UnifiedDeviceRegistry:
         # charger twice.
         charger_entities = self._configured_charger_entities()
 
+        # (#882 follow-up) The wrong-unit repair follows the MAPPING, not the
+        # device. Its clear used to live inside the current-control branch
+        # only, so every other way of reconfiguring the device — removing
+        # the mapping (back to its discovered switch), remapping it as a
+        # switch, switching "controllable" off, service-registering the id —
+        # never reached it, and the persistent repair for an entity SEM no
+        # longer pointed at outlived the mapping (02.09 live proof on the
+        # towel heater). Track who actually reached the current path; every
+        # other device in the roster is cleared after the walk, in one place.
+        reached_current_path: set[str] = set()
+
         for device in self._devices:
             if device.is_ev:
                 continue  # EV charger handled by __init__.py
@@ -936,6 +947,7 @@ class UnifiedDeviceRegistry:
                 self._surplus_controller.register_device(surplus_device)
 
             elif control_type == "current":
+                reached_current_path.add(device.device_id)
                 self._register_current_control(device, control)
 
             elif control_type == "service":
@@ -946,6 +958,17 @@ class UnifiedDeviceRegistry:
                     "Skipping service-based device %s for surplus (EV handled separately)",
                     device.device_id,
                 )
+
+        # (#882 follow-up) see above — the raise/clear on the current path is
+        # _register_current_control's; everything else is by definition no
+        # longer under current control and carries no wrong-unit repair.
+        from ..coordinator.repair_issues import (
+            clear_load_current_control_wrong_unit,
+        )
+        for device in self._devices:
+            if device.is_ev or device.device_id in reached_current_path:
+                continue
+            clear_load_current_control_wrong_unit(self.hass, device.device_id)
 
     def _register_current_control(self, device, control) -> None:
         """Register a current-controlled load — unless its entity is watts.

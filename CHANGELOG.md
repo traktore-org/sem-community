@@ -90,6 +90,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Zone 1 forever, so a battery-less *Min + Solar* install charges the car on
   surplus during the day; and its VPP/night-recorder inputs see "no SOC"
   instead of a 0 % measurement.
+- 🔧 **The "current control on a watt entity" Repair clears when the mapping
+  goes** (#882 follow-up). The Repair says *cleared once the device is
+  reconfigured* — but its clear lived inside the current-control branch
+  only, so removing the mapping (back to the discovered switch), remapping
+  as a switch, or switching *controllable* off left a persistent Repair for
+  an entity SEM no longer pointed at. The roster sync now clears it for
+  every device that is not under current control, in one place.
 - 🔧 **The battery-night backfill button heals its entity id on upgrade**
   (#815 follow-up). `button.sem_backfill_battery_nights` is only honoured at
   first registration; an install that registered the button before that id
