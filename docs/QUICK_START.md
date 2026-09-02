@@ -63,8 +63,9 @@ Click **Submit**.
 | Battery capacity | 10 kWh | Your home battery size |
 | Generate dashboard | ON | Auto-create the SEM dashboard — leave this on |
 
-Click **Submit**. SEM starts at a 5 kW target peak limit; tune it later from
-the Control tab's slider (up to 80 kW, or **Uncapped**) — see
+Click **Submit**. SEM starts at a 5 kW target peak limit with load shedding
+**off**; tune the limit later from the Control tab's slider (up to 80 kW, or
+**Uncapped**) and enable shedding on the Configuration tab — see
 [Load Management Settings](USER_GUIDE.md#load-management-settings).
 
 EV charger configuration is available after install via the **Configuration tab** or **Settings > Devices & Services > Solar Energy Management > Configure**.

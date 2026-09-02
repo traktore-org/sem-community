@@ -230,6 +230,10 @@ read-only by design — SEM can't suppress it), but the cards will load.
 
 **How SEM detects grid direction:** SEM reads the grid power sensor from your HA Energy Dashboard configuration. It then compares the power sensor's sign against the import/export energy counters (also from the Energy Dashboard) to automatically detect the sign convention. This works because the energy counters always increase in the correct direction — if the import counter is growing while the power sensor is positive, SEM knows positive means import and will correct accordingly.
 
+On a solar install a second voter runs first: solar production has no sign ambiguity, so when solar jumps by ≥ 500 W and the meter **answers** in the same cycle (moves at least a quarter of the swing, battery idle), the direction of that answer reveals the convention. A cycle in which the meter did not move is not an observation and casts no vote (2.1, #889): on polled inverters — Huawei modbus in particular — the inverter and meter registers are read seconds apart, so the solar step and the meter's answer often land in *different* 10-s cycles, and a solar sensor that goes `unavailable` reads as 0 W, which looks like a 4 kW swing while the meter holds still. Before #889 every such cycle was a full-weight "normal" vote and four of them locked SEM convention on an HA-convention meter. When no clean co-movement is ever seen, the solar voter simply stays silent and the counter voter above decides.
+
+**If SEM locked the wrong sign before 2.1** (you upgraded from a version that voted on stale cycles): the lock is persisted, so tap **Reset sign detection** once (Control tab → Advanced → Grid Sign). Detection re-runs with the corrected voter; if you had set the **Grid sign flip** switch as a workaround, turn it off afterwards so auto-detection is in charge again.
+
 **Requirements:**
 - HA Energy Dashboard must be configured with grid import AND export energy sensors
 - Both energy sensors must be available (not "unknown" or "unavailable")
@@ -582,6 +586,17 @@ exact residual of the six rows published beside it.
 - The *instantaneous* `sensor.sem_home_consumption_power` is unchanged (see ADR 0004) — only the
   daily energy row moved to the balance.
 
+## The EV paused for "Zone 1 — battery priority" right after a restart
+
+**Fixed in 2.1 (#875).** The battery SOC sensor reports its first value some time after a restart
+(a Huawei LUNA2000 needs up to ~3 minutes). SEM used to steer that window on a 0 % SOC that had
+never been read — the charger card said "Zone 1 (SOC=0% < priority=30%) — battery priority" and the
+car waited on a pack that was actually fine. An unread SOC is now **unknown**, not 0 %: the car charges
+on solar surplus (Zone 2 behaviour), no battery assist is offered, and the battery is protected from
+discharging into the car until the first real reading arrives. Nothing to configure. If you still
+see a Zone 1 reason with `SOC=0%` more than a few minutes after a restart, the SOC sensor itself is
+not reporting — check it under **Settings → Entities**.
+
 ## Charging stopped before my car app showed the target (slow SOC sensors)
 
 **This is intentional (v1.7.6, #708).** Some car integrations (OnStar and similar) poll the
@@ -803,6 +818,31 @@ no device class that means "take exactly 800 W". That is
 being built. In the meantime you can still use the device as an **on/off**
 surplus load by configuring a switch entity instead, which gives you coarse
 self-consumption rather than none.
+
+## The grid peak is driven by a load SEM does not control
+
+SEM raised the Repair *"The grid peak is driven by a load SEM does not
+control"*. It means: the meter is above your target, and even if SEM switched
+off **everything it is allowed to switch off**, the meter would still be above
+the target. The uncontrolled kilowatts named in the Repair are the draw of
+something SEM does not manage — an EV on a charger SEM was not given, an oven,
+a sauna, a heat pump on its own controller.
+
+Shedding the house cannot fix that peak, so SEM sheds nothing while this holds
+(an earlier version kept shedding one circuit after another until the house was
+dark). Your options:
+
+- **Give SEM the load.** If it is an EV charger, add it in *Configure → EV
+  Chargers*; SEM then paces it under the same peak allowance as everything
+  else. If it is a switchable load, add it as a device with a control entity
+  and a mode other than *Off*.
+- **Raise the target** if the ceiling is not really your contract's. The target
+  is your connection ceiling — see [Load Management Settings](USER_GUIDE.md#load-management-settings).
+- **Accept the peak** for loads that must run — the Repair clears by itself the
+  moment the peak becomes reachable again.
+
+Everything SEM *can* shed is listed on the Load Priorities card; a load marked
+*critical* or set to *Off* is never counted, by design.
 
 ## SEM cannot rebuild your battery-night history
 

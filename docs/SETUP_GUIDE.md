@@ -223,7 +223,9 @@ Click **Submit**. SEM starts running immediately. The SEM dashboard appears
 in your sidebar within a few seconds if dashboard generation is enabled.
 
 Every install starts with a 5.0 kW target peak limit — SEM no longer asks for
-your grid ceiling during setup. Tune it afterward from the **Control** tab's
+your grid ceiling during setup. The ceiling only *sizes* what SEM offers (the
+EV charger above all); load **shedding** stays off until you enable it on the
+Configuration tab. Tune it afterward from the **Control** tab's
 Load Management card (drag the slider up to **80 kW**, or all the way to
 **Uncapped** if the connection has no limit worth defending), or type an exact
 kW value on the **Configuration** tab. See

@@ -230,6 +230,7 @@ class TestShedLoopReadsTheRightAxis780:
         }
         shed = []
         lm780._shed_device = AsyncMock(side_effect=lambda d, r: shed.append(d))
+        lm780._last_grid_import_w = 5500.0  # (#896) the plan reads the meter
         await lm780._emergency_load_shedding()
         assert shed == ["shed"]
 

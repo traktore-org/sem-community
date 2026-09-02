@@ -1683,6 +1683,10 @@
     "load_current_control_wrong_unit": {
       "title": "O sarcină este setată pe control de curent, dar entitatea sa este în wați",
       "description": "**{name}** este configurată pentru control de *curent*, dar **{entity_id}** își așteaptă valoarea în **{unit}**.\n\nControlul de curent înseamnă **amperi** — există pentru stațiile de încărcare, cărora li se impune un curent de aproximativ 6–32 A. A scrie un surplus în amperi într-o entitate care așteaptă wați nu poate însemna ceea ce intenționați, așa că SEM nu comandă acest dispozitiv în loc să scrie un număr în unitatea greșită. Anterior îl înregistra și nu îi scria niciodată — apărea printre stațiile dumneavoastră cu surplusul blocat la 0 W.\n\n**Dacă dispozitivul chiar este comandat în curent**, indicați entitatea sa în amperi.\n\n**Dacă este o sarcină cu putere variabilă** — AC-THOR, rezistență — SEM nu o poate modula încă (#880). Între timp folosiți-o ca sarcină **pornit/oprit** printr-o entitate switch."
+    },
+    "load_shed_futile": {
+      "title": "Vârful de rețea este cauzat de un consumator pe care SEM nu îl controlează",
+      "description": "Contorul arată **{grid_import_kw} kW** față de o țintă de **{target_kw} kW** — și chiar dacă tot ce poate SEM să oprească ar fi deja oprit, ar rămâne **{uncontrolled_kw} kW**. Acel consum aparține unui lucru pe care SEM nu îl gestionează: un vehicul electric la un încărcător pe care SEM nu îl cunoaște, un cuptor, o pompă de căldură cu propriul controler.\n\nDeconectarea casei nu poate rezolva acest vârf, așa că SEM nu deconectează **nimic** cât timp situația persistă (o versiune anterioară oprea circuit după circuit până când casa rămânea în întuneric).\n\n**Ce e de făcut:** dați consumatorul în grija SEM (adăugați încărcătorul la *Încărcătoare VE*, sau dispozitivul cu o entitate de control), ridicați ținta dacă nu este cu adevărat plafonul contractului, sau acceptați vârful pentru un consumator care trebuie să funcționeze. Această problemă dispare singură de îndată ce vârful redevine atingibil."
     }
   },
   "selector": {

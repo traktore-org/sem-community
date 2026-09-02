@@ -13,69 +13,117 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🛡️ **A first install no longer sheds house circuits it was never told to
+  defend** (#895, #897 — forum report: a Span panel and a backup battery
+  switched off circuit by circuit, HA's own supply included). Two defects.
+  The #805 "monitor-only until you say otherwise" default reached the
+  surplus side but not the shedder: three readers each carried their own
+  `peak_only` literal, so emergency shedding still received every discovered
+  device as fair game. One resolver now answers all three, and a source
+  ratchet keeps the literals out. And load management itself was **on** by
+  default at a 5 kW ceiling nobody chose, while the User Guide said `false`
+  and the arm switch was hidden behind *Advanced* — the options wizard
+  re-armed it on any unrelated save. It is now **off on a fresh install**
+  (existing installs keep their own value), the enable toggle and the
+  target limit are in the default Config view side by side, and a Setup
+  overview chip routes to a section the default view actually shows.
+
+- 🛡️ **Load shedding is bounded by what the meter says and by what SEM
+  controls** (#896 — the same forum incident: an EV SEM did not manage held
+  the 15-minute average over the emergency level, and emergency shedding
+  walked one circuit after another until the house was dark). The average
+  decides the *state* — that is what a demand tariff bills — but each shed
+  is now judged against the **live meter**: no switch can move a rolling
+  average for minutes, so judging the next shed against it meant shedding
+  every cycle. Under the aim SEM holds; above it, Emergency sheds exactly
+  what the need takes and Shedding one load per pass. Before the first
+  switch SEM adds up everything it *may* shed; if the meter minus all of it
+  would still sit above the target, the peak belongs to a load SEM does not
+  control — it sheds **nothing** and files a Repair naming the uncontrolled
+  kilowatts (cleared the first pass the peak is reachable again). A
+  surplus-mode load counts as SEM's in that sum — the surplus controller
+  switches it off on the same peak state — so the Repair never names
+  kilowatts SEM is shedding through its other engine. A shed is
+  never silent any more: a persistent notification per episode, dismissed
+  when the last load is back. And what SEM switched off SEM now restores —
+  the shed list had evicted every SEM-shed load on the next cycle as
+  "finished on its own" (#40), so the restore pass never had anything to
+  restore. The dead `DEFAULT_CRITICAL_DEVICE_PROTECTION` is gone; *critical*
+  on the Load Priorities card is the one protection, and the only one there
+  ever was. The shedder's estimate of what a switch would free is now the
+  rating the Control card shows (an energy-only load — a Shelly with a kWh
+  counter and no power entity — read 0 W and had silently fallen off the
+  shed list); a measured 0 W stays 0 W. In observer mode the verdict reads
+  `observer:withheld:N` instead of a shed delay that was never the reason.
+  And the shed roster is the roster the card shows: a device added with
+  `register_surplus_device` and set to *Peak only* was shed by nobody — the
+  surplus controller leaves peak-only loads to load management, and load
+  management had been built from the Energy Dashboard list alone — so its
+  toggle was a promise nothing kept and its kilowatts counted as
+  uncontrolled. Finally, the verdict is somewhere a user can read it:
+  `shed_path`, `shed_need_w`, `shed_sheddable_w`, `shed_futile` and
+  `uncontrolled_w` are attributes of `sensor.sem_load_management_status`
+  and in the Diagnose modal — and so, for the first time, are #433's
+  `state_decision_path` / `process_path` / `action_path` / `last_error`,
+  which the load manager had reported since 1.5 and the coordinator's
+  hand-picked copy had dropped at the same hop that lost the device
+  table in #657. A test now pins that every key the load manager reports
+  is published or listed with the reason it is not.
+
+- 🔧 **Dragging a service-registered device in the priority list now
+  moves it** (#890). A load added with `register_surplus_device` took its
+  slot from the stored spec in three places — the live object at
+  registration and at boot, and the card row — while the per-cycle refresh
+  carved it out with a comment saying it was covered elsewhere. The drag
+  persisted an override nothing read: `update_device_priorities` answered
+  200, the log said "Updated priorities", and the allocator kept the old
+  order for good. One resolver now seeds every reader from the spec and
+  lets the drag outrank it, the refresh covers service devices like every
+  other direct device, and the drag applies the moment it is stored rather
+  than through an Energy-Dashboard rebuild that returns early on an install
+  without one.
+
+
+- 🔧 **The solar grid-sign voter only counts cycles in which the meter
+  answered** (#889). On a polled inverter (Huawei modbus on the test rig) the
+  inverter and meter registers land in different 10-s cycles, and a solar
+  `unavailable` reads as 0 W — both look like a big solar swing with the grid
+  standing still. Each such cycle was a full-weight "normal" vote; four of
+  them locked SEM convention on an HA-convention meter at confidence 1.00,
+  and the counter voter never got a turn. A cycle with a dark steering input
+  is now neither a sample nor a baseline, and a swing the meter did not
+  answer (moved less than a quarter of it) casts nothing. Installs that
+  locked the wrong sign on a stale cycle: tap **Reset sign detection** once.
+
+- 🔋 **A battery SOC that was never read is unknown, not 0 %** (#875). Between a
+  restart and the SOC sensor's first report (up to ~3 min on a Huawei) the
+  hold that carries the SOC across sensor gaps had nothing to hold and
+  published 0.0 — the charger path steered those cycles as Zone 1, "battery
+  priority, EV blocked", on an empty pack that was never measured. The hold
+  now has an honest never-read state (`battery_soc_known`) and the charger
+  view carries it: an unknown battery is neither a source nor a blocker —
+  the car charges on surplus (Zone 2), gets no assist, reclaims nothing, and
+  the discharge clamp protects the pack — and every reason that prints the
+  SOC (`Zone 2 (SOC=unknown)`, `SoC unknown < buffer`) says so instead of
+  quoting the 0 % that was never measured. A gap AFTER the first read keeps
+  the held value, as before. **Behaviour change:** an install with no SOC
+  sensor at all is now "unknown" on both config paths — it no longer sits in
+  Zone 1 forever, so a battery-less *Min + Solar* install charges the car on
+  surplus during the day; and its VPP/night-recorder inputs see "no SOC"
+  instead of a 0 % measurement.
+- 🔧 **The "current control on a watt entity" Repair clears when the mapping
+  goes** (#882 follow-up). The Repair says *cleared once the device is
+  reconfigured* — but its clear lived inside the current-control branch
+  only, so removing the mapping (back to the discovered switch), remapping
+  as a switch, or switching *controllable* off left a persistent Repair for
+  an entity SEM no longer pointed at. The roster sync now clears it for
+  every device that is not under current control, in one place.
 - 🔧 **The battery-night backfill button heals its entity id on upgrade**
   (#815 follow-up). `button.sem_backfill_battery_nights` is only honoured at
   first registration; an install that registered the button before that id
   existed kept the derived `button.<device>_rebuild_battery_night_history`
   and the stable id was "Entity not found". The button platform now runs the
   same registry repair switch/number/sensor already do.
-
-# [2.1.0-beta.5] — 01.09.2026
-
-- ☁️ **A passing cloud no longer hard-stops a solar charging session whenever
-  electricity isn't cheap** (#893, reported by @DigitalOptics on 2.0.0). The
-  anti-flap bridge — the 3-minute hold that carries a session through a solar
-  dip instead of cycling the contactor — was being cancelled by the tariff:
-  any daytime idle during a not-cheap price window was classed as a
-  structural stop, in **every** mode. For most tariffs that is most of the
-  day, so each cloud stopped the session outright and the charger switched
-  with the weather. The tariff veto now applies only to the mode that
-  actually prices its grid use (*Solar + cheapest hours*); for solar modes
-  the hold is funded by your own surplus and your battery above its buffer,
-  and the price is nobody's business. The one case the old rule genuinely
-  protected — a hold that could only be grid-fed — is still refused, now
-  also when the battery is *forbidden* from assisting rather than merely
-  below its buffer.
-
-- 🔁 **A fussy car's start-current floor is now remembered — the all-night
-  contactor churn ends** (#893). Some cars latch at a higher current than the
-  minimum but refuse the minimum itself (live on the test rig 31.08: drew
-  3.1 kW at 8 A, 0.13 kW at 6 A). The start ladder found 8 A, then settled
-  back to the 6 A budget, the car dropped, and the ladder started over —
-  a contactor click every ~3 minutes, all night. SEM now learns the
-  demonstrated latch floor for the session: a budget below it holds off
-  quietly instead of re-laddering, the next start begins at the floor rather
-  than re-poking a current the car already refused, a draw at lower amps
-  decays the floor (appetite changes are honoured), and unplugging clears
-  it. An active draw is never interrupted by the floor guard.
-
-- 🔌 **The EV charging stop was sent twice** (#894, reported by @DigitalOptics
-  on 2.0.0). With no start/stop entity configured, SEM stops the charger by
-  writing 0 A — but the generic adapter wrote that 0 A directly *and* then
-  called the session stop, which writes 0 A again as its no-mechanism
-  fallback, so a single stop hit the wire twice within milliseconds. On
-  installs where the stop is realised by an automation watching for the 0 A
-  write, that automation fired twice and produced a burst of SEM warnings. The
-  stop is now issued exactly once — the session stop owns it, matching how KEBA
-  has always worked. Root-caused as a recurring class (a wrapper that actuates
-  *and* delegates to a layer that actuates the same command again) and guarded.
-
-# [2.1.0-beta.4] — 01.09.2026
-
-- 🔌 **JuiceBox was driven through its *offline* current limit, not the live
-  one** (#886, reported by @Azlinon on 2.1.0-beta.3). Auto-detection bound
-  `number.juicebox_max_current_offline_wanted` as the current control — the
-  register the charger honours only when it has lost its server, and a
-  limited-write one at that — where the *online* twin belongs. The matcher took
-  the last `number.juicebox*` it saw, so entity ordering silently decided which
-  connection mode SEM commanded. SEM now refuses any `*_offline_*` register as
-  a charger's current control across every brand, swapping to the online twin;
-  installs that already adopted the offline binding self-heal to the online one
-  on upgrade. Root-caused as a recurring class (a mode-qualified fallback bound
-  as the live control surface) and guarded at the single discovery choke point,
-  so the next brand cannot repeat it.
-
-# [2.1.0-beta.3] — 31.08.2026
 
 - 🔋 **The car can no longer drain the battery past what the house needs
   tonight** (#878). Letting the battery help charge the car is a permission
@@ -151,6 +199,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   entering, so the two never compete for the same energy. The loads also now
   respect the #878 dynamic floor the car has honoured since it shipped; a
   floor kept by one consumer and ignored by the other was not a floor.
+
+
+# [2.1.0-beta.3] — 31.08.2026
 
 - ☀️ **"This provider does not publish this horizon" was told to everyone**
   (#884, reported by @ArneGollin1987 on beta.1). The battery card's

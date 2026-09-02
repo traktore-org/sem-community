@@ -36,7 +36,11 @@ def _set(name):
 
 #: The ceiling. Raising either number is a decision, not a detail.
 MAX_SECTIONS = 4
-MAX_CONTROLS = 5
+#: 5 → 7 (#897): the load-management arm switch and its ceiling. The shedder
+#: switches off house circuits, and hiding its on/off behind Advanced is how
+#: a first install shed a Span panel circuit by circuit (forum #30). A
+#: control that can turn the lights off is not one to bury.
+MAX_CONTROLS = 7
 
 
 def test_the_default_view_shows_at_most_four_sections():

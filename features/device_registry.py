@@ -495,6 +495,8 @@ class UnifiedDeviceRegistry:
         from ..devices.base import DeviceControlMode
         for device_id, spec in self._service_registrations.items():
             device = surplus_device_from_spec(self.hass, device_id, spec)
+            # (#890) the spec is the SEED; a persisted drag outranks it.
+            device.priority = self._service_device_priority(device_id, spec)
             try:
                 device.control_mode = DeviceControlMode(
                     spec.get("control_mode", "surplus")
@@ -574,6 +576,9 @@ class UnifiedDeviceRegistry:
         # under the same id.
         from ..devices.base import DeviceControlMode
         device = surplus_device_from_spec(self.hass, device_id, stored)
+        # (#890) A re-registration must not undo the user's drag: the spec
+        # priority is the seed, the override store is the slot.
+        device.priority = self._service_device_priority(device_id, stored)
         try:
             device.control_mode = DeviceControlMode(stored["control_mode"])
         except ValueError:
@@ -592,7 +597,8 @@ class UnifiedDeviceRegistry:
             "device_id": device_id,
             "name": stored["name"],
             "entity_id": stored["entity_id"],
-            "priority": stored["priority"],
+            # (#890) the EFFECTIVE slot — what the allocator will use
+            "priority": device.priority,
             "rated_power": stored["rated_power"],
             "control_mode": stored["control_mode"],
             "device_type": stored["device_type"],
@@ -848,6 +854,17 @@ class UnifiedDeviceRegistry:
         # charger twice.
         charger_entities = self._configured_charger_entities()
 
+        # (#882 follow-up) The wrong-unit repair follows the MAPPING, not the
+        # device. Its clear used to live inside the current-control branch
+        # only, so every other way of reconfiguring the device — removing
+        # the mapping (back to its discovered switch), remapping it as a
+        # switch, switching "controllable" off, service-registering the id —
+        # never reached it, and the persistent repair for an entity SEM no
+        # longer pointed at outlived the mapping (02.09 live proof on the
+        # towel heater). Track who actually reached the current path; every
+        # other device in the roster is cleared after the walk, in one place.
+        reached_current_path: set[str] = set()
+
         for device in self._devices:
             if device.is_ev:
                 continue  # EV charger handled by __init__.py
@@ -911,8 +928,7 @@ class UnifiedDeviceRegistry:
                 # (#805) No explicit choice → monitor only. See
                 # DEFAULT_DISCOVERED_CONTROL_MODE: SEM does not actuate what
                 # it found by itself until the user opts it in.
-                mode_str = self._control_mode_overrides.get(
-                    device.device_id, DEFAULT_DISCOVERED_CONTROL_MODE)
+                mode_str = self.control_mode_for(device.device_id)
                 try:
                     surplus_device.control_mode = DeviceControlMode(mode_str)
                 except ValueError:
@@ -931,6 +947,7 @@ class UnifiedDeviceRegistry:
                 self._surplus_controller.register_device(surplus_device)
 
             elif control_type == "current":
+                reached_current_path.add(device.device_id)
                 self._register_current_control(device, control)
 
             elif control_type == "service":
@@ -941,6 +958,17 @@ class UnifiedDeviceRegistry:
                     "Skipping service-based device %s for surplus (EV handled separately)",
                     device.device_id,
                 )
+
+        # (#882 follow-up) see above — the raise/clear on the current path is
+        # _register_current_control's; everything else is by definition no
+        # longer under current control and carries no wrong-unit repair.
+        from ..coordinator.repair_issues import (
+            clear_load_current_control_wrong_unit,
+        )
+        for device in self._devices:
+            if device.is_ev or device.device_id in reached_current_path:
+                continue
+            clear_load_current_control_wrong_unit(self.hass, device.device_id)
 
     def _register_current_control(self, device, control) -> None:
         """Register a current-controlled load — unless its entity is watts.
@@ -1027,6 +1055,28 @@ class UnifiedDeviceRegistry:
         )
         self._surplus_controller.register_device(surplus_device)
 
+    def control_mode_for(self, device_id: str) -> str:
+        """What a device may do: the user's choice, else the discovery default.
+
+        (#895) The ONE answer for every reader — the surplus sync, the load-
+        manager sync and the card payload. #805 lowered the default to
+        monitor-only, but each reader carried its own ``"peak_only"``
+        literal, so the change reached the surplus side and missed the
+        shedder: a first install still fed every discovered device to
+        emergency shedding (forum #30 — a Span panel and a backup battery
+        switched off circuit by circuit, HA's own supply included).
+        """
+        # (#896) A service registration's mode lives in its spec — that is
+        # what the live object is built from at boot and what the card row
+        # shows. The override map mirrors it from the same writers; a legacy
+        # spec that predates the mirror would otherwise read as "off" here
+        # while running as "surplus" there.
+        spec = self._service_registrations.get(device_id)
+        if spec is not None:
+            return spec.get("control_mode", "surplus")
+        return self._control_mode_overrides.get(
+            device_id, DEFAULT_DISCOVERED_CONTROL_MODE)
+
     def _sync_to_load_manager(self) -> bool:
         """Populate LoadManagement._devices dict from registry devices.
 
@@ -1059,23 +1109,30 @@ class UnifiedDeviceRegistry:
         # sync has always healed this by construction — it unregisters every
         # ``energy_dashboard_*`` device before re-adding the ones it knows —
         # so this is the same rule on the other side of the seam.
-        derived = {d.device_id for d in self._devices}
-        old_ids = [
-            did for did in list(self._load_manager._devices.keys())
-            if did not in derived
-            # (#436) per-charger EV rows are registered by __init__.py, not here
-            and not did.startswith("load_device_")
-            # (#559 Phase 0) an explicit registration is a user decision, not a
-            # discovery guess — and it never appears in ``derived``
-            and did not in self._service_registrations
-        ]
-        for did in old_ids:
-            del self._load_manager._devices[did]
-            _LOGGER.debug("Removed old device from load manager: %s", did)
+        # (#896) The roster the shedder sees is the roster the card shows.
+        # An explicit ``register_surplus_device`` registration owns its
+        # switch: the ED twin for the same entity is folded into it (as the
+        # card payload already does), and the registration itself gets a
+        # row — below, after the ED loop, so it wins an id collision too.
+        # Before this the roster was the ED list alone: a service-registered
+        # load set to peak_only was shed by NOBODY (the surplus controller
+        # leaves peak_only to the load manager, and the load manager had
+        # never heard of it) and the plan counted its kilowatts as
+        # uncontrolled.
+        service_entities = {
+            spec.get("entity_id")
+            for spec in self._service_registrations.values()
+            if spec.get("entity_id")
+        }
+        written: set = set()
 
         for device in self._devices:
             device_id = device.device_id
             control = device.control
+            if device_id in self._service_registrations:
+                continue  # the registration's own row is written below
+            if device.control_entity and device.control_entity in service_entities:
+                continue  # one switch, one row — the registration's
 
             # Build device info dict compatible with LoadManagementCoordinator
             device_info = {
@@ -1087,7 +1144,12 @@ class UnifiedDeviceRegistry:
                 "device_type": "ev_charger" if device.is_ev else "individual_device",
                 "description": f"Energy Dashboard: {device.name}",
                 "source": "unified_registry",
-                "power_rating": self._get_power_rating(device.power_sensor),
+                # (#896) WATTS, and the RATING — the same accessor the Control
+                # card reads, so the shedder's estimate of what a switch
+                # would free is the number the user sees. The live sensor
+                # tick that sat here read 0 W for a load that is off and 0 W
+                # forever for an energy-only load.
+                "power_rating": self._rated_power_for(device_id, device.power_sensor),
                 "is_available": True,
                 "priority": device.priority,
                 "is_critical": device.is_critical,
@@ -1098,7 +1160,9 @@ class UnifiedDeviceRegistry:
                 "user_hands_off": device.user_hands_off,
                 "is_controllable": device.is_controllable,
                 "is_ev": device.is_ev,
-                "control_mode": self._control_mode_overrides.get(device.device_id, "peak_only"),
+                # (#895) the same default the surplus side applies — the
+                # shedder used to carry its own "peak_only" literal here.
+                "control_mode": self.control_mode_for(device.device_id),
                 # (#649) Is this device driven by the surplus controller? Only
                 # then may load_management stand down from shedding it — a
                 # surplus-mode device with no live controller object (e.g. a
@@ -1115,6 +1179,25 @@ class UnifiedDeviceRegistry:
                 device_info["switch_entity"] = control.get("entity")
 
             self._load_manager._devices[device_id] = device_info
+            written.add(device_id)
+
+        for did, spec in self._service_registrations.items():
+            self._load_manager._devices[did] = self._service_lm_row(did, spec)
+            written.add(did)
+
+        # Keep exactly two things: what this pass wrote (ED rows and service
+        # registrations) and the per-charger EV rows. Everything else in
+        # LoadManagement's dict is stale — including a row this registry
+        # derived on an EARLIER pass and folded on this one.
+        old_ids = [
+            did for did in list(self._load_manager._devices.keys())
+            if did not in written
+            # (#436) per-charger EV rows are registered by __init__.py, not here
+            and not did.startswith("load_device_")
+        ]
+        for did in old_ids:
+            del self._load_manager._devices[did]
+            _LOGGER.debug("Removed old device from load manager: %s", did)
 
         # (#748) DATA-LAYER charger-duplicate reconcile — the twin of the #700
         # display fold. #700 suppressed the duplicate only in
@@ -1495,7 +1578,7 @@ class UnifiedDeviceRegistry:
                 "device_type": "ev_charger" if device.is_ev else "individual_device",
                 "has_manual_mapping": device.has_manual_mapping,
                 "control": device.control,
-                "control_mode": self._control_mode_overrides.get(did, "peak_only"),
+                "control_mode": self.control_mode_for(did),
                 # (#122/#576) the "Requires" link — read from the persistent
                 # store so it both survives rebuilds AND shows on the card
                 # (pre-fix it was never emitted, so the card couldn't display it).
@@ -1518,7 +1601,8 @@ class UnifiedDeviceRegistry:
             current_power = round(live.get_current_consumption()) if is_on and live else 0.0
             result[did] = {
                 "name": spec.get("name", did),
-                "priority": spec.get("priority", 5),
+                # (#890) the one axis, not the spec — a drag must show here
+                "priority": self._service_device_priority(did, spec),
                 # (#780) an explicit registration IS the control handle.
                 "has_control_handle": True,
                 "user_hands_off": False,
@@ -1718,16 +1802,61 @@ class UnifiedDeviceRegistry:
             **self._goal_payload(did),
         }
 
+    def _service_device_priority(self, device_id: str, spec: Dict[str, Any]) -> int:
+        """(#890) The slot of a service-registered device: the one axis,
+        seeded by the priority the ``register_surplus_device`` call gave.
+
+        Every reader of a service device's priority — the live object at
+        registration and at boot, the card payload — goes through here, so
+        a drag override reaches all of them or none. Before this the spec
+        was read directly in three places and the override in none."""
+        return self.priority_for(
+            device_id, seed=int(spec.get("priority", 5) or 5))
+
+    def _service_lm_row(self, device_id: str, spec: Dict[str, Any]) -> Dict[str, Any]:
+        """(#896) The load-manager row of a service-registered device — the
+        same axes the ED rows carry, read from the same resolvers (mode,
+        priority, rating), so the shedder's roster matches the card's."""
+        entity = spec.get("entity_id") or None
+        live = (
+            self._surplus_controller.get_device(device_id)
+            if self._surplus_controller is not None else None
+        )
+        return {
+            "power_entity": spec.get("power_entity_id"),
+            "energy_entity": spec.get("energy_entity_id"),
+            "switch_entity": entity,
+            "control": {"type": "switch", "entity": entity} if entity else None,
+            "friendly_name": spec.get("name", device_id),
+            "device_type": "individual_device",
+            "description": f"Registered device: {spec.get('name', device_id)}",
+            "source": "service_registration",
+            "power_rating": self._rated_power_for(device_id, spec.get("power_entity_id")),
+            "is_available": True,
+            "priority": self._service_device_priority(device_id, spec),
+            "is_critical": bool(self._critical_overrides.get(device_id, False)),
+            # (#780) an explicit registration IS the control handle.
+            "has_control_handle": entity is not None,
+            "user_hands_off": False,
+            "is_controllable": entity is not None,
+            "is_ev": False,
+            "control_mode": self.control_mode_for(device_id),
+            # (#649) as the ED rows: a live controller object exists. Whether
+            # it sheds the load is the mode's question (surplus → the surplus
+            # controller's; peak_only → this row is the shedder's).
+            "surplus_managed": live is not None,
+        }
+
     def refresh_direct_device_priorities(self) -> None:
-        """(#576) Make the drag store authoritative for directly-registered
-        surplus devices (heat pump / hot water / climate) too — mirrors the EV
-        charger refresh. ED / service devices already resolve via the registry
-        sync; this covers the ones registered straight into the controller so
-        their list position governs the walk (not just the card row)."""
+        """(#576) Make the drag store authoritative for every surplus device
+        the ED rebuild does not re-create — heat pump / hot water / climate
+        registered straight into the controller AND (#890) service-registered
+        devices, which the sync deliberately leaves alone (ownership by
+        construction, #559) and which therefore had no other path from the
+        override store to the live object. ED rows get theirs from the
+        rebuild, chargers from the coordinator's own refresh."""
         for did, dev in getattr(self._surplus_controller, "_devices", {}).items():
             if did.startswith("energy_dashboard_") or getattr(dev, "is_ev", False):
-                continue
-            if did in self._service_registrations:
                 continue
             dev.priority = self.priority_for(
                 did, seed=int(getattr(dev, "priority", 5) or 5))
@@ -2168,6 +2297,12 @@ class UnifiedDeviceRegistry:
                 self._priority_overrides[device_id] = int(priority)
 
         await self._save_storage()
+        # (#890) Apply to the live objects the ED rebuild below does not
+        # re-create (direct + service-registered devices) — and apply NOW,
+        # not on the next cycle: the rebuild returns early on an install
+        # without an Energy Dashboard, and the service response is read as
+        # "it took".
+        self.refresh_direct_device_priorities()
         await self.async_refresh_devices()
 
     async def update_device_control_mode(self, device_id: str, mode: str) -> None:
@@ -2535,7 +2670,10 @@ class UnifiedDeviceRegistry:
         power sensor, which reads 0 W whenever the load is off. Falls back to the
         live sensor reading when no device is registered (or its rating is 0).
         """
-        live = self._surplus_controller.get_device(device_id)
+        # (#896) the LM sync reads this too, and it already tolerates a
+        # registry with no surplus controller — so must the accessor.
+        sc = self._surplus_controller
+        live = sc.get_device(device_id) if sc is not None else None
         rated = float(getattr(live, "rated_power", 0) or 0) if live else 0.0
         if rated > 0:
             return rated
