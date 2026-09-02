@@ -15,6 +15,8 @@ pattern.
 from .base import BatteryControlAdapter
 from .deye import DeyeBatteryAdapter, DeyeCapability, DeyeControlSnapshot
 from .generic import GenericBatteryAdapter
+from typing import Optional
+
 from .goodwe import GoodWeBatteryAdapter
 from .huawei import HuaweiBatteryAdapter
 
@@ -67,6 +69,31 @@ def adapter_for(hass, config: dict) -> BatteryControlAdapter:
     except (AttributeError, TypeError):
         pass
     return GenericBatteryAdapter(hass, config)
+
+
+def pinned_generic_brand(hass, config: dict) -> "Optional[str]":
+    """(#900) The brand a ``generic`` install would auto-detect to — or None.
+
+    The options wizard used to offer generic / deye only and default to
+    generic, so a Huawei or GoodWe install that walked that page once came
+    out explicitly pinned to the generic adapter: no forcible charge, no
+    #538 idempotent writes. The stored value is indistinguishable from a
+    real choice, so the factory keeps honouring it; this names the case so
+    a Repair can tell the user. A generic battery with its OWN control
+    surface (a Sessy beside a Huawei fleet, #531) is a real choice and is
+    not named.
+    """
+    platform = (config.get("battery_charge_platform") or "auto").lower()
+    if platform != "generic":
+        return None
+    if (config.get("battery_strategy_control_entity")
+            or config.get("battery_setpoint_bidirectional")):
+        return None
+    if _integration_loaded(hass, "huawei_solar"):
+        return "huawei"
+    if _integration_loaded(hass, "goodwe"):
+        return "goodwe"
+    return None
 
 
 def _integration_loaded(hass, domain: str) -> bool:

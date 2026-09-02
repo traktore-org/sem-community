@@ -1687,6 +1687,10 @@
     "load_shed_futile": {
       "title": "The grid peak is driven by a load SEM does not control",
       "description": "The meter reads **{grid_import_kw} kW** against a **{target_kw} kW** target — and even with everything SEM may switch off already off, **{uncontrolled_kw} kW** would remain. That draw belongs to something SEM does not manage: an EV on a charger SEM was not given, an oven, a heat pump on its own controller.\n\nShedding the house cannot fix this peak, so SEM sheds **nothing** while it holds (an earlier version kept switching off one circuit after another until the house was dark).\n\n**What to do:** give SEM the load (add the charger under *EV Chargers*, or the device with a control entity), raise the target if it is not really your contract's ceiling, or accept the peak for a load that must run. This issue clears by itself the moment the peak becomes reachable again."
+    },
+    "battery_platform_pinned_generic": {
+      "title": "Battery platform pinned to Generic on a {brand} install",
+      "description": "SEM's battery platform is set to **Generic / other**, but the {brand} integration is loaded. Earlier versions of the options wizard offered only Generic and Deye and defaulted to Generic, so walking through that page once demoted a {brand} install to the generic adapter — no forcible charge, no idempotent register writes. Open **Settings → Integrations → SEM → Configure → Battery scheduler** and set **Battery charge platform** to **Auto-detect**. If Generic is a deliberate choice (a battery with its own control entities), set that entity and this notice goes away."
     }
   },
   "selector": {

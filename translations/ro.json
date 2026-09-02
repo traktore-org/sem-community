@@ -1687,6 +1687,10 @@
     "load_shed_futile": {
       "title": "Vârful de rețea este cauzat de un consumator pe care SEM nu îl controlează",
       "description": "Contorul arată **{grid_import_kw} kW** față de o țintă de **{target_kw} kW** — și chiar dacă tot ce poate SEM să oprească ar fi deja oprit, ar rămâne **{uncontrolled_kw} kW**. Acel consum aparține unui lucru pe care SEM nu îl gestionează: un vehicul electric la un încărcător pe care SEM nu îl cunoaște, un cuptor, o pompă de căldură cu propriul controler.\n\nDeconectarea casei nu poate rezolva acest vârf, așa că SEM nu deconectează **nimic** cât timp situația persistă (o versiune anterioară oprea circuit după circuit până când casa rămânea în întuneric).\n\n**Ce e de făcut:** dați consumatorul în grija SEM (adăugați încărcătorul la *Încărcătoare VE*, sau dispozitivul cu o entitate de control), ridicați ținta dacă nu este cu adevărat plafonul contractului, sau acceptați vârful pentru un consumator care trebuie să funcționeze. Această problemă dispare singură de îndată ce vârful redevine atingibil."
+    },
+    "battery_platform_pinned_generic": {
+      "title": "Battery platform pinned to Generic on a {brand} install",
+      "description": "SEM's battery platform is set to **Generic / other**, but the {brand} integration is loaded. Earlier versions of the options wizard offered only Generic and Deye and defaulted to Generic, so walking through that page once demoted a {brand} install to the generic adapter — no forcible charge, no idempotent register writes. Open **Settings → Integrations → SEM → Configure → Battery scheduler** and set **Battery charge platform** to **Auto-detect**. If Generic is a deliberate choice (a battery with its own control entities), set that entity and this notice goes away."
     }
   },
   "selector": {

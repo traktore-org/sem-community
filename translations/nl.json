@@ -1687,6 +1687,10 @@
     "load_shed_futile": {
       "title": "De netpiek wordt veroorzaakt door een verbruiker die SEM niet regelt",
       "description": "De meter staat op **{grid_import_kw} kW** tegenover een doel van **{target_kw} kW** — en zelfs als alles wat SEM mag uitschakelen al uit zou zijn, blijft er **{uncontrolled_kw} kW** over. Dat verbruik hoort bij iets dat SEM niet beheert: een EV aan een lader die SEM niet kent, een oven, een warmtepomp met eigen regeling.\n\nHet afschakelen van het huis kan deze piek niet oplossen, dus SEM schakelt **niets** af zolang dit geldt (een eerdere versie bleef groep na groep uitschakelen tot het huis donker was).\n\n**Wat te doen:** geef SEM de verbruiker (voeg de lader toe onder *EV-laders*, of het apparaat met een bedieningsentiteit), verhoog het doel als het niet echt de grens van je contract is, of accepteer de piek voor een verbruiker die moet draaien. Deze melding verdwijnt vanzelf zodra de piek weer haalbaar is."
+    },
+    "battery_platform_pinned_generic": {
+      "title": "Battery platform pinned to Generic on a {brand} install",
+      "description": "SEM's battery platform is set to **Generic / other**, but the {brand} integration is loaded. Earlier versions of the options wizard offered only Generic and Deye and defaulted to Generic, so walking through that page once demoted a {brand} install to the generic adapter — no forcible charge, no idempotent register writes. Open **Settings → Integrations → SEM → Configure → Battery scheduler** and set **Battery charge platform** to **Auto-detect**. If Generic is a deliberate choice (a battery with its own control entities), set that entity and this notice goes away."
     }
   },
   "selector": {

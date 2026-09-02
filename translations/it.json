@@ -1687,6 +1687,10 @@
     "load_shed_futile": {
       "title": "Il picco di rete è causato da un carico che SEM non controlla",
       "description": "Il contatore segna **{grid_import_kw} kW** contro un obiettivo di **{target_kw} kW** — e anche con tutto ciò che SEM può spegnere già spento, resterebbero **{uncontrolled_kw} kW**. Quel consumo appartiene a qualcosa che SEM non gestisce: un'auto elettrica su una colonnina che SEM non conosce, un forno, una pompa di calore con il proprio controller.\n\nDistaccare la casa non può risolvere questo picco, quindi SEM non distacca **nulla** finché la situazione persiste (una versione precedente continuava a spegnere un circuito dopo l'altro fino a lasciare la casa al buio).\n\n**Cosa fare:** affidare il carico a SEM (aggiungere la colonnina in *Caricatori EV*, o il dispositivo con un'entità di controllo), alzare l'obiettivo se non è davvero il limite del contratto, oppure accettare il picco per un carico che deve funzionare. Questo avviso si chiude da solo appena il picco torna raggiungibile."
+    },
+    "battery_platform_pinned_generic": {
+      "title": "Battery platform pinned to Generic on a {brand} install",
+      "description": "SEM's battery platform is set to **Generic / other**, but the {brand} integration is loaded. Earlier versions of the options wizard offered only Generic and Deye and defaulted to Generic, so walking through that page once demoted a {brand} install to the generic adapter — no forcible charge, no idempotent register writes. Open **Settings → Integrations → SEM → Configure → Battery scheduler** and set **Battery charge platform** to **Auto-detect**. If Generic is a deliberate choice (a battery with its own control entities), set that entity and this notice goes away."
     }
   },
   "selector": {

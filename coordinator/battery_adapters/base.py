@@ -61,6 +61,12 @@ class BatteryControlAdapter(ABC):
         SEM may ever WRITE a policy selector — that boundary is the user's."""
         return None
 
+    @property
+    def last_discharge_limit_w(self) -> float:
+        """(#900) The discharge limit this adapter last commanded, -1 when
+        none yet — the anchor the actuator quantises the next one against."""
+        return float(getattr(self, "_last_discharge_limit_w", -1.0))
+
     def __init__(self, hass, config: dict) -> None:
         self._hass = hass
         self._config = config

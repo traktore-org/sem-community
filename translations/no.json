@@ -1687,6 +1687,10 @@
     "load_shed_futile": {
       "title": "Nettoppen skyldes en last som SEM ikke styrer",
       "description": "Måleren viser **{grid_import_kw} kW** mot et mål på **{target_kw} kW** — og selv om alt SEM kan slå av allerede var av, ville **{uncontrolled_kw} kW** gjenstå. Det forbruket tilhører noe SEM ikke håndterer: en elbil på en lader SEM ikke kjenner, en ovn, en varmepumpe med egen styring.\n\nÅ koble ut huset kan ikke løse denne toppen, så SEM kobler ut **ingenting** så lenge dette gjelder (en tidligere versjon fortsatte å slå av kurs etter kurs til huset var mørkt).\n\n**Hva du kan gjøre:** gi SEM lasten (legg til laderen under *Elbilladere*, eller enheten med en styringsentitet), hev målet hvis det ikke egentlig er avtalens tak, eller godta toppen for en last som må gå. Denne saken forsvinner av seg selv så snart toppen igjen kan nås."
+    },
+    "battery_platform_pinned_generic": {
+      "title": "Battery platform pinned to Generic on a {brand} install",
+      "description": "SEM's battery platform is set to **Generic / other**, but the {brand} integration is loaded. Earlier versions of the options wizard offered only Generic and Deye and defaulted to Generic, so walking through that page once demoted a {brand} install to the generic adapter — no forcible charge, no idempotent register writes. Open **Settings → Integrations → SEM → Configure → Battery scheduler** and set **Battery charge platform** to **Auto-detect**. If Generic is a deliberate choice (a battery with its own control entities), set that entity and this notice goes away."
     }
   },
   "selector": {

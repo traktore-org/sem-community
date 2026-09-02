@@ -1687,6 +1687,10 @@
     "load_shed_futile": {
       "title": "Die Netzspitze wird von einer Last verursacht, die SEM nicht steuert",
       "description": "Der Zähler zeigt **{grid_import_kw} kW** gegenüber einem Ziel von **{target_kw} kW** — und selbst wenn alles, was SEM abschalten darf, bereits aus wäre, blieben **{uncontrolled_kw} kW** übrig. Dieser Bezug gehört zu etwas, das SEM nicht verwaltet: ein E-Auto an einer Wallbox, die SEM nicht kennt, ein Backofen, eine Wärmepumpe mit eigener Steuerung.\n\nDas Abwerfen von Haushaltslasten kann diese Spitze nicht beheben, deshalb wirft SEM **nichts** ab, solange das gilt (eine frühere Version schaltete einen Stromkreis nach dem anderen ab, bis das Haus dunkel war).\n\n**Was tun:** SEM die Last übergeben (die Wallbox unter *EV-Ladegeräte* hinzufügen oder das Gerät mit einer Steuerentität), das Ziel anheben, falls es nicht wirklich die Grenze Ihres Vertrags ist, oder die Spitze für eine Last akzeptieren, die laufen muss. Diese Meldung verschwindet von selbst, sobald die Spitze wieder erreichbar ist."
+    },
+    "battery_platform_pinned_generic": {
+      "title": "Battery platform pinned to Generic on a {brand} install",
+      "description": "SEM's battery platform is set to **Generic / other**, but the {brand} integration is loaded. Earlier versions of the options wizard offered only Generic and Deye and defaulted to Generic, so walking through that page once demoted a {brand} install to the generic adapter — no forcible charge, no idempotent register writes. Open **Settings → Integrations → SEM → Configure → Battery scheduler** and set **Battery charge platform** to **Auto-detect**. If Generic is a deliberate choice (a battery with its own control entities), set that entity and this notice goes away."
     }
   },
   "selector": {

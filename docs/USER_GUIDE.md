@@ -76,7 +76,7 @@ an honest per-brand status is [docs/SUPPORTED_HARDWARE.md](SUPPORTED_HARDWARE.md
 | `ev_battery_capacity_kwh` | 40 kWh | EV battery capacity for SOC→kWh conversion (10-120 kWh). |
 | `min_solar_power` | 500W | **Config floor** below which SEM won't even attempt to start the charger. Keep well below the **hardware minimum** of your charger (~4140 W on 3-phase, ~1380 W on 1-phase). Slider range 0–5000 W. |
 | `max_grid_import` | — | Maximum grid import power during solar charging (0-2000W) |
-| `ev_charging_mode` | `pv` | Charging mode: `pv` (solar only), `minpv` (Min+PV), `off` (disabled) |
+| `ev_charging_mode` | `pv` | Charging mode: `pv` (solar only), `minpv` (Min+PV), `off` (hands-off — SEM sends nothing to the charger, #898) |
 | `ev_ramp_rate_amps` | 2 | Max current change per 10s cycle during solar charging |
 
 ### Battery Settings

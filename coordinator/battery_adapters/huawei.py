@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 
 from ..charger_types import BatteryIntent
-from ..power_control import async_write_power_setpoint, prepare_power_setpoint
+from ..power_control import async_write_power_setpoint
 from .base import BatteryControlAdapter
 
 from ...utils.log_gate import log_on_change
@@ -485,15 +485,8 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         # next polls it (~30-60s / 1-2 SEM cycles); the next cycle sees the
         # divergence and re-asserts. Bounded, and acceptable vs the per-cycle
         # Modbus flooding this guard removes.
-        prepared = prepare_power_setpoint(
-            self._hass, self._discharge_control_entity, watts
-        )
-        if prepared is None:
-            return
-        tolerance = 1.0 / prepared.scale_to_watts
-        if abs(prepared.current_value - prepared.value) < tolerance:
-            self._last_discharge_limit_w = watts
-            return
+        # (#900) The compare-to-live-state skip now lives in
+        # ``async_write_power_setpoint`` itself, for every adapter.
         if await async_write_power_setpoint(
             self._hass,
             self._discharge_control_entity,

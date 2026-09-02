@@ -72,3 +72,28 @@ def reclaimable_battery_w(
     if soc < priority_soc:
         return 0.0
     return max(0.0, float(battery_charge_power))
+
+
+# ── (#899) Commit-then-measure for the solar_only battery redirect ─────────
+#: Grid import (W) the meter may show while a redirect is credited before the
+#: cycle counts as "the pack did not yield". Above house-meter noise, below
+#: the smallest redirect worth crediting (one 6 A phase ≈ 1.4 kW).
+REDIRECT_IMPORT_TOLERANCE_W: float = 300.0
+#: Consecutive contradicting cycles before the redirect is vetoed for the
+#: rest of the plug-in. Three cycles ≈ 30 s: past any inverter settle time,
+#: short enough that the meter, not the car, pays for the mistake.
+REDIRECT_VETO_STRIKES: int = 3
+
+
+def redirect_strikes(prev: int, *, redirect_w: float, grid_import_w: float,
+                     charging: bool) -> int:
+    """One cycle's verdict on the redirect. A strike is a cycle where a
+    redirect was in the budget, the car was charging, and the meter still
+    imported more than the tolerance — the watts the pack was supposed to
+    give up came from the grid instead. Any cycle that agrees (no redirect,
+    not charging, or import within tolerance) resets the count: the inverter
+    yielded after all."""
+    if redirect_w > 0.0 and charging and grid_import_w > REDIRECT_IMPORT_TOLERANCE_W:
+        return int(prev) + 1
+    return 0
+

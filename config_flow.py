@@ -3006,14 +3006,23 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="battery_scheduler",
             data_schema=vol.Schema({
+                # (#900) Every platform the adapter factory knows, and the
+                # stored value as the default — ``auto`` when there is none.
+                # This page used to offer generic / deye only and DEFAULT to
+                # generic: one walk through it demoted a Huawei install to
+                # the generic adapter (no forcible charge, no #538
+                # idempotency) without the user choosing anything.
                 vol.Optional(
                     "battery_charge_platform",
-                    default=_c("battery_charge_platform", "generic"),
+                    default=_c("battery_charge_platform", "auto"),
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
                         options=[
-                            {"value": "generic", "label": "Generic / other"},
+                            {"value": "auto", "label": "Auto-detect (recommended)"},
+                            {"value": "huawei", "label": "Huawei SUN2000 / LUNA2000"},
+                            {"value": "goodwe", "label": "GoodWe"},
                             {"value": "deye", "label": "Deye hybrid inverter"},
+                            {"value": "generic", "label": "Generic / other"},
                         ],
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
@@ -3160,7 +3169,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             clean = {k: v for k, v in user_input.items() if k.startswith("deye_")}
             self._data["battery_charge_platform"] = user_input.get(
                 "battery_charge_platform",
-                self._data.get("battery_charge_platform", "generic"),
+                self._data.get("battery_charge_platform", "auto"),
             )
             if self._data["battery_charge_platform"] == "deye":
                 # Normalise the six numbered program groups into the list shape.

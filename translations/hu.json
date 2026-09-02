@@ -1687,6 +1687,10 @@
     "load_shed_futile": {
       "title": "A hálózati csúcsot olyan fogyasztó okozza, amelyet a SEM nem vezérel",
       "description": "A mérő **{grid_import_kw} kW**-ot mutat a **{target_kw} kW** cél mellett — és még ha minden, amit a SEM lekapcsolhat, már ki is lenne kapcsolva, **{uncontrolled_kw} kW** akkor is maradna. Ez a fogyasztás olyasmihez tartozik, amit a SEM nem kezel: egy elektromos autó a SEM által nem ismert töltőn, egy sütő, egy saját vezérlésű hőszivattyú.\n\nA ház fogyasztóinak lekapcsolása nem oldja meg ezt a csúcsot, ezért a SEM **semmit** sem kapcsol le, amíg ez fennáll (egy korábbi verzió áramkört áramkör után kapcsolt le, amíg a ház sötét nem lett).\n\n**Mi a teendő:** add át a fogyasztót a SEM-nek (add hozzá a töltőt az *EV-töltők* alatt, vagy az eszközt egy vezérlő entitással), emeld a célt, ha az valójában nem a szerződésed felső határa, vagy fogadd el a csúcsot egy fogyasztónál, amelynek működnie kell. Ez a jelzés magától eltűnik, amint a csúcs újra elérhető."
+    },
+    "battery_platform_pinned_generic": {
+      "title": "Battery platform pinned to Generic on a {brand} install",
+      "description": "SEM's battery platform is set to **Generic / other**, but the {brand} integration is loaded. Earlier versions of the options wizard offered only Generic and Deye and defaulted to Generic, so walking through that page once demoted a {brand} install to the generic adapter — no forcible charge, no idempotent register writes. Open **Settings → Integrations → SEM → Configure → Battery scheduler** and set **Battery charge platform** to **Auto-detect**. If Generic is a deliberate choice (a battery with its own control entities), set that entity and this notice goes away."
     }
   },
   "selector": {

@@ -63,7 +63,16 @@ DEFAULT_DEVICE_RATED_POWER: Final = 1000
 DEFAULT_BATTERY_DISCHARGE_PROTECTION_ENABLED: Final = True  # Enable discharge protection during night charging
 DEFAULT_BATTERY_MAX_DISCHARGE_POWER: Final = 5000  # Watts - Maximum allowed discharge (caps 1:1 home consumption matching)
 DEFAULT_DISCHARGE_LIMIT_UPDATE_INTERVAL: Final = 60  # Seconds - How often to update discharge limits
-DEFAULT_BATTERY_DISCHARGE_CONTROL_ENTITY: Final = ""  # Entity ID for battery discharge control (e.g., number.batteries_maximale_entladeleistung)
+DEFAULT_BATTERY_DISCHARGE_CONTROL_ENTITY: Final = ""
+# (#902) Plausibility gates on battery INGESTION. A modbus source coming back
+# from a dropout can publish one garbage sample (HA-PROD 02.09.2026: SOC 0 %
+# and 22 806 824 W out of a 93 %, 5 kW LUNA, for one cycle). A value no
+# battery can produce is treated exactly like a sensor that did not answer —
+# the existing dark-read path — instead of steering a cycle.
+BATTERY_SOC_MAX_STEP_PCT: Final = 25.0   # pp between two reads; a LUNA moves single digits per MINUTE
+BATTERY_SOC_STEP_CONFIRM_READS: Final = 3  # a rejected level that persists this many reads IS the truth
+BATTERY_POWER_PLAUSIBLE_MAX_W: Final = 100_000.0  # no home battery; 22.8 MW was 2 000x the hardware
+  # Entity ID for battery discharge control (e.g., number.batteries_maximale_entladeleistung)
 
 # EV Charger Control Configuration
 DEFAULT_EV_CHARGER_SERVICE: Final = ""  # Service for EV charger current control (e.g., "keba.set_current" for KEBA chargers without number entity)
