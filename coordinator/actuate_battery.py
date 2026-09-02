@@ -67,6 +67,41 @@ _POWER_DERIVED_INTENTS = frozenset({
 })
 
 
+# (#900) The discharge limit follows the load's TREND, not its noise.
+# Under LIMIT_DISCHARGE the value written is the live house load, re-decided
+# every cycle; the adapters' 100 W hysteresis was narrower than a fridge, so
+# a Huawei register was rewritten all day (koen71, and HA-PROD). One rule for
+# every adapter: round UP to the step (coverage first — a limit below the
+# house load imports from grid), raise the moment the house exceeds the
+# current limit, and lower only once the load has fallen a full step plus
+# the leak allowance below it. A ±150 W wobble around any level is then one
+# write, not one per cycle.
+DISCHARGE_LIMIT_STEP_W: float = 250.0
+DISCHARGE_LIMIT_LEAK_W: float = 50.0
+# Raise fast, lower slow: a drop must persist this many consecutive cycles
+# before the limit follows it down. A fridge that cycles 1100 ↔ 1300 W is
+# then ONE write (the first exceedance), not a write per cycle; a load that
+# really fell is followed within a minute.
+DISCHARGE_LIMIT_LOWER_DWELL_CYCLES: int = 6
+
+
+def quantise_discharge_limit_w(raw_w: float, last_w: float) -> float:
+    """The discharge limit to command for a house load of ``raw_w``.
+
+    ``last_w`` is the limit the adapter last commanded (``-1`` when none).
+    """
+    import math
+    raw = max(0.0, float(raw_w or 0.0))
+    candidate = math.ceil(raw / DISCHARGE_LIMIT_STEP_W) * DISCHARGE_LIMIT_STEP_W
+    if last_w is None or last_w < 0:
+        return candidate
+    if raw > last_w:
+        return candidate                      # coverage first
+    if last_w - raw >= DISCHARGE_LIMIT_STEP_W + DISCHARGE_LIMIT_LEAK_W:
+        return candidate                      # the load really fell
+    return float(last_w)                      # noise — hold
+
+
 async def actuate_battery(
     decision: "BatteryDecision",
     adapter: "BatteryControlAdapter",
@@ -134,11 +169,27 @@ async def actuate_battery(
         return
 
     if decision.intent is BatteryIntent.LIMIT_DISCHARGE:
-        await adapter.command_limit_discharge(decision.discharge_limit_w)
+        # (#900) quantised against what the adapter last commanded, so the
+        # register follows the load's trend and not the fridge.
+        last_w = float(getattr(adapter, "last_discharge_limit_w", -1.0) or -1.0)
+        limit_w = quantise_discharge_limit_w(decision.discharge_limit_w, last_w)
+        # Lowering waits for the drop to persist; raising never waits.
+        streak = int(getattr(adapter, "_limit_lower_streak", 0) or 0)
+        if last_w >= 0 and limit_w < last_w:
+            streak += 1
+            if streak < DISCHARGE_LIMIT_LOWER_DWELL_CYCLES:
+                limit_w = last_w
+        else:
+            streak = 0
+        try:
+            adapter._limit_lower_streak = streak
+        except Exception:  # noqa: BLE001 — a read-only stub is not a failure
+            pass
+        await adapter.command_limit_discharge(limit_w)
         log_on_change(   # (#762) the watts wobble; the gate strips digits
             _LOGGER, f"actuate:{decision.battery_id}", logging.DEBUG,
-            "actuate_battery(%s): LIMIT_DISCHARGE %.0f W — %s",
-            decision.battery_id, decision.discharge_limit_w, decision.reason,
+            "actuate_battery(%s): LIMIT_DISCHARGE %.0f W (raw %.0f W) — %s",
+            decision.battery_id, limit_w, decision.discharge_limit_w, decision.reason,
         )
         return
 

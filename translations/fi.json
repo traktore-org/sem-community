@@ -1682,6 +1682,10 @@
     "load_shed_futile": {
       "title": "Verkon huippukuorman aiheuttaa kuorma, jota SEM ei ohjaa",
       "description": "Mittari näyttää **{grid_import_kw} kW** tavoitteen ollessa **{target_kw} kW** — ja vaikka kaikki, minkä SEM saa sammuttaa, olisi jo sammutettu, jäljelle jäisi **{uncontrolled_kw} kW**. Se kulutus kuuluu johonkin, mitä SEM ei hallitse: sähköautoon laturissa, jota SEM ei tunne, uuniin, lämpöpumppuun omalla ohjaimellaan.\n\nTalon kuormien pudottaminen ei korjaa tätä huippua, joten SEM ei pudota **mitään** niin kauan kuin tilanne jatkuu (aiempi versio sammutti piirin toisensa jälkeen, kunnes talo oli pimeä).\n\n**Mitä tehdä:** anna kuorma SEM:n hallintaan (lisää laturi kohdassa *Sähköautolaturit* tai laite ohjausentiteetillä), nosta tavoitetta, jos se ei todella ole sopimuksesi raja, tai hyväksy huippu kuormalle, jonka on käytävä. Tämä ilmoitus poistuu itsestään heti, kun huippu on taas saavutettavissa."
+    },
+    "battery_platform_pinned_generic": {
+      "title": "Battery platform pinned to Generic on a {brand} install",
+      "description": "SEM's battery platform is set to **Generic / other**, but the {brand} integration is loaded. Earlier versions of the options wizard offered only Generic and Deye and defaulted to Generic, so walking through that page once demoted a {brand} install to the generic adapter — no forcible charge, no idempotent register writes. Open **Settings → Integrations → SEM → Configure → Battery scheduler** and set **Battery charge platform** to **Auto-detect**. If Generic is a deliberate choice (a battery with its own control entities), set that entity and this notice goes away."
     }
   },
   "selector": {

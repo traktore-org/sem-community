@@ -708,8 +708,11 @@ class EVControlMixin:
             rec_cache[cid] = reconciler
 
         mode = str(charger_cfg.get("charge_mode", "off"))
+        # (#898) Off is hands-off here too: the night gate polices only the
+        # solar_only charger (a rogue self-start gets IDLE's immediate
+        # DISABLE); an off charger is released — nothing is sent.
         intent = (
-            ChargerIntent.DISABLE if mode == "off" else ChargerIntent.IDLE
+            ChargerIntent.RELEASE if mode == "off" else ChargerIntent.IDLE
         )
         decision = ChargerDecision(
             charger_id=cid,

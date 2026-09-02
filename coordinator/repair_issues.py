@@ -343,6 +343,33 @@ def _versions(hass: HomeAssistant) -> dict:
     return {"sem_version": sem, "ha_version": ha_ver if isinstance(ha_ver, str) else ""}
 
 
+def raise_battery_platform_pinned_generic(hass: HomeAssistant, *, brand: str) -> None:
+    """(#900) The battery platform is explicitly ``generic`` on an install
+    whose ``brand`` integration is loaded — the wizard's old default put it
+    there. One persistent Repair; cleared when the option changes."""
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id="battery_platform_pinned_generic",
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="battery_platform_pinned_generic",
+            learn_more_url=next_step_url("docs", "battery_platform_pinned_generic", **_versions(hass)),
+            translation_placeholders={"brand": brand},
+        )
+    except Exception as e:  # noqa: BLE001 — never fail the cycle over a repair
+        _LOGGER.debug("issue_registry.create failed for pinned platform: %s", e)
+
+
+def clear_battery_platform_pinned_generic(hass: HomeAssistant) -> None:
+    try:
+        ir.async_delete_issue(hass, DOMAIN, "battery_platform_pinned_generic")
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def raise_battery_operating_mode_unexpected(hass: HomeAssistant, entity_id: str,
                                             *, mode: str, expected: str) -> None:
     """(#845) The inverter's operating-policy selector is in a mode SEM's

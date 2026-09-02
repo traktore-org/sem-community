@@ -461,17 +461,21 @@ class ModeStrategy(ABC):
 # ─────────────────────────────────────────────────────────────────
 
 class OffMode(ModeStrategy):
-    """No charging, ever. Adapter calls ``command_disable()`` so
-    KEBA-class firmware actually opens the contactor (#315)."""
+    """(#898) Hands-off. The User Guide has said since 1.7 that Off means
+    *SEM continues monitoring but does not send any commands to the
+    charger* — the code produced DISABLE and the reconciler re-asserted it
+    on every rogue start, stopping a session the user began elsewhere.
+    RELEASE issues nothing; the reconciler ends SEM's own running session
+    once on the way in (see ``DesiredState.RELEASED``)."""
 
     def decide(self, view: ChargerView) -> ChargerDecision:
         return ChargerDecision(
             charger_id=view.power.charger_id,
             mode="off",
-            intent=ChargerIntent.DISABLE,
+            intent=ChargerIntent.RELEASE,
             commanded_amps=0,
             budget_w=0.0,
-            reason="off mode — user-explicit disable",
+            reason="off mode — hands-off, SEM sends nothing to this charger (#898)",
         )
 
 
@@ -570,10 +574,19 @@ class SolarOnlyMode(ModeStrategy):
         # forecast redirect must NOT add it a second time. The redirect stays
         # only as the fallback for when the EV does NOT reclaim by position
         # (below the battery, or below the reserve floor) — its original role.
+        # (#899) Two more reasons to credit nothing: a COMMANDED pack keeps
+        # its watts (parity with ``reclaimable_battery_w`` — a forced or
+        # scheduled charge is honoured, not sold to the car), and a session
+        # whose redirect the METER already contradicted (sustained import
+        # with a redirect in the budget: the pack did not yield) is vetoed
+        # until the next plug-in — ``view.redirect_allowed``.
         from .flow_calculator import battery_redirect_w as _redirect
-        redirect_w = 0.0 if _ev_reclaims(view) else _redirect(
+        redirect_w = 0.0 if (
+            _ev_reclaims(view) or not getattr(view, "redirect_allowed", True)
+        ) else _redirect(
             f.battery_charge_w, f.battery_soc,
             f.battery_capacity_kwh, f.forecast_remaining_kwh,
+            battery_commanded=bool(getattr(f, "battery_commanded", False)),
         )
         surplus_w = bare_surplus_w + redirect_w
 
@@ -608,6 +621,7 @@ class SolarOnlyMode(ModeStrategy):
             charger_id=cid, mode="solar_only",
             intent=ChargerIntent.CHARGE_AT_AMPS,
             commanded_amps=amps, budget_w=surplus_w,
+            redirect_w=float(redirect_w),   # (#899) checked against the meter
             reason=(
                 f"solar_only: surplus={_cw(surplus_w)}W "
                 f"(bare={_cw(bare_surplus_w)}W + redirect={_cw(redirect_w)}W) "
@@ -1025,6 +1039,11 @@ def decide(view: ChargerView) -> ChargerDecision:
     # mode dispatch so solar_only / min_plus_solar / always_max /
     # solar_plus_cheap all honour it. Skip while disconnected so a stale
     # ceiling can't suppress the "idle — disconnected" reason.
+    # (#898) Off is hands-off before any guard: a ceiling, a disconnect or
+    # a night gate has nothing to police on a charger SEM does not command.
+    if view.mode == "off":
+        return _OFF.decide(view)
+
     if view.soc_ceiling_reached and view.power.connected:
         # Max SOC/target is a STRUCTURAL stop — never bridge it.
         return ChargerDecision(

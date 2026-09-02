@@ -52,6 +52,30 @@ class PerChargerState:
     reenable_attempts: int = 0
     charge_refused: bool = False
     last_set_amps_ts: Optional[float] = None
+    # (#899) the solar_only battery redirect, checked against the meter:
+    # consecutive cycles the grid funded a credited redirect, and the veto
+    # that lands after REDIRECT_VETO_STRIKES of them. Per plug-in.
+    redirect_strikes: int = 0
+    redirect_vetoed: bool = False
+
+    def reset_session(self) -> None:
+        """(#899) A new plug-in is a new session: the veto and its strikes
+        end with the session that earned them."""
+        self.redirect_strikes = 0
+        self.redirect_vetoed = False
+
+
+def note_redirect_outcome(state: "PerChargerState", *, redirect_w: float,
+                          grid_import_w: float, charging: bool) -> None:
+    """(#899) Fold one cycle's meter verdict into the charger's durable state.
+    Pure bookkeeping; ``energy_reclaim.redirect_strikes`` is the rule."""
+    from .energy_reclaim import REDIRECT_VETO_STRIKES, redirect_strikes
+    state.redirect_strikes = redirect_strikes(
+        state.redirect_strikes, redirect_w=redirect_w,
+        grid_import_w=grid_import_w, charging=charging,
+    )
+    if state.redirect_strikes >= REDIRECT_VETO_STRIKES:
+        state.redirect_vetoed = True
 
 
 @dataclass

@@ -11,6 +11,7 @@ import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from ..utils.log_gate import log_on_change
 from .units import (
     is_battery_control_power_unit,
     normalize_unit,
@@ -207,6 +208,17 @@ async def async_write_power_setpoint(
     prepared = prepare_power_setpoint(hass, entity_id, watts)
     if prepared is None:
         return False
+    # (#900) Idempotency for EVERY writer, not one adapter (#538 had it on
+    # the Huawei path only; the generic adapter — where the wizard had pinned
+    # a Huawei install — wrote its max every cycle). Compare in native units
+    # to the LIVE entity state, so an external change is still re-asserted;
+    # one native unit is the resolution the entity can express.
+    if abs(prepared.current_value - prepared.value) < 1.0 / prepared.scale_to_watts:
+        log_on_change(
+            _LOGGER, f"setpoint-skip:{entity_id}", logging.DEBUG,
+            "%s: %s already at %.3f — no write", context, entity_id, prepared.value,
+        )
+        return True
     try:
         await hass.services.async_call(
             prepared.domain,

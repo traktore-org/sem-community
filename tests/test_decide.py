@@ -195,23 +195,26 @@ class TestHelpers:
 
 
 class TestOffMode:
-    """`off` always → DISABLE. Mirrors #315 fix at the strategy level."""
+    """`off` always → RELEASE (#898): hands-off, SEM sends nothing. The
+    reconciler ends SEM's OWN running session once on the way in; a session
+    the user started elsewhere is never touched (it used to be DISABLE,
+    re-asserted on every rogue start — #315 applied to the user's session)."""
 
     def test_off_disconnected(self):
         d = decide(_view(mode="off", connected=False))
-        assert d.intent is ChargerIntent.DISABLE
+        assert d.intent is ChargerIntent.RELEASE
 
     def test_off_connected_no_solar(self):
         d = decide(_view(mode="off", solar_w=0))
-        assert d.intent is ChargerIntent.DISABLE
+        assert d.intent is ChargerIntent.RELEASE
 
     def test_off_connected_high_solar(self):
         d = decide(_view(mode="off", solar_w=10000))
-        assert d.intent is ChargerIntent.DISABLE
+        assert d.intent is ChargerIntent.RELEASE
 
     def test_off_at_night(self):
         d = decide(_view(mode="off", is_night=True))
-        assert d.intent is ChargerIntent.DISABLE
+        assert d.intent is ChargerIntent.RELEASE
 
 
 class TestAlwaysMaxMode:
@@ -573,11 +576,14 @@ class TestSolarPlusCheapMode:
 
 
 class TestUnknownMode:
-    """Unknown mode → fail safe to OFF (loud)."""
+    """Unknown mode → fail safe to OFF (loud). Since #898 OFF is hands-off:
+    a misconfigured charger is one SEM does not command, rather than one it
+    stops."""
 
     def test_unknown_mode_falls_back_to_off(self):
         d = decide(_view(mode="some_typo_mode"))
-        assert d.intent is ChargerIntent.DISABLE
+        assert d.intent is ChargerIntent.RELEASE
+        assert d.mode == "off"
 
 
 class TestPurity:

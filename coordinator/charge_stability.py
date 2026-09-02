@@ -418,6 +418,7 @@ class ChargeStability:
             view.mode not in SURPLUS_DAY_MODES
             or not view.power.connected
             or decision.intent is ChargerIntent.DISABLE
+            or decision.intent is ChargerIntent.RELEASE   # (#898) hands-off
         ):
             self._reset(cid)
             # #610 — an unplug / mode change / DISABLE ends the full-car

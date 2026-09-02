@@ -30,6 +30,7 @@ class DesiredState(Enum):
     OFF = auto()     # user-explicit OFF (ChargerIntent.DISABLE)
     IDLE = auto()    # temporary pause (ChargerIntent.IDLE)
     CHARGE = auto()  # charging (CHARGE_AT_AMPS / CHARGE_MAX)
+    RELEASED = auto()  # (#898) hands-off (ChargerIntent.RELEASE): SEM issues nothing
 
 
 #: A real unplug persists; a UDP blip is one cycle (project_ev_flap_udp_blip).
@@ -100,6 +101,8 @@ def desired_from_decision(decision: ChargerDecision) -> Tuple[DesiredState, int]
     the hardware max from the adapter (so this stays pure and the max
     isn't duplicated here)."""
     intent = decision.intent
+    if intent is ChargerIntent.RELEASE:
+        return DesiredState.RELEASED, 0
     if intent is ChargerIntent.DISABLE:
         return DesiredState.OFF, 0
     if intent is ChargerIntent.IDLE:
@@ -312,6 +315,28 @@ class ChargerReconciler:
     def reconcile(self, desired: DesiredState, amps: int,
                   observed: ObservedState, now: float) -> List[Action]:
         """Pure decision table (spec rows 1-8, first match wins)."""
+        # (#898) Row 0 — RELEASED: hands-off, senior to every row below.
+        # Charge mode Off used to be DISABLE, and the rogue-start guard
+        # (#315/#552) re-asserted it on a session the USER started. Now:
+        # leaving CHARGE for RELEASED ends SEM's OWN session with one
+        # DISABLE (the user asked for Off, not for the car to finish); from
+        # then on SEM issues nothing — no park-off on unplug, no failsafe
+        # naming, no stop-war rounds. Whatever draws, draws.
+        if desired is DesiredState.RELEASED:
+            self._end_stop_war()
+            self._consecutive_idle_count = 0
+            self._idle_settled = False
+            if observed.connected:
+                self._seen_connected = True
+                self._disconnect_run = 0
+            if self._charging_intent_active:
+                self._charging_intent_active = False
+                self._enable_attempts = 0
+                self._enable_gave_up_at = 0.0
+                self._last_disable_at = now
+                self._last_disable_issued_at = now
+                return [Action(ActionKind.DISABLE)]
+            return [Action(ActionKind.NONE)]
         # (#823) Recovery: a reported failsafe whose LAST stop has now held
         # quiet for twice the learned interval means the user fixed the box —
         # retire the Repair and re-arm the recogniser, so a later relapse is

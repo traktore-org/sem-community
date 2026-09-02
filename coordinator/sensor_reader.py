@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from collections import deque
 from typing import Any, Dict, Optional, Tuple
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
@@ -24,6 +24,11 @@ from .units import (
 )
 
 from ..utils.log_gate import log_on_change
+from ..consts.core import (
+    BATTERY_POWER_PLAUSIBLE_MAX_W,
+    BATTERY_SOC_MAX_STEP_PCT,
+    BATTERY_SOC_STEP_CONFIRM_READS,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -419,6 +424,11 @@ class SensorReader:
         # until the first successful read: a hold needs something to hold,
         # and 0.0 before the first report was published as an empty pack.
         self._last_valid_soc: Optional[float] = None
+        # (#902) a SOC level rejected as an impossible step, and how many
+        # consecutive reads have repeated it — see _accept_battery_soc.
+        self._soc_step_candidate: Optional[float] = None
+        self._soc_step_streak: int = 0
+        self._battery_power_implausible: bool = False
         # EV flap fix (2026-07-10): the KEBA charging-power sensor polls over
         # UDP and blips to ~0 for a cycle while the car is really drawing 10 kW.
         # ``ev_power`` feeds the home energy balance (``home = solar + grid −
@@ -655,6 +665,8 @@ class SensorReader:
             readings = self._read_from_energy_dashboard()
         else:
             readings = self._read_from_legacy_config()
+        # (#902) A value no battery can produce is a dark read, not a number.
+        self._gate_battery_power(readings)
         # (#758) An unreadable battery power sensor reads as 0.0 W, which is
         # also what an idle battery reads. Say which one this is, once, here.
         readings.battery_power_unavailable = self._battery_power_missing
@@ -2168,11 +2180,7 @@ class SensorReader:
             if soc_entity:
                 soc_val = self._read_sensor(soc_entity, "battery_soc", allow_none=True)
 
-        if soc_val is not None:
-            readings.battery_soc = soc_val
-            self._last_valid_soc = soc_val
-        else:
-            self._hold_battery_soc(readings)
+        self._accept_battery_soc(readings, soc_val)
 
         # EV power — sum all chargers if multi-charger (#193), else single sensor.
         # v1.6.9 also populates ``ev_power_per_charger`` so the flow calculator
@@ -2242,6 +2250,89 @@ class SensorReader:
         self._read_inverter_temperature(readings)
 
         return readings
+
+    def _accept_battery_soc(self, readings: PowerReadings,
+                            soc_val: Optional[float]) -> None:
+        """Take a SOC read into the readings — or refuse it.
+
+        (#902) A read is not a measurement just because the sensor answered.
+        Out of a modbus dropout the Huawei published ``0.0`` for one cycle
+        from a 93 % pack, and the fleet was steered as EMPTY for that cycle
+        (Zone 1: car idled, discharge clamped) — the #875 symptom through a
+        different door. A step no battery can make between two reads is
+        treated exactly like a dark read: the last valid value is held.
+
+        But a level that PERSISTS is the truth — the sensor may have been
+        dark for hours while the pack really did drain — so a rejected level
+        is accepted once it has repeated for ``BATTERY_SOC_STEP_CONFIRM_READS``
+        consecutive reads. Garbage does not repeat itself; a real level does.
+        """
+        if soc_val is None:
+            self._hold_battery_soc(readings)
+            return
+        last = self._last_valid_soc
+        if last is not None and abs(soc_val - last) > BATTERY_SOC_MAX_STEP_PCT:
+            cand = self._soc_step_candidate
+            if cand is not None and abs(soc_val - cand) <= BATTERY_SOC_MAX_STEP_PCT:
+                self._soc_step_streak += 1
+            else:
+                self._soc_step_candidate = soc_val
+                self._soc_step_streak = 1
+            if self._soc_step_streak < BATTERY_SOC_STEP_CONFIRM_READS:
+                log_on_change(
+                    _LOGGER, "implausible:soc", logging.WARNING,
+                    "Battery SOC %.0f%% -> %.0f%% in one read is not a "
+                    "measurement — holding %.0f%% (#902; accepted if the level "
+                    "persists for %d reads)",
+                    last, soc_val, last, BATTERY_SOC_STEP_CONFIRM_READS,
+                )
+                self._hold_battery_soc(readings)
+                return
+            log_on_change(
+                _LOGGER, "implausible:soc", logging.INFO,
+                "Battery SOC level %.0f%% held for %d reads — accepting (#902)",
+                soc_val, self._soc_step_streak,
+            )
+        self._soc_step_candidate = None
+        self._soc_step_streak = 0
+        readings.battery_soc = soc_val
+        self._last_valid_soc = soc_val
+
+    def _gate_battery_power(self, readings: PowerReadings) -> None:
+        """(#902) A battery power no home battery can produce is a dark read.
+
+        22 806 824 W arrived from a 5 kW LUNA on the cycle its modbus link
+        came back. Published, it lands in a ``state_class: measurement``
+        entity and in every consumer of the balance. Treated here exactly as
+        an unreadable sensor: 0.0 with the unavailable flags set, counted as
+        dark for #818 (the cycle must not steer) and NOT as a read (so the
+        entity says unavailable rather than 0 W). Per-unit entries are
+        zeroed the same way.
+        """
+        bad = abs(float(readings.battery_power or 0.0)) > BATTERY_POWER_PLAUSIBLE_MAX_W
+        for bid, bp in list(readings.batteries.items()):
+            if abs(float(getattr(bp, "power_w", 0.0) or 0.0)) > BATTERY_POWER_PLAUSIBLE_MAX_W:
+                readings.batteries[bid] = replace(bp, power_w=0.0)
+                bad = True
+        if not bad:
+            if self._battery_power_implausible:
+                self._battery_power_implausible = False
+                log_on_change(
+                    _LOGGER, "implausible:battery_power", logging.DEBUG,
+                    "Battery power reading plausible again (#902)",
+                )
+            return
+        log_on_change(
+            _LOGGER, "implausible:battery_power", logging.WARNING,
+            "Battery power %.0f W is not a measurement (bound %.0f W) — "
+            "treated as a dark read (#902)",
+            float(readings.battery_power or 0.0), BATTERY_POWER_PLAUSIBLE_MAX_W,
+        )
+        self._battery_power_implausible = True
+        readings.battery_power = 0.0
+        self._battery_power_missing = True
+        self._input_dark["battery"] = self._input_dark.get("battery", 0) + 1
+        self._input_reads["battery"] = max(0, self._input_reads.get("battery", 0) - 1)
 
     def _hold_battery_soc(self, readings: PowerReadings) -> None:
         """The SOC sensor is dark this cycle: hold the last value read so the
@@ -3096,11 +3187,7 @@ class SensorReader:
             soc_val = self._read_sensor(
                 self.config.battery_soc_sensor, "battery_soc", allow_none=True,
             )
-        if soc_val is not None:
-            readings.battery_soc = soc_val
-            self._last_valid_soc = soc_val
-        else:
-            self._hold_battery_soc(readings)
+        self._accept_battery_soc(readings, soc_val)
 
         # Battery temperature (#564: configured sensor, else device sibling)
         self._read_battery_temperature(readings)

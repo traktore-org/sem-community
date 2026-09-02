@@ -426,10 +426,25 @@ class TestCoordinatorWiring:
         assert last["kwh"] == pytest.approx(1.5)
 
     def test_ev_mode_override_pause_and_boost(self):
+        # (#898) "pause" no longer borrows mode ``off`` — Off is hands-off
+        # and would stop nothing. The user's mode stays; the pause lands on
+        # the DECISION as an explicit DISABLE via ``vpp_pause_override``.
+        from custom_components.solar_energy_management.coordinator.charger_types import (
+            ChargerDecision, ChargerIntent,
+        )
+        from custom_components.solar_energy_management.coordinator.vpp_dispatch import (
+            vpp_pause_override,
+        )
         stub = SimpleNamespace(_vpp_ev_override="pause", hass=None,
                                config={})
         assert SEMCoordinator._effective_charge_mode_for(
-            stub, {"charge_mode": "solar_only"}) == "off"
+            stub, {"charge_mode": "solar_only"}) == "solar_only"
+        paused = vpp_pause_override(
+            ChargerDecision(charger_id="c", mode="solar_only",
+                            intent=ChargerIntent.CHARGE_AT_AMPS,
+                            commanded_amps=10, reason="solar"),
+            stub._vpp_ev_override == "pause")
+        assert paused.intent is ChargerIntent.DISABLE and "VPP" in paused.reason
         stub._vpp_ev_override = "boost"
         assert SEMCoordinator._effective_charge_mode_for(
             stub, {"charge_mode": "solar_only"}) == "always_max"

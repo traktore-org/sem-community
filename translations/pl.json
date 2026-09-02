@@ -1682,6 +1682,10 @@
     "load_shed_futile": {
       "title": "Szczyt poboru z sieci powoduje odbiornik, którego SEM nie kontroluje",
       "description": "Licznik wskazuje **{grid_import_kw} kW** wobec celu **{target_kw} kW** — i nawet gdyby wszystko, co SEM może wyłączyć, było już wyłączone, pozostałoby **{uncontrolled_kw} kW**. Ten pobór należy do czegoś, czym SEM nie zarządza: auto elektryczne na ładowarce, której SEM nie zna, piekarnik, pompa ciepła z własnym sterownikiem.\n\nZrzucanie obciążenia domu nie usunie tego szczytu, więc SEM **niczego** nie wyłącza, dopóki to trwa (wcześniejsza wersja wyłączała obwód za obwodem, aż dom pogrążył się w ciemności).\n\n**Co zrobić:** przekazać odbiornik do SEM (dodać ładowarkę w *Ładowarki EV* lub urządzenie z encją sterującą), podnieść cel, jeśli nie jest to naprawdę limit z umowy, albo zaakceptować szczyt dla odbiornika, który musi pracować. To zgłoszenie znika samo, gdy szczyt znów będzie osiągalny."
+    },
+    "battery_platform_pinned_generic": {
+      "title": "Battery platform pinned to Generic on a {brand} install",
+      "description": "SEM's battery platform is set to **Generic / other**, but the {brand} integration is loaded. Earlier versions of the options wizard offered only Generic and Deye and defaulted to Generic, so walking through that page once demoted a {brand} install to the generic adapter — no forcible charge, no idempotent register writes. Open **Settings → Integrations → SEM → Configure → Battery scheduler** and set **Battery charge platform** to **Auto-detect**. If Generic is a deliberate choice (a battery with its own control entities), set that entity and this notice goes away."
     }
   },
   "selector": {

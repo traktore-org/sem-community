@@ -13,6 +13,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔌 **Charge mode Off is hands-off** (#898). With a charger set to *Off*, a
+  session started elsewhere in Home Assistant was stopped by SEM within a
+  cycle — the only escape was global observer mode. Off now means what the
+  User Guide has said since 1.7: SEM sends nothing to that charger — no stop,
+  no park-on-disconnect, no failsafe, no stop-war. Switching to Off while
+  SEM's own charge runs still ends that charge, once. The VPP export pause,
+  which used to borrow Off to stop the car, carries its own explicit stop.
+  (reported by @DigitalOptics)
+- ☀️ **`solar_only` no longer imports grid for a battery "redirect" the pack
+  never gave up** (#899). The redirect credited a share of the measured
+  battery charge to the car on the assumption that the inverter would yield
+  it; when the pack kept charging anyway — a forced or scheduled charge, a
+  TOU window — the meter funded the car. A commanded pack now keeps its
+  watts, and the redirect counts only while the meter agrees: three cycles
+  of sustained import with a redirect in the budget veto it for the rest of
+  the plug-in. (reported by koen71 on the HA community thread)
+- 🔋 **The Huawei discharge limit stops chasing the fridge** (#900). Under
+  the EV protection clamp the limit was rewritten every 10 s to the live
+  house load against a 100 W hysteresis — a register write per fridge
+  cycle, all day. The limit now follows the load's trend (up at once, down
+  only after a full step), every setpoint writer skips a value the entity
+  already holds, and the options wizard offers auto / huawei / goodwe / deye
+  / generic instead of silently pinning a Huawei install to the generic
+  adapter — an install that was pinned gets a Repair saying so. (reported by
+  koen71)
+- 🛡️ **A garbage sample out of a modbus dropout is not a measurement**
+  (#902). PROD published `SOC 0.0 %` and `22.8 MW` for one cycle when the
+  LUNA came back from a 25 s dropout — the fleet read the pack as empty and
+  the car idled. A SOC step no battery can make is held until it persists;
+  a power beyond any home battery is a dark read. Both reuse the existing
+  unavailable path, so nothing new is fabricated.
 - 🧹 **An upgraded install stops carrying 15 stale translation resources**
   (#901). Since the #738 split, `sem-localize.js` is a loader that fetches
   only the viewer's own language; the per-language files are assets it

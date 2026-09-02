@@ -74,6 +74,14 @@ class ChargerIntent(Enum):
     IDLE is a temporary state (waiting for surplus), DISABLE is a
     permanent user-explicit OFF intent."""
 
+    RELEASE = "release"
+    """(#898) Hands-off. Charge mode *Off* means SEM sends NOTHING to
+    this charger: no stop, no park-on-disconnect, no failsafe, no
+    stop-war. The one exception is the transition INTO Off while SEM's
+    own session runs — one DISABLE ends that session, then silence. A
+    session the user started elsewhere is never touched (DigitalOptics,
+    Fronius: SEM stopped a manual charge within a cycle while "Off")."""
+
     CHARGE_AT_AMPS = "charge_at_amps"
     """Charge at a specific amperage. The amps value comes from
     ``ChargerDecision.commanded_amps``."""
@@ -500,6 +508,11 @@ class ChargerDecision:
     'off mode — explicit user disable', 'night mode + min_plus_solar
     floor, deadline 06:00'."""
 
+    redirect_w: float = 0.0
+    """(#899) Battery-charge watts this decision credited to the car
+    ("redirect"). Carried so the loop can check it against the meter
+    next cycle — sustained grid import with a redirect in the budget means
+    the pack did not yield, and the redirect is dropped for the session."""
     bridgeable: bool = True
     """For an IDLE decision: is this a TRANSIENT dip worth holding the
     contactor through (a passing cloud while real surplus / battery
@@ -951,6 +964,10 @@ class ChargerView:
     999 (bottom) so a view built without it never spuriously reclaims."""
 
     wpa_table: Mapping[int, float] = field(default_factory=dict)
+    redirect_allowed: bool = True
+    """(#899) False once the meter has contradicted this session's battery
+    redirect (see ``PerChargerState.redirect_vetoed``): ``solar_only``
+    credits no redirect until the next plug-in."""
     """(#846) Measured watts-per-amp per commanded setpoint for the phase
     count SEM believes — ``{amps: W/A}``, empty until earned. Every
     watts→amps conversion in ``decide()`` reads it through
