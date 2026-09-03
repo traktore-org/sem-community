@@ -2447,3 +2447,18 @@ at once), never on the clock, and no status sensor means no hold. **Guard:**
 `tests/test_910_keba_blink.py`. **Sweep question:** for every smoothing window, what is the longest
 fault it was sized for, and which sibling sensor could have vetoed the sample outright? Refs #910
 #902 #818.
+
+
+### 63. A per-domain excuse for silence where the source's liveness was the question — GUARDED
+**Symptom:** the frozen-sensor Repair fires for an export sensor at 0 W in the afternoon and for an
+idle battery — on an integration that polls every 15 s. **Root shape:** the detector reads
+``last_reported``, assumes every integration writes every poll, and when that broke (#851, Growatt
+asleep at dusk) the fix was a predicate for that domain (solar + ~0 + sun down). The next case was
+export + importing, then battery + idle: a predicate per domain, each an excuse for one kind of
+silence, none asking the actual question — is the SOURCE alive? **Live catch (#912, FoxESS).**
+**Closure:** one rule — a sensor is frozen only if its own integration has gone quiet; a sibling
+entity of the same config entry reporting within the threshold vouches for the reading. The domain
+predicate survives only for the integration that genuinely powers down (the whole entry quiet, the
+sun explains it). **Guard:** `tests/test_912_frozen_sibling_rule.py` pins the rule is one place.
+**Sweep question:** wherever a heuristic explains away a signal per domain, what single property of
+the SOURCE would answer all of them? Refs #912 #851 #611.

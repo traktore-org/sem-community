@@ -731,6 +731,14 @@ culprit is the device's connection (Modbus/WiFi/cloud), not Home Assistant.
 Power-cycle or reload the source integration. SEM clears the notice on the
 first fresh update.
 
+SEM only calls a sensor frozen when its **whole integration** has gone quiet:
+if any other entity from the same integration entry has reported within the
+last ten minutes, a flat value is taken as honest (integrations such as
+`foxess_modbus` skip rewriting an unchanged value, so an export sensor sitting
+at 0 W all afternoon, or an idle battery, never "reports" — that is not a
+stall). A solar sensor at 0 W with the sun down is likewise left alone even
+when the integration sleeps at night.
+
 ## No solar forecast integration found
 
 SEM plans night charging and battery budgets against tomorrow's solar

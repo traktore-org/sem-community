@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🛡️ **A flat value from a live integration is not a frozen sensor** (#912).
+  `foxess_modbus` (and any integration that skips identical writes) never
+  advances `last_reported` while a value holds still — an export sensor at
+  0 W all afternoon, an idle battery — and the frozen-sensor check raised a
+  Repair for each, at any hour, in any domain; the #851 solar-at-night
+  predicate covered none of them. One rule now, the reporter's: a sensor is
+  frozen only if its own integration has gone quiet — if any sibling entity
+  of the same config entry reported within the threshold, the reading is
+  honest. A real modbus/cloud stall silences the whole entry and still warns;
+  #851 stays for the integration that genuinely sleeps at dusk.
+
 - 🛡️ **A one-report charger power blink is a dark read, not a measurement**
   (#910). The KEBA reported 0.13 kW for one report cycle at 10 A with its own
   status still `charging`; the median-of-3 absorbs a one-read blip but this

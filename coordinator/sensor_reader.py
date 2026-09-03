@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections import deque
 from typing import Any, Dict, Optional, Tuple
 from dataclasses import dataclass, replace
@@ -425,6 +426,12 @@ class SensorReader:
             {"solar", "grid", "grid_import", "grid_export", "battery"}
         )
         self._STALE_THRESHOLD_S = 600  # 10 min: a fast power sensor stale this long is frozen
+        # (#912) per config entry: (monotonic stamp, any sibling reported within
+        # the threshold). A flat entity from a LIVE integration is honest —
+        # integrations that skip identical writes (foxess_modbus) never advance
+        # ``last_reported`` on a flat value, at any hour, in any domain.
+        self._entry_alive_cache: Dict[str, tuple[float, bool]] = {}
+        self._ENTRY_ALIVE_CACHE_S = 5.0
         # Cache last valid SOC to avoid 0% during sensor gaps. (#875) None
         # until the first successful read: a hold needs something to hold,
         # and 0.0 before the first report was published as an empty pack.
@@ -3620,10 +3627,21 @@ class SensorReader:
         # TypeError would be swallowed by _read_sensor's except → wrong 0.0.
         if not isinstance(age_s, (int, float)) or isinstance(age_s, bool):
             return
-        if age_s >= self._STALE_THRESHOLD_S:
+        stale = age_s >= self._STALE_THRESHOLD_S
+        if stale and self._stillness_is_expected(name, value):
             # (#851) A stall the sensor's own domain explains is not a fault.
-            if self._stillness_is_expected(name, value):
-                return
+            return
+        if stale and self._integration_is_reporting(entity_id):
+            # (#912) The sensor's own integration is alive — a sibling from the
+            # same config entry reported within the threshold — so this
+            # entity is FLAT, not frozen: foxess_modbus (and any integration
+            # that skips identical writes) never advances ``last_reported``
+            # while a value holds still, and grid_export sits at 0 all
+            # afternoon while the house imports. Falls through to the
+            # recovery branch so a Repair raised during a real stall clears
+            # once the integration reports again.
+            stale = False
+        if stale:
             if entity_id not in self._frozen_sensors:
                 self._frozen_sensors.add(entity_id)
                 mins = int(age_s // 60)
@@ -3649,6 +3667,59 @@ class SensorReader:
             _LOGGER.info(
                 "Sensor %s (%s) is updating again (was frozen).", entity_id, name,
             )
+
+    def _integration_is_reporting(self, entity_id: str) -> bool:
+        """(#912) True when ANY sibling entity of ``entity_id``'s config entry
+        reported within the freshness threshold — the integration is alive.
+
+        One rule instead of a predicate per domain (#851 added solar+night;
+        the next would have been export+importing, then battery+idle, …): a
+        sensor is frozen only if its own integration has gone quiet. A
+        genuinely stalled modbus/cloud connection silences every entity of
+        the entry, so no sibling corroborates and the warning stands. Cached
+        per entry for a few seconds so the three fast-power reads of one
+        cycle scan the registry once. No registry entry / no config entry →
+        False: missing information must not silence a warning.
+        """
+        try:
+            reg = er.async_get(self.hass)
+            entry = reg.async_get(entity_id)
+        except Exception:  # noqa: BLE001 — never break a read over the registry
+            return False
+        cid = getattr(entry, "config_entry_id", None) if entry is not None else None
+        if not cid:
+            return False
+        now_mono = time.monotonic()
+        cached = self._entry_alive_cache.get(cid)
+        if cached is not None and now_mono - cached[0] < self._ENTRY_ALIVE_CACHE_S:
+            return cached[1]
+        alive = False
+        try:
+            import homeassistant.util.dt as _dt
+            now = _dt.utcnow()
+            for sib in er.async_entries_for_config_entry(reg, cid):
+                if sib.entity_id == entity_id:
+                    continue
+                st = self.hass.states.get(sib.entity_id)
+                if st is None:
+                    continue
+                seen = getattr(st, "last_reported", None)
+                if seen is None:
+                    seen = getattr(st, "last_updated", None)
+                if seen is None:
+                    continue
+                try:
+                    age = (now - seen).total_seconds()
+                except Exception:  # noqa: BLE001 — a mock / naive dt sibling
+                    continue
+                if isinstance(age, (int, float)) and not isinstance(age, bool) \
+                        and age < self._STALE_THRESHOLD_S:
+                    alive = True
+                    break
+        except Exception:  # noqa: BLE001 — never break a read over the registry
+            alive = False
+        self._entry_alive_cache[cid] = (now_mono, alive)
+        return alive
 
     def _read_binary_sensor(self, entity_id: Optional[str], name: str) -> bool:
         """Read a binary sensor or status sensor value.
