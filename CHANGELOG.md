@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔋 **Battery pacing reads the day's own house profile, not the night
+  average** (#820). `build_day_slots` prices a slot as `solar − house`, and
+  the night packer fed it the weekday-aware hourly profile — but the pacing
+  ledger and both tomorrow previews handed it the average *overnight* draw,
+  held flat across the whole day. A busy evening was therefore modelled as a
+  sleeping house: SEM paced to land full at sunset, the last two hours of sun
+  went to the kitchen, and the pack stopped at 88 %. One accessor
+  (`_day_home_w_at`) now serves every day-ledger consumer, so the pace is
+  computed against the evening that will actually happen.
+
 # [2.1.0-beta.6] — 03.09.2026
 
 - 🧯 **Removing SEM no longer switches off loads it never turned on** (#908).

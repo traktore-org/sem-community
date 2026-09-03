@@ -6401,6 +6401,45 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         self._vpp_publish = self._vpp_dispatcher.publish_state(decision)
 
+    def _day_home_w_at(self, now, energy=None):
+        """(#820) The house draw a DAY ledger prices its surplus against.
+
+        ``build_day_slots`` computes ``surplus = solar - home_w_at(t)`` and
+        its docstring names the input *"the predictor's hourly profile with
+        the flat fallback"*. The night packer built exactly that inline; the
+        pacing ledger and the tomorrow previews passed the average OVERNIGHT
+        draw held flat across the whole day, so a busy evening was modelled
+        as a sleeping house. @ArneGollin1987 (02.09): SEM paced 800 W to
+        land full at 20:00, the kitchen ate the last two hours of sun, the
+        pack stopped at 88 %. One accessor, every day-ledger consumer.
+
+        A predicted 0 W hour is a data gap (``trained_with_fallback`` pads
+        with zeros), not a house that switched off — it falls through to the
+        flat estimate, same rule the night packer already used.
+        """
+        hourly = None
+        predictor = getattr(self, "_predictor", None)
+        if predictor is not None:
+            try:
+                hourly = predictor.predict_consumption_24h(now) or None
+            except Exception:  # noqa: BLE001 — untrained is not an error
+                hourly = None
+        try:
+            flat_w = float(self._expected_night_home_w(energy))
+        except Exception:  # noqa: BLE001
+            flat_w = 300.0
+
+        def _at(t):
+            if hourly:
+                i = int((t - now).total_seconds() // 3600)
+                if (0 <= i < len(hourly)
+                        and hourly[i] is not None
+                        and float(hourly[i]) > 0):
+                    return float(hourly[i])
+            return flat_w
+
+        return _at
+
     def _today_pacing_ledger(self) -> list:
         """(#820) Today's remaining-day slots, or [] outside daylight /
         without a forecast. Same sun frame and home-draw fallback the
@@ -6422,14 +6461,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             day_kwh = getattr(_fd, "forecast_today_kwh", None)
             if day_kwh is None:
                 day_kwh = getattr(_fd, "forecast_remaining_today_kwh", None)
-            try:
-                flat_home = float(self._expected_night_home_w(None))
-            except Exception:  # noqa: BLE001
-                flat_home = 300.0
             prov = self._tariff_provider
             return today_remaining_slots(
                 now=now, sunrise=sunrise, sunset=sunset, day_kwh=day_kwh,
-                home_w_at=lambda t: flat_home, builder=build_day_slots,
+                # (#820) the day's own house profile, not the night average
+                home_w_at=self._day_home_w_at(now), builder=build_day_slots,
                 price_at=lambda ts: tariff_price_at(prov, ts),
                 level_cheap_at=lambda ts: tariff_cheap_at(prov, ts),
             )
@@ -8104,16 +8140,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             day_kwh = float(getattr(_fd, "forecast_tomorrow_kwh", 0.0) or 0.0)
         except Exception:  # noqa: BLE001 — no forecast, dark preview
             day_kwh = 0.0
-        try:
-            flat_home = float(self._expected_night_home_w(None))
-        except Exception:  # noqa: BLE001
-            flat_home = 300.0
         from .day_ledger import tariff_cheap_at, tariff_price_at
         prov = self._tariff_provider
+        # (#820) tomorrow's hours, read off the weekday profile
+        _home_at_day = self._day_home_w_at(day_start)
         preview = tomorrow_preview(
             day_start=day_start, day_end=day_end, day_kwh=day_kwh,
             sunrise=sunrise, sunset=sunset,
-            home_w_at=lambda t: flat_home,
+            home_w_at=_home_at_day,
             price_at=lambda ts: tariff_price_at(prov, ts),
             level_cheap_at=lambda ts: tariff_cheap_at(prov, ts),
             stamps_at=stamps_at,
@@ -8205,7 +8239,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 slots2 = build_day_slots(
                     start=day_start, end=day_end, day_kwh=day_kwh,
                     sunrise=sunrise, sunset=sunset,
-                    home_w_at=lambda t: flat_home,
+                    home_w_at=self._day_home_w_at(day_start),   # (#820)
                     price_at=lambda ts: tariff_price_at(prov, ts),
                     level_cheap_at=lambda ts: tariff_cheap_at(prov, ts),
                 )
@@ -8926,30 +8960,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
             # Home per slot: the weekday-aware hourly profile when trained,
             # else the flat night estimate (same fallback chain as the EV
-            # peak-managed rate).
-            hourly_home = None
-            predictor = getattr(self, "_predictor", None)
-            if predictor is not None:
-                try:
-                    hourly_home = predictor.predict_consumption_24h(now) or None
-                except Exception:  # noqa: BLE001
-                    hourly_home = None
+            # peak-managed rate). (#820) This closure was the original; it
+            # now lives on the coordinator so the pacing ledger and both
+            # tomorrow previews read the same house instead of a flat night.
+            _home_at = self._day_home_w_at(now, energy)
+            # The advisor below prices tomorrow's free sun against a FLAT
+            # daytime house (12 h of it), so it keeps its own scalar.
             try:
                 flat_home_w = float(self._expected_night_home_w(energy))
             except Exception:  # noqa: BLE001
                 flat_home_w = 300.0
-
-            def _home_at(t):
-                if hourly_home:
-                    i = int((t - now).total_seconds() // 3600)
-                    # The profile appends 0.0 for hours it could not predict
-                    # (trained_with_fallback) — a 0 W house is a data gap,
-                    # not a forecast; fall through to the flat estimate.
-                    if (0 <= i < len(hourly_home)
-                            and hourly_home[i] is not None
-                            and float(hourly_home[i]) > 0):
-                        return float(hourly_home[i])
-                return flat_home_w
 
             # Slots follow the market: honest None price when the day-ahead
             # has no data (the fingerprint replan re-derives later); the

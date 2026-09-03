@@ -119,6 +119,13 @@ def _fake_self(devices=()):
         EVControlMixin,
     )
     fake._planning_peak_w = lambda: EVControlMixin._planning_peak_w(fake)
+    # (#820) The day ledger's house profile, bound the same way: the REAL
+    # accessor runs, so the double cannot price an evening differently from
+    # production. No ``_predictor`` on the fake → the flat night estimate,
+    # which is what an untrained install has.
+    fake._day_home_w_at = (
+        lambda now, energy=None: SEMCoordinator._day_home_w_at(
+            fake, now, energy))
     # (15.08) The plan's connection authority, bound the same way: the REAL
     # accessor runs, so the double cannot answer "is this car connected?"
     # differently from production (#660 lens). It reads the debounced map
