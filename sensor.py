@@ -5,6 +5,9 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 import json
 import logging
+import time
+
+from .consts.core import SENSOR_DARK_READ_GRACE_S
 from typing import Any, Dict, List, Optional
 
 from homeassistant.components.sensor import (
@@ -2283,6 +2286,13 @@ async def async_setup_entry(
 class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
     """SEM Solar Energy Management sensor with state persistence."""
 
+    # Dark-read grace (03.09): a numeric measurement keeps its last good value
+    # for SENSOR_DARK_READ_GRACE_S while its source is unreadable, and says so
+    # via ``stale_s``. Overridable clock for tests.
+    _now_monotonic = staticmethod(time.monotonic)
+    _last_good_value = None
+    _last_good_at = None
+    _stale_s = 0
     _attr_should_poll = False
     _attr_has_entity_name = True
 
@@ -2637,6 +2647,28 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             # Set values and mark as available (but unavailable if value is None)
             # Exception: timestamp sensors (e.g. ev_last_full_charge) are available
             # even when None — "no event yet" is a valid state, not unavailable.
+            # Dark-read grace (03.09, Guido: "it was very stable before"). A
+            # numeric measurement whose source is unreadable THIS cycle keeps
+            # its last good value for SENSOR_DARK_READ_GRACE_S and reports
+            # ``stale_s``; only a sustained outage blanks it. Never invents:
+            # a value that was never read stays unavailable (#875), and the
+            # coordinator's inputs_degraded / *_unavailable flags — the ones
+            # that steer — are not touched by this. PROD 03.09 14:00–18:00:
+            # 52–55 blinks per sensor, 13–15 % of the afternoon blank.
+            _now = float(self._now_monotonic())
+            if value is None and self._last_good_value is not None:
+                _age = _now - float(self._last_good_at or _now)
+                if _age <= SENSOR_DARK_READ_GRACE_S:
+                    self._stale_s = int(_age)
+                    self._attr_native_value = self._last_good_value
+                    self._attr_available = True
+                    return
+                self._last_good_value = None
+                self._last_good_at = None
+            self._stale_s = 0
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                self._last_good_value = value
+                self._last_good_at = _now
             self._attr_native_value = value
             if self.entity_description.device_class == SensorDeviceClass.TIMESTAMP:
                 self._attr_available = True
@@ -2655,6 +2687,18 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
+        """Return additional state attributes (+ ``stale_s`` while a dark
+        source is being held, see the dark-read grace in
+        ``_update_from_coordinator``)."""
+        # Unbound on purpose: a test double may call the property's fget on
+        # a MagicMock ``self`` (test_708) — the real base must still run.
+        attrs = SEMSolarSensor._extra_state_attributes_base(self)
+        if getattr(self, "_stale_s", 0):
+            attrs = dict(attrs or {})
+            attrs["stale_s"] = int(self._stale_s)
+        return attrs
+
+    def _extra_state_attributes_base(self) -> Dict[str, Any]:
         """Return additional state attributes."""
         if not self.coordinator.data:
             return {}

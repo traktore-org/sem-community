@@ -72,6 +72,14 @@ DEFAULT_BATTERY_DISCHARGE_CONTROL_ENTITY: Final = ""
 BATTERY_SOC_MAX_STEP_PCT: Final = 25.0   # pp between two reads; a LUNA moves single digits per MINUTE
 BATTERY_SOC_STEP_CONFIRM_READS: Final = 3  # a rejected level that persists this many reads IS the truth
 BATTERY_POWER_PLAUSIBLE_MAX_W: Final = 100_000.0  # no home battery; 22.8 MW was 2 000x the hardware
+# A SEM measurement entity keeps its last good value this long while its
+# source is dark, marked ``stale_s``, before it goes unavailable. PROD's
+# Huawei modbus blinks ~137x/day (p50 29 s, p99 114 s; 238 s the longest
+# seen 03.09) — since #818/#875 every blink blanked the dashboard. The
+# coordinator's own honesty (inputs_degraded, *_unavailable) is untouched;
+# this is the SURFACE holding, and saying so. (Guido, 03.09: "it was very
+# stable before.")
+SENSOR_DARK_READ_GRACE_S: Final = 180
   # Entity ID for battery discharge control (e.g., number.batteries_maximale_entladeleistung)
 
 # EV Charger Control Configuration

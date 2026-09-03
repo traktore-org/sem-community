@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 📊 **A 30-second inverter blink no longer blanks the dashboard.** Since the
+  #818/#875 honesty changes every Huawei modbus dropout published SEM's solar,
+  grid, battery-power and SOC sensors as `unavailable` — on PROD 52–55 times
+  per sensor in one afternoon, 13–15 % of the time — and the Home diagram,
+  the chips and every history graph blinked with it. A SEM measurement now
+  keeps its last good value for up to 180 s while its source is dark, marked
+  with a `stale_s` attribute, and blanks only on a sustained outage. Nothing
+  is invented: a value never read stays unavailable, and the coordinator's
+  own dark-read handling (`inputs_degraded`, the `*_unavailable` flags) is
+  untouched — this is the surface holding, and saying so.
+
 - 🔋 **Battery pacing reads the day's own house profile, not the night
   average** (#820). `build_day_slots` prices a slot as `solar − house`, and
   the night packer fed it the weekday-aware hourly profile — but the pacing

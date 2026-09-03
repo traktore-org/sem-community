@@ -118,6 +118,18 @@ freely. Two further limits worth knowing:
 Set the Control tab's Target Limit slider to MAX (*No grid limit*) to disable
 peak management entirely, guard included.
 
+## A blinking inverter feed is held, not shown
+
+Some inverter integrations (Huawei modbus in particular) drop out for a few
+seconds many times an hour. SEM's own measurement entities (solar, grid,
+battery power, SOC) keep their **last good value for up to 180 s** while the
+source is unreadable and carry a `stale_s` attribute meanwhile; only an
+outage longer than that shows as `unavailable`. The control layer does not
+use the held value — a dark cycle still counts as dark for every decision
+(`inputs degraded — holding`). A value that was never read (a sensor that has
+not reported since a restart) is not held: it stays unavailable rather than
+showing 0.
+
 ## Peak load management
 
 Peak load management requires controllable devices with switch entities for shedding. Devices without a discoverable switch entity must be configured manually. The 15-minute rolling average calculation starts fresh after each HA restart.

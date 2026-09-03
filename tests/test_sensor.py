@@ -188,6 +188,9 @@ class TestEMSSensors:
         mock_coordinator.last_update_success = False
         assert sensor.available is False
 
+        # A dark read is HELD for the grace (03.09) — the entity blanks only
+        # once the source has been dark longer than SENSOR_DARK_READ_GRACE_S.
+        sensor._now_monotonic = lambda: 1e12
         # Test unavailable when data is None
         mock_coordinator.last_update_success = True
         mock_coordinator.data = {"solar_power": None}  # Key matches directly
@@ -449,6 +452,7 @@ class TestEMSSensors:
         assert sensor.native_value == 1500  # String converted to int
 
         # Test invalid string
+        sensor._now_monotonic = lambda: 1e12   # past the dark-read grace
         mock_coordinator.data = {"test_power": "invalid"}
         assert sensor.native_value is None
 
@@ -492,7 +496,8 @@ class TestEMSSensors:
             assert sensor.native_value == expected_value
             assert sensor.available is True
 
-            # Test with None value
+            # Test with None value (past the dark-read grace, 03.09)
+            sensor._now_monotonic = lambda: 1e12
             mock_coordinator.data = {sensor_info["expected_key"]: None}
             assert sensor.native_value is None
             assert sensor.available is False
