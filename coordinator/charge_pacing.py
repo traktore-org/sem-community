@@ -32,6 +32,13 @@ class PacingDecision:
     code: str = "idle"
     """Stable token for the card (buffer/trust/weak_day/paced/clip/none/
     target/soc_unknown). Cards render the token; the prose is a tooltip."""
+    need_kwh: Optional[float] = None
+    """(#820 diag) kWh the pack still needs to reach the target."""
+    fill_kwh: Optional[float] = None
+    """(#820 diag) kWh the day model can put into the pack UNCAPPED — the
+    number ``weak_day`` is judged on. Published so a "weak day" verdict on a
+    bright forecast can be read instead of guessed (.175, 03.09: 27.8 kWh
+    forecast, 5.3 kWh need, verdict weak_day)."""
 
 
 def _fill_kwh(ledger, cap_w: float) -> float:
@@ -100,12 +107,15 @@ def paced_charge_cap_w(
 
     need_kwh = max(0.0, (target_soc_pct - soc_pct) / 100.0 * capacity_kwh)
     if need_kwh <= 0.05:
-        return PacingDecision(None, "target already reached", code="target")
+        return PacingDecision(None, "target already reached", code="target",
+                              need_kwh=round(need_kwh, 2))
 
-    if _fill_kwh(ledger, hw_max_charge_w) < need_kwh:
+    fill_kwh = _fill_kwh(ledger, hw_max_charge_w)
+    if fill_kwh < need_kwh:
         return PacingDecision(
             None, "the day cannot fill the pack even uncapped — a cap "
-                  "only makes it worse", code="weak_day")
+                  "only makes it worse", code="weak_day",
+            need_kwh=round(need_kwh, 2), fill_kwh=round(fill_kwh, 2))
 
     # Binary-search the smallest cap that still lands the target by the
     # end (with the margin) — the inversion of provisional_soc_curve.
@@ -144,7 +154,8 @@ def paced_charge_cap_w(
     slot = _full_slot(ledger, cap, need_kwh)
     full_at = ledger[slot].end.isoformat() if slot is not None else None
     return PacingDecision(round(cap, 0), reason, full_at,
-                          code="clip" if "clipping" in reason else "paced")
+                          code="clip" if "clipping" in reason else "paced",
+                          need_kwh=round(need_kwh, 2), fill_kwh=round(fill_kwh, 2))
 
 
 class ChargePacingWriter:

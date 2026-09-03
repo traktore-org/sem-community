@@ -2978,6 +2978,12 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "cap_w": cp.get("cap_w"),
                 "reason": cp.get("reason"),
                 "reason_code": cp.get("reason_code"),
+                # (#820 diag) why a day is "weak": the need vs what the day
+                # model can fill, and the model itself per slot.
+                "need_kwh": cp.get("need_kwh"),
+                "fill_kwh_at_max": cp.get("fill_kwh_at_max"),
+                "hw_max_charge_w": cp.get("hw_max_charge_w"),
+                "slots": cp.get("slots"),
                 "action": cp.get("action"),
                 "full_at": cp.get("full_at"),
                 "limit_entity": cp.get("entity"),

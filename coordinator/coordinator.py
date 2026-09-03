@@ -6713,7 +6713,38 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             "reason_code": code,
             "action": action,
             "entity": entity or None,
+            # (#820 diag) the two numbers a "weak day" is judged on, and the
+            # day model itself — solar, house and the surplus SEM can pace
+            # into, per remaining slot. Without these a verdict on a bright
+            # forecast cannot be argued with.
+            "need_kwh": getattr(decision, "need_kwh", None) if decision else None,
+            "fill_kwh_at_max": getattr(decision, "fill_kwh", None) if decision else None,
+            "hw_max_charge_w": float(self.config.get(
+                "battery_max_charge_power_w", 5000.0) or 5000.0),
+            "slots": [
+                {
+                    "start": getattr(s, "start", None).strftime("%H:%M")
+                    if getattr(s, "start", None) else None,
+                    "solar_w": round(float(getattr(s, "solar_w", 0.0) or 0.0)),
+                    "home_w": round(float(getattr(s, "home_gross_w", 0.0) or 0.0)),
+                    "surplus_w": (round(float(s.cap_override_w))
+                                  if getattr(s, "cap_override_w", None) is not None
+                                  else 0),
+                }
+                for s in (ledger or [])
+            ][:16],
         }
+        if decision is not None and decision.code == "weak_day":
+            log_on_change(
+                _LOGGER, "charge_pacing:weak_day", logging.INFO,
+                "charge pacing: weak day — need %.2f kWh, the day model fills "
+                "%.2f kWh uncapped (hw max %.0f W); slots %s",
+                float(decision.need_kwh or 0.0), float(decision.fill_kwh or 0.0),
+                float(self.config.get("battery_max_charge_power_w", 5000.0) or 5000.0),
+                [(getattr(s, "start", None).strftime("%H:%M") if getattr(s, "start", None) else "?",
+                  round(float(getattr(s, "solar_w", 0.0) or 0.0)),
+                  round(float(getattr(s, "home_gross_w", 0.0) or 0.0))) for s in (ledger or [])][:12],
+            )
 
     async def _run_battery_pipeline(self, power, energy, charging_state) -> None:
         """Per-cycle battery control via decide_battery + actuate_battery.

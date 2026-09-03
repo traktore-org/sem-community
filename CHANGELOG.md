@@ -21,7 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sleeping house: SEM paced to land full at sunset, the last two hours of sun
   went to the kitchen, and the pack stopped at 88 %. One accessor
   (`_day_home_w_at`) now serves every day-ledger consumer, so the pace is
-  computed against the evening that will actually happen.
+  computed against the evening that will actually happen. The pacing sensor
+  also carries the numbers a verdict is judged on — `need_kwh`,
+  `fill_kwh_at_max`, `hw_max_charge_w` and the day model per slot (solar,
+  house, surplus) — so a "weak day" on a bright forecast can be argued with.
 
 # [2.1.0-beta.6] — 03.09.2026
 
