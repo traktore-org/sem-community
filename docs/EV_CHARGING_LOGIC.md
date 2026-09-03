@@ -103,6 +103,14 @@ a gentle 6 A offer until a fussy car latches) and the full-car backoff
 the minimum hardware commands to converge and then leaves the charger alone.
 The strategy sensor narrates every step.
 
+Before any of that, the **sensor reader** cleans the charger's power reading:
+a median-of-3 absorbs the one-read UDP blip some boxes produce, and (#910) a
+read that collapses below 5 % of the last accepted value *while the charger's
+own status still says charging* is held at that value for at most two cycles
+and marked `ev_power_held` — a report-timing blink, not a measurement. The
+hold lives on the status: the moment the box says it stopped, the next read
+passes as is, and a charger without a status sensor keeps the median alone.
+
 **Where the ceiling comes from.** Two things, and the lower one wins:
 
 1. **Max Amps** (`number.sem_charger_<id>_maximum_current`, 6–80 A) — what you

@@ -2433,3 +2433,17 @@ the planner's raw verdict bypasses the median — the same rule the deficit brid
 "hold the last value" fallback, which decisions can reach it that do NOT depend on the missing
 input — and are they exempt? Refs #907 #818 #552.
 
+### 62. A window filter sized for a one-sample fault, blind to the sensor's own sibling — GUARDED
+**Symptom:** the diagram shows EV 120 W under a car drawing 5 kW; `home_consumption` jumps by the
+missing 5 kW for a cycle; every consumer of the balance (redirect strikes, shedder, day model,
+taper detector) sees a phantom house spike. **Root shape:** the median-of-3 was built for the KEBA's
+ONE-read UDP blip; a report-timing blink that spans two SEM reads defeats it, and the median's own
+lag then repeats the low for a second cycle. Meanwhile the box's status sensor said `charging` the
+whole time and nobody asked it — a sibling reading that names the sample as impossible. **Live
+catch (#910, PROD 03.09, two samples).** **Closure:** a status-gated hold above the median: while the
+charger's own status says charging and the read collapses below 5 % of the last accepted value,
+hold it for at most two cycles and mark the readings; the hold lives on the STATUS (a flip ends it
+at once), never on the clock, and no status sensor means no hold. **Guard:**
+`tests/test_910_keba_blink.py`. **Sweep question:** for every smoothing window, what is the longest
+fault it was sized for, and which sibling sensor could have vetoed the sample outright? Refs #910
+#902 #818.

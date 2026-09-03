@@ -214,6 +214,9 @@ class PowerReadings:
     solar_power_unavailable: bool = False
     grid_power_unavailable: bool = False
     battery_power_all_unavailable: bool = False
+    # (#910) True for a cycle in which a charger's power read was a blink
+    # held at its last accepted value (status still charging).
+    ev_power_held: bool = False
 
     # Battery state
     battery_soc: float = 0.0

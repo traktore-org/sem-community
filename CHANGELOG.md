@@ -13,6 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🛡️ **A one-report charger power blink is a dark read, not a measurement**
+  (#910). The KEBA reported 0.13 kW for one report cycle at 10 A with its own
+  status still `charging`; the median-of-3 absorbs a one-read blip but this
+  one spanned two SEM reads, so `ev_power` copied it and the energy balance
+  grew a phantom 5 kW house spike for a cycle — feeding the redirect strike
+  counter, the shedder's arithmetic and the day model. The reader now holds
+  the last accepted value while the charger's status says charging and the
+  read collapses below 5 % of it, for at most two cycles (the median's own
+  lag), marks the cycle (`ev_power_held`), and drops the hold the moment the
+  status flips off — a real stop is never masked, and a charger with no
+  status sensor keeps the median alone, exactly as before.
+
 - 🛡️ **A guessed grid meter is not a measurement, and never a silent one**
   (#911). With no grid power entity configured, discovery matched entity
   *names* and adopted a heat pump as the grid import meter and a

@@ -27,6 +27,9 @@ from .units import (
 
 from ..utils.log_gate import log_on_change
 from ..consts.core import (
+    EV_POWER_BLINK_HOLD_CYCLES,
+    EV_POWER_BLINK_MIN_W,
+    EV_POWER_BLINK_RATIO,
     BATTERY_POWER_PLAUSIBLE_MAX_W,
     BATTERY_SOC_MAX_STEP_PCT,
     BATTERY_SOC_STEP_CONFIRM_READS,
@@ -443,6 +446,10 @@ class SensorReader:
         # charger (plus a "_fleet" key) so the multi-charger per-charger dict
         # stays consistent with the smoothed fleet sum.
         self._ev_power_hist: Dict[str, deque] = {}
+        # (#910) last accepted EV power per key + how many cycles it has
+        # been held over a blink (status charging, read collapsed).
+        self._ev_power_last: Dict[str, float] = {}
+        self._ev_power_hold: Dict[str, int] = {}
         # Split grid power sensors (Growatt, DSMR, etc.) — discovered on first read.
         # confidence: "same-device" picks are permanently cached; "any-device" picks
         # are re-evaluated each cycle so a late-loading DSMR meter wins once it shows
@@ -2216,10 +2223,12 @@ class SensorReader:
             pass  # nested per-charger sensors handled the read (#642 helper)
         elif ed.ev_power:
             readings.ev_power = FleetEvPower(self._smooth_ev_power(
-                self._read_sensor(ed.ev_power, "ev")))
+                self._read_sensor(ed.ev_power, "ev"),
+                charging=self._fleet_charging_status(), readings=readings))
         elif self.config.ev_power_sensor:
             readings.ev_power = FleetEvPower(self._smooth_ev_power(
-                self._read_sensor(self.config.ev_power_sensor, "ev")
+                self._read_sensor(self.config.ev_power_sensor, "ev"),
+                charging=self._fleet_charging_status(), readings=readings,
             ))
 
         # EV connection status — per-charger OR'd for global (#193), plus
@@ -3282,7 +3291,8 @@ class SensorReader:
             pass  # nested per-charger sensors handled the read (#642 helper)
         elif self.config.ev_power_sensor:
             readings.ev_power = FleetEvPower(self._smooth_ev_power(
-                self._read_sensor(self.config.ev_power_sensor, "ev")
+                self._read_sensor(self.config.ev_power_sensor, "ev"),
+                charging=self._fleet_charging_status(), readings=readings,
             ))
 
         # EV connection status — per-charger OR'd for global (#193), plus
@@ -3330,8 +3340,12 @@ class SensorReader:
             if cps:
                 # Smooth per charger so the per-charger dict stays
                 # consistent with the fleet sum (both blip-filtered).
+                chrg = charger_cfg.get("ev_charging_sensor")
                 cw = self._smooth_ev_power(
                     self._read_sensor(cps, "ev"), key=cid or cps,
+                    charging=(self._read_binary_sensor(chrg, "ev_charging")
+                              if chrg else None),
+                    readings=readings,
                 )
                 total_ev += cw
                 if cid:
@@ -3343,8 +3357,22 @@ class SensorReader:
         readings.ev_power = FleetEvPower(total_ev)
         return True
 
-    def _smooth_ev_power(self, raw: float, key: str = "_fleet") -> float:
-        """Median-of-3 filter for EV power (2026-07-10 flap fix).
+    def _fleet_charging_status(self) -> Optional[bool]:
+        """(#910) The fleet-level charging status for the blink hold, or
+        None when no status sensor is configured (then the hold never
+        engages — the median alone stands, exactly as before)."""
+        ent = self.config.ev_charging_sensor
+        if not ent:
+            return None
+        return self._read_binary_sensor(ent, "ev_charging")
+
+    def _smooth_ev_power(
+        self, raw: float, key: str = "_fleet", *,
+        charging: Optional[bool] = None,
+        readings: Optional[PowerReadings] = None,
+    ) -> float:
+        """Median-of-3 filter for EV power (2026-07-10 flap fix), plus the
+        #910 blink hold on top of it.
 
         UDP-polled chargers (KEBA P30) blip to ~0 for a single cycle while
         the car is really drawing. Left raw, that blip corrupts the home
@@ -3363,9 +3391,44 @@ class SensorReader:
         if hist is None:
             hist = self._ev_power_hist[key] = deque(maxlen=3)
         hist.append(float(raw))
-        if len(hist) < 3:
-            return float(raw)
-        return sorted(hist)[1]
+        med = float(raw) if len(hist) < 3 else sorted(hist)[1]
+        return self._hold_ev_blink(med, key, charging, readings)
+
+    def _hold_ev_blink(
+        self, value: float, key: str, charging: Optional[bool],
+        readings: Optional[PowerReadings],
+    ) -> float:
+        """(#910) A read that collapses below ``EV_POWER_BLINK_RATIO`` of
+        the last accepted value while the charger's own status still says
+        charging is a dark read, not a measurement (PROD 03.09: the KEBA
+        reported 0.13 kW at 10 A for one report cycle, status ``on``, and
+        the median-of-3 let it through because the blink spanned two SEM
+        reads). Hold the accepted value for at most
+        ``EV_POWER_BLINK_HOLD_CYCLES`` cycles and mark the cycle on the
+        readings. The hold lives on the STATUS: a real stop flips it off and
+        the very next read passes unheld; no status sensor → no hold.
+        """
+        prev = self._ev_power_last.get(key)
+        held = self._ev_power_hold.get(key, 0)
+        if (
+            charging is True
+            and prev is not None
+            and prev >= EV_POWER_BLINK_MIN_W
+            and value < prev * EV_POWER_BLINK_RATIO
+            and held < EV_POWER_BLINK_HOLD_CYCLES
+        ):
+            self._ev_power_hold[key] = held + 1
+            if readings is not None:
+                readings.ev_power_held = True
+            _LOGGER.debug(
+                "EV power %s: read %.0f W while the charger says charging "
+                "— blink, holding %.0f W (cycle %d/%d) (#910)",
+                key, value, prev, held + 1, EV_POWER_BLINK_HOLD_CYCLES,
+            )
+            return prev
+        self._ev_power_hold[key] = 0
+        self._ev_power_last[key] = value
+        return value
 
     def _read_sensor(
         self, entity_id: Optional[str], name: str, *, allow_none: bool = False,

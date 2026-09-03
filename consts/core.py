@@ -80,6 +80,19 @@ BATTERY_POWER_PLAUSIBLE_MAX_W: Final = 100_000.0  # no home battery; 22.8 MW was
 # this is the SURFACE holding, and saying so. (Guido, 03.09: "it was very
 # stable before.")
 SENSOR_DARK_READ_GRACE_S: Final = 180
+
+# (#910) A one-report charger power blink (KEBA: 0.13 kW at 10 A while the
+# box's own status still said charging) is a dark read, not a measurement —
+# copied into ev_power it becomes a phantom 5 kW house spike for every
+# consumer of the balance. The reader holds the last accepted value while the
+# charger's status says charging and the read drops below RATIO of it, for at
+# most HOLD_CYCLES cycles: two, because the median-of-3 lags one cycle behind
+# a two-read blink. A real stop flips the status and ends the hold at once;
+# the hold lives on the status, never on the clock. MIN_W keeps the start
+# ladder (a car negotiating at 6 A) out of it.
+EV_POWER_BLINK_RATIO: Final = 0.05
+EV_POWER_BLINK_MIN_W: Final = 1000.0
+EV_POWER_BLINK_HOLD_CYCLES: Final = 2
   # Entity ID for battery discharge control (e.g., number.batteries_maximale_entladeleistung)
 
 # EV Charger Control Configuration

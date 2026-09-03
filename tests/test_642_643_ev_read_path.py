@@ -39,6 +39,8 @@ def _mk_reader(states: dict):
     """A minimal SensorReader with stubbed hass + config."""
     r = SensorReader.__new__(SensorReader)
     r._ev_power_hist = {}
+    r._ev_power_last = {}   # (#910) the blink hold's memory
+    r._ev_power_hold = {}
     r._raw_config = {
         "ev_chargers": [
             {"id": "c1", "ev_charging_power_sensor": "sensor.c1"},
