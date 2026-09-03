@@ -755,7 +755,7 @@ class SurplusAllocationData:
 
 
 async def deactivate_devices(devices, reason: str = "teardown") -> int:
-    """Command every active device in ``devices`` back to normal (#656).
+    """Release every load SEM COMMANDED on in ``devices`` (#656, #908).
 
     Module-level so the teardown path can use it after the registry has been
     detached — at removal time there is no controller left to ask, only the
@@ -763,9 +763,22 @@ async def deactivate_devices(devices, reason: str = "teardown") -> int:
 
     Deliberately takes the RAW device collection rather than
     ``get_devices_sorted()``: that view hides ``is_enabled=False`` and
-    ``managed_externally`` devices, both of which can be latched ON right now,
-    and a teardown that skips them leaves exactly the strand this exists to
-    prevent. Lowest priority first, so the log reads like a normal shed.
+    ``managed_externally`` devices, both of which SEM may have COMMANDED on
+    and which a teardown that skips them would strand. Lowest priority first,
+    so the log reads like a normal shed.
+
+    (#908) Actuates ONLY loads SEM actually commanded on — ``_sem_commanded``,
+    recorded at the ``_activate_owned`` choke point. The strands #656 exists
+    to clear (a hot-water boost, an SG-Ready relay, a SEM-forced switch) all
+    carry it. A load that was merely ADOPTED (external/user ON, claimed under
+    Surplus so goal gates could stop it) or observed in observer mode was
+    never SEM's to switch off — removing the integration must leave the user's
+    loads exactly as they are (markusschloesser, observer-mode install:
+    removal switched off his fridge and freezer, which SEM never commanded).
+    This is the same ownership predicate every other stop path uses
+    (``compute_load_intent`` clause 1, the force-expiry pass, the #847 mode→Off
+    handler): actuate the commanded, leave the rest untouched. In observer
+    mode SEM commands nothing, so this makes teardown a guaranteed no-op.
 
     Best-effort: one device failing must not abort the rest. The alternative
     to swallowing here is an unattended heating device left commanded on by an
@@ -777,6 +790,10 @@ async def deactivate_devices(devices, reason: str = "teardown") -> int:
     stopped = 0
     for device in devices:
         if not getattr(device, "is_active", False):
+            continue
+        # (#908) SEM only releases what SEM commanded. An adopted / external /
+        # observer-mode load stays exactly as the user has it.
+        if not getattr(device, "_sem_commanded", False):
             continue
         try:
             await _deactivate_owned(device)

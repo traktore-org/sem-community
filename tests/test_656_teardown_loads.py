@@ -49,6 +49,11 @@ def _device(device_id="hot_water", priority=2, is_active=True, **kw):
     d.is_active = is_active
     d.is_enabled = kw.get("is_enabled", True)
     d.managed_externally = kw.get("managed_externally", False)
+    # (#908) These fixtures model the strands #656 exists to clear — loads
+    # SEM COMMANDED on (a hot-water boost, an SG-Ready relay, a forced
+    # switch). Teardown now releases only commanded loads, so make ownership
+    # explicit rather than leaning on MagicMock's truthy auto-attribute.
+    d._sem_commanded = kw.get("_sem_commanded", True)
     d.deactivate = AsyncMock()
     return d
 
@@ -157,6 +162,34 @@ class TestTeardownPaths656:
 
         hw.deactivate.assert_awaited_once()
         assert "entry-1" not in sem._PENDING_LOAD_TEARDOWN
+
+    @pytest.mark.asyncio
+    async def test_removal_leaves_an_uncommanded_load_alone(self):
+        """(#908) markusschloesser's fridge/freezer: ON before SEM, adopted but
+        never COMMANDED. The real removal path must not switch it off — the
+        gate holds through ``async_unload_entry`` → ``async_remove_entry``,
+        not only in a direct ``deactivate_devices`` call."""
+        adopted = _device(device_id="freezer", _sem_commanded=False)
+        sc = _controller_with(adopted)
+        hass, entry = _hass_and_entry(sc)
+
+        await async_unload_entry(hass, entry)
+        await async_remove_entry(hass, entry)
+
+        adopted.deactivate.assert_not_called()
+        assert "entry-1" not in sem._PENDING_LOAD_TEARDOWN
+
+    @pytest.mark.asyncio
+    async def test_disabling_leaves_an_uncommanded_load_alone(self):
+        """(#908) Disabling SEM must not turn off the user's own loads either."""
+        from homeassistant.config_entries import ConfigEntryDisabler
+
+        adopted = _device(device_id="freezer", _sem_commanded=False)
+        sc = _controller_with(adopted)
+        hass, entry = _hass_and_entry(sc, disabled_by=ConfigEntryDisabler.USER)
+
+        assert await async_unload_entry(hass, entry) is True
+        adopted.deactivate.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_disabling_the_integration_releases_the_load_immediately(self):
