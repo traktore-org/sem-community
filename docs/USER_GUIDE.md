@@ -454,9 +454,17 @@ answer instead: SEM works out how much of the pack tonight can actually be
 spared, given what your house really uses overnight and how much tomorrow's sun
 is expected to put back.
 
-Turn it on under **Configuration → Battery intelligence → Forecast-led spending** (the two permissions — *may sell to the grid*, *may assist the car* — sit right beside it).
-It is **off by default**, and while it is off every number below is still
-measured and shown — nothing is spent.
+The budget is used by two sinks, and they carry their consent differently:
+
+- **The car.** A charger set to **Solar + battery** has already said the pack
+  may feed it. Below the solar gate it spends tonight's budget down to the
+  computed floor on its own — no extra switch. (Changed 03.09: the master
+  switch used to be required here as well, which contradicted the mode.)
+- **The grid.** Selling forecast surplus needs the master switch under
+  **Configuration → Battery intelligence → Forecast-led spending**, plus the
+  *may sell to the grid* permission beside it. It is **off by default**, and
+  while it is off every number in that section is still measured and shown —
+  nothing is sold.
 
 **How the budget is worked out**
 
@@ -545,11 +553,13 @@ at 82 % the offer is 2864 W instead of 3600 W, because 82 % is much closer to
   plenty spare and the assist runs at full power as before.
 - Tonight's computed floor comes out *below* your buffer — a mild night, so
   your buffer is still the binding limit.
-- Forecast-led spending is off. Then no floor is computed, and the buffer
-  alone decides, exactly as it always has.
+- The forecast has not earned trust yet, or there is no forecast. Then no
+  floor is computed and the buffer alone decides, exactly as it always has.
 
 That last case is deliberate: **no computed floor means fall back to your
-buffer**, never "no floor at all".
+buffer**, never "no floor at all". The master switch does not change this:
+the floor is computed and shown whenever the evidence exists, and a
+Solar + battery charger honours it whether or not selling is switched on.
 
 **Starting from history instead of waiting a week**
 
@@ -670,7 +680,7 @@ The battery **only assists the EV** when there is at least this much **real sola
 | Solar Surplus | Battery Assist | EV Gets From | Typical Scenario |
 |---|---|---|---|
 | ≥ 1200 W (gate) | Enabled | Solar + battery | Sunny morning, battery can help |
-| < 1200 W (below gate) | Disabled | Grid + solar | Overcast day, evening, night |
+| < 1200 W (below gate) | Disabled — unless the charger is in **Solar + battery** and tonight's forecast budget is positive: then the battery assists down to the computed floor | Grid + solar, or battery to the floor | Overcast day, evening |
 | 0 W (night) | Disabled | Grid only (if mode allows) | Night window, no sun |
 
 ### Default and configuration

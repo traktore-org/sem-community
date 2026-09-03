@@ -6401,6 +6401,32 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         self._vpp_publish = self._vpp_dispatcher.publish_state(decision)
 
+    def _ev_wants_pack(self, power) -> bool:
+        """(03.09) Is any CONNECTED charger in *Solar + battery* mode?
+
+        That mode is the user's consent for the pack to feed the car — the
+        same consent ``_battery_assist_split`` acts on — so the battery-side
+        discharge clamp (``decide_battery``) reads it here instead of
+        requiring the forecast-spending master switch as well. Connection is
+        per charger (#315 class: never the fleet OR for a per-charger
+        question); a single-charger install falls back to the fleet flag.
+        """
+        per = getattr(power, "ev_connected_per_charger", None) or {}
+        for cfg in (self.config.get("ev_chargers") or []):
+            cid = str(cfg.get("id") or "")
+            if not cid:
+                continue
+            try:
+                mode = self._effective_charge_mode_for(cfg)
+            except Exception:  # noqa: BLE001 — an unresolvable mode is no consent
+                continue
+            if mode != "solar_plus_battery":
+                continue
+            connected = per.get(cid) if cid in per else getattr(power, "ev_connected", False)
+            if bool(connected):
+                return True
+        return False
+
     def _day_home_w_at(self, now, energy=None):
         """(#820) The house draw a DAY ledger prices its surplus against.
 
@@ -7183,6 +7209,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     .get("battery_spendable_kwh") or 0.0),
                 forecast_spending_enabled=bool(
                     self.config.get("forecast_spending_enabled", False)),
+                # (03.09) the charger-side consent: a connected car whose
+                # mode is Solar + battery — the clamp reads it too.
+                ev_wants_pack=self._ev_wants_pack(power),
                 # (#778) The permission axis, resolved from the per-battery
                 # config so a multi-battery install can grant export on one
                 # pack and withhold it on another.

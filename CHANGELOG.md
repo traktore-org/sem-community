@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔋 **Solar + battery on the charger is the permission to spend the pack.**
+  The forecast-spending master switch was the release train's device for
+  landing the #778 arc asleep, not a user concept — a charger already set to
+  *Solar + battery* had to be switched on a second time before the pack could
+  feed the car below the solar gate ("why do I have to switch it on since I
+  chose the option on the EV charger"). Now the mode is the consent on both
+  sides — the charger's assist and the battery's discharge clamp read the
+  same one — and the forecast budget (spendable > 0, tonight's floor) stays
+  the safety. The switch keeps one job: selling forecast surplus to the grid,
+  where no device mode can carry the consent. Config-card help text updated
+  in English and German; the other languages keep the old wording until the
+  next translation pass.
+
 - 📊 **A 30-second inverter blink no longer blanks the dashboard.** Since the
   #818/#875 honesty changes every Huawei modbus dropout published SEM's solar,
   grid, battery-power and SOC sensors as `unavailable` — on PROD 52–55 times

@@ -393,6 +393,10 @@ class BatteryView:
     # sink. Defaults keep every existing install untouched: no master
     # switch, no budget, and a dynamic floor of None contributes nothing
     # to the max() rather than being read as a floor of zero.
+    ev_wants_pack: bool = False
+    """(03.09) A CONNECTED charger in *Solar + battery* mode — the consent
+    the charger side already acts on (``_battery_assist_split``), so the
+    discharge clamp reads the same one instead of a separate master switch."""
     battery_spendable_kwh: float = 0.0
     forecast_spending_enabled: bool = False
     dynamic_floor_pct: float = None

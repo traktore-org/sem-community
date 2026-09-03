@@ -395,8 +395,13 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
         # left closed, the charger offered assist amps the pack was pinned
         # from delivering and the car drew grid under a line that said
         # battery assist (PROD 02.09). One gate, two readers.
+        # (03.09) …and the consent is the charger's mode as much as the
+        # switch: a connected car in *Solar + battery* has already been told
+        # it may have the pack (``ev_wants_pack``). Same gate as the charger
+        # side, one more reader.
         spend_open = (
-            bool(getattr(view, "forecast_spending_enabled", False))
+            (bool(getattr(view, "forecast_spending_enabled", False))
+             or bool(getattr(view, "ev_wants_pack", False)))
             and float(getattr(view, "battery_spendable_kwh", 0.0) or 0.0) > 0.0
         )
         if (surplus_w < gate_w and not spend_open) or below_buffer:

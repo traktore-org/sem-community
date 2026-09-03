@@ -252,8 +252,18 @@ def _battery_assist_split(view: ChargerView) -> tuple[float, float]:
     # answers a different one — "will tomorrow put this back" — and it is
     # measured, floored and permissioned before it gets here. Master switch
     # OFF by default: this is the first non-inert behaviour in the arc.
+    #
+    # (03.09, Guido: "why do I have to switch it on since I chose the option
+    # on the EV charger") The CONSENT is the charger's mode: *Solar + battery*
+    # already says the pack may feed this car. The master switch was the
+    # release train's inertness device for the arc, not a user concept; it
+    # keeps one job — selling forecast surplus to the grid, where no device
+    # mode carries the consent. The budget (spendable > 0, tonight's floor)
+    # stays the SAFETY either way.
     if surplus < f.battery_assist_min_surplus_w:
-        if not (getattr(f, "forecast_spending_enabled", False)
+        _consent = (getattr(view, "mode", None) == "solar_plus_battery"
+                    or bool(getattr(f, "forecast_spending_enabled", False)))
+        if not (_consent
                 and float(getattr(f, "battery_spendable_kwh", 0.0) or 0.0) > 0.0):
             return surplus, 0.0
     potential = battery_assist_potential_w(
