@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.1.0-beta.7] — 03.09.2026
+
 - 🛡️ **A flat value from a live integration is not a frozen sensor** (#912).
   `foxess_modbus` (and any integration that skips identical writes) never
   advances `last_reported` while a value holds still — an export sensor at
