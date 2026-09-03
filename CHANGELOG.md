@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.1.0-beta.6] — 03.09.2026
+
 - 🧯 **Removing SEM no longer switches off loads it never turned on** (#908).
   Uninstalling (or disabling) the integration ran a teardown that stopped
   *every* active managed switch — including a fridge and freezer that were on
