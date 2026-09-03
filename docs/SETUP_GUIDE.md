@@ -609,7 +609,7 @@ needed. The current factor is exposed on the forecast sensor's attributes.
 
 | Entity | Purpose |
 |--------|---------|
-| `select.sem_charger_<id>_charge_mode` | Per-charger EV intent (v1.6.3) — Solar only / Solar + cheapest hours / Min + Solar / Always (max) / Off. Replaces the legacy `night_charging`, `smart_night_charging`, `tariff_optimized` switches and `ev_charging_mode` select. |
+| `select.sem_charger_<id>_charge_mode` | Per-charger EV intent (v1.6.3, extended 2.1) — Solar only / **Solar + battery** / Solar + cheapest hours / Min + Solar / Always (max) / Off. Replaces the legacy `night_charging`, `smart_night_charging`, `tariff_optimized` switches and `ev_charging_mode` select. |
 | `switch.sem_observer_mode` | Toggle read-only mode without reinstalling |
 
 ### Dashboard settings
@@ -882,6 +882,26 @@ auto-start SOC) the EV starts even without solar surplus.
 
 Scenario: 1.5 kW solar surplus, SOC 85%. Battery contributes ~2.5 kW assist,
 giving the EV ~4 kW. Charger runs continuously instead of intermittently.
+
+**Solar + battery (2.1)**
+
+Choose this mode when you want your own stored power in the car rather than
+grid power in the evening. Above the Solar Gate it behaves like Battery
+Assist. Below it — the hour after the sun has gone, which is exactly when a
+car is usually plugged in — it keeps charging from the pack, bounded by two
+things:
+
+- **How deep:** the drain stops at the higher of your Buffer SoC and
+  *tonight's computed floor* — the amount that must still be in the pack at
+  dawn for the house to get through the night on what it has measured itself
+  using. Never below your buffer, whatever the forecast says.
+- **Whether at all below the gate:** only while tonight's *spendable* budget
+  is positive, which requires a trusted forecast that tomorrow will refill
+  what is spent. No trust, no budget, no evening drain.
+
+Choosing the mode is the permission; there is no second switch to enable.
+Once the night window opens the mode still never grid-charges without an
+"At least" floor, and that floor is filled from the grid, not the pack.
 
 **Min+PV**
 

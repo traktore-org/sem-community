@@ -79,6 +79,18 @@ Both can be short-circuited from your own recorder history (**Rebuild from
 history** on the battery card, and *Learn forecast accuracy from past
 history*), but only if the counters exist — see below.
 
+Two things people expect from *Solar + battery* that it deliberately does not
+do:
+
+- **It stops a little above the computed floor, not exactly on it.** The offer
+  tapers as the pack nears the floor, and a car with a high minimum current
+  (a KEBA at 8 A wants ~3.2 kW) stops accepting before the taper reaches the
+  floor. Measured on a real install: stop at 81 % against a 78.6 % floor.
+  A car with a lower minimum gets closer.
+- **It does not use the battery for the overnight "At least" top-up.** Once
+  the night window opens, the guaranteed floor is filled from the **grid** by
+  design — after dark the pack's job is the house.
+
 ## Reconstructed nights are an upper bound, and need four meters (2.1)
 
 Rebuilding overnight history reads cumulative energy counters rather than

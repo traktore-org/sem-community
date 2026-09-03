@@ -134,7 +134,7 @@ Once installed, SEM runs without manual intervention:
 - **Solar surplus appears** — EV charging current increases automatically to use it (6–32 A range)
 - **Clouds roll in** — EV charging reduces or pauses, resumes when surplus returns
 - **Battery reaches priority SOC** — surplus is redirected to EV charging
-- **Evening** — solar charging stops; system monitors overnight
+- **Evening** — solar charging stops; system monitors overnight. With a charger in **Solar + battery**, the home battery keeps the car going after sunset — down to the level the house needs for the night, no further
 - **Night charging** — *opt-in (off by default)*; when enabled, grid-charges the EV to your daily-target floor
 - **Smart forecast** — if tomorrow is sunny, tonight's grid charging is reduced or skipped
 
@@ -142,7 +142,7 @@ The controls that matter most:
 
 | Entity | Default | Purpose |
 |--------|---------|---------|
-| `select.sem_charger_<id>_charge_mode` | `Min + Solar` | Per-charger charging mode: **Solar only** / **Solar + cheapest hours** / **Min + Solar** (grid minimum 6A + surplus) / **Always max** / **Off**. Pick based on your needs; see [Charging Modes](SETUP_GUIDE.md#8-ev-charging-modes) in the Setup Guide. |
+| `select.sem_charger_<id>_charge_mode` | `Min + Solar` | Per-charger charging mode: **Solar only** / **Solar + battery** (surplus plus the home battery, down to the level the house still needs overnight) / **Solar + cheapest hours** / **Min + Solar** (grid minimum 6A + surplus) / **Always max** / **Off** (hands-off — SEM sends nothing). Pick based on your needs; see [Charging Modes](SETUP_GUIDE.md#8-ev-charging-modes) in the Setup Guide. |
 | `number.sem_battery_assist_min_surplus` | 1200 W | **Solar Gate**: minimum real solar surplus to enable battery assist for the EV. Set to 0 W to allow battery support everywhere (previous behaviour). Prevents battery drain into the car at night. |
 | `switch.sem_observer_mode` | **ON** (new installs) | Monitor-only — turn it OFF to let SEM control hardware |
 

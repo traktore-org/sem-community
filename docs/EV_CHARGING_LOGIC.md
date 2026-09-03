@@ -32,7 +32,7 @@ migrating old automations):
 | Mode | Grid use | Home battery | What it does |
 |---|---|---|---|
 | **Solar only** | Never, unless *you* set a floor | **Never discharges for the car** | Pure surplus charging. Idles at night. |
-| **Solar + battery** *(2.1, #885)* | Never, unless *you* set a floor | Assists above the Buffer SoC (Solar Gate permitting) | Surplus plus the pack — the charger twin of a load's "Solar + battery" mode, restoring the legacy `pv` / `self_consumption` split. Idles at night. Works from day one; the forecast-led bypass and the dynamic floor wake once the battery learner completes (the card says so while it's still gathering). |
+| **Solar + battery** *(2.1, #885/#878)* | Never, unless *you* set a floor | Assists down to **max(Buffer SoC, tonight's computed floor)** — above the Solar Gate always, and below it when tonight's forecast budget is positive | Surplus plus the pack — the charger twin of a load's "Solar + battery" mode, restoring the legacy `pv` / `self_consumption` split. Idles at night. Works from day one; the forecast-led bypass and the dynamic floor wake once the battery learner completes (the card says so while it's still gathering). |
 | **Solar + cheapest hours** | Only in cheap tariff windows | Never | Surplus by day; grid only when the dynamic price is cheap. Always listed — shown disabled with the reason when no dynamic tariff is configured. |
 | **Min + Solar** *(default)* | Up to the Min guarantee | Assists above the Buffer SoC | Guarantees *At least X kWh* by the *Charge by* deadline (night top-up when needed); solar adds up to Max on top. |
 | **Always (max)** | Whatever it takes | — | Charge at maximum immediately. Explicit override — ignores solar, tariff and night logic. |

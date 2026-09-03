@@ -448,11 +448,26 @@ The discharge *rate* is not per-battery: **`number.sem_battery_max_discharge_pow
 
 ### Forecast-Led Spending (v2.1)
 
-By default your battery's overnight floor is a number you type once, and it is
-the same number in June and in December. Forecast-led spending makes it an
-answer instead: SEM works out how much of the pack tonight can actually be
-spared, given what your house really uses overnight and how much tomorrow's sun
-is expected to put back.
+**In one sentence:** let the car drain the home battery in the evening, but
+only down to the level the house still needs to get through the night on its
+own — and only when tomorrow's sun is expected to put it back.
+
+That is the whole idea. The rest of this section is how SEM works out "the
+level the house still needs", and what it refuses to do when it cannot.
+
+**The problem it replaces.** Your battery's overnight floor used to be a
+number you typed once, and it was the same number in June and in December.
+Too high and the car charges from the grid at six o'clock while the pack sits
+full. Too low and the house buys back at the evening rate what the car took.
+Forecast-led spending makes the floor an *answer* instead: SEM works out how
+much of the pack tonight can actually be spared, given what your house really
+uses overnight and how much tomorrow's sun is expected to put back.
+
+**Where you see it.** The Battery tab shows tonight's computed floor beside
+your configured one, the spendable figure in kWh, and which of the three
+states it is in (below). The EV card's strategy line names the assist when it
+is happening: *"Zone 4: budget=6000W → 10A (solar surplus + capped battery
+assist)"*.
 
 The budget is used by two sinks, and they carry their consent differently:
 
@@ -505,6 +520,9 @@ default to your current behaviour, so turning forecast spending on does not
 silently grant a permission you never gave.
 
 **How deep the car may drain the battery (#878)**
+
+> *"The car should drain the battery to the expected level, so the house
+> consumption is still covered by the battery."* — the request this answers.
 
 The permission above answers *whether* the car may have any of the pack. A
 second question follows: **how much?**
@@ -560,6 +578,36 @@ That last case is deliberate: **no computed floor means fall back to your
 buffer**, never "no floor at all". The master switch does not change this:
 the floor is computed and shown whenever the evidence exists, and a
 Solar + battery charger honours it whether or not selling is switched on.
+
+**What it looks like on a real evening**
+
+A maintainer's install, 03.09, 15 kWh pack, buffer 75 %, computed floor
+78.6 %, assist ceiling 5000 W, car on a KEBA in *Solar + battery*:
+
+| time | what happened |
+|---|---|
+| 17:51 | Sun fading, pack 90 %. Assist opens: `Zone 4: budget=6000W → 10A`, ~4 kW out of the pack into the car. |
+| 18:15 | Surplus falls to 858 W, under the 1000 W solar gate — assist stops, pack 82 %. |
+| 18:46 | Below the gate, the forecast budget takes over: assist resumes at 8 A. This is the part the gate alone would never allow. |
+| 18:53 | Stop at **81 %**, floor 78.6 %. The pack never crossed it. |
+
+Read the last row carefully: it stopped **2.4 % above** the floor, not on it.
+The offer tapers as the pack approaches the floor (half the ceiling at the
+floor, full at the auto-start SOC), and this car will not charge below 8 A ≈
+3.2 kW. When the tapered offer falls under what the car accepts, the session
+ends there. On a car with a lower minimum the drain would reach closer to the
+floor. Either way the floor is a floor: it is never crossed.
+
+**What it will not do**
+
+- It will not drain the pack below the higher of your buffer and tonight's
+  computed floor — not for the car, not for a grid sale.
+- It will not spend at all until it has measured five of your own nights.
+- It will not charge the car *from the pack* overnight. Once the night window
+  opens, an "At least" top-up is a **grid** top-up by design; the pack's job
+  after dark is the house.
+- It will not act on a forecast it does not trust yet. Trust is earned per
+  horizon and shown on the Battery tab.
 
 **Starting from history instead of waiting a week**
 

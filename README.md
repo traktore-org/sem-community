@@ -26,7 +26,7 @@ SEM monitors your solar production, battery, grid, EV charger, and household dev
 ## Features
 
 - **Smart EV charging** — dynamic 6-32A current control based on real-time solar surplus
-- **Five charging modes** — Solar only, Solar + cheapest hours, Min + Solar, Always (max), Off
+- **Six charging modes** — Solar only, **Solar + battery**, Solar + cheapest hours, Min + Solar, Always (max), Off
 - **Auto mode** — automatically switches between self-consumption and fast charging based on solar forecast vs EV need
 - **1↔3-phase switching (#804)** — *off by default in 2.1 while the model is reworked; enable per charger under Configuration → EV chargers → Phase switching.* For wallboxes with a phase-switch entity (go-e, KEBA X-series, openWB): SEM measures the active phases from the real draw, offers a per-charger **Phase Mode** (Auto / 1-phase / 3-phase), and switches through a safe *stop → switch → settle → start* sequence with hysteresis and hard interval/session caps. Auto scales the charger to fit the surplus; manual winter-pins 1-phase for low sun. See [docs/EV_CHARGING_LOGIC.md](docs/EV_CHARGING_LOGIC.md#phase-switching--13phase-observed-manual-and-automatic-804)
 - **Battery-aware** — four-zone SOC strategy decides when battery helps the EV and when it charges first
@@ -35,6 +35,7 @@ SEM monitors your solar production, battery, grid, EV charger, and household dev
 - **Tariff-optimized charging** — opt-in per charger: defer night charging to the cheapest contiguous price window (Min still guaranteed by the deadline), **top the Min floor up from grid on a cheap or negative price hour during the day** (#856), and pause grid top-up during expensive hours — surfaced live as the next-cheap-window on the EV card
 - **Night charging with battery protection** — charges EV from grid overnight without draining home battery
 - **Battery export arbitrage** — on a dynamic/spot tariff, opt-in sell the home battery to the grid when the export price beats the cost of recharging later (round-trip + wear accounted for); never below your reserve SOC, brand-agnostic, shown live as a "Selling to grid" state. See [docs/BATTERY_EXPORT_ARBITRAGE.md](docs/BATTERY_EXPORT_ARBITRAGE.md)
+- **Battery → car in the evening (2.1, #778/#878)** — set a charger to **Solar + battery** and the home battery keeps charging the car after the sun has gone, but only down to the level the house still needs to reach dawn (measured from your own nights, never below your buffer), and only when tomorrow's forecast is expected to put it back.
 - **Forecast-led battery spending (2.1, #778)** — your battery's overnight floor stops being a number you typed once in June and becomes an answer: *how much of the pack can tonight actually spare, given what your house really uses overnight and how much tomorrow's sun is expected to put back?* Every term is measured — the pack's real capacity, the high-percentile envelope of your own recorded nights, tomorrow's forecast after house load and committed EV charge, scaled by how accurate that horizon has actually proven. **Off by default**, and while it is off every number is still measured and shown, so you can watch it be right before letting it spend. Two separate permissions (*may sell to the grid*, *may assist the car*) rather than one mode. See [Forecast-Led Spending](docs/USER_GUIDE.md#forecast-led-spending-v21)
 - **Paced battery charging (2.1, #820)** — a pack that fills flat-out is full by 11:30 and then clips the whole afternoon. SEM spreads the fill across the day from the solar forecast minus house forecast, so the battery lands full at day's end and the surplus in between goes to the car, the loads, or the grid. Opt-in; declines to pace on a forecast it has not earned trust in, and charges flat-out below the safety buffer regardless
 - **Hot water solar boost** — SEM supplements your existing heating system with solar surplus (does not replace your boiler/heat pump), with mandatory Legionella prevention cycle (DVGW W 551, SIA 385/1, ÖNORM B 5019)
@@ -208,6 +209,17 @@ The per-charger `Charge mode` selector replaces the four-toggle soup with five n
 ### Solar only
 
 Pure surplus. With the **"At least" floor at 0** — the default — it never touches the grid, day or night. Set a floor **on this charger** and SEM tops that shortfall up overnight by the Charge-by time, which is how you keep the solar-first mode and still guarantee a minimum (#634/#679). Pick this if you only ever want to charge from sun.
+
+### Solar + battery (2.1)
+
+Surplus first, and when the sun runs out the **home battery** carries on
+charging the car — the mode most people mean by "use my own power for the
+car". Two limits make it safe: the drain stops at the higher of your Buffer
+SoC and **tonight's computed floor** (what the house needs to reach dawn,
+measured from your own nights), and below the Solar Gate it only spends when
+tomorrow's forecast is expected to refill the pack. Choosing this mode *is*
+the permission — there is no second switch. Grid: never, unless you set an
+"At least" floor, which is a night top-up like every other mode.
 
 ### Solar + cheapest hours
 
