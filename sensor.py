@@ -3201,6 +3201,20 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             attrs["peak_limit_unlimited"] = self.coordinator.data.get(
                 "peak_limit_unlimited", False
             )
+            # (#909) The #864 slot guard's live numbers, on the entity that
+            # carries the limit they defend. The card showed a 15-minute
+            # AVERAGE labelled "Current Peak" and nothing about the budget
+            # that actually bounds the next command, which is how 4.9 kW of
+            # charging and a 4.36 kW "margin" could appear side by side and
+            # read as a contradiction (Guido, 03.09). None when the install is
+            # uncapped or the guard has not published yet — never 0, which
+            # would draw a slot nobody measured.
+            attrs["peak_slot_allowed_w"] = self.coordinator.data.get(
+                "peak_slot_allowed_w"
+            )
+            attrs["peak_slot_used_kwh"] = self.coordinator.data.get(
+                "peak_slot_used_kwh"
+            )
         elif self.entity_description.key == "monthly_consecutive_peak":
             # (#657) The ``top_5_peaks`` / ``top_5_peaks_formatted`` pair used
             # to be built here from ``peak_history_top5`` — a key no producer

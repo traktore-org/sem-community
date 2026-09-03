@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 📊 **The peak card says what its number is, and shows the budget it steers
+  by** (#909). "Current Peak 0.55 kW / Margin 5.45 kW" next to a car drawing
+  4.9 kW read as a contradiction; both were right, because that figure is the
+  **15-minute rolling average** of grid import — the metric a demand tariff
+  bills — and nothing said so. The Load Management card now names it
+  *15-min average*, shows the instantaneous grid draw beside it, and adds the
+  billing slot the #864 guard defends: the window, how much of its energy
+  budget is spent, and what the rest of the slot may average. The guard's two
+  numbers ride on the peak-limit entity, absent rather than zero when the
+  install is uncapped.
+
 - 🔋 **Solar + battery on the charger is the permission to spend the pack.**
   The forecast-spending master switch was the release train's device for
   landing the #778 arc asleep, not a user concept — a charger already set to

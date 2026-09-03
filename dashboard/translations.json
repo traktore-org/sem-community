@@ -1504,7 +1504,13 @@
     "rebuild_nights_hint": "Načte zaznamenanou historii baterie a tyto noci rekonstruuje hned, místo čekání na ně",
     "rebuild_nights_busy": "Sestavuji…",
     "sensor_disabled": "Senzor vypnutý",
-    "enable_horizon_sensor": "Vaše integrace dodává tento senzor predikce vypnutý — zapněte jej v Home Assistantu a SEM se začne tento horizont učit"
+    "enable_horizon_sensor": "Vaše integrace dodává tento senzor predikce vypnutý — zapněte jej v Home Assistantu a SEM se začne tento horizont učit",
+    "peak_15min_avg": "15minutový průměr",
+    "peak_right_now": "Právě teď",
+    "peak_slot": "Zúčtovací okno",
+    "peak_slot_allows": "Zbytek okna průměrně",
+    "help_peak_15min_avg": "Klouzavý 15minutový průměr odběru ze sítě — hodnota, kterou účtuje výkonový tarif, nikoli okamžitá hodnota.",
+    "help_peak_slot": "Každá čtvrthodina má energetický rozpočet (váš cíl po dobu 15 minut). SEM omezuje každý příkaz, aby okno cíl dodrželo."
   },
   "da": {
     "% of limit": "% af grænse",
@@ -3011,7 +3017,13 @@
     "rebuild_nights_hint": "Læser batteriets egen registrerede historik og genskaber disse nætter nu i stedet for at vente på dem",
     "rebuild_nights_busy": "Genopbygger…",
     "sensor_disabled": "Sensor slået fra",
-    "enable_horizon_sensor": "Din integration leverer denne prognosesensor deaktiveret — aktivér den i Home Assistant, så begynder SEM at lære denne horisont"
+    "enable_horizon_sensor": "Din integration leverer denne prognosesensor deaktiveret — aktivér den i Home Assistant, så begynder SEM at lære denne horisont",
+    "peak_15min_avg": "15-min gennemsnit",
+    "peak_right_now": "Lige nu",
+    "peak_slot": "Afregningsvindue",
+    "peak_slot_allows": "Resten af vinduet i snit",
+    "help_peak_15min_avg": "Det glidende 15-minutters gennemsnit af nettræk — tallet en effekttarif afregner, ikke øjebliksværdien.",
+    "help_peak_slot": "Hvert kvarter har et energibudget (dit mål i 15 minutter). SEM begrænser hver kommando, så vinduet rammer målet."
   },
   "de": {
     "% of limit": "% des Limits",
@@ -4518,7 +4530,13 @@
     "rebuild_nights_hint": "Liest den aufgezeichneten Verlauf Ihrer Batterie und rekonstruiert diese Nächte sofort, statt auf sie zu warten",
     "rebuild_nights_busy": "Wird aufgebaut…",
     "sensor_disabled": "Sensor aus",
-    "enable_horizon_sensor": "Ihre Integration liefert diesen Prognosesensor deaktiviert — aktivieren Sie ihn in Home Assistant, dann lernt SEM diesen Horizont"
+    "enable_horizon_sensor": "Ihre Integration liefert diesen Prognosesensor deaktiviert — aktivieren Sie ihn in Home Assistant, dann lernt SEM diesen Horizont",
+    "peak_15min_avg": "15-Min-Mittelwert",
+    "peak_right_now": "Aktuell",
+    "peak_slot": "Abrechnungsfenster",
+    "peak_slot_allows": "Rest des Fensters im Mittel",
+    "help_peak_15min_avg": "Der gleitende 15-Minuten-Mittelwert des Netzbezugs — die Grösse, die ein Leistungstarif verrechnet. Nicht der Momentanwert: Ein Auto, das sechs der letzten fünfzehn Minuten geladen hat, bewegt diesen Wert nur wenig.",
+    "help_peak_slot": "Jede Viertelstunde hat ein Energiebudget (Ihr Zielwert für 15 Minuten). SEM verfolgt, was dieses Fenster bereits bezogen hat, und begrenzt jeden Befehl so, dass das Fenster den Zielwert einhält."
   },
   "en": {
     "% of limit": "% of limit",
@@ -6025,7 +6043,13 @@
     "rebuild_nights_hint": "Reads your battery's own recorded history and reconstructs these nights now, instead of waiting for them to happen",
     "rebuild_nights_busy": "Rebuilding…",
     "sensor_disabled": "Sensor off",
-    "enable_horizon_sensor": "Your integration ships this forecast sensor disabled — enable it in Home Assistant and SEM will start learning this horizon"
+    "enable_horizon_sensor": "Your integration ships this forecast sensor disabled — enable it in Home Assistant and SEM will start learning this horizon",
+    "peak_15min_avg": "15-min average",
+    "peak_right_now": "Right now",
+    "peak_slot": "Billing slot",
+    "peak_slot_allows": "Rest of slot may average",
+    "help_peak_15min_avg": "The 15-minute rolling average of grid import — the number a demand tariff bills. It is not what the meter shows right now: a car that has been charging for six of the last fifteen minutes moves this figure only a little.",
+    "help_peak_slot": "Each clock quarter-hour has an energy budget (your target for 15 minutes). SEM tracks what this slot has already imported and caps every command it issues so the slot still lands on target."
   },
   "es": {
     "% of limit": "% del límite",
@@ -7532,7 +7556,13 @@
     "rebuild_nights_hint": "Lee el historial registrado de su batería y reconstruye esas noches ahora, en lugar de esperarlas",
     "rebuild_nights_busy": "Reconstruyendo…",
     "sensor_disabled": "Sensor apagado",
-    "enable_horizon_sensor": "Su integración entrega este sensor de previsión desactivado — actívelo en Home Assistant y SEM aprenderá este horizonte"
+    "enable_horizon_sensor": "Su integración entrega este sensor de previsión desactivado — actívelo en Home Assistant y SEM aprenderá este horizonte",
+    "peak_15min_avg": "Media de 15 min",
+    "peak_right_now": "Ahora mismo",
+    "peak_slot": "Ventana de facturación",
+    "peak_slot_allows": "Resto de la ventana en media",
+    "help_peak_15min_avg": "La media móvil de 15 minutos del consumo de red — el valor que factura una tarifa de potencia, no el valor instantáneo.",
+    "help_peak_slot": "Cada cuarto de hora tiene un presupuesto de energía (su objetivo durante 15 minutos). SEM limita cada orden para que la ventana cumpla el objetivo."
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -9039,7 +9069,13 @@
     "rebuild_nights_hint": "Lukee akun oman tallennetun historian ja muodostaa nämä yöt heti sen sijaan, että niitä odotettaisiin",
     "rebuild_nights_busy": "Rakennetaan…",
     "sensor_disabled": "Anturi pois",
-    "enable_horizon_sensor": "Integraatiosi toimittaa tämän ennusteanturin poistettuna käytöstä — ota se käyttöön Home Assistantissa, niin SEM alkaa oppia tämän horisontin"
+    "enable_horizon_sensor": "Integraatiosi toimittaa tämän ennusteanturin poistettuna käytöstä — ota se käyttöön Home Assistantissa, niin SEM alkaa oppia tämän horisontin",
+    "peak_15min_avg": "15 min keskiarvo",
+    "peak_right_now": "Juuri nyt",
+    "peak_slot": "Laskutusikkuna",
+    "peak_slot_allows": "Loppuikkuna keskimäärin",
+    "help_peak_15min_avg": "Verkosta oton liukuva 15 minuutin keskiarvo — tehotariffin laskuttama luku, ei hetkellinen arvo.",
+    "help_peak_slot": "Jokaisella vartilla on energiabudjetti (tavoitteesi 15 minuutin ajan). SEM rajoittaa jokaista komentoa, jotta ikkuna pysyy tavoitteessa."
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -10546,7 +10582,13 @@
     "rebuild_nights_hint": "Lit l'historique enregistré de votre batterie et reconstruit ces nuits maintenant, au lieu de les attendre",
     "rebuild_nights_busy": "Reconstruction…",
     "sensor_disabled": "Capteur désactivé",
-    "enable_horizon_sensor": "Votre intégration livre ce capteur de prévision désactivé — activez-le dans Home Assistant et SEM apprendra cet horizon"
+    "enable_horizon_sensor": "Votre intégration livre ce capteur de prévision désactivé — activez-le dans Home Assistant et SEM apprendra cet horizon",
+    "peak_15min_avg": "Moyenne 15 min",
+    "peak_right_now": "En ce moment",
+    "peak_slot": "Fenêtre de facturation",
+    "peak_slot_allows": "Reste de la fenêtre en moyenne",
+    "help_peak_15min_avg": "La moyenne glissante sur 15 minutes du soutirage réseau — la valeur facturée par un tarif de puissance, pas la valeur instantanée.",
+    "help_peak_slot": "Chaque quart d'heure dispose d'un budget d'énergie (votre cible pendant 15 minutes). SEM plafonne chaque commande pour que la fenêtre atteigne la cible."
   },
   "hu": {
     "% of limit": "% a határból",
@@ -12053,7 +12095,13 @@
     "rebuild_nights_hint": "Beolvassa az akkumulátor rögzített előzményeit, és most rekonstruálja ezeket az éjszakákat ahelyett, hogy megvárná őket",
     "rebuild_nights_busy": "Felépítés…",
     "sensor_disabled": "Érzékelő kikapcsolva",
-    "enable_horizon_sensor": "Az integrációja letiltva szállítja ezt az előrejelzés-érzékelőt — kapcsolja be a Home Assistantban, és a SEM tanulni kezdi ezt a horizontot"
+    "enable_horizon_sensor": "Az integrációja letiltva szállítja ezt az előrejelzés-érzékelőt — kapcsolja be a Home Assistantban, és a SEM tanulni kezdi ezt a horizontot",
+    "peak_15min_avg": "15 perces átlag",
+    "peak_right_now": "Most",
+    "peak_slot": "Elszámolási ablak",
+    "peak_slot_allows": "Az ablak hátralévő része átlagosan",
+    "help_peak_15min_avg": "A hálózati vételezés 15 perces mozgóátlaga — ezt számlázza a teljesítménydíj, nem a pillanatnyi értéket.",
+    "help_peak_slot": "Minden negyedórának van energiakerete (a célérték 15 percre). A SEM minden parancsot úgy korlátoz, hogy az ablak tartsa a célt."
   },
   "it": {
     "% of limit": "% del limite",
@@ -13560,7 +13608,13 @@
     "rebuild_nights_hint": "Legge lo storico registrato della batteria e ricostruisce subito queste notti, invece di attenderle",
     "rebuild_nights_busy": "Ricostruzione…",
     "sensor_disabled": "Sensore spento",
-    "enable_horizon_sensor": "La tua integrazione fornisce questo sensore di previsione disattivato — attivalo in Home Assistant e SEM imparerà questo orizzonte"
+    "enable_horizon_sensor": "La tua integrazione fornisce questo sensore di previsione disattivato — attivalo in Home Assistant e SEM imparerà questo orizzonte",
+    "peak_15min_avg": "Media 15 min",
+    "peak_right_now": "Adesso",
+    "peak_slot": "Finestra di fatturazione",
+    "peak_slot_allows": "Resto della finestra in media",
+    "help_peak_15min_avg": "La media mobile su 15 minuti del prelievo di rete — il valore fatturato da una tariffa di potenza, non il valore istantaneo.",
+    "help_peak_slot": "Ogni quarto d'ora ha un budget di energia (il tuo obiettivo per 15 minuti). SEM limita ogni comando affinché la finestra rispetti l'obiettivo."
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -15067,7 +15121,13 @@
     "rebuild_nights_hint": "Leest de opgeslagen historie van uw batterij en reconstrueert deze nachten nu, in plaats van erop te wachten",
     "rebuild_nights_busy": "Bezig met opbouwen…",
     "sensor_disabled": "Sensor uit",
-    "enable_horizon_sensor": "Uw integratie levert deze prognosesensor uitgeschakeld — zet hem aan in Home Assistant en SEM gaat deze horizon leren"
+    "enable_horizon_sensor": "Uw integratie levert deze prognosesensor uitgeschakeld — zet hem aan in Home Assistant en SEM gaat deze horizon leren",
+    "peak_15min_avg": "15-min gemiddelde",
+    "peak_right_now": "Nu",
+    "peak_slot": "Afrekenvenster",
+    "peak_slot_allows": "Rest van venster gemiddeld",
+    "help_peak_15min_avg": "Het voortschrijdend 15-minutengemiddelde van netafname — het getal dat een capaciteitstarief factureert, niet de momentane waarde.",
+    "help_peak_slot": "Elk kwartier heeft een energiebudget (uw doel gedurende 15 minuten). SEM begrenst elk commando zodat het venster op het doel uitkomt."
   },
   "no": {
     "% of limit": "% av grense",
@@ -16574,7 +16634,13 @@
     "rebuild_nights_hint": "Leser batteriets egen registrerte historikk og gjenskaper disse nettene nå i stedet for å vente på dem",
     "rebuild_nights_busy": "Bygger opp…",
     "sensor_disabled": "Sensor av",
-    "enable_horizon_sensor": "Integrasjonen din leverer denne prognosesensoren deaktivert — aktiver den i Home Assistant, så begynner SEM å lære denne horisonten"
+    "enable_horizon_sensor": "Integrasjonen din leverer denne prognosesensoren deaktivert — aktiver den i Home Assistant, så begynner SEM å lære denne horisonten",
+    "peak_15min_avg": "15-min gjennomsnitt",
+    "peak_right_now": "Akkurat nå",
+    "peak_slot": "Avregningsvindu",
+    "peak_slot_allows": "Resten av vinduet i snitt",
+    "help_peak_15min_avg": "Det glidende 15-minutters gjennomsnittet av nettuttak — tallet en effekttariff fakturerer, ikke øyeblikksverdien.",
+    "help_peak_slot": "Hvert kvarter har et energibudsjett (målet ditt i 15 minutter). SEM begrenser hver kommando slik at vinduet treffer målet."
   },
   "pl": {
     "% of limit": "% limitu",
@@ -18081,7 +18147,13 @@
     "rebuild_nights_hint": "Odczytuje zapisaną historię akumulatora i odtwarza te noce teraz, zamiast na nie czekać",
     "rebuild_nights_busy": "Odtwarzanie…",
     "sensor_disabled": "Czujnik wyłączony",
-    "enable_horizon_sensor": "Twoja integracja dostarcza ten czujnik prognozy wyłączony — włącz go w Home Assistant, a SEM zacznie uczyć się tego horyzontu"
+    "enable_horizon_sensor": "Twoja integracja dostarcza ten czujnik prognozy wyłączony — włącz go w Home Assistant, a SEM zacznie uczyć się tego horyzontu",
+    "peak_15min_avg": "Średnia 15-minutowa",
+    "peak_right_now": "Teraz",
+    "peak_slot": "Okno rozliczeniowe",
+    "peak_slot_allows": "Reszta okna średnio",
+    "help_peak_15min_avg": "Ruchoma średnia 15-minutowa poboru z sieci — wartość rozliczana w taryfie mocowej, nie wartość chwilowa.",
+    "help_peak_slot": "Każdy kwadrans ma budżet energii (Twój cel przez 15 minut). SEM ogranicza każde polecenie, aby okno zmieściło się w celu."
   },
   "pt": {
     "% of limit": "% do limite",
@@ -19588,7 +19660,13 @@
     "rebuild_nights_hint": "Lê o histórico registado da sua bateria e reconstrói estas noites agora, em vez de esperar por elas",
     "rebuild_nights_busy": "A reconstruir…",
     "sensor_disabled": "Sensor desligado",
-    "enable_horizon_sensor": "A sua integração fornece este sensor de previsão desativado — ative-o no Home Assistant e o SEM aprenderá este horizonte"
+    "enable_horizon_sensor": "A sua integração fornece este sensor de previsão desativado — ative-o no Home Assistant e o SEM aprenderá este horizonte",
+    "peak_15min_avg": "Média de 15 min",
+    "peak_right_now": "Agora",
+    "peak_slot": "Janela de faturação",
+    "peak_slot_allows": "Resto da janela em média",
+    "help_peak_15min_avg": "A média móvel de 15 minutos do consumo da rede — o valor faturado por uma tarifa de potência, não o valor instantâneo.",
+    "help_peak_slot": "Cada quarto de hora tem um orçamento de energia (o seu alvo durante 15 minutos). O SEM limita cada comando para a janela cumprir o alvo."
   },
   "ro": {
     "% of limit": "% din limită",
@@ -21095,7 +21173,13 @@
     "rebuild_nights_hint": "Citește istoricul înregistrat al bateriei și reconstruiește aceste nopți acum, în loc să le aștepte",
     "rebuild_nights_busy": "Se reconstruiește…",
     "sensor_disabled": "Senzor oprit",
-    "enable_horizon_sensor": "Integrarea dvs. livrează acest senzor de prognoză dezactivat — activați-l în Home Assistant și SEM va învăța acest orizont"
+    "enable_horizon_sensor": "Integrarea dvs. livrează acest senzor de prognoză dezactivat — activați-l în Home Assistant și SEM va învăța acest orizont",
+    "peak_15min_avg": "Media pe 15 min",
+    "peak_right_now": "Acum",
+    "peak_slot": "Fereastră de facturare",
+    "peak_slot_allows": "Restul ferestrei în medie",
+    "help_peak_15min_avg": "Media mobilă pe 15 minute a consumului din rețea — valoarea facturată de un tarif de putere, nu valoarea instantanee.",
+    "help_peak_slot": "Fiecare sfert de oră are un buget de energie (ținta ta pe 15 minute). SEM limitează fiecare comandă pentru ca fereastra să atingă ținta."
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -22602,7 +22686,13 @@
     "rebuild_nights_hint": "Läser batteriets egen registrerade historik och återskapar dessa nätter nu i stället för att vänta på dem",
     "rebuild_nights_busy": "Bygger upp…",
     "sensor_disabled": "Sensor av",
-    "enable_horizon_sensor": "Din integration levererar denna prognossensor avstängd — aktivera den i Home Assistant så börjar SEM lära sig denna horisont"
+    "enable_horizon_sensor": "Din integration levererar denna prognossensor avstängd — aktivera den i Home Assistant så börjar SEM lära sig denna horisont",
+    "peak_15min_avg": "15-min medelvärde",
+    "peak_right_now": "Just nu",
+    "peak_slot": "Debiteringsfönster",
+    "peak_slot_allows": "Resten av fönstret i snitt",
+    "help_peak_15min_avg": "Det glidande 15-minutersmedelvärdet av nätuttaget — talet som en effekttariff debiterar, inte momentanvärdet.",
+    "help_peak_slot": "Varje kvart har en energibudget (ditt mål under 15 minuter). SEM begränsar varje kommando så att fönstret hamnar på målet."
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -24109,6 +24199,12 @@
     "rebuild_nights_hint": "读取电池自身的记录历史并立即重建这些夜晚，而不必等待它们发生",
     "rebuild_nights_busy": "正在重建…",
     "sensor_disabled": "传感器已禁用",
-    "enable_horizon_sensor": "您的集成默认禁用了该预测传感器——在 Home Assistant 中启用它，SEM 便会开始学习该时段"
+    "enable_horizon_sensor": "您的集成默认禁用了该预测传感器——在 Home Assistant 中启用它，SEM 便会开始学习该时段",
+    "peak_15min_avg": "15 分钟平均值",
+    "peak_right_now": "当前",
+    "peak_slot": "计费时段",
+    "peak_slot_allows": "时段剩余可用平均",
+    "help_peak_15min_avg": "电网取电的 15 分钟滚动平均值——需量电价按此计费，而不是瞬时值。",
+    "help_peak_slot": "每个一刻钟都有能量预算（15 分钟内的目标值）。SEM 会限制每条指令，使该时段仍能达到目标。"
   }
 }

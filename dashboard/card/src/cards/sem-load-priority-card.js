@@ -14,6 +14,7 @@
  */
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
+import { importKw, slotStatus } from '../util/peak-slot.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { moveToIndex, regroupChildren, computeDropIndex } from '../util/drag-reorder.js';
 import { semTheme, semDefineCard, semFormatPower } from '../base/sem-shared.js';
@@ -43,7 +44,10 @@ class SEMLoadPriorityCard extends SEMLitBase {
         this.devices = [];
         this.targetPeakLimit = 5.0;
         this.peakLimitUnlimited = false;  // (#716) explicit opt-out, never inferred
-        this.currentPeak = 0;
+        this.currentPeak = 0;            // the BILLED metric: 15-min rolling average
+        this.gridImportKw = null;        // (#909) instantaneous, for contrast
+        this.slotAllowedW = null;        // (#864/#909) what the rest of this slot may average
+        this.slotUsedKwh = null;         // (#864/#909) energy spent in this billing slot
         this.loadManagementStatus = 'normal';
         this._sortable = null;
         this._interacting = false;
@@ -371,6 +375,15 @@ class SEMLoadPriorityCard extends SEMLitBase {
         if (targetPeakEntity)  this.targetPeakLimit      = parseFloat(targetPeakEntity.state)  || 5.0;
         if (targetPeakEntity)  this.peakLimitUnlimited   = targetPeakEntity.attributes?.peak_limit_unlimited || false;
         if (currentPeakEntity) this.currentPeak          = parseFloat(currentPeakEntity.state) || 0;
+        // (#909) The two other quantities the peak block needs to stop reading
+        // as a contradiction: what the meter shows RIGHT NOW, and the slot
+        // budget the #864 guard actually steers by.
+        if (targetPeakEntity) {
+            this.slotAllowedW = targetPeakEntity.attributes?.peak_slot_allowed_w ?? null;
+            this.slotUsedKwh  = targetPeakEntity.attributes?.peak_slot_used_kwh ?? null;
+        }
+        const gridEntity = this._hass.states[`${this.entityPrefix}grid_power`];
+        this.gridImportKw = gridEntity ? importKw(gridEntity.state) : null;
         if (statusEntity)      this.loadManagementStatus = statusEntity.state || 'normal';
 
         if (devicesEntity?.attributes?.devices) {
@@ -431,6 +444,13 @@ class SEMLoadPriorityCard extends SEMLitBase {
         const peakColor  = this._getPeakColor();
         const peakMargin = this.targetPeakLimit - this.currentPeak;
         const peakPct    = unlimited ? 0 : (this.targetPeakLimit > 0 ? Math.min((this.currentPeak / this.targetPeakLimit) * 100, 100) : 0);
+        // (#909) The billing slot the guard defends — null when the install is
+        // uncapped or the guard has published nothing yet.
+        const slot = unlimited ? null : slotStatus({
+            targetKw: this.targetPeakLimit,
+            usedKwh: this.slotUsedKwh,
+            allowedW: this.slotAllowedW,
+        });
 
         return html`
             <ha-card>
@@ -439,7 +459,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         <div class="peak-dot" style="background:${peakColor};box-shadow:0 0 8px ${peakColor}"></div>
                         <span id="lm-status" class="status-text">${this._t(this.loadManagementStatus || 'normal').toUpperCase()}</span>
                         <div class="spacer"></div>
-                        <span class="dim">${this._t('peak')}</span>
+                        <span class="dim">${this._t('peak_15min_avg')}</span>
                         <span id="peak-current" class="mono">${this.currentPeak.toFixed(2)} kW</span>
                         <span class="dim">/ ${unlimited ? this._t('uncapped') : this.targetPeakLimit.toFixed(1)}</span>
                         <button class="help-btn ${this._showHelp ? 'active' : ''}" data-action="toggle-help"
@@ -448,9 +468,14 @@ class SEMLoadPriorityCard extends SEMLitBase {
 
                     <div class="peak-box">
                         <div class="peak-row">
-                            <span class="dim">${this._t('current_peak')}</span>
+                            <span class="dim">${this._t('peak_15min_avg')}</span>
                             <span id="peak-current2" class="mono">${this.currentPeak.toFixed(2)} kW</span>
                         </div>
+                        ${this.gridImportKw === null ? nothing : html`
+                        <div class="peak-row">
+                            <span class="dim">${this._t('peak_right_now')}</span>
+                            <span id="peak-now" class="mono dim">${this.gridImportKw.toFixed(2)} kW</span>
+                        </div>`}
                         <div class="peak-row">
                             <span class="dim">${this._t('target_limit')}</span>
                             <span id="peak-target" class="mono">${unlimited ? this._t('uncapped') : this.targetPeakLimit.toFixed(2) + ' kW'}</span>
@@ -463,6 +488,20 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         <div class="bar">
                             <div id="peak-bar" class="bar-fill" style="width:${peakPct}%;background:${peakColor}"></div>
                         </div>
+                        ${slot === null ? nothing : html`
+                        <div class="peak-row" style="margin-top:10px">
+                            <span class="dim">${this._t('peak_slot')} ${slot.label}</span>
+                            <span id="peak-slot-used" class="mono">${slot.usedKwh.toFixed(2)} / ${slot.budgetKwh.toFixed(2)} kWh</span>
+                        </div>
+                        <div class="bar">
+                            <div id="peak-slot-bar" class="bar-fill"
+                                 style="width:${slot.fraction * 100}%;background:${slot.overBudget ? '#f44336' : peakColor}"></div>
+                        </div>
+                        ${slot.allowedKw === null ? nothing : html`
+                        <div class="peak-row">
+                            <span class="dim">${this._t('peak_slot_allows')}</span>
+                            <span id="peak-slot-allows" class="mono dim">${slot.allowedKw.toFixed(2)} kW</span>
+                        </div>`}` }
                     </div>
 
                     <div class="peak-box" style="margin-bottom:16px">
@@ -479,6 +518,8 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         <div class="help-item"><b>${this._t('priority')}</b> — ${this._t('help_device_priority')}</div>
                         <div class="help-item"><b>${this._t('requires')}</b> — ${this._t('help_device_requires')}</div>
                         <div class="help-item"><b>${this._t('configure')}</b> — ${this._t('help_device_configure')}</div>
+                        <div class="help-item"><b>${this._t('peak_15min_avg')}</b> — ${this._t('help_peak_15min_avg')}</div>
+                        <div class="help-item"><b>${this._t('peak_slot')}</b> — ${this._t('help_peak_slot')}</div>
                         <div class="help-item"><b>${this._t('target_limit')}</b> — ${this._t('help_device_peak')}</div>
                         <div class="help-item"><b>${this._t('daily_target')}</b> — ${this._t('help_device_target')}</div>
                     </div>` : nothing}
