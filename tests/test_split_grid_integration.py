@@ -18,14 +18,22 @@ from custom_components.solar_energy_management.coordinator.sensor_reader import 
 from custom_components.solar_energy_management.coordinator.types import PowerReadings
 
 
-def _state(value, unit="W", device_class=None):
-    """Create a mock HA state."""
+def _state(value, unit="W", device_class=None, state_class="measurement"):
+    """Create a mock HA state.
+
+    (#911) Real meters publish ``state_class: measurement``; the fixture
+    carries it by default so the discovery filter that now requires it sees
+    these the way it sees a DSMR/Growatt entity. Pass ``state_class=None``
+    to model a forecast/estimate entity, which has none.
+    """
     s = MagicMock()
     s.state = str(value)
     s.entity_id = f"sensor.mock_{id(s)}"
     s.attributes = {"unit_of_measurement": unit}
     if device_class:
         s.attributes["device_class"] = device_class
+    if state_class:
+        s.attributes["state_class"] = state_class
     return s
 
 

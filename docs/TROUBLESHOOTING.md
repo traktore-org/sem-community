@@ -263,6 +263,27 @@ On a solar install a second voter runs first: solar production has no sign ambig
 
 ---
 
+## SEM guessed your grid power meters
+
+**Symptom:** a Repair names two entities SEM adopted as your grid import and
+export meters, and the grid figures on the dashboard do not match what your
+meter shows (a house drawing 1.5 kW reads 10 W of import).
+
+**Cause (#911):** no grid power entity is configured and the Energy
+Dashboard's grid source carries no power sensor, so SEM falls back to
+matching entity *names* against known meter patterns (`power_consumption`,
+`power_production`, `import_from_grid`, …). Where no match sits on the same
+device as your grid energy counters, the pick is a guess — on a large install
+a heat pump's `power_consumption` or a forecast's `power_production` can win.
+Since #911 a guess is said out loud (this Repair and one WARNING) and
+forecast/estimate entities are never candidates.
+
+**Fix:** open *Settings → Integrations → SEM → Configure → Sensors* and set
+**Grid import power** and **Grid export power** to your real meter entities
+(both positive-only, in W). The Repair clears on the next read. If your
+inverter only exposes per-phase registers, a template sensor summing them
+works — see `grid_import_power_entity` in the setup guide.
+
 ## The battery platform is pinned to generic
 
 **Symptom:** a Repair says the battery platform is set to *generic* although a

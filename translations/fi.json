@@ -1691,6 +1691,10 @@
     "battery_platform_pinned_generic": {
       "title": "Battery platform pinned to Generic on a {brand} install",
       "description": "SEM's battery platform is set to **Generic / other**, but the {brand} integration is loaded. Earlier versions of the options wizard offered only Generic and Deye and defaulted to Generic, so walking through that page once demoted a {brand} install to the generic adapter — no forcible charge, no idempotent register writes. Open **Settings → Integrations → SEM → Configure → Battery scheduler** and set **Battery charge platform** to **Auto-detect**. If Generic is a deliberate choice (a battery with its own control entities), set that entity and this notice goes away."
+    },
+    "split_grid_guessed": {
+      "title": "SEM guessed your grid power meters",
+      "description": "No grid power entity is configured and the Energy Dashboard gives none, so SEM matched entity names and adopted **{import_entity}** as the grid import meter and **{export_entity}** as the export meter — without any device evidence. If those are not your meters, every decision is steering on a wrong number. Open **Settings → Integrations → SEM → Configure → Sensors** and set **Grid import power** and **Grid export power** explicitly; this notice clears on the next read."
     }
   },
   "selector": {

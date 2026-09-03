@@ -227,6 +227,8 @@ _DOCS_ANCHORS = {
     "sensor_unavailable": "a-configured-sensor-is-unavailable",
     # (#900) the options wizard pinned a brand install to the generic adapter
     "battery_platform_pinned_generic": "the-battery-platform-is-pinned-to-generic",
+    # (#911) the grid meters were guessed by name — set them explicitly
+    "split_grid_guessed": "sem-guessed-your-grid-power-meters",
     "sensor_stale": "a-sensor-stopped-updating-stale",
     "no_forecast_integration": "no-solar-forecast-integration-found",
     "no_recorder": "the-recorder-is-not-available",
@@ -343,6 +345,36 @@ def _versions(hass: HomeAssistant) -> dict:
     except Exception:  # noqa: BLE001
         ha_ver = ""
     return {"sem_version": sem, "ha_version": ha_ver if isinstance(ha_ver, str) else ""}
+
+
+def raise_split_grid_guessed(hass: HomeAssistant, *, import_entity, export_entity) -> None:
+    """(#911) The grid meters were adopted by entity-name pattern with no
+    device evidence. One persistent Repair naming both picks; cleared by a
+    same-device pair, an explicit pair, or a rediscovery."""
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id="split_grid_guessed",
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="split_grid_guessed",
+            learn_more_url=next_step_url("docs", "split_grid_guessed", **_versions(hass)),
+            translation_placeholders={
+                "import_entity": str(import_entity or "—"),
+                "export_entity": str(export_entity or "—"),
+            },
+        )
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.create (split_grid_guessed) failed: %s", e)
+
+
+def clear_split_grid_guessed(hass: HomeAssistant) -> None:
+    try:
+        ir.async_delete_issue(hass, DOMAIN, "split_grid_guessed")
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete (split_grid_guessed) failed: %s", e)
 
 
 def raise_battery_platform_pinned_generic(hass: HomeAssistant, *, brand: str) -> None:

@@ -1691,6 +1691,10 @@
     "battery_platform_pinned_generic": {
       "title": "Battery platform pinned to Generic on a {brand} install",
       "description": "SEM's battery platform is set to **Generic / other**, but the {brand} integration is loaded. Earlier versions of the options wizard offered only Generic and Deye and defaulted to Generic, so walking through that page once demoted a {brand} install to the generic adapter — no forcible charge, no idempotent register writes. Open **Settings → Integrations → SEM → Configure → Battery scheduler** and set **Battery charge platform** to **Auto-detect**. If Generic is a deliberate choice (a battery with its own control entities), set that entity and this notice goes away."
+    },
+    "split_grid_guessed": {
+      "title": "SEM hat Ihre Netzleistungs-Zähler erraten",
+      "description": "Es ist keine Netzleistungs-Entität konfiguriert und das Energie-Dashboard liefert keine, daher hat SEM anhand von Entitätsnamen **{import_entity}** als Netzbezugs-Zähler und **{export_entity}** als Einspeise-Zähler übernommen — ohne Gerätenachweis. Sind das nicht Ihre Zähler, steuert jede Entscheidung auf einer falschen Zahl. Öffnen Sie **Einstellungen → Integrationen → SEM → Konfigurieren → Sensoren** und setzen Sie **Netzbezug Leistung** und **Einspeisung Leistung** explizit; der Hinweis verschwindet beim nächsten Lesen."
     }
   },
   "selector": {

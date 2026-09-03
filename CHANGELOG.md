@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🛡️ **A guessed grid meter is not a measurement, and never a silent one**
+  (#911). With no grid power entity configured, discovery matched entity
+  *names* and adopted a heat pump as the grid import meter and a
+  forecast_solar "+12 h production" sensor as the export meter — the house
+  drew 1.5 kW while SEM read 10 W, for weeks, with the pick visible only in
+  the diagnostics download. Now a discovery candidate must carry
+  `state_class: measurement` (forecasts and estimates never do) and
+  forecast-shaped entities are excluded outright; an `any-device` adoption —
+  a pick with no device evidence — is said out loud, once, as a WARNING and a
+  persistent Repair naming both picks and the two options that lock the real
+  pair; and a dropped pick takes its `sensor_stale` Repair with it instead of
+  leaving it in the registry forever.
+
 - 📊 **The peak card says what its number is, and shows the budget it steers
   by** (#909). "Current Peak 0.55 kW / Margin 5.45 kW" next to a car drawing
   4.9 kW read as a contradiction; both were right, because that figure is the

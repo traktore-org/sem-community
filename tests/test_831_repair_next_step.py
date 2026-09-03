@@ -29,6 +29,7 @@ REPAIR_ISSUES_PY = (
 TROUBLESHOOTING = Path(__file__).resolve().parent.parent / "docs" / "TROUBLESHOOTING.md"
 
 DOCS_SIDE = {
+    "split_grid_guessed",   # (#911) set the two grid power entities
     "battery_platform_pinned_generic",   # (#900) the wizard pinned it — docs say how to unpin
     "battery_operating_mode_unexpected",
     "sensor_unavailable", "sensor_stale", "no_forecast_integration",

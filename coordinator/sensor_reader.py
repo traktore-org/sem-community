@@ -9,6 +9,8 @@ from dataclasses import dataclass, replace
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
+from . import repair_issues as _ri
+
 from .types import FleetEvPower, PowerReadings
 from .charger_adapters.status_enum import (
     classify_charger_status,
@@ -1924,6 +1926,11 @@ class SensorReader:
             export_w = self._read_sensor(ed.grid_power_to, "grid_export")
             readings.grid_power = export_w - import_w
             self._grid_sign_detected = True
+            # (#911) an explicit pair ends any guess — and its Repair.
+            if self._split_grid_discovery.get("guess_reported"):
+                self._forget_split_grid_picks(self._split_grid_discovery, keep=(None, None))
+                self._split_grid_discovery["guess_reported"] = None
+                _ri.clear_split_grid_guessed(self.hass)
             self._audit_split_pair(
                 "grid", "Grid (declared two-sensor pair)",
                 import_w, ed.grid_power_from, export_w, ed.grid_power_to,
@@ -1969,9 +1976,11 @@ class SensorReader:
                 _prev_exp = disc["export"]
                 imp, exp, conf = self._discover_split_grid_power(ed)
                 if self._should_adopt_split_grid_picks(disc, conf):
+                    self._forget_split_grid_picks(disc, keep=(imp, exp))
                     disc["import"] = imp
                     disc["export"] = exp
                     disc["confidence"] = conf
+                    self._report_split_grid_confidence(disc)
                     if (_prev_imp is not None or _prev_exp is not None) and (
                         _prev_imp != imp or _prev_exp != exp
                     ):
@@ -2969,6 +2978,16 @@ class SensorReader:
                 # Must be a power sensor
                 if attrs.get("device_class") != "power" and attrs.get("unit_of_measurement") not in ("W", "kW"):
                     continue
+                # (#911) …and a MEASUREMENT. A forecast or estimate carries
+                # ``device_class: power`` and a unit but no ``state_class`` —
+                # verified on the reporter's install, where forecast_solar's
+                # "+12 h production" was adopted as the grid export meter on
+                # the substring ``power_production``. A meter always says
+                # ``measurement``.
+                if attrs.get("state_class") != "measurement":
+                    continue
+                if self._looks_like_a_forecast(state.entity_id):
+                    continue
 
                 is_import = any(p in eid for p in import_patterns)
                 is_export = any(p in eid for p in export_patterns)
@@ -3044,6 +3063,10 @@ class SensorReader:
         Called from __init__.py when a new sensor appears or after HA has fully
         started. Same-device locks are wiped along with any-device picks.
         """
+        # (#911) A dropped pick takes its ``sensor_stale`` Repair with it,
+        # and a guess that is being redone is no longer a guess to report.
+        self._forget_split_grid_picks(self._split_grid_discovery, keep=(None, None))
+        _ri.clear_split_grid_guessed(self.hass)
         self._split_grid_discovery = {
             "import": None,
             "export": None,
@@ -3054,6 +3077,62 @@ class SensorReader:
         # have changed (e.g. a new sensor appeared), so a fresh failure is worth surfacing.
         self._split_grid_discovery_warned = False
         self._last_split_grid_log = None  # next discovery logs at INFO again
+
+    _FORECAST_PLATFORMS = frozenset({
+        "forecast_solar", "open_meteo_solar_forecast", "solcast_solar",
+    })
+    _FORECAST_NAME_MARKERS = ("forecast", "_next_", "estimate", "predict")
+
+    def _looks_like_a_forecast(self, entity_id: str) -> bool:
+        """(#911) A forecast/estimate entity is never a grid meter — by
+        registry platform where the registry answers, by name otherwise."""
+        eid = (entity_id or "").lower()
+        if any(m in eid for m in self._FORECAST_NAME_MARKERS):
+            return True
+        try:
+            entry = er.async_get(self.hass).async_get(entity_id)
+            platform = getattr(entry, "platform", None) if entry else None
+            return isinstance(platform, str) and platform in self._FORECAST_PLATFORMS
+        except Exception:  # noqa: BLE001 — no registry, no verdict
+            return False
+
+    def _report_split_grid_confidence(self, disc: dict) -> None:
+        """(#911) An ``any-device`` adoption is a GUESS — pattern-matched
+        entity names with no device evidence — and a guess presented as a
+        measurement is worse than no number: the reporter's install read
+        10 W of import while the house drew 1466 W, for weeks, and the pick
+        appeared only in the diagnostics download. Say it once per pair, on
+        the log and as a persistent Repair with the next step; a same-device
+        pair retires it."""
+        pair = (disc.get("import"), disc.get("export"))
+        if disc.get("confidence") == "any-device" and any(pair):
+            if disc.get("guess_reported") != pair:
+                disc["guess_reported"] = pair
+                _LOGGER.warning(
+                    "Split-grid meters GUESSED by name (any-device, no device "
+                    "evidence): import=%s, export=%s. If these are not your grid "
+                    "meters, SEM is steering on a wrong number — set "
+                    "grid_import_power_entity / grid_export_power_entity to lock "
+                    "the real pair. (#911)",
+                    pair[0], pair[1],
+                )
+                _ri.raise_split_grid_guessed(
+                    self.hass, import_entity=pair[0], export_entity=pair[1],
+                )
+        elif disc.get("guess_reported"):
+            disc["guess_reported"] = None
+            _ri.clear_split_grid_guessed(self.hass)
+        elif disc.get("confidence") == "same-device":
+            _ri.clear_split_grid_guessed(self.hass)
+
+    def _forget_split_grid_picks(self, disc: dict, *, keep) -> None:
+        """(#911) Clear the ``sensor_stale`` Repair of any pick that is
+        being dropped. The freshness check only runs for entities SEM still
+        reads, so a Repair filed against a dropped pick used to live in the
+        issue registry forever."""
+        for old in (disc.get("import"), disc.get("export")):
+            if old and old not in keep:
+                _ri.clear_sensor_stale(self.hass, old)
 
     def _get_device_for_entity(self, entity_id: str) -> Optional[str]:
         """Get device_id for an entity from the entity registry."""
