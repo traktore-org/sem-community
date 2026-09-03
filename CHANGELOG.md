@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🧯 **Removing SEM no longer switches off loads it never turned on** (#908).
+  Uninstalling (or disabling) the integration ran a teardown that stopped
+  *every* active managed switch — including a fridge and freezer that were on
+  before SEM ran and that SEM had only observed, never commanded. Teardown now
+  releases only loads SEM actually started (a hot-water boost, an SG-Ready
+  relay, a forced switch); an adopted or observer-mode load is left exactly as
+  the user has it, and in observer mode — where SEM commands nothing — removal
+  touches nothing. (reported by @markusschloesser)
 - 🔌 **Charge mode Off is hands-off** (#898). With a charger set to *Off*, a
   session started elsewhere in Home Assistant was stopped by SEM within a
   cycle — the only escape was global observer mode. Off now means what the
