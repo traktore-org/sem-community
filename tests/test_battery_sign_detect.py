@@ -420,7 +420,10 @@ class TestSplitGridPowerDiscovery:
         state = Mock()
         state.entity_id = entity_id
         state.state = str(value)
-        state.attributes = {"unit_of_measurement": unit, "device_class": "power"}
+        # (#911) a candidate must be a live measurement — a forecast or a
+        # statistic is never a grid meter
+        state.attributes = {"unit_of_measurement": unit, "device_class": "power",
+                            "state_class": "measurement"}
         return state
 
     def test_discovers_growatt_sph_sensors(self):
