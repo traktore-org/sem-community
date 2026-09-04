@@ -986,6 +986,98 @@ def _census_energy_shaped(dev_entities) -> bool:
         for e in dev_entities)
 
 
+def _roster():
+    """(#915) The generated roster, or ``None``. Imported lazily and never
+    at module scope: it is a 30 KB data module that only the census and the
+    proposal path need, and a missing or broken roster must degrade to
+    today's behaviour rather than break a detection run."""
+    try:
+        from .consts import integration_roster as _r
+        return _r
+    except Exception:  # noqa: BLE001 — a prior is never load-bearing
+        return None
+
+
+def roster_provenance() -> Dict[str, Any]:
+    """When the roster was generated and from where — a prior with no
+    provenance is a rumour."""
+    r = _roster()
+    if r is None:
+        return {}
+    meta = getattr(r, "ROSTER_META", {}) or {}
+    return {"schema": getattr(r, "SCHEMA", None),
+            "generated_at": meta.get("generated_at"),
+            "rows": meta.get("kept")}
+
+
+def describe_domain(domain: str) -> Optional[Dict[str, Any]]:
+    """(#915) What the ecosystem says an integration IS — name, kind and how
+    many people run it — or ``None`` when the roster has never heard of it.
+
+    This is the ONLY thing the roster is allowed to assert on its own: a
+    name. It is not a claim that SEM supports the brand, and nothing here
+    reads a user's entities."""
+    r = _roster()
+    if r is None:
+        return None
+    row = (getattr(r, "ROSTER", {}) or {}).get(str(domain))
+    if not row:
+        return None
+    return {"domain": str(domain), "name": row.get("name"),
+            "kind": row.get("kind"), "installs": row.get("installs"),
+            "known_vocabulary": bool(
+                (getattr(r, "ROLE_VOCAB", {}) or {}).get(str(domain)))}
+
+
+def roster_role_keys(domain: str, role: str) -> tuple:
+    """The entity keys an integration DECLARES for a SEM role, from its own
+    repository. Empty when the roster has no vocabulary for it."""
+    r = _roster()
+    if r is None:
+        return ()
+    body = ((getattr(r, "ROLE_VOCAB", {}) or {}).get(str(domain)) or {}).get(role)
+    return tuple(body.get("keys", ())) if body else ()
+
+
+def propose_roles_from_roster(dev_entities, domain: str) -> Dict[str, Any]:
+    """(#915) Role proposals for ONE device, as an INTERSECTION.
+
+    The roster says what an integration calls things; ``dev_entities`` is
+    what this install actually has. Only entities present in BOTH are
+    proposed, so this can never invent hardware — the entity is physically
+    in the user's registry, under that integration. It can still be a wrong
+    ROLE, which is why every consumer treats the result as a proposal the
+    user confirms and never as a binding (bug class 42: read paths may
+    guess, actuation paths may not).
+
+    Matching is on ``translation_key`` (or a ``unique_id`` suffix), never on
+    the entity_id: a translation key is the integration author's own
+    semantic label, an entity_id is the user's rename.
+    """
+    r = _roster()
+    if r is None:
+        return {}
+    vocab = (getattr(r, "ROLE_VOCAB", {}) or {}).get(str(domain))
+    if not vocab:
+        return {}
+    out: Dict[str, Any] = {}
+    for role, body in vocab.items():
+        keys = tuple(body.get("keys", ()))
+        want_domain = str(body.get("platform") or "")
+        for entry in dev_entities:
+            eid = str(getattr(entry, "entity_id", ""))
+            if want_domain and not eid.startswith(f"{want_domain}."):
+                continue
+            tk = str(getattr(entry, "translation_key", "") or "")
+            uid = str(getattr(entry, "unique_id", "") or "")
+            hit = next((k for k in keys if tk == k or uid.endswith(k)), None)
+            if hit:
+                out[role] = {"entity": eid, "matched_key": hit,
+                             "source": "roster", "confirmed": False}
+                break
+    return out
+
+
 def build_integration_census(hass=None, registry=None, config_domains=None,
                              matched_charger_platforms=None) -> Dict[str, Any]:
     """The census: what is installed, what SEM knows, and the two gaps.
@@ -1042,6 +1134,16 @@ def build_integration_census(hass=None, registry=None, config_domains=None,
         "known_inverter_domains_present": inverters_present,
         "rows_matched_nothing": rows_matched_nothing,
         "unknown_energy_domains": unknown_energy,
+        # (#915) The same gap, with a name on it. "eg4_web_monitor" tells the
+        # user nothing; "EG4 Web Monitor, 412 installs" tells them what to
+        # report and tells us what it would be worth. Additive on purpose —
+        # every existing key above is byte-identical, so nothing that reads
+        # this census had to change.
+        "unknown_energy_domains_named": [
+            d for d in (describe_domain(dom) for dom in unknown_energy)
+            if d is not None
+        ],
+        "roster": roster_provenance(),
     }
 
 
@@ -1124,6 +1226,15 @@ def build_detection_report(hass: Optional[HomeAssistant] = None,
                     "device_id": device_id,
                     "entities": [_describe(e) for e in dev_entities],
                     "note": "entities present, no role matched",
+                    # (#915) "a near miss is a brand we almost support" — so
+                    # say which brand, and which of its own declared keys
+                    # these entities match. REPORT DATA ONLY: never merged
+                    # into ``mapping``, never written anywhere. The user
+                    # confirms a proposal in the pickers; SEM binds nothing
+                    # it guessed.
+                    "roster": describe_domain(platform),
+                    "proposed_roles": propose_roles_from_roster(
+                        dev_entities, platform),
                 })
                 continue
             mapped: Dict[str, Any] = {}
@@ -1907,10 +2018,10 @@ _DISCHARGE_CONTROL_PATTERNS = [
 ]
 
 
-def discover_inverter_from_registry(
+def discover_inverter_from_registry_verbose(
     hass: HomeAssistant,
     energy_dashboard_config,
-) -> Optional[str]:
+) -> Tuple[Optional[str], str]:
     """Auto-discover the battery discharge control number entity.
 
     Walks the entity registry from a sensor we already know (from the HA
@@ -1924,13 +2035,16 @@ def discover_inverter_from_registry(
             ``ha_energy_reader.read_energy_dashboard_config``.
 
     Returns:
-        The entity_id of the discovered control entity, or ``None`` if no
-        match was found. SEM falls back to no discharge protection when
-        ``None`` is returned, matching today's behaviour for users without
-        a configured entity.
+        ``(entity_id, rung)`` — the discovered control entity or ``None``,
+        and WHICH rung answered: ``translation_key`` (the integration's own
+        declared key, #915), ``entity_id_pattern`` (the name regexes), or a
+        reason for the miss. The rung is what makes the #915 rung's arrival
+        observable: the headline live assertion is the SAME entity for a
+        better reason. ``discover_inverter_from_registry`` below drops it,
+        so no existing caller changed.
     """
     if energy_dashboard_config is None:
-        return None
+        return None, "no_energy_dashboard"
 
     # Try battery sensors first (most likely to be on the same integration
     # as the discharge control), fall back to solar/grid.
@@ -1944,7 +2058,7 @@ def discover_inverter_from_registry(
     ]
     seed_candidates = [s for s in seed_candidates if s]
     if not seed_candidates:
-        return None
+        return None, "no_seed"
 
     entity_reg = entity_registry.async_get(hass)
 
@@ -1956,7 +2070,7 @@ def discover_inverter_from_registry(
             break
 
     if seed_entry is None or not seed_entry.platform:
-        return None
+        return None, "no_registry_entry"
 
     platform = seed_entry.platform
     config_entry_id = seed_entry.config_entry_id
@@ -1979,7 +2093,7 @@ def discover_inverter_from_registry(
         same_integration.append(entry.entity_id)
 
     if not same_integration:
-        return None
+        return None, "no_candidates"
 
     # A name match is not sufficient: Deye/ha-solarman exposes e.g.
     # ``number.inverter_battery_max_discharging_current`` in amperes. Older
@@ -1995,7 +2109,31 @@ def discover_inverter_from_registry(
         )
     ]
     if not same_integration:
-        return None
+        return None, "no_power_control_entity"
+
+    # (#915) FIRST RUNG — ask the registry the semantic question before
+    # regexing entity ids. The integration declared this control's
+    # translation_key in its own repository; SEM mined that offline. A key
+    # match is what HA already records as metadata, which bug class 42's
+    # sweep question asks for by name. The unit gate below is unchanged, so
+    # this rung is strictly safer than the name match it precedes — and when
+    # it finds nothing, the regex rung runs exactly as before.
+    _keys = roster_role_keys(platform, "battery_discharge_limit")
+    if _keys:
+        _by_key = []
+        for entry in entity_reg.entities.values():
+            if entry.entity_id not in same_integration:
+                continue
+            tk = str(getattr(entry, "translation_key", "") or "")
+            uid = str(getattr(entry, "unique_id", "") or "")
+            if any(tk == k or uid.endswith(k) for k in _keys):
+                _by_key.append(entry.entity_id)
+        if _by_key:
+            chosen = sorted(_by_key)[0]
+            _LOGGER.info(
+                "Auto-discovered battery discharge control entity: %s "
+                "(platform=%s, declared key — roster #915)", chosen, platform)
+            return chosen, "translation_key"
 
     # Score each candidate against the patterns; first hit wins. Prefer
     # entity IDs containing "batter" when multiple match the same pattern.
@@ -2014,9 +2152,19 @@ def discover_inverter_from_registry(
                 platform,
                 pattern.pattern,
             )
-            return chosen
+            return chosen, "entity_id_pattern"
 
-    return None
+    return None, "no_match"
+
+
+
+def discover_inverter_from_registry(
+    hass: HomeAssistant,
+    energy_dashboard_config,
+) -> Optional[str]:
+    """The entity only — every existing caller's contract, unchanged."""
+    return discover_inverter_from_registry_verbose(
+        hass, energy_dashboard_config)[0]
 
 
 # ============================================================

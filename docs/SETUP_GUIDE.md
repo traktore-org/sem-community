@@ -46,6 +46,12 @@ is included in the diagnostics download for bug reports. The full support
 matrix with an honest status per brand lives in
 [SUPPORTED_HARDWARE.md](SUPPORTED_HARDWARE.md).
 
+Since #915, an integration SEM has no row for is shown by **name** rather than
+by domain (*"EG4 Web Monitor · 412 installs"*), and a near-miss may come with
+**proposed roles** — entities of yours whose names match what that integration
+declares it creates, marked *unconfirmed*. Treat them as a shortcut for filling
+in the pickers, not as a verdict: SEM binds nothing it has not been told.
+
 ## 1. Prerequisites
 
 ### Home Assistant version

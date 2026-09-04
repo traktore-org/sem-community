@@ -228,6 +228,64 @@ _SPEC_REGISTRY_KEYS: Dict[str, tuple] = {
 }
 
 
+#: (#915) role in the mined roster -> the spec this flow fills from it. Only
+#: read-side specs: a spec is a NUMBER SEM reads once, never a control it
+#: writes, so a wrong guess costs a wrong capacity figure the user can see
+#: and correct — not a wrong register write.
+_ROSTER_SPEC_ROLES: Dict[str, str] = {
+    "battery_capacity_kwh": "battery_capacity_spec",
+    "system_size_kwp": "system_size_spec",
+    "battery_max_discharge_power": "battery_discharge_limit",
+}
+
+
+def _spec_keys(spec: str, platform: str) -> tuple:
+    """The entity keys that identify ``spec`` on ``platform``.
+
+    Hand-written keys FIRST and always — they were harvested from real
+    installs and one of them (Huawei's ``storage_rated_capacity``) has since
+    been renamed upstream to ``rated_ess_capacity``. Mined keys are ADDITIVE
+    ALIASES appended after: a published vocabulary is the current truth, a
+    harvested one is the truth some user's box still runs. Replacing rather
+    than appending would have broken that install.
+    """
+    keys = tuple(_SPEC_REGISTRY_KEYS.get(spec, ()))
+    role = _ROSTER_SPEC_ROLES.get(spec)
+    if not role or not platform:
+        return keys
+    try:
+        from .hardware_detection import roster_role_keys
+        mined = roster_role_keys(platform, role)
+    except Exception:  # noqa: BLE001 — a prior is never load-bearing
+        return keys
+    return keys + tuple(k for k in mined if k not in keys)
+
+
+def _suggest_select_from_roster(hass: HomeAssistant, platform: str,
+                                role: str) -> str | None:
+    """(#915) A select entity identified by the options its own integration
+    declares, for every mined brand.
+
+    ``_suggest_select_with_options`` already does this — it is how #827 finds
+    the Deye work-mode selector and #845 the Huawei one, "whatever the
+    integration named the entity". Both vocabularies are hand-written, which
+    means the trick only ever worked for two brands. The roster supplies the
+    other three hundred; the matcher, its three-label guard and its live
+    intersection are unchanged.
+    """
+    if not platform:
+        return None
+    try:
+        from .consts import integration_roster as _r
+        body = ((getattr(_r, "ROLE_VOCAB", {}) or {}).get(platform) or {}).get(role)
+    except Exception:  # noqa: BLE001
+        return None
+    labels = tuple(body.get("options", ())) if body else ()
+    if len(labels) < 3:
+        return None
+    return _suggest_select_with_options(hass, list(labels))
+
+
 def _spec_from_registry(hass: HomeAssistant, registry=None) -> Dict[str, str]:
     """(#848) entity_id per spec, found by translation_key / unique_id
     suffix in the entity registry — the language-proof half of the ladder.
@@ -251,10 +309,13 @@ def _spec_from_registry(hass: HomeAssistant, registry=None) -> Dict[str, str]:
             continue
         tk = str(getattr(e, "translation_key", "") or "")
         uid = str(getattr(e, "unique_id", "") or "")
-        for spec, keys in _SPEC_REGISTRY_KEYS.items():
+        for spec in _SPEC_REGISTRY_KEYS:
             if spec in found:
                 continue
-            if any(tk == k or uid.endswith(k) for k in keys):
+            # (#915) hand-written keys plus this integration's own declared
+            # aliases — see _spec_keys for why they are additive.
+            if any(tk == k or uid.endswith(k)
+                   for k in _spec_keys(spec, str(getattr(e, "platform", "")))):
                 found[spec] = eid
     return found
 
@@ -809,11 +870,7 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # (#845) The operating-policy selector, found by vocabulary.
                 merged.setdefault(
                     "battery_operating_mode_entity",
-                    _suggest_select_with_options(self.hass, [
-                        "maximise_self_consumption",
-                        "fully_fed_to_grid",
-                        "time_of_use_luna2000",
-                    ]) or "")
+                    _suggest_battery_mode_entity(self.hass) or "")
 
                 # Wrap flat EV keys into ev_chargers list (#112 multi-charger).
                 # #442: ``_install_defaults()`` now sets ``ev_chargers: []`` so
@@ -1188,6 +1245,33 @@ def _suggest_charge_limit_number(hass) -> str | None:
                 return st.entity_id
     except Exception:  # noqa: BLE001
         return None
+    return None
+
+
+def _suggest_battery_mode_entity(hass) -> str | None:
+    """(#915) The inverter's operating-policy selector, for ANY brand.
+
+    #845 hardcoded Huawei's three option labels because the entity id is
+    localised and only the vocabulary is stable. That reasoning was right and
+    applied to one brand; the roster carries the same vocabulary for every
+    integration that publishes one — GoodWe's ``eco/general/backup/off_grid``,
+    Sessy's ``api/eco/nom/idle``, EG4's ``normal/standby``. Huawei stays first
+    so a Huawei install behaves exactly as it did.
+    """
+    hard = _suggest_select_with_options(hass, [
+        "maximise_self_consumption", "fully_fed_to_grid", "time_of_use_luna2000",
+    ])
+    if hard:
+        return hard
+    try:
+        from .consts import integration_roster as _r
+        vocab = getattr(_r, "ROLE_VOCAB", {}) or {}
+    except Exception:  # noqa: BLE001 — a prior is never load-bearing
+        return None
+    for domain in sorted(vocab):
+        found = _suggest_select_from_roster(hass, domain, "battery_strategy")
+        if found:
+            return found
     return None
 
 
@@ -2045,11 +2129,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "battery_operating_mode_entity",
                     description={"suggested_value": (
                         current_config.get("battery_operating_mode_entity")
-                        or _suggest_select_with_options(self.hass, [
-                            "maximise_self_consumption",
-                            "fully_fed_to_grid",
-                            "time_of_use_luna2000",
-                        ]))},
+                        or _suggest_battery_mode_entity(self.hass))},
                 ): selector.EntitySelector(selector.EntitySelectorConfig(domain="select")),
                 vol.Optional(
                     "diagram_style",

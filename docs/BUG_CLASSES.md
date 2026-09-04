@@ -2462,3 +2462,21 @@ predicate survives only for the integration that genuinely powers down (the whol
 sun explains it). **Guard:** `tests/test_912_frozen_sibling_rule.py` pins the rule is one place.
 **Sweep question:** wherever a heuristic explains away a signal per domain, what single property of
 the SOURCE would answer all of them? Refs #912 #851 #611.
+
+### 64. A hand-maintained vocabulary where the source publishes its own — GUARDED
+**Symptom:** every brand SEM can name was typed by hand after a user filed an issue; a near-miss
+integration detects nothing instead of something reviewable, and `_suggest_select_with_options`'s
+"identify the entity by its options" trick works for exactly the two brands whose option lists
+somebody transcribed. **Root shape:** detection matched the *user's* entity ids with regexes while
+Home Assistant already records the *author's* semantic label — `translation_key` — and every
+integration publishes that label in its own repository. The vocabulary existed upstream all along;
+SEM was re-deriving it one live install at a time. **Closure (#915):** an offline crawl mines each
+energy-shaped integration's declared entity keys into a generated roster, and every runtime use is
+an INTERSECTION with the local registry — it can name a domain, propose a role for an entity the
+user already has, and ask the registry the semantic question before regexing a name. It can never
+invent an entity, and it structurally cannot carry a status, an evidence string or a sign
+convention. **Guard:** `tests/test_915_roster_is_not_a_claim.py` (a support claim is
+unrepresentable), `tests/test_915_roster_rediscovery.py` (the miner re-derives four facts SEM
+learned from four live installs, and invents nothing for a brand that exposes nothing).
+**Sweep question:** where else is SEM maintaining by hand a fact its source already publishes —
+and would reading the source be a hypothesis or a claim? Refs #915 #848 #814 #530.

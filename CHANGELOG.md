@@ -13,6 +13,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔎 **SEM now recognises hardware nobody has reported yet** (#915). Until
+  now every brand SEM could name was typed by hand after somebody filed an
+  issue: the census would say *"eg4_web_monitor — installed, unknown to
+  SEM"* and wait for a human. `scripts/crawl_integration_roster.py`
+  reads the public HACS, Home Assistant analytics and core indexes, and then
+  reads each energy-shaped integration's **own repository** for the entity
+  vocabulary it declares: an integration that publishes
+  `storage_maximum_discharging_power` has said, in its own words, what it will
+  create. The check that this is worth trusting is that the miner re-derives
+  four things SEM learned the hard way from live installs — Huawei's
+  discharge-limit key and its three working-mode labels, Zaptec's current
+  register (and *not* its phase-switch register), Sessy's strategy values —
+  and invents nothing for Easee, which exposes no current control at all. It
+  found 21 integrations SEM cannot place today that publish concrete role
+  candidates, Anker Solix and Sigenergy among them.
+
+  Three things use it, all of them small on purpose. **Configuration →
+  Detected hardware now names the gap** — "EG4 Web Monitor · 412 installs"
+  instead of a bare domain, so an unknown integration becomes something you
+  can report rather than something you have to decode. **A near miss carries
+  proposed roles**: when an integration's entities are present but no role
+  matched, SEM lists which of that integration's own declared keys your
+  entities match, marked *unconfirmed*, for you to accept in the pickers
+  above. And the **battery discharge-control discovery asks the registry the
+  semantic question first** — the integration's declared key before the
+  entity-id name patterns, behind the same unchanged unit check. Same entity
+  as before on every install that already worked; a better reason, and an
+  answer on installs where the name never matched.
+
+  **The roster is not a support list and cannot become one.** Nothing in it
+  may carry a status, an evidence string or a sign convention — a crawl is
+  structurally incapable of knowing which way a brand's grid meter counts,
+  which is exactly why guessing one has never been on the table. A proposal
+  is an intersection with your own entity registry, so it can never invent
+  hardware; SEM binds nothing it guessed, and a brand still reaches the
+  supported-hardware list only through a live confirmation. The diagnostics
+  download now carries the detection report too, so a report about detection
+  arrives with the artefact that explains it.
+
 # [2.1.0-beta.7] — 03.09.2026
 
 - 🛡️ **A flat value from a live integration is not a frozen sensor** (#912).

@@ -60,6 +60,23 @@ diagnostics). Wrong detections are corrected in place with the pickers in the
 charger and sensor-source sections — no reinstall. The full support matrix with
 an honest per-brand status is [docs/SUPPORTED_HARDWARE.md](SUPPORTED_HARDWARE.md).
 
+**Names and proposals (#915).** An integration SEM has no row for used to
+appear as a bare domain — `eg4_web_monitor`, and you were left to work out what
+that was. SEM now carries a roster of the energy integrations the Home
+Assistant ecosystem publishes, so the same line reads *"EG4 Web Monitor · 412
+installs"*. For a near-miss it goes one step further: many integrations declare,
+in their own source, what they call each entity they create, and where those
+declared names match your entities SEM lists them as **proposed roles, marked
+unconfirmed** — *"this number is probably your discharge-power limit"*.
+
+Nothing on that list is bound. SEM has not verified a proposal and will not act
+on one; it is there so you can set it in the pickers above with one glance
+instead of hunting through fifty entities, and so you can tell us it was right.
+The roster is deliberately not a support claim: it never records a sign
+convention (which way your grid meter counts is a fact about *your* system, and
+guessing it is the one mistake this project refuses to make), and a brand only
+reaches the supported-hardware list after someone confirms it on real hardware.
+
 ### Optimization Settings
 
 | Setting | Default | Description |

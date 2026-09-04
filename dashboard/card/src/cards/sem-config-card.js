@@ -1084,12 +1084,23 @@ class SEMConfigCard extends SEMLitBase {
         const census = r.census || {};
         const unknown = census.unknown_energy_domains || [];
         const nomatch = census.rows_matched_nothing || [];
+        // (#915) The same gap with a name on it. A bare domain tells the user
+        // nothing they can act on; "EG4 Web Monitor · 412 installs" tells them
+        // what to report. Falls back to the bare domain when the roster has
+        // never heard of it — which is itself worth seeing.
+        const named = census.unknown_energy_domains_named || [];
+        const describe = (dom) => {
+            const d = named.find((x) => x && x.domain === dom);
+            if (!d || !d.name) return dom;
+            const n = d.installs ? ` · ${d.installs} ${this._t('config_census_installs')}` : '';
+            return `${d.name}${n}`;
+        };
         return html`
             <div class="setting-help-text" style="margin:0 0 6px">${this._t('config_detect_intro')}</div>
             ${unknown.length ? html`
                 <div class="row" style="color:var(--warning-color,#ffa726)">
                     <span class="lbl">${this._t('config_census_unknown')}</span>
-                    <span style="font-family:monospace">${unknown.join(', ')}</span>
+                    <span style="font-family:monospace">${unknown.map(describe).join(', ')}</span>
                 </div>` : nothing}
             ${nomatch.length ? html`
                 <div class="row" style="color:var(--warning-color,#ffa726)">
@@ -1109,12 +1120,25 @@ class SEMConfigCard extends SEMLitBase {
             `)}
             ${misses.map((m) => html`
                 <div class="row" style="color:${T.warn || '#ffb74d'}">
-                    <span class="lbl">⚠ ${m.platform}</span>
+                    <span class="lbl">⚠ ${m.roster?.name || m.platform}</span>
                     <span>${this._t('config_detect_near_miss')}</span>
                 </div>
                 <div class="setting-help-text" style="margin:-2px 0 8px">
                     ${(m.entities || []).map((e) => e.entity).join(', ')}
-                </div>`)}
+                </div>
+                ${Object.keys(m.proposed_roles || {}).length ? html`
+                    <div class="row" style="font-weight:600">
+                        <span class="lbl">${this._t('config_proposed_roles')}</span>
+                        <span style="opacity:.7">${this._t('config_proposed_unconfirmed')}</span>
+                    </div>
+                    ${Object.entries(m.proposed_roles).map(([role, p]) => html`
+                        <div class="row"><span class="lbl">${role}</span>
+                            <span style="font-family:monospace;font-size:0.85em">${p.entity}
+                                <span style="opacity:.6"> · ${p.matched_key}</span>
+                            </span></div>`)}
+                    <div class="setting-help-text" style="margin:2px 0 8px">
+                        ${this._t('config_proposed_help')}
+                    </div>` : nothing}`)}
             ${dis.filter((d) => d.kind === 'prober_only').map((d) => html`
                 <div class="row"><span class="lbl">🔎 ${d.platform}</span>
                     <span>${this._t('config_detect_prober_only')}</span></div>`)}

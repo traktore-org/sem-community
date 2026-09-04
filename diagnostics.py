@@ -481,7 +481,19 @@ async def async_get_config_entry_diagnostics(
     # defensive caps and the Supervisor-install fallback.
     recent_logs = await _get_recent_sem_logs(hass)
 
+    # (#915) The detection report reaches the Config card and a sensor
+    # attribute, but never the diagnostics download — so a bug report about
+    # detection arrived without the one artefact that explains it. A trimmed
+    # slice: the census (what is installed, what SEM could not place, and
+    # now what those unplaceable domains ARE), the chargers it did map, the
+    # near-misses with their role proposals, and the prober disagreements.
+    _report = data.get("detection_report") or {}
+    detection = {k: _report.get(k) for k in
+                 ("census", "chargers", "near_misses", "disagreements")
+                 if _report.get(k) is not None}
+
     return {
+        "detection": detection,
         "config_entry": {
             "entry_id": entry.entry_id,
             "version": entry.version,
