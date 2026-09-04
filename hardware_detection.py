@@ -1080,9 +1080,75 @@ def propose_roles_from_roster(dev_entities, domain: str) -> Dict[str, Any]:
             hit = next((k for k in keys if tk == k or uid.endswith(k)), None)
             if hit:
                 out[role] = {"entity": eid, "matched_key": hit,
-                             "source": "roster", "confirmed": False}
+                             "source": "roster",
+                             # (#915) What the user can DO about it. A
+                             # proposal that says "unconfirmed" and offers no
+                             # way to confirm is a chore, not an offer:
+                             # ``config_key`` is the option the card writes
+                             # with one click, and its absence says why there
+                             # is no button.
+                             **_role_action(role)}
                 break
     return out
+
+
+def charger_from_near_miss(dev_entities, platform: str,
+                          proposed: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """(#915) The charger config a near miss is one click away from.
+
+    "Entities present, no role matched — please report" is the right thing to
+    say when SEM has nothing better. It is the wrong thing to say when SEM
+    has just worked out which entity is the current control: then the answer
+    is not a bug report, it is *add this charger*.
+
+    So: take the role the roster proposed (the integration's own declared
+    key for its charging current), fill the rest from the plain SHAPE of the
+    same device's entities — a power sensor, a plug binary_sensor, a
+    charging one — and hand back something the user can accept. Returns
+    ``{}`` when the essentials are missing, which is when "please report"
+    is still the honest line.
+    """
+    proposed = proposed or {}
+    current = (proposed.get("ev_current_control") or {}).get("entity")
+    if not current:
+        return {}
+    out: Dict[str, Any] = {"ev_current_control_entity": current}
+    for e in dev_entities:
+        eid = str(e.entity_id)
+        dc = str(getattr(e, "original_device_class", "") or "")
+        if eid.startswith("sensor.") and dc == "power":
+            out.setdefault("ev_charging_power_sensor", eid)
+        elif eid.startswith("binary_sensor.") and dc == "plug":
+            out.setdefault("ev_connected_sensor", eid)
+        elif eid.startswith("binary_sensor.") and dc in ("power", "running",
+                                                         "battery_charging"):
+            out.setdefault("ev_charging_sensor", eid)
+        elif eid.startswith("sensor.") and dc == "energy" and "session" in eid:
+            out.setdefault("ev_session_energy_sensor", eid)
+    # Without a power reading SEM cannot see what the car is drawing, and a
+    # charger it cannot measure is one it must not steer.
+    if "ev_charging_power_sensor" not in out:
+        return {}
+    out["id"] = f"{platform}_{str(getattr(dev_entities[0], 'device_id', '') or 'device')}"[:48]
+    out["name"] = (describe_domain(platform) or {}).get("name") or platform
+    return out
+
+
+def _role_action(role: str) -> Dict[str, Any]:
+    """How a proposed role can be accepted: a settable option key, a pointer
+    to the charger section, or nothing because SEM resolves it itself."""
+    try:
+        from .consts import role_lexicon as _lex
+    except Exception:  # noqa: BLE001
+        return {"config_key": None, "action": "none"}
+    key = _lex.SEM_CONFIG_KEY_FOR_ROLE.get(role)
+    if key:
+        return {"config_key": key, "action": "set_option"}
+    if role in _lex.PER_CHARGER_ROLES:
+        return {"config_key": None, "action": "per_charger"}
+    if role in _lex.AUTO_RESOLVED_ROLES:
+        return {"config_key": None, "action": "automatic"}
+    return {"config_key": None, "action": "none"}
 
 
 def propose_for_installed(registry, *, limit_per_domain: int = 8,
@@ -1121,7 +1187,9 @@ def propose_for_installed(registry, *, limit_per_domain: int = 8,
     out = []
     for dom, ents in sorted(by_domain.items()):
         roles = {r: b for r, b in propose_roles_from_roster(ents[:400], dom).items()
-                 if b.get("entity") not in used}
+                 # An entity SEM already drives is not news; nor is a role SEM
+                 # resolves by itself every time it looks.
+                 if b.get("entity") not in used and b.get("action") != "automatic"}
         if not roles:
             continue
         out.append({
@@ -1393,6 +1461,15 @@ def build_detection_report(hass: Optional[HomeAssistant] = None,
                 if (platform in _TRANSPORT_PLATFORMS and not _proposed
                         and not _census_energy_shaped(dev_entities)):
                     continue
+                # (#915) An integration whose charger SEM already drives is
+                # not "almost supported". A brand commonly ships a second,
+                # installation-level device — Zaptec's carries the site's
+                # available-current and phase registers — and on the .46 rig
+                # that device was the last near miss standing, telling the
+                # owner of a fully detected charger to report it.
+                if any(str(c.get("platform")) == platform
+                       for c in report["chargers"]):
+                    continue
                 report["near_misses"].append({
                     "platform": platform,
                     "device_id": device_id,
@@ -1406,6 +1483,11 @@ def build_detection_report(hass: Optional[HomeAssistant] = None,
                     # it guessed.
                     "roster": describe_domain(platform),
                     "proposed_roles": _proposed,
+                    # (#915) What the user can DO about this near miss.
+                    # A charger SEM can describe well enough to drive is an
+                    # offer, not a bug report.
+                    "suggested_charger": charger_from_near_miss(
+                        dev_entities, platform, _proposed),
                 })
                 continue
             mapped: Dict[str, Any] = {}

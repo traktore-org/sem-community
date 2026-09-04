@@ -1077,6 +1077,38 @@ class SEMConfigCard extends SEMLitBase {
         // (#915) Controls each INSTALLED integration says it creates, matched
         // against this box's own entities. Unconfirmed by definition.
         const rosterProposals = r.roster_proposals || [];
+        // A proposal that says "unconfirmed" and offers no way to confirm is
+        // a chore. When the role maps to a top-level option, accepting it is
+        // one click through the same set_option path the pickers below use;
+        // when it lives inside a charger, say so instead of showing a button
+        // that would write it in the wrong place.
+        const proposalRow = (role, p) => {
+            const already = this._options?.[p.config_key] === p.entity;
+            const st = this._saveStatus?.['prop_' + role];
+            return html`
+            <div class="row">
+                <span class="lbl">${role}</span>
+                <span style="font-family:monospace;font-size:0.85em">${p.entity}
+                    <span style="opacity:.6"> · ${p.matched_key}</span>
+                </span>
+            </div>
+            <div class="row" style="margin:-6px 0 6px">
+                <span class="lbl"></span>
+                <span>
+                    ${p.action === 'set_option' && !already ? html`
+                        <button class="sem-btn" ?disabled=${st === 'saving'}
+                            @click=${() => this._saveOption(p.config_key, p.entity, 'prop_' + role)}>
+                            ${st === 'saving' ? this._t('config_proposed_using')
+                                              : this._t('config_proposed_use')}
+                        </button>` : nothing}
+                    ${already ? html`<span style="opacity:.7">${this._t('config_proposed_already')}</span>` : nothing}
+                    ${p.action === 'per_charger' ? html`
+                        <span style="opacity:.7">${this._t('config_proposed_per_charger')}</span>` : nothing}
+                    ${st === 'ok' ? html`<span style="opacity:.7"> ✓</span>` : nothing}
+                    ${st && st !== 'ok' && st !== 'saving' ? html`<span style="opacity:.7"> ${st}</span>` : nothing}
+                </span>
+            </div>`;
+        };
         const prober = r.prober_candidates || [];
         const dis = r.disagreements || [];
         const roleRow = (k, v) => html`
@@ -1129,16 +1161,29 @@ class SEMConfigCard extends SEMLitBase {
                 <div class="setting-help-text" style="margin:-2px 0 8px">
                     ${(m.entities || []).map((e) => e.entity).join(', ')}
                 </div>
+                ${m.suggested_charger?.id ? html`
+                    <div class="row" style="margin:-2px 0 8px">
+                        <span class="lbl"></span>
+                        <span>
+                            <button class="sem-btn" ?disabled=${this._chargerBusy}
+                                @click=${() => this._addSuggestedCharger(m.suggested_charger)}>
+                                ${this._t('config_near_miss_add')}
+                            </button>
+                        </span>
+                    </div>` : html`
+                    <div class="row" style="margin:-2px 0 8px">
+                        <span class="lbl"></span>
+                        <span><a class="sem-btn" target="_blank" rel="noopener"
+                                 href=${this._reportNearMissUrl(m)}>
+                            ${this._t('config_near_miss_report')}
+                        </a></span>
+                    </div>`}
                 ${Object.keys(m.proposed_roles || {}).length ? html`
                     <div class="row" style="font-weight:600">
                         <span class="lbl">${this._t('config_proposed_roles')}</span>
                         <span style="opacity:.7">${this._t('config_proposed_unconfirmed')}</span>
                     </div>
-                    ${Object.entries(m.proposed_roles).map(([role, p]) => html`
-                        <div class="row"><span class="lbl">${role}</span>
-                            <span style="font-family:monospace;font-size:0.85em">${p.entity}
-                                <span style="opacity:.6"> · ${p.matched_key}</span>
-                            </span></div>`)}
+                    ${Object.entries(m.proposed_roles).map(([role, p]) => proposalRow(role, p))}
                     <div class="setting-help-text" style="margin:2px 0 8px">
                         ${this._t('config_proposed_help')}
                     </div>` : nothing}`)}
@@ -1147,11 +1192,7 @@ class SEMConfigCard extends SEMLitBase {
                     <span class="lbl">🧩 ${rp.roster?.name || rp.domain}</span>
                     <span style="opacity:.7">${this._t('config_proposed_unconfirmed')}</span>
                 </div>
-                ${Object.entries(rp.proposed_roles || {}).map(([role, p]) => html`
-                    <div class="row"><span class="lbl">${role}</span>
-                        <span style="font-family:monospace;font-size:0.85em">${p.entity}
-                            <span style="opacity:.6"> · ${p.matched_key}</span>
-                        </span></div>`)}
+                ${Object.entries(rp.proposed_roles || {}).map(([role, p]) => proposalRow(role, p))}
             `)}
             ${rosterProposals.length ? html`
                 <div class="setting-help-text" style="margin:2px 0 8px">
@@ -1532,6 +1573,56 @@ class SEMConfigCard extends SEMLitBase {
         if (!newChargers[chargerIndex].id && cid) newChargers[chargerIndex].id = cid;
         newChargers[chargerIndex][key] = value;
         await this._saveOption('ev_chargers', newChargers, statusKey);
+    }
+
+    // (#915) Accept a near miss as a charger. "Entities present, no role
+    // matched — please report" is the right line when SEM has nothing
+    // better; it is the wrong line when SEM has already worked out which
+    // entity is the charging current. Then the answer is not a bug report,
+    // it is *add this charger* — with the pickers pre-filled from what the
+    // integration declares and what the device's own entities are shaped
+    // like. Everything stays editable afterwards in the EV chargers
+    // section, and nothing is written until this button is pressed.
+    async _addSuggestedCharger(suggested) {
+        if (this._chargerBusy || !suggested || !suggested.id) return;
+        const existing = (this._options.ev_chargers || []);
+        const ids = new Set([
+            ...existing.map(c => c && c.id).filter(Boolean),
+            ...this._chargersList(),
+        ]);
+        let id = suggested.id, n = 1;
+        while (ids.has(id)) { id = `${suggested.id}_${n++}`; }
+        const charger = { ...suggested, id,
+                          ev_min_current: 6,
+                          ev_surplus_priority: existing.length + 3 };
+        this._chargerBusy = true;
+        this.requestUpdate();
+        try {
+            await this._saveOption('ev_chargers', [charger], 'ev_chargers_add');
+            await this._refreshOptions();
+        } finally {
+            this._chargerBusy = false;
+            this.requestUpdate();
+        }
+    }
+
+    // (#915) When SEM has nothing to offer, make the ask one click instead of
+    // a sentence. A prefilled issue carries the platform and the entity list,
+    // which is exactly what a detection row needs and exactly what a user
+    // should not have to assemble by hand.
+    _reportNearMissUrl(m) {
+        const ents = (m.entities || []).map(e => `- \`${e.entity}\` (${e.domain}${e.device_class ? '/' + e.device_class : ''})`).join('\n');
+        const name = m.roster?.name ? `${m.roster.name} (\`${m.platform}\`)` : `\`${m.platform}\``;
+        const body = [
+            `**Detected hardware — no role matched**`, '',
+            `Integration: ${name}`,
+            m.roster?.installs ? `Installs (HA analytics): ${m.roster.installs}` : '',
+            '', 'Entities on this device:', ents, '',
+            'What the device is and which entity does what:', '(please fill in)',
+        ].filter(Boolean).join('\n');
+        return 'https://github.com/traktore-org/sem-community/issues/new?labels=enhancement'
+            + '&title=' + encodeURIComponent(`Detected hardware: ${m.platform} — no role matched`)
+            + '&body=' + encodeURIComponent(body);
     }
 
     // #528 Phase 4 — add a charger from the dashboard. Sends ONLY the new
@@ -3365,6 +3456,20 @@ class SEMConfigCard extends SEMLitBase {
                     transition: background 0.15s, border-color 0.15s;
                 }
                 .ha-settings-btn:hover { background: ${T.surfaceHover}; border-color: ${accent}; }
+
+                /* (#915) accept a proposed role — the same affordance,
+                   smaller, because it sits inside a row rather than under a
+                   section heading. */
+                .sem-btn {
+                    display: inline-flex; align-items: center; gap: 4px;
+                    padding: 3px 10px; border-radius: 7px;
+                    background: ${T.surface}; border: 1px solid ${T.surfaceBorder};
+                    color: var(--primary-text-color, ${T.text});
+                    font-size: 12px; cursor: pointer;
+                    transition: background 0.15s, border-color 0.15s;
+                }
+                .sem-btn:hover:not([disabled]) { background: ${T.surfaceHover}; border-color: ${accent}; }
+                .sem-btn[disabled] { opacity: 0.55; cursor: default; }
 
                 /* ── #605 staged-changes UI ── */
                 .zone-knob.dirty, .stepper-cell.dirty {

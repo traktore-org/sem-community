@@ -96,7 +96,7 @@ class TestItProposesOnlyWhatTheRegistryHas:
         out = hd.propose_roles_from_roster(ents, "eg4_web_monitor")
         assert out["battery_target_soc"]["entity"] == "number.eg4_charge_soc"
         assert out["battery_target_soc"]["matched_key"] == "system_charge_soc_limit"
-        assert out["battery_target_soc"]["confirmed"] is False
+        assert out["battery_target_soc"]["action"] == "set_option"
 
     def test_a_unique_id_suffix_counts_too(self):
         ents = [_ent("number.x", "eg4_web_monitor",
@@ -216,7 +216,7 @@ class TestItRecognisesWhatIsAlreadyInstalled:
         roles = row["proposed_roles"]
         assert roles["battery_charge_limit"]["entity"] == "number.sigen_charge"
         assert roles["battery_discharge_limit"]["entity"] == "number.sigen_discharge"
-        assert all(v["confirmed"] is False for v in roles.values())
+        assert all(v.get("action") for v in roles.values())
 
     def test_an_integration_the_roster_has_no_vocabulary_for_is_skipped(self):
         ents = [_ent("number.whatever", "some_unknown_platform",
@@ -425,9 +425,173 @@ class TestANearMissIsAboutHardware:
         misses = self._report(ents)["near_misses"]
         assert [m["platform"] for m in misses] == ["mqtt"]
 
+    def test_a_second_device_of_a_detected_brand_is_not_a_near_miss(self):
+        """Zaptec ships an installation-level device beside the charger,
+        holding the site's available-current and phase registers. With the
+        charger detected, that device is not a brand SEM almost supports —
+        on the .46 rig it was the last near miss standing, telling the owner
+        of a working charger to file a report."""
+        ents = [
+            # the charger device — fully mapped
+            _ent("number.zap_current", "zaptec", device_id="charger",
+                 device_class="current"),
+            _ent("sensor.zap_power", "zaptec", device_id="charger",
+                 device_class="power"),
+            _ent("binary_sensor.zap_cable", "zaptec", device_id="charger",
+                 device_class="plug"),
+            _ent("binary_sensor.zap_charging", "zaptec", device_id="charger",
+                 device_class="power"),
+            # the installation device — no role
+            _ent("number.zap_available", "zaptec", device_id="site",
+                 unique_id="sim-1_available_current"),
+        ]
+        report = self._report(ents)
+        assert report["chargers"], "premise: the charger itself is detected"
+        assert report["near_misses"] == []
+
     def test_a_branded_platform_is_never_gated(self):
         """Only the shared transports are filtered. A brand platform with
         entities and no role is exactly what the near-miss list is for."""
         ents = [_ent("sensor.wallbox_thing", "wallbox", device_id="w1")]
         misses = self._report(ents)["near_misses"]
         assert [m["platform"] for m in misses] == ["wallbox"]
+
+
+@pytest.mark.unit
+class TestAProposalCanActuallyBeAccepted:
+    """Guido, reading the card: *"Huawei Solar unconfirmed — how do I
+    confirm?"* Fair: the block said unconfirmed and offered no way to
+    confirm, so the only route was to read the entity, scroll to the right
+    section and re-enter it by hand. That is a chore wearing the word
+    'proposal'. Every proposal now carries what the user can DO about it."""
+
+    def _roles(self, ents, domain):
+        return hd.propose_roles_from_roster(ents, domain)
+
+    def test_a_settable_role_names_the_option_the_card_writes(self):
+        ents = [_ent("number.eg4_soc", "eg4_web_monitor",
+                     translation_key="system_charge_soc_limit")]
+        p = self._roles(ents, "eg4_web_monitor")["battery_target_soc"]
+        assert p["action"] == "set_option"
+        assert p["config_key"] == "battery_target_soc_entity"
+
+    def test_a_read_role_names_the_key_the_READER_uses(self):
+        """Not the Energy-Dashboard-shaped name — the one SensorReader
+        consumes. Writing the other one is what made a fresh install read
+        0 W from a live inverter."""
+        ents = [_ent("sensor.pv", "huawei_solar", translation_key="input_power",
+                     device_class="power")]
+        p = self._roles(ents, "huawei_solar")["solar_power"]
+        assert p["config_key"] == "solar_production_sensor"
+
+    def test_a_per_charger_role_offers_no_top_level_button(self):
+        """ev_current_control lives inside a charger's own config. A button
+        here would write one charger's entity into an install-wide key."""
+        ents = [_ent("number.zap", "zaptec", translation_key="charger_max_current")]
+        p = self._roles(ents, "zaptec")["ev_current_control"]
+        assert p["action"] == "per_charger"
+        assert p["config_key"] is None
+
+    def test_an_auto_resolved_role_is_not_shown_as_a_chore(self):
+        """SEM reads the capacity spec by translation key every time it
+        looks (config_flow._spec_from_registry). Listing it as something to
+        confirm would invent work that does not exist."""
+        ents = [
+            _ent("sensor.cap", "huawei_solar",
+                 translation_key="storage_rated_capacity"),
+            _ent("number.dis", "huawei_solar",
+                 translation_key="storage_maximum_discharging_power"),
+        ]
+        out = hd.propose_for_installed(_registry(ents))
+        roles = out[0]["proposed_roles"]
+        assert "battery_capacity_spec" not in roles
+        assert "battery_discharge_limit" in roles
+
+    def test_every_settable_key_is_one_set_option_accepts(self):
+        """The button calls solar_energy_management.set_option with this
+        key. A key the service does not accept would fail silently in the
+        card's catch."""
+        import importlib.util
+        import pathlib as _p
+        root = _p.Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location(
+            "role_lexicon", root / "consts" / "role_lexicon.py")
+        lex = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(lex)
+        # The key has to be one SEM READS. Three of them (target SOC,
+        # strategy, force-charge switch) are consumed by the battery adapters
+        # without an options-flow field of their own, which is exactly why a
+        # one-click accept is worth having: today the only way to set them is
+        # the set_option service.
+        read_by = " ".join(
+            f.read_text() for f in (root / "coordinator").rglob("*.py"))
+        flow_src = (root / "config_flow.py").read_text()
+        card_src = (root / "dashboard" / "card" / "src" / "cards"
+                    / "sem-config-card.js").read_text()
+        for role, key in lex.SEM_CONFIG_KEY_FOR_ROLE.items():
+            assert (f'"{key}"' in read_by or f'"{key}"' in flow_src
+                    or key in card_src), (
+                f"{role} would write {key}, which nothing in SEM reads — "
+                "the card would save a key that does nothing")
+
+
+@pytest.mark.unit
+class TestANearMissIsAnOfferNotAChore:
+    """Guido: *"'no role matched — please report' — how?"* Fair. When SEM has
+    already worked out which entity is the charging current, asking the user
+    to file a bug report is the wrong end of the offer: the answer is *add
+    this charger*, pre-filled. "Please report" stays for the case where SEM
+    genuinely has nothing — and then it is a prefilled issue, one click."""
+
+    def test_a_charger_near_miss_comes_with_a_ready_charger(self):
+        ents = [
+            _ent("number.zap_current", "zaptec", device_id="z1",
+                 unique_id="sim-1_available_current"),
+            _ent("sensor.zap_power", "zaptec", device_id="z1",
+                 device_class="power"),
+            _ent("binary_sensor.zap_cable", "zaptec", device_id="z1",
+                 device_class="plug"),
+            _ent("binary_sensor.zap_charging", "zaptec", device_id="z1",
+                 device_class="power"),
+        ]
+        proposed = hd.propose_roles_from_roster(ents, "zaptec")
+        out = hd.charger_from_near_miss(ents, "zaptec", proposed)
+        assert out["ev_current_control_entity"] == "number.zap_current"
+        assert out["ev_charging_power_sensor"] == "sensor.zap_power"
+        assert out["ev_connected_sensor"] == "binary_sensor.zap_cable"
+        assert out["id"] and out["name"] == "Zaptec EV charger"
+
+    def test_no_power_sensor_means_no_offer(self):
+        """A charger SEM cannot measure is one it must not steer, so the
+        honest line there is still 'please report'."""
+        ents = [_ent("number.zap_current", "zaptec", device_id="z1",
+                     unique_id="sim-1_available_current")]
+        proposed = hd.propose_roles_from_roster(ents, "zaptec")
+        assert hd.charger_from_near_miss(ents, "zaptec", proposed) == {}
+
+    def test_no_proposed_control_means_no_offer(self):
+        ents = [_ent("sensor.mystery_power", "wallbox", device_id="w1",
+                     device_class="power")]
+        assert hd.charger_from_near_miss(ents, "wallbox", {}) == {}
+
+    def test_the_report_carries_the_offer(self):
+        ents = [
+            _ent("number.zap_current", "zaptec", device_id="z1",
+                 unique_id="sim-1_available_current"),
+            _ent("sensor.zap_power", "zaptec", device_id="z1",
+                 device_class="power"),
+        ]
+        misses = hd.build_detection_report(registry=_registry(ents))["near_misses"]
+        assert misses and misses[0]["suggested_charger"]["ev_current_control_entity"] \
+            == "number.zap_current"
+
+    def test_the_card_offers_the_action_before_the_report(self):
+        """Both paths exist in the card, and the offer comes first: a user
+        with a fixable near miss should never be sent to GitHub."""
+        import pathlib as _p
+        root = _p.Path(__file__).resolve().parent.parent
+        card = (root / "dashboard" / "card" / "src" / "cards"
+                / "sem-config-card.js").read_text()
+        assert "_addSuggestedCharger" in card
+        assert "_reportNearMissUrl" in card
+        assert card.index("suggested_charger?.id") < card.index("_reportNearMissUrl(m)")

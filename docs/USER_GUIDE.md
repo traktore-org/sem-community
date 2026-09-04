@@ -77,9 +77,18 @@ in their own source, what they call each entity they create, and where those
 declared names match your entities SEM lists them as **proposed roles, marked
 unconfirmed** — *"this number is probably your discharge-power limit"*.
 
-Nothing on that list is bound. SEM has not verified a proposal and will not act
-on one; it is there so you can set it in the pickers above with one glance
-instead of hunting through fifty entities, and so you can tell us it was right.
+Each one has a **Use this** button that writes it where SEM reads it — the
+same place the pickers below write, so you can change or undo it there at any
+time. A role that belongs to a charger rather than to the install says so
+instead of offering a button, and a role SEM works out by itself is not listed
+at all. Nothing is written until you press the button.
+
+If SEM sees an integration's entities but can map none of them, and it *has*
+worked out which one is the charging current, you get **Add this charger**
+instead of a shrug — pre-filled, and editable afterwards like any other
+charger. Only when SEM genuinely has nothing does it ask you to report the
+hardware, and that ask is a single click that opens an issue already carrying
+the entity list.
 The roster is deliberately not a support claim: it never records a sign
 convention (which way your grid meter counts is a fact about *your* system, and
 guessing it is the one mistake this project refuses to make), and a brand only

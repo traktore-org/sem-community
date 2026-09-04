@@ -185,17 +185,39 @@ APPLIANCE_MARKERS: Final[tuple] = (
     "pedal", "ebike", "printer", "cpu_", "ram_", "disk_", "toothbrush",
 )
 
-#: role -> the SEM option key it would fill. A role with no entry here is
-#: informational only (it can be named in a report, never pre-filled).
+#: role -> the TOP-LEVEL SEM option key it fills. A role listed here can be
+#: accepted with one click: the Config card writes this key through
+#: ``set_option``, which is the same path its own pickers use. A role absent
+#: from this map cannot be written that way and must say so instead of
+#: showing a button that would put an entity in the wrong place.
 SEM_CONFIG_KEY_FOR_ROLE: Final[Dict[str, str]] = {
     "battery_discharge_limit": "battery_discharge_control_entity",
     "battery_charge_limit": "battery_charge_power_limit_entity",
     "battery_target_soc": "battery_target_soc_entity",
     "battery_strategy": "battery_strategy_control_entity",
     "battery_force_charge": "battery_force_charge_switch",
-    "ev_current_control": "ev_current_control_entity",
-    "ev_charge_mode": "ev_charge_mode_entity",
+    # the read side — SensorReader's own key names (#915: writing the
+    # dashboard-shaped names instead read 0 W from a live inverter)
+    "solar_power": "solar_production_sensor",
+    "grid_power": "grid_power_sensor",
+    "battery_power": "battery_power_sensor",
+    "battery_soc": "battery_soc_sensor",
 }
+
+#: Roles that live INSIDE a charger's own config, not at the top level.
+#: Offering a one-click accept for these would write a charger's entity into
+#: an install-wide key, so they are reported with a pointer to the EV
+#: chargers section instead of a button.
+PER_CHARGER_ROLES: Final[frozenset] = frozenset({
+    "ev_current_control", "ev_charge_mode",
+})
+
+#: Roles SEM already resolves by itself every time it looks
+#: (``config_flow._spec_from_registry`` reads these by translation key).
+#: Nothing to confirm — showing them as proposals would invent a chore.
+AUTO_RESOLVED_ROLES: Final[frozenset] = frozenset({
+    "battery_capacity_spec", "system_size_spec",
+})
 
 #: Platforms whose entity names are chosen by the USER, not the integration
 #: author. A declared-key match is meaningless there — the official ``modbus``

@@ -1514,7 +1514,13 @@
     "config_census_installs": "instalací",
     "config_proposed_roles": "Navržené role",
     "config_proposed_unconfirmed": "nepotvrzeno",
-    "config_proposed_help": "SEM je neověřil — pocházejí z toho, co tato integrace uvádí, že vytváří. Nastavte je výše, pokud sedí, a dejte nám vědět."
+    "config_proposed_help": "SEM je neověřil — pocházejí z toho, co tato integrace uvádí, že vytváří. Nastavte je výše, pokud sedí, a dejte nám vědět.",
+    "config_proposed_use": "Použít",
+    "config_proposed_using": "Ukládání…",
+    "config_proposed_already": "používá se",
+    "config_proposed_per_charger": "nastavte u nabíječky, níže v EV nabíječky",
+    "config_near_miss_add": "Přidat tuto nabíječku",
+    "config_near_miss_report": "Nahlásit tento hardware"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -3031,7 +3037,13 @@
     "config_census_installs": "installationer",
     "config_proposed_roles": "Foreslåede roller",
     "config_proposed_unconfirmed": "ubekræftet",
-    "config_proposed_help": "SEM har ikke verificeret disse — de kommer fra det, integrationen selv siger, den opretter. Angiv dem ovenfor, hvis de passer, og sig til."
+    "config_proposed_help": "SEM har ikke verificeret disse — de kommer fra det, integrationen selv siger, den opretter. Angiv dem ovenfor, hvis de passer, og sig til.",
+    "config_proposed_use": "Brug",
+    "config_proposed_using": "Gemmer…",
+    "config_proposed_already": "i brug",
+    "config_proposed_per_charger": "angiv dette på laderen, under EV-ladere nedenfor",
+    "config_near_miss_add": "Tilføj denne lader",
+    "config_near_miss_report": "Rapportér denne hardware"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -3477,7 +3489,7 @@
     "config_detect_charger": "Lader",
     "config_detect_chargers": "Lader erkannt",
     "config_detect_intro": "Was SEM in deinem Home Assistant gefunden hat, mit Beleg für jede Rolle. Stimmt eine Zeile nicht, korrigiere sie mit den Auswahlfeldern in den Abschnitten darunter — und sag es uns bitte: ein Beinahe-Treffer ist eine Marke, die wir fast unterstützen.",
-    "config_detect_near_miss": "Entitäten vorhanden, keine Rolle passte — bitte melden",
+    "config_detect_near_miss": "Entitäten vorhanden, keine Rolle erkannt",
     "config_detect_near_misses": "Beinahe-Treffer",
     "config_detect_none": "noch kein Erkennungsbericht",
     "config_detect_nothing": "kein laderartiges Gerät gefunden",
@@ -4548,7 +4560,13 @@
     "config_census_installs": "Installationen",
     "config_proposed_roles": "Vorgeschlagene Rollen",
     "config_proposed_unconfirmed": "unbestätigt",
-    "config_proposed_help": "SEM hat diese nicht überprüft — sie stammen daraus, was diese Integration laut eigener Angabe anlegt. Wenn sie stimmen, oben in den Auswahlfeldern setzen und uns Bescheid geben: so wird aus einer Vermutung unterstützte Hardware."
+    "config_proposed_help": "SEM hat diese nicht überprüft — sie stammen daraus, was diese Integration laut eigener Angabe anlegt. Übernimm die, die stimmen; ändern kannst du sie später jederzeit mit den Auswahlfeldern unten. Und sag uns Bescheid: so wird aus einer Vermutung unterstützte Hardware.",
+    "config_proposed_use": "Übernehmen",
+    "config_proposed_using": "Speichern…",
+    "config_proposed_already": "in Verwendung",
+    "config_proposed_per_charger": "beim Ladegerät setzen, unten unter EV-Ladegeräte",
+    "config_near_miss_add": "Diesen Wallbox-Eintrag anlegen",
+    "config_near_miss_report": "Diese Hardware melden"
   },
   "en": {
     "% of limit": "% of limit",
@@ -4994,7 +5012,7 @@
     "config_detect_charger": "Charger",
     "config_detect_chargers": "charger(s) detected",
     "config_detect_intro": "What SEM found in your Home Assistant, with the evidence for every role. If a row is wrong, correct it with the pickers in the sections below — and please tell us: a near miss is a brand we almost support.",
-    "config_detect_near_miss": "entities present, no role matched — please report",
+    "config_detect_near_miss": "entities present, no role matched",
     "config_detect_near_misses": "near miss(es)",
     "config_detect_none": "no detection report yet",
     "config_detect_nothing": "no charger-shaped device found",
@@ -6065,7 +6083,13 @@
     "config_census_installs": "installs",
     "config_proposed_roles": "Proposed roles",
     "config_proposed_unconfirmed": "unconfirmed",
-    "config_proposed_help": "SEM has not verified these — they come from what this integration says it creates. Set them in the pickers above if they look right, and tell us: that is what turns a guess into supported hardware."
+    "config_proposed_help": "SEM has not verified these — they come from what this integration says it creates. Accept the ones that look right; you can change any of them later with the pickers below. And do tell us: that is what turns a guess into supported hardware.",
+    "config_proposed_use": "Use this",
+    "config_proposed_using": "Saving…",
+    "config_proposed_already": "in use",
+    "config_proposed_per_charger": "set this on the charger, in EV chargers below",
+    "config_near_miss_add": "Add this charger",
+    "config_near_miss_report": "Report this hardware"
   },
   "es": {
     "% of limit": "% del límite",
@@ -7582,7 +7606,13 @@
     "config_census_installs": "instalaciones",
     "config_proposed_roles": "Funciones propuestas",
     "config_proposed_unconfirmed": "sin confirmar",
-    "config_proposed_help": "SEM no los ha verificado: proceden de lo que esta integración dice que crea. Configúralos arriba si son correctos y avísanos."
+    "config_proposed_help": "SEM no los ha verificado: proceden de lo que esta integración dice que crea. Configúralos arriba si son correctos y avísanos.",
+    "config_proposed_use": "Usar",
+    "config_proposed_using": "Guardando…",
+    "config_proposed_already": "en uso",
+    "config_proposed_per_charger": "configúralo en el cargador, en Cargadores EV más abajo",
+    "config_near_miss_add": "Añadir este cargador",
+    "config_near_miss_report": "Informar de este hardware"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -9099,7 +9129,13 @@
     "config_census_installs": "asennusta",
     "config_proposed_roles": "Ehdotetut roolit",
     "config_proposed_unconfirmed": "vahvistamaton",
-    "config_proposed_help": "SEM ei ole vahvistanut näitä — ne perustuvat siihen, mitä tämä integraatio ilmoittaa luovansa. Aseta ne yllä, jos ne vaikuttavat oikeilta, ja kerro meille."
+    "config_proposed_help": "SEM ei ole vahvistanut näitä — ne perustuvat siihen, mitä tämä integraatio ilmoittaa luovansa. Aseta ne yllä, jos ne vaikuttavat oikeilta, ja kerro meille.",
+    "config_proposed_use": "Käytä",
+    "config_proposed_using": "Tallennetaan…",
+    "config_proposed_already": "käytössä",
+    "config_proposed_per_charger": "aseta latauslaitteelle, alla kohdassa EV-laturit",
+    "config_near_miss_add": "Lisää tämä latauslaite",
+    "config_near_miss_report": "Ilmoita tästä laitteesta"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -10616,7 +10652,13 @@
     "config_census_installs": "installations",
     "config_proposed_roles": "Rôles proposés",
     "config_proposed_unconfirmed": "non confirmé",
-    "config_proposed_help": "SEM ne les a pas vérifiés — ils proviennent de ce que cette intégration déclare créer. Renseignez-les ci-dessus s'ils vous semblent corrects et dites-le nous."
+    "config_proposed_help": "SEM ne les a pas vérifiés — ils proviennent de ce que cette intégration déclare créer. Renseignez-les ci-dessus s'ils vous semblent corrects et dites-le nous.",
+    "config_proposed_use": "Utiliser",
+    "config_proposed_using": "Enregistrement…",
+    "config_proposed_already": "utilisé",
+    "config_proposed_per_charger": "à définir sur la borne, dans Bornes de recharge ci-dessous",
+    "config_near_miss_add": "Ajouter cette borne",
+    "config_near_miss_report": "Signaler ce matériel"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -12133,7 +12175,13 @@
     "config_census_installs": "telepítés",
     "config_proposed_roles": "Javasolt szerepek",
     "config_proposed_unconfirmed": "megerősítetlen",
-    "config_proposed_help": "A SEM ezeket nem ellenőrizte — abból származnak, amit ez az integráció saját maga szerint létrehoz. Állítsd be őket fent, ha helyesnek tűnnek, és szólj nekünk."
+    "config_proposed_help": "A SEM ezeket nem ellenőrizte — abból származnak, amit ez az integráció saját maga szerint létrehoz. Állítsd be őket fent, ha helyesnek tűnnek, és szólj nekünk.",
+    "config_proposed_use": "Használ",
+    "config_proposed_using": "Mentés…",
+    "config_proposed_already": "használatban",
+    "config_proposed_per_charger": "a töltőnél állítsd be, lent az EV-töltők alatt",
+    "config_near_miss_add": "Töltő hozzáadása",
+    "config_near_miss_report": "Hardver bejelentése"
   },
   "it": {
     "% of limit": "% del limite",
@@ -13650,7 +13698,13 @@
     "config_census_installs": "installazioni",
     "config_proposed_roles": "Ruoli proposti",
     "config_proposed_unconfirmed": "non confermato",
-    "config_proposed_help": "SEM non li ha verificati: derivano da ciò che questa integrazione dichiara di creare. Impostali sopra se sono corretti e faccelo sapere."
+    "config_proposed_help": "SEM non li ha verificati: derivano da ciò che questa integrazione dichiara di creare. Impostali sopra se sono corretti e faccelo sapere.",
+    "config_proposed_use": "Usa",
+    "config_proposed_using": "Salvataggio…",
+    "config_proposed_already": "in uso",
+    "config_proposed_per_charger": "impostalo sulla stazione, in Caricatori EV qui sotto",
+    "config_near_miss_add": "Aggiungi questa stazione",
+    "config_near_miss_report": "Segnala questo hardware"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -15167,7 +15221,13 @@
     "config_census_installs": "installaties",
     "config_proposed_roles": "Voorgestelde rollen",
     "config_proposed_unconfirmed": "onbevestigd",
-    "config_proposed_help": "SEM heeft deze niet geverifieerd — ze komen uit wat deze integratie zegt aan te maken. Stel ze hierboven in als ze kloppen en laat het ons weten."
+    "config_proposed_help": "SEM heeft deze niet geverifieerd — ze komen uit wat deze integratie zegt aan te maken. Stel ze hierboven in als ze kloppen en laat het ons weten.",
+    "config_proposed_use": "Gebruiken",
+    "config_proposed_using": "Opslaan…",
+    "config_proposed_already": "in gebruik",
+    "config_proposed_per_charger": "stel dit in bij de lader, hieronder bij EV-laders",
+    "config_near_miss_add": "Deze lader toevoegen",
+    "config_near_miss_report": "Deze hardware melden"
   },
   "no": {
     "% of limit": "% av grense",
@@ -16684,7 +16744,13 @@
     "config_census_installs": "installasjoner",
     "config_proposed_roles": "Foreslåtte roller",
     "config_proposed_unconfirmed": "ubekreftet",
-    "config_proposed_help": "SEM har ikke verifisert disse — de kommer fra det integrasjonen selv sier den oppretter. Sett dem ovenfor hvis de stemmer, og si fra."
+    "config_proposed_help": "SEM har ikke verifisert disse — de kommer fra det integrasjonen selv sier den oppretter. Sett dem ovenfor hvis de stemmer, og si fra.",
+    "config_proposed_use": "Bruk",
+    "config_proposed_using": "Lagrer…",
+    "config_proposed_already": "i bruk",
+    "config_proposed_per_charger": "sett dette på laderen, under EV-ladere nedenfor",
+    "config_near_miss_add": "Legg til denne laderen",
+    "config_near_miss_report": "Rapporter denne maskinvaren"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -18201,7 +18267,13 @@
     "config_census_installs": "instalacji",
     "config_proposed_roles": "Proponowane role",
     "config_proposed_unconfirmed": "niepotwierdzone",
-    "config_proposed_help": "SEM ich nie zweryfikował — pochodzą z tego, co ta integracja deklaruje, że tworzy. Ustaw je powyżej, jeśli są poprawne, i daj nam znać."
+    "config_proposed_help": "SEM ich nie zweryfikował — pochodzą z tego, co ta integracja deklaruje, że tworzy. Ustaw je powyżej, jeśli są poprawne, i daj nam znać.",
+    "config_proposed_use": "Użyj",
+    "config_proposed_using": "Zapisywanie…",
+    "config_proposed_already": "w użyciu",
+    "config_proposed_per_charger": "ustaw to przy ładowarce, poniżej w Ładowarki EV",
+    "config_near_miss_add": "Dodaj tę ładowarkę",
+    "config_near_miss_report": "Zgłoś ten sprzęt"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -19718,7 +19790,13 @@
     "config_census_installs": "instalações",
     "config_proposed_roles": "Funções propostas",
     "config_proposed_unconfirmed": "não confirmado",
-    "config_proposed_help": "O SEM não os verificou — vêm do que esta integração diz que cria. Defina-os acima se estiverem certos e avise-nos."
+    "config_proposed_help": "O SEM não os verificou — vêm do que esta integração diz que cria. Defina-os acima se estiverem certos e avise-nos.",
+    "config_proposed_use": "Usar",
+    "config_proposed_using": "A guardar…",
+    "config_proposed_already": "em uso",
+    "config_proposed_per_charger": "defina no carregador, em Carregadores EV abaixo",
+    "config_near_miss_add": "Adicionar este carregador",
+    "config_near_miss_report": "Reportar este hardware"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -21235,7 +21313,13 @@
     "config_census_installs": "instalări",
     "config_proposed_roles": "Roluri propuse",
     "config_proposed_unconfirmed": "neconfirmat",
-    "config_proposed_help": "SEM nu le-a verificat — provin din ceea ce declară această integrare că creează. Setează-le mai sus dacă par corecte și spune-ne."
+    "config_proposed_help": "SEM nu le-a verificat — provin din ceea ce declară această integrare că creează. Setează-le mai sus dacă par corecte și spune-ne.",
+    "config_proposed_use": "Folosește",
+    "config_proposed_using": "Se salvează…",
+    "config_proposed_already": "în uz",
+    "config_proposed_per_charger": "setează la încărcător, mai jos la Încărcătoare EV",
+    "config_near_miss_add": "Adaugă acest încărcător",
+    "config_near_miss_report": "Raportează acest hardware"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -22752,7 +22836,13 @@
     "config_census_installs": "installationer",
     "config_proposed_roles": "Föreslagna roller",
     "config_proposed_unconfirmed": "obekräftat",
-    "config_proposed_help": "SEM har inte verifierat dessa — de kommer från vad integrationen själv säger att den skapar. Ställ in dem ovan om de stämmer och hör av dig."
+    "config_proposed_help": "SEM har inte verifierat dessa — de kommer från vad integrationen själv säger att den skapar. Ställ in dem ovan om de stämmer och hör av dig.",
+    "config_proposed_use": "Använd",
+    "config_proposed_using": "Sparar…",
+    "config_proposed_already": "används",
+    "config_proposed_per_charger": "ange detta på laddaren, under EV-laddare nedan",
+    "config_near_miss_add": "Lägg till denna laddare",
+    "config_near_miss_report": "Rapportera denna hårdvara"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -24269,6 +24359,12 @@
     "config_census_installs": "个安装",
     "config_proposed_roles": "建议的角色",
     "config_proposed_unconfirmed": "未确认",
-    "config_proposed_help": "SEM 尚未验证这些——它们来自该集成自己声明会创建的实体。如果看起来正确，请在上方设置，并告诉我们。"
+    "config_proposed_help": "SEM 尚未验证这些——它们来自该集成自己声明会创建的实体。如果看起来正确，请在上方设置，并告诉我们。",
+    "config_proposed_use": "使用",
+    "config_proposed_using": "保存中…",
+    "config_proposed_already": "已使用",
+    "config_proposed_per_charger": "请在下方“EV 充电器”中于该充电器上设置",
+    "config_near_miss_add": "添加此充电器",
+    "config_near_miss_report": "报告此硬件"
   }
 }

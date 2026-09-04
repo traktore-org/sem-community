@@ -43,13 +43,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   found 21 integrations SEM cannot place today that publish concrete role
   candidates, Anker Solix and Sigenergy among them.
 
+  **A proposal you can accept.** Each proposed role now carries a **Use
+  this** button that writes it exactly where SEM reads it — the same path the
+  pickers below use, and reversible with them. A role that lives inside a
+  charger says so instead of offering a button that would put it in the wrong
+  place, and a role SEM resolves by itself every time it looks (battery
+  capacity, system size) is not listed at all: it was never a chore.
+
+  **A near miss is an offer before it is a bug report.** When SEM has worked
+  out which entity is the charging current, the answer is not *please report*
+  — it is **Add this charger**, pre-filled from the integration's own declared
+  name plus the shape of that device's other entities, and editable afterwards
+  like any charger. Only when SEM genuinely has nothing does it ask, and then
+  the ask is one click: a prefilled issue carrying the platform and the entity
+  list.
+
   **The near-miss list stopped shouting.** "Entities present, no role matched
   — please report" is meant to say *a brand we almost support*; on a normal
   house it was saying it over Zigbee coordinators, 24 times, because
   everything on MQTT shares one platform. A device on a shared transport now
   earns that line only when something about it is actually energy-shaped —
   a power sensor with a plug, a current control, or a role SEM could name.
-  On the test rig: 24 near-misses became 1, and it is the real one.
+  A second device of a brand whose charger SEM already drives is filtered for
+  the same reason — Zaptec ships an installation-level device beside the
+  charger, and it was telling the owner of a working charger to report it. On
+  the test rig: **24 near-misses became 0**, because there was nothing left
+  worth a person's attention.
 
   Five things use it, all of them small on purpose. **SEM asks every
   integration you already run what it says it creates**: your box has
