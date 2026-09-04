@@ -1132,6 +1132,10 @@ _SOURCE_ROLE_TO_KEY = {
     "solar_power": "solar_power_sensor",
     "grid_power": "grid_import_power_sensor",
     "battery_power": "battery_power_sensor",
+    # The battery's state of charge rides along: without it the four SOC
+    # zones that decide every battery behaviour have nothing to read, and a
+    # manual install would come up with a working pack and no strategy.
+    "battery_soc": "battery_soc_sensor",
 }
 
 

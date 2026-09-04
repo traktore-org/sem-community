@@ -526,16 +526,30 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             solar = (user_input.get("solar_power_sensor") or "").strip()
             grid = (user_input.get("grid_import_power_sensor") or "").strip()
+            soc = (user_input.get("battery_soc_sensor") or "").strip()
             if not solar:
                 errors["solar_power_sensor"] = "required"
             if not grid:
                 errors["grid_import_power_sensor"] = "required"
             if not errors:
                 battery = (user_input.get("battery_power_sensor") or "").strip()
+                # Both key sets, deliberately. ``solar_production_sensor`` /
+                # ``grid_power_sensor`` are what SensorReader's LEGACY path
+                # consumes, and that is the path this install takes — the
+                # Energy Dashboard could not answer, so nothing feeds
+                # ``set_energy_dashboard_config`` and the reader falls back
+                # to these. The dashboard-shaped names are written too
+                # because the rest of the integration (flags, diagnostics,
+                # the Config card's pickers) reads those. Writing only the
+                # dashboard-shaped ones installed cleanly and then read 0 W
+                # from a 4.2 kW inverter — caught on the .46 rig.
                 self._data.update({
+                    "solar_production_sensor": solar,
+                    "grid_power_sensor": grid,
                     "solar_power_sensor": solar,
                     "grid_import_power_sensor": grid,
                     "battery_power_sensor": battery,
+                    "battery_soc_sensor": soc,
                     "has_solar": True,
                     "has_grid": True,
                     "has_battery": bool(battery),
@@ -557,7 +571,8 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         found_lines = []
         for key, label in (("solar_power_sensor", "Solar"),
                            ("grid_import_power_sensor", "Grid"),
-                           ("battery_power_sensor", "Battery")):
+                           ("battery_power_sensor", "Battery"),
+                           ("battery_soc_sensor", "Battery charge")):
             hit = proposals.get(key)
             if hit:
                 found_lines.append(
@@ -585,6 +600,12 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor",
                                                   device_class="power")),
+                vol.Optional(
+                    "battery_soc_sensor",
+                    description=_sug("battery_soc_sensor"),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor",
+                                                  device_class="battery")),
                 vol.Optional(
                     "observer_mode", default=DEFAULT_OBSERVER_MODE,
                 ): selector.BooleanSelector(),

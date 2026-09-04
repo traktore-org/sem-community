@@ -20,7 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it asked you to map energy counters when SEM steers on live power. SEM now
   asks your system directly instead — which energy integrations are installed,
   and what does each one call the three sensors SEM needs — and offers them
-  pre-filled for you to confirm. It works on a Huawei box whose entities are
+  pre-filled for you to confirm — solar, grid, battery power and the battery's
+  charge percentage. It works on a Huawei box whose entities are
   all named in German, because the match is on the name the *integration*
   declares, not the one your entity happens to carry. Discovery follows the
   same rule: when a supported inverter appears, SEM offers to set itself up

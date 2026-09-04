@@ -2497,3 +2497,19 @@ where no entity id contains "solar", "grid" or "battery"), plus the config-flow 
 assert a FORM where they asserted an ABORT. **Sweep question:** which of SEM's preconditions are
 really *another feature's* completeness, and what would SEM ask if that feature did not exist?
 Refs #915 #848 #274.
+
+### 66. A config-flow step that writes keys nothing reads — GUARDED
+**Symptom:** an install completes cleanly, every entity appears, and SEM reads **0 W from a 4.2 kW
+inverter**. **Root shape:** the new `sources` step wrote `solar_power_sensor` /
+`grid_import_power_sensor` — the names the Energy Dashboard produces — but an install that *takes*
+that step has no dashboard config by definition, so `SensorReader` falls to its legacy path, which
+reads `solar_production_sensor` / `grid_power_sensor`. Two vocabularies for the same three sensors,
+and the flow wrote the wrong one. **Every unit test passed**, because none of them followed the
+config from the step that writes it to the reader that consumes it — the halves were tested, the
+seam was not. **Live catch (#915, .46 fresh install with the grid source removed from the Energy
+Dashboard).** **Closure:** write both key sets, and a test that extracts the dict the step actually
+writes (by AST, so it cannot drift from the flow) and asserts `SensorReader` resolves every sensor
+from it. **Guard:**
+`tests/test_915_roster_at_runtime.py::TestTheSourcesStepWritesKeysTheReaderConsumes`.
+**Sweep question:** for every config key a flow writes, which code reads it — and is there a test
+that starts at the writer and ends at the reader? Refs #915 #274.

@@ -88,13 +88,15 @@
           "solar_power_sensor": "Solarleistung",
           "grid_import_power_sensor": "Netzleistung",
           "battery_power_sensor": "Batterieleistung (optional)",
-          "observer_mode": "Beobachtermodus (nur zusehen, nichts senden)"
+          "observer_mode": "Beobachtermodus (nur zusehen, nichts senden)",
+          "battery_soc_sensor": "Batterieladestand (optional)"
         },
         "data_description": {
           "solar_power_sensor": "Aktuelle Erzeugung in Watt — kein Tagesgesamtwert.",
           "grid_import_power_sensor": "Aktueller Bezug/Einspeisung in Watt. Ein vorzeichenbehafteter Sensor genügt; SEM erkennt die Richtung selbst.",
           "battery_power_sensor": "Aktuelles Laden/Entladen in Watt. Leer lassen, wenn keine Hausbatterie vorhanden ist.",
-          "observer_mode": "Für die ersten Tage empfohlen: SEM zeigt jede Entscheidung, die es treffen würde, und sendet nichts an deine Hardware."
+          "observer_mode": "Für die ersten Tage empfohlen: SEM zeigt jede Entscheidung, die es treffen würde, und sendet nichts an deine Hardware.",
+          "battery_soc_sensor": "Ladestand in Prozent. SEM's vier Batteriezonen lesen ihn."
         }
       }
     },

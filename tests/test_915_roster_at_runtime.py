@@ -325,3 +325,68 @@ class TestTheSecondAnchor:
         ]
         for body in hd.propose_energy_sources(registry=_registry(ents)).values():
             assert body["why"] and body["domain"] and body["entity"]
+
+
+@pytest.mark.unit
+class TestTheSourcesStepWritesKeysTheReaderConsumes:
+    """The bug this class exists for: the sources step wrote
+    ``solar_power_sensor`` / ``grid_import_power_sensor`` — the names the
+    Energy Dashboard produces — and the install completed cleanly and then
+    read **0 W from a 4.2 kW inverter**. An install that takes this step has
+    no dashboard config by definition, so SensorReader falls to its LEGACY
+    path, which reads ``solar_production_sensor`` / ``grid_power_sensor``.
+
+    Every unit test passed while that was broken, because none of them
+    followed the config from the step that writes it to the reader that
+    consumes it. Caught on the .46 rig; pinned here.
+    """
+
+    def _install_data(self) -> dict:
+        """The dict async_step_sources writes, extracted from the source so
+        this test cannot drift from the flow it is guarding."""
+        import ast
+        import pathlib as _p
+        src = (_p.Path(__file__).resolve().parent.parent
+               / "config_flow.py").read_text()
+        tree = ast.parse(src)
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.AsyncFunctionDef)
+                    and node.name == "async_step_sources"):
+                for call in ast.walk(node):
+                    if (isinstance(call, ast.Call)
+                            and isinstance(call.func, ast.Attribute)
+                            and call.func.attr == "update"
+                            and call.args
+                            and isinstance(call.args[0], ast.Dict)):
+                        out = {}
+                        for k, v in zip(call.args[0].keys, call.args[0].values):
+                            if isinstance(k, ast.Constant):
+                                out[k.value] = (
+                                    v.value if isinstance(v, ast.Constant)
+                                    else "sensor.chosen")
+                        return out
+        raise AssertionError("async_step_sources no longer updates _data")
+
+    def test_the_reader_resolves_every_sensor_the_step_writes(self):
+        from custom_components.solar_energy_management.coordinator.sensor_reader import (
+            SensorReader,
+        )
+        data = self._install_data()
+        assert data, "premise: the step writes an install config"
+        reader = SensorReader(MagicMock(), data)
+        cfg = reader.config
+        assert cfg.solar_power_sensor, (
+            "the sources step writes no key SensorReader reads for solar — "
+            "the install would come up reading 0 W")
+        assert cfg.grid_power_sensor, "same for grid"
+        assert cfg.battery_power_sensor, "same for battery"
+        assert cfg.battery_soc_sensor, (
+            "no SOC means the four battery zones have nothing to read")
+
+    def test_it_also_writes_the_dashboard_shaped_names(self):
+        """The rest of the integration — flags, diagnostics, the Config
+        card's pickers — reads those, so both sets are written."""
+        data = self._install_data()
+        for key in ("solar_power_sensor", "grid_import_power_sensor",
+                    "has_solar", "has_grid"):
+            assert key in data, key
