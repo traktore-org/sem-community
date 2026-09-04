@@ -97,6 +97,26 @@ class TestSolarEnergyManagementConfigFlow:
         assert "summary" in result.get("description_placeholders", {})
 
     @pytest.mark.asyncio
+    async def test_discovery_no_longer_stands_down_on_a_bare_dashboard(self, mock_hass):
+        """(#915) Discovery used to abort unless the Energy Dashboard was
+        already complete — so the one moment SEM KNOWS a supported inverter
+        just appeared was also the moment it said nothing. It now offers the
+        install; the user step handles an empty dashboard by asking the box."""
+        flow = _create_flow(mock_hass)
+        flow.async_set_unique_id = AsyncMock()
+        flow._abort_if_unique_id_configured = MagicMock()
+
+        with patch(
+            "custom_components.solar_energy_management.config_flow.read_energy_dashboard_config",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            result = await flow.async_step_integration_discovery({})
+
+        assert result["type"] == FlowResultType.FORM
+        assert result["step_id"] == "sources"
+
+    @pytest.mark.asyncio
     async def test_no_energy_dashboard_asks_the_box_instead(self, mock_hass):
         """(#915) An absent Energy Dashboard used to END the install with
         'go configure a different page and start again' — the hardest wall in

@@ -61,14 +61,38 @@ async function deleteSem() {
         await page.waitForTimeout(8000);
 
         // ── B1/B2 — the flow through the real dialog
+        //
+        // Which dialog depends on something this change caused: SEM now
+        // offers itself when a supported inverter is present, so seconds
+        // after the entry is deleted Home Assistant puts a DISCOVERED card on
+        // the Integrations page — and a discovery flow in progress makes the
+        // manual "Add integration" route a dead end. A user would click
+        // Configure on that card, so that is what this does, falling back to
+        // the manual route when nothing was discovered.
         await page.reload({ waitUntil: 'networkidle' });
-        await page.waitForTimeout(3500);
-        await page.getByText('Add integration').first().click();
-        await page.waitForTimeout(2500);
-        await page.keyboard.type(SEM);
-        await page.waitForTimeout(2500);
-        await page.keyboard.press('Enter');
-        await page.waitForTimeout(6000);
+        await page.waitForTimeout(4000);
+        const discovered = await page.evaluate(() =>
+            document.querySelector('home-assistant').hass
+                .callWS({ type: 'config_entries/flow/progress' })
+                .then(f => (f || []).some(x => x.handler === 'solar_energy_management'))
+                .catch(() => false));
+        // NOT an assertion: Home Assistant decides when to re-run discovery,
+        // so whether a card is waiting seconds after an uninstall is timing,
+        // not behaviour. The behaviour — discovery no longer standing down
+        // because a different page is unconfigured — is pinned where it can
+        // be pinned honestly, in tests/test_config_flow.py.
+        console.log(`route: ${discovered ? 'discovery card' : 'Add integration'}`);
+        if (discovered) {
+            await page.getByRole('button', { name: /configure|konfigurieren|einrichten/i })
+                .first().click();
+        } else {
+            await page.getByText('Add integration').first().click();
+            await page.waitForTimeout(2500);
+            await page.keyboard.type(SEM);
+            await page.waitForTimeout(2500);
+            await page.keyboard.press('Enter');
+        }
+        await page.waitForTimeout(7000);
 
         const dialogText = () => L.deepText(page);
         const step = await dialogText();
