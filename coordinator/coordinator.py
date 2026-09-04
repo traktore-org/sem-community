@@ -9643,6 +9643,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             out.add(item)
         except Exception:  # noqa: BLE001 — a filter never costs the report
             return set()
+        # The RESOLVED reads too. Several source sensors never land in the
+        # config entry — they are resolved from the Energy Dashboard on every
+        # cycle — so a filter that only reads the entry would still have told
+        # a working install about the grid meter it is already using (seen on
+        # .175: sensor.power_meter_wirkleistung).
+        try:
+            cfg = getattr(self._sensor_reader, "config", None)
+            for name in ("solar_power_sensor", "grid_power_sensor",
+                         "battery_power_sensor", "battery_soc_sensor",
+                         "ev_power_sensor"):
+                val = getattr(cfg, name, None)
+                if isinstance(val, str) and "." in val:
+                    out.add(val)
+        except Exception:  # noqa: BLE001
+            pass
         return out
 
     def refresh_detection_report(self) -> None:
