@@ -616,3 +616,48 @@ class TestANearMissIsAnOfferNotAChore:
         assert "_addSuggestedCharger" in card
         assert "_reportNearMissUrl" in card
         assert card.index("suggested_charger?.id") < card.index("_reportNearMissUrl(m)")
+
+
+@pytest.mark.unit
+class TestTheFilterSeesBothPlacesConfigLives:
+    """A source sensor lives in one of two places and the difference is
+    invisible from the outside: `sensor_reader.config` on a manual install,
+    the reader's Energy-Dashboard config on a dashboard-driven one. Reading
+    only the first told PROD's owner about `sensor.inverter_eingangsleistung`
+    and `sensor.power_meter_wirkleistung` — the two entities SEM reads every
+    ten seconds."""
+
+    def _coordinator_with(self, *, cfg=None, ed=None):
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        coord = SEMCoordinator.__new__(SEMCoordinator)
+        coord.config = {"battery_discharge_control_entity": "number.already"}
+        coord._sensor_reader = SimpleNamespace(
+            config=cfg or SimpleNamespace(),
+            _energy_dashboard_config=ed,
+        )
+        return coord
+
+    def test_a_dashboard_resolved_sensor_counts_as_configured(self):
+        ed = SimpleNamespace(solar_power="sensor.inverter_eingangsleistung",
+                             grid_import_power="sensor.power_meter_wirkleistung",
+                             battery_power="sensor.battery_1_lade_entladeleistung")
+        used = self._coordinator_with(ed=ed)._configured_entity_ids()
+        assert "sensor.inverter_eingangsleistung" in used
+        assert "sensor.power_meter_wirkleistung" in used
+        assert "number.already" in used, "the entry's own keys still count"
+
+    def test_a_manual_install_still_counts(self):
+        cfg = SimpleNamespace(solar_power_sensor="sensor.manual_solar",
+                              grid_power_sensor="sensor.manual_grid")
+        used = self._coordinator_with(cfg=cfg)._configured_entity_ids()
+        assert {"sensor.manual_solar", "sensor.manual_grid"} <= used
+
+    def test_a_multi_inverter_list_counts_every_entry(self):
+        ed = SimpleNamespace(solar_power_list=["sensor.pv_a", "sensor.pv_b"])
+        used = self._coordinator_with(ed=ed)._configured_entity_ids()
+        assert {"sensor.pv_a", "sensor.pv_b"} <= used
+
+    def test_nothing_configured_is_not_an_error(self):
+        assert isinstance(self._coordinator_with()._configured_entity_ids(), set)

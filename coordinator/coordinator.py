@@ -9643,11 +9643,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             out.add(item)
         except Exception:  # noqa: BLE001 — a filter never costs the report
             return set()
-        # The RESOLVED reads too. Several source sensors never land in the
-        # config entry — they are resolved from the Energy Dashboard on every
-        # cycle — so a filter that only reads the entry would still have told
-        # a working install about the grid meter it is already using (seen on
-        # .175: sensor.power_meter_wirkleistung).
+        # The RESOLVED reads too, from BOTH places they can live.
+        #
+        # ``sensor_reader.config`` is the legacy/manual surface — empty on an
+        # install whose sources come from the Energy Dashboard. Those live on
+        # the reader's dashboard config instead, and reading only the first
+        # one told PROD's owner about `sensor.inverter_eingangsleistung` and
+        # `sensor.power_meter_wirkleistung`: the two entities SEM reads every
+        # ten seconds. A proposal about an entity already in use is noise, and
+        # noise on this card is what the whole near-miss cleanup was for.
         try:
             cfg = getattr(self._sensor_reader, "config", None)
             for name in ("solar_power_sensor", "grid_power_sensor",
@@ -9656,6 +9660,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 val = getattr(cfg, name, None)
                 if isinstance(val, str) and "." in val:
                     out.add(val)
+            ed = getattr(self._sensor_reader, "_energy_dashboard_config", None)
+            for name in ("solar_power", "grid_import_power", "grid_export_power",
+                         "battery_power", "ev_power", "battery_soc"):
+                val = getattr(ed, name, None)
+                if isinstance(val, str) and "." in val:
+                    out.add(val)
+            for name in ("solar_power_list", "battery_power_list"):
+                for val in (getattr(ed, name, None) or []):
+                    if isinstance(val, str) and "." in val:
+                        out.add(val)
         except Exception:  # noqa: BLE001
             pass
         return out
