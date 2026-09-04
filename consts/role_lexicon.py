@@ -72,20 +72,23 @@ ROLE_RULES: Final[Dict[str, Dict[str, Any]]] = {
     # ── EV charger control ────────────────────────────────────────────
     "ev_current_control": {
         "platform": "number",
-        # Zaptec calls it ``charger_max_current`` and ``available_current``;
-        # OCPP calls it ``maximum_current``. The ``min`` and ``phase``
-        # exclusions matter: a minimum-current floor and Zaptec's
-        # 1↔3-phase switch register are both currents and neither is the
-        # control SEM writes (#804 learned the second one the hard way).
-        # NRGKick (#917) calls the control ``current_set`` and publishes a
-        # READ-ONLY ``charging_current`` beside it — the pair is why the
-        # "set" verbs are matched explicitly rather than by adding
-        # ``current`` alone, which would bind the reading and steer nothing.
-        "any": (r"charg(er|ing|e)?_(max_)?current", r"^maximum_current$",
-                r"current_limit", r"^available_current$",
+        # A CHARGER's current control, and nothing else that happens to be a
+        # current. Written as known control names plus an EV/charger context
+        # rather than as "anything with current in it", because the loose
+        # form matched an INVERTER's AC input limits — Victron's
+        # ``ac1_input_current_limit`` and ``remote_panel_current_limit`` were
+        # being offered as an EV charger control (found sweeping the open
+        # hardware requests, #809). A battery's ``charge_current`` is the
+        # same trap from the other side.
+        "any": (r"^charger_(max_)?current$", r"^charge_current_limit$",
+                r"^charging_current_(set|limit|max)$", r"ac_charger_.*current",
+                r"^(ev|evse)_.*current", r"ev.?charg.*current",
+                r"^maximum_current$", r"^available_current$",
                 r"^current_set$", r"^set_current$", r"^current_setpoint$"),
         "not": (r"phase", r"offline", r"failsafe", r"voltage", r"power",
-                r"\bmin\b", r"_min_", r"minimum", r"energy"),
+                r"\bmin\b", r"_min_", r"minimum", r"energy",
+                r"input", r"^ac\d", r"aes", r"remote_panel", r"bulk",
+                r"absorption", r"grid"),
     },
     "ev_charge_mode": {
         "platform": "select",

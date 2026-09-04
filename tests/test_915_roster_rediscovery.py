@@ -206,3 +206,48 @@ class TestItAnswersTheQuestionWeWereAskingReporters:
         "mobile EV charger", and that is the evidence — judging a brand by
         its name alone dropped it."""
         assert "nrgkick" in roster.ROSTER
+
+
+@pytest.mark.unit
+class TestTheEVCurrentRuleKnowsWhatItIsLookingFor:
+    """Sweeping the open hardware requests (#809) turned up the loose form of
+    this rule offering an INVERTER's AC input limits as an EV charger
+    control. A current is not a charger; the rule matches known control names
+    and an EV/charger context, and nothing else."""
+
+    import pytest as _pytest
+
+    @staticmethod
+    def _role(key):
+        import importlib.util
+        import pathlib as _p
+        root = _p.Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location(
+            "role_lexicon", root / "consts" / "role_lexicon.py")
+        lex = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(lex)
+        return lex.role_for("number", key)
+
+    @_pytest.mark.parametrize("key,brand", [
+        ("charger_max_current", "Zaptec"),
+        ("available_current", "Zaptec"),
+        ("maximum_current", "OCPP"),
+        ("current_set", "NRGKick"),
+        ("charge_current_limit", "SMA EV"),
+        ("ac_charger_output_current", "Sigenergy"),
+        ("max_evcharge_current", "Anker"),
+    ])
+    def test_a_real_charger_control_matches(self, key, brand):
+        assert self._role(key) == "ev_current_control", brand
+
+    @_pytest.mark.parametrize("key,why", [
+        ("ac1_input_current_limit", "Victron: the inverter's AC INPUT limit"),
+        ("aes_low_current_limit", "Victron: an assist threshold"),
+        ("remote_panel_current_limit", "Victron: a panel setting"),
+        ("charge_current", "a BATTERY's charge current"),
+        ("charger_min_current", "a floor, not the control"),
+        ("three_to_one_phase_switch_current", "#804: the phase register"),
+        ("energy_limit", "NRGKick: a kWh cap"),
+    ])
+    def test_a_current_that_is_not_a_charger_control_does_not(self, key, why):
+        assert self._role(key) != "ev_current_control", why

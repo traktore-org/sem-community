@@ -30,7 +30,7 @@ from typing import Any, Dict, Final
 SCHEMA: Final = 1
 
 
-ROSTER_META: Final[Dict[str, Any]] = {'generated_at': '2026-09-04T20:09:03Z', 'sources': {'core_analytics': 'https://analytics.home-assistant.io/data.json', 'core_index': 'https://raw.githubusercontent.com/home-assistant/core/dev/homeassistant/generated/integrations.json', 'custom_installs': 'https://analytics.home-assistant.io/custom_integrations.json', 'hacs': 'https://data-v2.hacs.xyz/integration/data.json', 'website': 'https://www.home-assistant.io/integrations.json'}, 'install_floor': 50, 'candidates': 768, 'kept': 167, 'with_roles': 48, 'roles_mined': 108}
+ROSTER_META: Final[Dict[str, Any]] = {'generated_at': '2026-09-04T20:22:20Z', 'sources': {'core_analytics': 'https://analytics.home-assistant.io/data.json', 'core_index': 'https://raw.githubusercontent.com/home-assistant/core/dev/homeassistant/generated/integrations.json', 'custom_installs': 'https://analytics.home-assistant.io/custom_integrations.json', 'hacs': 'https://data-v2.hacs.xyz/integration/data.json', 'website': 'https://www.home-assistant.io/integrations.json'}, 'install_floor': 50, 'candidates': 768, 'kept': 167, 'with_roles': 45, 'roles_mined': 103}
 
 #: domain -> what the ecosystem says this integration is.
 ROSTER: Final[Dict[str, Dict[str, Any]]] = {
@@ -79,7 +79,7 @@ ROSTER: Final[Dict[str, Dict[str, Any]]] = {
     'fronius_modbus': {'name': 'Fronius Modbus', 'repo': 'redpomodoro/fronius_modbus', 'origin': 'hacs', 'installs': 299, 'kind': 'energy', 'kind_from': 'keyword'},
     'fusion_solar': {'name': 'Fusion Solar', 'repo': 'tijsverkoyen/HomeAssistant-FusionSolar', 'origin': 'hacs', 'installs': 2815, 'kind': 'energy', 'kind_from': 'keyword'},
     'fusionsolarplus': {'name': 'FusionSolarPlus', 'repo': 'JortvanSchijndel/FusionSolarPlus', 'origin': 'hacs', 'installs': 930, 'kind': 'energy', 'kind_from': 'keyword'},
-    'garo_wallbox': {'name': 'Garo Wallbox', 'repo': 'sockless-coding/garo_wallbox', 'origin': 'hacs', 'installs': 104, 'kind': 'energy', 'kind_from': 'vocabulary'},
+    'garo_wallbox': {'name': 'Garo Wallbox', 'repo': 'sockless-coding/garo_wallbox', 'origin': 'hacs', 'installs': 104, 'kind': 'energy', 'kind_from': 'keyword'},
     'geo_home': {'name': 'Geo Home Smart Meter Integration', 'repo': 'mmillmor/geo_home', 'origin': 'hacs', 'installs': 124, 'kind': 'energy', 'kind_from': 'keyword'},
     'givenergy_local': {'name': 'GivEnergy Local', 'repo': 'dewet22/givenergy-hass', 'origin': 'hacs', 'installs': 174, 'kind': 'energy', 'kind_from': 'keyword'},
     'goecharger': {'name': 'go-eCharger', 'repo': 'cathiele/homeassistant-goecharger', 'origin': 'hacs', 'installs': 501, 'kind': 'energy', 'kind_from': 'keyword'},
@@ -133,7 +133,7 @@ ROSTER: Final[Dict[str, Dict[str, Any]]] = {
     'rce_pse': {'name': 'RCE PSE - Rynkowa Cena Energii', 'repo': 'Lewa-Reka/ha-rce-pse', 'origin': 'hacs', 'installs': 392, 'kind': 'other', 'kind_from': 'keyword'},
     'rct_power': {'name': 'RCT Power', 'repo': 'weltenwort/home-assistant-rct-power-integration', 'origin': 'hacs', 'installs': 446, 'kind': 'energy', 'kind_from': 'keyword'},
     'renault': {'name': 'Renault', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 4096, 'kind': 'vehicle', 'kind_from': 'keyword'},
-    'renogy': {'name': 'Renogy', 'repo': 'IAmTheMitchell/renogy-ha', 'origin': 'hacs', 'installs': 148, 'kind': 'energy', 'kind_from': 'vocabulary'},
+    'renogy': {'name': 'Renogy', 'repo': 'IAmTheMitchell/renogy-ha', 'origin': 'hacs', 'installs': 148, 'kind': 'energy', 'kind_from': 'keyword'},
     'saj': {'name': 'SAJ Solar Inverter', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 206, 'kind': 'other', 'kind_from': 'keyword'},
     'saj_esolar_air': {'name': 'SAJ eSolar Air', 'repo': 'faanskit/ha-esolar', 'origin': 'hacs', 'installs': 157, 'kind': 'energy', 'kind_from': 'keyword'},
     'saj_h2_modbus': {'name': 'SAJ H2 Inverter Modbus', 'repo': 'stanus74/home-assistant-saj-h2-modbus', 'origin': 'hacs', 'installs': 208, 'kind': 'energy', 'kind_from': 'keyword'},
@@ -145,7 +145,7 @@ ROSTER: Final[Dict[str, Dict[str, Any]]] = {
     'shell_recharge': {'name': 'Shell Recharge', 'repo': 'cyberjunky/home-assistant-shell_recharge', 'origin': 'hacs', 'installs': 58, 'kind': 'other', 'kind_from': 'keyword'},
     'shelly': {'name': 'ShellyForHass (Shelly integration)', 'repo': 'StyraHem/ShellyForHASS', 'origin': 'hacs', 'installs': 134576, 'kind': 'energy', 'kind_from': 'keyword'},
     'sigen': {'name': 'Sigenergy ESS', 'repo': 'TypQxQ/Sigenergy-Local-Modbus', 'origin': 'hacs', 'installs': 2255, 'kind': 'energy', 'kind_from': 'vocabulary'},
-    'silla_prism': {'name': 'Silla Prism Solar wallbox integration', 'repo': 'persuader72/silla-prism-integration', 'origin': 'hacs', 'installs': 76, 'kind': 'energy', 'kind_from': 'vocabulary'},
+    'silla_prism': {'name': 'Silla Prism Solar wallbox integration', 'repo': 'persuader72/silla-prism-integration', 'origin': 'hacs', 'installs': 76, 'kind': 'energy', 'kind_from': 'keyword'},
     'sinapsi_alfa': {'name': 'Alfa by Sinapsi', 'repo': 'alexdelprete/ha-sinapsi-alfa', 'origin': 'hacs', 'installs': 125, 'kind': 'other', 'kind_from': 'keyword'},
     'sma': {'name': 'SMA Solar', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 4738, 'kind': 'energy', 'kind_from': 'vocabulary'},
     'sma_ennexos': {'name': 'SMA ennexOS', 'repo': 'shadow578/homeassistant_sma-ennexos', 'origin': 'hacs', 'installs': 69, 'kind': 'energy', 'kind_from': 'keyword'},
@@ -240,9 +240,6 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'battery_discharge_limit': {'platform': 'number', 'keys': ('battery_discharge_power_limit',), 'options': ()},
         'battery_soc': {'platform': 'sensor', 'keys': ('state_of_charge',), 'options': ()},
     },
-    'garo_wallbox': {
-        'ev_current_control': {'platform': 'number', 'keys': ('current_limit',), 'options': ()},
-    },
     'goodwe': {
         'battery_strategy': {'platform': 'select', 'keys': ('operation_mode',), 'options': ('backup', 'eco', 'eco_charge', 'eco_discharge', 'general', 'off_grid', 'peak_shaving')},
         'battery_target_soc': {'platform': 'number', 'keys': ('soc_upper_limit',), 'options': ()},
@@ -318,9 +315,6 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'grid_power': {'platform': 'sensor', 'keys': ('grid_power',), 'options': ()},
         'solar_power': {'platform': 'sensor', 'keys': ('pv_power',), 'options': ()},
     },
-    'renogy': {
-        'ev_current_control': {'platform': 'number', 'keys': ('inverter_ac_input_current_limit', 'inverter_charge_current'), 'options': ()},
-    },
     'senec': {
         'battery_target_soc': {'platform': 'number', 'keys': ('sockets_1_lower_limit', 'sockets_1_time_limit', 'sockets_1_upper_limit', 'sockets_2_lower_limit', 'sockets_2_time_limit', 'sockets_2_upper_limit'), 'options': ()},
         'system_size_spec': {'platform': 'sensor', 'keys': ('solar_generated_power',), 'options': ()},
@@ -332,9 +326,7 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'battery_charge_limit': {'platform': 'number', 'keys': ('dc_charger_max_charging_power_limit',), 'options': ()},
         'battery_discharge_limit': {'platform': 'number', 'keys': ('dc_charger_max_discharging_power_limit',), 'options': ()},
         'battery_target_soc': {'platform': 'number', 'keys': ('plant_charge_cut_off_soc', 'plant_discharge_cut_off_soc'), 'options': ()},
-    },
-    'silla_prism': {
-        'ev_current_control': {'platform': 'number', 'keys': ('set_current_limit',), 'options': ()},
+        'ev_current_control': {'platform': 'number', 'keys': ('ac_charger_output_current',), 'options': ()},
     },
     'sma': {
         'grid_power': {'platform': 'sensor', 'keys': ('grid_power',), 'options': ()},
@@ -356,7 +348,6 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
     },
     'solis_cloud_control': {
         'battery_target_soc': {'platform': 'number', 'keys': ('battery_force_charge_soc', 'battery_max_charge_soc', 'battery_over_discharge_soc'), 'options': ()},
-        'ev_current_control': {'platform': 'number', 'keys': ('battery_max_charge_current', 'battery_max_discharge_current'), 'options': ()},
     },
     'solis_cloud_monitoring': {
         'battery_power': {'platform': 'sensor', 'keys': ('battery_power',), 'options': ()},
@@ -368,7 +359,6 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
     },
     'sunsynk': {
         'battery_target_soc': {'platform': 'number', 'keys': ('discharge_min_soc', 'target_soc'), 'options': ()},
-        'ev_current_control': {'platform': 'number', 'keys': ('cheap_charge_current', 'normal_charge_current', 'normal_discharge_current', 'peak_discharge_current', 'setting_charge_current', 'setting_discharge_current', 'setting_grid_charge_current'), 'options': ()},
     },
     'tibber': {
         'battery_capacity_spec': {'platform': 'sensor', 'keys': ('storage_rated_capacity',), 'options': ()},
@@ -397,7 +387,6 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
     },
     'wallbox': {
         'battery_soc': {'platform': 'sensor', 'keys': ('state_of_charge',), 'options': ()},
-        'ev_current_control': {'platform': 'number', 'keys': ('maximum_charging_current',), 'options': ()},
     },
     'zaptec': {
         'ev_current_control': {'platform': 'number', 'keys': ('available_current', 'charger_max_current'), 'options': ()},
