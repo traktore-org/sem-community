@@ -43,7 +43,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   found 21 integrations SEM cannot place today that publish concrete role
   candidates, Anker Solix and Sigenergy among them.
 
-  Four things use it, all of them small on purpose. **SEM asks every
+  **The near-miss list stopped shouting.** "Entities present, no role matched
+  — please report" is meant to say *a brand we almost support*; on a normal
+  house it was saying it over Zigbee coordinators, 24 times, because
+  everything on MQTT shares one platform. A device on a shared transport now
+  earns that line only when something about it is actually energy-shaped —
+  a power sensor with a plug, a current control, or a role SEM could name.
+  On the test rig: 24 near-misses became 1, and it is the real one.
+
+  Five things use it, all of them small on purpose. **SEM asks every
   integration you already run what it says it creates**: your box has
   Sigenergy installed, its own repository declares a discharge-power limit,
   and the entity of yours carrying that name is listed for you to confirm —

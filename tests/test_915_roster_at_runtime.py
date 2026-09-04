@@ -390,3 +390,44 @@ class TestTheSourcesStepWritesKeysTheReaderConsumes:
         for key in ("solar_power_sensor", "grid_import_power_sensor",
                     "has_solar", "has_grid"):
             assert key in data, key
+
+
+@pytest.mark.unit
+class TestANearMissIsAboutHardware:
+    """Seen on the .46 card: 24 near-misses, most of them zigbee2mqtt bridge
+    buttons, each telling the user *"a near miss is a brand we almost
+    support — please report"* about a Zigbee coordinator. The line is right;
+    the audience was wrong. ``mqtt`` is a transport carrying every brand at
+    once, so a device there earns the line only when something about it is
+    actually energy-shaped."""
+
+    def _report(self, ents):
+        return hd.build_detection_report(registry=_registry(ents))
+
+    def test_a_zigbee_bridge_is_not_a_near_miss(self):
+        ents = [
+            _ent("binary_sensor.zigbee2mqtt_bridge_connection_state", "mqtt",
+                 device_id="z1"),
+            _ent("button.zigbee2mqtt_bridge_restart", "mqtt", device_id="z1"),
+            _ent("select.zigbee2mqtt_bridge_log_level", "mqtt", device_id="z1"),
+        ]
+        assert self._report(ents)["near_misses"] == []
+
+    def test_an_energy_shaped_mqtt_device_still_is_one(self):
+        """The JuiceBox case (#816): a real charger rides mqtt, and if its
+        roles stop matching the user must still see the gap."""
+        ents = [
+            _ent("sensor.homie_juicebox_power", "mqtt", device_id="j1",
+                 device_class="power"),
+            _ent("binary_sensor.homie_juicebox_plug", "mqtt", device_id="j1",
+                 device_class="plug"),
+        ]
+        misses = self._report(ents)["near_misses"]
+        assert [m["platform"] for m in misses] == ["mqtt"]
+
+    def test_a_branded_platform_is_never_gated(self):
+        """Only the shared transports are filtered. A brand platform with
+        entities and no role is exactly what the near-miss list is for."""
+        ents = [_ent("sensor.wallbox_thing", "wallbox", device_id="w1")]
+        misses = self._report(ents)["near_misses"]
+        assert [m["platform"] for m in misses] == ["wallbox"]

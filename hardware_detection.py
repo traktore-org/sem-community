@@ -986,6 +986,13 @@ def _census_energy_shaped(dev_entities) -> bool:
         for e in dev_entities)
 
 
+#: Platforms that carry many brands at once. A device here is not a brand,
+#: so "entities present, no role matched" is only news when the device looks
+#: like energy hardware.
+_TRANSPORT_PLATFORMS = frozenset({"mqtt", "modbus", "esphome", "tasmota",
+                                  "template", "rest", "command_line"})
+
+
 def _roster():
     """(#915) The generated roster, or ``None``. Imported lazily and never
     at module scope: it is a 30 KB data module that only the census and the
@@ -1373,6 +1380,19 @@ def build_detection_report(hass: Optional[HomeAssistant] = None,
                         break
             by_id = {str(e.entity_id): e for e in dev_entities}
             if not mapping:
+                # (#915) A near miss is meant to read "a brand we almost
+                # support — please report". On the shared ``mqtt`` transport
+                # it was reading that over a Zigbee coordinator: the .46 rig
+                # showed 24 near-misses, most of them zigbee2mqtt bridge
+                # buttons, each asking the user to file an issue about a
+                # device SEM would never drive. A transport-platform device
+                # earns the line only if something about it is actually
+                # energy-shaped — a power sensor with a plug or a current
+                # control (the census rule), or a role the roster proposed.
+                _proposed = propose_roles_from_roster(dev_entities, platform)
+                if (platform in _TRANSPORT_PLATFORMS and not _proposed
+                        and not _census_energy_shaped(dev_entities)):
+                    continue
                 report["near_misses"].append({
                     "platform": platform,
                     "device_id": device_id,
@@ -1385,8 +1405,7 @@ def build_detection_report(hass: Optional[HomeAssistant] = None,
                     # confirms a proposal in the pickers; SEM binds nothing
                     # it guessed.
                     "roster": describe_domain(platform),
-                    "proposed_roles": propose_roles_from_roster(
-                        dev_entities, platform),
+                    "proposed_roles": _proposed,
                 })
                 continue
             mapped: Dict[str, Any] = {}

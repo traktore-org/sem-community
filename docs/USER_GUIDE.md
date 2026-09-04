@@ -54,7 +54,9 @@ The dashboard **Configuration tab → Detected hardware** shows every charger SE
 auto-detected, the evidence for each role (which entity and what it is), the
 entities it left unmapped, and **near-misses** — integrations whose entities SEM
 saw but could not map to any role. A near-miss means your hardware is *almost*
-supported: open an issue with the list shown. The same report is in the
+supported: open an issue with the list shown. Devices on shared transports
+(MQTT, Modbus) only appear here when they actually look like energy hardware —
+your Zigbee bridge is not a near-miss. The same report is in the
 diagnostics download (Settings → Devices & Services → SEM → ⋮ → Download
 diagnostics). Wrong detections are corrected in place with the pickers in the
 charger and sensor-source sections — no reinstall. The full support matrix with
