@@ -1078,7 +1078,8 @@ def propose_roles_from_roster(dev_entities, domain: str) -> Dict[str, Any]:
     return out
 
 
-def propose_for_installed(registry, *, limit_per_domain: int = 8) -> list:
+def propose_for_installed(registry, *, limit_per_domain: int = 8,
+                          configured_entities=None) -> list:
     """(#915) Every INSTALLED integration the roster has vocabulary for, with
     the controls it declares matched against this box's own entities.
 
@@ -1106,9 +1107,14 @@ def propose_for_installed(registry, *, limit_per_domain: int = 8) -> list:
         dom = str(e.platform or "")
         if dom in vocab:
             by_domain.setdefault(dom, []).append(e)
+    # (#915) An entity SEM already drives is not news. Without this the
+    # Config card told a working Huawei install about six "proposals" for
+    # controls it was already using — clutter wearing the shape of help.
+    used = {str(e) for e in (configured_entities or ()) if e}
     out = []
     for dom, ents in sorted(by_domain.items()):
-        roles = propose_roles_from_roster(ents[:400], dom)
+        roles = {r: b for r, b in propose_roles_from_roster(ents[:400], dom).items()
+                 if b.get("entity") not in used}
         if not roles:
             continue
         out.append({
@@ -1116,6 +1122,107 @@ def propose_for_installed(registry, *, limit_per_domain: int = 8) -> list:
             "roster": describe_domain(dom),
             "proposed_roles": dict(list(roles.items())[:limit_per_domain]),
         })
+    return out
+
+
+#: The four reads a first install cannot start without, and the SEM config
+#: key each fills. ``grid_power`` fills the IMPORT slot: SEM's reader
+#: auto-detects the sign, so one signed meter is the normal shape.
+_SOURCE_ROLE_TO_KEY = {
+    "solar_power": "solar_power_sensor",
+    "grid_power": "grid_import_power_sensor",
+    "battery_power": "battery_power_sensor",
+}
+
+
+def propose_energy_sources(hass=None, registry=None) -> Dict[str, Any]:
+    """(#915) The solar / grid / battery power sensors, proposed from the
+    integrations this box already runs.
+
+    SEM's install has always started at Home Assistant's Energy Dashboard: it
+    reads that mapping, and when it is missing or half-filled the install
+    ABORTS and sends the user off to configure a different page first. That
+    was the only anchor available — until the census could say which
+    integrations are installed and the roster could say what each one calls
+    its own entities.
+
+    So this is the second anchor, and it points the other way: what do you
+    already run, and what does it call the three things SEM needs? Two rungs,
+    strongest first — the integration's own declared key, then the plain
+    shape of the entity (a power sensor on an energy integration). Both are
+    proposals the user confirms in the flow; nothing is bound silently, and
+    no sign convention is claimed here (``sensor_reader`` detects that from
+    live values, as it always has).
+
+    Returns ``{config_key: {"entity", "why", "domain"}}`` — never a bare
+    entity id, because a suggestion the user cannot interrogate is one they
+    cannot correct.
+    """
+    if registry is None and hass is not None:
+        try:
+            registry = entity_registry.async_get(hass)
+        except Exception:  # noqa: BLE001 — a proposal never breaks a flow
+            return {}
+    if registry is None:
+        return {}
+    r = _roster()
+    vocab = (getattr(r, "ROLE_VOCAB", {}) or {}) if r is not None else {}
+
+    by_domain: Dict[str, list] = {}
+    for e in registry.entities.values():
+        if e.disabled_by:
+            continue
+        dom = str(e.platform or "")
+        if dom and dom not in _CENSUS_IGNORED:
+            by_domain.setdefault(dom, []).append(e)
+
+    out: Dict[str, Any] = {}
+
+    # Rung 1 — the integration's own declared key. Prefer a domain SEM
+    # already knows about, then any domain the roster calls energy-shaped.
+    def _domain_rank(dom: str) -> tuple:
+        row = (getattr(r, "ROSTER", {}) or {}).get(dom, {}) if r else {}
+        return (0 if dom in KNOWN_INVERTER_DOMAINS else 1,
+                -int(row.get("installs") or 0), dom)
+
+    for dom in sorted(by_domain, key=_domain_rank):
+        roles = vocab.get(dom)
+        if not roles:
+            continue
+        proposed = propose_roles_from_roster(by_domain[dom], dom)
+        for role, key in _SOURCE_ROLE_TO_KEY.items():
+            if key in out or role not in proposed:
+                continue
+            out[key] = {"entity": proposed[role]["entity"], "domain": dom,
+                        "why": f"declared as {proposed[role]['matched_key']}"}
+
+    # Rung 2 — shape. An entity that is a power sensor on an integration the
+    # census calls energy-shaped is a candidate even when nothing declared
+    # it, which is how a brand that publishes no vocabulary still gets help.
+    for dom in sorted(by_domain, key=_domain_rank):
+        ents = by_domain[dom]
+        if not _census_energy_shaped(ents):
+            continue
+        for e in ents:
+            eid = str(e.entity_id)
+            if not eid.startswith("sensor."):
+                continue
+            if str(getattr(e, "original_device_class", "")) != "power":
+                continue
+            low = eid.lower()
+            for token, key in (("solar", "solar_power_sensor"),
+                               ("pv", "solar_power_sensor"),
+                               ("grid", "grid_import_power_sensor"),
+                               ("meter", "grid_import_power_sensor"),
+                               ("batter", "battery_power_sensor")):
+                if key in out or token not in low:
+                    continue
+                if any(bad in low for bad in ("today", "daily", "total",
+                                              "forecast", "l1", "l2", "l3")):
+                    continue
+                out[key] = {"entity": eid, "domain": dom,
+                            "why": "a power sensor on an energy integration"}
+                break
     return out
 
 
@@ -1189,7 +1296,7 @@ def build_integration_census(hass=None, registry=None, config_domains=None,
 
 
 def build_detection_report(hass: Optional[HomeAssistant] = None,
-                           registry=None) -> Dict[str, Any]:
+                           registry=None, configured_entities=None) -> Dict[str, Any]:
     """(#814 Pillar B) Detection that shows its work.
 
     The same walk as ``discover_all_ev_chargers_from_registry`` — platform
@@ -1339,7 +1446,8 @@ def build_detection_report(hass: Optional[HomeAssistant] = None,
     # installed integration's own repository say it creates, and which of
     # this box's entities carry those names. Report data, intersection only.
     try:
-        report["roster_proposals"] = propose_for_installed(registry)
+        report["roster_proposals"] = propose_for_installed(
+            registry, configured_entities=configured_entities)
     except Exception:  # noqa: BLE001 — a prior never costs the report
         report["roster_proposals"] = []
     return report

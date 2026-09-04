@@ -9621,6 +9621,30 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     self._ev_retry_count,
                 )
 
+    def _configured_entity_ids(self) -> set:
+        """(#915) Every entity id this install already points SEM at.
+
+        A proposal about one of them is not information — the Config card
+        would be telling a working Huawei install about controls it is
+        already driving.
+        """
+        out = set()
+        try:
+            for value in (self.config or {}).values():
+                if isinstance(value, str) and "." in value and " " not in value:
+                    out.add(value)
+                elif isinstance(value, list):
+                    for item in value:
+                        if isinstance(item, dict):
+                            out |= {v for v in item.values()
+                                    if isinstance(v, str) and "." in v
+                                    and " " not in v}
+                        elif isinstance(item, str) and "." in item:
+                            out.add(item)
+        except Exception:  # noqa: BLE001 — a filter never costs the report
+            return set()
+        return out
+
     def refresh_detection_report(self) -> None:
         """(#814 Pillar B) Rebuild the detection evidence report from the
         entity registry. Called at setup and after a late discovery; the
@@ -9629,7 +9653,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         the Config tab's Detected-hardware section). Read-only, cheap."""
         try:
             from ..hardware_detection import build_detection_report
-            self._detection_report = build_detection_report(self.hass)
+            self._detection_report = build_detection_report(
+                self.hass, configured_entities=self._configured_entity_ids())
         except Exception:  # noqa: BLE001 — evidence must never cost setup
             _LOGGER.debug("detection report skipped", exc_info=True)
             self._detection_report = None

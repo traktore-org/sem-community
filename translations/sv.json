@@ -80,17 +80,32 @@
           "ev_battery_capacity_kwh": "Total användbar kapacitet i elbilens batteri i kWh. Används för att uppskatta SOC och laddningstid.",
           "ev_target_soc": "Härifrån betraktar SEM bilen som laddad. Det är en definition av \"full\", inte en laddgräns."
         }
+      },
+      "sources": {
+        "title": "Name your energy sensors",
+        "description": "Your Home Assistant Energy Dashboard is not set up (or is missing solar or grid), so SEM asked your system directly.\n\nWhat SEM recognised:\n{summary}\n\nConfirm or change each one below. SEM needs solar and grid to work out your surplus; leave battery empty if you have none. You can set up the Energy Dashboard later at {url} — SEM will keep using what you choose here.",
+        "data": {
+          "solar_power_sensor": "Solar power",
+          "grid_import_power_sensor": "Grid power",
+          "battery_power_sensor": "Battery power (optional)",
+          "observer_mode": "Observer mode (watch only, command nothing)"
+        },
+        "data_description": {
+          "solar_power_sensor": "Live production in watts — not a daily total.",
+          "grid_import_power_sensor": "Live import/export in watts. One signed sensor is fine; SEM works out which direction is which by watching it.",
+          "battery_power_sensor": "Live charge/discharge in watts. Leave empty if you have no home battery.",
+          "observer_mode": "Recommended for the first days: SEM shows every decision it would make and sends nothing to your hardware."
+        }
       }
     },
     "error": {
       "unknown": "Ett oväntat fel uppstod. Försök igen.",
       "entity_not_found": "Entiteten hittades inte. Kontrollera att entitets-ID:t finns.",
-      "service_not_found": "Aviseringstjänsten hittades inte. Kontrollera tjänstens namn (t.ex. notify.mobile_app_your_phone)."
+      "service_not_found": "Aviseringstjänsten hittades inte. Kontrollera tjänstens namn (t.ex. notify.mobile_app_your_phone).",
+      "required": "SEM needs this sensor to read your system."
     },
     "abort": {
-      "already_configured": "Solar Energy Management är redan konfigurerat. Bara en instans tillåts.",
-      "energy_dashboard_not_configured": "SEM läser dina sol-, nät- och batterisensorer från Home Assistants Energi-instrumentpanel, och den är inte konfigurerad ännu.\n\nStäll in den först under Inställningar → Instrumentpaneler → Energi ({url}) — lägg till minst din solproduktion och din elförbrukning från nätet — och starta sedan den här installationen igen.",
-      "energy_dashboard_incomplete": "Din Energi-instrumentpanel är konfigurerad, men följande saknas: {missing}.\n\nSEM behöver dessa källor för att kunna läsa av ditt system. Lägg till dem under Inställningar → Instrumentpaneler → Energi ({url}) och starta sedan den här installationen igen."
+      "already_configured": "Solar Energy Management är redan konfigurerat. Bara en instans tillåts."
     }
   },
   "options": {

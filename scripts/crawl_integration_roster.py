@@ -430,7 +430,9 @@ def roles_from_vocabulary(vocab: Dict[str, Dict[str, dict]], lexicon,
     if kind in ("appliance", "other"):
         return {}
     rules = (lexicon.VEHICLE_ROLE_RULES if kind == "vehicle"
-             else lexicon.ROLE_RULES)
+             # control roles AND the read roles: which entity is the solar
+             # power sensor is the question a first install actually asks.
+             else {**lexicon.ROLE_RULES, **lexicon.READ_ROLE_RULES})
     roles: Dict[str, dict] = {}
     for platform, keys in sorted(vocab.items()):
         for key, body in sorted(keys.items()):

@@ -80,6 +80,12 @@ def _declaring_steps(cf: str) -> dict:
 #: ever shown — so their fields must not be added together.
 FIRST_RUN_ALTERNATIVES = (
     ("ev_charger", "ev_charger_confirm"),
+    # (#915) A new install walks ONE of these, never both: ``user`` confirms
+    # what the Energy Dashboard already says, ``sources`` names the three
+    # sensors when it cannot. Counting both would charge every user for a
+    # step they only meet when the alternative is missing — and the honest
+    # comparison is against what ``sources`` replaced, which was an abort.
+    ("user", "sources"),
 )
 
 #: Steps in the install class that a NEW user never walks. ``reconfigure`` is

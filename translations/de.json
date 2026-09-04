@@ -80,17 +80,32 @@
           "ev_battery_capacity_kwh": "Gesamte nutzbare Kapazität der EV-Batterie in kWh. Wird zur Schätzung von SOC und Ladedauer verwendet.",
           "ev_target_soc": "Ab hier gilt das Auto für SEM als geladen. Das ist eine Definition von \"voll\", keine Ladegrenze."
         }
+      },
+      "sources": {
+        "title": "Benenne deine Energie-Sensoren",
+        "description": "Dein Home-Assistant-Energie-Dashboard ist nicht eingerichtet (oder es fehlt Solar bzw. Netz), also hat SEM dein System direkt gefragt.\n\nWas SEM erkannt hat:\n{summary}\n\nBestätige oder ändere unten jeden Eintrag. SEM braucht Solar und Netz, um den Überschuss zu berechnen; lass Batterie leer, wenn du keine hast. Du kannst das Energie-Dashboard später unter {url} einrichten — SEM benutzt weiterhin, was du hier wählst.",
+        "data": {
+          "solar_power_sensor": "Solarleistung",
+          "grid_import_power_sensor": "Netzleistung",
+          "battery_power_sensor": "Batterieleistung (optional)",
+          "observer_mode": "Beobachtermodus (nur zusehen, nichts senden)"
+        },
+        "data_description": {
+          "solar_power_sensor": "Aktuelle Erzeugung in Watt — kein Tagesgesamtwert.",
+          "grid_import_power_sensor": "Aktueller Bezug/Einspeisung in Watt. Ein vorzeichenbehafteter Sensor genügt; SEM erkennt die Richtung selbst.",
+          "battery_power_sensor": "Aktuelles Laden/Entladen in Watt. Leer lassen, wenn keine Hausbatterie vorhanden ist.",
+          "observer_mode": "Für die ersten Tage empfohlen: SEM zeigt jede Entscheidung, die es treffen würde, und sendet nichts an deine Hardware."
+        }
       }
     },
     "error": {
       "unknown": "Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es erneut.",
       "entity_not_found": "Entität nicht gefunden. Bitte überprüfen Sie die Entity-ID.",
-      "service_not_found": "Benachrichtigungsdienst nicht gefunden. Bitte überprüfen Sie den Dienstnamen (z. B. notify.mobile_app_your_phone)."
+      "service_not_found": "Benachrichtigungsdienst nicht gefunden. Bitte überprüfen Sie den Dienstnamen (z. B. notify.mobile_app_your_phone).",
+      "required": "SEM needs this sensor to read your system."
     },
     "abort": {
-      "already_configured": "Solar Energy Management ist bereits konfiguriert. Nur eine Instanz erlaubt.",
-      "energy_dashboard_not_configured": "SEM liest Ihre Solar-, Netz- und Batteriesensoren aus dem Energie-Dashboard von Home Assistant, und dieses ist noch nicht eingerichtet.\n\nRichten Sie es zuerst unter Einstellungen → Dashboards → Energie ({url}) ein — fügen Sie mindestens Ihre Solarproduktion und Ihren Netzbezug hinzu — und starten Sie diese Installation dann erneut.",
-      "energy_dashboard_incomplete": "Ihr Energie-Dashboard ist eingerichtet, aber es fehlt: {missing}.\n\nSEM benötigt diese Quellen, um Ihre Anlage auszulesen. Fügen Sie sie unter Einstellungen → Dashboards → Energie ({url}) hinzu und starten Sie diese Installation dann erneut."
+      "already_configured": "Solar Energy Management ist bereits konfiguriert. Nur eine Instanz erlaubt."
     }
   },
   "options": {

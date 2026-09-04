@@ -250,3 +250,78 @@ class TestItRecognisesWhatIsAlreadyInstalled:
         with patch.object(hd, "_roster", return_value=None):
             report = hd.build_detection_report(registry=_registry([]))
         assert report["roster_proposals"] == []
+
+
+@pytest.mark.unit
+class TestTheSecondAnchor:
+    """(#915) SEM's install used to start — and end — at Home Assistant's
+    Energy Dashboard. This is the other anchor: what do you already run, and
+    what does it call the three sensors SEM needs."""
+
+    def test_a_declared_key_names_the_solar_and_grid_sensors(self):
+        ents = [
+            _ent("sensor.wechselrichter_eingangsleistung", "huawei_solar",
+                 translation_key="input_power", device_class="power"),
+            _ent("sensor.leistungsmesser_wirkleistung", "huawei_solar",
+                 translation_key="power_meter_active_power", device_class="power"),
+            _ent("sensor.batterie_lade_entladeleistung", "huawei_solar",
+                 translation_key="storage_charge_discharge_power",
+                 device_class="power"),
+            _ent("sensor.batterie_ladestand", "huawei_solar",
+                 translation_key="state_of_capacity", device_class="battery"),
+        ]
+        out = hd.propose_energy_sources(registry=_registry(ents))
+        assert out["solar_power_sensor"]["entity"] == "sensor.wechselrichter_eingangsleistung"
+        assert out["grid_import_power_sensor"]["entity"] == "sensor.leistungsmesser_wirkleistung"
+        assert out["battery_power_sensor"]["entity"] == "sensor.batterie_lade_entladeleistung"
+        assert "declared as" in out["solar_power_sensor"]["why"]
+
+    def test_it_works_on_a_german_install(self):
+        """The point of matching a declared key rather than an entity id:
+        every entity above is German and none of them contains 'solar',
+        'grid' or 'battery'."""
+        ents = [
+            _ent("sensor.wechselrichter_eingangsleistung", "huawei_solar",
+                 translation_key="input_power", device_class="power"),
+        ]
+        out = hd.propose_energy_sources(registry=_registry(ents))
+        assert "solar_power_sensor" in out
+
+    def test_shape_answers_when_nothing_is_declared(self):
+        """A brand that publishes no vocabulary still gets help: a power
+        sensor on an energy-shaped integration is a candidate."""
+        ents = [
+            _ent("sensor.growatt_solar_power", "growatt_server",
+                 device_class="power"),
+            _ent("sensor.growatt_grid_power", "growatt_server",
+                 device_class="power"),
+            _ent("sensor.growatt_battery_soc", "growatt_server",
+                 device_class="battery"),
+        ]
+        out = hd.propose_energy_sources(registry=_registry(ents))
+        assert out["solar_power_sensor"]["entity"] == "sensor.growatt_solar_power"
+        assert out["grid_import_power_sensor"]["entity"] == "sensor.growatt_grid_power"
+        assert "power sensor" in out["grid_import_power_sensor"]["why"]
+
+    def test_a_daily_total_is_never_a_live_power_sensor(self):
+        ents = [
+            _ent("sensor.growatt_solar_power_today", "growatt_server",
+                 device_class="power"),
+            _ent("sensor.growatt_battery_soc", "growatt_server",
+                 device_class="battery"),
+        ]
+        out = hd.propose_energy_sources(registry=_registry(ents))
+        assert "solar_power_sensor" not in out
+
+    def test_a_box_with_no_energy_hardware_proposes_nothing(self):
+        ents = [_ent("sensor.lounge_temperature", "hue",
+                     device_class="temperature")]
+        assert hd.propose_energy_sources(registry=_registry(ents)) == {}
+
+    def test_every_proposal_says_where_it_came_from(self):
+        ents = [
+            _ent("sensor.pv", "huawei_solar", translation_key="input_power",
+                 device_class="power"),
+        ]
+        for body in hd.propose_energy_sources(registry=_registry(ents)).values():
+            assert body["why"] and body["domain"] and body["entity"]

@@ -97,8 +97,11 @@ class TestSolarEnergyManagementConfigFlow:
         assert "summary" in result.get("description_placeholders", {})
 
     @pytest.mark.asyncio
-    async def test_energy_dashboard_not_configured(self, mock_hass):
-        """Abort with reason energy_dashboard_not_configured."""
+    async def test_no_energy_dashboard_asks_the_box_instead(self, mock_hass):
+        """(#915) An absent Energy Dashboard used to END the install with
+        'go configure a different page and start again' — the hardest wall in
+        SEM's onboarding. It now opens the sources step, pre-filled from the
+        integrations this box already runs."""
         flow = _create_flow(mock_hass)
 
         with patch(
@@ -108,12 +111,13 @@ class TestSolarEnergyManagementConfigFlow:
         ):
             result = await flow.async_step_user()
 
-        assert result["type"] == FlowResultType.ABORT
-        assert result["reason"] == "energy_dashboard_not_configured"
+        assert result["type"] == FlowResultType.FORM
+        assert result["step_id"] == "sources"
+        assert "summary" in result.get("description_placeholders", {})
 
     @pytest.mark.asyncio
-    async def test_energy_dashboard_incomplete(self, mock_hass):
-        """Abort when Energy Dashboard is missing solar."""
+    async def test_energy_dashboard_missing_solar_asks_the_box(self, mock_hass):
+        """(#915) Half a dashboard is not a reason to refuse an install."""
         energy_config = _make_energy_dashboard_config(has_solar=False, has_grid=True)
         flow = _create_flow(mock_hass)
 
@@ -124,13 +128,12 @@ class TestSolarEnergyManagementConfigFlow:
         ):
             result = await flow.async_step_user()
 
-        assert result["type"] == FlowResultType.ABORT
-        assert result["reason"] == "energy_dashboard_incomplete"
-        assert "Solar" in result["description_placeholders"]["missing"]
+        assert result["type"] == FlowResultType.FORM
+        assert result["step_id"] == "sources"
 
     @pytest.mark.asyncio
-    async def test_energy_dashboard_incomplete_no_grid(self, mock_hass):
-        """Abort when Energy Dashboard has solar but no grid."""
+    async def test_energy_dashboard_missing_grid_asks_the_box(self, mock_hass):
+        """(#915) Same on the grid side."""
         energy_config = _make_energy_dashboard_config(has_solar=True, has_grid=False)
         flow = _create_flow(mock_hass)
 
@@ -141,9 +144,8 @@ class TestSolarEnergyManagementConfigFlow:
         ):
             result = await flow.async_step_user()
 
-        assert result["type"] == FlowResultType.ABORT
-        assert result["reason"] == "energy_dashboard_incomplete"
-        assert "Grid" in result["description_placeholders"]["missing"]
+        assert result["type"] == FlowResultType.FORM
+        assert result["step_id"] == "sources"
 
     @pytest.mark.asyncio
     async def test_user_step_proceeds_to_hardware(self, mock_hass):

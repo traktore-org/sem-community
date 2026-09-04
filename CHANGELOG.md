@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🚀 **An install no longer stops at the Energy Dashboard** (#915). SEM read
+  your solar, grid and battery from Home Assistant's Energy Dashboard, and if
+  that page was empty or half-filled the installation **ended**: *"set it up
+  first, then start again."* That was the hardest wall in getting started, and
+  it asked you to map energy counters when SEM steers on live power. SEM now
+  asks your system directly instead — which energy integrations are installed,
+  and what does each one call the three sensors SEM needs — and offers them
+  pre-filled for you to confirm. It works on a Huawei box whose entities are
+  all named in German, because the match is on the name the *integration*
+  declares, not the one your entity happens to carry. Discovery follows the
+  same rule: when a supported inverter appears, SEM offers to set itself up
+  rather than standing down because a different page is unconfigured.
+
 - 🔎 **SEM now recognises hardware nobody has reported yet** (#915). Until
   now every brand SEM could name was typed by hand after somebody filed an
   issue: the census would say *"eg4_web_monitor — installed, unknown to

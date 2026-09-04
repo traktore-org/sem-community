@@ -2480,3 +2480,20 @@ unrepresentable), `tests/test_915_roster_rediscovery.py` (the miner re-derives f
 learned from four live installs, and invents nothing for a brand that exposes nothing).
 **Sweep question:** where else is SEM maintaining by hand a fact its source already publishes —
 and would reading the source be a hypothesis or a claim? Refs #915 #848 #814 #530.
+
+### 65. One anchor for discovery, and it belongs to somebody else — GUARDED
+**Symptom:** an install ends with *"your Energy Dashboard is missing Solar — set it up and start
+again"*; a supported inverter is discovered and SEM stands down because a different page is
+unconfigured. **Root shape:** every source SEM reads was resolved from HA's Energy Dashboard, so
+SEM's onboarding inherited another feature's completeness as a precondition — and that feature maps
+kWh counters while SEM steers on watts, names only solar/grid/battery, and gives one entity where a
+two-inverter house has two. There was no second way in, because until the census (#848) SEM could
+not ask what was installed. **Closure (#915):** a second anchor pointing the other way — which
+energy integrations are installed, and what does each call the three sensors SEM needs, from its
+own declared vocabulary, then from entity shape. The dashboard becomes the preferred answer rather
+than the only one; discovery offers the install instead of standing down. **Guard:**
+`tests/test_915_roster_at_runtime.py::TestTheSecondAnchor` (including a German-named Huawei install
+where no entity id contains "solar", "grid" or "battery"), plus the config-flow tests that now
+assert a FORM where they asserted an ABORT. **Sweep question:** which of SEM's preconditions are
+really *another feature's* completeness, and what would SEM ask if that feature did not exist?
+Refs #915 #848 #274.

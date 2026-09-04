@@ -123,6 +123,7 @@ class TestTheTwoSignalRule:
             roles = set(roster.ROLE_VOCAB.get(domain, {}))
             assert roles <= set(lexicon.VEHICLE_ROLE_RULES), (domain, roles)
 
+
     def test_a_non_energy_domain_contributes_nothing(self):
         for domain, row in roster.ROSTER.items():
             if row["kind"] in ("appliance", "other"):
@@ -142,12 +143,14 @@ class TestTheBoundaries:
         assert "solar_energy_management" not in roster.ROSTER
 
     def test_every_role_is_one_the_lexicon_defines(self):
-        known = set(lexicon.ROLE_RULES) | set(lexicon.VEHICLE_ROLE_RULES)
+        known = (set(lexicon.ROLE_RULES) | set(lexicon.READ_ROLE_RULES)
+                 | set(lexicon.VEHICLE_ROLE_RULES))
         for domain, roles in roster.ROLE_VOCAB.items():
             assert set(roles) <= known, (domain, set(roles) - known)
 
     def test_every_role_body_has_keys_on_its_declared_platform(self):
-        rules = {**lexicon.ROLE_RULES, **lexicon.VEHICLE_ROLE_RULES}
+        rules = {**lexicon.ROLE_RULES, **lexicon.READ_ROLE_RULES,
+                 **lexicon.VEHICLE_ROLE_RULES}
         for domain, roles in roster.ROLE_VOCAB.items():
             for role, body in roles.items():
                 assert body["keys"], (domain, role)

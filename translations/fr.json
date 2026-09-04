@@ -80,17 +80,32 @@
           "ev_battery_capacity_kwh": "Capacité utile totale de la batterie du VE en kWh. Utilisée pour estimer le SOC et le temps de charge.",
           "ev_target_soc": "À partir de là, SEM considère la voiture comme chargée. C'est une définition de \"plein\", pas une limite de charge."
         }
+      },
+      "sources": {
+        "title": "Name your energy sensors",
+        "description": "Your Home Assistant Energy Dashboard is not set up (or is missing solar or grid), so SEM asked your system directly.\n\nWhat SEM recognised:\n{summary}\n\nConfirm or change each one below. SEM needs solar and grid to work out your surplus; leave battery empty if you have none. You can set up the Energy Dashboard later at {url} — SEM will keep using what you choose here.",
+        "data": {
+          "solar_power_sensor": "Solar power",
+          "grid_import_power_sensor": "Grid power",
+          "battery_power_sensor": "Battery power (optional)",
+          "observer_mode": "Observer mode (watch only, command nothing)"
+        },
+        "data_description": {
+          "solar_power_sensor": "Live production in watts — not a daily total.",
+          "grid_import_power_sensor": "Live import/export in watts. One signed sensor is fine; SEM works out which direction is which by watching it.",
+          "battery_power_sensor": "Live charge/discharge in watts. Leave empty if you have no home battery.",
+          "observer_mode": "Recommended for the first days: SEM shows every decision it would make and sends nothing to your hardware."
+        }
       }
     },
     "error": {
       "unknown": "Une erreur inattendue s'est produite. Veuillez réessayer.",
       "entity_not_found": "Entité introuvable. Vérifiez que l'ID d'entité existe.",
-      "service_not_found": "Service de notification introuvable. Veuillez vérifier le nom du service (par ex. notify.mobile_app_your_phone)."
+      "service_not_found": "Service de notification introuvable. Veuillez vérifier le nom du service (par ex. notify.mobile_app_your_phone).",
+      "required": "SEM needs this sensor to read your system."
     },
     "abort": {
-      "already_configured": "Solar Energy Management est déjà configuré. Une seule instance est autorisée.",
-      "energy_dashboard_not_configured": "SEM lit vos capteurs solaires, réseau et batterie depuis le tableau de bord Énergie de Home Assistant, et celui-ci n'est pas encore configuré.\n\nConfigurez-le d'abord dans Paramètres → Tableaux de bord → Énergie ({url}) — ajoutez au moins votre production solaire et votre consommation du réseau — puis relancez cette installation.",
-      "energy_dashboard_incomplete": "Votre tableau de bord Énergie est configuré, mais il manque : {missing}.\n\nSEM a besoin de ces sources pour lire votre installation. Ajoutez-les dans Paramètres → Tableaux de bord → Énergie ({url}), puis relancez cette installation."
+      "already_configured": "Solar Energy Management est déjà configuré. Une seule instance est autorisée."
     }
   },
   "options": {

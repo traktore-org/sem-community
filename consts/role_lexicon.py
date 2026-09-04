@@ -102,6 +102,40 @@ ROLE_RULES: Final[Dict[str, Dict[str, Any]]] = {
     },
 }
 
+#: READ roles — the three sensors SEM cannot run without, and the SOC.
+#: These identify WHICH entity plays a role, never which way it counts: a sign
+#: convention is a fact about one installation and SEM already auto-detects it
+#: (``sensor_reader``). A read guess the user confirms costs a wrong number on
+#: a screen; that is the side of bug class 42 where guessing is allowed.
+READ_ROLE_RULES: Final[Dict[str, Dict[str, Any]]] = {
+    "solar_power": {
+        "platform": "sensor",
+        "any": (r"^(pv|solar|input)_power$", r"^power_pv", r"pv_active_power",
+                r"^solar_generation", r"^inverter_input_power$"),
+        "not": (r"total", r"today", r"daily", r"yesterday", r"month",
+                r"forecast", r"string", r"pv\d", r"mppt"),
+    },
+    "grid_power": {
+        "platform": "sensor",
+        "any": (r"^grid_(active_)?power$", r"^power_meter_active_power$",
+                r"grid_exchange", r"^meter_active_power$", r"^grid_net_power$"),
+        "not": (r"today", r"daily", r"total", r"phase", r"l1", r"l2", r"l3",
+                r"import_energy", r"export_energy"),
+    },
+    "battery_power": {
+        "platform": "sensor",
+        "any": (r"^battery_(active_)?power$", r"^storage_.*charge_discharge_power$",
+                r"^battery_charge_discharge_power$"),
+        "not": (r"today", r"daily", r"total", r"soc", r"percent"),
+    },
+    "battery_soc": {
+        "platform": "sensor",
+        "any": (r"^(battery_)?state_of_(capacity|charge)$", r"^battery_soc$",
+                r"^storage_state_of_capacity$"),
+        "not": (r"target", r"limit", r"min", r"max", r"12v"),
+    },
+}
+
 #: Vehicle roles. SEM never controls a car — it charges *towards* the car's
 #: state (``vehicle_soc_entity`` / ``vehicle_range_entity``), so a car
 #: integration's vocabulary is worth reading even though nothing is written.
@@ -174,12 +208,17 @@ OPAQUE_PLATFORMS: Final[frozenset] = frozenset({
 })
 
 
+#: Every rule set the crawler may apply, by kind.
+ALL_RULE_SETS: Final[tuple] = ("ROLE_RULES", "READ_ROLE_RULES",
+                               "VEHICLE_ROLE_RULES")
+
+
 def role_for(platform: str, key: str) -> str | None:
     """The SEM role a declared ``translation_key`` on ``platform`` plays, or
     ``None``. First matching rule wins; rules are ordered by specificity in
     ``ROLE_RULES`` above."""
     import re
-    for role, rule in ROLE_RULES.items():
+    for role, rule in {**ROLE_RULES, **READ_ROLE_RULES}.items():
         if rule["platform"] != platform:
             continue
         if any(re.search(p, key, re.I) for p in rule.get("not", ())):

@@ -490,12 +490,109 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # (quality scale: discovery-update-info)
         self._abort_if_unique_id_configured(reload_on_update=True)
 
-        # Only proceed if Energy Dashboard is actually configured
-        dashboard = await read_energy_dashboard_config(self.hass)
-        if not dashboard or not dashboard.is_minimally_configured():
-            return self.async_abort(reason="energy_dashboard_not_configured")
-
+        # (#915) Discovery used to stand down unless the Energy Dashboard
+        # was already complete — so the one moment SEM KNOWS a supported
+        # inverter just appeared was also the moment it said nothing. The
+        # user step now handles an empty dashboard by asking the box, so
+        # discovery can simply offer the install.
         return await self.async_step_user()
+
+    async def async_step_sources(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """(#915) Name the three sensors SEM reads, without the Energy
+        Dashboard.
+
+        Reached only when the dashboard cannot answer. Every field is
+        pre-filled from what this box already runs — the integration's own
+        declared entity names first, the plain shape of a power sensor
+        second — so the common case is *confirm*, not *hunt through four
+        hundred entities*. Solar and grid are required because SEM cannot
+        compute a surplus without them; battery is optional, since plenty of
+        installs have none.
+
+        Nothing here is bound silently: the flow shows the proposal, the
+        user accepts or replaces it, and the sign convention is still
+        detected from live values rather than assumed.
+        """
+        errors: dict[str, str] = {}
+        proposals = {}
+        try:
+            from .hardware_detection import propose_energy_sources
+            proposals = propose_energy_sources(self.hass)
+        except Exception:  # noqa: BLE001 — a proposal never breaks an install
+            proposals = {}
+
+        if user_input is not None:
+            solar = (user_input.get("solar_power_sensor") or "").strip()
+            grid = (user_input.get("grid_import_power_sensor") or "").strip()
+            if not solar:
+                errors["solar_power_sensor"] = "required"
+            if not grid:
+                errors["grid_import_power_sensor"] = "required"
+            if not errors:
+                battery = (user_input.get("battery_power_sensor") or "").strip()
+                self._data.update({
+                    "solar_power_sensor": solar,
+                    "grid_import_power_sensor": grid,
+                    "battery_power_sensor": battery,
+                    "has_solar": True,
+                    "has_grid": True,
+                    "has_battery": bool(battery),
+                    "has_ev": False,
+                    # (#915) Recorded so a support thread can tell a manual
+                    # install from a dashboard-derived one at a glance.
+                    "sources_from": "manual",
+                })
+                self._data["observer_mode"] = user_input.get(
+                    "observer_mode", DEFAULT_OBSERVER_MODE)
+                self._data["vacation_mode"] = False
+                self._data["energy_plan_actuation"] = True
+                return await self.async_step_hardware()
+
+        def _sug(key: str) -> dict:
+            hit = proposals.get(key)
+            return {"suggested_value": hit["entity"]} if hit else {}
+
+        found_lines = []
+        for key, label in (("solar_power_sensor", "Solar"),
+                           ("grid_import_power_sensor", "Grid"),
+                           ("battery_power_sensor", "Battery")):
+            hit = proposals.get(key)
+            if hit:
+                found_lines.append(
+                    f"  • {label}: `{hit['entity']}` — {hit['why']}")
+        summary = ("\n".join(found_lines) if found_lines
+                   else "  • nothing recognised — pick the sensors yourself")
+
+        return self.async_show_form(
+            step_id="sources",
+            data_schema=vol.Schema({
+                vol.Required(
+                    "solar_power_sensor", description=_sug("solar_power_sensor"),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor",
+                                                  device_class="power")),
+                vol.Required(
+                    "grid_import_power_sensor",
+                    description=_sug("grid_import_power_sensor"),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor",
+                                                  device_class="power")),
+                vol.Optional(
+                    "battery_power_sensor",
+                    description=_sug("battery_power_sensor"),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor",
+                                                  device_class="power")),
+                vol.Optional(
+                    "observer_mode", default=DEFAULT_OBSERVER_MODE,
+                ): selector.BooleanSelector(),
+            }),
+            description_placeholders={"summary": summary,
+                                      "url": "/config/energy"},
+            errors=errors,
+        )
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -506,25 +603,16 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Read Energy Dashboard configuration
         self._energy_dashboard_config = await read_energy_dashboard_config(self.hass)
 
-        if self._energy_dashboard_config is None:
-            # Energy Dashboard not configured at all
-            return self.async_abort(
-                reason="energy_dashboard_not_configured",
-                description_placeholders={
-                    "url": "/config/energy"
-                }
-            )
-
-        if not self._energy_dashboard_config.is_minimally_configured():
-            # Energy Dashboard missing required components
-            missing = self._energy_dashboard_config.get_missing_components()
-            return self.async_abort(
-                reason="energy_dashboard_incomplete",
-                description_placeholders={
-                    "missing": ", ".join(missing),
-                    "url": "/config/energy"
-                }
-            )
+        # (#915) The Energy Dashboard is SEM's first anchor, not its only
+        # one. It used to be both: a missing or half-filled dashboard ended
+        # the install with "go configure a different page and start again" —
+        # the hardest wall in SEM's onboarding, and one that asks the user to
+        # map ENERGY counters when SEM steers on POWER. When it cannot
+        # answer, ask the box instead: which energy integrations are
+        # installed, and what does each call the three sensors SEM needs.
+        if (self._energy_dashboard_config is None
+                or not self._energy_dashboard_config.is_minimally_configured()):
+            return await self.async_step_sources()
 
         # Energy Dashboard is configured - show summary and continue.
         # Slim install (v1.7.1-beta.11+, #442): route directly to
