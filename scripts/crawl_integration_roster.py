@@ -240,7 +240,7 @@ def candidate_rows(sources: Dict[str, Any]) -> Dict[str, dict]:
         prev = rows.get(dom)
         row = {"name": str(name)[:60], "repo": entry.get("full_name"),
                "origin": "hacs", "installs": counts.get(dom, 0),
-               "stars": entry.get("stargazers_count") or 0}
+               "stars": entry.get("stargazers_count") or 0, "blurb": blob[:300]}
         if prev is None or row["stars"] > prev.get("stars", 0):
             rows[dom] = row
 
@@ -291,7 +291,7 @@ def candidate_rows(sources: Dict[str, Any]) -> Dict[str, dict]:
             continue
         rows[dom] = {"name": str(name)[:60], "repo": "home-assistant/core",
                      "origin": "core", "installs": counts.get(dom, 0),
-                     "stars": 0}
+                     "stars": 0, "blurb": blob[:300]}
     return rows
 
 
@@ -499,7 +499,13 @@ def build_roster(sources: Dict[str, Any], *, offline: bool, floor: int,
             # found in prose ("...with battery backup") is not a brand.
             if row["installs"] < floor:
                 continue
-            if not _KEYWORDS.search(f"{dom} {row['name']}") and dom not in known_now:
+            # Judge it on what the FIRST gate judged — domain, name AND the
+            # integration's own description. Checking the name alone dropped
+            # NRGKick (#917), whose HA page says "mobile EV charger" while
+            # its name says nothing at all: the ecosystem's own words are the
+            # evidence, and a brand name is rarely one of them.
+            if (not _KEYWORDS.search(f"{dom} {row['name']} {row.get('blurb', '')}")
+                    and dom not in known_now):
                 continue
         roster[dom] = {
             "name": row["name"],

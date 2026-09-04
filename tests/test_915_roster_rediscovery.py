@@ -174,3 +174,35 @@ class TestTheHardcodedKeysAreStillReal:
         capacity key SEM does not know about."""
         assert "rated_ess_capacity" in _keys("huawei_solar",
                                              "battery_capacity_spec")
+
+
+@pytest.mark.unit
+class TestItAnswersTheQuestionWeWereAskingReporters:
+    """#917 (NRGKick) arrived the day this shipped, and the triage reply asked
+    the reporter for his entity ids: *"which binary_sensor best means EV
+    plugged in, plus charging state, power, current and energy"*.
+
+    Home Assistant core publishes all of it. The miner reads the same file
+    the integration ships, so the question was answerable without him — which
+    is the whole point of the roster, tested on the first case that turned up
+    after it was built.
+    """
+
+    def test_nrgkick_is_recognised_without_its_reporter(self):
+        row = roster.ROSTER.get("nrgkick")
+        assert row, "NRGKick is a core integration; the roster should carry it"
+        assert row["kind_from"] == "vocabulary"
+
+    def test_its_current_control_is_the_set_verb_not_the_reading(self):
+        """NRGKick names the control ``current_set`` and publishes a
+        read-only ``charging_current`` beside it. Binding the reading would
+        steer nothing, so the rule matches the set verbs explicitly."""
+        keys = _keys("nrgkick", "ev_current_control")
+        assert "current_set" in keys
+        assert "charging_current" not in keys
+
+    def test_a_brand_whose_NAME_says_nothing_still_gets_in(self):
+        """"NRGkick" contains no energy word. Its Home Assistant page says
+        "mobile EV charger", and that is the evidence — judging a brand by
+        its name alone dropped it."""
+        assert "nrgkick" in roster.ROSTER

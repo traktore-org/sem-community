@@ -77,10 +77,15 @@ ROLE_RULES: Final[Dict[str, Dict[str, Any]]] = {
         # exclusions matter: a minimum-current floor and Zaptec's
         # 1↔3-phase switch register are both currents and neither is the
         # control SEM writes (#804 learned the second one the hard way).
+        # NRGKick (#917) calls the control ``current_set`` and publishes a
+        # READ-ONLY ``charging_current`` beside it — the pair is why the
+        # "set" verbs are matched explicitly rather than by adding
+        # ``current`` alone, which would bind the reading and steer nothing.
         "any": (r"charg(er|ing|e)?_(max_)?current", r"^maximum_current$",
-                r"current_limit", r"^available_current$"),
+                r"current_limit", r"^available_current$",
+                r"^current_set$", r"^set_current$", r"^current_setpoint$"),
         "not": (r"phase", r"offline", r"failsafe", r"voltage", r"power",
-                r"\bmin\b", r"_min_", r"minimum"),
+                r"\bmin\b", r"_min_", r"minimum", r"energy"),
     },
     "ev_charge_mode": {
         "platform": "select",
