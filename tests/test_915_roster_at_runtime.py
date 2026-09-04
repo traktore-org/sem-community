@@ -449,6 +449,27 @@ class TestANearMissIsAboutHardware:
         assert report["chargers"], "premise: the charger itself is detected"
         assert report["near_misses"] == []
 
+    def test_a_fork_of_a_detected_brand_counts_as_the_same_brand(self):
+        """`zaptec_sim` / `zaptec_custom` are the same brand as `zaptec` —
+        the tolerance the discovery walk and the census already apply.
+        Comparing raw platform strings left the fork's installation device
+        on the .46 card as the last near miss."""
+        ents = [
+            _ent("number.zap_current", "zaptec_sim", device_id="charger",
+                 device_class="current"),
+            _ent("sensor.zap_power", "zaptec_sim", device_id="charger",
+                 device_class="power"),
+            _ent("binary_sensor.zap_cable", "zaptec_sim", device_id="charger",
+                 device_class="plug"),
+            _ent("binary_sensor.zap_charging", "zaptec_sim", device_id="charger",
+                 device_class="power"),
+            _ent("number.zap_available", "zaptec", device_id="site",
+                 unique_id="sim-1_available_current"),
+        ]
+        report = self._report(ents)
+        assert report["chargers"], "premise: the fork's charger is detected"
+        assert report["near_misses"] == []
+
     def test_a_branded_platform_is_never_gated(self):
         """Only the shared transports are filtered. A brand platform with
         entities and no role is exactly what the near-miss list is for."""

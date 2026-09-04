@@ -1467,7 +1467,15 @@ def build_detection_report(hass: Optional[HomeAssistant] = None,
                 # available-current and phase registers — and on the .46 rig
                 # that device was the last near miss standing, telling the
                 # owner of a fully detected charger to report it.
-                if any(str(c.get("platform")) == platform
+                # ``zaptec_sim`` and ``zaptec_custom`` are the same brand as
+                # ``zaptec`` — the tolerance the discovery walk and the census
+                # already apply, applied here too. Comparing the raw platform
+                # left the fork's installation device on the card as the last
+                # near miss (.46).
+                def _same_brand(a: str, b: str) -> bool:
+                    a, b = str(a or ""), str(b or "")
+                    return a == b or a.startswith(f"{b}_") or b.startswith(f"{a}_")
+                if any(_same_brand(c.get("platform"), platform)
                        for c in report["chargers"]):
                     continue
                 report["near_misses"].append({
