@@ -1078,6 +1078,47 @@ def propose_roles_from_roster(dev_entities, domain: str) -> Dict[str, Any]:
     return out
 
 
+def propose_for_installed(registry, *, limit_per_domain: int = 8) -> list:
+    """(#915) Every INSTALLED integration the roster has vocabulary for, with
+    the controls it declares matched against this box's own entities.
+
+    The near-miss path (below) only walks ``_EV_CHARGER_PLATFORMS``, so it
+    answers the question for chargers and for nothing else: an inverter or a
+    battery SEM has no row for was named and then dropped. This walk asks the
+    same question of everything installed — "you are running Sigenergy; its
+    own repository says it creates a discharge-power limit; here is the
+    entity of yours that carries that name".
+
+    Still an INTERSECTION, and still report data: an entity appears only
+    because it is in this registry, and nothing here is written anywhere.
+    Grouped per domain, not per device — the roles a battery integration
+    declares are install-wide, and a per-device split would show the same
+    answer once per MPPT string.
+    """
+    r = _roster()
+    if r is None or registry is None:
+        return []
+    vocab = getattr(r, "ROLE_VOCAB", {}) or {}
+    by_domain: Dict[str, list] = {}
+    for e in registry.entities.values():
+        if e.disabled_by:
+            continue
+        dom = str(e.platform or "")
+        if dom in vocab:
+            by_domain.setdefault(dom, []).append(e)
+    out = []
+    for dom, ents in sorted(by_domain.items()):
+        roles = propose_roles_from_roster(ents[:400], dom)
+        if not roles:
+            continue
+        out.append({
+            "domain": dom,
+            "roster": describe_domain(dom),
+            "proposed_roles": dict(list(roles.items())[:limit_per_domain]),
+        })
+    return out
+
+
 def build_integration_census(hass=None, registry=None, config_domains=None,
                              matched_charger_platforms=None) -> Dict[str, Any]:
     """The census: what is installed, what SEM knows, and the two gaps.
@@ -1293,6 +1334,14 @@ def build_detection_report(hass: Optional[HomeAssistant] = None,
                 c.get("platform") for c in report["chargers"]})
     except Exception:  # noqa: BLE001 — a census never costs the report
         report["census"] = None
+    # (#915) The same question asked of EVERYTHING installed, not only of the
+    # charger platforms the near-miss walk covers: which controls does each
+    # installed integration's own repository say it creates, and which of
+    # this box's entities carry those names. Report data, intersection only.
+    try:
+        report["roster_proposals"] = propose_for_installed(registry)
+    except Exception:  # noqa: BLE001 — a prior never costs the report
+        report["roster_proposals"] = []
     return report
 
 

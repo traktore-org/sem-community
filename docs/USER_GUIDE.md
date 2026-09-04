@@ -60,7 +60,13 @@ diagnostics). Wrong detections are corrected in place with the pickers in the
 charger and sensor-source sections — no reinstall. The full support matrix with
 an honest per-brand status is [docs/SUPPORTED_HARDWARE.md](SUPPORTED_HARDWARE.md).
 
-**Names and proposals (#915).** An integration SEM has no row for used to
+**What SEM makes of what you already run (#915).** Every integration
+installed on your Home Assistant is checked against what that integration's own
+source says it creates. If you run Sigenergy and it declares a discharge-power
+limit, the entity of yours carrying that name is listed under Detected
+hardware — for inverters and batteries too, not only for chargers.
+
+**Names and proposals.** An integration SEM has no row for used to
 appear as a bare domain — `eg4_web_monitor`, and you were left to work out what
 that was. SEM now carries a roster of the energy integrations the Home
 Assistant ecosystem publishes, so the same line reads *"EG4 Web Monitor · 412

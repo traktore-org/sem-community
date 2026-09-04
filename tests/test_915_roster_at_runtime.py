@@ -191,3 +191,62 @@ class TestTheDischargeControlRung:
     def test_a_miss_still_returns_none_with_a_reason(self):
         entity, rung = self._run([_ent("sensor.x", "huawei_solar")])
         assert entity is None and rung
+
+
+@pytest.mark.unit
+class TestItRecognisesWhatIsAlreadyInstalled:
+    """The question the near-miss walk could not answer: it only covers the
+    charger platforms, so an INVERTER or battery SEM has no row for was named
+    and then dropped. This walk asks every installed integration the same
+    question."""
+
+    def test_an_installed_inverter_gets_its_declared_controls_matched(self):
+        ents = [
+            _ent("number.sigen_charge", "sigen",
+                 translation_key="dc_charger_max_charging_power_limit"),
+            _ent("number.sigen_discharge", "sigen",
+                 translation_key="dc_charger_max_discharging_power_limit"),
+            _ent("sensor.sigen_power", "sigen", device_class="power"),
+        ]
+        out = hd.propose_for_installed(_registry(ents))
+        assert len(out) == 1
+        row = out[0]
+        assert row["domain"] == "sigen"
+        assert row["roster"]["name"] == "Sigenergy ESS"
+        roles = row["proposed_roles"]
+        assert roles["battery_charge_limit"]["entity"] == "number.sigen_charge"
+        assert roles["battery_discharge_limit"]["entity"] == "number.sigen_discharge"
+        assert all(v["confirmed"] is False for v in roles.values())
+
+    def test_an_integration_the_roster_has_no_vocabulary_for_is_skipped(self):
+        ents = [_ent("number.whatever", "some_unknown_platform",
+                     translation_key="max_discharging_power")]
+        assert hd.propose_for_installed(_registry(ents)) == []
+
+    def test_an_installed_integration_with_none_of_its_controls_is_skipped(self):
+        """Vocabulary is not presence: EG4 declares a charge-SOC limit, but a
+        box that only has its sensors gets no proposal."""
+        ents = [_ent("sensor.eg4_power", "eg4_web_monitor",
+                     device_class="power")]
+        assert hd.propose_for_installed(_registry(ents)) == []
+
+    def test_disabled_entities_never_become_proposals(self):
+        ents = [_ent("number.eg4_soc", "eg4_web_monitor",
+                     translation_key="system_charge_soc_limit",
+                     disabled_by="user")]
+        assert hd.propose_for_installed(_registry(ents)) == []
+
+    def test_the_report_carries_it_and_stays_serialisable(self):
+        import json
+        ents = [
+            _ent("number.sigen_discharge", "sigen",
+                 translation_key="dc_charger_max_discharging_power_limit"),
+        ]
+        report = hd.build_detection_report(registry=_registry(ents))
+        assert report["roster_proposals"], "an installed brand must be asked"
+        json.dumps(report)
+
+    def test_a_missing_roster_leaves_the_report_intact(self):
+        with patch.object(hd, "_roster", return_value=None):
+            report = hd.build_detection_report(registry=_registry([]))
+        assert report["roster_proposals"] == []

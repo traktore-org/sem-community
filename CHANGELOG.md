@@ -29,8 +29,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   found 21 integrations SEM cannot place today that publish concrete role
   candidates, Anker Solix and Sigenergy among them.
 
-  Three things use it, all of them small on purpose. **Configuration →
-  Detected hardware now names the gap** — "EG4 Web Monitor · 412 installs"
+  Four things use it, all of them small on purpose. **SEM asks every
+  integration you already run what it says it creates**: your box has
+  Sigenergy installed, its own repository declares a discharge-power limit,
+  and the entity of yours carrying that name is listed for you to confirm —
+  for inverters and batteries, not only for the charger platforms detection
+  already walked. **Configuration → Detected hardware now names the gap** — "EG4 Web Monitor · 412 installs"
   instead of a bare domain, so an unknown integration becomes something you
   can report rather than something you have to decode. **A near miss carries
   proposed roles**: when an integration's entities are present but no role

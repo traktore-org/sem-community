@@ -1074,6 +1074,9 @@ class SEMConfigCard extends SEMLitBase {
         }
         const chargers = r.chargers || [];
         const misses = r.near_misses || [];
+        // (#915) Controls each INSTALLED integration says it creates, matched
+        // against this box's own entities. Unconfirmed by definition.
+        const rosterProposals = r.roster_proposals || [];
         const prober = r.prober_candidates || [];
         const dis = r.disagreements || [];
         const roleRow = (k, v) => html`
@@ -1139,6 +1142,21 @@ class SEMConfigCard extends SEMLitBase {
                     <div class="setting-help-text" style="margin:2px 0 8px">
                         ${this._t('config_proposed_help')}
                     </div>` : nothing}`)}
+            ${rosterProposals.map((rp) => html`
+                <div class="row" style="font-weight:600">
+                    <span class="lbl">🧩 ${rp.roster?.name || rp.domain}</span>
+                    <span style="opacity:.7">${this._t('config_proposed_unconfirmed')}</span>
+                </div>
+                ${Object.entries(rp.proposed_roles || {}).map(([role, p]) => html`
+                    <div class="row"><span class="lbl">${role}</span>
+                        <span style="font-family:monospace;font-size:0.85em">${p.entity}
+                            <span style="opacity:.6"> · ${p.matched_key}</span>
+                        </span></div>`)}
+            `)}
+            ${rosterProposals.length ? html`
+                <div class="setting-help-text" style="margin:2px 0 8px">
+                    ${this._t('config_proposed_help')}
+                </div>` : nothing}
             ${dis.filter((d) => d.kind === 'prober_only').map((d) => html`
                 <div class="row"><span class="lbl">🔎 ${d.platform}</span>
                     <span>${this._t('config_detect_prober_only')}</span></div>`)}

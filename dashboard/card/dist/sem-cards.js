@@ -7420,17 +7420,17 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     <span><i style="background:#64b5f6"></i>${this._t("zone_legend_surplus")}</span>
                 </div>
             </div>
-        `}_detectionReport(){const e=this._hass?.states?.["sensor.sem_diag_charger_control"];return e?.attributes?.detection_report||null}_detectedHardwareSubtitle(){const e=this._detectionReport();if(!e)return this._t("config_detect_none");const t=(e.chargers||[]).length,i=(e.near_misses||[]).length,s=((e.census||{}).unknown_energy_domains||[]).length+((e.census||{}).rows_matched_nothing||[]).length;let r=`${t} ${this._t("config_detect_chargers")}`;return i&&(r+=` · ${i} ${this._t("config_detect_near_misses")}`),s&&(r+=` · ${s} ${this._t("config_census_gaps")}`),r}_renderDetectedHardware(e){const t=this._detectionReport();if(!t)return W`<div class="setting-help-text">${this._t("config_detect_none")}</div>`;const i=t.chargers||[],s=t.near_misses||[],r=t.prober_candidates||[],a=t.disagreements||[],o=t.census||{},n=o.unknown_energy_domains||[],l=o.rows_matched_nothing||[],c=o.unknown_energy_domains_named||[];return W`
+        `}_detectionReport(){const e=this._hass?.states?.["sensor.sem_diag_charger_control"];return e?.attributes?.detection_report||null}_detectedHardwareSubtitle(){const e=this._detectionReport();if(!e)return this._t("config_detect_none");const t=(e.chargers||[]).length,i=(e.near_misses||[]).length,s=((e.census||{}).unknown_energy_domains||[]).length+((e.census||{}).rows_matched_nothing||[]).length;let r=`${t} ${this._t("config_detect_chargers")}`;return i&&(r+=` · ${i} ${this._t("config_detect_near_misses")}`),s&&(r+=` · ${s} ${this._t("config_census_gaps")}`),r}_renderDetectedHardware(e){const t=this._detectionReport();if(!t)return W`<div class="setting-help-text">${this._t("config_detect_none")}</div>`;const i=t.chargers||[],s=t.near_misses||[],r=t.roster_proposals||[],a=t.prober_candidates||[],o=t.disagreements||[],n=t.census||{},l=n.unknown_energy_domains||[],c=n.rows_matched_nothing||[],d=n.unknown_energy_domains_named||[];return W`
             <div class="setting-help-text" style="margin:0 0 6px">${this._t("config_detect_intro")}</div>
-            ${n.length?W`
-                <div class="row" style="color:var(--warning-color,#ffa726)">
-                    <span class="lbl">${this._t("config_census_unknown")}</span>
-                    <span style="font-family:monospace">${n.map(e=>{const t=c.find(t=>t&&t.domain===e);if(!t||!t.name)return e;const i=t.installs?` · ${t.installs} ${this._t("config_census_installs")}`:"";return`${t.name}${i}`}).join(", ")}</span>
-                </div>`:K}
             ${l.length?W`
                 <div class="row" style="color:var(--warning-color,#ffa726)">
+                    <span class="lbl">${this._t("config_census_unknown")}</span>
+                    <span style="font-family:monospace">${l.map(e=>{const t=d.find(t=>t&&t.domain===e);if(!t||!t.name)return e;const i=t.installs?` · ${t.installs} ${this._t("config_census_installs")}`:"";return`${t.name}${i}`}).join(", ")}</span>
+                </div>`:K}
+            ${c.length?W`
+                <div class="row" style="color:var(--warning-color,#ffa726)">
                     <span class="lbl">${this._t("config_census_nomatch")}</span>
-                    <span style="font-family:monospace">${l.join(", ")}</span>
+                    <span style="font-family:monospace">${c.join(", ")}</span>
                 </div>`:K}
             ${i.map(e=>W`
                 <div class="row" style="font-weight:600">
@@ -7468,10 +7468,25 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     <div class="setting-help-text" style="margin:2px 0 8px">
                         ${this._t("config_proposed_help")}
                     </div>`:K}`)}
-            ${a.filter(e=>"prober_only"===e.kind).map(e=>W`
+            ${r.map(e=>W`
+                <div class="row" style="font-weight:600">
+                    <span class="lbl">🧩 ${e.roster?.name||e.domain}</span>
+                    <span style="opacity:.7">${this._t("config_proposed_unconfirmed")}</span>
+                </div>
+                ${Object.entries(e.proposed_roles||{}).map(([e,t])=>W`
+                    <div class="row"><span class="lbl">${e}</span>
+                        <span style="font-family:monospace;font-size:0.85em">${t.entity}
+                            <span style="opacity:.6"> · ${t.matched_key}</span>
+                        </span></div>`)}
+            `)}
+            ${r.length?W`
+                <div class="setting-help-text" style="margin:2px 0 8px">
+                    ${this._t("config_proposed_help")}
+                </div>`:K}
+            ${o.filter(e=>"prober_only"===e.kind).map(e=>W`
                 <div class="row"><span class="lbl">🔎 ${e.platform}</span>
                     <span>${this._t("config_detect_prober_only")}</span></div>`)}
-            ${i.length||s.length||r.length?K:W`
+            ${i.length||s.length||a.length?K:W`
                 <div class="setting-help-text">${this._t("config_detect_nothing")}</div>`}
         `}_renderSensorSources(e){const t=this._options||{};return W`
             <div class="setting-help-text" style="margin:0 0 6px">
