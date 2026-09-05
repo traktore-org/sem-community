@@ -305,14 +305,43 @@ def candidate_rows(sources: Dict[str, Any]) -> Dict[str, dict]:
 
     core_index = (sources.get("core_index") or {}).get("integration") or {}
     website = sources.get("website") or {}
+
+    # (#915) HA groups sub-integrations under their BRAND: `tesla` carries
+    # `powerwall`, `tesla_wall_connector` and `tesla_fleet` in a nested
+    # ``integrations`` dict, and none of the three appears at the top level.
+    # Iterating the top level alone hid 241 core integrations — among them
+    # Tesla Powerwall, a brand SEM has supported since the sign-convention
+    # table was written. Found by checking the roster against the CLOSED
+    # hardware-support issues (#75-#81), where seven human verdicts had
+    # already named the integrations SEM should be able to name.
+    flat = {}
     for dom, entry in core_index.items():
+        if not isinstance(entry, dict):
+            continue
+        flat.setdefault(dom, entry)
+        for sub, sub_entry in (entry.get("integrations") or {}).items():
+            if isinstance(sub_entry, dict):
+                flat.setdefault(sub, {"name": sub_entry.get("name") or sub,
+                                      "brand": dom})
+
+    for dom, entry in flat.items():
         if dom in rows or not isinstance(entry, dict):
             continue
         name = entry.get("name") or dom
-        desc = (website.get(dom) or {}).get("description", "")
-        blob = f"{dom} {name} {desc}"
-        if dom not in known and (not _KEYWORDS.search(blob)
-                                 or _NOISE.search(f"{dom} {name}")):
+        brand = entry.get("brand") or ""
+        desc = ((website.get(dom) or {}).get("description", "")
+                or (website.get(brand) or {}).get("description", ""))
+        blob = f"{dom} {name} {brand} {desc}"
+        # (#915) Popularity buys a QUESTION, never an answer — the same rule
+        # the HACS loop has always had, which core never did. Tesla's Wall
+        # Connector has 6555 installs and a name with no energy word in it
+        # ("Wall Connector"), so it was never even asked what it declares.
+        # It answers `grid_v`, `total_power_w`, `session_energy_wh` — and no
+        # controllable role, which is #75's human verdict exactly.
+        popular = counts.get(dom, 0) >= POPULAR_FLOOR
+        if _NOISE.search(f"{dom} {name}"):
+            continue
+        if dom not in known and not popular and not _KEYWORDS.search(blob):
             continue
         rows[dom] = {"name": str(name)[:60], "repo": "home-assistant/core",
                      "origin": "core", "installs": counts.get(dom, 0),
@@ -447,9 +476,26 @@ def classify_kind(vocab: Dict[str, Dict[str, dict]], lexicon,
     all, so a car contributes vehicle roles and nothing else.
     """
     blob = " ".join(k for keys in vocab.values() for k in keys).lower()
-    if any(m in blob for m in lexicon.APPLIANCE_MARKERS):
+    # (#915) The house wins. A single incidental marker must not outvote a
+    # vocabulary that plainly describes a building's electrical system — see
+    # HOUSE_MARKERS for the Victron GX case that made this necessary.
+    # …and it wins on WEIGHT, not on being asked first. Victron's GX is 465
+    # keys of inverter with one `ev_odometer`; Midea's cloud is 1095 keys of
+    # fridges and dryers with one `inverter`. First-match got both wrong, in
+    # opposite directions. Counting distinct markers gets both right.
+    def _hits(markers) -> int:
+        return sum(1 for m in markers if m in blob)
+
+    house = _hits(getattr(lexicon, "HOUSE_MARKERS", ()))
+    appliance, vehicle = _hits(lexicon.APPLIANCE_MARKERS), _hits(
+        lexicon.VEHICLE_MARKERS)
+    # A TIE goes to the house: `camera`, `pedal` and `lightbar` are gadget
+    # words that a CAR also has, and on Teslemetry they tied with `grid_`,
+    # `inverter` and `_grid_` — three words no gadget has. The house side is
+    # what SEM would lose, so it needs the benefit of the doubt.
+    if appliance > house:
         return "appliance"
-    if any(m in blob for m in lexicon.VEHICLE_MARKERS):
+    if vehicle > house:
         return "vehicle"
     # The anchor rule: without a key no non-energy device declares, this is
     # something else that happens to have a battery. Say so rather than
@@ -469,6 +515,18 @@ def classify_kind(vocab: Dict[str, Dict[str, dict]], lexicon,
         # override that. Sessy publishes three sensors and one select.
         return "energy" if known else "other"
     return "energy"
+
+
+def _reports_electricity(vocab: Dict[str, Dict[str, dict]], lexicon) -> bool:
+    """Does this vocabulary describe an ELECTRICAL device? A strong anchor
+    plus two keys shaped like a watt, an amp or a kilowatt-hour. This is what
+    admits Tesla's Wall Connector (`grid_v`, `total_power_w`, `energy_kwh`)
+    and refuses a fitness watch that happens to charge from the sun."""
+    keys = [k for ks in vocab.values() for k in ks]
+    blob = " ".join(keys).lower()
+    if not any(a in blob for a in lexicon.STRONG_ENERGY_ANCHORS):
+        return False
+    return sum(1 for k in keys if lexicon.UNIT_SHAPED_KEY.search(k)) >= 2
 
 
 def roles_from_vocabulary(vocab: Dict[str, Dict[str, dict]], lexicon,
@@ -496,6 +554,15 @@ def roles_from_vocabulary(vocab: Dict[str, Dict[str, dict]], lexicon,
         # control roles AND the read roles: which entity is the solar
         # power sensor is the question a first install actually asks.
         rules = {**lexicon.ROLE_RULES, **lexicon.READ_ROLE_RULES}
+        # (#915) …and an integration can be BOTH. Tesla's Fleet API speaks
+        # for the car and the Powerwall through one vocabulary; a Victron GX
+        # runs the house and reads the SOC of whatever is plugged into its EV
+        # charger. Forcing a single verdict threw away one half or the other,
+        # so a house that also knows a car contributes the car's READS too —
+        # which is exactly what SEM's `vehicle_soc_entity` wants.
+        blob = " ".join(k for keys in vocab.values() for k in keys).lower()
+        if any(m in blob for m in lexicon.VEHICLE_MARKERS):
+            rules.update(lexicon.VEHICLE_ROLE_RULES)
     roles: Dict[str, dict] = {}
     for platform, keys in sorted(vocab.items()):
         for key, body in sorted(keys.items()):
@@ -519,6 +586,14 @@ def roles_from_vocabulary(vocab: Dict[str, Dict[str, dict]], lexicon,
     # switch that expires on its own is the wrong shape, and offering none is
     # the right failure. Same shape as the AC-THOR setpoint that expires
     # unless it is re-sent (#880).
+    # (#915) A battery role needs a battery somewhere in the vocabulary —
+    # see BATTERY_CONTEXT. This is the two-signal rule one level down: the
+    # key earns the role, the vocabulary earns the key.
+    blob_all = " ".join(k for keys in vocab.values() for k in keys).lower()
+    if not any(m in blob_all for m in getattr(lexicon, "BATTERY_CONTEXT", ())):
+        for r in [r for r in roles if r.startswith("battery_")]:
+            roles.pop(r)
+
     # Half a split pair is not a proposal (see PAIRED_ROLES).
     for pair in getattr(lexicon, "PAIRED_ROLES", ()):
         if not all(r in roles for r in pair):
@@ -570,13 +645,21 @@ def build_roster(sources: Dict[str, Any], *, offline: bool, floor: int,
                                 offline=offline)
         kind = (classify_kind(vocab, lexicon, known=dom in known, domain=dom)
                 if vocab else "energy")
-        return dom, kind, roles_from_vocabulary(vocab, lexicon, kind)
+        return (dom, kind, roles_from_vocabulary(vocab, lexicon, kind),
+                bool(vocab), _reports_electricity(vocab, lexicon))
 
     mined: Dict[str, dict] = {}
     kinds: Dict[str, str] = {}
+    spoke: set = set()          # domains that published a vocabulary at all
+    electrical: set = set()     # …and whose vocabulary reports watts/amps/kWh
     with concurrent.futures.ThreadPoolExecutor(workers) as ex:
-        for dom, kind, roles in ex.map(_one, sorted(to_mine.items())):
+        for dom, kind, roles, had_vocab, amps in ex.map(
+                _one, sorted(to_mine.items())):
             kinds[dom] = kind
+            if had_vocab:
+                spoke.add(dom)
+            if amps:
+                electrical.add(dom)
             if roles:
                 mined[dom] = roles
 
@@ -586,8 +669,22 @@ def build_roster(sources: Dict[str, Any], *, offline: bool, floor: int,
         if dom in lexicon.OPAQUE_PLATFORMS:
             continue
         has_roles = dom in mined
-        if not has_roles:
-            # No vocabulary: the row may still carry a NAME, but only if the
+        # (#915) A vocabulary that ANSWERS the energy-anchor test is evidence
+        # in its own right, even when no key maps to a SEM role. Tesla's Wall
+        # Connector — 6555 installs, more than KEBA, Zaptec and Wallbox — was
+        # dropped for having no energy word in "Tesla Wall Connector", while
+        # its own source declares `vehicle_connected`, `session_energy_wh` and
+        # `contactor_closed`. The crawler classifies it as a CHARGER with no
+        # controllable role, which is exactly the verdict a human wrote by
+        # hand in #75. Naming it costs nothing and is the whole point of the
+        # naming half; proposing for it remains impossible, because it has no
+        # role to propose. Spotify cannot arrive this way: it has to pass the
+        # same ENERGY_ANCHORS test that gates every mined row.
+        says_energy = (dom in spoke
+                       and kinds.get(dom) in ("energy", "charger")
+                       and dom in electrical)
+        if not has_roles and not says_energy:
+            # Nothing minable: the row may still carry a NAME, but only if the
             # domain or the brand name itself is energy-shaped. A keyword
             # found in prose ("...with battery backup") is not a brand.
             if row["installs"] < floor:
@@ -608,7 +705,12 @@ def build_roster(sources: Dict[str, Any], *, offline: bool, floor: int,
             "kind": kinds.get(dom, "energy"),
             # (#915) the two-signal rule, mirroring _census_energy_shaped():
             # a keyword match alone may supply a NAME and nothing else.
-            "kind_from": "vocabulary" if has_roles else "keyword",
+            # "vocabulary" is the two-signal claim: this row may route a
+            # proposal. A row that only PASSED the anchor test says so
+            # separately — it earned its name, not a role.
+            "kind_from": ("vocabulary" if has_roles
+                          else "vocabulary_name_only" if says_energy
+                          else "keyword"),
         }
     meta = {
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),

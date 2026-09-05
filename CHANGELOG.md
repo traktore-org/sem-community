@@ -130,6 +130,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   meter that only ever imports), and SEM's own reader honours the pair on
   that path, computing export minus import with no direction left to guess.
 
+  **Checked against the hardware nobody could support.** SEM has seven closed
+  issues where a person read an integration and wrote down what it exposes —
+  Tesla Wall Connector, Myenergi Zappi, OpenWB, BYD, LG ESS, KSTAR, SolArk —
+  and five of them say *no control exists*. Running the roster against those
+  verdicts found it agreed on every negative and could not NAME a single one
+  of them. The reason turned out to be structural: Home Assistant groups
+  sub-integrations under their brand, and the crawler read only the top level,
+  so **241 core integrations were never looked at** — Tesla Powerwall among
+  them, a brand whose sign convention is in SEM's own table. With the brands
+  flattened and the install floor buying a question for core integrations the
+  way it always had for HACS ones, SEM now names Tesla Wall Connector (6555
+  installs, more than KEBA, Zaptec or Wallbox) and classifies it as a charger
+  with **nothing to drive** — which is #75's human verdict, reached from the
+  source alone. Victron's GX and MQTT integrations arrived with their whole
+  ESS surface (charge and discharge limits, force charge, mode select, EV
+  current, and the plugged-in car's SOC), along with Tesla Powerwall, Tesla
+  Fleet, Tessie, Teslemetry, Subaru, EcoFlow, Blue Current, Heidelberg,
+  APsystems, Smappee, MyPV and Bluetti: 103 role candidates became 155.
+
+  Two ways of getting a device wrong showed up while checking that, and both
+  are now impossible. A single incidental word decided what a device *was*:
+  Victron's GX declares `ev_odometer` for the car at its charger — one key out
+  of 465 — and SEM called the whole system controller a vehicle; Midea's cloud
+  declares `inverter` among 1095 keys of fridges and dryers, and SEM called
+  the marketplace a house. Kinds are now decided by weight rather than by
+  whichever word appeared first. And a battery role now needs a battery in the
+  vocabulary at all — `work_mode` on an air conditioner and `work_mode` on a
+  battery are the same string, so only the company it keeps tells them apart.
+
 # [2.1.0-beta.7] — 03.09.2026
 
 - 🛡️ **A flat value from a live integration is not a frozen sensor** (#912).

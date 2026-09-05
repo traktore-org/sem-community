@@ -213,9 +213,13 @@ class TestAChargerIsNotAHouse:
         cheap hours last, so a switch that turns itself off is the wrong
         shape and proposing nothing is the right answer."""
         timed = {"switch": {"quick_charge": {}},
-                 "number": {"quick_charge_duration": {}}}
+                 "number": {"quick_charge_duration": {}},
+                 "sensor": {"battery_soc": {}}}
         assert "battery_force_charge" not in self._roles(timed, "energy")
-        durable = {"switch": {"ac_charge": {}}}
+        # (the battery sensor is not decoration: a battery role now needs a
+        # battery in the vocabulary — see BATTERY_CONTEXT)
+        durable = {"switch": {"ac_charge": {}},
+                   "sensor": {"battery_soc": {}}}
         assert self._roles(durable, "energy")["battery_force_charge"][
             "keys"] == ("ac_charge",)
 
@@ -226,3 +230,113 @@ class TestAChargerIsNotAHouse:
         roles = self._roles({"sensor": {"charger_rated_power": {},
                                         "inverter_rated_power": {}}}, "energy")
         assert roles["system_size_spec"]["keys"] == ("inverter_rated_power",)
+
+
+@pytest.mark.unit
+class TestTheClosedHardwareIssuesAgree:
+    """(#75-#81, #816) Seven closed hardware-support issues where a human
+    read the integration and wrote down what it exposes. The crawler must
+    reach the same verdicts from the source alone — and the sharp half is
+    the NEGATIVE one: five of the seven say "no control exists", and a
+    roster that invented one would be contradicting a person who looked.
+    """
+
+    def test_the_wall_connector_is_a_charger_with_nothing_to_drive(self):
+        """#75: "No current control — no number entity, no service to set
+        charging amps." The crawler classifies it as a CHARGER from
+        `vehicle_connected` / `session_energy_wh` / `contactor_closed`, and
+        proposes nothing. 6555 installs — more than KEBA, Zaptec or Wallbox
+        — and it was invisible until core's nested brands were walked."""
+        row = roster.ROSTER.get("tesla_wall_connector")
+        assert row, "hidden again: core sub-integrations are nested by brand"
+        assert row["kind"] == "charger"
+        assert not roster.ROLE_VOCAB.get("tesla_wall_connector")
+
+    def test_garo_is_named_and_still_manual(self):
+        """#816: GARO proven live, still manual-only."""
+        row = roster.ROSTER.get("garo_wallbox")
+        assert row and row["kind"] == "charger"
+        assert not roster.ROLE_VOCAB.get("garo_wallbox")
+
+    def test_a_brands_sub_integrations_are_not_hidden(self):
+        """Tesla carries `powerwall`, `tesla_wall_connector` and
+        `tesla_fleet` in a nested dict and appears at top level as a name
+        only. Iterating the top level alone hid 241 core integrations —
+        including Tesla Powerwall, whose sign convention is in SEM's own
+        table."""
+        assert "powerwall" in roster.ROSTER
+        assert roster.ROSTER["powerwall"]["origin"] == "core"
+
+    def test_popularity_buys_a_question_not_an_answer(self):
+        """A core integration above the install floor gets ASKED what it
+        declares even when its name has no energy word in it ("Wall
+        Connector"). What it answers still decides whether it may route
+        anything — Tesla's answer is: nothing."""
+        src = (ROOT / "scripts" / "crawl_integration_roster.py").read_text()
+        assert "POPULAR_FLOOR" in src.split("core_index = ")[1][:2000], (
+            "the core branch stopped consulting the install floor")
+
+
+@pytest.mark.unit
+class TestOneWordDoesNotDecideADevice:
+    """Both directions of the same error, found on the same afternoon."""
+
+    lexicon = _load("role_lexicon2", "consts/role_lexicon.py")
+
+    def _kind(self, vocab, dom=""):
+        return crawler.classify_kind(vocab, self.lexicon, domain=dom)
+
+    def test_a_house_is_not_a_car_because_a_car_is_plugged_into_it(self):
+        """Victron's GX declares `ev_odometer` for the vehicle at its EV
+        charger — one key out of 465 — and that single word discarded 464
+        keys of inverter and battery vocabulary."""
+        vocab = {"sensor": {"ev_odometer": {}, "battery_power": {},
+                            "grid_power": {}, "pv_power": {}},
+                 "number": {"system_ess_max_charge_power": {}}}
+        assert self._kind(vocab) == "energy"
+
+    def test_a_marketplace_is_not_a_house_because_one_product_is(self):
+        """Midea's cloud is 1095 keys of fridges, dryers and ice makers with
+        a single `inverter` (an inverter air conditioner). First-match on
+        the house side claimed the lot."""
+        vocab = {"sensor": {"inverter": {}, "storage_door_state": {},
+                            "dishwasher_state": {}, "oven_mode": {},
+                            "kettle_status": {}}}
+        assert self._kind(vocab) == "appliance"
+
+    def test_a_ups_input_is_not_sunshine(self):
+        """Network UPS Tools, 23568 installs, declares `input_power` — the
+        MAINS feed. Read as solar it would have told SEM the sun shines out
+        of a wall socket."""
+        vocab = {"sensor": {"input_power": {}, "battery_runtime": {},
+                            "battery_charge": {}}}
+        assert self._kind(vocab) == "appliance"
+        assert not crawler.roles_from_vocabulary(
+            vocab, self.lexicon, self._kind(vocab))
+
+    def test_a_battery_role_needs_a_battery(self):
+        """`work_mode` is `work_mode`: no key-level pattern separates an air
+        conditioner's from a battery's. The vocabulary around it does."""
+        no_battery = {"select": {"operation_mode": {}},
+                      "sensor": {"room_temperature": {}}}
+        assert "battery_strategy" not in crawler.roles_from_vocabulary(
+            no_battery, self.lexicon, "energy")
+        with_battery = {"select": {"operation_mode": {}},
+                        "sensor": {"battery_soc": {}}}
+        assert "battery_strategy" in crawler.roles_from_vocabulary(
+            with_battery, self.lexicon, "energy")
+
+    def test_an_integration_may_be_both(self):
+        """Tesla's Fleet API speaks for the car and the Powerwall through one
+        vocabulary; forcing one verdict threw away a half either way."""
+        vocab = {"sensor": {"solar_power": {}, "grid_power": {},
+                            "battery_power": {}, "odometer": {},
+                            "charge_state_battery_range": {}}}
+        roles = crawler.roles_from_vocabulary(vocab, self.lexicon, "energy")
+        assert roles["solar_power"]["keys"] == ("solar_power",)
+        assert roles["vehicle_range"]["keys"] == ("charge_state_battery_range",)
+
+    def test_a_cars_charge_limit_is_not_the_houses_target(self):
+        """`charge_state_*` is Tesla's VEHICLE namespace."""
+        assert self.lexicon.role_for(
+            "number", "charge_state_charge_limit_soc") != "battery_target_soc"

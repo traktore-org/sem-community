@@ -129,7 +129,12 @@ _KEY_DRIFT_ALLOWLIST: dict = {
     # live install had them; the miner cannot confirm them from upstream.
     "usable_capacity": "generic fallback, not published by a mined integration",
     "rated_capacity": "generic fallback",
-    "battery_capacity": "generic fallback",
+    # `battery_capacity` came OFF this list on 05.09: Tesla's Powerwall and
+    # Victron's GX both publish it, and the ratchet said so the moment the
+    # crawler could see them (Powerwall had been hidden under the `tesla`
+    # brand; the GX had been misread as a vehicle). A hand-harvested key
+    # that upstream turns out to declare is exactly what this allowlist is
+    # meant to surface.
     "max_discharging_power": "generic fallback",
     "nominal_power": "generic fallback",
 }

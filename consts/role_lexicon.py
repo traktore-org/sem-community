@@ -78,7 +78,13 @@ ROLE_RULES: Final[Dict[str, Dict[str, Any]]] = {
                 # discharging at 80 %, which is the opposite of the request.
                 # Growatt, Sigen, Solis, Sungrow and Sunsynk each declare
                 # both halves under names one word apart.
-                r"(?:^|_)(min|minimum|lower)", r"discharg"),
+                r"(?:^|_)(min|minimum|lower)", r"discharg",
+                # `charge_state_*` is Tesla's VEHICLE API namespace: the
+                # Fleet/Tessie/Teslemetry integrations speak for the car AND
+                # the Powerwall through one vocabulary, and
+                # `charge_state_charge_limit_soc` is how full the CAR should
+                # be (bug class 68 wearing a house's clothes).
+                r"^charge_state_"),
     },
     "battery_strategy": {
         "platform": "select",
@@ -270,7 +276,72 @@ APPLIANCE_MARKERS: Final[tuple] = (
     "feeder", "litter", "vacuum", "mower", "washer", "dryer", "dishwasher",
     "oven", "kettle", "humidifier", "purifier", "camera", "cadence",
     "pedal", "ebike", "printer", "cpu_", "ram_", "disk_", "toothbrush",
+    # A fitness watch charges from the SUN and reports a battery — two
+    # genuine energy anchors on a device that is not energy hardware
+    # (Garmin declares `solar` and `battery_charge` beside `avg_spo2` and
+    # `bedtime`). The health vocabulary is what tells them apart.
+    # NOT a bare "sleep_": Ohme's `sleep_when_inactive` and Enphase's
+    # `ac_battery_sleep_mode` are power states, not sleep tracking.
+    "spo2", "heart_rate", "calories", "bedtime", "stress",
+    "steps", "fitness", "badges", "workout",
+    # …and a lighting/media cloud: `hdmi`, scenes, light zones
+    "hdmi", "light_zone", "dreamview", "scene_select", "lightbar",
+    # A UPS is a battery that is not a HOME battery: its `input_power` is
+    # the mains feed, and reading it as solar would have told SEM the sun
+    # shines out of a wall socket (Network UPS Tools, 23568 installs).
+    # …and NOT "ups_": Victron's VE.Bus declares `ups_function`, which is a
+    # real inverter's real setting.
+    "battery_runtime",
+    # NOTHING ELSE GOES IN THIS TUPLE WITHOUT BEING RUN AGAINST THE ROSTER
+    # FIRST. Every marker here is a substring of a real vocabulary, and the
+    # obvious ones are wrong: `brightness` matched the LED on Zaptec, Peblar,
+    # SMA's EV charger and Anker; `load_percent` matched Growatt's
+    # `storage_load_percentage`; `cloud_cover` and `precip` matched Sunsynk's
+    # own solar FORECAST sensors. Each of those silently deleted a working
+    # brand's roles. A marker must be a word only a non-energy device says.
 )
+
+#: A battery role needs a BATTERY in the vocabulary. Midea's air conditioners
+#: are "inverter" units and declare `work_mode`; Qvantum's heat pump declares
+#: `operation_mode`. Read as a battery strategy those are nonsense, and no
+#: key-level pattern can tell them apart — `work_mode` is `work_mode`. The
+#: context is what differs: neither integration mentions a battery anywhere.
+BATTERY_CONTEXT: Final[tuple] = (
+    "battery", "state_of_charge", "_soc", "soc_", "storage_", "ess_",
+    "_ess", "accu", "pack_",
+)
+
+#: What only a BUILDING says. No car declares a grid connection, a PV input,
+#: an MPPT tracker or an AC input — so a vocabulary carrying these is energy
+#: hardware however much it also knows about a vehicle. Victron's GX declares
+#: `ev_odometer` for the car plugged into it, one key out of 465, and that
+#: single word reclassified the whole system controller as "a vehicle" —
+#: throwing away 464 keys of inverter and battery vocabulary.
+HOUSE_MARKERS: Final[tuple] = (
+    # NOT "ac_input"/"ac_output": to an air conditioner, AC is the appliance
+    # (Midea's cloud integration claimed the house on it).
+    "grid_", "pv_", "photovolt", "inverter", "mppt", "_grid_", "solar_yield",
+)
+
+#: The anchors strong enough to admit a NAME-ONLY row — one that mined a
+#: vocabulary, passed the anchor test, but matched no SEM role. Deliberately
+#: narrower than ENERGY_ANCHORS and written as prefixes: the loose `_grid`
+#: matched a Formula 1 integration's starting grid, and `_soc` matched a
+#: lighting cloud. Bug class 67 from the other side.
+STRONG_ENERGY_ANCHORS: Final[tuple] = (
+    "solar", "photovolt", "pv_power", "inverter", "grid_", "evse",
+    "wallbox", "charging_power", "state_of_charge", "battery_power",
+    "battery_charge_", "battery_discharge", "session_energy",
+    "charge_current", "export_power", "import_power", "feed_in",
+)
+
+#: …and the shape of an ELECTRICAL measurement. A brand that declares two of
+#: these alongside a strong anchor is reporting watts, amps or kilowatt-hours,
+#: which no watch and no light strip does.
+import re as _re
+UNIT_SHAPED_KEY: Final = _re.compile(
+    r"(^|_)(w|kw|kwh|wh|a|v|hz)$|_(power|current|voltage|energy)(_|$)"
+    r"|^(power|current|voltage|energy)_", _re.I)
 
 #: role -> the TOP-LEVEL SEM option key it fills. A role listed here can be
 #: accepted with one click: the Config card writes this key through
@@ -325,6 +396,15 @@ AUTO_RESOLVED_ROLES: Final[frozenset] = frozenset({
 OPAQUE_PLATFORMS: Final[frozenset] = frozenset({
     "modbus", "mqtt", "esphome", "template", "sql", "rest", "command_line",
     "knx", "tasmota", "shell_command", "input_number", "input_select",
+    # (#915) A TRANSPORT, like the rest of this list: what a HomeKit device
+    # is called is the accessory's business, so a key match under it would
+    # be pure guessing. 79831 installs, and every one of them a different
+    # vocabulary.
+    "homekit_controller", "homekit",
+    # Tuya is a MARKETPLACE, not a device: one vocabulary covering inverters,
+    # IP cameras, kettles and cat litter boxes. Its `work_mode` keys were
+    # offered as a battery strategy — `cat_litter_box_work_mode` among them.
+    "tuya", "xtend_tuya", "localtuya",
 })
 
 

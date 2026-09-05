@@ -2541,3 +2541,38 @@ what a charger is, with vocabulary markers for brands nobody has listed yet. **G
 `::test_a_protection_floor_is_never_a_target`, `tests/test_915_coverage_ratchet.py::TestAChargerIsNotAHouse`.
 **Sweep question:** for every value SEM writes, what is the OPPOSITE register called on that
 brand — and would the matching rule tell them apart? Refs #915 #810.
+
+### 69. One incidental word decides a whole device — GUARDED
+**Symptom, in both directions on the same afternoon.** Victron's GX declares `ev_odometer` for the
+car plugged into its EV charger — **one key out of 465** — and that single word classified the whole
+system controller as "a vehicle", discarding 464 keys of inverter and battery vocabulary (its ESS
+charge limit, force-charge, mode select and grid power). Midea's cloud declares `inverter` — an
+inverter *air conditioner* — among **1095 keys** of fridges, dryers and ice makers, and that single
+word classified the marketplace as a house and offered its `work_mode` as a battery strategy.
+**Root shape:** a classifier that returns on the FIRST marker it finds asks "does this word appear?"
+when the question is "what is this mostly?". On a large vocabulary an incidental word always appears.
+**Closure:** count distinct markers per kind and let the largest win, with a tie going to the house
+(`camera`, `pedal` and `lightbar` are gadget words a CAR also has, and they tied 3-3 with `grid_`,
+`inverter` and `_grid_` on a Tesla integration). Plus the level below: a `battery_*` role needs a
+battery somewhere in the vocabulary at all — no key-level pattern can separate an air conditioner's
+`work_mode` from a battery's, because they are the same string. **Guard:**
+`tests/test_915_coverage_ratchet.py::TestOneWordDoesNotDecideADevice`. **Sweep question:** every
+`any(...)` over a set of markers — is the answer a *property* of the whole thing, or just proof that
+one member exists? Refs #915 #869.
+
+### 70. The index nests, and the loop was flat — GUARDED
+**Symptom:** Tesla Powerwall — a brand in SEM's own sign-convention table, 1994 installs — was
+absent from the integration roster, and so was Tesla Wall Connector (6555 installs, more than KEBA,
+Zaptec and Wallbox). **Root shape:** Home Assistant's `generated/integrations.json` groups
+sub-integrations under their BRAND (`tesla` carries `powerwall`, `tesla_wall_connector` and
+`tesla_fleet` in a nested `integrations` dict and appears at the top level as a name only). The
+crawler iterated the top level and called it the core index — **241 integrations were never even
+looked at**, and nothing failed, because a source you do not read produces no error. Found by
+checking the roster against the CLOSED hardware-support issues (#75-#81), where seven human verdicts
+had already named the integrations SEM should have been able to name. **Closure:** flatten brand
+groups before filtering, and let the install floor buy a QUESTION for core integrations the way it
+always had for HACS ones — "Wall Connector" contains no energy word, so it was never asked what it
+declares. **Guard:**
+`tests/test_915_coverage_ratchet.py::TestTheClosedHardwareIssuesAgree`. **Sweep question:** for every
+external source, what is its shape — and does the count of what you read match the count it claims?
+Refs #915 #75 #816.
