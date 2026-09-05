@@ -43,29 +43,29 @@
 
 ## EV chargers
 
-| Brand | Control method | Status | Evidence |
-|---|---|---|---|
-| Easee | service-based | ✅ tested live | #68/#283 (Brkie) with GoodWe; #415 (zlakes01) two boxes on one install; disc. 103 (praun) beside a Deye Sun12k |
-| Fronius / go-e Wattpilot | number entity | ✅ tested live | #802 (HorizonKane, ha-wattpilot fork — confirmed working) |
-| GARO | switch + 6 A-floor current entity | ✅ tested live | #700/#748 (jappish84) switch.garo_laddbox — its 6 A floor drove the fix, confirmed on v1.7.6-beta.14; brand-detected with the floor carried since #816 |
-| JuiceBox 48 | number entity (JuiceBoxProxy - MQTT) | ✅ tested live | #683/#698 (Azlinon) two JuiceBox 48 over JuiceBoxProxy/MQTT — SOC mix-up and double-detection fixed, confirmed live; brand-detected since #816 |
-| KEBA P30/P40 | service: keba.set_current | ✅ tested live | SEM production wallbox, daily; #616/#763 (onkelfu) two P30 C driven over plain Modbus, not the KEBA integration |
-| Wallbox Pulsar | number entity | ✅ tested live | #548 status-lag fix confirmed by the reporter; two Pulsar Plus charging under SEM (disc. 103, RienduPre) |
-| Alfen Eve | number entity | 🧩 implemented | — |
-| Blue Current | number entity | 🧩 implemented | — |
-| ChargePoint | number entity | 🧩 implemented | — |
-| Generic / manual | any power+connected+charging sensors | 🧩 implemented | the documented manual-config path; #752 (praun) uses it to steer a Tesla's own BLE amp number behind an Easee |
-| go-eCharger (HTTP) | number entity | 🧩 implemented | — |
-| go-eCharger (MQTT) | number entity | 🧩 implemented | — |
-| Heidelberg Energy Control | number entity | 🧩 implemented | — |
-| OCPP-compatible (ABB Terra, Vestel, Grizzl-E, …) | number entity | 🧩 implemented | — |
-| Ohme | number entity | 🧩 implemented | — |
-| OpenEVSE | number entity | 🧩 implemented | — |
-| OpenWB 2.x | number entity | 🧩 implemented | — |
-| Peblar Rocksolid | number entity | 🧩 implemented | — |
-| V2C Trydan | number entity | 🧩 implemented | — |
-| Zaptec | service-based | 🧩 implemented | disc. 103 (coppe218) reports a Zaptec Go2 under test; no entities or values shown yet |
-| ABL eMH1 | Modbus ASCII (quirk: '>' start symbol) | 📥 requested | #808 (interface spec attached) |
+| Brand | Integration | Control method | Status | Evidence |
+|---|---|---|---|---|
+| Easee | `easee` | service-based | ✅ tested live | #68/#283 (Brkie) with GoodWe; #415 (zlakes01) two boxes on one install; disc. 103 (praun) beside a Deye Sun12k |
+| Fronius / go-e Wattpilot | `wattpilot` | number entity | ✅ tested live | #802 (HorizonKane, ha-wattpilot fork — confirmed working) |
+| GARO | `garo_wallbox` | switch + 6 A-floor current entity | ✅ tested live | #700/#748 (jappish84) switch.garo_laddbox — its 6 A floor drove the fix, confirmed on v1.7.6-beta.14; brand-detected with the floor carried since #816 |
+| JuiceBox 48 | `mqtt` | number entity (JuiceBoxProxy - MQTT) | ✅ tested live | #683/#698 (Azlinon) two JuiceBox 48 over JuiceBoxProxy/MQTT — SOC mix-up and double-detection fixed, confirmed live; brand-detected since #816 |
+| KEBA P30/P40 | `keba` | service: keba.set_current | ✅ tested live | SEM production wallbox, daily; #616/#763 (onkelfu) two P30 C driven over plain Modbus, not the KEBA integration |
+| Wallbox Pulsar | `wallbox` | number entity | ✅ tested live | #548 status-lag fix confirmed by the reporter; two Pulsar Plus charging under SEM (disc. 103, RienduPre) |
+| Alfen Eve | `alfen_wallbox` | number entity | 🧩 implemented | — |
+| Blue Current | `blue_current` | number entity | 🧩 implemented | — |
+| ChargePoint | `chargepoint` | number entity | 🧩 implemented | — |
+| Generic / manual | — | any power+connected+charging sensors | 🧩 implemented | the documented manual-config path; #752 (praun) uses it to steer a Tesla's own BLE amp number behind an Easee |
+| go-eCharger (HTTP) | `goecharger` | number entity | 🧩 implemented | — |
+| go-eCharger (MQTT) | `goecharger_mqtt` / `goecharger_api2` | number entity | 🧩 implemented | — |
+| Heidelberg Energy Control | `heidelberg_energy_control` | number entity | 🧩 implemented | — |
+| OCPP-compatible (ABB Terra, Vestel, Grizzl-E, …) | `ocpp` | number entity | 🧩 implemented | — |
+| Ohme | `ohme` | number entity | 🧩 implemented | — |
+| OpenEVSE | `openevse` | number entity | 🧩 implemented | — |
+| OpenWB 2.x | `openwb2mqtt` / `openwbmqtt` | number entity | 🧩 implemented | — |
+| Peblar Rocksolid | `peblar` | number entity | 🧩 implemented | — |
+| V2C Trydan | `v2c` | number entity | 🧩 implemented | — |
+| Zaptec | `zaptec` | service-based | 🧩 implemented | disc. 103 (coppe218) reports a Zaptec Go2 under test; no entities or values shown yet |
+| ABL eMH1 | — | Modbus ASCII (quirk: '>' start symbol) | 📥 requested | #808 (interface spec attached) |
 
 ## Vehicles
 

@@ -340,3 +340,126 @@ class TestOneWordDoesNotDecideADevice:
         """`charge_state_*` is Tesla's VEHICLE namespace."""
         assert self.lexicon.role_for(
             "number", "charge_state_charge_limit_soc") != "battery_target_soc"
+
+
+@pytest.mark.unit
+class TestTheMatrixAndTheRosterAgree:
+    """(#915) The matrix is what SEM CLAIMS; the roster is what the ecosystem
+    PUBLISHES. Checking one against the other is the only way to notice that a
+    supported brand has become unnameable — or that SEM detects a platform its
+    own documentation never mentions.
+    """
+
+    matrix = _load("hardware_matrix", "consts/hardware_matrix.py")
+
+    @staticmethod
+    def _detected_platforms() -> set:
+        import re
+        src = (ROOT / "hardware_detection.py").read_text()
+        body = re.search(r"_EV_CHARGER_PLATFORMS\s*=\s*\[(.*?)\n\]",
+                         src, re.S).group(1)
+        return set(re.findall(r'\(\s*"([a-z0-9_]+)"', body))
+
+    def _documented_domains(self) -> set:
+        out = set()
+        for row in self.matrix.CHARGERS:
+            if row.get("domain_token"):
+                out.add(row["domain_token"])
+            out |= set(row.get("also_domains") or ())
+        return out
+
+    def test_every_detected_charger_platform_is_documented(self):
+        """A platform SEM drives that no brand row names is a user who cannot
+        find their own hardware in the docs. `goecharger_api2` and the
+        archived `openwbmqtt` were both in that state."""
+        missing = sorted(self._detected_platforms() - self._documented_domains())
+        assert not missing, (
+            f"{missing} is detected by _EV_CHARGER_PLATFORMS but no charger "
+            "row names it — add domain_token/also_domains to the brand's row")
+
+    def test_every_documented_charger_domain_is_detected(self):
+        """…and the other way: a row claiming a domain nothing detects is a
+        support claim with no code behind it."""
+        extra = sorted(self._documented_domains() - self._detected_platforms())
+        assert not extra, f"{extra} is documented but never detected"
+
+    def test_every_charger_row_carries_its_domain(self):
+        """One row in twenty-one had a `domain_token`, so the brand table and
+        the detection list could drift apart with nothing noticing. The
+        exemptions are paths, not integrations."""
+        bare = sorted(r["brand"] for r in self.matrix.CHARGERS
+                      if not r.get("domain_token"))
+        assert bare == sorted(self.matrix.UNTOKENED_CHARGER_ROWS), bare
+
+    #: Matrix domains that no public index carries, with the reason and the
+    #: install count HA analytics DOES see. Each is a HACS custom repo (added
+    #: by URL, so it is not in the store index the crawl reads) or a
+    #: transport. All are brands SEM detects natively — the roster answers for
+    #: hardware detection does NOT know, so their absence costs nothing at
+    #: runtime. Shrink-only: see the test below.
+    NOT_IN_ANY_PUBLIC_INDEX = {
+        "alfen_wallbox": "HACS custom repo — 427 installs in analytics",
+        "wattpilot": "HACS custom repo — 974 installs",
+        "sonnenbatterie": "HACS custom repo — 577 installs",
+        "e3dc_rscp": "HACS custom repo — 743 installs",
+        "openwb2mqtt": "HACS custom repo — 374 installs",
+        "openwbmqtt": "archived predecessor — 47 installs",
+        "grott": "a Growatt MQTT proxy — 407 installs, no store entry",
+        "mqtt": "a transport, opaque by construction",
+        "homekit_controller": "a transport, opaque by construction",
+    }
+
+    def _claimed_domains(self) -> set:
+        """Every HA domain the matrix says SEM is reached through — from the
+        machine-readable fields only. The prose in `integration` is not
+        parsed: "SolaX Modbus / Grott behind an ESPHome" yields `behind` and
+        `an`, and a test that has to filter those cannot tell a missing brand
+        from a stray word."""
+        out = set(self._documented_domains())
+        for row in self.matrix.ALL_ROWS:
+            out |= set(row.get("domains") or ())
+        return out
+
+    def test_a_supported_brand_that_is_in_a_public_index_is_nameable(self):
+        """Every domain the matrix claims must be in the roster, or listed
+        above with the reason it cannot be. No shape filter: `sma`, `fronius`
+        and `sessy` are one word each and are the rows most worth checking."""
+        claimed = self._claimed_domains()
+        assert len(claimed) > 40, (
+            f"only {len(claimed)} domains parsed out of the matrix — the "
+            "fields changed and this test stopped checking anything")
+        unnameable = sorted(d for d in claimed
+                            if d not in roster.ROSTER
+                            and d not in self.NOT_IN_ANY_PUBLIC_INDEX)
+        assert not unnameable, (
+            f"{unnameable}: the matrix says SEM supports these and the roster "
+            "cannot name them. Either the crawl regressed, or they left the "
+            "public index — add them above WITH the reason, never bare.")
+
+    def test_the_exemptions_are_still_needed(self):
+        """Shrink-only: the day one of these reaches a public index, the
+        exemption goes rather than quietly hiding a working row."""
+        stale = sorted(d for d in self.NOT_IN_ANY_PUBLIC_INDEX
+                       if d in roster.ROSTER)
+        assert not stale, (
+            f"{stale} is in the roster now — drop it from "
+            "NOT_IN_ANY_PUBLIC_INDEX")
+
+    def test_every_row_is_either_addressable_or_explained(self):
+        """A row with no domain is reached some other way — generically
+        through the Energy Dashboard, through MQTT discovery, through a car
+        integration no index carries. That is fine, and it has to be SAID:
+        otherwise a row whose integration quietly disappeared looks the same
+        as one that never had a domain."""
+        bare = sorted(r["brand"] for r in self.matrix.ALL_ROWS
+                      if not r.get("domains") and not r.get("domain_token"))
+        explained = (set(self.matrix.ROWS_WITH_NO_DOMAIN)
+                     | set(self.matrix.UNTOKENED_CHARGER_ROWS))
+        assert not set(bare) - explained, (
+            f"{sorted(set(bare) - explained)} carries no domain and no reason")
+
+    def test_the_claimed_domains_are_real(self):
+        """A domain in the matrix that no index and no roster row knows is a
+        typo, and a typo here silently switches a check off."""
+        known = set(roster.ROSTER) | set(self.NOT_IN_ANY_PUBLIC_INDEX)
+        assert not sorted(self._claimed_domains() - known)

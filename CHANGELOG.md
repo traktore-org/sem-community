@@ -159,6 +159,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   vocabulary at all — `work_mode` on an air conditioner and `work_mode` on a
   battery are the same string, so only the company it keeps tells them apart.
 
+  **The supported-hardware table now says which integration to install.** An
+  Alfen Eve owner reading the EV charger table found "number entity" and no
+  way to learn that SEM reaches it through `alfen_wallbox`. The table has an
+  Integration column now, and the entries come from the same field detection
+  scans, so the documentation cannot say one thing while the code does
+  another. That field had to be added: **one charger row in twenty-one
+  carried its integration domain**, and the rest were brand names only — the
+  brand table and the detection list could drift apart with nothing noticing,
+  and two platforms SEM drives (`goecharger_api2` and the archived
+  `openwbmqtt`) were in exactly that state, supported in code and absent from
+  the docs. Both lists are now pinned to each other in both directions, and
+  every row that has no integration domain says why instead of just being
+  blank — read through the Energy Dashboard, over MQTT discovery, or through
+  a car integration no public index carries.
+
+  Checking the whole matrix against the roster this way found no missing
+  brands: everything SEM claims to support that appears in any public index
+  can be named. Six cannot — Alfen, Wattpilot, Sonnen, E3DC, openWB and
+  Grott are HACS *custom* repositories, added by URL and absent from the
+  store index — and each is listed with its reason and its real install
+  count. All six are brands SEM detects natively, so nothing is lost: the
+  roster answers for the hardware detection does *not* already know.
+
 # [2.1.0-beta.7] — 03.09.2026
 
 - 🛡️ **A flat value from a live integration is not a frozen sensor** (#912).
