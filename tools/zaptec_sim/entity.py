@@ -16,6 +16,23 @@ from homeassistant.helpers.entity import Entity
 from .const import CHARGER_ID, DOMAIN, INSTALL_ID, NAMES_NL
 
 
+def unmapped_fixture(entry) -> bool:
+    """(#915) True when this entry simulates a site SEM cannot map.
+
+    The offer it exists to reach — "Add this charger" on a near miss — needs
+    a device that SEM DESCRIBES but cannot MAP: entities present, no role
+    matched, and a proposal available from the integration's own declared
+    vocabulary. On a normal install that state is unreachable on purpose:
+    every brand here is detected, and a near miss for a brand whose charger
+    is already driven is filtered as noise. So the fixture publishes the
+    INSTALLATION device alone, with a power reading and the site's
+    available-current number — enough to describe, not enough to map
+    (`_discover_zaptec` requires a connected/charging state, and refuses
+    ``available_current`` as a throttle by name).
+    """
+    return bool(entry.data.get("unmapped_charger", False))
+
+
 class ZaptecSimEntity(Entity):
     _attr_has_entity_name = True
     _attr_should_poll = False

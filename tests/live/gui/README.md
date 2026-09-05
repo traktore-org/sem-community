@@ -65,3 +65,52 @@ assertion the unit suite could not make.
 
 Both cost a green-looking run that proved nothing, which is the failure mode
 this layer exists to prevent.
+
+## `test_915_near_miss_offer.js` — the offer, via a fixture
+
+"Add this charger" is unreachable on a healthy rig: every brand present is
+detected, and a near miss for a detected brand is filtered as noise. So
+`tools/zaptec_sim` grows an **`unmapped_charger`** option that publishes the
+installation device alone — a power reading and the site's grid-guard current,
+no cable state, no charging state, no throttle. SEM can describe it and cannot
+map it, which is exactly the near miss the offer answers. The suite turns the
+fixture on, asserts the offer appears and is wired to the entity the *real*
+Zaptec integration declares, **clicks it**, checks the charger that was
+created, and turns everything back off.
+
+## Running order, and the traps between suites
+
+Run them in this order, and one at a time:
+
+```
+test_915_detected_hardware.js        # reads + one click, non-destructive
+test_915_near_miss_offer.js          # flips a sim option, adds/removes a charger
+test_915_install_without_energy_dashboard.js   # DELETES SEM and reinstalls it
+```
+
+Traps that cost real time here, all of them about the rig rather than SEM:
+
+1. **A destructive suite must put the rig back even when it fails.** One
+   interrupted run left `.46` with no SEM entry, and every other suite failed
+   for reasons that had nothing to do with them. The install suite now
+   guarantees an entry exists before it exits.
+2. **Never "restore" a state you did not verify.** The same suite backs up the
+   Energy Dashboard and restores it; run against an already-broken dashboard it
+   faithfully restored the breakage, and the next run inherited it. It refuses
+   to start now if the grid source is missing.
+3. **Never restore `.storage` by file copy under a running Home Assistant.**
+   HA holds those prefs in memory and rewrites the file on its next save, so
+   the copy silently loses. Go through the API (`energy/save_prefs`).
+4. **Removing a charger is a service, not a shorter list.** `set_option` merges
+   `ev_chargers` by id and preserves siblings (#464, so a partial submit can
+   never drop one), so filtering the list does nothing. Use
+   `solar_energy_management.remove_charger`.
+5. **Do not compare two entities sampled at different instants.** The rig's
+   grid value moves every cycle; a strict equality between SEM's reading and
+   its source tests how fast the sun went behind a cloud. Sample the source
+   either side and assert SEM lies in that envelope.
+6. **The Add-integration dialog races Home Assistant's own discovery.** Since
+   #915 SEM offers itself when a supported inverter appears, and a discovery
+   flow in progress makes the manual route a dead end — while the card is not
+   always there yet. The install suite asserts the step through the flow API
+   (the same strings HA renders) and keeps the browser for evidence.

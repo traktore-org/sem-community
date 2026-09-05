@@ -137,6 +137,20 @@ async function clickCardButton(page, label, nth = 0) {
  * shape of the step description under test. So: walk TEXT NODES, across
  * shadow roots, skipping script and style.
  */
+/** Poll until `fn()` is truthy, or give up. SEM publishes on a 10 s cycle
+ * and a fresh entry warms for a few of them, so a value read the instant an
+ * install finishes is a coin toss — one suite failed on it only when another
+ * suite had touched the rig first. */
+async function until(fn, { timeoutMs = 90000, everyMs = 5000 } = {}) {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+        const v = await fn();
+        if (v) return v;
+        if (Date.now() > deadline) return null;
+        await new Promise(r => setTimeout(r, everyMs));
+    }
+}
+
 async function deepText(page) {
     return page.evaluate(`(() => {
         const out = [];
@@ -212,5 +226,5 @@ function summary() {
 }
 
 module.exports = { HOST, TOKEN, api, state, config, entryId, openBrowser, openConfigCard,
-                   deepText,
+                   deepText, until,
                    cardText, clickCardButton, shot, check, summary, assertNotProd };

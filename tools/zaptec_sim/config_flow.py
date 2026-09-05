@@ -26,5 +26,13 @@ class ZaptecSimConfigFlow(ConfigFlow, domain=DOMAIN):
                 # throttle at all — and must say so rather than reach for the
                 # installation's grid guard. Turn this off to simulate that.
                 vol.Optional("expose_charger_current", default=True): bool,
+                # (#915) Publish a site SEM can DESCRIBE but not MAP: the
+                # installation device alone, with a power reading and the
+                # grid-guard current. That is the near miss the "Add this
+                # charger" offer exists for, and on a normal install it is
+                # unreachable — every brand here is detected, and a near
+                # miss for a detected brand is filtered as noise. Turn this
+                # on to make the offer testable end to end.
+                vol.Optional("unmapped_charger", default=False): bool,
             }),
         )

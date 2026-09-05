@@ -6,10 +6,12 @@ from homeassistant.components.binary_sensor import (
 )
 
 from .const import DOMAIN, KEY_CABLE_CONNECTED, KEY_CHARGING
-from .entity import ZaptecSimEntity
+from .entity import ZaptecSimEntity, unmapped_fixture
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
+    if unmapped_fixture(entry):
+        return          # (#915) no cable/charging state = nothing to map
     state = hass.data[DOMAIN][entry.entry_id]
     async_add_entities([CableConnected(state, entry), Charging(state, entry)])
 
