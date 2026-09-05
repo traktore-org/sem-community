@@ -53,6 +53,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import functools
 import hashlib
 import importlib.util
 import json
@@ -278,6 +279,30 @@ def candidate_rows(sources: Dict[str, Any]) -> Dict[str, dict]:
                      "origin": "hacs", "installs": counts.get(dom, 0),
                      "stars": entry.get("stargazers_count") or 0}
 
+    # (#915, found via #869) A FORK of an energy integration is energy-shaped
+    # whatever its description says. ``anker_solix_official`` reports no
+    # installs and describes itself as "local Modbus TCP" — no keyword, no
+    # popularity, so it was invisible; meanwhile a reporter was running it.
+    # Its sibling ``anker_solix`` is already a candidate, and a domain that
+    # extends an accepted domain's name is the same hardware by another
+    # maintainer. Mining it costs one fetch and risks nothing: the two-signal
+    # rule still decides whether it may route anything.
+    for entry in (sources.get("hacs") or {}).values():
+        dom = (entry.get("domain") or "").strip().lower()
+        if not dom or dom in rows or "_" not in dom:
+            continue
+        parent = next((r for r in rows if dom.startswith(f"{r}_")), None)
+        if parent is None:
+            continue
+        name = ((entry.get("manifest") or {}).get("name")
+                or entry.get("manifest_name") or dom)
+        if _NOISE.search(f"{dom} {name}"):
+            continue
+        rows[dom] = {"name": str(name)[:60], "repo": entry.get("full_name"),
+                     "origin": "hacs", "installs": counts.get(dom, 0),
+                     "stars": entry.get("stargazers_count") or 0,
+                     "by": f"sibling:{parent}"}
+
     core_index = (sources.get("core_index") or {}).get("integration") or {}
     website = sources.get("website") or {}
     for dom, entry in core_index.items():
@@ -396,8 +421,22 @@ def _match_role(rules: Dict[str, Dict[str, Any]], platform: str,
     return None
 
 
+def sem_charger_domains() -> set:
+    """The platforms SEM already knows are EV chargers — its own
+    hand-maintained list, read the same way as ``sem_known_domains()``. A
+    domain on this list is a charger whatever its vocabulary looks like."""
+    src = (ROOT / "hardware_detection.py").read_text()
+    m = re.search(r"_EV_CHARGER_PLATFORMS\s*=\s*\[(.*?)\n\]", src, re.S)
+    return set(re.findall(r'\(\s*"([a-z0-9_]+)"', m.group(1))) if m else set()
+
+
+@functools.lru_cache(maxsize=1)
+def _charger_domains() -> frozenset:
+    return frozenset(sem_charger_domains())
+
+
 def classify_kind(vocab: Dict[str, Dict[str, dict]], lexicon,
-                  *, known: bool = False) -> str:
+                  *, known: bool = False, domain: str = "") -> str:
     """What the declared vocabulary says this integration IS.
 
     Necessary because a role name alone is ambiguous across kinds: a Porsche
@@ -415,6 +454,15 @@ def classify_kind(vocab: Dict[str, Dict[str, dict]], lexicon,
     # The anchor rule: without a key no non-energy device declares, this is
     # something else that happens to have a battery. Say so rather than
     # reading its `battery_level` as a home pack's state of charge.
+    # A charger, unless it also runs the house. Wallbox and V2C declare a
+    # ``state_of_charge`` / ``battery_power`` that belongs to the CAR; Anker
+    # Solix declares an EV current limit beside a real PV input and is a
+    # generator with a socket. The list SEM maintains by hand wins outright.
+    if domain in _charger_domains():
+        return "charger"
+    if (any(m in blob for m in lexicon.CHARGER_MARKERS)
+            and not any(m in blob for m in lexicon.GENERATOR_MARKERS)):
+        return "charger"
     if not any(a in blob for a in lexicon.ENERGY_ANCHORS):
         # A domain SEM already supports has human evidence behind it (a
         # matrix row with a citation); a thin published vocabulary does not
@@ -429,10 +477,25 @@ def roles_from_vocabulary(vocab: Dict[str, Dict[str, dict]], lexicon,
     contributes nothing; a vehicle contributes only vehicle roles."""
     if kind in ("appliance", "other"):
         return {}
-    rules = (lexicon.VEHICLE_ROLE_RULES if kind == "vehicle"
-             # control roles AND the read roles: which entity is the solar
-             # power sensor is the question a first install actually asks.
-             else {**lexicon.ROLE_RULES, **lexicon.READ_ROLE_RULES})
+    if kind == "vehicle":
+        rules = dict(lexicon.VEHICLE_ROLE_RULES)
+    elif kind == "charger":
+        # A CHARGER's "state of charge" is the CAR's, and its battery power
+        # is the car's too. Feeding either into SEM's house-battery reads
+        # would corrupt the energy balance every ten seconds — a far worse
+        # outcome than proposing nothing. So a charger contributes its
+        # controls and what it knows about the vehicle, and nothing about a
+        # house it does not have. (Wallbox declares ``state_of_charge`` and
+        # V2C declares ``battery_power`` — both the car's; SMA's EV charger
+        # declares ``charge_power_limit``, which is the CAR's charge rate
+        # and not the house pack's.)
+        rules = {r: v for r, v in lexicon.ROLE_RULES.items()
+                 if r.startswith("ev_")}
+        rules.update(lexicon.VEHICLE_ROLE_RULES)
+    else:
+        # control roles AND the read roles: which entity is the solar
+        # power sensor is the question a first install actually asks.
+        rules = {**lexicon.ROLE_RULES, **lexicon.READ_ROLE_RULES}
     roles: Dict[str, dict] = {}
     for platform, keys in sorted(vocab.items()):
         for key, body in sorted(keys.items()):
@@ -447,6 +510,32 @@ def roles_from_vocabulary(vocab: Dict[str, Dict[str, dict]], lexicon,
             for opt in body.get("options") or ():
                 if opt not in slot["options"]:
                     slot["options"].append(opt)
+    # (#810) A force-charge switch that ships a companion DURATION is a
+    # timed boost, not a state SEM can hold. EG4 declares ``quick_charge``
+    # beside ``quick_charge_duration``; its owner: "I don't think you want
+    # Quick charge for general usage — it's a 60 minute long run of AC charge
+    # mode intended for a quick battery boost before a storm." SEM's force
+    # charge is meant to stay on for as long as the cheap hours last, so a
+    # switch that expires on its own is the wrong shape, and offering none is
+    # the right failure. Same shape as the AC-THOR setpoint that expires
+    # unless it is re-sent (#880).
+    # Half a split pair is not a proposal (see PAIRED_ROLES).
+    for pair in getattr(lexicon, "PAIRED_ROLES", ()):
+        if not all(r in roles for r in pair):
+            for r in pair:
+                roles.pop(r, None)
+
+    every_key = {k for keys in vocab.values() for k in keys}
+    slot = roles.get("battery_force_charge")
+    if slot:
+        durable = [k for k in slot["keys"]
+                   if not ({f"{k}_duration", f"{k}_time", f"{k}_timer"}
+                           & every_key)]
+        if durable:
+            slot["keys"] = durable
+        else:
+            roles.pop("battery_force_charge")
+
     return {r: {"platform": v["platform"], "keys": tuple(v["keys"]),
                 "options": tuple(v["options"])}
             for r, v in sorted(roles.items())}
@@ -464,8 +553,12 @@ def build_roster(sources: Dict[str, Any], *, offline: bool, floor: int,
     # everything SEM already supports — the known ones are the ORACLE (can the
     # miner re-find what we learned by hand?) and their vocabulary widens the
     # spec keys for brands we do drive.
+    # A SIBLING is mined whatever its install count says: a fork exists
+    # precisely because the original did not fit somebody, and analytics has
+    # not caught up with it (#869: 0 reported installs, a live reporter).
     to_mine = {d: r for d, r in rows.items()
-               if r["installs"] >= floor or d in known}
+               if r["installs"] >= floor or d in known
+               or str(r.get("by", "")).startswith("sibling:")}
     to_mine = {d: r for d, r in to_mine.items()
                if d not in lexicon.OPAQUE_PLATFORMS}
     print(f"  candidates {len(rows)} · mining {len(to_mine)} "
@@ -475,7 +568,7 @@ def build_roster(sources: Dict[str, Any], *, offline: bool, floor: int,
         dom, row = item
         vocab = mine_vocabulary(row.get("repo") or "", dom, row["origin"],
                                 offline=offline)
-        kind = (classify_kind(vocab, lexicon, known=dom in known)
+        kind = (classify_kind(vocab, lexicon, known=dom in known, domain=dom)
                 if vocab else "energy")
         return dom, kind, roles_from_vocabulary(vocab, lexicon, kind)
 

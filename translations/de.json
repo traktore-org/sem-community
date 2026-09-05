@@ -89,14 +89,18 @@
           "grid_import_power_sensor": "Netzleistung",
           "battery_power_sensor": "Batterieleistung (optional)",
           "observer_mode": "Beobachtermodus (nur zusehen, nichts senden)",
-          "battery_soc_sensor": "Batterieladestand (optional)"
+          "battery_soc_sensor": "Batterieladestand (optional)",
+          "grid_import_power_entity": "Netzbezug-Leistung (optional)",
+          "grid_export_power_entity": "Netzeinspeisung-Leistung (optional)"
         },
         "data_description": {
           "solar_power_sensor": "Aktuelle Erzeugung in Watt — kein Tagesgesamtwert.",
           "grid_import_power_sensor": "Aktueller Bezug/Einspeisung in Watt. Ein vorzeichenbehafteter Sensor genügt; SEM erkennt die Richtung selbst.",
           "battery_power_sensor": "Aktuelles Laden/Entladen in Watt. Leer lassen, wenn keine Hausbatterie vorhanden ist.",
           "observer_mode": "Für die ersten Tage empfohlen: SEM zeigt jede Entscheidung, die es treffen würde, und sendet nichts an deine Hardware.",
-          "battery_soc_sensor": "Ladestand in Prozent. SEM's vier Batteriezonen lesen ihn."
+          "battery_soc_sensor": "Ladestand in Prozent. SEM's vier Batteriezonen lesen ihn.",
+          "grid_import_power_entity": "Nur wenn dein Zähler keinen einzelnen vorzeichenbehafteten Sensor hat: die Bezugsseite, immer positiv. Beide ausfüllen oder keinen.",
+          "grid_export_power_entity": "Die Einspeiseseite, immer positiv. SEM rechnet Einspeisung minus Bezug — es muss keine Richtung geraten werden."
         }
       }
     },

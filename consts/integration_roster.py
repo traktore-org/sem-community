@@ -30,7 +30,7 @@ from typing import Any, Dict, Final
 SCHEMA: Final = 1
 
 
-ROSTER_META: Final[Dict[str, Any]] = {'generated_at': '2026-09-04T20:22:20Z', 'sources': {'core_analytics': 'https://analytics.home-assistant.io/data.json', 'core_index': 'https://raw.githubusercontent.com/home-assistant/core/dev/homeassistant/generated/integrations.json', 'custom_installs': 'https://analytics.home-assistant.io/custom_integrations.json', 'hacs': 'https://data-v2.hacs.xyz/integration/data.json', 'website': 'https://www.home-assistant.io/integrations.json'}, 'install_floor': 50, 'candidates': 768, 'kept': 167, 'with_roles': 45, 'roles_mined': 103}
+ROSTER_META: Final[Dict[str, Any]] = {'generated_at': '2026-09-05T15:17:07Z', 'sources': {'core_analytics': 'https://analytics.home-assistant.io/data.json', 'core_index': 'https://raw.githubusercontent.com/home-assistant/core/dev/homeassistant/generated/integrations.json', 'custom_installs': 'https://analytics.home-assistant.io/custom_integrations.json', 'hacs': 'https://data-v2.hacs.xyz/integration/data.json', 'website': 'https://www.home-assistant.io/integrations.json'}, 'install_floor': 50, 'candidates': 814, 'kept': 171, 'with_roles': 49, 'roles_mined': 109}
 
 #: domain -> what the ecosystem says this integration is.
 ROSTER: Final[Dict[str, Dict[str, Any]]] = {
@@ -38,6 +38,7 @@ ROSTER: Final[Dict[str, Dict[str, Any]]] = {
     'alphaess': {'name': 'AlphaESS Energy Storage System', 'repo': 'CharlesGillanders/homeassistant-alphaESS', 'origin': 'hacs', 'installs': 940, 'kind': 'energy', 'kind_from': 'keyword'},
     'anglian_water': {'name': 'Anglian Water', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 283, 'kind': 'other', 'kind_from': 'keyword'},
     'anker_solix': {'name': 'Anker Solix', 'repo': 'thomluther/ha-anker-solix', 'origin': 'hacs', 'installs': 5705, 'kind': 'energy', 'kind_from': 'vocabulary'},
+    'anker_solix_official': {'name': 'Anker SOLIX Official', 'repo': 'anker-charging/ha-anker-solix-official', 'origin': 'hacs', 'installs': 0, 'kind': 'energy', 'kind_from': 'vocabulary'},
     'apsystems_ecu_reader': {'name': 'APsystems ECU Reader', 'repo': 'HAEdwin/homeassistant-apsystems_ecu_reader', 'origin': 'hacs', 'installs': 835, 'kind': 'energy', 'kind_from': 'keyword'},
     'aqua_temp': {'name': 'Aqua Temp', 'repo': 'radical-squared/aquatemp', 'origin': 'hacs', 'installs': 544, 'kind': 'other', 'kind_from': 'keyword'},
     'aquarea': {'name': 'HeishaMon', 'repo': 'kamaradclimber/heishamon-homeassistant', 'origin': 'hacs', 'installs': 951, 'kind': 'energy', 'kind_from': 'keyword'},
@@ -46,7 +47,7 @@ ROSTER: Final[Dict[str, Dict[str, Any]]] = {
     'battery_smartflow_ai': {'name': 'Battery SmartFlow AI', 'repo': 'PalmManiac/battery-smartflow-ai', 'origin': 'hacs', 'installs': 72, 'kind': 'vehicle', 'kind_from': 'keyword'},
     'cez_hdo': {'name': 'ČEZ HDO', 'repo': 'Cmajda/ha_cez_distribuce', 'origin': 'hacs', 'installs': 269, 'kind': 'other', 'kind_from': 'keyword'},
     'chargecloud': {'name': 'Chargecloud.de', 'repo': 'functionpointer/home-assistant-chargecloud-integration', 'origin': 'hacs', 'installs': 67, 'kind': 'energy', 'kind_from': 'keyword'},
-    'chargepoint': {'name': 'ChargePoint', 'repo': 'mbillow/ha-chargepoint', 'origin': 'hacs', 'installs': 791, 'kind': 'energy', 'kind_from': 'keyword'},
+    'chargepoint': {'name': 'ChargePoint', 'repo': 'mbillow/ha-chargepoint', 'origin': 'hacs', 'installs': 791, 'kind': 'charger', 'kind_from': 'keyword'},
     'cheapest_energy_windows': {'name': 'Cheapest Energy Windows', 'repo': 'cheapest-energy-windows/cheapest_energy_windows', 'origin': 'hacs', 'installs': 51, 'kind': 'other', 'kind_from': 'keyword'},
     'defa_power': {'name': 'DEFA Power', 'repo': 'Bebbssos/ha-defa-power', 'origin': 'hacs', 'installs': 85, 'kind': 'other', 'kind_from': 'keyword'},
     'dess_monitor': {'name': 'DESS Monitor', 'repo': 'Antoxa1081/home-assistant-dess-monitor', 'origin': 'hacs', 'installs': 479, 'kind': 'energy', 'kind_from': 'keyword'},
@@ -54,7 +55,7 @@ ROSTER: Final[Dict[str, Dict[str, Any]]] = {
     'discovergy': {'name': 'inexogy', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 748, 'kind': 'other', 'kind_from': 'keyword'},
     'dsmr': {'name': 'DSMR Smart Meter', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 5699, 'kind': 'energy', 'kind_from': 'keyword'},
     'dynamic_energy_cost': {'name': 'Dynamic Energy Cost', 'repo': 'martinarva/dynamic_energy_cost', 'origin': 'hacs', 'installs': 1157, 'kind': 'energy', 'kind_from': 'keyword'},
-    'easee': {'name': 'Easee EV Charger', 'repo': 'nordicopen/easee_hass', 'origin': 'hacs', 'installs': 3533, 'kind': 'energy', 'kind_from': 'keyword'},
+    'easee': {'name': 'Easee EV Charger', 'repo': 'nordicopen/easee_hass', 'origin': 'hacs', 'installs': 3533, 'kind': 'charger', 'kind_from': 'keyword'},
     'ecotracker': {'name': 'Ecotracker', 'repo': 'stefanseeger/ecotracker', 'origin': 'hacs', 'installs': 375, 'kind': 'other', 'kind_from': 'keyword'},
     'edl21': {'name': 'EDL21', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 662, 'kind': 'appliance', 'kind_from': 'keyword'},
     'eg4_web_monitor': {'name': 'EG4 Web Monitor', 'repo': 'joyfulhouse/eg4_web_monitor', 'origin': 'hacs', 'installs': 241, 'kind': 'energy', 'kind_from': 'vocabulary'},
@@ -69,7 +70,7 @@ ROSTER: Final[Dict[str, Dict[str, Any]]] = {
     'envertech_solar': {'name': 'Envertech Solar', 'repo': 'jimmybonesde/envertech_solar', 'origin': 'hacs', 'installs': 167, 'kind': 'energy', 'kind_from': 'keyword'},
     'epex_spot': {'name': 'EPEX Spot', 'repo': 'mampfes/ha_epex_spot', 'origin': 'hacs', 'installs': 3638, 'kind': 'energy', 'kind_from': 'keyword'},
     'evcc_intg': {'name': 'evcc☀️🚘- Solar Charging', 'repo': 'marq24/ha-evcc', 'origin': 'hacs', 'installs': 4277, 'kind': 'vehicle', 'kind_from': 'vocabulary'},
-    'evcnet': {'name': 'EVC-net (Last Mile Solutions)', 'repo': 'Platzii/homeassistant-evcnet', 'origin': 'hacs', 'installs': 89, 'kind': 'other', 'kind_from': 'keyword'},
+    'evcnet': {'name': 'EVC-net (Last Mile Solutions)', 'repo': 'Platzii/homeassistant-evcnet', 'origin': 'hacs', 'installs': 89, 'kind': 'charger', 'kind_from': 'keyword'},
     'fglair_heatpump_controller': {'name': 'FGLair Home Assistant Integration', 'repo': 'bigmoby/fglair_for_homeassistant', 'origin': 'hacs', 'installs': 216, 'kind': 'energy', 'kind_from': 'keyword'},
     'forecast_solar': {'name': 'Forecast.Solar', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 64218, 'kind': 'energy', 'kind_from': 'keyword'},
     'foxess': {'name': 'FoxESS Cloud', 'repo': 'macxq/foxess-ha', 'origin': 'hacs', 'installs': 1427, 'kind': 'energy', 'kind_from': 'keyword'},
@@ -79,12 +80,12 @@ ROSTER: Final[Dict[str, Dict[str, Any]]] = {
     'fronius_modbus': {'name': 'Fronius Modbus', 'repo': 'redpomodoro/fronius_modbus', 'origin': 'hacs', 'installs': 299, 'kind': 'energy', 'kind_from': 'keyword'},
     'fusion_solar': {'name': 'Fusion Solar', 'repo': 'tijsverkoyen/HomeAssistant-FusionSolar', 'origin': 'hacs', 'installs': 2815, 'kind': 'energy', 'kind_from': 'keyword'},
     'fusionsolarplus': {'name': 'FusionSolarPlus', 'repo': 'JortvanSchijndel/FusionSolarPlus', 'origin': 'hacs', 'installs': 930, 'kind': 'energy', 'kind_from': 'keyword'},
-    'garo_wallbox': {'name': 'Garo Wallbox', 'repo': 'sockless-coding/garo_wallbox', 'origin': 'hacs', 'installs': 104, 'kind': 'energy', 'kind_from': 'keyword'},
+    'garo_wallbox': {'name': 'Garo Wallbox', 'repo': 'sockless-coding/garo_wallbox', 'origin': 'hacs', 'installs': 104, 'kind': 'charger', 'kind_from': 'keyword'},
     'geo_home': {'name': 'Geo Home Smart Meter Integration', 'repo': 'mmillmor/geo_home', 'origin': 'hacs', 'installs': 124, 'kind': 'energy', 'kind_from': 'keyword'},
     'givenergy_local': {'name': 'GivEnergy Local', 'repo': 'dewet22/givenergy-hass', 'origin': 'hacs', 'installs': 174, 'kind': 'energy', 'kind_from': 'keyword'},
     'goecharger': {'name': 'go-eCharger', 'repo': 'cathiele/homeassistant-goecharger', 'origin': 'hacs', 'installs': 501, 'kind': 'energy', 'kind_from': 'keyword'},
-    'goecharger_api2': {'name': 'go-e APIv2 Connect', 'repo': 'marq24/ha-goecharger-api2', 'origin': 'hacs', 'installs': 1377, 'kind': 'energy', 'kind_from': 'keyword'},
-    'goecharger_mqtt': {'name': 'go-eCharger integration for Home Assistant using the MQTT AP', 'repo': 'syssi/homeassistant-goecharger-mqtt', 'origin': 'hacs', 'installs': 990, 'kind': 'energy', 'kind_from': 'keyword'},
+    'goecharger_api2': {'name': 'go-e APIv2 Connect', 'repo': 'marq24/ha-goecharger-api2', 'origin': 'hacs', 'installs': 1377, 'kind': 'charger', 'kind_from': 'keyword'},
+    'goecharger_mqtt': {'name': 'go-eCharger integration for Home Assistant using the MQTT AP', 'repo': 'syssi/homeassistant-goecharger-mqtt', 'origin': 'hacs', 'installs': 990, 'kind': 'charger', 'kind_from': 'keyword'},
     'goodwe': {'name': 'GoodWe Inverter (experimental)', 'repo': 'mletenay/home-assistant-goodwe-inverter', 'origin': 'hacs', 'installs': 3399, 'kind': 'energy', 'kind_from': 'vocabulary'},
     'grizzl_e': {'name': 'Grizzl-E EV Charger', 'repo': 'mclare/grizzl_e-for-HA', 'origin': 'hacs', 'installs': 81, 'kind': 'energy', 'kind_from': 'keyword'},
     'growatt_modbus': {'name': 'Growatt_Modbus', 'repo': '0xAHA/Growatt_ModbusTCP', 'origin': 'hacs', 'installs': 276, 'kind': 'energy', 'kind_from': 'vocabulary'},
@@ -112,17 +113,17 @@ ROSTER: Final[Dict[str, Dict[str, Any]]] = {
     'nibe_heatpump': {'name': 'Nibe Heat Pump', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 1010, 'kind': 'energy', 'kind_from': 'keyword'},
     'nordpool': {'name': 'nordpool', 'repo': 'custom-components/nordpool', 'origin': 'hacs', 'installs': 8288, 'kind': 'energy', 'kind_from': 'keyword'},
     'nordpool_planner': {'name': 'nordpool_planner', 'repo': 'dala318/nordpool_planner', 'origin': 'hacs', 'installs': 208, 'kind': 'energy', 'kind_from': 'keyword'},
-    'nrgkick': {'name': 'NRGkick', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 241, 'kind': 'energy', 'kind_from': 'vocabulary'},
-    'ocpp': {'name': 'Open Charge Point Protocol (OCPP)', 'repo': 'lbbrhzn/ocpp', 'origin': 'hacs', 'installs': 2336, 'kind': 'energy', 'kind_from': 'vocabulary'},
+    'nrgkick': {'name': 'NRGkick', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 241, 'kind': 'charger', 'kind_from': 'vocabulary'},
+    'ocpp': {'name': 'Open Charge Point Protocol (OCPP)', 'repo': 'lbbrhzn/ocpp', 'origin': 'hacs', 'installs': 2336, 'kind': 'charger', 'kind_from': 'vocabulary'},
     'octopus_energy': {'name': 'Octopus Energy', 'repo': 'BottlecapDave/HomeAssistant-OctopusEnergy', 'origin': 'hacs', 'installs': 9944, 'kind': 'energy', 'kind_from': 'keyword'},
     'octopus_energy_it': {'name': 'Octopus Energy Italy', 'repo': 'samuelebistoletti/HomeAssistant-OctopusEnergyIT', 'origin': 'hacs', 'installs': 385, 'kind': 'other', 'kind_from': 'keyword'},
     'octopus_spain': {'name': 'Octopus Spain', 'repo': 'miguelangellv/ha-octopus-spain', 'origin': 'hacs', 'installs': 260, 'kind': 'energy', 'kind_from': 'keyword'},
-    'ohme': {'name': 'Ohme', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 1183, 'kind': 'energy', 'kind_from': 'vocabulary'},
+    'ohme': {'name': 'Ohme', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 1183, 'kind': 'charger', 'kind_from': 'vocabulary'},
     'omie': {'name': 'OMIE - Spain and Portugal electricity prices', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 269, 'kind': 'other', 'kind_from': 'keyword'},
     'omnik_inverter': {'name': 'Omnik Inverter Solar Sensor (No Cloud)', 'repo': 'robbinjanssen/home-assistant-omnik-inverter', 'origin': 'hacs', 'installs': 333, 'kind': 'energy', 'kind_from': 'keyword'},
     'open_meteo_solar_forecast': {'name': 'Open-Meteo Solar Forecast', 'repo': 'rany2/ha-open-meteo-solar-forecast', 'origin': 'hacs', 'installs': 2414, 'kind': 'energy', 'kind_from': 'keyword'},
-    'openevse': {'name': 'OpenEVSE', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 359, 'kind': 'energy', 'kind_from': 'keyword'},
-    'peblar': {'name': 'Peblar', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 707, 'kind': 'energy', 'kind_from': 'vocabulary'},
+    'openevse': {'name': 'OpenEVSE', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 359, 'kind': 'charger', 'kind_from': 'vocabulary'},
+    'peblar': {'name': 'Peblar', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 707, 'kind': 'charger', 'kind_from': 'vocabulary'},
     'polestar_api': {'name': 'Polestar API', 'repo': 'pypolestar/polestar_api', 'origin': 'hacs', 'installs': 1021, 'kind': 'vehicle', 'kind_from': 'vocabulary'},
     'porscheconnect': {'name': 'Porsche Connect', 'repo': 'CJNE/ha-porscheconnect', 'origin': 'hacs', 'installs': 369, 'kind': 'vehicle', 'kind_from': 'vocabulary'},
     'powerbrain': {'name': 'cFos Powerbrain', 'repo': 'mb-software/homeassistant-powerbrain', 'origin': 'hacs', 'installs': 129, 'kind': 'energy', 'kind_from': 'keyword'},
@@ -130,6 +131,7 @@ ROSTER: Final[Dict[str, Dict[str, Any]]] = {
     'pv_management_fix': {'name': 'PV Energy Management+', 'repo': 'hoizi89/pv_management_fix', 'origin': 'hacs', 'installs': 52, 'kind': 'energy', 'kind_from': 'keyword'},
     'pysmaplus': {'name': 'SMA Devices Plus', 'repo': 'littleyoda/ha-pysmaplus', 'origin': 'hacs', 'installs': 1112, 'kind': 'energy', 'kind_from': 'vocabulary'},
     'quatt': {'name': 'Quatt', 'repo': 'marcoboers/home-assistant-quatt', 'origin': 'hacs', 'installs': 324, 'kind': 'other', 'kind_from': 'keyword'},
+    'qvantum_modbus': {'name': 'Qvantum Modbus', 'repo': 'majorfrog/qvantum_modbus', 'origin': 'hacs', 'installs': 0, 'kind': 'energy', 'kind_from': 'vocabulary'},
     'rce_pse': {'name': 'RCE PSE - Rynkowa Cena Energii', 'repo': 'Lewa-Reka/ha-rce-pse', 'origin': 'hacs', 'installs': 392, 'kind': 'other', 'kind_from': 'keyword'},
     'rct_power': {'name': 'RCT Power', 'repo': 'weltenwort/home-assistant-rct-power-integration', 'origin': 'hacs', 'installs': 446, 'kind': 'energy', 'kind_from': 'keyword'},
     'renault': {'name': 'Renault', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 4096, 'kind': 'vehicle', 'kind_from': 'keyword'},
@@ -149,7 +151,7 @@ ROSTER: Final[Dict[str, Dict[str, Any]]] = {
     'sinapsi_alfa': {'name': 'Alfa by Sinapsi', 'repo': 'alexdelprete/ha-sinapsi-alfa', 'origin': 'hacs', 'installs': 125, 'kind': 'other', 'kind_from': 'keyword'},
     'sma': {'name': 'SMA Solar', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 4738, 'kind': 'energy', 'kind_from': 'vocabulary'},
     'sma_ennexos': {'name': 'SMA ennexOS', 'repo': 'shadow578/homeassistant_sma-ennexos', 'origin': 'hacs', 'installs': 69, 'kind': 'energy', 'kind_from': 'keyword'},
-    'smaev': {'name': 'SMA EV Charger', 'repo': 'alengwenus/ha-sma-ev-charger', 'origin': 'hacs', 'installs': 348, 'kind': 'energy', 'kind_from': 'vocabulary'},
+    'smaev': {'name': 'SMA EV Charger', 'repo': 'alengwenus/ha-sma-ev-charger', 'origin': 'hacs', 'installs': 348, 'kind': 'charger', 'kind_from': 'vocabulary'},
     'smart_meter_texas': {'name': 'Smart Meter Texas', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 666, 'kind': 'energy', 'kind_from': 'keyword'},
     'smartevse': {'name': 'SmartEVSE', 'repo': 'dingo35/ha-SmartEVSEv3', 'origin': 'hacs', 'installs': 97, 'kind': 'energy', 'kind_from': 'keyword'},
     'solar_optimizer': {'name': 'Solar Optimizer', 'repo': 'jmcollin78/solar_optimizer', 'origin': 'hacs', 'installs': 282, 'kind': 'energy', 'kind_from': 'keyword'},
@@ -189,16 +191,18 @@ ROSTER: Final[Dict[str, Dict[str, Any]]] = {
     'toyota': {'name': 'Toyota EU community integration', 'repo': 'pytoyoda/ha_toyota', 'origin': 'hacs', 'installs': 1334, 'kind': 'vehicle', 'kind_from': 'vocabulary'},
     'tuya_heat_pump': {'name': 'Tuya Heat Pump', 'repo': 'Korkuttum/tuya_heat_pump', 'origin': 'hacs', 'installs': 87, 'kind': 'other', 'kind_from': 'keyword'},
     'uconnect': {'name': 'Uconnect', 'repo': 'hass-uconnect/hass-uconnect', 'origin': 'hacs', 'installs': 697, 'kind': 'vehicle', 'kind_from': 'vocabulary'},
-    'v2c': {'name': 'V2C', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 773, 'kind': 'energy', 'kind_from': 'vocabulary'},
-    'v2c_cloud': {'name': 'V2C Cloud', 'repo': 'samuelebistoletti/HomeAssistant-V2C-Cloud', 'origin': 'hacs', 'installs': 105, 'kind': 'energy', 'kind_from': 'vocabulary'},
-    'vicare': {'name': 'Viessmann ViCare', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 5930, 'kind': 'energy', 'kind_from': 'vocabulary'},
+    'v2c': {'name': 'V2C', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 773, 'kind': 'charger', 'kind_from': 'vocabulary'},
+    'v2c_cloud': {'name': 'V2C Cloud', 'repo': 'samuelebistoletti/HomeAssistant-V2C-Cloud', 'origin': 'hacs', 'installs': 105, 'kind': 'charger', 'kind_from': 'vocabulary'},
+    'vicare': {'name': 'Viessmann ViCare', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 5930, 'kind': 'energy', 'kind_from': 'keyword'},
     'victron': {'name': 'Victron GX modbus TCP', 'repo': 'sfstar/hass-victron', 'origin': 'hacs', 'installs': 1987, 'kind': 'energy', 'kind_from': 'keyword'},
+    'victron_mk3': {'name': 'Victron MK3', 'repo': 'j9brown/victron-mk3-hass', 'origin': 'hacs', 'installs': 20, 'kind': 'energy', 'kind_from': 'vocabulary'},
     'victron_mqtt': {'name': 'Victron MQTT Integration', 'repo': 'tomer-w/ha-victron-mqtt', 'origin': 'hacs', 'installs': 1634, 'kind': 'vehicle', 'kind_from': 'vocabulary'},
-    'wallbox': {'name': 'Wallbox', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 2668, 'kind': 'energy', 'kind_from': 'vocabulary'},
+    'victron_vebus_mk3': {'name': 'Victron VE.Bus MK3 Control', 'repo': 'usersaynoso/victron-vebus-mk3-control', 'origin': 'hacs', 'installs': 0, 'kind': 'energy', 'kind_from': 'vocabulary'},
+    'wallbox': {'name': 'Wallbox', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 2668, 'kind': 'charger', 'kind_from': 'vocabulary'},
     'waterkotte_heatpump': {'name': 'Waterkotte Heatpump [+2020]', 'repo': 'marq24/ha-waterkotte', 'origin': 'hacs', 'installs': 118, 'kind': 'energy', 'kind_from': 'keyword'},
     'weishaupt_modbus': {'name': 'Weishaupt WBB', 'repo': 'OStrama/weishaupt_modbus', 'origin': 'hacs', 'installs': 176, 'kind': 'energy', 'kind_from': 'keyword'},
     'wibeee': {'name': 'Wibeee (and Mirubee) energy monitor', 'repo': 'luuuis/hass_wibeee', 'origin': 'hacs', 'installs': 91, 'kind': 'energy', 'kind_from': 'keyword'},
-    'zaptec': {'name': 'Zaptec EV charger', 'repo': 'custom-components/zaptec', 'origin': 'hacs', 'installs': 1970, 'kind': 'energy', 'kind_from': 'vocabulary'},
+    'zaptec': {'name': 'Zaptec EV charger', 'repo': 'custom-components/zaptec', 'origin': 'hacs', 'installs': 1970, 'kind': 'charger', 'kind_from': 'vocabulary'},
     'zendure_ha': {'name': 'Zendure Home Assistant Integration', 'repo': 'Zendure/Zendure-HA', 'origin': 'hacs', 'installs': 3882, 'kind': 'energy', 'kind_from': 'vocabulary'},
     'zonneplan_one': {'name': 'Zonneplan', 'repo': 'fsaris/home-assistant-zonneplan-one', 'origin': 'hacs', 'installs': 2002, 'kind': 'energy', 'kind_from': 'vocabulary'},
 }
@@ -216,17 +220,23 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'ev_current_control': {'platform': 'number', 'keys': ('max_evcharge_current',), 'options': ()},
         'solar_power': {'platform': 'sensor', 'keys': ('input_power',), 'options': ()},
     },
+    'anker_solix_official': {
+        'battery_soc': {'platform': 'sensor', 'keys': ('battery_soc',), 'options': ()},
+        'battery_strategy': {'platform': 'select', 'keys': ('operating_mode',), 'options': ('custom_mode', 'dynamic_pricing', 'self_consumption', 'smart_mode', 'socket_overlay_mode', 'third_party_control', 'tou_mode')},
+        'grid_export_power': {'platform': 'sensor', 'keys': ('grid_export_power',), 'options': ()},
+        'grid_import_power': {'platform': 'sensor', 'keys': ('grid_import_power',), 'options': ()},
+        'solar_power': {'platform': 'sensor', 'keys': ('pv_power',), 'options': ()},
+    },
     'audiconnect': {
         'vehicle_range': {'platform': 'sensor', 'keys': ('hybrid_range', 'primary_engine_range', 'range', 'secondary_engine_range'), 'options': ()},
         'vehicle_soc': {'platform': 'sensor', 'keys': ('state_of_charge',), 'options': ()},
     },
     'eg4_web_monitor': {
         'battery_charge_limit': {'platform': 'number', 'keys': ('ac_charge_power',), 'options': ()},
-        'battery_force_charge': {'platform': 'switch', 'keys': ('quick_charge',), 'options': ()},
         'battery_power': {'platform': 'sensor', 'keys': ('battery_power',), 'options': ()},
         'battery_soc': {'platform': 'sensor', 'keys': ('state_of_charge',), 'options': ()},
         'battery_strategy': {'platform': 'select', 'keys': ('operating_mode',), 'options': ('normal', 'standby')},
-        'battery_target_soc': {'platform': 'number', 'keys': ('ac_charge_soc_limit', 'ac_couple_end_soc', 'smart_load_end_soc', 'soc_cutoff', 'system_charge_soc_limit'), 'options': ()},
+        'battery_target_soc': {'platform': 'number', 'keys': ('ac_charge_soc_limit',), 'options': ()},
         'grid_power': {'platform': 'sensor', 'keys': ('grid_power',), 'options': ()},
     },
     'enphase_ev': {
@@ -247,13 +257,15 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
     'growatt_modbus': {
         'battery_power': {'platform': 'sensor', 'keys': ('battery_power',), 'options': ()},
         'battery_soc': {'platform': 'sensor', 'keys': ('battery_soc',), 'options': ()},
+        'grid_export_power': {'platform': 'sensor', 'keys': ('grid_export_power',), 'options': ()},
+        'grid_import_power': {'platform': 'sensor', 'keys': ('grid_import_power',), 'options': ()},
         'grid_power': {'platform': 'sensor', 'keys': ('grid_power',), 'options': ()},
     },
     'growatt_server': {
         'battery_charge_limit': {'platform': 'number', 'keys': ('battery_charge_power_limit',), 'options': ()},
         'battery_discharge_limit': {'platform': 'number', 'keys': ('battery_discharge_power_limit',), 'options': ()},
         'battery_force_charge': {'platform': 'switch', 'keys': ('ac_charge',), 'options': ()},
-        'battery_target_soc': {'platform': 'number', 'keys': ('battery_charge_soc_limit', 'battery_discharge_soc_limit_off_grid', 'battery_discharge_soc_limit_on_grid'), 'options': ()},
+        'battery_target_soc': {'platform': 'number', 'keys': ('battery_charge_soc_limit',), 'options': ()},
     },
     'ha_kia_hyundai': {
         'vehicle_range': {'platform': 'sensor', 'keys': ('ev_remaining_range_value', 'total_remaining_range_value'), 'options': ()},
@@ -269,7 +281,7 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'battery_target_soc': {'platform': 'number', 'keys': ('storage_capacity_control_soc_peak_shaving',), 'options': ()},
         'grid_power': {'platform': 'sensor', 'keys': ('meter_active_power', 'power_meter_active_power'), 'options': ()},
         'solar_power': {'platform': 'sensor', 'keys': ('input_power',), 'options': ()},
-        'system_size_spec': {'platform': 'sensor', 'keys': ('charger_rated_power', 'inverter_rated_power', 'rated_power'), 'options': ()},
+        'system_size_spec': {'platform': 'sensor', 'keys': ('inverter_rated_power', 'rated_power'), 'options': ()},
     },
     'hypontech': {
         'battery_power': {'platform': 'sensor', 'keys': ('battery_power',), 'options': ()},
@@ -301,6 +313,9 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
     'ohme': {
         'ev_charge_mode': {'platform': 'select', 'keys': ('charge_mode',), 'options': ('max_charge', 'paused', 'smart_charge')},
     },
+    'openevse': {
+        'vehicle_range': {'platform': 'sensor', 'keys': ('vehicle_range',), 'options': ()},
+    },
     'peblar': {
         'ev_current_control': {'platform': 'number', 'keys': ('charge_current_limit',), 'options': ()},
     },
@@ -315,9 +330,12 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'grid_power': {'platform': 'sensor', 'keys': ('grid_power',), 'options': ()},
         'solar_power': {'platform': 'sensor', 'keys': ('pv_power',), 'options': ()},
     },
+    'qvantum_modbus': {
+        'battery_strategy': {'platform': 'select', 'keys': ('operation_mode', 'use_operation_mode_sensor'), 'options': ('auto', 'manual', 'only_addition', 'external', 'no', 'yes_aux', 'yes_bt2', 'yes_bt3')},
+    },
     'senec': {
-        'battery_target_soc': {'platform': 'number', 'keys': ('sockets_1_lower_limit', 'sockets_1_time_limit', 'sockets_1_upper_limit', 'sockets_2_lower_limit', 'sockets_2_time_limit', 'sockets_2_upper_limit'), 'options': ()},
-        'system_size_spec': {'platform': 'sensor', 'keys': ('solar_generated_power',), 'options': ()},
+        'grid_export_power': {'platform': 'sensor', 'keys': ('grid_exported_power',), 'options': ()},
+        'grid_import_power': {'platform': 'sensor', 'keys': ('grid_imported_power',), 'options': ()},
     },
     'sessy': {
         'battery_strategy': {'platform': 'select', 'keys': ('battery_strategy',), 'options': ('api', 'eco', 'idle', 'nom', 'roi', 'sessy_connect')},
@@ -325,7 +343,7 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
     'sigen': {
         'battery_charge_limit': {'platform': 'number', 'keys': ('dc_charger_max_charging_power_limit',), 'options': ()},
         'battery_discharge_limit': {'platform': 'number', 'keys': ('dc_charger_max_discharging_power_limit',), 'options': ()},
-        'battery_target_soc': {'platform': 'number', 'keys': ('plant_charge_cut_off_soc', 'plant_discharge_cut_off_soc'), 'options': ()},
+        'battery_target_soc': {'platform': 'number', 'keys': ('plant_charge_cut_off_soc',), 'options': ()},
         'ev_current_control': {'platform': 'number', 'keys': ('ac_charger_output_current',), 'options': ()},
     },
     'sma': {
@@ -333,8 +351,6 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'solar_power': {'platform': 'sensor', 'keys': ('pv_power',), 'options': ()},
     },
     'smaev': {
-        'battery_charge_limit': {'platform': 'number', 'keys': ('charge_power_limit',), 'options': ()},
-        'battery_strategy': {'platform': 'select', 'keys': ('operating_mode_of_charge_session',), 'options': ('boost_charging', 'charge_stop', 'optimized_charging', 'setpoint_charging')},
         'ev_current_control': {'platform': 'number', 'keys': ('charge_current_limit',), 'options': ()},
     },
     'solaredge': {
@@ -347,7 +363,7 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'solar_power': {'platform': 'sensor', 'keys': ('pv_power',), 'options': ()},
     },
     'solis_cloud_control': {
-        'battery_target_soc': {'platform': 'number', 'keys': ('battery_force_charge_soc', 'battery_max_charge_soc', 'battery_over_discharge_soc'), 'options': ()},
+        'battery_target_soc': {'platform': 'number', 'keys': ('battery_force_charge_soc', 'battery_max_charge_soc'), 'options': ()},
     },
     'solis_cloud_monitoring': {
         'battery_power': {'platform': 'sensor', 'keys': ('battery_power',), 'options': ()},
@@ -355,10 +371,10 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'grid_power': {'platform': 'sensor', 'keys': ('grid_active_power',), 'options': ()},
     },
     'sungrow': {
-        'battery_target_soc': {'platform': 'number', 'keys': ('forced_charging_target_soc_1', 'forced_charging_target_soc_2', 'soc_lower_limit', 'soc_upper_limit'), 'options': ()},
+        'battery_target_soc': {'platform': 'number', 'keys': ('forced_charging_target_soc_1', 'forced_charging_target_soc_2', 'soc_upper_limit'), 'options': ()},
     },
     'sunsynk': {
-        'battery_target_soc': {'platform': 'number', 'keys': ('discharge_min_soc', 'target_soc'), 'options': ()},
+        'battery_target_soc': {'platform': 'number', 'keys': ('target_soc',), 'options': ()},
     },
     'tibber': {
         'battery_capacity_spec': {'platform': 'sensor', 'keys': ('storage_rated_capacity',), 'options': ()},
@@ -372,21 +388,23 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'vehicle_soc': {'platform': 'sensor', 'keys': ('battery_state_of_charge', 'state_of_charge'), 'options': ()},
     },
     'v2c': {
-        'battery_power': {'platform': 'sensor', 'keys': ('battery_power',), 'options': ()},
         'ev_charge_mode': {'platform': 'select', 'keys': ('charge_mode',), 'options': ('mixed', 'monophasic', 'threephasic')},
     },
     'v2c_cloud': {
-        'battery_power': {'platform': 'sensor', 'keys': ('battery_power',), 'options': ()},
         'ev_charge_mode': {'platform': 'select', 'keys': ('charge_mode',), 'options': ()},
     },
-    'vicare': {
-        'battery_strategy': {'platform': 'select', 'keys': ('dhw_operating_mode',), 'options': ('efficient', 'efficient_with_min_comfort', 'off')},
+    'victron_mk3': {
+        'battery_power': {'platform': 'sensor', 'keys': ('battery_power',), 'options': ()},
     },
     'victron_mqtt': {
         'vehicle_soc': {'platform': 'sensor', 'keys': ('ev_soc',), 'options': ()},
     },
+    'victron_vebus_mk3': {
+        'battery_power': {'platform': 'sensor', 'keys': ('battery_charge_discharge_power', 'battery_power'), 'options': ()},
+        'battery_soc': {'platform': 'sensor', 'keys': ('battery_state_of_charge',), 'options': ()},
+    },
     'wallbox': {
-        'battery_soc': {'platform': 'sensor', 'keys': ('state_of_charge',), 'options': ()},
+        'vehicle_soc': {'platform': 'sensor', 'keys': ('state_of_charge',), 'options': ()},
     },
     'zaptec': {
         'ev_current_control': {'platform': 'number', 'keys': ('available_current', 'charger_max_current'), 'options': ()},

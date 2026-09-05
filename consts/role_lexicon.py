@@ -52,16 +52,44 @@ ROLE_RULES: Final[Dict[str, Dict[str, Any]]] = {
     },
     "battery_target_soc": {
         "platform": "number",
-        "any": (r"(target|charge|end).*soc", r"soc.*(limit|target)",
-                r"minimum_soc", r"soc_cutoff", r"capacity_control"),
-        "not": (r"power", r"current", r"voltage"),
+        # ``soc`` must be a whole SEGMENT. Unanchored, it matched SENEC's
+        # ``sockets_1_upper_limit`` and ``sockets_1_time_limit`` — the
+        # letters s-o-c inside "sockets" — and offered a switchable wall
+        # socket's schedule as the battery's charge target.
+        "any": (r"(target|charge|end).*(?:^|_)soc(?:_|$)",
+                r"(?:^|_)soc(?:_|$).*(limit|target)",
+                r"capacity_control"),
+        # (#810, @Azlinon on real EG4 hardware) A declared key is not
+        # automatically a key SEM may WRITE. He named three that look like a
+        # target SOC and are not: ``system_charge_soc_limit`` is the global
+        # ceiling for the battery bank ("recommended 101 for EG4 batteries",
+        # not a per-cycle target), ``soc_cutoff`` belongs to the on/off-grid
+        # transition, and ``ac_couple_end_soc`` configures an AC-coupled
+        # grid-tie inverter. Proposing any of them behind a one-click button
+        # would hand a user a register the vendor says to leave alone.
+        "not": (r"power", r"current", r"voltage", r"^system_", r"cutoff",
+                r"couple", r"backup", r"global", r"off_?grid", r"eps",
+                # a smart-load threshold decides when a SECOND load runs,
+                # not how full the pack should be
+                r"smart_load", r"generator", r"grid_peak",
+                # A protection FLOOR is not a target, and confusing the two
+                # is not a near miss — it inverts the knob. Write "charge to
+                # 80" into "never discharge below" and the pack stops
+                # discharging at 80 %, which is the opposite of the request.
+                # Growatt, Sigen, Solis, Sungrow and Sunsynk each declare
+                # both halves under names one word apart.
+                r"(?:^|_)(min|minimum|lower)", r"discharg"),
     },
     "battery_strategy": {
         "platform": "select",
         "any": (r"working_mode", r"work_mode", r"operating_mode",
                 r"operation_mode", r"battery_strategy", r"energy_pattern",
                 r"ess_mode", r"power_strategy"),
-        "not": (r"grid_code", r"phase"),
+        # Viessmann's ``dhw_operating_mode`` is domestic hot water: a heat
+        # pump's operating mode reads exactly like a battery's and drives
+        # something else entirely.
+        "not": (r"grid_code", r"phase", r"dhw", r"water", r"heating",
+                r"room", r"circuit", r"holiday", r"comfort", r"ventilat"),
     },
     "battery_force_charge": {
         "platform": "switch",
@@ -105,8 +133,16 @@ ROLE_RULES: Final[Dict[str, Dict[str, Any]]] = {
     },
     "system_size_spec": {
         "platform": "sensor",
-        "any": (r"^(rated|nominal|maximum)_(active_)?power$", r"rated_power"),
-        "not": (r"battery", r"today"),
+        # ``rated_power`` unanchored is inside "solar_gene|rated_power" —
+        # SENEC's live production sensor was being offered as the system's
+        # nameplate size. Same class as the "sockets"/"soc" collision above.
+        "any": (r"^(rated|nominal|maximum)_(active_)?power$",
+                r"(?:^|_)rated_power"),
+        # Huawei declares ``charger_rated_power`` beside
+        # ``inverter_rated_power``: the optional EV charger's nameplate, not
+        # the system's. Picked first by sort order, it would have reported a
+        # 7 kW house on a 10 kW inverter.
+        "not": (r"battery", r"today", r"generated", r"charger"),
     },
 }
 
@@ -129,6 +165,28 @@ READ_ROLE_RULES: Final[Dict[str, Dict[str, Any]]] = {
                 r"grid_exchange", r"^meter_active_power$", r"^grid_net_power$"),
         "not": (r"today", r"daily", r"total", r"phase", r"l1", r"l2", r"l3",
                 r"import_energy", r"export_energy"),
+    },
+    # Some brands never publish a combined grid sensor — they publish the
+    # two directions as separate positive magnitudes, which is why SEM
+    # carries IMPORT_PATTERNS / EXPORT_PATTERNS and a split-pair reader at
+    # all (pattern E, Growatt). Those lists are entity-id guesses; these are
+    # the same question asked of the integration's own declared names.
+    # Anker's official integration is the case in hand (#869): it declares
+    # ``grid_import_power`` and ``grid_export_power`` and no combined one.
+    "grid_import_power": {
+        "platform": "sensor",
+        "any": (r"^grid_import_power$", r"^import_from_grid", r"^import_power$",
+                r"^grid_imported_power$", r"^from_grid_power$",
+                r"^consumption_from_grid", r"^pac_to_user"),
+        "not": (r"energy", r"today", r"daily", r"total", r"month", r"year",
+                r"cumulative", r"phase", r"l1", r"l2", r"l3"),
+    },
+    "grid_export_power": {
+        "platform": "sensor",
+        "any": (r"^grid_export_power$", r"^export_to_grid", r"^export_power$",
+                r"^grid_exported_power$", r"^to_grid_power$", r"^pac_to_grid"),
+        "not": (r"energy", r"today", r"daily", r"total", r"month", r"year",
+                r"cumulative", r"phase", r"l1", r"l2", r"l3", r"limit"),
     },
     "battery_power": {
         "platform": "sensor",
@@ -160,7 +218,10 @@ VEHICLE_ROLE_RULES: Final[Dict[str, Dict[str, Any]]] = {
         "platform": "sensor",
         "any": (r"(ev_)?range$", r"remaining_range", r"electric_range",
                 r"range_(electric|total)"),
-        "not": (r"fuel", r"gas"),
+        # ``added_range`` is what THIS session put in, not what the car has
+        # left — a charger's odometer, not its fuel gauge. SEM asks the
+        # second question and would read the first as an almost-empty car.
+        "not": (r"fuel", r"gas", r"added", r"session", r"charged"),
     },
 }
 
@@ -187,6 +248,24 @@ VEHICLE_MARKERS: Final[tuple] = (
 )
 
 #: Not an energy system, whatever else it declares.
+#: What says "this box charges a CAR" rather than "this box runs a house".
+#: The distinction matters because both declare ``state_of_charge`` and
+#: ``battery_power``, and on a charger those belong to the vehicle — feeding
+#: them into SEM's house reads would corrupt the energy balance every cycle.
+CHARGER_MARKERS: Final[tuple] = (
+    "evse", "charge_point", "chargepoint", "charging_cable", "cable_",
+    "connector_", "charging_session", "session_energy", "rfid", "authoriz",
+    "charger_max_current", "available_current", "charge_current_limit",
+)
+
+#: …and what says the same box ALSO runs the house, so it is not merely a
+#: charger. Anker Solix declares ``max_evcharge_current`` next to a real PV
+#: input and a real pack: it is a generator with a socket, not a wallbox.
+GENERATOR_MARKERS: Final[tuple] = (
+    "pv_power", "solar_power", "input_power", "inverter", "photovolt",
+    "storage_", "grid_active_power", "meter_active_power",
+)
+
 APPLIANCE_MARKERS: Final[tuple] = (
     "feeder", "litter", "vacuum", "mower", "washer", "dryer", "dishwasher",
     "oven", "kettle", "humidifier", "purifier", "camera", "cadence",
@@ -210,7 +289,18 @@ SEM_CONFIG_KEY_FOR_ROLE: Final[Dict[str, str]] = {
     "grid_power": "grid_power_sensor",
     "battery_power": "battery_power_sensor",
     "battery_soc": "battery_soc_sensor",
+    # the split pair — SEM's own manual override keys, treated as explicit
+    # intent by the reader (no sign autocorrect), which is exactly what a
+    # confirmed proposal is
+    "grid_import_power": "grid_import_power_entity",
+    "grid_export_power": "grid_export_power_entity",
 }
+
+#: Roles that only mean anything TOGETHER. A brand that declares one half of
+#: the split grid pair and not the other is describing something else — a
+#: single-direction meter reading, a load. SEM's own split reader audits the
+#: pair for exclusivity (#661); the roster refuses to propose half of it.
+PAIRED_ROLES: Final[tuple] = (("grid_import_power", "grid_export_power"),)
 
 #: Roles that live INSIDE a charger's own config, not at the top level.
 #: Offering a one-click accept for these would write a charger's entity into

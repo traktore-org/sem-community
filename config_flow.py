@@ -527,9 +527,23 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             solar = (user_input.get("solar_power_sensor") or "").strip()
             grid = (user_input.get("grid_import_power_sensor") or "").strip()
             soc = (user_input.get("battery_soc_sensor") or "").strip()
+            # (#915) A combined grid sensor is not something every brand
+            # HAS. Growatt (pattern E), Anker's official integration and
+            # Senec publish import and export as two positive sensors and
+            # nothing else — demanding a combined one would stop exactly the
+            # installs this step exists to rescue. Either answer is enough,
+            # and the pair must be whole: half of it reads as a meter that
+            # only ever imports.
+            split_in = (user_input.get("grid_import_power_entity") or "").strip()
+            split_out = (user_input.get("grid_export_power_entity") or "").strip()
             if not solar:
                 errors["solar_power_sensor"] = "required"
-            if not grid:
+            if split_in or split_out:
+                if not split_in:
+                    errors["grid_import_power_entity"] = "required"
+                if not split_out:
+                    errors["grid_export_power_entity"] = "required"
+            elif not grid:
                 errors["grid_import_power_sensor"] = "required"
             if not errors:
                 battery = (user_input.get("battery_power_sensor") or "").strip()
@@ -558,6 +572,12 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     # install from a dashboard-derived one at a glance.
                     "sources_from": "manual",
                 })
+                if split_in and split_out:
+                    # The keys SensorReader reads for a declared pair, on
+                    # BOTH of its paths since #915 — this install is on the
+                    # legacy one by definition.
+                    self._data["grid_import_power_entity"] = split_in
+                    self._data["grid_export_power_entity"] = split_out
                 self._data["observer_mode"] = user_input.get(
                     "observer_mode", DEFAULT_OBSERVER_MODE)
                 self._data["vacation_mode"] = False
@@ -571,6 +591,8 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         found_lines = []
         for key, label in (("solar_power_sensor", "Solar"),
                            ("grid_import_power_sensor", "Grid"),
+                           ("grid_import_power_entity", "Grid import"),
+                           ("grid_export_power_entity", "Grid export"),
                            ("battery_power_sensor", "Battery"),
                            ("battery_soc_sensor", "Battery charge")):
             hit = proposals.get(key)
@@ -588,9 +610,23 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor",
                                                   device_class="power")),
-                vol.Required(
+                vol.Optional(
                     "grid_import_power_sensor",
                     description=_sug("grid_import_power_sensor"),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor",
+                                                  device_class="power")),
+                # …or the two-sided pair, for meters that have no combined
+                # reading. Both positive; SEM computes export − import.
+                vol.Optional(
+                    "grid_import_power_entity",
+                    description=_sug("grid_import_power_entity"),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor",
+                                                  device_class="power")),
+                vol.Optional(
+                    "grid_export_power_entity",
+                    description=_sug("grid_export_power_entity"),
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor",
                                                   device_class="power")),

@@ -89,14 +89,18 @@
           "grid_import_power_sensor": "Grid power",
           "battery_power_sensor": "Battery power (optional)",
           "observer_mode": "Observer mode (watch only, command nothing)",
-          "battery_soc_sensor": "Battery charge % (optional)"
+          "battery_soc_sensor": "Battery charge % (optional)",
+          "grid_import_power_entity": "Grid import power (optional)",
+          "grid_export_power_entity": "Grid export power (optional)"
         },
         "data_description": {
           "solar_power_sensor": "Live production in watts — not a daily total.",
           "grid_import_power_sensor": "Live import/export in watts. One signed sensor is fine; SEM works out which direction is which by watching it.",
           "battery_power_sensor": "Live charge/discharge in watts. Leave empty if you have no home battery.",
           "observer_mode": "Recommended for the first days: SEM shows every decision it would make and sends nothing to your hardware.",
-          "battery_soc_sensor": "State of charge in percent — SEM's four battery zones read it."
+          "battery_soc_sensor": "State of charge in percent — SEM's four battery zones read it.",
+          "grid_import_power_entity": "Only if your meter has no single signed sensor: the import side, always positive. Fill both of these or neither.",
+          "grid_export_power_entity": "The export side, always positive. SEM computes export minus import, so no direction has to be guessed."
         }
       }
     },

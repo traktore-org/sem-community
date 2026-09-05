@@ -1071,24 +1071,39 @@ def propose_roles_from_roster(dev_entities, domain: str) -> Dict[str, Any]:
     for role, body in vocab.items():
         keys = tuple(body.get("keys", ()))
         want_domain = str(body.get("platform") or "")
+        # (#810) Collect EVERY match, then choose deterministically. Taking
+        # the first entity the registry happened to yield meant that a brand
+        # declaring four target-SOC keys got whichever one iteration order
+        # produced — a different answer on two boxes with the same hardware.
+        # The roster's key order is stable (sorted at generation), so it is
+        # the tie-break, and the runners-up ride along instead of vanishing.
+        matches = []
         for entry in dev_entities:
             eid = str(getattr(entry, "entity_id", ""))
             if want_domain and not eid.startswith(f"{want_domain}."):
                 continue
             tk = str(getattr(entry, "translation_key", "") or "")
             uid = str(getattr(entry, "unique_id", "") or "")
-            hit = next((k for k in keys if tk == k or uid.endswith(k)), None)
-            if hit:
-                out[role] = {"entity": eid, "matched_key": hit,
-                             "source": "roster",
-                             # (#915) What the user can DO about it. A
-                             # proposal that says "unconfirmed" and offers no
-                             # way to confirm is a chore, not an offer:
-                             # ``config_key`` is the option the card writes
-                             # with one click, and its absence says why there
-                             # is no button.
-                             **_role_action(role)}
-                break
+            for rank, k in enumerate(keys):
+                if tk == k or uid.endswith(k):
+                    matches.append((rank, eid, k))
+                    break
+        if not matches:
+            continue
+        matches.sort()
+        rank, eid, hit = matches[0]
+        out[role] = {"entity": eid, "matched_key": hit,
+                     "source": "roster",
+                     # (#915) What the user can DO about it. A proposal that
+                     # says "unconfirmed" and offers no way to confirm is a
+                     # chore, not an offer: ``config_key`` is the option the
+                     # card writes with one click, and its absence says why
+                     # there is no button.
+                     **_role_action(role)}
+        if len(matches) > 1:
+            out[role]["alternatives"] = [
+                {"entity": e, "matched_key": k} for _, e, k in matches[1:]
+            ]
     return out
 
 
@@ -1211,6 +1226,10 @@ _SOURCE_ROLE_TO_KEY = {
     # zones that decide every battery behaviour have nothing to read, and a
     # manual install would come up with a working pack and no strategy.
     "battery_soc": "battery_soc_sensor",
+    # (#915) …and the two-sided answer, for the brands that give no other:
+    # the step accepts either a combined grid sensor or this pair.
+    "grid_import_power": "grid_import_power_entity",
+    "grid_export_power": "grid_export_power_entity",
 }
 
 

@@ -49,6 +49,12 @@ Two things worth knowing:
 - **One signed grid sensor is fine.** You do not need separate import and
   export entities, and you do not need to tell SEM which direction is
   positive — it works that out by watching the value.
+- **…and if your meter has no signed sensor, use the pair.** Growatt, Senec
+  and Anker's official integration publish grid import and grid export as two
+  always-positive sensors and no combined one. Fill **Grid import power** and
+  **Grid export power** instead — both of them, or neither — and leave *Grid
+  power* empty. SEM computes export minus import, so there is no direction
+  left to guess.
 
 Setting up the Energy Dashboard later does no harm; SEM keeps using what you
 chose. If it recognises nothing at all, every field is still a normal entity

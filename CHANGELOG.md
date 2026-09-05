@@ -97,6 +97,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   download now carries the detection report too, so a report about detection
   arrives with the artefact that explains it.
 
+  **What SEM will not offer, decided by the people who own the hardware.**
+  @Azlinon read the EG4 candidates on his own inverter and rejected four of
+  the five: a global bank ceiling, an on/off-grid cutoff, an AC-coupling
+  register and a smart-load threshold. All four are gone, and the one that
+  survives is the SOC his AC-charge mode actually charges to. Sweeping the
+  rest of the roster the same way found the shape repeated: a **protection
+  floor** offered as a charge target (writing "charge to 80" into "never
+  discharge below" inverts the knob rather than missing it), a **wall
+  socket's** schedule read as a battery target because the letters s-o-c sit
+  inside "sockets", a live production sensor read as the system's nameplate
+  because `rated_power` sits inside "solar_gene*rated_power*", a hot-water
+  mode offered as a battery strategy, and — the one that would have hurt —
+  a **car's** state of charge and charge rate offered as the HOUSE battery's,
+  which would have fed the energy balance a foreign number every ten seconds.
+  A charger now contributes its own controls and what it knows about the
+  vehicle, and nothing about a house it does not have. When a brand declares
+  several candidates for one role, SEM picks the same one on every box
+  instead of whichever the registry happened to yield first, and carries the
+  runners-up. And a **fork is the same hardware**: `anker_solix_official`
+  reports zero installs and describes itself as "local Modbus TCP", so both
+  candidate gates missed it while @coppe218 was running it — a domain that
+  extends an accepted one is now mined whatever analytics says about it.
+
+  **A meter with no combined sensor can finish the install too.** Growatt,
+  Senec and Anker's official integration publish grid import and grid export
+  as two always-positive sensors and no signed one — SEM has read that shape
+  from the Energy Dashboard for years, but the new no-dashboard step demanded
+  a combined sensor those brands do not have, and the reader it hands the
+  install to could not have used the pair anyway. Both halves now: the step
+  accepts either answer (both sides of the pair or neither — half of one is a
+  meter that only ever imports), and SEM's own reader honours the pair on
+  that path, computing export minus import with no direction left to guess.
+
 # [2.1.0-beta.7] — 03.09.2026
 
 - 🛡️ **A flat value from a live integration is not a frozen sensor** (#912).

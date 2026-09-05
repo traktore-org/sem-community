@@ -3262,7 +3262,33 @@ class SensorReader:
                 )
 
         # Grid power (hardware convention: negative=import, positive=export)
-        if self.config.grid_power_sensor:
+        #
+        # (#915) The SPLIT PAIR first. Some brands cannot give any other
+        # answer — Growatt (pattern E), Anker's official integration and
+        # Senec publish import and export as separate positive magnitudes
+        # and no combined sensor at all. The Energy-Dashboard reader has
+        # honoured these two keys since #461; this path did not, so an
+        # install that never had a dashboard could be offered them by the
+        # config flow and the Detected-hardware card and then read a flat
+        # 0 W grid forever. Same semantics as there: grid = export − import,
+        # both sides positive, and the convention is fixed BY DECLARATION so
+        # no sign detection is needed (the solar voter computes the same
+        # sign and therefore never flips it).
+        manual_import = self._raw_config.get("grid_import_power_entity")
+        manual_export = self._raw_config.get("grid_export_power_entity")
+        if manual_import or manual_export:
+            import_w = (self._read_sensor(manual_import, "grid_import")
+                        if manual_import else 0.0)
+            export_w = (self._read_sensor(manual_export, "grid_export")
+                        if manual_export else 0.0)
+            readings.grid_power = export_w - import_w
+            self._grid_sign_detected = True
+            if manual_import and manual_export:
+                self._audit_split_pair(
+                    "grid", "Grid (manual import/export override)",
+                    import_w, manual_import, export_w, manual_export,
+                )
+        elif self.config.grid_power_sensor:
             readings.grid_power = self._read_sensor(
                 self.config.grid_power_sensor, "grid"
             )

@@ -127,6 +127,22 @@ async function deleteSem() {
             await page.screenshot({ path: `${OUT}/915_B_integrations_page.png` });
         } catch { /* evidence only */ }
 
+        // A meter with no combined sensor has to be able to finish too
+        // (Growatt, Senec, Anker official publish two positive sensors and
+        // no signed one). The pair is offered on the same step.
+        const fields = (step.data_schema || []).map((f) => f.name);
+        L.check('B2c the split pair is offered for meters with no signed sensor',
+                fields.includes('grid_import_power_entity')
+                && fields.includes('grid_export_power_entity'),
+                fields.join(','));
+        const halfPair = await flow({
+            solar_power_sensor: 'sensor.inverter_eingangsleistung',
+            grid_import_power_entity: 'sensor.power_meter_wirkleistung',
+        }, step.flow_id);
+        L.check('B2d half a split pair is refused',
+                !!(halfPair.errors || {}).grid_export_power_entity,
+                JSON.stringify(halfPair.errors || {}));
+
         // ── B3 — submit what it proposed
         const next = await flow({
             solar_power_sensor: 'sensor.inverter_eingangsleistung',

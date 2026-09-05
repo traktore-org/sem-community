@@ -92,15 +92,15 @@ class TestItNamesTheGap:
 class TestItProposesOnlyWhatTheRegistryHas:
     def test_a_declared_key_present_on_this_device_is_proposed(self):
         ents = [_ent("number.eg4_charge_soc", "eg4_web_monitor",
-                     translation_key="system_charge_soc_limit")]
+                     translation_key="ac_charge_soc_limit")]
         out = hd.propose_roles_from_roster(ents, "eg4_web_monitor")
         assert out["battery_target_soc"]["entity"] == "number.eg4_charge_soc"
-        assert out["battery_target_soc"]["matched_key"] == "system_charge_soc_limit"
+        assert out["battery_target_soc"]["matched_key"] == "ac_charge_soc_limit"
         assert out["battery_target_soc"]["action"] == "set_option"
 
     def test_a_unique_id_suffix_counts_too(self):
         ents = [_ent("number.x", "eg4_web_monitor",
-                     unique_id="abc123_system_charge_soc_limit")]
+                     unique_id="abc123_ac_charge_soc_limit")]
         assert "battery_target_soc" in hd.propose_roles_from_roster(
             ents, "eg4_web_monitor")
 
@@ -128,6 +128,144 @@ class TestItProposesOnlyWhatTheRegistryHas:
         ents = [_ent("number.system_charge_soc_limit", "eg4_web_monitor",
                      translation_key="brightness")]
         assert hd.propose_roles_from_roster(ents, "eg4_web_monitor") == {}
+
+
+@pytest.mark.unit
+class TestTheChoiceIsDeterministic:
+    """(#810) A brand may declare several keys for one role. Which one SEM
+    offers must not depend on the order the entity registry happened to
+    yield — two boxes with identical hardware would then get different
+    answers, and only one of them could be right."""
+
+    @staticmethod
+    def _a_multi_candidate_role():
+        """Any shipped domain that declares two keys for one role. Named
+        dynamically so a roster refresh that narrows one brand does not turn
+        this guard off — it is the BEHAVIOUR under test, not the brand."""
+        from custom_components.solar_energy_management.consts import (
+            integration_roster as r)
+        for dom in sorted(r.ROLE_VOCAB):
+            for role, body in sorted(r.ROLE_VOCAB[dom].items()):
+                if len(body["keys"]) > 1:
+                    return dom, role, body["platform"]
+        pytest.skip("no multi-candidate role in the shipped roster")
+
+    def test_the_roster_key_order_decides_not_the_registry_order(self):
+        dom, role, plat = self._a_multi_candidate_role()
+        keys = hd.roster_role_keys(dom, role)
+        first, second = keys[0], keys[1]
+        ents = [_ent(f"{plat}.b", dom, translation_key=second),
+                _ent(f"{plat}.a", dom, translation_key=first)]
+        forwards = hd.propose_roles_from_roster(ents, dom)
+        backwards = hd.propose_roles_from_roster(list(reversed(ents)), dom)
+        assert forwards[role]["matched_key"] == first
+        assert forwards == backwards
+
+    def test_the_runners_up_ride_along_instead_of_vanishing(self):
+        dom, role, plat = self._a_multi_candidate_role()
+        keys = hd.roster_role_keys(dom, role)
+        ents = [_ent(f"{plat}.k{i}", dom, translation_key=k)
+                for i, k in enumerate(keys)]
+        alts = hd.propose_roles_from_roster(ents, dom)[role].get(
+            "alternatives") or []
+        assert [a["matched_key"] for a in alts] == list(keys[1:])
+        assert all(a["entity"].startswith(f"{plat}.k") for a in alts)
+
+    def test_a_single_match_carries_no_alternatives_key(self):
+        ents = [_ent("number.only", "eg4_web_monitor",
+                     translation_key="ac_charge_soc_limit")]
+        out = hd.propose_roles_from_roster(ents, "eg4_web_monitor")
+        assert "alternatives" not in out["battery_target_soc"]
+
+
+@pytest.mark.unit
+class TestSemDoesNotOfferToWriteTheseRegisters:
+    """(#810, @Azlinon on real EG4 hardware) Every one of these is a real
+    declared key that reads like a target SOC and is not one. A declared key
+    is not automatically a key SEM may WRITE — the lexicon is where that
+    judgement lives, so it is pinned by the words of the person who owns the
+    hardware, not by what the crawl happened to return."""
+
+    REJECTED = (
+        # "the maximum the system is ALLOWED to charge the batteries ... a
+        # global thing that SEM really shouldn't be touching"
+        "system_charge_soc_limit",
+        # "I assume this refers to the ongrid/offgrid values"
+        "soc_cutoff",
+        # "connecting grid-tie inverters to a compatible hybrid inverter,
+        # definitely not what you want"
+        "ac_couple_end_soc",
+        "ac_couple_start_soc",
+        # "disconnecting a controlled LOAD at a specified SoC" — a second
+        # load's threshold, not how full the pack should be
+        "smart_load_end_soc",
+        # peak shaving is a grid-draw ceiling wearing an SOC's clothes
+        "grid_peak_shaving_soc",
+        # off-grid reserve: what the house falls back on, not a target
+        "off_grid_discharge_soc",
+        "eps_soc_limit",
+    )
+
+    @pytest.mark.parametrize("key", REJECTED)
+    def test_it_is_not_a_target_soc(self, key):
+        from custom_components.solar_energy_management.consts import (
+            role_lexicon as lex)
+        assert lex.role_for("number", key) != "battery_target_soc"
+
+    def test_the_real_ones_still_match(self):
+        from custom_components.solar_energy_management.consts import (
+            role_lexicon as lex)
+        for key in ("ac_charge_soc_limit", "battery_charge_soc_limit",
+                    "storage_capacity_control_soc_peak_shaving",
+                    "soc_upper_limit"):
+            assert lex.role_for("number", key) == "battery_target_soc", key
+
+    @pytest.mark.parametrize("key,role", [
+        # s-o-c inside "sockets": SENEC's switchable wall sockets were being
+        # offered as the battery's charge target, schedule and all.
+        ("sockets_1_upper_limit", "battery_target_soc"),
+        ("sockets_1_time_limit", "battery_target_soc"),
+        # "solar_gene|rated_power": a live production sensor read as the
+        # system's nameplate size.
+        ("solar_generated_power", "system_size_spec"),
+    ])
+    def test_a_substring_is_not_a_word(self, key, role):
+        """Both of these shipped in the first roster. A key is a sequence of
+        SEGMENTS, and a rule that forgets it matches the letters inside an
+        unrelated word — silently, and only on the brands that own that
+        word."""
+        from custom_components.solar_energy_management.consts import (
+            role_lexicon as lex)
+        plat = "sensor" if role.endswith("_spec") else "number"
+        assert lex.role_for(plat, key) != role
+
+    @pytest.mark.parametrize("key", [
+        "soc_lower_limit", "discharge_min_soc", "battery_over_discharge_soc",
+        "battery_discharge_soc_limit_on_grid", "plant_discharge_cut_off_soc",
+    ])
+    def test_a_protection_floor_is_never_a_target(self, key):
+        """Writing "charge to 80" into "never discharge below" does not miss
+        the mark, it inverts the knob: the pack stops discharging at 80 %.
+        Five brands declare both halves under names one word apart."""
+        from custom_components.solar_energy_management.consts import (
+            role_lexicon as lex)
+        assert lex.role_for("number", key) != "battery_target_soc"
+
+    def test_hot_water_is_not_a_battery_strategy(self):
+        from custom_components.solar_energy_management.consts import (
+            role_lexicon as lex)
+        assert lex.role_for("select", "dhw_operating_mode") != "battery_strategy"
+        assert lex.role_for("select", "operating_mode") == "battery_strategy"
+
+    def test_no_rejected_key_survives_in_the_shipped_roster(self):
+        from custom_components.solar_energy_management.consts import (
+            integration_roster as roster)
+        offered = {k
+                   for vocab in roster.ROLE_VOCAB.values()
+                   for role, body in vocab.items()
+                   if role == "battery_target_soc"
+                   for k in body["keys"]}
+        assert not offered & set(self.REJECTED)
 
 
 @pytest.mark.unit
@@ -359,7 +497,8 @@ class TestTheSourcesStepWritesKeysTheReaderConsumes:
                             and call.args
                             and isinstance(call.args[0], ast.Dict)):
                         out = {}
-                        for k, v in zip(call.args[0].keys, call.args[0].values):
+                        for k, v in zip(call.args[0].keys, call.args[0].values,
+                                              strict=False):
                             if isinstance(k, ast.Constant):
                                 out[k.value] = (
                                     v.value if isinstance(v, ast.Constant)
@@ -390,6 +529,53 @@ class TestTheSourcesStepWritesKeysTheReaderConsumes:
         for key in ("solar_power_sensor", "grid_import_power_sensor",
                     "has_solar", "has_grid"):
             assert key in data, key
+
+    def test_a_split_only_meter_can_finish_the_install(self):
+        """(#915) Growatt (pattern E), Anker's official integration and
+        Senec publish import and export as two positive sensors and no
+        combined one. Demanding a combined sensor would stop exactly the
+        installs this step exists to rescue — and the two keys it writes
+        instead have to be keys the LEGACY reader consumes, which until now
+        only the Energy-Dashboard reader did."""
+        from custom_components.solar_energy_management.coordinator.sensor_reader import (
+            SensorReader,
+        )
+        cfg = {"solar_production_sensor": "sensor.pv",
+               "solar_power_sensor": "sensor.pv",
+               "grid_import_power_entity": "sensor.imp",
+               "grid_export_power_entity": "sensor.exp"}
+        reader = SensorReader(MagicMock(), cfg)
+        assert reader._energy_dashboard_config is None, (
+            "premise: this install has no Energy Dashboard")
+
+        reads = {"sensor.pv": 3000.0, "sensor.imp": 200.0, "sensor.exp": 0.0}
+        reader._read_sensor = lambda eid, *a, **k: reads.get(eid, 0.0)
+        readings = reader._read_from_legacy_config()
+        assert readings.grid_power == -200.0, (
+            "export − import, in SEM convention: importing 200 W reads −200")
+
+        reads["sensor.imp"], reads["sensor.exp"] = 0.0, 1500.0
+        assert reader._read_from_legacy_config().grid_power == 1500.0
+
+    def test_the_step_still_demands_one_of_the_two_grid_answers(self):
+        """Half a split pair is a meter that only ever imports. The step
+        accepts a combined sensor OR both halves, never one half."""
+        import ast
+        import pathlib as _p
+        src = (_p.Path(__file__).resolve().parent.parent
+               / "config_flow.py").read_text()
+        tree = ast.parse(src)
+        fn = next(n for n in ast.walk(tree)
+                  if isinstance(n, ast.AsyncFunctionDef)
+                  and n.name == "async_step_sources")
+        marked = {n.slice.value for n in ast.walk(fn)
+                  if isinstance(n, ast.Subscript)
+                  and isinstance(n.slice, ast.Constant)
+                  and isinstance(getattr(n, "value", None), ast.Name)
+                  and n.value.id == "errors"
+                  and isinstance(n.slice.value, str)}
+        assert {"grid_import_power_entity", "grid_export_power_entity",
+                "grid_import_power_sensor"} <= marked
 
 
 @pytest.mark.unit
@@ -491,7 +677,7 @@ class TestAProposalCanActuallyBeAccepted:
 
     def test_a_settable_role_names_the_option_the_card_writes(self):
         ents = [_ent("number.eg4_soc", "eg4_web_monitor",
-                     translation_key="system_charge_soc_limit")]
+                     translation_key="ac_charge_soc_limit")]
         p = self._roles(ents, "eg4_web_monitor")["battery_target_soc"]
         assert p["action"] == "set_option"
         assert p["config_key"] == "battery_target_soc_entity"

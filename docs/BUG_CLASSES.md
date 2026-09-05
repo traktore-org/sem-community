@@ -2513,3 +2513,31 @@ from it. **Guard:**
 `tests/test_915_roster_at_runtime.py::TestTheSourcesStepWritesKeysTheReaderConsumes`.
 **Sweep question:** for every config key a flow writes, which code reads it — and is there a test
 that starts at the writer and ends at the reader? Refs #915 #274.
+
+### 67. A substring is not a word — GUARDED
+**Symptom:** SEM offered SENEC's switchable **wall sockets** as the house battery's charge target
+(`sockets_1_upper_limit`, and its `sockets_1_time_limit` schedule with it), and SENEC's live
+production sensor as the system's nameplate size. **Root shape:** a matching rule written as
+`soc.*(limit|target)` matches the letters s-o-c inside "**soc**kets"; `rated_power` matches the
+tail of "solar_gene**rated_power**". A translation key is a sequence of **segments**, and a rule
+that forgets it silently claims the brands that happen to own that word — the two above were the
+only ones in 171 rows, which is exactly why nothing looked wrong. **Closure:** anchor the token
+(`(?:^|_)soc(?:_|$)`); `\b` does not help, because `_` is a word character. **Guard:**
+`tests/test_915_roster_at_runtime.py::TestSemDoesNotOfferToWriteTheseRegisters::test_a_substring_is_not_a_word`.
+**Sweep question:** every regex over an identifier — does it anchor to segment boundaries, and
+which real key would it match by accident? Refs #915 #810.
+
+### 68. A protection floor read as a target — the knob is not missed, it is INVERTED — GUARDED
+**Symptom:** five brands (Growatt, Sigen, Solis, Sungrow, Sunsynk) declare both halves of the SOC
+range under names one word apart — `battery_charge_soc_limit` beside
+`battery_discharge_soc_limit_on_grid`, `soc_upper_limit` beside `soc_lower_limit`. SEM proposed
+either as `battery_target_soc_entity`. **Root shape:** "charge to 80 %" written into "never
+discharge below" does not miss the target — it stops the pack discharging at 80 %, the opposite of
+the request, and it looks like a working configuration. The same shape put a **car's** state of
+charge (Wallbox `state_of_charge`, V2C `battery_power`) into the HOUSE battery reads that feed the
+energy balance every ten seconds. **Closure:** the lexicon excludes floors from the target role,
+and a charger contributes EV + vehicle roles only — SEM's own `_EV_CHARGER_PLATFORMS` list decides
+what a charger is, with vocabulary markers for brands nobody has listed yet. **Guard:**
+`::test_a_protection_floor_is_never_a_target`, `tests/test_915_coverage_ratchet.py::TestAChargerIsNotAHouse`.
+**Sweep question:** for every value SEM writes, what is the OPPOSITE register called on that
+brand — and would the matching rule tell them apart? Refs #915 #810.

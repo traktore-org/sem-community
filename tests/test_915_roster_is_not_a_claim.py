@@ -112,7 +112,8 @@ class TestTheTwoSignalRule:
 
     def test_kind_comes_from_a_closed_set(self):
         kinds = {r["kind"] for r in roster.ROSTER.values()}
-        assert kinds <= {"energy", "vehicle", "appliance", "other"}, kinds
+        assert kinds <= {"energy", "charger", "vehicle", "appliance",
+                         "other"}, kinds
 
     def test_a_car_never_carries_a_home_battery_role(self):
         """A Porsche declares `target_soc`; read as a home pack's target it is

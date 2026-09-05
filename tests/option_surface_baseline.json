@@ -6,12 +6,19 @@
     "Regenerate:  python3 scripts/audit_options.py --baseline",
     "#915: total 177 -> 181 and worst-case first run 10 -> 14. The four are",
     "solar/grid/battery power + battery charge pickers on the new `sources`",
-    "step, walked ONLY when the Energy Dashboard cannot answer \u2014 where the",
+    "step, walked ONLY when the Energy Dashboard cannot answer — where the",
     "alternative was an ABORT, not a smaller form. Best case is unchanged",
-    "at 10: an install with a working Energy Dashboard never sees them."
+    "at 10: an install with a working Energy Dashboard never sees them.",
+    "#915 again: worst-case first run 14 -> 16, and total UNCHANGED at 181 —",
+    "grid_import_power_entity / grid_export_power_entity already existed in",
+    "the options flow; they are now also offered on `sources`. Growatt, Senec",
+    "and Anker's official integration publish import and export as two",
+    "positive sensors and no signed one, so demanding a combined sensor",
+    "stopped exactly the installs that step exists to rescue. Both optional,",
+    "pre-filled when the roster recognises the pair, and best case stays 10."
   ],
   "total": 181,
-  "first_run_fields": 14,
+  "first_run_fields": 16,
   "first_run_steps": 3,
   "first_run_fields_best": 10,
   "config_fields": [
