@@ -1526,7 +1526,9 @@
     "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
     "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
     "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
-    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
+    "config_import_surcharge": "Variable network-owner fee",
+    "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export."
   },
   "da": {
     "% of limit": "% af grænse",
@@ -3055,7 +3057,9 @@
     "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
     "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
     "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
-    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
+    "config_import_surcharge": "Variable network-owner fee",
+    "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export."
   },
   "de": {
     "% of limit": "% des Limits",
@@ -4584,7 +4588,9 @@
     "config_proposed_not_loaded": "die Entität steht in der Registry, aber Home Assistant hat sie nie erzeugt — kein Button, bis sie lädt",
     "config_proposed_no_unit": "diese Entität meldet keine Einheit; SEM braucht hier {wanted} und rät nicht",
     "config_proposed_unit_mismatch": "diese Entität meldet {seen}; SEM braucht hier {wanted}",
-    "config_proposed_options_unmapped": "dieses Select hat keine Option namens {missing} — setze die vier Strategiewerte im Batterie-Abschnitt passend zu seinen Optionen: {options}"
+    "config_proposed_options_unmapped": "dieses Select hat keine Option namens {missing} — setze die vier Strategiewerte im Batterie-Abschnitt passend zu seinen Optionen: {options}",
+    "config_import_surcharge": "Variable Netzbetreiber-Gebühr",
+    "config_help_import_surcharge": "Optionale Gebühr auf jede importierte kWh (Netznutzung + Energieabgabe). Nur wenn deine dynamische Preis-Entität sie nicht enthält. Keine Grundgebühr; kein Einfluss auf die Einspeisung."
   },
   "en": {
     "% of limit": "% of limit",
@@ -6113,7 +6119,9 @@
     "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
     "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
     "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
-    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
+    "config_import_surcharge": "Variable network-owner fee",
+    "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export."
   },
   "es": {
     "% of limit": "% del límite",
@@ -7642,7 +7650,9 @@
     "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
     "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
     "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
-    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
+    "config_import_surcharge": "Variable network-owner fee",
+    "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export."
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -9171,7 +9181,9 @@
     "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
     "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
     "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
-    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
+    "config_import_surcharge": "Variable network-owner fee",
+    "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export."
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -10700,7 +10712,9 @@
     "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
     "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
     "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
-    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
+    "config_import_surcharge": "Variable network-owner fee",
+    "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export."
   },
   "hu": {
     "% of limit": "% a határból",
@@ -12229,7 +12243,9 @@
     "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
     "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
     "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
-    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
+    "config_import_surcharge": "Variable network-owner fee",
+    "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export."
   },
   "it": {
     "% of limit": "% del limite",
@@ -13758,7 +13774,9 @@
     "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
     "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
     "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
-    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
+    "config_import_surcharge": "Variable network-owner fee",
+    "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export."
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -15287,7 +15305,9 @@
     "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
     "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
     "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
-    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
+    "config_import_surcharge": "Variable network-owner fee",
+    "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export."
   },
   "no": {
     "% of limit": "% av grense",
@@ -16816,7 +16836,9 @@
     "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
     "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
     "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
-    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
+    "config_import_surcharge": "Variable network-owner fee",
+    "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export."
   },
   "pl": {
     "% of limit": "% limitu",
@@ -18345,7 +18367,9 @@
     "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
     "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
     "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
-    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
+    "config_import_surcharge": "Variable network-owner fee",
+    "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export."
   },
   "pt": {
     "% of limit": "% do limite",
@@ -19874,7 +19898,9 @@
     "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
     "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
     "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
-    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
+    "config_import_surcharge": "Variable network-owner fee",
+    "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export."
   },
   "ro": {
     "% of limit": "% din limită",
@@ -21403,7 +21429,9 @@
     "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
     "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
     "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
-    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
+    "config_import_surcharge": "Variable network-owner fee",
+    "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export."
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -22932,7 +22960,9 @@
     "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
     "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
     "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
-    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
+    "config_import_surcharge": "Variable network-owner fee",
+    "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export."
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -24461,6 +24491,8 @@
     "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
     "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
     "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
-    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
+    "config_import_surcharge": "Variable network-owner fee",
+    "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export."
   }
 }

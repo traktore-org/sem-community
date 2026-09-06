@@ -1384,6 +1384,8 @@ class SEMConfigCard extends SEMLitBase {
                 { min: 0, max: 10000, step: 0.001, unit: `${currency}/kWh`, default: 0.3387 }, opts, 'config_help_off_peak_rate')}
             ${this._renderOptionNumberInput('electricity_export_rate', 'config_export_rate',
                 { min: 0, max: 10000, step: 0.001, unit: `${currency}/kWh`, default: 0.075 }, opts, 'config_help_export_rate')}
+            ${this._renderOptionNumberInput('grid_import_surcharge', 'config_import_surcharge',
+                { min: 0, max: 10, step: 0.001, unit: `${currency}/kWh`, default: 0 }, opts, 'config_help_import_surcharge')}
             ${this._renderOptionNumberInput('demand_charge_rate', 'config_demand_charge_rate',
                 { min: 0, max: 100000, step: 0.01, unit: `${currency}/kW/Mt`, default: 4.32 }, opts, 'config_help_demand_charge_rate')}
             ${this._renderPicker('grid_import_power_entity', 'config_grid_import_entity',

@@ -7582,6 +7582,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
             ${this._renderOptionNumberInput("electricity_import_rate","config_import_rate",{min:0,max:1e4,step:.001,unit:`${a}/kWh`,default:.3387},t,"config_help_import_rate")}
             ${this._renderOptionNumberInput("electricity_off_peak_rate","config_off_peak_rate",{min:0,max:1e4,step:.001,unit:`${a}/kWh`,default:.3387},t,"config_help_off_peak_rate")}
             ${this._renderOptionNumberInput("electricity_export_rate","config_export_rate",{min:0,max:1e4,step:.001,unit:`${a}/kWh`,default:.075},t,"config_help_export_rate")}
+            ${this._renderOptionNumberInput("grid_import_surcharge","config_import_surcharge",{min:0,max:10,step:.001,unit:`${a}/kWh`,default:0},t,"config_help_import_surcharge")}
             ${this._renderOptionNumberInput("demand_charge_rate","config_demand_charge_rate",{min:0,max:1e5,step:.01,unit:`${a}/kW/Mt`,default:4.32},t,"config_help_demand_charge_rate")}
             ${this._renderPicker("grid_import_power_entity","config_grid_import_entity","sensor","power",t,"config_help_grid_import_entity")}
             ${this._renderPicker("grid_export_power_entity","config_grid_export_entity","sensor","power",t,"config_help_grid_export_entity")}

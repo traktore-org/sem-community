@@ -5273,6 +5273,7 @@ async def _async_register_phase_services(
         "dynamic_tariff_entity", "dynamic_forecast_entity", "dynamic_feedin_entity",
         "electricity_import_rate", "electricity_off_peak_rate",
         "electricity_export_rate", "demand_charge_rate",
+        "grid_import_surcharge",
         "cheap_price_threshold", "expensive_price_threshold",
     }
     _DIAGNOSE_TARIFF_STATE = {
