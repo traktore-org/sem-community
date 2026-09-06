@@ -16,7 +16,7 @@
 | DEYE / Sunsynk | `ha-solarman` | ED | yes | ✅ tested live | #554/#573 (hrdilshan) Deye Cloud 5 kW; #749 / disc. 103 (praun) Sun12k over ESPHome Modbus; #807 Deye 12 kW |
 | Enphase | `enphase_envoy` | B | yes | ✅ tested live | #352 (markmacseventynine) 3-phase Envoy grid polarity; #583 (nicoziptous) IQ 5P battery temperature |
 | FENECON Home | `HA Energy Dashboard` | ED | — | ✅ tested live | #802 (HorizonKane) Home 11 read through the Energy Dashboard mapping — values reconciled, install confirmed |
-| Fronius | `fronius` | B | — | ✅ tested live | #551-#613 (ebnerjoh) Verto 15.0 Plus + Fronius storage + Smart Meter TS 65A-3, a multi-issue live arc |
+| Fronius | `fronius` | B | yes | ✅ tested live | #551-#613 (ebnerjoh) Verto 15.0 Plus + Fronius storage + Smart Meter TS 65A-3, a multi-issue live arc; discharge limit: core number `battery_discharge_power_limit` (declared upstream, unconfirmed live) |
 | GoodWe | `goodwe` | C | yes | ✅ tested live | #174 (MRAK96) ESA + battery stack, SOC fix confirmed live; #68/#283 (Brkie) GoodWe + Easee install |
 | Growatt | `growatt_server / grott` | E | yes | ✅ tested live | #378 / disc. 103 (RienduPre) MOD9000TL3-X + MIC2500TL-X; #732 (bjpo-abelco) Growatt grid+battery with SMA strings |
 | Huawei Solar | `huawei_solar` | A | yes | ✅ tested live | SEM production system (SUN2000 + LUNA2000) daily; three independent installs: #529, #588, #597 |
@@ -64,7 +64,7 @@
 | OpenWB 2.x | `openwb2mqtt` / `openwbmqtt` | number entity | 🧩 implemented | — |
 | Peblar Rocksolid | `peblar` | number entity | 🧩 implemented | — |
 | V2C Trydan | `v2c` | number entity | 🧩 implemented | — |
-| Zaptec | `zaptec` | service-based | 🧩 implemented | disc. 103 (coppe218) reports a Zaptec Go2 under test; no entities or values shown yet |
+| Zaptec | `zaptec` | service-based / number entity (available_current) | 🧩 implemented | disc. 103 (coppe218) reports a Zaptec Go2 under test; no entities or values shown yet |
 | ABL eMH1 | — | Modbus ASCII (quirk: '>' start symbol) | 📥 requested | #808 (interface spec attached) |
 
 ## Vehicles

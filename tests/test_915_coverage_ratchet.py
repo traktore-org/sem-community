@@ -519,3 +519,155 @@ class TestNoBrandLosesARoleUnnoticed:
         body = src[src.index("if args.roles_baseline"):]
         assert "write_roles_baseline" in body.split("if args.baseline")[0]
         assert "write_roles_baseline" not in src.split("if args.roles_baseline")[0].split("def main")[-1]
+
+
+@pytest.mark.unit
+class TestTheMatrixControlClaimsAgreeWithTheRoster:
+    """(#915) The challenge Guido asked for, made permanent: does what the
+    roster OFFERS agree with what the matrix CLAIMS about control?
+
+    Run by hand on 06.09 it agreed on 3 of 14 inverter discharge-control
+    claims and 2 of 14 charger current-control claims. The disagreements
+    split cleanly: the matrix was stale twice (Fronius declares a discharge
+    limit upstream; Zaptec declares `available_current`), the lexicon had
+    missed three keys SEM's own discovery already drives (Wallbox, go-e
+    APIv2, OpenEVSE), and the rest declare NOTHING control-shaped upstream —
+    their control is a service, or a mechanism SEM's adapter implements
+    itself. Each of those is listed below with the reason, and the list may
+    only shrink: the day a brand declares its control, the exemption goes.
+    """
+
+    matrix = _load("hardware_matrix3", "consts/hardware_matrix.py")
+
+    #: Inverter rows claiming discharge control whose integration declares
+    #: no discharge-power-limit key upstream (checked 06.09.2026).
+    DISCHARGE_NOT_DECLARED = {
+        "Sungrow": "declares `charge_discharge_power` — a SIGNED forced "
+                   "setpoint, not a limit; mapping it would write a limit "
+                   "into a force register",
+        "Enphase": "no control key declared (9 number/select keys, none "
+                   "control-shaped)",
+        "Tesla Powerwall": "core declares no number/select at all — control "
+                           "is backup-reserve via the integration's own path",
+        "Kostal Plenticore": "declares `battery_charge` and "
+                             "`active_power_limitation`; neither is a "
+                             "discharge limit",
+        "SolarEdge": "solaredge_modbus_multi declares no keys; control is "
+                     "storage_command_mode via its own path",
+        "GoodWe": "declares `eco_mode_power` (a % of rated, adapter-specific) "
+                  "and `battery_discharge_depth`; not a watt limit",
+        "SolaX": "solax_modbus declares no keys (entity names set in code)",
+        "DEYE / Sunsynk": "ha-solarman: entity names come from YAML "
+                          "profiles, nothing declared",
+        "Sofar": "ha-solarman, same",
+        "Solis": "ha-solarman, same",
+        "Sessy (battery)": "one declared control (the power strategy); the "
+                           "setpoint is a service, not a number",
+    }
+    #: Charger rows saying "number entity" whose integration declares no
+    #: current-control key upstream.
+    CURRENT_NOT_DECLARED = {
+        "JuiceBox 48": "JuiceBoxProxy over plain MQTT — opaque by construction",
+        "Fronius / go-e Wattpilot": "HACS custom repo, not in the store index",
+        "go-eCharger (HTTP)": "declares no number keys (names set in code)",
+        "ChargePoint": "declares no number keys",
+        "Heidelberg Energy Control": "declares `virtual_current` and "
+                                     "`failsafe_current_command`; SEM's own "
+                                     "discovery uses `requested_current`/"
+                                     "`_amp` — no evidence which is the "
+                                     "live control",
+        "OpenWB 2.x": "HACS custom repo, not in the store index",
+        "Ohme": "declares only `state_of_charge_input` as a number; current "
+                "is set through its own path",
+        "V2C Trydan": "declares 4 numbers, none current-shaped",
+        "Alfen Eve": "HACS custom repo, not in the store index",
+        "Blue Current": "core declares no numbers — power-only monitoring, "
+                        "as SEM's own discovery says",
+    }
+
+    def _offers(self, doms, role):
+        return any(role in roster.ROLE_VOCAB.get(d, {}) for d in doms)
+
+    def test_every_inverter_discharge_claim_is_derived_or_explained(self):
+        unexplained = []
+        for row in self.matrix.INVERTERS:
+            doms = row.get("domains") or []
+            if not row.get("discharge_control") or not doms:
+                continue
+            if self._offers(doms, "battery_discharge_limit"):
+                continue
+            if row["brand"] not in self.DISCHARGE_NOT_DECLARED:
+                unexplained.append(row["brand"])
+        assert not unexplained, (
+            f"{unexplained}: the matrix says SEM drives the discharge limit "
+            "and the roster cannot derive it from what the integration "
+            "declares — either the lexicon missed a declared key (add it, "
+            "with the brand's own discovery as evidence) or nothing is "
+            "declared (say so above)")
+
+    def test_the_roster_never_offers_a_discharge_limit_the_matrix_denies(self):
+        """The sharp direction. Both hits on 06.09 were the MATRIX being
+        stale (Fronius), and it was corrected rather than exempted."""
+        wrong = []
+        for row in self.matrix.INVERTERS:
+            doms = row.get("domains") or []
+            if row.get("status") == "requested":
+                continue          # a wish, not a claim either way
+            if not row.get("discharge_control") and self._offers(
+                    doms, "battery_discharge_limit"):
+                wrong.append(row["brand"])
+        assert not wrong, (
+            f"{wrong}: the roster offers a discharge limit the matrix says "
+            "does not exist. If the key is real, the matrix is stale — fix "
+            "the row; if it is not, the lexicon has a false positive")
+
+    def test_every_charger_number_claim_is_derived_or_explained(self):
+        unexplained = []
+        for row in self.matrix.CHARGERS:
+            doms = ([row["domain_token"]] if row.get("domain_token") else []
+                    ) + list(row.get("also_domains") or ())
+            if "number" not in row.get("control", "") or not doms:
+                continue
+            if self._offers(doms, "ev_current_control"):
+                continue
+            if row["brand"] not in self.CURRENT_NOT_DECLARED:
+                unexplained.append(row["brand"])
+        assert not unexplained, f"{unexplained}: see the inverter test"
+
+    def test_the_roster_never_offers_a_current_control_the_matrix_denies(self):
+        wrong = []
+        for row in self.matrix.CHARGERS:
+            doms = ([row["domain_token"]] if row.get("domain_token") else []
+                    ) + list(row.get("also_domains") or ())
+            if "number" not in row.get("control", "") and self._offers(
+                    doms, "ev_current_control"):
+                wrong.append(row["brand"])
+        assert not wrong, f"{wrong}: Zaptec was this on 06.09 — the row was stale"
+
+    def test_the_exemptions_are_still_needed(self):
+        """Shrink-only: an exempted brand that now derives its control has
+        to come off the list, so the list never hides a working brand."""
+        by_brand = {r["brand"]: r for r in self.matrix.ALL_ROWS}
+        stale = []
+        for brand in self.DISCHARGE_NOT_DECLARED:
+            doms = by_brand[brand].get("domains") or []
+            if self._offers(doms, "battery_discharge_limit"):
+                stale.append(brand)
+        for brand in self.CURRENT_NOT_DECLARED:
+            row = by_brand[brand]
+            doms = ([row["domain_token"]] if row.get("domain_token") else []
+                    ) + list(row.get("also_domains") or ())
+            if self._offers(doms, "ev_current_control"):
+                stale.append(brand)
+        assert not stale, f"{stale} derives its control now — drop the exemption"
+
+    def test_the_three_oracle_keys_are_derived(self):
+        """The lexicon learned these from the matrix; pinned so the next
+        tightening cannot silently unlearn them."""
+        assert roster.ROLE_VOCAB["wallbox"]["ev_current_control"]["keys"] == (
+            "maximum_charging_current",)
+        assert "amp" in roster.ROLE_VOCAB["goecharger_api2"]["ev_current_control"]["keys"]
+        assert "charge_rate" in roster.ROLE_VOCAB["openevse"]["ev_current_control"]["keys"]
+        # …and the installation's contracted limit is NOT the charger's
+        assert "maximum_icp_current" not in roster.ROLE_VOCAB["wallbox"][
+            "ev_current_control"]["keys"]

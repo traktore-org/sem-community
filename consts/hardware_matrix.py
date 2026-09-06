@@ -91,9 +91,15 @@ INVERTERS = [
      "discharge_control": True, "status": "implemented", "evidence": ""},
     {"brand": "Fronius", "domains": ['fronius'],
      "integration": "fronius", "pattern": "B",
-     "discharge_control": False, "status": "tested-live",
+     # (#915) the core integration declares `battery_discharge_power_limit`
+     # (Gen24); found by challenging the roster against this table, where
+     # the row had said "no". Drivable through the generic adapter; not yet
+     # confirmed live — which the evidence line says.
+     "discharge_control": True, "status": "tested-live",
      "evidence": "#551-#613 (ebnerjoh) Verto 15.0 Plus + Fronius storage + "
-                 "Smart Meter TS 65A-3, a multi-issue live arc"},
+                 "Smart Meter TS 65A-3, a multi-issue live arc; discharge "
+                 "limit: core number `battery_discharge_power_limit` "
+                 "(declared upstream, unconfirmed live)"},
     {"brand": "Enphase", "domains": ['enphase_envoy'],
      "integration": "enphase_envoy", "pattern": "B",
      "discharge_control": True, "status": "tested-live",
@@ -231,7 +237,10 @@ CHARGERS = [
      "control": "number entity",
      "status": "implemented", "evidence": ""},
     {"brand": "Zaptec", "domain_token": "zaptec",
-     "control": "service-based",
+     # (#915) the integration also declares `number.available_current`; the
+     # roster proposes it and the near-miss offer wires it (see tools/
+     # zaptec_sim). The service path predates that entity.
+     "control": "service-based / number entity (available_current)",
      "status": "implemented",
      "evidence": "disc. 103 (coppe218) reports a Zaptec Go2 under test; no "
                  "entities or values shown yet"},

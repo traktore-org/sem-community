@@ -547,8 +547,8 @@ def roles_from_vocabulary(vocab: Dict[str, Dict[str, dict]], lexicon,
         # V2C declares ``battery_power`` — both the car's; SMA's EV charger
         # declares ``charge_power_limit``, which is the CAR's charge rate
         # and not the house pack's.)
-        rules = {r: v for r, v in lexicon.ROLE_RULES.items()
-                 if r.startswith("ev_")}
+        rules = {r: {**v, "any": tuple(v["any"]) + tuple(v.get("charger_only_any", ()))}
+                 for r, v in lexicon.ROLE_RULES.items() if r.startswith("ev_")}
         rules.update(lexicon.VEHICLE_ROLE_RULES)
     else:
         # control roles AND the read roles: which entity is the solar

@@ -231,6 +231,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   edit that narrows a brand fails CI until someone regenerates it on purpose
   and the commit says why.
 
+  **Challenged against the hardware matrix, and the matrix learned from it
+  too.** Does what the roster *offers* agree with what the support table
+  *claims* about control? Run by hand it agreed on 3 of 14 inverter
+  discharge-control claims and 2 of 14 charger current-control claims — and
+  every disagreement had a name. Twice the table was stale: Fronius's core
+  integration declares a discharge-power limit the row said did not exist,
+  and Zaptec declares an `available_current` number the row called
+  "service-based". Three times the lexicon had missed a key SEM's own
+  discovery has driven for years — Wallbox's `maximum_charging_current`,
+  go-e's `amp`, OpenEVSE's `charge_rate` — learned now, with the
+  installation's contracted `maximum_icp_current` deliberately left alone
+  and the two charger-only names applied to chargers and nowhere else. The
+  rest declare nothing control-shaped upstream: their control is a service,
+  or a mechanism SEM's own adapter implements (Sungrow's signed forced
+  setpoint is not a limit and is not mapped as one). Each is listed with its
+  reason, and the challenge is a test now — shrink-only, so an exemption
+  that stops being true has to go. In the direction that matters, the roster
+  offers **no** control the table denies.
+
+  The write read-back moved into the shared adapter base, so Huawei's
+  discharge limit gets the same "did it take" judgement as the generic
+  adapter's — which is what SEM's own production system runs.
+
 # [2.1.0-beta.7] — 03.09.2026
 
 - 🛡️ **A flat value from a live integration is not a frozen sensor** (#912).

@@ -494,6 +494,8 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
             context="Huawei battery discharge limit",
         ):
             self._last_discharge_limit_w = watts
+            # (#915) judged on the next cycle: did the register keep it?
+            self._note_pending_write(self._discharge_control_entity, watts)
             _LOGGER.debug(
                 "Huawei battery: discharge limit %.0f W → %s",
                 watts, self._discharge_control_entity,

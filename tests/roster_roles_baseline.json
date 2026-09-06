@@ -134,6 +134,11 @@
         "state_of_charge"
       ]
     },
+    "goecharger_api2": {
+      "ev_current_control": [
+        "amp"
+      ]
+    },
     "goodwe": {
       "battery_strategy": [
         "operation_mode"
@@ -287,6 +292,9 @@
       ]
     },
     "openevse": {
+      "ev_current_control": [
+        "charge_rate"
+      ],
       "vehicle_range": [
         "vehicle_range"
       ]
@@ -600,6 +608,9 @@
       ]
     },
     "wallbox": {
+      "ev_current_control": [
+        "maximum_charging_current"
+      ],
       "vehicle_soc": [
         "state_of_charge"
       ]

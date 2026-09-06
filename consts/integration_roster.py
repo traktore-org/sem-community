@@ -30,7 +30,7 @@ from typing import Any, Dict, Final
 SCHEMA: Final = 1
 
 
-ROSTER_META: Final[Dict[str, Any]] = {'generated_at': '2026-09-06T03:35:18Z', 'sources': {'core_analytics': 'https://analytics.home-assistant.io/data.json', 'core_index': 'https://raw.githubusercontent.com/home-assistant/core/dev/homeassistant/generated/integrations.json', 'custom_installs': 'https://analytics.home-assistant.io/custom_integrations.json', 'hacs': 'https://data-v2.hacs.xyz/integration/data.json', 'website': 'https://www.home-assistant.io/integrations.json'}, 'install_floor': 50, 'candidates': 1350, 'kept': 194, 'with_roles': 57, 'roles_mined': 155}
+ROSTER_META: Final[Dict[str, Any]] = {'generated_at': '2026-09-06T05:29:20Z', 'sources': {'core_analytics': 'https://analytics.home-assistant.io/data.json', 'core_index': 'https://raw.githubusercontent.com/home-assistant/core/dev/homeassistant/generated/integrations.json', 'custom_installs': 'https://analytics.home-assistant.io/custom_integrations.json', 'hacs': 'https://data-v2.hacs.xyz/integration/data.json', 'website': 'https://www.home-assistant.io/integrations.json'}, 'install_floor': 50, 'candidates': 1350, 'kept': 194, 'with_roles': 58, 'roles_mined': 158}
 
 #: domain -> what the ecosystem says this integration is.
 ROSTER: Final[Dict[str, Dict[str, Any]]] = {
@@ -90,7 +90,7 @@ ROSTER: Final[Dict[str, Dict[str, Any]]] = {
     'geo_home': {'name': 'Geo Home Smart Meter Integration', 'repo': 'mmillmor/geo_home', 'origin': 'hacs', 'installs': 124, 'kind': 'energy', 'kind_from': 'keyword'},
     'givenergy_local': {'name': 'GivEnergy Local', 'repo': 'dewet22/givenergy-hass', 'origin': 'hacs', 'installs': 174, 'kind': 'energy', 'kind_from': 'keyword'},
     'goecharger': {'name': 'go-eCharger', 'repo': 'cathiele/homeassistant-goecharger', 'origin': 'hacs', 'installs': 501, 'kind': 'energy', 'kind_from': 'keyword'},
-    'goecharger_api2': {'name': 'go-e APIv2 Connect', 'repo': 'marq24/ha-goecharger-api2', 'origin': 'hacs', 'installs': 1377, 'kind': 'charger', 'kind_from': 'keyword'},
+    'goecharger_api2': {'name': 'go-e APIv2 Connect', 'repo': 'marq24/ha-goecharger-api2', 'origin': 'hacs', 'installs': 1377, 'kind': 'charger', 'kind_from': 'vocabulary'},
     'goecharger_mqtt': {'name': 'go-eCharger integration for Home Assistant using the MQTT AP', 'repo': 'syssi/homeassistant-goecharger-mqtt', 'origin': 'hacs', 'installs': 990, 'kind': 'charger', 'kind_from': 'keyword'},
     'goodwe': {'name': 'GoodWe Inverter (experimental)', 'repo': 'mletenay/home-assistant-goodwe-inverter', 'origin': 'hacs', 'installs': 3399, 'kind': 'energy', 'kind_from': 'vocabulary'},
     'goodwe_sec1000': {'name': 'GoodWe SEC1000/S', 'repo': 'jozef-moravcik-homeassistant/GoodWe-SEC1000S', 'origin': 'hacs', 'installs': 0, 'kind': 'energy', 'kind_from': 'vocabulary_name_only'},
@@ -285,6 +285,9 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'battery_discharge_limit': {'platform': 'number', 'keys': ('battery_discharge_power_limit',), 'options': ()},
         'battery_soc': {'platform': 'sensor', 'keys': ('state_of_charge',), 'options': ()},
     },
+    'goecharger_api2': {
+        'ev_current_control': {'platform': 'number', 'keys': ('amp',), 'options': (), 'exact_only': ('amp',)},
+    },
     'goodwe': {
         'battery_strategy': {'platform': 'select', 'keys': ('operation_mode',), 'options': ('backup', 'eco', 'eco_charge', 'eco_discharge', 'general', 'off_grid', 'peak_shaving')},
         'battery_target_soc': {'platform': 'number', 'keys': ('soc_upper_limit',), 'options': ()},
@@ -349,6 +352,7 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'ev_charge_mode': {'platform': 'select', 'keys': ('charge_mode',), 'options': ('max_charge', 'paused', 'smart_charge')},
     },
     'openevse': {
+        'ev_current_control': {'platform': 'number', 'keys': ('charge_rate',), 'options': ()},
         'vehicle_range': {'platform': 'sensor', 'keys': ('vehicle_range',), 'options': ()},
     },
     'peblar': {
@@ -489,6 +493,7 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'battery_soc': {'platform': 'sensor', 'keys': ('battery_state_of_charge',), 'options': ()},
     },
     'wallbox': {
+        'ev_current_control': {'platform': 'number', 'keys': ('maximum_charging_current',), 'options': ()},
         'vehicle_soc': {'platform': 'sensor', 'keys': ('state_of_charge',), 'options': ()},
     },
     'zaptec': {

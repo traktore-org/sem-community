@@ -129,7 +129,17 @@ ROLE_RULES: Final[Dict[str, Dict[str, Any]]] = {
                 r"^charging_current_(set|limit|max)$", r"ac_charger_.*current",
                 r"^(ev|evse)_.*current", r"ev.?charg.*current",
                 r"^maximum_current$", r"^available_current$",
-                r"^current_set$", r"^set_current$", r"^current_setpoint$"),
+                r"^current_set$", r"^set_current$", r"^current_setpoint$",
+                # Wallbox (core) — the key SEM's own discovery has driven
+                # since v1.4; `maximum_icp_current` is the installation's
+                # contracted limit and is NOT matched. Learned by challenging
+                # the roster against the hardware matrix (#915).
+                r"^maximum_charging_current$"),
+        # Names that mean "the charger's current" ONLY on a charger: go-e's
+        # `amp` (its API's own word since v1) and OpenEVSE's `charge_rate`.
+        # On an inverter a `charge_rate` is watts into a pack. The crawler
+        # applies these for kind=charger and nowhere else.
+        "charger_only_any": (r"^amp$", r"^charge_rate$"),
         "not": (r"phase", r"offline", r"failsafe", r"voltage", r"power",
                 r"\bmin\b", r"_min_", r"minimum", r"energy",
                 r"input", r"^ac\d", r"aes", r"remote_panel", r"bulk",
