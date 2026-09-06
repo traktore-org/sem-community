@@ -183,3 +183,38 @@ class TestThreeMissesBecomeARepairOnce:
             SEMCoordinator._raise_or_clear_battery_write_repair(
                 c, self._adapter(5), None)
         raise_.assert_not_called(); clear.assert_not_called()
+
+
+@pytest.mark.unit
+class TestTheVerdictHasASurface:
+    """The failure side is a Repair. The success side had NO surface: PROD's
+    first day on the read-back could not show it working, because nothing
+    published the verdict. The battery-spendable sensor carries it now."""
+
+    def test_the_battery_sensor_publishes_the_verdict(self):
+        from homeassistant.components.sensor import SensorEntityDescription
+        from custom_components.solar_energy_management.sensor import SEMSolarSensor
+        coord = MagicMock()
+        coord.data = {"last_update": "x",
+                      "battery_control_write_verified": True,
+                      "battery_control_write_strikes": 0}
+        coord._sensor_reader = MagicMock()
+        s = SEMSolarSensor(coordinator=coord, entry_id="e",
+                           description=SensorEntityDescription(
+                               key="battery_spendable_kwh", name="x"))
+        attrs = s.extra_state_attributes
+        assert attrs["write_verified"] is True
+        assert attrs["write_strikes"] == 0
+
+    def test_no_verdict_yet_reads_none_not_false(self):
+        """None until a changed write has been judged — 'not yet' must not
+        look like 'failed'."""
+        from homeassistant.components.sensor import SensorEntityDescription
+        from custom_components.solar_energy_management.sensor import SEMSolarSensor
+        coord = MagicMock()
+        coord.data = {"last_update": "x"}
+        coord._sensor_reader = MagicMock()
+        s = SEMSolarSensor(coordinator=coord, entry_id="e",
+                           description=SensorEntityDescription(
+                               key="battery_spendable_kwh", name="x"))
+        assert s.extra_state_attributes["write_verified"] is None
