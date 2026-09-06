@@ -192,9 +192,13 @@ class TestRecoveryAndCost:
 
 
 def test_the_rule_is_one_place():
-    """Guard: no new per-domain excuse joins #851's; the sibling rule is
-    the general answer."""
+    """Guard: no new per-domain excuse joins #851's. The freshness audit
+    delegates to the one source-liveness rule and keeps exactly one domain
+    predicate (#851's night one); the source rule reuses the config-entry
+    sibling primitive rather than copying it."""
     import inspect
-    src = inspect.getsource(sr_mod.SensorReader._audit_sensor_freshness)
-    assert "_integration_is_reporting" in src
-    assert src.count("_stillness_is_expected") == 1
+    audit = inspect.getsource(sr_mod.SensorReader._audit_sensor_freshness)
+    assert "_source_is_alive" in audit
+    assert audit.count("_stillness_is_expected") == 1
+    src_rule = inspect.getsource(sr_mod.SensorReader._source_is_alive)
+    assert "_integration_is_reporting" in src_rule
