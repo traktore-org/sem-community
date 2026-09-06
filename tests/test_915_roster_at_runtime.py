@@ -268,6 +268,209 @@ class TestSemDoesNotOfferToWriteTheseRegisters:
         assert not offered & set(self.REJECTED)
 
 
+def _state(state="1000", **attrs):
+    return SimpleNamespace(state=state, attributes=attrs)
+
+
+@pytest.mark.unit
+class TestAKeyIsMatchedAtASegmentBoundary:
+    """(#915) `unique_id` is a convention — ``<serial>_<key>`` — and matching
+    it with a bare ``endswith`` was bug class 67 on the runtime side."""
+
+    def test_a_longer_key_of_the_same_brand_is_not_the_shorter_one(self):
+        """Victron declares `battery_capacity` AND `ev_battery_capacity`. A
+        unique_id ending in the CAR's key must not become the house's — the
+        roster marks such keys exact-only (24 of them, 12 brands)."""
+        car = _ent("sensor.x", "victron_gx", unique_id="gx1_ev_battery_capacity")
+        out = hd.propose_roles_from_roster([car], "victron_gx")
+        assert "battery_capacity_spec" not in out
+
+    def test_the_same_key_still_matches_by_translation_key(self):
+        house = _ent("sensor.y", "victron_gx", translation_key="battery_capacity")
+        out = hd.propose_roles_from_roster([house], "victron_gx")
+        assert out["battery_capacity_spec"]["entity"] == "sensor.y"
+
+    @staticmethod
+    def _a_suffix_matchable_key():
+        """Any shipped role key that is NOT exact-only — chosen dynamically,
+        because `growatt_modbus.grid_power` turned out to be exact-only
+        itself (Growatt also declares `box_grid_power`) and a fixture that
+        names a brand goes stale the day the roster learns one more key."""
+        from custom_components.solar_energy_management.consts import (
+            integration_roster as r)
+        for dom in sorted(r.ROLE_VOCAB):
+            for role, body in sorted(r.ROLE_VOCAB[dom].items()):
+                for k in body["keys"]:
+                    if k not in body.get("exact_only", ()):
+                        return dom, role, body["platform"], k
+        pytest.skip("every shipped key is exact-only")
+
+    def test_a_unique_id_needs_the_underscore(self):
+        """`abcgrid_power` is not `grid_power`; `abc_grid_power` is."""
+        dom, role, plat, key = self._a_suffix_matchable_key()
+        glued = [_ent(f"{plat}.a", dom, unique_id=f"abc{key}")]
+        assert role not in hd.propose_roles_from_roster(glued, dom)
+        bounded = [_ent(f"{plat}.a", dom, unique_id=f"abc_{key}")]
+        assert hd.propose_roles_from_roster(bounded, dom)[role]["matched_key"] == key
+
+
+@pytest.mark.unit
+class TestTheButtonIsOfferedOnlyWhenTheEntityCanTakeIt:
+    """(#915) Discovery's explicit-unit gate never ran on the card's path —
+    the button writes the option directly — so a key named like a power
+    limit and measured in amps got a button. The live state decides now,
+    and every refusal carries the reason the card renders."""
+
+    HUAWEI_LIMIT = _ent("number.limit", "huawei_solar",
+                        translation_key="storage_maximum_discharging_power")
+
+    def _prop(self, states, ents=None, **kw):
+        return hd.propose_roles_from_roster(
+            ents or [self.HUAWEI_LIMIT], "huawei_solar",
+            state_of=lambda eid: states.get(eid), **kw)
+
+    def test_a_watt_entity_gets_the_button(self):
+        p = self._prop({"number.limit": _state(unit_of_measurement="W")})
+        assert p["battery_discharge_limit"]["action"] == "set_option"
+
+    def test_kilowatts_are_fine_too(self):
+        p = self._prop({"number.limit": _state(unit_of_measurement="kW")})
+        assert p["battery_discharge_limit"]["action"] == "set_option"
+
+    def test_amps_named_like_a_power_limit_get_no_button(self):
+        p = self._prop({"number.limit": _state(unit_of_measurement="A")})
+        r = p["battery_discharge_limit"]
+        assert r["action"] == "unit_mismatch"
+        assert r["unit_seen"] == "A" and "W" in r["unit_wanted"]
+        assert r["config_key"], "the reason must still say WHERE it would go"
+
+    def test_no_unit_no_button(self):
+        """The same rule discovery already had: a bare number is not a
+        power control SEM will write watts into."""
+        p = self._prop({"number.limit": _state()})
+        assert p["battery_discharge_limit"]["action"] == "no_unit"
+
+    def test_a_registry_entry_ha_never_produced_gets_no_button(self):
+        """#824's `restored: true` from the other side: known to the
+        registry, absent from hass.states."""
+        p = self._prop({})
+        assert p["battery_discharge_limit"]["action"] == "not_loaded"
+
+    def test_a_percent_role_wants_percent(self):
+        ents = [_ent("number.soc", "eg4_web_monitor",
+                     translation_key="ac_charge_soc_limit")]
+        p = hd.propose_roles_from_roster(
+            ents, "eg4_web_monitor",
+            state_of=lambda e: _state(unit_of_measurement="kWh"))
+        assert p["battery_target_soc"]["action"] == "unit_mismatch"
+
+    def test_before_ha_is_running_nothing_is_judged(self):
+        """The report is first built during first refresh, while other
+        integrations are still loading: every Huawei proposal on a fresh
+        boot of the .46 rig read "not loaded". Before HA is running an
+        absent state means not loaded YET — nothing is judged, the proposal
+        says so, and the post-startup hook rebuilds it (#166's shape)."""
+        ents = [self.HUAWEI_LIMIT]
+        hass = SimpleNamespace(is_running=False,
+                               states=SimpleNamespace(get=lambda e: None))
+        rep = hd.build_detection_report(hass, registry=_registry(ents))
+        roles = {r: v for p in rep["roster_proposals"]
+                 for r, v in p["proposed_roles"].items()}
+        assert roles["battery_discharge_limit"]["action"] == "set_option"
+        assert roles["battery_discharge_limit"]["judged"] is False
+
+    def test_once_running_an_absent_state_is_not_loaded(self):
+        ents = [self.HUAWEI_LIMIT]
+        hass = SimpleNamespace(is_running=True,
+                               states=SimpleNamespace(get=lambda e: None))
+        rep = hd.build_detection_report(hass, registry=_registry(ents))
+        roles = {r: v for p in rep["roster_proposals"]
+                 for r, v in p["proposed_roles"].items()}
+        assert roles["battery_discharge_limit"]["action"] == "not_loaded"
+        assert roles["battery_discharge_limit"]["judged"] is True
+
+    def test_the_coordinator_reheals_an_unjudged_report_once_ha_is_up(self):
+        """Seen live on the .46 rig: a clean install's report was the boot-time
+        copy and every Huawei proposal read "not loaded" for a minute. The
+        coordinator rebuilds it itself — unjudged: once; not-loaded: up to
+        five times a minute apart — instead of trusting one startup event."""
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        calls = []
+        c = SimpleNamespace(hass=SimpleNamespace(is_running=True),
+                            _detection_report={"judged": False},
+                            REPORT_REHEAL_BUDGET=SEMCoordinator.REPORT_REHEAL_BUDGET,
+                            REPORT_REHEAL_EVERY=SEMCoordinator.REPORT_REHEAL_EVERY,
+                            refresh_detection_report=lambda: calls.append("r"))
+        reheal = SEMCoordinator._reheal_detection_report
+        assert reheal(c) is True and calls == ["r"]
+        # a judged report with nothing missing: quiet
+        c._detection_report = {"judged": True, "not_loaded": 0}
+        assert reheal(c) is False and calls == ["r"]
+        # not-loaded: one rebuild per REPORT_REHEAL_EVERY cycles, budget-bound
+        c._detection_report = {"judged": True, "not_loaded": 3}
+        got = sum(1 for _ in range(60) if reheal(c))
+        assert got == SEMCoordinator.REPORT_REHEAL_BUDGET, got
+        # before HA is running: never
+        c.hass = SimpleNamespace(is_running=False)
+        c._detection_report = {"judged": False}
+        assert reheal(c) is False
+
+    def test_without_a_state_reader_nothing_is_judged(self):
+        """The report path may run without hass (tests, a bare registry
+        walk); then the button is offered as before and the card's write
+        path still has the adapter's own unit check behind it."""
+        p = hd.propose_roles_from_roster([self.HUAWEI_LIMIT], "huawei_solar")
+        assert p["battery_discharge_limit"]["action"] == "set_option"
+
+
+@pytest.mark.unit
+class TestAPolicySelectorGetsNoButton:
+    """(#845) SEM names and watches an inverter's operating policy; it never
+    writes it. The generic adapter DOES write the power-strategy select
+    every cycle (`_set_strategy`), which is why the two are different roles
+    and only one of them may carry a config key."""
+
+    def test_victrons_ess_mode_is_observe_only(self):
+        ents = [_ent("select.ess", "victron_gx", translation_key="system_ess_mode")]
+        p = hd.propose_roles_from_roster(ents, "victron_gx",
+                                         state_of=lambda e: _state("Optimized"))
+        assert p["battery_strategy"]["action"] == "observe_only"
+        assert p["battery_strategy"]["config_key"] is None
+
+    def test_sessys_power_strategy_gets_the_button_when_the_options_exist(self):
+        ents = [_ent("select.strat", "sessy", translation_key="battery_strategy")]
+        st = _state("eco", options=["api", "eco", "nom", "idle", "roi"])
+        p = hd.propose_roles_from_roster(ents, "sessy", state_of=lambda e: st)
+        assert p["battery_power_strategy"]["action"] == "set_option"
+        assert p["battery_power_strategy"]["config_key"] == "battery_strategy_control_entity"
+
+    def test_a_select_missing_one_of_the_four_values_gets_no_button(self):
+        """#751 was this mismatch, silent: the adapter would write `nom` into
+        a select that has no such option, every cycle."""
+        ents = [_ent("select.strat", "sessy", translation_key="battery_strategy")]
+        st = _state("eco", options=["api", "eco", "idle"])   # no `nom`
+        p = hd.propose_roles_from_roster(ents, "sessy", state_of=lambda e: st)
+        r = p["battery_power_strategy"]
+        assert r["action"] == "options_unmapped"
+        assert r["values_missing"] == ["nom"]
+        assert "api" in r["options"]
+
+    def test_the_users_own_values_are_what_is_checked(self):
+        """A user who already renamed the four values to their select's
+        vocabulary gets the button on that vocabulary."""
+        ents = [_ent("select.strat", "sessy", translation_key="battery_strategy")]
+        st = _state("x", options=["control", "auto", "selfuse", "stop"])
+        p = hd.propose_roles_from_roster(
+            ents, "sessy", state_of=lambda e: st,
+            strategy_values={"battery_strategy_active_value": "control",
+                             "battery_strategy_idle_value": "auto",
+                             "battery_strategy_self_consume_value": "selfuse",
+                             "battery_strategy_off_value": "stop"})
+        assert p["battery_power_strategy"]["action"] == "set_option"
+
+
 @pytest.mark.unit
 class TestTheDischargeControlRung:
     """The one place a mined key reaches a real decision — and it reaches it

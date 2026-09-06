@@ -2576,3 +2576,36 @@ declares. **Guard:**
 `tests/test_915_coverage_ratchet.py::TestTheClosedHardwareIssuesAgree`. **Sweep question:** for every
 external source, what is its shape — and does the count of what you read match the count it claims?
 Refs #915 #75 #816.
+
+### 71. A catalogue role that spans the write boundary — GUARDED
+**Symptom:** the roster's `battery_strategy` role matched Sessy's power-strategy select — which the
+generic adapter switches every cycle (`_set_strategy`) — AND Huawei's working mode, Victron's ESS
+mode, Deye's work mode, GoodWe's operation mode. #845 had drawn the line for those: *"nothing in
+SEM may ever WRITE a policy selector, that boundary is the user's."* The card would have offered a
+one-click bind of Victron's `system_ess_mode` to the key the adapter writes, and every cycle SEM
+would have sent `select_option("nom")` to the inverter's operating policy. **Root shape:** a role
+is a *reading* — "this is the mode select" — but a config key is a *permission to write*, and the
+mapping role → key silently granted the permission to every reading that matched the regex. The
+regex cannot see the boundary; only the key's consumer knows whether it writes. **Closure:** two
+roles. The writable one (`battery_power_strategy`) matches only the keys the adapter was written
+for; the policy one (`battery_strategy`) is `OBSERVE_ONLY` and carries no key at all — the card
+says *SEM reads it and never writes it*. A writable strategy is additionally offered only when the
+select lists every value SEM would send (#751 was that mismatch, silent). **Guard:**
+`tests/test_915_roster_rediscovery.py::test_a_policy_selector_is_never_the_writable_strategy`,
+`tests/test_915_roster_at_runtime.py::TestAPolicySelectorGetsNoButton`. **Sweep question:** for
+every role → config-key mapping, does the key's CONSUMER write — and does every key the role matches
+deserve to be written? Refs #915 #845 #751.
+
+### 72. A gate on the discovery path, bypassed by the button — GUARDED
+**Symptom:** `discover_inverter_from_registry_verbose` refuses a discharge control without an
+explicit power unit (`require_explicit_unit=True`). The Config card's *Use this* button writes
+`battery_discharge_control_entity` directly, so a number named like a power limit and measured in
+amps — or with no unit at all — got a button, and the first write would have gone into it at scale
+1.0. The write path's own check catches `%`/A at write time but only with a log line, and a log
+line is not a surface (#799). **Root shape:** a safety check that lives on ONE path to a config
+key, when the key has two. The second path was added later and inherited none of it. **Closure:**
+the check moves to proposal time, where every path that can offer the button runs — the live
+entity's unit and existence are read, and each refusal carries a reason the card renders. **Guard:**
+`tests/test_915_roster_at_runtime.py::TestTheButtonIsOfferedOnlyWhenTheEntityCanTakeIt`.
+**Sweep question:** for every config key, how many code paths can SET it — and does each of them
+run the same gate? Refs #915 #824 #882.

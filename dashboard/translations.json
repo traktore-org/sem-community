@@ -1520,7 +1520,13 @@
     "config_proposed_already": "používá se",
     "config_proposed_per_charger": "nastavte u nabíječky, níže v EV nabíječky",
     "config_near_miss_add": "Přidat tuto nabíječku",
-    "config_near_miss_report": "Nahlásit tento hardware"
+    "config_near_miss_report": "Nahlásit tento hardware",
+    "config_proposed_or": "or:",
+    "config_proposed_observe_only": "a policy selector — SEM reads it and never writes it; you set it",
+    "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
+    "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
+    "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -3043,7 +3049,13 @@
     "config_proposed_already": "i brug",
     "config_proposed_per_charger": "angiv dette på laderen, under EV-ladere nedenfor",
     "config_near_miss_add": "Tilføj denne lader",
-    "config_near_miss_report": "Rapportér denne hardware"
+    "config_near_miss_report": "Rapportér denne hardware",
+    "config_proposed_or": "or:",
+    "config_proposed_observe_only": "a policy selector — SEM reads it and never writes it; you set it",
+    "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
+    "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
+    "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -4566,7 +4578,13 @@
     "config_proposed_already": "in Verwendung",
     "config_proposed_per_charger": "beim Ladegerät setzen, unten unter EV-Ladegeräte",
     "config_near_miss_add": "Diesen Wallbox-Eintrag anlegen",
-    "config_near_miss_report": "Diese Hardware melden"
+    "config_near_miss_report": "Diese Hardware melden",
+    "config_proposed_or": "oder:",
+    "config_proposed_observe_only": "ein Betriebsmodus — SEM liest ihn und schreibt ihn nie; du stellst ihn ein",
+    "config_proposed_not_loaded": "die Entität steht in der Registry, aber Home Assistant hat sie nie erzeugt — kein Button, bis sie lädt",
+    "config_proposed_no_unit": "diese Entität meldet keine Einheit; SEM braucht hier {wanted} und rät nicht",
+    "config_proposed_unit_mismatch": "diese Entität meldet {seen}; SEM braucht hier {wanted}",
+    "config_proposed_options_unmapped": "dieses Select hat keine Option namens {missing} — setze die vier Strategiewerte im Batterie-Abschnitt passend zu seinen Optionen: {options}"
   },
   "en": {
     "% of limit": "% of limit",
@@ -6089,7 +6107,13 @@
     "config_proposed_already": "in use",
     "config_proposed_per_charger": "set this on the charger, in EV chargers below",
     "config_near_miss_add": "Add this charger",
-    "config_near_miss_report": "Report this hardware"
+    "config_near_miss_report": "Report this hardware",
+    "config_proposed_or": "or:",
+    "config_proposed_observe_only": "a policy selector — SEM reads it and never writes it; you set it",
+    "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
+    "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
+    "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
   },
   "es": {
     "% of limit": "% del límite",
@@ -7612,7 +7636,13 @@
     "config_proposed_already": "en uso",
     "config_proposed_per_charger": "configúralo en el cargador, en Cargadores EV más abajo",
     "config_near_miss_add": "Añadir este cargador",
-    "config_near_miss_report": "Informar de este hardware"
+    "config_near_miss_report": "Informar de este hardware",
+    "config_proposed_or": "or:",
+    "config_proposed_observe_only": "a policy selector — SEM reads it and never writes it; you set it",
+    "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
+    "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
+    "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -9135,7 +9165,13 @@
     "config_proposed_already": "käytössä",
     "config_proposed_per_charger": "aseta latauslaitteelle, alla kohdassa EV-laturit",
     "config_near_miss_add": "Lisää tämä latauslaite",
-    "config_near_miss_report": "Ilmoita tästä laitteesta"
+    "config_near_miss_report": "Ilmoita tästä laitteesta",
+    "config_proposed_or": "or:",
+    "config_proposed_observe_only": "a policy selector — SEM reads it and never writes it; you set it",
+    "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
+    "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
+    "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -10658,7 +10694,13 @@
     "config_proposed_already": "utilisé",
     "config_proposed_per_charger": "à définir sur la borne, dans Bornes de recharge ci-dessous",
     "config_near_miss_add": "Ajouter cette borne",
-    "config_near_miss_report": "Signaler ce matériel"
+    "config_near_miss_report": "Signaler ce matériel",
+    "config_proposed_or": "or:",
+    "config_proposed_observe_only": "a policy selector — SEM reads it and never writes it; you set it",
+    "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
+    "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
+    "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -12181,7 +12223,13 @@
     "config_proposed_already": "használatban",
     "config_proposed_per_charger": "a töltőnél állítsd be, lent az EV-töltők alatt",
     "config_near_miss_add": "Töltő hozzáadása",
-    "config_near_miss_report": "Hardver bejelentése"
+    "config_near_miss_report": "Hardver bejelentése",
+    "config_proposed_or": "or:",
+    "config_proposed_observe_only": "a policy selector — SEM reads it and never writes it; you set it",
+    "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
+    "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
+    "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
   },
   "it": {
     "% of limit": "% del limite",
@@ -13704,7 +13752,13 @@
     "config_proposed_already": "in uso",
     "config_proposed_per_charger": "impostalo sulla stazione, in Caricatori EV qui sotto",
     "config_near_miss_add": "Aggiungi questa stazione",
-    "config_near_miss_report": "Segnala questo hardware"
+    "config_near_miss_report": "Segnala questo hardware",
+    "config_proposed_or": "or:",
+    "config_proposed_observe_only": "a policy selector — SEM reads it and never writes it; you set it",
+    "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
+    "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
+    "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -15227,7 +15281,13 @@
     "config_proposed_already": "in gebruik",
     "config_proposed_per_charger": "stel dit in bij de lader, hieronder bij EV-laders",
     "config_near_miss_add": "Deze lader toevoegen",
-    "config_near_miss_report": "Deze hardware melden"
+    "config_near_miss_report": "Deze hardware melden",
+    "config_proposed_or": "or:",
+    "config_proposed_observe_only": "a policy selector — SEM reads it and never writes it; you set it",
+    "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
+    "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
+    "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
   },
   "no": {
     "% of limit": "% av grense",
@@ -16750,7 +16810,13 @@
     "config_proposed_already": "i bruk",
     "config_proposed_per_charger": "sett dette på laderen, under EV-ladere nedenfor",
     "config_near_miss_add": "Legg til denne laderen",
-    "config_near_miss_report": "Rapporter denne maskinvaren"
+    "config_near_miss_report": "Rapporter denne maskinvaren",
+    "config_proposed_or": "or:",
+    "config_proposed_observe_only": "a policy selector — SEM reads it and never writes it; you set it",
+    "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
+    "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
+    "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -18273,7 +18339,13 @@
     "config_proposed_already": "w użyciu",
     "config_proposed_per_charger": "ustaw to przy ładowarce, poniżej w Ładowarki EV",
     "config_near_miss_add": "Dodaj tę ładowarkę",
-    "config_near_miss_report": "Zgłoś ten sprzęt"
+    "config_near_miss_report": "Zgłoś ten sprzęt",
+    "config_proposed_or": "or:",
+    "config_proposed_observe_only": "a policy selector — SEM reads it and never writes it; you set it",
+    "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
+    "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
+    "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -19796,7 +19868,13 @@
     "config_proposed_already": "em uso",
     "config_proposed_per_charger": "defina no carregador, em Carregadores EV abaixo",
     "config_near_miss_add": "Adicionar este carregador",
-    "config_near_miss_report": "Reportar este hardware"
+    "config_near_miss_report": "Reportar este hardware",
+    "config_proposed_or": "or:",
+    "config_proposed_observe_only": "a policy selector — SEM reads it and never writes it; you set it",
+    "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
+    "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
+    "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -21319,7 +21397,13 @@
     "config_proposed_already": "în uz",
     "config_proposed_per_charger": "setează la încărcător, mai jos la Încărcătoare EV",
     "config_near_miss_add": "Adaugă acest încărcător",
-    "config_near_miss_report": "Raportează acest hardware"
+    "config_near_miss_report": "Raportează acest hardware",
+    "config_proposed_or": "or:",
+    "config_proposed_observe_only": "a policy selector — SEM reads it and never writes it; you set it",
+    "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
+    "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
+    "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -22842,7 +22926,13 @@
     "config_proposed_already": "används",
     "config_proposed_per_charger": "ange detta på laddaren, under EV-laddare nedan",
     "config_near_miss_add": "Lägg till denna laddare",
-    "config_near_miss_report": "Rapportera denna hårdvara"
+    "config_near_miss_report": "Rapportera denna hårdvara",
+    "config_proposed_or": "or:",
+    "config_proposed_observe_only": "a policy selector — SEM reads it and never writes it; you set it",
+    "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
+    "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
+    "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -24365,6 +24455,12 @@
     "config_proposed_already": "已使用",
     "config_proposed_per_charger": "请在下方“EV 充电器”中于该充电器上设置",
     "config_near_miss_add": "添加此充电器",
-    "config_near_miss_report": "报告此硬件"
+    "config_near_miss_report": "报告此硬件",
+    "config_proposed_or": "or:",
+    "config_proposed_observe_only": "a policy selector — SEM reads it and never writes it; you set it",
+    "config_proposed_not_loaded": "the entity is in the registry but Home Assistant never produced it — no button until it loads",
+    "config_proposed_no_unit": "this entity reports no unit; SEM needs {wanted} here and will not guess",
+    "config_proposed_unit_mismatch": "this entity reports {seen}; SEM needs {wanted} here",
+    "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}"
   }
 }

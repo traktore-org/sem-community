@@ -182,6 +182,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   count. All six are brands SEM detects natively, so nothing is lost: the
   roster answers for the hardware detection does *not* already know.
 
+  **Closing the gap between "the registry says which integration" and "SEM
+  wrote the right thing".** With the integration known for certain, five
+  links remained where a proposal could still be wrong, and four of them are
+  closed mechanically:
+
+  - **Which key.** When an entity has no declared translation key, SEM
+    falls back to its unique id — and 24 role keys on 12 brands are a suffix
+    of a *longer* key the same brand declares (`battery_capacity` beside
+    `ev_battery_capacity` on a Victron GX). A unique id ending in the car's
+    key would have matched the house's. Those keys now match by the declared
+    key only, and every unique-id match needs a segment boundary.
+  - **Which unit.** The card's *Use this* button wrote the option directly,
+    so discovery's explicit-unit gate never ran: a number named like a power
+    limit and measured in amps got a button. The live entity is read at
+    proposal time now — no unit, the wrong unit, or an entity Home Assistant
+    never produced each refuse the button *with the reason on the card*.
+  - **Which options.** A battery-strategy proposal used to bind the select
+    and leave Sessy's four values in place; on any other brand every write
+    would then fail silently (#751). The button is offered only when all four
+    configured values are options the select actually lists — SEM writes
+    nothing it has not seen.
+  - **Which policy.** One role covered both Sessy's power-strategy select,
+    which the adapter switches every cycle, and the operating-policy
+    selectors of Huawei, Victron, Deye, GoodWe and EG4 — which #845 ruled
+    SEM must never write. It would have offered to bind Victron's ESS mode to
+    the key the adapter writes. Two roles now: the policy selector is named
+    on the card as *SEM reads it and never writes it*, and only Sessy's
+    keeps a button.
+  - **Which instance.** A brand that declares several keys for one role
+    shows every runner-up on the card, each with its own button — a
+    two-pack install can pick the right pack instead of trusting the first.
+
+  The fifth link cannot be closed from any catalogue: whether the write
+  **takes**. A register can accept a value and expire it, need an enable
+  switch first, or be a global setting the vendor says to leave alone — a
+  declared name looks identical in every case. So the generic adapter now
+  records each control write and judges it on the next cycle in the
+  entity's own unit; three misses raise a Repair that names the entity, what
+  was written and what it reads, and clears itself the moment a write is
+  reflected. Chargers have had this since #824; batteries did not.
+
+  And a guard on the guard: the roster's count ratchet is regenerated in the
+  same command as the roster, so it could never catch a regression its author
+  introduces — five times in one afternoon a new classifier marker deleted a
+  working brand's roles and each was caught by hand. A per-brand role
+  baseline now lives in a file only its own flag can rewrite, so a lexicon
+  edit that narrows a brand fails CI until someone regenerates it on purpose
+  and the commit says why.
+
 # [2.1.0-beta.7] — 03.09.2026
 
 - 🛡️ **A flat value from a live integration is not a frozen sensor** (#912).

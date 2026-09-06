@@ -1082,9 +1082,46 @@ class SEMConfigCard extends SEMLitBase {
         // one click through the same set_option path the pickers below use;
         // when it lives inside a charger, say so instead of showing a button
         // that would write it in the wrong place.
+        // (#915) A reason for every proposal that carries no button. The
+        // registry cannot say whether the entity LOADED, what it MEASURES,
+        // or whether a strategy select lists the options SEM would send —
+        // the backend checks the live state and says which; the card only
+        // renders the verdict. Never a bare missing button.
+        const fill = (key, vars) => Object.entries(vars).reduce(
+            (t, [k, v]) => t.split('{' + k + '}').join(v), this._t(key));
+        const whyNoButton = (p) => {
+            switch (p.action) {
+                case 'observe_only': return this._t('config_proposed_observe_only');
+                case 'not_loaded': return this._t('config_proposed_not_loaded');
+                case 'no_unit': return fill('config_proposed_no_unit', { wanted: p.unit_wanted || '' });
+                case 'unit_mismatch': return fill('config_proposed_unit_mismatch',
+                    { seen: p.unit_seen || '?', wanted: p.unit_wanted || '' });
+                case 'options_unmapped': return fill('config_proposed_options_unmapped',
+                    { missing: (p.values_missing || []).join(', '),
+                      options: (p.options || []).join(', ') });
+                case 'per_charger': return this._t('config_proposed_per_charger');
+                default: return '';
+            }
+        };
+        const useButton = (p, entity, fieldKey) => {
+            const st = this._saveStatus?.[fieldKey];
+            return html`
+                <button class="sem-btn" ?disabled=${st === 'saving'}
+                    @click=${() => this._saveOption(p.config_key, entity, fieldKey)}>
+                    ${st === 'saving' ? this._t('config_proposed_using')
+                                      : this._t('config_proposed_use')}
+                </button>
+                ${st === 'ok' ? html`<span style="opacity:.7"> ✓</span>` : nothing}
+                ${st && st !== 'ok' && st !== 'saving' ? html`<span style="opacity:.7"> ${st}</span>` : nothing}`;
+        };
         const proposalRow = (role, p) => {
             const already = this._options?.[p.config_key] === p.entity;
-            const st = this._saveStatus?.['prop_' + role];
+            const reason = whyNoButton(p);
+            // (#915) the runners-up: a brand that declares several keys for
+            // one role gets a deterministic first pick, and the user gets to
+            // see there WAS a choice — each alternative carries its own
+            // button, so a two-pack install can pick the right pack.
+            const alts = (p.alternatives || []).filter((a) => a && a.entity);
             return html`
             <div class="row">
                 <span class="lbl">${role}</span>
@@ -1095,19 +1132,20 @@ class SEMConfigCard extends SEMLitBase {
             <div class="row" style="margin:-6px 0 6px">
                 <span class="lbl"></span>
                 <span>
-                    ${p.action === 'set_option' && !already ? html`
-                        <button class="sem-btn" ?disabled=${st === 'saving'}
-                            @click=${() => this._saveOption(p.config_key, p.entity, 'prop_' + role)}>
-                            ${st === 'saving' ? this._t('config_proposed_using')
-                                              : this._t('config_proposed_use')}
-                        </button>` : nothing}
+                    ${p.action === 'set_option' && !already ? useButton(p, p.entity, 'prop_' + role) : nothing}
                     ${already ? html`<span style="opacity:.7">${this._t('config_proposed_already')}</span>` : nothing}
-                    ${p.action === 'per_charger' ? html`
-                        <span style="opacity:.7">${this._t('config_proposed_per_charger')}</span>` : nothing}
-                    ${st === 'ok' ? html`<span style="opacity:.7"> ✓</span>` : nothing}
-                    ${st && st !== 'ok' && st !== 'saving' ? html`<span style="opacity:.7"> ${st}</span>` : nothing}
+                    ${reason ? html`<span style="opacity:.7">${reason}</span>` : nothing}
                 </span>
-            </div>`;
+            </div>
+            ${alts.map((a, i) => html`
+                <div class="row" style="margin:-6px 0 6px">
+                    <span class="lbl" style="opacity:.6">${this._t('config_proposed_or')}</span>
+                    <span style="font-family:monospace;font-size:0.85em">${a.entity}
+                        <span style="opacity:.6"> · ${a.matched_key}</span>
+                        ${p.action === 'set_option' && p.config_key && this._options?.[p.config_key] !== a.entity
+                            ? html` ${useButton(p, a.entity, 'prop_' + role + '_alt' + i)}` : nothing}
+                    </span>
+                </div>`)}`;
         };
         const prober = r.prober_candidates || [];
         const dis = r.disagreements || [];

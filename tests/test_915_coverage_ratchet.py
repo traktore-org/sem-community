@@ -463,3 +463,59 @@ class TestTheMatrixAndTheRosterAgree:
         typo, and a typo here silently switches a check off."""
         known = set(roster.ROSTER) | set(self.NOT_IN_ANY_PUBLIC_INDEX)
         assert not sorted(self._claimed_domains() - known)
+
+
+@pytest.mark.unit
+class TestNoBrandLosesARoleUnnoticed:
+    """(#915) The guard the count ratchet is not.
+
+    `--write --baseline` regenerates the counts in the same breath as the
+    roster, so that ratchet cannot catch a regression its author introduces.
+    Five times in one afternoon a new classifier marker deleted a working
+    brand's roles — `brightness` took Zaptec, Peblar, SMA and Anker;
+    `load_percent` took Growatt; `ups_` took Victron — and each was caught
+    by diffing the roster BY HAND. This file is written only by
+    `--roles-baseline`, so the roster can move and this cannot.
+    """
+
+    ROLES = json.loads((ROOT / "tests" / "roster_roles_baseline.json").read_text())["roles"]
+
+    def test_every_domain_in_the_baseline_is_still_in_the_roster(self):
+        gone = sorted(set(self.ROLES) - set(roster.ROLE_VOCAB))
+        assert not gone, (
+            f"{gone} had roles and now has none. If that is right, run "
+            "`python3 scripts/crawl_integration_roster.py --roles-baseline` "
+            "and say in the commit WHY the brand lost its vocabulary.")
+
+    def test_no_role_vanished(self):
+        lost = []
+        for dom, roles in self.ROLES.items():
+            now = roster.ROLE_VOCAB.get(dom, {})
+            for role in roles:
+                if role not in now:
+                    lost.append(f"{dom}.{role}")
+        assert not lost, (
+            f"{lost} — a role a brand had is gone. Regenerate the roles "
+            "baseline on purpose and say in the commit why.")
+
+    def test_no_key_vanished_from_a_role(self):
+        """A role may GAIN keys silently — that is the point of a refresh.
+        Losing one is a lexicon edit that narrowed a brand, and it has to be
+        said (the #810 narrowing was right, and it was said)."""
+        lost = []
+        for dom, roles in self.ROLES.items():
+            for role, keys in roles.items():
+                now = set(roster.ROLE_VOCAB.get(dom, {}).get(role, {}).get("keys", ()))
+                missing = sorted(set(keys) - now)
+                if missing:
+                    lost.append(f"{dom}.{role}: {missing}")
+        assert not lost, (
+            f"{lost} — keys a brand's role had are gone. Regenerate the "
+            "roles baseline on purpose and say in the commit why.")
+
+    def test_the_baseline_is_not_written_by_write(self):
+        """The whole value of this file is that `--write` cannot touch it."""
+        src = (ROOT / "scripts" / "crawl_integration_roster.py").read_text()
+        body = src[src.index("if args.roles_baseline"):]
+        assert "write_roles_baseline" in body.split("if args.baseline")[0]
+        assert "write_roles_baseline" not in src.split("if args.roles_baseline")[0].split("def main")[-1]

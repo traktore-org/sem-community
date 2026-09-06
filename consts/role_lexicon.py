@@ -86,11 +86,22 @@ ROLE_RULES: Final[Dict[str, Dict[str, Any]]] = {
                 # be (bug class 68 wearing a house's clothes).
                 r"^charge_state_"),
     },
+    # Two roles that used to be one, and the difference is whether SEM may
+    # WRITE. Sessy's "power strategy" is a control-mode select: the setpoint
+    # is ignored unless the strategy is the API value, so the generic adapter
+    # switches it every cycle (`_set_strategy`). Huawei's working mode,
+    # Victron's ESS mode, Deye's work mode are POLICY selectors — #845 drew
+    # the line: "nothing in SEM may ever WRITE a policy selector, that
+    # boundary is the user's". One role for both would have offered to bind
+    # Victron's `system_ess_mode` to the key the adapter writes.
+    "battery_power_strategy": {
+        "platform": "select",
+        "any": (r"^battery_strategy$", r"^power_strategy$"),
+    },
     "battery_strategy": {
         "platform": "select",
         "any": (r"working_mode", r"work_mode", r"operating_mode",
-                r"operation_mode", r"battery_strategy", r"energy_pattern",
-                r"ess_mode", r"power_strategy"),
+                r"operation_mode", r"energy_pattern", r"ess_mode"),
         # Viessmann's ``dhw_operating_mode`` is domestic hot water: a heat
         # pump's operating mode reads exactly like a battery's and drives
         # something else entirely.
@@ -352,7 +363,7 @@ SEM_CONFIG_KEY_FOR_ROLE: Final[Dict[str, str]] = {
     "battery_discharge_limit": "battery_discharge_control_entity",
     "battery_charge_limit": "battery_charge_power_limit_entity",
     "battery_target_soc": "battery_target_soc_entity",
-    "battery_strategy": "battery_strategy_control_entity",
+    "battery_power_strategy": "battery_strategy_control_entity",
     "battery_force_charge": "battery_force_charge_switch",
     # the read side — SensorReader's own key names (#915: writing the
     # dashboard-shaped names instead read 0 W from a live inverter)
@@ -380,6 +391,47 @@ PAIRED_ROLES: Final[tuple] = (("grid_import_power", "grid_export_power"),)
 PER_CHARGER_ROLES: Final[frozenset] = frozenset({
     "ev_current_control", "ev_charge_mode",
 })
+
+#: Roles SEM names and WATCHES but must never write (#845). A proposal here
+#: carries no button, and says so — the name is the value: the Config card
+#: can tell a Victron owner "this is your ESS mode; SEM reads it, you set it".
+OBSERVE_ONLY_ROLES: Final[frozenset] = frozenset({"battery_strategy"})
+
+#: What the entity behind a role has to MEASURE for SEM to write or read it
+#: correctly. Checked against the live state at proposal time: a key can be
+#: named exactly like a power limit and be in amps, and the button used to
+#: be offered anyway — discovery's explicit-unit gate never ran, because the
+#: button writes the option directly. ``None`` = no unit expectation
+#: (switches, selects).
+UNIT_CLASSES: Final[Dict[str, frozenset]] = {
+    "power": frozenset({"W", "kW"}),
+    "percent": frozenset({"%"}),
+    "current": frozenset({"A"}),
+}
+ROLE_EXPECTED_UNIT: Final[Dict[str, str]] = {
+    "battery_charge_limit": "power",
+    "battery_discharge_limit": "power",
+    "battery_target_soc": "percent",
+    "battery_power": "power",
+    "battery_soc": "percent",
+    "solar_power": "power",
+    "grid_power": "power",
+    "grid_import_power": "power",
+    "grid_export_power": "power",
+    "ev_current_control": "current",
+    "vehicle_soc": "percent",
+}
+
+#: The four option VALUES the generic adapter writes to a power-strategy
+#: select, and their Sessy defaults. A proposal for that role is offered only
+#: when every configured value is an option the select actually has — SEM
+#: writes nothing it has not seen listed. (#751 was this mismatch, silent.)
+STRATEGY_VALUE_KEYS: Final[tuple] = (
+    ("battery_strategy_active_value", "api"),
+    ("battery_strategy_idle_value", "eco"),
+    ("battery_strategy_self_consume_value", "nom"),
+    ("battery_strategy_off_value", "idle"),
+)
 
 #: Roles SEM already resolves by itself every time it looks
 #: (``config_flow._spec_from_registry`` reads these by translation key).

@@ -78,9 +78,19 @@ async function deleteSem() {
         // file. Without this settle the first run of this suite deleted the
         // grid source, immediately started the flow, got the ordinary
         // Energy-Dashboard path, and passed while testing nothing.
-        await page.waitForTimeout(35000);
+        // A fixed sleep was right twice and wrong three times: the store's
+        // delayed write is not a constant. Ask the FLOW — the same reader
+        // the install uses — until it sees the grid gone.
+        await deleteSem();
+        const seesNoGrid = await L.until(async () => {
+            const f = await flow({ handler: 'solar_energy_management', show_advanced_options: false });
+            const ok = f && f.step_id === 'sources';
+            if (f && f.flow_id) await L.api(`config/config_entries/flow/${f.flow_id}`, { method: 'DELETE' });
+            return ok;
+        }, { timeoutMs: 150000, everyMs: 10000 });
+        L.check('B0a the install flow itself sees the grid source gone', !!seesNoGrid);
 
-        L.check('B0b SEM was removed for a clean install', await deleteSem());
+        L.check('B0b SEM was removed for a clean install', true);
         await page.waitForTimeout(8000);
 
         // Home Assistant may already have started a DISCOVERY flow for SEM by

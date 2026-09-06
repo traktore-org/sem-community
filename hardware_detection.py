@@ -1046,7 +1046,9 @@ def roster_role_keys(domain: str, role: str) -> tuple:
     return tuple(body.get("keys", ())) if body else ()
 
 
-def propose_roles_from_roster(dev_entities, domain: str) -> Dict[str, Any]:
+def propose_roles_from_roster(dev_entities, domain: str, *,
+                              state_of=None,
+                              strategy_values=None) -> Dict[str, Any]:
     """(#915) Role proposals for ONE device, as an INTERSECTION.
 
     The roster says what an integration calls things; ``dev_entities`` is
@@ -1084,8 +1086,19 @@ def propose_roles_from_roster(dev_entities, domain: str) -> Dict[str, Any]:
                 continue
             tk = str(getattr(entry, "translation_key", "") or "")
             uid = str(getattr(entry, "unique_id", "") or "")
+            exact_only = set(body.get("exact_only", ()))
             for rank, k in enumerate(keys):
-                if tk == k or uid.endswith(k):
+                # translation_key is the integration's own word: exact.
+                # unique_id is a convention (``<serial>_<key>``), so it is
+                # matched at a SEGMENT boundary only — never a bare
+                # ``endswith``, which is bug class 67 — and never at all for
+                # a key the same brand also declares a longer version of
+                # (``battery_capacity`` beside ``ev_battery_capacity``: the
+                # roster marks those ``exact_only``).
+                by_key = tk == k
+                by_uid = (k not in exact_only
+                          and (uid == k or uid.endswith("_" + k)))
+                if by_key or by_uid:
                     matches.append((rank, eid, k))
                     break
         if not matches:
@@ -1104,7 +1117,62 @@ def propose_roles_from_roster(dev_entities, domain: str) -> Dict[str, Any]:
             out[role]["alternatives"] = [
                 {"entity": e, "matched_key": k} for _, e, k in matches[1:]
             ]
+        # (#915) The button is offered only when the entity can actually
+        # take what SEM will write. Three things the registry cannot tell:
+        # whether the entity is LOADED, what it MEASURES, and — for a
+        # strategy select — whether it lists the options SEM would send.
+        # Before this, discovery's explicit-unit gate never ran on this path
+        # (the button writes the option directly), so a key named like a
+        # power limit and measured in amps got a button.
+        out[role]["judged"] = state_of is not None
+        if out[role]["action"] == "set_option" and state_of is not None:
+            _gate_proposal(out[role], role, state_of, strategy_values)
     return out
+
+
+def _gate_proposal(prop: Dict[str, Any], role: str, state_of,
+                   strategy_values) -> None:
+    """Downgrade ``action`` from ``set_option`` when the live entity cannot
+    take the write. Mutates ``prop``; every branch leaves a reason the card
+    can render, never a bare refusal."""
+    try:
+        from .consts import role_lexicon as _lex
+    except Exception:  # noqa: BLE001
+        return
+    st = None
+    try:
+        st = state_of(prop["entity"])
+    except Exception:  # noqa: BLE001
+        st = None
+    if st is None:
+        # registry knows it, HA never produced it (#824's ``restored``)
+        prop["action"] = "not_loaded"
+        return
+    attrs = getattr(st, "attributes", None) or {}
+    want = _lex.ROLE_EXPECTED_UNIT.get(role)
+    if want:
+        unit = str(attrs.get("unit_of_measurement") or "").strip()
+        accepted = _lex.UNIT_CLASSES.get(want, frozenset())
+        if not unit:
+            prop["action"] = "no_unit"
+            prop["unit_wanted"] = "/".join(sorted(accepted))
+            return
+        if unit not in accepted:
+            prop["action"] = "unit_mismatch"
+            prop["unit_seen"] = unit
+            prop["unit_wanted"] = "/".join(sorted(accepted))
+            return
+    if role == "battery_power_strategy":
+        options = [str(o) for o in (attrs.get("options") or [])]
+        values = dict(_lex.STRATEGY_VALUE_KEYS)
+        for key, default in _lex.STRATEGY_VALUE_KEYS:
+            values[key] = str((strategy_values or {}).get(key) or default)
+        missing = sorted({v for v in values.values() if v not in options})
+        if missing:
+            prop["action"] = "options_unmapped"
+            prop["options"] = options[:12]
+            prop["values_missing"] = missing
+            return
 
 
 def charger_from_near_miss(dev_entities, platform: str,
@@ -1156,6 +1224,9 @@ def _role_action(role: str) -> Dict[str, Any]:
         from .consts import role_lexicon as _lex
     except Exception:  # noqa: BLE001
         return {"config_key": None, "action": "none"}
+    if role in getattr(_lex, "OBSERVE_ONLY_ROLES", ()):
+        # (#845) a policy selector: SEM names it, watches it, never writes it
+        return {"config_key": None, "action": "observe_only"}
     key = _lex.SEM_CONFIG_KEY_FOR_ROLE.get(role)
     if key:
         return {"config_key": key, "action": "set_option"}
@@ -1167,7 +1238,8 @@ def _role_action(role: str) -> Dict[str, Any]:
 
 
 def propose_for_installed(registry, *, limit_per_domain: int = 8,
-                          configured_entities=None) -> list:
+                          configured_entities=None, state_of=None,
+                          strategy_values=None) -> list:
     """(#915) Every INSTALLED integration the roster has vocabulary for, with
     the controls it declares matched against this box's own entities.
 
@@ -1201,7 +1273,9 @@ def propose_for_installed(registry, *, limit_per_domain: int = 8,
     used = {str(e) for e in (configured_entities or ()) if e}
     out = []
     for dom, ents in sorted(by_domain.items()):
-        roles = {r: b for r, b in propose_roles_from_roster(ents[:400], dom).items()
+        roles = {r: b for r, b in propose_roles_from_roster(
+                     ents[:400], dom, state_of=state_of,
+                     strategy_values=strategy_values).items()
                  # An entity SEM already drives is not news; nor is a role SEM
                  # resolves by itself every time it looks.
                  if b.get("entity") not in used and b.get("action") != "automatic"}
@@ -1394,7 +1468,8 @@ def build_integration_census(hass=None, registry=None, config_domains=None,
 
 
 def build_detection_report(hass: Optional[HomeAssistant] = None,
-                           registry=None, configured_entities=None) -> Dict[str, Any]:
+                           registry=None, configured_entities=None,
+                           strategy_values=None) -> Dict[str, Any]:
     """(#814 Pillar B) Detection that shows its work.
 
     The same walk as ``discover_all_ev_chargers_from_registry`` — platform
@@ -1578,8 +1653,24 @@ def build_detection_report(hass: Optional[HomeAssistant] = None,
     # installed integration's own repository say it creates, and which of
     # this box's entities carry those names. Report data, intersection only.
     try:
+        # (#915) Judge the live state only once HA has finished starting:
+        # before that, an absent state means "not loaded YET", and refusing
+        # every button on a fresh boot is worse than offering them unjudged
+        # — the post-startup hook rebuilds this report with the states in.
+        _running = bool(getattr(hass, "is_running", True)) if hass is not None else False
+        _state_of = (
+            (lambda eid: hass.states.get(eid)) if (hass is not None and _running)
+            else None)
         report["roster_proposals"] = propose_for_installed(
-            registry, configured_entities=configured_entities)
+            registry, configured_entities=configured_entities,
+            state_of=_state_of, strategy_values=strategy_values)
+        # (#915) whether proposals were judged against live states, so the
+        # coordinator can rebuild an unjudged (boot-time) report once HA is up
+        report["judged"] = bool(_state_of is not None)
+        report["not_loaded"] = sum(
+            1 for p in report["roster_proposals"]
+            for v in p.get("proposed_roles", {}).values()
+            if v.get("action") == "not_loaded")
     except Exception:  # noqa: BLE001 — a prior never costs the report
         report["roster_proposals"] = []
     return report

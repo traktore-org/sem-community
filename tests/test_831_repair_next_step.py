@@ -36,6 +36,8 @@ DOCS_SIDE = {
     "no_recorder", "heat_pump_relay_unavailable", "hot_water_entity_unavailable",
     "hot_water_temperature_sensor_unavailable", "heat_pump_partial_sg_ready",
     "charger_control_entity_broken", "keba_failsafe_active",
+    # (#915) the write landed nowhere — the register, not SEM, is the next step
+    "battery_control_write_not_taken",
     "charger_failsafe_suspected", "battery_force_discharge_unsupported",
     # (#872) The same raiser files a second, different story when the
     # evidence says the ENTITY is flaky rather than the device unable.

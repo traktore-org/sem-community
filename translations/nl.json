@@ -1716,6 +1716,10 @@
     "split_grid_guessed": {
       "title": "SEM guessed your grid power meters",
       "description": "No grid power entity is configured and the Energy Dashboard gives none, so SEM matched entity names and adopted **{import_entity}** as the grid import meter and **{export_entity}** as the export meter — without any device evidence. If those are not your meters, every decision is steering on a wrong number. Open **Settings → Integrations → SEM → Configure → Sensors** and set **Grid import power** and **Grid export power** explicitly; this notice clears on the next read."
+    },
+    "battery_control_write_not_taken": {
+      "title": "A battery control write is not taken: {entity_id}",
+      "description": "SEM set **`{entity_id}`** to **{wanted}** and on the following cycles it still read **{seen}** — {strikes} times running. The service call did not fail; the register simply did not keep the value.\n\nA declared entity name cannot say whether a register accepts a write, expires it after a while, needs an enable switch first, or is a global setting the vendor says to leave alone — only the first write answers that, and this is the answer.\n\nOpen the entity in **Developer Tools → States** and set it by hand. If it does not hold, it is the wrong entity for this role: pick the right one in the Configuration card's battery pickers. If it holds by hand but not for SEM, tell us the brand and the entity — that is what turns a proposal into a supported row.\n\nThis clears itself the moment a write is reflected."
     }
   },
   "selector": {

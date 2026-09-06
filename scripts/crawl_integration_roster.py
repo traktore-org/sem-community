@@ -611,9 +611,23 @@ def roles_from_vocabulary(vocab: Dict[str, Dict[str, dict]], lexicon,
         else:
             roles.pop("battery_force_charge")
 
-    return {r: {"platform": v["platform"], "keys": tuple(v["keys"]),
+    # (#915) A key that is a segment-suffix of a LONGER key on the same
+    # platform may only ever match by translation_key, never by unique_id
+    # suffix. Victron declares `battery_capacity` AND `ev_battery_capacity`:
+    # a unique_id ending in the car's key would have matched the house's.
+    # Measured across the roster: 24 such keys on 12 brands.
+    out = {}
+    for r, v in sorted(roles.items()):
+        declared = set((vocab.get(v["platform"]) or {}).keys())
+        exact_only = tuple(
+            k for k in v["keys"]
+            if any(d != k and d.endswith("_" + k) for d in declared))
+        body = {"platform": v["platform"], "keys": tuple(v["keys"]),
                 "options": tuple(v["options"])}
-            for r, v in sorted(roles.items())}
+        if exact_only:
+            body["exact_only"] = exact_only
+        out[r] = body
+    return out
 
 
 # ────────────────────────── the roster ───────────────────────────────
@@ -788,6 +802,40 @@ def backlog(roster: dict, role_vocab: dict) -> list:
     return sorted(rows, key=lambda r: -r[2])
 
 
+ROLES_BASELINE = ROOT / "tests" / "roster_roles_baseline.json"
+
+
+def write_roles_baseline(role_vocab: dict) -> dict:
+    """(#915) domain -> role -> keys, as the guard the count ratchet is not.
+
+    `--write --baseline` regenerates the counts in the same breath as the
+    roster, so the count ratchet can never catch a regression its author
+    introduces — it is a consistency check between two artefacts written
+    together. Five times in one afternoon a new classifier marker deleted a
+    working brand's roles (`brightness` took Zaptec, Peblar, SMA and Anker;
+    `load_percent` took Growatt; `ups_` took Victron) and each was caught
+    by diffing the roster BY HAND. This file is written only by
+    `--roles-baseline`, so the roster can move and this cannot, and the
+    test that compares them fails until a person regenerates this and the
+    commit says why a brand lost a role."""
+    data = {
+        "_comment": [
+            "#915 per-domain role guard. A domain or role listed here may",
+            "not lose keys without this file being regenerated on purpose:",
+            "  python3 scripts/crawl_integration_roster.py --roles-baseline",
+            "and the commit saying WHY the brand lost the role. Gains do not",
+            "need it. Never regenerate this in the same breath as --write",
+            "without reading the diff: that is exactly the regression it",
+            "exists to catch.",
+        ],
+        "roles": {dom: {role: list(body["keys"])
+                        for role, body in sorted(roles.items())}
+                  for dom, roles in sorted(role_vocab.items())},
+    }
+    ROLES_BASELINE.write_text(json.dumps(data, indent=2) + "\n")
+    return data
+
+
 def write_baseline(roster: dict, role_vocab: dict, meta: dict, floor: int) -> dict:
     gap = backlog(roster, role_vocab)
     data = {
@@ -825,6 +873,10 @@ def main() -> int:
                     help="print the ranked coverage gap")
     ap.add_argument("--baseline", action="store_true",
                     help="rewrite tests/roster_coverage_baseline.json")
+    ap.add_argument("--roles-baseline", action="store_true",
+                    help="rewrite tests/roster_roles_baseline.json — the "
+                         "per-domain role guard. Deliberate, separate from "
+                         "--write: read the diff before committing it")
     ap.add_argument("--floor", type=int, default=50,
                     help="minimum installs for a name-only row (default 50)")
     args = ap.parse_args()
@@ -849,6 +901,10 @@ def main() -> int:
         target = ROOT / "consts" / "integration_roster.py"
         target.write_text(render_module(roster, role_vocab, meta))
         print(f"wrote {target.relative_to(ROOT)}", file=sys.stderr)
+    if args.roles_baseline:
+        rb = write_roles_baseline(role_vocab)
+        print(f"wrote {ROLES_BASELINE.relative_to(ROOT)} "
+              f"({len(rb['roles'])} domains)", file=sys.stderr)
     if args.baseline:
         data = write_baseline(roster, role_vocab, meta, args.floor)
         print(f"wrote tests/roster_coverage_baseline.json "

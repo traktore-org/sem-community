@@ -79,9 +79,24 @@ unconfirmed** — *"this number is probably your discharge-power limit"*.
 
 Each one has a **Use this** button that writes it where SEM reads it — the
 same place the pickers below write, so you can change or undo it there at any
-time. A role that belongs to a charger rather than to the install says so
-instead of offering a button, and a role SEM works out by itself is not listed
-at all. Nothing is written until you press the button.
+time. Nothing is written until you press the button, and **a proposal with
+no button always says why**: the entity reports the wrong unit for the role
+(amps where SEM writes watts), reports no unit at all, exists in the registry
+but was never produced by Home Assistant, is a strategy select that does not
+list the four values SEM would send, or is an inverter's operating-policy
+selector — which SEM reads and never writes; that one is yours to set. A role
+that belongs to a charger points you to the charger section, and a role SEM
+works out by itself is not listed at all. When a brand declares several
+candidates for one role, the runners-up are listed underneath with their own
+buttons, so a two-pack install can pick the right pack.
+
+**After you press it, SEM checks that the write took.** A declared entity
+name cannot say whether a register accepts a value, expires it, needs an
+enable switch first, or is a global setting the vendor says to leave alone.
+So the first writes to a battery control are read back on the next cycle; if
+the entity does not reflect the value three times running, a Repair names the
+entity, what was written and what it reads — and clears itself the moment a
+write is reflected.
 
 If SEM sees an integration's entities but can map none of them, and it *has*
 worked out which one is the charging current, you get **Add this charger**

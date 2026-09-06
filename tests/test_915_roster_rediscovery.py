@@ -84,8 +84,22 @@ class TestItRediscoversWhatWeLearnedByHand:
     def test_sessy_strategy_options_cover_the_generic_adapter_defaults(self):
         """#523: the generic battery adapter's `api` / `eco` / `nom` / `idle`
         values were learned from a live Sessy."""
-        assert {"api", "eco", "nom", "idle"} <= _options("sessy",
-                                                         "battery_strategy")
+        assert {"api", "eco", "nom", "idle"} <= _options(
+            "sessy", "battery_power_strategy")
+
+    def test_a_policy_selector_is_never_the_writable_strategy(self):
+        """Sessy's power strategy is a control-mode select SEM switches every
+        cycle. Huawei's working mode and Victron's ESS mode are POLICY
+        selectors — #845: nothing in SEM may ever write one. One role for
+        both would have offered to bind `system_ess_mode` to the key the
+        generic adapter writes."""
+        writable = {d for d, v in roster.ROLE_VOCAB.items()
+                    if "battery_power_strategy" in v}
+        assert writable == {"sessy"}, writable
+        for dom in ("huawei_solar", "victron_gx", "victron_mqtt", "goodwe",
+                    "eg4_web_monitor"):
+            assert "battery_power_strategy" not in roster.ROLE_VOCAB.get(dom, {}), dom
+            assert "battery_strategy" in roster.ROLE_VOCAB.get(dom, {}), dom
 
     def test_easee_exposes_no_current_control_and_none_is_invented(self):
         """Easee is service-driven. Absence is information: a miner that

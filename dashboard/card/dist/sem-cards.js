@@ -7420,7 +7420,13 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     <span><i style="background:#64b5f6"></i>${this._t("zone_legend_surplus")}</span>
                 </div>
             </div>
-        `}_detectionReport(){const e=this._hass?.states?.["sensor.sem_diag_charger_control"];return e?.attributes?.detection_report||null}_detectedHardwareSubtitle(){const e=this._detectionReport();if(!e)return this._t("config_detect_none");const t=(e.chargers||[]).length,i=(e.near_misses||[]).length,s=((e.census||{}).unknown_energy_domains||[]).length+((e.census||{}).rows_matched_nothing||[]).length;let r=`${t} ${this._t("config_detect_chargers")}`;return i&&(r+=` · ${i} ${this._t("config_detect_near_misses")}`),s&&(r+=` · ${s} ${this._t("config_census_gaps")}`),r}_renderDetectedHardware(e){const t=this._detectionReport();if(!t)return W`<div class="setting-help-text">${this._t("config_detect_none")}</div>`;const i=t.chargers||[],s=t.near_misses||[],r=t.roster_proposals||[],a=(e,t)=>{const i=this._options?.[t.config_key]===t.entity,s=this._saveStatus?.["prop_"+e];return W`
+        `}_detectionReport(){const e=this._hass?.states?.["sensor.sem_diag_charger_control"];return e?.attributes?.detection_report||null}_detectedHardwareSubtitle(){const e=this._detectionReport();if(!e)return this._t("config_detect_none");const t=(e.chargers||[]).length,i=(e.near_misses||[]).length,s=((e.census||{}).unknown_energy_domains||[]).length+((e.census||{}).rows_matched_nothing||[]).length;let r=`${t} ${this._t("config_detect_chargers")}`;return i&&(r+=` · ${i} ${this._t("config_detect_near_misses")}`),s&&(r+=` · ${s} ${this._t("config_census_gaps")}`),r}_renderDetectedHardware(e){const t=this._detectionReport();if(!t)return W`<div class="setting-help-text">${this._t("config_detect_none")}</div>`;const i=t.chargers||[],s=t.near_misses||[],r=t.roster_proposals||[],a=(e,t)=>Object.entries(t).reduce((e,[t,i])=>e.split("{"+t+"}").join(i),this._t(e)),o=e=>{switch(e.action){case"observe_only":return this._t("config_proposed_observe_only");case"not_loaded":return this._t("config_proposed_not_loaded");case"no_unit":return a("config_proposed_no_unit",{wanted:e.unit_wanted||""});case"unit_mismatch":return a("config_proposed_unit_mismatch",{seen:e.unit_seen||"?",wanted:e.unit_wanted||""});case"options_unmapped":return a("config_proposed_options_unmapped",{missing:(e.values_missing||[]).join(", "),options:(e.options||[]).join(", ")});case"per_charger":return this._t("config_proposed_per_charger");default:return""}},n=(e,t,i)=>{const s=this._saveStatus?.[i];return W`
+                <button class="sem-btn" ?disabled=${"saving"===s}
+                    @click=${()=>this._saveOption(e.config_key,t,i)}>
+                    ${"saving"===s?this._t("config_proposed_using"):this._t("config_proposed_use")}
+                </button>
+                ${"ok"===s?W`<span style="opacity:.7"> ✓</span>`:K}
+                ${s&&"ok"!==s&&"saving"!==s?W`<span style="opacity:.7"> ${s}</span>`:K}`},l=(e,t)=>{const i=this._options?.[t.config_key]===t.entity,s=o(t),r=(t.alternatives||[]).filter(e=>e&&e.entity);return W`
             <div class="row">
                 <span class="lbl">${e}</span>
                 <span style="font-family:monospace;font-size:0.85em">${t.entity}
@@ -7430,28 +7436,29 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
             <div class="row" style="margin:-6px 0 6px">
                 <span class="lbl"></span>
                 <span>
-                    ${"set_option"!==t.action||i?K:W`
-                        <button class="sem-btn" ?disabled=${"saving"===s}
-                            @click=${()=>this._saveOption(t.config_key,t.entity,"prop_"+e)}>
-                            ${"saving"===s?this._t("config_proposed_using"):this._t("config_proposed_use")}
-                        </button>`}
+                    ${"set_option"!==t.action||i?K:n(t,t.entity,"prop_"+e)}
                     ${i?W`<span style="opacity:.7">${this._t("config_proposed_already")}</span>`:K}
-                    ${"per_charger"===t.action?W`
-                        <span style="opacity:.7">${this._t("config_proposed_per_charger")}</span>`:K}
-                    ${"ok"===s?W`<span style="opacity:.7"> ✓</span>`:K}
-                    ${s&&"ok"!==s&&"saving"!==s?W`<span style="opacity:.7"> ${s}</span>`:K}
+                    ${s?W`<span style="opacity:.7">${s}</span>`:K}
                 </span>
-            </div>`},o=t.prober_candidates||[],n=t.disagreements||[],l=t.census||{},c=l.unknown_energy_domains||[],d=l.rows_matched_nothing||[],p=l.unknown_energy_domains_named||[];return W`
+            </div>
+            ${r.map((i,s)=>W`
+                <div class="row" style="margin:-6px 0 6px">
+                    <span class="lbl" style="opacity:.6">${this._t("config_proposed_or")}</span>
+                    <span style="font-family:monospace;font-size:0.85em">${i.entity}
+                        <span style="opacity:.6"> · ${i.matched_key}</span>
+                        ${"set_option"===t.action&&t.config_key&&this._options?.[t.config_key]!==i.entity?W` ${n(t,i.entity,"prop_"+e+"_alt"+s)}`:K}
+                    </span>
+                </div>`)}`},c=t.prober_candidates||[],d=t.disagreements||[],p=t.census||{},h=p.unknown_energy_domains||[],_=p.rows_matched_nothing||[],g=p.unknown_energy_domains_named||[];return W`
             <div class="setting-help-text" style="margin:0 0 6px">${this._t("config_detect_intro")}</div>
-            ${c.length?W`
+            ${h.length?W`
                 <div class="row" style="color:var(--warning-color,#ffa726)">
                     <span class="lbl">${this._t("config_census_unknown")}</span>
-                    <span style="font-family:monospace">${c.map(e=>{const t=p.find(t=>t&&t.domain===e);if(!t||!t.name)return e;const i=t.installs?` · ${t.installs} ${this._t("config_census_installs")}`:"";return`${t.name}${i}`}).join(", ")}</span>
+                    <span style="font-family:monospace">${h.map(e=>{const t=g.find(t=>t&&t.domain===e);if(!t||!t.name)return e;const i=t.installs?` · ${t.installs} ${this._t("config_census_installs")}`:"";return`${t.name}${i}`}).join(", ")}</span>
                 </div>`:K}
-            ${d.length?W`
+            ${_.length?W`
                 <div class="row" style="color:var(--warning-color,#ffa726)">
                     <span class="lbl">${this._t("config_census_nomatch")}</span>
-                    <span style="font-family:monospace">${d.join(", ")}</span>
+                    <span style="font-family:monospace">${_.join(", ")}</span>
                 </div>`:K}
             ${i.map(e=>W`
                 <div class="row" style="font-weight:600">
@@ -7498,7 +7505,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                         <span class="lbl">${this._t("config_proposed_roles")}</span>
                         <span style="opacity:.7">${this._t("config_proposed_unconfirmed")}</span>
                     </div>
-                    ${Object.entries(t.proposed_roles).map(([e,t])=>a(e,t))}
+                    ${Object.entries(t.proposed_roles).map(([e,t])=>l(e,t))}
                     <div class="setting-help-text" style="margin:2px 0 8px">
                         ${this._t("config_proposed_help")}
                     </div>`:K}`)}
@@ -7507,16 +7514,16 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     <span class="lbl">🧩 ${e.roster?.name||e.domain}</span>
                     <span style="opacity:.7">${this._t("config_proposed_unconfirmed")}</span>
                 </div>
-                ${Object.entries(e.proposed_roles||{}).map(([e,t])=>a(e,t))}
+                ${Object.entries(e.proposed_roles||{}).map(([e,t])=>l(e,t))}
             `)}
             ${r.length?W`
                 <div class="setting-help-text" style="margin:2px 0 8px">
                     ${this._t("config_proposed_help")}
                 </div>`:K}
-            ${n.filter(e=>"prober_only"===e.kind).map(e=>W`
+            ${d.filter(e=>"prober_only"===e.kind).map(e=>W`
                 <div class="row"><span class="lbl">🔎 ${e.platform}</span>
                     <span>${this._t("config_detect_prober_only")}</span></div>`)}
-            ${i.length||s.length||o.length?K:W`
+            ${i.length||s.length||c.length?K:W`
                 <div class="setting-help-text">${this._t("config_detect_nothing")}</div>`}
         `}_renderSensorSources(e){const t=this._options||{};return W`
             <div class="setting-help-text" style="margin:0 0 6px">

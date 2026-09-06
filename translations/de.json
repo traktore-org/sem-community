@@ -1716,6 +1716,10 @@
     "split_grid_guessed": {
       "title": "SEM hat Ihre Netzleistungs-Zähler erraten",
       "description": "Es ist keine Netzleistungs-Entität konfiguriert und das Energie-Dashboard liefert keine, daher hat SEM anhand von Entitätsnamen **{import_entity}** als Netzbezugs-Zähler und **{export_entity}** als Einspeise-Zähler übernommen — ohne Gerätenachweis. Sind das nicht Ihre Zähler, steuert jede Entscheidung auf einer falschen Zahl. Öffnen Sie **Einstellungen → Integrationen → SEM → Konfigurieren → Sensoren** und setzen Sie **Netzbezug Leistung** und **Einspeisung Leistung** explizit; der Hinweis verschwindet beim nächsten Lesen."
+    },
+    "battery_control_write_not_taken": {
+      "title": "Eine Batterie-Steuerung übernimmt den geschriebenen Wert nicht: {entity_id}",
+      "description": "SEM hat **`{entity_id}`** auf **{wanted}** gesetzt, und in den folgenden Zyklen stand dort weiterhin **{seen}** — {strikes} Mal in Folge. Der Dienstaufruf ist nicht fehlgeschlagen; das Register hat den Wert schlicht nicht behalten.\n\nEin deklarierter Entitätsname kann nicht sagen, ob ein Register Schreibvorgänge annimmt, sie nach einer Weile verwirft, zuerst einen Freigabeschalter braucht oder eine globale Einstellung ist, die der Hersteller unangetastet lassen will — das beantwortet erst der erste Schreibvorgang, und das ist die Antwort.\n\nÖffne die Entität unter **Entwicklerwerkzeuge → Zustände** und setze sie von Hand. Hält sie den Wert nicht, ist es die falsche Entität für diese Rolle: wähle die richtige in den Batterie-Auswahlfeldern der Konfigurationskarte. Hält sie von Hand, aber nicht für SEM, nenne uns Marke und Entität — genau das macht aus einem Vorschlag eine unterstützte Zeile.\n\nDie Meldung verschwindet von selbst, sobald ein Schreibvorgang übernommen wird."
     }
   },
   "selector": {

@@ -4592,6 +4592,34 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             result["battery_capacity_drift_pct"] = _pe.get("battery_capacity_drift_pct")
             result["battery_capacity_reason"] = _pe.get("battery_capacity_reason")
             # (#820) what pacing decided this cycle (None until first run)
+            # (#915) A report built at BOOT is unjudged (no live states yet),
+            # and one built seconds after boot can still miss a slow modbus
+            # integration's entities ("not loaded"). Heal it here rather
+            # than trusting the STARTED hook alone: rebuild once HA is up
+            # while it is unjudged, and up to five more times a minute
+            # apart while any proposal still reads not-loaded. Observed on
+            # the .46 rig: every Huawei proposal read "not loaded" for the
+            # first minute after a clean install.
+            try:
+                self._reheal_detection_report()
+            except Exception:  # noqa: BLE001
+                pass
+            # (#915) Did the last battery control write TAKE? A declared key
+            # cannot say whether the register accepts a write, expires it, or
+            # is a global setting the vendor says to leave alone — the answer
+            # only exists after the first write. Same three-strike shape as
+            # #824/#840, on the read-back side.
+            try:
+                _ad = getattr(self, "_battery_adapter", None)
+                _verify = getattr(_ad, "verify_pending_write", None)
+                if callable(_verify):
+                    _v = _verify()
+                    result["battery_control_write_verified"] = _v
+                    result["battery_control_write_strikes"] = int(
+                        getattr(_ad, "write_not_taken_strikes", 0) or 0)
+                    self._raise_or_clear_battery_write_repair(_ad, _v)
+            except Exception:  # noqa: BLE001
+                pass
             # (#827) a brand whose discharge rate SEM cannot set says so.
             try:
                 _ad = getattr(self, "_battery_adapter", None)
@@ -5085,6 +5113,32 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         ("ev_current_control_entity", "set the charging current"),
         ("ev_start_stop_entity", "start and stop charging"),
     )
+
+    #: (#915) strikes before a not-reflected battery write becomes a Repair
+    BATTERY_WRITE_STRIKES: int = 3
+
+    def _raise_or_clear_battery_write_repair(self, adapter, verdict) -> None:
+        """(#915) Turn the adapter's read-back verdict into a Repair, once,
+        and clear it the moment a write is reflected again."""
+        from . import repair_issues as _ri
+        entity_id = str(getattr(adapter, "last_unverified_entity", "") or "")
+        raised = getattr(self, "_battery_write_repair_raised", None)
+        if raised is None:
+            raised = self._battery_write_repair_raised = set()
+        strikes = int(getattr(adapter, "write_not_taken_strikes", 0) or 0)
+        if verdict is True and raised:
+            for eid in list(raised):
+                _ri.clear_battery_control_write_not_taken(self.hass, eid)
+            raised.clear()
+        elif (verdict is False and entity_id
+              and strikes >= self.BATTERY_WRITE_STRIKES
+              and entity_id not in raised):
+            raised.add(entity_id)
+            _ri.raise_battery_control_write_not_taken(
+                self.hass, entity_id=entity_id,
+                wanted=getattr(adapter, "last_unverified_wanted", ""),
+                seen=getattr(adapter, "last_unverified_seen", ""),
+                strikes=strikes)
 
     def _check_charger_control_entities(self, cid, charger_cfg, result) -> None:
         """Pre-flight the entities SEM COMMANDS on this charger (#824).
@@ -9674,6 +9728,36 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             pass
         return out
 
+    #: (#915) how many post-boot rebuilds a not-loaded proposal may buy
+    REPORT_REHEAL_BUDGET: int = 5
+    #: …and how many cycles apart (10 s cycles → about a minute)
+    REPORT_REHEAL_EVERY: int = 6
+
+    def _reheal_detection_report(self) -> bool:
+        """Rebuild the detection report when the last one could not judge
+        its proposals (built before HA was running) or judged some as not
+        loaded while integrations were still coming up. Returns True when a
+        rebuild happened. Bounded: unjudged → once; not-loaded → at most
+        ``REPORT_REHEAL_BUDGET`` times, ``REPORT_REHEAL_EVERY`` cycles apart."""
+        rep = getattr(self, "_detection_report", None)
+        if not isinstance(rep, dict) or not getattr(self.hass, "is_running", False):
+            return False
+        cycles = int(getattr(self, "_reheal_cycles", 0)) + 1
+        self._reheal_cycles = cycles
+        if not rep.get("judged"):
+            self.refresh_detection_report()
+            self._reheal_last = cycles
+            return True
+        if not rep.get("not_loaded"):
+            return False
+        budget = int(getattr(self, "_reheal_budget", self.REPORT_REHEAL_BUDGET))
+        if budget <= 0 or cycles - int(getattr(self, "_reheal_last", 0)) < self.REPORT_REHEAL_EVERY:
+            return False
+        self._reheal_budget = budget - 1
+        self._reheal_last = cycles
+        self.refresh_detection_report()
+        return True
+
     def refresh_detection_report(self) -> None:
         """(#814 Pillar B) Rebuild the detection evidence report from the
         entity registry. Called at setup and after a late discovery; the
@@ -9682,8 +9766,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         the Config tab's Detected-hardware section). Read-only, cheap."""
         try:
             from ..hardware_detection import build_detection_report
+            _sv = {k: (self.config or {}).get(k)
+                   for k in ("battery_strategy_active_value",
+                             "battery_strategy_idle_value",
+                             "battery_strategy_self_consume_value",
+                             "battery_strategy_off_value")}
             self._detection_report = build_detection_report(
-                self.hass, configured_entities=self._configured_entity_ids())
+                self.hass, configured_entities=self._configured_entity_ids(),
+                strategy_values=_sv)
         except Exception:  # noqa: BLE001 — evidence must never cost setup
             _LOGGER.debug("detection report skipped", exc_info=True)
             self._detection_report = None

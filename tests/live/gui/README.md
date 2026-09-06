@@ -114,3 +114,30 @@ Traps that cost real time here, all of them about the rig rather than SEM:
    flow in progress makes the manual route a dead end — while the card is not
    always there yet. The install suite asserts the step through the flow API
    (the same strings HA renders) and keeps the browser for evidence.
+
+## Two more traps (06.09.2026), both "wait for the condition, not the clock"
+
+7. **The detection report you read first is the boot-time copy.** It is built
+   during SEM's first refresh, before other integrations have states, so every
+   proposal on it is unjudged (`judged: false`) — and for a minute after a
+   restart a slow modbus integration's entities have no state at all, so a
+   judged report can still say `not_loaded`. The coordinator re-heals it
+   itself (unjudged → once; not-loaded → up to five rebuilds a minute apart).
+   Suite A waits for `detection_report.judged === true && !not_loaded`
+   through `L.until` before asserting anything about buttons or units. The
+   first version asserted on the boot-time copy and reported four "wrong
+   unit" failures on entities whose only fault was not existing yet.
+8. **Suite B's 35-second settle was right twice and wrong three times.** The
+   config flow reads the energy prefs from the `.storage/energy` FILE, and
+   the store's delayed write is not a constant. B now asks the flow itself —
+   the same reader the install uses — until it lands on the `sources` step,
+   deleting each probe flow, up to 150 s. A fixed sleep is a guess about
+   somebody else's timer.
+
+And one that is not the harness's: **`~/bin/deploy-test.sh` could not install
+on a rig with no SEM store files** — the rig's login shell is zsh, zsh exits 1
+on an unmatched glob, and `set -e` killed the script silently in step 2. Every
+deploy had worked because the files always existed; the day B was interrupted
+between stripping and restoring, they did not. Fixed there (`sh -c` + `|| true`).
+Never run suite B concurrently with a deploy: B is destructive and a restart
+in the middle leaves the rig with neither SEM nor its grid source.

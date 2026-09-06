@@ -61,6 +61,19 @@ class BatteryControlAdapter(ABC):
         SEM may ever WRITE a policy selector — that boundary is the user's."""
         return None
 
+    #: (#915) Read-back after a control write. The generic adapter — the one
+    #: a roster proposal lands on — implements it; brands with their own
+    #: read-back (Deye) or none report "nothing pending" and are unchanged.
+    write_not_taken_strikes: int = 0
+    last_unverified_entity: str = ""
+    last_unverified_wanted: str = ""
+    last_unverified_seen: str = ""
+
+    def verify_pending_write(self):
+        """None = nothing to judge yet; True = the last write is reflected by
+        the entity; False = it is not, after a full cycle's grace."""
+        return None
+
     @property
     def last_discharge_limit_w(self) -> float:
         """(#900) The discharge limit this adapter last commanded, -1 when

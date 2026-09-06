@@ -301,3 +301,61 @@ class GenericBatteryAdapter(BatteryControlAdapter):
             context="Generic battery discharge limit",
         ):
             self._last_discharge_limit_w = watts
+            self._note_pending_write(self._discharge_control_entity, watts)
+
+    # ── (#915) did the write TAKE? ────────────────────────────────────
+    # A declared key says what a register is CALLED; it cannot say whether
+    # the register accepts a write, expires it after sixty minutes, or is a
+    # global setting the vendor says to leave alone (@Azlinon named four such
+    # on EG4). That answer only exists after the first write — so the write
+    # is recorded here and judged on the NEXT cycle, non-blocking, in the
+    # entity's own unit. Not error handling: a register that ignores a write
+    # raises nothing (#824's lesson, from the other side of the wire).
+    _WRITE_GRACE_S: float = 8.0
+    _WRITE_TOLERANCE_NATIVE: float = 1.0
+
+    def _note_pending_write(self, entity_id: str, watts: float) -> None:
+        import time as _time
+        self._pending_write = (entity_id, float(watts), _time.monotonic())
+
+    def verify_pending_write(self):
+        import time as _time
+        pending = getattr(self, "_pending_write", None)
+        if not pending:
+            return None
+        entity_id, watts, at = pending
+        if _time.monotonic() - at < self._WRITE_GRACE_S:
+            return None          # not yet judged; integrations poll
+        self._pending_write = None
+        from ..units import power_state_to_watts, power_unit_scale
+        st = self._hass.states.get(entity_id)
+        attrs = getattr(st, "attributes", None) or {}
+        # Compared in WATTS through the one canonical converter (#641): the
+        # entity's own unit decides the scale, and one native unit of it is
+        # the tolerance — the resolution the register can express.
+        scale = power_unit_scale(st) if st is not None else 1.0
+        seen_w = power_state_to_watts(st) if st is not None else None
+        tol_w = self._WRITE_TOLERANCE_NATIVE * scale
+        # the entity may clamp to its own max — a reflected write is one
+        # that landed within tolerance OR at the entity's ceiling
+        ceiling = attrs.get("max")
+        ceiling_w = float(ceiling) * scale if ceiling is not None else None
+        reflected = seen_w is not None and (
+            abs(seen_w - watts) <= tol_w
+            or (ceiling_w is not None and watts >= ceiling_w
+                and abs(seen_w - ceiling_w) <= tol_w))
+        if reflected:
+            self.write_not_taken_strikes = 0
+            self.last_unverified_entity = ""
+            return True
+        self.write_not_taken_strikes += 1
+        self.last_unverified_entity = entity_id
+        label = str(attrs.get("unit_of_measurement") or "W")
+        self.last_unverified_wanted = f"{watts / scale:g} {label}"
+        self.last_unverified_seen = (f"{seen_w / scale:g} {label}"
+                                     if seen_w is not None
+                                     else str(getattr(st, "state", "missing")))
+        self._last_error = (
+            f"write not reflected by {entity_id}: wanted "
+            f"{self.last_unverified_wanted}, reads {self.last_unverified_seen}")
+        return False

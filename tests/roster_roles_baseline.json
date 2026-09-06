@@ -1,0 +1,630 @@
+{
+  "_comment": [
+    "#915 per-domain role guard. A domain or role listed here may",
+    "not lose keys without this file being regenerated on purpose:",
+    "  python3 scripts/crawl_integration_roster.py --roles-baseline",
+    "and the commit saying WHY the brand lost the role. Gains do not",
+    "need it. Never regenerate this in the same breath as --write",
+    "without reading the diff: that is exactly the regression it",
+    "exists to catch."
+  ],
+  "roles": {
+    "abb_fimer_pvi_vsn_rest": {
+      "battery_soc": [
+        "state_of_charge"
+      ]
+    },
+    "anker_solix": {
+      "battery_charge_limit": [
+        "ac_max_charging_power"
+      ],
+      "battery_soc": [
+        "state_of_charge"
+      ],
+      "ev_charge_mode": [
+        "charger_mode",
+        "ev_charger_mode"
+      ],
+      "ev_current_control": [
+        "max_evcharge_current"
+      ],
+      "solar_power": [
+        "input_power"
+      ]
+    },
+    "anker_solix_official": {
+      "battery_soc": [
+        "battery_soc"
+      ],
+      "battery_strategy": [
+        "operating_mode"
+      ],
+      "grid_export_power": [
+        "grid_export_power"
+      ],
+      "grid_import_power": [
+        "grid_import_power"
+      ],
+      "solar_power": [
+        "pv_power"
+      ]
+    },
+    "audiconnect": {
+      "vehicle_range": [
+        "hybrid_range",
+        "primary_engine_range",
+        "range",
+        "secondary_engine_range"
+      ],
+      "vehicle_soc": [
+        "state_of_charge"
+      ]
+    },
+    "ef_ble": {
+      "battery_charge_limit": [
+        "charging_grid_power_limit"
+      ],
+      "battery_discharge_limit": [
+        "discharging_power_limit"
+      ],
+      "battery_force_charge": [
+        "ch_force_charge"
+      ],
+      "battery_power": [
+        "battery_power"
+      ],
+      "battery_strategy": [
+        "operating_mode_select"
+      ],
+      "battery_target_soc": [
+        "charging_grid_target_soc"
+      ],
+      "ev_charge_mode": [
+        "charger_mode"
+      ],
+      "grid_power": [
+        "grid_power"
+      ],
+      "solar_power": [
+        "input_power"
+      ],
+      "system_size_spec": [
+        "channel_rated_power"
+      ]
+    },
+    "eg4_web_monitor": {
+      "battery_charge_limit": [
+        "ac_charge_power"
+      ],
+      "battery_power": [
+        "battery_power"
+      ],
+      "battery_soc": [
+        "state_of_charge"
+      ],
+      "battery_strategy": [
+        "operating_mode"
+      ],
+      "battery_target_soc": [
+        "ac_charge_soc_limit"
+      ],
+      "grid_power": [
+        "grid_power"
+      ]
+    },
+    "enphase_ev": {
+      "ev_charge_mode": [
+        "charge_mode"
+      ]
+    },
+    "evcc_intg": {
+      "vehicle_range": [
+        "configvehicle_range",
+        "vehiclerange"
+      ]
+    },
+    "fronius": {
+      "battery_charge_limit": [
+        "battery_charge_power_limit"
+      ],
+      "battery_discharge_limit": [
+        "battery_discharge_power_limit"
+      ],
+      "battery_soc": [
+        "state_of_charge"
+      ]
+    },
+    "goodwe": {
+      "battery_strategy": [
+        "operation_mode"
+      ],
+      "battery_target_soc": [
+        "soc_upper_limit"
+      ]
+    },
+    "growatt_modbus": {
+      "battery_power": [
+        "battery_power"
+      ],
+      "battery_soc": [
+        "battery_soc"
+      ],
+      "grid_export_power": [
+        "grid_export_power"
+      ],
+      "grid_import_power": [
+        "grid_import_power"
+      ],
+      "grid_power": [
+        "grid_power"
+      ]
+    },
+    "growatt_server": {
+      "battery_charge_limit": [
+        "battery_charge_power_limit"
+      ],
+      "battery_discharge_limit": [
+        "battery_discharge_power_limit"
+      ],
+      "battery_force_charge": [
+        "ac_charge"
+      ],
+      "battery_target_soc": [
+        "battery_charge_soc_limit"
+      ]
+    },
+    "ha_kia_hyundai": {
+      "vehicle_range": [
+        "ev_remaining_range_value",
+        "total_remaining_range_value"
+      ],
+      "vehicle_soc": [
+        "ev_battery_level"
+      ]
+    },
+    "huawei_solar": {
+      "battery_capacity_spec": [
+        "rated_ess_capacity",
+        "storage_rated_capacity"
+      ],
+      "battery_charge_limit": [
+        "storage_maximum_charging_power"
+      ],
+      "battery_discharge_limit": [
+        "storage_maximum_discharging_power"
+      ],
+      "battery_power": [
+        "battery_charge_discharge_power",
+        "storage_charge_discharge_power"
+      ],
+      "battery_soc": [
+        "state_of_capacity",
+        "storage_state_of_capacity"
+      ],
+      "battery_strategy": [
+        "storage_working_mode_settings"
+      ],
+      "battery_target_soc": [
+        "storage_capacity_control_soc_peak_shaving"
+      ],
+      "grid_power": [
+        "meter_active_power",
+        "power_meter_active_power"
+      ],
+      "solar_power": [
+        "input_power"
+      ],
+      "system_size_spec": [
+        "inverter_rated_power",
+        "rated_power"
+      ]
+    },
+    "hypontech": {
+      "battery_power": [
+        "battery_power"
+      ],
+      "battery_soc": [
+        "battery_state_of_charge"
+      ],
+      "grid_power": [
+        "grid_power"
+      ],
+      "solar_power": [
+        "pv_power"
+      ]
+    },
+    "idm_heatpump": {
+      "battery_soc": [
+        "battery_soc"
+      ]
+    },
+    "marstek_venus_energy_manager": {
+      "battery_charge_limit": [
+        "max_charge_power",
+        "system_max_charge_power"
+      ],
+      "battery_discharge_limit": [
+        "max_discharge_power",
+        "system_max_discharge_power"
+      ],
+      "battery_power": [
+        "battery_power"
+      ],
+      "battery_soc": [
+        "battery_soc"
+      ],
+      "battery_strategy": [
+        "user_work_mode"
+      ],
+      "battery_target_soc": [
+        "charge_to_soc"
+      ],
+      "solar_power": [
+        "solar_power"
+      ]
+    },
+    "myskoda": {
+      "vehicle_range": [
+        "adblue_range",
+        "combustion_range",
+        "electric_range",
+        "range"
+      ]
+    },
+    "nrgkick": {
+      "ev_current_control": [
+        "current_set"
+      ]
+    },
+    "ocpp": {
+      "ev_current_control": [
+        "maximum_current"
+      ]
+    },
+    "ohme": {
+      "ev_charge_mode": [
+        "charge_mode"
+      ]
+    },
+    "openevse": {
+      "vehicle_range": [
+        "vehicle_range"
+      ]
+    },
+    "peblar": {
+      "ev_current_control": [
+        "charge_current_limit"
+      ]
+    },
+    "polestar_api": {
+      "vehicle_range": [
+        "polestar_estimated_full_charge_range",
+        "polestar_estimated_range"
+      ]
+    },
+    "porscheconnect": {
+      "vehicle_range": [
+        "remaining_range",
+        "remaining_range_electric"
+      ],
+      "vehicle_soc": [
+        "state_of_charge"
+      ]
+    },
+    "powerwall": {
+      "battery_capacity_spec": [
+        "battery_capacity"
+      ]
+    },
+    "pysmaplus": {
+      "grid_power": [
+        "grid_power"
+      ],
+      "solar_power": [
+        "pv_power"
+      ]
+    },
+    "senec": {
+      "grid_export_power": [
+        "grid_exported_power"
+      ],
+      "grid_import_power": [
+        "grid_imported_power"
+      ]
+    },
+    "sessy": {
+      "battery_power_strategy": [
+        "battery_strategy"
+      ]
+    },
+    "sigen": {
+      "battery_charge_limit": [
+        "dc_charger_max_charging_power_limit"
+      ],
+      "battery_discharge_limit": [
+        "dc_charger_max_discharging_power_limit"
+      ],
+      "battery_target_soc": [
+        "plant_charge_cut_off_soc"
+      ],
+      "ev_current_control": [
+        "ac_charger_output_current"
+      ]
+    },
+    "sma": {
+      "grid_power": [
+        "grid_power"
+      ],
+      "solar_power": [
+        "pv_power"
+      ]
+    },
+    "smaev": {
+      "ev_current_control": [
+        "charge_current_limit"
+      ]
+    },
+    "smappee": {
+      "solar_power": [
+        "solar_power"
+      ]
+    },
+    "solaredge": {
+      "battery_power": [
+        "battery_power"
+      ],
+      "battery_soc": [
+        "battery_state_of_charge"
+      ],
+      "grid_power": [
+        "grid_power"
+      ],
+      "solar_power": [
+        "solar_power"
+      ]
+    },
+    "solarfocus": {
+      "solar_power": [
+        "pv_power"
+      ]
+    },
+    "solis_cloud_control": {
+      "battery_target_soc": [
+        "battery_force_charge_soc",
+        "battery_max_charge_soc"
+      ]
+    },
+    "solis_cloud_monitoring": {
+      "battery_power": [
+        "battery_power"
+      ],
+      "battery_soc": [
+        "battery_soc"
+      ],
+      "grid_power": [
+        "grid_active_power"
+      ]
+    },
+    "subaru": {
+      "vehicle_range": [
+        "ev_range",
+        "range"
+      ],
+      "vehicle_soc": [
+        "ev_battery_level"
+      ]
+    },
+    "sungrow": {
+      "battery_target_soc": [
+        "forced_charging_target_soc_1",
+        "forced_charging_target_soc_2",
+        "soc_upper_limit"
+      ]
+    },
+    "sunsynk": {
+      "battery_target_soc": [
+        "target_soc"
+      ]
+    },
+    "tesla_fleet": {
+      "battery_power": [
+        "battery_power"
+      ],
+      "grid_power": [
+        "grid_power"
+      ],
+      "solar_power": [
+        "solar_power"
+      ],
+      "vehicle_range": [
+        "charge_state_battery_range",
+        "charge_state_est_battery_range",
+        "charge_state_ideal_battery_range"
+      ]
+    },
+    "teslemetry": {
+      "battery_power": [
+        "battery_power"
+      ],
+      "grid_power": [
+        "grid_power"
+      ],
+      "solar_power": [
+        "solar_power"
+      ],
+      "vehicle_range": [
+        "charge_state_battery_range",
+        "charge_state_est_battery_range",
+        "charge_state_ideal_battery_range",
+        "rated_range"
+      ]
+    },
+    "tessie": {
+      "battery_power": [
+        "battery_power"
+      ],
+      "grid_power": [
+        "grid_power"
+      ],
+      "solar_power": [
+        "solar_power"
+      ],
+      "vehicle_range": [
+        "charge_state_battery_range",
+        "charge_state_est_battery_range",
+        "charge_state_ideal_battery_range"
+      ]
+    },
+    "tibber": {
+      "battery_capacity_spec": [
+        "storage_rated_capacity"
+      ],
+      "system_size_spec": [
+        "storage_rated_power"
+      ]
+    },
+    "toyota": {
+      "vehicle_range": [
+        "battery_range",
+        "total_range"
+      ]
+    },
+    "uconnect": {
+      "vehicle_range": [
+        "range_total"
+      ],
+      "vehicle_soc": [
+        "battery_state_of_charge",
+        "state_of_charge"
+      ]
+    },
+    "v2c": {
+      "ev_charge_mode": [
+        "charge_mode"
+      ]
+    },
+    "v2c_cloud": {
+      "ev_charge_mode": [
+        "charge_mode"
+      ]
+    },
+    "victron_ble": {
+      "solar_power": [
+        "solar_power"
+      ]
+    },
+    "victron_gx": {
+      "battery_capacity_spec": [
+        "battery_capacity"
+      ],
+      "battery_charge_limit": [
+        "system_ess_max_charge_power"
+      ],
+      "battery_force_charge": [
+        "hub4_force_charge"
+      ],
+      "battery_power": [
+        "battery_power"
+      ],
+      "battery_soc": [
+        "battery_soc"
+      ],
+      "battery_strategy": [
+        "system_ess_mode",
+        "system_settings_dess_mode"
+      ],
+      "ev_charge_mode": [
+        "evcharger_mode"
+      ],
+      "ev_current_control": [
+        "evcharger_max_set_current",
+        "evcharger_set_current"
+      ],
+      "grid_power": [
+        "grid_power"
+      ],
+      "vehicle_soc": [
+        "ev_soc"
+      ]
+    },
+    "victron_mk3": {
+      "battery_power": [
+        "battery_power"
+      ]
+    },
+    "victron_mqtt": {
+      "battery_capacity_spec": [
+        "battery_capacity"
+      ],
+      "battery_charge_limit": [
+        "hub4_max_charge_power",
+        "system_ess_max_charge_power"
+      ],
+      "battery_discharge_limit": [
+        "hub4_max_discharge_power"
+      ],
+      "battery_force_charge": [
+        "hub4_force_charge"
+      ],
+      "battery_power": [
+        "battery_power"
+      ],
+      "battery_soc": [
+        "battery_soc"
+      ],
+      "battery_strategy": [
+        "system_ess_mode",
+        "system_settings_dess_mode"
+      ],
+      "ev_charge_mode": [
+        "evcharger_mode"
+      ],
+      "ev_current_control": [
+        "evcharger_max_set_current",
+        "evcharger_set_current"
+      ],
+      "grid_power": [
+        "grid_power"
+      ],
+      "vehicle_soc": [
+        "ev_soc"
+      ]
+    },
+    "victron_vebus_mk3": {
+      "battery_power": [
+        "battery_charge_discharge_power",
+        "battery_power"
+      ],
+      "battery_soc": [
+        "battery_state_of_charge"
+      ]
+    },
+    "wallbox": {
+      "vehicle_soc": [
+        "state_of_charge"
+      ]
+    },
+    "zaptec": {
+      "ev_current_control": [
+        "available_current",
+        "charger_max_current"
+      ]
+    },
+    "zendure_ha": {
+      "grid_power": [
+        "grid_power"
+      ]
+    },
+    "zonneplan_one": {
+      "battery_charge_limit": [
+        "max_charge_power"
+      ],
+      "battery_discharge_limit": [
+        "max_discharge_power"
+      ],
+      "battery_soc": [
+        "state_of_charge"
+      ]
+    }
+  }
+}

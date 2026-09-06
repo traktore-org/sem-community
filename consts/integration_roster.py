@@ -30,7 +30,7 @@ from typing import Any, Dict, Final
 SCHEMA: Final = 1
 
 
-ROSTER_META: Final[Dict[str, Any]] = {'generated_at': '2026-09-05T20:06:33Z', 'sources': {'core_analytics': 'https://analytics.home-assistant.io/data.json', 'core_index': 'https://raw.githubusercontent.com/home-assistant/core/dev/homeassistant/generated/integrations.json', 'custom_installs': 'https://analytics.home-assistant.io/custom_integrations.json', 'hacs': 'https://data-v2.hacs.xyz/integration/data.json', 'website': 'https://www.home-assistant.io/integrations.json'}, 'install_floor': 50, 'candidates': 1350, 'kept': 194, 'with_roles': 57, 'roles_mined': 155}
+ROSTER_META: Final[Dict[str, Any]] = {'generated_at': '2026-09-06T03:35:18Z', 'sources': {'core_analytics': 'https://analytics.home-assistant.io/data.json', 'core_index': 'https://raw.githubusercontent.com/home-assistant/core/dev/homeassistant/generated/integrations.json', 'custom_installs': 'https://analytics.home-assistant.io/custom_integrations.json', 'hacs': 'https://data-v2.hacs.xyz/integration/data.json', 'website': 'https://www.home-assistant.io/integrations.json'}, 'install_floor': 50, 'candidates': 1350, 'kept': 194, 'with_roles': 57, 'roles_mined': 155}
 
 #: domain -> what the ecosystem says this integration is.
 ROSTER: Final[Dict[str, Dict[str, Any]]] = {
@@ -238,10 +238,10 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
     },
     'anker_solix': {
         'battery_charge_limit': {'platform': 'number', 'keys': ('ac_max_charging_power',), 'options': ()},
-        'battery_soc': {'platform': 'sensor', 'keys': ('state_of_charge',), 'options': ()},
-        'ev_charge_mode': {'platform': 'select', 'keys': ('charger_mode', 'ev_charger_mode'), 'options': ('normal', 'reverse', 'unknown', 'boost_charge', 'skip_delay', 'start_charge', 'stop_charge', 'wait_plug', 'wait_start')},
+        'battery_soc': {'platform': 'sensor', 'keys': ('state_of_charge',), 'options': (), 'exact_only': ('state_of_charge',)},
+        'ev_charge_mode': {'platform': 'select', 'keys': ('charger_mode', 'ev_charger_mode'), 'options': ('normal', 'reverse', 'unknown', 'boost_charge', 'skip_delay', 'start_charge', 'stop_charge', 'wait_plug', 'wait_start'), 'exact_only': ('charger_mode',)},
         'ev_current_control': {'platform': 'number', 'keys': ('max_evcharge_current',), 'options': ()},
-        'solar_power': {'platform': 'sensor', 'keys': ('input_power',), 'options': ()},
+        'solar_power': {'platform': 'sensor', 'keys': ('input_power',), 'options': (), 'exact_only': ('input_power',)},
     },
     'anker_solix_official': {
         'battery_soc': {'platform': 'sensor', 'keys': ('battery_soc',), 'options': ()},
@@ -251,19 +251,19 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'solar_power': {'platform': 'sensor', 'keys': ('pv_power',), 'options': ()},
     },
     'audiconnect': {
-        'vehicle_range': {'platform': 'sensor', 'keys': ('hybrid_range', 'primary_engine_range', 'range', 'secondary_engine_range'), 'options': ()},
-        'vehicle_soc': {'platform': 'sensor', 'keys': ('state_of_charge',), 'options': ()},
+        'vehicle_range': {'platform': 'sensor', 'keys': ('hybrid_range', 'primary_engine_range', 'range', 'secondary_engine_range'), 'options': (), 'exact_only': ('range',)},
+        'vehicle_soc': {'platform': 'sensor', 'keys': ('state_of_charge',), 'options': (), 'exact_only': ('state_of_charge',)},
     },
     'ef_ble': {
         'battery_charge_limit': {'platform': 'number', 'keys': ('charging_grid_power_limit',), 'options': ()},
         'battery_discharge_limit': {'platform': 'number', 'keys': ('discharging_power_limit',), 'options': ()},
         'battery_force_charge': {'platform': 'switch', 'keys': ('ch_force_charge',), 'options': ()},
-        'battery_power': {'platform': 'sensor', 'keys': ('battery_power',), 'options': ()},
+        'battery_power': {'platform': 'sensor', 'keys': ('battery_power',), 'options': (), 'exact_only': ('battery_power',)},
         'battery_strategy': {'platform': 'select', 'keys': ('operating_mode_select',), 'options': ('intelligent', 'none', 'scheduled', 'self_powered', 'time_of_use')},
         'battery_target_soc': {'platform': 'number', 'keys': ('charging_grid_target_soc',), 'options': ()},
         'ev_charge_mode': {'platform': 'select', 'keys': ('charger_mode',), 'options': ('battery_maintenance', 'charge', 'idle', 'reverse_charge')},
         'grid_power': {'platform': 'sensor', 'keys': ('grid_power',), 'options': ()},
-        'solar_power': {'platform': 'sensor', 'keys': ('input_power',), 'options': ()},
+        'solar_power': {'platform': 'sensor', 'keys': ('input_power',), 'options': (), 'exact_only': ('input_power',)},
         'system_size_spec': {'platform': 'sensor', 'keys': ('channel_rated_power',), 'options': ()},
     },
     'eg4_web_monitor': {
@@ -294,7 +294,7 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'battery_soc': {'platform': 'sensor', 'keys': ('battery_soc',), 'options': ()},
         'grid_export_power': {'platform': 'sensor', 'keys': ('grid_export_power',), 'options': ()},
         'grid_import_power': {'platform': 'sensor', 'keys': ('grid_import_power',), 'options': ()},
-        'grid_power': {'platform': 'sensor', 'keys': ('grid_power',), 'options': ()},
+        'grid_power': {'platform': 'sensor', 'keys': ('grid_power',), 'options': (), 'exact_only': ('grid_power',)},
     },
     'growatt_server': {
         'battery_charge_limit': {'platform': 'number', 'keys': ('battery_charge_power_limit',), 'options': ()},
@@ -311,12 +311,12 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'battery_charge_limit': {'platform': 'number', 'keys': ('storage_maximum_charging_power',), 'options': ()},
         'battery_discharge_limit': {'platform': 'number', 'keys': ('storage_maximum_discharging_power',), 'options': ()},
         'battery_power': {'platform': 'sensor', 'keys': ('battery_charge_discharge_power', 'storage_charge_discharge_power'), 'options': ()},
-        'battery_soc': {'platform': 'sensor', 'keys': ('state_of_capacity', 'storage_state_of_capacity'), 'options': ()},
+        'battery_soc': {'platform': 'sensor', 'keys': ('state_of_capacity', 'storage_state_of_capacity'), 'options': (), 'exact_only': ('state_of_capacity',)},
         'battery_strategy': {'platform': 'select', 'keys': ('storage_working_mode_settings',), 'options': ('adaptive', 'fixed_charge_discharge', 'fully_fed_to_grid', 'maximise_self_consumption', 'time_of_use_lg', 'time_of_use_luna2000')},
         'battery_target_soc': {'platform': 'number', 'keys': ('storage_capacity_control_soc_peak_shaving',), 'options': ()},
-        'grid_power': {'platform': 'sensor', 'keys': ('meter_active_power', 'power_meter_active_power'), 'options': ()},
-        'solar_power': {'platform': 'sensor', 'keys': ('input_power',), 'options': ()},
-        'system_size_spec': {'platform': 'sensor', 'keys': ('inverter_rated_power', 'rated_power'), 'options': ()},
+        'grid_power': {'platform': 'sensor', 'keys': ('meter_active_power', 'power_meter_active_power'), 'options': (), 'exact_only': ('meter_active_power',)},
+        'solar_power': {'platform': 'sensor', 'keys': ('input_power',), 'options': (), 'exact_only': ('input_power',)},
+        'system_size_spec': {'platform': 'sensor', 'keys': ('inverter_rated_power', 'rated_power'), 'options': (), 'exact_only': ('rated_power',)},
     },
     'hypontech': {
         'battery_power': {'platform': 'sensor', 'keys': ('battery_power',), 'options': ()},
@@ -328,16 +328,16 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'battery_soc': {'platform': 'sensor', 'keys': ('battery_soc',), 'options': ()},
     },
     'marstek_venus_energy_manager': {
-        'battery_charge_limit': {'platform': 'number', 'keys': ('max_charge_power', 'system_max_charge_power'), 'options': ()},
-        'battery_discharge_limit': {'platform': 'number', 'keys': ('max_discharge_power', 'system_max_discharge_power'), 'options': ()},
+        'battery_charge_limit': {'platform': 'number', 'keys': ('max_charge_power', 'system_max_charge_power'), 'options': (), 'exact_only': ('max_charge_power',)},
+        'battery_discharge_limit': {'platform': 'number', 'keys': ('max_discharge_power', 'system_max_discharge_power'), 'options': (), 'exact_only': ('max_discharge_power',)},
         'battery_power': {'platform': 'sensor', 'keys': ('battery_power',), 'options': ()},
         'battery_soc': {'platform': 'sensor', 'keys': ('battery_soc',), 'options': ()},
         'battery_strategy': {'platform': 'select', 'keys': ('user_work_mode',), 'options': ('anti_feed', 'manual', 'trade_mode')},
         'battery_target_soc': {'platform': 'number', 'keys': ('charge_to_soc',), 'options': ()},
-        'solar_power': {'platform': 'sensor', 'keys': ('solar_power',), 'options': ()},
+        'solar_power': {'platform': 'sensor', 'keys': ('solar_power',), 'options': (), 'exact_only': ('solar_power',)},
     },
     'myskoda': {
-        'vehicle_range': {'platform': 'sensor', 'keys': ('adblue_range', 'combustion_range', 'electric_range', 'range'), 'options': ()},
+        'vehicle_range': {'platform': 'sensor', 'keys': ('adblue_range', 'combustion_range', 'electric_range', 'range'), 'options': (), 'exact_only': ('range',)},
     },
     'nrgkick': {
         'ev_current_control': {'platform': 'number', 'keys': ('current_set',), 'options': ()},
@@ -373,7 +373,7 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'grid_import_power': {'platform': 'sensor', 'keys': ('grid_imported_power',), 'options': ()},
     },
     'sessy': {
-        'battery_strategy': {'platform': 'select', 'keys': ('battery_strategy',), 'options': ('api', 'eco', 'idle', 'nom', 'roi', 'sessy_connect')},
+        'battery_power_strategy': {'platform': 'select', 'keys': ('battery_strategy',), 'options': ('api', 'eco', 'idle', 'nom', 'roi', 'sessy_connect')},
     },
     'sigen': {
         'battery_charge_limit': {'platform': 'number', 'keys': ('dc_charger_max_charging_power_limit',), 'options': ()},
@@ -409,7 +409,7 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'grid_power': {'platform': 'sensor', 'keys': ('grid_active_power',), 'options': ()},
     },
     'subaru': {
-        'vehicle_range': {'platform': 'sensor', 'keys': ('ev_range', 'range'), 'options': ()},
+        'vehicle_range': {'platform': 'sensor', 'keys': ('ev_range', 'range'), 'options': (), 'exact_only': ('range',)},
         'vehicle_soc': {'platform': 'sensor', 'keys': ('ev_battery_level',), 'options': ()},
     },
     'sungrow': {
@@ -445,7 +445,7 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
     },
     'uconnect': {
         'vehicle_range': {'platform': 'sensor', 'keys': ('range_total',), 'options': ()},
-        'vehicle_soc': {'platform': 'sensor', 'keys': ('battery_state_of_charge', 'state_of_charge'), 'options': ()},
+        'vehicle_soc': {'platform': 'sensor', 'keys': ('battery_state_of_charge', 'state_of_charge'), 'options': (), 'exact_only': ('state_of_charge',)},
     },
     'v2c': {
         'ev_charge_mode': {'platform': 'select', 'keys': ('charge_mode',), 'options': ('mixed', 'monophasic', 'threephasic')},
@@ -457,11 +457,11 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'solar_power': {'platform': 'sensor', 'keys': ('solar_power',), 'options': ()},
     },
     'victron_gx': {
-        'battery_capacity_spec': {'platform': 'sensor', 'keys': ('battery_capacity',), 'options': ()},
+        'battery_capacity_spec': {'platform': 'sensor', 'keys': ('battery_capacity',), 'options': (), 'exact_only': ('battery_capacity',)},
         'battery_charge_limit': {'platform': 'number', 'keys': ('system_ess_max_charge_power',), 'options': ()},
         'battery_force_charge': {'platform': 'switch', 'keys': ('hub4_force_charge',), 'options': ()},
-        'battery_power': {'platform': 'sensor', 'keys': ('battery_power',), 'options': ()},
-        'battery_soc': {'platform': 'sensor', 'keys': ('battery_soc',), 'options': ()},
+        'battery_power': {'platform': 'sensor', 'keys': ('battery_power',), 'options': (), 'exact_only': ('battery_power',)},
+        'battery_soc': {'platform': 'sensor', 'keys': ('battery_soc',), 'options': (), 'exact_only': ('battery_soc',)},
         'battery_strategy': {'platform': 'select', 'keys': ('system_ess_mode', 'system_settings_dess_mode'), 'options': ('external_control', 'phase_compensation_disabled', 'phase_compensation_enabled', 'auto_vrm', 'buy', 'node_red', 'off', 'sell')},
         'ev_charge_mode': {'platform': 'select', 'keys': ('evcharger_mode',), 'options': ('auto', 'manual', 'scheduled_charge')},
         'ev_current_control': {'platform': 'number', 'keys': ('evcharger_max_set_current', 'evcharger_set_current'), 'options': ()},
@@ -472,12 +472,12 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'battery_power': {'platform': 'sensor', 'keys': ('battery_power',), 'options': ()},
     },
     'victron_mqtt': {
-        'battery_capacity_spec': {'platform': 'sensor', 'keys': ('battery_capacity',), 'options': ()},
+        'battery_capacity_spec': {'platform': 'sensor', 'keys': ('battery_capacity',), 'options': (), 'exact_only': ('battery_capacity',)},
         'battery_charge_limit': {'platform': 'number', 'keys': ('hub4_max_charge_power', 'system_ess_max_charge_power'), 'options': ()},
         'battery_discharge_limit': {'platform': 'number', 'keys': ('hub4_max_discharge_power',), 'options': ()},
         'battery_force_charge': {'platform': 'switch', 'keys': ('hub4_force_charge',), 'options': ('off', 'on')},
-        'battery_power': {'platform': 'sensor', 'keys': ('battery_power',), 'options': ()},
-        'battery_soc': {'platform': 'sensor', 'keys': ('battery_soc',), 'options': ()},
+        'battery_power': {'platform': 'sensor', 'keys': ('battery_power',), 'options': (), 'exact_only': ('battery_power',)},
+        'battery_soc': {'platform': 'sensor', 'keys': ('battery_soc',), 'options': (), 'exact_only': ('battery_soc',)},
         'battery_strategy': {'platform': 'select', 'keys': ('system_ess_mode', 'system_settings_dess_mode'), 'options': ('external_control', 'phase_compensation_disabled', 'phase_compensation_enabled', 'auto_vrm', 'buy', 'node_red', 'off', 'sell')},
         'ev_charge_mode': {'platform': 'select', 'keys': ('evcharger_mode',), 'options': ('auto', 'manual', 'scheduled_charge')},
         'ev_current_control': {'platform': 'number', 'keys': ('evcharger_max_set_current', 'evcharger_set_current'), 'options': ()},

@@ -238,6 +238,8 @@ _DOCS_ANCHORS = {
         "hot-water-temperature-sensor-unavailable",
     "heat_pump_partial_sg_ready": "heat-pump-only-one-sg-ready-relay",
     "charger_control_entity_broken": "a-charger-control-entity-is-broken",
+    # (#915) a battery control SEM wrote never reflected the value
+    "battery_control_write_not_taken": "a-battery-control-write-is-not-taken",
     # KEBA has a dedicated deep-dive doc — richer than a troubleshooting
     # section, so the builder serves it whole (a full URL passes through).
     "keba_failsafe_active":
@@ -1385,6 +1387,48 @@ def raise_charger_control_entity_broken(
         )
     except Exception as e:  # noqa: BLE001 — never fail the cycle over a repair
         _LOGGER.debug("issue_registry.create failed for %s: %s", entity_id, e)
+
+
+def _battery_write_issue_id(entity_id: str) -> str:
+    return f"battery_control_write_not_taken_{entity_id}"
+
+
+def raise_battery_control_write_not_taken(
+    hass: HomeAssistant, *, entity_id: str, wanted: str, seen: str,
+    strikes: int,
+) -> None:
+    """(#915) SEM wrote a battery control and the entity never reflected it
+    — three cycles running. A declared key cannot say whether a register
+    accepts a write, expires it, or is a global setting the vendor says to
+    leave alone; only the first write answers that, and this is where the
+    answer surfaces instead of staying a log line."""
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id=_battery_write_issue_id(entity_id),
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="battery_control_write_not_taken",
+            learn_more_url=next_step_url(
+                "docs", "battery_control_write_not_taken", **_versions(hass)),
+            translation_placeholders={
+                "entity_id": entity_id,
+                "wanted": str(wanted),
+                "seen": str(seen),
+                "strikes": str(strikes),
+            },
+        )
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.create failed for %s: %s", entity_id, e)
+
+
+def clear_battery_control_write_not_taken(hass: HomeAssistant, entity_id: str) -> None:
+    try:
+        ir.async_delete_issue(hass, DOMAIN, _battery_write_issue_id(entity_id))
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete failed for %s: %s", entity_id, e)
 
 
 def clear_charger_control_entity_broken(

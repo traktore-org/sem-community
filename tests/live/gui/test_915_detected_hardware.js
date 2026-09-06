@@ -33,6 +33,16 @@ const OUT = process.env.SHOT_DIR || '/tmp';
         L.check('A1b the Detected hardware section is open',
                 text.includes('Detected hardware'));
 
+        // (#915) The report built at boot is unjudged and a slow modbus
+        // integration's entities may not have states for a minute after a
+        // restart; the coordinator re-heals it. Wait for that instead of
+        // asserting on the boot-time copy — the README's settle trap, in
+        // its A form.
+        await L.until(async () => {
+            const r = await L.api('states/sensor.sem_diag_charger_control');
+            const dr = r?.attributes?.detection_report;
+            return dr && dr.judged === true && !(dr.not_loaded > 0);
+        }, { timeoutMs: 150000, everyMs: 10000 });
         const report = JSON.parse(await page.evaluate(`(() => {
             const st = document.querySelector('home-assistant')?.hass
                 ?.states?.['sensor.sem_diag_charger_control'];
@@ -83,6 +93,47 @@ const OUT = process.env.SHOT_DIR || '/tmp';
         const perCharger = allRoles.filter(([, v]) => v.action === 'per_charger');
         L.check('A5d a charger-scoped role explains itself instead of offering a button',
                 perCharger.every(() => text.includes('EV chargers')) || perCharger.length === 0);
+
+        // A5e — (#915 gap close) a policy selector is named and NOT offered.
+        // Huawei's working-mode select is the #845 boundary: SEM watches
+        // it, the user sets it. The card has to say so, not just omit a
+        // button.
+        const observe = allRoles.filter(([, v]) => v.action === 'observe_only');
+        // A policy selector SEM already watches (#845's
+        // battery_operating_mode_entity) is filtered as "in use" and never
+        // proposed — correct, and distinguishable from a lost reason.
+        const cfg = await L.config();
+        const policyBound = !!(cfg.battery_operating_mode_entity || '').startsWith?.('select.');
+        L.check('A5e a policy selector is observe-only, with the reason on the card',
+                observe.length > 0 ? text.includes('SEM reads it and never writes it') : policyBound,
+                observe.length ? observe.map(([r, v]) => `${r}:${v.matched_key}`).join(' ')
+                               : `none proposed; policy selector bound=${cfg.battery_operating_mode_entity || '—'}`);
+        L.check('A5e2 every proposal on a running HA was judged against its live state',
+                allRoles.every(([, v]) => v.judged === true),
+                allRoles.filter(([, v]) => v.judged !== true).map(([r]) => r).join(' ') || 'all judged');
+        L.check('A5f an observe-only role carries no config key',
+                observe.every(([, v]) => !v.config_key));
+
+        // A5g — every button-bearing proposal points at an entity whose
+        // LIVE unit is what SEM will write. Read the states directly: the
+        // backend judged them, this is the independent check.
+        const WANT = { battery_charge_limit: ['W', 'kW'], battery_discharge_limit: ['W', 'kW'],
+                       battery_target_soc: ['%'], battery_power: ['W', 'kW'],
+                       battery_soc: ['%'], solar_power: ['W', 'kW'], grid_power: ['W', 'kW'],
+                       ev_current_control: ['A'] };
+        let unitOk = true; const unitNotes = [];
+        for (const [role, v] of settable) {
+            if (!WANT[role]) continue;
+            const st = await L.api(`states/${v.entity}`);
+            const u = st?.attributes?.unit_of_measurement;
+            if (!WANT[role].includes(u)) { unitOk = false; unitNotes.push(`${role}=${v.entity}:${u}`); }
+        }
+        L.check('A5g every button-bearing proposal has the unit SEM will write',
+                unitOk, unitNotes.join(' ') || `${settable.length} checked`);
+        const refused = allRoles.filter(([, v]) => ['unit_mismatch', 'no_unit', 'not_loaded', 'options_unmapped'].includes(v.action));
+        L.check('A5h every refusal carries a reason the card renders',
+                refused.every(([, v]) => v.action !== 'unit_mismatch' || (v.unit_seen && v.unit_wanted)),
+                refused.map(([r, v]) => `${r}:${v.action}`).join(' ') || 'none refused on this rig');
 
         await L.shot(page, `${OUT}/915_A_detected_hardware.png`);
 
