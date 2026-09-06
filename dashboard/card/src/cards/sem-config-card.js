@@ -1099,6 +1099,8 @@ class SEMConfigCard extends SEMLitBase {
                 case 'options_unmapped': return fill('config_proposed_options_unmapped',
                     { missing: (p.values_missing || []).join(', '),
                       options: (p.options || []).join(', ') });
+                case 'pair_incomplete': return fill('config_proposed_pair_incomplete',
+                    { missing: (p.missing_role || []).join(', ') });
                 case 'per_charger': return this._t('config_proposed_per_charger');
                 default: return '';
             }

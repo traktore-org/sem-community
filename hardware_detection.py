@@ -1036,14 +1036,48 @@ def describe_domain(domain: str) -> Optional[Dict[str, Any]]:
                 (getattr(r, "ROLE_VOCAB", {}) or {}).get(str(domain)))}
 
 
-def roster_role_keys(domain: str, role: str) -> tuple:
-    """The entity keys an integration DECLARES for a SEM role, from its own
-    repository. Empty when the roster has no vocabulary for it."""
+def roster_role_vocab(domain: str, role: str) -> Dict[str, tuple]:
+    """What an integration DECLARES for a SEM role, from its own repository:
+    ``{"keys": (...), "exact_only": (...)}``. ``exact_only`` names the keys
+    that may be matched by translation_key alone — each is a segment-suffix
+    of a LONGER key the same brand declares (``max_discharge_power`` beside
+    ``system_max_discharge_power``), so a unique_id suffix cannot tell them
+    apart. Every consumer must carry it; ``roster_role_keys`` below dropped
+    it, and the discovery rung that auto-binds the discharge control was
+    matching on the stripped list (found by the 06.09 audit)."""
     r = _roster()
     if r is None:
-        return ()
+        return {"keys": (), "exact_only": ()}
     body = ((getattr(r, "ROLE_VOCAB", {}) or {}).get(str(domain)) or {}).get(role)
-    return tuple(body.get("keys", ())) if body else ()
+    if not body:
+        return {"keys": (), "exact_only": ()}
+    return {"keys": tuple(body.get("keys", ())),
+            "exact_only": tuple(body.get("exact_only", ()))}
+
+
+def roster_role_keys(domain: str, role: str) -> tuple:
+    """The entity keys an integration DECLARES for a SEM role. Empty when the
+    roster has no vocabulary for it. Callers that MATCH must use
+    ``_entry_matches_declared`` with ``roster_role_vocab``, never a bare
+    ``endswith`` over this list."""
+    return roster_role_vocab(domain, role)["keys"]
+
+
+def _entry_matches_declared(entry, keys, exact_only=()) -> Optional[str]:
+    """The ONE matcher every consumer of the roster uses. translation_key is
+    the integration's own word and matches exactly. unique_id is a
+    convention (``<serial>_<key>``): it matches at a ``_`` segment boundary
+    only — a bare ``endswith`` is bug class 67 — and never for an
+    ``exact_only`` key. Returns the matched key or None."""
+    tk = str(getattr(entry, "translation_key", "") or "")
+    uid = str(getattr(entry, "unique_id", "") or "")
+    exact = set(exact_only or ())
+    for k in keys:
+        if tk == k:
+            return k
+        if k not in exact and (uid == k or uid.endswith("_" + k)):
+            return k
+    return None
 
 
 def propose_roles_from_roster(dev_entities, domain: str, *,
@@ -1084,23 +1118,10 @@ def propose_roles_from_roster(dev_entities, domain: str, *,
             eid = str(getattr(entry, "entity_id", ""))
             if want_domain and not eid.startswith(f"{want_domain}."):
                 continue
-            tk = str(getattr(entry, "translation_key", "") or "")
-            uid = str(getattr(entry, "unique_id", "") or "")
-            exact_only = set(body.get("exact_only", ()))
-            for rank, k in enumerate(keys):
-                # translation_key is the integration's own word: exact.
-                # unique_id is a convention (``<serial>_<key>``), so it is
-                # matched at a SEGMENT boundary only — never a bare
-                # ``endswith``, which is bug class 67 — and never at all for
-                # a key the same brand also declares a longer version of
-                # (``battery_capacity`` beside ``ev_battery_capacity``: the
-                # roster marks those ``exact_only``).
-                by_key = tk == k
-                by_uid = (k not in exact_only
-                          and (uid == k or uid.endswith("_" + k)))
-                if by_key or by_uid:
-                    matches.append((rank, eid, k))
-                    break
+            hit = _entry_matches_declared(
+                entry, keys, body.get("exact_only", ()))
+            if hit:
+                matches.append((keys.index(hit), eid, hit))
         if not matches:
             continue
         matches.sort()
@@ -1127,6 +1148,25 @@ def propose_roles_from_roster(dev_entities, domain: str, *,
         out[role]["judged"] = state_of is not None
         if out[role]["action"] == "set_option" and state_of is not None:
             _gate_proposal(out[role], role, state_of, strategy_values)
+    # (#915, 06.09 audit) Half a split pair is not a proposal — PER DEVICE.
+    # The crawler enforces PAIRED_ROLES on the whole declared vocabulary, but
+    # a firmware or model variant may expose only one of the two sensors on
+    # THIS box; accepting that one alone writes grid_import_power_entity
+    # with no export half, and the reader then reads "always importing,
+    # never exporting" with no warning. The button is withheld and the row
+    # says which half is missing.
+    try:
+        from .consts import role_lexicon as _lex
+        pairs = getattr(_lex, "PAIRED_ROLES", ())
+    except Exception:  # noqa: BLE001
+        pairs = ()
+    for pair in pairs:
+        present = [r for r in pair if r in out]
+        if 0 < len(present) < len(pair):
+            for r in present:
+                if out[r].get("action") == "set_option":
+                    out[r]["action"] = "pair_incomplete"
+                    out[r]["missing_role"] = [x for x in pair if x not in out]
     return out
 
 
@@ -2498,18 +2538,28 @@ def discover_inverter_from_registry_verbose(
     # sweep question asks for by name. The unit gate below is unchanged, so
     # this rung is strictly safer than the name match it precedes — and when
     # it finds nothing, the regex rung runs exactly as before.
-    _keys = roster_role_keys(platform, "battery_discharge_limit")
+    _vocab = roster_role_vocab(platform, "battery_discharge_limit")
+    _keys = _vocab["keys"]
     if _keys:
+        # (06.09 audit) The SAME matcher the card path uses — segment
+        # boundary, exact_only honoured. This rung auto-binds the entity
+        # SEM writes a power setpoint to every cycle; a bare ``endswith``
+        # here picked Marstek's fleet ceiling (``system_max_discharge_power``)
+        # for the per-unit key it ends with.
         _by_key = []
         for entry in entity_reg.entities.values():
             if entry.entity_id not in same_integration:
                 continue
-            tk = str(getattr(entry, "translation_key", "") or "")
-            uid = str(getattr(entry, "unique_id", "") or "")
-            if any(tk == k or uid.endswith(k) for k in _keys):
-                _by_key.append(entry.entity_id)
+            hit = _entry_matches_declared(entry, _keys, _vocab["exact_only"])
+            if hit:
+                # ranked by the roster's key ORDER, as the card path is (#810):
+                # Marstek declares the per-unit `max_discharge_power` before
+                # the fleet ceiling `system_max_discharge_power`; sorting by
+                # entity id picked whichever name came first alphabetically —
+                # the ceiling, on the audit's rig.
+                _by_key.append((_keys.index(hit), entry.entity_id))
         if _by_key:
-            chosen = sorted(_by_key)[0]
+            chosen = sorted(_by_key)[0][1]
             _LOGGER.info(
                 "Auto-discovered battery discharge control entity: %s "
                 "(platform=%s, declared key — roster #915)", chosen, platform)

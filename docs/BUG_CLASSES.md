@@ -2609,3 +2609,26 @@ entity's unit and existence are read, and each refusal carries a reason the card
 `tests/test_915_roster_at_runtime.py::TestTheButtonIsOfferedOnlyWhenTheEntityCanTakeIt`.
 **Sweep question:** for every config key, how many code paths can SET it — and does each of them
 run the same gate? Refs #915 #824 #882.
+
+**Second instance, one day later, in the fix itself (06.09 audit).** The segment-bounded,
+exact-only-aware matcher was written for the card's proposal path. The discovery rung that
+AUTO-BINDS `battery_discharge_control_entity` at install — the actuation path, the one the whole
+gate exists for — kept `roster_role_keys()` (exact-only stripped) and a bare `endswith`, and on a
+Marstek bound the fleet ceiling for the per-unit key it ends with. Three consumers of the same
+data, three matchers; now one `_entry_matches_declared`. The sweep question above applies to
+MATCHERS as much as to gates: how many places compare a declared key, and is it the same code?
+
+### 73. A success that is not an event re-arms the clock — GUARDED
+**Symptom:** the #915 write read-back never produced a verdict on PROD: `write_verified` stayed
+`None` all day while the discharge limit was written every cycle. **Root shape:** the idempotent
+same-value skip (#900/#538) returns `True` — correct for "did the setpoint end up right" — and the
+read-back took that `True` as "a write went out" and re-noted the pending write, resetting its
+grace timer every ten seconds. A timer that measures "time since the last write" was being fed
+"time since the last *success*", and in the default state every cycle succeeds. The feature was
+inert precisely when the register it exists to watch was being written. **Closure:** the write
+helper returns `(ok, wrote)`; only `wrote` notes a pending write; an identical pending write is
+never re-armed; and the default state (`command_normal` with a register stuck at 0) is tested to
+reach a `False` verdict within cycles. **Guard:**
+`tests/test_915_write_verification.py::TestTheDefaultStateReachesAVerdict`. **Sweep question:**
+for every timer or counter armed "on write", "on send", "on refresh" — is it armed by the EVENT or
+by the RESULT, and does the result ever succeed without the event? Refs #915 #900 #538.

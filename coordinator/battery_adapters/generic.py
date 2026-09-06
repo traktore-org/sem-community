@@ -14,7 +14,7 @@ import logging
 from typing import Optional
 
 from ..charger_types import BatteryIntent
-from ..power_control import async_write_power_setpoint
+from ..power_control import async_write_power_setpoint_verbose
 from .base import BatteryControlAdapter
 
 _LOGGER = logging.getLogger(__name__)
@@ -294,12 +294,16 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         if not self._discharge_control_entity:
             self._last_discharge_limit_w = watts
             return
-        if await async_write_power_setpoint(
+        ok, wrote = await async_write_power_setpoint_verbose(
             self._hass,
             self._discharge_control_entity,
             watts,
             context="Generic battery discharge limit",
-        ):
+        )
+        if ok:
             self._last_discharge_limit_w = watts
-            self._note_pending_write(self._discharge_control_entity, watts)
+            if wrote:
+                # only a write that went OUT is judged; the same-value skip
+                # is not a write and must not re-arm the grace (06.09 audit)
+                self._note_pending_write(self._discharge_control_entity, watts)
 

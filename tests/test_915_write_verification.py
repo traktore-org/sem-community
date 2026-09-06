@@ -12,7 +12,7 @@ entity's own unit, and the coordinator turns three misses into a Repair.
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -218,3 +218,125 @@ class TestTheVerdictHasASurface:
                            description=SensorEntityDescription(
                                key="battery_spendable_kwh", name="x"))
         assert s.extra_state_attributes["write_verified"] is None
+
+
+
+@pytest.mark.unit
+class TestTheDefaultStateReachesAVerdict:
+    """(06.09 audit) ``command_normal`` writes the max every cycle. The
+    same-value skip returned True, that re-noted the pending write, the
+    grace timer re-armed every cycle and no verdict could EVER come — the
+    read-back was inert in the default state, which is why PROD read None
+    all day. Only a write that went out is noted, and an identical pending
+    write is never re-armed."""
+
+    def _adapter_with_stuck_register(self, stuck_at="0"):
+        hass = MagicMock()
+        hass.states = MagicMock()
+        hass.states.get = MagicMock(return_value=SimpleNamespace(
+            state=stuck_at, attributes={"unit_of_measurement": "W", "max": 5000}))
+        hass.services = MagicMock()
+        hass.services.async_call = AsyncMock()
+        ad = GenericBatteryAdapter(hass, {
+            "battery_discharge_control_entity": "number.limit",
+            "battery_max_discharge_power": 5000})
+        ad._write_force_discharge = AsyncMock()
+        ad._set_strategy = AsyncMock()
+        return ad
+
+    @pytest.mark.asyncio
+    async def test_a_register_that_ignores_the_write_is_judged_within_cycles(self):
+        ad = self._adapter_with_stuck_register()
+        verdicts = []
+        t = [1000.0]
+        with patch("time.monotonic", side_effect=lambda: t[0]):
+            for _ in range(10):
+                await ad.command_normal()        # writes 5000 (register stays 0)
+                verdicts.append(ad.verify_pending_write())
+                t[0] += 10.0                     # one coordinator cycle
+        assert False in verdicts, verdicts
+        assert ad.write_not_taken_strikes >= 1
+
+    @pytest.mark.asyncio
+    async def test_the_same_value_skip_is_not_a_write(self):
+        from custom_components.solar_energy_management.coordinator.power_control import (
+            async_write_power_setpoint_verbose,
+        )
+        hass = MagicMock()
+        hass.states.get = MagicMock(return_value=SimpleNamespace(
+            state="5000", attributes={"unit_of_measurement": "W"}))
+        hass.services.async_call = AsyncMock()
+        ok, wrote = await async_write_power_setpoint_verbose(
+            hass, "number.limit", 5000.0, context="t")
+        assert (ok, wrote) == (True, False)
+        hass.services.async_call.assert_not_called()
+
+    def test_an_identical_pending_write_does_not_rearm(self):
+        ad = self._adapter_with_stuck_register()
+        with patch("time.monotonic", return_value=100.0):
+            ad._note_pending_write("number.limit", 5000.0)
+        with patch("time.monotonic", return_value=105.0):
+            ad._note_pending_write("number.limit", 5000.0)   # must NOT reset
+        assert ad._pending_write[2] == 100.0
+
+
+
+@pytest.mark.unit
+class TestTheVerdictWaitsForAReportNotAClock:
+    """(06.09 audit) Huawei's adapter documents a 30-60 s poll lag: the HA
+    entity shows the stale commanded value until huawei_solar next polls.
+    A fixed 8 s grace judged a correct write "not reflected". The verdict
+    waits until the entity has been REPORTED since the write, and gives up
+    only on an integration silent for three minutes."""
+
+    def _adapter(self, state_value, reported_at):
+        import datetime as dt
+        hass = MagicMock()
+        st = SimpleNamespace(state=str(state_value),
+                             attributes={"unit_of_measurement": "W"},
+                             last_reported=dt.datetime.fromtimestamp(
+                                 reported_at, tz=dt.timezone.utc))
+        hass.states.get = MagicMock(return_value=st)
+        return GenericBatteryAdapter(hass, {"battery_discharge_control_entity": "number.limit"})
+
+    def test_stale_value_before_the_integration_reports_is_not_a_miss(self):
+        # write at wall 1000; the entity was last reported at 990 (before)
+        ad = self._adapter(5000, reported_at=990.0)
+        with patch("time.monotonic", return_value=100.0), patch("time.time", return_value=1000.0):
+            ad._note_pending_write("number.limit", 1200.0)
+        with patch("time.monotonic", return_value=120.0):   # 20 s later, still unreported
+            assert ad.verify_pending_write() is None
+        assert ad.write_not_taken_strikes == 0
+
+    def test_once_reported_the_value_is_judged(self):
+        ad = self._adapter(1200, reported_at=1030.0)          # reported AFTER the write
+        with patch("time.monotonic", return_value=100.0), patch("time.time", return_value=1000.0):
+            ad._note_pending_write("number.limit", 1200.0)
+        with patch("time.monotonic", return_value=140.0):
+            assert ad.verify_pending_write() is True
+
+    def test_a_report_after_the_write_that_still_shows_the_old_value_is_a_miss(self):
+        ad = self._adapter(5000, reported_at=1030.0)
+        with patch("time.monotonic", return_value=100.0), patch("time.time", return_value=1000.0):
+            ad._note_pending_write("number.limit", 1200.0)
+        with patch("time.monotonic", return_value=140.0):
+            assert ad.verify_pending_write() is False
+
+    def test_an_integration_silent_for_three_minutes_is_judged_anyway(self):
+        ad = self._adapter(5000, reported_at=990.0)
+        with patch("time.monotonic", return_value=100.0), patch("time.time", return_value=1000.0):
+            ad._note_pending_write("number.limit", 1200.0)
+        with patch("time.monotonic", return_value=100.0 + ad._WRITE_REPORT_WAIT_S + 1):
+            assert ad.verify_pending_write() is False
+
+    def test_a_state_without_timestamps_keeps_the_old_grace(self):
+        """Test doubles and helper entities may carry no timestamps: the
+        8 s grace alone then decides, exactly as before."""
+        hass = MagicMock()
+        hass.states.get = MagicMock(return_value=SimpleNamespace(
+            state="1200", attributes={"unit_of_measurement": "W"}))
+        ad = GenericBatteryAdapter(hass, {"battery_discharge_control_entity": "number.limit"})
+        with patch("time.monotonic", return_value=100.0):
+            ad._note_pending_write("number.limit", 1200.0)
+        with patch("time.monotonic", return_value=110.0):
+            assert ad.verify_pending_write() is True

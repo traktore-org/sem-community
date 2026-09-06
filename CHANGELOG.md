@@ -254,6 +254,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   discharge limit gets the same "did it take" judgement as the generic
   adapter's — which is what SEM's own production system runs.
 
+  **Audited by three independent reviewers before the merge, and they earned
+  their keep.** Runtime: the discovery rung that *auto-binds* the discharge
+  control at install still matched declared keys with a bare suffix — the
+  very hole closed on the card path a day earlier — and on a Marstek, whose
+  per-unit limit is a suffix of its fleet-wide ceiling, it bound the ceiling.
+  Every consumer now uses one matcher, segment-bounded, exact-only aware,
+  ranked by the roster's key order. The write read-back could **never reach
+  a verdict in the default state**: the idempotent same-value skip reported
+  success, that re-armed the grace timer every cycle, and the register was
+  never judged — which is why PROD read "not yet" all day; only a write that
+  actually goes out is noted now, and the default state is tested to reach a
+  verdict. Half a split pair is refused *per device* (a firmware variant may
+  expose one sensor), on the card and in the reader. Security: one malformed
+  row in the HACS index no longer aborts a refresh, a JSON `NaN` can no
+  longer render as a bare name in the generated module, cache filenames and
+  mined keys are bounded, and the split-pair entity ids are redacted from
+  diagnostics like the sibling keys already were. Nothing the reviewers
+  attacked in the card's rendering, the generated code's escaping, the
+  regexes or the offline guarantee gave way.
+
 # [2.1.0-beta.7] — 03.09.2026
 
 - 🛡️ **A flat value from a live integration is not a frozen sensor** (#912).

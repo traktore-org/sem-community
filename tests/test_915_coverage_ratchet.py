@@ -85,11 +85,16 @@ class TestTheCrawlerNeverRunsInCI:
         src = (ROOT / "scripts" / "crawl_integration_roster.py").read_text()
         assert "urlopen" in src, "premise: the crawler is the networked file"
         net = ("urlopen", "requests.", "aiohttp", "httpx")
-        for path in ("tests/test_915_roster_rediscovery.py",
-                     "tests/test_915_roster_is_not_a_claim.py"):
-            text = (ROOT / path).read_text()
-            assert not any(t in text for t in net), path
-            assert "fetch_sources" not in text, path
+        # (06.09 audit) every #915 test file, not the two the guard began
+        # with — a new file that fetched would have passed unnoticed
+        me = pathlib.Path(__file__).name
+        paths = sorted(p for p in (ROOT / "tests").glob("test_915_*.py")
+                       if p.name != me)      # this file names the tokens
+        assert len(paths) >= 4, "premise: the #915 suites exist"
+        for path in paths:
+            text = path.read_text()
+            assert not any(t in text for t in net), path.name
+            assert "fetch_sources" not in text, path.name
 
 
 @pytest.mark.unit
@@ -596,6 +601,9 @@ class TestTheMatrixControlClaimsAgreeWithTheRoster:
                 continue
             if self._offers(doms, "battery_discharge_limit"):
                 continue
+            if row.get("discharge_control") == "declared":
+                unexplained.append(f"{row['brand']} (declared, but the roster no longer offers it)")
+                continue
             if row["brand"] not in self.DISCHARGE_NOT_DECLARED:
                 unexplained.append(row["brand"])
         assert not unexplained, (
@@ -613,6 +621,8 @@ class TestTheMatrixControlClaimsAgreeWithTheRoster:
             doms = row.get("domains") or []
             if row.get("status") == "requested":
                 continue          # a wish, not a claim either way
+            # "declared" is the honest state for a roster-found key nobody
+            # has confirmed live — it agrees with the roster by definition
             if not row.get("discharge_control") and self._offers(
                     doms, "battery_discharge_limit"):
                 wrong.append(row["brand"])
@@ -671,3 +681,58 @@ class TestTheMatrixControlClaimsAgreeWithTheRoster:
         # …and the installation's contracted limit is NOT the charger's
         assert "maximum_icp_current" not in roster.ROLE_VOCAB["wallbox"][
             "ev_current_control"]["keys"]
+
+
+
+@pytest.mark.unit
+class TestOneBadUpstreamRowNeverKillsTheCrawl:
+    """(06.09 audit) HACS aggregates thousands of independently maintained
+    manifests. One malformed row used to raise out of ``candidate_rows`` and
+    deny the whole refresh; a JSON ``NaN`` rendered as the bare name ``nan``
+    in the generated module and made it unimportable; a long domain made a
+    cache filename the filesystem refuses."""
+
+    def _hacs(self, *rows):
+        return {"hacs": {str(i): r for i, r in enumerate(rows)}}
+
+    def test_a_malformed_manifest_or_topic_is_skipped_not_fatal(self):
+        good = {"domain": "acme_x", "manifest": {"name": "Acme X"},
+                "description": "a solar inverter", "full_name": "acme/x",
+                "topics": [], "stargazers_count": 1}
+        bad1 = {"domain": "bad_one", "manifest": ["not", "an", "object"],
+                "description": "solar", "full_name": "x/y"}
+        bad2 = {"domain": "bad_two", "manifest": {"name": "B"},
+                "description": "solar", "full_name": "x/z", "topics": [123]}
+        rows = crawler.candidate_rows(self._hacs(bad1, good, bad2))
+        assert "acme_x" in rows
+        assert "bad_one" not in rows and "bad_two" not in rows
+
+    def test_json_nan_never_reaches_the_generated_module(self, tmp_path):
+        """``json.loads`` accepts ``NaN``; ``repr(nan)`` is the bare name
+        ``nan``, which is not a builtin — the module would raise NameError
+        at import. The parser maps the token to None instead."""
+        import json
+        parsed = json.loads('{"full_name": NaN, "n": Infinity}',
+                            parse_constant=lambda _c: None)
+        assert parsed == {"full_name": None, "n": None}
+        src = (ROOT / "scripts" / "crawl_integration_roster.py").read_text()
+        assert src.count("parse_constant=lambda _c: None") == 2, (
+            "both json.loads sites must reject NaN/Infinity")
+
+    def test_a_long_domain_still_gets_a_valid_cache_name(self):
+        path = crawler._cache_path("vocab_" + "x" * 5000 + "_abc")
+        assert len(path.name) < 200
+        # and it is stable
+        assert path == crawler._cache_path("vocab_" + "x" * 5000 + "_abc")
+
+    def test_mined_keys_and_options_are_bounded(self, monkeypatch):
+        huge_key = "k" * (crawler._MAX_KEY_LEN + 1)
+        raw = {"select": {"mode": {"options": [str(i) for i in range(100)]},
+                          huge_key: {"options": ()}},
+               "number": {"ok_key": {"options": ()}}}
+        monkeypatch.setattr(crawler, "_mine_vocabulary_raw",
+                            lambda *a, **k: raw)
+        v = crawler.mine_vocabulary("r", "d", "hacs", offline=True)
+        assert huge_key not in v["select"]
+        assert len(v["select"]["mode"]["options"]) == crawler._MAX_OPTIONS
+        assert "ok_key" in v["number"]

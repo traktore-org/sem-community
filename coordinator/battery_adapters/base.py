@@ -79,22 +79,57 @@ class BatteryControlAdapter(ABC):
     # raises nothing (#824's lesson, from the other side of the wire).
     _WRITE_GRACE_S: float = 8.0
     _WRITE_TOLERANCE_NATIVE: float = 1.0
+    #: (06.09 audit) A clock is the wrong witness. Huawei's own adapter
+    #: documents that the HA entity shows the STALE commanded value until
+    #: huawei_solar next polls it (30-60 s) — longer than any fixed grace,
+    #: so a correct write would have been judged "not reflected" and three
+    #: changed writes would have raised a Repair on a working battery. The
+    #: verdict therefore waits until the entity has been REPORTED since the
+    #: write (HA's ``last_reported`` / ``last_updated``), and only gives up
+    #: on an integration that stays silent this long — which is its own
+    #: fault, and the sensor-unavailable Repair's business, not this one's.
+    _WRITE_REPORT_WAIT_S: float = 180.0
 
     def _note_pending_write(self, entity_id: str, watts: float) -> None:
         import time as _time
-        self._pending_write = (entity_id, float(watts), _time.monotonic())
+        pending = getattr(self, "_pending_write", None)
+        # A write already waiting to be judged is not re-armed by an
+        # identical one: re-noting reset the grace every cycle and the
+        # verdict never came (06.09 audit).
+        if (pending and pending[0] == entity_id
+                and abs(pending[1] - float(watts)) < 1e-6):
+            return
+        # monotonic for the grace, wall-clock to compare with HA's
+        # ``last_reported`` (a datetime); both taken at the same instant
+        self._pending_write = (entity_id, float(watts), _time.monotonic(),
+                               _time.time())
 
     def verify_pending_write(self):
         import time as _time
         pending = getattr(self, "_pending_write", None)
         if not pending:
             return None
-        entity_id, watts, at = pending
-        if _time.monotonic() - at < self._WRITE_GRACE_S:
+        entity_id, watts, at = pending[0], pending[1], pending[2]
+        wrote_wall = pending[3] if len(pending) > 3 else None
+        elapsed = _time.monotonic() - at
+        if elapsed < self._WRITE_GRACE_S:
             return None          # not yet judged; integrations poll
-        self._pending_write = None
         from ..units import power_state_to_watts, power_unit_scale
         st = self._hass.states.get(entity_id)
+        # Has the integration REPORTED the entity since the write? Until it
+        # has, the state is the stale pre-write value by definition and there
+        # is nothing to judge (06.09 audit — Huawei polls every 30-60 s).
+        reported = (getattr(st, "last_reported", None)
+                    or getattr(st, "last_updated", None)) if st is not None else None
+        try:
+            reported_ts = float(reported.timestamp()) if reported is not None else None
+        except (AttributeError, TypeError, ValueError):
+            reported_ts = None
+        if (reported_ts is not None and wrote_wall is not None
+                and reported_ts < wrote_wall
+                and elapsed < self._WRITE_REPORT_WAIT_S):
+            return None          # no report since the write yet — wait
+        self._pending_write = None
         attrs = getattr(st, "attributes", None) or {}
         # Compared in WATTS through the one canonical converter (#641): the
         # entity's own unit decides the scale, and one native unit of it is

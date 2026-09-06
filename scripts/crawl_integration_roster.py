@@ -118,6 +118,11 @@ def _url_key(url: str) -> str:
 
 def _cache_path(key: str) -> pathlib.Path:
     safe = re.sub(r"[^A-Za-z0-9_.-]", "_", key)
+    # (06.09 audit) an upstream domain of any length flows into this name;
+    # the filesystem stops at 255 bytes, so a long key is shortened to a
+    # prefix plus its own hash — still stable, never too long
+    if len(safe) > 120:
+        safe = safe[:80] + "_" + hashlib.sha1(safe.encode()).hexdigest()[:16]
     return CACHE / f"{safe}.json"
 
 
@@ -151,7 +156,7 @@ def fetch_sources(*, offline: bool) -> Dict[str, Any]:
     for name, url in SOURCES.items():
         raw = _get(url, f"index_{name}", offline=offline)
         try:
-            out[name] = json.loads(raw.decode("utf-8-sig")) if raw else {}
+            out[name] = json.loads(raw.decode("utf-8-sig"), parse_constant=lambda _c: None) if raw else {}
         except (ValueError, UnicodeDecodeError):
             out[name] = {}
         if not out[name]:
@@ -220,6 +225,37 @@ def _install_counts(sources: Dict[str, Any]) -> Dict[str, int]:
     return counts
 
 
+def _hacs_entries(sources: Dict[str, Any]) -> Iterable[dict]:
+    """The HACS index rows that are SHAPED like rows. HACS aggregates
+    thousands of independently maintained manifests; one with ``manifest``
+    as a list or a non-string topic used to raise out of ``candidate_rows``
+    and deny the whole refresh (06.09 audit). Malformed rows are skipped and
+    counted, never fatal."""
+    skipped = 0
+    for entry in (sources.get("hacs") or {}).values():
+        try:
+            if not isinstance(entry, dict):
+                raise TypeError("row is not an object")
+            dom = entry.get("domain")
+            man = entry.get("manifest")
+            topics = entry.get("topics")
+            if dom is not None and not isinstance(dom, str):
+                raise TypeError("domain is not a string")
+            if man is not None and not isinstance(man, dict):
+                raise TypeError("manifest is not an object")
+            if topics is not None and not all(isinstance(t, str) for t in topics):
+                raise TypeError("a topic is not a string")
+            for k in ("description", "full_name", "manifest_name"):
+                if entry.get(k) is not None and not isinstance(entry[k], str):
+                    raise TypeError(f"{k} is not a string")
+        except (TypeError, AttributeError, ValueError):
+            skipped += 1
+            continue
+        yield entry
+    if skipped:
+        print(f"  skipped {skipped} malformed HACS rows", file=sys.stderr)
+
+
 def candidate_rows(sources: Dict[str, Any]) -> Dict[str, dict]:
     """Every integration that looks energy-shaped by NAME (signal 1), from
     both HACS and core. The keyword filter is deliberately generous: signal 2
@@ -227,7 +263,7 @@ def candidate_rows(sources: Dict[str, Any]) -> Dict[str, dict]:
     counts = _install_counts(sources)
     rows: Dict[str, dict] = {}
 
-    for entry in (sources.get("hacs") or {}).values():
+    for entry in _hacs_entries(sources):
         dom = (entry.get("domain") or "").strip().lower()
         if not dom:
             continue
@@ -249,7 +285,7 @@ def candidate_rows(sources: Dict[str, Any]) -> Dict[str, dict]:
     # energy, and it has 5.7k installs. So every WIDELY installed integration
     # is a candidate regardless of its name — its declared vocabulary decides
     # (the two-signal rule, from the other direction).
-    for entry in (sources.get("hacs") or {}).values():
+    for entry in _hacs_entries(sources):
         dom = (entry.get("domain") or "").strip().lower()
         if not dom or dom in rows or counts.get(dom, 0) < POPULAR_FLOOR:
             continue
@@ -269,7 +305,7 @@ def candidate_rows(sources: Dict[str, Any]) -> Dict[str, dict]:
     # ``api/eco/nom/idle`` strategy values from a live install in #523, and
     # the keyword filter had never heard of it.
     known = sem_known_domains()
-    for entry in (sources.get("hacs") or {}).values():
+    for entry in _hacs_entries(sources):
         dom = (entry.get("domain") or "").strip().lower()
         if not dom or dom in rows or dom not in known:
             continue
@@ -287,7 +323,7 @@ def candidate_rows(sources: Dict[str, Any]) -> Dict[str, dict]:
     # extends an accepted domain's name is the same hardware by another
     # maintainer. Mining it costs one fetch and risks nothing: the two-signal
     # rule still decides whether it may route anything.
-    for entry in (sources.get("hacs") or {}).values():
+    for entry in _hacs_entries(sources):
         dom = (entry.get("domain") or "").strip().lower()
         if not dom or dom in rows or "_" not in dom:
             continue
@@ -386,7 +422,32 @@ def _source_urls(repo: str, domain: str, origin: str) -> Iterable[str]:
                 yield f"https://raw.githubusercontent.com/{repo}/{branch}/{prefix}{plat}.py"
 
 
+_MAX_KEY_LEN = 80
+_MAX_OPTIONS = 24
+_MAX_OPTION_LEN = 60
+
+
 def mine_vocabulary(repo: str, domain: str, origin: str, *,
+                    offline: bool) -> Dict[str, Dict[str, dict]]:
+    """(06.09 audit) The raw miner, bounded: a declared key longer than
+    ``_MAX_KEY_LEN`` is not a translation key anyone types, and a select
+    with hundreds of options is not a mode select. Both are dropped so a
+    hostile or broken upstream file cannot bloat the shipped module."""
+    raw = _mine_vocabulary_raw(repo, domain, origin, offline=offline)
+    if not raw:
+        return raw
+    out: Dict[str, Dict[str, dict]] = {}
+    for plat, keys in raw.items():
+        for key, body in keys.items():
+            if not isinstance(key, str) or len(key) > _MAX_KEY_LEN:
+                continue
+            opts = tuple(str(o)[:_MAX_OPTION_LEN]
+                         for o in (body.get("options") or ())[:_MAX_OPTIONS])
+            out.setdefault(plat, {})[key] = {"options": opts}
+    return out
+
+
+def _mine_vocabulary_raw(repo: str, domain: str, origin: str, *,
                     offline: bool) -> Dict[str, Dict[str, dict]]:
     """The entity vocabulary an integration DECLARES, per platform.
 
@@ -403,7 +464,7 @@ def mine_vocabulary(repo: str, domain: str, origin: str, *,
         if not raw:
             continue
         try:
-            data = json.loads(raw.decode("utf-8-sig"))
+            data = json.loads(raw.decode("utf-8-sig"), parse_constant=lambda _c: None)
         except (ValueError, UnicodeDecodeError):
             continue
         entity = data.get("entity")

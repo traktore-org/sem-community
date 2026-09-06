@@ -30,7 +30,7 @@ from typing import Any, Dict, Final
 SCHEMA: Final = 1
 
 
-ROSTER_META: Final[Dict[str, Any]] = {'generated_at': '2026-09-06T05:29:20Z', 'sources': {'core_analytics': 'https://analytics.home-assistant.io/data.json', 'core_index': 'https://raw.githubusercontent.com/home-assistant/core/dev/homeassistant/generated/integrations.json', 'custom_installs': 'https://analytics.home-assistant.io/custom_integrations.json', 'hacs': 'https://data-v2.hacs.xyz/integration/data.json', 'website': 'https://www.home-assistant.io/integrations.json'}, 'install_floor': 50, 'candidates': 1350, 'kept': 194, 'with_roles': 58, 'roles_mined': 158}
+ROSTER_META: Final[Dict[str, Any]] = {'generated_at': '2026-09-06T20:11:36Z', 'sources': {'core_analytics': 'https://analytics.home-assistant.io/data.json', 'core_index': 'https://raw.githubusercontent.com/home-assistant/core/dev/homeassistant/generated/integrations.json', 'custom_installs': 'https://analytics.home-assistant.io/custom_integrations.json', 'hacs': 'https://data-v2.hacs.xyz/integration/data.json', 'website': 'https://www.home-assistant.io/integrations.json'}, 'install_floor': 50, 'candidates': 1350, 'kept': 194, 'with_roles': 58, 'roles_mined': 158}
 
 #: domain -> what the ecosystem says this integration is.
 ROSTER: Final[Dict[str, Dict[str, Any]]] = {

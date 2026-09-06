@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 
 from ..charger_types import BatteryIntent
-from ..power_control import async_write_power_setpoint
+from ..power_control import async_write_power_setpoint_verbose
 from .base import BatteryControlAdapter
 
 from ...utils.log_gate import log_on_change
@@ -487,15 +487,18 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         # Modbus flooding this guard removes.
         # (#900) The compare-to-live-state skip now lives in
         # ``async_write_power_setpoint`` itself, for every adapter.
-        if await async_write_power_setpoint(
+        ok, wrote = await async_write_power_setpoint_verbose(
             self._hass,
             self._discharge_control_entity,
             watts,
             context="Huawei battery discharge limit",
-        ):
+        )
+        if ok:
             self._last_discharge_limit_w = watts
-            # (#915) judged on the next cycle: did the register keep it?
-            self._note_pending_write(self._discharge_control_entity, watts)
+            if wrote:
+                # (#915) judged on the next cycle: did the register keep it?
+                # Only a write that went OUT — not the #538 same-value skip.
+                self._note_pending_write(self._discharge_control_entity, watts)
             _LOGGER.debug(
                 "Huawei battery: discharge limit %.0f W → %s",
                 watts, self._discharge_control_entity,

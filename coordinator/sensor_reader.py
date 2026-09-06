@@ -3276,18 +3276,29 @@ class SensorReader:
         # sign and therefore never flips it).
         manual_import = self._raw_config.get("grid_import_power_entity")
         manual_export = self._raw_config.get("grid_export_power_entity")
-        if manual_import or manual_export:
-            import_w = (self._read_sensor(manual_import, "grid_import")
-                        if manual_import else 0.0)
-            export_w = (self._read_sensor(manual_export, "grid_export")
-                        if manual_export else 0.0)
+        if manual_import and manual_export:
+            import_w = self._read_sensor(manual_import, "grid_import")
+            export_w = self._read_sensor(manual_export, "grid_export")
             readings.grid_power = export_w - import_w
             self._grid_sign_detected = True
-            if manual_import and manual_export:
-                self._audit_split_pair(
-                    "grid", "Grid (manual import/export override)",
-                    import_w, manual_import, export_w, manual_export,
-                )
+            self._audit_split_pair(
+                "grid", "Grid (manual import/export override)",
+                import_w, manual_import, export_w, manual_export,
+            )
+        elif manual_import or manual_export:
+            # (06.09 audit) HALF a pair is a meter that only ever imports (or
+            # exports): reading it as the whole grid is a silent, permanent
+            # sign error. Say so once and fall through to the combined sensor.
+            if not getattr(self, "_half_pair_warned", False):
+                self._half_pair_warned = True
+                _LOGGER.warning(
+                    "Only one of grid_import_power_entity / "
+                    "grid_export_power_entity is set (%s / %s) — a split pair "
+                    "needs both; ignoring it and using the combined grid sensor",
+                    manual_import, manual_export)
+            if self.config.grid_power_sensor:
+                readings.grid_power = self._read_sensor(
+                    self.config.grid_power_sensor, "grid")
         elif self.config.grid_power_sensor:
             readings.grid_power = self._read_sensor(
                 self.config.grid_power_sensor, "grid"

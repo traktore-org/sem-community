@@ -472,6 +472,122 @@ class TestAPolicySelectorGetsNoButton:
 
 
 @pytest.mark.unit
+class TestEveryConsumerUsesTheOneMatcher:
+    """(06.09 audit) The card path honoured exact_only and the segment
+    boundary; the discovery rung that AUTO-BINDS the discharge control did
+    not — it used ``roster_role_keys`` (exact_only stripped) and a bare
+    ``endswith``. Marstek declares ``max_discharge_power`` (per unit) and
+    ``system_max_discharge_power`` (fleet ceiling); the rung picked the
+    ceiling. Bug class 72, applied to its own fix."""
+
+    def test_roster_role_vocab_carries_exact_only(self):
+        v = hd.roster_role_vocab("marstek_venus_energy_manager",
+                                 "battery_discharge_limit")
+        assert "max_discharge_power" in v["keys"]
+        assert "max_discharge_power" in v["exact_only"]
+
+    def _run(self, entities, seed):
+        reg = _registry(entities)
+        ed = SimpleNamespace(battery_power=seed, battery_charge_energy=None,
+                             battery_discharge_energy=None, solar_power=None,
+                             solar_energy=None, grid_import_power=None)
+        with patch.object(hd.entity_registry, "async_get", return_value=reg), \
+             patch("custom_components.solar_energy_management.coordinator"
+                   ".power_control.is_valid_power_control_entity",
+                   return_value=True):
+            return hd.discover_inverter_from_registry_verbose(MagicMock(), ed)
+
+    def test_the_rung_never_picks_the_fleet_ceiling_by_suffix(self):
+        """The audit's repro: the fleet ceiling carries the per-unit key as
+        a unique_id suffix; the per-unit control carries the declared key.
+        The rung must bind the per-unit control — or, with only the ceiling
+        present, nothing by this rung at all."""
+        seed = _ent("sensor.m_battery_power", "marstek_venus_energy_manager")
+        ceiling = _ent("number.m_ceiling", "marstek_venus_energy_manager",
+                       unique_id="m1_system_max_discharge_power")
+        unit = _ent("number.m_unit", "marstek_venus_energy_manager",
+                    translation_key="max_discharge_power")
+        out, rung = self._run([seed, ceiling, unit], "sensor.m_battery_power")
+        assert out == "number.m_unit" and rung == "translation_key", (out, rung)
+        # a decoy that carries the SHORT key only as a unique_id suffix and
+        # is not any declared key: exact_only must refuse it by this rung
+        decoy = _ent("number.m_decoy", "marstek_venus_energy_manager",
+                     unique_id="m1_other_max_discharge_power")
+        out, rung = self._run([seed, decoy], "sensor.m_battery_power")
+        assert not (out == "number.m_decoy" and rung == "translation_key"), (out, rung)
+
+    def test_the_matcher_itself(self):
+        keys = ("max_discharge_power", "system_max_discharge_power")
+        by_uid = _ent("number.a", "x", unique_id="m1_system_max_discharge_power")
+        # without exact_only the short key would match by suffix — WRONG
+        assert hd._entry_matches_declared(by_uid, keys, ()) == "max_discharge_power"
+        # with it, the long key is what this entity IS
+        assert hd._entry_matches_declared(
+            by_uid, keys, ("max_discharge_power",)) == "system_max_discharge_power"
+        glued = _ent("number.b", "x", unique_id="m1xmax_discharge_power")
+        assert hd._entry_matches_declared(glued, keys, ()) is None
+
+    def test_spec_aliases_drop_exact_only_mined_keys(self):
+        """Hand-written spec keys stay whatever they are (a live install
+        harvested them); a MINED alias that is exact-only is not usable by
+        a suffix-matching consumer and is left out."""
+        from custom_components.solar_energy_management import config_flow as cf
+        spec, role = next(iter(cf._ROSTER_SPEC_ROLES.items()))
+        hand = tuple(cf._SPEC_REGISTRY_KEYS.get(spec, ()))
+        with patch("custom_components.solar_energy_management.hardware_detection"
+                   ".roster_role_vocab",
+                   return_value={"keys": ("zz_plain_alias", "zz_suffix_alias"),
+                                 "exact_only": ("zz_suffix_alias",)}):
+            keys = cf._spec_keys(spec, "any_platform")
+        assert keys[:len(hand)] == hand, "hand-written keys first and always"
+        assert "zz_plain_alias" in keys
+        assert "zz_suffix_alias" not in keys
+
+
+@pytest.mark.unit
+class TestHalfASplitPairIsNotAProposal:
+    """(06.09 audit) The crawler enforces PAIRED_ROLES on the whole declared
+    vocabulary; THIS device may expose only one half. Accepting it alone
+    writes grid_import_power_entity with no export half, and the reader
+    then reads "always importing" with no warning."""
+
+    def test_only_the_import_half_present_gets_no_button(self):
+        ents = [_ent("sensor.imp", "anker_solix_official",
+                     translation_key="grid_import_power")]
+        out = hd.propose_roles_from_roster(ents, "anker_solix_official")
+        assert out["grid_import_power"]["action"] == "pair_incomplete"
+        assert out["grid_import_power"]["missing_role"] == ["grid_export_power"]
+
+    def test_both_halves_present_get_buttons(self):
+        ents = [_ent("sensor.imp", "anker_solix_official",
+                     translation_key="grid_import_power"),
+                _ent("sensor.exp", "anker_solix_official",
+                     translation_key="grid_export_power")]
+        out = hd.propose_roles_from_roster(ents, "anker_solix_official")
+        assert out["grid_import_power"]["action"] == "set_option"
+        assert out["grid_export_power"]["action"] == "set_option"
+
+    def test_the_legacy_reader_refuses_half_a_pair(self):
+        from custom_components.solar_energy_management.coordinator.sensor_reader import (
+            SensorReader,
+        )
+        reader = SensorReader(MagicMock(), {
+            "solar_production_sensor": "sensor.pv",
+            "grid_power_sensor": "sensor.grid",
+            "grid_import_power_entity": "sensor.imp"})    # no export half
+        reads = {"sensor.pv": 100.0, "sensor.grid": -300.0, "sensor.imp": 900.0}
+        reader._read_sensor = lambda eid, *a, **k: reads.get(eid, 0.0)
+        r = reader._read_from_legacy_config()
+        assert r.grid_power == -300.0, "the combined sensor, not −900 from a half pair"
+
+
+@pytest.mark.unit
+class TestDiagnosticsRedactsTheSplitPair:
+    def test_both_keys_are_redacted(self):
+        from custom_components.solar_energy_management.diagnostics import REDACT_CONFIG_KEYS
+        assert {"grid_import_power_entity", "grid_export_power_entity"} <= REDACT_CONFIG_KEYS
+
+@pytest.mark.unit
 class TestTheDischargeControlRung:
     """The one place a mined key reaches a real decision — and it reaches it
     in FRONT of the entity-id regexes, behind the same unit gate."""

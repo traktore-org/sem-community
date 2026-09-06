@@ -254,11 +254,16 @@ def _spec_keys(spec: str, platform: str) -> tuple:
     if not role or not platform:
         return keys
     try:
-        from .hardware_detection import roster_role_keys
-        mined = roster_role_keys(platform, role)
+        from .hardware_detection import roster_role_vocab
+        vocab = roster_role_vocab(platform, role)
     except Exception:  # noqa: BLE001 — a prior is never load-bearing
         return keys
-    return keys + tuple(k for k in mined if k not in keys)
+    # (06.09 audit) an exact_only mined key is a suffix of a longer key the
+    # same brand declares; matched by unique_id suffix it picks the wrong
+    # entity, so it is not an alias this suffix-matching consumer may use
+    exact_only = set(vocab.get("exact_only", ()))
+    return keys + tuple(k for k in vocab["keys"]
+                        if k not in keys and k not in exact_only)
 
 
 def _suggest_select_from_roster(hass: HomeAssistant, platform: str,
@@ -314,7 +319,8 @@ def _spec_from_registry(hass: HomeAssistant, registry=None) -> Dict[str, str]:
                 continue
             # (#915) hand-written keys plus this integration's own declared
             # aliases — see _spec_keys for why they are additive.
-            if any(tk == k or uid.endswith(k)
+            # segment boundary, never a bare endswith (bug class 67)
+            if any(tk == k or uid == k or uid.endswith("_" + k)
                    for k in _spec_keys(spec, str(getattr(e, "platform", "")))):
                 found[spec] = eid
     return found

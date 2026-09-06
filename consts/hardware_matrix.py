@@ -31,6 +31,12 @@ through the HA Energy Dashboard mapping with sign auto-detection.
 """
 
 
+#: ``discharge_control`` is ``True`` (SEM drives it, evidence in the row),
+#: ``False``, or ``"declared"``: the integration publishes a discharge-power
+#: limit SEM can bind through the generic adapter, and nobody has confirmed
+#: a live write yet. The doc says so in those words.
+DISCHARGE_DECLARED = "declared"
+
 #: (#915) ``domain_token`` is the HA integration domain SEM DETECTS for a
 #: charger row, and ``also_domains`` lists the brand's other integrations
 #: (go-e ships three; openWB's 1.x is archived but still installed). Together
@@ -94,8 +100,10 @@ INVERTERS = [
      # (#915) the core integration declares `battery_discharge_power_limit`
      # (Gen24); found by challenging the roster against this table, where
      # the row had said "no". Drivable through the generic adapter; not yet
-     # confirmed live — which the evidence line says.
-     "discharge_control": True, "status": "tested-live",
+     # confirmed live. "declared" is that third state — the doc renders it
+     # as such, so the ✅ on this row keeps meaning what the legend says
+     # (06.09 audit: True + "unconfirmed" in the evidence was an overclaim).
+     "discharge_control": "declared", "status": "tested-live",
      "evidence": "#551-#613 (ebnerjoh) Verto 15.0 Plus + Fronius storage + "
                  "Smart Meter TS 65A-3, a multi-issue live arc; discharge "
                  "limit: core number `battery_discharge_power_limit` "

@@ -183,6 +183,10 @@ REDACT_CONFIG_KEYS = {
     "ev_daily_energy_sensor",
     "vehicle_soc_entity",
     "battery_discharge_control_entity",
+    # (#915, 06.09 audit) the split pair the sources step now fills for any
+    # split-meter brand — same privacy class as the keys above
+    "grid_import_power_entity",
+    "grid_export_power_entity",
 }
 
 
