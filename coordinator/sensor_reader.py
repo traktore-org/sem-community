@@ -3689,7 +3689,12 @@ class SensorReader:
         "trend", "history_stats", "compensation", "mold_indicator",
         "average", "combine",
     })
+    # Quoted / function-call form: ``states('sensor.x')``, a ``source`` key.
     _ENTITY_ID_RE = re.compile(r"\b[a-z_][a-z0-9_]*\.[a-z0-9_]+\b")
+    # Object form: ``states.sensor.x.state`` — the plain regex would split this
+    # into ``states.sensor`` + ``x.state`` and resolve neither; capture the real
+    # ``sensor.x`` from the middle two segments (a very common template style).
+    _STATES_OBJ_RE = re.compile(r"\bstates\.([a-z_][a-z0-9_]*)\.([a-z0-9_]+)")
 
     def _source_is_alive(self, entity_id: str) -> bool:
         """(#912) True when whatever FEEDS ``entity_id`` is still live.
@@ -3789,14 +3794,20 @@ class SensorReader:
         found.discard(self_eid)
         return list(found)
 
-    def _collect_entity_ids(self, blob, out: set) -> None:
+    def _collect_entity_ids(self, blob, out: set, _depth: int = 0) -> None:
         """Walk a config-entry options/data blob and add every entity-id-shaped
         token that resolves to a real state. Validating against the state
         machine drops false hits (``template_type: sensor`` has no dot; a stray
-        ``foo.bar`` that is not an entity is skipped)."""
+        ``foo.bar`` that is not an entity is skipped). The depth cap is a
+        belt-and-braces guard — a config-entry blob is acyclic JSON — so a
+        pathological/self-referential mock can never spin."""
+        if _depth > 6:
+            return
         if isinstance(blob, str):
-            for m in self._ENTITY_ID_RE.finditer(blob):
-                cand = m.group(0)
+            cands = {m.group(0) for m in self._ENTITY_ID_RE.finditer(blob)}
+            cands |= {f"{m.group(1)}.{m.group(2)}"
+                      for m in self._STATES_OBJ_RE.finditer(blob)}
+            for cand in cands:
                 try:
                     if self.hass.states.get(cand) is not None:
                         out.add(cand)
@@ -3804,10 +3815,10 @@ class SensorReader:
                     continue
         elif isinstance(blob, dict):
             for v in blob.values():
-                self._collect_entity_ids(v, out)
+                self._collect_entity_ids(v, out, _depth + 1)
         elif isinstance(blob, (list, tuple, set)):
             for v in blob:
-                self._collect_entity_ids(v, out)
+                self._collect_entity_ids(v, out, _depth + 1)
 
     def _integration_is_reporting(self, entity_id: str) -> bool:
         """(#912) True when ANY sibling entity of ``entity_id``'s config entry

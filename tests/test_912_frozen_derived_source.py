@@ -155,6 +155,29 @@ class TestUntraceableHelpers:
         assert TMPL not in rig.r._frozen_sensors
         assert rig.raised == []
 
+    def test_object_syntax_template_resolves_its_source(self, monkeypatch):
+        """A template written in object syntax (``states.sensor.x.state``) must
+        still resolve to ``sensor.x`` — the plain regex would split it and miss
+        the source, silently widening the honest fail-open."""
+        states = {
+            TMPL: _state(-500, 900),
+            SRC: _state(500, 900),
+            "sensor.shelly_plug_temperature": _state(42, 900),  # whole entry quiet
+        }
+        reg_entries = {
+            TMPL: _RegEntry(TMPL, "tmpl1", "template"),
+            SRC: _RegEntry(SRC, "shelly1", "shelly"),
+            "sensor.shelly_plug_temperature": _RegEntry(
+                "sensor.shelly_plug_temperature", "shelly1", "shelly"),
+        }
+        ce_options = {"tmpl1": {"state": "{{ states.sensor.shelly_plug_power.state | float * -1 }}"}}
+        rig = _Rig(monkeypatch, states, reg_entries, ce_options)
+        rig.r._read_sensor(TMPL, "solar")
+        # source WAS resolved (object syntax) and its whole entry is quiet → a
+        # genuine dead source, so the warning stands — proving resolution, not
+        # a fall-through to the untraceable-honest branch.
+        assert TMPL in rig.r._frozen_sensors
+
     def test_a_template_whose_source_is_not_a_real_entity_is_honest(self, monkeypatch):
         """The template references an entity that no longer exists: nothing to
         follow, so a flat derived value is treated as honest, not frozen."""
