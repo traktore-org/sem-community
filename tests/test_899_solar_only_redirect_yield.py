@@ -140,8 +140,29 @@ class TestViewPlumbing:
         assert v2.redirect_allowed is True
 
     def test_the_loop_records_the_outcome_and_passes_the_flag(self):
-        import inspect
-        from custom_components.solar_energy_management.coordinator import coordinator
-        src = inspect.getsource(coordinator)
-        assert "note_redirect_outcome(" in src
-        assert "redirect_allowed=" in src
+        """(#924 follow-up) This used to be
+        ``assert "note_redirect_outcome(" in inspect.getsource(coordinator)``
+        — a substring search over a twelve-thousand-line MODULE. It passed
+        on a mention in a comment, on a call in a dead branch, and on a
+        call in some unrelated method. It could not say the one thing it
+        was named for: that the per-charger LOOP records the outcome.
+
+        Asked structurally instead. A mention in prose is not a call.
+        """
+        from .ast_contracts import call_sites, calls
+        from custom_components.solar_energy_management.coordinator \
+            .coordinator import SEMCoordinator
+
+        sites = call_sites("note_redirect_outcome")
+        assert sites, (
+            "nothing in production calls note_redirect_outcome — the #899 "
+            "veto is dead code and the meter never gets a vote")
+        assert calls(SEMCoordinator._async_update_data,
+                     "note_redirect_outcome"), (
+            "the veto is called from somewhere, but not from the cycle that "
+            "drives the chargers — it cannot strike if it never runs")
+        # and the flag it sets has to reach the view the decision reads
+        assert any("redirect_allowed" in kw
+                   for _f, _l, kw in call_sites("build_charger_view")), (
+            "no production build_charger_view call passes redirect_allowed, "
+            "so a veto that fires changes nothing")
