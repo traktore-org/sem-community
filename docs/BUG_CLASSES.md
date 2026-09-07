@@ -2661,3 +2661,26 @@ verdict through the real per-cycle shape rather than a hand-built one. **Guard:*
 `tests/test_915_roster_at_runtime.py::TestTheReadBackIsActuallyWired`. **Sweep question:** for
 every `getattr(self, "_x", None)` — is `_x` ever assigned? And does any test exercise the path
 through the REAL object rather than a stand-in? Refs #915 #827 #845 #375.
+
+### 75. One knob, two features, and the knob shows only one of them — GUARDED
+**Symptom:** `switch.sem_battery_may_export` read **off** on PROD while SEM opened a 5 kW sell block
+("selling before the night at 5000 W"). Nothing sold, and only because that battery happened to be
+pinned to an adapter with no forced-discharge path — on a correctly detected Huawei it would have
+sold the pack to the grid under a switch that said no. **Root shape:** TWO features can sell —
+#533's arbitrage under `battery_grid_arbitrage_enabled` and #778's forecast spend under
+`forecast_spending_enabled` — and each correctly asks `may_export` with its OWN flag. The switch
+asked with only the arbitrage one, so it answered *"may the arbitrage feature sell?"* while wearing
+the label *"Battery may sell to grid"*. Neither side was wrong; the switch answered a narrower
+question than its label. `tests/test_knob_wiring.py` guarded that the permission is READ — not that
+the two readers AGREE. **Closure:** the display is defined AS the decision (`battery_may_export_display`
+= the OR over every path that can sell), so the two cannot disagree because there is only one of
+them; plus a combination guard over mode × permission × both master switches. **That guard then found
+a second, worse case nobody had asked about:** on the legacy `allow_arbitrage` mode an EXPLICIT
+revocation was ignored — switch off, both features off, and SEM still sold. The code knew ("the two
+functions genuinely disagree… worth settling deliberately, not here", August) and it was never
+settled; a mode value chosen once does not outrank a permission revoked deliberately, so the newer,
+more specific *no* now wins, with UNSET still short-circuiting so no existing install moves.
+**Guard:** `tests/test_920_switch_agrees_with_the_decision.py` (parametrised over every combination,
+with the decision model pinned to the real call site so it cannot go stale). **Sweep question:** for
+every switch a user can see — how many code paths act on the thing it names, and does the switch
+consult ALL of them? Refs #920 #778 #533.

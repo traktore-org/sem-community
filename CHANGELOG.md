@@ -13,6 +13,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🛡️ **"Battery may sell to grid" showed OFF while SEM was selling** (#920).
+  Two features can sell — the arbitrage path and the forecast spend — and
+  each asks the permission with its own master switch, correctly. The switch
+  asked with only one of them, so it answered *"may the arbitrage feature
+  sell?"* while labelled *"Battery may sell to grid"*: on a real system it
+  read off at the moment a 5 kW sell block opened. It is defined as the
+  decision now, over every path that can sell, so the two cannot disagree.
+
+  Writing the guard for that — every combination of mode, permission and
+  both switches — turned up a worse one nobody had asked about: on the
+  legacy *allow arbitrage* mode, a user who explicitly turned the permission
+  **off** was still sold to the grid, with both feature switches off too. An
+  explicit revocation now beats the mode. A permission left untouched still
+  behaves exactly as it did, so no existing install changes.
+
+- 🛡️ **The Repair that explains a battery pinned to the generic adapter
+  could never fire** (#919). SEM asks "is this install pinned to `generic`
+  while its brand integration is loaded?" — once, during the first refresh,
+  while that integration is still loading. The answer was therefore always
+  "no", which *cleared* the Repair, and it was never asked again. On a
+  production system that meant the evening sell block was dropped every
+  cycle for days with nothing to explain why. Asked every cycle now, acted
+  on only when the answer changes, and never before Home Assistant is up.
+
+
 - 🚀 **An install no longer stops at the Energy Dashboard** (#915). SEM read
   your solar, grid and battery from Home Assistant's Energy Dashboard, and if
   that page was empty or half-filled the installation **ended**: *"set it up
