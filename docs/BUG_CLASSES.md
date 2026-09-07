@@ -2709,3 +2709,31 @@ grid price the preview must move the load off the sun, which unpriced it cannot)
 for every guard written as `inspect.getsource(<one thing>)` or `assert "x" in src` — does the
 invariant it protects have exactly one site, and how would anyone notice when it grows a second?
 Refs #924 #871 #755.
+
+### 77. A store's own derived output, read back as the user's testimony — GUARDED
+**Symptom:** storacm's pool pump — the switch correctly identified, and the Control card saying
+**"Off — SEM won't act"** whatever Mode was picked. Permanent, surviving every restart, and
+clearable from no surface at all. **Root shape:** `UnifiedDevice.is_controllable` is DERIVED —
+`has_control_handle and not user_hands_off`, the two axes mixed under a name that reads as one.
+`_sync_to_load_manager` writes that derived value into the LoadManagement row for EVERY
+Energy-Dashboard device, so a device whose switch was not discovered yet writes `False` as
+ARITHMETIC. `_adopt_legacy_device_flags` then read that `False` back as proof the user had opted
+out, on the written premise that *"the registry always derives those rows WITH a handle"* — which
+`_sync_to_load_manager` makes false. A fabricated preference, indistinguishable on disk from a real
+one, about a decision nobody had made. **Why it was unrecoverable:** the toggle that could clear it
+died in the LitElement migration (14.05.2026) leaving only a dead handler; `hands_off` was accepted
+by the service HANDLER but absent from its `vol.In` list, so voluptuous refused the call before it
+arrived; and `bool(value)` on a `cv.string` made `"false"` mean true. An axis with a reader, a
+store and a handler, and no way in. **The tell it was already known:** `features/device_axes.py`
+refuses this fallback in terms — *"reading it here too would count the same bit twice and, worse,
+would re-mix the axes this module exists to separate"* — and #650's own test docstring describes
+the identical hazard for the re-enable direction, solved there with a one-shot latch. #888 is that
+hazard on the fresh-install path, where the latch is deliberately not yet set. **Closure:** adoption
+asks `device_axes.user_hands_off`; a one-shot marked migration clears the fabricated flags (safe,
+not a guess — the store was created 25.07.2026, its only writer died 14.05.2026, so no value in it
+can be a surviving click); and the axis gets an honest writer back in both directions.
+**Guard:** `tests/test_888_hands_off_is_the_users_word.py` (structural: adoption calls
+`user_hands_off` and performs no `.get("is_controllable")` read; the marker is persisted, not only
+read). **Sweep question:** for every value one component writes and another reads as evidence — is
+it a MEASUREMENT of the world, or this system's own conclusion coming back around? Refs #888 #780
+#650 #779.

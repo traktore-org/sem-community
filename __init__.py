@@ -3878,13 +3878,19 @@ async def _async_register_services(
             # (#780) ``controllable`` / ``hands_off`` are the SAME toggle under
             # two names, and ``value`` keeps the card's polarity throughout:
             # True = "SEM may touch this load".
+            # (#888) ``value`` arrives as cv.string, and ``bool("false")`` is
+            # True — every falsey word a caller would naturally send ("false",
+            # "0", "no", "off") turned into the opposite instruction. The
+            # permission axis therefore had no way to be switched OFF through
+            # the service even once its name was accepted.
+            _flag = str(value).strip().lower() in ("true", "1", "on", "yes")
             if prop == "critical":
-                await coordinator._load_manager.update_device_critical_status(device_id, bool(value))
+                await coordinator._load_manager.update_device_critical_status(device_id, _flag)
             else:
-                await coordinator._load_manager.async_set_hands_off(device_id, not bool(value))
+                await coordinator._load_manager.async_set_hands_off(device_id, not _flag)
             reg = getattr(coordinator, "_device_registry", None)
             if reg is not None:
-                await reg.async_set_device_flag(device_id, prop, bool(value))
+                await reg.async_set_device_flag(device_id, prop, _flag)
         elif prop == "control_mode":
             # Update device control mode: off / peak_only / surplus (#49)
             registry = getattr(coordinator, '_device_registry', None)
@@ -3991,6 +3997,12 @@ async def _async_register_services(
                 vol.Required("device_id"): cv.string,
                 vol.Required("property"): vol.In([
                     "controllable", "critical", "control_mode", "depends_on",
+                    # (#888) the permission axis under its own name. The
+                    # handler has accepted "hands_off" since #780; it was
+                    # never added HERE, so voluptuous refused the call before
+                    # it arrived — the axis had a reader, a store and a
+                    # handler, and no way in.
+                    "hands_off",
                     # (#559) goal engine — grounded core
                     "daily_min_runtime_min", "top_up_policy",
                     "stop_entity", "stop_at",

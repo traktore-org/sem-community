@@ -33,6 +33,9 @@ from ..ha_energy_reader import (
     _find_load_power_sensor,
 )
 from .load_device_discovery import LoadDeviceDiscovery, resolve_load_is_on
+# (#780/#888) the two axes, asked of the module that owns them. Imported
+# unaliased so a structural test can see the call.
+from .device_axes import user_hands_off
 from ..devices.base import (
     SwitchDevice,
     CurrentControlDevice,
@@ -237,6 +240,7 @@ class UnifiedDeviceRegistry:
         # DELETES the key, and a second adoption pass would immediately put it
         # back from the not-yet-resynced LM entry. That is this very bug, rebuilt.
         self._legacy_flags_adopted: bool = False
+        self._axes_migrated: bool = False   # (#888) one-shot marker
         # (#576) device_id → learned rated_power (W). A sensor-equipped load
         # self-calibrates its real draw at runtime (calibrate_rated_power); we
         # PERSIST that here so it survives a restart instead of resetting to the
@@ -310,6 +314,34 @@ class UnifiedDeviceRegistry:
                 self._controllable_overrides = {
                     k: bool(v) for k, v in data.get("controllable_overrides", {}).items()
                 }
+                # (#888) ONE-SHOT: drop hands-off flags SEM fabricated about
+                # itself. Adoption used to read the DERIVED ``is_controllable``
+                # as the user's opt-out, so every Energy-Dashboard device whose
+                # switch was not yet discovered at startup was written down as
+                # "never touch this" — permanently, and unreachable from any
+                # surface, so the Control card answered "SEM won't act"
+                # whatever Mode was picked.
+                #
+                # Clearing them is safe rather than a guess, and the dates say
+                # why: this store was created 25.07.2026 (6fdd1eec), while the
+                # only UI that could ever write the flag died in the LitElement
+                # migration on 14.05.2026 (e36b66fa) — a dead handler survives
+                # in the card, but nothing emits to it. No entry written into
+                # this store can be a surviving user click.
+                #
+                # One-shot by marker, not by heuristic: once the axis has an
+                # honest writer again a real opt-out must never be swept away
+                # by an upgrade.
+                if not data.get("axes_migrated") and self._controllable_overrides:
+                    _fabricated = sorted(self._controllable_overrides)
+                    self._controllable_overrides = {}
+                    _LOGGER.warning(
+                        "(#888) cleared %d hands-off flag(s) SEM had set about "
+                        "itself, not the user: %s — these loads are SEM's to "
+                        "act on again, subject to the Mode you picked",
+                        len(_fabricated), _fabricated[:6],
+                    )
+                self._axes_migrated = True
                 self._rated_power_overrides = {
                     k: float(v) for k, v in
                     data.get("rated_power_overrides", {}).items()
@@ -2192,9 +2224,16 @@ class UnifiedDeviceRegistry:
     async def _adopt_legacy_device_flags(self) -> None:
         """Seed the #650 override stores from LoadManagement — ONCE per session.
 
-        Only non-default values are adopted (critical=True, controllable=False):
+        Only non-default values are adopted (critical=True, hands-off=True):
         those are the ones a user had to click for, and only the OLD code path
         could have put them in the LM dict without a matching override.
+
+        (#888) "A user had to click for it" is the whole justification, so it
+        has to be TRUE of every key read here. It was not: the permission half
+        used to accept the DERIVED ``is_controllable`` flag, which SEM writes
+        itself for every row. ``is_critical`` is derived too (it mirrors the
+        override), but a derived True can only come FROM an override that
+        already exists, so re-adopting it is a no-op rather than a fabrication.
 
         One-shot by design. After the first sync the LM dict holds the
         REGISTRY's values, so a second pass would read our own output back — and
@@ -2209,28 +2248,44 @@ class UnifiedDeviceRegistry:
             return  # LM not up yet — try again on the next refresh
         self._legacy_flags_adopted = True
         crit = ctrl = 0
+        _crit_ids: list = []
+        _ctrl_ids: list = []
         for did, info in lm._devices.items():
             if not did.startswith("energy_dashboard_") or not isinstance(info, dict):
                 continue
             if info.get("is_critical") is True and did not in self._critical_overrides:
                 self._critical_overrides[did] = True
+                _crit_ids.append(did)
                 crit += 1
-            # (#780) either spelling of the user's opt-out: the migrated
-            # permission key, or the pre-split mixed flag whose False could
-            # only have come from this same toggle on an ``energy_dashboard_``
-            # row (the registry always derives those rows WITH a handle).
-            hands_off = (
-                info.get("user_hands_off") is True
-                or info.get("is_controllable") is False  # LEGACY-READ (#780)
-            )
-            if hands_off and did not in self._controllable_overrides:
+            # (#888) THE PERMISSION AXIS, asked of the module that owns it.
+            #
+            # This used to ALSO accept ``is_controllable is False`` as the
+            # user's opt-out, on the stated premise that "the registry always
+            # derives those rows WITH a handle". That premise is false:
+            # ``_sync_to_load_manager`` writes ``is_controllable`` for EVERY
+            # Energy-Dashboard device (see the derived write above), and
+            # ``UnifiedDevice.is_controllable`` is ``has_control_handle and
+            # not user_hands_off`` — so a device whose switch simply had not
+            # been discovered yet wrote False as ARITHMETIC, and this read it
+            # back as a PREFERENCE. SEM told itself to keep its hands off a
+            # load nobody had opted out of, permanently, with no way to undo
+            # it from any surface.
+            #
+            # ``device_axes.user_hands_off`` refuses that legacy fallback on
+            # purpose, in its own words: "reading it here too would count the
+            # same bit twice and, worse, would re-mix the axes this module
+            # exists to separate." #780 migrated every consumer except this
+            # one.
+            if user_hands_off(info) and did not in self._controllable_overrides:
                 self._controllable_overrides[did] = False
+                _ctrl_ids.append(did)
                 ctrl += 1
         if crit or ctrl:
             await self._save_storage()
             _LOGGER.info(
-                "Adopted %d critical / %d controllable flag(s) from LoadManagement (#650)",
-                crit, ctrl,
+                "Adopted %d critical / %d hands-off flag(s) from LoadManagement "
+                "(#650): critical=%s hands_off=%s",
+                crit, ctrl, _crit_ids[:6], _ctrl_ids[:6],
             )
 
     async def async_set_device_flag(
@@ -2611,6 +2666,9 @@ class UnifiedDeviceRegistry:
             "dependencies": self._dependency_overrides,
             "critical_overrides": self._critical_overrides,          # (#650)
             "controllable_overrides": self._controllable_overrides,  # (#650)
+            # (#888) the one-shot marker — set once the fabricated flags have
+            # been cleared, so a genuine opt-out set afterwards survives.
+            "axes_migrated": True,
             "rated_power_overrides": self._rated_power_overrides,
             "service_registrations": self._service_registrations,
             "device_goals": self._device_goals,

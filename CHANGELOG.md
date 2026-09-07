@@ -13,6 +13,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🛡️ **SEM had told itself to keep its hands off a load nobody had opted out
+  of** (#888). If a device's switch was not yet visible when SEM started —
+  ordinary on a fresh install, where discovery finishes about half a minute
+  later — SEM wrote it down as "not controllable". That was arithmetic, not a
+  preference. Half a minute later it read its own note back as though you had
+  said it, and recorded a permanent *never touch this*.
+
+  The Control card then answered **"Off — SEM won't act"** no matter which
+  Mode you picked, because the Mode was never what it was reporting. Nothing
+  in the interface could undo it: the toggle that once cleared this was
+  removed in May, and the service that should have accepted it rejected the
+  word before it arrived.
+
+  Fixed at the root — a derived value is no longer read as your decision —
+  and the flags SEM invented about itself are cleared once on upgrade. That
+  clearing is safe rather than hopeful: the file holding them was created in
+  late July, and the only thing that could ever have written a real one
+  stopped existing in May. The setting is now reachable and reversible again
+  in both directions, so a genuine *hands off* survives.
+
 - 🩹 **The battery budget explained itself using a charge level it had
   never read** (#925 audit, then seen live). With the SOC sensor
   unavailable, SEM still published a confident floor percentage and the
