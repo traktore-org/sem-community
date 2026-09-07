@@ -7186,7 +7186,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         bp.capacity_kwh
                         or self.config.get("battery_capacity_kwh", 0.0)
                     ),
-                    available=True,  # populated → it reported this cycle
+                    # (#932) "populated → it reported this cycle" was false:
+                    # a HELD reading is populated too. Per-unit flag when the
+                    # reading carries one, else the fleet's — never a bare
+                    # True, which is what let a multi-battery install sell
+                    # through a dark SOC. decide_battery gates the sell on it.
+                    available=not bool(
+                        getattr(bp, "soc_unavailable", False)
+                        or getattr(bp, "unavailable", False)
+                        or getattr(power, "battery_soc_unavailable", False)
+                    ),
                     name=bp.name or battery_id,
                 )))
         else:

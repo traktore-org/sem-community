@@ -13,6 +13,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🛡️ **Arbitrage could keep selling the battery through a dark SOC reading**
+  (#932). The "never sell blind" guard checked for a value the reading
+  pipeline never produces: when the SOC sensor drops out, SEM holds the last
+  good number and flags it, and the guard only looked at the number. A held
+  60 % looked exactly like a live 60 %, so a sell already under way would
+  have continued for as long as the link stayed down — on a battery with no
+  hardware reserve-stop, past the reserve. It now asks the flag. Arbitrage
+  ships off by default, so no install was selling; this is the audit before
+  it is switched on.
+
+  Also from the same audit: an arbitrage setting stored as *null* — a hand
+  edit or a migration — used to switch arbitrage off silently with no
+  Repair; it now takes the documented default.
+
 - 🩹 **A setting for a device that does not exist was accepted and stored**
   (#928). A typo in a device id, a renamed entity, or a card row that no
   longer exists used to get a quiet success — the value went into a store

@@ -86,9 +86,10 @@ def _sell_sched(*, power=5000.0):
 
 
 def _view(*, sched=None, sell=None, mode="allow_arbitrage", soc=80.0,
-          reserve=55.0, global_arb=False):
+          reserve=55.0, global_arb=False, available=True):
     return BatteryView(
-        runtime=BatteryRuntime(battery_id="b1", last_known_soc=soc),
+        runtime=BatteryRuntime(battery_id="b1", last_known_soc=soc,
+                               available=available),
         config={"battery_max_discharge_power": 5000,
                 "battery_mode": mode,
                 "battery_reserve_soc": reserve,
@@ -183,6 +184,16 @@ class TestTheScenarioMatrix:
         d = decide_battery(_view(sched=_sell_sched(), sell=(True, 1500.0),
                                  soc=None))
         assert d.intent != BatteryIntent.FORCE_DISCHARGE
+
+    def test_a_HELD_soc_holds_not_sells(self):
+        """(#932) The shape the pipeline actually makes on a dropout: the
+        last valid SOC is kept and flagged. `soc=None` above is a branch
+        production cannot reach; this one it reaches ~137 times a day on
+        the maintainer's own hardware."""
+        d = decide_battery(_view(sched=_sell_sched(), sell=(True, 1500.0),
+                                 soc=80.0, available=False))
+        assert d.intent != BatteryIntent.FORCE_DISCHARGE, (
+            "a held 80 % sold — the block sell does not ask rt.available")
 
     def test_block_closing_mid_sell_falls_to_normal(self):
         """The block ends while the economics verdict is still warm: the

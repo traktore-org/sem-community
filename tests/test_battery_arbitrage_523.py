@@ -675,12 +675,17 @@ async def test_force_charge_then_release_restores_then_idle_leaves_alone():
 
 # ── #3: SOC unavailable → never sell blind (reserve safety) ──────────────
 
-def _mode_view(mode, soc, *, sched=None, reserve=None):
+def _mode_view(mode, soc, *, sched=None, reserve=None, available=True):
     cfg = {"battery_mode": mode, "battery_grid_arbitrage_enabled": True}
     if reserve is not None:
         cfg["battery_reserve_soc"] = reserve
+    # (#932) ``last_known_soc`` is a float the pipeline builds as
+    # ``float(... or 0.0)`` — it is never None in production. ``available``
+    # is the flag that says a dark read was HELD; a test that only ever
+    # passes ``soc=None`` proves a branch the product cannot reach.
     return BatteryView(
-        runtime=BatteryRuntime(battery_id="b", last_known_soc=soc),
+        runtime=BatteryRuntime(battery_id="b", last_known_soc=soc,
+                               available=available),
         config=cfg,
         fleet=FleetContext(),
         charging_state="idle",
@@ -698,6 +703,26 @@ def test_force_discharge_holds_when_soc_unavailable():
     assert "unavailable" in d.reason
 
 
+def test_force_discharge_holds_on_a_HELD_soc_the_shape_production_makes():
+    """(#932) The real dropout shape: the reader keeps the last valid 60 %
+    and flags it unavailable. `soc is not None` was the whole guard, and a
+    held 60 passed it — the pack kept discharging blind for as long as the
+    link was down. This is the test the three `soc=None` tests were
+    standing in for."""
+    d = decide_battery(_mode_view("force_discharge", 60.0, reserve=20.0,
+                                  available=False))
+    assert d.intent is BatteryIntent.NORMAL, (
+        "a HELD SOC above the reserve still sold — the sell gate does not "
+        "ask rt.available")
+    assert "held" in d.reason
+
+
+def test_force_discharge_sells_on_a_LIVE_soc_above_reserve():
+    d = decide_battery(_mode_view("force_discharge", 60.0, reserve=20.0,
+                                  available=True))
+    assert d.intent is BatteryIntent.FORCE_DISCHARGE
+
+
 def test_force_discharge_sells_when_soc_above_reserve():
     d = decide_battery(_mode_view("force_discharge", 80.0, reserve=20.0))
     assert d.intent is BatteryIntent.FORCE_DISCHARGE
@@ -710,6 +735,16 @@ def test_arbitrage_holds_when_soc_unavailable():
     v = _mode_view("auto", None, sched=arb)
     d = decide_battery(v)
     assert d.intent is not BatteryIntent.FORCE_DISCHARGE
+
+
+def test_arbitrage_holds_on_a_HELD_soc(monkeypatch):
+    """(#932) the scheduler path, with the shape production makes."""
+    s = _scheduler()
+    arb = s.evaluate_arbitrage(80.0, 0.45, 0.20)
+    v = _mode_view("auto", 80.0, sched=arb, available=False)
+    d = decide_battery(v)
+    assert d.intent is not BatteryIntent.FORCE_DISCHARGE, (
+        "the arbitrage sell gate took a held SOC as a live one")
 
 
 # ── #5: LIMIT_DISCHARGE splits the home budget across the fleet ──────────

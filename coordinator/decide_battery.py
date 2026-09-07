@@ -113,7 +113,14 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
         # so discharging "blind" could drain it past the backup reserve. When
         # in doubt, hold (the live SOC self-heals next cycle).
         soc = rt.last_known_soc
-        if soc is not None and soc > reserve:
+        # (#932) "Don't sell blind" was `soc is not None` — and last_known_soc
+        # is a float that defaults to 0.0 and is built as `float(... or 0.0)`;
+        # it is NEVER None. The reader HOLDS the last valid SOC through a
+        # dropout and says so on the twin flag, which the runtime carries as
+        # `available`. A held 60 % passed `60 > reserve` and kept the pack
+        # discharging blind for as long as the link was down — on a setpoint
+        # battery with no hardware reserve-stop behind it. Ask the flag.
+        if rt.available and soc is not None and soc > reserve:
             return BatteryDecision(
                 battery_id=rt.battery_id,
                 intent=BatteryIntent.FORCE_DISCHARGE,
@@ -121,7 +128,8 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
                 floor_soc=reserve,
                 reason="mode=force_discharge (manual sell to grid)",
             )
-        _soc_txt = f"{soc:.0f}%" if soc is not None else "unavailable"
+        _soc_txt = (f"{soc:.0f}% (held from a dark read)" if not rt.available
+                    else f"{soc:.0f}%" if soc is not None else "unavailable")
         return BatteryDecision(
             battery_id=rt.battery_id,
             intent=BatteryIntent.NORMAL,
@@ -268,7 +276,10 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
                 soc = rt.last_known_soc
                 # #531: don't sell blind — a setpoint battery has no hardware
                 # reserve-stop, so an unavailable SOC must hold, not discharge.
-                if soc is not None and soc > floor:
+                # (#932) …and "unavailable" is `rt.available`, not `soc is
+                # None` — the number is HELD through a dark read and never
+                # None once a reading has ever succeeded.
+                if rt.available and soc is not None and soc > floor:
                     # Power discipline (#638 C6): the block-implied watts
                     # are the cap — the advisor bounded delivery by the
                     # home's own draw, so this stays an avoided-import

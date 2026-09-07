@@ -95,6 +95,23 @@ class SchedulerDecision:
         return self.state in (SchedulerState.SCHEDULED, SchedulerState.WAITING_FOR_SLOT, SchedulerState.CHARGING)
 
 
+def _num(value, default: float) -> float:
+    """A config number, or its documented default when the key holds null.
+
+    ``None`` is an absence, not a zero: ``dict.get(key, default)`` hands the
+    default back only when the key is MISSING, and an options file that
+    carries ``"battery_arbitrage_reserve_soc": null`` is how one install
+    reached the scheduler with ``None`` (#932). An explicit 0 is a choice
+    and is honoured.
+    """
+    if value is None:
+        return float(default)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
+
+
 @dataclass
 class SchedulerConfig:
     """Configuration for the battery charge scheduler."""
@@ -217,12 +234,19 @@ class SchedulerConfig:
             peak_limit_w=0.0 if config.get(
                 "peak_limit_unlimited", False
             ) else float(config.get("target_peak_limit", 0.0) or 0.0) * 1000.0,
-            max_grid_import_w=config.get("battery_max_grid_import_w", 0.0),
+            # (#932 audit / the spendable_budget lesson) ``config.get(key,
+            # default)`` returns None when the key EXISTS holding null — how
+            # a hand-edited or migrated options file looks — and None then
+            # reached ``current_soc <= cfg.arbitrage_reserve_soc`` as a
+            # TypeError, swallowed by the cycle's blanket except: arbitrage
+            # silently off, no Repair. An explicit 0 stays a choice; None is
+            # an absence and takes the documented default.
+            max_grid_import_w=_num(config.get("battery_max_grid_import_w"), 0.0),
             force_charge_on_negative_price=config.get("battery_force_charge_negative_price", True),
             arbitrage_enabled=config.get("battery_grid_arbitrage_enabled", False),
-            arbitrage_min_export_price=config.get("battery_arbitrage_min_export_price", 0.20),
-            arbitrage_reserve_soc=config.get("battery_arbitrage_reserve_soc", 50.0),
-            max_discharge_power_w=config.get("battery_max_discharge_power", 5000.0),
+            arbitrage_min_export_price=_num(config.get("battery_arbitrage_min_export_price"), 0.20),
+            arbitrage_reserve_soc=_num(config.get("battery_arbitrage_reserve_soc"), 50.0),
+            max_discharge_power_w=_num(config.get("battery_max_discharge_power"), 5000.0),
             # #533: cap the arbitrage sell power. Explicit key wins; else fall
             # back to the grid export limit (max_export_power); 0 = uncapped.
             arbitrage_max_export_w=float(

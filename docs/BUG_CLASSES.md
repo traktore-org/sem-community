@@ -2743,3 +2743,26 @@ adoption not yet run) — the first draft of that wiped a genuine opt-out on a f
 restart. **Sweep question:** for every value one component writes and another reads as evidence —
 is it a MEASUREMENT of the world, or this system's own conclusion coming back around? And how many
 stores does that conclusion live in? Refs #888 #780 #650 #779.
+
+### 78. A `None` guard on a field the producer never sets to None — GUARDED
+**Symptom:** arbitrage's "don't sell blind" guard was `if soc is not None and soc > floor`, and it
+never held: a sell already under way continued through a SOC dropout for as long as the link was
+down, on setpoint batteries with no hardware reserve-stop behind it (found by the ruflo audit of
+arbitrage mode, 08.09.2026, before it was ever switched on). **Root shape:** `BatteryRuntime
+.last_known_soc` is a `float` defaulting to `0.0`, built as `float(... or 0.0)` — it is NEVER None.
+The reader HOLDS the last valid SOC through a dropout and reports the darkness on a twin flag
+(`battery_soc_unavailable` → `runtime.available`), which the decision never read; the multi-battery
+runtime hardcoded `available=True` with the comment "populated → it reported this cycle", which a
+held value also is. The guard tested the wrong axis. **Why the suite was green:** three tests
+"proved" the hold by hand-building `last_known_soc=None` — an input the pipeline cannot produce
+once a reading has ever succeeded. Same vacuity as class 76's cousin the same afternoon (a test that
+hand-fills the dicts a fix sums): the test exercised the arithmetic of a branch the product cannot
+reach. **Closure:** both sell gates ask `rt.available`; the multi-battery runtime fills it from the
+per-unit or fleet flag; the tests build the HELD-nonzero shape production actually makes, and keep
+the `None` variant as a harmless extra. **Guard:** `tests/test_battery_arbitrage_523.py::
+test_force_discharge_holds_on_a_HELD_soc_the_shape_production_makes` and siblings, `tests/
+test_638_c6_arbitrage_sell.py::test_a_HELD_soc_holds_not_sells`. **Sweep question:** for every
+`x is not None` guard on a dataclass field — what is the field's default, and can the producer
+actually assign None to it? If not, the guard is decoration and the real "absent" signal lives
+somewhere else. Refs #932 #531 #875 #925.
+
