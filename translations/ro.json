@@ -1557,11 +1557,8 @@
     "dashboard_generation_failed": {
       "message": "Generarea panoului SEM a eșuat. Consultați jurnalele Home Assistant pentru detalii."
     },
-    "load_management_not_initialized": {
-      "message": "Gestionarea sarcinii nu este încă pregătită. Așteptați ca integrarea să termine pornirea și încercați din nou."
-    },
     "device_registry_not_initialized": {
-      "message": "Registrul de dispozitive nu este încă pregătit. Așteptați ca integrarea să termine pornirea și încercați din nou."
+      "message": "Registrul de dispozitive SEM nu a putut fi construit, deci acest dispozitiv nu poate fi modificat. Verificați jurnalul Home Assistant pentru \"Unified device registry init failed\" și reîncărcați integrarea."
     },
     "mapping_service_required": {
       "message": "Este necesar un serviciu când tipul de control este „serviciu”. Indicați un serviciu de apelat."
@@ -1578,9 +1575,6 @@
     "invalid_deadline_format": {
       "message": "Format de termen invalid: „{deadline}”. Folosiți formatul ISO 8601, de exemplu 2026-05-27T07:00:00."
     },
-    "energy_dashboard_configuration_failed": {
-      "message": "Configurarea Tabloului de bord Energie a eșuat. Verificați dacă toți senzorii necesari sunt disponibili."
-    },
     "set_option_invalid_payload": {
       "message": "set_option necesită un dicționar „options” care asociază chei de configurare cu valori noi."
     },
@@ -1589,6 +1583,12 @@
     },
     "unknown_appliance_schedule": {
       "message": "Nu a fost găsită nicio programare de aparat pentru {device_id}. Verificați ID-ul dispozitivului folosit cu serviciul schedule_appliance."
+    },
+    "load_management_disabled": {
+      "message": "Gestionarea sarcinilor este oprită, deci nu există o listă de deconectare de actualizat. Porniți-o din Configurare → Gestionarea sarcinilor pe panoul SEM și încercați din nou."
+    },
+    "load_management_failed_to_start": {
+      "message": "Gestionarea sarcinilor este pornită, dar nu a reușit să pornească, deci SEM nu își poate folosi lista de dispozitive. Verificați jurnalul Home Assistant pentru \"Failed to initialize load management\" și reîncărcați integrarea."
     }
   },
   "issues": {

@@ -1557,11 +1557,8 @@
     "dashboard_generation_failed": {
       "message": "Nepodařilo se vygenerovat řídicí panel SEM. Podrobnosti najdete v protokolech Home Assistant."
     },
-    "load_management_not_initialized": {
-      "message": "Správa zátěže ještě není připravena. Počkejte, až se integrace plně spustí, a zkuste to znovu."
-    },
     "device_registry_not_initialized": {
-      "message": "Registr zařízení ještě není připraven. Počkejte, až se integrace plně spustí, a zkuste to znovu."
+      "message": "Registr zařízení SEM se nepodařilo sestavit, takže toto zařízení nelze změnit. Zkontrolujte protokol Home Assistant na \"Unified device registry init failed\" a znovu načtěte integraci."
     },
     "mapping_service_required": {
       "message": "Když je typ ovládání „služba“, je vyžadována služba. Zadejte službu, která se má volat."
@@ -1578,9 +1575,6 @@
     "invalid_deadline_format": {
       "message": "Neplatný formát termínu: „{deadline}“. Použijte formát ISO 8601, například 2026-05-27T07:00:00."
     },
-    "energy_dashboard_configuration_failed": {
-      "message": "Konfigurace panelu Energie selhala. Zkontrolujte, zda jsou dostupné všechny požadované senzory."
-    },
     "set_option_invalid_payload": {
       "message": "set_option vyžaduje slovník 'options' mapující konfigurační klíče na nové hodnoty."
     },
@@ -1589,6 +1583,12 @@
     },
     "unknown_appliance_schedule": {
       "message": "Pro {device_id} nebyl nalezen žádný plán spotřebiče. Zkontrolujte ID zařízení, které jste použili u služby schedule_appliance."
+    },
+    "load_management_disabled": {
+      "message": "Řízení zátěže je vypnuté, takže není co aktualizovat v seznamu odpojení. Zapněte ho v Konfigurace → Řízení zátěže na panelu SEM a zkuste to znovu."
+    },
+    "load_management_failed_to_start": {
+      "message": "Řízení zátěže je zapnuté, ale nepodařilo se ho spustit, takže SEM nemůže použít svůj seznam zařízení. Zkontrolujte protokol Home Assistant na \"Failed to initialize load management\" a znovu načtěte integraci."
     }
   },
   "issues": {

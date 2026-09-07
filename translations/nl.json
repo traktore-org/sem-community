@@ -1557,11 +1557,8 @@
     "dashboard_generation_failed": {
       "message": "Het SEM-dashboard kon niet worden gegenereerd. Raadpleeg de Home Assistant-logboeken voor details."
     },
-    "load_management_not_initialized": {
-      "message": "Lastbeheer is nog niet gereed. Wacht tot de integratie volledig is opgestart en probeer het opnieuw."
-    },
     "device_registry_not_initialized": {
-      "message": "Het apparaatregister is nog niet gereed. Wacht tot de integratie volledig is opgestart en probeer het opnieuw."
+      "message": "Het SEM-apparaatregister kon niet worden opgebouwd, dus dit apparaat kan niet worden gewijzigd. Controleer het Home Assistant-logboek op \"Unified device registry init failed\" en herlaad de integratie."
     },
     "mapping_service_required": {
       "message": "Bij besturingstype “service” is een service vereist. Geef een aan te roepen service op."
@@ -1578,9 +1575,6 @@
     "invalid_deadline_format": {
       "message": "Ongeldig deadlineformaat: “{deadline}”. Gebruik de ISO 8601-notatie, bijvoorbeeld 2026-05-27T07:00:00."
     },
-    "energy_dashboard_configuration_failed": {
-      "message": "Configuratie van het Energiedashboard mislukt. Controleer of alle vereiste sensoren beschikbaar zijn."
-    },
     "set_option_invalid_payload": {
       "message": "set_option vereist een 'options'-dict die configuratiesleutels aan nieuwe waarden koppelt."
     },
@@ -1589,6 +1583,12 @@
     },
     "unknown_appliance_schedule": {
       "message": "Geen apparaatschema gevonden voor {device_id}. Controleer de apparaat-ID die je bij de service schedule_appliance hebt gebruikt."
+    },
+    "load_management_disabled": {
+      "message": "Lastbeheer staat uit, dus er is geen afschakellijst om bij te werken. Zet het aan via Configuratie → Lastbeheer op het SEM-dashboard en probeer het opnieuw."
+    },
+    "load_management_failed_to_start": {
+      "message": "Lastbeheer staat aan maar kon niet starten, dus SEM kan zijn apparatenlijst niet gebruiken. Controleer het Home Assistant-logboek op \"Failed to initialize load management\" en herlaad de integratie."
     }
   },
   "issues": {

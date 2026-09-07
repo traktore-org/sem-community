@@ -1557,11 +1557,8 @@
     "dashboard_generation_failed": {
       "message": "Nie udało się wygenerować pulpitu SEM. Szczegóły znajdziesz w dziennikach Home Assistant."
     },
-    "load_management_not_initialized": {
-      "message": "Zarządzanie obciążeniem nie jest jeszcze gotowe. Poczekaj, aż integracja zakończy uruchamianie, i spróbuj ponownie."
-    },
     "device_registry_not_initialized": {
-      "message": "Rejestr urządzeń nie jest jeszcze gotowy. Poczekaj, aż integracja zakończy uruchamianie, i spróbuj ponownie."
+      "message": "Nie udało się zbudować rejestru urządzeń SEM, więc tego urządzenia nie można zmienić. Sprawdź dziennik Home Assistant pod kątem \"Unified device registry init failed\" i przeładuj integrację."
     },
     "mapping_service_required": {
       "message": "Gdy typ sterowania to „usługa”, wymagana jest usługa. Podaj usługę do wywołania."
@@ -1578,9 +1575,6 @@
     "invalid_deadline_format": {
       "message": "Nieprawidłowy format terminu: „{deadline}”. Użyj formatu ISO 8601, na przykład 2026-05-27T07:00:00."
     },
-    "energy_dashboard_configuration_failed": {
-      "message": "Konfiguracja pulpitu Energia nie powiodła się. Sprawdź, czy wszystkie wymagane czujniki są dostępne."
-    },
     "set_option_invalid_payload": {
       "message": "set_option wymaga słownika 'options' mapującego klucze konfiguracji na nowe wartości."
     },
@@ -1589,6 +1583,12 @@
     },
     "unknown_appliance_schedule": {
       "message": "Nie znaleziono harmonogramu urządzenia dla {device_id}. Sprawdź identyfikator urządzenia użyty w usłudze schedule_appliance."
+    },
+    "load_management_disabled": {
+      "message": "Zarządzanie obciążeniem jest wyłączone, więc nie ma listy zrzutu do aktualizacji. Włącz je w Konfiguracja → Zarządzanie obciążeniem na pulpicie SEM i spróbuj ponownie."
+    },
+    "load_management_failed_to_start": {
+      "message": "Zarządzanie obciążeniem jest włączone, ale nie udało się go uruchomić, więc SEM nie może użyć swojej listy urządzeń. Sprawdź dziennik Home Assistant pod kątem \"Failed to initialize load management\" i przeładuj integrację."
     }
   },
   "issues": {

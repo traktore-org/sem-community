@@ -333,6 +333,16 @@ cycle.
 
 ## Peak load management not working
 
+**First, read the sentence SEM gives you.** Since 2.1 a service that
+genuinely needs load management says which of two things is true: *switched
+off* (turn it on under Configuration → Load management on the SEM
+dashboard) or *switched on but failed to start* (check the log for
+"Failed to initialize load management" and reload). Two things that used to
+be refused with load management off are not any more: setting the **target
+peak limit** — the EV planner reads that ceiling whether or not shedding is
+armed — and every per-device setting that goes through the device registry
+(mode, dependencies, goals, comfort band, anti-cycle windows).
+
 **Cause:** Load management must be explicitly enabled and configured with a target peak limit.
 
 **Fix:**

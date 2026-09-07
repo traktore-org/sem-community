@@ -1557,11 +1557,8 @@
     "dashboard_generation_failed": {
       "message": "Das SEM-Dashboard konnte nicht erstellt werden. Details finden Sie in den Home-Assistant-Protokollen."
     },
-    "load_management_not_initialized": {
-      "message": "Das Lastmanagement ist noch nicht bereit. Bitte warten Sie, bis die Integration vollständig gestartet ist, und versuchen Sie es erneut."
-    },
     "device_registry_not_initialized": {
-      "message": "Die Geräteregistrierung ist noch nicht bereit. Bitte warten Sie, bis die Integration vollständig gestartet ist, und versuchen Sie es erneut."
+      "message": "Die SEM-Geräteregistrierung konnte nicht aufgebaut werden, daher kann dieses Gerät nicht geändert werden. Prüfe das Home-Assistant-Protokoll auf \"Unified device registry init failed\" und lade die Integration neu."
     },
     "mapping_service_required": {
       "message": "Beim Steuerungstyp „Dienst“ ist ein Dienst erforderlich. Bitte geben Sie einen aufzurufenden Dienst an."
@@ -1578,9 +1575,6 @@
     "invalid_deadline_format": {
       "message": "Ungültiges Fristformat: „{deadline}“. Verwenden Sie das ISO-8601-Format, zum Beispiel 2026-05-27T07:00:00."
     },
-    "energy_dashboard_configuration_failed": {
-      "message": "Konfiguration des Energie-Dashboards fehlgeschlagen. Prüfe, ob alle erforderlichen Sensoren verfügbar sind."
-    },
     "set_option_invalid_payload": {
       "message": "set_option benötigt ein 'options'-Dict, das Konfigurationsschlüssel auf neue Werte abbildet."
     },
@@ -1589,6 +1583,12 @@
     },
     "unknown_appliance_schedule": {
       "message": "Kein Geräteplan für {device_id} gefunden. Prüfen Sie die Geräte-ID, die Sie mit dem Dienst schedule_appliance verwendet haben."
+    },
+    "load_management_disabled": {
+      "message": "Das Lastmanagement ist ausgeschaltet, daher gibt es keine Abwurfliste zu aktualisieren. Schalte es auf dem SEM-Dashboard unter Konfiguration → Lastmanagement ein und versuche es erneut."
+    },
+    "load_management_failed_to_start": {
+      "message": "Das Lastmanagement ist eingeschaltet, konnte aber nicht starten, daher kann SEM seine Geräteliste nicht verwenden. Prüfe das Home-Assistant-Protokoll auf \"Failed to initialize load management\" und lade die Integration neu."
     }
   },
   "issues": {

@@ -1557,11 +1557,8 @@
     "dashboard_generation_failed": {
       "message": "A SEM irányítópult létrehozása sikertelen. A részletekért tekintse meg a Home Assistant naplóit."
     },
-    "load_management_not_initialized": {
-      "message": "A terheléskezelés még nem áll készen. Várja meg, amíg az integráció elindul, majd próbálja újra."
-    },
     "device_registry_not_initialized": {
-      "message": "Az eszköznyilvántartás még nem áll készen. Várja meg, amíg az integráció elindul, majd próbálja újra."
+      "message": "A SEM eszköznyilvántartását nem sikerült felépíteni, így ez az eszköz nem módosítható. Ellenőrizze a Home Assistant naplóját az \"Unified device registry init failed\" bejegyzésre, és töltse újra az integrációt."
     },
     "mapping_service_required": {
       "message": "Ha a vezérlés típusa „szolgáltatás”, szolgáltatás megadása szükséges. Adjon meg egy meghívandó szolgáltatást."
@@ -1578,9 +1575,6 @@
     "invalid_deadline_format": {
       "message": "Érvénytelen határidőformátum: „{deadline}”. Használjon ISO 8601 formátumot, például 2026-05-27T07:00:00."
     },
-    "energy_dashboard_configuration_failed": {
-      "message": "Az Energia irányítópult konfigurálása sikertelen. Ellenőrizze, hogy minden szükséges érzékelő elérhető-e."
-    },
     "set_option_invalid_payload": {
       "message": "A set_option egy 'options' szótárat igényel, amely a konfigurációs kulcsokat új értékekre képezi le."
     },
@@ -1589,6 +1583,12 @@
     },
     "unknown_appliance_schedule": {
       "message": "Nem található készülék-ütemezés ehhez: {device_id}. Ellenőrizze az eszközazonosítót, amelyet a schedule_appliance szolgáltatással használt."
+    },
+    "load_management_disabled": {
+      "message": "A terheléskezelés ki van kapcsolva, így nincs frissítendő lekapcsolási lista. Kapcsolja be a SEM irányítópulton a Beállítások → Terheléskezelés alatt, majd próbálja újra."
+    },
+    "load_management_failed_to_start": {
+      "message": "A terheléskezelés be van kapcsolva, de nem indult el, így a SEM nem tudja használni az eszközlistáját. Ellenőrizze a Home Assistant naplóját a \"Failed to initialize load management\" bejegyzésre, és töltse újra az integrációt."
     }
   },
   "issues": {

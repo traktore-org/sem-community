@@ -38,6 +38,7 @@ from .const import (
     MIN_PEAK_LIMIT_KW,
     MAX_PEAK_LIMIT_KW,
 )
+from .consts.core import DEFAULT_LOAD_MANAGEMENT_ENABLED
 from .coordinator.sensor_reader import GRID_TRIGGER_HINTS
 from .coordinator import SEMCoordinator
 
@@ -291,6 +292,33 @@ _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
     # force-discharge entity) — read at adapter construction.
     "battery_setpoint_bidirectional",
 })
+
+
+def _require_load_manager(coordinator):
+    """(#913) The load manager, or the honest reason there is none.
+
+    Four service handlers used to gate on ``coordinator._load_manager`` and
+    answer "not initialized — wait" when it was None. Since #897 it is None
+    BY DEFAULT: load management ships off, so the sentence blamed the clock
+    for a setting, and for two of the four handlers the gate tested the
+    wrong precondition altogether (their own branch never touched the
+    manager). This helper exists for the two that genuinely need it, and
+    it says which of the two things is actually true.
+    """
+    lm = getattr(coordinator, "_load_manager", None)
+    if lm is not None:
+        return lm
+    enabled = bool(coordinator.config.get(
+        "load_management_enabled", DEFAULT_LOAD_MANAGEMENT_ENABLED))
+    if not enabled:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="load_management_disabled",
+        )
+    raise HomeAssistantError(
+        translation_domain=DOMAIN,
+        translation_key="load_management_failed_to_start",
+    )
 
 
 def _warn_missing_charger_entities(hass, charger_name, charger_id, to_check):
@@ -3619,11 +3647,9 @@ async def _async_register_services(
         dashboard_storage_key = call.data.get("dashboard_storage_key", "lovelace.dashboard_test")
         view_path = call.data.get("view_path", "peak-load-management")
 
-        if not coordinator._load_manager:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="load_management_not_initialized",
-            )
+        # (#913) this handler reads coordinator._load_manager._devices below,
+        # so it genuinely needs the manager — ask with the true reason.
+        _require_load_manager(coordinator)
 
         try:
             # Load dashboard configuration
@@ -3825,11 +3851,9 @@ async def _async_register_services(
             _LOGGER.info("Updated priorities for %d devices via registry", len(priorities))
             return
 
-        if not coordinator._load_manager:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="load_management_not_initialized",
-            )
+        # (#913) only the fallback below touches the manager; the registry
+        # fast-path above already returned for every normal install.
+        _require_load_manager(coordinator)
 
         updated = 0
         for item in priorities:
@@ -3854,13 +3878,16 @@ async def _async_register_services(
         _LOGGER.error("Failed to register update_device_priorities service: %s", err)
 
     async def async_update_device_config(call) -> None:
-        """Update a single device property (controllable or critical)."""
-        if not coordinator._load_manager:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="load_management_not_initialized",
-            )
+        """Update a single device property.
 
+        (#913) No load-manager gate here. It used to sit above every
+        branch, and 15 of the 18 properties this accepts — control mode,
+        dependencies, every goal, the comfort band, the anti-cycle windows
+        — go through the device registry and never touch the manager. With
+        load management off (the default since #897) they were all refused
+        with "not initialized — wait", for a manager that was never going
+        to arrive. The three flag properties tolerate its absence below.
+        """
         device_id = call.data.get("device_id")
         prop = call.data.get("property")
         value = call.data.get("value")
@@ -3884,13 +3911,25 @@ async def _async_register_services(
             # permission axis therefore had no way to be switched OFF through
             # the service even once its name was accepted.
             _flag = str(value).strip().lower() in ("true", "1", "on", "yes")
-            if prop == "critical":
-                await coordinator._load_manager.update_device_critical_status(device_id, _flag)
-            else:
-                await coordinator._load_manager.async_set_hands_off(device_id, not _flag)
+            # (#913) The registry write is the durable half (see the #650
+            # note above); the manager write takes effect this cycle IF the
+            # manager exists. With load management off it does not, and the
+            # registry heals a later-enabled manager's row on its own sync
+            # — so its absence is not a refusal. Only BOTH missing is.
+            lm = getattr(coordinator, "_load_manager", None)
+            if lm is not None:
+                if prop == "critical":
+                    await lm.update_device_critical_status(device_id, _flag)
+                else:
+                    await lm.async_set_hands_off(device_id, not _flag)
             reg = getattr(coordinator, "_device_registry", None)
             if reg is not None:
                 await reg.async_set_device_flag(device_id, prop, _flag)
+            elif lm is None:
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="device_registry_not_initialized",
+                )
         elif prop == "control_mode":
             # Update device control mode: off / peak_only / surplus (#49)
             registry = getattr(coordinator, '_device_registry', None)
@@ -4022,17 +4061,31 @@ async def _async_register_services(
         _LOGGER.error("Failed to register update_device_config service: %s", err)
 
     async def async_update_target_peak(call) -> None:
-        """Update target peak limit."""
-        if not coordinator._load_manager:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="load_management_not_initialized",
-            )
+        """Update target peak limit.
 
+        (#913) Never refuses for a missing load manager. The limit is a
+        config-entry option that the EV planner reads as its ceiling whether
+        or not shedding is armed (``ev_control._get_peak_limit_w`` falls back
+        to the option), so refusing to SET it while telling the user to
+        enable load management prescribed the exact thing #897 exists to
+        keep off. With a live manager the write goes through it (live
+        re-plan); without one it takes the same ``set_option`` path the key
+        already falls into today.
+        """
         target = call.data.get("target_peak_limit")
         unlimited = call.data.get("peak_limit_unlimited")
-        await coordinator._load_manager.update_target_peak_limit(
-            float(target), unlimited=unlimited
+        lm = getattr(coordinator, "_load_manager", None)
+        if lm is not None:
+            await lm.update_target_peak_limit(float(target), unlimited=unlimited)
+            return
+        await hass.services.async_call(
+            DOMAIN, "set_option",
+            {"options": {
+                "target_peak_limit": float(target),
+                **({"peak_limit_unlimited": bool(unlimited)}
+                   if unlimited is not None else {}),
+            }},
+            blocking=True,
         )
         _LOGGER.info(
             "Updated target peak limit to %.1f kW%s", target,

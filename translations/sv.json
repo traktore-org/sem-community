@@ -1557,11 +1557,8 @@
     "dashboard_generation_failed": {
       "message": "Det gick inte att generera SEM-instrumentpanelen. Se Home Assistant-loggarna för detaljer."
     },
-    "load_management_not_initialized": {
-      "message": "Lasthanteringen är inte redo ännu. Vänta tills integrationen har startat klart och försök igen."
-    },
     "device_registry_not_initialized": {
-      "message": "Enhetsregistret är inte redo ännu. Vänta tills integrationen har startat klart och försök igen."
+      "message": "SEM:s enhetsregister kunde inte byggas, så den här enheten kan inte ändras. Kontrollera Home Assistant-loggen efter \"Unified device registry init failed\" och ladda om integrationen."
     },
     "mapping_service_required": {
       "message": "En tjänst krävs när styrtypen är ”tjänst”. Ange en tjänst att anropa."
@@ -1578,9 +1575,6 @@
     "invalid_deadline_format": {
       "message": "Ogiltigt deadlineformat: ”{deadline}”. Använd ISO 8601-format, till exempel 2026-05-27T07:00:00."
     },
-    "energy_dashboard_configuration_failed": {
-      "message": "Konfigurationen av Energipanelen misslyckades. Kontrollera att alla nödvändiga sensorer är tillgängliga."
-    },
     "set_option_invalid_payload": {
       "message": "set_option kräver en 'options'-dict som mappar konfigurationsnycklar till nya värden."
     },
@@ -1589,6 +1583,12 @@
     },
     "unknown_appliance_schedule": {
       "message": "Ingen apparatschemaläggning hittades för {device_id}. Kontrollera det enhets-ID du använde med tjänsten schedule_appliance."
+    },
+    "load_management_disabled": {
+      "message": "Lasthantering är avstängd, så det finns ingen frånkopplingslista att uppdatera. Slå på den under Konfiguration → Lasthantering på SEM-panelen och försök igen."
+    },
+    "load_management_failed_to_start": {
+      "message": "Lasthantering är påslagen men kunde inte starta, så SEM kan inte använda sin enhetslista. Kontrollera Home Assistant-loggen efter \"Failed to initialize load management\" och ladda om integrationen."
     }
   },
   "issues": {

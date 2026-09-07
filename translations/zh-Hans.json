@@ -1557,11 +1557,8 @@
     "dashboard_generation_failed": {
       "message": "生成 SEM 看板失败。请查看 Home Assistant 日志以获取详细信息。"
     },
-    "load_management_not_initialized": {
-      "message": "负荷管理尚未就绪。请等待集成完成启动后重试。"
-    },
     "device_registry_not_initialized": {
-      "message": "设备注册表尚未就绪。请等待集成完成启动后重试。"
+      "message": "SEM 的设备注册表构建失败，因此无法更改此设备。请在 Home Assistant 日志中查找 \"Unified device registry init failed\" 并重新加载该集成。"
     },
     "mapping_service_required": {
       "message": "当控制类型为“service”服务调用时，必须提供一个服务。请配置需要调用的服务。"
@@ -1578,9 +1575,6 @@
     "invalid_deadline_format": {
       "message": "无效的时间截止格式：“{deadline}”。请使用 ISO 8601 格式，例如 2026-05-27T07:00:00。"
     },
-    "energy_dashboard_configuration_failed": {
-      "message": "能源看板配置失败。请检查所有必需的传感器是否可用。"
-    },
     "set_option_invalid_payload": {
       "message": "set_option 需要一个 options 字典，用于将配置键映射到新的值。"
     },
@@ -1589,6 +1583,12 @@
     },
     "unknown_appliance_schedule": {
       "message": "未找到 {device_id} 的设备计划。请检查您在 schedule_appliance 服务中使用的设备 ID。"
+    },
+    "load_management_disabled": {
+      "message": "负载管理已关闭，因此没有可更新的卸载设备列表。请在 SEM 仪表盘的 配置 → 负载管理 中开启后重试。"
+    },
+    "load_management_failed_to_start": {
+      "message": "负载管理已开启但启动失败，因此 SEM 无法使用其设备列表。请在 Home Assistant 日志中查找 \"Failed to initialize load management\" 并重新加载该集成。"
     }
   },
   "issues": {

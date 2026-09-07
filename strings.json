@@ -1554,20 +1554,14 @@
     }
   },
   "exceptions": {
-    "load_management_not_initialized": {
-      "message": "Load management is not initialized. Please enable it in the integration settings."
-    },
     "device_registry_not_initialized": {
-      "message": "Device registry is not initialized. Please check the integration setup."
+      "message": "SEM's device registry failed to build, so this device cannot be changed. Check the Home Assistant log for \"Unified device registry init failed\" and reload the integration."
     },
     "invalid_device_property": {
       "message": "Unknown device property: {property}. Expected \"controllable\" or \"critical\"."
     },
     "dashboard_generation_failed": {
       "message": "Dashboard generation failed. See logs for details."
-    },
-    "energy_dashboard_configuration_failed": {
-      "message": "Energy Dashboard configuration failed. Check that all required sensors are available."
     },
     "device_not_found": {
       "message": "Device {device_id} not found in surplus controller."
@@ -1589,6 +1583,12 @@
     },
     "set_option_no_entry": {
       "message": "No SEM ConfigEntry found — install SEM via Settings → Devices & Services first."
+    },
+    "load_management_disabled": {
+      "message": "Load management is switched off, so there is no shed device list to update. Turn it on under Configuration → Load management on the SEM dashboard, then try again."
+    },
+    "load_management_failed_to_start": {
+      "message": "Load management is switched on but failed to start, so SEM cannot use its device list. Check the Home Assistant log for \"Failed to initialize load management\" and reload the integration."
     }
   },
   "issues": {

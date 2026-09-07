@@ -1557,11 +1557,8 @@
     "dashboard_generation_failed": {
       "message": "SEM-koontinäytön luominen epäonnistui. Katso lisätiedot Home Assistantin lokeista."
     },
-    "load_management_not_initialized": {
-      "message": "Kuormanhallinta ei ole vielä valmis. Odota, että integraatio on käynnistynyt kokonaan, ja yritä uudelleen."
-    },
     "device_registry_not_initialized": {
-      "message": "Laiterekisteri ei ole vielä valmis. Odota, että integraatio on käynnistynyt kokonaan, ja yritä uudelleen."
+      "message": "SEM:n laiterekisteriä ei voitu rakentaa, joten tätä laitetta ei voi muuttaa. Tarkista Home Assistantin lokista \"Unified device registry init failed\" ja lataa integraatio uudelleen."
     },
     "mapping_service_required": {
       "message": "Palvelu vaaditaan, kun ohjaustyyppi on ”palvelu”. Anna kutsuttava palvelu."
@@ -1578,9 +1575,6 @@
     "invalid_deadline_format": {
       "message": "Virheellinen määräajan muoto: ”{deadline}”. Käytä ISO 8601 -muotoa, esimerkiksi 2026-05-27T07:00:00."
     },
-    "energy_dashboard_configuration_failed": {
-      "message": "Energia-koontinäytön määritys epäonnistui. Tarkista, että kaikki vaaditut anturit ovat käytettävissä."
-    },
     "set_option_invalid_payload": {
       "message": "set_option vaatii 'options'-sanakirjan, joka liittää määritysavaimet uusiin arvoihin."
     },
@@ -1589,6 +1583,12 @@
     },
     "unknown_appliance_schedule": {
       "message": "Laitteelle {device_id} ei löytynyt laiteaikataulua. Tarkista laitetunnus, jota käytit palvelun schedule_appliance kanssa."
+    },
+    "load_management_disabled": {
+      "message": "Kuormanhallinta on pois päältä, joten päivitettävää irtikytkentälistaa ei ole. Kytke se päälle SEM-kojelaudan kohdasta Asetukset → Kuormanhallinta ja yritä uudelleen."
+    },
+    "load_management_failed_to_start": {
+      "message": "Kuormanhallinta on päällä, mutta se ei käynnistynyt, joten SEM ei voi käyttää laitelistaansa. Tarkista Home Assistantin lokista \"Failed to initialize load management\" ja lataa integraatio uudelleen."
     }
   },
   "issues": {

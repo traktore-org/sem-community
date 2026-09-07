@@ -1557,11 +1557,8 @@
     "dashboard_generation_failed": {
       "message": "Falha ao gerar o painel SEM. Consulte os registos do Home Assistant para mais detalhes."
     },
-    "load_management_not_initialized": {
-      "message": "A gestão de carga ainda não está pronta. Aguarde que a integração termine de iniciar e tente novamente."
-    },
     "device_registry_not_initialized": {
-      "message": "O registo de dispositivos ainda não está pronto. Aguarde que a integração termine de iniciar e tente novamente."
+      "message": "O registo de dispositivos do SEM não pôde ser construído, por isso este dispositivo não pode ser alterado. Verifique o registo do Home Assistant por \"Unified device registry init failed\" e recarregue a integração."
     },
     "mapping_service_required": {
       "message": "É necessário um serviço quando o tipo de controlo é «serviço». Indique um serviço a chamar."
@@ -1578,9 +1575,6 @@
     "invalid_deadline_format": {
       "message": "Formato de prazo inválido: «{deadline}». Use o formato ISO 8601, por exemplo 2026-05-27T07:00:00."
     },
-    "energy_dashboard_configuration_failed": {
-      "message": "Falha na configuração do Painel de Energia. Verifique se todos os sensores necessários estão disponíveis."
-    },
     "set_option_invalid_payload": {
       "message": "set_option requer um dicionário 'options' que associe chaves de configuração a novos valores."
     },
@@ -1589,6 +1583,12 @@
     },
     "unknown_appliance_schedule": {
       "message": "Não foi encontrado nenhum agendamento de eletrodoméstico para {device_id}. Verifique o ID do dispositivo que usou com o serviço schedule_appliance."
+    },
+    "load_management_disabled": {
+      "message": "A gestão de cargas está desligada, por isso não há lista de corte para atualizar. Ligue-a em Configuração → Gestão de cargas no painel SEM e tente novamente."
+    },
+    "load_management_failed_to_start": {
+      "message": "A gestão de cargas está ligada mas não conseguiu arrancar, por isso o SEM não pode usar a sua lista de dispositivos. Verifique o registo do Home Assistant por \"Failed to initialize load management\" e recarregue a integração."
     }
   },
   "issues": {

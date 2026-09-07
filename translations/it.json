@@ -1557,11 +1557,8 @@
     "dashboard_generation_failed": {
       "message": "Impossibile generare la dashboard SEM. Controlla i log di Home Assistant per i dettagli."
     },
-    "load_management_not_initialized": {
-      "message": "La gestione del carico non è ancora pronta. Attendi che l’integrazione completi l’avvio e riprova."
-    },
     "device_registry_not_initialized": {
-      "message": "Il registro dei dispositivi non è ancora pronto. Attendi che l’integrazione completi l’avvio e riprova."
+      "message": "Il registro dispositivi di SEM non è stato costruito, quindi questo dispositivo non può essere modificato. Controlla il log di Home Assistant per \"Unified device registry init failed\" e ricarica l'integrazione."
     },
     "mapping_service_required": {
       "message": "È richiesto un servizio quando il tipo di controllo è «servizio». Indica un servizio da chiamare."
@@ -1578,9 +1575,6 @@
     "invalid_deadline_format": {
       "message": "Formato scadenza non valido: «{deadline}». Usa il formato ISO 8601, ad esempio 2026-05-27T07:00:00."
     },
-    "energy_dashboard_configuration_failed": {
-      "message": "Configurazione della Dashboard Energia non riuscita. Verifica che tutti i sensori richiesti siano disponibili."
-    },
     "set_option_invalid_payload": {
       "message": "set_option richiede un dizionario 'options' che associ le chiavi di configurazione ai nuovi valori."
     },
@@ -1589,6 +1583,12 @@
     },
     "unknown_appliance_schedule": {
       "message": "Nessuna pianificazione dell’elettrodomestico trovata per {device_id}. Controlla l’ID dispositivo che hai usato con il servizio schedule_appliance."
+    },
+    "load_management_disabled": {
+      "message": "La gestione dei carichi è disattivata, quindi non c'è alcun elenco di distacco da aggiornare. Attivala in Configurazione → Gestione carichi nella dashboard SEM e riprova."
+    },
+    "load_management_failed_to_start": {
+      "message": "La gestione dei carichi è attiva ma non è riuscita ad avviarsi, quindi SEM non può usare il suo elenco dispositivi. Controlla il log di Home Assistant per \"Failed to initialize load management\" e ricarica l'integrazione."
     }
   },
   "issues": {

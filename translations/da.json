@@ -1557,11 +1557,8 @@
     "dashboard_generation_failed": {
       "message": "SEM-dashboardet kunne ikke genereres. Se Home Assistant-loggene for detaljer."
     },
-    "load_management_not_initialized": {
-      "message": "Belastningsstyringen er ikke klar endnu. Vent, til integrationen er færdig med at starte, og prøv igen."
-    },
     "device_registry_not_initialized": {
-      "message": "Enhedsregistret er ikke klar endnu. Vent, til integrationen er færdig med at starte, og prøv igen."
+      "message": "SEM's enhedsregister kunne ikke bygges, så denne enhed kan ikke ændres. Tjek Home Assistant-loggen for \"Unified device registry init failed\", og genindlæs integrationen."
     },
     "mapping_service_required": {
       "message": "Der kræves en tjeneste, når styringstypen er ”tjeneste”. Angiv en tjeneste, der skal kaldes."
@@ -1578,9 +1575,6 @@
     "invalid_deadline_format": {
       "message": "Ugyldigt deadlineformat: ”{deadline}”. Brug ISO 8601-format, for eksempel 2026-05-27T07:00:00."
     },
-    "energy_dashboard_configuration_failed": {
-      "message": "Konfiguration af Energi-dashboardet mislykkedes. Kontrollér, at alle nødvendige sensorer er tilgængelige."
-    },
     "set_option_invalid_payload": {
       "message": "set_option kræver en 'options'-dict, der mapper konfigurationsnøgler til nye værdier."
     },
@@ -1589,6 +1583,12 @@
     },
     "unknown_appliance_schedule": {
       "message": "Der blev ikke fundet nogen apparatplan for {device_id}. Kontrollér det enheds-ID, du brugte med tjenesten schedule_appliance."
+    },
+    "load_management_disabled": {
+      "message": "Laststyring er slået fra, så der er ingen frakoblingsliste at opdatere. Slå den til under Konfiguration → Laststyring på SEM-dashboardet, og prøv igen."
+    },
+    "load_management_failed_to_start": {
+      "message": "Laststyring er slået til, men kunne ikke starte, så SEM kan ikke bruge sin enhedsliste. Tjek Home Assistant-loggen for \"Failed to initialize load management\", og genindlæs integrationen."
     }
   },
   "issues": {

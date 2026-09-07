@@ -1557,11 +1557,8 @@
     "dashboard_generation_failed": {
       "message": "Échec de la génération du tableau de bord SEM. Consultez les journaux de Home Assistant pour plus de détails."
     },
-    "load_management_not_initialized": {
-      "message": "La gestion de charge n’est pas encore prête. Veuillez attendre que l’intégration ait fini de démarrer, puis réessayez."
-    },
     "device_registry_not_initialized": {
-      "message": "Le registre des appareils n’est pas encore prêt. Veuillez attendre que l’intégration ait fini de démarrer, puis réessayez."
+      "message": "Le registre d'appareils de SEM n'a pas pu être construit, cet appareil ne peut donc pas être modifié. Vérifiez le journal Home Assistant pour \"Unified device registry init failed\" et rechargez l'intégration."
     },
     "mapping_service_required": {
       "message": "Un service est requis lorsque le type de commande est « service ». Veuillez indiquer un service à appeler."
@@ -1578,9 +1575,6 @@
     "invalid_deadline_format": {
       "message": "Format d’échéance invalide : « {deadline} ». Utilisez le format ISO 8601, par exemple 2026-05-27T07:00:00."
     },
-    "energy_dashboard_configuration_failed": {
-      "message": "Échec de la configuration du tableau de bord Énergie. Vérifiez que tous les capteurs requis sont disponibles."
-    },
     "set_option_invalid_payload": {
       "message": "set_option nécessite un dictionnaire 'options' associant des clés de configuration à de nouvelles valeurs."
     },
@@ -1589,6 +1583,12 @@
     },
     "unknown_appliance_schedule": {
       "message": "Aucune programmation d’appareil trouvée pour {device_id}. Vérifiez l’ID d’appareil que vous avez utilisé avec le service schedule_appliance."
+    },
+    "load_management_disabled": {
+      "message": "La gestion de charge est désactivée, il n'y a donc aucune liste de délestage à mettre à jour. Activez-la sous Configuration → Gestion de charge sur le tableau de bord SEM, puis réessayez."
+    },
+    "load_management_failed_to_start": {
+      "message": "La gestion de charge est activée mais n'a pas pu démarrer, SEM ne peut donc pas utiliser sa liste d'appareils. Vérifiez le journal Home Assistant pour \"Failed to initialize load management\" et rechargez l'intégration."
     }
   },
   "issues": {
