@@ -22,7 +22,7 @@ YAML scenario shape:
     timeline:
         - t: 0
           solar_power: 5500
-          grid_power: -4200          # negative = export
+          grid_power: 4200           # SEM convention: + = EXPORT, - = import
           battery_power: 0
           battery_soc: 75
           ev_power: 0
@@ -30,7 +30,7 @@ YAML scenario shape:
         - t: 60
           # Sticky semantics: omitted keys inherit from the previous cycle.
           ev_power: 9900
-          grid_power: 3100
+          grid_power: -3100          # importing for the car
           battery_power: -500
     expect:
         strategy_substring: "solar_only"
