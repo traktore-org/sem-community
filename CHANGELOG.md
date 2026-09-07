@@ -13,6 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🩹 **A setting for a device that does not exist was accepted and stored**
+  (#928). A typo in a device id, a renamed entity, or a card row that no
+  longer exists used to get a quiet success — the value went into a store
+  nothing would ever read. SEM now says *device not found* instead. A load
+  that registers itself later still gets its settings, as before.
+
+- 🩹 **The Control card said nothing when a change was refused** (#929).
+  A refused priority, setting or peak-limit change simply snapped back with
+  no explanation. The card now shows the reason SEM gives — the same
+  sentence Developer Tools always showed — at the top of the card for a
+  few seconds.
+
 - 🩹 **Services refused "load management is not initialized" for a setting
   that was simply off** (#913). Load management ships off by default since
   #897, and four services gated on it. Two of them never needed it: setting

@@ -1559,6 +1559,36 @@ class UnifiedDeviceRegistry:
             )
         return bool(removed)
 
+    def knows_device(self, device_id: str) -> bool:
+        """(#913 follow-up) Is ``device_id`` a device this install has — live
+        now, or persisted and merely not built yet?
+
+        The goal, mode and flag stores are keyed by whatever id they are
+        handed, which is the right shape for a device that is ABOUT TO
+        register (a service-registered load can arrive after its goal) and
+        the wrong answer for a typo, a renamed entity or a card row that no
+        longer exists: the service returned 200 and stored a value nothing
+        would ever read — the #462 silent-no-op class, seen on .175 when a
+        hot-water goal was accepted on a rig with no hot-water device.
+
+        Known means: live in the surplus controller; a persisted service
+        registration; or any row the Control card would show (Energy
+        Dashboard devices, charger rows, the battery row) — the card's own
+        payload is the authoritative "what exists here".
+        """
+        if not device_id:
+            return False
+        sc = getattr(self, "_surplus_controller", None)
+        if sc is not None and getattr(sc, "get_device", None) is not None:
+            if sc.get_device(device_id) is not None:
+                return True
+        if device_id in (getattr(self, "_service_registrations", None) or {}):
+            return True
+        try:
+            return device_id in self.get_devices_for_sensor()
+        except Exception:  # noqa: BLE001 — an unbuildable payload is "unknown", not a crash
+            return False
+
     def get_devices_for_sensor(self) -> Dict[str, Dict[str, Any]]:
         """Return dict formatted for the controllable_devices_count sensor attributes."""
         result = {}

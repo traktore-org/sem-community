@@ -3924,6 +3924,12 @@ async def _async_register_services(
                     await lm.async_set_hands_off(device_id, not _flag)
             reg = getattr(coordinator, "_device_registry", None)
             if reg is not None:
+                if not reg.knows_device(device_id):
+                    raise HomeAssistantError(
+                        translation_domain=DOMAIN,
+                        translation_key="device_not_found",
+                        translation_placeholders={"device_id": device_id},
+                    )
                 await reg.async_set_device_flag(device_id, prop, _flag)
             elif lm is None:
                 raise HomeAssistantError(
@@ -3934,6 +3940,14 @@ async def _async_register_services(
             # Update device control mode: off / peak_only / surplus (#49)
             registry = getattr(coordinator, '_device_registry', None)
             if registry:
+                # (#913 follow-up) same rule as the goals: an unknown id is
+                # refused, not silently stored.
+                if not registry.knows_device(device_id):
+                    raise HomeAssistantError(
+                        translation_domain=DOMAIN,
+                        translation_key="device_not_found",
+                        translation_placeholders={"device_id": device_id},
+                    )
                 await registry.update_device_control_mode(device_id, str(value))
             else:
                 raise HomeAssistantError(
@@ -3977,6 +3991,14 @@ async def _async_register_services(
                 raise HomeAssistantError(
                     translation_domain=DOMAIN,
                     translation_key="device_registry_not_initialized",
+                )
+            # (#913 follow-up) a goal for a device this install does not
+            # have is a silent no-op stored forever — say so instead.
+            if not registry.knows_device(device_id):
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="device_not_found",
+                    translation_placeholders={"device_id": device_id},
                 )
             if prop == "top_up_policy" and str(value) not in (
                 "solar_only", "cheap_hours"
