@@ -119,14 +119,35 @@ def mutate(issue: str, commits: list, tests: list) -> dict:
         sh(["git", "checkout", "-q", "develop"], cwd=clone)
 
         # Revert newest-first so earlier hunks still apply. Conflicts in
-        # CHANGELOG/docs are noise — the source is what is being mutated,
-        # and whether source actually changed is checked explicitly below.
+        # CHANGELOG/docs are noise — the source is what is being mutated.
+        #
+        # A CONFLICT IN SOURCE IS NOT NOISE, and the first version treated
+        # it as such: it ran `git checkout --theirs .`, which does not
+        # "resolve" a conflict so much as take one whole side of the file,
+        # discarding every unrelated change in it. Reverting #897 that way
+        # also removed #910's constant from consts/core.py, so the guard
+        # could not import at all — and the tool called that GUARD-SILENT,
+        # inventing a decorative guard that does not exist.
+        #
+        # So the two verdicts are NOT symmetric, and the tool must not
+        # pretend they are. GUARD-BITES is positive evidence: the guard
+        # failed, and it does not matter how tidy the mutation was.
+        # GUARD-SILENT is an absence, and an absence only means something
+        # when the mutation was CLEAN. A source conflict forfeits the
+        # verdict rather than producing a finding.
+        conflicted = []
         for c in reversed(commits):
-            sh(["git", "revert", "--no-commit", "-n", c], cwd=clone)
+            r = sh(["git", "revert", "--no-commit", "-n", c], cwd=clone)
+            blob = (r.stdout or "") + (r.stderr or "")
+            conflicted += [ln.split("in ", 1)[1].strip()
+                           for ln in blob.splitlines()
+                           if ln.startswith("CONFLICT") and " in " in ln]
             sh(["git", "checkout", "HEAD", "--",
                 "tests/", "dashboard/", "CHANGELOG.md", "docs/"], cwd=clone)
             sh(["git", "checkout", "--theirs", "."], cwd=clone)
             sh(["git", "add", "-A"], cwd=clone)
+        # prose conflicts are genuinely noise; source conflicts are not
+        src_conflicts = sorted({f for f in conflicted if f.endswith(".py")})
 
         changed = [f for f in sh(["git", "diff", "--name-only", "HEAD", "--",
                                   "*.py"], cwd=clone).stdout.split()
@@ -179,8 +200,13 @@ def mutate(issue: str, commits: list, tests: list) -> dict:
         if re.search(r"\d+ errors?", out):
             return {"issue": issue, "verdict": "INVALID-MUTATION",
                     "detail": "errored for a reason other than the fix"}
+        if src_conflicts:
+            return {"issue": issue, "verdict": "INVALID-MUTATION",
+                    "detail": f"source conflicts, verdict forfeited: "
+                              f"{src_conflicts[:3]}"}
         return {"issue": issue, "verdict": "GUARD-SILENT",
-                "detail": f"reverted {len(changed)} file(s); nothing failed"}
+                "detail": f"reverted {len(changed)} file(s) cleanly; "
+                          f"nothing failed"}
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
