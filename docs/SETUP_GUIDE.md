@@ -33,6 +33,33 @@ For developer and architecture details, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ---
 
+## If you have no Energy Dashboard (#915)
+
+SEM used to require Home Assistant's Energy Dashboard to be set up first, and
+refused to install without it. It no longer does. When that page is empty or
+missing solar or grid, the installer asks your system instead: it looks at the
+energy integrations you already run, reads what each one calls its own
+entities, and offers **Solar power**, **Grid power** and **Battery power**
+pre-filled for you to confirm or change.
+
+Two things worth knowing:
+
+- **Live power, not daily totals.** SEM steers on watts. If a suggestion looks
+  like a total for today, replace it.
+- **One signed grid sensor is fine.** You do not need separate import and
+  export entities, and you do not need to tell SEM which direction is
+  positive — it works that out by watching the value.
+- **…and if your meter has no signed sensor, use the pair.** Growatt, Senec
+  and Anker's official integration publish grid import and grid export as two
+  always-positive sensors and no combined one. Fill **Grid import power** and
+  **Grid export power** instead — both of them, or neither — and leave *Grid
+  power* empty. SEM computes export minus import, so there is no direction
+  left to guess.
+
+Setting up the Energy Dashboard later does no harm; SEM keeps using what you
+chose. If it recognises nothing at all, every field is still a normal entity
+picker.
+
 ## What SEM detected — and how to correct it
 
 After setup, the dashboard **Configuration tab → Detected hardware** shows
@@ -45,6 +72,12 @@ with the pickers in the charger and sensor-source sections; the same report
 is included in the diagnostics download for bug reports. The full support
 matrix with an honest status per brand lives in
 [SUPPORTED_HARDWARE.md](SUPPORTED_HARDWARE.md).
+
+Since #915, an integration SEM has no row for is shown by **name** rather than
+by domain (*"EG4 Web Monitor · 412 installs"*), and a near-miss may come with
+**proposed roles** — entities of yours whose names match what that integration
+declares it creates, marked *unconfirmed*. Treat them as a shortcut for filling
+in the pickers, not as a verdict: SEM binds nothing it has not been told.
 
 ## 1. Prerequisites
 
@@ -61,11 +94,13 @@ not have HACS installed, follow the official instructions at
 
 ### The Energy Dashboard
 
-SEM reads all its source sensors from the **HA Energy Dashboard**, not from a
-manual sensor list you provide. This design means SEM works with any inverter
-brand automatically — it just asks the Energy Dashboard what you have.
+SEM's first choice for its source sensors is the **HA Energy Dashboard**,
+because it is already the canonical list of energy sensors in your system —
+which is how SEM works with any inverter brand without a per-brand setup.
 
-Before installing SEM, go to **Settings > Dashboards > Energy** and confirm:
+It is the easiest path, not a requirement (see *If you have no Energy
+Dashboard* above). If you want to use it, go to **Settings > Dashboards >
+Energy** and confirm:
 
 - "Solar panels" section has at least one solar production sensor
 - "Grid consumption" and "Grid return" sections have sensors assigned
@@ -73,9 +108,10 @@ Before installing SEM, go to **Settings > Dashboards > Energy** and confirm:
 
 ![Energy Dashboard configuration](images/sem_energy_dashboard_config.png)
 
-If the Energy Dashboard is blank or partially configured, SEM detects fewer
-sensors and may fail to calculate energy flows correctly. Configure it first,
-then install SEM.
+If it is blank or half-filled, the installer will ask your system directly and
+offer the sensors it recognises — you confirm them and carry on. Filling in the
+Energy Dashboard afterwards is still worth doing (HA's own energy history uses
+it), and it will not overwrite what you chose.
 
 > **Why the Energy Dashboard?** HA's Energy Dashboard is already the canonical
 > registry of energy sensors in your installation. SEM leverages this so you

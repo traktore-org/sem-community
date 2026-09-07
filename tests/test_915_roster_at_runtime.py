@@ -1,0 +1,1279 @@
+"""#915 B+C — what the roster is allowed to do on a running install.
+
+Stage A proved the miner re-derives what SEM learned by hand. This file pins
+what SEM may then DO with it, and the answer is deliberately small:
+
+* **name** an unknown domain in the census, so "eg4_web_monitor" becomes
+  "EG4 Web Monitor · 412 installs" and a near-miss becomes a filable report;
+* **propose** a role for an entity the user's own registry already has, as
+  report data the Config card shows and the user confirms;
+* **ask the registry the semantic question first** in the discharge-control
+  discovery — the integration's declared key before the entity-id regexes,
+  behind the same unchanged unit gate.
+
+And what it may never do: invent an entity, bind a control, or change what an
+existing consumer of the census reads. Every key `tests/test_848_census.py`
+asserts on is byte-identical; the new ones are additive.
+"""
+from __future__ import annotations
+
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from custom_components.solar_energy_management import hardware_detection as hd
+
+
+def _ent(entity_id, platform, *, translation_key="", unique_id="",
+         device_id="dev1", device_class=None, disabled_by=None,
+         config_entry_id="entry1"):
+    return SimpleNamespace(
+        entity_id=entity_id, platform=platform, device_id=device_id,
+        translation_key=translation_key, unique_id=unique_id,
+        original_device_class=device_class, disabled_by=disabled_by,
+        config_entry_id=config_entry_id)
+
+
+def _registry(entities):
+    return SimpleNamespace(entities={e.entity_id: e for e in entities},
+                           async_get=lambda eid: {
+                               e.entity_id: e for e in entities}.get(eid))
+
+
+@pytest.mark.unit
+class TestItNamesTheGap:
+    def test_an_unknown_energy_domain_is_named_from_the_roster(self):
+        ents = [
+            _ent("sensor.eg4_battery_power", "eg4_web_monitor",
+                 device_class="power"),
+            _ent("sensor.eg4_soc", "eg4_web_monitor", device_class="battery"),
+        ]
+        census = hd.build_integration_census(registry=_registry(ents))
+        assert census["unknown_energy_domains"] == ["eg4_web_monitor"]
+        named = census["unknown_energy_domains_named"]
+        assert named and named[0]["domain"] == "eg4_web_monitor"
+        assert named[0]["name"] == "EG4 Web Monitor"
+        assert named[0]["known_vocabulary"] is True
+
+    def test_a_domain_the_roster_never_heard_of_is_still_reported(self):
+        """Silence about the name must not become silence about the gap."""
+        ents = [
+            _ent("sensor.mystery_power", "totally_unknown_brand",
+                 device_class="power"),
+            _ent("sensor.mystery_soc", "totally_unknown_brand",
+                 device_class="battery"),
+        ]
+        census = hd.build_integration_census(registry=_registry(ents))
+        assert census["unknown_energy_domains"] == ["totally_unknown_brand"]
+        assert census["unknown_energy_domains_named"] == []
+
+    def test_the_census_keeps_every_key_848_reads(self):
+        census = hd.build_integration_census(registry=_registry([]))
+        for key in ("installed", "known_charger_platforms_present",
+                    "known_inverter_domains_present", "rows_matched_nothing",
+                    "unknown_energy_domains"):
+            assert key in census, key
+
+    def test_the_roster_says_when_it_was_generated(self):
+        prov = hd.roster_provenance()
+        assert prov.get("generated_at"), "a prior with no provenance is a rumour"
+
+    def test_a_missing_roster_degrades_to_todays_behaviour(self):
+        with patch.object(hd, "_roster", return_value=None):
+            assert hd.describe_domain("eg4_web_monitor") is None
+            assert hd.roster_role_keys("eg4_web_monitor", "battery_target_soc") == ()
+            assert hd.propose_roles_from_roster([], "eg4_web_monitor") == {}
+            census = hd.build_integration_census(registry=_registry([]))
+            assert census["unknown_energy_domains_named"] == []
+
+
+@pytest.mark.unit
+class TestItProposesOnlyWhatTheRegistryHas:
+    def test_a_declared_key_present_on_this_device_is_proposed(self):
+        ents = [_ent("number.eg4_charge_soc", "eg4_web_monitor",
+                     translation_key="ac_charge_soc_limit")]
+        out = hd.propose_roles_from_roster(ents, "eg4_web_monitor")
+        assert out["battery_target_soc"]["entity"] == "number.eg4_charge_soc"
+        assert out["battery_target_soc"]["matched_key"] == "ac_charge_soc_limit"
+        assert out["battery_target_soc"]["action"] == "set_option"
+
+    def test_a_unique_id_suffix_counts_too(self):
+        ents = [_ent("number.x", "eg4_web_monitor",
+                     unique_id="abc123_ac_charge_soc_limit")]
+        assert "battery_target_soc" in hd.propose_roles_from_roster(
+            ents, "eg4_web_monitor")
+
+    def test_nothing_is_proposed_for_an_entity_this_install_lacks(self):
+        """The intersection rule: the roster knows EG4 declares a charge-SOC
+        limit, but this device does not have one, so nothing is proposed. A
+        proposal can never invent hardware."""
+        ents = [_ent("sensor.eg4_battery_power", "eg4_web_monitor")]
+        assert hd.propose_roles_from_roster(ents, "eg4_web_monitor") == {}
+
+    def test_the_entity_must_be_on_the_declared_platform(self):
+        """A sensor named like a control is not the control."""
+        ents = [_ent("sensor.eg4_charge_soc", "eg4_web_monitor",
+                     translation_key="system_charge_soc_limit")]
+        assert hd.propose_roles_from_roster(ents, "eg4_web_monitor") == {}
+
+    def test_an_unknown_domain_proposes_nothing(self):
+        ents = [_ent("number.x", "no_such_integration",
+                     translation_key="system_charge_soc_limit")]
+        assert hd.propose_roles_from_roster(ents, "no_such_integration") == {}
+
+    def test_the_entity_id_is_never_matched_on(self):
+        """A translation key is the author's label; an entity_id is the
+        user's rename. Only the first may decide a role."""
+        ents = [_ent("number.system_charge_soc_limit", "eg4_web_monitor",
+                     translation_key="brightness")]
+        assert hd.propose_roles_from_roster(ents, "eg4_web_monitor") == {}
+
+
+@pytest.mark.unit
+class TestTheChoiceIsDeterministic:
+    """(#810) A brand may declare several keys for one role. Which one SEM
+    offers must not depend on the order the entity registry happened to
+    yield — two boxes with identical hardware would then get different
+    answers, and only one of them could be right."""
+
+    @staticmethod
+    def _a_multi_candidate_role():
+        """Any shipped domain that declares two keys for one role. Named
+        dynamically so a roster refresh that narrows one brand does not turn
+        this guard off — it is the BEHAVIOUR under test, not the brand."""
+        from custom_components.solar_energy_management.consts import (
+            integration_roster as r)
+        for dom in sorted(r.ROLE_VOCAB):
+            for role, body in sorted(r.ROLE_VOCAB[dom].items()):
+                if len(body["keys"]) > 1:
+                    return dom, role, body["platform"]
+        pytest.skip("no multi-candidate role in the shipped roster")
+
+    def test_the_roster_key_order_decides_not_the_registry_order(self):
+        dom, role, plat = self._a_multi_candidate_role()
+        keys = hd.roster_role_keys(dom, role)
+        first, second = keys[0], keys[1]
+        ents = [_ent(f"{plat}.b", dom, translation_key=second),
+                _ent(f"{plat}.a", dom, translation_key=first)]
+        forwards = hd.propose_roles_from_roster(ents, dom)
+        backwards = hd.propose_roles_from_roster(list(reversed(ents)), dom)
+        assert forwards[role]["matched_key"] == first
+        assert forwards == backwards
+
+    def test_the_runners_up_ride_along_instead_of_vanishing(self):
+        dom, role, plat = self._a_multi_candidate_role()
+        keys = hd.roster_role_keys(dom, role)
+        ents = [_ent(f"{plat}.k{i}", dom, translation_key=k)
+                for i, k in enumerate(keys)]
+        alts = hd.propose_roles_from_roster(ents, dom)[role].get(
+            "alternatives") or []
+        assert [a["matched_key"] for a in alts] == list(keys[1:])
+        assert all(a["entity"].startswith(f"{plat}.k") for a in alts)
+
+    def test_a_single_match_carries_no_alternatives_key(self):
+        ents = [_ent("number.only", "eg4_web_monitor",
+                     translation_key="ac_charge_soc_limit")]
+        out = hd.propose_roles_from_roster(ents, "eg4_web_monitor")
+        assert "alternatives" not in out["battery_target_soc"]
+
+
+@pytest.mark.unit
+class TestSemDoesNotOfferToWriteTheseRegisters:
+    """(#810, @Azlinon on real EG4 hardware) Every one of these is a real
+    declared key that reads like a target SOC and is not one. A declared key
+    is not automatically a key SEM may WRITE — the lexicon is where that
+    judgement lives, so it is pinned by the words of the person who owns the
+    hardware, not by what the crawl happened to return."""
+
+    REJECTED = (
+        # "the maximum the system is ALLOWED to charge the batteries ... a
+        # global thing that SEM really shouldn't be touching"
+        "system_charge_soc_limit",
+        # "I assume this refers to the ongrid/offgrid values"
+        "soc_cutoff",
+        # "connecting grid-tie inverters to a compatible hybrid inverter,
+        # definitely not what you want"
+        "ac_couple_end_soc",
+        "ac_couple_start_soc",
+        # "disconnecting a controlled LOAD at a specified SoC" — a second
+        # load's threshold, not how full the pack should be
+        "smart_load_end_soc",
+        # peak shaving is a grid-draw ceiling wearing an SOC's clothes
+        "grid_peak_shaving_soc",
+        # off-grid reserve: what the house falls back on, not a target
+        "off_grid_discharge_soc",
+        "eps_soc_limit",
+    )
+
+    @pytest.mark.parametrize("key", REJECTED)
+    def test_it_is_not_a_target_soc(self, key):
+        from custom_components.solar_energy_management.consts import (
+            role_lexicon as lex)
+        assert lex.role_for("number", key) != "battery_target_soc"
+
+    def test_the_real_ones_still_match(self):
+        from custom_components.solar_energy_management.consts import (
+            role_lexicon as lex)
+        for key in ("ac_charge_soc_limit", "battery_charge_soc_limit",
+                    "storage_capacity_control_soc_peak_shaving",
+                    "soc_upper_limit"):
+            assert lex.role_for("number", key) == "battery_target_soc", key
+
+    @pytest.mark.parametrize("key,role", [
+        # s-o-c inside "sockets": SENEC's switchable wall sockets were being
+        # offered as the battery's charge target, schedule and all.
+        ("sockets_1_upper_limit", "battery_target_soc"),
+        ("sockets_1_time_limit", "battery_target_soc"),
+        # "solar_gene|rated_power": a live production sensor read as the
+        # system's nameplate size.
+        ("solar_generated_power", "system_size_spec"),
+    ])
+    def test_a_substring_is_not_a_word(self, key, role):
+        """Both of these shipped in the first roster. A key is a sequence of
+        SEGMENTS, and a rule that forgets it matches the letters inside an
+        unrelated word — silently, and only on the brands that own that
+        word."""
+        from custom_components.solar_energy_management.consts import (
+            role_lexicon as lex)
+        plat = "sensor" if role.endswith("_spec") else "number"
+        assert lex.role_for(plat, key) != role
+
+    @pytest.mark.parametrize("key", [
+        "soc_lower_limit", "discharge_min_soc", "battery_over_discharge_soc",
+        "battery_discharge_soc_limit_on_grid", "plant_discharge_cut_off_soc",
+    ])
+    def test_a_protection_floor_is_never_a_target(self, key):
+        """Writing "charge to 80" into "never discharge below" does not miss
+        the mark, it inverts the knob: the pack stops discharging at 80 %.
+        Five brands declare both halves under names one word apart."""
+        from custom_components.solar_energy_management.consts import (
+            role_lexicon as lex)
+        assert lex.role_for("number", key) != "battery_target_soc"
+
+    def test_hot_water_is_not_a_battery_strategy(self):
+        from custom_components.solar_energy_management.consts import (
+            role_lexicon as lex)
+        assert lex.role_for("select", "dhw_operating_mode") != "battery_strategy"
+        assert lex.role_for("select", "operating_mode") == "battery_strategy"
+
+    def test_no_rejected_key_survives_in_the_shipped_roster(self):
+        from custom_components.solar_energy_management.consts import (
+            integration_roster as roster)
+        offered = {k
+                   for vocab in roster.ROLE_VOCAB.values()
+                   for role, body in vocab.items()
+                   if role == "battery_target_soc"
+                   for k in body["keys"]}
+        assert not offered & set(self.REJECTED)
+
+
+def _state(state="1000", **attrs):
+    return SimpleNamespace(state=state, attributes=attrs)
+
+
+@pytest.mark.unit
+class TestAKeyIsMatchedAtASegmentBoundary:
+    """(#915) `unique_id` is a convention — ``<serial>_<key>`` — and matching
+    it with a bare ``endswith`` was bug class 67 on the runtime side."""
+
+    def test_a_longer_key_of_the_same_brand_is_not_the_shorter_one(self):
+        """Victron declares `battery_capacity` AND `ev_battery_capacity`. A
+        unique_id ending in the CAR's key must not become the house's — the
+        roster marks such keys exact-only (24 of them, 12 brands)."""
+        car = _ent("sensor.x", "victron_gx", unique_id="gx1_ev_battery_capacity")
+        out = hd.propose_roles_from_roster([car], "victron_gx")
+        assert "battery_capacity_spec" not in out
+
+    def test_the_same_key_still_matches_by_translation_key(self):
+        house = _ent("sensor.y", "victron_gx", translation_key="battery_capacity")
+        out = hd.propose_roles_from_roster([house], "victron_gx")
+        assert out["battery_capacity_spec"]["entity"] == "sensor.y"
+
+    @staticmethod
+    def _a_suffix_matchable_key():
+        """Any shipped role key that is NOT exact-only — chosen dynamically,
+        because `growatt_modbus.grid_power` turned out to be exact-only
+        itself (Growatt also declares `box_grid_power`) and a fixture that
+        names a brand goes stale the day the roster learns one more key."""
+        from custom_components.solar_energy_management.consts import (
+            integration_roster as r)
+        for dom in sorted(r.ROLE_VOCAB):
+            for role, body in sorted(r.ROLE_VOCAB[dom].items()):
+                for k in body["keys"]:
+                    if k not in body.get("exact_only", ()):
+                        return dom, role, body["platform"], k
+        pytest.skip("every shipped key is exact-only")
+
+    def test_a_unique_id_needs_the_underscore(self):
+        """`abcgrid_power` is not `grid_power`; `abc_grid_power` is."""
+        dom, role, plat, key = self._a_suffix_matchable_key()
+        glued = [_ent(f"{plat}.a", dom, unique_id=f"abc{key}")]
+        assert role not in hd.propose_roles_from_roster(glued, dom)
+        bounded = [_ent(f"{plat}.a", dom, unique_id=f"abc_{key}")]
+        assert hd.propose_roles_from_roster(bounded, dom)[role]["matched_key"] == key
+
+
+@pytest.mark.unit
+class TestTheButtonIsOfferedOnlyWhenTheEntityCanTakeIt:
+    """(#915) Discovery's explicit-unit gate never ran on the card's path —
+    the button writes the option directly — so a key named like a power
+    limit and measured in amps got a button. The live state decides now,
+    and every refusal carries the reason the card renders."""
+
+    HUAWEI_LIMIT = _ent("number.limit", "huawei_solar",
+                        translation_key="storage_maximum_discharging_power")
+
+    def _prop(self, states, ents=None, **kw):
+        return hd.propose_roles_from_roster(
+            ents or [self.HUAWEI_LIMIT], "huawei_solar",
+            state_of=lambda eid: states.get(eid), **kw)
+
+    def test_a_watt_entity_gets_the_button(self):
+        p = self._prop({"number.limit": _state(unit_of_measurement="W")})
+        assert p["battery_discharge_limit"]["action"] == "set_option"
+
+    def test_kilowatts_are_fine_too(self):
+        p = self._prop({"number.limit": _state(unit_of_measurement="kW")})
+        assert p["battery_discharge_limit"]["action"] == "set_option"
+
+    def test_amps_named_like_a_power_limit_get_no_button(self):
+        p = self._prop({"number.limit": _state(unit_of_measurement="A")})
+        r = p["battery_discharge_limit"]
+        assert r["action"] == "unit_mismatch"
+        assert r["unit_seen"] == "A" and "W" in r["unit_wanted"]
+        assert r["config_key"], "the reason must still say WHERE it would go"
+
+    def test_no_unit_no_button(self):
+        """The same rule discovery already had: a bare number is not a
+        power control SEM will write watts into."""
+        p = self._prop({"number.limit": _state()})
+        assert p["battery_discharge_limit"]["action"] == "no_unit"
+
+    def test_a_registry_entry_ha_never_produced_gets_no_button(self):
+        """#824's `restored: true` from the other side: known to the
+        registry, absent from hass.states."""
+        p = self._prop({})
+        assert p["battery_discharge_limit"]["action"] == "not_loaded"
+
+    def test_a_percent_role_wants_percent(self):
+        ents = [_ent("number.soc", "eg4_web_monitor",
+                     translation_key="ac_charge_soc_limit")]
+        p = hd.propose_roles_from_roster(
+            ents, "eg4_web_monitor",
+            state_of=lambda e: _state(unit_of_measurement="kWh"))
+        assert p["battery_target_soc"]["action"] == "unit_mismatch"
+
+    def test_before_ha_is_running_nothing_is_judged(self):
+        """The report is first built during first refresh, while other
+        integrations are still loading: every Huawei proposal on a fresh
+        boot of the .46 rig read "not loaded". Before HA is running an
+        absent state means not loaded YET — nothing is judged, the proposal
+        says so, and the post-startup hook rebuilds it (#166's shape)."""
+        ents = [self.HUAWEI_LIMIT]
+        hass = SimpleNamespace(is_running=False,
+                               states=SimpleNamespace(get=lambda e: None))
+        rep = hd.build_detection_report(hass, registry=_registry(ents))
+        roles = {r: v for p in rep["roster_proposals"]
+                 for r, v in p["proposed_roles"].items()}
+        assert roles["battery_discharge_limit"]["action"] == "set_option"
+        assert roles["battery_discharge_limit"]["judged"] is False
+
+    def test_once_running_an_absent_state_is_not_loaded(self):
+        ents = [self.HUAWEI_LIMIT]
+        hass = SimpleNamespace(is_running=True,
+                               states=SimpleNamespace(get=lambda e: None))
+        rep = hd.build_detection_report(hass, registry=_registry(ents))
+        roles = {r: v for p in rep["roster_proposals"]
+                 for r, v in p["proposed_roles"].items()}
+        assert roles["battery_discharge_limit"]["action"] == "not_loaded"
+        assert roles["battery_discharge_limit"]["judged"] is True
+
+    def test_the_coordinator_reheals_an_unjudged_report_once_ha_is_up(self):
+        """Seen live on the .46 rig: a clean install's report was the boot-time
+        copy and every Huawei proposal read "not loaded" for a minute. The
+        coordinator rebuilds it itself — unjudged: once; not-loaded: up to
+        five times a minute apart — instead of trusting one startup event."""
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        calls = []
+        c = SimpleNamespace(hass=SimpleNamespace(is_running=True),
+                            _detection_report={"judged": False},
+                            REPORT_REHEAL_BUDGET=SEMCoordinator.REPORT_REHEAL_BUDGET,
+                            REPORT_REHEAL_EVERY=SEMCoordinator.REPORT_REHEAL_EVERY,
+                            refresh_detection_report=lambda: calls.append("r"))
+        reheal = SEMCoordinator._reheal_detection_report
+        assert reheal(c) is True and calls == ["r"]
+        # a judged report with nothing missing: quiet
+        c._detection_report = {"judged": True, "not_loaded": 0}
+        assert reheal(c) is False and calls == ["r"]
+        # not-loaded: one rebuild per REPORT_REHEAL_EVERY cycles, budget-bound
+        c._detection_report = {"judged": True, "not_loaded": 3}
+        got = sum(1 for _ in range(60) if reheal(c))
+        assert got == SEMCoordinator.REPORT_REHEAL_BUDGET, got
+        # before HA is running: never
+        c.hass = SimpleNamespace(is_running=False)
+        c._detection_report = {"judged": False}
+        assert reheal(c) is False
+
+    def test_without_a_state_reader_nothing_is_judged(self):
+        """The report path may run without hass (tests, a bare registry
+        walk); then the button is offered as before and the card's write
+        path still has the adapter's own unit check behind it."""
+        p = hd.propose_roles_from_roster([self.HUAWEI_LIMIT], "huawei_solar")
+        assert p["battery_discharge_limit"]["action"] == "set_option"
+
+
+@pytest.mark.unit
+class TestAPolicySelectorGetsNoButton:
+    """(#845) SEM names and watches an inverter's operating policy; it never
+    writes it. The generic adapter DOES write the power-strategy select
+    every cycle (`_set_strategy`), which is why the two are different roles
+    and only one of them may carry a config key."""
+
+    def test_victrons_ess_mode_is_observe_only(self):
+        ents = [_ent("select.ess", "victron_gx", translation_key="system_ess_mode")]
+        p = hd.propose_roles_from_roster(ents, "victron_gx",
+                                         state_of=lambda e: _state("Optimized"))
+        assert p["battery_strategy"]["action"] == "observe_only"
+        assert p["battery_strategy"]["config_key"] is None
+
+    def test_sessys_power_strategy_gets_the_button_when_the_options_exist(self):
+        ents = [_ent("select.strat", "sessy", translation_key="battery_strategy")]
+        st = _state("eco", options=["api", "eco", "nom", "idle", "roi"])
+        p = hd.propose_roles_from_roster(ents, "sessy", state_of=lambda e: st)
+        assert p["battery_power_strategy"]["action"] == "set_option"
+        assert p["battery_power_strategy"]["config_key"] == "battery_strategy_control_entity"
+
+    def test_a_select_missing_one_of_the_four_values_gets_no_button(self):
+        """#751 was this mismatch, silent: the adapter would write `nom` into
+        a select that has no such option, every cycle."""
+        ents = [_ent("select.strat", "sessy", translation_key="battery_strategy")]
+        st = _state("eco", options=["api", "eco", "idle"])   # no `nom`
+        p = hd.propose_roles_from_roster(ents, "sessy", state_of=lambda e: st)
+        r = p["battery_power_strategy"]
+        assert r["action"] == "options_unmapped"
+        assert r["values_missing"] == ["nom"]
+        assert "api" in r["options"]
+
+    def test_the_users_own_values_are_what_is_checked(self):
+        """A user who already renamed the four values to their select's
+        vocabulary gets the button on that vocabulary."""
+        ents = [_ent("select.strat", "sessy", translation_key="battery_strategy")]
+        st = _state("x", options=["control", "auto", "selfuse", "stop"])
+        p = hd.propose_roles_from_roster(
+            ents, "sessy", state_of=lambda e: st,
+            strategy_values={"battery_strategy_active_value": "control",
+                             "battery_strategy_idle_value": "auto",
+                             "battery_strategy_self_consume_value": "selfuse",
+                             "battery_strategy_off_value": "stop"})
+        assert p["battery_power_strategy"]["action"] == "set_option"
+
+
+@pytest.mark.unit
+class TestEveryConsumerUsesTheOneMatcher:
+    """(06.09 audit) The card path honoured exact_only and the segment
+    boundary; the discovery rung that AUTO-BINDS the discharge control did
+    not — it used ``roster_role_keys`` (exact_only stripped) and a bare
+    ``endswith``. Marstek declares ``max_discharge_power`` (per unit) and
+    ``system_max_discharge_power`` (fleet ceiling); the rung picked the
+    ceiling. Bug class 72, applied to its own fix."""
+
+    def test_roster_role_vocab_carries_exact_only(self):
+        v = hd.roster_role_vocab("marstek_venus_energy_manager",
+                                 "battery_discharge_limit")
+        assert "max_discharge_power" in v["keys"]
+        assert "max_discharge_power" in v["exact_only"]
+
+    def _run(self, entities, seed):
+        reg = _registry(entities)
+        ed = SimpleNamespace(battery_power=seed, battery_charge_energy=None,
+                             battery_discharge_energy=None, solar_power=None,
+                             solar_energy=None, grid_import_power=None)
+        with patch.object(hd.entity_registry, "async_get", return_value=reg), \
+             patch("custom_components.solar_energy_management.coordinator"
+                   ".power_control.is_valid_power_control_entity",
+                   return_value=True):
+            return hd.discover_inverter_from_registry_verbose(MagicMock(), ed)
+
+    def test_the_rung_never_picks_the_fleet_ceiling_by_suffix(self):
+        """The audit's repro: the fleet ceiling carries the per-unit key as
+        a unique_id suffix; the per-unit control carries the declared key.
+        The rung must bind the per-unit control — or, with only the ceiling
+        present, nothing by this rung at all."""
+        seed = _ent("sensor.m_battery_power", "marstek_venus_energy_manager")
+        ceiling = _ent("number.m_ceiling", "marstek_venus_energy_manager",
+                       unique_id="m1_system_max_discharge_power")
+        unit = _ent("number.m_unit", "marstek_venus_energy_manager",
+                    translation_key="max_discharge_power")
+        out, rung = self._run([seed, ceiling, unit], "sensor.m_battery_power")
+        assert out == "number.m_unit" and rung == "translation_key", (out, rung)
+        # a decoy that carries the SHORT key only as a unique_id suffix and
+        # is not any declared key: exact_only must refuse it by this rung
+        decoy = _ent("number.m_decoy", "marstek_venus_energy_manager",
+                     unique_id="m1_other_max_discharge_power")
+        out, rung = self._run([seed, decoy], "sensor.m_battery_power")
+        assert not (out == "number.m_decoy" and rung == "translation_key"), (out, rung)
+
+    def test_the_matcher_itself(self):
+        keys = ("max_discharge_power", "system_max_discharge_power")
+        by_uid = _ent("number.a", "x", unique_id="m1_system_max_discharge_power")
+        # without exact_only the short key would match by suffix — WRONG
+        assert hd._entry_matches_declared(by_uid, keys, ()) == "max_discharge_power"
+        # with it, the long key is what this entity IS
+        assert hd._entry_matches_declared(
+            by_uid, keys, ("max_discharge_power",)) == "system_max_discharge_power"
+        glued = _ent("number.b", "x", unique_id="m1xmax_discharge_power")
+        assert hd._entry_matches_declared(glued, keys, ()) is None
+
+    def test_spec_aliases_drop_exact_only_mined_keys(self):
+        """Hand-written spec keys stay whatever they are (a live install
+        harvested them); a MINED alias that is exact-only is not usable by
+        a suffix-matching consumer and is left out."""
+        from custom_components.solar_energy_management import config_flow as cf
+        spec, role = next(iter(cf._ROSTER_SPEC_ROLES.items()))
+        hand = tuple(cf._SPEC_REGISTRY_KEYS.get(spec, ()))
+        with patch("custom_components.solar_energy_management.hardware_detection"
+                   ".roster_role_vocab",
+                   return_value={"keys": ("zz_plain_alias", "zz_suffix_alias"),
+                                 "exact_only": ("zz_suffix_alias",)}):
+            keys = cf._spec_keys(spec, "any_platform")
+        assert keys[:len(hand)] == hand, "hand-written keys first and always"
+        assert "zz_plain_alias" in keys
+        assert "zz_suffix_alias" not in keys
+
+
+@pytest.mark.unit
+class TestHalfASplitPairIsNotAProposal:
+    """(06.09 audit) The crawler enforces PAIRED_ROLES on the whole declared
+    vocabulary; THIS device may expose only one half. Accepting it alone
+    writes grid_import_power_entity with no export half, and the reader
+    then reads "always importing" with no warning."""
+
+    def test_only_the_import_half_present_gets_no_button(self):
+        ents = [_ent("sensor.imp", "anker_solix_official",
+                     translation_key="grid_import_power")]
+        out = hd.propose_roles_from_roster(ents, "anker_solix_official")
+        assert out["grid_import_power"]["action"] == "pair_incomplete"
+        assert out["grid_import_power"]["missing_role"] == ["grid_export_power"]
+
+    def test_both_halves_present_get_buttons(self):
+        ents = [_ent("sensor.imp", "anker_solix_official",
+                     translation_key="grid_import_power"),
+                _ent("sensor.exp", "anker_solix_official",
+                     translation_key="grid_export_power")]
+        out = hd.propose_roles_from_roster(ents, "anker_solix_official")
+        assert out["grid_import_power"]["action"] == "set_option"
+        assert out["grid_export_power"]["action"] == "set_option"
+
+    def test_the_legacy_reader_refuses_half_a_pair(self):
+        from custom_components.solar_energy_management.coordinator.sensor_reader import (
+            SensorReader,
+        )
+        reader = SensorReader(MagicMock(), {
+            "solar_production_sensor": "sensor.pv",
+            "grid_power_sensor": "sensor.grid",
+            "grid_import_power_entity": "sensor.imp"})    # no export half
+        reads = {"sensor.pv": 100.0, "sensor.grid": -300.0, "sensor.imp": 900.0}
+        reader._read_sensor = lambda eid, *a, **k: reads.get(eid, 0.0)
+        r = reader._read_from_legacy_config()
+        assert r.grid_power == -300.0, "the combined sensor, not −900 from a half pair"
+
+
+@pytest.mark.unit
+class TestDiagnosticsRedactsTheSplitPair:
+    def test_both_keys_are_redacted(self):
+        from custom_components.solar_energy_management.diagnostics import REDACT_CONFIG_KEYS
+        assert {"grid_import_power_entity", "grid_export_power_entity"} <= REDACT_CONFIG_KEYS
+
+@pytest.mark.unit
+class TestTheDischargeControlRung:
+    """The one place a mined key reaches a real decision — and it reaches it
+    in FRONT of the entity-id regexes, behind the same unit gate."""
+
+    def _run(self, entities, seed="sensor.huawei_battery_power"):
+        reg = _registry(entities)
+        hass = MagicMock()
+        ed = SimpleNamespace(battery_power=seed, battery_charge_energy=None,
+                             battery_discharge_energy=None, solar_power=None,
+                             solar_energy=None, grid_import_power=None)
+        with patch.object(hd.entity_registry, "async_get",
+                          return_value=reg), \
+             patch("custom_components.solar_energy_management.coordinator"
+                   ".power_control.is_valid_power_control_entity",
+                   return_value=True):
+            return hd.discover_inverter_from_registry_verbose(hass, ed)
+
+    def test_the_declared_key_answers_first(self):
+        ents = [
+            _ent("sensor.huawei_battery_power", "huawei_solar"),
+            _ent("number.inverter_setting_a", "huawei_solar",
+                 translation_key="storage_maximum_discharging_power"),
+        ]
+        entity, rung = self._run(ents)
+        assert entity == "number.inverter_setting_a"
+        assert rung == "translation_key"
+
+    def test_the_regex_rung_still_answers_when_no_key_matches(self):
+        """The same entity, the older reason — nothing regressed for an
+        integration that publishes no vocabulary."""
+        ents = [
+            _ent("sensor.growatt_battery_power", "growatt_server"),
+            _ent("number.growatt_max_discharge_power", "growatt_server"),
+        ]
+        entity, rung = self._run(ents, seed="sensor.growatt_battery_power")
+        assert entity == "number.growatt_max_discharge_power"
+        assert rung == "entity_id_pattern"
+
+    def test_the_wrapper_contract_is_unchanged(self):
+        ents = [
+            _ent("sensor.huawei_battery_power", "huawei_solar"),
+            _ent("number.inverter_setting_a", "huawei_solar",
+                 translation_key="storage_maximum_discharging_power"),
+        ]
+        reg = _registry(ents)
+        hass = MagicMock()
+        ed = SimpleNamespace(battery_power="sensor.huawei_battery_power",
+                             battery_charge_energy=None,
+                             battery_discharge_energy=None, solar_power=None,
+                             solar_energy=None, grid_import_power=None)
+        with patch.object(hd.entity_registry, "async_get", return_value=reg), \
+             patch("custom_components.solar_energy_management.coordinator"
+                   ".power_control.is_valid_power_control_entity",
+                   return_value=True):
+            out = hd.discover_inverter_from_registry(hass, ed)
+        assert out == "number.inverter_setting_a", "callers still get a string"
+
+    def test_a_miss_still_returns_none_with_a_reason(self):
+        entity, rung = self._run([_ent("sensor.x", "huawei_solar")])
+        assert entity is None and rung
+
+
+@pytest.mark.unit
+class TestItRecognisesWhatIsAlreadyInstalled:
+    """The question the near-miss walk could not answer: it only covers the
+    charger platforms, so an INVERTER or battery SEM has no row for was named
+    and then dropped. This walk asks every installed integration the same
+    question."""
+
+    def test_an_installed_inverter_gets_its_declared_controls_matched(self):
+        ents = [
+            _ent("number.sigen_charge", "sigen",
+                 translation_key="dc_charger_max_charging_power_limit"),
+            _ent("number.sigen_discharge", "sigen",
+                 translation_key="dc_charger_max_discharging_power_limit"),
+            _ent("sensor.sigen_power", "sigen", device_class="power"),
+        ]
+        out = hd.propose_for_installed(_registry(ents))
+        assert len(out) == 1
+        row = out[0]
+        assert row["domain"] == "sigen"
+        assert row["roster"]["name"] == "Sigenergy ESS"
+        roles = row["proposed_roles"]
+        assert roles["battery_charge_limit"]["entity"] == "number.sigen_charge"
+        assert roles["battery_discharge_limit"]["entity"] == "number.sigen_discharge"
+        assert all(v.get("action") for v in roles.values())
+
+    def test_an_integration_the_roster_has_no_vocabulary_for_is_skipped(self):
+        ents = [_ent("number.whatever", "some_unknown_platform",
+                     translation_key="max_discharging_power")]
+        assert hd.propose_for_installed(_registry(ents)) == []
+
+    def test_an_installed_integration_with_none_of_its_controls_is_skipped(self):
+        """Vocabulary is not presence: EG4 declares a charge-SOC limit, but a
+        box that only has its sensors gets no proposal."""
+        ents = [_ent("sensor.eg4_power", "eg4_web_monitor",
+                     device_class="power")]
+        assert hd.propose_for_installed(_registry(ents)) == []
+
+    def test_disabled_entities_never_become_proposals(self):
+        ents = [_ent("number.eg4_soc", "eg4_web_monitor",
+                     translation_key="system_charge_soc_limit",
+                     disabled_by="user")]
+        assert hd.propose_for_installed(_registry(ents)) == []
+
+    def test_the_report_carries_it_and_stays_serialisable(self):
+        import json
+        ents = [
+            _ent("number.sigen_discharge", "sigen",
+                 translation_key="dc_charger_max_discharging_power_limit"),
+        ]
+        report = hd.build_detection_report(registry=_registry(ents))
+        assert report["roster_proposals"], "an installed brand must be asked"
+        json.dumps(report)
+
+    def test_a_missing_roster_leaves_the_report_intact(self):
+        with patch.object(hd, "_roster", return_value=None):
+            report = hd.build_detection_report(registry=_registry([]))
+        assert report["roster_proposals"] == []
+
+
+@pytest.mark.unit
+class TestTheSecondAnchor:
+    """(#915) SEM's install used to start — and end — at Home Assistant's
+    Energy Dashboard. This is the other anchor: what do you already run, and
+    what does it call the three sensors SEM needs."""
+
+    def test_a_declared_key_names_the_solar_and_grid_sensors(self):
+        ents = [
+            _ent("sensor.wechselrichter_eingangsleistung", "huawei_solar",
+                 translation_key="input_power", device_class="power"),
+            _ent("sensor.leistungsmesser_wirkleistung", "huawei_solar",
+                 translation_key="power_meter_active_power", device_class="power"),
+            _ent("sensor.batterie_lade_entladeleistung", "huawei_solar",
+                 translation_key="storage_charge_discharge_power",
+                 device_class="power"),
+            _ent("sensor.batterie_ladestand", "huawei_solar",
+                 translation_key="state_of_capacity", device_class="battery"),
+        ]
+        out = hd.propose_energy_sources(registry=_registry(ents))
+        assert out["solar_power_sensor"]["entity"] == "sensor.wechselrichter_eingangsleistung"
+        assert out["grid_import_power_sensor"]["entity"] == "sensor.leistungsmesser_wirkleistung"
+        assert out["battery_power_sensor"]["entity"] == "sensor.batterie_lade_entladeleistung"
+        assert "declared as" in out["solar_power_sensor"]["why"]
+
+    def test_it_works_on_a_german_install(self):
+        """The point of matching a declared key rather than an entity id:
+        every entity above is German and none of them contains 'solar',
+        'grid' or 'battery'."""
+        ents = [
+            _ent("sensor.wechselrichter_eingangsleistung", "huawei_solar",
+                 translation_key="input_power", device_class="power"),
+        ]
+        out = hd.propose_energy_sources(registry=_registry(ents))
+        assert "solar_power_sensor" in out
+
+    def test_shape_answers_when_nothing_is_declared(self):
+        """A brand that publishes no vocabulary still gets help: a power
+        sensor on an energy-shaped integration is a candidate."""
+        ents = [
+            _ent("sensor.growatt_solar_power", "growatt_server",
+                 device_class="power"),
+            _ent("sensor.growatt_grid_power", "growatt_server",
+                 device_class="power"),
+            _ent("sensor.growatt_battery_soc", "growatt_server",
+                 device_class="battery"),
+        ]
+        out = hd.propose_energy_sources(registry=_registry(ents))
+        assert out["solar_power_sensor"]["entity"] == "sensor.growatt_solar_power"
+        assert out["grid_import_power_sensor"]["entity"] == "sensor.growatt_grid_power"
+        assert "power sensor" in out["grid_import_power_sensor"]["why"]
+
+    def test_a_daily_total_is_never_a_live_power_sensor(self):
+        ents = [
+            _ent("sensor.growatt_solar_power_today", "growatt_server",
+                 device_class="power"),
+            _ent("sensor.growatt_battery_soc", "growatt_server",
+                 device_class="battery"),
+        ]
+        out = hd.propose_energy_sources(registry=_registry(ents))
+        assert "solar_power_sensor" not in out
+
+    def test_a_box_with_no_energy_hardware_proposes_nothing(self):
+        ents = [_ent("sensor.lounge_temperature", "hue",
+                     device_class="temperature")]
+        assert hd.propose_energy_sources(registry=_registry(ents)) == {}
+
+    def test_every_proposal_says_where_it_came_from(self):
+        ents = [
+            _ent("sensor.pv", "huawei_solar", translation_key="input_power",
+                 device_class="power"),
+        ]
+        for body in hd.propose_energy_sources(registry=_registry(ents)).values():
+            assert body["why"] and body["domain"] and body["entity"]
+
+
+@pytest.mark.unit
+class TestTheSourcesStepWritesKeysTheReaderConsumes:
+    """The bug this class exists for: the sources step wrote
+    ``solar_power_sensor`` / ``grid_import_power_sensor`` — the names the
+    Energy Dashboard produces — and the install completed cleanly and then
+    read **0 W from a 4.2 kW inverter**. An install that takes this step has
+    no dashboard config by definition, so SensorReader falls to its LEGACY
+    path, which reads ``solar_production_sensor`` / ``grid_power_sensor``.
+
+    Every unit test passed while that was broken, because none of them
+    followed the config from the step that writes it to the reader that
+    consumes it. Caught on the .46 rig; pinned here.
+    """
+
+    def _install_data(self) -> dict:
+        """The dict async_step_sources writes, extracted from the source so
+        this test cannot drift from the flow it is guarding."""
+        import ast
+        import pathlib as _p
+        src = (_p.Path(__file__).resolve().parent.parent
+               / "config_flow.py").read_text()
+        tree = ast.parse(src)
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.AsyncFunctionDef)
+                    and node.name == "async_step_sources"):
+                for call in ast.walk(node):
+                    if (isinstance(call, ast.Call)
+                            and isinstance(call.func, ast.Attribute)
+                            and call.func.attr == "update"
+                            and call.args
+                            and isinstance(call.args[0], ast.Dict)):
+                        out = {}
+                        for k, v in zip(call.args[0].keys, call.args[0].values,
+                                              strict=False):
+                            if isinstance(k, ast.Constant):
+                                out[k.value] = (
+                                    v.value if isinstance(v, ast.Constant)
+                                    else "sensor.chosen")
+                        return out
+        raise AssertionError("async_step_sources no longer updates _data")
+
+    def test_the_reader_resolves_every_sensor_the_step_writes(self):
+        from custom_components.solar_energy_management.coordinator.sensor_reader import (
+            SensorReader,
+        )
+        data = self._install_data()
+        assert data, "premise: the step writes an install config"
+        reader = SensorReader(MagicMock(), data)
+        cfg = reader.config
+        assert cfg.solar_power_sensor, (
+            "the sources step writes no key SensorReader reads for solar — "
+            "the install would come up reading 0 W")
+        assert cfg.grid_power_sensor, "same for grid"
+        assert cfg.battery_power_sensor, "same for battery"
+        assert cfg.battery_soc_sensor, (
+            "no SOC means the four battery zones have nothing to read")
+
+    def test_it_also_writes_the_dashboard_shaped_names(self):
+        """The rest of the integration — flags, diagnostics, the Config
+        card's pickers — reads those, so both sets are written."""
+        data = self._install_data()
+        for key in ("solar_power_sensor", "grid_import_power_sensor",
+                    "has_solar", "has_grid"):
+            assert key in data, key
+
+    def test_a_split_only_meter_can_finish_the_install(self):
+        """(#915) Growatt (pattern E), Anker's official integration and
+        Senec publish import and export as two positive sensors and no
+        combined one. Demanding a combined sensor would stop exactly the
+        installs this step exists to rescue — and the two keys it writes
+        instead have to be keys the LEGACY reader consumes, which until now
+        only the Energy-Dashboard reader did."""
+        from custom_components.solar_energy_management.coordinator.sensor_reader import (
+            SensorReader,
+        )
+        cfg = {"solar_production_sensor": "sensor.pv",
+               "solar_power_sensor": "sensor.pv",
+               "grid_import_power_entity": "sensor.imp",
+               "grid_export_power_entity": "sensor.exp"}
+        reader = SensorReader(MagicMock(), cfg)
+        assert reader._energy_dashboard_config is None, (
+            "premise: this install has no Energy Dashboard")
+
+        reads = {"sensor.pv": 3000.0, "sensor.imp": 200.0, "sensor.exp": 0.0}
+        reader._read_sensor = lambda eid, *a, **k: reads.get(eid, 0.0)
+        readings = reader._read_from_legacy_config()
+        assert readings.grid_power == -200.0, (
+            "export − import, in SEM convention: importing 200 W reads −200")
+
+        reads["sensor.imp"], reads["sensor.exp"] = 0.0, 1500.0
+        assert reader._read_from_legacy_config().grid_power == 1500.0
+
+    def test_the_step_still_demands_one_of_the_two_grid_answers(self):
+        """Half a split pair is a meter that only ever imports. The step
+        accepts a combined sensor OR both halves, never one half."""
+        import ast
+        import pathlib as _p
+        src = (_p.Path(__file__).resolve().parent.parent
+               / "config_flow.py").read_text()
+        tree = ast.parse(src)
+        fn = next(n for n in ast.walk(tree)
+                  if isinstance(n, ast.AsyncFunctionDef)
+                  and n.name == "async_step_sources")
+        marked = {n.slice.value for n in ast.walk(fn)
+                  if isinstance(n, ast.Subscript)
+                  and isinstance(n.slice, ast.Constant)
+                  and isinstance(getattr(n, "value", None), ast.Name)
+                  and n.value.id == "errors"
+                  and isinstance(n.slice.value, str)}
+        assert {"grid_import_power_entity", "grid_export_power_entity",
+                "grid_import_power_sensor"} <= marked
+
+
+@pytest.mark.unit
+class TestANearMissIsAboutHardware:
+    """Seen on the .46 card: 24 near-misses, most of them zigbee2mqtt bridge
+    buttons, each telling the user *"a near miss is a brand we almost
+    support — please report"* about a Zigbee coordinator. The line is right;
+    the audience was wrong. ``mqtt`` is a transport carrying every brand at
+    once, so a device there earns the line only when something about it is
+    actually energy-shaped."""
+
+    def _report(self, ents):
+        return hd.build_detection_report(registry=_registry(ents))
+
+    def test_a_zigbee_bridge_is_not_a_near_miss(self):
+        ents = [
+            _ent("binary_sensor.zigbee2mqtt_bridge_connection_state", "mqtt",
+                 device_id="z1"),
+            _ent("button.zigbee2mqtt_bridge_restart", "mqtt", device_id="z1"),
+            _ent("select.zigbee2mqtt_bridge_log_level", "mqtt", device_id="z1"),
+        ]
+        assert self._report(ents)["near_misses"] == []
+
+    def test_an_energy_shaped_mqtt_device_still_is_one(self):
+        """The JuiceBox case (#816): a real charger rides mqtt, and if its
+        roles stop matching the user must still see the gap."""
+        ents = [
+            _ent("sensor.homie_juicebox_power", "mqtt", device_id="j1",
+                 device_class="power"),
+            _ent("binary_sensor.homie_juicebox_plug", "mqtt", device_id="j1",
+                 device_class="plug"),
+        ]
+        misses = self._report(ents)["near_misses"]
+        assert [m["platform"] for m in misses] == ["mqtt"]
+
+    def test_a_second_device_of_a_detected_brand_is_not_a_near_miss(self):
+        """Zaptec ships an installation-level device beside the charger,
+        holding the site's available-current and phase registers. With the
+        charger detected, that device is not a brand SEM almost supports —
+        on the .46 rig it was the last near miss standing, telling the owner
+        of a working charger to file a report."""
+        ents = [
+            # the charger device — fully mapped
+            _ent("number.zap_current", "zaptec", device_id="charger",
+                 device_class="current"),
+            _ent("sensor.zap_power", "zaptec", device_id="charger",
+                 device_class="power"),
+            _ent("binary_sensor.zap_cable", "zaptec", device_id="charger",
+                 device_class="plug"),
+            _ent("binary_sensor.zap_charging", "zaptec", device_id="charger",
+                 device_class="power"),
+            # the installation device — no role
+            _ent("number.zap_available", "zaptec", device_id="site",
+                 unique_id="sim-1_available_current"),
+        ]
+        report = self._report(ents)
+        assert report["chargers"], "premise: the charger itself is detected"
+        assert report["near_misses"] == []
+
+    def test_a_fork_of_a_detected_brand_counts_as_the_same_brand(self):
+        """`zaptec_sim` / `zaptec_custom` are the same brand as `zaptec` —
+        the tolerance the discovery walk and the census already apply.
+        Comparing raw platform strings left the fork's installation device
+        on the .46 card as the last near miss."""
+        ents = [
+            _ent("number.zap_current", "zaptec_sim", device_id="charger",
+                 device_class="current"),
+            _ent("sensor.zap_power", "zaptec_sim", device_id="charger",
+                 device_class="power"),
+            _ent("binary_sensor.zap_cable", "zaptec_sim", device_id="charger",
+                 device_class="plug"),
+            _ent("binary_sensor.zap_charging", "zaptec_sim", device_id="charger",
+                 device_class="power"),
+            _ent("number.zap_available", "zaptec", device_id="site",
+                 unique_id="sim-1_available_current"),
+        ]
+        report = self._report(ents)
+        assert report["chargers"], "premise: the fork's charger is detected"
+        assert report["near_misses"] == []
+
+    def test_a_branded_platform_is_never_gated(self):
+        """Only the shared transports are filtered. A brand platform with
+        entities and no role is exactly what the near-miss list is for."""
+        ents = [_ent("sensor.wallbox_thing", "wallbox", device_id="w1")]
+        misses = self._report(ents)["near_misses"]
+        assert [m["platform"] for m in misses] == ["wallbox"]
+
+
+@pytest.mark.unit
+class TestAProposalCanActuallyBeAccepted:
+    """Guido, reading the card: *"Huawei Solar unconfirmed — how do I
+    confirm?"* Fair: the block said unconfirmed and offered no way to
+    confirm, so the only route was to read the entity, scroll to the right
+    section and re-enter it by hand. That is a chore wearing the word
+    'proposal'. Every proposal now carries what the user can DO about it."""
+
+    def _roles(self, ents, domain):
+        return hd.propose_roles_from_roster(ents, domain)
+
+    def test_a_settable_role_names_the_option_the_card_writes(self):
+        ents = [_ent("number.eg4_soc", "eg4_web_monitor",
+                     translation_key="ac_charge_soc_limit")]
+        p = self._roles(ents, "eg4_web_monitor")["battery_target_soc"]
+        assert p["action"] == "set_option"
+        assert p["config_key"] == "battery_target_soc_entity"
+
+    def test_a_read_role_names_the_key_the_READER_uses(self):
+        """Not the Energy-Dashboard-shaped name — the one SensorReader
+        consumes. Writing the other one is what made a fresh install read
+        0 W from a live inverter."""
+        ents = [_ent("sensor.pv", "huawei_solar", translation_key="input_power",
+                     device_class="power")]
+        p = self._roles(ents, "huawei_solar")["solar_power"]
+        assert p["config_key"] == "solar_production_sensor"
+
+    def test_a_per_charger_role_offers_no_top_level_button(self):
+        """ev_current_control lives inside a charger's own config. A button
+        here would write one charger's entity into an install-wide key."""
+        ents = [_ent("number.zap", "zaptec", translation_key="charger_max_current")]
+        p = self._roles(ents, "zaptec")["ev_current_control"]
+        assert p["action"] == "per_charger"
+        assert p["config_key"] is None
+
+    def test_an_auto_resolved_role_is_not_shown_as_a_chore(self):
+        """SEM reads the capacity spec by translation key every time it
+        looks (config_flow._spec_from_registry). Listing it as something to
+        confirm would invent work that does not exist."""
+        ents = [
+            _ent("sensor.cap", "huawei_solar",
+                 translation_key="storage_rated_capacity"),
+            _ent("number.dis", "huawei_solar",
+                 translation_key="storage_maximum_discharging_power"),
+        ]
+        out = hd.propose_for_installed(_registry(ents))
+        roles = out[0]["proposed_roles"]
+        assert "battery_capacity_spec" not in roles
+        assert "battery_discharge_limit" in roles
+
+    def test_every_settable_key_is_one_set_option_accepts(self):
+        """The button calls solar_energy_management.set_option with this
+        key. A key the service does not accept would fail silently in the
+        card's catch."""
+        import importlib.util
+        import pathlib as _p
+        root = _p.Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location(
+            "role_lexicon", root / "consts" / "role_lexicon.py")
+        lex = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(lex)
+        # The key has to be one SEM READS. Three of them (target SOC,
+        # strategy, force-charge switch) are consumed by the battery adapters
+        # without an options-flow field of their own, which is exactly why a
+        # one-click accept is worth having: today the only way to set them is
+        # the set_option service.
+        read_by = " ".join(
+            f.read_text() for f in (root / "coordinator").rglob("*.py"))
+        flow_src = (root / "config_flow.py").read_text()
+        card_src = (root / "dashboard" / "card" / "src" / "cards"
+                    / "sem-config-card.js").read_text()
+        for role, key in lex.SEM_CONFIG_KEY_FOR_ROLE.items():
+            assert (f'"{key}"' in read_by or f'"{key}"' in flow_src
+                    or key in card_src), (
+                f"{role} would write {key}, which nothing in SEM reads — "
+                "the card would save a key that does nothing")
+
+
+@pytest.mark.unit
+class TestANearMissIsAnOfferNotAChore:
+    """Guido: *"'no role matched — please report' — how?"* Fair. When SEM has
+    already worked out which entity is the charging current, asking the user
+    to file a bug report is the wrong end of the offer: the answer is *add
+    this charger*, pre-filled. "Please report" stays for the case where SEM
+    genuinely has nothing — and then it is a prefilled issue, one click."""
+
+    def test_a_charger_near_miss_comes_with_a_ready_charger(self):
+        ents = [
+            _ent("number.zap_current", "zaptec", device_id="z1",
+                 unique_id="sim-1_available_current"),
+            _ent("sensor.zap_power", "zaptec", device_id="z1",
+                 device_class="power"),
+            _ent("binary_sensor.zap_cable", "zaptec", device_id="z1",
+                 device_class="plug"),
+            _ent("binary_sensor.zap_charging", "zaptec", device_id="z1",
+                 device_class="power"),
+        ]
+        proposed = hd.propose_roles_from_roster(ents, "zaptec")
+        out = hd.charger_from_near_miss(ents, "zaptec", proposed)
+        assert out["ev_current_control_entity"] == "number.zap_current"
+        assert out["ev_charging_power_sensor"] == "sensor.zap_power"
+        assert out["ev_connected_sensor"] == "binary_sensor.zap_cable"
+        assert out["id"] and out["name"] == "Zaptec EV charger"
+
+    def test_no_power_sensor_means_no_offer(self):
+        """A charger SEM cannot measure is one it must not steer, so the
+        honest line there is still 'please report'."""
+        ents = [_ent("number.zap_current", "zaptec", device_id="z1",
+                     unique_id="sim-1_available_current")]
+        proposed = hd.propose_roles_from_roster(ents, "zaptec")
+        assert hd.charger_from_near_miss(ents, "zaptec", proposed) == {}
+
+    def test_no_proposed_control_means_no_offer(self):
+        ents = [_ent("sensor.mystery_power", "wallbox", device_id="w1",
+                     device_class="power")]
+        assert hd.charger_from_near_miss(ents, "wallbox", {}) == {}
+
+    def test_the_report_carries_the_offer(self):
+        ents = [
+            _ent("number.zap_current", "zaptec", device_id="z1",
+                 unique_id="sim-1_available_current"),
+            _ent("sensor.zap_power", "zaptec", device_id="z1",
+                 device_class="power"),
+        ]
+        misses = hd.build_detection_report(registry=_registry(ents))["near_misses"]
+        assert misses and misses[0]["suggested_charger"]["ev_current_control_entity"] \
+            == "number.zap_current"
+
+    def test_the_card_offers_the_action_before_the_report(self):
+        """Both paths exist in the card, and the offer comes first: a user
+        with a fixable near miss should never be sent to GitHub."""
+        import pathlib as _p
+        root = _p.Path(__file__).resolve().parent.parent
+        card = (root / "dashboard" / "card" / "src" / "cards"
+                / "sem-config-card.js").read_text()
+        assert "_addSuggestedCharger" in card
+        assert "_reportNearMissUrl" in card
+        assert card.index("suggested_charger?.id") < card.index("_reportNearMissUrl(m)")
+
+
+@pytest.mark.unit
+class TestTheFilterSeesBothPlacesConfigLives:
+    """A source sensor lives in one of two places and the difference is
+    invisible from the outside: `sensor_reader.config` on a manual install,
+    the reader's Energy-Dashboard config on a dashboard-driven one. Reading
+    only the first told PROD's owner about `sensor.inverter_eingangsleistung`
+    and `sensor.power_meter_wirkleistung` — the two entities SEM reads every
+    ten seconds."""
+
+    def _coordinator_with(self, *, cfg=None, ed=None):
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        coord = SEMCoordinator.__new__(SEMCoordinator)
+        coord.config = {"battery_discharge_control_entity": "number.already"}
+        coord._sensor_reader = SimpleNamespace(
+            config=cfg or SimpleNamespace(),
+            _energy_dashboard_config=ed,
+        )
+        return coord
+
+    def test_a_dashboard_resolved_sensor_counts_as_configured(self):
+        ed = SimpleNamespace(solar_power="sensor.inverter_eingangsleistung",
+                             grid_import_power="sensor.power_meter_wirkleistung",
+                             battery_power="sensor.battery_1_lade_entladeleistung")
+        used = self._coordinator_with(ed=ed)._configured_entity_ids()
+        assert "sensor.inverter_eingangsleistung" in used
+        assert "sensor.power_meter_wirkleistung" in used
+        assert "number.already" in used, "the entry's own keys still count"
+
+    def test_a_manual_install_still_counts(self):
+        cfg = SimpleNamespace(solar_power_sensor="sensor.manual_solar",
+                              grid_power_sensor="sensor.manual_grid")
+        used = self._coordinator_with(cfg=cfg)._configured_entity_ids()
+        assert {"sensor.manual_solar", "sensor.manual_grid"} <= used
+
+    def test_a_multi_inverter_list_counts_every_entry(self):
+        ed = SimpleNamespace(solar_power_list=["sensor.pv_a", "sensor.pv_b"])
+        used = self._coordinator_with(ed=ed)._configured_entity_ids()
+        assert {"sensor.pv_a", "sensor.pv_b"} <= used
+
+    def test_nothing_configured_is_not_an_error(self):
+        assert isinstance(self._coordinator_with()._configured_entity_ids(), set)
+
+
+@pytest.mark.unit
+class TestTheReadBackIsActuallyWired:
+    """(07.09 re-audit) THREE call sites read `self._battery_adapter` —
+    singular — a name nothing has ever assigned: the per-battery loop caches
+    adapters in `_battery_adapters` (plural, keyed by battery_id) since #375.
+    `getattr(..., None)` made each a silent no-op, so #827's discharge-rate
+    caveat, #845's expected-mode seed and #915's write read-back were all
+    dead code. The unit tests passed because they called the helper directly
+    with a hand-built self."""
+
+    def test_no_code_reads_the_singular_name(self):
+        import ast as _ast
+        import pathlib as _p
+        root = _p.Path(__file__).resolve().parent.parent
+        # Parsed, not grepped: `_battery_adapter_context` is a different
+        # method and a docstring naming the old attribute is prose. Only a
+        # real `self._battery_adapter` attribute access counts.
+        offenders = []
+        for f in list(root.glob("*.py")) + list(root.glob("coordinator/**/*.py")):
+            try:
+                tree = _ast.parse(f.read_text())
+            except SyntaxError:               # not ours to police
+                continue
+            for node in _ast.walk(tree):
+                if (isinstance(node, _ast.Attribute)
+                        and node.attr == "_battery_adapter"
+                        and isinstance(node.value, _ast.Name)
+                        and node.value.id == "self"):
+                    offenders.append(f"{f.name}:{node.lineno}")
+        assert not offenders, (
+            f"{offenders} reads `_battery_adapter` — nothing assigns it; "
+            "use _primary_battery_adapter()")
+
+    def test_the_accessor_finds_the_cached_adapter(self):
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        c = SimpleNamespace()
+        assert SEMCoordinator._primary_battery_adapter(c) is None
+        c._battery_adapters = {}
+        assert SEMCoordinator._primary_battery_adapter(c) is None
+        primary, other = object(), object()
+        c._battery_adapters = {"batt_2": other, "primary": primary}
+        assert SEMCoordinator._primary_battery_adapter(c) is primary
+        c._battery_adapters = {"batt_2": other}      # no "primary" key
+        assert SEMCoordinator._primary_battery_adapter(c) is other
+
+    def test_the_verdict_reaches_the_result_dict(self):
+        """End to end through the real per-cycle block: an adapter in the
+        plural dict must have its verdict published."""
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        ad = SimpleNamespace(verify_pending_write=lambda: False,
+                             write_not_taken_strikes=2,
+                             last_unverified_entity="number.limit",
+                             last_unverified_wanted="1200 W",
+                             last_unverified_seen="5000 W")
+        c = SimpleNamespace(hass=MagicMock(), _battery_adapters={"primary": ad},
+                            BATTERY_WRITE_STRIKES=SEMCoordinator.BATTERY_WRITE_STRIKES)
+        result = {}
+        _ad = SEMCoordinator._primary_battery_adapter(c)
+        assert _ad is ad
+        result["battery_control_write_verified"] = _ad.verify_pending_write()
+        result["battery_control_write_strikes"] = _ad.write_not_taken_strikes
+        assert result["battery_control_write_verified"] is False
+        assert result["battery_control_write_strikes"] == 2
+
+
+@pytest.mark.unit
+class TestHalfAPairOnTheDashboardPath:
+    """(07.09 re-audit) The legacy reader refused half a pair; the
+    Energy-Dashboard reader — the one most installs use — still computed
+    `export − import` with export pinned at 0.0, so a house that exports
+    read as one that never does. It yields to a combined sensor now; with
+    no combined sensor the import half IS the whole story (a zero-export
+    install), which is what test_split_grid_integration pins."""
+
+    def _reader(self, ed, cfg, reads):
+        from custom_components.solar_energy_management.coordinator.sensor_reader import (
+            SensorReader,
+        )
+        r = SensorReader(MagicMock(), cfg)
+        r._read_sensor = lambda eid, *a, **k: reads.get(eid, 0.0)
+        r.set_energy_dashboard_config(ed)
+        return r
+
+    def test_half_a_pair_yields_to_the_combined_sensor(self):
+        from custom_components.solar_energy_management.ha_energy_reader import (
+            EnergyDashboardConfig,
+        )
+        ed = EnergyDashboardConfig()
+        ed.grid_import_power = "sensor.combined"
+        r = self._reader(ed, {"grid_import_power_entity": "sensor.imp"},
+                         {"sensor.imp": 900.0, "sensor.combined": 1500.0})
+        out = r._read_from_energy_dashboard()
+        assert out.grid_power == 1500.0, "the measured combined value, not −900"
+
+    def test_with_no_combined_sensor_the_import_half_still_reads(self):
+        """A zero-export install: the import half IS the whole story, and
+        today's behaviour is right — this is what test_split_grid_integration
+        pins, and the fix must not move it."""
+        from custom_components.solar_energy_management.ha_energy_reader import (
+            EnergyDashboardConfig,
+        )
+        ed = EnergyDashboardConfig()
+        r = self._reader(ed, {"grid_import_power_entity": "sensor.imp"},
+                         {"sensor.imp": 900.0})
+        assert r._read_from_energy_dashboard().grid_power == -900.0

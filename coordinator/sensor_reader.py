@@ -1914,7 +1914,24 @@ class SensorReader:
         #    Both always positive — SEM calculates: grid_power = export - import
         manual_import = self._raw_config.get("grid_import_power_entity")
         manual_export = self._raw_config.get("grid_export_power_entity")
-        if manual_import or manual_export:
+        if (manual_import and not manual_export) and ed.grid_import_power:
+            # (07.09 re-audit) HALF a manual pair, and a combined sensor
+            # exists: prefer the combined one. Reading the import half alone
+            # says "export − import" with export pinned at 0.0 — a house
+            # that exports then reads as one that never does, permanently,
+            # with only a one-time log line. Same resolution as the legacy
+            # path. A house with NO combined sensor keeps today's behaviour:
+            # for a zero-export install the import half IS the whole story,
+            # which is what tests/test_split_grid_integration.py pins.
+            if not getattr(self, "_half_pair_ed_warned", False):
+                self._half_pair_ed_warned = True
+                _LOGGER.warning(
+                    "Only grid_import_power_entity is set (%s) with no export "
+                    "half — using the Energy Dashboard's combined grid sensor "
+                    "%s instead, so export is measured rather than assumed 0",
+                    manual_import, ed.grid_import_power)
+            readings.grid_power = self._read_sensor(ed.grid_import_power, "grid")
+        elif manual_import or manual_export:
             # Manual override — user explicitly set grid power sensors.
             # NO auto-detection runs on this path, so misconfiguration
             # (swapped roles, one side missing, energy counter instead of
@@ -3263,7 +3280,44 @@ class SensorReader:
                 )
 
         # Grid power (hardware convention: negative=import, positive=export)
-        if self.config.grid_power_sensor:
+        #
+        # (#915) The SPLIT PAIR first. Some brands cannot give any other
+        # answer — Growatt (pattern E), Anker's official integration and
+        # Senec publish import and export as separate positive magnitudes
+        # and no combined sensor at all. The Energy-Dashboard reader has
+        # honoured these two keys since #461; this path did not, so an
+        # install that never had a dashboard could be offered them by the
+        # config flow and the Detected-hardware card and then read a flat
+        # 0 W grid forever. Same semantics as there: grid = export − import,
+        # both sides positive, and the convention is fixed BY DECLARATION so
+        # no sign detection is needed (the solar voter computes the same
+        # sign and therefore never flips it).
+        manual_import = self._raw_config.get("grid_import_power_entity")
+        manual_export = self._raw_config.get("grid_export_power_entity")
+        if manual_import and manual_export:
+            import_w = self._read_sensor(manual_import, "grid_import")
+            export_w = self._read_sensor(manual_export, "grid_export")
+            readings.grid_power = export_w - import_w
+            self._grid_sign_detected = True
+            self._audit_split_pair(
+                "grid", "Grid (manual import/export override)",
+                import_w, manual_import, export_w, manual_export,
+            )
+        elif manual_import or manual_export:
+            # (06.09 audit) HALF a pair is a meter that only ever imports (or
+            # exports): reading it as the whole grid is a silent, permanent
+            # sign error. Say so once and fall through to the combined sensor.
+            if not getattr(self, "_half_pair_warned", False):
+                self._half_pair_warned = True
+                _LOGGER.warning(
+                    "Only one of grid_import_power_entity / "
+                    "grid_export_power_entity is set (%s / %s) — a split pair "
+                    "needs both; ignoring it and using the combined grid sensor",
+                    manual_import, manual_export)
+            if self.config.grid_power_sensor:
+                readings.grid_power = self._read_sensor(
+                    self.config.grid_power_sensor, "grid")
+        elif self.config.grid_power_sensor:
             readings.grid_power = self._read_sensor(
                 self.config.grid_power_sensor, "grid"
             )

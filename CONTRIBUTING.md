@@ -81,6 +81,36 @@ Users see what detection did on the dashboard **Configuration → Detected
 hardware** (evidence per role, near-misses named); when triaging a report, ask
 for that section or the diagnostics download — the same report is in both.
 
+#### Which brand next? Ask the roster (#915)
+
+`consts/integration_roster.py` is a **generated** list of the energy-shaped
+integrations the ecosystem actually runs — domain, display name, install count,
+and, where the integration publishes one, the entity vocabulary it declares in
+its own repository. Regenerate it with:
+
+```bash
+python3 scripts/crawl_integration_roster.py --refresh --write --baseline
+python3 scripts/crawl_integration_roster.py --backlog     # the ranked gap
+```
+
+It answers "which brand is worth a row" with install counts instead of with
+whoever filed the loudest issue, and for a brand that publishes a
+`strings.json` it also answers "what does it call its discharge limit".
+
+**It is not a support list and never becomes one.** A roster row is a claim
+about the world, gated by a URL; a matrix row is a claim about SEM, gated by
+evidence. Nothing crawled may carry a status, an evidence string or a sign
+convention — `tests/test_915_roster_is_not_a_claim.py` makes that
+structural. A crawled brand reaches `hardware_matrix.py` the same way every
+other brand does: a human files an issue, and the row cites it.
+
+`tests/test_915_roster_rediscovery.py` is the check that the mining is worth
+trusting: it asserts the miner re-derives four things SEM learned from live
+installs (Huawei's discharge-limit key and working-mode labels, Zaptec's
+current register but *not* its phase-switch register, Sessy's strategy
+values) and that it invents nothing where an integration exposes nothing
+(Easee is service-driven and must mine no current control).
+
 ### Multi-charger correctness
 
 SEM was originally single-charger; multi-charger support was added

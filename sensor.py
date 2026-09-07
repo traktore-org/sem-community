@@ -3063,6 +3063,13 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 # (#827) On a Deye the spend runs at the INVERTER's own rate
                 # — the card must say so rather than imply SEM chose it.
                 "rate_caveat": d.get("battery_discharge_rate_caveat"),
+                # (#915) Did the last battery control write TAKE? None until
+                # a changed write has been judged; True/False after. The
+                # failure side surfaces as a Repair; this is the success
+                # side, which had no surface at all — PROD's first day on
+                # the read-back could not show it working.
+                "write_verified": d.get("battery_control_write_verified"),
+                "write_strikes": d.get("battery_control_write_strikes"),
                 # (2.1 audit) last night with hindsight — the reason to wait
                 "last_night_surplus_kwh": d.get("battery_last_night_surplus_kwh"),
                 "last_night_date": d.get("battery_last_night_date"),

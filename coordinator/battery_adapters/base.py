@@ -61,6 +61,113 @@ class BatteryControlAdapter(ABC):
         SEM may ever WRITE a policy selector — that boundary is the user's."""
         return None
 
+    #: (#915) Read-back after a control write. The generic adapter — the one
+    #: a roster proposal lands on — implements it; brands with their own
+    #: read-back (Deye) or none report "nothing pending" and are unchanged.
+    write_not_taken_strikes: int = 0
+    last_unverified_entity: str = ""
+    last_unverified_wanted: str = ""
+    last_unverified_seen: str = ""
+
+    # ── (#915) did the write TAKE? ────────────────────────────────────
+    # A declared key says what a register is CALLED; it cannot say whether
+    # the register accepts a write, expires it after sixty minutes, or is a
+    # global setting the vendor says to leave alone (@Azlinon named four such
+    # on EG4). That answer only exists after the first write — so the write
+    # is recorded here and judged on the NEXT cycle, non-blocking, in the
+    # entity's own unit. Not error handling: a register that ignores a write
+    # raises nothing (#824's lesson, from the other side of the wire).
+    _WRITE_GRACE_S: float = 8.0
+    _WRITE_TOLERANCE_NATIVE: float = 1.0
+    #: (06.09 audit) A clock is the wrong witness. Huawei's own adapter
+    #: documents that the HA entity shows the STALE commanded value until
+    #: huawei_solar next polls it (30-60 s) — longer than any fixed grace,
+    #: so a correct write would have been judged "not reflected" and three
+    #: changed writes would have raised a Repair on a working battery. The
+    #: verdict therefore waits until the entity has been REPORTED since the
+    #: write (HA's ``last_reported`` / ``last_updated``), and only gives up
+    #: on an integration that stays silent this long — which is its own
+    #: fault, and the sensor-unavailable Repair's business, not this one's.
+    _WRITE_REPORT_WAIT_S: float = 180.0
+
+    def _note_pending_write(self, entity_id: str, watts: float) -> None:
+        import time as _time
+        pending = getattr(self, "_pending_write", None)
+        # A write already waiting to be judged is not re-armed by an
+        # identical one: re-noting reset the grace every cycle and the
+        # verdict never came (06.09 audit).
+        if (pending and pending[0] == entity_id
+                and abs(pending[1] - float(watts)) < 1e-6):
+            return
+        # monotonic for the grace, wall-clock to compare with HA's
+        # ``last_reported`` (a datetime); both taken at the same instant
+        self._pending_write = (entity_id, float(watts), _time.monotonic(),
+                               _time.time())
+
+    def verify_pending_write(self):
+        import time as _time
+        pending = getattr(self, "_pending_write", None)
+        if not pending:
+            return None
+        entity_id, watts, at = pending[0], pending[1], pending[2]
+        wrote_wall = pending[3] if len(pending) > 3 else None
+        elapsed = _time.monotonic() - at
+        if elapsed < self._WRITE_GRACE_S:
+            return None          # not yet judged; integrations poll
+        from ..units import power_state_to_watts, power_unit_scale
+        st = self._hass.states.get(entity_id)
+        # Has the integration REPORTED the entity since the write? Until it
+        # has, the state is the stale pre-write value by definition and there
+        # is nothing to judge (06.09 audit — Huawei polls every 30-60 s).
+        reported = (getattr(st, "last_reported", None)
+                    or getattr(st, "last_updated", None)) if st is not None else None
+        try:
+            # (07.09 re-audit) A NAIVE datetime is read by Python as LOCAL
+            # time, so `.timestamp()` would shift by the host's UTC offset
+            # and a fresh report could look older than the write. HA's own
+            # State is always tz-aware; a helper or a test double may not be.
+            if reported is not None and reported.tzinfo is None:
+                import datetime as _dt
+                reported = reported.replace(tzinfo=_dt.timezone.utc)
+            reported_ts = float(reported.timestamp()) if reported is not None else None
+        except (AttributeError, TypeError, ValueError):
+            reported_ts = None
+        if (reported_ts is not None and wrote_wall is not None
+                and reported_ts < wrote_wall
+                and elapsed < self._WRITE_REPORT_WAIT_S):
+            return None          # no report since the write yet — wait
+        self._pending_write = None
+        attrs = getattr(st, "attributes", None) or {}
+        # Compared in WATTS through the one canonical converter (#641): the
+        # entity's own unit decides the scale, and one native unit of it is
+        # the tolerance — the resolution the register can express.
+        scale = power_unit_scale(st) if st is not None else 1.0
+        seen_w = power_state_to_watts(st) if st is not None else None
+        tol_w = self._WRITE_TOLERANCE_NATIVE * scale
+        # the entity may clamp to its own max — a reflected write is one
+        # that landed within tolerance OR at the entity's ceiling
+        ceiling = attrs.get("max")
+        ceiling_w = float(ceiling) * scale if ceiling is not None else None
+        reflected = seen_w is not None and (
+            abs(seen_w - watts) <= tol_w
+            or (ceiling_w is not None and watts >= ceiling_w
+                and abs(seen_w - ceiling_w) <= tol_w))
+        if reflected:
+            self.write_not_taken_strikes = 0
+            self.last_unverified_entity = ""
+            return True
+        self.write_not_taken_strikes += 1
+        self.last_unverified_entity = entity_id
+        label = str(attrs.get("unit_of_measurement") or "W")
+        self.last_unverified_wanted = f"{watts / scale:g} {label}"
+        self.last_unverified_seen = (f"{seen_w / scale:g} {label}"
+                                     if seen_w is not None
+                                     else str(getattr(st, "state", "missing")))
+        self._last_error = (
+            f"write not reflected by {entity_id}: wanted "
+            f"{self.last_unverified_wanted}, reads {self.last_unverified_seen}")
+        return False
+
     @property
     def last_discharge_limit_w(self) -> float:
         """(#900) The discharge limit this adapter last commanded, -1 when

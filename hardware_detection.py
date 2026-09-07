@@ -986,6 +986,464 @@ def _census_energy_shaped(dev_entities) -> bool:
         for e in dev_entities)
 
 
+#: Platforms that carry many brands at once. A device here is not a brand,
+#: so "entities present, no role matched" is only news when the device looks
+#: like energy hardware.
+_TRANSPORT_PLATFORMS = frozenset({"mqtt", "modbus", "esphome", "tasmota",
+                                  "template", "rest", "command_line"})
+
+
+def _roster():
+    """(#915) The generated roster, or ``None``. Imported lazily and never
+    at module scope: it is a 30 KB data module that only the census and the
+    proposal path need, and a missing or broken roster must degrade to
+    today's behaviour rather than break a detection run."""
+    try:
+        from .consts import integration_roster as _r
+        return _r
+    except Exception:  # noqa: BLE001 — a prior is never load-bearing
+        return None
+
+
+def roster_provenance() -> Dict[str, Any]:
+    """When the roster was generated and from where — a prior with no
+    provenance is a rumour."""
+    r = _roster()
+    if r is None:
+        return {}
+    meta = getattr(r, "ROSTER_META", {}) or {}
+    return {"schema": getattr(r, "SCHEMA", None),
+            "generated_at": meta.get("generated_at"),
+            "rows": meta.get("kept")}
+
+
+def describe_domain(domain: str) -> Optional[Dict[str, Any]]:
+    """(#915) What the ecosystem says an integration IS — name, kind and how
+    many people run it — or ``None`` when the roster has never heard of it.
+
+    This is the ONLY thing the roster is allowed to assert on its own: a
+    name. It is not a claim that SEM supports the brand, and nothing here
+    reads a user's entities."""
+    r = _roster()
+    if r is None:
+        return None
+    row = (getattr(r, "ROSTER", {}) or {}).get(str(domain))
+    if not row:
+        return None
+    return {"domain": str(domain), "name": row.get("name"),
+            "kind": row.get("kind"), "installs": row.get("installs"),
+            "known_vocabulary": bool(
+                (getattr(r, "ROLE_VOCAB", {}) or {}).get(str(domain)))}
+
+
+def roster_role_vocab(domain: str, role: str) -> Dict[str, tuple]:
+    """What an integration DECLARES for a SEM role, from its own repository:
+    ``{"keys": (...), "exact_only": (...)}``. ``exact_only`` names the keys
+    that may be matched by translation_key alone — each is a segment-suffix
+    of a LONGER key the same brand declares (``max_discharge_power`` beside
+    ``system_max_discharge_power``), so a unique_id suffix cannot tell them
+    apart. Every consumer must carry it; ``roster_role_keys`` below dropped
+    it, and the discovery rung that auto-binds the discharge control was
+    matching on the stripped list (found by the 06.09 audit)."""
+    r = _roster()
+    if r is None:
+        return {"keys": (), "exact_only": ()}
+    body = ((getattr(r, "ROLE_VOCAB", {}) or {}).get(str(domain)) or {}).get(role)
+    if not body:
+        return {"keys": (), "exact_only": ()}
+    return {"keys": tuple(body.get("keys", ())),
+            "exact_only": tuple(body.get("exact_only", ()))}
+
+
+def roster_role_keys(domain: str, role: str) -> tuple:
+    """The entity keys an integration DECLARES for a SEM role. Empty when the
+    roster has no vocabulary for it. Callers that MATCH must use
+    ``_entry_matches_declared`` with ``roster_role_vocab``, never a bare
+    ``endswith`` over this list."""
+    return roster_role_vocab(domain, role)["keys"]
+
+
+def _entry_matches_declared(entry, keys, exact_only=()) -> Optional[str]:
+    """The ONE matcher every consumer of the roster uses. translation_key is
+    the integration's own word and matches exactly. unique_id is a
+    convention (``<serial>_<key>``): it matches at a ``_`` segment boundary
+    only — a bare ``endswith`` is bug class 67 — and never for an
+    ``exact_only`` key. Returns the matched key or None."""
+    tk = str(getattr(entry, "translation_key", "") or "")
+    uid = str(getattr(entry, "unique_id", "") or "")
+    exact = set(exact_only or ())
+    for k in keys:
+        if tk == k:
+            return k
+        if k not in exact and (uid == k or uid.endswith("_" + k)):
+            return k
+    return None
+
+
+def propose_roles_from_roster(dev_entities, domain: str, *,
+                              state_of=None,
+                              strategy_values=None) -> Dict[str, Any]:
+    """(#915) Role proposals for ONE device, as an INTERSECTION.
+
+    The roster says what an integration calls things; ``dev_entities`` is
+    what this install actually has. Only entities present in BOTH are
+    proposed, so this can never invent hardware — the entity is physically
+    in the user's registry, under that integration. It can still be a wrong
+    ROLE, which is why every consumer treats the result as a proposal the
+    user confirms and never as a binding (bug class 42: read paths may
+    guess, actuation paths may not).
+
+    Matching is on ``translation_key`` (or a ``unique_id`` suffix), never on
+    the entity_id: a translation key is the integration author's own
+    semantic label, an entity_id is the user's rename.
+    """
+    r = _roster()
+    if r is None:
+        return {}
+    vocab = (getattr(r, "ROLE_VOCAB", {}) or {}).get(str(domain))
+    if not vocab:
+        return {}
+    out: Dict[str, Any] = {}
+    for role, body in vocab.items():
+        keys = tuple(body.get("keys", ()))
+        want_domain = str(body.get("platform") or "")
+        # (#810) Collect EVERY match, then choose deterministically. Taking
+        # the first entity the registry happened to yield meant that a brand
+        # declaring four target-SOC keys got whichever one iteration order
+        # produced — a different answer on two boxes with the same hardware.
+        # The roster's key order is stable (sorted at generation), so it is
+        # the tie-break, and the runners-up ride along instead of vanishing.
+        matches = []
+        for entry in dev_entities:
+            eid = str(getattr(entry, "entity_id", ""))
+            if want_domain and not eid.startswith(f"{want_domain}."):
+                continue
+            hit = _entry_matches_declared(
+                entry, keys, body.get("exact_only", ()))
+            if hit:
+                matches.append((keys.index(hit), eid, hit))
+        if not matches:
+            continue
+        matches.sort()
+        rank, eid, hit = matches[0]
+        out[role] = {"entity": eid, "matched_key": hit,
+                     "source": "roster",
+                     # (#915) What the user can DO about it. A proposal that
+                     # says "unconfirmed" and offers no way to confirm is a
+                     # chore, not an offer: ``config_key`` is the option the
+                     # card writes with one click, and its absence says why
+                     # there is no button.
+                     **_role_action(role)}
+        if len(matches) > 1:
+            out[role]["alternatives"] = [
+                {"entity": e, "matched_key": k} for _, e, k in matches[1:]
+            ]
+        # (#915) The button is offered only when the entity can actually
+        # take what SEM will write. Three things the registry cannot tell:
+        # whether the entity is LOADED, what it MEASURES, and — for a
+        # strategy select — whether it lists the options SEM would send.
+        # Before this, discovery's explicit-unit gate never ran on this path
+        # (the button writes the option directly), so a key named like a
+        # power limit and measured in amps got a button.
+        out[role]["judged"] = state_of is not None
+        if out[role]["action"] == "set_option" and state_of is not None:
+            _gate_proposal(out[role], role, state_of, strategy_values)
+    # (#915, 06.09 audit) Half a split pair is not a proposal — PER DEVICE.
+    # The crawler enforces PAIRED_ROLES on the whole declared vocabulary, but
+    # a firmware or model variant may expose only one of the two sensors on
+    # THIS box; accepting that one alone writes grid_import_power_entity
+    # with no export half, and the reader then reads "always importing,
+    # never exporting" with no warning. The button is withheld and the row
+    # says which half is missing.
+    try:
+        from .consts import role_lexicon as _lex
+        pairs = getattr(_lex, "PAIRED_ROLES", ())
+    except Exception:  # noqa: BLE001
+        pairs = ()
+    for pair in pairs:
+        present = [r for r in pair if r in out]
+        if 0 < len(present) < len(pair):
+            for r in present:
+                if out[r].get("action") == "set_option":
+                    out[r]["action"] = "pair_incomplete"
+                    out[r]["missing_role"] = [x for x in pair if x not in out]
+    return out
+
+
+def _gate_proposal(prop: Dict[str, Any], role: str, state_of,
+                   strategy_values) -> None:
+    """Downgrade ``action`` from ``set_option`` when the live entity cannot
+    take the write. Mutates ``prop``; every branch leaves a reason the card
+    can render, never a bare refusal."""
+    try:
+        from .consts import role_lexicon as _lex
+    except Exception:  # noqa: BLE001
+        return
+    st = None
+    try:
+        st = state_of(prop["entity"])
+    except Exception:  # noqa: BLE001
+        st = None
+    if st is None:
+        # registry knows it, HA never produced it (#824's ``restored``)
+        prop["action"] = "not_loaded"
+        return
+    attrs = getattr(st, "attributes", None) or {}
+    want = _lex.ROLE_EXPECTED_UNIT.get(role)
+    if want:
+        unit = str(attrs.get("unit_of_measurement") or "").strip()
+        accepted = _lex.UNIT_CLASSES.get(want, frozenset())
+        if not unit:
+            prop["action"] = "no_unit"
+            prop["unit_wanted"] = "/".join(sorted(accepted))
+            return
+        if unit not in accepted:
+            prop["action"] = "unit_mismatch"
+            prop["unit_seen"] = unit
+            prop["unit_wanted"] = "/".join(sorted(accepted))
+            return
+    if role == "battery_power_strategy":
+        options = [str(o) for o in (attrs.get("options") or [])]
+        values = dict(_lex.STRATEGY_VALUE_KEYS)
+        for key, default in _lex.STRATEGY_VALUE_KEYS:
+            values[key] = str((strategy_values or {}).get(key) or default)
+        missing = sorted({v for v in values.values() if v not in options})
+        if missing:
+            prop["action"] = "options_unmapped"
+            prop["options"] = options[:12]
+            prop["values_missing"] = missing
+            return
+
+
+def charger_from_near_miss(dev_entities, platform: str,
+                          proposed: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """(#915) The charger config a near miss is one click away from.
+
+    "Entities present, no role matched — please report" is the right thing to
+    say when SEM has nothing better. It is the wrong thing to say when SEM
+    has just worked out which entity is the current control: then the answer
+    is not a bug report, it is *add this charger*.
+
+    So: take the role the roster proposed (the integration's own declared
+    key for its charging current), fill the rest from the plain SHAPE of the
+    same device's entities — a power sensor, a plug binary_sensor, a
+    charging one — and hand back something the user can accept. Returns
+    ``{}`` when the essentials are missing, which is when "please report"
+    is still the honest line.
+    """
+    proposed = proposed or {}
+    current = (proposed.get("ev_current_control") or {}).get("entity")
+    if not current:
+        return {}
+    out: Dict[str, Any] = {"ev_current_control_entity": current}
+    for e in dev_entities:
+        eid = str(e.entity_id)
+        dc = str(getattr(e, "original_device_class", "") or "")
+        if eid.startswith("sensor.") and dc == "power":
+            out.setdefault("ev_charging_power_sensor", eid)
+        elif eid.startswith("binary_sensor.") and dc == "plug":
+            out.setdefault("ev_connected_sensor", eid)
+        elif eid.startswith("binary_sensor.") and dc in ("power", "running",
+                                                         "battery_charging"):
+            out.setdefault("ev_charging_sensor", eid)
+        elif eid.startswith("sensor.") and dc == "energy" and "session" in eid:
+            out.setdefault("ev_session_energy_sensor", eid)
+    # Without a power reading SEM cannot see what the car is drawing, and a
+    # charger it cannot measure is one it must not steer.
+    if "ev_charging_power_sensor" not in out:
+        return {}
+    out["id"] = f"{platform}_{str(getattr(dev_entities[0], 'device_id', '') or 'device')}"[:48]
+    out["name"] = (describe_domain(platform) or {}).get("name") or platform
+    return out
+
+
+def _role_action(role: str) -> Dict[str, Any]:
+    """How a proposed role can be accepted: a settable option key, a pointer
+    to the charger section, or nothing because SEM resolves it itself."""
+    try:
+        from .consts import role_lexicon as _lex
+    except Exception:  # noqa: BLE001
+        return {"config_key": None, "action": "none"}
+    if role in getattr(_lex, "OBSERVE_ONLY_ROLES", ()):
+        # (#845) a policy selector: SEM names it, watches it, never writes it
+        return {"config_key": None, "action": "observe_only"}
+    key = _lex.SEM_CONFIG_KEY_FOR_ROLE.get(role)
+    if key:
+        return {"config_key": key, "action": "set_option"}
+    if role in _lex.PER_CHARGER_ROLES:
+        return {"config_key": None, "action": "per_charger"}
+    if role in _lex.AUTO_RESOLVED_ROLES:
+        return {"config_key": None, "action": "automatic"}
+    return {"config_key": None, "action": "none"}
+
+
+def propose_for_installed(registry, *, limit_per_domain: int = 8,
+                          configured_entities=None, state_of=None,
+                          strategy_values=None) -> list:
+    """(#915) Every INSTALLED integration the roster has vocabulary for, with
+    the controls it declares matched against this box's own entities.
+
+    The near-miss path (below) only walks ``_EV_CHARGER_PLATFORMS``, so it
+    answers the question for chargers and for nothing else: an inverter or a
+    battery SEM has no row for was named and then dropped. This walk asks the
+    same question of everything installed — "you are running Sigenergy; its
+    own repository says it creates a discharge-power limit; here is the
+    entity of yours that carries that name".
+
+    Still an INTERSECTION, and still report data: an entity appears only
+    because it is in this registry, and nothing here is written anywhere.
+    Grouped per domain, not per device — the roles a battery integration
+    declares are install-wide, and a per-device split would show the same
+    answer once per MPPT string.
+    """
+    r = _roster()
+    if r is None or registry is None:
+        return []
+    vocab = getattr(r, "ROLE_VOCAB", {}) or {}
+    by_domain: Dict[str, list] = {}
+    for e in registry.entities.values():
+        if e.disabled_by:
+            continue
+        dom = str(e.platform or "")
+        if dom in vocab:
+            by_domain.setdefault(dom, []).append(e)
+    # (#915) An entity SEM already drives is not news. Without this the
+    # Config card told a working Huawei install about six "proposals" for
+    # controls it was already using — clutter wearing the shape of help.
+    used = {str(e) for e in (configured_entities or ()) if e}
+    out = []
+    for dom, ents in sorted(by_domain.items()):
+        roles = {r: b for r, b in propose_roles_from_roster(
+                     ents[:400], dom, state_of=state_of,
+                     strategy_values=strategy_values).items()
+                 # An entity SEM already drives is not news; nor is a role SEM
+                 # resolves by itself every time it looks.
+                 if b.get("entity") not in used and b.get("action") != "automatic"}
+        if not roles:
+            continue
+        out.append({
+            "domain": dom,
+            "roster": describe_domain(dom),
+            "proposed_roles": dict(list(roles.items())[:limit_per_domain]),
+        })
+    return out
+
+
+#: The four reads a first install cannot start without, and the SEM config
+#: key each fills. ``grid_power`` fills the IMPORT slot: SEM's reader
+#: auto-detects the sign, so one signed meter is the normal shape.
+_SOURCE_ROLE_TO_KEY = {
+    "solar_power": "solar_power_sensor",
+    "grid_power": "grid_import_power_sensor",
+    "battery_power": "battery_power_sensor",
+    # The battery's state of charge rides along: without it the four SOC
+    # zones that decide every battery behaviour have nothing to read, and a
+    # manual install would come up with a working pack and no strategy.
+    "battery_soc": "battery_soc_sensor",
+    # (#915) …and the two-sided answer, for the brands that give no other:
+    # the step accepts either a combined grid sensor or this pair.
+    "grid_import_power": "grid_import_power_entity",
+    "grid_export_power": "grid_export_power_entity",
+}
+
+
+def propose_energy_sources(hass=None, registry=None) -> Dict[str, Any]:
+    """(#915) The solar / grid / battery power sensors, proposed from the
+    integrations this box already runs.
+
+    SEM's install has always started at Home Assistant's Energy Dashboard: it
+    reads that mapping, and when it is missing or half-filled the install
+    ABORTS and sends the user off to configure a different page first. That
+    was the only anchor available — until the census could say which
+    integrations are installed and the roster could say what each one calls
+    its own entities.
+
+    So this is the second anchor, and it points the other way: what do you
+    already run, and what does it call the three things SEM needs? Two rungs,
+    strongest first — the integration's own declared key, then the plain
+    shape of the entity (a power sensor on an energy integration). Both are
+    proposals the user confirms in the flow; nothing is bound silently, and
+    no sign convention is claimed here (``sensor_reader`` detects that from
+    live values, as it always has).
+
+    Returns ``{config_key: {"entity", "why", "domain"}}`` — never a bare
+    entity id, because a suggestion the user cannot interrogate is one they
+    cannot correct.
+    """
+    if registry is None and hass is not None:
+        try:
+            registry = entity_registry.async_get(hass)
+        except Exception:  # noqa: BLE001 — a proposal never breaks a flow
+            return {}
+    if registry is None:
+        return {}
+    r = _roster()
+    vocab = (getattr(r, "ROLE_VOCAB", {}) or {}) if r is not None else {}
+
+    by_domain: Dict[str, list] = {}
+    for e in registry.entities.values():
+        if e.disabled_by:
+            continue
+        dom = str(e.platform or "")
+        if dom and dom not in _CENSUS_IGNORED:
+            by_domain.setdefault(dom, []).append(e)
+
+    out: Dict[str, Any] = {}
+
+    # Rung 1 — the integration's own declared key. Prefer a domain SEM
+    # already knows about, then any domain the roster calls energy-shaped.
+    def _domain_rank(dom: str) -> tuple:
+        row = (getattr(r, "ROSTER", {}) or {}).get(dom, {}) if r else {}
+        return (0 if dom in KNOWN_INVERTER_DOMAINS else 1,
+                -int(row.get("installs") or 0), dom)
+
+    for dom in sorted(by_domain, key=_domain_rank):
+        roles = vocab.get(dom)
+        if not roles:
+            continue
+        proposed = propose_roles_from_roster(by_domain[dom], dom)
+        for role, key in _SOURCE_ROLE_TO_KEY.items():
+            if key in out or role not in proposed:
+                continue
+            # (07.09 re-audit) A role the gates DOWNGRADED is not a
+            # suggestion: `pair_incomplete` (half a split pair on this
+            # device) would otherwise be pre-filled into the install form
+            # looking confirmed. Only a role still offering the button.
+            if proposed[role].get("action") not in ("set_option", None):
+                continue
+            out[key] = {"entity": proposed[role]["entity"], "domain": dom,
+                        "why": f"declared as {proposed[role]['matched_key']}"}
+
+    # Rung 2 — shape. An entity that is a power sensor on an integration the
+    # census calls energy-shaped is a candidate even when nothing declared
+    # it, which is how a brand that publishes no vocabulary still gets help.
+    for dom in sorted(by_domain, key=_domain_rank):
+        ents = by_domain[dom]
+        if not _census_energy_shaped(ents):
+            continue
+        for e in ents:
+            eid = str(e.entity_id)
+            if not eid.startswith("sensor."):
+                continue
+            if str(getattr(e, "original_device_class", "")) != "power":
+                continue
+            low = eid.lower()
+            for token, key in (("solar", "solar_power_sensor"),
+                               ("pv", "solar_power_sensor"),
+                               ("grid", "grid_import_power_sensor"),
+                               ("meter", "grid_import_power_sensor"),
+                               ("batter", "battery_power_sensor")):
+                if key in out or token not in low:
+                    continue
+                if any(bad in low for bad in ("today", "daily", "total",
+                                              "forecast", "l1", "l2", "l3")):
+                    continue
+                out[key] = {"entity": eid, "domain": dom,
+                            "why": "a power sensor on an energy integration"}
+                break
+    return out
+
+
 def build_integration_census(hass=None, registry=None, config_domains=None,
                              matched_charger_platforms=None) -> Dict[str, Any]:
     """The census: what is installed, what SEM knows, and the two gaps.
@@ -1042,11 +1500,22 @@ def build_integration_census(hass=None, registry=None, config_domains=None,
         "known_inverter_domains_present": inverters_present,
         "rows_matched_nothing": rows_matched_nothing,
         "unknown_energy_domains": unknown_energy,
+        # (#915) The same gap, with a name on it. "eg4_web_monitor" tells the
+        # user nothing; "EG4 Web Monitor, 412 installs" tells them what to
+        # report and tells us what it would be worth. Additive on purpose —
+        # every existing key above is byte-identical, so nothing that reads
+        # this census had to change.
+        "unknown_energy_domains_named": [
+            d for d in (describe_domain(dom) for dom in unknown_energy)
+            if d is not None
+        ],
+        "roster": roster_provenance(),
     }
 
 
 def build_detection_report(hass: Optional[HomeAssistant] = None,
-                           registry=None) -> Dict[str, Any]:
+                           registry=None, configured_entities=None,
+                           strategy_values=None) -> Dict[str, Any]:
     """(#814 Pillar B) Detection that shows its work.
 
     The same walk as ``discover_all_ev_chargers_from_registry`` — platform
@@ -1119,11 +1588,54 @@ def build_detection_report(hass: Optional[HomeAssistant] = None,
                         break
             by_id = {str(e.entity_id): e for e in dev_entities}
             if not mapping:
+                # (#915) A near miss is meant to read "a brand we almost
+                # support — please report". On the shared ``mqtt`` transport
+                # it was reading that over a Zigbee coordinator: the .46 rig
+                # showed 24 near-misses, most of them zigbee2mqtt bridge
+                # buttons, each asking the user to file an issue about a
+                # device SEM would never drive. A transport-platform device
+                # earns the line only if something about it is actually
+                # energy-shaped — a power sensor with a plug or a current
+                # control (the census rule), or a role the roster proposed.
+                _proposed = propose_roles_from_roster(dev_entities, platform)
+                if (platform in _TRANSPORT_PLATFORMS and not _proposed
+                        and not _census_energy_shaped(dev_entities)):
+                    continue
+                # (#915) An integration whose charger SEM already drives is
+                # not "almost supported". A brand commonly ships a second,
+                # installation-level device — Zaptec's carries the site's
+                # available-current and phase registers — and on the .46 rig
+                # that device was the last near miss standing, telling the
+                # owner of a fully detected charger to report it.
+                # ``zaptec_sim`` and ``zaptec_custom`` are the same brand as
+                # ``zaptec`` — the tolerance the discovery walk and the census
+                # already apply, applied here too. Comparing the raw platform
+                # left the fork's installation device on the card as the last
+                # near miss (.46).
+                def _same_brand(a: str, b: str) -> bool:
+                    a, b = str(a or ""), str(b or "")
+                    return a == b or a.startswith(f"{b}_") or b.startswith(f"{a}_")
+                if any(_same_brand(c.get("platform"), platform)
+                       for c in report["chargers"]):
+                    continue
                 report["near_misses"].append({
                     "platform": platform,
                     "device_id": device_id,
                     "entities": [_describe(e) for e in dev_entities],
                     "note": "entities present, no role matched",
+                    # (#915) "a near miss is a brand we almost support" — so
+                    # say which brand, and which of its own declared keys
+                    # these entities match. REPORT DATA ONLY: never merged
+                    # into ``mapping``, never written anywhere. The user
+                    # confirms a proposal in the pickers; SEM binds nothing
+                    # it guessed.
+                    "roster": describe_domain(platform),
+                    "proposed_roles": _proposed,
+                    # (#915) What the user can DO about this near miss.
+                    # A charger SEM can describe well enough to drive is an
+                    # offer, not a bug report.
+                    "suggested_charger": charger_from_near_miss(
+                        dev_entities, platform, _proposed),
                 })
                 continue
             mapped: Dict[str, Any] = {}
@@ -1182,6 +1694,31 @@ def build_detection_report(hass: Optional[HomeAssistant] = None,
                 c.get("platform") for c in report["chargers"]})
     except Exception:  # noqa: BLE001 — a census never costs the report
         report["census"] = None
+    # (#915) The same question asked of EVERYTHING installed, not only of the
+    # charger platforms the near-miss walk covers: which controls does each
+    # installed integration's own repository say it creates, and which of
+    # this box's entities carry those names. Report data, intersection only.
+    try:
+        # (#915) Judge the live state only once HA has finished starting:
+        # before that, an absent state means "not loaded YET", and refusing
+        # every button on a fresh boot is worse than offering them unjudged
+        # — the post-startup hook rebuilds this report with the states in.
+        _running = bool(getattr(hass, "is_running", True)) if hass is not None else False
+        _state_of = (
+            (lambda eid: hass.states.get(eid)) if (hass is not None and _running)
+            else None)
+        report["roster_proposals"] = propose_for_installed(
+            registry, configured_entities=configured_entities,
+            state_of=_state_of, strategy_values=strategy_values)
+        # (#915) whether proposals were judged against live states, so the
+        # coordinator can rebuild an unjudged (boot-time) report once HA is up
+        report["judged"] = bool(_state_of is not None)
+        report["not_loaded"] = sum(
+            1 for p in report["roster_proposals"]
+            for v in p.get("proposed_roles", {}).values()
+            if v.get("action") == "not_loaded")
+    except Exception:  # noqa: BLE001 — a prior never costs the report
+        report["roster_proposals"] = []
     return report
 
 
@@ -1907,10 +2444,10 @@ _DISCHARGE_CONTROL_PATTERNS = [
 ]
 
 
-def discover_inverter_from_registry(
+def discover_inverter_from_registry_verbose(
     hass: HomeAssistant,
     energy_dashboard_config,
-) -> Optional[str]:
+) -> Tuple[Optional[str], str]:
     """Auto-discover the battery discharge control number entity.
 
     Walks the entity registry from a sensor we already know (from the HA
@@ -1924,13 +2461,16 @@ def discover_inverter_from_registry(
             ``ha_energy_reader.read_energy_dashboard_config``.
 
     Returns:
-        The entity_id of the discovered control entity, or ``None`` if no
-        match was found. SEM falls back to no discharge protection when
-        ``None`` is returned, matching today's behaviour for users without
-        a configured entity.
+        ``(entity_id, rung)`` — the discovered control entity or ``None``,
+        and WHICH rung answered: ``translation_key`` (the integration's own
+        declared key, #915), ``entity_id_pattern`` (the name regexes), or a
+        reason for the miss. The rung is what makes the #915 rung's arrival
+        observable: the headline live assertion is the SAME entity for a
+        better reason. ``discover_inverter_from_registry`` below drops it,
+        so no existing caller changed.
     """
     if energy_dashboard_config is None:
-        return None
+        return None, "no_energy_dashboard"
 
     # Try battery sensors first (most likely to be on the same integration
     # as the discharge control), fall back to solar/grid.
@@ -1944,7 +2484,7 @@ def discover_inverter_from_registry(
     ]
     seed_candidates = [s for s in seed_candidates if s]
     if not seed_candidates:
-        return None
+        return None, "no_seed"
 
     entity_reg = entity_registry.async_get(hass)
 
@@ -1956,7 +2496,7 @@ def discover_inverter_from_registry(
             break
 
     if seed_entry is None or not seed_entry.platform:
-        return None
+        return None, "no_registry_entry"
 
     platform = seed_entry.platform
     config_entry_id = seed_entry.config_entry_id
@@ -1979,7 +2519,7 @@ def discover_inverter_from_registry(
         same_integration.append(entry.entity_id)
 
     if not same_integration:
-        return None
+        return None, "no_candidates"
 
     # A name match is not sufficient: Deye/ha-solarman exposes e.g.
     # ``number.inverter_battery_max_discharging_current`` in amperes. Older
@@ -1995,7 +2535,41 @@ def discover_inverter_from_registry(
         )
     ]
     if not same_integration:
-        return None
+        return None, "no_power_control_entity"
+
+    # (#915) FIRST RUNG — ask the registry the semantic question before
+    # regexing entity ids. The integration declared this control's
+    # translation_key in its own repository; SEM mined that offline. A key
+    # match is what HA already records as metadata, which bug class 42's
+    # sweep question asks for by name. The unit gate below is unchanged, so
+    # this rung is strictly safer than the name match it precedes — and when
+    # it finds nothing, the regex rung runs exactly as before.
+    _vocab = roster_role_vocab(platform, "battery_discharge_limit")
+    _keys = _vocab["keys"]
+    if _keys:
+        # (06.09 audit) The SAME matcher the card path uses — segment
+        # boundary, exact_only honoured. This rung auto-binds the entity
+        # SEM writes a power setpoint to every cycle; a bare ``endswith``
+        # here picked Marstek's fleet ceiling (``system_max_discharge_power``)
+        # for the per-unit key it ends with.
+        _by_key = []
+        for entry in entity_reg.entities.values():
+            if entry.entity_id not in same_integration:
+                continue
+            hit = _entry_matches_declared(entry, _keys, _vocab["exact_only"])
+            if hit:
+                # ranked by the roster's key ORDER, as the card path is (#810):
+                # Marstek declares the per-unit `max_discharge_power` before
+                # the fleet ceiling `system_max_discharge_power`; sorting by
+                # entity id picked whichever name came first alphabetically —
+                # the ceiling, on the audit's rig.
+                _by_key.append((_keys.index(hit), entry.entity_id))
+        if _by_key:
+            chosen = sorted(_by_key)[0][1]
+            _LOGGER.info(
+                "Auto-discovered battery discharge control entity: %s "
+                "(platform=%s, declared key — roster #915)", chosen, platform)
+            return chosen, "translation_key"
 
     # Score each candidate against the patterns; first hit wins. Prefer
     # entity IDs containing "batter" when multiple match the same pattern.
@@ -2014,9 +2588,19 @@ def discover_inverter_from_registry(
                 platform,
                 pattern.pattern,
             )
-            return chosen
+            return chosen, "entity_id_pattern"
 
-    return None
+    return None, "no_match"
+
+
+
+def discover_inverter_from_registry(
+    hass: HomeAssistant,
+    energy_dashboard_config,
+) -> Optional[str]:
+    """The entity only — every existing caller's contract, unchanged."""
+    return discover_inverter_from_registry_verbose(
+        hass, energy_dashboard_config)[0]
 
 
 # ============================================================

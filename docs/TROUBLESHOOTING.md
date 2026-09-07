@@ -783,6 +783,34 @@ Without the temperature, SEM cannot tell whether a boost is needed or done,
 so the hot-water program is on hold. **Fix:** restore the sensor (or pick a
 different one in the settings); the program resumes on the next reading.
 
+## A battery control write is not taken
+
+**Repair:** *"SEM wrote `{entity_id}` and it never reflected the value"*.
+
+SEM set a battery control — most often the discharge-power limit — and on the
+next cycles the entity still read the old value, three times running. The
+service call did not raise; the register simply did not keep what it was
+given.
+
+That is not a SEM bug, and it is not something any integration catalogue can
+know in advance. Some registers **accept a write and expire it** (EG4's quick
+charge runs 60 minutes and turns itself off). Some are **global settings** the
+vendor says to leave alone (EG4's `system_charge_soc_limit`, "recommended
+101"). Some need a **heartbeat** or an enable switch elsewhere before they
+take (an AC-THOR setpoint). Some are simply **read-only mirrors** with a
+`number` domain. A declared name looks the same in every case; only the
+first write tells them apart.
+
+**What to do:** open the entity in **Developer Tools → States**, set it by
+hand, and watch whether it holds. If it does not, the entity is the wrong
+one for this role — pick the right register in the Configuration card's
+battery pickers (the *Detected hardware* section lists the candidates the
+integration declares). If it holds by hand but not for SEM, the integration
+may need a companion switch or mode first; tell us the brand and the entity
+and it becomes a row in the support matrix.
+
+The Repair clears itself the moment a write is reflected.
+
 ## A charger control entity is broken
 
 A number/switch SEM uses to command your wallbox exists in the registry but

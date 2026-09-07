@@ -2737,6 +2737,17 @@ def _schedule_post_startup_tasks(
         if reader is not None:
             reader.invalidate_split_grid_cache()
             hass.async_create_task(coordinator.async_request_refresh())
+        # (#915) The detection report is built during first refresh, while
+        # other integrations are still loading — every proposal read
+        # "not loaded" on a fresh boot of the .46 rig because Huawei's
+        # states did not exist yet. Same trap #166 hit for split-grid
+        # discovery, same fix: ask again once HA says everything is up.
+        try:
+            coordinator.refresh_detection_report()
+            _LOGGER.info("Detection report rebuilt after startup (judged=%s)",
+                         (getattr(coordinator, "_detection_report", None) or {}).get("judged"))
+        except Exception:  # noqa: BLE001 — evidence never costs startup
+            _LOGGER.debug("post-startup detection refresh failed", exc_info=True)
 
     @callback
     def _on_new_sensor(event) -> None:
@@ -5262,6 +5273,7 @@ async def _async_register_phase_services(
         "dynamic_tariff_entity", "dynamic_forecast_entity", "dynamic_feedin_entity",
         "electricity_import_rate", "electricity_off_peak_rate",
         "electricity_export_rate", "demand_charge_rate",
+        "grid_import_surcharge",
         "cheap_price_threshold", "expensive_price_threshold",
     }
     _DIAGNOSE_TARIFF_STATE = {

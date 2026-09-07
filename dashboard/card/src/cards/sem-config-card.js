@@ -1074,6 +1074,81 @@ class SEMConfigCard extends SEMLitBase {
         }
         const chargers = r.chargers || [];
         const misses = r.near_misses || [];
+        // (#915) Controls each INSTALLED integration says it creates, matched
+        // against this box's own entities. Unconfirmed by definition.
+        const rosterProposals = r.roster_proposals || [];
+        // A proposal that says "unconfirmed" and offers no way to confirm is
+        // a chore. When the role maps to a top-level option, accepting it is
+        // one click through the same set_option path the pickers below use;
+        // when it lives inside a charger, say so instead of showing a button
+        // that would write it in the wrong place.
+        // (#915) A reason for every proposal that carries no button. The
+        // registry cannot say whether the entity LOADED, what it MEASURES,
+        // or whether a strategy select lists the options SEM would send —
+        // the backend checks the live state and says which; the card only
+        // renders the verdict. Never a bare missing button.
+        const fill = (key, vars) => Object.entries(vars).reduce(
+            (t, [k, v]) => t.split('{' + k + '}').join(v), this._t(key));
+        const whyNoButton = (p) => {
+            switch (p.action) {
+                case 'observe_only': return this._t('config_proposed_observe_only');
+                case 'not_loaded': return this._t('config_proposed_not_loaded');
+                case 'no_unit': return fill('config_proposed_no_unit', { wanted: p.unit_wanted || '' });
+                case 'unit_mismatch': return fill('config_proposed_unit_mismatch',
+                    { seen: p.unit_seen || '?', wanted: p.unit_wanted || '' });
+                case 'options_unmapped': return fill('config_proposed_options_unmapped',
+                    { missing: (p.values_missing || []).join(', '),
+                      options: (p.options || []).join(', ') });
+                case 'pair_incomplete': return fill('config_proposed_pair_incomplete',
+                    { missing: (p.missing_role || []).join(', ') });
+                case 'per_charger': return this._t('config_proposed_per_charger');
+                default: return '';
+            }
+        };
+        const useButton = (p, entity, fieldKey) => {
+            const st = this._saveStatus?.[fieldKey];
+            return html`
+                <button class="sem-btn" ?disabled=${st === 'saving'}
+                    @click=${() => this._saveOption(p.config_key, entity, fieldKey)}>
+                    ${st === 'saving' ? this._t('config_proposed_using')
+                                      : this._t('config_proposed_use')}
+                </button>
+                ${st === 'ok' ? html`<span style="opacity:.7"> ✓</span>` : nothing}
+                ${st && st !== 'ok' && st !== 'saving' ? html`<span style="opacity:.7"> ${st}</span>` : nothing}`;
+        };
+        const proposalRow = (role, p) => {
+            const already = this._options?.[p.config_key] === p.entity;
+            const reason = whyNoButton(p);
+            // (#915) the runners-up: a brand that declares several keys for
+            // one role gets a deterministic first pick, and the user gets to
+            // see there WAS a choice — each alternative carries its own
+            // button, so a two-pack install can pick the right pack.
+            const alts = (p.alternatives || []).filter((a) => a && a.entity);
+            return html`
+            <div class="row">
+                <span class="lbl">${role}</span>
+                <span style="font-family:monospace;font-size:0.85em">${p.entity}
+                    <span style="opacity:.6"> · ${p.matched_key}</span>
+                </span>
+            </div>
+            <div class="row" style="margin:-6px 0 6px">
+                <span class="lbl"></span>
+                <span>
+                    ${p.action === 'set_option' && !already ? useButton(p, p.entity, 'prop_' + role) : nothing}
+                    ${already ? html`<span style="opacity:.7">${this._t('config_proposed_already')}</span>` : nothing}
+                    ${reason ? html`<span style="opacity:.7">${reason}</span>` : nothing}
+                </span>
+            </div>
+            ${alts.map((a, i) => html`
+                <div class="row" style="margin:-6px 0 6px">
+                    <span class="lbl" style="opacity:.6">${this._t('config_proposed_or')}</span>
+                    <span style="font-family:monospace;font-size:0.85em">${a.entity}
+                        <span style="opacity:.6"> · ${a.matched_key}</span>
+                        ${p.action === 'set_option' && p.config_key && this._options?.[p.config_key] !== a.entity
+                            ? html` ${useButton(p, a.entity, 'prop_' + role + '_alt' + i)}` : nothing}
+                    </span>
+                </div>`)}`;
+        };
         const prober = r.prober_candidates || [];
         const dis = r.disagreements || [];
         const roleRow = (k, v) => html`
@@ -1084,12 +1159,23 @@ class SEMConfigCard extends SEMLitBase {
         const census = r.census || {};
         const unknown = census.unknown_energy_domains || [];
         const nomatch = census.rows_matched_nothing || [];
+        // (#915) The same gap with a name on it. A bare domain tells the user
+        // nothing they can act on; "EG4 Web Monitor · 412 installs" tells them
+        // what to report. Falls back to the bare domain when the roster has
+        // never heard of it — which is itself worth seeing.
+        const named = census.unknown_energy_domains_named || [];
+        const describe = (dom) => {
+            const d = named.find((x) => x && x.domain === dom);
+            if (!d || !d.name) return dom;
+            const n = d.installs ? ` · ${d.installs} ${this._t('config_census_installs')}` : '';
+            return `${d.name}${n}`;
+        };
         return html`
             <div class="setting-help-text" style="margin:0 0 6px">${this._t('config_detect_intro')}</div>
             ${unknown.length ? html`
                 <div class="row" style="color:var(--warning-color,#ffa726)">
                     <span class="lbl">${this._t('config_census_unknown')}</span>
-                    <span style="font-family:monospace">${unknown.join(', ')}</span>
+                    <span style="font-family:monospace">${unknown.map(describe).join(', ')}</span>
                 </div>` : nothing}
             ${nomatch.length ? html`
                 <div class="row" style="color:var(--warning-color,#ffa726)">
@@ -1109,12 +1195,49 @@ class SEMConfigCard extends SEMLitBase {
             `)}
             ${misses.map((m) => html`
                 <div class="row" style="color:${T.warn || '#ffb74d'}">
-                    <span class="lbl">⚠ ${m.platform}</span>
+                    <span class="lbl">⚠ ${m.roster?.name || m.platform}</span>
                     <span>${this._t('config_detect_near_miss')}</span>
                 </div>
                 <div class="setting-help-text" style="margin:-2px 0 8px">
                     ${(m.entities || []).map((e) => e.entity).join(', ')}
-                </div>`)}
+                </div>
+                ${m.suggested_charger?.id ? html`
+                    <div class="row" style="margin:-2px 0 8px">
+                        <span class="lbl"></span>
+                        <span>
+                            <button class="sem-btn" ?disabled=${this._chargerBusy}
+                                @click=${() => this._addSuggestedCharger(m.suggested_charger)}>
+                                ${this._t('config_near_miss_add')}
+                            </button>
+                        </span>
+                    </div>` : html`
+                    <div class="row" style="margin:-2px 0 8px">
+                        <span class="lbl"></span>
+                        <span><a class="sem-btn" target="_blank" rel="noopener"
+                                 href=${this._reportNearMissUrl(m)}>
+                            ${this._t('config_near_miss_report')}
+                        </a></span>
+                    </div>`}
+                ${Object.keys(m.proposed_roles || {}).length ? html`
+                    <div class="row" style="font-weight:600">
+                        <span class="lbl">${this._t('config_proposed_roles')}</span>
+                        <span style="opacity:.7">${this._t('config_proposed_unconfirmed')}</span>
+                    </div>
+                    ${Object.entries(m.proposed_roles).map(([role, p]) => proposalRow(role, p))}
+                    <div class="setting-help-text" style="margin:2px 0 8px">
+                        ${this._t('config_proposed_help')}
+                    </div>` : nothing}`)}
+            ${rosterProposals.map((rp) => html`
+                <div class="row" style="font-weight:600">
+                    <span class="lbl">🧩 ${rp.roster?.name || rp.domain}</span>
+                    <span style="opacity:.7">${this._t('config_proposed_unconfirmed')}</span>
+                </div>
+                ${Object.entries(rp.proposed_roles || {}).map(([role, p]) => proposalRow(role, p))}
+            `)}
+            ${rosterProposals.length ? html`
+                <div class="setting-help-text" style="margin:2px 0 8px">
+                    ${this._t('config_proposed_help')}
+                </div>` : nothing}
             ${dis.filter((d) => d.kind === 'prober_only').map((d) => html`
                 <div class="row"><span class="lbl">🔎 ${d.platform}</span>
                     <span>${this._t('config_detect_prober_only')}</span></div>`)}
@@ -1263,6 +1386,8 @@ class SEMConfigCard extends SEMLitBase {
                 { min: 0, max: 10000, step: 0.001, unit: `${currency}/kWh`, default: 0.3387 }, opts, 'config_help_off_peak_rate')}
             ${this._renderOptionNumberInput('electricity_export_rate', 'config_export_rate',
                 { min: 0, max: 10000, step: 0.001, unit: `${currency}/kWh`, default: 0.075 }, opts, 'config_help_export_rate')}
+            ${this._renderOptionNumberInput('grid_import_surcharge', 'config_import_surcharge',
+                { min: 0, max: 10, step: 0.001, unit: `${currency}/kWh`, default: 0 }, opts, 'config_help_import_surcharge')}
             ${this._renderOptionNumberInput('demand_charge_rate', 'config_demand_charge_rate',
                 { min: 0, max: 100000, step: 0.01, unit: `${currency}/kW/Mt`, default: 4.32 }, opts, 'config_help_demand_charge_rate')}
             ${this._renderPicker('grid_import_power_entity', 'config_grid_import_entity',
@@ -1490,6 +1615,56 @@ class SEMConfigCard extends SEMLitBase {
         if (!newChargers[chargerIndex].id && cid) newChargers[chargerIndex].id = cid;
         newChargers[chargerIndex][key] = value;
         await this._saveOption('ev_chargers', newChargers, statusKey);
+    }
+
+    // (#915) Accept a near miss as a charger. "Entities present, no role
+    // matched — please report" is the right line when SEM has nothing
+    // better; it is the wrong line when SEM has already worked out which
+    // entity is the charging current. Then the answer is not a bug report,
+    // it is *add this charger* — with the pickers pre-filled from what the
+    // integration declares and what the device's own entities are shaped
+    // like. Everything stays editable afterwards in the EV chargers
+    // section, and nothing is written until this button is pressed.
+    async _addSuggestedCharger(suggested) {
+        if (this._chargerBusy || !suggested || !suggested.id) return;
+        const existing = (this._options.ev_chargers || []);
+        const ids = new Set([
+            ...existing.map(c => c && c.id).filter(Boolean),
+            ...this._chargersList(),
+        ]);
+        let id = suggested.id, n = 1;
+        while (ids.has(id)) { id = `${suggested.id}_${n++}`; }
+        const charger = { ...suggested, id,
+                          ev_min_current: 6,
+                          ev_surplus_priority: existing.length + 3 };
+        this._chargerBusy = true;
+        this.requestUpdate();
+        try {
+            await this._saveOption('ev_chargers', [charger], 'ev_chargers_add');
+            await this._refreshOptions();
+        } finally {
+            this._chargerBusy = false;
+            this.requestUpdate();
+        }
+    }
+
+    // (#915) When SEM has nothing to offer, make the ask one click instead of
+    // a sentence. A prefilled issue carries the platform and the entity list,
+    // which is exactly what a detection row needs and exactly what a user
+    // should not have to assemble by hand.
+    _reportNearMissUrl(m) {
+        const ents = (m.entities || []).map(e => `- \`${e.entity}\` (${e.domain}${e.device_class ? '/' + e.device_class : ''})`).join('\n');
+        const name = m.roster?.name ? `${m.roster.name} (\`${m.platform}\`)` : `\`${m.platform}\``;
+        const body = [
+            `**Detected hardware — no role matched**`, '',
+            `Integration: ${name}`,
+            m.roster?.installs ? `Installs (HA analytics): ${m.roster.installs}` : '',
+            '', 'Entities on this device:', ents, '',
+            'What the device is and which entity does what:', '(please fill in)',
+        ].filter(Boolean).join('\n');
+        return 'https://github.com/traktore-org/sem-community/issues/new?labels=enhancement'
+            + '&title=' + encodeURIComponent(`Detected hardware: ${m.platform} — no role matched`)
+            + '&body=' + encodeURIComponent(body);
     }
 
     // #528 Phase 4 — add a charger from the dashboard. Sends ONLY the new
@@ -3323,6 +3498,20 @@ class SEMConfigCard extends SEMLitBase {
                     transition: background 0.15s, border-color 0.15s;
                 }
                 .ha-settings-btn:hover { background: ${T.surfaceHover}; border-color: ${accent}; }
+
+                /* (#915) accept a proposed role — the same affordance,
+                   smaller, because it sits inside a row rather than under a
+                   section heading. */
+                .sem-btn {
+                    display: inline-flex; align-items: center; gap: 4px;
+                    padding: 3px 10px; border-radius: 7px;
+                    background: ${T.surface}; border: 1px solid ${T.surfaceBorder};
+                    color: var(--primary-text-color, ${T.text});
+                    font-size: 12px; cursor: pointer;
+                    transition: background 0.15s, border-color 0.15s;
+                }
+                .sem-btn:hover:not([disabled]) { background: ${T.surfaceHover}; border-color: ${accent}; }
+                .sem-btn[disabled] { opacity: 0.55; cursor: default; }
 
                 /* ── #605 staged-changes UI ── */
                 .zone-knob.dirty, .stepper-cell.dirty {

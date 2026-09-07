@@ -8,12 +8,19 @@ from .const import (
     DOMAIN, KEY_AVAILABLE_CURRENT, KEY_CHARGER_MAX_CURRENT,
     KEY_CHARGER_MIN_CURRENT, KEY_PHASE_SWITCH_CURRENT,
 )
-from .entity import ZaptecSimEntity
+from .entity import ZaptecSimEntity, unmapped_fixture
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
     state = hass.data[DOMAIN][entry.entry_id]
     ents = []
+    if unmapped_fixture(entry):
+        # (#915) The installation numbers only: the grid guard SEM must never
+        # write, and the phase threshold. Neither is a throttle, which is
+        # what makes the device unmappable.
+        async_add_entities([AvailableCurrent(state, entry),
+                            PhaseSwitchCurrent(state, entry)])
+        return
     if entry.data.get("expose_charger_current", True):
         # CHARGER — this is SEM's throttle.
         ents.append(ChargerMaxCurrent(state, entry))

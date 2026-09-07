@@ -2472,3 +2472,192 @@ still warns through the helper. **Guard:** `tests/test_912_frozen_sibling_rule.p
 one place; `tests/test_912_frozen_derived_source.py` pins source-following for derived inputs.
 **Sweep question:** wherever a heuristic explains away a signal per domain, what single property of
 the SOURCE would answer all of them? Refs #912 #851 #611.
+
+### 64. A hand-maintained vocabulary where the source publishes its own — GUARDED
+**Symptom:** every brand SEM can name was typed by hand after a user filed an issue; a near-miss
+integration detects nothing instead of something reviewable, and `_suggest_select_with_options`'s
+"identify the entity by its options" trick works for exactly the two brands whose option lists
+somebody transcribed. **Root shape:** detection matched the *user's* entity ids with regexes while
+Home Assistant already records the *author's* semantic label — `translation_key` — and every
+integration publishes that label in its own repository. The vocabulary existed upstream all along;
+SEM was re-deriving it one live install at a time. **Closure (#915):** an offline crawl mines each
+energy-shaped integration's declared entity keys into a generated roster, and every runtime use is
+an INTERSECTION with the local registry — it can name a domain, propose a role for an entity the
+user already has, and ask the registry the semantic question before regexing a name. It can never
+invent an entity, and it structurally cannot carry a status, an evidence string or a sign
+convention. **Guard:** `tests/test_915_roster_is_not_a_claim.py` (a support claim is
+unrepresentable), `tests/test_915_roster_rediscovery.py` (the miner re-derives four facts SEM
+learned from four live installs, and invents nothing for a brand that exposes nothing).
+**Sweep question:** where else is SEM maintaining by hand a fact its source already publishes —
+and would reading the source be a hypothesis or a claim? Refs #915 #848 #814 #530.
+
+### 65. One anchor for discovery, and it belongs to somebody else — GUARDED
+**Symptom:** an install ends with *"your Energy Dashboard is missing Solar — set it up and start
+again"*; a supported inverter is discovered and SEM stands down because a different page is
+unconfigured. **Root shape:** every source SEM reads was resolved from HA's Energy Dashboard, so
+SEM's onboarding inherited another feature's completeness as a precondition — and that feature maps
+kWh counters while SEM steers on watts, names only solar/grid/battery, and gives one entity where a
+two-inverter house has two. There was no second way in, because until the census (#848) SEM could
+not ask what was installed. **Closure (#915):** a second anchor pointing the other way — which
+energy integrations are installed, and what does each call the three sensors SEM needs, from its
+own declared vocabulary, then from entity shape. The dashboard becomes the preferred answer rather
+than the only one; discovery offers the install instead of standing down. **Guard:**
+`tests/test_915_roster_at_runtime.py::TestTheSecondAnchor` (including a German-named Huawei install
+where no entity id contains "solar", "grid" or "battery"), plus the config-flow tests that now
+assert a FORM where they asserted an ABORT. **Sweep question:** which of SEM's preconditions are
+really *another feature's* completeness, and what would SEM ask if that feature did not exist?
+Refs #915 #848 #274.
+
+### 66. A config-flow step that writes keys nothing reads — GUARDED
+**Symptom:** an install completes cleanly, every entity appears, and SEM reads **0 W from a 4.2 kW
+inverter**. **Root shape:** the new `sources` step wrote `solar_power_sensor` /
+`grid_import_power_sensor` — the names the Energy Dashboard produces — but an install that *takes*
+that step has no dashboard config by definition, so `SensorReader` falls to its legacy path, which
+reads `solar_production_sensor` / `grid_power_sensor`. Two vocabularies for the same three sensors,
+and the flow wrote the wrong one. **Every unit test passed**, because none of them followed the
+config from the step that writes it to the reader that consumes it — the halves were tested, the
+seam was not. **Live catch (#915, .46 fresh install with the grid source removed from the Energy
+Dashboard).** **Closure:** write both key sets, and a test that extracts the dict the step actually
+writes (by AST, so it cannot drift from the flow) and asserts `SensorReader` resolves every sensor
+from it. **Guard:**
+`tests/test_915_roster_at_runtime.py::TestTheSourcesStepWritesKeysTheReaderConsumes`.
+**Sweep question:** for every config key a flow writes, which code reads it — and is there a test
+that starts at the writer and ends at the reader? Refs #915 #274.
+
+### 67. A substring is not a word — GUARDED
+**Symptom:** SEM offered SENEC's switchable **wall sockets** as the house battery's charge target
+(`sockets_1_upper_limit`, and its `sockets_1_time_limit` schedule with it), and SENEC's live
+production sensor as the system's nameplate size. **Root shape:** a matching rule written as
+`soc.*(limit|target)` matches the letters s-o-c inside "**soc**kets"; `rated_power` matches the
+tail of "solar_gene**rated_power**". A translation key is a sequence of **segments**, and a rule
+that forgets it silently claims the brands that happen to own that word — the two above were the
+only ones in 171 rows, which is exactly why nothing looked wrong. **Closure:** anchor the token
+(`(?:^|_)soc(?:_|$)`); `\b` does not help, because `_` is a word character. **Guard:**
+`tests/test_915_roster_at_runtime.py::TestSemDoesNotOfferToWriteTheseRegisters::test_a_substring_is_not_a_word`.
+**Sweep question:** every regex over an identifier — does it anchor to segment boundaries, and
+which real key would it match by accident? Refs #915 #810.
+
+### 68. A protection floor read as a target — the knob is not missed, it is INVERTED — GUARDED
+**Symptom:** five brands (Growatt, Sigen, Solis, Sungrow, Sunsynk) declare both halves of the SOC
+range under names one word apart — `battery_charge_soc_limit` beside
+`battery_discharge_soc_limit_on_grid`, `soc_upper_limit` beside `soc_lower_limit`. SEM proposed
+either as `battery_target_soc_entity`. **Root shape:** "charge to 80 %" written into "never
+discharge below" does not miss the target — it stops the pack discharging at 80 %, the opposite of
+the request, and it looks like a working configuration. The same shape put a **car's** state of
+charge (Wallbox `state_of_charge`, V2C `battery_power`) into the HOUSE battery reads that feed the
+energy balance every ten seconds. **Closure:** the lexicon excludes floors from the target role,
+and a charger contributes EV + vehicle roles only — SEM's own `_EV_CHARGER_PLATFORMS` list decides
+what a charger is, with vocabulary markers for brands nobody has listed yet. **Guard:**
+`::test_a_protection_floor_is_never_a_target`, `tests/test_915_coverage_ratchet.py::TestAChargerIsNotAHouse`.
+**Sweep question:** for every value SEM writes, what is the OPPOSITE register called on that
+brand — and would the matching rule tell them apart? Refs #915 #810.
+
+### 69. One incidental word decides a whole device — GUARDED
+**Symptom, in both directions on the same afternoon.** Victron's GX declares `ev_odometer` for the
+car plugged into its EV charger — **one key out of 465** — and that single word classified the whole
+system controller as "a vehicle", discarding 464 keys of inverter and battery vocabulary (its ESS
+charge limit, force-charge, mode select and grid power). Midea's cloud declares `inverter` — an
+inverter *air conditioner* — among **1095 keys** of fridges, dryers and ice makers, and that single
+word classified the marketplace as a house and offered its `work_mode` as a battery strategy.
+**Root shape:** a classifier that returns on the FIRST marker it finds asks "does this word appear?"
+when the question is "what is this mostly?". On a large vocabulary an incidental word always appears.
+**Closure:** count distinct markers per kind and let the largest win, with a tie going to the house
+(`camera`, `pedal` and `lightbar` are gadget words a CAR also has, and they tied 3-3 with `grid_`,
+`inverter` and `_grid_` on a Tesla integration). Plus the level below: a `battery_*` role needs a
+battery somewhere in the vocabulary at all — no key-level pattern can separate an air conditioner's
+`work_mode` from a battery's, because they are the same string. **Guard:**
+`tests/test_915_coverage_ratchet.py::TestOneWordDoesNotDecideADevice`. **Sweep question:** every
+`any(...)` over a set of markers — is the answer a *property* of the whole thing, or just proof that
+one member exists? Refs #915 #869.
+
+### 70. The index nests, and the loop was flat — GUARDED
+**Symptom:** Tesla Powerwall — a brand in SEM's own sign-convention table, 1994 installs — was
+absent from the integration roster, and so was Tesla Wall Connector (6555 installs, more than KEBA,
+Zaptec and Wallbox). **Root shape:** Home Assistant's `generated/integrations.json` groups
+sub-integrations under their BRAND (`tesla` carries `powerwall`, `tesla_wall_connector` and
+`tesla_fleet` in a nested `integrations` dict and appears at the top level as a name only). The
+crawler iterated the top level and called it the core index — **241 integrations were never even
+looked at**, and nothing failed, because a source you do not read produces no error. Found by
+checking the roster against the CLOSED hardware-support issues (#75-#81), where seven human verdicts
+had already named the integrations SEM should have been able to name. **Closure:** flatten brand
+groups before filtering, and let the install floor buy a QUESTION for core integrations the way it
+always had for HACS ones — "Wall Connector" contains no energy word, so it was never asked what it
+declares. **Guard:**
+`tests/test_915_coverage_ratchet.py::TestTheClosedHardwareIssuesAgree`. **Sweep question:** for every
+external source, what is its shape — and does the count of what you read match the count it claims?
+Refs #915 #75 #816.
+
+### 71. A catalogue role that spans the write boundary — GUARDED
+**Symptom:** the roster's `battery_strategy` role matched Sessy's power-strategy select — which the
+generic adapter switches every cycle (`_set_strategy`) — AND Huawei's working mode, Victron's ESS
+mode, Deye's work mode, GoodWe's operation mode. #845 had drawn the line for those: *"nothing in
+SEM may ever WRITE a policy selector, that boundary is the user's."* The card would have offered a
+one-click bind of Victron's `system_ess_mode` to the key the adapter writes, and every cycle SEM
+would have sent `select_option("nom")` to the inverter's operating policy. **Root shape:** a role
+is a *reading* — "this is the mode select" — but a config key is a *permission to write*, and the
+mapping role → key silently granted the permission to every reading that matched the regex. The
+regex cannot see the boundary; only the key's consumer knows whether it writes. **Closure:** two
+roles. The writable one (`battery_power_strategy`) matches only the keys the adapter was written
+for; the policy one (`battery_strategy`) is `OBSERVE_ONLY` and carries no key at all — the card
+says *SEM reads it and never writes it*. A writable strategy is additionally offered only when the
+select lists every value SEM would send (#751 was that mismatch, silent). **Guard:**
+`tests/test_915_roster_rediscovery.py::test_a_policy_selector_is_never_the_writable_strategy`,
+`tests/test_915_roster_at_runtime.py::TestAPolicySelectorGetsNoButton`. **Sweep question:** for
+every role → config-key mapping, does the key's CONSUMER write — and does every key the role matches
+deserve to be written? Refs #915 #845 #751.
+
+### 72. A gate on the discovery path, bypassed by the button — GUARDED
+**Symptom:** `discover_inverter_from_registry_verbose` refuses a discharge control without an
+explicit power unit (`require_explicit_unit=True`). The Config card's *Use this* button writes
+`battery_discharge_control_entity` directly, so a number named like a power limit and measured in
+amps — or with no unit at all — got a button, and the first write would have gone into it at scale
+1.0. The write path's own check catches `%`/A at write time but only with a log line, and a log
+line is not a surface (#799). **Root shape:** a safety check that lives on ONE path to a config
+key, when the key has two. The second path was added later and inherited none of it. **Closure:**
+the check moves to proposal time, where every path that can offer the button runs — the live
+entity's unit and existence are read, and each refusal carries a reason the card renders. **Guard:**
+`tests/test_915_roster_at_runtime.py::TestTheButtonIsOfferedOnlyWhenTheEntityCanTakeIt`.
+**Sweep question:** for every config key, how many code paths can SET it — and does each of them
+run the same gate? Refs #915 #824 #882.
+
+**Second instance, one day later, in the fix itself (06.09 audit).** The segment-bounded,
+exact-only-aware matcher was written for the card's proposal path. The discovery rung that
+AUTO-BINDS `battery_discharge_control_entity` at install — the actuation path, the one the whole
+gate exists for — kept `roster_role_keys()` (exact-only stripped) and a bare `endswith`, and on a
+Marstek bound the fleet ceiling for the per-unit key it ends with. Three consumers of the same
+data, three matchers; now one `_entry_matches_declared`. The sweep question above applies to
+MATCHERS as much as to gates: how many places compare a declared key, and is it the same code?
+
+### 73. A success that is not an event re-arms the clock — GUARDED
+**Symptom:** the #915 write read-back never produced a verdict on PROD: `write_verified` stayed
+`None` all day while the discharge limit was written every cycle. **Root shape:** the idempotent
+same-value skip (#900/#538) returns `True` — correct for "did the setpoint end up right" — and the
+read-back took that `True` as "a write went out" and re-noted the pending write, resetting its
+grace timer every ten seconds. A timer that measures "time since the last write" was being fed
+"time since the last *success*", and in the default state every cycle succeeds. The feature was
+inert precisely when the register it exists to watch was being written. **Closure:** the write
+helper returns `(ok, wrote)`; only `wrote` notes a pending write; an identical pending write is
+never re-armed; and the default state (`command_normal` with a register stuck at 0) is tested to
+reach a `False` verdict within cycles. **Guard:**
+`tests/test_915_write_verification.py::TestTheDefaultStateReachesAVerdict`. **Sweep question:**
+for every timer or counter armed "on write", "on send", "on refresh" — is it armed by the EVENT or
+by the RESULT, and does the result ever succeed without the event? Refs #915 #900 #538.
+
+### 74. `getattr(self, "name", None)` on an attribute that was renamed — the feature is dead and nothing says so — GUARDED
+**Symptom:** three separate features published nothing and raised nothing: #827's discharge-rate
+caveat, #845's expected-operating-mode seed, and #915's battery write read-back with its Repair.
+All three read `self._battery_adapter` — **singular** — and nothing has assigned that name since
+#375 moved the per-battery loop to `self._battery_adapters` (plural, keyed by battery_id).
+**Root shape:** `getattr(obj, "name", None)` is written to survive a missing attribute, and it does
+exactly that — forever, silently, for a name that will never exist again. A rename that a plain
+`self._battery_adapter` would have turned into an `AttributeError` on the first cycle instead
+produced a `None`, a `callable(None)` that is False, and a feature that never ran. Each of the
+three was unit-tested and each test passed, because every one called the helper directly with a
+hand-built `self` — the tests proved the logic and never the WIRING. Found by a re-audit that was
+asked to verify a fix rather than trust it. **Closure:** one accessor,
+`SEMCoordinator._primary_battery_adapter()`, reading the plural dict; an AST guard that fails on
+any `self._battery_adapter` attribute access anywhere in the tree; and a test that drives the
+verdict through the real per-cycle shape rather than a hand-built one. **Guard:**
+`tests/test_915_roster_at_runtime.py::TestTheReadBackIsActuallyWired`. **Sweep question:** for
+every `getattr(self, "_x", None)` — is `_x` ever assigned? And does any test exercise the path
+through the REAL object rather than a stand-in? Refs #915 #827 #845 #375.

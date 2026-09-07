@@ -183,6 +183,17 @@ REDACT_CONFIG_KEYS = {
     "ev_daily_energy_sensor",
     "vehicle_soc_entity",
     "battery_discharge_control_entity",
+    # (#915, 06.09 audit) the split pair the sources step now fills for any
+    # split-meter brand — same privacy class as the keys above
+    "grid_import_power_entity",
+    "grid_export_power_entity",
+    # (07.09 re-audit) The SAME entity ids appear again under the adapter
+    # and charger runtime blocks with shorter names. Redacting the config
+    # key while its mirror walks out of the next section is not privacy,
+    # it is bookkeeping.
+    "discharge_control_entity",
+    "force_discharge_entity",
+    "pause_switch_entity",
 }
 
 
@@ -481,7 +492,19 @@ async def async_get_config_entry_diagnostics(
     # defensive caps and the Supervisor-install fallback.
     recent_logs = await _get_recent_sem_logs(hass)
 
+    # (#915) The detection report reaches the Config card and a sensor
+    # attribute, but never the diagnostics download — so a bug report about
+    # detection arrived without the one artefact that explains it. A trimmed
+    # slice: the census (what is installed, what SEM could not place, and
+    # now what those unplaceable domains ARE), the chargers it did map, the
+    # near-misses with their role proposals, and the prober disagreements.
+    _report = data.get("detection_report") or {}
+    detection = {k: _report.get(k) for k in
+                 ("census", "chargers", "near_misses", "disagreements")
+                 if _report.get(k) is not None}
+
     return {
+        "detection": detection,
         "config_entry": {
             "entry_id": entry.entry_id,
             "version": entry.version,

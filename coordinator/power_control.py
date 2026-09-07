@@ -197,17 +197,25 @@ def prepare_power_setpoint(
     )
 
 
-async def async_write_power_setpoint(
+async def async_write_power_setpoint_verbose(
     hass,
     entity_id: str,
     watts: float,
     *,
     context: str,
-) -> bool:
-    """Validate, convert, and write a watt setpoint. Return success."""
+) -> tuple:
+    """Validate, convert, and write a watt setpoint.
+
+    Returns ``(ok, wrote)``: ``ok`` is success as before; ``wrote`` is True
+    only when a service call actually went out. The idempotent same-value
+    skip (#900/#538) is ``(True, False)`` — and that distinction is what the
+    #915 read-back needs: noting a "write" that never happened re-armed its
+    grace timer every cycle and no verdict could ever be reached (06.09
+    audit).
+    """
     prepared = prepare_power_setpoint(hass, entity_id, watts)
     if prepared is None:
-        return False
+        return False, False
     # (#900) Idempotency for EVERY writer, not one adapter (#538 had it on
     # the Huawei path only; the generic adapter — where the wizard had pinned
     # a Huawei install — wrote its max every cycle). Compare in native units
@@ -218,7 +226,7 @@ async def async_write_power_setpoint(
             _LOGGER, f"setpoint-skip:{entity_id}", logging.DEBUG,
             "%s: %s already at %.3f — no write", context, entity_id, prepared.value,
         )
-        return True
+        return True, False
     try:
         await hass.services.async_call(
             prepared.domain,
@@ -228,5 +236,18 @@ async def async_write_power_setpoint(
         )
     except Exception as err:  # noqa: BLE001 - HA service exceptions vary
         _LOGGER.warning("%s: failed to set %s: %s", context, entity_id, err)
-        return False
-    return True
+        return False, False
+    return True, True
+
+
+async def async_write_power_setpoint(
+    hass,
+    entity_id: str,
+    watts: float,
+    *,
+    context: str,
+) -> bool:
+    """Validate, convert, and write a watt setpoint. Return success."""
+    ok, _wrote = await async_write_power_setpoint_verbose(
+        hass, entity_id, watts, context=context)
+    return ok

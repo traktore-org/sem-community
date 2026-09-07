@@ -6,10 +6,12 @@ from __future__ import annotations
 from homeassistant.components.button import ButtonEntity
 
 from .const import DOMAIN, KEY_RESUME
-from .entity import ZaptecSimEntity
+from .entity import ZaptecSimEntity, unmapped_fixture
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
+    if unmapped_fixture(entry):
+        return          # (#915) a resume button is an identity key
     async_add_entities([ResumeCharging(hass.data[DOMAIN][entry.entry_id], entry)])
 
 

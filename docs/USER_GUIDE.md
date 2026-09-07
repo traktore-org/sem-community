@@ -54,11 +54,60 @@ The dashboard **Configuration tab → Detected hardware** shows every charger SE
 auto-detected, the evidence for each role (which entity and what it is), the
 entities it left unmapped, and **near-misses** — integrations whose entities SEM
 saw but could not map to any role. A near-miss means your hardware is *almost*
-supported: open an issue with the list shown. The same report is in the
+supported: open an issue with the list shown. Devices on shared transports
+(MQTT, Modbus) only appear here when they actually look like energy hardware —
+your Zigbee bridge is not a near-miss. The same report is in the
 diagnostics download (Settings → Devices & Services → SEM → ⋮ → Download
 diagnostics). Wrong detections are corrected in place with the pickers in the
 charger and sensor-source sections — no reinstall. The full support matrix with
 an honest per-brand status is [docs/SUPPORTED_HARDWARE.md](SUPPORTED_HARDWARE.md).
+
+**What SEM makes of what you already run (#915).** Every integration
+installed on your Home Assistant is checked against what that integration's own
+source says it creates. If you run Sigenergy and it declares a discharge-power
+limit, the entity of yours carrying that name is listed under Detected
+hardware — for inverters and batteries too, not only for chargers.
+
+**Names and proposals.** An integration SEM has no row for used to
+appear as a bare domain — `eg4_web_monitor`, and you were left to work out what
+that was. SEM now carries a roster of the energy integrations the Home
+Assistant ecosystem publishes, so the same line reads *"EG4 Web Monitor · 412
+installs"*. For a near-miss it goes one step further: many integrations declare,
+in their own source, what they call each entity they create, and where those
+declared names match your entities SEM lists them as **proposed roles, marked
+unconfirmed** — *"this number is probably your discharge-power limit"*.
+
+Each one has a **Use this** button that writes it where SEM reads it — the
+same place the pickers below write, so you can change or undo it there at any
+time. Nothing is written until you press the button, and **a proposal with
+no button always says why**: the entity reports the wrong unit for the role
+(amps where SEM writes watts), reports no unit at all, exists in the registry
+but was never produced by Home Assistant, is a strategy select that does not
+list the four values SEM would send, or is an inverter's operating-policy
+selector — which SEM reads and never writes; that one is yours to set. A role
+that belongs to a charger points you to the charger section, and a role SEM
+works out by itself is not listed at all. When a brand declares several
+candidates for one role, the runners-up are listed underneath with their own
+buttons, so a two-pack install can pick the right pack.
+
+**After you press it, SEM checks that the write took.** A declared entity
+name cannot say whether a register accepts a value, expires it, needs an
+enable switch first, or is a global setting the vendor says to leave alone.
+So the first writes to a battery control are read back on the next cycle; if
+the entity does not reflect the value three times running, a Repair names the
+entity, what was written and what it reads — and clears itself the moment a
+write is reflected.
+
+If SEM sees an integration's entities but can map none of them, and it *has*
+worked out which one is the charging current, you get **Add this charger**
+instead of a shrug — pre-filled, and editable afterwards like any other
+charger. Only when SEM genuinely has nothing does it ask you to report the
+hardware, and that ask is a single click that opens an issue already carrying
+the entity list.
+The roster is deliberately not a support claim: it never records a sign
+convention (which way your grid meter counts is a fact about *your* system, and
+guessing it is the one mistake this project refuses to make), and a brand only
+reaches the supported-hardware list after someone confirms it on real hardware.
 
 ### Optimization Settings
 

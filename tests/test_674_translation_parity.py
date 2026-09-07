@@ -278,7 +278,12 @@ class TestConfigFlowStringsResolve674:
         assigned = self._assigned_errors()
         for cls in self._FLOW_BLOCKS:
             assert assigned[cls], f"no errors[...] assignments found in {cls}"
-        assert re.findall(r'reason\s*=\s*"([a-z_]+)"', src)
+        # (#915) The flow no longer aborts on a missing Energy Dashboard, so
+        # `reason="..."` literals are gone from this file — the remaining
+        # abort (`already_configured`) is raised by HA's own helper. Scan the
+        # step ids instead: same file, same bug-class-8 protection, and it
+        # matches what the flow actually does now.
+        assert re.findall(r'step_id\s*=\s*"([a-z_]+)"', src)
         assert re.findall(r"description_placeholders\s*=\s*\{", src)
 
     def test_every_error_key_is_both_declared_and_reachable(self):
@@ -344,10 +349,15 @@ class TestConfigFlowStringsResolve674:
     def test_the_rules_can_actually_fire(self):
         """Each rule must reject a real bad input and accept a real good one."""
         declared_aborts = set(self._config_block("abort"))
-        # Real good input: the two reasons #674 added must now resolve.
-        assert {"energy_dashboard_not_configured", "energy_dashboard_incomplete"} <= (
-            declared_aborts
-        ), "the #674 abort messages are gone again"
+        # (#915) The two #674 abort messages are GONE on purpose: neither an
+        # absent nor a half-filled Energy Dashboard ends an install any more —
+        # the flow asks the box instead. The rule now guards the step that
+        # replaced them.
+        assert "sources" in self._config_block("step"), (
+            "the #915 sources step is gone — an incomplete Energy Dashboard "
+            "would refuse the install again"
+        )
+        assert "energy_dashboard_incomplete" not in declared_aborts
         # Real bad input: a reason that does not exist must not be tolerated.
         assert "energy_dashboard_on_fire" not in declared_aborts
 
@@ -362,8 +372,12 @@ class TestConfigFlowStringsResolve674:
                 ),
             )
         )
-        assert {"url", "missing"} <= supplied, (
-            "the abort call sites stopped passing {url}/{missing} — the rule "
+        # (#915) ``missing`` went with the energy_dashboard_incomplete abort:
+        # an incomplete Energy Dashboard no longer ends the install, it opens
+        # the sources step instead. ``url`` and ``summary`` are that step's
+        # placeholders and carry the rule now.
+        assert {"url", "summary"} <= supplied, (
+            "the flow stopped passing {url}/{summary} — the rule "
             "above would now reject the messages that use them"
         )
         assert "entity_id" not in supplied, (

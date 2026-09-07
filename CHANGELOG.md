@@ -13,6 +13,290 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🚀 **An install no longer stops at the Energy Dashboard** (#915). SEM read
+  your solar, grid and battery from Home Assistant's Energy Dashboard, and if
+  that page was empty or half-filled the installation **ended**: *"set it up
+  first, then start again."* That was the hardest wall in getting started, and
+  it asked you to map energy counters when SEM steers on live power. SEM now
+  asks your system directly instead — which energy integrations are installed,
+  and what does each one call the three sensors SEM needs — and offers them
+  pre-filled for you to confirm — solar, grid, battery power and the battery's
+  charge percentage. It works on a Huawei box whose entities are
+  all named in German, because the match is on the name the *integration*
+  declares, not the one your entity happens to carry. Discovery follows the
+  same rule: when a supported inverter appears, SEM offers to set itself up
+  rather than standing down because a different page is unconfigured.
+
+- 🔎 **SEM now recognises hardware nobody has reported yet** (#915). Until
+  now every brand SEM could name was typed by hand after somebody filed an
+  issue: the census would say *"eg4_web_monitor — installed, unknown to
+  SEM"* and wait for a human. `scripts/crawl_integration_roster.py`
+  reads the public HACS, Home Assistant analytics and core indexes, and then
+  reads each energy-shaped integration's **own repository** for the entity
+  vocabulary it declares: an integration that publishes
+  `storage_maximum_discharging_power` has said, in its own words, what it will
+  create. The check that this is worth trusting is that the miner re-derives
+  four things SEM learned the hard way from live installs — Huawei's
+  discharge-limit key and its three working-mode labels, Zaptec's current
+  register (and *not* its phase-switch register), Sessy's strategy values —
+  and invents nothing for Easee, which exposes no current control at all. It
+  found 21 integrations SEM cannot place today that publish concrete role
+  candidates, Anker Solix and Sigenergy among them.
+
+  **A proposal you can accept.** Each proposed role now carries a **Use
+  this** button that writes it exactly where SEM reads it — the same path the
+  pickers below use, and reversible with them. A role that lives inside a
+  charger says so instead of offering a button that would put it in the wrong
+  place, and a role SEM resolves by itself every time it looks (battery
+  capacity, system size) is not listed at all: it was never a chore.
+
+  **A near miss is an offer before it is a bug report.** When SEM has worked
+  out which entity is the charging current, the answer is not *please report*
+  — it is **Add this charger**, pre-filled from the integration's own declared
+  name plus the shape of that device's other entities, and editable afterwards
+  like any charger. Only when SEM genuinely has nothing does it ask, and then
+  the ask is one click: a prefilled issue carrying the platform and the entity
+  list.
+
+  **The near-miss list stopped shouting.** "Entities present, no role matched
+  — please report" is meant to say *a brand we almost support*; on a normal
+  house it was saying it over Zigbee coordinators, 24 times, because
+  everything on MQTT shares one platform. A device on a shared transport now
+  earns that line only when something about it is actually energy-shaped —
+  a power sensor with a plug, a current control, or a role SEM could name.
+  A second device of a brand whose charger SEM already drives is filtered for
+  the same reason — Zaptec ships an installation-level device beside the
+  charger, and it was telling the owner of a working charger to report it. On
+  the test rig: **24 near-misses became 0**, because there was nothing left
+  worth a person's attention.
+
+  Five things use it, all of them small on purpose. **SEM asks every
+  integration you already run what it says it creates**: your box has
+  Sigenergy installed, its own repository declares a discharge-power limit,
+  and the entity of yours carrying that name is listed for you to confirm —
+  for inverters and batteries, not only for the charger platforms detection
+  already walked. **Configuration → Detected hardware now names the gap** — "EG4 Web Monitor · 412 installs"
+  instead of a bare domain, so an unknown integration becomes something you
+  can report rather than something you have to decode. **A near miss carries
+  proposed roles**: when an integration's entities are present but no role
+  matched, SEM lists which of that integration's own declared keys your
+  entities match, marked *unconfirmed*, for you to accept in the pickers
+  above. And the **battery discharge-control discovery asks the registry the
+  semantic question first** — the integration's declared key before the
+  entity-id name patterns, behind the same unchanged unit check. Same entity
+  as before on every install that already worked; a better reason, and an
+  answer on installs where the name never matched.
+
+  **The roster is not a support list and cannot become one.** Nothing in it
+  may carry a status, an evidence string or a sign convention — a crawl is
+  structurally incapable of knowing which way a brand's grid meter counts,
+  which is exactly why guessing one has never been on the table. A proposal
+  is an intersection with your own entity registry, so it can never invent
+  hardware; SEM binds nothing it guessed, and a brand still reaches the
+  supported-hardware list only through a live confirmation. The diagnostics
+  download now carries the detection report too, so a report about detection
+  arrives with the artefact that explains it.
+
+  **What SEM will not offer, decided by the people who own the hardware.**
+  @Azlinon read the EG4 candidates on his own inverter and rejected four of
+  the five: a global bank ceiling, an on/off-grid cutoff, an AC-coupling
+  register and a smart-load threshold. All four are gone, and the one that
+  survives is the SOC his AC-charge mode actually charges to. Sweeping the
+  rest of the roster the same way found the shape repeated: a **protection
+  floor** offered as a charge target (writing "charge to 80" into "never
+  discharge below" inverts the knob rather than missing it), a **wall
+  socket's** schedule read as a battery target because the letters s-o-c sit
+  inside "sockets", a live production sensor read as the system's nameplate
+  because `rated_power` sits inside "solar_gene*rated_power*", a hot-water
+  mode offered as a battery strategy, and — the one that would have hurt —
+  a **car's** state of charge and charge rate offered as the HOUSE battery's,
+  which would have fed the energy balance a foreign number every ten seconds.
+  A charger now contributes its own controls and what it knows about the
+  vehicle, and nothing about a house it does not have. When a brand declares
+  several candidates for one role, SEM picks the same one on every box
+  instead of whichever the registry happened to yield first, and carries the
+  runners-up. And a **fork is the same hardware**: `anker_solix_official`
+  reports zero installs and describes itself as "local Modbus TCP", so both
+  candidate gates missed it while @coppe218 was running it — a domain that
+  extends an accepted one is now mined whatever analytics says about it.
+
+  **A meter with no combined sensor can finish the install too.** Growatt,
+  Senec and Anker's official integration publish grid import and grid export
+  as two always-positive sensors and no signed one — SEM has read that shape
+  from the Energy Dashboard for years, but the new no-dashboard step demanded
+  a combined sensor those brands do not have, and the reader it hands the
+  install to could not have used the pair anyway. Both halves now: the step
+  accepts either answer (both sides of the pair or neither — half of one is a
+  meter that only ever imports), and SEM's own reader honours the pair on
+  that path, computing export minus import with no direction left to guess.
+
+  **Checked against the hardware nobody could support.** SEM has seven closed
+  issues where a person read an integration and wrote down what it exposes —
+  Tesla Wall Connector, Myenergi Zappi, OpenWB, BYD, LG ESS, KSTAR, SolArk —
+  and five of them say *no control exists*. Running the roster against those
+  verdicts found it agreed on every negative and could not NAME a single one
+  of them. The reason turned out to be structural: Home Assistant groups
+  sub-integrations under their brand, and the crawler read only the top level,
+  so **241 core integrations were never looked at** — Tesla Powerwall among
+  them, a brand whose sign convention is in SEM's own table. With the brands
+  flattened and the install floor buying a question for core integrations the
+  way it always had for HACS ones, SEM now names Tesla Wall Connector (6555
+  installs, more than KEBA, Zaptec or Wallbox) and classifies it as a charger
+  with **nothing to drive** — which is #75's human verdict, reached from the
+  source alone. Victron's GX and MQTT integrations arrived with their whole
+  ESS surface (charge and discharge limits, force charge, mode select, EV
+  current, and the plugged-in car's SOC), along with Tesla Powerwall, Tesla
+  Fleet, Tessie, Teslemetry, Subaru, EcoFlow, Blue Current, Heidelberg,
+  APsystems, Smappee, MyPV and Bluetti: 103 role candidates became 155.
+
+  Two ways of getting a device wrong showed up while checking that, and both
+  are now impossible. A single incidental word decided what a device *was*:
+  Victron's GX declares `ev_odometer` for the car at its charger — one key out
+  of 465 — and SEM called the whole system controller a vehicle; Midea's cloud
+  declares `inverter` among 1095 keys of fridges and dryers, and SEM called
+  the marketplace a house. Kinds are now decided by weight rather than by
+  whichever word appeared first. And a battery role now needs a battery in the
+  vocabulary at all — `work_mode` on an air conditioner and `work_mode` on a
+  battery are the same string, so only the company it keeps tells them apart.
+
+  **The supported-hardware table now says which integration to install.** An
+  Alfen Eve owner reading the EV charger table found "number entity" and no
+  way to learn that SEM reaches it through `alfen_wallbox`. The table has an
+  Integration column now, and the entries come from the same field detection
+  scans, so the documentation cannot say one thing while the code does
+  another. That field had to be added: **one charger row in twenty-one
+  carried its integration domain**, and the rest were brand names only — the
+  brand table and the detection list could drift apart with nothing noticing,
+  and two platforms SEM drives (`goecharger_api2` and the archived
+  `openwbmqtt`) were in exactly that state, supported in code and absent from
+  the docs. Both lists are now pinned to each other in both directions, and
+  every row that has no integration domain says why instead of just being
+  blank — read through the Energy Dashboard, over MQTT discovery, or through
+  a car integration no public index carries.
+
+  Checking the whole matrix against the roster this way found no missing
+  brands: everything SEM claims to support that appears in any public index
+  can be named. Six cannot — Alfen, Wattpilot, Sonnen, E3DC, openWB and
+  Grott are HACS *custom* repositories, added by URL and absent from the
+  store index — and each is listed with its reason and its real install
+  count. All six are brands SEM detects natively, so nothing is lost: the
+  roster answers for the hardware detection does *not* already know.
+
+  **Closing the gap between "the registry says which integration" and "SEM
+  wrote the right thing".** With the integration known for certain, five
+  links remained where a proposal could still be wrong, and four of them are
+  closed mechanically:
+
+  - **Which key.** When an entity has no declared translation key, SEM
+    falls back to its unique id — and 24 role keys on 12 brands are a suffix
+    of a *longer* key the same brand declares (`battery_capacity` beside
+    `ev_battery_capacity` on a Victron GX). A unique id ending in the car's
+    key would have matched the house's. Those keys now match by the declared
+    key only, and every unique-id match needs a segment boundary.
+  - **Which unit.** The card's *Use this* button wrote the option directly,
+    so discovery's explicit-unit gate never ran: a number named like a power
+    limit and measured in amps got a button. The live entity is read at
+    proposal time now — no unit, the wrong unit, or an entity Home Assistant
+    never produced each refuse the button *with the reason on the card*.
+  - **Which options.** A battery-strategy proposal used to bind the select
+    and leave Sessy's four values in place; on any other brand every write
+    would then fail silently (#751). The button is offered only when all four
+    configured values are options the select actually lists — SEM writes
+    nothing it has not seen.
+  - **Which policy.** One role covered both Sessy's power-strategy select,
+    which the adapter switches every cycle, and the operating-policy
+    selectors of Huawei, Victron, Deye, GoodWe and EG4 — which #845 ruled
+    SEM must never write. It would have offered to bind Victron's ESS mode to
+    the key the adapter writes. Two roles now: the policy selector is named
+    on the card as *SEM reads it and never writes it*, and only Sessy's
+    keeps a button.
+  - **Which instance.** A brand that declares several keys for one role
+    shows every runner-up on the card, each with its own button — a
+    two-pack install can pick the right pack instead of trusting the first.
+
+  The fifth link cannot be closed from any catalogue: whether the write
+  **takes**. A register can accept a value and expire it, need an enable
+  switch first, or be a global setting the vendor says to leave alone — a
+  declared name looks identical in every case. So the generic adapter now
+  records each control write and judges it on the next cycle in the
+  entity's own unit; three misses raise a Repair that names the entity, what
+  was written and what it reads, and clears itself the moment a write is
+  reflected. Chargers have had this since #824; batteries did not.
+
+  And a guard on the guard: the roster's count ratchet is regenerated in the
+  same command as the roster, so it could never catch a regression its author
+  introduces — five times in one afternoon a new classifier marker deleted a
+  working brand's roles and each was caught by hand. A per-brand role
+  baseline now lives in a file only its own flag can rewrite, so a lexicon
+  edit that narrows a brand fails CI until someone regenerates it on purpose
+  and the commit says why.
+
+  **Challenged against the hardware matrix, and the matrix learned from it
+  too.** Does what the roster *offers* agree with what the support table
+  *claims* about control? Run by hand it agreed on 3 of 14 inverter
+  discharge-control claims and 2 of 14 charger current-control claims — and
+  every disagreement had a name. Twice the table was stale: Fronius's core
+  integration declares a discharge-power limit the row said did not exist,
+  and Zaptec declares an `available_current` number the row called
+  "service-based". Three times the lexicon had missed a key SEM's own
+  discovery has driven for years — Wallbox's `maximum_charging_current`,
+  go-e's `amp`, OpenEVSE's `charge_rate` — learned now, with the
+  installation's contracted `maximum_icp_current` deliberately left alone
+  and the two charger-only names applied to chargers and nowhere else. The
+  rest declare nothing control-shaped upstream: their control is a service,
+  or a mechanism SEM's own adapter implements (Sungrow's signed forced
+  setpoint is not a limit and is not mapped as one). Each is listed with its
+  reason, and the challenge is a test now — shrink-only, so an exemption
+  that stops being true has to go. In the direction that matters, the roster
+  offers **no** control the table denies.
+
+  The write read-back moved into the shared adapter base, so Huawei's
+  discharge limit gets the same "did it take" judgement as the generic
+  adapter's. (This sentence originally claimed the mechanism was running on
+  the maintainer's own production system. It was not: the coordinator was
+  reading an attribute name nothing assigns, so the read-back never
+  executed anywhere — found by the re-audit below and fixed there. The
+  claim is corrected rather than deleted, because a release note that
+  quietly loses an overstatement teaches nobody.)
+
+  **Audited by three independent reviewers before the merge, and they earned
+  their keep.** Runtime: the discovery rung that *auto-binds* the discharge
+  control at install still matched declared keys with a bare suffix — the
+  very hole closed on the card path a day earlier — and on a Marstek, whose
+  per-unit limit is a suffix of its fleet-wide ceiling, it bound the ceiling.
+  Every consumer now uses one matcher, segment-bounded, exact-only aware,
+  ranked by the roster's key order. The write read-back could **never reach
+  a verdict in the default state**: the idempotent same-value skip reported
+  success, that re-armed the grace timer every cycle, and the register was
+  never judged — which is why PROD read "not yet" all day; only a write that
+  actually goes out is noted now, and the default state is tested to reach a
+  verdict. Half a split pair is refused *per device* (a firmware variant may
+  expose one sensor), on the card and in the reader. Security: one malformed
+  row in the HACS index no longer aborts a refresh, a JSON `NaN` can no
+  longer render as a bare name in the generated module, cache filenames and
+  mined keys are bounded, and the split-pair entity ids are redacted from
+  diagnostics like the sibling keys already were. Nothing the reviewers
+  attacked in the card's rendering, the generated code's escaping, the
+  regexes or the offline guarantee gave way.
+
+  **Re-audited before the merge, and the second pass found the one that
+  mattered.** The write read-back — the whole point of the previous round —
+  was **dead code in every running instance**: it read `self._battery_adapter`,
+  singular, a name nothing has assigned since the battery loop went
+  per-battery. So did #827's discharge-rate caveat and #845's
+  expected-operating-mode seed, for the past ten days. `getattr(..., None)`
+  had turned a rename into three silent no-ops, and every unit test passed
+  because each called its helper with a hand-built object — the tests proved
+  the logic and never the wiring. One accessor now, with a guard that fails
+  on the old name anywhere in the tree. The same pass closed the
+  Energy-Dashboard reader's half-a-split-pair hole (it yields to a combined
+  sensor rather than reporting a house that never exports; an install with
+  no combined sensor is unchanged, because there the import half really is
+  the whole story), routed the config flow's last private key-matcher
+  through the shared one, stopped a gated proposal from being pre-filled
+  into the install form, and normalised a timestamp to UTC before comparing
+  it.
+
 # [2.1.0-beta.8] — 06.09.2026
 
 - 🛡️ **A template that derives from a live source is not a frozen sensor**

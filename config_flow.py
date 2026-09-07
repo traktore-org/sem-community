@@ -228,6 +228,93 @@ _SPEC_REGISTRY_KEYS: Dict[str, tuple] = {
 }
 
 
+#: (#915) role in the mined roster -> the spec this flow fills from it. Only
+#: read-side specs: a spec is a NUMBER SEM reads once, never a control it
+#: writes, so a wrong guess costs a wrong capacity figure the user can see
+#: and correct — not a wrong register write.
+_ROSTER_SPEC_ROLES: Dict[str, str] = {
+    "battery_capacity_kwh": "battery_capacity_spec",
+    "system_size_kwp": "system_size_spec",
+    "battery_max_discharge_power": "battery_discharge_limit",
+}
+
+
+def _spec_exact_only(spec: str, platform: str) -> tuple:
+    """Which of this spec's keys may be matched by translation_key ONLY."""
+    role = _ROSTER_SPEC_ROLES.get(spec)
+    if not role or not platform:
+        return ()
+    try:
+        from .hardware_detection import roster_role_vocab
+        return tuple(roster_role_vocab(platform, role).get("exact_only", ()))
+    except Exception:  # noqa: BLE001
+        return ()
+
+
+def _spec_matches(entry, spec: str, platform: str):
+    """Does this registry entry carry one of ``spec``'s keys? The single
+    matcher in ``hardware_detection``, with the roster's exact_only set —
+    including for keys that were hand-written before the roster existed."""
+    try:
+        from .hardware_detection import _entry_matches_declared
+        return _entry_matches_declared(
+            entry, _spec_keys(spec, platform), _spec_exact_only(spec, platform))
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _spec_keys(spec: str, platform: str) -> tuple:
+    """The entity keys that identify ``spec`` on ``platform``.
+
+    Hand-written keys FIRST and always — they were harvested from real
+    installs and one of them (Huawei's ``storage_rated_capacity``) has since
+    been renamed upstream to ``rated_ess_capacity``. Mined keys are ADDITIVE
+    ALIASES appended after: a published vocabulary is the current truth, a
+    harvested one is the truth some user's box still runs. Replacing rather
+    than appending would have broken that install.
+    """
+    keys = tuple(_SPEC_REGISTRY_KEYS.get(spec, ()))
+    role = _ROSTER_SPEC_ROLES.get(spec)
+    if not role or not platform:
+        return keys
+    try:
+        from .hardware_detection import roster_role_vocab
+        vocab = roster_role_vocab(platform, role)
+    except Exception:  # noqa: BLE001 — a prior is never load-bearing
+        return keys
+    # (06.09 audit) an exact_only mined key is a suffix of a longer key the
+    # same brand declares; matched by unique_id suffix it picks the wrong
+    # entity, so it is not an alias this suffix-matching consumer may use
+    exact_only = set(vocab.get("exact_only", ()))
+    return keys + tuple(k for k in vocab["keys"]
+                        if k not in keys and k not in exact_only)
+
+
+def _suggest_select_from_roster(hass: HomeAssistant, platform: str,
+                                role: str) -> str | None:
+    """(#915) A select entity identified by the options its own integration
+    declares, for every mined brand.
+
+    ``_suggest_select_with_options`` already does this — it is how #827 finds
+    the Deye work-mode selector and #845 the Huawei one, "whatever the
+    integration named the entity". Both vocabularies are hand-written, which
+    means the trick only ever worked for two brands. The roster supplies the
+    other three hundred; the matcher, its three-label guard and its live
+    intersection are unchanged.
+    """
+    if not platform:
+        return None
+    try:
+        from .consts import integration_roster as _r
+        body = ((getattr(_r, "ROLE_VOCAB", {}) or {}).get(platform) or {}).get(role)
+    except Exception:  # noqa: BLE001
+        return None
+    labels = tuple(body.get("options", ())) if body else ()
+    if len(labels) < 3:
+        return None
+    return _suggest_select_with_options(hass, list(labels))
+
+
 def _spec_from_registry(hass: HomeAssistant, registry=None) -> Dict[str, str]:
     """(#848) entity_id per spec, found by translation_key / unique_id
     suffix in the entity registry — the language-proof half of the ladder.
@@ -249,12 +336,18 @@ def _spec_from_registry(hass: HomeAssistant, registry=None) -> Dict[str, str]:
         eid = str(e.entity_id)
         if not eid.startswith(("sensor.", "number.")):
             continue
-        tk = str(getattr(e, "translation_key", "") or "")
-        uid = str(getattr(e, "unique_id", "") or "")
-        for spec, keys in _SPEC_REGISTRY_KEYS.items():
+        for spec in _SPEC_REGISTRY_KEYS:
             if spec in found:
                 continue
-            if any(tk == k or uid.endswith(k) for k in keys):
+            # (#915) hand-written keys plus this integration's own declared
+            # aliases — see _spec_keys for why they are additive.
+            # (07.09 re-audit) THE one matcher — this had its own copy,
+            # which honoured no exact_only at all: a HAND-WRITTEN spec key
+            # the roster later marks exact_only (Marstek's
+            # `max_discharge_power`, a suffix of `system_max_discharge_power`)
+            # still matched the wrong entity by unique_id, whichever the
+            # registry yielded first.
+            if _spec_matches(e, spec, str(getattr(e, "platform", ""))):
                 found[spec] = eid
     return found
 
@@ -429,12 +522,166 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # (quality scale: discovery-update-info)
         self._abort_if_unique_id_configured(reload_on_update=True)
 
-        # Only proceed if Energy Dashboard is actually configured
-        dashboard = await read_energy_dashboard_config(self.hass)
-        if not dashboard or not dashboard.is_minimally_configured():
-            return self.async_abort(reason="energy_dashboard_not_configured")
-
+        # (#915) Discovery used to stand down unless the Energy Dashboard
+        # was already complete — so the one moment SEM KNOWS a supported
+        # inverter just appeared was also the moment it said nothing. The
+        # user step now handles an empty dashboard by asking the box, so
+        # discovery can simply offer the install.
         return await self.async_step_user()
+
+    async def async_step_sources(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """(#915) Name the three sensors SEM reads, without the Energy
+        Dashboard.
+
+        Reached only when the dashboard cannot answer. Every field is
+        pre-filled from what this box already runs — the integration's own
+        declared entity names first, the plain shape of a power sensor
+        second — so the common case is *confirm*, not *hunt through four
+        hundred entities*. Solar and grid are required because SEM cannot
+        compute a surplus without them; battery is optional, since plenty of
+        installs have none.
+
+        Nothing here is bound silently: the flow shows the proposal, the
+        user accepts or replaces it, and the sign convention is still
+        detected from live values rather than assumed.
+        """
+        errors: dict[str, str] = {}
+        proposals = {}
+        try:
+            from .hardware_detection import propose_energy_sources
+            proposals = propose_energy_sources(self.hass)
+        except Exception:  # noqa: BLE001 — a proposal never breaks an install
+            proposals = {}
+
+        if user_input is not None:
+            solar = (user_input.get("solar_power_sensor") or "").strip()
+            grid = (user_input.get("grid_import_power_sensor") or "").strip()
+            soc = (user_input.get("battery_soc_sensor") or "").strip()
+            # (#915) A combined grid sensor is not something every brand
+            # HAS. Growatt (pattern E), Anker's official integration and
+            # Senec publish import and export as two positive sensors and
+            # nothing else — demanding a combined one would stop exactly the
+            # installs this step exists to rescue. Either answer is enough,
+            # and the pair must be whole: half of it reads as a meter that
+            # only ever imports.
+            split_in = (user_input.get("grid_import_power_entity") or "").strip()
+            split_out = (user_input.get("grid_export_power_entity") or "").strip()
+            if not solar:
+                errors["solar_power_sensor"] = "required"
+            if split_in or split_out:
+                if not split_in:
+                    errors["grid_import_power_entity"] = "required"
+                if not split_out:
+                    errors["grid_export_power_entity"] = "required"
+            elif not grid:
+                errors["grid_import_power_sensor"] = "required"
+            if not errors:
+                battery = (user_input.get("battery_power_sensor") or "").strip()
+                # Both key sets, deliberately. ``solar_production_sensor`` /
+                # ``grid_power_sensor`` are what SensorReader's LEGACY path
+                # consumes, and that is the path this install takes — the
+                # Energy Dashboard could not answer, so nothing feeds
+                # ``set_energy_dashboard_config`` and the reader falls back
+                # to these. The dashboard-shaped names are written too
+                # because the rest of the integration (flags, diagnostics,
+                # the Config card's pickers) reads those. Writing only the
+                # dashboard-shaped ones installed cleanly and then read 0 W
+                # from a 4.2 kW inverter — caught on the .46 rig.
+                self._data.update({
+                    "solar_production_sensor": solar,
+                    "grid_power_sensor": grid,
+                    "solar_power_sensor": solar,
+                    "grid_import_power_sensor": grid,
+                    "battery_power_sensor": battery,
+                    "battery_soc_sensor": soc,
+                    "has_solar": True,
+                    "has_grid": True,
+                    "has_battery": bool(battery),
+                    "has_ev": False,
+                    # (#915) Recorded so a support thread can tell a manual
+                    # install from a dashboard-derived one at a glance.
+                    "sources_from": "manual",
+                })
+                if split_in and split_out:
+                    # The keys SensorReader reads for a declared pair, on
+                    # BOTH of its paths since #915 — this install is on the
+                    # legacy one by definition.
+                    self._data["grid_import_power_entity"] = split_in
+                    self._data["grid_export_power_entity"] = split_out
+                self._data["observer_mode"] = user_input.get(
+                    "observer_mode", DEFAULT_OBSERVER_MODE)
+                self._data["vacation_mode"] = False
+                self._data["energy_plan_actuation"] = True
+                return await self.async_step_hardware()
+
+        def _sug(key: str) -> dict:
+            hit = proposals.get(key)
+            return {"suggested_value": hit["entity"]} if hit else {}
+
+        found_lines = []
+        for key, label in (("solar_power_sensor", "Solar"),
+                           ("grid_import_power_sensor", "Grid"),
+                           ("grid_import_power_entity", "Grid import"),
+                           ("grid_export_power_entity", "Grid export"),
+                           ("battery_power_sensor", "Battery"),
+                           ("battery_soc_sensor", "Battery charge")):
+            hit = proposals.get(key)
+            if hit:
+                found_lines.append(
+                    f"  • {label}: `{hit['entity']}` — {hit['why']}")
+        summary = ("\n".join(found_lines) if found_lines
+                   else "  • nothing recognised — pick the sensors yourself")
+
+        return self.async_show_form(
+            step_id="sources",
+            data_schema=vol.Schema({
+                vol.Required(
+                    "solar_power_sensor", description=_sug("solar_power_sensor"),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor",
+                                                  device_class="power")),
+                vol.Optional(
+                    "grid_import_power_sensor",
+                    description=_sug("grid_import_power_sensor"),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor",
+                                                  device_class="power")),
+                # …or the two-sided pair, for meters that have no combined
+                # reading. Both positive; SEM computes export − import.
+                vol.Optional(
+                    "grid_import_power_entity",
+                    description=_sug("grid_import_power_entity"),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor",
+                                                  device_class="power")),
+                vol.Optional(
+                    "grid_export_power_entity",
+                    description=_sug("grid_export_power_entity"),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor",
+                                                  device_class="power")),
+                vol.Optional(
+                    "battery_power_sensor",
+                    description=_sug("battery_power_sensor"),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor",
+                                                  device_class="power")),
+                vol.Optional(
+                    "battery_soc_sensor",
+                    description=_sug("battery_soc_sensor"),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor",
+                                                  device_class="battery")),
+                vol.Optional(
+                    "observer_mode", default=DEFAULT_OBSERVER_MODE,
+                ): selector.BooleanSelector(),
+            }),
+            description_placeholders={"summary": summary,
+                                      "url": "/config/energy"},
+            errors=errors,
+        )
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -445,25 +692,16 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Read Energy Dashboard configuration
         self._energy_dashboard_config = await read_energy_dashboard_config(self.hass)
 
-        if self._energy_dashboard_config is None:
-            # Energy Dashboard not configured at all
-            return self.async_abort(
-                reason="energy_dashboard_not_configured",
-                description_placeholders={
-                    "url": "/config/energy"
-                }
-            )
-
-        if not self._energy_dashboard_config.is_minimally_configured():
-            # Energy Dashboard missing required components
-            missing = self._energy_dashboard_config.get_missing_components()
-            return self.async_abort(
-                reason="energy_dashboard_incomplete",
-                description_placeholders={
-                    "missing": ", ".join(missing),
-                    "url": "/config/energy"
-                }
-            )
+        # (#915) The Energy Dashboard is SEM's first anchor, not its only
+        # one. It used to be both: a missing or half-filled dashboard ended
+        # the install with "go configure a different page and start again" —
+        # the hardest wall in SEM's onboarding, and one that asks the user to
+        # map ENERGY counters when SEM steers on POWER. When it cannot
+        # answer, ask the box instead: which energy integrations are
+        # installed, and what does each call the three sensors SEM needs.
+        if (self._energy_dashboard_config is None
+                or not self._energy_dashboard_config.is_minimally_configured()):
+            return await self.async_step_sources()
 
         # Energy Dashboard is configured - show summary and continue.
         # Slim install (v1.7.1-beta.11+, #442): route directly to
@@ -809,11 +1047,7 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # (#845) The operating-policy selector, found by vocabulary.
                 merged.setdefault(
                     "battery_operating_mode_entity",
-                    _suggest_select_with_options(self.hass, [
-                        "maximise_self_consumption",
-                        "fully_fed_to_grid",
-                        "time_of_use_luna2000",
-                    ]) or "")
+                    _suggest_battery_mode_entity(self.hass) or "")
 
                 # Wrap flat EV keys into ev_chargers list (#112 multi-charger).
                 # #442: ``_install_defaults()`` now sets ``ev_chargers: []`` so
@@ -1188,6 +1422,33 @@ def _suggest_charge_limit_number(hass) -> str | None:
                 return st.entity_id
     except Exception:  # noqa: BLE001
         return None
+    return None
+
+
+def _suggest_battery_mode_entity(hass) -> str | None:
+    """(#915) The inverter's operating-policy selector, for ANY brand.
+
+    #845 hardcoded Huawei's three option labels because the entity id is
+    localised and only the vocabulary is stable. That reasoning was right and
+    applied to one brand; the roster carries the same vocabulary for every
+    integration that publishes one — GoodWe's ``eco/general/backup/off_grid``,
+    Sessy's ``api/eco/nom/idle``, EG4's ``normal/standby``. Huawei stays first
+    so a Huawei install behaves exactly as it did.
+    """
+    hard = _suggest_select_with_options(hass, [
+        "maximise_self_consumption", "fully_fed_to_grid", "time_of_use_luna2000",
+    ])
+    if hard:
+        return hard
+    try:
+        from .consts import integration_roster as _r
+        vocab = getattr(_r, "ROLE_VOCAB", {}) or {}
+    except Exception:  # noqa: BLE001 — a prior is never load-bearing
+        return None
+    for domain in sorted(vocab):
+        found = _suggest_select_from_roster(hass, domain, "battery_strategy")
+        if found:
+            return found
     return None
 
 
@@ -2045,11 +2306,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "battery_operating_mode_entity",
                     description={"suggested_value": (
                         current_config.get("battery_operating_mode_entity")
-                        or _suggest_select_with_options(self.hass, [
-                            "maximise_self_consumption",
-                            "fully_fed_to_grid",
-                            "time_of_use_luna2000",
-                        ]))},
+                        or _suggest_battery_mode_entity(self.hass))},
                 ): selector.EntitySelector(selector.EntitySelectorConfig(domain="select")),
                 vol.Optional(
                     "diagram_style",

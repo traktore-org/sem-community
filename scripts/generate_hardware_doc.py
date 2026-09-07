@@ -55,15 +55,24 @@ def render() -> str:
     for r in _sorted(hm.INVERTERS):
         out.append("| {brand} | `{integration}` | {pattern} | {dc} | {st} | {ev} |".format(
             brand=r["brand"], integration=r["integration"], pattern=r["pattern"],
-            dc="yes" if r["discharge_control"] else "—",
+            dc=("declared, unconfirmed" if r["discharge_control"] == "declared"
+                else "yes" if r["discharge_control"] else "—"),
             st=BADGE[r["status"]], ev=r["evidence"] or "—"))
 
     out.append("\n## EV chargers\n")
-    out.append("| Brand | Control method | Status | Evidence |")
-    out.append("|---|---|---|---|")
+    # (#915) The integration column: a reader with an Alfen Eve used to find
+    # "number entity" here and no way to learn WHICH Home Assistant
+    # integration SEM detects it through. The domains come from the row, so
+    # they cannot drift from what detection actually scans.
+    out.append("| Brand | Integration | Control method | Status | Evidence |")
+    out.append("|---|---|---|---|---|")
     for r in _sorted(hm.CHARGERS):
-        out.append("| {brand} | {control} | {st} | {ev} |".format(
-            brand=r["brand"], control=r["control"],
+        doms = [d for d in [r.get("domain_token")] if d]
+        doms += list(r.get("also_domains") or ())
+        out.append("| {brand} | {dom} | {control} | {st} | {ev} |".format(
+            brand=r["brand"],
+            dom=" / ".join(f"`{d}`" for d in doms) or "—",
+            control=r["control"],
             st=BADGE[r["status"]], ev=r["evidence"] or "—"))
 
     out.append("\n## Vehicles\n")

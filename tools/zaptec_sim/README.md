@@ -38,3 +38,30 @@ languages.
 ## NOT for production
 
 A test fixture. It talks to nothing, and every value is local.
+
+## The unmapped-charger fixture (#915)
+
+Set **`unmapped_charger`** on the config entry and the simulator publishes a
+site SEM can *describe* but not *map*: the **installation device alone**, with
+a power reading (`total_charge_power`), the grid-guard `available_current` and
+the phase threshold. No cable state, no charging state, no charger-level
+current, no resume button.
+
+That is a **near miss with an offer**, and it is the only way to reach one on
+a healthy rig:
+
+* `_discover_zaptec` refuses it — it requires a connected/charging state, and
+  rejects `available_current` as a throttle by name (it constrains every
+  charger on the site);
+* the #915 roster still proposes `ev_current_control → available_current`,
+  because that is what the real Zaptec integration declares;
+* the device has a power sensor, so `charger_from_near_miss` can build a
+  charger and the card offers **Add this charger** instead of *please report*.
+
+Turn it off and the offer must disappear, because the charger is detected
+again and a near miss for a detected brand is noise.
+
+Why a fixture rather than a live case: on both rigs every brand present is
+detected, so the state is unreachable by construction — the correct behaviour,
+and the reason this path had no live proof until now.
+Driven by `tests/live/gui/test_915_near_miss_offer.js`.
