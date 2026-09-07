@@ -895,7 +895,6 @@ def assert_expectations(run: ScenarioRun, scenario: Dict[str, Any]) -> None:
             f"exercise, or when_strategy names a state that no longer exists."
         )
         for c in matched_cycles:
-            strat = str(c.result.get("canonical_strategy") or "").lower()
             # Evaluate the formula in the readings dict's namespace
             try:
                 allowed_w = float(eval(formula, {"__builtins__": {}, "max": max, "min": min}, c.readings))
