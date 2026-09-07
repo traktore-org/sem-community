@@ -136,6 +136,10 @@ class SEMLoadPriorityCard extends SEMLitBase {
     // ── Static CSS ──
     static get styles() {
         return css`
+            /* (#913 follow-up) a refused service call, in the modal's error voice */
+            .svc-error { margin: 6px 0 8px; padding: 6px 10px; border-radius: 6px;
+                         background: rgba(244, 67, 54, .12); color: #f44336;
+                         font-size: 0.85em; }
             :host { display: block; }
             ha-card {
                 overflow: visible;
@@ -726,6 +730,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
         const stacked = (maxH - minH) < STEP_H - 1e-6;
         return html`
             <div class="range-wrap">
+                ${this._serviceError ? html`<div class="svc-error" role="alert">${this._serviceError}</div>` : nothing}
                 <div class="range-labels">
                     <span>${this._t('at_least')} <b style="color:#8DC892">${minH <= 0 ? this._t('no_target') : fmt(minH) + ' h'}</b></span>
                     <span>${this._t('up_to')} <b style="color:#ff9800">${atFull ? this._t('uncapped') : fmt(maxH) + ' h'}</b></span>
@@ -1391,11 +1396,28 @@ class SEMLoadPriorityCard extends SEMLitBase {
     }
 
     // ── Service calls ──
+    /** (#913 follow-up) A refused service call used to vanish: the three
+     *  fire-and-forget calls below had no .catch, so the slider snapped back
+     *  or the value did not stick and the card said nothing. HA rejects a
+     *  ServiceValidationError with its TRANSLATED message — the honest #913
+     *  sentence ("switched off, turn it on under…") — so showing err.message
+     *  is the whole fix. Same pattern the Configure modal already uses. */
+    _showServiceError(err) {
+        const msg = (err && err.message) ? String(err.message) : String(err || '');
+        this._serviceError = msg;
+        this.requestUpdate();
+        clearTimeout(this._serviceErrorTimer);
+        this._serviceErrorTimer = setTimeout(() => {
+            this._serviceError = '';
+            this.requestUpdate();
+        }, 12000);
+    }
+
     _sendPriorityUpdate() {
         if (!this._hass) return;
         this._hass.callService('solar_energy_management', 'update_device_priorities', {
             priorities: this.devices.map(d => ({ device_id: d.id, priority: d.priority })),
-        });
+        }).catch((err) => this._showServiceError(err));
         // Hold the just-dragged order until the backend re-emits the sensor
         // (~1 coordinator cycle). Without this the next hass push re-renders
         // the STALE sensor order and the drag snaps back — the "not taking it"
@@ -1408,7 +1430,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
         if (!this._hass) return;
         this._hass.callService('solar_energy_management', 'update_device_config', {
             device_id: deviceId, property, value,
-        });
+        }).catch((err) => this._showServiceError(err));
     }
 
     _sendTargetPeakUpdate(val, unlimited = false) {
@@ -1416,7 +1438,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
         this._hass.callService('solar_energy_management', 'update_target_peak', {
             target_peak_limit: val,
             peak_limit_unlimited: unlimited,
-        });
+        }).catch((err) => this._showServiceError(err));
     }
 
     // ── Configure modal ──
