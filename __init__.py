@@ -1792,6 +1792,51 @@ def _derive_charge_mode(
     return DEFAULT_EV_CHARGE_MODE
 
 
+def _migrate_legacy_arbitrage_mode(hass: HomeAssistant, entry: SEMConfigEntry) -> None:
+    """(#930) Make a stored ``allow_arbitrage`` mode the explicit permission
+    it always meant, ONCE, on disk.
+
+    The mode left the selector in v1.7.3 and ``migrate_mode()`` has read it
+    as ``auto`` + ``may_export=True`` ever since — but only ephemerally, inside
+    ``effective_permissions()``, so the stored value never went away. And
+    ``consts/battery_modes.py`` short-circuits that legacy value past BOTH
+    master switches unless ``may_export`` was explicitly set False: a battery
+    still carrying it kept selling under a switch that read "off". Written
+    down as the permission, the master switches apply to it like every other
+    battery, and the user's revocation (an explicit False) is left alone.
+
+    Idempotent: acts only while the legacy value is present in options or
+    data; a key living only in read-only ``entry.data`` is overridden from
+    options, which win the merge.
+    """
+    opts = {**entry.options}
+    merged = {**entry.data, **opts}
+    perms = dict(opts.get("battery_permissions") or {})
+    changed = False
+    legacy = "allow_arbitrage"
+    if str(merged.get("battery_mode") or "").lower() == legacy:
+        opts["battery_mode"] = "auto"
+        changed = True
+    modes = merged.get("battery_modes")
+    if isinstance(modes, list) and any(
+            str(m or "").lower() == legacy for m in modes):
+        opts["battery_modes"] = [
+            "auto" if str(m or "").lower() == legacy else m for m in modes]
+        changed = True
+    if not changed:
+        return
+    # the permission the mode stood for — never overwriting a revocation
+    if perms.get("may_export") is None:
+        perms["may_export"] = True
+    opts["battery_permissions"] = perms
+    hass.config_entries.async_update_entry(entry, options=opts)
+    _LOGGER.warning(
+        "(#930) migrated the retired 'allow_arbitrage' battery mode to auto "
+        "with an explicit may_export=%s — the arbitrage master switch applies "
+        "to this battery from now on", perms.get("may_export"),
+    )
+
+
 def _migrate_limit_surplus_to_max(hass: HomeAssistant, entry: SEMConfigEntry) -> None:
     """Fold the removed ev_limit_surplus switch (#235) into the Max ceiling (#245).
 
@@ -2014,6 +2059,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     # Fold the removed ev_limit_surplus switch (#235) into the Max ceiling (#245).
     # Idempotent; only acts while the legacy key is present.
     _migrate_limit_surplus_to_max(hass, entry)
+    _migrate_legacy_arbitrage_mode(hass, entry)   # (#930)
 
     # Heal a poisoned ``options.ev_chargers`` list (#462/#464 follow-up).
     # v1.7.2..v1.7.3-beta.3 builds could leave options with a partial or
