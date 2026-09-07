@@ -13,6 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🩹 **A battery budget still being learned showed as "0 kWh" rather than
+  unknown** (#925 audit). For the first few nights after install SEM has
+  not measured enough to say what the pack can spare. The battery card
+  said so — *"Learning, 2 of 5 nights"* — but the sensor itself published
+  a confident **0.0 kWh**, so History, the Logbook, a plain entity card,
+  an automation or a voice query all read it as *nothing to spend*.
+
+  It now reads unknown until the measurement exists, and 0 kWh once SEM
+  has actually measured and the answer really is nothing. Which of the two
+  it is was always known internally — it just was not published. Nothing
+  about what SEM spends changes; only what it claims to know.
+
 - 🛡️ **Two safety checks were disabled by a blink of the grid meter**
   (#925 audit). SEM's rule is that an absent reading is never a reading of
   zero, and in both of these the flag saying "this was not actually read"

@@ -4660,7 +4660,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             result["battery_expected_refill_kwh"] = _pe.get("battery_expected_refill_kwh")
             result["battery_refill_clipped_kwh"] = _pe.get("battery_refill_clipped_kwh")
             result["battery_refill_reason"] = _pe.get("battery_refill_reason")
-            result["battery_spendable_kwh"] = _pe.get("battery_spendable_kwh")
+            # (#925 audit) LEARNING IS NOT A MEASURED ZERO. The budget
+            # dataclass collapses both into 0.0 — "0.0 whenever anything is
+            # unknown" — which is right for the DECISION (spend nothing
+            # while you do not know) and wrong for the DISPLAY. Only the
+            # battery card read the `phase` attribute and rendered
+            # "Learning, n of 5 nights"; History, the Logbook, a generic
+            # entity card, an automation and a voice query all saw a
+            # confident `0.0 kWh` on a brand-new install for a week.
+            #
+            # `planning_phase` already separates the two states, so the
+            # sensor can too: unknown while learning, 0.0 once holding —
+            # which IS a measurement. Decisions are untouched; they read
+            # `_planning_evidence`, which still carries the number.
+            _spend = _pe.get("battery_spendable_kwh")
+            result["battery_spendable_kwh"] = (
+                None if _pe.get("planning_phase") == "learning" else _spend)
             result["battery_dynamic_floor_pct"] = _pe.get("battery_dynamic_floor_pct")
             result["battery_spendable_reason"] = _pe.get("battery_spendable_reason")
             result["planning_phase"] = _pe.get("planning_phase")
