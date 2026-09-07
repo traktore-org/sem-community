@@ -116,18 +116,170 @@ class TestTheFabricatedFlagsAreCleared:
         saved = [
             k for node in ast.walk(tree) if isinstance(node, ast.Dict)
             for k in node.keys
-            if isinstance(k, ast.Constant) and k.value == "axes_migrated"
+            if isinstance(k, ast.Constant) and k.value == "legacy_flags_adopted"
         ]
         assert saved, "the marker is read but never persisted — it would re-run"
-        # READ: and it is consulted, via data.get("axes_migrated"). A marker
-        # written and never read would clear a real opt-out on every load.
+        # READ: and it is consulted by name in the loader — as a membership
+        # test (``"legacy_flags_adopted" in data``, the absent-vs-False
+        # question) and as a subscript. A marker written and never read
+        # would clear a real opt-out on every load. Any read form counts;
+        # the first draft only accepted ``.get()`` and broke the moment the
+        # loader learned to tell absent from False.
+        def _names(node):
+            if isinstance(node, ast.Compare):
+                return [node.left, *node.comparators]
+            if isinstance(node, ast.Subscript):
+                return [node.slice]
+            if isinstance(node, ast.Call) and getattr(node.func, "attr", "") == "get":
+                return node.args[:1]
+            return []
         read = [
             n for n in ast.walk(tree)
-            if isinstance(n, ast.Call) and getattr(n.func, "attr", "") == "get"
-            and n.args and isinstance(n.args[0], ast.Constant)
-            and n.args[0].value == "axes_migrated"
+            for c in _names(n)
+            if isinstance(c, ast.Constant) and c.value == "legacy_flags_adopted"
         ]
         assert read, "the marker is saved but never consulted"
+
+
+class TestTheEchoInTheSecondStoreCannotRestoreIt:
+    """Found live on .175 the first time the migration ran: the registry's
+    flag was cleared, and 35 s later adoption put it straight back.
+
+    The LoadManagement store carries its own ``user_hands_off`` per row —
+    SEM's derived output from the PREVIOUS run, persisted in a second place.
+    Adoption, latched only in memory, re-read that echo every restart as the
+    user's word. The fabricated flag round-tripped through two stores, and
+    clearing one of them was half a fix.
+
+    The fix is not to chase the echo but to stop adoption re-running at all:
+    it seeds a pre-#650 install ONCE, and a registry store proves that has
+    happened. The latch is persisted.
+    """
+
+    def _registry_with_stores(self, registry_store, lm_rows):
+        """A registry whose own store and whose LoadManagement partner both
+        carry SEM's previous-run output — the .175 shape."""
+        import asyncio
+        from types import SimpleNamespace
+        from unittest.mock import AsyncMock, MagicMock
+
+        reg = UnifiedDeviceRegistry.__new__(UnifiedDeviceRegistry)
+        reg._store = MagicMock()
+        reg._store.async_load = AsyncMock(return_value=registry_store)
+        reg._store.async_save = AsyncMock()
+        reg._load_manager = SimpleNamespace(_devices=dict(lm_rows))
+        reg._manual_mappings = {}
+        reg._priority_overrides = {}
+        reg._control_mode_overrides = {}
+        reg._dependency_overrides = {}
+        reg._critical_overrides = {}
+        reg._controllable_overrides = {}
+        reg._rated_power_overrides = {}
+        reg._service_registrations = {}
+        reg._device_goals = {}
+        reg._legacy_flags_adopted = False
+        return reg, asyncio
+
+    def _run(self, coro):
+        import asyncio
+        return asyncio.new_event_loop().run_until_complete(coro)
+
+    LM_ECHO = {
+        "energy_dashboard_keba_p30_total": {
+            "is_critical": False,
+            "has_control_handle": True,
+            "user_hands_off": True,      # SEM's own previous-run output
+            "is_controllable": False,
+        },
+    }
+
+    def _load(self, reg):
+        """Only the storage-load path — the seam #888 extracted from
+        ``async_initialize`` so the migration can be exercised without
+        discovery, HA, or a running load manager."""
+        return self._run(reg._load_storage())
+
+    def test_an_upgraded_install_clears_the_flag_and_latches(self):
+        reg, _ = self._registry_with_stores(
+            {"controllable_overrides":
+                {"energy_dashboard_keba_p30_total": False}},
+            self.LM_ECHO)
+        self._load(reg)
+        assert reg._controllable_overrides == {}, "the fabricated flag survived"
+        assert reg._legacy_flags_adopted is True, (
+            "adoption is not latched after the migration — the LM echo will "
+            "be re-adopted on the next refresh, which is what .175 did")
+
+    def test_the_latch_is_persisted_in_the_same_save(self):
+        reg, _ = self._registry_with_stores(
+            {"controllable_overrides":
+                {"energy_dashboard_keba_p30_total": False}},
+            self.LM_ECHO)
+        self._load(reg)
+        assert reg._store.async_save.await_count >= 1, (
+            "the latch was set in memory and never written — a restart would "
+            "adopt the echo again")
+        saved = reg._store.async_save.await_args.args[0]
+        assert saved.get("legacy_flags_adopted") is True
+        assert saved.get("controllable_overrides") == {}
+
+    def test_adoption_then_does_nothing_against_the_echo(self):
+        """The whole point: after load, the LM store still says hands-off,
+        and adoption must not believe it."""
+        reg, _ = self._registry_with_stores(
+            {"controllable_overrides":
+                {"energy_dashboard_keba_p30_total": False}},
+            self.LM_ECHO)
+        self._load(reg)
+        self._run(reg._adopt_legacy_device_flags())
+        assert reg._controllable_overrides == {}, (
+            "adoption re-adopted SEM's own echo from the LoadManagement "
+            "store — the flag round-tripped through two stores")
+
+    def test_a_post_888_store_with_the_latch_false_keeps_its_flags(self):
+        """ABSENT is not FALSE. A fresh install saves the latch as False
+        before adoption has run; on its first restart that must NOT read as
+        "pre-#888 store, migrate" — the flags in it came through an honest
+        writer. The first version wiped them, and #650's round-trip test
+        caught it."""
+        reg, _ = self._registry_with_stores(
+            {"legacy_flags_adopted": False,
+             "controllable_overrides": {"energy_dashboard_pump": False}},
+            {})
+        self._load(reg)
+        assert reg._controllable_overrides == {"energy_dashboard_pump": False}, (
+            "a present-but-False latch was read as an absent one and an "
+            "honest opt-out was wiped")
+        assert reg._legacy_flags_adopted is False, (
+            "the latch was set without adoption having run")
+        assert reg._store.async_save.await_count == 0, "nothing to migrate"
+
+    def test_a_store_that_already_latched_is_left_alone(self):
+        """A genuine opt-out set AFTER the migration must survive the next
+        restart — the marker is what makes the clearing one-shot."""
+        reg, _ = self._registry_with_stores(
+            {"legacy_flags_adopted": True,
+             "controllable_overrides": {"energy_dashboard_pump": False}},
+            {})
+        self._load(reg)
+        assert reg._controllable_overrides == {"energy_dashboard_pump": False}
+        assert reg._legacy_flags_adopted is True
+
+    def test_a_fresh_install_still_adopts_once(self):
+        """No registry store at all: adoption may run, exactly once, and the
+        fixed adoption reads the permission axis so a control-less device
+        adopts nothing."""
+        reg, _ = self._registry_with_stores(None, {
+            "energy_dashboard_new": {"is_critical": False,
+                                     "has_control_handle": False,
+                                     "user_hands_off": False,
+                                     "is_controllable": False},
+        })
+        self._load(reg)
+        assert reg._legacy_flags_adopted is False
+        self._run(reg._adopt_legacy_device_flags())
+        assert reg._controllable_overrides == {}
+        assert reg._legacy_flags_adopted is True
 
 
 class TestThePermissionHasAnHonestWriter:

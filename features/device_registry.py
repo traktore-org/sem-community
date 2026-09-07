@@ -240,7 +240,6 @@ class UnifiedDeviceRegistry:
         # DELETES the key, and a second adoption pass would immediately put it
         # back from the not-yet-resynced LM entry. That is this very bug, rebuilt.
         self._legacy_flags_adopted: bool = False
-        self._axes_migrated: bool = False   # (#888) one-shot marker
         # (#576) device_id → learned rated_power (W). A sensor-equipped load
         # self-calibrates its real draw at runtime (calibrate_rated_power); we
         # PERSIST that here so it survives a restart instead of resetting to the
@@ -294,11 +293,14 @@ class UnifiedDeviceRegistry:
         """Return current device list."""
         return self._devices
 
-    async def async_initialize(self) -> None:
-        """Load manual mappings from storage, then refresh devices.
+    async def _load_storage(self) -> None:
+        """Load the registry's own store and run its one-shot upgrades.
 
-        Also schedules a delayed re-discovery after 35s because at startup
-        many entities aren't available yet (HA loads integrations in stages).
+        Split out of ``async_initialize`` (#888) so the store migration is
+        a unit that can be exercised without discovery, HA, or a running
+        load manager — the two-store round-trip that put the fabricated
+        hands-off flag back on .175 was only reproducible once this had
+        its own seam.
         """
         try:
             data = await self._store.async_load()
@@ -332,16 +334,52 @@ class UnifiedDeviceRegistry:
                 # One-shot by marker, not by heuristic: once the axis has an
                 # honest writer again a real opt-out must never be swept away
                 # by an upgrade.
-                if not data.get("axes_migrated") and self._controllable_overrides:
-                    _fabricated = sorted(self._controllable_overrides)
-                    self._controllable_overrides = {}
-                    _LOGGER.warning(
-                        "(#888) cleared %d hands-off flag(s) SEM had set about "
-                        "itself, not the user: %s — these loads are SEM's to "
-                        "act on again, subject to the Mode you picked",
-                        len(_fabricated), _fabricated[:6],
-                    )
-                self._axes_migrated = True
+                #
+                # THE MARKER IS THE ADOPTION LATCH, PERSISTED — and that is
+                # load-bearing, found live on .175 the first time this ran:
+                # the flags were cleared here, and 35 s later adoption put
+                # them straight back. The LoadManagement store carries its
+                # own copy of ``user_hands_off`` for every row — SEM's derived
+                # output from the PREVIOUS run, persisted in a second place —
+                # and adoption, latched only in memory, re-read that echo as
+                # the user's word on every restart. The fabricated flag
+                # round-tripped through two stores; clearing one of them was
+                # half a fix.
+                #
+                # Adoption exists to seed a pre-#650 install ONCE. A registry
+                # store at all proves that has happened — the store and the
+                # adopter arrived in the same commit — so on any load with
+                # data the latch is set and stays set across restarts.
+                # ABSENT is not FALSE — the three-state rule, in its own
+                # store. A store with NO latch key at all predates #888: its
+                # hands-off flags can only be adoption's fabrication, so
+                # clear them and latch. A store that HAS the key is post-#888
+                # and every flag in it was set through an honest writer —
+                # respect the value, and if adoption simply has not run yet
+                # (False), leave the flags AND the latch alone. The first
+                # version tested ``not data.get(...)`` and so read a fresh
+                # install's honest ``False`` as "needs migration", wiping a
+                # genuine opt-out on its first restart; #650's own
+                # round-trip test caught it in the same minute.
+                if "legacy_flags_adopted" not in data:
+                    if self._controllable_overrides:
+                        _fabricated = sorted(self._controllable_overrides)
+                        self._controllable_overrides = {}
+                        _LOGGER.warning(
+                            "(#888) cleared %d hands-off flag(s) SEM had set "
+                            "about itself, not the user: %s — these loads are "
+                            "SEM's to act on again, subject to the Mode you "
+                            "picked",
+                            len(_fabricated), _fabricated[:6],
+                        )
+                    self._legacy_flags_adopted = True
+                    # Persist NOW, before any refresh can run adoption. The
+                    # first version set a flag here and saved "later" —
+                    # later was after the delayed rediscovery, which is
+                    # exactly when adoption fires.
+                    await self._save_storage()
+                else:
+                    self._legacy_flags_adopted = bool(data["legacy_flags_adopted"])
                 self._rated_power_overrides = {
                     k: float(v) for k, v in
                     data.get("rated_power_overrides", {}).items()
@@ -394,6 +432,14 @@ class UnifiedDeviceRegistry:
                 )
         except Exception as e:
             _LOGGER.warning("Could not load device mappings: %s", e)
+
+    async def async_initialize(self) -> None:
+        """Load manual mappings from storage, then refresh devices.
+
+        Also schedules a delayed re-discovery after 35s because at startup
+        many entities aren't available yet (HA loads integrations in stages).
+        """
+        await self._load_storage()
 
         # (#662) Both dependency stores are loaded now — break any cycle a
         # pre-guard or hand-edited store carried in, before a device can
@@ -2666,9 +2712,11 @@ class UnifiedDeviceRegistry:
             "dependencies": self._dependency_overrides,
             "critical_overrides": self._critical_overrides,          # (#650)
             "controllable_overrides": self._controllable_overrides,  # (#650)
-            # (#888) the one-shot marker — set once the fabricated flags have
-            # been cleared, so a genuine opt-out set afterwards survives.
-            "axes_migrated": True,
+            # (#888) the persisted adoption latch. Once True, adoption never
+            # runs again on this install — so SEM's own echo in the
+            # LoadManagement store can never be re-read as the user's word,
+            # and a genuine opt-out set afterwards survives every upgrade.
+            "legacy_flags_adopted": bool(self._legacy_flags_adopted),
             "rated_power_overrides": self._rated_power_overrides,
             "service_registrations": self._service_registrations,
             "device_goals": self._device_goals,
