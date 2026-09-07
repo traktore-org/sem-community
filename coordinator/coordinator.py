@@ -7100,6 +7100,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             if not _charge_active and not _arb_fired:
                 from .forecast_sell import evaluate_forecast_sell
                 _pe0 = getattr(self, "_planning_evidence", {}) or {}
+                # (#931) the CURRENT export price, three-state. A dynamic
+                # provider answers from its entity; the static one answers
+                # the configured feed-in — the same number the budget priced
+                # with, so a fixed-tariff install is unchanged. A provider
+                # that raises, or none at all with no configured rate, is
+                # UNKNOWN, and the sell refuses rather than guess.
+                _xr, _xr_known = None, False
+                try:
+                    _prov = getattr(self, "_tariff_provider", None)
+                    if _prov is not None and hasattr(_prov, "get_current_export_rate"):
+                        _xr = float(_prov.get_current_export_rate())
+                        _xr_known = True
+                    else:
+                        _xr = float(self._configured_export_rate())
+                        _xr_known = True
+                except Exception:  # noqa: BLE001 — unreadable is a state, not 0
+                    _xr, _xr_known = None, False
                 _fs = evaluate_forecast_sell(
                     dt_util.now(), enabled=True, in_block=_fsell_in,
                     block_w=_fsell[1],
@@ -7110,6 +7127,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     dynamic_floor_pct=_pe0.get("battery_dynamic_floor_pct"),
                     reserve_pct=float(self.config.get(
                         "battery_reserve_soc", 20.0) or 20.0),
+                    export_rate=_xr, export_rate_known=_xr_known,
                 )
                 if _fs.state.value == "discharging_arbitrage":
                     scheduler_decision = _fs

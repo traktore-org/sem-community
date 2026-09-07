@@ -100,6 +100,8 @@ def evaluate_forecast_sell(
     max_discharge_w: float,
     dynamic_floor_pct: Optional[float],
     reserve_pct: float,
+    export_rate: Optional[float] = None,
+    export_rate_known: bool = True,
 ) -> SchedulerDecision:
     """The live WHETHER, in ``evaluate_arbitrage``'s verdict shape.
 
@@ -114,6 +116,20 @@ def evaluate_forecast_sell(
 
     if not enabled:
         return _v(state=SchedulerState.IDLE, reason="forecast spending off")
+    # (#931) This sell was written price-blind ON PURPOSE for a fixed
+    # feed-in, where the rate is a constant the budget already priced. But
+    # the switch that enables it is a plain global, and a dynamic-tariff
+    # install that turns it on would be sold at whatever the evening's
+    # export price is — zero, or negative, paying to give energy away.
+    # Three states, never two: a price that could not be READ is not a
+    # price of zero, and neither of them is a reason to sell.
+    if not export_rate_known:
+        return _v(state=SchedulerState.IDLE,
+                  reason="export price unreadable — not selling blind on price")
+    if export_rate is not None and float(export_rate) <= 0.0:
+        return _v(state=SchedulerState.IDLE,
+                  reason=f"export price is not positive ({float(export_rate):.3f}) "
+                         "— selling would pay to give energy away")
     kwh = float(spendable_kwh or 0.0)
     if kwh < MIN_SPEND_KWH:
         return _v(state=SchedulerState.NOT_NEEDED,

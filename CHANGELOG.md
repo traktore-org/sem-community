@@ -13,6 +13,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🛡️ **A battery still set to the retired "allow arbitrage" mode kept
+  selling under a master switch that read off** (#930). That mode left the
+  selector in v1.7.3 and has been read as *auto + may export* ever since —
+  but only in memory, so the stored value never went away, and it was
+  allowed to bypass both master switches. On first start after this update
+  it is written down as the permission it always meant, once; the arbitrage
+  master switch applies to that battery from then on. An explicit "may not
+  export" you set yourself is never overwritten.
+
+- 🛡️ **Forecast spending will not sell at a zero or negative export price**
+  (#931). That sell was written for a fixed feed-in and never looked at the
+  price. On a dynamic tariff it could sell during a negative-price hour —
+  paying to give energy away. It now refuses when the export price is not
+  positive, and refuses when the price cannot be read at all (unreadable is
+  not zero). A fixed-tariff install hands in its configured rate and is
+  unchanged. Arbitrage stays off by default; the real economics — a
+  per-slot feed-in price and profit after round-trip — are 2.2's work.
+
 - 🛡️ **Arbitrage could keep selling the battery through a dark SOC reading**
   (#932). The "never sell blind" guard checked for a value the reading
   pipeline never produces: when the SOC sensor drops out, SEM holds the last
