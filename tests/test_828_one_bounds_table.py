@@ -57,8 +57,6 @@ _UNMIGRATED = {
     # refactor.
     "battery_assist_max_power",
     "battery_assist_min_surplus",
-    "battery_auto_start_soc",
-    "battery_buffer_soc",
     "battery_cycle_cost",
     "battery_max_charge_power_w",
     "battery_max_discharge_power",
@@ -66,7 +64,6 @@ _UNMIGRATED = {
     "battery_min_deficit_kwh",
     "battery_pessimism_weight",
     "battery_precharge_trigger_hour",
-    "battery_priority_soc",
     "battery_replan_interval_min",
     "battery_roundtrip_efficiency",
     "demand_charge_rate",

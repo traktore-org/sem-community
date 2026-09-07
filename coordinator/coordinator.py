@@ -3830,6 +3830,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                     redirect_w=float(getattr(decision, "redirect_w", 0.0) or 0.0),
                                     grid_import_w=float(getattr(view.fleet, "grid_import_w", 0.0) or 0.0),
                                     charging=bool(view.power.charging),
+                                    # (#925 audit) a dark meter is not
+                                    # agreement — hold, do not forgive
+                                    grid_import_known=bool(getattr(
+                                        view.fleet, "grid_import_known", True)),
                                 )
                         try:
                             await actuate(
@@ -5516,6 +5520,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 peak_slot_allowed_w=getattr(self, "_peak_slot_allowed_w", None),
                 grid_import_w=float(getattr(
                     power, "grid_import_power", 0.0) or 0.0),
+                # (#925 audit) the twin flag travels with the watts
+                grid_import_known=not bool(getattr(
+                    power, "grid_power_unavailable", False)),
             )
             surplus_data.surplus_total_w = allocation.total_surplus_w
             surplus_data.surplus_distributable_w = allocation.distributable_surplus_w
@@ -7184,6 +7191,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # 2-battery setup), so both units can sell to grid / be limited
             # independently. Falls back to the global single-entity keys.
             self._check_battery_platform_pin(battery_id, batt_idx, _bat_count)
+            self._check_soc_zone_order()      # (#870)
             adapter = self._battery_adapters.get(battery_id)
             if adapter is None:
                 # #709: runtime context — injects the persistent Deye snapshot
@@ -9737,6 +9745,42 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         except Exception:  # noqa: BLE001
             pass
         return out
+
+    def _check_soc_zone_order(self) -> None:
+        """(#870) Are the three battery SOC zones in ascending order?
+
+        Since #870 all three are settable anywhere in 5..100 — the old
+        minimums (buffer 50, auto-start 70) were enforcing the ordering by
+        accident and made coppe218's 20/30/50 layout impossible. `soc_zone`
+        sorts them so no zone is ever SKIPPED, but a user who wrote them
+        out of order made a mistake and should hear about it.
+
+        Asked every cycle, acted on only when the verdict CHANGES, and
+        never before HA is running — the shape #919 taught: a question
+        asked before the thing it asks about exists answers 'no' forever.
+        """
+        if not getattr(self.hass, "is_running", False):
+            return
+        from . import repair_issues as _ri_soc
+        try:
+            p = float(self.config.get("battery_priority_soc", 30) or 0)
+            b = float(self.config.get("battery_buffer_soc", 70) or 0)
+            a = float(self.config.get("battery_auto_start_soc", 90) or 0)
+        except (TypeError, ValueError):
+            return                      # unreadable is not out-of-order
+        bad = not (p <= b <= a)
+        if bad == getattr(self, "_soc_zone_order_bad", None):
+            return                      # no change, no churn
+        self._soc_zone_order_bad = bad
+        if bad:
+            _ri_soc.raise_soc_zones_out_of_order(
+                self.hass, priority=p, buffer=b, auto_start=a)
+            _LOGGER.warning(
+                "battery SOC zones are out of order (priority %g, buffer %g, "
+                "auto-start %g) — using %g/%g/%g as the boundaries",
+                p, b, a, *sorted((p, b, a)))
+        else:
+            _ri_soc.clear_soc_zones_out_of_order(self.hass)
 
     def _check_battery_platform_pin(self, battery_id, batt_idx, bat_count) -> None:
         """(#900, fixed 07.09 for #919) Is this battery pinned to `generic`

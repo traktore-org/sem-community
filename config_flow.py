@@ -2250,21 +2250,15 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "battery_priority_soc",
                     default=_c("battery_priority_soc", DEFAULT_BATTERY_PRIORITY_SOC),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=5, max=60, step=5, unit_of_measurement="%", mode="slider")
-                ),
+                ): bounds_selector("battery_priority_soc", mode="slider"),
                 vol.Optional(
                     "battery_buffer_soc",
                     default=_c("battery_buffer_soc", DEFAULT_BATTERY_BUFFER_SOC),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=50, max=95, step=5, unit_of_measurement="%", mode="slider")
-                ),
+                ): bounds_selector("battery_buffer_soc", mode="slider"),
                 vol.Optional(
                     "battery_auto_start_soc",
                     default=_c("battery_auto_start_soc", DEFAULT_BATTERY_AUTO_START_SOC),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=70, max=100, step=5, unit_of_measurement="%", mode="slider")
-                ),
+                ): bounds_selector("battery_auto_start_soc", mode="slider"),
                 vol.Optional(
                     "battery_capacity_kwh",
                     default=_c("battery_capacity_kwh", DEFAULT_BATTERY_CAPACITY_KWH),

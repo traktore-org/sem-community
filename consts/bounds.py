@@ -78,6 +78,28 @@ BOUNDS: dict[str, Range] = {
     # never reported. One row, one answer.
     "battery_capacity_kwh": Range(1, 100, step=0.5, unit="kWh"),
 
+    # ── Battery SOC zones (#870) ─────────────────────────────────────
+    # coppe218: "Battery size, chemistry, inverter behaviour and the user's
+    # energy strategy differ significantly between installations... a
+    # configuration such as Priority 20 / Buffer 30 / Auto-start 50 can be
+    # completely intentional." It could not be configured: buffer floored
+    # at 50 and auto-start at 70, so his two lower zones were unreachable.
+    #
+    # The old minimums were doing two jobs — bounding the value AND implying
+    # the ordering priority < buffer < auto_start. That is why widening one
+    # felt unsafe. The ordering is a RUNTIME relationship between three
+    # numbers, not a property of any one field's range, so it does not
+    # belong here; ``decide.soc_zone`` now enforces it where it is actually
+    # used, and a Repair tells the user when their zones are out of order
+    # rather than a slider silently forbidding a legitimate layout.
+    #
+    # These were declared TWICE (number.py entities and the config-flow
+    # selectors) with the numbers duplicated by hand. Same numbers today,
+    # which is exactly how #828's pair started.
+    "battery_priority_soc": Range(5, 100, step=5, unit="%"),
+    "battery_buffer_soc": Range(5, 100, step=5, unit="%"),
+    "battery_auto_start_soc": Range(5, 100, step=5, unit="%"),
+
     # ── heat pumps (#685) ────────────────────────────────────────────
     "heat_pump_rated_power": Range(100, 30000, step=100, unit="W"),
     "heat_pump_force_on_threshold": Range(0, 30000, step=100, unit="W"),

@@ -1720,6 +1720,10 @@
     "battery_control_write_not_taken": {
       "title": "Eine Batterie-Steuerung übernimmt den geschriebenen Wert nicht: {entity_id}",
       "description": "SEM hat **`{entity_id}`** auf **{wanted}** gesetzt, und in den folgenden Zyklen stand dort weiterhin **{seen}** — {strikes} Mal in Folge. Der Dienstaufruf ist nicht fehlgeschlagen; das Register hat den Wert schlicht nicht behalten.\n\nEin deklarierter Entitätsname kann nicht sagen, ob ein Register Schreibvorgänge annimmt, sie nach einer Weile verwirft, zuerst einen Freigabeschalter braucht oder eine globale Einstellung ist, die der Hersteller unangetastet lassen will — das beantwortet erst der erste Schreibvorgang, und das ist die Antwort.\n\nÖffne die Entität unter **Entwicklerwerkzeuge → Zustände** und setze sie von Hand. Hält sie den Wert nicht, ist es die falsche Entität für diese Rolle: wähle die richtige in den Batterie-Auswahlfeldern der Konfigurationskarte. Hält sie von Hand, aber nicht für SEM, nenne uns Marke und Entität — genau das macht aus einem Vorschlag eine unterstützte Zeile.\n\nDie Meldung verschwindet von selbst, sobald ein Schreibvorgang übernommen wird."
+    },
+    "soc_zones_out_of_order": {
+      "title": "Battery SOC zones are out of order",
+      "description": "Your battery zones read **Priority {priority}% · Buffer {buffer}% · Auto-start {auto_start}%**, but SEM expects them to rise in that order: Priority is the reserve you never spend, Buffer is where battery assist stops, and Auto-start is where the pack is full enough to give freely.\n\nSEM is using **{used}** as the boundaries — the same three numbers, sorted — so no zone is skipped and nothing behaves unpredictably. It is telling you because the layout you typed is almost certainly not the one you meant.\n\nFix it in **Settings → Devices & Services → SEM → Configure → Battery** or on the dashboard's Configuration tab. Any values are allowed as long as they ascend; wide zones are fine — 20 / 30 / 50 is a perfectly good layout on a large pack."
     }
   },
   "selector": {

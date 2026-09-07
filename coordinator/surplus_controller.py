@@ -1280,6 +1280,9 @@ class SurplusController:
         # None allowance = no ceiling configured / guard off.
         peak_slot_allowed_w: Optional[float] = None,
         grid_import_w: float = 0.0,
+        # (#925 audit) False when the grid sensor was unreadable this
+        # cycle — grid_import_w is then a fallback, not a measurement.
+        grid_import_known: bool = True,
     ) -> SurplusAllocationData:
         """Run the surplus allocation algorithm.
 
@@ -1878,7 +1881,8 @@ class SurplusController:
                     from .peak_guard import clamp_import_command
                     _fit_w, _clamped = clamp_import_command(
                         float(device.min_power_threshold or 0.0),
-                        peak_slot_allowed_w, grid_import_w)
+                        peak_slot_allowed_w, grid_import_w,
+                        grid_import_known=grid_import_known)
                     if _clamped and _fit_w < float(device.min_power_threshold or 0.0):
                         log_on_change(
                             _LOGGER, f"peakslot:{device.device_id}",

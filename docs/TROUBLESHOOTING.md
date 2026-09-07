@@ -995,3 +995,34 @@ exact reason. **Fix:** in Configuration → Battery intelligence, check the
 select entity and the three option labels against what your Deye integration
 actually shows; the labels must match exactly. SEM clears the notice the
 moment the setup validates.
+
+## Your battery SOC zones are out of order
+
+SEM's battery zones are three thresholds that must rise in order:
+
+| zone | meaning |
+|---|---|
+| **Priority SOC** | the reserve you never spend — below this the pack is protected |
+| **Buffer SOC** | where battery assist stops giving energy away |
+| **Auto-start SOC** | full enough that the pack can give freely |
+
+Until 2.1 the sliders enforced that ordering by accident: Buffer could not
+go below 50% and Auto-start not below 70%. That also made perfectly
+reasonable layouts impossible — on a large pack, **Priority 20 / Buffer 30
+/ Auto-start 50** is a deliberate strategy, not a mistake, and #870 asked
+for exactly it. All three now range 5–100%.
+
+The cost of that freedom is that they can be typed out of order, so SEM
+raises this Repair when they are. It names what you set and what it is
+using instead.
+
+**SEM does not misbehave in the meantime.** The zone boundaries are the
+same three numbers sorted, so no zone is ever skipped — this matters,
+because an unsorted cascade does not merely reorder the zones, it *deletes*
+one. With Auto-start at 50% and Buffer at 80%, a pack at 60% would answer
+"above auto-start" and report the top zone, never reaching the buffer test
+you set at 80%.
+
+**To fix it:** Settings → Devices & Services → SEM → Configure → Battery,
+or the Configuration tab on the SEM dashboard. Any values are fine as long
+as Priority ≤ Buffer ≤ Auto-start.

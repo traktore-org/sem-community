@@ -131,6 +131,7 @@ def clamp_import_command(
     allowed_w: Optional[float],
     grid_import_w: float,
     own_grid_draw_w: float = 0.0,
+    grid_import_known: bool = True,
 ) -> tuple:
     """Bound one import-creating command by the slot allowance.
 
@@ -147,6 +148,18 @@ def clamp_import_command(
     """
     if allowed_w is None:
         return float(desired_w), False
+    # (#925 audit) A DARK METER PROVES NO HEADROOM. `grid_import_w` is the
+    # reader's 0.0 fallback when the sensor was unreadable, and crediting
+    # that as "nobody else is drawing" inflates headroom to the WHOLE slot
+    # allowance — #906's defect ("headroom grew the longer the meter stayed
+    # dark") recurring in a sibling call site the #906 fix did not cover.
+    # The sibling that computes the slot CEILING gates on the same flag
+    # correctly; this one, added in the same release, never received it.
+    #
+    # Refusing is preventive and costs a cycle: it declines to START a new
+    # grid-funded load while blind, and touches nothing already running.
+    if not grid_import_known:
+        return 0.0, True
     gi = max(0.0, float(grid_import_w or 0.0))
     others_w = max(0.0, gi - min(max(0.0, float(own_grid_draw_w or 0.0)), gi))
     headroom_w = max(0.0, float(allowed_w) - others_w)

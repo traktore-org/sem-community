@@ -13,6 +13,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🛡️ **Two safety checks were disabled by a blink of the grid meter**
+  (#925 audit). SEM's rule is that an absent reading is never a reading of
+  zero, and in both of these the flag saying "this was not actually read"
+  was computed correctly one file away and then never passed to the code
+  that needed it. On a system whose grid read goes missing over a hundred
+  times a day, neither was hypothetical.
+
+  The battery→EV redirect check counts three cycles where the promised
+  battery power failed to show up at the meter, then stops trusting the
+  redirect. A dark meter reads zero watts, which looked like success, so a
+  single blip in the middle **reset the count** — the protection could be
+  postponed indefinitely by the exact condition it was built for. An
+  unreadable meter now holds the count instead of clearing it.
+
+  The peak-slot guard's other half had the same hole: deciding whether a
+  cheap-hours load could start, it credited a dark meter as *nobody else
+  is drawing* and offered the whole slot budget. It now declines to start
+  a new grid-funded load while blind, and leaves anything already running
+  alone.
+
+- ✨ **The battery SOC zones are yours to place** (#870). Priority, Buffer
+  and Auto-start now range 5–100% each, so a layout like *20 / 30 / 50* on
+  a large pack — deliberate, and what the issue asked for — is finally
+  configurable. Buffer used to floor at 50% and Auto-start at 70%, which
+  put both of the lower zones out of reach.
+
+  Those minimums were quietly doing a second job: enforcing that the three
+  rise in order. That job moved to where it belongs. The zone boundaries
+  are now the same three numbers sorted, so no zone is ever skipped, and
+  SEM raises a Repair naming what you set and what it is using if they are
+  out of order — corrected in behaviour, but told about, not hidden.
+
 - 🐛 **Tomorrow's plan was packed against a free sun** (#924). SEM prices a
   sunny hour at what the electricity would have earned leaving the house, so
   a genuinely cheaper grid hour can win — that is what stops solar being
