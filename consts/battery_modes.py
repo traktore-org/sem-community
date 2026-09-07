@@ -79,6 +79,18 @@ def arbitrage_allowed_for_mode(
     # functions genuinely disagree about whether a per-battery opt-in beats
     # the master switch; that is worth settling deliberately, not here.
     if m == LEGACY_ARBITRAGE_MODE:
+        # …but an EXPLICIT revocation beats it. The paragraph above left one
+        # question open on purpose ("worth settling deliberately, not here"),
+        # and #920's guard settled it by asking every combination: a user on
+        # this legacy mode who turns "Battery may sell to grid" OFF was still
+        # sold to the grid, with the switch showing off. A mode value chosen
+        # once and a permission revoked deliberately are not equal claims —
+        # the newer, more specific "no" wins, and selling against an explicit
+        # no is the one outcome this whole axis exists to prevent. An UNSET
+        # permission still short-circuits, so no existing install moves.
+        from .battery_permissions import _perm
+        if _perm(permissions, "may_export") is False:
+            return False
         return True
 
     # Everything else routes through the permission axis — INCLUDING

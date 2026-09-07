@@ -6858,7 +6858,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         keyed by ``"primary"``.
         """
         from .actuate_battery import actuate_battery
-        from .battery_adapters import adapter_for, _integration_loaded, pinned_generic_brand
+        from .battery_adapters import adapter_for, _integration_loaded
         from .charger_types import (
             BatteryIntent, BatteryRuntime, BatteryView,
             FleetContext,
@@ -7166,6 +7166,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # entities when configured (#523 multi-battery — RienduPre's
             # 2-battery setup), so both units can sell to grid / be limited
             # independently. Falls back to the global single-entity keys.
+            self._check_battery_platform_pin(battery_id, batt_idx, _bat_count)
             adapter = self._battery_adapters.get(battery_id)
             if adapter is None:
                 # #709: runtime context — injects the persistent Deye snapshot
@@ -7174,20 +7175,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 _pbc = self._battery_adapter_context(battery_id, batt_idx, _bat_count)
                 self._warn_battery_entity_collision(battery_id, _pbc)
                 adapter = adapter_for(self.hass, _pbc)
-                # (#900) An explicit ``generic`` on a brand install is the old
-                # wizard default, not a choice — say so where the user reads.
-                from . import repair_issues as _ri_pin
-                _pinned = pinned_generic_brand(self.hass, _pbc)
-                if _pinned:
-                    _ri_pin.raise_battery_platform_pinned_generic(self.hass, brand=_pinned)
-                    log_on_change(
-                        _LOGGER, f"pinned-generic:{battery_id}", logging.WARNING,
-                        "battery %s: platform is 'generic' but the %s integration "
-                        "is loaded — set Battery charge platform to Auto-detect "
-                        "(#900)", battery_id, _pinned,
-                    )
-                else:
-                    _ri_pin.clear_battery_platform_pinned_generic(self.hass)
                 # H2 (review): share one orphan-stop guard across the fleet so a
                 # multi-battery setup behind one inverter issues a single
                 # stop_forcible_charge per device on restart (#532).
@@ -9727,6 +9714,47 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         except Exception:  # noqa: BLE001
             pass
         return out
+
+    def _check_battery_platform_pin(self, battery_id, batt_idx, bat_count) -> None:
+        """(#900, fixed 07.09 for #919) Is this battery pinned to `generic`
+        on an install whose brand integration is loaded?
+
+        This used to be asked ONCE, inside the branch that builds the adapter
+        — which runs during SEM's first refresh, while `huawei_solar` is
+        still loading. `_integration_loaded` was therefore False, the check
+        took its `else` branch and CLEARED the Repair, and never ran again:
+        the one Repair that would have told PROD's owner why the #778 sell
+        block was dropped every evening could not fire on any install, ever.
+        Same shape as #166 and as the detection report's re-heal — a question
+        asked before the thing it asks about exists.
+
+        Asked every cycle now, acted on only when the verdict CHANGES, and
+        never before HA is running (an unloaded integration is "not yet",
+        not "no").
+        """
+        if not getattr(self.hass, "is_running", False):
+            return
+        from .battery_adapters import pinned_generic_brand
+        from . import repair_issues as _ri_pin
+        try:
+            _pbc = self._battery_adapter_context(battery_id, batt_idx, bat_count)
+            pinned = pinned_generic_brand(self.hass, _pbc)
+        except Exception:  # noqa: BLE001 — a Repair never costs a cycle
+            return
+        seen = getattr(self, "_pinned_verdicts", None)
+        if seen is None:
+            seen = self._pinned_verdicts = {}
+        if seen.get(battery_id) == pinned:
+            return
+        seen[battery_id] = pinned
+        if pinned:
+            _ri_pin.raise_battery_platform_pinned_generic(self.hass, brand=pinned)
+            _LOGGER.warning(
+                "battery %s: platform is 'generic' but the %s integration is "
+                "loaded — set Battery charge platform to Auto-detect (#900)",
+                battery_id, pinned)
+        else:
+            _ri_pin.clear_battery_platform_pinned_generic(self.hass)
 
     def _primary_battery_adapter(self):
         """The adapter for the primary battery, or None before the first

@@ -84,6 +84,27 @@ SWITCH_TYPES = [
 # dict. That dict is the ONE representation the resolver reads; persisting a
 # flat ``battery_may_export`` option beside it would create a second spelling
 # of one fact, which is precisely the drift class this arc has been closing.
+def battery_may_export_display(mode, stored, arbitrage_on, spend_on) -> bool:
+    """(#920) Will SEM sell to the grid? — asked of EVERY path that can.
+
+    The switch is labelled "Battery may sell to grid", so that is the
+    question it must answer. Two features can sell: #533's arbitrage under
+    ``battery_grid_arbitrage_enabled`` and #778's forecast spend under
+    ``forecast_spending_enabled``. Each asks the permission with its own
+    flag — correctly, they are separate features — and this switch used to
+    ask with only the arbitrage one, so on PROD it read OFF while a 5 kW
+    sell block was open.
+
+    Defined as the decision itself rather than as a parallel calculation:
+    the two cannot disagree if there is only one of them.
+    """
+    from .consts.battery_modes import arbitrage_allowed_for_mode
+    from .consts.battery_permissions import effective_permissions
+    perms = effective_permissions(mode or "auto", stored or {})
+    return bool(arbitrage_allowed_for_mode(mode, bool(arbitrage_on), perms)
+                or arbitrage_allowed_for_mode(mode, bool(spend_on), perms))
+
+
 PERMISSION_SWITCHES = {
     "battery_may_export": "may_export",
     "battery_may_assist_ev": "may_assist_ev",
@@ -214,7 +235,7 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         key = self.entity_description.key
         if key in PERMISSION_SWITCHES:
             from .consts.battery_permissions import (
-                effective_permissions, may_assist_ev, may_export,
+                effective_permissions, may_assist_ev,
             )
             cfg = getattr(self.coordinator, "config", None) or {}
             mode = cfg.get("battery_mode") or "auto"
@@ -232,9 +253,29 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
                 # default (True) always won, so this switch displayed ON while
                 # the decision path was OFF — the same knob-that-lies bug this
                 # class was written to prevent, pointing the other way.
-                return bool(may_export(
-                    mode, perms,
-                    bool(cfg.get("battery_grid_arbitrage_enabled", False))))
+                #
+                # (#920) …and it pointed that way again, because TWO features
+                # can sell: #533's arbitrage, gated by the kill switch, and
+                # #778's forecast spend, gated by its own switch. Each asks
+                # ``may_export`` with ITS OWN flag — correctly, they are
+                # separate features — but this switch asked with only the
+                # arbitrage one. Seen on PROD 06.09: the switch read OFF while
+                # the spend path opened a 5 kW sell block, because the
+                # question it answered ("may the ARBITRAGE feature sell?") is
+                # not the question it is labelled with ("Battery may sell to
+                # grid"). The label is the user's question, so the answer is
+                # over EVERY path that can sell: a permission the user has
+                # revoked still blocks both, and an untouched install now sees
+                # the switch agree with what SEM actually does.
+                # options FIRST for the two feature flags, exactly as
+                # `stored` does above and as `_configured` does for every
+                # persisted switch: a runtime flip lands in options, and
+                # reading `config` alone made this switch answer with the
+                # value from before the user touched anything.
+                return battery_may_export_display(
+                    mode, stored,
+                    self._flag("battery_grid_arbitrage_enabled", cfg),
+                    self._flag("forecast_spending_enabled", cfg))
             return bool(may_assist_ev(mode, perms))
 
         if key in self._PERSISTED_DEFAULTS:
@@ -371,8 +412,43 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
 
     @property
     def is_on(self) -> bool:
-        """Return true if switch is on."""
+        """Return true if switch is on.
+
+        (#920) A permission the user has never set is DERIVED, not stored —
+        computed on every read rather than seeded once. The restore path
+        already re-resolves an UNSET permission at startup ("a ghost in the
+        restore store has nothing to say and can only contradict it"); a
+        value that follows two FEATURE switches has to follow them between
+        restarts too. Turning the forecast spend on made SEM able to sell,
+        and this switch went on reading "off" until the next reboot — the
+        same lie the seed fix had just closed, one layer up. An explicit
+        choice is still a stored boolean, and still wins.
+        """
+        key = self.entity_description.key
+        if key in PERMISSION_SWITCHES and self._permission_is_unset(key):
+            return self._seed_state()
         return self._is_on
+
+    def _flag(self, key: str, cfg) -> bool:
+        """A feature flag as the rest of SEM sees it: the user's runtime flip
+        (options) first, then the install-time value, then config."""
+        explicit = self._configured(key)
+        if explicit is not None:
+            return bool(explicit)
+        return bool((cfg or {}).get(key, False))
+
+    def _permission_is_unset(self, key: str) -> bool:
+        """True when the user has never chosen this permission either way."""
+        from .consts.battery_permissions import _perm
+        cfg = getattr(self.coordinator, "config", None) or {}
+        stored = cfg.get("battery_permissions") or {}
+        try:
+            stored = {**stored, **((
+                getattr(self.coordinator.config_entry, "options", None)
+                or {}).get("battery_permissions") or {})}
+        except (AttributeError, TypeError):
+            pass
+        return _perm(stored, PERMISSION_SWITCHES[key]) is None
 
     @property
     def extra_state_attributes(self) -> Optional[Dict[str, Any]]:
