@@ -225,7 +225,16 @@ class SensorConfig:
 # (#818) ``_read_sensor`` names its caller; these three are the power
 # inputs whose 0.0 fallback is indistinguishable from a real reading
 # and which the surplus maths steers on.
-_DEGRADABLE_POWER_INPUTS = frozenset({"solar", "grid", "battery"})
+# (#925 audit, REFUTED once) The split halves of a grid meter are steering
+# inputs too. ``_all_dark_any("grid", "grid_import", "grid_export")`` was
+# added so a split-grid install could report a dark meter — and it could
+# not, because THIS set gates whether ``_read_sensor`` records a read into
+# the dark/reads tallies at all, and the split names were never in it. The
+# fix summed two counters that were never written; its test hand-filled
+# the dicts and proved the arithmetic, not the product. A ruflo reviewer
+# caught it before PROD. Membership here is the whole fix.
+_DEGRADABLE_POWER_INPUTS = frozenset(
+    {"solar", "grid", "grid_import", "grid_export", "battery"})
 
 
 class SensorReader:

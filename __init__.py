@@ -4078,15 +4078,22 @@ async def _async_register_services(
         if lm is not None:
             await lm.update_target_peak_limit(float(target), unlimited=unlimited)
             return
-        await hass.services.async_call(
-            DOMAIN, "set_option",
-            {"options": {
-                "target_peak_limit": float(target),
-                **({"peak_limit_unlimited": bool(unlimited)}
-                   if unlimited is not None else {}),
-            }},
-            blocking=True,
-        )
+        # (#913, REFUTED once) The first version of this branch went through
+        # ``set_option``, where ``target_peak_limit`` is UNROUTED — no number
+        # entity, not a live key — and the unrouted path ends in a full
+        # integration reload: a slider drag on every default install tore
+        # down the coordinator managing the live inverter, battery and
+        # charger, with a Modbus "stop forced charge" on the way out. A ruflo
+        # reviewer caught it before PROD. ``persist_global_option`` is the
+        # no-reload seam (#523/#547): it writes the option, updates
+        # ``coordinator.config`` — which ``_get_peak_limit_w`` reads live — and
+        # arms the skip so the update listener does not reload either.
+        _entry = coordinator.config_entry
+        persist_global_option(hass, _entry, coordinator,
+                              "target_peak_limit", float(target))
+        if unlimited is not None:
+            persist_global_option(hass, _entry, coordinator,
+                                  "peak_limit_unlimited", bool(unlimited))
         _LOGGER.info(
             "Updated target peak limit to %.1f kW%s", target,
             "" if unlimited is None else f" (unlimited={unlimited})",

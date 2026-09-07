@@ -145,6 +145,30 @@ class TestTheTwoHandlersThatNeverNeededIt:
             "update_target_peak refuses — the limit is a config option the "
             "planner reads with shedding off")
 
+    def test_update_target_peak_without_a_manager_does_not_reload(self):
+        """(ruflo refutation before PROD) The first no-manager branch went
+        through set_option, where this key is UNROUTED and the unrouted path
+        ends in a full integration reload — a slider drag tore down the
+        coordinator on every default install. It must take the no-reload
+        seam and never call set_option or async_reload."""
+        fn = self._handler_src("async_update_target_peak")
+        called = {
+            (n.func.id if isinstance(n.func, ast.Name)
+             else getattr(n.func, "attr", ""))
+            for n in ast.walk(fn) if isinstance(n, ast.Call)
+        }
+        assert "persist_global_option" in called, (
+            "the no-manager write no longer goes through the no-reload seam")
+        assert "async_reload" not in called
+        # no set_option service call from inside this handler
+        svc = [
+            n for n in ast.walk(fn) if isinstance(n, ast.Call)
+            and getattr(n.func, "attr", "") == "async_call"
+            and any(isinstance(a, ast.Constant) and a.value == "set_option"
+                    for a in n.args)
+        ]
+        assert not svc, "update_target_peak still routes through set_option"
+
     def test_update_device_config_has_no_manager_gate_above_its_branches(self):
         fn = self._handler_src("async_update_device_config")
         # the only raise for a MISSING dependency is the registry one, and

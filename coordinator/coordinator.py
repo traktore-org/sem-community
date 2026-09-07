@@ -4680,7 +4680,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             _spend = _pe.get("battery_spendable_kwh")
             result["battery_spendable_kwh"] = (
                 None if _pe.get("planning_phase") == "learning" else _spend)
-            result["battery_dynamic_floor_pct"] = _pe.get("battery_dynamic_floor_pct")
+            # (#925 audit, sibling of the spendable gate) a floor percentage
+            # beside a budget that reads "learning" is a number the card
+            # cannot explain — same rule, same phase, one line down.
+            result["battery_dynamic_floor_pct"] = (
+                None if _pe.get("planning_phase") == "learning"
+                else _pe.get("battery_dynamic_floor_pct"))
             result["battery_spendable_reason"] = _pe.get("battery_spendable_reason")
             result["planning_phase"] = _pe.get("planning_phase")
             result["planning_nights_sealed"] = _pe.get("nights_sealed")

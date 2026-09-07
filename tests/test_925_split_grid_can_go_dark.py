@@ -18,15 +18,80 @@ same gap booked a fabricated 0 W into long-term statistics.
 from __future__ import annotations
 
 from custom_components.solar_energy_management.coordinator.sensor_reader import (
+    _DEGRADABLE_POWER_INPUTS,
     SensorReader,
 )
 
 
 def _reader(dark: dict, reads: dict) -> SensorReader:
+    """A reader with the tallies PRE-FILLED — tests the arithmetic only."""
     r = SensorReader.__new__(SensorReader)
     r._input_dark = dict(dark)
     r._input_reads = dict(reads)
     return r
+
+
+def _live_reader() -> SensorReader:
+    """A reader whose tallies are filled by ``_read_sensor`` ITSELF — the
+    product path. The first version of this file used only ``_reader``
+    above, hand-filling the dicts, and so proved that summing two counters
+    works while the counters were never written for the split names: the
+    gate in ``_read_sensor`` records only names in ``_DEGRADABLE_POWER_INPUTS``,
+    and ``grid_import``/``grid_export`` were not in it. A ruflo reviewer
+    caught that the fix could not fire on the hardware it named, and that
+    this test could not tell. Same fixture shape as test_818."""
+    from unittest.mock import MagicMock
+    hass = MagicMock()
+    hass.states = MagicMock()
+    return SensorReader(hass, {})
+
+
+class TestTheSplitHalvesAreRecordedAtAll:
+    """The half of the fix the first version skipped."""
+
+    def test_the_split_names_are_degradable_inputs(self):
+        assert {"grid_import", "grid_export"} <= _DEGRADABLE_POWER_INPUTS, (
+            "the split halves are not in _DEGRADABLE_POWER_INPUTS, so "
+            "_read_sensor never tallies them and _all_dark_any sums zero")
+
+    def test_an_unavailable_import_half_is_tallied_dark(self):
+        r = _live_reader()
+        r.hass.states.get = lambda eid: None
+        r._read_sensor("sensor.grid_import", "grid_import")
+        assert r._input_dark.get("grid_import"), (
+            "a dark split-grid read left no trace — the gate dropped it")
+
+    def test_a_live_export_half_is_tallied_read(self):
+        r = _live_reader()
+        st = MagicMock_state("250")
+        r.hass.states.get = lambda eid: st
+        r._read_sensor("sensor.grid_export", "grid_export")
+        assert r._input_reads.get("grid_export")
+
+    def test_both_halves_dark_through_the_real_path_reads_dark(self):
+        """End to end: two dark reads → the flag every blind-meter
+        protection gates on says so. This is what could not happen."""
+        r = _live_reader()
+        r.hass.states.get = lambda eid: None
+        r._read_sensor("sensor.grid_import", "grid_import")
+        r._read_sensor("sensor.grid_export", "grid_export")
+        assert r._all_dark_any("grid", "grid_import", "grid_export") is True
+
+    def test_one_half_alive_through_the_real_path_is_not_dark(self):
+        r = _live_reader()
+        st = MagicMock_state("1200")
+        r.hass.states.get = lambda eid: (st if "import" in eid else None)
+        r._read_sensor("sensor.grid_import", "grid_import")
+        r._read_sensor("sensor.grid_export", "grid_export")
+        assert r._all_dark_any("grid", "grid_import", "grid_export") is False
+
+
+def MagicMock_state(value: str):
+    from unittest.mock import MagicMock
+    st = MagicMock()
+    st.state = value
+    st.attributes = {}
+    return st
 
 
 class TestACombinedMeterStillBehaves:
