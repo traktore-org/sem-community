@@ -13,6 +13,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🩹 **The battery budget explained itself using a charge level it had
+  never read** (#925 audit, then seen live). With the SOC sensor
+  unavailable, SEM still published a confident floor percentage and the
+  sentence *"nothing spendable — tonight's own load needs all 0.0 kWh
+  stored"*, as though it had measured an empty pack. It had measured
+  nothing. SEM already had the honest wording for this — *"unknown battery
+  SOC — spending nothing"* — and it could never be reached, because the
+  reading arrived as a plain 0 with no way to tell it apart from a real
+  one. It says which it means now.
+
+  What SEM spends is unchanged: an unknown pack was already spending
+  nothing. What changes is that it no longer explains that decision with a
+  number nobody measured.
+
 - 🛡️ **Load shedding stopped working while the grid meter blinked** (#925
   audit). Shedding decides how much to shed by comparing the live meter
   against your target. A meter that is momentarily unreadable reports zero

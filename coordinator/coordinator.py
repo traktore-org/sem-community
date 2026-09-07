@@ -11850,7 +11850,24 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         usable_kwh = cap.usable_kwh if cap is not None else _f_or_none(nameplate)
         need_kwh = expected_overnight_need(sealed)
-        soc_now = getattr(power, "battery_soc", None)
+        # (#925 audit, then SEEN on .175 07.09) `battery_soc` is 0.0 by
+        # dataclass default and never None — the twin flag is the only way
+        # to know it was read. Ungated, a dark SOC computed the whole
+        # budget against a literal 0 %, and the rig showed exactly that:
+        # `sensor.sem_battery_soc` unavailable, and the published reason
+        # reading "nothing spendable — tonight's own load needs all 0.0 kWh
+        # stored" with a confident dynamic_floor_pct beside it. Both
+        # dawn_headroom_kwh() and spendable_budget() HAVE an honest
+        # "SOC unknown" branch; neither could ever be reached.
+        #
+        # It fails safe numerically — the reserve always exceeds a stored
+        # zero, so the answer is 0.0 either way — but a number a user
+        # cannot explain is one they will not trust, which is the module's
+        # own rule 5. `_run_charge_pacing` sixty lines away already asks
+        # this question correctly.
+        soc_now = (
+            None if getattr(power, "battery_soc_unavailable", False)
+            else getattr(power, "battery_soc", None))
 
         # (#778, found live on .175 30.08) The room that answers "will
         # tomorrow put the spend back" is the room at DAWN, after the
