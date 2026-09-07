@@ -62,16 +62,25 @@ class TestTheThreeStatesStayThree:
 
 class TestTheDecisionPathIsUntouched:
 
-    def test_the_coordinator_gates_the_publish_not_the_evidence(self):
-        """Decisions read `_planning_evidence`, which still carries the
-        number — spending nothing while unknown stays correct. Only the
-        published sensor changes."""
-        from .ast_contracts import call_sites  # noqa: F401  (import guard)
+    def test_the_evidence_dict_still_carries_the_raw_number(self):
+        """Decisions read `_planning_evidence`; only the published sensor
+        is gated. Asked STRUCTURALLY — the first draft of this test grepped
+        the coordinator's source for a dict literal, which is the very
+        idiom #925 exists to retire, and the ratchet caught me writing it.
+        """
+        import ast
         from pathlib import Path
         src = (Path(__file__).resolve().parent.parent
                / "coordinator" / "coordinator.py").read_text(encoding="utf-8")
-        assert 'result["battery_spendable_kwh"] = (' in src, (
-            "the publish site no longer gates on the phase")
-        assert '"battery_spendable_kwh": budget.spendable_kwh' in src, (
-            "the evidence dict should still carry the raw number for the "
-            "decision paths — gating THAT would change behaviour")
+        tree = ast.parse(src)
+        # the evidence dict maps "battery_spendable_kwh" to an ATTRIBUTE
+        # read (budget.spendable_kwh), not to a gated expression
+        raw = [
+            v for node in ast.walk(tree) if isinstance(node, ast.Dict)
+            for k, v in zip(node.keys, node.values)
+            if isinstance(k, ast.Constant) and k.value == "battery_spendable_kwh"
+        ]
+        assert any(isinstance(v, ast.Attribute) and v.attr == "spendable_kwh"
+                   for v in raw), (
+            "the evidence dict no longer carries the raw budget number — "
+            "gating THAT would change what SEM spends, not just what it says")

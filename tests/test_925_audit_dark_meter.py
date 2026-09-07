@@ -77,14 +77,27 @@ class TestADarkMeterProvesNoHeadroom:
     def test_a_readable_meter_passes_a_command_that_fits(self):
         assert clamp_import_command(500.0, 5000.0, 1000.0) == (500.0, False)
 
-    def test_a_dark_meter_grants_nothing(self):
-        """Refusing is preventive: it declines to START a grid-funded load
-        while blind and touches nothing already running."""
+    def test_a_dark_meter_with_no_estimate_grants_nothing(self):
         got, clamped = clamp_import_command(
             3000.0, 5000.0, 0.0, grid_import_known=False)
         assert got == 0.0 and clamped is True, (
             "a dark meter was credited as 'nobody else is drawing' and "
             "handed out the whole slot allowance")
+
+    def test_a_dark_meter_uses_the_house_draw_as_the_honest_estimate(self):
+        """Matching the charger-side sibling (decide.clamp_to_peak_slot),
+        which already got #906 right. Two implementations of one rule is
+        how this gap appeared; they agree now."""
+        got, clamped = clamp_import_command(
+            3000.0, 5000.0, 0.0, grid_import_known=False,
+            blind_others_w=4000.0)
+        assert (got, clamped) == (1000.0, True)
+
+    def test_a_dark_meter_still_passes_what_genuinely_fits(self):
+        got, clamped = clamp_import_command(
+            500.0, 5000.0, 0.0, grid_import_known=False,
+            blind_others_w=1000.0)
+        assert (got, clamped) == (500.0, False)
 
     def test_no_ceiling_configured_still_passes_through(self):
         """The guard being off is not the same as the meter being dark."""

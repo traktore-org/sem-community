@@ -49,6 +49,7 @@ class TestTheRangesAreWideEnoughToMeanSomething:
         """They were declared twice — the number entities and the config
         flow — with the numbers duplicated by hand. Same values then;
         that is exactly how #828's pair started."""
+        import ast
         import re
         from pathlib import Path
         root = Path(__file__).resolve().parent.parent
@@ -75,8 +76,23 @@ class TestTheRangesAreWideEnoughToMeanSomething:
                         f"({hit.group(0)!r}) instead of reading the one "
                         "bounds table")
                 if key in src:
-                    assert (f'BOUNDS["{key}"]' in src
-                            or f'bounds_selector("{key}"' in src), (
+                    # Structural, not textual: a BOUNDS[key] subscript or a
+                    # bounds_selector(key) call. (The first draft grepped
+                    # for the spelling and #925's ratchet caught it.)
+                    tree = ast.parse(src)
+                    reads = any(
+                        isinstance(n, ast.Subscript)
+                        and isinstance(n.value, ast.Name) and n.value.id == "BOUNDS"
+                        and isinstance(n.slice, ast.Constant) and n.slice.value == key
+                        for n in ast.walk(tree)
+                    ) or any(
+                        isinstance(n, ast.Call)
+                        and getattr(n.func, "id", "") == "bounds_selector"
+                        and n.args and isinstance(n.args[0], ast.Constant)
+                        and n.args[0].value == key
+                        for n in ast.walk(tree)
+                    )
+                    assert reads, (
                         f"{name} mentions {key} but never reads its range "
                         "from the table")
 
