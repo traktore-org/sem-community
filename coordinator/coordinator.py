@@ -4610,7 +4610,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # only exists after the first write. Same three-strike shape as
             # #824/#840, on the read-back side.
             try:
-                _ad = getattr(self, "_battery_adapter", None)
+                _ad = self._primary_battery_adapter()
                 _verify = getattr(_ad, "verify_pending_write", None)
                 if callable(_verify):
                     _v = _verify()
@@ -4622,7 +4622,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 pass
             # (#827) a brand whose discharge rate SEM cannot set says so.
             try:
-                _ad = getattr(self, "_battery_adapter", None)
+                _ad = self._primary_battery_adapter()
                 _cav = getattr(_ad, "discharge_rate_caveat", None)
                 if callable(_cav) and getattr(
                         _ad, "_system_work_mode_control", False):
@@ -6910,7 +6910,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 if _watch is None:
                     from .battery_mode_watch import BatteryModeWatch
                     _exp = None
-                    _ad0 = getattr(self, "_battery_adapter", None)
+                    _ad0 = self._primary_battery_adapter()
                     if _ad0 is not None:
                         _exp = type(_ad0).expected_operating_modes()
                     elif str(self.config.get(
@@ -9727,6 +9727,24 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         except Exception:  # noqa: BLE001
             pass
         return out
+
+    def _primary_battery_adapter(self):
+        """The adapter for the primary battery, or None before the first
+        cycle has built one.
+
+        (07.09 re-audit) THREE call sites read ``self._battery_adapter`` —
+        singular — a name nothing has ever assigned: the per-battery loop
+        has cached adapters in ``self._battery_adapters`` (plural, keyed by
+        battery_id, ``"primary"`` on a single-battery install) since #375.
+        ``getattr(..., None)`` turned each into a silent no-op, so #827's
+        discharge-rate caveat, #845's expected-operating-mode seed and
+        #915's write read-back were all dead code that raised nothing and
+        published nothing. One accessor now, and it is the only way in.
+        """
+        adapters = getattr(self, "_battery_adapters", None) or {}
+        if not adapters:
+            return None
+        return adapters.get("primary") or next(iter(adapters.values()), None)
 
     #: (#915) how many post-boot rebuilds a not-loaded proposal may buy
     REPORT_REHEAL_BUDGET: int = 5

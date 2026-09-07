@@ -187,6 +187,13 @@ REDACT_CONFIG_KEYS = {
     # split-meter brand — same privacy class as the keys above
     "grid_import_power_entity",
     "grid_export_power_entity",
+    # (07.09 re-audit) The SAME entity ids appear again under the adapter
+    # and charger runtime blocks with shorter names. Redacting the config
+    # key while its mirror walks out of the next section is not privacy,
+    # it is bookkeeping.
+    "discharge_control_entity",
+    "force_discharge_entity",
+    "pause_switch_entity",
 }
 
 

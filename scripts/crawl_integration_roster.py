@@ -156,7 +156,20 @@ def fetch_sources(*, offline: bool) -> Dict[str, Any]:
     for name, url in SOURCES.items():
         raw = _get(url, f"index_{name}", offline=offline)
         try:
-            out[name] = json.loads(raw.decode("utf-8-sig"), parse_constant=lambda _c: None) if raw else {}
+            parsed = (json.loads(raw.decode("utf-8-sig"),
+                                 parse_constant=lambda _c: None)
+                      if raw else {})
+            # (07.09 re-audit) Syntactically valid is not the same shape.
+            # Every reader below does `.values()` / `.items()` on these; a
+            # source that answers a LIST or `null` — a CDN error page, a
+            # changed schema — crashed the whole refresh with an
+            # AttributeError. An unusable source is an EMPTY source: the
+            # roster degrades, it never dies.
+            if not isinstance(parsed, dict):
+                print(f"  source {name} is {type(parsed).__name__}, not an "
+                      f"object — ignoring it", file=sys.stderr)
+                parsed = {}
+            out[name] = parsed
         except (ValueError, UnicodeDecodeError):
             out[name] = {}
         if not out[name]:
@@ -248,6 +261,15 @@ def _hacs_entries(sources: Dict[str, Any]) -> Iterable[dict]:
             for k in ("description", "full_name", "manifest_name"):
                 if entry.get(k) is not None and not isinstance(entry[k], str):
                     raise TypeError(f"{k} is not a string")
+            # (07.09 re-audit) …and the one the rows are COMPARED on: two
+            # entries sharing a domain are ranked by `stars`, so a string
+            # here raised out of candidate_rows — the very "one bad row
+            # denies the refresh" bug the validator exists to stop.
+            stars = entry.get("stargazers_count")
+            if stars is not None and isinstance(stars, bool):
+                raise TypeError("stargazers_count is a bool")
+            if stars is not None and not isinstance(stars, (int, float)):
+                raise TypeError("stargazers_count is not a number")
         except (TypeError, AttributeError, ValueError):
             skipped += 1
             continue
@@ -464,7 +486,11 @@ def _mine_vocabulary_raw(repo: str, domain: str, origin: str, *,
         if not raw:
             continue
         try:
-            data = json.loads(raw.decode("utf-8-sig"), parse_constant=lambda _c: None)
+            data = json.loads(raw.decode("utf-8-sig"),
+                              parse_constant=lambda _c: None)
+            # one integration author's broken file is not everyone's problem
+            if not isinstance(data, dict):
+                continue
         except (ValueError, UnicodeDecodeError):
             continue
         entity = data.get("entity")

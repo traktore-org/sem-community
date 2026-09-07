@@ -239,6 +239,30 @@ _ROSTER_SPEC_ROLES: Dict[str, str] = {
 }
 
 
+def _spec_exact_only(spec: str, platform: str) -> tuple:
+    """Which of this spec's keys may be matched by translation_key ONLY."""
+    role = _ROSTER_SPEC_ROLES.get(spec)
+    if not role or not platform:
+        return ()
+    try:
+        from .hardware_detection import roster_role_vocab
+        return tuple(roster_role_vocab(platform, role).get("exact_only", ()))
+    except Exception:  # noqa: BLE001
+        return ()
+
+
+def _spec_matches(entry, spec: str, platform: str):
+    """Does this registry entry carry one of ``spec``'s keys? The single
+    matcher in ``hardware_detection``, with the roster's exact_only set —
+    including for keys that were hand-written before the roster existed."""
+    try:
+        from .hardware_detection import _entry_matches_declared
+        return _entry_matches_declared(
+            entry, _spec_keys(spec, platform), _spec_exact_only(spec, platform))
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _spec_keys(spec: str, platform: str) -> tuple:
     """The entity keys that identify ``spec`` on ``platform``.
 
@@ -312,16 +336,18 @@ def _spec_from_registry(hass: HomeAssistant, registry=None) -> Dict[str, str]:
         eid = str(e.entity_id)
         if not eid.startswith(("sensor.", "number.")):
             continue
-        tk = str(getattr(e, "translation_key", "") or "")
-        uid = str(getattr(e, "unique_id", "") or "")
         for spec in _SPEC_REGISTRY_KEYS:
             if spec in found:
                 continue
             # (#915) hand-written keys plus this integration's own declared
             # aliases — see _spec_keys for why they are additive.
-            # segment boundary, never a bare endswith (bug class 67)
-            if any(tk == k or uid == k or uid.endswith("_" + k)
-                   for k in _spec_keys(spec, str(getattr(e, "platform", "")))):
+            # (07.09 re-audit) THE one matcher — this had its own copy,
+            # which honoured no exact_only at all: a HAND-WRITTEN spec key
+            # the roster later marks exact_only (Marstek's
+            # `max_discharge_power`, a suffix of `system_max_discharge_power`)
+            # still matched the wrong entity by unique_id, whichever the
+            # registry yielded first.
+            if _spec_matches(e, spec, str(getattr(e, "platform", ""))):
                 found[spec] = eid
     return found
 

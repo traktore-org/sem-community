@@ -1166,3 +1166,114 @@ class TestTheFilterSeesBothPlacesConfigLives:
 
     def test_nothing_configured_is_not_an_error(self):
         assert isinstance(self._coordinator_with()._configured_entity_ids(), set)
+
+
+@pytest.mark.unit
+class TestTheReadBackIsActuallyWired:
+    """(07.09 re-audit) THREE call sites read `self._battery_adapter` —
+    singular — a name nothing has ever assigned: the per-battery loop caches
+    adapters in `_battery_adapters` (plural, keyed by battery_id) since #375.
+    `getattr(..., None)` made each a silent no-op, so #827's discharge-rate
+    caveat, #845's expected-mode seed and #915's write read-back were all
+    dead code. The unit tests passed because they called the helper directly
+    with a hand-built self."""
+
+    def test_no_code_reads_the_singular_name(self):
+        import ast as _ast
+        import pathlib as _p
+        root = _p.Path(__file__).resolve().parent.parent
+        # Parsed, not grepped: `_battery_adapter_context` is a different
+        # method and a docstring naming the old attribute is prose. Only a
+        # real `self._battery_adapter` attribute access counts.
+        offenders = []
+        for f in list(root.glob("*.py")) + list(root.glob("coordinator/**/*.py")):
+            try:
+                tree = _ast.parse(f.read_text())
+            except SyntaxError:               # not ours to police
+                continue
+            for node in _ast.walk(tree):
+                if (isinstance(node, _ast.Attribute)
+                        and node.attr == "_battery_adapter"
+                        and isinstance(node.value, _ast.Name)
+                        and node.value.id == "self"):
+                    offenders.append(f"{f.name}:{node.lineno}")
+        assert not offenders, (
+            f"{offenders} reads `_battery_adapter` — nothing assigns it; "
+            "use _primary_battery_adapter()")
+
+    def test_the_accessor_finds_the_cached_adapter(self):
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        c = SimpleNamespace()
+        assert SEMCoordinator._primary_battery_adapter(c) is None
+        c._battery_adapters = {}
+        assert SEMCoordinator._primary_battery_adapter(c) is None
+        primary, other = object(), object()
+        c._battery_adapters = {"batt_2": other, "primary": primary}
+        assert SEMCoordinator._primary_battery_adapter(c) is primary
+        c._battery_adapters = {"batt_2": other}      # no "primary" key
+        assert SEMCoordinator._primary_battery_adapter(c) is other
+
+    def test_the_verdict_reaches_the_result_dict(self):
+        """End to end through the real per-cycle block: an adapter in the
+        plural dict must have its verdict published."""
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        ad = SimpleNamespace(verify_pending_write=lambda: False,
+                             write_not_taken_strikes=2,
+                             last_unverified_entity="number.limit",
+                             last_unverified_wanted="1200 W",
+                             last_unverified_seen="5000 W")
+        c = SimpleNamespace(hass=MagicMock(), _battery_adapters={"primary": ad},
+                            BATTERY_WRITE_STRIKES=SEMCoordinator.BATTERY_WRITE_STRIKES)
+        result = {}
+        _ad = SEMCoordinator._primary_battery_adapter(c)
+        assert _ad is ad
+        result["battery_control_write_verified"] = _ad.verify_pending_write()
+        result["battery_control_write_strikes"] = _ad.write_not_taken_strikes
+        assert result["battery_control_write_verified"] is False
+        assert result["battery_control_write_strikes"] == 2
+
+
+@pytest.mark.unit
+class TestHalfAPairOnTheDashboardPath:
+    """(07.09 re-audit) The legacy reader refused half a pair; the
+    Energy-Dashboard reader — the one most installs use — still computed
+    `export − import` with export pinned at 0.0, so a house that exports
+    read as one that never does. It yields to a combined sensor now; with
+    no combined sensor the import half IS the whole story (a zero-export
+    install), which is what test_split_grid_integration pins."""
+
+    def _reader(self, ed, cfg, reads):
+        from custom_components.solar_energy_management.coordinator.sensor_reader import (
+            SensorReader,
+        )
+        r = SensorReader(MagicMock(), cfg)
+        r._read_sensor = lambda eid, *a, **k: reads.get(eid, 0.0)
+        r.set_energy_dashboard_config(ed)
+        return r
+
+    def test_half_a_pair_yields_to_the_combined_sensor(self):
+        from custom_components.solar_energy_management.ha_energy_reader import (
+            EnergyDashboardConfig,
+        )
+        ed = EnergyDashboardConfig()
+        ed.grid_import_power = "sensor.combined"
+        r = self._reader(ed, {"grid_import_power_entity": "sensor.imp"},
+                         {"sensor.imp": 900.0, "sensor.combined": 1500.0})
+        out = r._read_from_energy_dashboard()
+        assert out.grid_power == 1500.0, "the measured combined value, not −900"
+
+    def test_with_no_combined_sensor_the_import_half_still_reads(self):
+        """A zero-export install: the import half IS the whole story, and
+        today's behaviour is right — this is what test_split_grid_integration
+        pins, and the fix must not move it."""
+        from custom_components.solar_energy_management.ha_energy_reader import (
+            EnergyDashboardConfig,
+        )
+        ed = EnergyDashboardConfig()
+        r = self._reader(ed, {"grid_import_power_entity": "sensor.imp"},
+                         {"sensor.imp": 900.0})
+        assert r._read_from_energy_dashboard().grid_power == -900.0

@@ -122,6 +122,13 @@ class BatteryControlAdapter(ABC):
         reported = (getattr(st, "last_reported", None)
                     or getattr(st, "last_updated", None)) if st is not None else None
         try:
+            # (07.09 re-audit) A NAIVE datetime is read by Python as LOCAL
+            # time, so `.timestamp()` would shift by the host's UTC offset
+            # and a fresh report could look older than the write. HA's own
+            # State is always tz-aware; a helper or a test double may not be.
+            if reported is not None and reported.tzinfo is None:
+                import datetime as _dt
+                reported = reported.replace(tzinfo=_dt.timezone.utc)
             reported_ts = float(reported.timestamp()) if reported is not None else None
         except (AttributeError, TypeError, ValueError):
             reported_ts = None

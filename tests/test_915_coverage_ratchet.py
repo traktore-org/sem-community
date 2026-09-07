@@ -736,3 +736,39 @@ class TestOneBadUpstreamRowNeverKillsTheCrawl:
         assert huge_key not in v["select"]
         assert len(v["select"]["mode"]["options"]) == crawler._MAX_OPTIONS
         assert "ok_key" in v["number"]
+
+
+@pytest.mark.unit
+class TestNoUpstreamShapeCanKillTheRefresh:
+    """(07.09 re-audit) Syntactically valid is not the same shape. Each of
+    these was a real uncaught crash that denied the maintainer a refresh
+    entirely — one bad row, one bad file, or one endpoint answering the
+    wrong kind of document."""
+
+    def test_a_source_that_is_not_an_object_is_ignored(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(crawler, "CACHE", tmp_path)
+        for name in crawler.SOURCES:
+            crawler._cache_path(f"index_{name}").write_bytes(b'[1, 2, 3]')
+        src = crawler.fetch_sources(offline=True)
+        assert all(isinstance(v, dict) for v in src.values()), src
+        # and the readers survive it
+        assert crawler.candidate_rows(src) == {}
+
+    def test_a_string_star_count_does_not_raise(self):
+        rows = {"hacs": {
+            "1": {"domain": "acme_x", "manifest": {"name": "Acme X"},
+                  "description": "a solar inverter", "full_name": "a/x",
+                  "topics": [], "stargazers_count": 3},
+            "2": {"domain": "acme_x", "manifest": {"name": "Acme X dup"},
+                  "description": "a solar inverter", "full_name": "a/y",
+                  "topics": [], "stargazers_count": "999"},
+        }}
+        out = crawler.candidate_rows(rows)          # must not raise
+        assert out["acme_x"]["repo"] == "a/x", "the malformed row is skipped"
+
+    def test_a_malformed_strings_json_skips_that_domain_only(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(crawler, "CACHE", tmp_path)
+        for url in crawler._strings_urls("home-assistant/core", "acme", "core"):
+            crawler._cache_path(crawler._url_key(url)).write_bytes(b"null")
+        assert crawler.mine_vocabulary(
+            "home-assistant/core", "acme", "core", offline=True) == {}

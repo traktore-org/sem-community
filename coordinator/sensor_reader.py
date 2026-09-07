@@ -1914,7 +1914,24 @@ class SensorReader:
         #    Both always positive — SEM calculates: grid_power = export - import
         manual_import = self._raw_config.get("grid_import_power_entity")
         manual_export = self._raw_config.get("grid_export_power_entity")
-        if manual_import or manual_export:
+        if (manual_import and not manual_export) and ed.grid_import_power:
+            # (07.09 re-audit) HALF a manual pair, and a combined sensor
+            # exists: prefer the combined one. Reading the import half alone
+            # says "export − import" with export pinned at 0.0 — a house
+            # that exports then reads as one that never does, permanently,
+            # with only a one-time log line. Same resolution as the legacy
+            # path. A house with NO combined sensor keeps today's behaviour:
+            # for a zero-export install the import half IS the whole story,
+            # which is what tests/test_split_grid_integration.py pins.
+            if not getattr(self, "_half_pair_ed_warned", False):
+                self._half_pair_ed_warned = True
+                _LOGGER.warning(
+                    "Only grid_import_power_entity is set (%s) with no export "
+                    "half — using the Energy Dashboard's combined grid sensor "
+                    "%s instead, so export is measured rather than assumed 0",
+                    manual_import, ed.grid_import_power)
+            readings.grid_power = self._read_sensor(ed.grid_import_power, "grid")
+        elif manual_import or manual_export:
             # Manual override — user explicitly set grid power sensors.
             # NO auto-detection runs on this path, so misconfiguration
             # (swapped roles, one side missing, energy counter instead of

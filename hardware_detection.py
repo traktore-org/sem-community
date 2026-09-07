@@ -1405,6 +1405,12 @@ def propose_energy_sources(hass=None, registry=None) -> Dict[str, Any]:
         for role, key in _SOURCE_ROLE_TO_KEY.items():
             if key in out or role not in proposed:
                 continue
+            # (07.09 re-audit) A role the gates DOWNGRADED is not a
+            # suggestion: `pair_incomplete` (half a split pair on this
+            # device) would otherwise be pre-filled into the install form
+            # looking confirmed. Only a role still offering the button.
+            if proposed[role].get("action") not in ("set_option", None):
+                continue
             out[key] = {"entity": proposed[role]["entity"], "domain": dom,
                         "why": f"declared as {proposed[role]['matched_key']}"}
 

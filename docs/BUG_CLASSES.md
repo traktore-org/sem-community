@@ -2642,3 +2642,22 @@ reach a `False` verdict within cycles. **Guard:**
 `tests/test_915_write_verification.py::TestTheDefaultStateReachesAVerdict`. **Sweep question:**
 for every timer or counter armed "on write", "on send", "on refresh" — is it armed by the EVENT or
 by the RESULT, and does the result ever succeed without the event? Refs #915 #900 #538.
+
+### 74. `getattr(self, "name", None)` on an attribute that was renamed — the feature is dead and nothing says so — GUARDED
+**Symptom:** three separate features published nothing and raised nothing: #827's discharge-rate
+caveat, #845's expected-operating-mode seed, and #915's battery write read-back with its Repair.
+All three read `self._battery_adapter` — **singular** — and nothing has assigned that name since
+#375 moved the per-battery loop to `self._battery_adapters` (plural, keyed by battery_id).
+**Root shape:** `getattr(obj, "name", None)` is written to survive a missing attribute, and it does
+exactly that — forever, silently, for a name that will never exist again. A rename that a plain
+`self._battery_adapter` would have turned into an `AttributeError` on the first cycle instead
+produced a `None`, a `callable(None)` that is False, and a feature that never ran. Each of the
+three was unit-tested and each test passed, because every one called the helper directly with a
+hand-built `self` — the tests proved the logic and never the WIRING. Found by a re-audit that was
+asked to verify a fix rather than trust it. **Closure:** one accessor,
+`SEMCoordinator._primary_battery_adapter()`, reading the plural dict; an AST guard that fails on
+any `self._battery_adapter` attribute access anywhere in the tree; and a test that drives the
+verdict through the real per-cycle shape rather than a hand-built one. **Guard:**
+`tests/test_915_roster_at_runtime.py::TestTheReadBackIsActuallyWired`. **Sweep question:** for
+every `getattr(self, "_x", None)` — is `_x` ever assigned? And does any test exercise the path
+through the REAL object rather than a stand-in? Refs #915 #827 #845 #375.

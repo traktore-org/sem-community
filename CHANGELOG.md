@@ -252,7 +252,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   The write read-back moved into the shared adapter base, so Huawei's
   discharge limit gets the same "did it take" judgement as the generic
-  adapter's — which is what SEM's own production system runs.
+  adapter's. (This sentence originally claimed the mechanism was running on
+  the maintainer's own production system. It was not: the coordinator was
+  reading an attribute name nothing assigns, so the read-back never
+  executed anywhere — found by the re-audit below and fixed there. The
+  claim is corrected rather than deleted, because a release note that
+  quietly loses an overstatement teaches nobody.)
 
   **Audited by three independent reviewers before the merge, and they earned
   their keep.** Runtime: the discovery rung that *auto-binds* the discharge
@@ -273,6 +278,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   diagnostics like the sibling keys already were. Nothing the reviewers
   attacked in the card's rendering, the generated code's escaping, the
   regexes or the offline guarantee gave way.
+
+  **Re-audited before the merge, and the second pass found the one that
+  mattered.** The write read-back — the whole point of the previous round —
+  was **dead code in every running instance**: it read `self._battery_adapter`,
+  singular, a name nothing has assigned since the battery loop went
+  per-battery. So did #827's discharge-rate caveat and #845's
+  expected-operating-mode seed, for the past ten days. `getattr(..., None)`
+  had turned a rename into three silent no-ops, and every unit test passed
+  because each called its helper with a hand-built object — the tests proved
+  the logic and never the wiring. One accessor now, with a guard that fails
+  on the old name anywhere in the tree. The same pass closed the
+  Energy-Dashboard reader's half-a-split-pair hole (it yields to a combined
+  sensor rather than reporting a house that never exports; an install with
+  no combined sensor is unchanged, because there the import half really is
+  the whole story), routed the config flow's last private key-matcher
+  through the shared one, stopped a gated proposal from being pre-filled
+  into the install form, and normalised a timestamp to UTC before comparing
+  it.
 
 # [2.1.0-beta.8] — 06.09.2026
 
