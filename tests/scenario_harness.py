@@ -65,6 +65,20 @@ TIMELINE_FIELDS = {
     "solar_power", "grid_power", "battery_power", "ev_power",
     "battery_soc", "battery_temperature", "battery_soc_unavailable",
     "ev_connected", "ev_charging",
+    # (#925/#906) THE DARK-READ FLAGS. PowerReadings carries five of these
+    # and the harness exposed exactly one, so "the meter went dark this
+    # cycle" — the single most common real-world condition on PROD, where
+    # the solar read is absent 137 times a day — could not be written in a
+    # scenario at all. #906 (the peak guard releasing on a blind meter) was
+    # therefore unreplayable for want of a field name, not for want of a
+    # code path: its trigger is `power.grid_power_unavailable`.
+    #
+    # An absent reading is NOT a reading of zero. These let a timeline say
+    # which, which is the whole distinction SEM keeps getting wrong.
+    "solar_power_unavailable",
+    "grid_power_unavailable",
+    "battery_power_unavailable",
+    "battery_power_all_unavailable",
     "home_consumption_power",  # override the derived value when needed
     # v1.6.12: per-charger EV draw in watts as a mapping ``{cid: watts}``.
     # When present, populates ``PowerReadings.ev_power_per_charger`` so
@@ -193,6 +207,15 @@ def _build_power_readings(effective: Dict[str, Any]):
         battery_soc=float(effective.get("battery_soc", 50.0)),
         battery_temperature=float(effective.get("battery_temperature", 25.0)),
         battery_soc_unavailable=bool(effective.get("battery_soc_unavailable", False)),
+        # (#925) the dark-read twins — see TIMELINE_FIELDS
+        solar_power_unavailable=bool(
+            effective.get("solar_power_unavailable", False)),
+        grid_power_unavailable=bool(
+            effective.get("grid_power_unavailable", False)),
+        battery_power_unavailable=bool(
+            effective.get("battery_power_unavailable", False)),
+        battery_power_all_unavailable=bool(
+            effective.get("battery_power_all_unavailable", False)),
         ev_connected=bool(effective.get("ev_connected", False)),
         ev_charging=bool(effective.get("ev_charging", False)),
     )
@@ -532,6 +555,14 @@ async def run_scenario(yaml_path: Path) -> ScenarioRun:
             "ev_power": readings.ev_power,
             "ev_connected": readings.ev_connected,
             "home_consumption_power": readings.home_consumption_power,
+            # (#925) the dark-read twins, so a formula and a failure
+            # message can both see WHICH reading was absent rather than
+            # inferring it from a zero.
+            "solar_power_unavailable": readings.solar_power_unavailable,
+            "grid_power_unavailable": readings.grid_power_unavailable,
+            "battery_soc_unavailable": readings.battery_soc_unavailable,
+            "battery_power_all_unavailable":
+                readings.battery_power_all_unavailable,
         }
 
         # Power flows (per-cycle, correctly attributed)
@@ -840,10 +871,31 @@ def assert_expectations(run: ScenarioRun, scenario: Dict[str, Any]) -> None:
         margin_w = float(ac.get("max_w_minus_margin", 0))
         voltage = 230.0
         phases = 3.0
-        for c in run.cycles:
+        # (#925) VACUITY GATE. This block skips every cycle whose strategy
+        # does not match and then asserts on what is left — so a scenario
+        # whose strategy NEVER matches asserts on nothing and passes,
+        # silently, forever. ``strategy_substring`` twelve lines above has
+        # had this guard since it was written; this one never got it.
+        #
+        # Live on 07.09: a #899 scenario passed while SEM answered "idle"
+        # on all six cycles. It looked like a regression test and was an
+        # empty loop. A check that cannot fail is worse than no check —
+        # it spends the credibility of the ones that can.
+        matched_cycles = [
+            c for c in run.cycles
+            if when_strategy.lower() in
+            str(c.result.get("canonical_strategy") or "").lower()
+        ]
+        assert matched_cycles, (
+            f"actuator_current_a asserts on cycles whose strategy contains "
+            f"'{when_strategy}', and NO cycle matched — so this expectation "
+            f"tested nothing. Strategies seen: "
+            f"{sorted({str(c.result.get('canonical_strategy')) for c in run.cycles})}. "
+            f"Either the scenario does not reach the state it claims to "
+            f"exercise, or when_strategy names a state that no longer exists."
+        )
+        for c in matched_cycles:
             strat = str(c.result.get("canonical_strategy") or "").lower()
-            if when_strategy.lower() not in strat:
-                continue
             # Evaluate the formula in the readings dict's namespace
             try:
                 allowed_w = float(eval(formula, {"__builtins__": {}, "max": max, "min": min}, c.readings))
