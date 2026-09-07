@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Tomorrow's plan was packed against a free sun** (#924). SEM prices a
+  sunny hour at what the electricity would have earned leaving the house, so
+  a genuinely cheaper grid hour can win — that is what stops solar being
+  preferred by arithmetic fiat. Four places build the day's hours and only
+  one of them was told the feed-in rate. The one that matters is tomorrow's
+  preview, which runs the real packer: it planned as though sunlight were
+  free, so the card could show a plan the night then did not execute. All
+  four now price from a single reader.
+
+  Users on an ordinary feed-in tariff see no change — below the day price the
+  sun was already the cheapest hour, which is why this went unnoticed. It
+  shows up where exporting earns more than importing costs.
+
 - 🛡️ **"Battery may sell to grid" showed OFF while SEM was selling** (#920).
   Two features can sell — the arbitrage path and the forecast spend — and
   each asks the permission with its own master switch, correctly. The switch

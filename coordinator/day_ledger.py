@@ -148,7 +148,8 @@ def _merge_windows(slots) -> list:
 
 
 def tomorrow_preview(*, day_start, day_end, day_kwh, sunrise, sunset,
-                     home_w_at, price_at, level_cheap_at, stamps_at) -> dict:
+                     home_w_at, price_at, level_cheap_at, stamps_at,
+                     export_rate: float = 0.0) -> dict:
     """(#638 consolidation / #722) The NEXT energy day's books, previewed.
 
     tintinz's Today|Tomorrow idea (#722), adopted onto the one data path:
@@ -168,6 +169,11 @@ def tomorrow_preview(*, day_start, day_end, day_kwh, sunrise, sunset,
         start=day_start, end=day_end, day_kwh=day_kwh,
         sunrise=sunrise, sunset=sunset, home_w_at=home_w_at,
         price_at=price_at, level_cheap_at=level_cheap_at,
+        # (#924) This surface reads WINDOWS, never a price — but a builder
+        # that takes the rate and is not given it is how #755 was undone
+        # on a sibling path. Carry it, so a future reader is right by
+        # construction rather than by luck.
+        export_rate=export_rate,
     )
     probe = day_start + (day_end - day_start) / 2
     try:
