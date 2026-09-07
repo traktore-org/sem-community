@@ -13,6 +13,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🛡️ **Load shedding stopped working while the grid meter blinked** (#925
+  audit). Shedding decides how much to shed by comparing the live meter
+  against your target. A meter that is momentarily unreadable reports zero
+  watts, which looks like a house drawing nothing — so during an outage the
+  shedder concluded there was nothing to do and stood down, in the middle
+  of exactly the peak event it exists to prevent. On real hardware that is
+  up to two and a half minutes at a stretch.
+
+  Nothing already shed was restored, so this stopped helping rather than
+  doing harm. It falls back to the 15-minute average — the figure the older
+  code used and which cannot be fooled by a single missing sample — and
+  keeps using the live meter whenever the meter is actually there.
+
+- 🛡️ **Split-meter installs could never report a blind meter at all**
+  (#925 audit). Systems with separate import and export sensors — Growatt,
+  Anker, Senec, DSMR and any manually paired setup — answered "the meter is
+  fine" on every single cycle, because the check asked about a sensor
+  arrangement those systems do not use. Every protection SEM has against a
+  blind meter was therefore switched off for them, and a fabricated 0 W was
+  recorded into long-term statistics as though it had been measured. Both
+  meter arrangements are now understood.
+
 - 🩹 **The Home tab said "Solar 0 W" when the solar sensor was simply
   absent** (#925 audit). The battery chip beside it already knew better —
   an unread SOC shows a dash, not a flat pack — and its two neighbours in

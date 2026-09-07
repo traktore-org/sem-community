@@ -77,7 +77,7 @@ class TestTheDecisionPathIsUntouched:
         # read (budget.spendable_kwh), not to a gated expression
         raw = [
             v for node in ast.walk(tree) if isinstance(node, ast.Dict)
-            for k, v in zip(node.keys, node.values)
+            for k, v in zip(node.keys, node.values, strict=True)
             if isinstance(k, ast.Constant) and k.value == "battery_spendable_kwh"
         ]
         assert any(isinstance(v, ast.Attribute) and v.attr == "spendable_kwh"

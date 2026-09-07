@@ -4059,6 +4059,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         monthly_peak,
                         ev_is_charging=False,
                         grid_import_w=power.grid_import_power,
+                        # (#925 audit) a dark meter must not read as 0 W
+                        # and idle the shed engine mid-emergency
+                        grid_import_known=not bool(getattr(
+                            power, "grid_power_unavailable", False)),
                         # FLEET-READ: load manager peak budget is a
                         # whole-house concept; fleet EV total is correct.
                         ev_power_w=power.ev_power,
