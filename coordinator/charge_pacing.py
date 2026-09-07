@@ -219,7 +219,8 @@ class ChargePacingWriter:
 
 
 def today_remaining_slots(*, now, sunrise, sunset, day_kwh, home_w_at,
-                          builder, price_at=None, level_cheap_at=None):
+                          builder, price_at=None, level_cheap_at=None,
+                          export_rate: float = 0.0):
     """Today's remaining day, [now, sunset), in the planner's slot shape.
 
     The PROD campaign (26.08 morning) caught pacing hooked to the tomorrow
@@ -241,6 +242,11 @@ def today_remaining_slots(*, now, sunrise, sunset, day_kwh, home_w_at,
     return builder(
         start=now, end=sunset, day_kwh=float(day_kwh),
         sunrise=sunrise, sunset=sunset, home_w_at=home_w_at,
+        # (#924) Pacing reads surplus WATTS and never a price, so this
+        # changes nothing today. It is threaded because the builder it
+        # calls prices with it, and a builder handed no rate prices the
+        # sun at zero — the #755 defect, one call site over.
+        export_rate=float(export_rate or 0.0),
         **({"price_at": price_at} if price_at else {}),
         **({"level_cheap_at": level_cheap_at} if level_cheap_at else {}),
     )

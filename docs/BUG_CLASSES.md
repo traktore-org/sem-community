@@ -2684,3 +2684,28 @@ more specific *no* now wins, with UNSET still short-circuiting so no existing in
 with the decision model pinned to the real call site so it cannot go stale). **Sweep question:** for
 every switch a user can see — how many code paths act on the thing it names, and does the switch
 consult ALL of them? Refs #920 #778 #533.
+
+### 76. A source-inspection guard names the ONE function it was written for — GUARDED
+**Symptom:** Tomorrow's card showed a plan the night would not execute: the same forecast, the same
+tariff and the same battery produced one answer in the preview and another in the stamped plan.
+**Root shape:** `day_ledger.build_day_slots` prices a surplus slot at `export_rate` — what a kWh
+earns if it leaves, and therefore what consuming it here costs (#755) — and the parameter **defaults
+to `0.0`**, the free sun the packer prefers by fiat. Four production sites build day slots; #755
+passed the rate at **one**. Two of the three silent ones read no price and were merely a loaded gun;
+the third, `_compose_tomorrow_preview`, runs the real `build_night_ledger` + `pack_night`, so it
+packed tomorrow against a sun that cost nothing for a month. **Why it survived:** #755 shipped a
+guard, and the guard was `inspect.getsource(SEMCoordinator._shadow_energy_plan)` — a substring check
+over ONE named function. A source-inspection guard can prove a fact about the site it names and
+about nothing else; siblings are invisible to it on the day it is written and stay invisible to
+every commit after. It is the same failure as a keyword search that only knows the word you thought
+of. **Closure:** the rate is threaded through all four; one reader (`_configured_export_rate`) holds
+#755's reason; and the guard is an AST lint that names no function — it derives the set of *pricing
+surfaces* (every module-level function in the package declaring an `export_rate` parameter) and
+requires every production call to one of them, including a `builder=` handoff, to pass the rate or
+carry an explicit `# UNPRICED: <reason>`. A new wrapper is covered the day it is written.
+**Guard:** `tests/test_924_every_day_builder_is_priced.py` (the coverage rule) plus
+`tests/test_924_tomorrow_preview_prices_the_sun.py` (the behaviour: at a feed-in richer than the
+grid price the preview must move the load off the sun, which unpriced it cannot). **Sweep question:**
+for every guard written as `inspect.getsource(<one thing>)` or `assert "x" in src` — does the
+invariant it protects have exactly one site, and how would anyone notice when it grows a second?
+Refs #924 #871 #755.

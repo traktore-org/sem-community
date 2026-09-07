@@ -107,6 +107,12 @@ def _fake_self(devices=()):
         # (#638 finding #3) when the fleet first came up short, or None.
         _shadow_partial_since=None,
     )
+    # (#924) the ONE feed-in reader every day-slot builder prices with.
+    # Bound to the REAL method so the fake cannot drift from what the
+    # coordinator does — #755's rate reached one call site of four
+    # precisely because a fake could disagree with production silently.
+    fake._configured_export_rate = (
+        lambda: SEMCoordinator._configured_export_rate(fake))
     # (#846) per-setpoint sizing — the fake keeps modelling the no-memo
     # case: amps × the nameplate W/A above, same as a coordinator whose
     # learner has never been fed.

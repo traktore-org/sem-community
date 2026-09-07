@@ -190,16 +190,26 @@ class TestThePredictedShare:
 class TestTheCoordinatorStatesAndMeasuresIt:
     def test_the_day_slots_are_priced_at_the_configured_feed_in(self):
         """The objective is only real if the real build path carries it —
-        a pure module nobody passes the rate to optimises nothing."""
+        a pure module nobody passes the rate to optimises nothing.
+
+        (#924) This assertion used to read the source of THIS ONE method,
+        and so could only ever prove THIS ONE call site. Three siblings
+        kept the free sun for a month behind it, one of them a packer.
+        The coverage question moved to an AST lint over the whole package
+        (``test_924_every_day_builder_is_priced``); what stays here is the
+        narrower fact this test was named for — the shadow plan prices its
+        day from the coordinator's one feed-in reader.
+        """
         import inspect
         from custom_components.solar_energy_management.coordinator \
             .coordinator import SEMCoordinator
 
         src = inspect.getsource(SEMCoordinator._shadow_energy_plan)
-        assert "export_rate=" in src, (
+        assert "export_rate=self._configured_export_rate()" in src, (
             "build_day_slots must be given the feed-in rate, else every "
             "surplus slot prices at 0 and the sun wins by fiat again")
-        assert "electricity_export_rate" in src
+        assert "electricity_export_rate" in inspect.getsource(
+            SEMCoordinator._configured_export_rate)
 
     def test_the_stamped_plan_states_the_share_it_expects(self, freeze_targets):
         """A prediction nobody wrote down cannot be wrong, which is the same
