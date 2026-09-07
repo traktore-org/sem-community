@@ -127,12 +127,32 @@ def soc_zone(soc: float, auto_start: float, buffer: float, priority: float) -> i
     view, or wraps ``decide()`` in a debounce shim).
 
     Returns 1..4. Higher = more battery available.
+
+    (#870) THE THRESHOLDS ARE SORTED FIRST, and that is load-bearing now
+    that the user may place all three anywhere in 5..100. The cascade below
+    assumes priority <= buffer <= auto_start, and the old ranges enforced
+    that by accident — buffer floored at 50, auto-start at 70 — which is
+    also what made coppe218's perfectly reasonable 20/30/50 layout
+    impossible to configure.
+
+    Unsorted, the cascade does not merely mis-order the zones, it SKIPS
+    one: with auto_start 50 and buffer 80, a 60 % pack answers `60 >= 50`
+    and returns Zone 4 — "plenty available" — never reaching the buffer
+    test the user set at 80. Sorting makes the boundaries mean what the
+    three numbers say regardless of which field holds which, so a mistyped
+    zone shifts a boundary instead of deleting one.
+
+    Silently sorting is not the whole answer: a user whose zones are out of
+    order has made a mistake and should be told. That is a Repair, raised
+    from the coordinator where the config is read — not this function's
+    job. This one's job is never to answer nonsense.
     """
-    if soc >= auto_start:
+    lo, mid, hi = sorted((float(priority), float(buffer), float(auto_start)))
+    if soc >= hi:
         return 4
-    if soc >= buffer:
+    if soc >= mid:
         return 3
-    if soc >= priority:
+    if soc >= lo:
         return 2
     return 1
 

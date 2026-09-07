@@ -15,7 +15,7 @@
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semFormatPower, semDefineCard } from '../base/sem-shared.js';
-import { socDisplay } from '../util/missing-value.js';
+import { MISSING, socDisplay } from '../util/missing-value.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
 
@@ -48,7 +48,12 @@ class SEMHomeStatusCard extends SEMLitBase {
     _val(suffix, fallback = 0) {
         const e = this._hass?.states[`${this._prefix}${suffix}`];
         if (!e || e.state === 'unavailable' || e.state === 'unknown') return fallback;
-        return parseFloat(e.state) ?? fallback;
+        // (#925 audit) `??` only catches null/undefined, and parseFloat of a
+        // non-numeric state returns NaN — which sailed straight past it. A
+        // caller asking for a null fallback got NaN instead and rendered
+        // "NaN W". Unparseable is just another way of not having a reading.
+        const n = parseFloat(e.state);
+        return Number.isFinite(n) ? n : fallback;
     }
 
     _valStr(suffix) {
@@ -86,11 +91,17 @@ class SEMHomeStatusCard extends SEMLitBase {
     render() {
         if (!this._config || !this._hass) return nothing;
 
-        const solar = this._val('solar_power');
+        // (#925 audit) The SOC chip below was fixed for #903 and its two
+        // NEIGHBOURS were not — same card, same render, same dropout. On
+        // this hardware the solar read is absent ~137 times a day, so
+        // "Solar 0 W · Autarky 0%" beside a correctly em-dashed SOC is the
+        // most-seen instance of the class in the whole product. Ask for
+        // null and let the chip say nothing rather than say zero.
+        const solar = this._val('solar_power', null);
         // An unavailable SOC is an absent reading, not a flat pack: the chip
         // shows the em-dash, never a fallback 0 % (PROD 02.09, mid-dropout).
         const soc = socDisplay(this._val('battery_soc', null));
-        const autarky = this._val('autarky_rate');
+        const autarky = this._val('autarky_rate', null);
         const evPower = this._val('ev_power');
         const score = this._val('energy_optimization_score');
         const scoreColor = this._scoreColor(score);
@@ -112,9 +123,11 @@ class SEMHomeStatusCard extends SEMLitBase {
 
                 <!-- 1. Status Chips -->
                 <div class="chips-row">
-                    ${this._renderChip('mdi:solar-power', '#ff9800', semFormatPower(solar))}
+                    ${this._renderChip('mdi:solar-power', '#ff9800',
+                        solar == null ? MISSING : semFormatPower(solar))}
                     ${this._renderChip('mdi:battery', '#4db6ac', soc.label)}
-                    ${this._renderChip('mdi:leaf', '#8DC892', `${autarky.toFixed(0)}%`)}
+                    ${this._renderChip('mdi:leaf', '#8DC892',
+                        autarky == null ? MISSING : `${autarky.toFixed(0)}%`)}
                     ${this._renderChip('mdi:car-electric', '#8DC892', evPower > 0 ? semFormatPower(evPower) : '—')}
                     <div class="chip">
                         <ha-icon icon="mdi:speedometer" style="--mdc-icon-size:16px;color:${scoreColor}"></ha-icon>

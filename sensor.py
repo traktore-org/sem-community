@@ -2306,6 +2306,7 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
     # live state (cards still read them) while excluding them from the recorder.
     _unrecorded_attributes = frozenset({
         "devices",
+        "anti_cycle_bounds",   # (#914) a constant off consts/bounds.py
         "device_list",
         "per_charger_states",
         "per_charger_plans",
@@ -3175,6 +3176,13 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 registry = getattr(self.coordinator, '_device_registry', None)
                 if registry:
                     attrs["devices"] = registry.get_devices_for_sensor()
+                    # (#914) the anti-cycle range, from the ONE bounds table,
+                    # so the card never re-declares it. Constant per
+                    # release: unrecorded.
+                    from .consts.bounds import BOUNDS as _B
+                    _r = _B["anti_cycle_window_min"]
+                    attrs["anti_cycle_bounds"] = {
+                        "min": _r.min, "max": _r.max, "step": _r.step}
                 elif hasattr(self.coordinator, '_load_manager') and self.coordinator._load_manager:
                     lm_data = self.coordinator._load_manager.get_load_management_data()
                     devices = lm_data.get("devices", {})

@@ -1557,11 +1557,8 @@
     "dashboard_generation_failed": {
       "message": "Failed to generate the SEM dashboard. Check the Home Assistant logs for details."
     },
-    "load_management_not_initialized": {
-      "message": "Load management is not ready yet. Please wait for the integration to finish starting and try again."
-    },
     "device_registry_not_initialized": {
-      "message": "The device registry is not ready yet. Please wait for the integration to finish starting and try again."
+      "message": "SEM's device registry failed to build, so this device cannot be changed. Check the Home Assistant log for \"Unified device registry init failed\" and reload the integration."
     },
     "mapping_service_required": {
       "message": "A service is required when the control type is “service”. Please provide a service to call."
@@ -1581,14 +1578,17 @@
     "invalid_deadline_format": {
       "message": "Invalid deadline format: “{deadline}”. Use ISO 8601 format, for example 2026-05-27T07:00:00."
     },
-    "energy_dashboard_configuration_failed": {
-      "message": "Energy Dashboard configuration failed. Check that all required sensors are available."
-    },
     "set_option_invalid_payload": {
       "message": "set_option requires an 'options' dict mapping config keys to new values."
     },
     "set_option_no_entry": {
       "message": "No SEM ConfigEntry found — install SEM via Settings → Devices & Services first."
+    },
+    "load_management_disabled": {
+      "message": "Load management is switched off, so there is no shed device list to update. Turn it on under Configuration → Load management on the SEM dashboard, then try again."
+    },
+    "load_management_failed_to_start": {
+      "message": "Load management is switched on but failed to start, so SEM cannot use its device list. Check the Home Assistant log for \"Failed to initialize load management\" and reload the integration."
     }
   },
   "issues": {
@@ -1720,6 +1720,10 @@
     "battery_control_write_not_taken": {
       "title": "A battery control write is not taken: {entity_id}",
       "description": "SEM set **`{entity_id}`** to **{wanted}** and on the following cycles it still read **{seen}** — {strikes} times running. The service call did not fail; the register simply did not keep the value.\n\nA declared entity name cannot say whether a register accepts a write, expires it after a while, needs an enable switch first, or is a global setting the vendor says to leave alone — only the first write answers that, and this is the answer.\n\nOpen the entity in **Developer Tools → States** and set it by hand. If it does not hold, it is the wrong entity for this role: pick the right one in the Configuration card's battery pickers. If it holds by hand but not for SEM, tell us the brand and the entity — that is what turns a proposal into a supported row.\n\nThis clears itself the moment a write is reflected."
+    },
+    "soc_zones_out_of_order": {
+      "title": "Battery SOC zones are out of order",
+      "description": "Your battery zones read **Priority {priority}% · Buffer {buffer}% · Auto-start {auto_start}%**, but SEM expects them to rise in that order: Priority is the reserve you never spend, Buffer is where battery assist stops, and Auto-start is where the pack is full enough to give freely.\n\nSEM is using **{used}** as the boundaries — the same three numbers, sorted — so no zone is skipped and nothing behaves unpredictably. It is telling you because the layout you typed is almost certainly not the one you meant.\n\nFix it in **Settings → Devices & Services → SEM → Configure → Battery** or on the dashboard's Configuration tab. Any values are allowed as long as they ascend; wide zones are fine — 20 / 30 / 50 is a perfectly good layout on a large pack."
     }
   },
   "selector": {

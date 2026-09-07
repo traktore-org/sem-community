@@ -64,8 +64,17 @@ class HotWaterController(SwitchDevice):
         solar_target_temp: float = DEFAULT_SOLAR_TARGET_TEMP,
         legionella_target_temp: float = DEFAULT_LEGIONELLA_TARGET,
         legionella_interval_hours: float = DEFAULT_LEGIONELLA_INTERVAL_HOURS,
-        min_on_time: int = 300,
-        min_off_time: int = 60,
+        # (#914) heat-pump-shaped, not resistive-element-shaped. The #688
+        # floor-raise to 300 s on SwitchDevice never reached this subclass,
+        # so a hot-water heat pump restarted after a 60 s pause — pure wear
+        # while the circuit water was still coming up. These are the SAME
+        # numbers HeatPumpController committed to for its compressor (#508
+        # W1: 10 min minimum run / 5 min rest), so this is consistency with
+        # a value the repo already stands behind, not a new guess. Legionella
+        # cycles bypass this window entirely (they call activate() directly),
+        # so nothing about sanitation moves.
+        min_on_time: int = 600,
+        min_off_time: int = 300,
         daily_min_runtime_sec: int = 0,
         energy_entity_id: Optional[str] = None,
     ):

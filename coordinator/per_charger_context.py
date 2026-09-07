@@ -66,13 +66,21 @@ class PerChargerState:
 
 
 def note_redirect_outcome(state: "PerChargerState", *, redirect_w: float,
-                          grid_import_w: float, charging: bool) -> None:
+                          grid_import_w: float, charging: bool,
+                          grid_import_known: bool = True) -> None:
     """(#899) Fold one cycle's meter verdict into the charger's durable state.
-    Pure bookkeeping; ``energy_reclaim.redirect_strikes`` is the rule."""
+    Pure bookkeeping; ``energy_reclaim.redirect_strikes`` is the rule.
+
+    ``grid_import_known`` (#925 audit) has to travel with the watts. The
+    flag was computed correctly in ``build_view`` and declared on
+    ``FleetContext`` in the same commit batch that added this call, and
+    then simply never passed — so the verdict was taken on a number that
+    might be a fallback."""
     from .energy_reclaim import REDIRECT_VETO_STRIKES, redirect_strikes
     state.redirect_strikes = redirect_strikes(
         state.redirect_strikes, redirect_w=redirect_w,
         grid_import_w=grid_import_w, charging=charging,
+        grid_import_known=grid_import_known,
     )
     if state.redirect_strikes >= REDIRECT_VETO_STRIKES:
         state.redirect_vetoed = True

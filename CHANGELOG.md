@@ -13,6 +13,148 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🩹 **Services refused "load management is not initialized" for a setting
+  that was simply off** (#913). Load management ships off by default since
+  #897, and four services gated on it. Two of them never needed it: setting
+  the **target peak limit** — which the EV planner uses as its ceiling
+  regardless — and every per-device change that goes through the device
+  registry (mode, dependencies, goals, comfort band, anti-cycle windows).
+  All of those work now with load management off. The two that genuinely
+  need it say which thing is true: switched off, with where to turn it on,
+  or switched on and failed to start, with what to look for in the log.
+  Two exception messages that were never raised anywhere were removed.
+
+- 🩹 **The hot-water anti-cycle window did not survive a restart, and
+  defaulted to a 60-second pause** (#914). The minimum run / minimum pause
+  you set on the Load Priority card was saved, shown back to you, and never
+  re-applied to the device after a restart. It is now, on the same path the
+  drag priority always used. The default pause was a resistive-element
+  number — a heat pump restarted before its circuit water had come up — and
+  is now 10 minutes run / 5 minutes pause, the same values SEM already used
+  for its compressor logic. The card's placeholder now shows what the device
+  is actually holding instead of a fixed "5", and its range comes from the
+  one bounds table rather than a copy in the card.
+
+- 🛡️ **SEM had told itself to keep its hands off a load nobody had opted out
+  of** (#888). If a device's switch was not yet visible when SEM started —
+  ordinary on a fresh install, where discovery finishes about half a minute
+  later — SEM wrote it down as "not controllable". That was arithmetic, not a
+  preference. Half a minute later it read its own note back as though you had
+  said it, and recorded a permanent *never touch this*.
+
+  The Control card then answered **"Off — SEM won't act"** no matter which
+  Mode you picked, because the Mode was never what it was reporting. Nothing
+  in the interface could undo it: the toggle that once cleared this was
+  removed in May, and the service that should have accepted it rejected the
+  word before it arrived.
+
+  Fixed at the root — a derived value is no longer read as your decision —
+  and the flags SEM invented about itself are cleared once on upgrade. That
+  clearing is safe rather than hopeful: the file holding them was created in
+  late July, and the only thing that could ever have written a real one
+  stopped existing in May. The setting is now reachable and reversible again
+  in both directions, so a genuine *hands off* survives.
+
+- 🩹 **The battery budget explained itself using a charge level it had
+  never read** (#925 audit, then seen live). With the SOC sensor
+  unavailable, SEM still published a confident floor percentage and the
+  sentence *"nothing spendable — tonight's own load needs all 0.0 kWh
+  stored"*, as though it had measured an empty pack. It had measured
+  nothing. SEM already had the honest wording for this — *"unknown battery
+  SOC — spending nothing"* — and it could never be reached, because the
+  reading arrived as a plain 0 with no way to tell it apart from a real
+  one. It says which it means now.
+
+  What SEM spends is unchanged: an unknown pack was already spending
+  nothing. What changes is that it no longer explains that decision with a
+  number nobody measured.
+
+- 🛡️ **Load shedding stopped working while the grid meter blinked** (#925
+  audit). Shedding decides how much to shed by comparing the live meter
+  against your target. A meter that is momentarily unreadable reports zero
+  watts, which looks like a house drawing nothing — so during an outage the
+  shedder concluded there was nothing to do and stood down, in the middle
+  of exactly the peak event it exists to prevent. On real hardware that is
+  up to two and a half minutes at a stretch.
+
+  Nothing already shed was restored, so this stopped helping rather than
+  doing harm. It falls back to the 15-minute average — the figure the older
+  code used and which cannot be fooled by a single missing sample — and
+  keeps using the live meter whenever the meter is actually there.
+
+- 🛡️ **Split-meter installs could never report a blind meter at all**
+  (#925 audit). Systems with separate import and export sensors — Growatt,
+  Anker, Senec, DSMR and any manually paired setup — answered "the meter is
+  fine" on every single cycle, because the check asked about a sensor
+  arrangement those systems do not use. Every protection SEM has against a
+  blind meter was therefore switched off for them, and a fabricated 0 W was
+  recorded into long-term statistics as though it had been measured. Both
+  meter arrangements are now understood.
+
+- 🩹 **The Home tab said "Solar 0 W" when the solar sensor was simply
+  absent** (#925 audit). The battery chip beside it already knew better —
+  an unread SOC shows a dash, not a flat pack — and its two neighbours in
+  the very same row were never given the same treatment. On a system whose
+  solar reading goes missing over a hundred times a day, this was the most
+  frequently seen version of the mistake anywhere in SEM. Solar and
+  self-sufficiency now show a dash when there is nothing to show, and 0
+  only when zero is the actual measurement.
+
+  A related hole in the same reader: a sensor holding something
+  unparseable produced `NaN` rather than falling back, so the chip could
+  read "NaN W". Unparseable now counts as having no reading.
+
+- 📝 **The user guide said observer mode defaults to off. It defaults to
+  on** (#925 audit). Every other page — README, setup guide, quick start —
+  and the code all agree that a new install observes first and sends
+  nothing until you say so. One stale table row in the reference section
+  said the opposite, which is precisely the reader most likely to skip the
+  safety step on that advice.
+
+- 🩹 **A battery budget still being learned showed as "0 kWh" rather than
+  unknown** (#925 audit). For the first few nights after install SEM has
+  not measured enough to say what the pack can spare. The battery card
+  said so — *"Learning, 2 of 5 nights"* — but the sensor itself published
+  a confident **0.0 kWh**, so History, the Logbook, a plain entity card,
+  an automation or a voice query all read it as *nothing to spend*.
+
+  It now reads unknown until the measurement exists, and 0 kWh once SEM
+  has actually measured and the answer really is nothing. Which of the two
+  it is was always known internally — it just was not published. Nothing
+  about what SEM spends changes; only what it claims to know.
+
+- 🛡️ **Two safety checks were disabled by a blink of the grid meter**
+  (#925 audit). SEM's rule is that an absent reading is never a reading of
+  zero, and in both of these the flag saying "this was not actually read"
+  was computed correctly one file away and then never passed to the code
+  that needed it. On a system whose grid read goes missing over a hundred
+  times a day, neither was hypothetical.
+
+  The battery→EV redirect check counts three cycles where the promised
+  battery power failed to show up at the meter, then stops trusting the
+  redirect. A dark meter reads zero watts, which looked like success, so a
+  single blip in the middle **reset the count** — the protection could be
+  postponed indefinitely by the exact condition it was built for. An
+  unreadable meter now holds the count instead of clearing it.
+
+  The peak-slot guard's other half had the same hole: deciding whether a
+  cheap-hours load could start, it credited a dark meter as *nobody else
+  is drawing* and offered the whole slot budget. It now declines to start
+  a new grid-funded load while blind, and leaves anything already running
+  alone.
+
+- ✨ **The battery SOC zones are yours to place** (#870). Priority, Buffer
+  and Auto-start now range 5–100% each, so a layout like *20 / 30 / 50* on
+  a large pack — deliberate, and what the issue asked for — is finally
+  configurable. Buffer used to floor at 50% and Auto-start at 70%, which
+  put both of the lower zones out of reach.
+
+  Those minimums were quietly doing a second job: enforcing that the three
+  rise in order. That job moved to where it belongs. The zone boundaries
+  are now the same three numbers sorted, so no zone is ever skipped, and
+  SEM raises a Repair naming what you set and what it is using if they are
+  out of order — corrected in behaviour, but told about, not hidden.
+
 - 🐛 **Tomorrow's plan was packed against a free sun** (#924). SEM prices a
   sunny hour at what the electricity would have earned leaving the house, so
   a genuinely cheaper grid hour can win — that is what stops solar being

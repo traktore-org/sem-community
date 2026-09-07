@@ -693,7 +693,12 @@ class SensorReader:
         # real left in it should read unavailable).
         readings.inputs_degraded = any(self._input_dark.values())
         readings.solar_power_unavailable = self._all_dark("solar")
-        readings.grid_power_unavailable = self._all_dark("grid")
+        # (#925 audit) BOTH shapes of grid meter — a combined sensor tags
+        # "grid", a split pair tags "grid_import"/"grid_export" and never
+        # "grid", so asking about one category answered False forever for
+        # every split-grid install.
+        readings.grid_power_unavailable = self._all_dark_any(
+            "grid", "grid_import", "grid_export")
         readings.battery_power_all_unavailable = self._all_dark("battery")
 
         # #661 — forget audits for pairs that are no longer being netted, so a
@@ -1834,6 +1839,31 @@ class SensorReader:
                 )
 
         return self._battery_sign_inverted[bid]
+
+    def _all_dark_any(self, *names: str) -> bool:
+        """(#925 audit) ``_all_dark`` across SEVERAL contributing categories.
+
+        The grid reading has two shapes. A combined meter tags its reads
+        ``"grid"``; a SPLIT pair — Growatt, Anker, Senec, DSMR, and every
+        manual import+export pair, including the new one #915 added — tags
+        them ``"grid_import"`` and ``"grid_export"`` and never ``"grid"``
+        at all. So ``_all_dark("grid")`` asked about a category those
+        installs never write, found no reads, and answered False. Not "the
+        meter is fine" — *structurally always* False, on every cycle, for
+        that entire hardware class.
+
+        What that silently disabled, for split-grid installs only: #906's
+        peak-guard gate, ``grid_import_known`` in the charger view, the
+        #925 surplus-controller clamp — every protection built against a
+        blind meter — plus it booked a fabricated 0 W into HA's long-term
+        statistics as though it were a reading.
+
+        Union semantics, same rule: dark if something was read across
+        these categories and every one of those reads came back dark.
+        """
+        dark = sum(self._input_dark.get(n, 0) for n in names)
+        reads = sum(self._input_reads.get(n, 0) for n in names)
+        return bool(dark) and reads == 0
 
     def _all_dark(self, name: str) -> bool:
         """(#818) Was EVERY contributing read of this input unavailable?

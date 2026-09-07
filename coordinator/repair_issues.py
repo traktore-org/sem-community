@@ -227,6 +227,7 @@ _DOCS_ANCHORS = {
     "sensor_unavailable": "a-configured-sensor-is-unavailable",
     # (#900) the options wizard pinned a brand install to the generic adapter
     "battery_platform_pinned_generic": "the-battery-platform-is-pinned-to-generic",
+    "soc_zones_out_of_order": "your-battery-soc-zones-are-out-of-order",
     # (#911) the grid meters were guessed by name — set them explicitly
     "split_grid_guessed": "sem-guessed-your-grid-power-meters",
     "sensor_stale": "a-sensor-stopped-updating-stale",
@@ -377,6 +378,47 @@ def clear_split_grid_guessed(hass: HomeAssistant) -> None:
         ir.async_delete_issue(hass, DOMAIN, "split_grid_guessed")
     except Exception as e:  # noqa: BLE001
         _LOGGER.debug("issue_registry.delete (split_grid_guessed) failed: %s", e)
+
+
+def raise_soc_zones_out_of_order(hass: HomeAssistant, *, priority, buffer,
+                                  auto_start) -> None:
+    """(#870) The three battery SOC zones are not in ascending order.
+
+    Since #870 all three are settable anywhere in 5..100, because the old
+    minimums were enforcing the ordering by accident and made a perfectly
+    reasonable 20/30/50 layout impossible. ``decide.soc_zone`` sorts them
+    so the boundaries still mean what the numbers say and no zone is ever
+    skipped — but a user who wrote them out of order made a mistake, and
+    silently repairing a mistake teaches nothing. Say so, once, naming
+    what they set and what SEM is therefore using."""
+    lo, mid, hi = sorted((float(priority), float(buffer), float(auto_start)))
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id="soc_zones_out_of_order",
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="soc_zones_out_of_order",
+            learn_more_url=next_step_url("docs", "soc_zones_out_of_order",
+                                         **_versions(hass)),
+            translation_placeholders={
+                "priority": f"{float(priority):g}",
+                "buffer": f"{float(buffer):g}",
+                "auto_start": f"{float(auto_start):g}",
+                "used": f"{lo:g} / {mid:g} / {hi:g}",
+            },
+        )
+    except Exception as e:  # noqa: BLE001 — never fail the cycle over a repair
+        _LOGGER.debug("issue_registry.create (soc_zones_out_of_order): %s", e)
+
+
+def clear_soc_zones_out_of_order(hass: HomeAssistant) -> None:
+    try:
+        ir.async_delete_issue(hass, DOMAIN, "soc_zones_out_of_order")
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete (soc_zones_out_of_order): %s", e)
 
 
 def raise_battery_platform_pinned_generic(hass: HomeAssistant, *, brand: str) -> None:

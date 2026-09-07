@@ -1557,11 +1557,8 @@
     "dashboard_generation_failed": {
       "message": "SEM-koontinäytön luominen epäonnistui. Katso lisätiedot Home Assistantin lokeista."
     },
-    "load_management_not_initialized": {
-      "message": "Kuormanhallinta ei ole vielä valmis. Odota, että integraatio on käynnistynyt kokonaan, ja yritä uudelleen."
-    },
     "device_registry_not_initialized": {
-      "message": "Laiterekisteri ei ole vielä valmis. Odota, että integraatio on käynnistynyt kokonaan, ja yritä uudelleen."
+      "message": "SEM:n laiterekisteriä ei voitu rakentaa, joten tätä laitetta ei voi muuttaa. Tarkista Home Assistantin lokista \"Unified device registry init failed\" ja lataa integraatio uudelleen."
     },
     "mapping_service_required": {
       "message": "Palvelu vaaditaan, kun ohjaustyyppi on ”palvelu”. Anna kutsuttava palvelu."
@@ -1578,9 +1575,6 @@
     "invalid_deadline_format": {
       "message": "Virheellinen määräajan muoto: ”{deadline}”. Käytä ISO 8601 -muotoa, esimerkiksi 2026-05-27T07:00:00."
     },
-    "energy_dashboard_configuration_failed": {
-      "message": "Energia-koontinäytön määritys epäonnistui. Tarkista, että kaikki vaaditut anturit ovat käytettävissä."
-    },
     "set_option_invalid_payload": {
       "message": "set_option vaatii 'options'-sanakirjan, joka liittää määritysavaimet uusiin arvoihin."
     },
@@ -1589,6 +1583,12 @@
     },
     "unknown_appliance_schedule": {
       "message": "Laitteelle {device_id} ei löytynyt laiteaikataulua. Tarkista laitetunnus, jota käytit palvelun schedule_appliance kanssa."
+    },
+    "load_management_disabled": {
+      "message": "Kuormanhallinta on pois päältä, joten päivitettävää irtikytkentälistaa ei ole. Kytke se päälle SEM-kojelaudan kohdasta Asetukset → Kuormanhallinta ja yritä uudelleen."
+    },
+    "load_management_failed_to_start": {
+      "message": "Kuormanhallinta on päällä, mutta se ei käynnistynyt, joten SEM ei voi käyttää laitelistaansa. Tarkista Home Assistantin lokista \"Failed to initialize load management\" ja lataa integraatio uudelleen."
     }
   },
   "issues": {
@@ -1720,6 +1720,10 @@
     "battery_control_write_not_taken": {
       "title": "A battery control write is not taken: {entity_id}",
       "description": "SEM set **`{entity_id}`** to **{wanted}** and on the following cycles it still read **{seen}** — {strikes} times running. The service call did not fail; the register simply did not keep the value.\n\nA declared entity name cannot say whether a register accepts a write, expires it after a while, needs an enable switch first, or is a global setting the vendor says to leave alone — only the first write answers that, and this is the answer.\n\nOpen the entity in **Developer Tools → States** and set it by hand. If it does not hold, it is the wrong entity for this role: pick the right one in the Configuration card's battery pickers. If it holds by hand but not for SEM, tell us the brand and the entity — that is what turns a proposal into a supported row.\n\nThis clears itself the moment a write is reflected."
+    },
+    "soc_zones_out_of_order": {
+      "title": "Battery SOC zones are out of order",
+      "description": "Your battery zones read **Priority {priority}% · Buffer {buffer}% · Auto-start {auto_start}%**, but SEM expects them to rise in that order: Priority is the reserve you never spend, Buffer is where battery assist stops, and Auto-start is where the pack is full enough to give freely.\n\nSEM is using **{used}** as the boundaries — the same three numbers, sorted — so no zone is skipped and nothing behaves unpredictably. It is telling you because the layout you typed is almost certainly not the one you meant.\n\nFix it in **Settings → Devices & Services → SEM → Configure → Battery** or on the dashboard's Configuration tab. Any values are allowed as long as they ascend; wide zones are fine — 20 / 30 / 50 is a perfectly good layout on a large pack."
     }
   },
   "selector": {

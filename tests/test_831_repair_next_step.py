@@ -30,6 +30,9 @@ TROUBLESHOOTING = Path(__file__).resolve().parent.parent / "docs" / "TROUBLESHOO
 
 DOCS_SIDE = {
     "split_grid_guessed",   # (#911) set the two grid power entities
+    # (#870) the three SOC zones are out of ascending order — the docs say
+    # what each zone means and that any values are fine as long as they rise
+    "soc_zones_out_of_order",
     "battery_platform_pinned_generic",   # (#900) the wizard pinned it — docs say how to unpin
     "battery_operating_mode_unexpected",
     "sensor_unavailable", "sensor_stale", "no_forecast_integration",

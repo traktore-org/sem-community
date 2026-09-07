@@ -78,7 +78,7 @@ class TestRefreshRuntimeConfig:
         assert hp.force_on_threshold == 4000.0
         assert hp.invert_sg_ready is True
         # #602/#576 — priority is the DRAG-LIST position now (resolved by
-        # refresh_direct_device_priorities), no longer clobbered from
+        # refresh_direct_device_overrides), no longer clobbered from
         # heat_pump_priority here; it stays at the registration value.
         assert hp.priority == 1
 

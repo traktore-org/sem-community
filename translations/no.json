@@ -1557,11 +1557,8 @@
     "dashboard_generation_failed": {
       "message": "Kunne ikke generere SEM-dashbordet. Se Home Assistant-loggene for detaljer."
     },
-    "load_management_not_initialized": {
-      "message": "Laststyringen er ikke klar ennå. Vent til integrasjonen er ferdig med å starte, og prøv igjen."
-    },
     "device_registry_not_initialized": {
-      "message": "Enhetsregisteret er ikke klart ennå. Vent til integrasjonen er ferdig med å starte, og prøv igjen."
+      "message": "SEMs enhetsregister kunne ikke bygges, så denne enheten kan ikke endres. Sjekk Home Assistant-loggen for \"Unified device registry init failed\" og last integrasjonen på nytt."
     },
     "mapping_service_required": {
       "message": "En tjeneste kreves når styringstypen er «tjeneste». Angi en tjeneste som skal kalles."
@@ -1578,9 +1575,6 @@
     "invalid_deadline_format": {
       "message": "Ugyldig fristformat: «{deadline}». Bruk ISO 8601-format, for eksempel 2026-05-27T07:00:00."
     },
-    "energy_dashboard_configuration_failed": {
-      "message": "Konfigurasjon av Energi-dashbordet mislyktes. Kontroller at alle nødvendige sensorer er tilgjengelige."
-    },
     "set_option_invalid_payload": {
       "message": "set_option krever en 'options'-dict som tilordner konfigurasjonsnøkler til nye verdier."
     },
@@ -1589,6 +1583,12 @@
     },
     "unknown_appliance_schedule": {
       "message": "Fant ingen apparatplan for {device_id}. Kontroller enhets-ID-en du brukte med tjenesten schedule_appliance."
+    },
+    "load_management_disabled": {
+      "message": "Laststyring er slått av, så det finnes ingen utkoblingsliste å oppdatere. Slå den på under Konfigurasjon → Laststyring på SEM-dashbordet, og prøv igjen."
+    },
+    "load_management_failed_to_start": {
+      "message": "Laststyring er slått på, men kunne ikke starte, så SEM kan ikke bruke enhetslisten sin. Sjekk Home Assistant-loggen for \"Failed to initialize load management\" og last integrasjonen på nytt."
     }
   },
   "issues": {
@@ -1720,6 +1720,10 @@
     "battery_control_write_not_taken": {
       "title": "A battery control write is not taken: {entity_id}",
       "description": "SEM set **`{entity_id}`** to **{wanted}** and on the following cycles it still read **{seen}** — {strikes} times running. The service call did not fail; the register simply did not keep the value.\n\nA declared entity name cannot say whether a register accepts a write, expires it after a while, needs an enable switch first, or is a global setting the vendor says to leave alone — only the first write answers that, and this is the answer.\n\nOpen the entity in **Developer Tools → States** and set it by hand. If it does not hold, it is the wrong entity for this role: pick the right one in the Configuration card's battery pickers. If it holds by hand but not for SEM, tell us the brand and the entity — that is what turns a proposal into a supported row.\n\nThis clears itself the moment a write is reflected."
+    },
+    "soc_zones_out_of_order": {
+      "title": "Battery SOC zones are out of order",
+      "description": "Your battery zones read **Priority {priority}% · Buffer {buffer}% · Auto-start {auto_start}%**, but SEM expects them to rise in that order: Priority is the reserve you never spend, Buffer is where battery assist stops, and Auto-start is where the pack is full enough to give freely.\n\nSEM is using **{used}** as the boundaries — the same three numbers, sorted — so no zone is skipped and nothing behaves unpredictably. It is telling you because the layout you typed is almost certainly not the one you meant.\n\nFix it in **Settings → Devices & Services → SEM → Configure → Battery** or on the dashboard's Configuration tab. Any values are allowed as long as they ascend; wide zones are fine — 20 / 30 / 50 is a perfectly good layout on a large pack."
     }
   },
   "selector": {

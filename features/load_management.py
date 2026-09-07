@@ -745,7 +745,8 @@ class LoadManagementCoordinator:
         consecutive_peak: float,
         ev_is_charging: bool = False,
         grid_import_w: float = 0,
-        ev_power_w: float = 0
+        ev_power_w: float = 0,
+        grid_import_known: bool = True,
     ):
         """Process peak power update and manage loads accordingly.
 
@@ -761,7 +762,28 @@ class LoadManagementCoordinator:
             return
 
         # (#896) The live meter is what the shed plan is judged against.
-        self._last_grid_import_w = float(grid_import_w or 0.0)
+        #
+        # (#925 audit) ...and when the meter is DARK, `grid_import_w` is the
+        # reader's 0.0, which makes `need_w = max(0, 0 - aim_w)` zero and
+        # the shed engine go idle — mid-emergency, for up to 150 s, while
+        # the state machine independently knows the house is over target.
+        # Fail-static rather than fail-dangerous (nothing already shed is
+        # restored, that is gated on the smoothed average), but going blind
+        # during a demand-charge event is precisely what this feature
+        # exists to prevent.
+        #
+        # It is also a REGRESSION: the code #896 replaced judged the shed
+        # against `current_peak`, the 15-minute rolling average, which
+        # survives one dark sample by construction. #896 moved to the raw
+        # meter for a good reason — "a shed cannot move a rolling average
+        # for minutes" — and dropped the availability check on the way.
+        # So: keep the live meter when we have it, fall back to the average
+        # we always had when we do not.
+        if grid_import_known:
+            self._last_grid_import_w = float(grid_import_w or 0.0)
+        else:
+            self._last_grid_import_w = max(
+                0.0, float(current_peak or 0.0) * 1000.0)
 
         # Update rolling peak tracking from actual grid import
         peak_changed = self._update_peak_tracking(grid_import_w)

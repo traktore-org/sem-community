@@ -14,6 +14,7 @@
  */
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
+import { antiCyclePlaceholder, antiCycleBounds } from '../util/load-sections.js';
 import { importKw, slotStatus } from '../util/peak-slot.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { moveToIndex, regroupChildren, computeDropIndex } from '../util/drag-reorder.js';
@@ -1147,6 +1148,14 @@ class SEMLoadPriorityCard extends SEMLitBase {
             <div class="ge-hint">${this._t('comfort_hint')}</div>`;
     }
 
+    /** (#914) The anti-cycle range the backend publishes off consts/bounds.py
+     *  on the devices sensor, or null when it is not there. Null means the
+     *  input carries no min/max — never a range this card made up. */
+    _antiCycleBounds() {
+        const ent = this._hass?.states?.[`${this._prefix}controllable_devices_count`];
+        return antiCycleBounds(ent?.attributes);
+    }
+
     _renderAntiCycle(device) {
         // (#688) per-load anti-cycling — minutes, next to Min/Max/Mode (the
         // "well-placed" home the cycling report asked for). Blank ⇒ the solid
@@ -1162,24 +1171,37 @@ class SEMLoadPriorityCard extends SEMLitBase {
             device.goals = { ...(device.goals || {}), [key]: v };
             this._sendDeviceUpdate(device.id, key, String(v));
         };
-        const box = (key, ph) => html`
-            <input type="number" min="1" max="120" step="1" style="width:56px"
+        // (#914) ONE bounds table. The range used to be re-declared here as
+        // min="1" max="120" — a second copy of a number that lives nowhere
+        // else, which is how a card and a backend come to disagree. It is now
+        // read from the attribute the backend publishes off consts/bounds.py;
+        // an ABSENT attribute renders no min/max at all rather than a range
+        // this card invented (absent is not a default).
+        const bounds = this._antiCycleBounds();
+        // (#914) The placeholder is the window the LIVE device is actually
+        // holding — never a hard-coded "5" that was true for neither the
+        // resistive default nor the heat-pump one. Absent live object ⇒ "—".
+        const eff = (k) => antiCyclePlaceholder(g, k);
+        const box = (key, effKey) => html`
+            <input type="number" step="1" style="width:56px"
+                   min=${bounds ? bounds.min : nothing}
+                   max=${bounds ? bounds.max : nothing}
                    .value="${g[key] != null && g[key] !== '' ? String(g[key]) : ''}"
-                   placeholder="${ph}"
+                   placeholder="${eff(effKey)}"
                    @change=${onChange(key)}
                    @click=${(e) => e.stopPropagation()}>`;
         return html`
             <div class="ge-row">
                 <span class="ge-label">${this._t('anti_cycle_min_run')}</span>
                 <span class="ge-ctl">
-                    ${box('min_on_time_min', '5')}
+                    ${box('min_on_time_min', 'min_on_effective_min')}
                     <span class="ge-unit">${this._t('minutes_short')}</span>
                 </span>
             </div>
             <div class="ge-row">
                 <span class="ge-label">${this._t('anti_cycle_min_pause')}</span>
                 <span class="ge-ctl">
-                    ${box('min_off_time_min', '5')}
+                    ${box('min_off_time_min', 'min_off_effective_min')}
                     <span class="ge-unit">${this._t('minutes_short')}</span>
                 </span>
             </div>

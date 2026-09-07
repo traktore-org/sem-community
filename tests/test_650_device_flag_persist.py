@@ -150,7 +150,18 @@ class TestLegacyFlagAdoption650:
     async def test_adopts_non_default_flags_once(self):
         reg = self._reg_with_lm({
             "energy_dashboard_freezer": {"is_critical": True, "is_controllable": True},
-            "energy_dashboard_pond": {"is_critical": False, "is_controllable": False},
+            # (#888) said in the PERMISSION axis, not the mixed key. A bare
+            # ``is_controllable: False`` is ambiguous by construction — it is
+            # also what SEM DERIVES for a device whose switch has not been
+            # discovered yet — so adoption no longer reads it. This test's own
+            # sibling docstring below names the same hazard for the re-enable
+            # direction; #888 is that hazard on the fresh-install path, where
+            # the one-shot latch has not been set yet.
+            "energy_dashboard_pond": {
+                "is_critical": False,
+                "has_control_handle": True,
+                "user_hands_off": True,
+            },
         })
         await reg._adopt_legacy_device_flags()
         assert reg._critical_overrides == {"energy_dashboard_freezer": True}
@@ -188,7 +199,18 @@ class TestLegacyFlagAdoption650:
         for the re-enable direction. The one-shot flag is what stops it.
         """
         reg = self._reg_with_lm({
-            "energy_dashboard_pond": {"is_critical": False, "is_controllable": False},
+            # (#888) said in the PERMISSION axis, not the mixed key. A bare
+            # ``is_controllable: False`` is ambiguous by construction — it is
+            # also what SEM DERIVES for a device whose switch has not been
+            # discovered yet — so adoption no longer reads it. This test's own
+            # sibling docstring below names the same hazard for the re-enable
+            # direction; #888 is that hazard on the fresh-install path, where
+            # the one-shot latch has not been set yet.
+            "energy_dashboard_pond": {
+                "is_critical": False,
+                "has_control_handle": True,
+                "user_hands_off": True,
+            },
         })
         await reg._adopt_legacy_device_flags()          # boot: adopt the opt-out
         assert reg._controllable_overrides == {"energy_dashboard_pond": False}

@@ -742,7 +742,7 @@ class TestDefaultSeedOrder:
 class TestDirectSurplusDeviceRows:
     """Heat pump / hot water / climate (registered straight into the surplus
     controller) appear as draggable rows keyed by their id, deduped, and their
-    drag position is authoritative (refresh_direct_device_priorities)."""
+    drag position is authoritative (refresh_direct_device_overrides)."""
 
     def _reg_with_hp(self):
         reg = _registry_for_rows()
@@ -784,7 +784,7 @@ class TestDirectSurplusDeviceRows:
     def test_refresh_makes_drag_authoritative(self):
         reg, hp = self._reg_with_hp()
         reg._priority_overrides["heat_pump"] = 2
-        reg.refresh_direct_device_priorities()
+        reg.refresh_direct_device_overrides()
         assert hp.priority == 2  # walk now honours the drag
 
 

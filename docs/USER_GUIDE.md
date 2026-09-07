@@ -244,7 +244,7 @@ untouched when you turn it off.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `observer_mode` | false | Read-only mode — no hardware control |
+| `observer_mode` | **true** | Read-only mode — SEM watches and decides but sends nothing. A new install observes first; turn it off when you are ready to let SEM act. |
 | `daily_home_consumption_estimate` | 18 kWh | Fallback for first 7 days of month |
 
 Smart night charging is no longer a switch. Since v1.6.3 it is implied by the

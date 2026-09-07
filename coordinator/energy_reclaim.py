@@ -86,13 +86,28 @@ REDIRECT_VETO_STRIKES: int = 3
 
 
 def redirect_strikes(prev: int, *, redirect_w: float, grid_import_w: float,
-                     charging: bool) -> int:
+                     charging: bool, grid_import_known: bool = True) -> int:
     """One cycle's verdict on the redirect. A strike is a cycle where a
     redirect was in the budget, the car was charging, and the meter still
     imported more than the tolerance — the watts the pack was supposed to
     give up came from the grid instead. Any cycle that agrees (no redirect,
     not charging, or import within tolerance) resets the count: the inverter
-    yielded after all."""
+    yielded after all.
+
+    ``grid_import_known`` (#925 audit) — False when the grid sensor was
+    unreadable this cycle. THIS IS NOT AGREEMENT. ``grid_import_w`` is then
+    the reader's 0.0 fallback, which is below any tolerance, so the
+    unguarded version read a dark meter as "the pack yielded after all" and
+    RESET the counter. On the maintainer's own hardware the grid read is
+    absent ~137 times a day, so a single blip interleaved with genuinely
+    failing cycles delays the three-strike veto indefinitely — the safety
+    mechanism disabled by exactly the condition it was built for.
+
+    An unreadable meter is no evidence either way: it neither strikes nor
+    forgives. HOLD the count and wait for a cycle we can actually see.
+    """
+    if not grid_import_known:
+        return int(prev)
     if redirect_w > 0.0 and charging and grid_import_w > REDIRECT_IMPORT_TOLERANCE_W:
         return int(prev) + 1
     return 0

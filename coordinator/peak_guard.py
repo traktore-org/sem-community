@@ -131,6 +131,8 @@ def clamp_import_command(
     allowed_w: Optional[float],
     grid_import_w: float,
     own_grid_draw_w: float = 0.0,
+    grid_import_known: bool = True,
+    blind_others_w: Optional[float] = None,
 ) -> tuple:
     """Bound one import-creating command by the slot allowance.
 
@@ -147,6 +149,35 @@ def clamp_import_command(
     """
     if allowed_w is None:
         return float(desired_w), False
+    # (#925 audit) A DARK METER PROVES NO HEADROOM. `grid_import_w` is the
+    # reader's 0.0 fallback when the sensor was unreadable, and crediting
+    # that as "nobody else is drawing" inflates headroom to the WHOLE slot
+    # allowance — #906's defect ("headroom grew the longer the meter stayed
+    # dark") recurring in a sibling call site the #906 fix did not cover.
+    # The sibling that computes the slot CEILING gates on the same flag
+    # correctly; this one, added in the same release, never received it.
+    #
+    # ``blind_others_w`` is the honest ESTIMATE of what else the slot is
+    # carrying — the house's own held draw. This mirrors the charger-side
+    # sibling (``decide.clamp_to_peak_slot``), which already got #906 right;
+    # matching it matters more than being differently conservative, because
+    # two implementations of one rule is how the gap appeared in the first
+    # place. With no estimate available it degrades to granting nothing,
+    # which declines a new grid-funded START and touches nothing running.
+    if not grid_import_known:
+        # None means NO ESTIMATE, which is not an estimate of zero. The
+        # first draft defaulted it to 0.0 and its own test caught the
+        # result immediately: headroom became the whole allowance and the
+        # blind path handed out everything — the exact defect being fixed,
+        # reintroduced by folding "unknown" into "none of it". Third time
+        # today; the shape is genuinely seductive.
+        if blind_others_w is None:
+            return 0.0, True
+        headroom_w = max(0.0, float(allowed_w)
+                         - max(0.0, float(blind_others_w)))
+        if float(desired_w) <= headroom_w:
+            return float(desired_w), False
+        return headroom_w, True
     gi = max(0.0, float(grid_import_w or 0.0))
     others_w = max(0.0, gi - min(max(0.0, float(own_grid_draw_w or 0.0)), gi))
     headroom_w = max(0.0, float(allowed_w) - others_w)

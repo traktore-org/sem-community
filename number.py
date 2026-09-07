@@ -26,6 +26,7 @@ from homeassistant.const import (
 from homeassistant.helpers.entity import EntityCategory
 
 from .const import DEFAULT_MAX_CHARGING_CURRENT
+from .consts.bounds import BOUNDS      # (#870) one range per field
 from .coordinator import SEMCoordinator
 
 type SEMConfigEntry = ConfigEntry[SEMCoordinator]
@@ -69,26 +70,26 @@ NUMBER_TYPES = [
         # the 4-zone semantics documented in docs/ARCHITECTURE.md.
         key="battery_priority_soc",
         native_unit_of_measurement=PERCENTAGE,
-        native_min_value=5,
-        native_max_value=60,
-        native_step=5,
+        native_min_value=BOUNDS["battery_priority_soc"].min,   # (#870)
+        native_max_value=BOUNDS["battery_priority_soc"].max,
+        native_step=BOUNDS["battery_priority_soc"].step,
         mode=NumberMode.SLIDER,
     ),
     # SOC Zone Thresholds
     NumberEntityDescription(
         key="battery_buffer_soc",
         native_unit_of_measurement=PERCENTAGE,
-        native_min_value=50,
-        native_max_value=95,
-        native_step=5,
+        native_min_value=BOUNDS["battery_buffer_soc"].min,     # (#870)
+        native_max_value=BOUNDS["battery_buffer_soc"].max,
+        native_step=BOUNDS["battery_buffer_soc"].step,
         mode=NumberMode.SLIDER,
     ),
     NumberEntityDescription(
         key="battery_auto_start_soc",
         native_unit_of_measurement=PERCENTAGE,
-        native_min_value=70,
-        native_max_value=100,
-        native_step=5,
+        native_min_value=BOUNDS["battery_auto_start_soc"].min, # (#870)
+        native_max_value=BOUNDS["battery_auto_start_soc"].max,
+        native_step=BOUNDS["battery_auto_start_soc"].step,
         mode=NumberMode.SLIDER,
     ),
     NumberEntityDescription(

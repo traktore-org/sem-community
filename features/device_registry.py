@@ -33,6 +33,9 @@ from ..ha_energy_reader import (
     _find_load_power_sensor,
 )
 from .load_device_discovery import LoadDeviceDiscovery, resolve_load_is_on
+# (#780/#888) the two axes, asked of the module that owns them. Imported
+# unaliased so a structural test can see the call.
+from .device_axes import user_hands_off
 from ..devices.base import (
     SwitchDevice,
     CurrentControlDevice,
@@ -290,11 +293,14 @@ class UnifiedDeviceRegistry:
         """Return current device list."""
         return self._devices
 
-    async def async_initialize(self) -> None:
-        """Load manual mappings from storage, then refresh devices.
+    async def _load_storage(self) -> None:
+        """Load the registry's own store and run its one-shot upgrades.
 
-        Also schedules a delayed re-discovery after 35s because at startup
-        many entities aren't available yet (HA loads integrations in stages).
+        Split out of ``async_initialize`` (#888) so the store migration is
+        a unit that can be exercised without discovery, HA, or a running
+        load manager — the two-store round-trip that put the fabricated
+        hands-off flag back on .175 was only reproducible once this had
+        its own seam.
         """
         try:
             data = await self._store.async_load()
@@ -310,6 +316,70 @@ class UnifiedDeviceRegistry:
                 self._controllable_overrides = {
                     k: bool(v) for k, v in data.get("controllable_overrides", {}).items()
                 }
+                # (#888) ONE-SHOT: drop hands-off flags SEM fabricated about
+                # itself. Adoption used to read the DERIVED ``is_controllable``
+                # as the user's opt-out, so every Energy-Dashboard device whose
+                # switch was not yet discovered at startup was written down as
+                # "never touch this" — permanently, and unreachable from any
+                # surface, so the Control card answered "SEM won't act"
+                # whatever Mode was picked.
+                #
+                # Clearing them is safe rather than a guess, and the dates say
+                # why: this store was created 25.07.2026 (6fdd1eec), while the
+                # only UI that could ever write the flag died in the LitElement
+                # migration on 14.05.2026 (e36b66fa) — a dead handler survives
+                # in the card, but nothing emits to it. No entry written into
+                # this store can be a surviving user click.
+                #
+                # One-shot by marker, not by heuristic: once the axis has an
+                # honest writer again a real opt-out must never be swept away
+                # by an upgrade.
+                #
+                # THE MARKER IS THE ADOPTION LATCH, PERSISTED — and that is
+                # load-bearing, found live on .175 the first time this ran:
+                # the flags were cleared here, and 35 s later adoption put
+                # them straight back. The LoadManagement store carries its
+                # own copy of ``user_hands_off`` for every row — SEM's derived
+                # output from the PREVIOUS run, persisted in a second place —
+                # and adoption, latched only in memory, re-read that echo as
+                # the user's word on every restart. The fabricated flag
+                # round-tripped through two stores; clearing one of them was
+                # half a fix.
+                #
+                # Adoption exists to seed a pre-#650 install ONCE. A registry
+                # store at all proves that has happened — the store and the
+                # adopter arrived in the same commit — so on any load with
+                # data the latch is set and stays set across restarts.
+                # ABSENT is not FALSE — the three-state rule, in its own
+                # store. A store with NO latch key at all predates #888: its
+                # hands-off flags can only be adoption's fabrication, so
+                # clear them and latch. A store that HAS the key is post-#888
+                # and every flag in it was set through an honest writer —
+                # respect the value, and if adoption simply has not run yet
+                # (False), leave the flags AND the latch alone. The first
+                # version tested ``not data.get(...)`` and so read a fresh
+                # install's honest ``False`` as "needs migration", wiping a
+                # genuine opt-out on its first restart; #650's own
+                # round-trip test caught it in the same minute.
+                if "legacy_flags_adopted" not in data:
+                    if self._controllable_overrides:
+                        _fabricated = sorted(self._controllable_overrides)
+                        self._controllable_overrides = {}
+                        _LOGGER.warning(
+                            "(#888) cleared %d hands-off flag(s) SEM had set "
+                            "about itself, not the user: %s — these loads are "
+                            "SEM's to act on again, subject to the Mode you "
+                            "picked",
+                            len(_fabricated), _fabricated[:6],
+                        )
+                    self._legacy_flags_adopted = True
+                    # Persist NOW, before any refresh can run adoption. The
+                    # first version set a flag here and saved "later" —
+                    # later was after the delayed rediscovery, which is
+                    # exactly when adoption fires.
+                    await self._save_storage()
+                else:
+                    self._legacy_flags_adopted = bool(data["legacy_flags_adopted"])
                 self._rated_power_overrides = {
                     k: float(v) for k, v in
                     data.get("rated_power_overrides", {}).items()
@@ -362,6 +432,14 @@ class UnifiedDeviceRegistry:
                 )
         except Exception as e:
             _LOGGER.warning("Could not load device mappings: %s", e)
+
+    async def async_initialize(self) -> None:
+        """Load manual mappings from storage, then refresh devices.
+
+        Also schedules a delayed re-discovery after 35s because at startup
+        many entities aren't available yet (HA loads integrations in stages).
+        """
+        await self._load_storage()
 
         # (#662) Both dependency stores are loaded now — break any cycle a
         # pre-guard or hand-edited store carried in, before a device can
@@ -1847,19 +1925,29 @@ class UnifiedDeviceRegistry:
             "surplus_managed": live is not None,
         }
 
-    def refresh_direct_device_priorities(self) -> None:
-        """(#576) Make the drag store authoritative for every surplus device
-        the ED rebuild does not re-create — heat pump / hot water / climate
-        registered straight into the controller AND (#890) service-registered
-        devices, which the sync deliberately leaves alone (ownership by
-        construction, #559) and which therefore had no other path from the
-        override store to the live object. ED rows get theirs from the
-        rebuild, chargers from the coordinator's own refresh."""
+    def refresh_direct_device_overrides(self) -> None:
+        """(#576) Make the override stores authoritative for every surplus
+        device the ED rebuild does not re-create — heat pump / hot water /
+        climate registered straight into the controller AND (#890)
+        service-registered devices, which the sync deliberately leaves alone
+        (ownership by construction, #559) and which therefore had no other
+        path from a store to the live object. ED rows get theirs from the
+        rebuild, chargers from the coordinator's own refresh.
+
+        (#914) Renamed from ``refresh_direct_device_priorities`` because it
+        now carries the GOALS too. The anti-cycle windows a user set on the
+        hot-water row were stored, published back to the card, and never
+        re-applied to the live object after a restart — the drag priority
+        had this seam and the goals did not. ``_apply_goals`` is idempotent
+        (returns early with nothing stored; writes only keys present), so
+        this costs nothing on an install with no goal set.
+        """
         for did, dev in getattr(self._surplus_controller, "_devices", {}).items():
             if did.startswith("energy_dashboard_") or getattr(dev, "is_ev", False):
                 continue
             dev.priority = self.priority_for(
                 did, seed=int(getattr(dev, "priority", 5) or 5))
+            self._apply_goals(dev)
 
     def set_ev_chargers(self, chargers: List[Dict[str, Any]]) -> None:
         """(#576 P2.1) The coordinator hands its configured chargers here each
@@ -2107,6 +2195,16 @@ class UnifiedDeviceRegistry:
                 # reload (None ⇒ the card shows the default placeholder).
                 "min_on_time_min": goals.get("min_on_time_min"),
                 "min_off_time_min": goals.get("min_off_time_min"),
+                # (#914) what the LIVE object is actually holding, in minutes
+                # — the only way to see that a stored goal reached the
+                # device (it did not, across a restart, until #914). None
+                # when there is no live object yet: absent, not zero.
+                "min_on_effective_min": (
+                    None if live is None or getattr(live, "min_on_seconds", None) is None
+                    else round(float(live.min_on_seconds) / 60.0, 1)),
+                "min_off_effective_min": (
+                    None if live is None or getattr(live, "min_off_seconds", None) is None
+                    else round(float(live.min_off_seconds) / 60.0, 1)),
                 # (#705) the comfort band — pre-fill for the editor.
                 "comfort_entity": goals.get("comfort_entity", ""),
                 "comfort_target": goals.get("comfort_target", 0),
@@ -2192,9 +2290,16 @@ class UnifiedDeviceRegistry:
     async def _adopt_legacy_device_flags(self) -> None:
         """Seed the #650 override stores from LoadManagement — ONCE per session.
 
-        Only non-default values are adopted (critical=True, controllable=False):
+        Only non-default values are adopted (critical=True, hands-off=True):
         those are the ones a user had to click for, and only the OLD code path
         could have put them in the LM dict without a matching override.
+
+        (#888) "A user had to click for it" is the whole justification, so it
+        has to be TRUE of every key read here. It was not: the permission half
+        used to accept the DERIVED ``is_controllable`` flag, which SEM writes
+        itself for every row. ``is_critical`` is derived too (it mirrors the
+        override), but a derived True can only come FROM an override that
+        already exists, so re-adopting it is a no-op rather than a fabrication.
 
         One-shot by design. After the first sync the LM dict holds the
         REGISTRY's values, so a second pass would read our own output back — and
@@ -2209,28 +2314,44 @@ class UnifiedDeviceRegistry:
             return  # LM not up yet — try again on the next refresh
         self._legacy_flags_adopted = True
         crit = ctrl = 0
+        _crit_ids: list = []
+        _ctrl_ids: list = []
         for did, info in lm._devices.items():
             if not did.startswith("energy_dashboard_") or not isinstance(info, dict):
                 continue
             if info.get("is_critical") is True and did not in self._critical_overrides:
                 self._critical_overrides[did] = True
+                _crit_ids.append(did)
                 crit += 1
-            # (#780) either spelling of the user's opt-out: the migrated
-            # permission key, or the pre-split mixed flag whose False could
-            # only have come from this same toggle on an ``energy_dashboard_``
-            # row (the registry always derives those rows WITH a handle).
-            hands_off = (
-                info.get("user_hands_off") is True
-                or info.get("is_controllable") is False  # LEGACY-READ (#780)
-            )
-            if hands_off and did not in self._controllable_overrides:
+            # (#888) THE PERMISSION AXIS, asked of the module that owns it.
+            #
+            # This used to ALSO accept ``is_controllable is False`` as the
+            # user's opt-out, on the stated premise that "the registry always
+            # derives those rows WITH a handle". That premise is false:
+            # ``_sync_to_load_manager`` writes ``is_controllable`` for EVERY
+            # Energy-Dashboard device (see the derived write above), and
+            # ``UnifiedDevice.is_controllable`` is ``has_control_handle and
+            # not user_hands_off`` — so a device whose switch simply had not
+            # been discovered yet wrote False as ARITHMETIC, and this read it
+            # back as a PREFERENCE. SEM told itself to keep its hands off a
+            # load nobody had opted out of, permanently, with no way to undo
+            # it from any surface.
+            #
+            # ``device_axes.user_hands_off`` refuses that legacy fallback on
+            # purpose, in its own words: "reading it here too would count the
+            # same bit twice and, worse, would re-mix the axes this module
+            # exists to separate." #780 migrated every consumer except this
+            # one.
+            if user_hands_off(info) and did not in self._controllable_overrides:
                 self._controllable_overrides[did] = False
+                _ctrl_ids.append(did)
                 ctrl += 1
         if crit or ctrl:
             await self._save_storage()
             _LOGGER.info(
-                "Adopted %d critical / %d controllable flag(s) from LoadManagement (#650)",
-                crit, ctrl,
+                "Adopted %d critical / %d hands-off flag(s) from LoadManagement "
+                "(#650): critical=%s hands_off=%s",
+                crit, ctrl, _crit_ids[:6], _ctrl_ids[:6],
             )
 
     async def async_set_device_flag(
@@ -2302,7 +2423,7 @@ class UnifiedDeviceRegistry:
         # not on the next cycle: the rebuild returns early on an install
         # without an Energy Dashboard, and the service response is read as
         # "it took".
-        self.refresh_direct_device_priorities()
+        self.refresh_direct_device_overrides()
         await self.async_refresh_devices()
 
     async def update_device_control_mode(self, device_id: str, mode: str) -> None:
@@ -2421,7 +2542,7 @@ class UnifiedDeviceRegistry:
                 self._has_battery = True
             battery_priority = self.battery_surplus_priority()
             self.set_ev_chargers(charger_rows)
-            self.refresh_direct_device_priorities()
+            self.refresh_direct_device_overrides()
             return battery_priority
         except Exception:  # pragma: no cover - never break the cycle
             return None
@@ -2611,6 +2732,11 @@ class UnifiedDeviceRegistry:
             "dependencies": self._dependency_overrides,
             "critical_overrides": self._critical_overrides,          # (#650)
             "controllable_overrides": self._controllable_overrides,  # (#650)
+            # (#888) the persisted adoption latch. Once True, adoption never
+            # runs again on this install — so SEM's own echo in the
+            # LoadManagement store can never be re-read as the user's word,
+            # and a genuine opt-out set afterwards survives every upgrade.
+            "legacy_flags_adopted": bool(self._legacy_flags_adopted),
             "rated_power_overrides": self._rated_power_overrides,
             "service_registrations": self._service_registrations,
             "device_goals": self._device_goals,

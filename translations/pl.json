@@ -1557,11 +1557,8 @@
     "dashboard_generation_failed": {
       "message": "Nie udało się wygenerować pulpitu SEM. Szczegóły znajdziesz w dziennikach Home Assistant."
     },
-    "load_management_not_initialized": {
-      "message": "Zarządzanie obciążeniem nie jest jeszcze gotowe. Poczekaj, aż integracja zakończy uruchamianie, i spróbuj ponownie."
-    },
     "device_registry_not_initialized": {
-      "message": "Rejestr urządzeń nie jest jeszcze gotowy. Poczekaj, aż integracja zakończy uruchamianie, i spróbuj ponownie."
+      "message": "Nie udało się zbudować rejestru urządzeń SEM, więc tego urządzenia nie można zmienić. Sprawdź dziennik Home Assistant pod kątem \"Unified device registry init failed\" i przeładuj integrację."
     },
     "mapping_service_required": {
       "message": "Gdy typ sterowania to „usługa”, wymagana jest usługa. Podaj usługę do wywołania."
@@ -1578,9 +1575,6 @@
     "invalid_deadline_format": {
       "message": "Nieprawidłowy format terminu: „{deadline}”. Użyj formatu ISO 8601, na przykład 2026-05-27T07:00:00."
     },
-    "energy_dashboard_configuration_failed": {
-      "message": "Konfiguracja pulpitu Energia nie powiodła się. Sprawdź, czy wszystkie wymagane czujniki są dostępne."
-    },
     "set_option_invalid_payload": {
       "message": "set_option wymaga słownika 'options' mapującego klucze konfiguracji na nowe wartości."
     },
@@ -1589,6 +1583,12 @@
     },
     "unknown_appliance_schedule": {
       "message": "Nie znaleziono harmonogramu urządzenia dla {device_id}. Sprawdź identyfikator urządzenia użyty w usłudze schedule_appliance."
+    },
+    "load_management_disabled": {
+      "message": "Zarządzanie obciążeniem jest wyłączone, więc nie ma listy zrzutu do aktualizacji. Włącz je w Konfiguracja → Zarządzanie obciążeniem na pulpicie SEM i spróbuj ponownie."
+    },
+    "load_management_failed_to_start": {
+      "message": "Zarządzanie obciążeniem jest włączone, ale nie udało się go uruchomić, więc SEM nie może użyć swojej listy urządzeń. Sprawdź dziennik Home Assistant pod kątem \"Failed to initialize load management\" i przeładuj integrację."
     }
   },
   "issues": {
@@ -1720,6 +1720,10 @@
     "battery_control_write_not_taken": {
       "title": "A battery control write is not taken: {entity_id}",
       "description": "SEM set **`{entity_id}`** to **{wanted}** and on the following cycles it still read **{seen}** — {strikes} times running. The service call did not fail; the register simply did not keep the value.\n\nA declared entity name cannot say whether a register accepts a write, expires it after a while, needs an enable switch first, or is a global setting the vendor says to leave alone — only the first write answers that, and this is the answer.\n\nOpen the entity in **Developer Tools → States** and set it by hand. If it does not hold, it is the wrong entity for this role: pick the right one in the Configuration card's battery pickers. If it holds by hand but not for SEM, tell us the brand and the entity — that is what turns a proposal into a supported row.\n\nThis clears itself the moment a write is reflected."
+    },
+    "soc_zones_out_of_order": {
+      "title": "Battery SOC zones are out of order",
+      "description": "Your battery zones read **Priority {priority}% · Buffer {buffer}% · Auto-start {auto_start}%**, but SEM expects them to rise in that order: Priority is the reserve you never spend, Buffer is where battery assist stops, and Auto-start is where the pack is full enough to give freely.\n\nSEM is using **{used}** as the boundaries — the same three numbers, sorted — so no zone is skipped and nothing behaves unpredictably. It is telling you because the layout you typed is almost certainly not the one you meant.\n\nFix it in **Settings → Devices & Services → SEM → Configure → Battery** or on the dashboard's Configuration tab. Any values are allowed as long as they ascend; wide zones are fine — 20 / 30 / 50 is a perfectly good layout on a large pack."
     }
   },
   "selector": {

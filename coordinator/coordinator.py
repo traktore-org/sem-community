@@ -3830,6 +3830,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                     redirect_w=float(getattr(decision, "redirect_w", 0.0) or 0.0),
                                     grid_import_w=float(getattr(view.fleet, "grid_import_w", 0.0) or 0.0),
                                     charging=bool(view.power.charging),
+                                    # (#925 audit) a dark meter is not
+                                    # agreement — hold, do not forgive
+                                    grid_import_known=bool(getattr(
+                                        view.fleet, "grid_import_known", True)),
                                 )
                         try:
                             await actuate(
@@ -4055,6 +4059,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         monthly_peak,
                         ev_is_charging=False,
                         grid_import_w=power.grid_import_power,
+                        # (#925 audit) a dark meter must not read as 0 W
+                        # and idle the shed engine mid-emergency
+                        grid_import_known=not bool(getattr(
+                            power, "grid_power_unavailable", False)),
                         # FLEET-READ: load manager peak budget is a
                         # whole-house concept; fleet EV total is correct.
                         ev_power_w=power.ev_power,
@@ -4656,7 +4664,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             result["battery_expected_refill_kwh"] = _pe.get("battery_expected_refill_kwh")
             result["battery_refill_clipped_kwh"] = _pe.get("battery_refill_clipped_kwh")
             result["battery_refill_reason"] = _pe.get("battery_refill_reason")
-            result["battery_spendable_kwh"] = _pe.get("battery_spendable_kwh")
+            # (#925 audit) LEARNING IS NOT A MEASURED ZERO. The budget
+            # dataclass collapses both into 0.0 — "0.0 whenever anything is
+            # unknown" — which is right for the DECISION (spend nothing
+            # while you do not know) and wrong for the DISPLAY. Only the
+            # battery card read the `phase` attribute and rendered
+            # "Learning, n of 5 nights"; History, the Logbook, a generic
+            # entity card, an automation and a voice query all saw a
+            # confident `0.0 kWh` on a brand-new install for a week.
+            #
+            # `planning_phase` already separates the two states, so the
+            # sensor can too: unknown while learning, 0.0 once holding —
+            # which IS a measurement. Decisions are untouched; they read
+            # `_planning_evidence`, which still carries the number.
+            _spend = _pe.get("battery_spendable_kwh")
+            result["battery_spendable_kwh"] = (
+                None if _pe.get("planning_phase") == "learning" else _spend)
             result["battery_dynamic_floor_pct"] = _pe.get("battery_dynamic_floor_pct")
             result["battery_spendable_reason"] = _pe.get("battery_spendable_reason")
             result["planning_phase"] = _pe.get("planning_phase")
@@ -5516,6 +5539,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 peak_slot_allowed_w=getattr(self, "_peak_slot_allowed_w", None),
                 grid_import_w=float(getattr(
                     power, "grid_import_power", 0.0) or 0.0),
+                # (#925 audit) the twin flag travels with the watts
+                grid_import_known=not bool(getattr(
+                    power, "grid_power_unavailable", False)),
             )
             surplus_data.surplus_total_w = allocation.total_surplus_w
             surplus_data.surplus_distributable_w = allocation.distributable_surplus_w
@@ -7184,6 +7210,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # 2-battery setup), so both units can sell to grid / be limited
             # independently. Falls back to the global single-entity keys.
             self._check_battery_platform_pin(battery_id, batt_idx, _bat_count)
+            self._check_soc_zone_order()      # (#870)
             adapter = self._battery_adapters.get(battery_id)
             if adapter is None:
                 # #709: runtime context — injects the persistent Deye snapshot
@@ -9738,6 +9765,42 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             pass
         return out
 
+    def _check_soc_zone_order(self) -> None:
+        """(#870) Are the three battery SOC zones in ascending order?
+
+        Since #870 all three are settable anywhere in 5..100 — the old
+        minimums (buffer 50, auto-start 70) were enforcing the ordering by
+        accident and made coppe218's 20/30/50 layout impossible. `soc_zone`
+        sorts them so no zone is ever SKIPPED, but a user who wrote them
+        out of order made a mistake and should hear about it.
+
+        Asked every cycle, acted on only when the verdict CHANGES, and
+        never before HA is running — the shape #919 taught: a question
+        asked before the thing it asks about exists answers 'no' forever.
+        """
+        if not getattr(self.hass, "is_running", False):
+            return
+        from . import repair_issues as _ri_soc
+        try:
+            p = float(self.config.get("battery_priority_soc", 30) or 0)
+            b = float(self.config.get("battery_buffer_soc", 70) or 0)
+            a = float(self.config.get("battery_auto_start_soc", 90) or 0)
+        except (TypeError, ValueError):
+            return                      # unreadable is not out-of-order
+        bad = not (p <= b <= a)
+        if bad == getattr(self, "_soc_zone_order_bad", None):
+            return                      # no change, no churn
+        self._soc_zone_order_bad = bad
+        if bad:
+            _ri_soc.raise_soc_zones_out_of_order(
+                self.hass, priority=p, buffer=b, auto_start=a)
+            _LOGGER.warning(
+                "battery SOC zones are out of order (priority %g, buffer %g, "
+                "auto-start %g) — using %g/%g/%g as the boundaries",
+                p, b, a, *sorted((p, b, a)))
+        else:
+            _ri_soc.clear_soc_zones_out_of_order(self.hass)
+
     def _check_battery_platform_pin(self, battery_id, batt_idx, bat_count) -> None:
         """(#900, fixed 07.09 for #919) Is this battery pinned to `generic`
         on an install whose brand integration is loaded?
@@ -11787,7 +11850,24 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         usable_kwh = cap.usable_kwh if cap is not None else _f_or_none(nameplate)
         need_kwh = expected_overnight_need(sealed)
-        soc_now = getattr(power, "battery_soc", None)
+        # (#925 audit, then SEEN on .175 07.09) `battery_soc` is 0.0 by
+        # dataclass default and never None — the twin flag is the only way
+        # to know it was read. Ungated, a dark SOC computed the whole
+        # budget against a literal 0 %, and the rig showed exactly that:
+        # `sensor.sem_battery_soc` unavailable, and the published reason
+        # reading "nothing spendable — tonight's own load needs all 0.0 kWh
+        # stored" with a confident dynamic_floor_pct beside it. Both
+        # dawn_headroom_kwh() and spendable_budget() HAVE an honest
+        # "SOC unknown" branch; neither could ever be reached.
+        #
+        # It fails safe numerically — the reserve always exceeds a stored
+        # zero, so the answer is 0.0 either way — but a number a user
+        # cannot explain is one they will not trust, which is the module's
+        # own rule 5. `_run_charge_pacing` sixty lines away already asks
+        # this question correctly.
+        soc_now = (
+            None if getattr(power, "battery_soc_unavailable", False)
+            else getattr(power, "battery_soc", None))
 
         # (#778, found live on .175 30.08) The room that answers "will
         # tomorrow put the spend back" is the room at DAWN, after the
@@ -12527,7 +12607,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     )
                     hp.invert_sg_ready = bool(cfg.get("heat_pump_invert_sg_ready", False))
                     # #602/#576 — priority is the DRAG-LIST position now (resolved
-                    # by refresh_direct_device_priorities), NOT a standalone knob.
+                    # by refresh_direct_device_overrides), NOT a standalone knob.
                     # (Previously clobbered here from heat_pump_priority every
                     # cycle, killing the drag position.)
                 except (TypeError, ValueError):
