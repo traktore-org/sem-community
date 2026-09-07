@@ -110,31 +110,61 @@ class TestTheFabricatedFlagsAreCleared:
         the moment the axis has an honest writer again."""
         src = (Path(__file__).resolve().parent.parent
                / "features" / "device_registry.py").read_text(encoding="utf-8")
-        assert '"axes_migrated"' in src
         tree = ast.parse(src)
+        # PERSISTED: the marker appears as a key in a dict literal (the
+        # payload handed to Store.async_save).
         saved = [
-            k.value for node in ast.walk(tree) if isinstance(node, ast.Dict)
+            k for node in ast.walk(tree) if isinstance(node, ast.Dict)
             for k in node.keys
             if isinstance(k, ast.Constant) and k.value == "axes_migrated"
         ]
         assert saved, "the marker is read but never persisted — it would re-run"
+        # READ: and it is consulted, via data.get("axes_migrated"). A marker
+        # written and never read would clear a real opt-out on every load.
+        read = [
+            n for n in ast.walk(tree)
+            if isinstance(n, ast.Call) and getattr(n.func, "attr", "") == "get"
+            and n.args and isinstance(n.args[0], ast.Constant)
+            and n.args[0].value == "axes_migrated"
+        ]
+        assert read, "the marker is saved but never consulted"
 
 
 class TestThePermissionHasAnHonestWriter:
     """A migration that clears a flag nobody can set again is half a fix."""
 
-    def _schema_src(self):
-        return (Path(__file__).resolve().parent.parent
-                / "__init__.py").read_text(encoding="utf-8")
+    def _accepted_properties(self):
+        """Every literal inside a ``vol.In([...])`` in __init__.py.
+
+        Structural, not a window of source text (#925): the first draft
+        sliced 900 characters after a marker string and asked whether a
+        word appeared in it, which is exactly the idiom the ratchet
+        exists to retire — and the ratchet caught it.
+        """
+        src = (Path(__file__).resolve().parent.parent
+               / "__init__.py").read_text(encoding="utf-8")
+        out = set()
+        for n in ast.walk(ast.parse(src)):
+            if not (isinstance(n, ast.Call)
+                    and getattr(n.func, "attr", "") == "In"):
+                continue
+            for arg in n.args:
+                if isinstance(arg, (ast.List, ast.Tuple)):
+                    out |= {e.value for e in arg.elts
+                            if isinstance(e, ast.Constant)}
+        return out
 
     def test_hands_off_is_an_accepted_property(self):
-        src = self._schema_src()
-        i = src.index('vol.Required("property"): vol.In([')
-        window = src[i:i + 900]
-        assert '"hands_off"' in window, (
+        props = self._accepted_properties()
+        assert "hands_off" in props, (
             "the handler has accepted hands_off since #780 but voluptuous "
             "refuses the call before it arrives — an axis with a reader, a "
             "store and a handler, and no way in")
+
+    def test_the_sibling_spelling_still_works(self):
+        """``controllable`` is the same toggle under the older name and must
+        keep working — this adds a way in, it does not move the door."""
+        assert "controllable" in self._accepted_properties()
 
     def test_a_falsey_word_is_not_true(self):
         """``bool("false")`` is True. Every natural way to say no — false, 0,
