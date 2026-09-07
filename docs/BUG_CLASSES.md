@@ -2733,7 +2733,13 @@ asks `device_axes.user_hands_off`; a one-shot marked migration clears the fabric
 not a guess — the store was created 25.07.2026, its only writer died 14.05.2026, so no value in it
 can be a surviving click); and the axis gets an honest writer back in both directions.
 **Guard:** `tests/test_888_hands_off_is_the_users_word.py` (structural: adoption calls
-`user_hands_off` and performs no `.get("is_controllable")` read; the marker is persisted, not only
-read). **Sweep question:** for every value one component writes and another reads as evidence — is
-it a MEASUREMENT of the world, or this system's own conclusion coming back around? Refs #888 #780
-#650 #779.
+`user_hands_off` and performs no `.get("is_controllable")` read; the latch is persisted AND
+consulted; a two-store round-trip is reproduced in-process). **Addendum, found live on .175 (08.09):**
+the echo lived in a SECOND store. The load-manager persists its own `user_hands_off` per row —
+SEM's previous-run output — and adoption, latched only in memory, re-adopted it 35 s after the
+registry's copy was cleared. The fix is not to chase echoes but to latch adoption in the store, for
+good; and the latch key must distinguish ABSENT (pre-fix store, migrate) from FALSE (post-fix store,
+adoption not yet run) — the first draft of that wiped a genuine opt-out on a fresh install's first
+restart. **Sweep question:** for every value one component writes and another reads as evidence —
+is it a MEASUREMENT of the world, or this system's own conclusion coming back around? And how many
+stores does that conclusion live in? Refs #888 #780 #650 #779.
