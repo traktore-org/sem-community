@@ -274,6 +274,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   attacked in the card's rendering, the generated code's escaping, the
   regexes or the offline guarantee gave way.
 
+# [2.1.0-beta.8] — 06.09.2026
+
+- 🛡️ **A template that derives from a live source is not a frozen sensor**
+  (#912). The beta.7 fix cleared a flat reading when a *sibling of the same
+  config entry* still reported — right for a directly-polled sensor, but
+  bekovan's `sensor.inverted_power_plugin_solar` (a Template helper negating a
+  Shelly plug) kept raising the Repair: a template writes only when its value
+  changes, so a flat value holds `last_reported` still, and a UI helper is the
+  *only* entity of its config entry, so no sibling can ever vouch. A derived
+  sensor's liveness is its **source's** liveness. SEM now follows a
+  derived/helper input (template, utility_meter, integration, derivative,
+  min/max, group, …) to the source entities it draws from — read generically
+  from the helper's config entry — and the flat reading is honest if any source
+  is still alive; a genuinely dead source still warns through the helper, and a
+  YAML helper with no config entry to trace is honest rather than false-flagged.
+
 # [2.1.0-beta.7] — 03.09.2026
 
 - 🛡️ **A flat value from a live integration is not a frozen sensor** (#912).

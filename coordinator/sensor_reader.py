@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from collections import deque
 from typing import Any, Dict, Optional, Tuple
@@ -3668,15 +3669,20 @@ class SensorReader:
         if stale and self._stillness_is_expected(name, value):
             # (#851) A stall the sensor's own domain explains is not a fault.
             return
-        if stale and self._integration_is_reporting(entity_id):
-            # (#912) The sensor's own integration is alive — a sibling from the
-            # same config entry reported within the threshold — so this
-            # entity is FLAT, not frozen: foxess_modbus (and any integration
-            # that skips identical writes) never advances ``last_reported``
-            # while a value holds still, and grid_export sits at 0 all
-            # afternoon while the house imports. Falls through to the
-            # recovery branch so a Repair raised during a real stall clears
-            # once the integration reports again.
+        if stale and self._source_is_alive(entity_id):
+            # (#912) The reading's SOURCE is still alive — so this entity is
+            # FLAT, not frozen. For a directly-polled sensor that means a
+            # sibling of its own config entry reported within the threshold
+            # (foxess_modbus and any integration that skips identical writes
+            # never advances ``last_reported`` while a value holds still, and
+            # grid_export sits at 0 all afternoon while the house imports).
+            # For a DERIVED sensor (bekovan's template negating a Shelly plug,
+            # 2026-09-06) it means a SOURCE entity it draws from is alive: a
+            # template writes only when its value changes and is the sole
+            # entity of its helper config entry, so it has no sibling to vouch
+            # and its liveness is its source's. Falls through to the recovery
+            # branch so a Repair raised during a real stall clears once the
+            # source reports again.
             stale = False
         if stale:
             if entity_id not in self._frozen_sensors:
@@ -3704,6 +3710,152 @@ class SensorReader:
             _LOGGER.info(
                 "Sensor %s (%s) is updating again (was frozen).", entity_id, name,
             )
+
+    # (#912) Helper/derived platforms whose entities write only when their
+    # rendered value changes — a Template inverting a Shelly plug, a
+    # utility_meter, a Riemann integral, a min/max group. They have no poll
+    # loop, so a flat ``last_reported`` is expected and is NEVER a stall; and a
+    # UI helper is the ONLY entity of its config entry, so the sibling rule can
+    # never vouch for it. Their liveness is their SOURCE's liveness. Over-
+    # inclusion is safe (a genuine derived sensor is always followed to its
+    # source, never fail-closed on its own flat value); under-inclusion only
+    # leaves a false positive, so the set is generous.
+    _DERIVED_PLATFORMS = frozenset({
+        "template", "utility_meter", "integration", "derivative",
+        "min_max", "group", "filter", "statistics", "threshold",
+        "trend", "history_stats", "compensation", "mold_indicator",
+        "average", "combine",
+    })
+    # Quoted / function-call form: ``states('sensor.x')``, a ``source`` key.
+    _ENTITY_ID_RE = re.compile(r"\b[a-z_][a-z0-9_]*\.[a-z0-9_]+\b")
+    # Object form: ``states.sensor.x.state`` — the plain regex would split this
+    # into ``states.sensor`` + ``x.state`` and resolve neither; capture the real
+    # ``sensor.x`` from the middle two segments (a very common template style).
+    _STATES_OBJ_RE = re.compile(r"\bstates\.([a-z_][a-z0-9_]*)\.([a-z0-9_]+)")
+
+    def _source_is_alive(self, entity_id: str) -> bool:
+        """(#912) True when whatever FEEDS ``entity_id`` is still live.
+
+        Completes bug class 63 for DERIVED inputs. The sibling rule below
+        answers "is the source alive?" for a directly-polled sensor: its source
+        is its own poll loop, so a live sibling of the same config entry
+        vouches. But bekovan's ``sensor.inverted_power_plugin_solar``
+        (2026-09-06) is a Template helper that negates a Shelly plug — and it
+        still false-warned on beta.7. A template writes only when its rendered
+        value changes, so a flat ``last_reported`` is expected, AND a UI helper
+        is the sole entity of its config entry, so no sibling can ever vouch.
+        The sibling rule cannot clear it; its liveness is its SOURCE's.
+
+        1. its own config-entry siblings vouch (the directly-polled case), else
+        2. if it is a derived/helper platform, follow the source entities it
+           derives from — honest if any source reported within the threshold or
+           any source's own integration is alive; and if the source cannot be
+           traced (a YAML helper with no config entry to read), a flat derived
+           value is still not stall evidence → honest;
+        3. otherwise (a real polled sensor with no live sibling) → frozen.
+        """
+        if self._integration_is_reporting(entity_id):
+            return True
+        try:
+            reg = er.async_get(self.hass)
+            entry = reg.async_get(entity_id)
+        except Exception:  # noqa: BLE001 — never break a read over the registry
+            return False
+        platform = getattr(entry, "platform", None) if entry is not None else None
+        if platform not in self._DERIVED_PLATFORMS:
+            # A directly-polled sensor whose whole entry has gone quiet is the
+            # real stall the check exists for. Fail closed (missing information
+            # must not silence a warning) — unchanged from the shipped rule.
+            return False
+        sources = self._resolve_source_entities(entry)
+        if not sources:
+            # A helper we cannot trace (no config entry / unreadable options):
+            # its ``last_reported`` is a change signal, not a poll signal, so a
+            # flat value is honest, not frozen.
+            return True
+        for src in sources:
+            if self._entity_reported_recently(src) or self._integration_is_reporting(src):
+                return True
+        return False
+
+    def _entity_reported_recently(self, entity_id: str) -> bool:
+        """True when ``entity_id`` reported within the freshness threshold."""
+        try:
+            st = self.hass.states.get(entity_id)
+        except Exception:  # noqa: BLE001 — never break a read over a source read
+            return False
+        if st is None:
+            return False
+        seen = getattr(st, "last_reported", None)
+        if seen is None:
+            seen = getattr(st, "last_updated", None)
+        if seen is None:
+            return False
+        try:
+            import homeassistant.util.dt as _dt
+            age = (_dt.utcnow() - seen).total_seconds()
+        except Exception:  # noqa: BLE001 — a mock / naive dt source
+            return False
+        return (
+            isinstance(age, (int, float)) and not isinstance(age, bool)
+            and age < self._STALE_THRESHOLD_S
+        )
+
+    def _resolve_source_entities(self, entry) -> list[str]:
+        """(#912) The entity ids a derived sensor draws from, read from its
+        helper config entry's options/data.
+
+        A Template stores its source inside the template string
+        (``states('sensor.shelly_plug_power')``); utility_meter / derivative /
+        integration store it under ``source``; min_max / group under
+        ``entity_ids``; threshold / statistics under ``entity_id``. Rather than
+        special-case each helper's key, scan every string in options+data for
+        entity-id-shaped tokens and keep the ones that resolve to a real state
+        — one rule for every helper, present and future. A YAML helper has no
+        config entry to read → empty, and the caller treats an untraceable
+        helper as honest (its flat value is not stall evidence).
+        """
+        cid = getattr(entry, "config_entry_id", None)
+        self_eid = getattr(entry, "entity_id", None)
+        if not cid:
+            return []
+        try:
+            ce = self.hass.config_entries.async_get_entry(cid)
+        except Exception:  # noqa: BLE001 — never break a read over config entries
+            return []
+        if ce is None:
+            return []
+        found: set[str] = set()
+        for blob in (getattr(ce, "options", None), getattr(ce, "data", None)):
+            self._collect_entity_ids(blob, found)
+        found.discard(self_eid)
+        return list(found)
+
+    def _collect_entity_ids(self, blob, out: set, _depth: int = 0) -> None:
+        """Walk a config-entry options/data blob and add every entity-id-shaped
+        token that resolves to a real state. Validating against the state
+        machine drops false hits (``template_type: sensor`` has no dot; a stray
+        ``foo.bar`` that is not an entity is skipped). The depth cap is a
+        belt-and-braces guard — a config-entry blob is acyclic JSON — so a
+        pathological/self-referential mock can never spin."""
+        if _depth > 6:
+            return
+        if isinstance(blob, str):
+            cands = {m.group(0) for m in self._ENTITY_ID_RE.finditer(blob)}
+            cands |= {f"{m.group(1)}.{m.group(2)}"
+                      for m in self._STATES_OBJ_RE.finditer(blob)}
+            for cand in cands:
+                try:
+                    if self.hass.states.get(cand) is not None:
+                        out.add(cand)
+                except Exception:  # noqa: BLE001 — never break a read over a candidate
+                    continue
+        elif isinstance(blob, dict):
+            for v in blob.values():
+                self._collect_entity_ids(v, out, _depth + 1)
+        elif isinstance(blob, (list, tuple, set)):
+            for v in blob:
+                self._collect_entity_ids(v, out, _depth + 1)
 
     def _integration_is_reporting(self, entity_id: str) -> bool:
         """(#912) True when ANY sibling entity of ``entity_id``'s config entry

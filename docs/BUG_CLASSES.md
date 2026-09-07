@@ -2459,7 +2459,17 @@ silence, none asking the actual question — is the SOURCE alive? **Live catch (
 **Closure:** one rule — a sensor is frozen only if its own integration has gone quiet; a sibling
 entity of the same config entry reporting within the threshold vouches for the reading. The domain
 predicate survives only for the integration that genuinely powers down (the whole entry quiet, the
-sun explains it). **Guard:** `tests/test_912_frozen_sibling_rule.py` pins the rule is one place.
+sun explains it). **Derived-source completion (#912 round 2, bekovan, 2026-09-06).** The sibling
+rule read the SOURCE as "my own config-entry siblings" — right for a directly-polled sensor, but a
+DERIVED input (a Template negating a Shelly plug; a utility_meter; a Riemann integral) writes only
+when its rendered value changes AND is the sole entity of its helper config entry, so it has no
+sibling to vouch and false-warned on beta.7. Its liveness is its actual source's: a derived-platform
+entity now follows the source entities it draws from (scanned generically from its helper config
+entry's options/data — the template string, a ``source``/``entity_id``/``entity_ids`` key), honest
+if any source or a source's integration is alive; an untraceable helper (YAML, no config entry) is
+honest because a flat derived value is a change signal, not a poll stall; a genuinely dead source
+still warns through the helper. **Guard:** `tests/test_912_frozen_sibling_rule.py` pins the rule is
+one place; `tests/test_912_frozen_derived_source.py` pins source-following for derived inputs.
 **Sweep question:** wherever a heuristic explains away a signal per domain, what single property of
 the SOURCE would answer all of them? Refs #912 #851 #611.
 
