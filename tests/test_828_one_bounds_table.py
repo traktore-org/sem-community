@@ -107,8 +107,12 @@ class TestTheTableIsTheDeclaration:
         that let `custom_entities` sit unreachable in the forecast reader."""
         flow = (_ROOT / "config_flow.py").read_text()
         num = (_ROOT / "number.py").read_text()
+        # (#914) a row may also be consumed by being PUBLISHED as a sensor
+        # attribute for the cards — that is how the anti-cycle range reaches
+        # the Load Priority card without a second copy in JS.
+        sen = (_ROOT / "sensor.py").read_text()
         for key in _bounds.BOUNDS:
-            assert f'"{key}"' in flow or f'"{key}"' in num, (
+            assert f'"{key}"' in flow or f'"{key}"' in num or f'"{key}"' in sen, (
                 f"{key} is declared in consts/bounds.py but no surface uses it"
             )
 

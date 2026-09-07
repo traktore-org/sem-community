@@ -13,6 +13,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🩹 **Services refused "load management is not initialized" for a setting
+  that was simply off** (#913). Load management ships off by default since
+  #897, and four services gated on it. Two of them never needed it: setting
+  the **target peak limit** — which the EV planner uses as its ceiling
+  regardless — and every per-device change that goes through the device
+  registry (mode, dependencies, goals, comfort band, anti-cycle windows).
+  All of those work now with load management off. The two that genuinely
+  need it say which thing is true: switched off, with where to turn it on,
+  or switched on and failed to start, with what to look for in the log.
+  Two exception messages that were never raised anywhere were removed.
+
+- 🩹 **The hot-water anti-cycle window did not survive a restart, and
+  defaulted to a 60-second pause** (#914). The minimum run / minimum pause
+  you set on the Load Priority card was saved, shown back to you, and never
+  re-applied to the device after a restart. It is now, on the same path the
+  drag priority always used. The default pause was a resistive-element
+  number — a heat pump restarted before its circuit water had come up — and
+  is now 10 minutes run / 5 minutes pause, the same values SEM already used
+  for its compressor logic. The card's placeholder now shows what the device
+  is actually holding instead of a fixed "5", and its range comes from the
+  one bounds table rather than a copy in the card.
+
 - 🛡️ **SEM had told itself to keep its hands off a load nobody had opted out
   of** (#888). If a device's switch was not yet visible when SEM started —
   ordinary on a fresh install, where discovery finishes about half a minute

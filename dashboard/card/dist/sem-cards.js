@@ -6806,23 +6806,25 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                 <span class="ge-ctl">${_("comfort_limit",o,.5)}
                     <span class="ge-unit">${s}</span></span>
             </div>
-            <div class="ge-hint">${this._t("comfort_hint")}</div>`}_renderAntiCycle(e){const t=e.goals||{},i=t=>i=>{const s=i.target.value;""===s||null==s||Number(s)<1||(e.goals={...e.goals||{},[t]:s},this._sendDeviceUpdate(e.id,t,String(s)))},s=(e,s)=>W`
-            <input type="number" min="1" max="120" step="1" style="width:56px"
+            <div class="ge-hint">${this._t("comfort_hint")}</div>`}_antiCycleBounds(){const e=this._hass?.states?.[`${this._prefix}controllable_devices_count`];return function(e){const t=e&&e.anti_cycle_bounds;if(!t)return null;const i=Number(t.min),s=Number(t.max);return Number.isFinite(i)&&Number.isFinite(s)?{min:i,max:s}:null}(e?.attributes)}_renderAntiCycle(e){const t=e.goals||{},i=t=>i=>{const s=i.target.value;""===s||null==s||Number(s)<1||(e.goals={...e.goals||{},[t]:s},this._sendDeviceUpdate(e.id,t,String(s)))},s=this._antiCycleBounds(),r=e=>function(e,t){const i=(e||{})[t];if(null==i)return"—";const s=Number(i);return Number.isFinite(s)?String(s):"—"}(t,e),a=(e,a)=>W`
+            <input type="number" step="1" style="width:56px"
+                   min=${s?s.min:K}
+                   max=${s?s.max:K}
                    .value="${null!=t[e]&&""!==t[e]?String(t[e]):""}"
-                   placeholder="${s}"
+                   placeholder="${r(a)}"
                    @change=${i(e)}
                    @click=${e=>e.stopPropagation()}>`;return W`
             <div class="ge-row">
                 <span class="ge-label">${this._t("anti_cycle_min_run")}</span>
                 <span class="ge-ctl">
-                    ${s("min_on_time_min","5")}
+                    ${a("min_on_time_min","min_on_effective_min")}
                     <span class="ge-unit">${this._t("minutes_short")}</span>
                 </span>
             </div>
             <div class="ge-row">
                 <span class="ge-label">${this._t("anti_cycle_min_pause")}</span>
                 <span class="ge-ctl">
-                    ${s("min_off_time_min","5")}
+                    ${a("min_off_time_min","min_off_effective_min")}
                     <span class="ge-unit">${this._t("minutes_short")}</span>
                 </span>
             </div>

@@ -96,12 +96,12 @@ async def test_re_registering_keeps_the_dragged_slot(registry):
 
 @pytest.mark.asyncio
 async def test_the_per_cycle_refresh_covers_service_devices(registry):
-    """``refresh_direct_device_priorities`` runs every cycle for direct
+    """``refresh_direct_device_overrides`` runs every cycle for direct
     devices; the service-device carve-out is what left them stranded."""
     await registry.async_register_service_device(dict(POOL))
     registry._priority_overrides["sim_pool_pump"] = 1
 
-    registry.refresh_direct_device_priorities()
+    registry.refresh_direct_device_overrides()
 
     assert _live_priority(registry) == 1
 
@@ -110,6 +110,6 @@ async def test_the_per_cycle_refresh_covers_service_devices(registry):
 async def test_no_override_keeps_the_spec_seed(registry):
     """Nothing dragged → the priority the service call gave stands."""
     await registry.async_register_service_device(dict(POOL))
-    registry.refresh_direct_device_priorities()
+    registry.refresh_direct_device_overrides()
     assert _live_priority(registry) == 6
     assert registry.get_devices_for_sensor()["sim_pool_pump"]["priority"] == 6

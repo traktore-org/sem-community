@@ -112,6 +112,16 @@ BOUNDS: dict[str, Range] = {
     "deye_max_charge_current_a": Range(
         1, 200, step=1, unit="A", at_most="deye_bms_max_charge_current_a"),
     "deye_bms_max_charge_current_a": Range(0, 200, step=1, unit="A"),
+    # (#914) the per-load anti-cycle window, minutes — ONE row for both the
+    # minimum-run and minimum-pause inputs, which share it. Published on the
+    # devices sensor as ``anti_cycle_bounds`` and read by the Load Priority
+    # card, which used to re-declare 1..120 inline: a second copy of a
+    # number that then lived nowhere else. A UI hint only — the service
+    # keeps its existing non-negative check and refuses nothing new, so an
+    # install that stored a larger value years ago keeps working unchanged.
+    # (The first draft declared a second, identical row for the pause input;
+    # test_828's orphan check caught it — a row nobody reads is a claim.)
+    "anti_cycle_window_min": Range(0, 120, step=1, unit="min"),
 }
 
 

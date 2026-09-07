@@ -1925,19 +1925,29 @@ class UnifiedDeviceRegistry:
             "surplus_managed": live is not None,
         }
 
-    def refresh_direct_device_priorities(self) -> None:
-        """(#576) Make the drag store authoritative for every surplus device
-        the ED rebuild does not re-create — heat pump / hot water / climate
-        registered straight into the controller AND (#890) service-registered
-        devices, which the sync deliberately leaves alone (ownership by
-        construction, #559) and which therefore had no other path from the
-        override store to the live object. ED rows get theirs from the
-        rebuild, chargers from the coordinator's own refresh."""
+    def refresh_direct_device_overrides(self) -> None:
+        """(#576) Make the override stores authoritative for every surplus
+        device the ED rebuild does not re-create — heat pump / hot water /
+        climate registered straight into the controller AND (#890)
+        service-registered devices, which the sync deliberately leaves alone
+        (ownership by construction, #559) and which therefore had no other
+        path from a store to the live object. ED rows get theirs from the
+        rebuild, chargers from the coordinator's own refresh.
+
+        (#914) Renamed from ``refresh_direct_device_priorities`` because it
+        now carries the GOALS too. The anti-cycle windows a user set on the
+        hot-water row were stored, published back to the card, and never
+        re-applied to the live object after a restart — the drag priority
+        had this seam and the goals did not. ``_apply_goals`` is idempotent
+        (returns early with nothing stored; writes only keys present), so
+        this costs nothing on an install with no goal set.
+        """
         for did, dev in getattr(self._surplus_controller, "_devices", {}).items():
             if did.startswith("energy_dashboard_") or getattr(dev, "is_ev", False):
                 continue
             dev.priority = self.priority_for(
                 did, seed=int(getattr(dev, "priority", 5) or 5))
+            self._apply_goals(dev)
 
     def set_ev_chargers(self, chargers: List[Dict[str, Any]]) -> None:
         """(#576 P2.1) The coordinator hands its configured chargers here each
@@ -2185,6 +2195,16 @@ class UnifiedDeviceRegistry:
                 # reload (None ⇒ the card shows the default placeholder).
                 "min_on_time_min": goals.get("min_on_time_min"),
                 "min_off_time_min": goals.get("min_off_time_min"),
+                # (#914) what the LIVE object is actually holding, in minutes
+                # — the only way to see that a stored goal reached the
+                # device (it did not, across a restart, until #914). None
+                # when there is no live object yet: absent, not zero.
+                "min_on_effective_min": (
+                    None if live is None or getattr(live, "min_on_seconds", None) is None
+                    else round(float(live.min_on_seconds) / 60.0, 1)),
+                "min_off_effective_min": (
+                    None if live is None or getattr(live, "min_off_seconds", None) is None
+                    else round(float(live.min_off_seconds) / 60.0, 1)),
                 # (#705) the comfort band — pre-fill for the editor.
                 "comfort_entity": goals.get("comfort_entity", ""),
                 "comfort_target": goals.get("comfort_target", 0),
@@ -2403,7 +2423,7 @@ class UnifiedDeviceRegistry:
         # not on the next cycle: the rebuild returns early on an install
         # without an Energy Dashboard, and the service response is read as
         # "it took".
-        self.refresh_direct_device_priorities()
+        self.refresh_direct_device_overrides()
         await self.async_refresh_devices()
 
     async def update_device_control_mode(self, device_id: str, mode: str) -> None:
@@ -2522,7 +2542,7 @@ class UnifiedDeviceRegistry:
                 self._has_battery = True
             battery_priority = self.battery_surplus_priority()
             self.set_ev_chargers(charger_rows)
-            self.refresh_direct_device_priorities()
+            self.refresh_direct_device_overrides()
             return battery_priority
         except Exception:  # pragma: no cover - never break the cycle
             return None

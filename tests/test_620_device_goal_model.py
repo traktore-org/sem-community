@@ -626,7 +626,7 @@ class TestPhase2Extractions625:
         assert out == 3
         assert reg._has_battery is True
         reg.set_ev_chargers.assert_called_once_with(["row"])
-        reg.refresh_direct_device_priorities.assert_called_once()
+        reg.refresh_direct_device_overrides.assert_called_once()
 
 
 class TestPublishDiag625:

@@ -12607,7 +12607,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     )
                     hp.invert_sg_ready = bool(cfg.get("heat_pump_invert_sg_ready", False))
                     # #602/#576 — priority is the DRAG-LIST position now (resolved
-                    # by refresh_direct_device_priorities), NOT a standalone knob.
+                    # by refresh_direct_device_overrides), NOT a standalone knob.
                     # (Previously clobbered here from heat_pump_priority every
                     # cycle, killing the drag position.)
                 except (TypeError, ValueError):
