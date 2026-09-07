@@ -1,8 +1,16 @@
 # Known Limitations
 
-## Energy Dashboard dependency
+## Energy Dashboard first, not Energy Dashboard only
 
-SEM reads solar, grid, and battery sensors from the **HA Energy Dashboard** configuration (`.storage/energy`). The Energy Dashboard must be configured with at least solar and grid sensors before SEM can be set up.
+SEM's first choice for its solar, grid and battery sensors is the **HA Energy
+Dashboard** configuration (`.storage/energy`), because it is already the
+canonical list of energy sensors in your system. Since 2.1 (#915) it is no
+longer a requirement: when that page is empty or missing solar or grid, the
+installer asks the energy integrations you already run what they create and
+offers the sensors pre-filled for you to confirm. See *If you have no Energy
+Dashboard* in [SETUP_GUIDE.md](SETUP_GUIDE.md). What SEM still cannot do is
+guess a sensor for a system that publishes nothing recognisable — every field
+then falls back to a plain entity picker.
 
 ## Single instance only
 
@@ -141,6 +149,13 @@ use the held value — a dark cycle still counts as dark for every decision
 (`inputs degraded — holding`). A value that was never read (a sensor that has
 not reported since a restart) is not held: it stays unavailable rather than
 showing 0.
+
+A grid meter configured as a **separate import / export pair** (Growatt,
+Senec, Anker, any manual pair) follows the same rule from 2.1 on (#925): the
+combined grid reading is dark only when *both* halves are unreadable, and one
+dark half still marks the cycle degraded for control. Before that, a split
+pair could never report itself dark at all, so every blind-meter protection
+was silently off for those installs.
 
 ## Peak load management
 

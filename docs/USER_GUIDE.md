@@ -550,6 +550,9 @@ Each term is measured rather than assumed:
 
 - **Learning** — SEM has not seen enough nights yet (it needs five). It spends
   nothing and shows you how many it has. Every new install starts here.
+  While it is learning, `sensor.sem_battery_spendable_kwh` reads **unknown** — not
+  0 kWh — and so does the dynamic floor (#925). A zero there would be a measurement,
+  and SEM has not made one yet; the card says *Learning, n of 5 nights* instead.
 - **Holding** — there is enough evidence and the answer is genuinely nothing
   spare: a long winter night against a weak forecast.
 - **Spending** — there is a budget tonight, with the floor it will land on.
@@ -1159,6 +1162,21 @@ data:
 ```
 
 The mode is persisted across restarts.
+
+The same service carries the **hands-off** permission under its own name since
+2.1 (#888) — "never touch this load", independent of the Mode:
+
+```yaml
+service: solar_energy_management.update_device_config
+data:
+  device_id: energy_dashboard_heizband
+  property: hands_off
+  value: "true"       # "false" hands the load back to SEM
+```
+
+Every property this service accepts works whether or not load management is
+switched on (#913); only the priority sync genuinely needs the load manager,
+and says so.
 
 ### EV charging
 

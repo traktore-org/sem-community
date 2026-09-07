@@ -248,6 +248,39 @@ to nudge them apart so each is grabbable again.
 The counter resets **after sunrise**, not at midnight — so a battery-eligible
 load isn't reset mid-night and re-drained before the new day's surplus arrives.
 
+## Minimum run / minimum pause — anti-cycling
+
+Two small inputs sit under the Min/Max slider: **Minimum run** and **Minimum
+pause**, in minutes (#688). They stop a load flapping on a passing cloud: once
+SEM switches a load on it stays on for at least the minimum run, and once it
+switches it off it stays off for at least the minimum pause. Together they cap
+cycling at roughly one period per run-plus-pause.
+
+They only apply where SEM is the one switching — the two **solar modes**. In
+*Peak only* the load is user-managed and the peak shedder does not read these
+windows; the row still shows them, but nothing consults them there.
+
+**Defaults** if you leave the boxes blank:
+
+| device | minimum run | minimum pause |
+|---|---|---|
+| a switch load (pump, heater, plug) | 5 min | 5 min |
+| the hot-water controller | 10 min | 5 min |
+| the heat-pump controller | 10 min | 5 min |
+
+The hot-water and heat-pump numbers are the ones SEM uses for its own
+compressor logic (#508): a heat pump restarted after a one-minute pause is
+pure wear while the circuit water is still coming up, which is what the old
+60-second hot-water default did (#914).
+
+A value you type is saved, shown back to you, and **re-applied to the device
+after every restart** (2.1, #914 — before that it silently reverted to the
+default). The greyed placeholder in an empty box is the window the device is
+actually holding right now, or a dash if the device has not come up yet;
+never a made-up number. The range (0–120 min) comes from SEM's one bounds
+table, and the service keeps accepting any non-negative value, so an older
+install holding a larger number is untouched.
+
 ## Finish overnight from — the overnight source (axis 2)
 
 These sources are **night-only** (#633): they engage after night mode starts and a

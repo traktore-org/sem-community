@@ -407,6 +407,44 @@ derived, so older tooling keeps working.
 
 ---
 
+## The Control card says "SEM won't act" whatever Mode I pick
+
+**Symptom:** a load's switch is correctly identified, you set its Mode to
+*Solar* (or *Peak only*), and the Control card still answers **"Off — SEM
+won't act"**. Changing the Mode changes nothing.
+
+**Cause (fixed in 2.1, #888):** that verdict has two inputs, and the Mode is
+only one of them. The other is a *hands-off* flag — "never touch this load" —
+which SEM was setting **on its own**. If a device's switch was not yet
+visible when SEM started (ordinary on a fresh install, where discovery
+finishes about half a minute later), SEM wrote the device down as "not
+controllable". That was arithmetic, not a preference. Half a minute later it
+read its own note back as though you had said it, and stored a permanent
+hands-off that no surface could clear. On the maintainer's own house eight
+loads were in that state.
+
+**What the 2.1 update does:** on the first start after upgrading, SEM clears
+every hands-off flag it invented about itself, once, and logs one line naming
+them: *"cleared N hands-off flag(s) SEM had set about itself, not the user"*.
+Nothing else changes. If your load reads "SEM may act" after that, you are
+done.
+
+**If it still says hands off afterwards,** that is now a real flag, and it is
+yours to set or clear. The permission is reachable through the service under
+its own name:
+
+```yaml
+service: solar_energy_management.update_device_config
+data:
+  device_id: energy_dashboard_pool_pump
+  property: hands_off
+  value: "false"      # "true" = SEM keeps its hands off; "false" = SEM may act
+```
+
+`controllable` is the same toggle under its older name (`value: "true"` there
+means SEM *may* act). A genuine hands-off set this way survives every restart
+and every future upgrade — the one-shot clearing above never runs twice.
+
 ## Two HA instances controlling the same hardware
 
 **Cause:** Running both a production and test HA instance with SEM against the same physical devices (KEBA, inverter, Shelly switches) causes conflicting commands.

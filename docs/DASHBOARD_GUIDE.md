@@ -450,6 +450,13 @@ The one device list (#576): drag and drop to set the single priority order
 shared by loads, chargers, and the battery, with live power per device and a
 mode picker per row. See [Load priority](LOAD_PRIORITY.md).
 
+**Minimum run / minimum pause.** Under the Min/Max slider, two minute boxes stop
+a load flapping on a passing cloud. Leave them blank for the device's default
+(5/5 for a switch load, 10/5 for hot water and heat pumps); the greyed
+placeholder is the window the device is actually holding, or a dash until it
+comes up — never a made-up number (#914). A value you type survives restarts.
+They act only in the solar modes; see [LOAD_PRIORITY.md](LOAD_PRIORITY.md#minimum-run--minimum-pause--anti-cycling).
+
 #### sem-onboarding-banner
 
 **SEM Onboarding Banner** · *Home tab*
