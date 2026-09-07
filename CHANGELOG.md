@@ -13,6 +13,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🩹 **The Home tab said "Solar 0 W" when the solar sensor was simply
+  absent** (#925 audit). The battery chip beside it already knew better —
+  an unread SOC shows a dash, not a flat pack — and its two neighbours in
+  the very same row were never given the same treatment. On a system whose
+  solar reading goes missing over a hundred times a day, this was the most
+  frequently seen version of the mistake anywhere in SEM. Solar and
+  self-sufficiency now show a dash when there is nothing to show, and 0
+  only when zero is the actual measurement.
+
+  A related hole in the same reader: a sensor holding something
+  unparseable produced `NaN` rather than falling back, so the chip could
+  read "NaN W". Unparseable now counts as having no reading.
+
+- 📝 **The user guide said observer mode defaults to off. It defaults to
+  on** (#925 audit). Every other page — README, setup guide, quick start —
+  and the code all agree that a new install observes first and sends
+  nothing until you say so. One stale table row in the reference section
+  said the opposite, which is precisely the reader most likely to skip the
+  safety step on that advice.
+
 - 🩹 **A battery budget still being learned showed as "0 kWh" rather than
   unknown** (#925 audit). For the first few nights after install SEM has
   not measured enough to say what the pack can spare. The battery card
