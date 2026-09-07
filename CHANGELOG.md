@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.1.0-beta.9] — 07.09.2026
+
 - 🛡️ **A battery still set to the retired "allow arbitrage" mode kept
   selling under a master switch that read off** (#930). That mode left the
   selector in v1.7.3 and has been read as *auto + may export* ever since —
