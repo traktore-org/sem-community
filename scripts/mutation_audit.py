@@ -95,7 +95,16 @@ def fix_commits(issue: str) -> list:
 
 
 def guards_for(issue: str) -> list:
-    """Test files that name this issue — filename first, then content."""
+    """Test files that name this issue — filename first, then content.
+
+    Python only, and that is a KNOWN limit rather than an oversight: #903
+    is a card fix whose guard is ``dashboard/card/test/soc-display.test.js``,
+    run by a separate `node --test` job. This matcher cannot see it and
+    reports NO-GUARD, which is honest — the guard exists and was verified
+    by hand (reintroduce the 0% fallback, two JS tests fail). Mutating the
+    JS side needs a second runner; until then NO-GUARD on a card fix means
+    "not checked here", not "unguarded".
+    """
     named = sorted(p.name for p in (REPO / "tests").glob(f"test_{issue}_*.py"))
     if named:
         return named
@@ -108,8 +117,14 @@ def mutate(issue: str, commits: list, tests: list) -> dict:
     if not commits:
         return {"issue": issue, "verdict": "NO-FIX", "detail": "-"}
     if not tests:
+        js = list((REPO / "dashboard" / "card" / "test").glob("*.test.js"))
+        hint = " (card fix? the JS suite is not mutated here)" if js and \
+            any("dashboard/" in f for f in sh(
+                ["git", "show", "--name-only", "--format=", commits[-1]],
+                cwd=REPO).stdout.split()) else ""
         return {"issue": issue, "verdict": "NO-GUARD",
-                "detail": f"{len(commits)} fix commit(s), no test names it"}
+                "detail": f"{len(commits)} fix commit(s), no python test "
+                          f"names it{hint}"}
 
     work = Path(tempfile.mkdtemp(prefix=f"sem-mut-{issue}-"))
     try:
