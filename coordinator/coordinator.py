@@ -6783,7 +6783,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # cycle after every restart. 0 % reads as "empty, fill fast", the
         # exact opposite of pacing (#820, found on review).
         soc = None
-        soc_stale_s = 0
+        soc_stale_s = None
         soc_expired = False
         if power is not None:
             # ``battery_soc`` is 0.0 before the SOC sensor has EVER reported
@@ -6809,7 +6809,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             from .soc_grace import soc_for_a_limit, soc_hold_age_s
             soc = soc_for_a_limit(power)
             soc_stale_s = soc_hold_age_s(power)
-            soc_expired = soc_stale_s > SENSOR_DARK_READ_GRACE_S
+            soc_expired = (
+                soc is None and soc_stale_s is not None
+                and bool(getattr(power, "battery_soc_known", True))
+                and soc_stale_s > SENSOR_DARK_READ_GRACE_S)
         elif self.data:
             # Bare callers (older paths, tests) keep the published value.
             try:

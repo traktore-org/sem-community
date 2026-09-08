@@ -63,14 +63,14 @@ def _reader(soc_state, clock):
 
 class TestTheHoldCarriesItsAge:
     def test_the_dataclass_default_is_no_age(self):
-        assert PowerReadings().battery_soc_stale_s == 0
+        assert PowerReadings().battery_soc_stale_s is None
 
     def test_a_fresh_read_has_no_age(self):
         soc, clock = ["78"], [1000.0]
         p = _reader(soc, clock).read_power()
         assert p.battery_soc == pytest.approx(78.0)
         assert p.battery_soc_unavailable is False
-        assert p.battery_soc_stale_s == 0
+        assert p.battery_soc_stale_s is None
 
     def test_a_held_value_is_stamped_with_seconds_since_the_last_accepted_read(self):
         soc, clock = ["78"], [1000.0]
@@ -102,7 +102,7 @@ class TestTheHoldCarriesItsAge:
         p = r.read_power()
         assert p.battery_soc == pytest.approx(77.0)
         assert p.battery_soc_unavailable is False
-        assert p.battery_soc_stale_s == 0
+        assert p.battery_soc_stale_s is None
         soc[0] = "unavailable"
         clock[0] = 1160.0
         assert r.read_power().battery_soc_stale_s == 30, (
@@ -118,7 +118,7 @@ class TestTheHoldCarriesItsAge:
         p = r.read_power()
         assert p.battery_soc_known is False
         assert p.battery_soc_unavailable is True
-        assert p.battery_soc_stale_s == 0
+        assert p.battery_soc_stale_s is None
 
     def test_an_implausible_step_hold_ages_the_same_way(self):
         """(#902) A rejected level is held exactly like a dark read — and the
@@ -175,7 +175,7 @@ def _coordinator(*, observer=False):
 
 def _fresh(soc=40.0):
     return PowerReadings(battery_soc=soc, battery_soc_unavailable=False,
-                         battery_soc_known=True, battery_soc_stale_s=0)
+                         battery_soc_known=True, battery_soc_stale_s=None)
 
 
 def _held(soc=40.0, stale_s=30):
@@ -188,7 +188,7 @@ def _held(soc=40.0, stale_s=30):
 def _never_read():
     """(#875) The shape before the first successful read."""
     return PowerReadings(battery_soc=0.0, battery_soc_unavailable=True,
-                         battery_soc_known=False, battery_soc_stale_s=0)
+                         battery_soc_known=False, battery_soc_stale_s=None)
 
 
 async def _engaged():

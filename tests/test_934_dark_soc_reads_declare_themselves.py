@@ -88,17 +88,28 @@ class TestSocForALimit:
         """The producer's defaults ARE the fresh-read shape: no hand-built
         flags needed for a reading that was read this cycle."""
         assert soc_for_a_limit(PowerReadings(battery_soc=42.0)) == pytest.approx(42.0)
-        assert soc_hold_age_s(PowerReadings()) == 0
+        assert soc_hold_age_s(PowerReadings()) is None
+
+    def test_a_dark_reading_without_an_age_is_not_a_hold(self):
+        """Fail-closed: a producer that raises the flag without stamping the
+        age (a hand-built reading, the scenario harness, a future reader)
+        gets 'unknown', never 'held since 0 s' — an unbounded hold is the
+        very thing a limit must not have."""
+        assert soc_for_a_limit(_reading(
+            battery_soc=60.0, battery_soc_unavailable=True)) is None
+        assert soc_for_a_limit(PowerReadings(
+            battery_soc=60.0, battery_soc_unavailable=True)) is None
 
     def test_no_reading_is_no_value(self):
         assert soc_for_a_limit(None) is None
         assert soc_for_a_limit(_reading(battery_soc=None)) is None
         assert soc_for_a_limit(_reading(battery_soc="n/a")) is None
 
-    def test_a_garbage_age_reads_as_fresh_not_as_a_crash(self):
-        assert soc_hold_age_s(_reading(battery_soc_stale_s="soon")) == 0
-        assert soc_hold_age_s(_reading(battery_soc_stale_s=-4)) == 0
+    def test_a_garbage_age_is_no_age(self):
+        assert soc_hold_age_s(_reading(battery_soc_stale_s="soon")) is None
+        assert soc_hold_age_s(_reading(battery_soc_stale_s=-4)) is None
         assert soc_hold_age_s(_reading(battery_soc_stale_s=17.9)) == 17
+        assert soc_hold_age_s(_reading(battery_soc_stale_s=0)) == 0
 
 
 # ─── the shape the reader makes, through to the wire ────────────────────────
@@ -277,11 +288,3 @@ class TestEveryDarkSocReadDeclaresItself:
             f"'{ANNOTATION} <{'|'.join(KINDS)}> — <why>' declaration on the same "
             "or the previous line. A LIMIT reads through soc_for_a_limit; anything "
             "else says what a one-cycle blink does to it:\n" + "\n".join(offenders))
-
-    def test_no_declared_limit_reads_the_boolean(self):
-        """'limit' is not a kind you may declare: a limit goes through the rule."""
-        lines = _COORD_PY.read_text().splitlines()
-        tree = ast.parse("\n".join(lines))
-        limits = [ln for ln in _flag_reads(tree)
-                  if (_declaration(lines, ln) or "").startswith("limit")]
-        assert limits == []

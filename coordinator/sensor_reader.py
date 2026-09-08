@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import re
 import time
 from collections import deque
@@ -2442,8 +2443,10 @@ class SensorReader:
         # long. A limit-type consumer (the #820 charge cap) holds through a
         # blink and lets go only past the dark-read grace — so the held
         # value carries its age, counted from the last ACCEPTED read.
+        # Rounded UP, so "age <= grace" here is the entity layer's own
+        # float comparison and not a second boundary one second wide.
         if self._last_valid_soc_mono is not None:
-            readings.battery_soc_stale_s = max(0, int(
+            readings.battery_soc_stale_s = max(0, math.ceil(
                 float(self._now_monotonic()) - self._last_valid_soc_mono))
 
     def _read_battery_temperature(self, readings) -> None:

@@ -25,13 +25,18 @@ from typing import Optional
 from ..consts.core import SENSOR_DARK_READ_GRACE_S
 
 
-def soc_hold_age_s(power) -> int:
-    """Seconds the reading's SOC has been held from the last accepted read:
-    0 when it was read this cycle, and 0 before any read."""
+def soc_hold_age_s(power) -> Optional[int]:
+    """Seconds the reading's SOC has been held from the last accepted read.
+    None when it was read this cycle, before any read, and for a reading
+    that does not say — a dark cycle without an age is not a hold."""
+    raw = getattr(power, "battery_soc_stale_s", None)
+    if raw is None:
+        return None
     try:
-        return max(0, int(getattr(power, "battery_soc_stale_s", 0) or 0))
+        age = int(raw)
     except (TypeError, ValueError):
-        return 0
+        return None
+    return age if age >= 0 else None
 
 
 def soc_for_a_limit(power, *, grace_s: float = SENSOR_DARK_READ_GRACE_S
@@ -41,15 +46,17 @@ def soc_for_a_limit(power, *, grace_s: float = SENSOR_DARK_READ_GRACE_S
     The fresh read; or the reader's held value while it is a measurement
     (``battery_soc_known``) and the hold is inside ``grace_s``. None before
     the first read (#875: the 0.0 there is not an empty pack), once an
-    outage outlives the grace, and for a reading that carries no number.
+    outage outlives the grace, for a dark reading that does not say how
+    long it has been dark, and for a reading that carries no number.
     """
     if power is None:
         return None
     if not bool(getattr(power, "battery_soc_known", True)):
         return None
-    if (bool(getattr(power, "battery_soc_unavailable", False))
-            and soc_hold_age_s(power) > grace_s):
-        return None
+    if bool(getattr(power, "battery_soc_unavailable", False)):
+        age = soc_hold_age_s(power)
+        if age is None or age > grace_s:
+            return None
     raw = getattr(power, "battery_soc", None)
     if raw is None:
         return None
