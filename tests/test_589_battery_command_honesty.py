@@ -458,23 +458,43 @@ class TestGenericForceChargeHonesty:
 
 # ── Part B: unload teardown ───────────────────────────────────────────────────
 
+def _unload_adapter(**bookkeeping):
+    """A battery adapter as the unload rule sees it (#936): explicit
+    bookkeeping, because a bare MagicMock reads every attribute as truthy —
+    which would make a never-commanded battery look like one mid-force-op."""
+    from unittest.mock import AsyncMock as AM
+
+    a = MagicMock()
+    a.command_normal = AM(return_value=None)
+    a._forcible_charging = False
+    a._forcible_discharging = False
+    a._charge_adapter = None
+    a._last_discharge_limit_w = -1.0
+    for k, v in bookkeeping.items():
+        setattr(a, k, v)
+    return a
+
+
 class TestUnloadTeardown:
-    """UL1/UL2 — async_unload_entry calls command_normal on adapters."""
+    """UL1/UL2 — async_unload_entry hands the batteries back (#589 Part B),
+    but since #936 ONLY those SEM itself commanded: a force op it started is
+    stopped, a never-commanded battery is left exactly as found, and the
+    coordinator is switched to observer mode first."""
 
     @pytest.mark.asyncio
-    async def test_ul1_command_normal_called_on_each_adapter(self) -> None:
-        """UL1: unload iterates _battery_adapters and calls command_normal."""
+    async def test_ul1_unload_stops_what_sem_started_and_leaves_the_rest(self) -> None:
+        """UL1 (#589 Part B + #936): a forcible charge SEM started is stopped
+        on unload; a battery SEM never commanded gets no command at all."""
         from unittest.mock import AsyncMock as AM
 
-        mock_adapter_a = MagicMock()
-        mock_adapter_a.command_normal = AM(return_value=None)
-        mock_adapter_b = MagicMock()
-        mock_adapter_b.command_normal = AM(return_value=None)
+        forcing = _unload_adapter(_forcible_charging=True)
+        untouched = _unload_adapter()
 
         mock_coord = MagicMock()
+        mock_coord._observer_mode = False
         mock_coord._battery_adapters = {
-            "primary": mock_adapter_a,
-            "secondary": mock_adapter_b,
+            "primary": forcing,
+            "secondary": untouched,
         }
         mock_coord._surplus_controller = None
 
@@ -492,19 +512,49 @@ class TestUnloadTeardown:
         result = await async_unload_entry(hass, entry)
 
         assert result is True
-        mock_adapter_a.command_normal.assert_awaited_once()
-        mock_adapter_b.command_normal.assert_awaited_once()
+        forcing.command_normal.assert_awaited_once()
+        untouched.command_normal.assert_not_called()
+        # "go to observation mode on and then uninstall" (Guido, 08.09.2026)
+        assert mock_coord._observer_mode is True
+
+    @pytest.mark.asyncio
+    async def test_ul1b_observer_rig_commands_nothing_on_unload(self) -> None:
+        """UL1b (#936): a coordinator already in observer mode never
+        commands a battery on unload — the .46 rig rewrote PROD's shared
+        discharge-limit register this way on 08.09.2026."""
+        from unittest.mock import AsyncMock as AM
+
+        forcing = _unload_adapter(_forcible_charging=True, _last_discharge_limit_w=750.0)
+        mock_coord = MagicMock()
+        mock_coord._observer_mode = True
+        mock_coord._battery_adapters = {"primary": forcing}
+        mock_coord._surplus_controller = None
+
+        hass = MagicMock()
+        hass.data = {"solar_energy_management": {"entry-1": mock_coord}}
+        hass.config_entries = MagicMock()
+        hass.config_entries.async_unload_platforms = AM(return_value=True)
+        hass.services = MagicMock()
+        hass.services.async_remove = Mock()
+        entry = MagicMock()
+        entry.entry_id = "entry-1"
+
+        from custom_components.solar_energy_management import async_unload_entry
+        assert await async_unload_entry(hass, entry) is True
+        forcing.command_normal.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_ul2_adapter_exception_does_not_block_unload(self) -> None:
         """UL2: adapter raising in command_normal never blocks unload."""
         from unittest.mock import AsyncMock as AM
 
-        mock_adapter = MagicMock()
+        # A limit SEM wrote → the hand-back IS attempted (and raises).
+        mock_adapter = _unload_adapter(_last_discharge_limit_w=750.0)
         mock_adapter.command_normal = AM(
             side_effect=RuntimeError("flaky Modbus"),
         )
         mock_coord = MagicMock()
+        mock_coord._observer_mode = False
         mock_coord._battery_adapters = {"primary": mock_adapter}
         mock_coord._surplus_controller = None
 
