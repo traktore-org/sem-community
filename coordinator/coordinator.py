@@ -6780,14 +6780,37 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # cycle after every restart. 0 % reads as "empty, fill fast", the
         # exact opposite of pacing (#820, found on review).
         soc = None
+        soc_stale_s = 0
+        soc_expired = False
         if power is not None:
-            # ``battery_soc`` is 0.0 when the SOC sensor is OFFLINE — the
-            # dataclass carries no sentinel, only the twin flag. Reading the
-            # number without the flag would reintroduce, one layer along, the
-            # very fault this argument was added to remove: a dark sensor
-            # reading as "empty, fill fast". None means "unknown", and
+            # ``battery_soc`` is 0.0 before the SOC sensor has EVER reported
+            # — the dataclass carries no sentinel; ``battery_soc_known`` is
+            # the "never measured" fact (#875). Reading the number without
+            # it would reintroduce, one layer along, the very fault this
+            # argument was added to remove: a dark sensor reading as
+            # "empty, fill fast". None means "unknown", and
             # paced_charge_cap_w declines to pace on unknown.
-            if not getattr(power, "battery_soc_unavailable", False):
+            #
+            # (#934) A dark cycle AFTER a read is a different thing: the
+            # reader holds the last accepted value and raises
+            # ``battery_soc_unavailable`` on every such cycle. Reading THAT
+            # flag as "no SOC" made every modbus blink a restore + a
+            # re-engage write on the charge-limit register (~250 blinks a
+            # day on PROD). A cap is a LIMIT, not an action — holding it
+            # through a blink is safe, the opposite of the #932 sell gate —
+            # so the decision runs on the held SOC while the hold is inside
+            # the dark-read grace, and the pacer lets go (restoring once)
+            # only when the outage is sustained past it.
+            from ..consts.core import SENSOR_DARK_READ_GRACE_S
+            _known = bool(getattr(power, "battery_soc_known", True))
+            _dark = bool(getattr(power, "battery_soc_unavailable", False))
+            if _dark:
+                try:
+                    soc_stale_s = int(getattr(power, "battery_soc_stale_s", 0) or 0)
+                except (TypeError, ValueError):
+                    soc_stale_s = 0
+                soc_expired = soc_stale_s > SENSOR_DARK_READ_GRACE_S
+            if _known and not soc_expired:
                 raw = getattr(power, "battery_soc", None)
                 if raw is not None:
                     try:
@@ -6807,8 +6830,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             "battery_charge_power_limit_entity") or "")
         if soc is None or capacity_kwh <= 0:
             decision = None
-            _why = ("battery SOC unknown" if soc is None
-                    else "no battery capacity")
+            _why = ((f"battery SOC dark for {soc_stale_s} s — held value "
+                     "expired" if soc_expired else "battery SOC unknown")
+                    if soc is None else "no battery capacity")
         else:
             decision = paced_charge_cap_w(
                 ledger=ledger, capacity_kwh=capacity_kwh, soc_pct=soc,
@@ -6833,6 +6857,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # value that used to be a cycle stale (and 0.0 on the first cycle
             # after a restart) with nothing on the surface to show it (#820).
             "soc": soc,
+            # (#934) seconds the SOC above has been held through a dark
+            # sensor (0 = read this cycle). A blink shows here as a small
+            # number under an unchanged cap, instead of as a restore.
+            "soc_stale_s": soc_stale_s if soc is not None else None,
             "cap_w": decision.cap_w if decision else None,
             "reason": decision.reason if decision else (
                 "pacing idle — outside daylight or no forecast"
