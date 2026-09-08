@@ -2967,23 +2967,23 @@ async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool
         # would otherwise grow the list. Guarded — coordinator may be
         # missing if setup never completed.
         if coordinator is not None:
-            # Part B (#589): clear any active force-op before dropping adapters.
-            # Prevents a reload mid-force-op stranding the inverter in a
-            # forced charge/discharge mode that SEM will no longer manage.
-            # Only issues a STOP (command_normal) — never a new command.
-            # Failures are swallowed so a flaky Modbus never blocks unload.
-            _battery_adapters = getattr(coordinator, "_battery_adapters", {}) or {}
-            for _bid, _adapter in _battery_adapters.items():
-                try:
-                    await _adapter.command_normal()
-                    _LOGGER.debug(
-                        "Battery adapter %s: command_normal on unload", _bid,
-                    )
-                except Exception as _e:  # noqa: BLE001
-                    _LOGGER.debug(
-                        "Battery adapter %s: command_normal on unload failed "
-                        "(non-blocking): %s", _bid, _e,
-                    )
+            # (#936 — Guido, 08.09.2026: "on uninstall SEM should go to
+            # observation mode on and then uninstall.") Observer ON first, so
+            # nothing still in flight commands anything; then hand back ONLY
+            # what SEM itself commanded in this lifetime — a force op it
+            # started (#589 Part B: never strand the inverter in a forced
+            # mode), a discharge limit it wrote. A battery SEM never
+            # commanded, and every battery of a rig that already was in
+            # observer mode, is left exactly as found. Before this,
+            # command_normal ran on every adapter on every unload, and the
+            # .46 observer rig rewrote the SHARED Huawei discharge-limit
+            # register (750 → 5000 W) while PROD was holding it. The #908
+            # rule, extended from loads to batteries.
+            from .coordinator.battery_adapters.base import (
+                async_release_batteries_on_unload,
+            )
+            for _bid, _what in (await async_release_batteries_on_unload(coordinator)).items():
+                _LOGGER.info("Battery adapter %s on unload: %s", _bid, _what)
 
             # #656 — loads must not be stranded ON when SEM goes away.
             #

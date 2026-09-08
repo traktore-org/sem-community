@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🛡️ **Removing or disabling SEM no longer commands a battery it never
+  commanded** (#936). Unload ran "restore discharge to max" on every battery
+  adapter, whatever mode SEM was in — an observer-mode test rig rewrote the
+  shared Huawei discharge-limit register on its way out while the production
+  instance was holding it at 750 W. SEM now switches itself to observer mode
+  first, then hands back only what it started in this lifetime (a forced
+  charge or discharge, a discharge limit it wrote) and leaves everything else
+  exactly as found — the #908 rule, extended from loads to batteries.
+
 # [2.1.0-beta.9] — 07.09.2026
 
 - 🛡️ **A battery still set to the retired "allow arbitrage" mode kept
