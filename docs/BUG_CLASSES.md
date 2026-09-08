@@ -2785,11 +2785,20 @@ hold carries its age — `PowerReadings.battery_soc_stale_s`, seconds since the 
 (0 when read this cycle, 0 before any read); the pacer decides on the held SOC while `battery_soc_
 known` and the age is within `SENSOR_DARK_READ_GRACE_S` (the grace the entity layer already uses
 for dark reads), and disengages — restoring ONCE — only past it; `charge_pacing.soc_stale_s`
-publishes the age so a blink shows as a small number under an unchanged cap. Action-type gates
-(#932 sell, #925 spend budget, VPP force-discharge) keep the boolean: they must stop blind.
-**Guard:** `tests/test_934_pacing_holds_through_a_blink.py` — the reader stamps the age (dark AND
+publishes the age so a blink shows as a small number under an unchanged cap. The rule is ONE
+function, `coordinator/soc_grace.py::soc_for_a_limit` — the sanctioned path for every limit that
+reads a SOC. Action-type gates (#932 sell, VPP force-discharge, the #925 spend budget's rule 4)
+keep the boolean: they must stop blind. The spend budget is the one action-side reader whose
+blink cost is visible — one cycle's `battery_spendable_kwh` reads 0, which closes the #537 EV
+gate for a cycle at night (a stop/start pair on the charger per blink, the #893 stop-rate shape);
+bounding THAT hold is Guido's call, not this fix's. **Guard:**
+`tests/test_934_pacing_holds_through_a_blink.py` — the reader stamps the age (dark AND
 #902-rejected holds, counted from the last accepted read), a blink is `held` with the wire silent,
-the boundary is the grace constant, a sustained outage restores exactly once. **Sweep question:**
+the boundary is the grace constant, a sustained outage restores exactly once; and
+`tests/test_934_dark_soc_reads_declare_themselves.py` — the FLEET-READ pattern: every direct read
+of `battery_soc_unavailable` in `coordinator.py` must carry `# DARK-SOC: <display|record|plan|
+action> — <why a one-cycle edge is acceptable>`, the pacer has none and calls `soc_for_a_limit`,
+so the next limit-type consumer cannot read the boolean without declaring itself. **Sweep question:**
 for every actuator that maps an `*_unavailable` flag to "no decision", is its side effect a LIMIT
 (hold it through a blink, bounded by the grace) or an ACTION (stop blind)? And for every held
 value, can its consumer read HOW LONG it has been held? Refs #934 #820 #932 #902 #875 #818.

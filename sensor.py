@@ -3032,6 +3032,11 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "action": cp.get("action"),
                 "full_at": cp.get("full_at"),
                 "limit_entity": cp.get("entity"),
+                # (#934) the SOC the decision ran on and, on a dark cycle,
+                # how long it has been held — a blink reads as a small
+                # number under an unchanged cap, not as a restore.
+                "soc": cp.get("soc"),
+                "soc_stale_s": cp.get("soc_stale_s"),
             })
         elif self.entity_description.key == "battery_spendable_kwh":
             # (#778) Everything a user needs to argue with the number, on the
