@@ -387,14 +387,17 @@ def solar_bounded_reclaim(
     off, off 06:03, "4.3/4 h on solar today").
 
     You cannot reclaim more sun than there is: ``surplus_w + result ≤
-    solar_w``. ``solar_w=None`` (no reading) mirrors the #620 policy and
-    skips the cap — ``reclaimable_battery_w``'s grid-import term is the
-    independent second ceiling, so both have to be blind before a grid
-    charge can pass as surplus again.
+    solar_w``. ``solar_w=None`` (no reading) reclaims NOTHING — deliberately
+    unlike ``solar_bounded_surplus``, which lets a raw export figure through
+    on a missing reading because export IS physical evidence of the sun; a
+    charging battery is not. In production the reader never yields None (a
+    dark solar sensor reads 0.0 and pins the pool that way), so this is the
+    contract for callers, not a live branch. ``reclaimable_battery_w``'s
+    grid-import term is the independent second ceiling.
     """
     reclaim = max(0.0, float(reclaim_w or 0.0))
     if solar_w is None:
-        return reclaim
+        return 0.0
     return max(0.0, min(reclaim, float(solar_w) - float(surplus_w or 0.0)))
 
 

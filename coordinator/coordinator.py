@@ -78,7 +78,7 @@ from .cycle_trace import (
     ev_layer_match, battery_layer_match, device_layer_match, battery_list_role,
     heat_pump_layer_match,
 )
-from .energy_reclaim import reclaimable_battery_w
+from .energy_reclaim import reclaimable_battery_w, held_grid_import
 from .forecast_reader import ForecastReader
 from .forecast_tracker import ForecastTracker
 from .ev_control import EVControlMixin
@@ -2363,7 +2363,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         st.management = LayerRecord(
             LayerStatus.OK, role,
             {"list_priority": bp, "reserve_soc": prio_soc,
-             "reclaim_yielded_w": cr.get("reclaim_w", 0)},
+             "reclaim_yielded_w": cr.get("reclaim_w", 0),
+             # (#938) the charge power BEFORE the sun/import ceilings — a
+             # night with 3000 here and 0 above reads "grid charge, not surplus".
+             "reclaim_raw_w": cr.get("reclaim_raw_w", 0)},
         )
         st.process = LayerRecord(LayerStatus.OK, reason, {"soc": soc})
         # match: an explicit force command must be observed (force_charge →
@@ -2399,11 +2402,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         p_status = LayerStatus.OK if active > 0 else LayerStatus.IDLE
         # (#576) show the battery-charge power the loads above the battery
         # reclaimed this cycle — the extra pool that let a pump run.
-        reclaim_w = int((getattr(self, "_cycle_reclaim", {}) or {}).get("reclaim_w", 0) or 0)
+        _cr = getattr(self, "_cycle_reclaim", {}) or {}
+        reclaim_w = int(_cr.get("reclaim_w", 0) or 0)
         st.process = LayerRecord(
             p_status, f"{active}/{total_dev} active",
             {"surplus_w": total_w, "distributable_w": dist_w,
-             "allocated_w": alloc_w, "reclaim_w": reclaim_w},
+             "allocated_w": alloc_w, "reclaim_w": reclaim_w,
+             # (#938) what the pack was charging at before the sun/import
+             # ceilings, and how long the import ceiling has been held.
+             "reclaim_raw_w": int(_cr.get("reclaim_raw_w", 0) or 0),
+             "import_held_s": int(_cr.get("import_held_s", 0) or 0)},
         )
         obs_mode = getattr(self, "_observer_mode", False)
         obs = "observer mode — not commanding" if obs_mode else f"{active} device(s) on"
@@ -5467,14 +5475,30 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # 0 W. Two independent ceilings, both physics: only the share of
             # the charge the meter is not importing is solar-funded, and the
             # pool as a whole never exceeds the sun (``surplus + reclaim ≤
-            # solar``). Either alone closes the night; both have to be blind
-            # before a grid charge can pass as surplus again.
+            # solar``). The sun ceiling fails closed (a dark solar sensor
+            # reads 0 W); the import ceiling rides on the last readable
+            # meter value through a dark cycle — the reader's 0.0 fallback
+            # would credit the whole charge for one blink (#925: a dark
+            # meter is no evidence either way) — and is blind only until
+            # the meter has been read once this lifetime.
+            _grid_known = not bool(getattr(power, "grid_power_unavailable", False))
+            reclaim_import_w = held_grid_import(
+                getattr(self, "_reclaim_import_w", None),
+                grid_import_w=float(getattr(power, "grid_import_power", 0.0) or 0.0),
+                grid_import_known=_grid_known,
+            )
+            self._reclaim_import_w = reclaim_import_w
+            _now_mono = time.monotonic()
+            if _grid_known:
+                self._reclaim_import_seen_mono = _now_mono
+            _seen = getattr(self, "_reclaim_import_seen_mono", None)
+            import_held_s = 0.0 if (_grid_known or _seen is None) else _now_mono - _seen
             reclaim_raw_w = reclaimable_battery_w(
                 battery_charge_power=float(getattr(power, "battery_charge_power", 0.0) or 0.0),
                 soc=float(getattr(power, "battery_soc", 0.0) or 0.0),
                 priority_soc=float(self.config.get("battery_priority_soc", 30)),
                 battery_commanded=battery_commanded,
-                grid_import_w=float(getattr(power, "grid_import_power", 0.0) or 0.0),
+                grid_import_w=reclaim_import_w,
             )
             reclaim_w = solar_bounded_reclaim(
                 reclaim_raw_w,
@@ -5504,6 +5528,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # ceilings — a night with reclaim_w 0 and reclaim_raw_w 3000
                 # reads as "grid charge, not surplus" in the trace.
                 "reclaim_raw_w": round(float(reclaim_raw_w)),
+                # (#938) how long the import ceiling has been riding on a
+                # held value — 0 while the meter is readable (class 79: a
+                # held value's consumer can read how long it has been held).
+                "import_held_s": round(float(import_held_s)),
                 "battery_priority": battery_priority,
                 "battery_commanded": battery_commanded,
             }

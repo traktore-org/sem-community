@@ -2833,28 +2833,49 @@ own commands). **Live catch (#938, alexmc1510, 09.09.2026):** Solar-only pool pu
 (`charge − import` — before any load commits this is exactly `solar − house − ev`);
 `solar_bounded_reclaim(reclaim, surplus_w, solar_w)` in `surplus_controller.py` enforces
 `surplus + reclaim ≤ solar` on the pool the coordinator hands to `update()`. Two independent
-ceilings: a dark meter leaves the first inert, a missing solar reading leaves the second inert
-(the #620 policy), both have to be blind before a grid charge can pass as surplus again. The
-cycle trace publishes `reclaim_raw_w` beside `reclaim_w` so a night with 3000 → 0 reads as "grid
-charge, not surplus". **Guard:** `tests/test_938_night_reclaim_solar_bound.py` — the reporter's
+ceilings, each fail-closed in its own way: the sun ceiling reads a dark solar sensor as 0 W (the
+reader's fallback) and reclaims nothing on a missing reading; the import ceiling rides on the
+last readable meter value through a dark cycle (`held_grid_import`, the #934 held-value shape —
+the reader's 0.0 fallback would otherwise credit the whole charge for one blink, the #925 rule
+that a dark meter is no evidence either way) and reclaims nothing until the meter has been read
+once. What rules the *marked* passes (Tier-2 battery, cheap-hours grid) out for this report is
+the run length itself: a marked run is ended by the #688 goal gate the cycle `daily_targets_met`
+turns true, and this one ran 4.3 h past a 4 h floor — only an unmarked "solar" run does that.
+The cycle trace (battery management + loads process records) publishes `reclaim_raw_w` beside
+`reclaim_w`, and `import_held_s`, so a night with 3000 → 0 reads as "grid charge, not surplus".
+**Guard:** `tests/test_938_night_reclaim_solar_bound.py` — the reporter's
 night through the two-line pipeline into a real `SurplusController.update()` walk (the unbounded
 pool is shown to START the pump first, so the pass is not vacuous), a sweep asserting
 `surplus + reclaim ≤ solar` over the grid, and an AST guard that the `reclaim_w=` handed to
 `update()` is assigned from `solar_bounded_reclaim()` in that function and that
 `reclaimable_battery_w()` is called with `grid_import_w=` — the reclaim cannot reach the walk
-unbounded whichever way the block is refactored. **Siblings swept:** the EV redirect (#899,
-closed earlier by commit-then-measure — a stricter answer, because there the credit is
-pre-commit and the pool cannot tell a yielding pack from a non-yielding one afterwards; the loads'
-pool is re-derived each cycle from the meter, so the physical share suffices for the start and
-the #899 question stays with the EV); Tier-1 assist headroom (`_tier1_headroom_w`) is an opt-in
-PAID source bounded by its own budget, not a sun credit — not this class; the `max_export_w`
-excess is derived from the already-bounded surplus — fine. **Left for Guido (product call, not
-a sweep):** `_apply_price_adjustment` adds +3 kW (cheap) / +10 kW (negative) of *virtual* surplus
-to the same pool for every dynamic-tariff install, with no per-device policy gate — a documented
-feature (USER_GUIDE "Price-responsive mode") that predates #559's per-device "Finish overnight
-from: Grid" and contradicts its "solar_only never grid-forces" contract: on a dynamic tariff a
-Solar-only load runs from the grid in every cheap hour. Same shape, same pool, deliberate; the
-fix is a decision about which of the two contracts wins, not a bound. **Sweep question:** for
+unbounded whichever way the block is refactored, and that the import it subtracts comes from
+`held_grid_import` fed by the reader's `grid_power_unavailable` flag. **Siblings swept:** the
+EV's bare surplus (`decide.self_consumption_surplus_w`) is `solar − home` and therefore
+sun-bounded by construction — the loads' export-plus-raw-charge pool was the odd one out, and
+`charge − import` is exactly that same quantity; Tier-1 assist headroom (`_tier1_headroom_w`) is
+an opt-in PAID source bounded by its own budget, not a sun credit — not this class; the
+`max_export_w` excess is derived from the already-bounded surplus — fine; `_desired_intents`
+consumes the same bounded `reclaim_w`; the surplus-available binary sensor reads
+`unallocated_w`, which excludes the reclaim. **Open sibling (for Guido):** the EV's *forecast
+redirect* fallback (`flow_calculator.battery_redirect_w`, used when the car does NOT reclaim by
+position) is neither sun- nor import-bounded — at night `forecast_remaining_kwh` is 0 and the
+SoC ≥ 80 % branch redirects the whole grid charge to a `solar_only` car; #899's
+commit-then-measure veto is REACTIVE (three contradicting cycles ≈ 30 s, per plug-in, counter
+reset by any agreeing cycle), so wherever the #193 night gate is not in force (dusk/dawn) a
+nightly plug-in can get a start/stop burst — the #893 stop-rate residual. The preventive twin
+is the same `charge − import` share before the credit. **Left for Guido (product call, not a
+sweep):** `_apply_price_adjustment` adds +3 kW (cheap) / +10 kW (negative) of *virtual* surplus
+to the same pool for every dynamic-tariff install (`tariff_mode == "dynamic"`), with no
+per-device policy gate — a documented feature (USER_GUIDE "Price-responsive mode") that predates
+#559's per-device "Finish overnight from: Grid" and contradicts its "solar_only never
+grid-forces" contract: on a dynamic tariff a Solar-only load runs from the grid in every cheap
+hour. Same shape, same pool, deliberate; it is also the one other mechanism that produces an
+unmarked night run of a Solar-only switch, so it is a *candidate* cause of this very report if
+the reporter's tariff mode turns out to be dynamic (not established — the arbitrary 01:29 start
+and the untouched 1.7 kW priority-2 load, which a +3 kW pool would have started, argue for the
+reclaim). The fix is a decision about which of the two contracts wins, not a bound. **Sweep
+question:** for
 every allocation pool that is a sum, *which term carries the invariant, and does every later term
 pass through it?* And for every measured quantity re-labelled as a source ("that charge would have
 been solar", "that import is cheap"), *what has to be true of the hardware for the label to hold,

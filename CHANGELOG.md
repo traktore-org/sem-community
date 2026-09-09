@@ -23,7 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   funding (the meter's import comes off the top), and the whole pool is
   capped at the solar production — the same "surplus ≤ sun" rule that already
   pinned the export side to 0 W overnight. A battery charging from the sun by
-  day is reclaimed exactly as before.
+  day, with nothing coming in from the grid, is reclaimed exactly as before;
+  a meter that blinks keeps its last reading rather than crediting the whole
+  charge for one cycle.
 
 - 🛡️ **Removing or disabling SEM no longer commands a battery it never
   commanded** (#936). Unload ran "restore discharge to max" on every battery
