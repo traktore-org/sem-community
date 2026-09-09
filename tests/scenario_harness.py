@@ -64,6 +64,10 @@ import yaml
 TIMELINE_FIELDS = {
     "solar_power", "grid_power", "battery_power", "ev_power",
     "battery_soc", "battery_temperature", "battery_soc_unavailable",
+    # (#934) seconds the SOC has been HELD through a dark read. Without it
+    # a dark cycle is fail-closed (unknown); with it a limit-type consumer
+    # (charge pacing) holds through the blink — the fixed path itself.
+    "battery_soc_stale_s",
     "ev_connected", "ev_charging",
     # (#925/#906) THE DARK-READ FLAGS. PowerReadings carries five of these
     # and the harness exposed exactly one, so "the meter went dark this
@@ -207,6 +211,10 @@ def _build_power_readings(effective: Dict[str, Any]):
         battery_soc=float(effective.get("battery_soc", 50.0)),
         battery_temperature=float(effective.get("battery_temperature", 25.0)),
         battery_soc_unavailable=bool(effective.get("battery_soc_unavailable", False)),
+        # (#934) the hold's age — see TIMELINE_FIELDS
+        battery_soc_stale_s=(
+            int(effective["battery_soc_stale_s"])
+            if effective.get("battery_soc_stale_s") is not None else None),
         # (#925) the dark-read twins — see TIMELINE_FIELDS
         solar_power_unavailable=bool(
             effective.get("solar_power_unavailable", False)),

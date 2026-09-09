@@ -2766,3 +2766,48 @@ test_638_c6_arbitrage_sell.py::test_a_HELD_soc_holds_not_sells`. **Sweep questio
 actually assign None to it? If not, the guard is decoration and the real "absent" signal lives
 somewhere else. Refs #932 #531 #875 #925.
 
+
+### 79. A boolean "dark this cycle" flag read as "let go" by a LIMIT writer — a blink becomes a write pair — GUARDED
+**Symptom:** charge pacing (#820) restored the inverter's charge-limit register on every SOC
+blink and re-engaged it the next cycle: two `number.set_value` writes per modbus dropout, ~500 a
+day on PROD's Huawei link (250 blinks/day, 10.8 % of wall time, measured 08.09), a cap that flaps
+between "restored to 5000 W" and the pace every few minutes, and the #538 collision class one layer
+up on the single serial link. **Root shape:** `_hold_battery_soc` holds the last accepted SOC
+through a dark cycle and raises `battery_soc_unavailable` on EVERY such cycle — the flag is boolean
+and cannot tell a one-cycle blink from a sustained outage. `_run_charge_pacing` read it as "no SOC"
+(`soc=None` → no decision → `cap=None` → the writer's disengage-and-restore), so an actuator whose
+side effect is a LIMIT — safe to hold through a blink, a cap is not an action — behaved like one
+whose side effect is an ACTION (the #932 sell, where acting on a held SOC IS the danger). Same
+family as class 58 (which DIRECTION does the fallback err in?) and class 62 (a filter sized for a
+one-sample fault): the honest fallback for a limit is zero-order hold with a bound on how long.
+**Live catch (#934, PROD/.46 08.09, while setting up the #820 real-day proof).** **Closure:** the
+hold carries its age — `PowerReadings.battery_soc_stale_s`, seconds since the last ACCEPTED read
+(None when read this cycle and before any read; a dark reading that carries NO age is not a hold a
+limit may ride — fail-closed for any producer that raises the flag without stamping it); the pacer decides on the held SOC while `battery_soc_known` and the age is within `SENSOR_DARK_READ_GRACE_S` (the grace the entity layer already uses
+for dark reads), and disengages — restoring ONCE — only past it; `charge_pacing.soc_stale_s`
+publishes the age so a blink shows as a small number under an unchanged cap, and an expired hold
+carries its own token (`soc_expired`, age still counting) so a sustained outage is never read as a
+restart's never-read window. The rule is ONE module, `coordinator/soc_grace.py`
+(`soc_for_a_limit` + `soc_hold_expired`, one boundary) — the sanctioned path for every limit that
+reads a SOC. Action-type gates (#932 sell, VPP force-discharge, the #925 spend budget's rule 4)
+keep the boolean: they must stop blind — and each pays the SAME blink cost this class names, on
+the action side: the sell gates (`decide_battery` manual force_discharge + the #533/#778 sell) and
+the VPP export force op return NORMAL for the dark cycle and FORCE_DISCHARGE the next, a
+stop/start pair on the forcible-discharge register per blink while a sell runs (Huawei:
+`_stop_forcible` then `command_force_discharge`; ~30 pairs over a 3 h evening sell on PROD's
+link); the spend budget's rule 4 zeroes one cycle's `battery_spendable_kwh`, which closes the #537
+EV gate for that cycle at night (whether the charger reconciler absorbs a single-cycle drop was
+not measured). The sell-side pair is absorbed by nothing: the #818 hold covers power-derived
+intents only, and the SOC is not a degradable input. Bounding an ACTION by the same 180 s grace
+(the held value is above the floor by construction for that long) is Guido's call, not this
+fix's — the bound exists so that decision can be taken. **Guard:**
+`tests/test_934_pacing_holds_through_a_blink.py` — the reader stamps the age (dark AND
+#902-rejected holds, counted from the last accepted read), a blink is `held` with the wire silent,
+the boundary is the grace constant, a sustained outage restores exactly once; and
+`tests/test_934_dark_soc_reads_declare_themselves.py` — the FLEET-READ pattern: every direct read
+of `battery_soc_unavailable` in `coordinator.py` must carry `# DARK-SOC: <display|record|plan|
+action> — <why a one-cycle edge is acceptable>`, the pacer has none and calls `soc_for_a_limit`,
+so the next limit-type consumer cannot read the boolean without declaring itself. **Sweep question:**
+for every actuator that maps an `*_unavailable` flag to "no decision", is its side effect a LIMIT
+(hold it through a blink, bounded by the grace) or an ACTION (stop blind)? And for every held
+value, can its consumer read HOW LONG it has been held? Refs #934 #820 #932 #902 #875 #818.

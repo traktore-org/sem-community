@@ -82,14 +82,20 @@ class TestPacingUsesTheCurrentCycle:
     @pytest.mark.asyncio
     async def test_an_offline_soc_sensor_is_unknown_not_zero(self):
         """``PowerReadings.battery_soc`` is a plain ``float = 0.0`` with no
-        sentinel — the twin flag ``battery_soc_unavailable`` carries the
-        "sensor is dark" fact. Reading the number alone would reintroduce
-        the very defect this argument removes, one layer along: a dark
-        sensor sizing the day as an empty pack.
+        sentinel — ``battery_soc_known`` carries the "never measured" fact
+        (#875). Reading the number alone would reintroduce the very defect
+        this argument removes, one layer along: a dark sensor sizing the
+        day as an empty pack.
+
+        (#934) This is the shape production makes BEFORE the first read:
+        0.0, dark, not known. A dark cycle AFTER a read holds the last
+        accepted value and stays known — that shape is a reading, and the
+        pacer decides on it (see test_934_pacing_holds_through_a_blink).
         """
         coord = _coord(stale_soc=80.0)
         await SEMCoordinator._run_charge_pacing(coord, SimpleNamespace(
-            battery_soc=0.0, battery_soc_unavailable=True))
+            battery_soc=0.0, battery_soc_unavailable=True,
+            battery_soc_known=False))
         state = getattr(coord, "_charge_pacing_state", None) or {}
         assert state.get("soc") is None, (
             "an offline SOC sensor reported 0 % — 'empty, fill fast', the "

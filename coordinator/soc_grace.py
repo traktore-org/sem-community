@@ -1,0 +1,84 @@
+"""#934 — which SOC a consumer may use on a dark cycle: one rule, one place.
+
+The reader holds the last accepted SOC through a dropout and says so on
+``battery_soc_unavailable`` — on EVERY dark cycle — and, since #934, says
+HOW LONG on ``battery_soc_stale_s`` (seconds since the last accepted read).
+Consumers split by what they do with the number:
+
+* a LIMIT (the #820 charge-power cap) is safe to hold through a short blink:
+  releasing it is the permissive direction, and the writer's restore +
+  re-engage pair cost a modbus write pair per dropout on a link that blinks
+  ~250 times a day. A limit reads the SOC through ``soc_for_a_limit``.
+* an ACTION on the pack (a sell, a VPP discharge, tonight's spend budget)
+  may not ride a held reading at all (#932): those keep asking the flag,
+  and say so at the read (``# DARK-SOC:``, linted by
+  ``tests/test_934_dark_soc_reads_declare_themselves.py``).
+
+The grace is the entity layer's dark-read grace (``SENSOR_DARK_READ_GRACE_S``,
+inclusive at the boundary, exactly as the entity applies it): one constant
+for "a blink", wherever a blink is forgiven.
+"""
+from __future__ import annotations
+
+from typing import Optional
+
+from ..consts.core import SENSOR_DARK_READ_GRACE_S
+
+
+def soc_hold_age_s(power) -> Optional[int]:
+    """Seconds the reading's SOC has been held from the last accepted read.
+    None when it was read this cycle, before any read, and for a reading
+    that does not say — a dark cycle without an age is not a hold."""
+    raw = getattr(power, "battery_soc_stale_s", None)
+    if raw is None:
+        return None
+    try:
+        age = int(raw)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return age if age >= 0 else None
+
+
+def soc_hold_expired(power, *, grace_s: float = SENSOR_DARK_READ_GRACE_S
+                     ) -> bool:
+    """True when the reading holds a measurement that has outlived
+    ``grace_s`` — the one case in which a LIMIT lets go of a hold. The
+    boundary is this module's, so the reason a consumer publishes can never
+    disagree with the value ``soc_for_a_limit`` handed it. False for a
+    fresh read, a never-read SOC (#875: nothing to expire) and a dark
+    reading that carries no age (not a hold, so not an expired one)."""
+    if power is None:
+        return False
+    if not bool(getattr(power, "battery_soc_known", True)):
+        return False
+    if not bool(getattr(power, "battery_soc_unavailable", False)):
+        return False
+    age = soc_hold_age_s(power)
+    return age is not None and age > grace_s
+
+
+def soc_for_a_limit(power, *, grace_s: float = SENSOR_DARK_READ_GRACE_S
+                    ) -> Optional[float]:
+    """The SOC a LIMIT may be held on this cycle, or None.
+
+    The fresh read; or the reader's held value while it is a measurement
+    (``battery_soc_known``) and the hold is inside ``grace_s``. None before
+    the first read (#875: the 0.0 there is not an empty pack), once an
+    outage outlives the grace, for a dark reading that does not say how
+    long it has been dark, and for a reading that carries no number.
+    """
+    if power is None:
+        return None
+    if not bool(getattr(power, "battery_soc_known", True)):
+        return None
+    if bool(getattr(power, "battery_soc_unavailable", False)):
+        age = soc_hold_age_s(power)
+        if age is None or age > grace_s:
+            return None
+    raw = getattr(power, "battery_soc", None)
+    if raw is None:
+        return None
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None

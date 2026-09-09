@@ -228,6 +228,19 @@ class PowerReadings:
     # (neither a source nor a blocker). A later gap keeps this True: the
     # held value IS a measurement and stays steerable.
     battery_soc_known: bool = True
+    # (#934) How old the held SOC is: seconds since the last ACCEPTED read,
+    # stamped by the reader on every dark cycle that holds a value. None
+    # when this cycle's read was accepted, and before any read (there is
+    # nothing to age). The twin flag above is boolean and cannot tell a
+    # one-cycle modbus blink from a sustained outage; a LIMIT-type actuator
+    # (the #820 charge cap) that read the flag as "no SOC" restored and
+    # re-engaged its register on every blink. With the age, a consumer can
+    # hold a limit through a blink (safe — a cap is not an action) and let
+    # go only past SENSOR_DARK_READ_GRACE_S. A dark reading that carries NO
+    # age is not a hold a limit may ride — fail-closed for any producer that
+    # raises the flag without stamping it. Action-type gates (the #932
+    # sell) keep reading the flag: acting blind is the danger there.
+    battery_soc_stale_s: Optional[int] = None
     # (#638 finding #3) On a multi-battery install the fleet SOC is the
     # average of the units that could be READ. When one unit's sensors are
     # still warming (boot) or offline, that average silently becomes a
