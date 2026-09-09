@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.1.0-beta.11] — 09.09.2026
+
 - 🛡️ **A "Solar only" load could run at night on the battery's grid charge**
   (#938). A load placed above the home battery in the priority list may take
   the power that would otherwise charge the battery — and SEM read the whole
