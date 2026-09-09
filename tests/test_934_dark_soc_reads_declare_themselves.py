@@ -40,6 +40,7 @@ from custom_components.solar_energy_management.coordinator.sensor_reader import 
 from custom_components.solar_energy_management.coordinator.soc_grace import (
     soc_for_a_limit,
     soc_hold_age_s,
+    soc_hold_expired,
 )
 from custom_components.solar_energy_management.coordinator.types import (
     PowerReadings,
@@ -108,8 +109,46 @@ class TestSocForALimit:
     def test_a_garbage_age_is_no_age(self):
         assert soc_hold_age_s(_reading(battery_soc_stale_s="soon")) is None
         assert soc_hold_age_s(_reading(battery_soc_stale_s=-4)) is None
+        assert soc_hold_age_s(_reading(battery_soc_stale_s=float("inf"))) is None
         assert soc_hold_age_s(_reading(battery_soc_stale_s=17.9)) == 17
         assert soc_hold_age_s(_reading(battery_soc_stale_s=0)) == 0
+
+
+@pytest.mark.unit
+class TestSocHoldExpired:
+    """The ONE boundary: ``soc_hold_expired`` is True exactly where
+    ``soc_for_a_limit`` refuses a reading that was once a measurement."""
+
+    def _held(self, **kw):
+        base = dict(battery_soc=60.0, battery_soc_unavailable=True,
+                    battery_soc_known=True, battery_soc_stale_s=30)
+        base.update(kw)
+        return _reading(**base)
+
+    def test_inside_the_grace_is_not_expired(self):
+        assert soc_hold_expired(self._held(battery_soc_stale_s=GRACE)) is False
+        assert soc_for_a_limit(self._held(battery_soc_stale_s=GRACE)) is not None
+
+    def test_past_the_grace_is_expired_and_refused_together(self):
+        past = self._held(battery_soc_stale_s=GRACE + 1)
+        assert soc_hold_expired(past) is True
+        assert soc_for_a_limit(past) is None
+
+    def test_a_custom_grace_moves_both_together(self):
+        r = self._held(battery_soc_stale_s=50)
+        assert soc_hold_expired(r, grace_s=40) is True
+        assert soc_for_a_limit(r, grace_s=40) is None
+        assert soc_hold_expired(r, grace_s=60) is False
+        assert soc_for_a_limit(r, grace_s=60) == pytest.approx(60.0)
+
+    def test_what_was_never_a_hold_cannot_expire(self):
+        assert soc_hold_expired(None) is False
+        assert soc_hold_expired(_reading(battery_soc=60.0)) is False
+        assert soc_hold_expired(self._held(battery_soc_known=False,
+                                           battery_soc_stale_s=GRACE + 60)) is False
+        assert soc_hold_expired(_reading(
+            battery_soc=60.0, battery_soc_unavailable=True)) is False, (
+            "a dark reading without an age is refused as UNKNOWN, not expired")
 
 
 # ─── the shape the reader makes, through to the wire ────────────────────────
@@ -206,7 +245,10 @@ class TestTheShapeTheReaderMakes:
         st = fake._charge_pacing_state
         assert st["action"] == "restored"
         assert st["soc"] is None and st["cap_w"] is None
-        assert st["soc_stale_s"] is None, "no SOC decided on → no age to show"
+        assert st["reason_code"] == "soc_expired"
+        assert st["soc_stale_s"] == GRACE + 30, (
+            "the hold's age is published through the outage — it is the "
+            "reader's fact, not the decision's")
         assert "expired" in st["reason"]
         assert _writes(hass) == [pytest.approx(cap), 5000.0]
         clock[0] += 30.0

@@ -2783,11 +2783,12 @@ one-sample fault): the honest fallback for a limit is zero-order hold with a bou
 **Live catch (#934, PROD/.46 08.09, while setting up the #820 real-day proof).** **Closure:** the
 hold carries its age — `PowerReadings.battery_soc_stale_s`, seconds since the last ACCEPTED read
 (None when read this cycle and before any read; a dark reading that carries NO age is not a hold a
-limit may ride — fail-closed for any producer that raises the flag without stamping it); the pacer decides on the held SOC while `battery_soc_
-known` and the age is within `SENSOR_DARK_READ_GRACE_S` (the grace the entity layer already uses
+limit may ride — fail-closed for any producer that raises the flag without stamping it); the pacer decides on the held SOC while `battery_soc_known` and the age is within `SENSOR_DARK_READ_GRACE_S` (the grace the entity layer already uses
 for dark reads), and disengages — restoring ONCE — only past it; `charge_pacing.soc_stale_s`
-publishes the age so a blink shows as a small number under an unchanged cap. The rule is ONE
-function, `coordinator/soc_grace.py::soc_for_a_limit` — the sanctioned path for every limit that
+publishes the age so a blink shows as a small number under an unchanged cap, and an expired hold
+carries its own token (`soc_expired`, age still counting) so a sustained outage is never read as a
+restart's never-read window. The rule is ONE module, `coordinator/soc_grace.py`
+(`soc_for_a_limit` + `soc_hold_expired`, one boundary) — the sanctioned path for every limit that
 reads a SOC. Action-type gates (#932 sell, VPP force-discharge, the #925 spend budget's rule 4)
 keep the boolean: they must stop blind — and each pays the SAME blink cost this class names, on
 the action side: the sell gates (`decide_battery` manual force_discharge + the #533/#778 sell) and
@@ -2795,11 +2796,11 @@ the VPP export force op return NORMAL for the dark cycle and FORCE_DISCHARGE the
 stop/start pair on the forcible-discharge register per blink while a sell runs (Huawei:
 `_stop_forcible` then `command_force_discharge`; ~30 pairs over a 3 h evening sell on PROD's
 link); the spend budget's rule 4 zeroes one cycle's `battery_spendable_kwh`, which closes the #537
-EV gate for a cycle at night (a stop/start pair on the charger per blink, the #893 stop-rate
-shape). Nothing absorbs these: the #818 hold covers power-derived intents only, and the SOC is not
-a degradable input. Bounding an ACTION by the same 180 s grace (the held value is above the floor
-by construction for that long) is Guido's call, not this fix's — the bound exists so that decision
-can be taken. **Guard:**
+EV gate for that cycle at night (whether the charger reconciler absorbs a single-cycle drop was
+not measured). The sell-side pair is absorbed by nothing: the #818 hold covers power-derived
+intents only, and the SOC is not a degradable input. Bounding an ACTION by the same 180 s grace
+(the held value is above the floor by construction for that long) is Guido's call, not this
+fix's — the bound exists so that decision can be taken. **Guard:**
 `tests/test_934_pacing_holds_through_a_blink.py` — the reader stamps the age (dark AND
 #902-rejected holds, counted from the last accepted read), a blink is `held` with the wire silent,
 the boundary is the grace constant, a sustained outage restores exactly once; and

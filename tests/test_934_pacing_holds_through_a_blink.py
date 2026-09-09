@@ -246,7 +246,13 @@ class TestPacingHoldsThroughABlink:
         assert st["action"] == "restored"
         assert st["soc"] is None, "past the grace the held value is expired"
         assert st["cap_w"] is None
-        assert st["reason_code"] == "soc_unknown"
+        assert st["reason_code"] == "soc_expired", (
+            "an expired hold is not the never-read shape — the card must be "
+            "able to tell a sustained outage from a restart")
+        assert st["soc_stale_s"] == SENSOR_DARK_READ_GRACE_S + 1, (
+            "the hold's age is published even though no cap was decided on")
+        assert "expired" in st["reason"]
+        reason_at_expiry = st["reason"]
         hass.services.async_call.assert_awaited_once()
         call = hass.services.async_call.await_args
         assert call.args[0] == "number" and call.args[1] == "set_value"
@@ -259,6 +265,11 @@ class TestPacingHoldsThroughABlink:
             fake, _held(stale_s=SENSOR_DARK_READ_GRACE_S + 31))
         assert fake._charge_pacing_state["action"] == "idle"
         hass.services.async_call.assert_not_awaited()
+        assert fake._charge_pacing_state["reason"] == reason_at_expiry, (
+            "the reason prose carried a live counter — the entity's "
+            "attributes would churn every cycle of an outage; the age "
+            "belongs in soc_stale_s")
+        assert fake._charge_pacing_state["soc_stale_s"] == SENSOR_DARK_READ_GRACE_S + 31
         # The SOC comes back: the pacer re-engages — that write is the point.
         await SEMCoordinator._run_charge_pacing(fake, _fresh())
         assert fake._charge_pacing_state["action"] == "wrote"
@@ -273,6 +284,8 @@ class TestPacingHoldsThroughABlink:
         assert st["soc"] is None
         assert st["cap_w"] is None
         assert st["action"] == "idle"
+        assert st["reason_code"] == "soc_unknown", "never read is not expired"
+        assert st["soc_stale_s"] is None
         hass.services.async_call.assert_not_awaited()
 
     async def test_a_held_zero_is_a_reading_not_a_gap(self):

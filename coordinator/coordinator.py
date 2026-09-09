@@ -6805,14 +6805,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # the dark-read grace, and the pacer lets go (restoring once)
             # only when the outage is sustained past it. The rule lives in
             # soc_grace, once, for every limit that reads a SOC.
-            from ..consts.core import SENSOR_DARK_READ_GRACE_S
-            from .soc_grace import soc_for_a_limit, soc_hold_age_s
+            from .soc_grace import (
+                soc_for_a_limit, soc_hold_age_s, soc_hold_expired,
+            )
             soc = soc_for_a_limit(power)
             soc_stale_s = soc_hold_age_s(power)
-            soc_expired = (
-                soc is None and soc_stale_s is not None
-                and bool(getattr(power, "battery_soc_known", True))
-                and soc_stale_s > SENSOR_DARK_READ_GRACE_S)
+            soc_expired = soc_hold_expired(power)
         elif self.data:
             # Bare callers (older paths, tests) keep the published value.
             try:
@@ -6826,8 +6824,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             "battery_charge_power_limit_entity") or "")
         if soc is None or capacity_kwh <= 0:
             decision = None
-            _why = ((f"battery SOC dark for {soc_stale_s} s — held value "
-                     "expired" if soc_expired else "battery SOC unknown")
+            # Constant prose (the age lives in ``soc_stale_s`` below): a
+            # counter in the reason would churn the entity's attributes
+            # every cycle of an outage — the #762 rule, attribute-side.
+            _why = (("battery SOC held past the dark-read grace — held "
+                     "value expired, cap released" if soc_expired
+                     else "battery SOC unknown")
                     if soc is None else "no battery capacity")
         else:
             decision = paced_charge_cap_w(
@@ -6843,7 +6845,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         cap = decision.cap_w if (decision and enabled) else None
         code = (decision.code if decision else
                 ("night" if not ledger else
-                 ("soc_unknown" if soc is None else "none")))
+                 (("soc_expired" if soc_expired else "soc_unknown")
+                  if soc is None else "none")))
         action = await self._charge_pacing_writer.apply(
             self.hass, entity, cap, observer=self._observer_mode)
         self._charge_pacing_state = {
@@ -6853,10 +6856,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # value that used to be a cycle stale (and 0.0 on the first cycle
             # after a restart) with nothing on the surface to show it (#820).
             "soc": soc,
-            # (#934) seconds the SOC above has been held through a dark
-            # sensor (0 = read this cycle). A blink shows here as a small
-            # number under an unchanged cap, instead of as a restore.
-            "soc_stale_s": soc_stale_s if soc is not None else None,
+            # (#934) seconds the reader has held the SOC through a dark
+            # sensor (None = read this cycle, or never read). A blink shows
+            # here as a small number under an unchanged cap, instead of as
+            # a restore; past the grace it keeps counting beside the
+            # ``soc_expired`` token, so a sustained outage is never
+            # confused with a restart's never-read window.
+            "soc_stale_s": soc_stale_s,
             "cap_w": decision.cap_w if decision else None,
             "reason": decision.reason if decision else (
                 "pacing idle — outside daylight or no forecast"

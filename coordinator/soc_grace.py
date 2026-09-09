@@ -34,9 +34,27 @@ def soc_hold_age_s(power) -> Optional[int]:
         return None
     try:
         age = int(raw)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
     return age if age >= 0 else None
+
+
+def soc_hold_expired(power, *, grace_s: float = SENSOR_DARK_READ_GRACE_S
+                     ) -> bool:
+    """True when the reading holds a measurement that has outlived
+    ``grace_s`` — the one case in which a LIMIT lets go of a hold. The
+    boundary is this module's, so the reason a consumer publishes can never
+    disagree with the value ``soc_for_a_limit`` handed it. False for a
+    fresh read, a never-read SOC (#875: nothing to expire) and a dark
+    reading that carries no age (not a hold, so not an expired one)."""
+    if power is None:
+        return False
+    if not bool(getattr(power, "battery_soc_known", True)):
+        return False
+    if not bool(getattr(power, "battery_soc_unavailable", False)):
+        return False
+    age = soc_hold_age_s(power)
+    return age is not None and age > grace_s
 
 
 def soc_for_a_limit(power, *, grace_s: float = SENSOR_DARK_READ_GRACE_S
