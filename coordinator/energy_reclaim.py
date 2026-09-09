@@ -57,21 +57,70 @@ def reclaimable_battery_w(
     soc: float,
     priority_soc: float,
     battery_commanded: bool,
+    grid_import_w: Optional[float] = 0.0,
 ) -> float:
-    """Watts currently charging the battery that a higher-priority load may
-    take instead.
+    """Watts of SOLAR currently charging the battery that a higher-priority
+    load may take instead.
 
     Returns 0.0 (battery keeps the charge) unless ALL hold:
       - SOC is at/above the reserve zone (``battery_priority_soc``),
       - the battery is NOT under an explicit/scheduled command
         (force-charge / scheduled / arbitrage — those are honored),
       - the battery is actually charging (positive power).
+
+    (#938) Only the solar-funded share of that charge is surplus. The reclaim
+    was built on the picture "the sun would charge the battery, so a load may
+    have those watts instead" — and read the WHOLE charge power as if it were
+    that. An inverter filling its pack from the GRID (a TOU window set in the
+    inverter, an external EMS — anything SEM did not command) presents the
+    same positive charge power with nothing behind it but the meter. Live: a
+    Solar-only pool pump switched on at 01:29 and ran 4.3 h against a night
+    grid charge that ``solar_bounded_surplus`` had already pinned to 0 W on
+    the export side (alexmc1510, 09.09.2026). Import while
+    the pack charges means the grid, not the sun, is filling it — so the
+    import comes off the top. Before any load commits, this is exactly the
+    solar-funded share (``solar − house − ev``); once a load runs on it the
+    pool is unchanged whether the pack yields or not, which is the #899
+    commit-then-measure question and stays with the EV redirect.
+    ``grid_import_w`` is what the meter shows — or, on a dark cycle, what
+    it last showed (``held_grid_import``); ``None`` means the meter has not
+    been read once this lifetime, and with no evidence that the sun is
+    funding the charge nothing is reclaimed (fail-closed, the #925 rule).
+    ``solar_bounded_reclaim`` in the surplus controller is the independent
+    second ceiling (``surplus + reclaim ≤ solar``).
     """
     if battery_commanded:
         return 0.0
     if soc < priority_soc:
         return 0.0
-    return max(0.0, float(battery_charge_power))
+    if grid_import_w is None:
+        return 0.0
+    charge = max(0.0, float(battery_charge_power))
+    return max(0.0, charge - max(0.0, float(grid_import_w)))
+
+
+def held_grid_import(
+    prev_import_w: Optional[float],
+    *,
+    grid_import_w: float,
+    grid_import_known: bool,
+) -> Optional[float]:
+    """(#938) The import the reclaim may subtract this cycle.
+
+    A readable meter is the answer, and becomes the hold. A dark meter is
+    no evidence either way (the #925 rule): the reader's fallback is 0.0,
+    which ``reclaimable_battery_w`` would read as "nothing imported" and
+    credit the WHOLE charge for that one cycle — a single blink turning a
+    grid charge into surplus, and a start the next cycle's LIFO has to
+    undo. So a dark cycle rides on the last readable value instead (the
+    #934 held-value shape: a blink holds the limit, it does not act).
+    ``None`` = no readable meter yet this lifetime → the caller reclaims
+    nothing. An install with NO grid sensor is never dark (nothing was
+    read), so it keeps its 0.0 and the sun ceiling alone applies.
+    """
+    if grid_import_known:
+        return max(0.0, float(grid_import_w or 0.0))
+    return prev_import_w
 
 
 # ── (#899) Commit-then-measure for the solar_only battery redirect ─────────
