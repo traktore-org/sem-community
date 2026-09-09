@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import re
 import time
 from collections import deque
@@ -240,6 +241,10 @@ _DEGRADABLE_POWER_INPUTS = frozenset(
 class SensorReader:
     """Reads power and state values from Home Assistant sensors."""
 
+    # (#934) Overridable clock for the SOC hold's age — the same seam the
+    # entity layer's dark-read grace uses (``SEMSolarSensor._now_monotonic``).
+    _now_monotonic = staticmethod(time.monotonic)
+
     def __init__(self, hass: HomeAssistant, config: Dict[str, Any]):
         """Initialize sensor reader."""
         self.hass = hass
@@ -446,6 +451,8 @@ class SensorReader:
         # until the first successful read: a hold needs something to hold,
         # and 0.0 before the first report was published as an empty pack.
         self._last_valid_soc: Optional[float] = None
+        # (#934) monotonic stamp of that read — a held value carries its age.
+        self._last_valid_soc_mono: Optional[float] = None
         # (#902) a SOC level rejected as an impossible step, and how many
         # consecutive reads have repeated it — see _accept_battery_soc.
         self._soc_step_candidate: Optional[float] = None
@@ -2379,6 +2386,7 @@ class SensorReader:
         self._soc_step_streak = 0
         readings.battery_soc = soc_val
         self._last_valid_soc = soc_val
+        self._last_valid_soc_mono = float(self._now_monotonic())
 
     def _gate_battery_power(self, readings: PowerReadings) -> None:
         """(#902) A battery power no home battery can produce is a dark read.
@@ -2431,6 +2439,15 @@ class SensorReader:
             readings.battery_soc_known = False
             return
         readings.battery_soc = self._last_valid_soc
+        # (#934) The flag says "dark this cycle"; it cannot say for how
+        # long. A limit-type consumer (the #820 charge cap) holds through a
+        # blink and lets go only past the dark-read grace — so the held
+        # value carries its age, counted from the last ACCEPTED read.
+        # Rounded UP, so "age <= grace" here is the entity layer's own
+        # float comparison and not a second boundary one second wide.
+        if self._last_valid_soc_mono is not None:
+            readings.battery_soc_stale_s = max(0, math.ceil(
+                float(self._now_monotonic()) - self._last_valid_soc_mono))
 
     def _read_battery_temperature(self, readings) -> None:
         """(#564) Fill battery_temperature honestly.
