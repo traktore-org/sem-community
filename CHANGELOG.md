@@ -13,6 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🛡️ **A "Solar only" load could run at night on the battery's grid charge**
+  (#938). A load placed above the home battery in the priority list may take
+  the power that would otherwise charge the battery — and SEM read the whole
+  charge power as that, including a charge the inverter was pulling from the
+  grid on its own night schedule. A Solar-only pool pump switched on at
+  01:29, again after a manual off, and ran until the charge ended at 06:03,
+  booked as "4.3/4 h on solar". The reclaim now counts only what the sun is
+  funding (the meter's import comes off the top), and the whole pool is
+  capped at the solar production — the same "surplus ≤ sun" rule that already
+  pinned the export side to 0 W overnight. A battery charging from the sun by
+  day is reclaimed exactly as before.
+
 - 🛡️ **Removing or disabling SEM no longer commands a battery it never
   commanded** (#936). Unload ran "restore discharge to max" on every battery
   adapter, whatever mode SEM was in — an observer-mode test rig rewrote the

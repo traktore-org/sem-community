@@ -368,6 +368,36 @@ def solar_bounded_surplus(
     return max(0.0, surplus)
 
 
+def solar_bounded_reclaim(
+    reclaim_w: float,
+    *,
+    surplus_w: float,
+    solar_w: "Optional[float]" = None,
+) -> float:
+    """(#938) The #620 invariant on the WHOLE load pool, not on one addend.
+
+    ``update()`` allocates from ``surplus + reclaim``: the feedback-free
+    export surplus (already ``≤ solar`` via ``solar_bounded_surplus``) PLUS
+    the battery-charge power a load above the battery may reclaim (#576).
+    The bound sat on the first addend only; the reclaim joined the pool
+    below it. So a battery charging from the grid at night — an inverter TOU
+    window, nothing SEM commanded — put kilowatts of "surplus" in front of a
+    Solar-only pump with the sun at 0 W, and the pump ran until the charge
+    ended (alexmc1510, 09.09.2026: on 01:29, on again 01:45 after a manual
+    off, off 06:03, "4.3/4 h on solar today").
+
+    You cannot reclaim more sun than there is: ``surplus_w + result ≤
+    solar_w``. ``solar_w=None`` (no reading) mirrors the #620 policy and
+    skips the cap — ``reclaimable_battery_w``'s grid-import term is the
+    independent second ceiling, so both have to be blind before a grid
+    charge can pass as surplus again.
+    """
+    reclaim = max(0.0, float(reclaim_w or 0.0))
+    if solar_w is None:
+        return reclaim
+    return max(0.0, min(reclaim, float(solar_w) - float(surplus_w or 0.0)))
+
+
 @dataclass(frozen=True)
 class LoadIntent:
     """(desired-state, phase 1) The MANAGEMENT layer's decision for one load:

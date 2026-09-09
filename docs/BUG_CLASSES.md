@@ -2811,3 +2811,51 @@ so the next limit-type consumer cannot read the boolean without declaring itself
 for every actuator that maps an `*_unavailable` flag to "no decision", is its side effect a LIMIT
 (hold it through a blink, bounded by the grace) or an ACTION (stop blind)? And for every held
 value, can its consumer read HOW LONG it has been held? Refs #934 #820 #932 #902 #875 #818.
+
+### 80. A physical bound on ONE addend of a pool; a second addend joins the sum below it — GUARDED
+**Symptom:** a "Solar only" load runs at night, for hours, with the sun at 0 W — and the very
+invariant written to make that impossible is provably in force: the export surplus reads 0.0
+every cycle. The load's progress bar books the run as "on solar". **Root shape:** an allocation
+pool is a SUM (`surplus + reclaim`, `bare + redirect`, `distributable + virtual`), the invariant
+("you cannot have more solar surplus than the sun produces", #620) is enforced on the first term
+where it was first needed, and a later feature adds a second term that enters the pool AFTER the
+bound. Each term is individually justified; the sum is what the actuator sees. The second term is
+usually a *measured* quantity re-labelled as solar on an unstated assumption — here "the power
+charging the battery would otherwise be solar surplus" (#576), which holds for an inverter left
+alone and fails the moment the pack is filled from the grid by something SEM did not command (an
+inverter TOU window, an external EMS; the U6 "commanded battery is honoured" gate only sees SEM's
+own commands). **Live catch (#938, alexmc1510, Huawei + LUNA, 09.09.2026):** Solar-only pool pump,
+4 h/day target, on at 01:29, on again 01:45 after a manual off, off 06:03 when the charge ended
+— "4.3/4 h on solar today"; reproduced on 2.0 and 2.1.0-beta.9. The EV side of the same shape was
+#899 (the redirect credited to the car while a TOU window kept the pack charging from the meter).
+**Closure:** bound the SUM at the point where it is assembled, and make the second term physical.
+`reclaimable_battery_w(grid_import_w=…)` returns only the solar-funded share of the charge
+(`charge − import` — before any load commits this is exactly `solar − house − ev`);
+`solar_bounded_reclaim(reclaim, surplus_w, solar_w)` in `surplus_controller.py` enforces
+`surplus + reclaim ≤ solar` on the pool the coordinator hands to `update()`. Two independent
+ceilings: a dark meter leaves the first inert, a missing solar reading leaves the second inert
+(the #620 policy), both have to be blind before a grid charge can pass as surplus again. The
+cycle trace publishes `reclaim_raw_w` beside `reclaim_w` so a night with 3000 → 0 reads as "grid
+charge, not surplus". **Guard:** `tests/test_938_night_reclaim_solar_bound.py` — the reporter's
+night through the two-line pipeline into a real `SurplusController.update()` walk (the unbounded
+pool is shown to START the pump first, so the pass is not vacuous), a sweep asserting
+`surplus + reclaim ≤ solar` over the grid, and an AST guard that the `reclaim_w=` handed to
+`update()` is assigned from `solar_bounded_reclaim()` in that function and that
+`reclaimable_battery_w()` is called with `grid_import_w=` — the reclaim cannot reach the walk
+unbounded whichever way the block is refactored. **Siblings swept:** the EV redirect (#899,
+closed earlier by commit-then-measure — a stricter answer, because there the credit is
+pre-commit and the pool cannot tell a yielding pack from a non-yielding one afterwards; the loads'
+pool is re-derived each cycle from the meter, so the physical share suffices for the start and
+the #899 question stays with the EV); Tier-1 assist headroom (`_tier1_headroom_w`) is an opt-in
+PAID source bounded by its own budget, not a sun credit — not this class; the `max_export_w`
+excess is derived from the already-bounded surplus — fine. **Left for Guido (product call, not
+a sweep):** `_apply_price_adjustment` adds +3 kW (cheap) / +10 kW (negative) of *virtual* surplus
+to the same pool for every dynamic-tariff install, with no per-device policy gate — a documented
+feature (USER_GUIDE "Price-responsive mode") that predates #559's per-device "Finish overnight
+from: Grid" and contradicts its "solar_only never grid-forces" contract: on a dynamic tariff a
+Solar-only load runs from the grid in every cheap hour. Same shape, same pool, deliberate; the
+fix is a decision about which of the two contracts wins, not a bound. **Sweep question:** for
+every allocation pool that is a sum, *which term carries the invariant, and does every later term
+pass through it?* And for every measured quantity re-labelled as a source ("that charge would have
+been solar", "that import is cheap"), *what has to be true of the hardware for the label to hold,
+and who checks it?* Refs #938 #899 #576 #620 #559.

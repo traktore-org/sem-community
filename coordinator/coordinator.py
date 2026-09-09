@@ -70,8 +70,8 @@ from .per_charger_context import PerChargerContext, PerChargerState
 from .storage import SEMStorage
 from .notifications import NotificationManager
 from .surplus_controller import (
-    SurplusController, solar_bounded_surplus, build_battery_tier_context,
-    effective_peak_state,
+    SurplusController, solar_bounded_surplus, solar_bounded_reclaim,
+    build_battery_tier_context, effective_peak_state,
 )
 from .cycle_trace import (
     TraceCollector, LayerRecord, LayerStatus, CrossCheck,
@@ -5446,17 +5446,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # arbitrage) is honored — no reclaim.
             # Same definition the EV reclaim gate uses — one source of truth.
             battery_commanded = self._battery_commanded()
-            reclaim_w = reclaimable_battery_w(
-                battery_charge_power=float(getattr(power, "battery_charge_power", 0.0) or 0.0),
-                soc=float(getattr(power, "battery_soc", 0.0) or 0.0),
-                priority_soc=float(self.config.get("battery_priority_soc", 30)),
-                battery_commanded=battery_commanded,
-            )
-            # #576 — pass the export surplus and the reclaimable battery-charge
-            # power SEPARATELY (plus the battery's slot in the priority walk).
-            # The controller offers the reclaim only to loads ABOVE the battery
-            # and hands it back at the battery's slot, so its drag position
-            # decides who charges before the battery.
             # (#620) Feedback-free SOLAR surplus, physically bounded by the live
             # solar production — one invariant ("surplus ≤ sun") that pins the
             # figure to 0 overnight and kills phantom surplus from the add-back,
@@ -5464,6 +5453,32 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             true_surplus_w = solar_bounded_surplus(
                 grid_export_w=float(getattr(power, "grid_export_power", 0.0) or 0.0),
                 active_draw_w=self._surplus_controller.active_surplus_draw_w(),
+                solar_w=getattr(power, "solar_power", None),
+            )
+            # #576 — pass the export surplus and the reclaimable battery-charge
+            # power SEPARATELY (plus the battery's slot in the priority walk).
+            # The controller offers the reclaim only to loads ABOVE the battery
+            # and hands it back at the battery's slot, so its drag position
+            # decides who charges before the battery.
+            # (#938) The reclaim is the pool's SECOND addend and the #620 bound
+            # covered only the first: a battery charging from the GRID at night
+            # (an inverter TOU window — nothing SEM commanded, so U6 did not
+            # apply) handed a Solar-only pump 3 kW of "surplus" with the sun at
+            # 0 W. Two independent ceilings, both physics: only the share of
+            # the charge the meter is not importing is solar-funded, and the
+            # pool as a whole never exceeds the sun (``surplus + reclaim ≤
+            # solar``). Either alone closes the night; both have to be blind
+            # before a grid charge can pass as surplus again.
+            reclaim_raw_w = reclaimable_battery_w(
+                battery_charge_power=float(getattr(power, "battery_charge_power", 0.0) or 0.0),
+                soc=float(getattr(power, "battery_soc", 0.0) or 0.0),
+                priority_soc=float(self.config.get("battery_priority_soc", 30)),
+                battery_commanded=battery_commanded,
+                grid_import_w=float(getattr(power, "grid_import_power", 0.0) or 0.0),
+            )
+            reclaim_w = solar_bounded_reclaim(
+                reclaim_raw_w,
+                surplus_w=true_surplus_w,
                 solar_w=getattr(power, "solar_power", None),
             )
             # (#625) per-cycle registry priority sync + peak posture — both
@@ -5485,6 +5500,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # slot, how much charge power it yielded, and whether it's commanded.
             self._cycle_reclaim = {
                 "reclaim_w": round(float(reclaim_w)),
+                # (#938) what the pack was charging at before the solar/import
+                # ceilings — a night with reclaim_w 0 and reclaim_raw_w 3000
+                # reads as "grid charge, not surplus" in the trace.
+                "reclaim_raw_w": round(float(reclaim_raw_w)),
                 "battery_priority": battery_priority,
                 "battery_commanded": battery_commanded,
             }
