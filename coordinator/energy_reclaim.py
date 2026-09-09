@@ -76,7 +76,7 @@ def reclaimable_battery_w(
     same positive charge power with nothing behind it but the meter. Live: a
     Solar-only pool pump switched on at 01:29 and ran 4.3 h against a night
     grid charge that ``solar_bounded_surplus`` had already pinned to 0 W on
-    the export side (alexmc1510, Huawei + LUNA, 09.09.2026). Import while
+    the export side (alexmc1510, 09.09.2026). Import while
     the pack charges means the grid, not the sun, is filling it — so the
     import comes off the top. Before any load commits, this is exactly the
     solar-funded share (``solar − house − ev``); once a load runs on it the

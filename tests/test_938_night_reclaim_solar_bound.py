@@ -1,6 +1,6 @@
 """#938 — a Solar-only load ran at night on the battery's GRID charge.
 
-alexmc1510 (Huawei SUN2000 + LUNA, Spain, 2.0 → 2.1.0-beta.9): a pool pump
+alexmc1510 (2.0 → 2.1.0-beta.9; a battery the inverter fills from the grid on its own night schedule): a pool pump
 in mode "Solar only", target 4 h/day, was switched on by SEM at 01:29,
 again at 01:45 after a manual off, and off at 06:03 — "4.3/4 h on solar
 today" with the sun at 0 W the whole time.

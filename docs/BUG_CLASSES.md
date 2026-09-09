@@ -2824,7 +2824,7 @@ usually a *measured* quantity re-labelled as solar on an unstated assumption —
 charging the battery would otherwise be solar surplus" (#576), which holds for an inverter left
 alone and fails the moment the pack is filled from the grid by something SEM did not command (an
 inverter TOU window, an external EMS; the U6 "commanded battery is honoured" gate only sees SEM's
-own commands). **Live catch (#938, alexmc1510, Huawei + LUNA, 09.09.2026):** Solar-only pool pump,
+own commands). **Live catch (#938, alexmc1510, 09.09.2026):** Solar-only pool pump,
 4 h/day target, on at 01:29, on again 01:45 after a manual off, off 06:03 when the charge ended
 — "4.3/4 h on solar today"; reproduced on 2.0 and 2.1.0-beta.9. The EV side of the same shape was
 #899 (the redirect credited to the car while a TOU window kept the pack charging from the meter).
