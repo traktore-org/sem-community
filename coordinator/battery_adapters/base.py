@@ -27,6 +27,72 @@ from ..charger_types import BatteryIntent
 _LOGGER = logging.getLogger(__name__)
 
 
+def unload_release_reason(adapter, was_observer: bool) -> Optional[str]:
+    """(#936) Why THIS adapter must be commanded once more on unload — or
+    ``None``: leave the battery exactly as found.
+
+    Unload used to run ``command_normal()`` ("restore discharge to max") on
+    every adapter, whatever SEM had or had not done. On 08.09.2026 the .46
+    test rig — observer mode ON, so SEM had commanded nothing, ever — wrote
+    the SHARED Huawei discharge-limit register from 750 to 5000 W on its
+    way out, while PROD was holding it at 750. The #908 rule for loads
+    applies here word for word: release what SEM started, leave the rest.
+
+    - observer was on → nothing. Observer commands nothing, including on
+      the way out.
+    - a forcible charge / discharge SEM started is still active → stop it
+      (the inverter must not be left in a forced mode nobody manages).
+    - a discharge limit SEM wrote in this lifetime is still in force → hand
+      it back (``command_normal`` restores the maximum; the same-value skip
+      makes it a no-op when it already is).
+    - otherwise → nothing. SEM never commanded this battery.
+    """
+    if was_observer:
+        return None
+    if getattr(adapter, "_forcible_charging", False) or getattr(adapter, "_forcible_discharging", False):
+        return "a forcible operation SEM started is still active"
+    charge = getattr(adapter, "_charge_adapter", None)
+    if charge is not None and bool(getattr(charge, "is_active", False)):
+        return "a forced charge SEM started is still active"
+    try:
+        last = float(getattr(adapter, "_last_discharge_limit_w", -1.0))
+    except (TypeError, ValueError):
+        last = -1.0
+    if last >= 0:
+        return f"a discharge limit SEM wrote ({last:.0f} W) is still in force"
+    return None
+
+
+async def async_release_batteries_on_unload(coordinator) -> dict:
+    """(#936 — Guido, 08.09.2026: *"on uninstall SEM should go to observation
+    mode on and then uninstall"*.) Flip the coordinator to observer mode
+    FIRST, so no cycle still in flight commands anything, then hand back only
+    what SEM itself commanded (see :func:`unload_release_reason`).
+
+    Returns ``{battery_id: what happened}`` for the caller to log. Never
+    raises: a flaky Modbus must not block an unload.
+    """
+    was_observer = bool(getattr(coordinator, "_observer_mode", False))
+    try:
+        coordinator._observer_mode = True
+    except Exception:  # noqa: BLE001 — a read-only stand-in in tests
+        pass
+    outcome: dict = {}
+    adapters = getattr(coordinator, "_battery_adapters", {}) or {}
+    for bid, adapter in adapters.items():
+        why = unload_release_reason(adapter, was_observer)
+        if why is None:
+            outcome[bid] = ("observer mode — nothing was ever commanded, nothing written"
+                            if was_observer else "nothing commanded in this lifetime — left as found")
+            continue
+        try:
+            await adapter.command_normal()
+            outcome[bid] = f"released: {why}"
+        except Exception as e:  # noqa: BLE001
+            outcome[bid] = f"release failed (non-blocking): {e}"
+    return outcome
+
+
 class BatteryControlAdapter(ABC):
     """One adapter per battery brand. Mirrors
     :class:`ChargerAdapter` on the EV side.
