@@ -13,6 +13,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.1.0-beta.10] — 09.09.2026
+
+- 🛡️ **Charge pacing wrote the inverter's charge-limit register twice on
+  every battery-SOC blink** (#934). When the SOC sensor dropped out for a
+  cycle, pacing read the held value as "no SOC", let go of its cap and
+  restored the register, then re-engaged and wrote the cap again one cycle
+  later — two Modbus writes per dropout, about 500 a day on a link that
+  blinks 250 times a day, and a cap that flapped between the pace and the
+  restored value. A cap is a limit, not an action: pacing now keeps its cap
+  through a short dropout (the same 180 s grace SEM's sensors already use
+  for a dark read) and releases it, once, only when the SOC has been dark
+  longer than that. The charge-pacing sensor shows the SOC it decided on
+  and how long that value has been held. The "never sell blind" gates are
+  untouched: a sell still stops on a dark SOC.
+
 # [2.1.0-beta.9] — 07.09.2026
 
 - 🛡️ **A battery still set to the retired "allow arbitrage" mode kept
