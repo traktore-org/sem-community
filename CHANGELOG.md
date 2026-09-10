@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🚗 **Charge mode *Off* stops the car again** (#942). Since 02.09 the one
+  closing stop was only sent when SEM believed it had started the session —
+  so on a wallbox that had restarted itself, selecting Off did nothing at
+  all, and the car went on charging from the house battery and the grid. The
+  transition into Off now stops whatever is drawing, whoever started it;
+  after that SEM issues nothing, so a charge you start at the box yourself
+  is still left alone (#898), including across a restart.
+
 # [2.1.0-beta.11] — 09.09.2026
 
 - 🛡️ **A "Solar only" load could run at night on the battery's grid charge**
