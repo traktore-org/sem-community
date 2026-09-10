@@ -177,3 +177,75 @@ class TestVppPauseKeepsItsStop:
         src = inspect.getsource(coordinator.SEMCoordinator._effective_charge_mode_for)
         assert 'return "off"' not in src
         assert "vpp_pause_override(" in inspect.getsource(coordinator)
+
+
+class TestOffStopsACarThatSemDidNotStart:
+    """(10.09.2026, PROD) Selecting Off must stop whatever is charging.
+
+    #898 narrowed the one closing stop to sessions SEM believed it had
+    started (``_charging_intent_active``), and the commit said what that
+    meant: *"whatever draws, draws"*. On real hardware it meant this:
+
+      16:13–17:48  the KEBA auto-restarts itself every ~10 min; SEM stops it
+                   seven times, every stop taking within seconds
+      18:29:41     the box restarts once more
+      18:29:56     stop-war ceasefire — SEM stands down (intent now False)
+      19:25        the owner selects Off to stop the car
+      → the RELEASED row answered NONE, and the car charged on the house
+        battery and the grid until 19:49, when it was stopped by hand.
+
+    The rule that serves both reports: the TRANSITION into Off issues one
+    stop for whatever is drawing, whoever started it; from then on SEM issues
+    nothing, so #898's own case — a charge started at the box while Off was
+    already set — is still left alone, across restarts too.
+    """
+
+    def test_off_stops_a_box_that_started_itself(self):
+        """The PROD shape: SEM is not charging-intent-active (it had given
+        up), the box is drawing, the user selects Off."""
+        rec = _rec()
+        # a cycle in some other state: this is what makes the next Off a
+        # transition rather than a continuation
+        rec.reconcile(DesiredState.IDLE, 0, _obs(charging=True, power=3100.0),
+                      now=0.0)
+        actions = rec.reconcile(DesiredState.RELEASED, 0,
+                                _obs(charging=True, power=3100.0), now=10.0)
+        assert [a.kind for a in actions] == [ActionKind.DISABLE], (
+            "selecting Off left a drawing charger alone — the #898 regression "
+            "that cost a live install 80 minutes of charging")
+
+    def test_and_then_never_again(self):
+        """#898's rule survives: after that one stop, nothing — including a
+        charge the user starts at the box afterwards."""
+        rec = _rec()
+        rec.reconcile(DesiredState.IDLE, 0, _obs(charging=True, power=3100.0),
+                      now=0.0)
+        rec.reconcile(DesiredState.RELEASED, 0,
+                      _obs(charging=True, power=3100.0), now=10.0)
+        for i in range(6):
+            actions = rec.reconcile(DesiredState.RELEASED, 0,
+                                    _obs(charging=True, power=4000.0),
+                                    now=20.0 + i * 10)
+            assert [a.kind for a in actions] == [ActionKind.NONE]
+
+    def test_a_reconciler_that_wakes_up_in_off_leaves_it_alone(self):
+        """A restart while Off is already selected must not stop the user's
+        charge — the reconciler cannot tell 'chosen just now' from 'chosen an
+        hour ago', so it assumes the safe one."""
+        rec = _rec()
+        actions = rec.reconcile(DesiredState.RELEASED, 0,
+                                _obs(charging=True, power=4000.0), now=0.0)
+        assert [a.kind for a in actions] == [ActionKind.NONE]
+
+    def test_leaving_off_re_arms_the_stop(self):
+        """Off → charge → Off again is a second instruction to stop."""
+        rec = _rec()
+        rec.reconcile(DesiredState.IDLE, 0, _obs(charging=True, power=3100.0), now=0.0)
+        assert [a.kind for a in rec.reconcile(
+            DesiredState.RELEASED, 0, _obs(charging=True, power=3100.0), now=10.0)
+        ] == [ActionKind.DISABLE]
+        rec.reconcile(DesiredState.CHARGE, 10, _obs(charging=False), now=20.0)
+        rec.reconcile(DesiredState.CHARGE, 10, _obs(charging=True, power=4000.0), now=30.0)
+        assert [a.kind for a in rec.reconcile(
+            DesiredState.RELEASED, 0, _obs(charging=True, power=4000.0), now=40.0)
+        ] == [ActionKind.DISABLE]
