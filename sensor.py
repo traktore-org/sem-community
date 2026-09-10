@@ -2745,6 +2745,19 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 if k.startswith("charger_") and k.endswith("_today_plan"):
                     cid = k[len("charger_"):-len("_today_plan")]
                     _per_charger_plans[cid] = v or []
+            # (#940) Per-charger contactor anti-cycle hold — the floor that
+            # keeps a switch-controlled charger from being toggled every
+            # 20 s. Published so "nothing is happening" reads as a decision
+            # with a countdown instead of as SEM being stuck.
+            _per_charger_anticycle = {}
+            for k, v in self.coordinator.data.items():
+                if k.startswith("charger_") and k.endswith("_anticycle_hold"):
+                    cid = k[len("charger_"):-len("_anticycle_hold")]
+                    _per_charger_anticycle[cid] = {
+                        "holding": v,
+                        "remaining_s": self.coordinator.data.get(
+                            f"charger_{cid}_anticycle_hold_s"),
+                    }
             # (#804 Phase A) Observed phase model per charger: the
             # measured-W/A phase estimate + the user-named switch
             # capability's validation verdict. Observe-only surface.
@@ -2774,6 +2787,7 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "charging_strategy": self.coordinator.data.get("charging_strategy"),
                 "strategy_reason": self.coordinator.data.get("charging_strategy_reason"),
                 "per_charger_states": _per_charger_states,
+                "per_charger_anticycle": _per_charger_anticycle,
                 # (#846) fire → check → adjust: the measured watts-per-amp
                 # table, the samples still earning confidence, and every
                 # refusal with its reason — plus the cold-start replay

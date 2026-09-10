@@ -1274,6 +1274,9 @@ def decide(view: ChargerView) -> ChargerDecision:
             return replace(
                 result, intent=ChargerIntent.IDLE, commanded_amps=0,
                 budget_w=0.0, bridgeable=False,
+                # (#940) senior to the contactor's minimum ON: the peak
+                # defence is a guarantee, and it opens the relay this cycle.
+                safety_stop=True,
                 reason=f"{result.reason} [peak EMERGENCY — EV sheds first]",
             )
         min_a = effective_min_amps(dict(view.config), 6)

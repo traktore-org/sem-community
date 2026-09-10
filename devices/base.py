@@ -2133,6 +2133,65 @@ class CurrentControlDevice(ControllableDevice):
     def device_type(self) -> DeviceType:
         return DeviceType.CURRENT_CONTROL
 
+    def _discrete_contactor_surfaces(self) -> tuple:
+        """(#940) ``(can_open, can_close)`` — has SEM a DISCRETE mechanism
+        for this charger, in each direction?
+
+        DISCRETE means the command flips a contactor surface — a start/stop
+        switch, a charge-mode select, a brand start/stop service, a brand
+        ``enable``/``disable`` — rather than riding the current number. The
+        distinction is the whole of #940: a 0 A write is a pilot-signal
+        pause the charger's own firmware interprets, while these four are
+        SEM opening and closing a relay, and a relay has a wear budget.
+
+        This is the same dispatch list ``start_session`` / ``stop_session``
+        / ``ChargerAdapter.ensure_enabled`` walk, read ONCE so its two
+        consumers — ``can_stop_charging`` (#627, the open side plus the 0 A
+        fallback) and ``contactor_surface`` (#940, either side) — cannot
+        drift from it or from each other when a brand is added.
+        """
+        can_open = can_close = False
+        if self.stop_service:
+            can_open = True
+        if self.start_service:
+            can_close = True
+        if self.charge_mode_entity:
+            if self.charge_mode_stop:
+                can_open = True
+            if self.charge_mode_start:
+                can_close = True
+        if self.start_stop_entity:
+            # Both directions, including a ``button.`` start: #804 B4a
+            # routes a button charger's STOP through the current write, but
+            # the press itself still closes a contactor, which is what the
+            # anti-cycle floor is counting. ``can_stop_charging`` has always
+            # answered True for any start/stop entity — unchanged here.
+            can_open = can_close = True
+        if self.charger_service:
+            domain = str(self.charger_service).split(".", 1)[0]
+            try:
+                if self.hass.services.has_service(domain, "disable"):
+                    can_open = True
+                if self.hass.services.has_service(domain, "enable"):
+                    can_close = True
+            except Exception:  # noqa: BLE001 — capability probe, never raise
+                pass
+        return can_open, can_close
+
+    @property
+    def contactor_surface(self) -> bool:
+        """(#940) True when SEM's own start or stop flips a relay.
+
+        A charger whose only control surface is the current number
+        degrades gracefully under a flapping decision — it rides the amp
+        ladder and the reconciler's holds, and a 0 A write is a pause, not
+        a contactor cycle. One with a switch / select / service surface has
+        nothing between the decision and the relay, so it is the one that
+        gets the anti-cycle dwell (``CONTACTOR_MIN_ON_S`` /
+        ``CONTACTOR_MIN_OFF_S`` in ``charger_reconciler``).
+        """
+        return any(self._discrete_contactor_surfaces())
+
     def can_stop_charging(self) -> bool:
         """Whether SEM has ANY mechanism that can actually open the contactor.
 
@@ -2154,19 +2213,8 @@ class CurrentControlDevice(ControllableDevice):
         the same fields ``stop_session`` actually dispatches on, and the
         reconciler surfaces it instead of counting.
         """
-        if self.stop_service:
+        if self._discrete_contactor_surfaces()[0]:
             return True
-        if self.charge_mode_entity and self.charge_mode_stop:
-            return True
-        if self.start_stop_entity:
-            return True
-        if self.charger_service:
-            domain = str(self.charger_service).split(".", 1)[0]
-            try:
-                if self.hass.services.has_service(domain, "disable"):
-                    return True
-            except Exception:  # noqa: BLE001 — capability probe, never raise
-                pass
         # Last resort: a 0 A write, which only stops the car if the control
         # entity can express 0. ``_bound_to_entity_range`` returns the
         # skip-flag for exactly that question.

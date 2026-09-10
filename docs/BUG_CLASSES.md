@@ -2880,3 +2880,105 @@ every allocation pool that is a sum, *which term carries the invariant, and does
 pass through it?* And for every measured quantity re-labelled as a source ("that charge would have
 been solar", "that import is cheap"), *what has to be true of the hardware for the label to hold,
 and who checks it?* Refs #938 #899 #576 #620 #559.
+
+### 81. A rate limit on the REPEAT of one command, read as a limit on the CYCLE — GUARDED
+**Symptom:** the pacing provably works — the log shows exactly one `DISABLE` per minute, as
+designed — and the hardware toggles anyway. alexmc1510's switch-controlled charger
+(`switch.cargador_coche_carga_de_ve`, 09.09.2026, 22:13–22:19) ran 60 s on / 20 s off for at
+least six minutes: the 60 s is `STOP_REASSERT_DWELL_S`, the 20 s is two coordinator cycles, and
+nothing at all sat between "SEM wants CHARGE again" and `ChargerAdapter.ensure_enabled` closing
+the relay. SEM's own card read `CHARGING (6 A) · 1.8 kW` while the box was off two seconds later.
+**Root shape:** a two-direction actuator (open/close, engage/disengage, start/stop) acquires a
+minimum interval on ONE direction, written for a *different* problem — de-duplicating a standing
+command the box keeps ignoring (#763's re-assert, #392's spam fix). It reads like an anti-cycle
+floor, it is named like one, and it bounds only same-command repeats. The cycle rate — the thing
+that wears a relay and aborts a car's handshake — stays unbounded, and the faster the opposite
+decision arrives, the *less* the limiter has to say. Neighbouring machinery makes it harder to
+see: SEM had four steadiness mechanisms on this path (the 4-cycle idle grace, #910's blink hold,
+#545's current floor, #763's ceasefire) and not one of them was on this seam.
+**Where it lives:** any actuator with a wear budget and two opposite commands —
+`charger_reconciler` (the instance), `ev_phase_sequencer` (`MIN_SWITCH_GAP_S` /
+`AUTO_MIN_INTERVAL_S`: symmetric, already closed), `actuate_battery`
+(`DISCHARGE_LIMIT_LOWER_DWELL_CYCLES`: deliberately asymmetric — *raise fast, lower slow* — but it
+is a LIMIT with a 250 W + 50 W hysteresis band, so its up/down cycle IS bounded; not this class),
+`device_reconciler` (`EXTERNAL_OFF_COOLDOWN_S`, whose opposite direction is the load's own
+`min_on`), and the LOAD side, which is the closed example: `SwitchDevice` / `ClimateDevice` /
+`load_management` all carry **both** `min_on` and `min_off`. The charger inherited
+`ControllableDevice`'s `min_on_seconds = 0` and no path ever read it.
+**Closure:** a floor on the CYCLE, at the one place that emits contactor actions —
+`ChargerReconciler.reconcile`. Five decisions carry the fix, and four of them are the interesting
+part:
+(a) **In `reconcile`, not in `send`/`start_session`.** #940's own fix direction named
+`start_session`/`stop_session` — but on the reporter's charger `start_session` selects a mode on a
+`select.` entity and the RELAY is closed by `ensure_enabled`, a different branch (class 29 again).
+A floor below the reconciler is also a *swallowed* command: the #536 enable backoff would spend an
+attempt per cycle on writes that never went out, give up after five, and raise "enable switch
+unavailable/locked" on a switch that is fine. A refusal must be visible to the layer that would
+retry.
+(b) **The clocks arm on a believed TRANSITION, never on a re-assert** — this class's own closure
+came within one review of committing **class 73** ("a success that is not an event re-arms the
+clock"). `START_AND_WRITE` is re-emitted on every CHARGE cycle once an IDLE cycle has cleared
+`_charging_intent_active`, and `DISABLE` once per reassert dwell while a stop is not taking.
+Stamping either refreshes the floor from SEM's own idempotent repeats, and under a flapping
+decision the minimum ON then **never expires**: measured on the real reconciler, a 20 s flap
+produced *zero* stops over 100 minutes — SEM losing the stop entirely, strictly worse than the bug
+(class 17). The belief follows a readable enable switch in BOTH directions and stamps nothing when
+it does: a relay the box opened has no minimum ON left to protect, and a stop that did NOT take
+leaves the relay closed — where holding the close side would also hold the heartbeat current
+write that feeds a device failsafe watchdog. A move SEM did not make earns neither the protection
+nor the penalty.
+(c) **The two floors are not the same number, because they do not cost the same.** The CLOSE floor
+is what bounds the cycle (`CONTACTOR_MIN_OFF_S = 300`, `SwitchDevice`'s own default, #688):
+delaying a START is always safe, so it needs no exemption and gets the long number. The OPEN floor
+(`CONTACTOR_MIN_ON_S = 120`, matching `ev_phase_sequencer.MIN_SWITCH_GAP_S`, this codebase's
+existing "minimum gap between contactor operations") only stops SEM opening a relay it just
+closed, and every second it holds is a second the car charges against SEM's own judgement — off
+the grid or out of the house battery. 120 s bounds that at ~0.05 kWh at 6 A, ~0.37 kWh at 11 kW,
+while still exceeding the 40 s idle grace and the 60 s reassert dwell.
+(d) **The exemption is structural, not a list.** The OPEN floor delays a DISCRETIONARY stop only —
+`DesiredState.IDLE`, "SEM would rather not charge just now". `DesiredState.OFF` never waits,
+because every producer of `ChargerIntent.DISABLE` in the tree is a *demand*: the #804 phase switch
+(never switch under load), `active_phase_guard`'s conductor protection, the VPP export pause. OFF
+already gets no flicker grace on that same reasoning. Mode Off is `RELEASE` and bypasses on its
+own row (a swallowed one-shot strands the session — class 17), as does `PARK_OFF` on a real
+disconnect. Exactly one demand arrives as an IDLE — the peak EMERGENCY shed — and it says so, via
+`ChargerDecision.safety_stop`. Enumerating a safety *list* is how the first cut missed the phase
+guard entirely; deriving it from the intent cannot.
+(e) **Scoped by `CurrentControlDevice.contactor_surface`** — a charger whose only control surface
+is the current number stops by writing 0 A, which is a pilot-signal pause and not a relay cycle;
+holding ITS restart for five minutes would cost surplus for no wear saved. That property and
+`can_stop_charging` (#627) read ONE extracted dispatch list, `_discrete_contactor_surfaces()`, so
+a new brand cannot teach one of them about a mechanism and not the other. The #627 row itself
+deliberately does NOT arm the clock: `stop_controllable=False` means that `DISABLE` moves no
+relay, and arming a five-minute close floor off a doomed command would lock the CHARGE rows — and
+every current correction with them — out while the car keeps drawing.
+**Guard:** `tests/test_940_contactor_anticycle.py` — an **invariant oracle**, not a row test:
+4000 cycles of randomised desired states against a *coherent simulated relay* (SEM's own commands
+move it, plus a 2 %/cycle external flip, and `observed.enabled` reports it), asserting that no
+route through `reconcile()` closes the relay inside the minimum OFF or makes a discretionary open
+inside the minimum ON — so a NEW row fails here whatever it is called. Around it: the vacuity twin
+(the same fuzz with no relay surface must produce violations in both directions — a guard that
+cannot fire is class 8), the reporter's own flap replayed against a simulated relay with an
+`assert len(history) >= 4` so that "SEM stopped acting" can never read as "SEM stopped cycling",
+an explicit class-73 pin that a re-assert does not re-arm either clock, a pin that the heartbeat
+write survives a stop that did not take, a pin that the hold does not spend the #536 enable
+budget, and an AST pin (not a source substring) that the peak-EMERGENCY clamp carries
+`safety_stop=True`.
+**Sweep question:** for every minimum interval on an actuator, ask *which* thing it limits — the
+repeat of one command, or the transition between opposite ones? If a decision that flips every
+cycle can still reach the hardware every cycle, it is the first, and the second does not exist.
+Then ask class 73's question of whatever you add: is the clock armed by the EVENT or by the
+RESULT? And: is the limited thing's opposite even *in the same function*, or does it arrive by a
+route (`ensure_enabled`, a re-assert, a recovery path) whose author never met the limiter?
+**Left for Guido:** (1) the clocks are in-memory on the per-charger reconciler, so an HA restart
+or an options reload costs one free contactor operation — the #461 stability epochs ARE persisted
+(class 7) and these are not. (2) The floors are module constants: a user with a contactor rated
+for faster switching cannot lower them, and a KEBA install acquires them (its `enable`/`disable`
+IS a relay) with no opt-out. (3) The hold is published — `charger_<id>_anticycle_hold` /
+`_hold_s`, `per_charger_anticycle` on the charging-state sensor, `anticycle` in the diagnostics
+war snapshot — but no CARD renders it yet; the "holding on for another 2 min — anti-cycle" line
+#940 asks for needs a card change plus its translation keys. (4) Whether a switch-only charger
+should be offered the amp-shaped modes at all is still open. (5) Observer mode stamps the clocks
+for commands `ControllableDevice.send` withholds — the same pre-existing shape as `_last_disable_at`,
+so an observer rig's holds are real while its writes are not.
+Refs #940 #939 #763 #536 #627 #688 #392 #804.

@@ -4482,6 +4482,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 result[f"charger_{cid}_believed_phases"] = (
                     getattr(self, "_phase_believed", None) or {}
                 ).get(cid)
+                # (#940) The contactor's anti-cycle hold. SEM refusing to
+                # toggle a relay is a DECISION the user is entitled to see —
+                # #940's reporter watched his switch flip 60 s on / 20 s off
+                # while the card said CHARGING. Seconds remaining, 0 when
+                # nothing is held.
+                _rec = (getattr(self, "_charger_reconcilers", None) or {}).get(cid)
+                _ac = (_rec.anticycle_snapshot(time.monotonic())
+                       if _rec is not None else None)
+                result[f"charger_{cid}_anticycle_hold"] = (
+                    (_ac or {}).get("holding"))
+                result[f"charger_{cid}_anticycle_hold_s"] = float(
+                    (_ac or {}).get("remaining_s") or 0.0)
                 # Per-charger vehicle SOC (#193) — collected for the global
                 # vehicle_soc/range fallback below (no dedicated per-charger
                 # sensor consumes this, so don't write it into result; #245 review #2).

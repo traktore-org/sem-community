@@ -387,6 +387,9 @@ def vpp_pause_override(decision, paused: bool):
         return replace(
             decision, intent=ChargerIntent.DISABLE, commanded_amps=0,
             budget_w=0.0, bridgeable=False,
+            # (#940) a dispatched grid event is not a preference — the stop
+            # bypasses the contactor's minimum-ON floor.
+            safety_stop=True,
             reason=f"VPP export pause — EV stopped for the event (#580) — {decision.reason}",
         )
     return decision
