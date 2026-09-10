@@ -9,8 +9,8 @@ battery.
 
 A log line is not a surface (#799). While SEM holds fire AND the box draws: a
 Repair of its own, one charger notification, the state on the card — all gone
-the moment the draw stops or the war ends; once per onset, never per cycle.
-And the class guard: no ``REPORT_*`` action may reach only the log.
+when the draw stops or the war ends; once per ceasefire, never per cycle. And
+the class guard: no ``REPORT_*`` action may reach only the log.
 """
 from __future__ import annotations
 
@@ -64,7 +64,8 @@ class _Box:
         a.enable_state = MagicMock(return_value=(None, True))
         a.max_current_a = 16
         for m in ("command_disable", "command_current", "arm_failsafe",
-                  "ensure_enabled", "command_park_off"):
+                  "ensure_enabled", "command_park_off",
+                  "clear_failsafe_suspected"):
             setattr(a, m, AsyncMock())
         self.adapter = a
 
@@ -83,14 +84,19 @@ async def _cycle(rec, box, t, *, w=0.0, connected=True,
         now=t)
 
 
-async def _to_ceasefire(rec, box):
+async def _to_ceasefire(rec, box, *, final_w=_DRAW_W, final_by_status=False):
     """Settle, then three stop→redraw rounds the box wins; its fourth
-    restart at t=270 finds SEM standing down with the car drawing."""
+    restart at t=270 finds SEM standing down with the car drawing.
+
+    ``final_by_status`` — the box reports "charging" by status before its
+    power reads anything (cloud-polled brands)."""
     await _cycle(rec, box, 0.0)
     for t in (10.0, 110.0, 210.0):
         await _cycle(rec, box, t, w=_DRAW_W)    # the box restarted → DISABLE
         await _cycle(rec, box, t + 5, w=0.0)    # …and the stop took
-    await _cycle(rec, box, 270.0, w=_DRAW_W)    # restart #4 → stand down
+    if final_by_status:
+        box.adapter.actual_charging = MagicMock(return_value=True)
+    await _cycle(rec, box, 270.0, w=final_w)    # restart #4 → stand down
 
 
 @pytest.fixture
@@ -147,11 +153,13 @@ class TestTheStandDownIsSeen:
         await _cycle(rec, box, 400.0, w=_DRAW_W)
         repairs["clear"].clear()
 
-        await _cycle(rec, box, 410.0, w=0.0)            # the car paused
+        await _cycle(rec, box, 410.0, w=0.0)            # the car paused…
+        assert repairs["clear"] == [], "one quiet cycle is a blip, not a stop"
+        await _cycle(rec, box, 420.0, w=0.0)            # …and stayed paused
         assert repairs["clear"] == [_CID]
-        assert rec.stand_down_snapshot(410.0)["standing_down"] is False
+        assert rec.stand_down_snapshot(420.0)["standing_down"] is False
 
-        await _cycle(rec, box, 500.0, w=_DRAW_W)        # …and resumed, in the window
+        await _cycle(rec, box, 500.0, w=_DRAW_W)        # resumed, in the window
         assert len(repairs["raise"]) == 2, "the Repair follows the draw"
         box.notifier.notify_charger_stand_down.assert_awaited_once()
         assert rec.stand_down_snapshot(500.0)["standing_down"] is True
@@ -176,7 +184,7 @@ class TestTheStandDownIsSeen:
             t = 270.0 + STOP_WAR_BACKOFF_S + 1.0
             await _cycle(rec, box, t, w=_DRAW_W)         # SEM stops it again
             assert box.adapter.command_disable.await_count == 4
-        assert repairs["clear"] == [_CID]
+        assert repairs["clear"] == [_CID], "a war ending is not debounced"
         assert rec.stand_down_snapshot(t)["standing_down"] is False
 
     @pytest.mark.asyncio
@@ -222,10 +230,106 @@ class TestTheStandDownIsSeen:
 
     @pytest.mark.asyncio
     async def test_no_coordinator_link_still_files_the_repair(self, repairs):
+        """The Repair does not depend on the notifier being reachable (the
+        link itself is pinned in TestEveryChargerCanReachTheNotifier)."""
         rec, box = ChargerReconciler(charger_id=_CID, heartbeat_s=5.0), _Box()
         box.adapter._device._coordinator = None
         await _to_ceasefire(rec, box)
         assert len(repairs["raise"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_a_stale_reconciler_cannot_leave_a_stand_down_behind(
+            self, repairs):
+        rec, box = ChargerReconciler(charger_id=_CID, heartbeat_s=5.0), _Box()
+        await _to_ceasefire(rec, box)
+        assert rec.stand_down_snapshot(1000.0)["standing_down"] is True
+        # Nothing calls the reconciler after this: the window's end alone
+        # must take the published state down.
+        assert rec.stand_down_snapshot(270.0 + STOP_WAR_BACKOFF_S + 1.0) == {
+            "standing_down": False, "remaining_s": 0.0, "power_w": 0}
+
+
+@pytest.mark.unit
+class TestOncePerCeasefire:
+    """The onset is the ceasefire — not "the first report after some other
+    action". The review found both ways the old flag got that wrong."""
+
+    @pytest.mark.asyncio
+    async def test_a_ceasefire_entered_from_a_pause_is_announced(
+            self, repairs, caplog):
+        """The car pauses in the first ceasefire and the box returns after
+        it: no action lands in between, and the second, doubled ceasefire
+        must still get its warning and its push."""
+        rec, box = ChargerReconciler(charger_id=_CID, heartbeat_s=5.0), _Box()
+        await _to_ceasefire(rec, box)
+        await _cycle(rec, box, 410.0, w=0.0)
+        await _cycle(rec, box, 420.0, w=0.0)
+        t = 270.0 + STOP_WAR_BACKOFF_S + 100.0          # back after the window
+        caplog.clear()
+        with caplog.at_level(logging.WARNING, logger=_RECONCILER_LOGGER):
+            await _cycle(rec, box, t, w=_DRAW_W)
+        msgs = [r.getMessage() for r in caplog.records]
+        assert any("Standing down for 60 min" in m for m in msgs), msgs
+        assert box.notifier.notify_charger_stand_down.await_count == 2
+        assert box.adapter.command_disable.await_count == 3, "no probe went out"
+
+    @pytest.mark.asyncio
+    async def test_a_failsafe_clear_inside_one_ceasefire_is_not_a_second_push(
+            self, repairs):
+        rec, box = ChargerReconciler(charger_id=_CID, heartbeat_s=5.0), _Box()
+        await _to_ceasefire(rec, box)
+        await rec._apply_actions(
+            [Action(ActionKind.CLEAR_FAILSAFE_SUSPECTED)], box.adapter,
+            SimpleNamespace(reason="t"), SimpleNamespace(power_w=_DRAW_W),
+            now=300.0)
+        await _cycle(rec, box, 310.0, w=_DRAW_W)
+        box.notifier.notify_charger_stand_down.assert_awaited_once()
+
+
+@pytest.mark.unit
+class TestTheSurfaceHoldsSteady:
+    @pytest.mark.asyncio
+    async def test_a_draw_flapping_at_the_threshold_does_not_churn_the_repair(
+            self, repairs):
+        rec, box = ChargerReconciler(charger_id=_CID, heartbeat_s=5.0), _Box()
+        await _to_ceasefire(rec, box)
+        repairs["clear"].clear()
+        for i, t in enumerate(range(280, 580, 10)):
+            await _cycle(rec, box, float(t), w=_DRAW_W if i % 2 else 300.0)
+        assert repairs["clear"] == []
+        assert len(repairs["raise"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_a_status_only_onset_is_corrected_once_the_watts_arrive(
+            self, repairs):
+        """A cloud-polled box can say "charging" a cycle before its power
+        reads anything; the Repair must not say 0 W for the whole episode."""
+        rec, box = ChargerReconciler(charger_id=_CID, heartbeat_s=5.0), _Box()
+        await _to_ceasefire(rec, box, final_w=0.0, final_by_status=True)
+        await _cycle(rec, box, 280.0, w=_DRAW_W)
+        await _cycle(rec, box, 290.0, w=_DRAW_W)
+        assert [kw["power_w"] for _, kw in repairs["raise"]] == [0.0, _DRAW_W]
+
+
+@pytest.mark.unit
+class TestEveryChargerCanReachTheNotifier:
+    def test_the_late_discovered_legacy_charger_is_linked_too(self):
+        """Only the per-charger loop linked a charger back to the
+        coordinator, so the legacy ``_ev_device`` that
+        ``_retry_ev_device_setup`` fills never was — its stand-down push
+        died in silence. The every-cycle both-shapes walk links both."""
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        coord = SEMCoordinator.__new__(SEMCoordinator)
+        coord._observer_mode = False
+        listed, legacy = SimpleNamespace(), SimpleNamespace()
+        coord._ev_devices = {"garage": listed}
+        coord._ev_device = legacy
+        coord._surplus_controller = None
+        SEMCoordinator._push_observer_mode_to_devices(coord)
+        assert legacy._coordinator is coord
+        assert listed._coordinator is coord
 
 
 def _nm(**config):

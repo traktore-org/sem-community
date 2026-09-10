@@ -289,8 +289,14 @@ class ChargerReconciler:
         self._stop_war_last_round_at: float = 0.0
         self._stop_war_backoff_until: float = 0.0
         self._stop_war_draw_seen: bool = False
-        self._stop_war_reported: bool = False
         self._stop_war_ceasefires: int = 0
+        # (#944) Every ceasefire ever started (never reset) and the last one
+        # announced. The warning and the charger notification are once per
+        # CEASEFIRE. The old "re-arm on any other action" flag let a second
+        # ceasefire entered straight from a pause go unannounced (no action
+        # landed between the two), and a #823 clear inside one announce twice.
+        self._stop_war_ceasefire_serial: int = 0
+        self._stop_war_reported_serial: int = -1
         # (#944) How long THIS stand-down lasts. The doubling makes it 30,
         # 60, 120 or 240 min; the warning announced the first figure for all.
         self._stop_war_backoff_s: float = 0.0
@@ -301,6 +307,8 @@ class ChargerReconciler:
         # without a stand-down clears once.
         self._stand_down_surfaced: Optional[bool] = None
         self._stand_down_power_w: float = 0.0
+        self._stand_down_raised_w: float = 0.0   # the figure the Repair shows
+        self._stand_down_quiet: int = 0          # non-drawing cycles in the window
         # (#823) stop→re-enable gap history. A failsafe timeout re-enables on
         # a CONSTANT interval after our DISABLE — a retrying car or a human
         # does not. Two matching gaps name it; the report never changes the
@@ -707,6 +715,7 @@ class ChargerReconciler:
                     self._failsafe_settled_since_disable = False
                     if self._stop_war_rounds > STOP_WAR_ROUNDS:
                         self._stop_war_ceasefires += 1
+                        self._stop_war_ceasefire_serial += 1  # (#944) onset identity
                         factor = min(
                             2 ** (self._stop_war_ceasefires - 1),
                             STOP_WAR_BACKOFF_MAX_FACTOR,
@@ -975,8 +984,6 @@ class ChargerReconciler:
             # warning so the NEXT unenforceable episode warns again.
             if action.kind is not ActionKind.REPORT_STOP_UNENFORCEABLE:
                 self._stop_unenforceable_warned = False
-            if action.kind is not ActionKind.REPORT_STOP_WAR:
-                self._stop_war_reported = False
             if action.kind is ActionKind.ENABLE:
                 # #536 — re-assert the start/stop switch (idempotent).
                 await adapter.ensure_enabled()
@@ -994,11 +1001,13 @@ class ChargerReconciler:
             elif action.kind is ActionKind.REPORT_STOP_WAR:
                 # #763 — once per ONSET (the #700 pattern): the ceasefire
                 # holds for half an hour and re-warning every 10 s cycle
-                # would be its own flood. Re-armed below when any other
-                # action lands (the war ended or the intent moved).
-                onset = not self._stop_war_reported
+                # would be its own flood. (#944) The onset is the CEASEFIRE:
+                # each new one — the doubled window after a probe, or one
+                # entered straight from a pause — is announced exactly once.
+                serial = getattr(self, "_stop_war_ceasefire_serial", 0)
+                onset = serial != getattr(self, "_stop_war_reported_serial", -1)
                 if onset:
-                    self._stop_war_reported = True
+                    self._stop_war_reported_serial = serial
                     _LOGGER.warning(
                         "reconcile(%s): stop war detected — the charger keeps "
                         "restarting itself against SEM's stop (%d stop→redraw "
@@ -1106,11 +1115,22 @@ class ChargerReconciler:
                 _LOGGER.debug("reconcile(%s): WRITE %dA — %s",
                               self.charger_id, action.amps, decision.reason)
         # (#944) The stand-down's surfaces follow the CONDITION, not the
-        # warning: up while SEM holds fire against a live draw, down on the
-        # first cycle that stops being true — the draw stopped, the war
-        # ended, or the window closed and SEM is stopping again.
-        if not any(a.kind is ActionKind.REPORT_STOP_WAR for a in actions):
-            self._retire_stand_down(adapter)
+        # warning: up while SEM holds fire against a live draw, down once it
+        # stops being true. The war ending or the window closing takes them
+        # down at once. The draw stopping inside the window takes them down
+        # after the debounce a disconnect gets (a real stop persists; a UDP
+        # blip, or a car tapering at the threshold, is one cycle) — else the
+        # Repair, and the user's "ignore" with it, would be deleted and
+        # re-created every other cycle.
+        if any(a.kind is ActionKind.REPORT_STOP_WAR for a in actions):
+            self._stand_down_quiet = 0
+            return
+        if (getattr(self, "_stand_down_surfaced", None) is True
+                and now < self._stop_war_backoff_until):
+            self._stand_down_quiet += 1
+            if self._stand_down_quiet < PARK_ON_DISCONNECT_CYCLES:
+                return
+        self._retire_stand_down(adapter)
 
     # ── #627 stop-unenforceable repair plumbing ──────────────────────────
     def _device_and_hass(self, adapter):
@@ -1151,8 +1171,13 @@ class ChargerReconciler:
         dev, hass = self._device_and_hass(adapter)
         name = str(getattr(dev, "name", None) or self.charger_id)
         minutes = max(0.0, self._stop_war_backoff_until - now) / 60.0
-        if self._stand_down_surfaced is not True:
+        # Raised on the edge — and once more if the onset read no watts: a
+        # cloud-polled box says "charging" a cycle before its power does, and
+        # the same issue id updated in place must not say 0 W all episode.
+        if (self._stand_down_surfaced is not True
+                or self._stand_down_raised_w <= 0.0 < power_w):
             self._stand_down_surfaced = True
+            self._stand_down_raised_w = power_w
             if hass is not None:
                 from .repair_issues import raise_charger_stop_war_stand_down
                 raise_charger_stop_war_stand_down(

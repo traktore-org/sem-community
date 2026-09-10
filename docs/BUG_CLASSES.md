@@ -3010,8 +3010,15 @@ the box undoes it), sends one charger notification through `_send_charger_notifi
 `per_charger_stop_war` on the charging-state sensor → the EV card's status reads "Charging — SEM
 stood down". The Repair and the state follow the CONDITION: raised on the edge, cleared the cycle
 it stops being true (the draw stopped, the war ended, or the window closed and SEM is stopping
-again). The notification follows the warning's own once-per-onset flag, so a car that pauses inside
-one ceasefire is not a second push. The Repair is non-persistent (the ceasefire lives in memory)
+again). The warning and the notification are once per CEASEFIRE, keyed on a never-reset serial: the
+old "re-arm on any other action" flag missed a second ceasefire entered straight from a pause and
+double-pushed across a #823 clear. The draw stopping *inside* the window retires after the 2-cycle
+debounce a disconnect gets — a draw flapping at the threshold would otherwise delete and re-create
+the Repair (and the user's "ignore") every other cycle. A status-only onset read at 0 W is re-raised
+once when the watts arrive. Every charger — including the late-discovered legacy `_ev_device`, which
+the per-charger loop never linked — gets its `_coordinator` link in the every-cycle both-shapes
+walk (`_push_observer_mode_to_devices`), so the push cannot die on the branch that skipped it
+(class 29). The Repair is non-persistent (the ceasefire lives in memory)
 and a fresh reconciler clears once (an options reload rebuilds it mid-stand-down). Observer mode
 keeps the Repair but not the display message — an observer rig may share the physical box. The
 warning also names the real window (30/60/120/240 min), not always 30.
@@ -3022,7 +3029,10 @@ that only logs fails CI whatever it is called. Its vacuity twin strips #944's su
 the oracle fire. Around it: the stand-down driven through `reconcile_and_apply` (one Repair and one
 notification across 30 drawing cycles; cleared by each of the three war endings; re-raised without
 a second push after a pause), observer mode, the user's switch, the doubled window, the sensor
-attribute, and the node test on the card's status key.
+attribute, the node test on the card's status key, and the adversarial review's catches — a
+ceasefire entered from a pause is announced, a #823 clear is not a second push, a flapping draw
+does not churn the Repair, a 0 W onset is corrected, the legacy charger is linked
+(`TestOncePerCeasefire`, `TestTheSurfaceHoldsSteady`, `TestEveryChargerCanReachTheNotifier`).
 **Sweep question:** for every place SEM decides to STOP acting — a backoff, a ceasefire, a give-up,
 a hold — what is still running while it holds back, and who can see that it is holding back?
 **Left for Guido:** (1) The #548 stop-not-taking sibling: a box that ignores SEM's stop *without an

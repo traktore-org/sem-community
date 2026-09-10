@@ -2582,6 +2582,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         single = getattr(self, "_ev_device", None)
         if single is not None and not any(d is single for d in devs):
             devs.append(single)
+        # (#944) The same both-shapes walk links each CHARGER back to this
+        # coordinator. The stand-down notification reaches the notifier
+        # through ``_coordinator``, and the per-charger loop was the only
+        # place that set it — so the late-discovered legacy ``_ev_device``
+        # was never linked, and its notification died in silence (the split
+        # F3 above closed for observer mode). Chargers only.
+        for dev in devs:
+            try:
+                dev._coordinator = self
+            except Exception:  # noqa: BLE001 — same contract as below
+                continue
         # EVERY commandable device, not just the chargers. ``send()`` is the
         # one seam and it withholds only when the DEVICE knows, so a device
         # this push skips is a device that acts. Loads, climate and heat
