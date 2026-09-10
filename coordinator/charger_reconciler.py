@@ -329,13 +329,21 @@ class ChargerReconciler:
         self._contactor_opened_at: float = float("-inf")
         self._contactor_closed: Optional[bool] = None
         """SEM's belief about the relay: True closed, False open, None at
-        boot (SEM has commanded nothing). Corrected DOWNWARD by a readable
-        enable switch — a relay the box opened on its own is open whatever
-        SEM last commanded, and a minimum ON has nothing left to protect."""
+        boot (SEM has commanded nothing). A readable enable switch
+        overrides it in both directions — see the adoption in
+        ``reconcile``."""
         self._contactor_surface: bool = False
         self._anticycle_hold_kind: str = ""
         self._anticycle_hold_until: float = 0.0
         self._anticycle_episodes: int = 0
+        # (10.09.2026) Off issues ONE stop, then never again — see the
+        # RELEASED row. Starts LATCHED on purpose: a reconciler that opens
+        # its eyes already in Off cannot know whether the user chose Off just
+        # now or an hour ago, and #898's case (a charge started at the box
+        # while Off was already set) must survive a restart. Only the
+        # TRANSITION into Off — a cycle that saw some other desired state
+        # first — clears it and earns the one stop.
+        self._released_stop_issued = True
 
     def snapshot_war(self, now: float) -> dict:
         """(#763 beta.7) The war state for the diagnostics download.
@@ -513,6 +521,25 @@ class ChargerReconciler:
         # DISABLE (the user asked for Off, not for the car to finish); from
         # then on SEM issues nothing — no park-off on unplug, no failsafe
         # naming, no stop-war rounds. Whatever draws, draws.
+        # (10.09.2026) The one closing stop was conditional on
+        # ``_charging_intent_active``, which narrowed Off from "the car
+        # stops" to "the car stops IF SEM believes it started the session".
+        # The commit said as much: "whatever draws, draws". On a live install
+        # that cost 80 minutes of unattended charging — the box auto-restarts
+        # every ~10 min, SEM had stopped it seven times, then stood down from
+        # the stop-war ceasefire (so intent was False), and the owner selected
+        # Off to stop the car. Precisely the case where the session is not
+        # SEM's, so this row answered NONE.
+        #
+        # #898 reported a DIFFERENT moment: "if the charger is now started
+        # elsewhere in HA, SEM stops it soon after" — a session that begins
+        # AFTER Off was chosen. One rule serves both:
+        #   entering Off → ONE stop for whatever is charging, whoever started
+        #                  it, because that is what the user just asked for;
+        #   from then on → nothing, ever, so a charge the user starts at the
+        #                  box afterwards is left alone (#898 stays fixed).
+        # ``_released_stop_issued`` is that latch, cleared below when the mode
+        # leaves Off so the NEXT Off is again an instruction to stop.
         if desired is DesiredState.RELEASED:
             self._end_stop_war()
             self._consecutive_idle_count = 0
@@ -520,15 +547,20 @@ class ChargerReconciler:
             if observed.connected:
                 self._seen_connected = True
                 self._disconnect_run = 0
-            if self._charging_intent_active:
+            if not self._released_stop_issued and (
+                    self._charging_intent_active or observed.charging):
                 self._charging_intent_active = False
+                self._released_stop_issued = True
                 self._enable_attempts = 0
                 self._enable_gave_up_at = 0.0
                 self._last_disable_at = now
                 self._last_disable_issued_at = now
                 self._note_contactor(False, now)     # (#940) anti-cycle clock
                 return [Action(ActionKind.DISABLE)]
+            self._released_stop_issued = True
             return [Action(ActionKind.NONE)]
+        # Left Off: the next Off selection is a fresh instruction to stop.
+        self._released_stop_issued = False
         # (#823) Recovery: a reported failsafe whose LAST stop has now held
         # quiet for twice the learned interval means the user fixed the box —
         # retire the Repair and re-arm the recogniser, so a later relapse is
