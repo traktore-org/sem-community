@@ -127,6 +127,11 @@ PER_CHARGER_REPAIRS = {
         "which is instantiated per charger and holds self.charger_id + its "
         "own adapter/power (#627)"
     ),
+    "raise_charger_stop_war_stand_down": (
+        "structural — raised by ChargerReconciler._surface_stand_down, which "
+        "is instantiated per charger: the war, the window and the draw are "
+        "this reconciler's own, from its own adapter/power (#944)"
+    ),
     "raise_charger_actuation_failed": (
         "structural — raised from devices/base.py on the device object "
         "whose write just failed (#392)"

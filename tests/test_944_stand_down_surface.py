@@ -342,12 +342,36 @@ class TestTheCardCanSeeIt:
     def test_the_coordinator_writes_the_keys_the_sensor_reads(self):
         """Class 22: a string-keyed store whose write site and read site
         disagree is silent. The coordinator is too large to drive for one
-        key, so both ends are pinned to the same suffixes."""
-        src = (_ROOT / "coordinator" / "coordinator.py").read_text()
-        for suffix in ("_stop_war_stand_down", "_stop_war_stand_down_s",
-                       "_stop_war_stand_down_w"):
-            assert f'result[f"charger_{{cid}}{suffix}"]' in src, suffix
-        assert "stand_down_snapshot(" in src
+        key, so its PARSED tree (not its spelling, #925) is held to calling
+        the snapshot and to writing the suffixes the sensor above reads."""
+        import ast
+
+        from .ast_contracts import call_sites
+
+        assert any(path == "coordinator/coordinator.py"
+                   for path, _line, _kw in call_sites("stand_down_snapshot")), (
+            "nothing publishes the stand-down — the card would never see it")
+        tree = ast.parse((_ROOT / "coordinator" / "coordinator.py")
+                         .read_text(encoding="utf-8"))
+        written = set()
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Assign):
+                continue
+            for t in node.targets:
+                if not (isinstance(t, ast.Subscript)
+                        and isinstance(t.value, ast.Name)
+                        and t.value.id == "result"
+                        and isinstance(t.slice, ast.JoinedStr)):
+                    continue
+                parts = t.slice.values
+                if (len(parts) == 3 and isinstance(parts[0], ast.Constant)
+                        and parts[0].value == "charger_"
+                        and isinstance(parts[2], ast.Constant)):
+                    written.add(parts[2].value)
+        # Vacuity (class 8): the walker must see a known sibling first.
+        assert "_anticycle_hold" in written, sorted(written)[:10]
+        assert {"_stop_war_stand_down", "_stop_war_stand_down_s",
+                "_stop_war_stand_down_w"} <= written
 
     def test_the_countdown_is_live_context_not_history(self):
         from custom_components.solar_energy_management.sensor import (
