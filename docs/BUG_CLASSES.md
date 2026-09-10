@@ -2982,3 +2982,57 @@ should be offered the amp-shaped modes at all is still open. (5) Observer mode s
 for commands `ControllableDevice.send` withholds — the same pre-existing shape as `_last_disable_at`,
 so an observer rig's holds are real while its writes are not.
 Refs #940 #939 #763 #536 #627 #688 #392 #804.
+
+### 82. A deliberate stand-down announced only in the log — GUARDED
+**Symptom:** a backoff makes exactly the right call — stop acting, because acting harder does
+damage — and says so with one `_LOGGER.warning`. From outside, "SEM has given up" and "everything
+is fine" look identical, while the thing SEM stopped policing keeps running. #944 (PROD
+10.09.2026): the KEBA auto-restarted every ~10 min and every stop SEM sent took; then the #763
+ceasefire stood down, and the car charged from the house battery and the grid from 18:29 to 19:49.
+The owner found out from the battery.
+**Root shape:** the reconciler's `REPORT_*` actions are the moments SEM tells the user it cannot or
+will not do what it was asked. Three of four reached a surface — #536 `REPORT_ENABLE_BLOCKED` (the
+actuation-failure Repair), #627 `REPORT_STOP_UNENFORCEABLE`, #823 `REPORT_FAILSAFE_SUSPECTED` —
+and `REPORT_STOP_WAR` reached the log only. A stand-down is not an error, so nobody filed it as
+something to *report*; yet it is the one report with a live, unattended draw attached. #799's "a
+log line is not a surface" had been applied to refusals and failures, never to a deliberate
+decision.
+**Where it lives:** every `ActionKind.REPORT_*` (now all surfaced), and every deliberate "stop
+trying" path: #536's enable backoff (surfaced), the #940 anti-cycle hold (published — a decision,
+not a fault), `charge_stability`'s full-car give-up (the car is NOT drawing; nothing runs
+unattended), the grid-sign auto-correction's stand-down in `coordinator.py` (log-only, but a
+diagnosis with no unattended draw), and the #548 "commanded STOP N× but charger still drawing"
+warning in `reconcile_and_apply` — log-only, and a real sibling (see Left for Guido).
+**Closure:** while the ceasefire holds AND the box draws, `_apply_actions` raises a Repair of its own
+(`charger_stop_war_stand_down` — not #627's key, which says no mechanism exists; here one works and
+the box undoes it), sends one charger notification through `_send_charger_notification` behind
+`enable_charger_notifications`, and publishes `charger_<id>_stop_war_stand_down` (+ `_s`, `_w`) →
+`per_charger_stop_war` on the charging-state sensor → the EV card's status reads "Charging — SEM
+stood down". The Repair and the state follow the CONDITION: raised on the edge, cleared the cycle
+it stops being true (the draw stopped, the war ended, or the window closed and SEM is stopping
+again). The notification follows the warning's own once-per-onset flag, so a car that pauses inside
+one ceasefire is not a second push. The Repair is non-persistent (the ceasefire lives in memory)
+and a fresh reconciler clears once (an options reload rebuilds it mid-stand-down). Observer mode
+keeps the Repair but not the display message — an observer rig may share the physical box. The
+warning also names the real window (30/60/120/240 min), not always 30.
+**Guard:** `tests/test_944_stand_down_surface.py::TestEveryReportReachesASurface` — an oracle
+parametrized over every `ActionKind.REPORT_*` member, driving the real `_apply_actions` and
+requiring a non-log surface (an issue-registry write or an adapter `report_*` hook): a new report
+that only logs fails CI whatever it is called. Its vacuity twin strips #944's surface and must see
+the oracle fire. Around it: the stand-down driven through `reconcile_and_apply` (one Repair and one
+notification across 30 drawing cycles; cleared by each of the three war endings; re-raised without
+a second push after a pause), observer mode, the user's switch, the doubled window, the sensor
+attribute, and the node test on the card's status key.
+**Sweep question:** for every place SEM decides to STOP acting — a backoff, a ceasefire, a give-up,
+a hold — what is still running while it holds back, and who can see that it is holding back?
+**Left for Guido:** (1) The #548 stop-not-taking sibling: a box that ignores SEM's stop *without an
+error* never settles, so no war round counts, and it is warned at 3/12/60 cycles in the log and
+nowhere else. A Repair there needs field evidence first — cloud-polled chargers (Zaptec) can show
+power for minutes after a stop that did take, so a naive threshold would cry wolf. (2)
+`_send_charger_notification` resolves ONE notify service for the whole fleet, so on a two-charger
+install the display message can land on the other box — pre-existing for every charging-state
+message. (3) The not-drawing row's quiet reset clears the war's rounds after an hour of quiet but
+not a 4×/8× ceasefire's window, so a box that returns 1–3 h later can still meet a standing
+ceasefire with zero rounds — pre-existing, surfaced now, unchanged (fighting harder is out of
+scope).
+Refs #944 #763 #627 #823 #536 #548 #799 #942 #940.

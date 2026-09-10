@@ -886,6 +886,21 @@ would strobe the contactor and the box wins anyway. **Fix:** find the
 failsafe/fallback-current setting on the wallbox and set the fallback current
 to `0`. The notice retires itself once a stop holds.
 
+## SEM stood down while the charger kept charging
+
+Every stop SEM sent took, and each time the charger closed its contactor
+again on its own. After a few rounds SEM stops fighting — for 30 minutes,
+doubling if the box comes back again — because a contactor switched on and
+off every few minutes can drive the car into a charging fault. Meanwhile the
+car keeps drawing, from the grid or from the house battery. Two causes look
+identical from SEM's side: the wallbox's own **auto-start or authorization**
+re-closing when the car retries, or **another controller** — a second SEM
+instance, an automation, the vendor app — commanding the same charger.
+**Fix:** turn off auto-start on the wallbox (or require authorization), or
+give SEM a stop mechanism the box respects. If another controller could
+exist, silence it first: if SEM's stops then hold, that was it. The notice
+clears as soon as the car stops drawing or SEM takes control again.
+
 ## The inverter refuses forced discharge
 
 SEM asked your inverter/battery to force-discharge (battery-to-grid export)

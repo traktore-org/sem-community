@@ -4494,6 +4494,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     (_ac or {}).get("holding"))
                 result[f"charger_{cid}_anticycle_hold_s"] = float(
                     (_ac or {}).get("remaining_s") or 0.0)
+                # (#944) SEM holding fire against a live draw — #763's
+                # ceasefire. Without it the tile passed for an ordinary charge
+                # while the house battery drained for an hour.
+                _sd = (_rec.stand_down_snapshot(time.monotonic())
+                       if _rec is not None else None) or {}
+                result[f"charger_{cid}_stop_war_stand_down"] = bool(
+                    _sd.get("standing_down"))
+                result[f"charger_{cid}_stop_war_stand_down_s"] = float(
+                    _sd.get("remaining_s") or 0.0)
+                result[f"charger_{cid}_stop_war_stand_down_w"] = float(
+                    _sd.get("power_w") or 0.0)
                 # Per-charger vehicle SOC (#193) — collected for the global
                 # vehicle_soc/range fallback below (no dedicated per-charger
                 # sensor consumes this, so don't write it into result; #245 review #2).

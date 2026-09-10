@@ -2349,6 +2349,9 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         "charging_strategy",
         "strategy_reason",
         "per_charger_phases",
+        # (#944) the stand-down's countdown moves every cycle of an episode;
+        # the Repair is the record, this is live card context.
+        "per_charger_stop_war",
         "control_entities",
         "sources_available",
     })
@@ -2758,6 +2761,20 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                         "remaining_s": self.coordinator.data.get(
                             f"charger_{cid}_anticycle_hold_s"),
                     }
+            # (#944) Per-charger stop-war stand-down — SEM holding fire while
+            # the box keeps drawing. The EV card reads it so the tile says so
+            # instead of passing for an ordinary charge.
+            _per_charger_stop_war = {}
+            for k, v in self.coordinator.data.items():
+                if k.startswith("charger_") and k.endswith("_stop_war_stand_down"):
+                    cid = k[len("charger_"):-len("_stop_war_stand_down")]
+                    _per_charger_stop_war[cid] = {
+                        "standing_down": bool(v),
+                        "remaining_s": self.coordinator.data.get(
+                            f"charger_{cid}_stop_war_stand_down_s"),
+                        "power_w": self.coordinator.data.get(
+                            f"charger_{cid}_stop_war_stand_down_w"),
+                    }
             # (#804 Phase A) Observed phase model per charger: the
             # measured-W/A phase estimate + the user-named switch
             # capability's validation verdict. Observe-only surface.
@@ -2788,6 +2805,7 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "strategy_reason": self.coordinator.data.get("charging_strategy_reason"),
                 "per_charger_states": _per_charger_states,
                 "per_charger_anticycle": _per_charger_anticycle,
+                "per_charger_stop_war": _per_charger_stop_war,
                 # (#846) fire → check → adjust: the measured watts-per-amp
                 # table, the samples still earning confidence, and every
                 # refusal with its reason — plus the cold-start replay

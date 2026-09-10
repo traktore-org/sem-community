@@ -291,6 +291,16 @@ class ChargerReconciler:
         self._stop_war_draw_seen: bool = False
         self._stop_war_reported: bool = False
         self._stop_war_ceasefires: int = 0
+        # (#944) How long THIS stand-down lasts. The doubling makes it 30,
+        # 60, 120 or 240 min; the warning announced the first figure for all.
+        self._stop_war_backoff_s: float = 0.0
+        # (#944) The stand-down's surfaces — Repair, charger notification,
+        # published state — are up while SEM holds fire AND the box draws.
+        # None at boot: a reconciler rebuilt by an options reload cannot know
+        # whether its predecessor left the Repair up, so its first cycle
+        # without a stand-down clears once.
+        self._stand_down_surfaced: Optional[bool] = None
+        self._stand_down_power_w: float = 0.0
         # (#823) stop→re-enable gap history. A failsafe timeout re-enables on
         # a CONSTANT interval after our DISABLE — a retrying car or a human
         # does not. Two matching gaps name it; the report never changes the
@@ -366,6 +376,25 @@ class ChargerReconciler:
             "last_desired": self._last_desired,
             "last_actions": list(self._last_actions),
             "anticycle": self.anticycle_snapshot(now),
+            "stand_down": self.stand_down_snapshot(now),
+        }
+
+    def stand_down_snapshot(self, now: float) -> dict:
+        """(#944) SEM holding fire while the box draws, for the EV surface.
+
+        The ceasefire (#763) is the right call for the car, and it was
+        invisible: the tile passed for an ordinary charge while 3 kW ran out
+        of the house battery for an hour. Counts only while the car draws AND
+        the window is open, so a reconciler that stopped being called cannot
+        leave a stale "standing down" behind.
+        """
+        active = (bool(self._stand_down_surfaced)
+                  and now < self._stop_war_backoff_until)
+        return {
+            "standing_down": active,
+            "remaining_s": round(max(0.0, self._stop_war_backoff_until - now), 1)
+            if active else 0.0,
+            "power_w": round(self._stand_down_power_w) if active else 0,
         }
 
     # ── #940 contactor anti-cycle ────────────────────────────────────
@@ -486,6 +515,7 @@ class ChargerReconciler:
     def _end_stop_war(self) -> None:
         self._stop_war_rounds = 0
         self._stop_war_backoff_until = 0.0
+        self._stop_war_backoff_s = 0.0
         self._stop_war_draw_seen = False
         self._stop_war_ceasefires = 0
 
@@ -681,8 +711,9 @@ class ChargerReconciler:
                             2 ** (self._stop_war_ceasefires - 1),
                             STOP_WAR_BACKOFF_MAX_FACTOR,
                         )
+                        self._stop_war_backoff_s = STOP_WAR_BACKOFF_S * factor
                         self._stop_war_backoff_until = (
-                            now + STOP_WAR_BACKOFF_S * factor)
+                            now + self._stop_war_backoff_s)
                         return [Action(ActionKind.REPORT_STOP_WAR)]
 
             if desired is DesiredState.OFF:
@@ -923,11 +954,19 @@ class ChargerReconciler:
             except Exception:  # the probe must never break actuation
                 pass
 
-        await self._apply_actions(actions, adapter, decision, power)
+        await self._apply_actions(actions, adapter, decision, power, now=now)
 
-    async def _apply_actions(self, actions, adapter, decision, power) -> None:
+    async def _apply_actions(self, actions, adapter, decision, power,
+                             now: Optional[float] = None) -> None:
         """Execute the reconcile actions. Extracted (#700) so the one-shot
-        warning behaviour is testable against the real action loop."""
+        warning behaviour is testable against the real action loop.
+
+        ``now`` (#944) dates the stand-down's surfaces; it defaults to the
+        cycle ``reconcile_and_apply`` just stamped."""
+        if now is None:
+            # getattr, like the #700 flag below: this loop is driven on bare
+            # instances by the tests it was extracted for.
+            now = getattr(self, "_last_apply_at", 0.0)
         for action in actions:
             if action.kind is ActionKind.NONE:
                 continue
@@ -957,7 +996,8 @@ class ChargerReconciler:
                 # holds for half an hour and re-warning every 10 s cycle
                 # would be its own flood. Re-armed below when any other
                 # action lands (the war ended or the intent moved).
-                if not self._stop_war_reported:
+                onset = not self._stop_war_reported
+                if onset:
                     self._stop_war_reported = True
                     _LOGGER.warning(
                         "reconcile(%s): stop war detected — the charger keeps "
@@ -977,11 +1017,16 @@ class ChargerReconciler:
                         "starts holding the moment the other writer is "
                         "silenced is the proof. — %s",
                         self.charger_id, self._stop_war_rounds,
-                        STOP_WAR_BACKOFF_S / 60.0, decision.reason)
+                        (self._stop_war_backoff_s or STOP_WAR_BACKOFF_S) / 60.0,
+                        decision.reason)
                 else:
                     _LOGGER.debug(
                         "reconcile(%s): stop-war ceasefire holding (%d rounds)",
                         self.charger_id, self._stop_war_rounds)
+                # (#944) …and not only in the log. The warning was the whole
+                # surface, and "SEM has given up" looked exactly like "all is
+                # well" while the car drew from the house battery.
+                await self._surface_stand_down(adapter, power, now, notify=onset)
                 continue
             elif action.kind is ActionKind.REPORT_FAILSAFE_SUSPECTED:
                 # (#823) once, by construction (_failsafe_reported). SEM
@@ -1060,6 +1105,12 @@ class ChargerReconciler:
                 await adapter.command_current(action.amps)
                 _LOGGER.debug("reconcile(%s): WRITE %dA — %s",
                               self.charger_id, action.amps, decision.reason)
+        # (#944) The stand-down's surfaces follow the CONDITION, not the
+        # warning: up while SEM holds fire against a live draw, down on the
+        # first cycle that stops being true — the draw stopped, the war
+        # ended, or the window closed and SEM is stopping again.
+        if not any(a.kind is ActionKind.REPORT_STOP_WAR for a in actions):
+            self._retire_stand_down(adapter)
 
     # ── #627 stop-unenforceable repair plumbing ──────────────────────────
     def _device_and_hass(self, adapter):
@@ -1085,6 +1136,60 @@ class ChargerReconciler:
             return
         from .repair_issues import clear_charger_stop_unenforceable
         clear_charger_stop_unenforceable(hass, self.charger_id)
+
+    # ── #944 stop-war stand-down surfaces ────────────────────────────────
+    async def _surface_stand_down(self, adapter, power, now: float, *,
+                                  notify: bool) -> None:
+        """Put the stand-down where the owner can see it (#944).
+
+        The Repair is raised once when the stand-down meets a live draw and
+        taken down by ``_retire_stand_down``. The charger notification rides
+        the warning's own once-per-onset flag (``notify``), so a car that
+        pauses and resumes inside one ceasefire is not a second push."""
+        power_w = float(getattr(power, "power_w", 0.0) or 0.0)
+        self._stand_down_power_w = power_w
+        dev, hass = self._device_and_hass(adapter)
+        name = str(getattr(dev, "name", None) or self.charger_id)
+        minutes = max(0.0, self._stop_war_backoff_until - now) / 60.0
+        if self._stand_down_surfaced is not True:
+            self._stand_down_surfaced = True
+            if hass is not None:
+                from .repair_issues import raise_charger_stop_war_stand_down
+                raise_charger_stop_war_stand_down(
+                    hass, self.charger_id,
+                    name=name, power_w=power_w, minutes=minutes)
+        if not notify or dev is None:
+            return
+        # An observer rig may share the physical box (#855): its display is
+        # somebody else's, and "SEM stood down" there would be a lie told by
+        # an instance that commands nothing.
+        if getattr(dev, "observer_mode", False) is True:
+            return
+        nm = getattr(getattr(dev, "_coordinator", None),
+                     "_notification_manager", None)
+        send = getattr(nm, "notify_charger_stand_down", None)
+        if send is None:
+            return
+        try:
+            await send(charger_id=self.charger_id, charger_name=name,
+                       power_w=power_w, minutes=minutes)
+        except Exception as e:  # noqa: BLE001 — a notification never costs a cycle
+            _LOGGER.debug("reconcile(%s): stand-down notification failed: %s",
+                          self.charger_id, e)
+
+    def _retire_stand_down(self, adapter) -> None:
+        """Take the stand-down's surfaces down (#944). Once per offset; from
+        ``None`` (boot) it clears once, in case a predecessor rebuilt away by
+        an options reload left the Repair up."""
+        if getattr(self, "_stand_down_surfaced", None) is False:
+            return
+        self._stand_down_surfaced = False
+        self._stand_down_power_w = 0.0
+        dev, hass = self._device_and_hass(adapter)
+        if hass is None:
+            return
+        from .repair_issues import clear_charger_stop_war_stand_down
+        clear_charger_stop_war_stand_down(hass, self.charger_id)
 
 
 # ─────────────────────────────────────────────────────────────────
