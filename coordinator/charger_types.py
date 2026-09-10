@@ -552,6 +552,21 @@ class ChargerDecision:
     ``decide`` reports it. Honours the dataclass contract: 'All fields
     are computed once in decide … no re-derivation downstream.'"""
 
+    safety_stop: bool = False
+    """(#940) This stop is a SAFETY stop and must not wait.
+
+    #940 gave a switch-controlled charger's contactor a minimum ON — once
+    SEM closes the relay it stays closed for a few minutes, so a decision
+    that flaps cannot toggle it every 20 s. A guarantee the house makes to
+    itself must be senior to that comfort: the peak EMERGENCY shed and the
+    VPP export pause set this, and the reconciler opens the contactor on
+    the cycle they ask. Everything else — a mode change, a cloud, a target
+    reached — waits out the floor.
+
+    Deliberately NOT derived from ``bridgeable``: that field answers "is
+    this dip transient", which a max-SOC stop also answers False, and a
+    full car is not an emergency. One flag, one meaning."""
+
 
 def solar_commitment_w(
     decision: ChargerDecision,
