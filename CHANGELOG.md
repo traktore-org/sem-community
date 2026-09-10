@@ -13,6 +13,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.1.0-beta.12] — 10.09.2026
+
+- 🔌 **A switch-controlled charger could have its contactor toggled every
+  20 s** (#940). SEM had a dwell on repeating a stop, but nothing between
+  "charge again" and closing the relay — so whenever the per-charger
+  decision flapped, the box ran 60 s on, 20 s off, for minutes at a time,
+  while the card still read "CHARGING". A charger whose start/stop is a
+  switch, a mode select or a brand service now keeps its relay closed for at
+  least 2 minutes and open for at least 5, so the flapping costs a slower
+  charge instead of contactor wear and an aborted session. A stop that is a
+  demand — the peak-power emergency, a phase switch, the export pause, mode
+  Off, unplugging the car — still opens the relay the moment it is asked.
+  Chargers controlled only by a current number are unaffected: their stop is
+  a 0 A write, not a relay cycle. The hold is visible as a countdown on the
+  charging-state sensor and in the diagnostics download.
+
 # [2.1.0-beta.11] — 09.09.2026
 
 - 🛡️ **A "Solar only" load could run at night on the battery's grid charge**
