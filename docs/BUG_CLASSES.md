@@ -3014,8 +3014,9 @@ again). The warning and the notification are once per CEASEFIRE, keyed on a neve
 old "re-arm on any other action" flag missed a second ceasefire entered straight from a pause and
 double-pushed across a #823 clear. The draw stopping *inside* the window retires after the 2-cycle
 debounce a disconnect gets — a draw flapping at the threshold would otherwise delete and re-create
-the Repair (and the user's "ignore") every other cycle. A status-only onset read at 0 W is re-raised
-once when the watts arrive. Every charger — including the late-discovered legacy `_ev_device`, which
+the Repair (and the user's "ignore") every other cycle. The Repair is updated in place when what it
+says goes stale: a new ceasefire that began without the draw ever stopping (a longer window), or a
+status-only onset read at 0 W once the watts arrive. Every charger — including the late-discovered legacy `_ev_device`, which
 the per-charger loop never linked — gets its `_coordinator` link in the every-cycle both-shapes
 walk (`_push_observer_mode_to_devices`), so the push cannot die on the branch that skipped it
 (class 29). The Repair is non-persistent (the ceasefire lives in memory)

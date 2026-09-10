@@ -285,6 +285,26 @@ class TestOncePerCeasefire:
         await _cycle(rec, box, 310.0, w=_DRAW_W)
         box.notifier.notify_charger_stand_down.assert_awaited_once()
 
+    @pytest.mark.asyncio
+    async def test_a_ceasefire_that_follows_straight_on_updates_the_repair(
+            self, repairs):
+        """The car pauses and resumes inside ceasefire 1 (the Repair is
+        re-raised with the time LEFT), then draws straight through the
+        window's close: ceasefire 2 begins with no stop in between. Its
+        doubled window must reach the Repair, not only the warning."""
+        rec, box = ChargerReconciler(charger_id=_CID, heartbeat_s=5.0), _Box()
+        await _to_ceasefire(rec, box)
+        await _cycle(rec, box, 410.0, w=0.0)
+        await _cycle(rec, box, 420.0, w=0.0)
+        await _cycle(rec, box, 500.0, w=_DRAW_W)
+        end = 270.0 + STOP_WAR_BACKOFF_S
+        for t in (end - 10.0, end, end + 10.0):
+            await _cycle(rec, box, t, w=_DRAW_W)
+        assert box.adapter.command_disable.await_count == 3, "no stop between"
+        assert repairs["raise"][-1][1]["minutes"] == pytest.approx(
+            2 * STOP_WAR_BACKOFF_S / 60.0)
+        assert box.notifier.notify_charger_stand_down.await_count == 2
+
 
 @pytest.mark.unit
 class TestTheSurfaceHoldsSteady:

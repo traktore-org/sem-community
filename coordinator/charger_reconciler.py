@@ -308,6 +308,7 @@ class ChargerReconciler:
         self._stand_down_surfaced: Optional[bool] = None
         self._stand_down_power_w: float = 0.0
         self._stand_down_raised_w: float = 0.0   # the figure the Repair shows
+        self._stand_down_raised_serial: int = 0  # …and the ceasefire it describes
         self._stand_down_quiet: int = 0          # non-drawing cycles in the window
         # (#823) stop→re-enable gap history. A failsafe timeout re-enables on
         # a CONSTANT interval after our DISABLE — a retrying car or a human
@@ -1163,21 +1164,26 @@ class ChargerReconciler:
         """Put the stand-down where the owner can see it (#944).
 
         The Repair is raised once when the stand-down meets a live draw and
-        taken down by ``_retire_stand_down``. The charger notification rides
-        the warning's own once-per-onset flag (``notify``), so a car that
-        pauses and resumes inside one ceasefire is not a second push."""
+        taken down by ``_retire_stand_down``. The charger notification is once
+        per CEASEFIRE (``notify``, keyed on the ceasefire serial), so a car
+        that pauses and resumes inside one ceasefire is not a second push."""
         power_w = float(getattr(power, "power_w", 0.0) or 0.0)
         self._stand_down_power_w = power_w
         dev, hass = self._device_and_hass(adapter)
         name = str(getattr(dev, "name", None) or self.charger_id)
         minutes = max(0.0, self._stop_war_backoff_until - now) / 60.0
-        # Raised on the edge — and once more if the onset read no watts: a
-        # cloud-polled box says "charging" a cycle before its power does, and
-        # the same issue id updated in place must not say 0 W all episode.
+        # Raised on the edge, and updated in place (same issue id, so an
+        # "ignore" survives) when what it says went stale: a new ceasefire
+        # began without the draw ever stopping (a longer window), or the
+        # onset read no watts (a cloud-polled box says "charging" a cycle
+        # before its power does).
+        serial = self._stop_war_ceasefire_serial
         if (self._stand_down_surfaced is not True
+                or self._stand_down_raised_serial != serial
                 or self._stand_down_raised_w <= 0.0 < power_w):
             self._stand_down_surfaced = True
             self._stand_down_raised_w = power_w
+            self._stand_down_raised_serial = serial
             if hass is not None:
                 from .repair_issues import raise_charger_stop_war_stand_down
                 raise_charger_stop_war_stand_down(
