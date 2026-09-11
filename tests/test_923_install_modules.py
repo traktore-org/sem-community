@@ -6,15 +6,29 @@ has it. The verdict comes from configuration, never live state, and "the
 Energy Dashboard could not be read" is UNKNOWN — never ABSENT (#925)."""
 from __future__ import annotations
 
+import ast
+import re
+from collections import Counter
+from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 
 from custom_components.solar_energy_management.coordinator.install_modules import (
+    CORE_BY_DECISION,
+    ENTITY_MODULES,
     Module,
     Presence,
+    absent_entity_ids,
+    all_unknown,
+    entity_kept,
     has_managed_charger,
     install_modules,
+    keeps,
+    kept_descriptions,
+    presence_of,
+    presence_summary,
 )
 
 ED_EMPTY = SimpleNamespace(has_battery=False, has_ev=False)
@@ -132,3 +146,135 @@ class TestManagedCharger:
     def test_dashboard_ev_alone_is_data_not_a_managed_charger(self):
         assert install_modules({}, ED_EV, True)[Module.EV] is Presence.PRESENT
         assert has_managed_charger({}) is False
+
+
+_ORACLE_SRC = Path(__file__).resolve().parents[1] / "coordinator" / "install_modules.py"
+LOOKS_LIKE_A_MODULE = re.compile(
+    r"battery|(^|_)ev(_|$)|heat_pump|hot_water|legionella|charg|session|vehicle")
+
+
+def _static_lists():
+    from custom_components.solar_energy_management.binary_sensor import BINARY_SENSOR_TYPES
+    from custom_components.solar_energy_management.button import BUTTONS
+    from custom_components.solar_energy_management.number import NUMBER_TYPES
+    from custom_components.solar_energy_management.sensor import SENSOR_TYPES
+    from custom_components.solar_energy_management.switch import SWITCH_TYPES
+    return {"sensor": SENSOR_TYPES, "number": NUMBER_TYPES, "switch": SWITCH_TYPES,
+            "binary_sensor": BINARY_SENSOR_TYPES, "button": BUTTONS}
+
+
+def _static_keys():
+    return {(p, d.key) for p, ds in _static_lists().items() for d in ds}
+
+
+class TestTheTable:
+
+    def test_every_row_names_an_entity_a_platform_creates(self):
+        stale = sorted(set(ENTITY_MODULES) - _static_keys())
+        assert not stale, f"rows for keys no platform creates: {stale}"
+
+    def test_core_by_decision_rows_are_real_and_not_modules(self):
+        assert set(CORE_BY_DECISION) <= _static_keys()
+        assert not set(CORE_BY_DECISION) & set(ENTITY_MODULES)
+
+    def test_every_module_look_alike_has_chosen(self):
+        undecided = sorted(
+            pk for pk in _static_keys()
+            if LOOKS_LIKE_A_MODULE.search(pk[1])
+            and pk not in ENTITY_MODULES and pk not in CORE_BY_DECISION
+        )
+        assert not undecided, (
+            "an entity named like a module must be put in ENTITY_MODULES or, "
+            f"with its reason, in CORE_BY_DECISION: {undecided}")
+
+    def test_charging_state_is_core(self):
+        # It carries the Home tab's today_plan and is the Config tab's
+        # "set up" marker on EVERY install.
+        assert ("sensor", "charging_state") not in ENTITY_MODULES
+
+    @pytest.mark.parametrize("pk", [
+        ("switch", "battery_may_assist_ev"),
+        ("number", "battery_assist_max_power"),
+        ("number", "battery_assist_min_surplus"),
+        ("sensor", "flow_battery_to_ev_power"),
+        ("sensor", "flow_battery_to_ev_energy"),
+        ("sensor", "lifetime_ev_battery_share"),
+    ])
+    def test_battery_to_ev_needs_both(self, pk):
+        assert ENTITY_MODULES[pk] == {Module.BATTERY, Module.EV}
+
+    def test_the_counts_the_spec_states(self):
+        by_module = Counter(frozenset(m) for m in ENTITY_MODULES.values())
+        assert by_module[frozenset({Module.BATTERY})] == 59
+        assert by_module[frozenset({Module.BATTERY, Module.EV})] == 6
+        assert by_module[frozenset({Module.EV})] == 33
+        assert by_module[frozenset({Module.HEAT_PUMP})] == 11
+        assert by_module[frozenset({Module.HOT_WATER})] == 4
+        assert len(ENTITY_MODULES) == 113
+
+    def test_the_oracle_stays_importable_without_home_assistant(self):
+        # validate-sem.sh loads this file by path on sem-dev, where HA is
+        # not installed.
+        tree = ast.parse(_ORACLE_SRC.read_text(encoding="utf-8"))
+        roots = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                roots.update(a.name.split(".")[0] for a in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                roots.add((node.module or "").split(".")[0])
+        assert roots <= {"__future__", "enum", "typing"}, roots
+
+
+class TestKeepRules:
+    ALL_ABSENT = {m: Presence.ABSENT for m in Module}
+
+    def test_unknown_keeps(self):
+        assert keeps(all_unknown(), [Module.BATTERY])
+
+    def test_absent_drops(self):
+        assert not keeps({Module.BATTERY: Presence.ABSENT}, [Module.BATTERY])
+
+    def test_core_is_always_kept(self):
+        assert entity_kept("sensor", "solar_power", self.ALL_ABSENT)
+        assert entity_kept("sensor", "charging_state", self.ALL_ABSENT)
+
+    def test_cross_module_drops_when_either_is_absent(self):
+        p = {Module.BATTERY: Presence.PRESENT, Module.EV: Presence.ABSENT}
+        assert not entity_kept("switch", "battery_may_assist_ev", p)
+        assert entity_kept("sensor", "battery_soc", p)
+
+    def test_kept_descriptions_filters_by_key(self):
+        descs = [SimpleNamespace(key="battery_soc"), SimpleNamespace(key="solar_power")]
+        kept = kept_descriptions("sensor", descs, {Module.BATTERY: Presence.ABSENT})
+        assert [d.key for d in kept] == ["solar_power"]
+
+    def test_absent_entity_ids_are_the_forced_ids(self):
+        gone = absent_entity_ids({**all_unknown(), Module.BATTERY: Presence.ABSENT})
+        assert "sensor.sem_battery_soc" in gone
+        assert "switch.sem_battery_may_assist_ev" in gone
+        assert "number.sem_battery_capacity" in gone
+        assert "button.sem_backfill_battery_nights" in gone
+        assert "sensor.sem_ev_power" not in gone
+        assert "sensor.sem_solar_power" not in gone
+
+    def test_nothing_is_absent_while_unknown(self):
+        assert absent_entity_ids(all_unknown()) == frozenset()
+
+
+class TestPresenceOf:
+
+    def test_a_test_double_builds_everything(self):
+        assert presence_of(MagicMock()) == all_unknown()
+
+    def test_no_coordinator_builds_everything(self):
+        assert presence_of(None) == all_unknown()
+
+    def test_the_setup_verdict_is_returned_and_completed(self):
+        p = presence_of(SimpleNamespace(setup_presence={Module.BATTERY: Presence.ABSENT}))
+        assert p[Module.BATTERY] is Presence.ABSENT
+        assert p[Module.EV] is Presence.UNKNOWN
+
+    def test_summary(self):
+        assert presence_summary({Module.BATTERY: Presence.ABSENT}) == {
+            "battery": "absent", "ev": "unknown", "heat_pump": "unknown",
+            "hot_water": "unknown"}
