@@ -14,6 +14,9 @@ invitation to add what is missing — never a pointer into a void.
 from __future__ import annotations
 
 from custom_components.solar_energy_management import build_welcome_message
+from custom_components.solar_energy_management.coordinator.install_modules import (
+    Module, Presence,
+)
 
 
 class TestTheChecklistMatchesReality:
@@ -41,12 +44,30 @@ class TestTheChecklistMatchesReality:
         assert "Battery tab" not in msg
 
     def test_a_battery_install_gets_its_reserve_line(self):
-        msg = build_welcome_message({"battery_capacity_kwh": 10})
+        msg = build_welcome_message({"battery_soc_sensor": "sensor.soc"})
         assert "Battery tab" in msg
         assert "reserve" in msg.lower()
 
+    def test_capacity_alone_does_not_claim_a_battery(self):
+        # (#923) The Settings step saves battery_capacity_kwh with a default
+        # for every install — it is not evidence, and a Battery tab it points
+        # to would not exist on a battery-less install.
+        assert "Battery tab" not in build_welcome_message({"battery_capacity_kwh": 10})
+
+    def test_the_setup_verdict_wins(self):
+        # A battery declared only in HA's Energy Dashboard: the config has no
+        # battery key, the coordinator's verdict says PRESENT.
+        verdict = {m: Presence.ABSENT for m in Module} | {Module.BATTERY: Presence.PRESENT}
+        assert "Battery tab" in build_welcome_message({}, verdict)
+
+    def test_an_unknown_battery_is_invited_not_directed(self):
+        verdict = {m: Presence.UNKNOWN for m in Module}
+        msg = build_welcome_message({}, verdict)
+        assert "Battery tab" not in msg
+        assert "Add your home battery" in msg
+
     def test_the_dashboard_link_is_always_there(self):
-        for cfg in ({}, {"battery_capacity_kwh": 10}):
+        for cfg in ({}, {"battery_soc_sensor": "sensor.soc"}):
             assert "/sem-dashboard/home" in build_welcome_message(cfg)
 
     def test_it_says_what_sem_will_control_before_it_controls_it(self):

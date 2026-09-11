@@ -287,6 +287,10 @@ class TestStructuralKeysVisibility:
             "battery_strategy_entities",
             "battery_strategy_control_entity",
             "battery_setpoint_bidirectional",
+            # (#923) module wiring the install-modules oracle reads — adding
+            # hardware through set_option must reload to create its entities
+            "ev_charging_power_sensor", "ev_power_sensor", "heat_pumps",
+            "heat_pump_sg_ready_service", "heat_pump_sg_ready_state_entity",
         }
         assert _SET_OPTION_STRUCTURAL_KEYS == expected
 

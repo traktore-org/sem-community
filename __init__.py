@@ -291,6 +291,12 @@ _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
     # #523 AC-coupled bidirectional setpoint (charge = negative on the
     # force-discharge entity) — read at adapter construction.
     "battery_setpoint_bidirectional",
+    # (#923) Module wiring the install-modules oracle reads. Setting one
+    # through set_option must reload, or the module's entities are not
+    # created until the next restart. tests/test_923_structural_keys.py
+    # keeps every MODULE_EVIDENCE_KEYS entry in this set.
+    "ev_charging_power_sensor", "ev_power_sensor", "heat_pumps",
+    "heat_pump_sg_ready_service", "heat_pump_sg_ready_state_entity",
 })
 
 
@@ -358,7 +364,7 @@ def _warn_missing_charger_entities(hass, charger_name, charger_id, to_check):
     return missing
 
 
-def build_welcome_message(config: dict) -> str:
+def build_welcome_message(config: dict, presence: dict | None = None) -> str:
     """The first-run checklist, describing THIS install (#805 fix 2).
 
     The old text told everyone to "pick an EV charge mode on the EV tab",
@@ -372,12 +378,19 @@ def build_welcome_message(config: dict) -> str:
     wording promised "sensible defaults" while SEM was about to manage
     auto-discovered devices; since #805 those are monitor-only, and saying
     so is how the user can consent to it.
+
+    (#923) Both answers come from the install-modules oracle: the EV line
+    from ``has_managed_charger`` (the #595 tab rule), the battery line from
+    the setup verdict — PRESENT only, because an UNKNOWN battery must be
+    invited, not sent to a tab.
     """
-    has_ev = bool(config.get("ev_chargers")
-                  or config.get("ev_charging_power_sensor"))
-    has_battery = bool(config.get("battery_capacity_kwh")
-                       or config.get("battery_soc_sensor")
-                       or config.get("battery_power_sensor"))
+    from .coordinator.install_modules import (
+        Module, Presence, has_managed_charger, module_verdict,
+    )
+    if presence is None:
+        presence = module_verdict(config, None, False)
+    has_ev = has_managed_charger(config)
+    has_battery = presence.get(Module.BATTERY) is Presence.PRESENT
 
     lines = ["1. Confirm solar is reporting on the Energy tab"]
     if has_ev:
@@ -2754,7 +2767,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 {
                     "notification_id": "sem_first_install_welcome",
                     "title": "Solar Energy Management installed",
-                    "message": build_welcome_message(full_config),
+                    "message": build_welcome_message(full_config, coordinator.setup_presence),
                 },
                 blocking=False,
             )
