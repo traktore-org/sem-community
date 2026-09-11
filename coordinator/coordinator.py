@@ -49,7 +49,7 @@ from ..const import (
 )
 from ..utils.time_manager import TimeManager
 from ..ha_energy_reader import read_energy_dashboard_config_outcome, EnergyDashboardConfig
-from .install_modules import Module, Presence, module_verdict
+from .install_modules import Module, Presence, module_reload_due, module_verdict
 
 from .types import (
     SEMData, PowerReadings, PowerFlows, SystemStatus, LoadManagementData,
@@ -1791,6 +1791,26 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         """(#923) What this install has right now — see install_modules.py."""
         return module_verdict(self.config, self._ed_raw_config, self._ed_answered)
 
+    def _check_module_growth(self) -> None:
+        """(#923) Hardware SEM only DISCOVERS — a battery added to HA's Energy
+        Dashboard — changes no SEM option, so no options reload creates its
+        entities. When a module the platforms were built without is PRESENT
+        now, reload once (see install_modules.module_reload_due)."""
+        at_setup = self.setup_presence
+        if not isinstance(at_setup, dict) or self.config_entry is None:
+            return  # still setting up: the platforms read the fresh verdict
+        key = f"{DOMAIN}_module_reload_at"
+        now_ts = dt_util.utcnow().timestamp()
+        grown = module_reload_due(
+            at_setup, self.install_presence(), now_ts, self.hass.data.get(key))
+        if not grown:
+            return
+        self.hass.data[key] = now_ts
+        _LOGGER.info(
+            "#923 — %s appeared since setup; reloading once to create its entities",
+            ", ".join(m.value for m in grown))
+        self.hass.config_entries.async_schedule_reload(self.config_entry.entry_id)
+
     async def async_initialize_energy_dashboard(self, quiet: bool = False) -> bool:
         """Initialize sensors from HA Energy Dashboard.
 
@@ -1945,6 +1965,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             and self._energy_dashboard_config.power_resolution_incomplete()
         )
 
+        self._check_module_growth()
         return self._energy_dashboard_config is not None
 
     async def _retry_energy_dashboard_resolution(self) -> None:

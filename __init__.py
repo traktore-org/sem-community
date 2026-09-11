@@ -2029,6 +2029,44 @@ def _async_rename_actuation_switch(registry) -> None:
     registry.async_update_entity(old, **changes)
 
 
+# (#923) HA's EnergyManager.async_listen_updates has no unsubscribe, so SEM
+# registers ONE listener per hass and looks the live coordinators up when it
+# fires — binding it to a coordinator would leak a stale listener per reload.
+_ENERGY_PREFS_LISTENER = f"{DOMAIN}_energy_prefs_listener"
+
+
+async def _async_listen_energy_prefs(hass: HomeAssistant) -> None:
+    """Re-read the Energy Dashboard when the user edits it, so a battery or
+    EV consumer added there reaches SEM without a restart (#923)."""
+    if hass.data.get(_ENERGY_PREFS_LISTENER):
+        return
+    if "energy" not in hass.config.components:
+        return  # nobody can edit the Energy Dashboard without it; re-read on restart
+    try:
+        from homeassistant.components.energy.data import async_get_manager
+        manager = await async_get_manager(hass)
+    except Exception as err:  # noqa: BLE001 — no energy manager: re-read on restart
+        _LOGGER.debug("Energy Dashboard listener not installed: %s", err)
+        return
+
+    async def _on_energy_prefs_updated() -> None:
+        from homeassistant.config_entries import ConfigEntryState
+        for sem_entry in hass.config_entries.async_entries(DOMAIN):
+            if sem_entry.state is not ConfigEntryState.LOADED:
+                continue
+            coordinator = getattr(sem_entry, "runtime_data", None)
+            if coordinator is None:
+                continue
+            try:
+                await coordinator.async_initialize_energy_dashboard(quiet=True)
+            except Exception as err:  # noqa: BLE001 — never raise into HA's energy save
+                _LOGGER.debug("Energy Dashboard re-read after an edit failed: %s", err)
+
+    manager.async_listen_updates(_on_energy_prefs_updated)
+    hass.data[_ENERGY_PREFS_LISTENER] = True
+
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     """Set up Solar Energy Management from a config entry.
 
@@ -2710,6 +2748,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     try:
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
         _LOGGER.info("Platforms setup completed: %s", PLATFORMS)
+        await _async_listen_energy_prefs(hass)
     except Exception as err:
         _LOGGER.error("Failed to setup platforms: %s", err, exc_info=True)
         # Cleanup coordinator data

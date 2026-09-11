@@ -347,3 +347,40 @@ def presence_from_summary(summary: Mapping[str, Any]) -> dict[Module, Presence]:
         except ValueError:
             continue
     return presence
+
+
+# At most one module-driven reload per this many seconds, across reloads —
+# a flickering detection must never become a reload loop.
+MODULE_RELOAD_MIN_INTERVAL_S = 600.0
+
+
+def modules_grown(
+    at_setup: Mapping[Module, Presence], now: Mapping[Module, Presence],
+) -> tuple[Module, ...]:
+    """Modules that were ABSENT when the platforms were built and are PRESENT
+    now — the only transition that needs new entities. ABSENT → UNKNOWN is a
+    failed re-read, not hardware. PRESENT → ABSENT waits for the next
+    restart or options change: removing a user's entities on a live re-read
+    is exactly the false ABSENT this oracle exists to prevent."""
+    return tuple(
+        m for m in Module
+        if at_setup.get(m) is Presence.ABSENT and now.get(m) is Presence.PRESENT
+    )
+
+
+def module_reload_due(
+    at_setup: Mapping[Module, Presence],
+    now: Mapping[Module, Presence],
+    now_ts: float,
+    last_reload_ts: float | None,
+) -> tuple[Module, ...]:
+    """The grown modules, if a reload may run now. Once per transition holds
+    by construction — after the reload the new setup verdict is PRESENT. A
+    growth refused by the interval is picked up by the next Energy Dashboard
+    re-read, or at the next restart."""
+    grown = modules_grown(at_setup, now)
+    if not grown:
+        return ()
+    if last_reload_ts is not None and now_ts - last_reload_ts < MODULE_RELOAD_MIN_INTERVAL_S:
+        return ()
+    return grown
