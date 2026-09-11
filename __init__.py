@@ -301,6 +301,7 @@ _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
     "battery_discharge_energy_sensor", "battery_energy_discharged_sensor",
     "battery_operating_mode_entity", "battery_soc_entity",
     "battery_target_soc_entity", "battery_temperature_sensor",
+    "battery_charge_power_limit_entity", "ev_start_service", "ev_stop_service",
     "ev_charge_mode_entity", "ev_charger_service", "ev_charging_sensor",
     "ev_connected_sensor", "ev_current_control_entity", "ev_current_sensor",
     "ev_daily_energy_sensor", "ev_departure_time_entity", "ev_energy_sensor",

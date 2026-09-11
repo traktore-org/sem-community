@@ -355,8 +355,8 @@ class TestWiringIsComplete:
 
     _PKG = Path(__file__).resolve().parents[1]
     _WIRING_SHAPE = re.compile(
-        r'\.get\(\s*"((?:battery|ev|heat_pump|hot_water)_[a-z0-9_]*'
-        r'(?:_sensor|_sensors|_entity|_entities|_service|_platform)|ev_chargers|heat_pumps)"')
+        r'\.get\(\s*"((?:battery_|ev_|heat_pump_|hot_water_)[a-z0-9_]*?'
+        r'(?:sensor|sensors|entity|entities|service|platform)|ev_chargers|heat_pumps)"')
 
     def _reads(self):
         found = {}

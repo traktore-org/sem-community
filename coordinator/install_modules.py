@@ -57,6 +57,7 @@ BATTERY_WIRING_KEYS: tuple[str, ...] = (
     # select, and watched every cycle by the #845 BatteryModeWatch — a battery
     # SEM can watch but not yet drive is still a battery.
     "battery_operating_mode_entity",
+    "battery_charge_power_limit_entity",
     "battery_discharge_control_entity",
     "battery_discharge_control_entities",
     "battery_force_discharge_control_entity",
@@ -81,6 +82,8 @@ EV_WIRING_KEYS: tuple[str, ...] = (
     "ev_daily_energy_sensor",
     "ev_session_energy_sensor",
     "ev_charger_service",
+    "ev_start_service",
+    "ev_stop_service",
     "ev_current_control_entity",
     "ev_start_stop_entity",
     "ev_charge_mode_entity",
