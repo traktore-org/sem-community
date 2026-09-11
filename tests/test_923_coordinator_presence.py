@@ -87,3 +87,29 @@ class TestTheInitialiseRunFeedsTheVerdict:
 
         assert coord._ed_answered is True
         assert coord.install_presence()[Module.BATTERY] is Presence.ABSENT
+
+
+class TestNoBatteryModuleNoBatteryControl:
+    """(#923, found live on .175) With the battery ABSENT the coordinator
+    must not pick an adapter or decide for a battery it cannot see."""
+
+    async def test_absent_battery_skips_the_pipeline(self):
+        from unittest.mock import MagicMock
+        stub = MagicMock()
+        stub.setup_presence = {m: Presence.ABSENT for m in Module}
+        await SEMCoordinator._run_battery_pipeline(stub, MagicMock(), MagicMock(), MagicMock())
+        assert stub._last_battery_decisions == {}
+        # nothing past the gate ran
+        stub.time_manager.is_night_mode.assert_not_called()
+        stub._per_battery_config.assert_not_called()
+
+    async def test_unknown_battery_still_runs_it(self):
+        from unittest.mock import MagicMock
+        stub = MagicMock()
+        stub.setup_presence = {m: Presence.UNKNOWN for m in Module}
+        try:
+            await SEMCoordinator._run_battery_pipeline(stub, MagicMock(), MagicMock(), MagicMock())
+        except Exception:  # noqa: BLE001 — the double cannot carry a real cycle
+            pass
+        # it went past the gate into the real pipeline
+        assert stub.method_calls, "UNKNOWN must not be gated"

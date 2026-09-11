@@ -49,7 +49,7 @@ from ..const import (
 )
 from ..utils.time_manager import TimeManager
 from ..ha_energy_reader import read_energy_dashboard_config_outcome, EnergyDashboardConfig
-from .install_modules import Module, Presence, module_reload_due, module_verdict
+from .install_modules import Module, Presence, module_reload_due, module_verdict, presence_of
 
 from .types import (
     SEMData, PowerReadings, PowerFlows, SystemStatus, LoadManagementData,
@@ -7074,6 +7074,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         the only difference is the adapter cache is now a dict-of-one
         keyed by ``"primary"``.
         """
+        # (#923) No battery module, no battery control. With the battery
+        # ABSENT SEM reads no SOC and no power, and a brand adapter
+        # auto-detected from a loaded inverter integration would act blind —
+        # "limit discharge 0 W, SoC unknown", seen live on .175 with the
+        # battery removed. PRESENT and UNKNOWN run exactly as before.
+        if presence_of(self).get(Module.BATTERY) is Presence.ABSENT:
+            self._last_battery_decisions = {}
+            return
         from .actuate_battery import actuate_battery
         from .battery_adapters import adapter_for, _integration_loaded
         from .charger_types import (

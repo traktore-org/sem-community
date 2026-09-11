@@ -33,6 +33,7 @@ from homeassistant.util import dt as dt_util
 import voluptuous as vol
 from homeassistant.helpers import config_validation as cv
 
+from .coordinator.install_modules import MODULE_EVIDENCE_KEYS
 from .const import (
     DOMAIN,
     MIN_PEAK_LIMIT_KW,
@@ -291,23 +292,12 @@ _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
     # #523 AC-coupled bidirectional setpoint (charge = negative on the
     # force-discharge entity) — read at adapter construction.
     "battery_setpoint_bidirectional",
-    # (#923) Module wiring the install-modules oracle reads. Setting one
-    # through set_option must reload, or the module's entities are not
-    # created until the next restart. tests/test_923_structural_keys.py
-    # keeps every MODULE_EVIDENCE_KEYS entry in this set.
-    "ev_charging_power_sensor", "ev_power_sensor", "heat_pumps",
-    "heat_pump_sg_ready_service", "heat_pump_sg_ready_state_entity",
-    "battery_charge_energy_sensor", "battery_charge_platform",
-    "battery_discharge_energy_sensor", "battery_energy_discharged_sensor",
-    "battery_operating_mode_entity", "battery_soc_entity",
-    "battery_target_soc_entity", "battery_temperature_sensor",
-    "battery_charge_power_limit_entity", "ev_start_service", "ev_stop_service",
-    "ev_charge_mode_entity", "ev_charger_service", "ev_charging_sensor",
-    "ev_connected_sensor", "ev_current_control_entity", "ev_current_sensor",
-    "ev_daily_energy_sensor", "ev_departure_time_entity", "ev_energy_sensor",
-    "ev_phase_switch_entity", "ev_plug_sensor", "ev_session_energy_sensor",
-    "ev_start_stop_entity", "ev_total_energy_sensor",
-})
+    # (#923) ...plus every module wiring key the install-modules oracle
+    # reads (MODULE_EVIDENCE_KEYS, joined below): setting one through
+    # set_option must reload, or the module's entities wait for the next
+    # restart. Joined from the oracle, not listed here, so the two cannot
+    # drift — and so this file never names a key it must not write (#845).
+}) | MODULE_EVIDENCE_KEYS
 
 
 def _require_load_manager(coordinator):
