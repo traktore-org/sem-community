@@ -68,6 +68,9 @@ _BASELINE = {
     # used by its tests and by the phase-4 planner feed; remove them when that
     # lands.
     "forecast_for", "actual_for",
+    # (#923) read by ~/bin/validate-sem.sh, outside the package — this
+    # scan can never see that caller.
+    "presence_from_summary",
     # generic-accessor (coordinator/storage.py)
     "clear_daily_accumulators", "clear_monthly_accumulators", "get_accumulator",
     "get_baseline", "get_daily_accumulator", "get_flow_accumulator",
