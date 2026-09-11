@@ -60,7 +60,12 @@ momentarily unavailable says nothing about whether the hardware exists — readi
 | Heat pump | `heat_pumps` non-empty, or a heat-pump wiring key set (relay 1/2, climate entity, SG-Ready service or state entity, power or energy sensor) | none | — |
 | Hot water | `hot_water_entity` is set — the one key that creates a `HotWaterController` today (`__init__.py`, #454) | not set | — |
 
-Only **wiring** counts. `battery_capacity_kwh` is deliberately not evidence: the options
+Only **wiring** counts, and ALL of it: every `battery_*`/`ev_*`/`heat_pump*`/`hot_water_*`
+sensor, entity, service or platform key the package reads is evidence, pinned by a scan of the
+code (`TestWiringIsComplete`). The ruflo challenge refuted the first, hand-picked list: a battery
+SEM only watches (`battery_operating_mode_entity`, seeded by the config flow) read ABSENT and
+would have lost its 51 entities. A key holding its install default (`battery_charge_platform:
+auto`) is not evidence. `battery_capacity_kwh` is deliberately not evidence either: the options
 flow's Settings step saves it with a default for every install that passes through it
 (`config_flow.py`, step `settings`), so it describes a battery without proving one. The same
 goes for heat-pump tunables (boost offset, rated power, priority).
@@ -169,6 +174,7 @@ entity is removed (the same leftover Spook reported on #908). Offering to clear 
 | Energy Dashboard not loaded at boot | battery = UNKNOWN → everything kept; re-evaluated later |
 | detection flickers | one reload per transition, rate-limited |
 | a card references a removed entity | generator prunes in lockstep; cards tolerate absence |
+| battery ABSENT, but a brand adapter is auto-detected from a loaded inverter integration | the battery control pipeline stands down (seen live on .175: "limit discharge 0 W, SoC unknown") |
 
 ## 9. Testing
 
