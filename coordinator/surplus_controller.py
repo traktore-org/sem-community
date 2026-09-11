@@ -1385,6 +1385,12 @@ class SurplusController:
                 if callable(_sync):
                     _sync()
             except Exception:  # noqa: BLE001 — one device never stalls the walk
+                # (#914) the sync also carries the restart adoption of a
+                # setpoint tank / SG-Ready pump — a failure leaves a trace.
+                _LOGGER.debug(
+                    "Belief sync skipped for %s",
+                    getattr(_dev, "device_id", "?"), exc_info=True,
+                )
                 continue
         peak_freeze = peak_state in (
             LoadManagementState.WARNING,

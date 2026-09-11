@@ -1104,6 +1104,36 @@ class ControllableDevice(ABC):
         self._sem_commanded = False
         return owned
 
+    # (#914) How long a restart adoption may wait for an entity whose
+    # integration is still loading. HA's own startup settles well inside it.
+    BOOT_ADOPTION_WINDOW_S: float = 600.0
+
+    def _boot_adoption_window_open(self) -> bool:
+        """(#914) Is this lifetime's one restart adoption still undecided?
+
+        Opens on the first call — the registration — and stays open while
+        the entity cannot be read yet, for at most ``BOOT_ADOPTION_WINDOW_S``.
+        An entity dark for longer is no evidence of anything SEM left behind:
+        the window closes unread, and SEM never claims what it sees start
+        later (a relay the user's own automation put in BOOST, a setpoint
+        set by hand).
+        """
+        if not getattr(self, "_boot_adoption_pending", False):
+            return False
+        now = time.monotonic()
+        until = getattr(self, "_boot_adoption_until", None)
+        if until is None:
+            self._boot_adoption_until = until = now + self.BOOT_ADOPTION_WINDOW_S
+        if now > until:
+            self._boot_adoption_pending = False
+            _LOGGER.info(
+                "%s: restart adoption closed unread — nothing readable within "
+                "%.0f min of registration (#914)",
+                self.name, self.BOOT_ADOPTION_WINDOW_S / 60,
+            )
+            return False
+        return True
+
     def record_deactivated(self) -> None:
         """Record deactivation timestamp for anti-cycling."""
         self._last_deactivated = datetime.now()

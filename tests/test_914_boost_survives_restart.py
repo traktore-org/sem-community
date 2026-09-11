@@ -193,6 +193,46 @@ class TestAnEntityThatLoadsAfterSEM:
         assert hw._boot_adoption_pending is False
 
 
+class TestTheWindowClosesUnread:
+    """An entity still dark ten minutes after registration is not evidence of
+    anything SEM left behind — the window closes, and what starts later is
+    never claimed (review finding: an open-ended window would claim the
+    first readable value, whoever set it)."""
+
+    def test_a_tank_dark_past_the_window_is_never_claimed(self):
+        states = {"water_heater.dhw": _state("unavailable")}
+        hw = HotWaterController(_hass(states), entity_id="water_heater.dhw")
+        assert hw.adopt_if_running() is False          # opens the window
+        hw._boot_adoption_until = -1.0                 # …and it has expired
+        states["water_heater.dhw"] = _state("heat_pump", temperature=50.0)
+        assert hw.sync_belief_to_observation() is False
+        assert hw._boot_adoption_pending is False
+        assert not hw.is_active
+
+    def test_relays_dark_past_the_window_are_never_claimed(self):
+        states = {"switch.sg1": _state("unavailable"),
+                  "switch.sg2": _state("unavailable")}
+        hp = _hp(states)
+        assert hp.adopt_if_running() is False
+        hp._boot_adoption_until = -1.0
+        states["switch.sg1"] = _state("off")
+        states["switch.sg2"] = _state("on")                # a user's BOOST
+        assert hp.sync_belief_to_observation() is False
+        assert not hp.is_active
+
+
+class TestTheClaimIsByValue:
+
+    def test_a_hand_set_setpoint_equal_to_sems_boost_cannot_be_told_apart(self):
+        """Documented, not an accident: 50 °C set by hand reads exactly like
+        SEM's 50 °C boost and is claimed — the contract #766 already holds
+        for a switch turned on in Solar mode. Persisting the commanded
+        setpoint would make the claim exact (class 85, left for Guido)."""
+        hw = _tank("water_heater.dhw", _state("heat_pump", temperature=50.0))
+        assert hw.adopt_if_running() is True
+        assert hw._sem_commanded is False    # adopted — teardown never touches it (#908)
+
+
 def _hp(states: dict, **kw) -> HeatPumpController:
     return HeatPumpController(_hass(states), relay1_entity_id="switch.sg1",
                               relay2_entity_id="switch.sg2", **kw)

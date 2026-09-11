@@ -160,9 +160,11 @@ class HotWaterController(SwitchDevice):
 
         True only while the entity still holds one of SEM's OWN boost
         setpoints: the solar target, or the legionella target mid-cycle. A
-        setpoint the user chose — hotter than SEM's target, or anything else
-        — is theirs: SEM releases what it commanded and nothing more
-        (#847, #908). A climate tank must also be in the ``heat`` mode SEM
+        setpoint SEM never writes — hotter than its target, or anything else
+        — is the user's and is never claimed: SEM releases what it commanded
+        and nothing more (#847, #908). One that EQUALS SEM's boost cannot be
+        told apart from it and is claimed, as #766 claims a switch turned on
+        in Solar mode. A climate tank must also be in the ``heat`` mode SEM
         writes, the line ``ClimateDevice.adopt_if_running`` holds.
         """
         if self._entity_domain not in _SETPOINT_DOMAINS:
@@ -204,7 +206,7 @@ class HotWaterController(SwitchDevice):
         the per-cycle belief sync retries it — and after that SEM never
         claims a setpoint the user sets later.
         """
-        if not self._boot_adoption_pending:
+        if not self._boot_adoption_window_open():
             return False
         if self.is_active:
             # SEM started it itself this lifetime — nothing left to adopt.

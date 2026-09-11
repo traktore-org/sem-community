@@ -363,7 +363,7 @@ class HeatPumpController(SetpointDevice):
         NORMAL is nothing of SEM's, BLOCKED SEM never writes (#664). Decided
         once per lifetime, on the first readable observation.
         """
-        if not self._boot_adoption_pending or not self.hass:
+        if not self.hass or not self._boot_adoption_window_open():
             return False
         if self.is_active:
             # SEM started it itself this lifetime — nothing left to adopt.

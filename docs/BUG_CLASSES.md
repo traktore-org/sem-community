@@ -3225,11 +3225,14 @@ hysteresis it activated in the night."
 NC-inverted truth table, or a #801 service pump's state entity).
 **Closure:** the adoption and its gated claim stay one body; the predicate is per device and reads
 the axis SEM writes. A setpoint tank is adopted only while it holds one of SEM's OWN boost setpoints
-(solar or legionella target, ±0.5 K) — never a setpoint the user chose (#847/#908: release what SEM
-commanded, nothing more) — and a climate tank only in SEM's `heat` mode (the `ClimateDevice` line).
-An SG-Ready pump is adopted only in BOOST / FORCE_ON. One decision per lifetime, on the first
-READABLE observation: an entity whose integration is still loading on an HA restart keeps the window
-open and the per-cycle belief sync retries it; after that SEM never claims a boost it sees start.
+(solar or legionella target, ±0.5 K); a setpoint SEM never writes is never claimed (#847/#908:
+release what SEM commanded, nothing more), while one that EQUALS SEM's boost cannot be told apart
+from it and is — the claim #766 already makes for a switch turned on in Solar mode. A climate tank
+is adopted only in SEM's `heat` mode (the `ClimateDevice` line); an SG-Ready pump only in BOOST /
+FORCE_ON. One decision per lifetime (a reload is a new one), on the first READABLE observation
+within ten minutes of registration: an entity whose integration is still loading on an HA restart
+keeps the window open and the per-cycle belief sync retries it; after that — or once the window
+closes unread — SEM never claims a boost it sees start.
 **Guard:** `tests/test_914_boost_survives_restart.py` — an AST check that every non-EV
 `register_device(x)` in `async_setup_entry` is preceded by `x.adopt_if_running()` (with a floor
 naming `hw_device` and `hp_extra`, so it cannot pass vacuously); the per-domain adoption family
@@ -3249,6 +3252,13 @@ decision that settles both (enhancement). (4) A direct device's control mode (Of
 the card is persisted but never re-applied after a restart — `refresh_direct_device_overrides`
 carries priority and goals, not the mode. Re-applying it naively would flip every direct device the
 #805 upgrade froze at `peak_only` (it pins every id in `priority_overrides` / `device_goals`): a
-decision, not a sweep. (5) A solar target changed in the options between the boost and the reload
-is no longer recognised as SEM's; persisting the commanded setpoint would close it.
+decision, not a sweep. (5) The tank predicate recognises SEM's boost by VALUE: a setpoint set by
+hand that equals SEM's target (50 °C by default) is claimed after a reload, and a solar target
+changed in the options between the boost and the reload is no longer recognised. Persisting the
+commanded setpoint (entity + value, set on activation, cleared on release) would make the claim
+exact — storage plumbing and a decision, pinned as-is by `TestTheClaimIsByValue`. (6) Pre-existing,
+found in this change's review by reading (not reproduced): a legionella cycle has no exemption from
+the deficit LIFO. `check_legionella_cycle` starts it with a bare `activate()` (no ownership, no
+clock); the next no-surplus cycle sheds it, and the cycle then sits in `heating_to_target` without
+ever re-heating. A tank adopted at 65 °C after a restart is released the same way.
 Refs #914 #559 #656 #766 #779 #847 #908 #523 #801.
