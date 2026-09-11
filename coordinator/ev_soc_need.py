@@ -25,7 +25,7 @@ pre-#708 behaviour (charge to the hardware taper), never a fabricated 0.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Sequence, Tuple
 
 
 @dataclass(frozen=True)
@@ -78,3 +78,56 @@ def soc_remaining_need(
 
     return SocRemaining(sensor_kwh=_need(vehicle_soc),
                         effective_kwh=_need(effective_soc))
+
+
+def estimate_stop_step(
+    latched_bound: Optional[str],
+    bounds: Sequence[Tuple[str, float]],
+    vehicle_soc: Optional[float],
+    ceiling_soc: Optional[float],
+    capacity_kwh: float,
+) -> Tuple[Optional[str], Optional[str], Optional[float]]:
+    """(#939) One cycle of the #708 estimate-stop / resume announcement.
+
+    ``bounds`` is ``(name, target_soc)`` in evaluation order (``min`` then
+    ``max``). Returns ``(latched_bound, event, target_soc)``: the latch to
+    keep; ``"stop"``, ``"resume"``, the silent ``"release"`` or ``None``;
+    and the target the event is about.
+
+    * stop — the first bound the sensor alone has NOT reached but the
+      measured cap has. The latch keeps THAT bound.
+    * resume — only when the latched bound's effective need re-opens (a
+      fresh reading below it, or its target raised). It names the first
+      re-opened bound in evaluation order: a reading back under Min is a
+      top-up to Min, whichever bound the stop was at.
+    * release — the sensor itself has reached the latched bound: the stop
+      is no longer the estimate's, nothing resumes and nothing is sent, and
+      the next estimate stop (say at Max, the next day) may be announced.
+
+    The latch used to be a bare flag, so the resume ran against every
+    bound: stopped at Min (90 %), it was released on the next cycle by Max
+    (100 %), which the capped estimate had of course not reached — and the
+    stop re-fired the cycle after. Live 10.09: the pair alternated several
+    times a minute until the owner moved Min. With the bound kept,
+    identical inputs cannot produce a second announcement.
+    """
+    needs = {name: soc_remaining_need(target, vehicle_soc, ceiling_soc, capacity_kwh)
+             for name, target in bounds}
+
+    def _eff_rem(name: str) -> float:
+        return needs[name].effective_kwh or 0.0
+
+    if latched_bound is None:
+        for name, target in bounds:
+            if (needs[name].sensor_kwh or 0.0) > 0.1 and _eff_rem(name) <= 0.1:
+                return name, "stop", target
+        return None, None, None
+    if latched_bound not in needs:
+        return None, "release", None
+    if _eff_rem(latched_bound) > 0.1:
+        reopened = next(t for name, t in bounds if _eff_rem(name) > 0.1)
+        return None, "resume", reopened
+    sensor_rem = needs[latched_bound].sensor_kwh
+    if sensor_rem is not None and sensor_rem <= 0.1:
+        return None, "release", dict(bounds)[latched_bound]
+    return latched_bound, None, None

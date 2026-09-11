@@ -17,6 +17,21 @@ from typing import Any, Dict
 _LOGGER = logging.getLogger(__name__)
 
 
+def charger_target_type(config, cfg) -> str:
+    """Which need ``build_night_target_map`` builds for this charger:
+    ``soc`` or ``kwh`` (per-charger key, the legacy ``ev_target_mode``,
+    then the integration default).
+
+    (#939) Shared with ``_plan_car_full``, whose car-full gate must know
+    which of the two needs it stands in front of, so it mirrors this map's
+    resolution exactly. (``_calculate_remaining_need`` additionally honours
+    an integration-level ``ev_target_mode``; unchanged here.)
+    """
+    cfg = cfg or {}
+    return (cfg.get("ev_target_type") or cfg.get("ev_target_mode")
+            or (config or {}).get("ev_target_type", "kwh"))
+
+
 def build_night_target_map(coord, energy) -> Dict[str, float]:
     """Per-charger remaining night-charge need, in kWh (#193/#245/#464).
 
@@ -34,8 +49,7 @@ def build_night_target_map(coord, energy) -> Dict[str, float]:
 
     for cid in coord._ev_devices:
         cfg = charger_cfg_by_id.get(cid, {})
-        ttype = (cfg.get("ev_target_type") or cfg.get("ev_target_mode")
-                 or coord.config.get("ev_target_type", "kwh"))
+        ttype = charger_target_type(coord.config, cfg)
         if ttype == "soc":
             per_soc = coord._resolve_charger_soc(cid, cfg)
             out[cid] = coord._calculate_remaining_need(

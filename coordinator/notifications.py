@@ -849,6 +849,20 @@ class NotificationManager:
             group="sem_charging",
         )
 
+    def release_ev_estimate_stop(
+        self, *, charger_name: str | None = None, flag_key: str | None = None,
+    ) -> None:
+        """(#939) The sensor caught up with an estimate-based stop: nothing
+        resumes and nothing is sent, but the next estimate stop in this
+        session (say at Max, the next day) may announce itself. The resume
+        used to free this flag as a side effect — the bogus resume #939
+        removed.
+        """
+        key = flag_key or charger_name
+        self._notified_flags.discard(
+            f"ev_estimate_stop_{key}" if key else "ev_estimate_stop"
+        )
+
     async def notify_ev_deadline_unreachable(
         self, remaining_kwh: float, hours_left: float, deadline: str,
         *, charger_name: str | None = None, flag_key: str | None = None,

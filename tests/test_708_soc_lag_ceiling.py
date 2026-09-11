@@ -100,7 +100,7 @@ class TestAnchorLifecycle:
     def test_disconnect_clears_anchor_and_latch(self):
         det = _detector()
         det.get_virtual_soc(55.0)
-        det._estimate_stop_active = True
+        det._estimate_stop_bound = "min"
         det.reset_session()
         assert det._soc_anchor_value is None
         assert det._soc_anchor_session_kwh is None

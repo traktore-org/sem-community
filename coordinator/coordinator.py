@@ -88,7 +88,7 @@ from ..tariff.tariff_provider import _local_date as _tariff_local_date
 from ..analytics.pv_performance import PVPerformanceAnalyzer
 from ..analytics.consumption_predictor import ConsumptionPredictor
 from .ev_taper_detector import EVTaperDetector
-from .ev_soc_need import soc_remaining_need
+from .ev_soc_need import estimate_stop_step, soc_remaining_need
 from ..utils.log_gate import log_on_change
 from ..analytics.energy_assistant import EnergyAssistant
 
@@ -7743,8 +7743,33 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         Two readings, one question: the taper detector's anchor and THIS
         charger's draw (``_charger_power_w``, the canonical per-charger
         read) against the charger's own handshake threshold.
+
+        (#939) Not asked at all for a SOC-target charger. Its night need is
+        already car-derived — ``target −`` the car's own reading, or, while
+        the sensor is dark, the anchored virtual SOC the anchor itself pins
+        (``_resolve_charger_soc``) — and a car at its target is skipped
+        there (``kwh <= 0.05``). So the anchor adds nothing but a chance to
+        disagree, and when it did the layers fought: live, a false taper
+        anchor said "full" over a Tesla reading 71 %, the plan dropped the
+        car, the reactive layer started it for the deadline, the draw
+        un-fulled it (the N2 meter rule), the plan covered it again and
+        stopped it outside the window — 60 s on, 20 s off, all evening.
+        Keyed on the target TYPE, not on whether the sensor reads this
+        cycle: a gate that changed hands with sensor availability would
+        restamp the night on every blink. A kWh target — the calendar
+        counter #756 was built for — still asks the anchor.
         """
         from .ev_availability import plan_car_fullness
+        from .ev_night_targets import charger_target_type
+        try:
+            config = getattr(self, "config", None) or {}
+            cfg = next((c for c in (config.get("ev_chargers") or [])
+                        if isinstance(c, dict)
+                        and str(c.get("id") or "") == str(cid)), None) or {}
+            if charger_target_type(config, cfg) == "soc":
+                return None
+        except Exception:  # noqa: BLE001 — unevaluable: the anchor answers, as before
+            pass
         detector = (getattr(self, "_ev_taper_detectors", None) or {}).get(cid)
         if detector is None:
             return None
@@ -9176,6 +9201,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 why = (f"ev_targets={ {k: round(v, 2) for k, v in targets.items()} }, "
                        f"mode_opted_out={mode_opted_out}, "
                        f"disconnected={disconnected}, "
+                       # (#939) the fourth gate the collector skips on — its
+                       # absence here left a false anchor invisible in the log.
+                       f"car_full={car_full}, "
                        f"loads_seen={loads_seen}, loads_eligible={loads_eligible}, "
                        f"battery_deficit={deficit:.2f} kWh")
                 _LOGGER.info(
@@ -9757,60 +9785,73 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         mins_to_full, charger_name=charger_name
                     )
 
-                # #708 — estimate-stop / auto-resume announcements. The
-                # decision itself lives in _calculate_remaining_need
-                # (effective SOC = max(sensor, energy-accounted)); this
-                # block only detects the two user-visible transitions:
-                # the estimate ends a charge the stale sensor would have
-                # kept running, and a fresh reading below target makes
-                # SEM resume. Latch lives on the per-charger detector
-                # (session-scoped, cleared on disconnect).
-                det_708 = self._ev_taper_detectors.get(cid)
-                cfg_708 = chargers_cfg_by_id.get(cid) or {}
-                type_708 = (
-                    cfg_708.get("ev_target_type") or cfg_708.get("ev_target_mode")
-                    or self.config.get("ev_target_type")
-                    or self.config.get("ev_target_mode", "kwh")
+                # #708 — estimate-stop / auto-resume announcements (#939:
+                # one method, so the latch can be driven and pinned alone).
+                await self._announce_estimate_stop(
+                    cid, intel, chargers_cfg_by_id.get(cid) or {},
+                    charger_name, charger_connected,
                 )
-                ea_708 = intel.get("energy_accounted_soc")
-                soc_708 = intel.get("vehicle_soc")
-                if (det_708 is not None and charger_connected
-                        and type_708 == "soc"
-                        and ea_708 is not None and soc_708 is not None):
-                    cap_708 = (
-                        cfg_708.get("ev_battery_capacity_kwh")
-                        or self.config.get("ev_battery_capacity_kwh", 40)
-                    )
-                    for bound_708 in ("min", "max"):
-                        tgt = self._resolve_target(
-                            cfg_708, "ev_target_soc", bound_708, 80, 100
-                        )
-                        # (#708) same helper as the decision — see SITE 1.
-                        need_708 = soc_remaining_need(
-                            tgt, soc_708, ea_708, cap_708)
-                        sensor_rem = need_708.sensor_kwh or 0.0
-                        eff_rem = need_708.effective_kwh or 0.0
-                        if (not det_708._estimate_stop_active
-                                and sensor_rem > 0.1 and eff_rem <= 0.1):
-                            det_708._estimate_stop_active = True
-                            await self._notification_manager.notify_ev_estimate_stop(
-                                target_soc=tgt, sensor_soc=soc_708,
-                                sensor_age_min=intel.get("vehicle_soc_age_min") or 0,
-                                charger_name=charger_name, flag_key=cid,
-                            )
-                            break
-                        if det_708._estimate_stop_active and eff_rem > 0.1:
-                            det_708._estimate_stop_active = False
-                            await self._notification_manager.notify_ev_estimate_resume(
-                                sensor_soc=soc_708, target_soc=tgt,
-                                charger_name=charger_name, flag_key=cid,
-                            )
-                            break
 
         except (ValueError, TypeError) as e:
             _LOGGER.debug("Event notification failed: %s", e)
         except HomeAssistantError as e:
             _LOGGER.warning("Notification service call failed: %s", e)
+
+    async def _announce_estimate_stop(
+        self, cid: str, intel: dict, cfg_708: dict, charger_name: str,
+        charger_connected: bool,
+    ) -> None:
+        """#708 — the estimate-stop / auto-resume announcements, ONE charger.
+
+        The decision itself lives in ``_calculate_remaining_need`` (effective
+        SOC = max(sensor, energy-accounted)); this only announces its two
+        user-visible transitions: the estimate ends a charge the stale sensor
+        would have kept running, and a fresh reading below target makes SEM
+        resume. The latch lives on the per-charger detector (session-scoped,
+        cleared on disconnect) and holds the BOUND it was set at (#939) —
+        ``estimate_stop_step`` is the whole rule.
+        """
+        det_708 = self._ev_taper_detectors.get(cid)
+        type_708 = (
+            cfg_708.get("ev_target_type") or cfg_708.get("ev_target_mode")
+            or self.config.get("ev_target_type")
+            or self.config.get("ev_target_mode", "kwh")
+        )
+        ea_708 = intel.get("energy_accounted_soc")
+        soc_708 = intel.get("vehicle_soc")
+        if not (det_708 is not None and charger_connected
+                and type_708 == "soc"
+                and ea_708 is not None and soc_708 is not None):
+            return
+        cap_708 = (
+            cfg_708.get("ev_battery_capacity_kwh")
+            or self.config.get("ev_battery_capacity_kwh", 40)
+        )
+        # (#708) same helper as the decision — see SITE 1.
+        bounds_708 = [
+            (b, self._resolve_target(cfg_708, "ev_target_soc", b, 80, 100))
+            for b in ("min", "max")
+        ]
+        latched, event, tgt = estimate_stop_step(
+            det_708._estimate_stop_bound, bounds_708, soc_708, ea_708, cap_708)
+        det_708._estimate_stop_bound = latched
+        if event == "stop":
+            await self._notification_manager.notify_ev_estimate_stop(
+                target_soc=tgt, sensor_soc=soc_708,
+                sensor_age_min=intel.get("vehicle_soc_age_min") or 0,
+                charger_name=charger_name, flag_key=cid,
+            )
+        elif event == "resume":
+            await self._notification_manager.notify_ev_estimate_resume(
+                sensor_soc=soc_708, target_soc=tgt,
+                charger_name=charger_name, flag_key=cid,
+            )
+        elif event == "release":
+            # The sensor caught up with the stop: nothing to say, but the
+            # next estimate stop this session must be able to announce.
+            self._notification_manager.release_ev_estimate_stop(
+                charger_name=charger_name, flag_key=cid,
+            )
 
     async def _retry_ev_device_with_backoff(self) -> None:
         """Retry EV device setup with exponential backoff (#27).
