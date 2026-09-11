@@ -428,6 +428,12 @@ class SensorReader:
         # Per-entity flag — was the Repair already raised this outage?
         # Avoids re-raising every cycle past the threshold.
         self._sensor_repair_raised: set[str] = set()
+        # (#933) Entities whose unavailable-Repair this reader has already
+        # reconciled once. The Repair is persistent and the two sets above
+        # are not, so one raised before a restart — or before the reload
+        # that fixing the sensor caused — was never cleared: the recovery
+        # branch only runs for an outage THIS reader saw.
+        self._sensor_repair_reconciled: set[str] = set()
         # W3 — frozen (available-but-not-updating) fast-power-sensor detector.
         # A Huawei modbus stall / Growatt cloud freeze keeps the entity
         # "available" with a stale value that silently poisons the energy
@@ -437,6 +443,14 @@ class SensorReader:
         # seconds) are checked, with a generous threshold, so a legitimately
         # slow sensor never false-positives.
         self._frozen_sensors: set[str] = set()
+        # (#933) Same gap for the stale-Repair: ``_frozen_sensors`` is per
+        # lifetime, the Repair is not. A predecessor's Repair is cleared
+        # once this reader has SEEN the entity report — its report stamp
+        # moving past the one it first saw. Mere freshness is not enough:
+        # after a restart a frozen sensor's restored state looks fresh for
+        # ten minutes.
+        self._stale_first_report: dict[str, Any] = {}
+        self._stale_reconciled: set[str] = set()
         self._FAST_POWER_NAMES = frozenset(
             {"solar", "grid", "grid_import", "grid_export", "battery"}
         )
@@ -1960,6 +1974,7 @@ class SensorReader:
         #    Both always positive — SEM calculates: grid_power = export - import
         manual_import = self._raw_config.get("grid_import_power_entity")
         manual_export = self._raw_config.get("grid_export_power_entity")
+        guessing = False                # (#933) set by the discovery branch only
         if (manual_import and not manual_export) and ed.grid_import_power:
             # (07.09 re-audit) HALF a manual pair, and a combined sensor
             # exists: prefer the combined one. Reading the import half alone
@@ -2025,6 +2040,7 @@ class SensorReader:
             # any-device matches stay re-evaluated so a late-loading DSMR meter
             # (issue #166) takes over within one update interval.
             self._uses_split_grid = True
+            guessing = True
             disc = self._split_grid_discovery
             # The same-device lock only holds for a COMPLETE pair
             # (#485 H2): an import-only same-device pick used to stop
@@ -2103,6 +2119,17 @@ class SensorReader:
                     "No grid power sensor found (no combined and no split import/export). "
                     "Grid power will be 0. Check Energy Dashboard grid configuration."
                 )
+
+        # (#933) The grid was read by an explicit path — SEM's own pair (the
+        # guess Repair's own remedy, which reloads the entry), a declared
+        # pair, a combined sensor — so nothing is guessed, and a guess Repair
+        # the reader before the reload left goes, once per reader. The
+        # discovery branch reports its own verdict every scan; the startup
+        # sweep in invalidate_split_grid_cache() hangs off
+        # EVENT_HOMEASSISTANT_STARTED, which a reload never fires.
+        if not guessing and not getattr(self, "_split_guess_reconciled", False):
+            self._split_guess_reconciled = True
+            _ri.clear_split_grid_guessed(self.hass)
 
         # Battery power — sum all battery units if multiple configured.
         # v1.7.0 arch: also populate the per-battery dict so multi-
@@ -3638,13 +3665,18 @@ class SensorReader:
                     "Sensor %s (%s) recovered — now reading %.1f",
                     entity_id, name, value,
                 )
-                # (HA Repairs) Reset the outage clock and clear any
-                # Repair issue we may have filed for this sensor.
+                # (HA Repairs) Reset the outage clock.
                 self._sensor_unavailable_since.pop(entity_id, None)
-                if entity_id in self._sensor_repair_raised:
-                    self._sensor_repair_raised.discard(entity_id)
-                    from . import repair_issues as _ri
-                    _ri.clear_sensor_unavailable(self.hass, entity_id)
+            # (HA Repairs) Clear the Repair we filed for this outage — or
+            # (#933) one a predecessor filed: the Repair is persistent and our
+            # sets are not, so the first live read of this reader's life
+            # clears it once, as a recovery does.
+            if (entity_id in self._sensor_repair_raised
+                    or entity_id not in self._sensor_repair_reconciled):
+                self._sensor_repair_raised.discard(entity_id)
+                self._sensor_repair_reconciled.add(entity_id)
+                from . import repair_issues as _ri
+                _ri.clear_sensor_unavailable(self.hass, entity_id)
 
             # W3 — observe-only frozen-sensor detection (does NOT alter value).
             # Wrapped so the audit can NEVER corrupt the read: an exception here
@@ -3738,6 +3770,9 @@ class SensorReader:
         # TypeError would be swallowed by _read_sensor's except → wrong 0.0.
         if not isinstance(age_s, (int, float)) or isinstance(age_s, bool):
             return
+        # (#933) the report stamp this reader saw first, for the reconcile below
+        first_report = self._stale_first_report.setdefault(entity_id, last_seen)
+        rescued = False                 # (#933) set by the #912 live-source rule
         stale = age_s >= self._STALE_THRESHOLD_S
         if stale and self._stillness_is_expected(name, value):
             # (#851) A stall the sensor's own domain explains is not a fault.
@@ -3757,6 +3792,7 @@ class SensorReader:
             # branch so a Repair raised during a real stall clears once the
             # source reports again.
             stale = False
+            rescued = True
         if stale:
             if entity_id not in self._frozen_sensors:
                 self._frozen_sensors.add(entity_id)
@@ -3778,11 +3814,20 @@ class SensorReader:
         elif entity_id in self._frozen_sensors:
             # Fresh again — re-arm the warn-once, clear the Repair, note recovery.
             self._frozen_sensors.discard(entity_id)
+            self._stale_reconciled.add(entity_id)
             from . import repair_issues as _ri
             _ri.clear_sensor_stale(self.hass, entity_id)
             _LOGGER.info(
                 "Sensor %s (%s) is updating again (was frozen).", entity_id, name,
             )
+        elif (entity_id not in self._stale_reconciled
+              and (rescued or last_seen > first_report)):
+            # (#933) A Repair a predecessor raised: this reader has now SEEN
+            # the entity report — or its source report while it holds still
+            # (#912) — so the stall it named is over. Once.
+            self._stale_reconciled.add(entity_id)
+            from . import repair_issues as _ri
+            _ri.clear_sensor_stale(self.hass, entity_id)
 
     # (#912) Helper/derived platforms whose entities write only when their
     # rendered value changes — a Template inverting a Shelly plug, a

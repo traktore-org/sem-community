@@ -168,6 +168,8 @@ class LoadManagementCoordinator:
         self._shed_futile: bool = False
         self._uncontrolled_w: float = 0.0
         self._futile_repair_open: bool = False
+        # (#933) has this shedder reconciled the persistent Repair once?
+        self._futile_reconciled: bool = False
         self._shed_notified: bool = False
 
     async def async_initialize(self):
@@ -1167,10 +1169,15 @@ class LoadManagementCoordinator:
                 )
             return
 
-        if self._futile_repair_open:
+        # (#933) …and on the first reachable plan of this shedder's life: the
+        # Repair is persistent and ``_futile_repair_open`` is not, so one a
+        # predecessor filed (before a restart or an options reload) was
+        # never withdrawn.
+        if self._futile_repair_open or not self._futile_reconciled:
             self._futile_repair_open = False
             from ..coordinator.repair_issues import clear_load_shed_futile
             clear_load_shed_futile(self.hass)
+        self._futile_reconciled = True
 
         if plan["need_w"] <= 0:
             self._shed_path = "held:under_aim"

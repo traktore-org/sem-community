@@ -5197,8 +5197,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         if raised is None:
             raised = self._battery_write_repair_raised = set()
         strikes = int(getattr(adapter, "write_not_taken_strikes", 0) or 0)
-        if verdict is True and raised:
-            for eid in list(raised):
+        if verdict is True:
+            # (#933) …and the entity this write proved, once per lifetime:
+            # the Repair is persistent and ``raised`` is not, so one raised
+            # before a restart or an options reload was never cleared.
+            done = getattr(self, "_battery_write_reconciled", None)
+            if done is None:
+                done = self._battery_write_reconciled = set()
+            proved = str(getattr(adapter, "last_verified_entity", "") or "")
+            stale = set(raised)
+            if proved and proved not in done:
+                stale.add(proved)
+                done.add(proved)
+            for eid in sorted(stale):
                 _ri.clear_battery_control_write_not_taken(self.hass, eid)
             raised.clear()
         elif (verdict is False and entity_id
@@ -5248,10 +5259,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
             if verdict.valid:
                 self._control_broken_since.pop((cid, entity_id), None)
-                if (cid, entity_id) in self._control_repair_raised:
+                # (#933) …and once on this coordinator's first valid
+                # verdict: the Repair is persistent and the raised-set is
+                # not, so one raised before a restart — or before the reload
+                # that fixing the helper caused — was never cleared.
+                done = getattr(self, "_control_repair_reconciled", None)
+                if done is None:
+                    done = self._control_repair_reconciled = set()
+                if ((cid, entity_id) in self._control_repair_raised
+                        or (cid, entity_id) not in done):
                     self._control_repair_raised.discard((cid, entity_id))
                     _ri.clear_charger_control_entity_broken(
                         self.hass, str(cid), entity_id)
+                done.add((cid, entity_id))
                 continue
 
             broken_now = broken_now or verdict.reason
@@ -7097,9 +7117,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     else:
                         clear_battery_operating_mode_unexpected(
                             self.hass, _mode_ent)
-                        _LOGGER.info(
-                            "#845 battery operating mode back to '%s' — "
-                            "repair cleared", _watch.last_mode)
+                        if _watch.recovered:    # (#933) not a first verdict
+                            _LOGGER.info(
+                                "#845 battery operating mode back to '%s' — "
+                                "repair cleared", _watch.last_mode)
         except Exception:  # noqa: BLE001 — a watch never costs a cycle
             _LOGGER.debug("battery mode watch skipped", exc_info=True)
 
@@ -10001,28 +10022,56 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         Asked every cycle now, acted on only when the verdict CHANGES, and
         never before HA is running (an unloaded integration is "not yet",
         not "no").
+
+        (#933) "Changes" is measured from UNSEEN, not from None. The memo
+        started empty and "not pinned" is None, so the first verdict of a
+        fresh coordinator matched the empty memo and was dropped — and a
+        fresh coordinator is exactly what the remedy produces (the options
+        write reloads the entry) and what every restart produces, while the
+        Repair is persistent and outlives them all. On PROD the remedy was
+        applied as the Repair says, and the Repair stayed.
+
+        The Repair has ONE id for the install, so the verdict is the
+        install's: the first pinned battery's brand, or None when none is.
+        It is not a verdict until every battery has answered in this cycle —
+        or a healthy second battery's first answer would clear the first's —
+        and "not pinned" is no answer while a Huawei/GoodWe entry is still
+        loading: ``is_running`` holds from HA's ``starting`` state on, and an
+        entry in SETUP_RETRY is not loaded. Acting on that None deleted the
+        Repair (and the user's "ignore") only to re-raise it a minute later.
         """
         if not getattr(self.hass, "is_running", False):
             return
-        from .battery_adapters import pinned_generic_brand
+        from .battery_adapters import pinned_generic_brand, pinned_generic_pending
         from . import repair_issues as _ri_pin
         try:
             _pbc = self._battery_adapter_context(battery_id, batt_idx, bat_count)
             pinned = pinned_generic_brand(self.hass, _pbc)
+            pending = pinned is None and pinned_generic_pending(self.hass, _pbc)
         except Exception:  # noqa: BLE001 — a Repair never costs a cycle
             return
+        # This cycle's answers only: a battery that leaves the install takes
+        # its answer with it.
         seen = getattr(self, "_pinned_verdicts", None)
-        if seen is None:
+        if seen is None or batt_idx == 0:
             seen = self._pinned_verdicts = {}
-        if seen.get(battery_id) == pinned:
+        seen[battery_id] = (pinned, pending)
+        if batt_idx < bat_count - 1 or len(seen) < bat_count:
+            return                      # not every battery has answered yet
+        first_id, verdict = next(
+            ((bid, b) for bid, (b, _p) in seen.items() if b), (None, None))
+        if verdict is None and any(p for _b, p in seen.values()):
+            return                      # a brand is still loading: "not yet"
+        if (hasattr(self, "_pinned_repair_verdict")
+                and self._pinned_repair_verdict == verdict):
             return
-        seen[battery_id] = pinned
-        if pinned:
-            _ri_pin.raise_battery_platform_pinned_generic(self.hass, brand=pinned)
+        self._pinned_repair_verdict = verdict
+        if verdict:
+            _ri_pin.raise_battery_platform_pinned_generic(self.hass, brand=verdict)
             _LOGGER.warning(
                 "battery %s: platform is 'generic' but the %s integration is "
                 "loaded — set Battery charge platform to Auto-detect (#900)",
-                battery_id, pinned)
+                first_id, verdict)
         else:
             _ri_pin.clear_battery_platform_pinned_generic(self.hass)
 

@@ -83,17 +83,41 @@ def pinned_generic_brand(hass, config: dict) -> "Optional[str]":
     surface (a Sessy beside a Huawei fleet, #531) is a real choice and is
     not named.
     """
-    platform = (config.get("battery_charge_platform") or "auto").lower()
-    if platform != "generic":
-        return None
-    if (config.get("battery_strategy_control_entity")
-            or config.get("battery_setpoint_bidirectional")):
+    if not _pinnable(config):
         return None
     if _integration_loaded(hass, "huawei_solar"):
         return "huawei"
     if _integration_loaded(hass, "goodwe"):
         return "goodwe"
     return None
+
+
+def _pinnable(config: dict) -> bool:
+    """A generic pin without its own control surface — the case #900 names."""
+    platform = (config.get("battery_charge_platform") or "auto").lower()
+    if platform != "generic":
+        return False
+    return not (config.get("battery_strategy_control_entity")
+                or config.get("battery_setpoint_bidirectional"))
+
+
+def pinned_generic_pending(hass, config: dict) -> bool:
+    """(#933) Could ``pinned_generic_brand``'s None still become a brand?
+
+    True for a generic pin while a Huawei/GoodWe config entry exists that has
+    not finished loading — HA reports ``is_running`` from ``starting`` on,
+    and an entry in SETUP_RETRY is not loaded. That None is "not yet", not
+    "no"."""
+    if not _pinnable(config):
+        return False
+    for domain in ("huawei_solar", "goodwe"):
+        try:
+            if (hass.config_entries.async_entries(domain)
+                    and not _integration_loaded(hass, domain)):
+                return True
+        except (AttributeError, TypeError):
+            continue
+    return False
 
 
 def _integration_loaded(hass, domain: str) -> bool:

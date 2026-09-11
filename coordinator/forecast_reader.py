@@ -260,6 +260,8 @@ class ForecastReader:
         self._no_forecast_logged: bool = False
         self._no_forecast_since_mono: Optional[float] = None
         self._no_forecast_repair_raised: bool = False
+        # (#933) has this reader reconciled the persistent Repair once?
+        self._no_forecast_reconciled: bool = False
         self._mono_time = _time.monotonic
         # (#562) 60 s cache for entity-registry scans: {platform: (mono_ts, entities)}
         self._registry_cache: Dict[str, tuple] = {}
@@ -283,16 +285,22 @@ class ForecastReader:
 
     def _clear_no_forecast_repair(self) -> None:
         """Reset detection-failure state + drop the Repair issue when
-        a forecast integration appears after a previous absence."""
+        a forecast integration appears after a previous absence.
+
+        (#933) …and on this reader's first detection: the Repair is
+        persistent and ``_no_forecast_repair_raised`` is not, so one filed
+        before a restart (Solcast installed, then HA restarted) was never
+        dropped."""
         self._no_forecast_logged = False
         self._no_forecast_since_mono = None
-        if self._no_forecast_repair_raised:
+        if self._no_forecast_repair_raised or not self._no_forecast_reconciled:
             try:
                 from . import repair_issues as _ri
                 _ri.clear_no_forecast_integration(self.hass)
             except Exception as e:  # noqa: BLE001
                 _LOGGER.debug("Could not clear no_forecast Repair: %s", e)
             self._no_forecast_repair_raised = False
+        self._no_forecast_reconciled = True
 
     def _registry_entity_groups(self, platform: str) -> Dict[str, list]:
         """All matching entities per role for a platform (registry scan).

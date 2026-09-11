@@ -3128,3 +3128,76 @@ re-offer is never taper-anchored. The primary charger has the stall path behind 
 kWh charger has nothing, which widens #756 N1's existing gap there (a car that arrives full is
 already never anchored on a non-primary).
 Refs #939 #708 #774 #756.
+
+### 84. A memo that dies before the thing it reconciles — the first verdict of a lifetime is swallowed — GUARDED
+**Symptom:** a Repair outlives its own remedy. The user does exactly what it says, the log confirms
+the change took, and the Repair is still in Settings → Repairs forty minutes later — and after every
+restart since.
+**Root shape:** HA's issue registry keeps a persistent Repair across restarts, and a config-entry
+reload never touches the registry at all — but the flag that decides whether to clear is an instance
+attribute, reset by every restart and every options reload. Two spellings: (a) *act on change*
+against a memo whose empty value is also a verdict — `seen.get(id) == pinned` starts at None, "not
+pinned" is None, so a fresh owner's first verdict equals the empty memo and is dropped; (b) *clear
+only if raised* — `if eid in self._raised: clear` — so a Repair a predecessor raised is never in this
+lifetime's set. Either way the fresh owner that most needs to reconcile — the reload a remedy
+triggers (`set_option` → `async_reload`), the restart after a fix — is the one that cannot. #485 H5
+(actuation failure) and #944 (`_retire_stand_down` from None) had each closed one instance by hand;
+the shape had no name, so the next Repair repeated it.
+**Live catch (#933, PROD 08.09.2026, Huawei SUN2000 + LUNA2000):** the #919 "Battery platform pinned
+to Generic" Repair. `battery_charge_platform` → auto via `set_option`, the adapter came back as
+Huawei, the Repair stayed.
+**Where it lives:** every memo-gated Repair clear. Fixed here: the pin check (#900/#919), charger
+control entity (#824), battery write-back (#915), sensor unavailable and sensor stale
+(`sensor_reader`), load-shed futile (#896), no forecast integration, force-discharge refused (#840),
+the operating-mode watch (#845 — non-persistent, but it survives an options reload), and the
+split-grid guess (#911) — its text tells the user to set the pair in SEM's options and promises "this
+notice clears on the next read", but that write reloads SEM onto the manual path, which never touched
+it, and the unconditional clear in `invalidate_split_grid_cache` hangs off
+`EVENT_HOMEASSISTANT_STARTED`, which a reload never fires. Assessed and already safe: SOC-zone order
+(#870 — its verdict is a bool, so the None memo never matches), actuation failure (#485 H5),
+stop-war stand-down (#944), and the heat-pump / hot-water / KEBA / SOC-cap / wrong-unit / backfill /
+no-recorder / Deye Repairs, which clear on every current verdict.
+**Closure:** the first healthy verdict of a fresh owner clears once. Each owner keeps a "reconciled"
+memo (or starts its verdict memo at *unseen*, never at a value the verdict can take) and treats its
+first healthy verdict as an edge. "Healthy" means evidence this lifetime saw: a reflected write names
+the entity it proved; a stale sensor clears only once this reader has SEEN its report stamp move — a
+restored state looks fresh for ten minutes after a restart and proves nothing (its source reporting
+while it holds still does, #912); an accepted 0 W write proves nothing about discharge. A first
+verdict is only a verdict when the question could have been answered: "not pinned" while a
+Huawei/GoodWe entry is still loading (HA is `is_running` from `starting` on; SETUP_RETRY) is "not
+yet", not "no" — acting on it would delete the Repair, and the user's "ignore", only to re-raise
+it. One Repair id for
+several units is one verdict: the pin Repair is decided for the install once every battery has
+answered, because a first-verdict clear per battery would let a healthy second battery take down the
+first one's Repair.
+**Guard:** `tests/test_933_memo_gated_clear_registry.py` — an AST detector over all production code.
+A Repair clear (direct, or through a thin wrapper) is *memo-gated* when a condition guarding it — an
+enclosing `if`/`while`/`for`, or an earlier early exit — reads instance state the same function
+writes. Every memo-gated function is declared with its answer to "who clears the Repair a previous
+lifetime left?"; a new one fails CI until answered, and a stale declaration fails too. The
+detector's twin fires on the #933, #824, #915 and #840 shapes and not on a reading or an
+unconditional clear; a floor on the site count stops a walker that parses nothing. It cannot see
+a memo on a helper object built elsewhere, a raised-set mutated only through a helper method, a memo
+in `hass.data`, or a clear delivered as an action (#823) — the registry makes each new site ask the
+question; the behaviour tests prove the fixes. Behaviour:
+`tests/test_933_first_verdict_of_a_lifetime.py` drives each owner the way a reload does — fresh
+owner, healthy first verdict, the clear exactly once — with every verdict formed by production code
+(the real `pinned_generic_brand`, the real generic adapter's read-back, the real sensor reader).
+**Sweep question:** for every durable effect SEM reconciles — a Repair, a persisted flag, a register
+it wrote — does the memo that decides "already done" live at least as long as the effect? If not,
+what does a fresh owner's first verdict do?
+**Left for Guido:** (1) #823 charger failsafe-suspected: its clear is an `ActionKind` emitted only
+while `_failsafe_reported` (in memory) and a learned interval hold, so a fresh reconciler can never
+produce it. What proves the box healthy without the learned interval is a decision, not a sweep —
+and an action-mediated clear is invisible to the AST guard. (2) A Repair keyed on an entity the new
+config no longer writes (a platform switch, a renamed entity) has no owner left to clear it at all:
+the orphan sweep the heat-pump and hot-water Repairs have, not generalized. (3) The #845 mode watch
+is built on the first cycle, before any battery adapter exists, so on an auto-detected platform it
+has no expectation and stays publish-only for its whole life: the #845 Repair is dormant everywhere
+but an explicit `huawei` platform (the #919 shape — a question asked before the thing it asks about
+exists). Turning it on raises a new Repair on live installs: a decision, not a sweep. (4) #915's
+clear is install-wide within the primary adapter: any reflected write clears every raised write
+Repair, including one for another entity that still ignores writes (class 83's shape; pre-existing).
+(5) The pin verdict's first cycle is SEM's battery set at that moment: a synthetic `primary` that
+later becomes b1/b2 with a different per-battery platform can clear once and re-raise.
+Refs #933 #919 #900 #824 #915 #840 #845 #896 #911 #485 #944.
