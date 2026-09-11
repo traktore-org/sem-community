@@ -47,7 +47,14 @@ class BatteryModeWatch:
         self._confirm = int(confirm_reads)
         self._streak = 0
         self._raised = False
+        #: (#933) Has this watch reached a verdict yet? An options reload
+        #: rebuilds the watch mid-HA-run and keeps the issue registry, so a
+        #: Repair its predecessor raised is still up: the first expected
+        #: reading is an edge (a clear), not a quiet "still ok".
+        self._settled = False
         self.changed = False
+        #: True only on a raised → expected edge — the "back to" moment.
+        self.recovered = False
         self.last_mode: Optional[str] = None
 
     def feed(self, state: Optional[str]) -> str:
@@ -57,6 +64,7 @@ class BatteryModeWatch:
         between reads as ``unknown`` (evidence accruing, nothing to act
         on yet)."""
         self.changed = False
+        self.recovered = False
         if self.expected is None:
             # publish-only install (brand without a known expectation)
             if state not in _NO_READING:
@@ -68,13 +76,17 @@ class BatteryModeWatch:
         self.last_mode = mode
         if mode in self.expected:
             self._streak = 0
-            if self._raised:
-                # Recovery edge: the repair clears and the change is noted.
+            if self._raised or not self._settled:
+                # Recovery edge — or this watch's first verdict (#933): the
+                # repair clears; only a recovery is noted as one.
+                self.recovered = self._raised
                 self._raised, self.changed = False, True
+            self._settled = True
             return "ok"
         self._streak += 1
         if not self._raised and self._streak >= self._confirm:
             self._raised, self.changed = True, True
+            self._settled = True
         return "unexpected" if self._raised else "unknown"
 
     @property

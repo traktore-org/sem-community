@@ -131,6 +131,9 @@ class BatteryControlAdapter(ABC):
     #: a roster proposal lands on — implements it; brands with their own
     #: read-back (Deye) or none report "nothing pending" and are unchanged.
     write_not_taken_strikes: int = 0
+    #: (#933) the entity the last REFLECTED write proved — a Repair raised
+    #: against it before a restart/reload can go on this lifetime's proof.
+    last_verified_entity: str = ""
     last_unverified_entity: str = ""
     last_unverified_wanted: str = ""
     last_unverified_seen: str = ""
@@ -221,6 +224,7 @@ class BatteryControlAdapter(ABC):
         if reflected:
             self.write_not_taken_strikes = 0
             self.last_unverified_entity = ""
+            self.last_verified_entity = entity_id
             return True
         self.write_not_taken_strikes += 1
         self.last_unverified_entity = entity_id
@@ -274,6 +278,11 @@ class BatteryControlAdapter(ABC):
         # update or corrected entity gets another chance without the user
         # needing to know SEM had given up.
         self._force_discharge_failures: int = 0
+        # (#933) The Repair is persistent; the count above is not. A reload
+        # builds this adapter at zero, so "recovered from refusals" never
+        # fires for a Repair its predecessor raised — the first accepted
+        # write of this adapter's life clears it, once.
+        self._force_discharge_repair_reconciled: bool = False
         # (#840) The last value whose write was REFUSED. Distinct from
         # ``_last_force_discharge_w``, which records what actually landed.
         self._last_force_discharge_attempt_w: "Optional[float]" = None
@@ -611,6 +620,9 @@ class BatteryControlAdapter(ABC):
                 )
                 self._force_discharge_failures = 0
                 self._clear_force_discharge_repair()
+            elif not self._force_discharge_repair_reconciled:
+                self._clear_force_discharge_repair()        # (#933) once
+            self._force_discharge_repair_reconciled = True
             if watts > 0:
                 _LOGGER.info(
                     "Battery: forcible-discharge %.0f W → %s (arbitrage)",
