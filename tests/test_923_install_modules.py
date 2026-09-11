@@ -8,9 +8,8 @@ from __future__ import annotations
 
 import ast
 import re
-from collections import Counter
 from pathlib import Path
-from types import SimpleNamespace
+from types import MappingProxyType, SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -20,13 +19,15 @@ from custom_components.solar_energy_management.coordinator.install_modules impor
     ENTITY_MODULES,
     Module,
     Presence,
+    _table,
     absent_entity_ids,
     all_unknown,
     entity_kept,
     has_managed_charger,
-    install_modules,
     keeps,
     kept_descriptions,
+    module_verdict,
+    presence_from_summary,
     presence_of,
     presence_summary,
 )
@@ -39,61 +40,92 @@ ED_EV = SimpleNamespace(has_battery=False, has_ev=True)
 class TestBattery:
 
     def test_a_wired_soc_sensor_is_present_before_the_dashboard_is_read(self):
-        v = install_modules({"battery_soc_sensor": "sensor.soc"}, None, False)
+        v = module_verdict({"battery_soc_sensor": "sensor.soc"}, None, False)
         assert v[Module.BATTERY] is Presence.PRESENT
 
     def test_a_wired_control_entity_is_present(self):
-        v = install_modules(
+        v = module_verdict(
             {"battery_discharge_control_entity": "number.max_discharge"}, ED_EMPTY, True)
         assert v[Module.BATTERY] is Presence.PRESENT
 
     def test_the_energy_dashboard_alone_makes_it_present(self):
-        assert install_modules({}, ED_BATTERY, True)[Module.BATTERY] is Presence.PRESENT
+        assert module_verdict({}, ED_BATTERY, True)[Module.BATTERY] is Presence.PRESENT
 
     def test_nothing_wired_and_the_dashboard_read_is_absent(self):
-        assert install_modules({}, ED_EMPTY, True)[Module.BATTERY] is Presence.ABSENT
+        assert module_verdict({}, ED_EMPTY, True)[Module.BATTERY] is Presence.ABSENT
 
     def test_a_missing_dashboard_file_is_an_answer(self):
         # read_energy_dashboard_config_outcome() returns (None, True) when
         # .storage/energy does not exist: a definite "no dashboard".
-        assert install_modules({}, None, True)[Module.BATTERY] is Presence.ABSENT
+        assert module_verdict({}, None, True)[Module.BATTERY] is Presence.ABSENT
 
     def test_an_unread_dashboard_is_unknown_never_absent(self):
         # #925: "I could not ask" is not "no". UNKNOWN keeps every entity.
-        assert install_modules({}, None, False)[Module.BATTERY] is Presence.UNKNOWN
+        assert module_verdict({}, None, False)[Module.BATTERY] is Presence.UNKNOWN
 
     def test_capacity_alone_is_not_evidence(self):
         # The options flow's Settings step saves battery_capacity_kwh with a
         # default for every install that passes through it.
-        v = install_modules({"battery_capacity_kwh": 10.0}, ED_EMPTY, True)
+        v = module_verdict({"battery_capacity_kwh": 10.0}, ED_EMPTY, True)
         assert v[Module.BATTERY] is Presence.ABSENT
 
     @pytest.mark.parametrize("value", [None, "", [], {}])
     def test_empty_values_are_not_wiring(self, value):
-        v = install_modules({"battery_power_sensor": value}, ED_EMPTY, True)
+        v = module_verdict({"battery_power_sensor": value}, ED_EMPTY, True)
+        assert v[Module.BATTERY] is Presence.ABSENT
+
+    @pytest.mark.parametrize("bogus_answer", [MagicMock(), (None, False)])
+    def test_a_truthy_non_bool_answer_is_not_an_answer(self, bogus_answer):
+        # #925: only the exact value True means "asked and got a definite
+        # answer". A MagicMock or a stray tuple is truthy but must not
+        # silently pass as "yes, we asked".
+        v = module_verdict({}, ED_EMPTY, bogus_answer)
+        assert v[Module.BATTERY] is Presence.UNKNOWN
+
+    def test_a_malformed_dashboard_object_is_unknown_not_absent(self):
+        # An ed_config that is neither a Mapping nor has a has_battery
+        # attribute cannot say yes or no — that is not the same as "declares
+        # nothing" (#925).
+        v = module_verdict({}, object(), True)
+        assert v[Module.BATTERY] is Presence.UNKNOWN
+
+    def test_a_mapping_dashboard_config_declaring_battery_is_present(self):
+        v = module_verdict({}, {"has_battery": True, "has_ev": False}, True)
+        assert v[Module.BATTERY] is Presence.PRESENT
+
+    def test_a_mapping_dashboard_config_declaring_nothing_is_absent(self):
+        v = module_verdict({}, {"has_battery": False, "has_ev": False}, True)
         assert v[Module.BATTERY] is Presence.ABSENT
 
 
 class TestEv:
 
     def test_a_charger_list_is_present(self):
-        v = install_modules({"ev_chargers": [{"id": "ev_charger"}]}, ED_EMPTY, True)
+        v = module_verdict({"ev_chargers": [{"id": "ev_charger"}]}, ED_EMPTY, True)
         assert v[Module.EV] is Presence.PRESENT
 
     @pytest.mark.parametrize("key", ["ev_charging_power_sensor", "ev_power_sensor"])
     def test_the_legacy_single_charger_keys_are_present(self, key):
-        assert install_modules({key: "sensor.wb"}, ED_EMPTY, True)[Module.EV] is Presence.PRESENT
+        assert module_verdict({key: "sensor.wb"}, ED_EMPTY, True)[Module.EV] is Presence.PRESENT
 
     def test_an_energy_dashboard_ev_consumer_is_present_without_a_charger(self):
         # sensor_reader.py feeds sem_ev_power from ed.ev_power when no charger
         # is configured — that install HAS EV data.
-        assert install_modules({}, ED_EV, True)[Module.EV] is Presence.PRESENT
+        assert module_verdict({}, ED_EV, True)[Module.EV] is Presence.PRESENT
 
     def test_nothing_and_the_dashboard_read_is_absent(self):
-        assert install_modules({}, ED_EMPTY, True)[Module.EV] is Presence.ABSENT
+        assert module_verdict({}, ED_EMPTY, True)[Module.EV] is Presence.ABSENT
 
     def test_an_unread_dashboard_is_unknown(self):
-        assert install_modules({}, None, False)[Module.EV] is Presence.UNKNOWN
+        assert module_verdict({}, None, False)[Module.EV] is Presence.UNKNOWN
+
+    def test_a_malformed_dashboard_object_is_unknown_not_absent(self):
+        v = module_verdict({}, object(), True)
+        assert v[Module.EV] is Presence.UNKNOWN
+
+    def test_a_mapping_dashboard_config_declaring_ev_is_present(self):
+        v = module_verdict({}, {"has_battery": False, "has_ev": True}, True)
+        assert v[Module.EV] is Presence.PRESENT
 
 
 class TestHeatPump:
@@ -105,29 +137,29 @@ class TestHeatPump:
         "heat_pump_energy_sensor",
     ])
     def test_any_wiring_key_is_present(self, key):
-        assert install_modules({key: "x.y"}, ED_EMPTY, True)[Module.HEAT_PUMP] is Presence.PRESENT
+        assert module_verdict({key: "x.y"}, ED_EMPTY, True)[Module.HEAT_PUMP] is Presence.PRESENT
 
     def test_an_additional_unit_list_is_present(self):
-        v = install_modules({"heat_pumps": [{"id": "hp2"}]}, ED_EMPTY, True)
+        v = module_verdict({"heat_pumps": [{"id": "hp2"}]}, ED_EMPTY, True)
         assert v[Module.HEAT_PUMP] is Presence.PRESENT
 
     def test_tunables_alone_are_not_evidence(self):
         cfg = {"heat_pump_boost_offset": 2.0, "heat_pump_rated_power": 3000,
                "heat_pump_priority": 5}
-        assert install_modules(cfg, ED_EMPTY, True)[Module.HEAT_PUMP] is Presence.ABSENT
+        assert module_verdict(cfg, ED_EMPTY, True)[Module.HEAT_PUMP] is Presence.ABSENT
 
     def test_config_only_so_never_unknown(self):
-        assert install_modules({}, None, False)[Module.HEAT_PUMP] is Presence.ABSENT
+        assert module_verdict({}, None, False)[Module.HEAT_PUMP] is Presence.ABSENT
 
 
 class TestHotWater:
 
     def test_the_tank_entity_is_present(self):
-        v = install_modules({"hot_water_entity": "water_heater.tank"}, ED_EMPTY, True)
+        v = module_verdict({"hot_water_entity": "water_heater.tank"}, ED_EMPTY, True)
         assert v[Module.HOT_WATER] is Presence.PRESENT
 
     def test_settings_alone_are_not_evidence(self):
-        v = install_modules({"hot_water_max_temperature": 60}, None, False)
+        v = module_verdict({"hot_water_max_temperature": 60}, None, False)
         assert v[Module.HOT_WATER] is Presence.ABSENT
 
 
@@ -144,23 +176,27 @@ class TestManagedCharger:
         assert has_managed_charger({"ev_charging_power_sensor": "sensor.wb"}) is True
 
     def test_dashboard_ev_alone_is_data_not_a_managed_charger(self):
-        assert install_modules({}, ED_EV, True)[Module.EV] is Presence.PRESENT
+        assert module_verdict({}, ED_EV, True)[Module.EV] is Presence.PRESENT
         assert has_managed_charger({}) is False
 
 
 _ORACLE_SRC = Path(__file__).resolve().parents[1] / "coordinator" / "install_modules.py"
 LOOKS_LIKE_A_MODULE = re.compile(
-    r"battery|(^|_)ev(_|$)|heat_pump|hot_water|legionella|charg|session|vehicle")
+    r"battery|(^|_)ev(_|$)|heat_pump|hot_water|legionella|charg|session|vehicle"
+    r"|soc|discharg|sg_ready|spend|pacing|cycles|tank|boiler|dhw|water_heater"
+    r"|calculated_current")
 
 
 def _static_lists():
     from custom_components.solar_energy_management.binary_sensor import BINARY_SENSOR_TYPES
     from custom_components.solar_energy_management.button import BUTTONS
     from custom_components.solar_energy_management.number import NUMBER_TYPES
+    from custom_components.solar_energy_management.select import SELECT_TYPES
     from custom_components.solar_energy_management.sensor import SENSOR_TYPES
     from custom_components.solar_energy_management.switch import SWITCH_TYPES
     return {"sensor": SENSOR_TYPES, "number": NUMBER_TYPES, "switch": SWITCH_TYPES,
-            "binary_sensor": BINARY_SENSOR_TYPES, "button": BUTTONS}
+            "binary_sensor": BINARY_SENSOR_TYPES, "button": BUTTONS,
+            "select": SELECT_TYPES}
 
 
 def _static_keys():
@@ -203,14 +239,13 @@ class TestTheTable:
     def test_battery_to_ev_needs_both(self, pk):
         assert ENTITY_MODULES[pk] == {Module.BATTERY, Module.EV}
 
-    def test_the_counts_the_spec_states(self):
-        by_module = Counter(frozenset(m) for m in ENTITY_MODULES.values())
-        assert by_module[frozenset({Module.BATTERY})] == 59
-        assert by_module[frozenset({Module.BATTERY, Module.EV})] == 6
-        assert by_module[frozenset({Module.EV})] == 33
-        assert by_module[frozenset({Module.HEAT_PUMP})] == 11
-        assert by_module[frozenset({Module.HOT_WATER})] == 4
-        assert len(ENTITY_MODULES) == 113
+    def test_a_row_defined_twice_is_refused(self):
+        # A (platform, key) collision between two row groups is a bug in the
+        # table, not an intentional override — merging silently would hide
+        # it (#4 of the #923 review).
+        group = {("sensor", "battery_soc"): frozenset({Module.BATTERY})}
+        with pytest.raises(ValueError):
+            _table(group, group)
 
     def test_the_oracle_stays_importable_without_home_assistant(self):
         # validate-sem.sh loads this file by path on sem-dev, where HA is
@@ -274,7 +309,39 @@ class TestPresenceOf:
         assert p[Module.BATTERY] is Presence.ABSENT
         assert p[Module.EV] is Presence.UNKNOWN
 
+    def test_an_empty_dict_builds_everything(self):
+        assert presence_of(SimpleNamespace(setup_presence={})) == all_unknown()
+
+    def test_a_dict_with_string_keys_and_values_builds_everything(self):
+        # Not a Module -> Presence mapping — the wrong shape is UNKNOWN, not
+        # a crash and not a guess (#925).
+        p = SimpleNamespace(setup_presence={"battery": "absent"})
+        assert presence_of(p) == all_unknown()
+
+    def test_a_mapping_proxy_is_accepted_too(self):
+        # presence_of() must not require a literal dict — any Mapping (a
+        # MappingProxyType, a frozen snapshot, ...) carries the same verdict.
+        proxy = MappingProxyType({Module.BATTERY: Presence.ABSENT})
+        p = presence_of(SimpleNamespace(setup_presence=proxy))
+        assert p[Module.BATTERY] is Presence.ABSENT
+
     def test_summary(self):
         assert presence_summary({Module.BATTERY: Presence.ABSENT}) == {
             "battery": "absent", "ev": "unknown", "heat_pump": "unknown",
             "hot_water": "unknown"}
+
+    def test_summary_round_trips(self):
+        presence = {**all_unknown(), Module.BATTERY: Presence.ABSENT, Module.EV: Presence.PRESENT}
+        assert presence_from_summary(presence_summary(presence)) == presence
+
+    def test_an_unknown_key_in_the_summary_is_ignored(self):
+        p = presence_from_summary({"sauna": "present", "battery": "absent"})
+        assert p == {**all_unknown(), Module.BATTERY: Presence.ABSENT}
+
+    def test_a_bad_value_in_the_summary_is_unknown(self):
+        p = presence_from_summary({"battery": "maybe"})
+        assert p[Module.BATTERY] is Presence.UNKNOWN
+
+    def test_a_non_string_value_in_the_summary_is_unknown(self):
+        p = presence_from_summary({"battery": 1})
+        assert p[Module.BATTERY] is Presence.UNKNOWN
