@@ -6,9 +6,10 @@
 ## 1. Problem
 
 SEM creates its full entity set and dashboard regardless of what the install owns. Of the 221
-global sensors, 52 belong to a home battery, 24 to an EV charger and 8 to a heat pump, so an
-install with none of them carries 84 sensors — over a third — for hardware it does not have,
-plus the numbers, switches, selects and cards that go with them. #857's reporter: *"I have no
+global sensors, 51 belong to a home battery (3 of them shared with EV), 29 to an EV charger and
+8 to a heat pump, so an install with none of them carries 88 sensors — two in five — for
+hardware it does not have, plus 25 numbers, switches, binary sensors and buttons, and the cards
+that go with them (113 static entities in all, classified in the plan). #857's reporter: *"I have no
 heat pump, no home battery … would prefer to hide all related elements."*
 
 EV already does this halfway (#595 removes the EV tab when no charger is configured); battery
@@ -54,39 +55,74 @@ momentarily unavailable says nothing about whether the hardware exists — readi
 
 | module | PRESENT when | ABSENT when | otherwise |
 |---|---|---|---|
-| Battery | `battery_soc_sensor`, `battery_power_sensor` or `battery_capacity_kwh` is set, **or** the Energy Dashboard declares a battery | none of those **and** the Energy Dashboard config was read | UNKNOWN — Energy Dashboard not loaded yet |
-| EV | `ev_chargers` non-empty or `ev_charging_power_sensor` set | neither | — |
-| Heat pump | `heat_pumps` non-empty, or `heat_pump_climate_entity` / an SG-Ready relay entity set — the same inputs `heat_pump_registration_status` reads | none | — |
+| Battery | a battery **wiring** key is set (`battery_soc_sensor`, `battery_power_sensor`, a discharge/force-discharge/strategy control entity), **or** the Energy Dashboard declares a battery | none of those **and** the Energy Dashboard question was answered | UNKNOWN — Energy Dashboard unread or unreadable |
+| EV | `ev_chargers` non-empty, `ev_charging_power_sensor` / `ev_power_sensor` set, **or** the Energy Dashboard declares an EV consumer | none of those **and** the Energy Dashboard question was answered | UNKNOWN |
+| Heat pump | `heat_pumps` non-empty, or a heat-pump wiring key set (relay 1/2, climate entity, SG-Ready service or state entity, power or energy sensor) | none | — |
 | Hot water | `hot_water_entity` is set — the one key that creates a `HotWaterController` today (`__init__.py`, #454) | not set | — |
 
-The four existing "has a battery" checks are replaced by calls to this function. The battery
-rule keeps the constraint the dashboard generator already documents: *a battery-less verdict
-must never come from an incomplete config alone.*
+Only **wiring** counts. `battery_capacity_kwh` is deliberately not evidence: the options
+flow's Settings step saves it with a default for every install that passes through it
+(`config_flow.py`, step `settings`), so it describes a battery without proving one. The same
+goes for heat-pump tunables (boost offset, rated power, priority).
+
+"Answered" is its own value (#925): a missing `.storage/energy` file is a definite "no
+dashboard" (answered), a read or parse failure is not. `read_energy_dashboard_config` folds
+both into `None`, so the oracle gets a sibling that keeps them apart.
+
+The deciders that are replaced by calls to this function: `__init__.py:378` (welcome text),
+`select.py:_has_battery` (shared with `number.py`), and `features/dashboard_generator.py`
+`:277` and `:636`. (`config_flow.py:601` only *writes* a `has_battery` flag that nothing
+reads — it is not a decider and is left alone.) The battery rule keeps the constraint the
+dashboard generator already documents: *a battery-less verdict must never come from an
+incomplete config alone.*
+
+**The EV module is not the EV tab.** An Energy Dashboard EV consumer feeds `sem_ev_power` with
+no charger configured (`sensor_reader.py`, the `ed.ev_power` branch), so that install has EV
+*data* and keeps its EV entities. The EV *tab* is the control surface for a charger SEM was told
+about and keeps #595's rule — a configured charger (`has_managed_charger`) — as does the
+welcome text's charge-mode line.
 
 ## 4. Entity gating
 
-Each entity description may declare the modules it needs:
+Each entity declares the modules it needs in ONE keyed table beside the oracle:
 
 ```python
-requires: frozenset[Module] = frozenset()   # empty = core
+ENTITY_MODULES: Mapping[tuple[str, str], frozenset[Module]]   # (platform, key) -> modules; absent = core
 ```
+
+A table rather than a field on each description: HA's `EntityDescription` classes are frozen
+dataclasses, so a field means subclassing all 267 descriptions; the table leaves them untouched
+and gives the dashboard generator the same lookup. A naming ratchet keeps it complete — any key
+that *looks* like a module (`battery`, `ev_`, `heat_pump`, `hot_water`, `charg`, …) must be in
+the table or in an explicit core-by-decision list with its reason.
 
 An entity is **created when every required module is PRESENT or UNKNOWN**, and skipped only when
 one is definitively ABSENT. UNKNOWN always keeps — a slow boot must never hide a real battery.
 
-Applies to every platform: sensor, number, switch, select, binary_sensor, button, time.
-Cross-module entities list all their modules — battery→EV assist requires `{BATTERY, EV}`.
+Applies to every static list: sensor, number, switch, binary_sensor, button (select and time
+have per-device entities only, which already follow their config lists; the global battery
+select follows the oracle through `_has_battery`). Cross-module entities list all their
+modules — battery→EV assist requires `{BATTERY, EV}`.
+
+**Core by decision:** `sensor.charging_state` stays core although it is named like EV — it
+carries the Home tab's `today_plan` attribute (solar peak, price windows, night) and is the
+Config tab's "set up" marker. `diag_charger_count` stays core — it is how "0 chargers found"
+is visible.
 
 ## 5. The dashboard moves in lockstep
 
 `_prune_ev_view_if_no_charger` becomes a module-driven prune on the same oracle:
 
-- an ABSENT module removes its tab (Battery, EV) and sets the diagram node flag
-  (`show_battery`, `show_ev`) — the existing #595/#614 behaviour, generalised;
-- any card whose entities all belong to an ABSENT module is removed from the other tabs — the
-  generator maps an entity to its module through the same `requires` declarations (§4), so the
-  dashboard and the entity set cannot disagree;
-- every `sem-*` card tolerates a missing module without rendering an error card.
+- Battery ABSENT removes the Battery tab and sets `show_battery: false` (#614); no managed
+  charger removes the EV tab and sets `show_ev: false` (#595, unchanged);
+- every explicit reference to an ABSENT module's entity is removed from the remaining views —
+  a sankey node or `children` link, a card whose `entity:` it is, a stack left empty — through
+  the same `ENTITY_MODULES` table (§4), so the dashboard and the entity set cannot disagree.
+  Most `sem-*` cards take `entity_prefix` and pick their entities internally, so they are not
+  pruned but must tolerate absence;
+- every `sem-*` card tolerates a missing module without rendering an error card — enforced by a
+  lint on unguarded `states[x].prop` reads (one exists today, `sem-load-priority-card.js:403`)
+  and checked live on the minimal install.
 
 Hand-built user dashboards that reference removed entities cannot be fixed by SEM; the release
 note says so.
@@ -94,20 +130,36 @@ note says so.
 ## 6. Existing installs — a one-time cleanup
 
 On setup, for each module that is **definitively ABSENT**, SEM removes its own registry entries
-for that module (`platform == DOMAIN` and a `unique_id` from that module's set, `sem_<key>`).
-Never on UNKNOWN. Logged with the count per module.
+for that module. Never on UNKNOWN.
+
+This needs no new remover: the sensor, number and switch platforms already sweep registry
+entries whose key is not in their description list, so feeding them the *gated* list removes
+exactly the ABSENT modules' entries (UNKNOWN keeps the description, so it stays valid). Two gaps
+are closed: binary_sensor and button had no sweep, and number's legacy unique_id
+(`battery_capacity` → `battery_capacity_kwh`) was valid unconditionally.
 
 Long-term statistics of removed entities are left in place — Home Assistant keeps them after any
 entity is removed (the same leftover Spook reported on #908). Offering to clear them is #935's job.
 
 ## 7. Adding hardware later
 
-- A change on SEM's configure screen already triggers a reload (`_SET_OPTION_STRUCTURAL_KEYS`
-  and the options flow), and the reload creates whatever is now PRESENT. No new code.
+- A change on SEM's configure screen already triggers a reload (the options flow), and the
+  reload creates whatever is now PRESENT. `set_option` reloads only for keys in
+  `_SET_OPTION_STRUCTURAL_KEYS` — five module wiring keys were missing (`ev_charging_power_sensor`,
+  `ev_power_sensor`, `heat_pumps`, `heat_pump_sg_ready_service`,
+  `heat_pump_sg_ready_state_entity`); they are added and a ratchet keeps every wiring key there.
 - Hardware SEM only **discovers** — a battery added to HA's Energy Dashboard — does not change
-  SEM's options. The coordinator re-evaluates the oracle; a module that flips **ABSENT → PRESENT**
-  schedules **one** reload. Guarded: once per transition, and at most one module-driven reload
-  per 10 minutes, so a flickering detection cannot become a reload loop.
+  SEM's options. SEM subscribes to HA's energy-prefs updates (ONE listener per hass: the
+  EnergyManager has no unsubscribe, so it looks the live coordinators up when it fires) and
+  re-reads the Energy Dashboard; a module that flips **ABSENT → PRESENT** schedules **one**
+  reload. Guarded: once per transition (after the reload the setup verdict is PRESENT), and at
+  most one module-driven reload per 10 minutes across reloads, so a flickering detection cannot
+  become a reload loop. PRESENT → ABSENT never reloads — it applies at the next restart or
+  options change, because removing entities on a live re-read is the false-ABSENT this whole
+  design exists to prevent.
+- The verdict is visible: `sensor.sem_diag_ed_config` carries an `install_modules` attribute
+  and the downloadable diagnostics include it — support's first stop for "where is my battery
+  tab", and what `validate-sem.sh` reads.
 
 ## 8. Failure modes and how they are contained
 
