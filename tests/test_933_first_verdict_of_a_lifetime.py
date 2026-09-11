@@ -331,8 +331,10 @@ class TestTheForceDischargeRepair:
                             "number.growatt_power_setpoint"})
         with patch(RI + ".clear_battery_force_discharge_unsupported") as clear:
             await a._write_force_discharge(0.0)
+            clear.assert_not_called()   # a register can take 0 and refuse real setpoints
             await a._write_force_discharge(1500.0)
             await a._write_force_discharge(0.0)
+            await a._write_force_discharge(2500.0)
         clear.assert_called_once()
         assert clear.call_args.args[1] == "number.growatt_power_setpoint"
 
@@ -485,3 +487,70 @@ class TestTheSplitGridGuessRepair:
                 reader.read_power()
         ri.raise_split_grid_guessed.assert_called_once()
         ri.clear_split_grid_guessed.assert_not_called()
+
+
+@pytest.mark.unit
+class TestAFirstVerdictNeedsAnAnswerableQuestion:
+    """The adversarial review's catches: a fresh owner's first verdict is
+    only a verdict when the question could have been answered."""
+
+    def test_a_brand_still_loading_is_not_yet_not_no(self):
+        """``is_running`` holds from HA's ``starting`` state on, and an entry
+        in SETUP_RETRY is not loaded: a still-pinned install must neither
+        lose its Repair (and the user's "ignore") nor see it re-raised."""
+        loaded: dict = {}
+        entry = SimpleNamespace(state=SimpleNamespace(value="setup_retry"))
+        c = SimpleNamespace(hass=SimpleNamespace(
+            is_running=True, data=loaded,
+            config_entries=SimpleNamespace(
+                async_entries=lambda d: [entry] if d == "huawei_solar" else [])))
+        c._battery_adapter_context = lambda bid, idx, n: dict(PINNED)
+        with patch(PIN.format("raise")) as raise_, \
+                patch(PIN.format("clear")) as clear:
+            _cycles(c, ["primary"])
+            clear.assert_not_called()
+            raise_.assert_not_called()
+            loaded["huawei_solar"] = {}          # the brand finished loading
+            _cycles(c, ["primary"])
+        raise_.assert_called_once()
+        clear.assert_not_called()
+
+    def test_a_battery_that_leaves_takes_its_answer_with_it(self):
+        contexts = {"a": PINNED, "b": SESSY}
+        c = SimpleNamespace(hass=SimpleNamespace(is_running=True,
+                                                 data={"huawei_solar": {}}))
+        c._battery_adapter_context = lambda bid, idx, n: dict(contexts[bid])
+        with patch(PIN.format("raise")) as raise_, \
+                patch(PIN.format("clear")) as clear:
+            _cycles(c, ["a", "b"])
+            raise_.assert_called_once()
+            _cycles(c, ["b"])                    # battery a is gone
+        clear.assert_called_once()
+
+    def test_a_flat_sensor_with_a_live_source_clears_a_predecessors_stale_repair(self):
+        """#912: its own stamp never moves while it holds still, but its
+        source reports — flat, not frozen. The rule that clears a Repair
+        raised in this life clears a predecessor's too."""
+        at = dt_util.utcnow() - timedelta(minutes=15)
+        hass = MagicMock()
+        hass.states.get = lambda eid: _reading(0, reported_at=at)
+        r = SensorReader(hass, {})
+        with patch.object(SensorReader, "_source_is_alive", return_value=True), \
+                patch.object(SensorReader, "_stillness_is_expected", return_value=False), \
+                patch(RI + ".clear_sensor_stale") as clear, \
+                patch(RI + ".raise_sensor_stale") as raise_:
+            for _ in range(3):
+                r._read_sensor("sensor.grid_export", "grid_export")
+        clear.assert_called_once()
+        raise_.assert_not_called()
+
+    def test_a_watch_without_an_expectation_clears_what_one_with_it_raised(self):
+        """Raised under an explicit huawei platform; the platform went to
+        auto and the reload built a publish-only watch."""
+        w = BatteryModeWatch(None)
+        w.feed("unavailable")
+        assert not w.changed
+        w.feed("fully_fed_to_grid")
+        assert w.changed and not w.raised and not w.recovered
+        w.feed("fully_fed_to_grid")
+        assert not w.changed

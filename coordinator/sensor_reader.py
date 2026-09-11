@@ -3772,6 +3772,7 @@ class SensorReader:
             return
         # (#933) the report stamp this reader saw first, for the reconcile below
         first_report = self._stale_first_report.setdefault(entity_id, last_seen)
+        rescued = False                 # (#933) set by the #912 live-source rule
         stale = age_s >= self._STALE_THRESHOLD_S
         if stale and self._stillness_is_expected(name, value):
             # (#851) A stall the sensor's own domain explains is not a fault.
@@ -3791,6 +3792,7 @@ class SensorReader:
             # branch so a Repair raised during a real stall clears once the
             # source reports again.
             stale = False
+            rescued = True
         if stale:
             if entity_id not in self._frozen_sensors:
                 self._frozen_sensors.add(entity_id)
@@ -3818,9 +3820,11 @@ class SensorReader:
             _LOGGER.info(
                 "Sensor %s (%s) is updating again (was frozen).", entity_id, name,
             )
-        elif entity_id not in self._stale_reconciled and last_seen > first_report:
+        elif (entity_id not in self._stale_reconciled
+              and (rescued or last_seen > first_report)):
             # (#933) A Repair a predecessor raised: this reader has now SEEN
-            # the entity report, so the stall it named is over. Once.
+            # the entity report — or its source report while it holds still
+            # (#912) — so the stall it named is over. Once.
             self._stale_reconciled.add(entity_id)
             from . import repair_issues as _ri
             _ri.clear_sensor_stale(self.hass, entity_id)

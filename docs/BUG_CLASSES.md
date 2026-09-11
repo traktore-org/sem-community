@@ -3161,7 +3161,12 @@ no-recorder / Deye Repairs, which clear on every current verdict.
 memo (or starts its verdict memo at *unseen*, never at a value the verdict can take) and treats its
 first healthy verdict as an edge. "Healthy" means evidence this lifetime saw: a reflected write names
 the entity it proved; a stale sensor clears only once this reader has SEEN its report stamp move — a
-restored state looks fresh for ten minutes after a restart and proves nothing. One Repair id for
+restored state looks fresh for ten minutes after a restart and proves nothing (its source reporting
+while it holds still does, #912); an accepted 0 W write proves nothing about discharge. A first
+verdict is only a verdict when the question could have been answered: "not pinned" while a
+Huawei/GoodWe entry is still loading (HA is `is_running` from `starting` on; SETUP_RETRY) is "not
+yet", not "no" — acting on it would delete the Repair, and the user's "ignore", only to re-raise
+it. One Repair id for
 several units is one verdict: the pin Repair is decided for the install once every battery has
 answered, because a first-verdict clear per battery would let a healthy second battery take down the
 first one's Repair.
@@ -3171,7 +3176,10 @@ enclosing `if`/`while`/`for`, or an earlier early exit — reads instance state 
 writes. Every memo-gated function is declared with its answer to "who clears the Repair a previous
 lifetime left?"; a new one fails CI until answered, and a stale declaration fails too. The
 detector's twin fires on the #933, #824, #915 and #840 shapes and not on a reading or an
-unconditional clear; a floor on the site count stops a walker that parses nothing. Behaviour:
+unconditional clear; a floor on the site count stops a walker that parses nothing. It cannot see
+a memo on a helper object built elsewhere, a raised-set mutated only through a helper method, a memo
+in `hass.data`, or a clear delivered as an action (#823) — the registry makes each new site ask the
+question; the behaviour tests prove the fixes. Behaviour:
 `tests/test_933_first_verdict_of_a_lifetime.py` drives each owner the way a reload does — fresh
 owner, healthy first verdict, the clear exactly once — with every verdict formed by production code
 (the real `pinned_generic_brand`, the real generic adapter's read-back, the real sensor reader).
@@ -3183,5 +3191,13 @@ while `_failsafe_reported` (in memory) and a learned interval hold, so a fresh r
 produce it. What proves the box healthy without the learned interval is a decision, not a sweep —
 and an action-mediated clear is invisible to the AST guard. (2) A Repair keyed on an entity the new
 config no longer writes (a platform switch, a renamed entity) has no owner left to clear it at all:
-the orphan sweep the heat-pump and hot-water Repairs have, not generalized.
-Refs #933 #919 #900 #824 #915 #840 #845 #896 #485 #944.
+the orphan sweep the heat-pump and hot-water Repairs have, not generalized. (3) The #845 mode watch
+is built on the first cycle, before any battery adapter exists, so on an auto-detected platform it
+has no expectation and stays publish-only for its whole life: the #845 Repair is dormant everywhere
+but an explicit `huawei` platform (the #919 shape — a question asked before the thing it asks about
+exists). Turning it on raises a new Repair on live installs: a decision, not a sweep. (4) #915's
+clear is install-wide within the primary adapter: any reflected write clears every raised write
+Repair, including one for another entity that still ignores writes (class 83's shape; pre-existing).
+(5) The pin verdict's first cycle is SEM's battery set at that moment: a synthetic `primary` that
+later becomes b1/b2 with a different per-battery platform can clear once and re-raise.
+Refs #933 #919 #900 #824 #915 #840 #845 #896 #911 #485 #944.

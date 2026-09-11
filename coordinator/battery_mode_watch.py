@@ -69,6 +69,11 @@ class BatteryModeWatch:
             # publish-only install (brand without a known expectation)
             if state not in _NO_READING:
                 self.last_mode = str(state)
+                if not self._settled:
+                    # (#933) No expectation, no claim: a Repair a predecessor
+                    # raised under one (the platform changed, the entry
+                    # reloaded) is cleared on the first real reading.
+                    self._settled, self.changed = True, True
             return "ok"
         if state in _NO_READING:
             return "unknown" if not self._raised else "unexpected"

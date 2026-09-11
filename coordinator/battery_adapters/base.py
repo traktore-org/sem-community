@@ -281,7 +281,7 @@ class BatteryControlAdapter(ABC):
         # (#933) The Repair is persistent; the count above is not. A reload
         # builds this adapter at zero, so "recovered from refusals" never
         # fires for a Repair its predecessor raised — the first accepted
-        # write of this adapter's life clears it, once.
+        # discharge setpoint of this adapter's life clears it, once.
         self._force_discharge_repair_reconciled: bool = False
         # (#840) The last value whose write was REFUSED. Distinct from
         # ``_last_force_discharge_w``, which records what actually landed.
@@ -620,9 +620,13 @@ class BatteryControlAdapter(ABC):
                 )
                 self._force_discharge_failures = 0
                 self._clear_force_discharge_repair()
-            elif not self._force_discharge_repair_reconciled:
-                self._clear_force_discharge_repair()        # (#933) once
-            self._force_discharge_repair_reconciled = True
+            elif watts > 0 and not self._force_discharge_repair_reconciled:
+                # (#933) once, on an accepted DISCHARGE setpoint — the
+                # capability the Repair names. The routine 0 W proves nothing:
+                # a register can take 0 and refuse every real setpoint.
+                self._clear_force_discharge_repair()
+            if watts > 0:
+                self._force_discharge_repair_reconciled = True
             if watts > 0:
                 _LOGGER.info(
                     "Battery: forcible-discharge %.0f W → %s (arbitrage)",

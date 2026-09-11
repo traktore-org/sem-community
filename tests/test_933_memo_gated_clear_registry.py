@@ -17,6 +17,14 @@ statements, ungated inside) count as clears at their call sites. Every
 memo-gated function is declared below with its answer to the one question
 the class asks. A new one fails CI until someone answers it; a declaration
 whose site is gone fails too.
+
+What it cannot see (the review's probe, recorded so nobody trusts it
+further): a memo kept on a helper object built elsewhere (``if
+self._w.changed``), a raised-set mutated only through a helper method, a
+memo in ``hass.data``, and a clear delivered as an action (#823's
+``CLEAR_FAILSAFE_SUSPECTED``). The behaviour tests in
+test_933_first_verdict_of_a_lifetime.py prove the fixes; this file makes
+each new site ask the question.
 """
 from __future__ import annotations
 
@@ -47,7 +55,8 @@ DECLARED: dict[str, str] = {
         "current verdict every cycle",
     "coordinator/coordinator.py::SEMCoordinator._check_battery_platform_pin":
         "the verdict memo means 'decided yet?' (hasattr), never None; one "
-        "install-wide verdict once every battery has answered (#933)",
+        "install-wide verdict once every battery answered this cycle, and "
+        "none while a brand entry is still loading (#933)",
     "coordinator/coordinator.py::SEMCoordinator._check_charger_control_entities":
         "the first valid verdict per (charger, entity) of each lifetime "
         "clears once (_control_repair_reconciled, #933)",

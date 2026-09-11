@@ -10033,26 +10033,35 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         The Repair has ONE id for the install, so the verdict is the
         install's: the first pinned battery's brand, or None when none is.
-        It is not a verdict until every battery has answered once — or a
-        healthy second battery's first answer would clear the first's.
+        It is not a verdict until every battery has answered in this cycle —
+        or a healthy second battery's first answer would clear the first's —
+        and "not pinned" is no answer while a Huawei/GoodWe entry is still
+        loading: ``is_running`` holds from HA's ``starting`` state on, and an
+        entry in SETUP_RETRY is not loaded. Acting on that None deleted the
+        Repair (and the user's "ignore") only to re-raise it a minute later.
         """
         if not getattr(self.hass, "is_running", False):
             return
-        from .battery_adapters import pinned_generic_brand
+        from .battery_adapters import pinned_generic_brand, pinned_generic_pending
         from . import repair_issues as _ri_pin
         try:
             _pbc = self._battery_adapter_context(battery_id, batt_idx, bat_count)
             pinned = pinned_generic_brand(self.hass, _pbc)
+            pending = pinned is None and pinned_generic_pending(self.hass, _pbc)
         except Exception:  # noqa: BLE001 — a Repair never costs a cycle
             return
+        # This cycle's answers only: a battery that leaves the install takes
+        # its answer with it.
         seen = getattr(self, "_pinned_verdicts", None)
-        if seen is None:
+        if seen is None or batt_idx == 0:
             seen = self._pinned_verdicts = {}
-        seen[battery_id] = pinned
-        if len(seen) < max(1, int(bat_count or 1)):
+        seen[battery_id] = (pinned, pending)
+        if batt_idx < bat_count - 1 or len(seen) < bat_count:
             return                      # not every battery has answered yet
         first_id, verdict = next(
-            ((bid, b) for bid, b in seen.items() if b), (None, None))
+            ((bid, b) for bid, (b, _p) in seen.items() if b), (None, None))
+        if verdict is None and any(p for _b, p in seen.values()):
+            return                      # a brand is still loading: "not yet"
         if (hasattr(self, "_pinned_repair_verdict")
                 and self._pinned_repair_verdict == verdict):
             return
