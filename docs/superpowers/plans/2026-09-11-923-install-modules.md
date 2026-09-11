@@ -2289,6 +2289,7 @@ async def test_an_energy_dashboard_edit_rereads_it_once(hass):
     coordinator.async_initialize_energy_dashboard = AsyncMock()
     entry.runtime_data = coordinator
     entry.mock_state(hass, ConfigEntryState.LOADED)
+    hass.config.components.add("energy")
 
     await _async_listen_energy_prefs(hass)
     await _async_listen_energy_prefs(hass)   # a reload must not add a second listener
@@ -2401,6 +2402,8 @@ async def _async_listen_energy_prefs(hass: HomeAssistant) -> None:
     EV consumer added there reaches SEM without a restart (#923)."""
     if hass.data.get(_ENERGY_PREFS_LISTENER):
         return
+    if "energy" not in hass.config.components:
+        return  # nobody can edit the Energy Dashboard without it; re-read on restart
     try:
         from homeassistant.components.energy.data import async_get_manager
         manager = await async_get_manager(hass)
@@ -2436,19 +2439,7 @@ add
         await _async_listen_energy_prefs(hass)
 ```
 
-In `manifest.json` replace
-```json
-  "after_dependencies": [
-    "recorder"
-  ],
-```
-with
-```json
-  "after_dependencies": [
-    "energy",
-    "recorder"
-  ],
-```
+(`manifest.json` already lists `"energy"` in `after_dependencies` — added by the Tasks 3-4 review fix, because `ha_energy_reader` now reads HA's energy manager first.)
 
 - [ ] **Step 6: Run to verify they pass**
 
@@ -2458,7 +2449,7 @@ Expected: all PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add coordinator/install_modules.py coordinator/coordinator.py __init__.py manifest.json tests/test_923_module_growth.py
+git add coordinator/install_modules.py coordinator/coordinator.py __init__.py tests/test_923_module_growth.py
 git commit -m "feat(#923): a module added in the Energy Dashboard creates its entities with one guarded reload"
 ```
 
