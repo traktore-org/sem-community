@@ -2680,6 +2680,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             "Load management features will be unavailable."
         )
 
+    # (#923) ONE module verdict for every platform: captured here, after the
+    # Energy Dashboard read above and before any platform builds entities —
+    # so sensor, number, switch, the dashboard and the welcome text can never
+    # disagree about what this install has.
+    from .coordinator.install_modules import presence_summary
+    coordinator.setup_presence = coordinator.install_presence()
+    _LOGGER.info("Install modules: %s", presence_summary(coordinator.setup_presence))
+
     # Setup platforms (critical - must succeed)
     try:
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

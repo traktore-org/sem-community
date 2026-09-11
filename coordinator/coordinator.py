@@ -48,7 +48,8 @@ from ..const import (
     STATE_UNAVAILABLE,
 )
 from ..utils.time_manager import TimeManager
-from ..ha_energy_reader import read_energy_dashboard_config, EnergyDashboardConfig
+from ..ha_energy_reader import read_energy_dashboard_config_outcome, EnergyDashboardConfig
+from .install_modules import Module, Presence, module_verdict
 
 from .types import (
     SEMData, PowerReadings, PowerFlows, SystemStatus, LoadManagementData,
@@ -537,6 +538,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         # Energy Dashboard config
         self._energy_dashboard_config: Optional[EnergyDashboardConfig] = None
+        # (#923) The Energy Dashboard as the install-modules oracle sees it:
+        # the parsed config even when it is not "minimally configured", and
+        # whether the question got an answer at all (#925 — unread ≠ no).
+        self._ed_raw_config: Optional[EnergyDashboardConfig] = None
+        self._ed_answered: bool = False
+        # The verdict the platforms were built with — captured once in
+        # async_setup_entry, after the Energy Dashboard read and before any
+        # platform loads, so every platform gates on the SAME answer.
+        self.setup_presence: Optional[Dict[Module, Presence]] = None
         # Cold-start recovery (#274): re-derive ED power sensors each cycle while
         # they're unresolved (source integration registered after SEM), bounded.
         self._ed_resolve_pending: bool = False
@@ -1777,6 +1787,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 counters.append(fallback)
         return counters
 
+    def install_presence(self) -> Dict[Module, Presence]:
+        """(#923) What this install has right now — see install_modules.py."""
+        return module_verdict(self.config, self._ed_raw_config, self._ed_answered)
+
     async def async_initialize_energy_dashboard(self, quiet: bool = False) -> bool:
         """Initialize sensors from HA Energy Dashboard.
 
@@ -1786,7 +1800,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         """
         _info = _LOGGER.debug if quiet else _LOGGER.info
         try:
-            dashboard_config = await read_energy_dashboard_config(self.hass, quiet=quiet)
+            dashboard_config, answered = await read_energy_dashboard_config_outcome(
+                self.hass, quiet=quiet)
+            self._ed_raw_config = dashboard_config
+            self._ed_answered = answered
 
             # Activate whenever the dashboard is minimally configured (solar + grid),
             # not only when a stat_rate power sensor exists. ha_energy_reader already
