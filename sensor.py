@@ -37,6 +37,7 @@ from homeassistant.helpers import label_registry as lr
 from .const import SENSOR_LABEL_MAPPING
 from .consts.labels import SEM_LABELS
 from .coordinator import SEMCoordinator
+from .coordinator.install_modules import kept_descriptions, presence_of
 from .features.device_axes import (
     has_control_handle as _has_control_handle,
     may_actuate as _may_actuate,
@@ -1962,11 +1963,16 @@ async def async_setup_entry(
     _LOGGER.info("Setting up SEM sensors for entry %s", entry.entry_id)
 
     coordinator: SEMCoordinator = entry.runtime_data
-    _LOGGER.info("Got coordinator, creating %d sensors", len(SENSOR_TYPES))
+    # (#923) Only the sensors of modules this install has — UNKNOWN keeps.
+    # The same list feeds the stale sweep below, which is what removes an
+    # ABSENT module's leftovers from the registry.
+    static_descriptions = kept_descriptions(
+        "sensor", SENSOR_TYPES, presence_of(coordinator))
+    _LOGGER.info("Got coordinator, creating %d sensors", len(static_descriptions))
 
     sensors = [
         SEMSolarSensor(coordinator, description, entry.entry_id)
-        for description in SENSOR_TYPES
+        for description in static_descriptions
     ]
 
     # Per-charger sensors (#131): create power + session sensors for each configured charger
@@ -2271,7 +2277,7 @@ async def async_setup_entry(
 
     # Fix entity_ids from pre-translation installs and clean up stale entities
     all_descriptions = (
-        list(SENSOR_TYPES)
+        list(static_descriptions)
         + per_charger_descriptions
         + per_string_descriptions
         + per_battery_descriptions

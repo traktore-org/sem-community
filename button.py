@@ -14,7 +14,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
-from .sensor import _fix_entity_ids
+from .coordinator.install_modules import kept_descriptions, presence_of
+from .sensor import _cleanup_stale_entities, _fix_entity_ids
 
 BUTTONS: tuple[ButtonEntityDescription, ...] = (
     ButtonEntityDescription(
@@ -29,13 +30,16 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities(SEMButton(coordinator, d) for d in BUTTONS)
+    # (#923) The battery-night backfill is a battery entity.
+    static_descriptions = kept_descriptions("button", BUTTONS, presence_of(coordinator))
+    async_add_entities(SEMButton(coordinator, d) for d in static_descriptions)
     # ``self.entity_id`` below is honoured only at FIRST registration; an
     # install that registered the button before the #815 id line existed
     # keeps the derived id (the .175 rig held
     # ``button.garden_sem_rebuild_battery_night_history`` on 01.09.2026).
     # Same registry repair switch/number/sensor run at setup.
-    _fix_entity_ids(hass, entry, list(BUTTONS), "button")
+    _fix_entity_ids(hass, entry, static_descriptions, "button")
+    _cleanup_stale_entities(hass, entry, static_descriptions, "button")
 
 
 class SEMButton(CoordinatorEntity, ButtonEntity):

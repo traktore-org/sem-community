@@ -17,6 +17,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .coordinator import SEMCoordinator
+from .coordinator.install_modules import kept_descriptions, presence_of
+from .sensor import _cleanup_stale_entities
 
 type SEMConfigEntry = ConfigEntry[SEMCoordinator]
 
@@ -109,22 +111,35 @@ async def async_setup_entry(
     """Set up SEM Solar Energy Management binary sensors."""
     coordinator: SEMCoordinator = entry.runtime_data
 
+    # (#923) Only the binary sensors of modules this install has — UNKNOWN keeps.
+    static_descriptions = kept_descriptions(
+        "binary_sensor", BINARY_SENSOR_TYPES, presence_of(coordinator))
     entities = [
         SEMSolarBinarySensor(coordinator, description, entry)
-        for description in BINARY_SENSOR_TYPES
+        for description in static_descriptions
     ]
 
     # Per-charger binary sensors (#193)
     full_config = {**entry.data, **entry.options}
     ev_chargers = full_config.get("ev_chargers", [])
+    per_charger_descriptions = []
     for charger_cfg in ev_chargers:
         cid = charger_cfg.get("id", "ev_charger")
-        entities.append(SEMSolarBinarySensor(coordinator, BinarySensorEntityDescription(
+        description = BinarySensorEntityDescription(
             key=f"charger_{cid}_connected",
             device_class=BinarySensorDeviceClass.PLUG,
-        ), entry))
+        )
+        per_charger_descriptions.append(description)
+        entities.append(SEMSolarBinarySensor(coordinator, description, entry))
 
     async_add_entities(entities)
+
+    # (#923) binary_sensor had no stale sweep at all, so a removed or
+    # module-gated key lingered in the registry forever. Same sweep the
+    # sensor platform runs, same two unique_id formats.
+    _cleanup_stale_entities(
+        hass, entry, list(static_descriptions) + per_charger_descriptions,
+        "binary_sensor")
 
 
 class SEMSolarBinarySensor(CoordinatorEntity, BinarySensorEntity):
