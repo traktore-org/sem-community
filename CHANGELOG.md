@@ -13,6 +13,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.1.0-beta.15] — 11.09.2026
+
+- 🔧 **Repairs now go away once you have fixed the cause** (#933). Following
+  the "Battery platform pinned to Generic" Repair (platform → Auto-detect)
+  left it in Settings → Repairs, because the reload that change triggers
+  threw away SEM's first check. The same flaw kept other Repairs up after a
+  fix and a restart: a sensor that is back or updating again, a charger
+  control entity that works again, a newly installed forecast integration,
+  "SEM guessed your grid meters" after you set the pair, "load shedding is
+  futile", a battery write that now takes, and forcible discharge that works
+  again. Each now clears on the first reading that proves it — and a Repair
+  whose inverter integration is still loading at startup is left alone
+  instead of being cleared and raised again.
+
 # [2.1.0-beta.14] — 11.09.2026
 
 - 🔌 **An EV on "Solar + cheapest hours" no longer switches on and off all
