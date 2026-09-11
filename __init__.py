@@ -2683,10 +2683,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     # (#923) ONE module verdict for every platform: captured here, after the
     # Energy Dashboard read above and before any platform builds entities —
     # so sensor, number, switch, the dashboard and the welcome text can never
-    # disagree about what this install has.
-    from .coordinator.install_modules import presence_summary
-    coordinator.setup_presence = coordinator.install_presence()
-    _LOGGER.info("Install modules: %s", presence_summary(coordinator.setup_presence))
+    # disagree about what this install has. A verdict that cannot be formed
+    # must never fail setup: None means "keep every entity".
+    try:
+        from .coordinator.install_modules import presence_summary
+        coordinator.setup_presence = coordinator.install_presence()
+        _LOGGER.info("Install modules: %s", presence_summary(coordinator.setup_presence))
+    except Exception as err:  # noqa: BLE001 — no verdict means keep every entity
+        coordinator.setup_presence = None
+        _LOGGER.warning("Install-modules verdict failed, keeping every entity: %s", err)
 
     # Setup platforms (critical - must succeed)
     try:
