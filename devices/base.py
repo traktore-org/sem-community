@@ -1104,6 +1104,36 @@ class ControllableDevice(ABC):
         self._sem_commanded = False
         return owned
 
+    # (#914) How long a restart adoption may wait for an entity whose
+    # integration is still loading. HA's own startup settles well inside it.
+    BOOT_ADOPTION_WINDOW_S: float = 600.0
+
+    def _boot_adoption_window_open(self) -> bool:
+        """(#914) Is this lifetime's one restart adoption still undecided?
+
+        Opens on the first call — the registration — and stays open while
+        the entity cannot be read yet, for at most ``BOOT_ADOPTION_WINDOW_S``.
+        An entity dark for longer is no evidence of anything SEM left behind:
+        the window closes unread, and SEM never claims what it sees start
+        later (a relay the user's own automation put in BOOST, a setpoint
+        set by hand).
+        """
+        if not getattr(self, "_boot_adoption_pending", False):
+            return False
+        now = time.monotonic()
+        until = getattr(self, "_boot_adoption_until", None)
+        if until is None:
+            self._boot_adoption_until = until = now + self.BOOT_ADOPTION_WINDOW_S
+        if now > until:
+            self._boot_adoption_pending = False
+            _LOGGER.info(
+                "%s: restart adoption closed unread — nothing readable within "
+                "%.0f min of registration (#914)",
+                self.name, self.BOOT_ADOPTION_WINDOW_S / 60,
+            )
+            return False
+        return True
+
     def record_deactivated(self) -> None:
         """Record deactivation timestamp for anti-cycling."""
         self._last_deactivated = datetime.now()
@@ -1650,6 +1680,20 @@ class SwitchDevice(ComfortBandMixin, ControllableDevice):
             return True
         return False
 
+    def _adoptable_now(self) -> Optional[bool]:
+        """(#914) Is the load running on the axis SEM commands it on?
+        ``None`` = the entity cannot be read yet.
+
+        A switch's command IS its on/off state, so ``"on"`` is the whole
+        answer here. A subclass that commands something else — a hot-water
+        tank's SETPOINT — overrides this predicate, never the adoption
+        below: the belief, the clocks and the gated claim stay in one body.
+        """
+        state = self.hass.states.get(self.entity_id)
+        if not state or state.state in ("unavailable", "unknown", None):
+            return None
+        return state.state == "on"
+
     def adopt_if_running(self) -> bool:
         """(#559) Re-own a switch that is physically ON at (re-)registration.
 
@@ -1660,8 +1704,7 @@ class SwitchDevice(ComfortBandMixin, ControllableDevice):
         """
         if not self.entity_id or not self.hass or self.is_active:
             return False
-        state = self.hass.states.get(self.entity_id)
-        if not state or state.state != "on":
+        if not self._adoptable_now():
             return False
         self._status.state = DeviceState.ACTIVE
         self._status.current_consumption_w = self.rated_power
@@ -1670,7 +1713,7 @@ class SwitchDevice(ComfortBandMixin, ControllableDevice):
         self._last_activated = self._status.last_activated  # (#644) unified clock
         owned = self._adopt_ownership()  # (#779) gated, in one place
         _LOGGER.info(
-            "%s: switch %s was ON at registration — belief adopted, %s",
+            "%s: %s was running at registration — belief adopted, %s",
             self.name, self.entity_id,
             "re-owned as active" if owned
             else f"left to the user (mode {self.control_mode.value})",

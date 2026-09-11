@@ -41,6 +41,14 @@ LEGIONELLA_HOLD_MINUTES = {
     80: 3,
 }
 
+# (#914) The domains whose command is a SETPOINT, not an on/off state.
+_SETPOINT_DOMAINS = ("water_heater", "climate")
+
+# (#914) How close a tank's setpoint must sit to one SEM writes before a
+# restart may read it as SEM's boost. Half a degree absorbs a device that
+# rounds the written value; a setpoint the user picked sits further away.
+_BOOST_SETPOINT_MATCH_K = 0.5
+
 
 class HotWaterController(SwitchDevice):
     """Hot water controller with multi-entity support and Legionella prevention.
@@ -137,6 +145,85 @@ class HotWaterController(SwitchDevice):
         # but never turned on. Overridable via set_device_control_mapping.
         from .base import DeviceControlMode
         self.control_mode = DeviceControlMode.SURPLUS
+
+        # (#914) One restart adoption per lifetime, decided on the first
+        # READABLE observation after registration — see adopt_if_running.
+        self._boot_adoption_pending: bool = True
+
+    # ─── Restart adoption (#914) ─────────────────────────────
+
+    def _adoptable_now(self) -> Optional[bool]:
+        """(#914) A water_heater / climate tank is commanded by SETPOINT, not
+        by an on/off state — a water_heater reports its operation mode as its
+        state ("heat_pump", "eco"), a climate its hvac mode, and neither is
+        ever "on". So read the axis SEM writes.
+
+        True only while the entity still holds one of SEM's OWN boost
+        setpoints: the solar target, or the legionella target mid-cycle. A
+        setpoint SEM never writes — hotter than its target, or anything else
+        — is the user's and is never claimed: SEM releases what it commanded
+        and nothing more (#847, #908). One that EQUALS SEM's boost cannot be
+        told apart from it and is claimed, as #766 claims a switch turned on
+        in Solar mode. A climate tank must also be in the ``heat`` mode SEM
+        writes, the line ``ClimateDevice.adopt_if_running`` holds.
+        """
+        if self._entity_domain not in _SETPOINT_DOMAINS:
+            return super()._adoptable_now()
+        state = self.hass.states.get(self.entity_id)
+        if not state or state.state in ("unavailable", None):
+            return None
+        mode = str(state.state).lower()
+        if mode == "off":
+            return False
+        if self._entity_domain == "climate" and mode != "heat":
+            return None if mode == "unknown" else False
+        raw = state.attributes.get("temperature")
+        if raw is None:
+            # HA writes "unknown" for a water_heater without operation modes
+            # — permanently. Without a setpoint yet, it is still loading.
+            return None if mode == "unknown" else False
+        try:
+            target = float(raw)
+        except (TypeError, ValueError):
+            return False
+        return any(
+            abs(target - boost) <= _BOOST_SETPOINT_MATCH_K
+            for boost in (self.solar_target_temp, self.legionella_target_temp)
+        )
+
+    def adopt_if_running(self) -> bool:
+        """(#914) Re-own a boost SEM left on the tank across a restart.
+
+        #656 leaves loads exactly as they are on a reload or an HA restart
+        and relies on SEM re-adopting them when it comes back. The tank was
+        registered with no adopter at all, so SEM came back believing it idle
+        while its own boost setpoint stayed armed: the reconciler filed the
+        tank as external_on, no stop path ever visited it, and the
+        appliance's thermostat reheated to SEM's setpoint at any hour.
+
+        Decided ONCE per lifetime, on the first readable observation. An
+        entity whose integration is still loading keeps the window open —
+        the per-cycle belief sync retries it — and after that SEM never
+        claims a setpoint the user sets later.
+        """
+        if not self._boot_adoption_window_open():
+            return False
+        if self.is_active:
+            # SEM started it itself this lifetime — nothing left to adopt.
+            self._boot_adoption_pending = False
+            return False
+        if self.entity_id and self.hass and self._adoptable_now() is None:
+            return False
+        self._boot_adoption_pending = False
+        return super().adopt_if_running()
+
+    def sync_belief_to_observation(self) -> bool:
+        """(#766 / #914) The per-cycle twin. A switch tank follows its switch
+        every cycle (#766); a setpoint tank does not — only the restart
+        adoption above is retried, until the entity is first readable."""
+        if self._entity_domain in _SETPOINT_DOMAINS:
+            return self.adopt_if_running()
+        return super().sync_belief_to_observation()
 
     @property
     def entity_domain(self) -> Optional[str]:
