@@ -13,6 +13,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.1.0-beta.14] — 11.09.2026
+
+- 🔌 **An EV on "Solar + cheapest hours" no longer switches on and off all
+  evening** (#939). A car that had not yet answered SEM's start was misread
+  as full; the night plan then dropped it while the charging logic kept
+  starting it for the deadline, so the charger ran about 60 s on, 20 s off
+  until the cheap window. On a charger with a % target the plan now asks
+  the car's own battery reading, like the rest of SEM, and a car that does
+  not answer a start straight away is no longer called full.
+
+- 🔔 **No more "stopped at ~90 %" / "topping up to 100 %" notification
+  storm** (#939). With an "at least … up to …" range, a stop at the lower
+  target was cancelled by the upper one on the next cycle and re-sent the
+  cycle after. You now get one message per stop.
+
 # [2.1.0-beta.13] — 11.09.2026
 
 - 🔔 **SEM no longer stands down in silence while the car keeps charging**
