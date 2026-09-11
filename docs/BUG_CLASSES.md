@@ -1520,17 +1520,24 @@ car full?" from the taper/stall anchor for every charger, while a SOC-target cha
 the car's own SOC sensor. A false anchor over a Tesla reading 71 % dropped the car from the plan
 while the reactive layer charged it for the deadline; the N2 meter rule then made the gate follow
 the charger's own draw, and the two layers fought 60 s on / 20 s off all evening. **Closure:** for a
-SOC target with a live reading the gate returns None — the need already skips a car at its target —
-and the anchor still answers for a kWh target and a dark sensor. The sensor read is one helper
-(`ev_night_targets.charger_soc_reading`), shared with `_resolve_charger_soc`; the plan's "no
+SOC-target charger the gate returns None, keyed on the target TYPE: the need is car-derived either
+way (the sensor, else the anchored virtual SOC `_resolve_charger_soc` falls back to — the anchor's
+own answer, so #756's skip still arrives through `kwh <= 0.05`), and a gate keyed on "the sensor
+reads this cycle" restamped the night on every blink (caught in review). The type expression is
+shared with `build_night_target_map` (`ev_night_targets.charger_target_type`); the plan's "no
 overnight demands" line now names `car_full`, whose absence hid the anchor. **Guard:**
-`tests/test_939_plan_defers_to_the_car.py` — accessor, a signature that must not move with the draw,
-and the collector keeping the car (all RED against the pre-fix gate). **Left for Guido:** on a kWh
-target the gate still consults the anchor and the N2 meter rule is memoryless, so any false anchor
-still makes the car-full term follow the draw there. Closing it means letting post-full energy
-refute a `_full_detected` anchor (exempt by design today —
+`tests/test_939_plan_defers_to_the_car.py` — the accessor, a signature that must not move with the
+draw or a sensor blink (the `ev` term asserted present, so a raising accessor cannot pass it), the
+dark-sensor need reading nothing owed, and the collector keeping the car; the at-rest, signature and
+collector pins are RED against the pre-fix gate. **Left for Guido:** (1) on a kWh target the gate
+still consults the anchor and the N2 meter rule is memoryless, so any false anchor still makes the
+car-full term follow the draw there. Closing it means letting post-full energy refute a
+`_full_detected` anchor (exempt by design today —
 `test_a_detected_full_charge_is_never_refuted_by_its_own_trickle`; #939's car took 23 kWh
-"post-taper") and making `get_virtual_soc` recalibrate when it re-arms on an unchanged reading.
+"post-taper") and making `get_virtual_soc` recalibrate when it re-arms on an unchanged reading. (2) A
+SOC car that finishes mid-night by taper (Min 100 %, or the car's own limit) no longer restamps the
+plan through this term — the SOC need is not a signature term, so its blocks stay stamped until
+another trigger.
 **Known-open sibling (#744, flagged for Guido) — the authoritative read is UNREACHABLE for lights.**
 `resolve_load_is_on` prefers the control entity for the whole `_ONOFF_CONTROL_DOMAINS`
 (`switch`/`light`/`input_boolean`/`fan`/`humidifier`/`siren`/`remote`), but control *discovery*
@@ -3094,13 +3101,19 @@ keyed; `notify_ev_nearly_full` sets and clears on one predicate, one key.
 offer (setpoint 0 → > 0) clears the decline latch, the confirm count and the trend buffer — the new
 charge re-earns it from its own samples; absence of an offer (observer mode) never crosses the edge.
 The estimate latch holds the bound it was set at (`_estimate_stop_bound`; `_estimate_stop_active` is
-derived from it), and only that bound's effective need re-opening resumes.
+derived from it); only that bound's effective need re-opening resumes, naming the first re-opened
+bound (a reading back under Min is a top-up to Min). When the sensor itself reaches the latched
+bound the latch releases silently and frees the notification manager's stop flag, so the next
+estimate stop (Max, the next day) is still announced — the old bogus resume had done that by
+accident (liveness, caught in review).
 **Guard:** `tests/test_939_estimate_latch.py::TestIdenticalInputsNeverAnnounceTwice` — over a grid
 of sensor / cap / Min / Max, a clear latch announces at most once across 30 identical cycles and no
-latch alternates; its vacuity twin runs the old bare-flag rule through the same property and must
-fail on the live numbers. `tests/test_939_reoffer_is_not_a_taper.py` — the live evening (decline
-under a withdrawn offer, 6 A re-offer, 70 min of silence) must not anchor, with the latch pinned as
-set beforehand so it cannot pass on a detector that never latched.
+latch more than twice (safety), and a stop that falls due once the latched bound's sensor has caught
+up is announced within two cycles (liveness); the vacuity twin runs the old bare-flag rule through
+the safety property and must fail on the live numbers. `tests/test_939_reoffer_is_not_a_taper.py` —
+the live evening (decline under a withdrawn offer, 6 A re-offer, 70 min of silence) on a simulated
+10-second clock must not anchor, with the latch pinned as set beforehand so it cannot pass on a
+detector that never latched.
 **Sweep question:** for every latch — what KEY was its evidence about (which offer, bound, device,
 window)? Is every site that reads or clears it restricted to that key, and can its set and clear
 conditions both be true on the same inputs?
@@ -3109,5 +3122,9 @@ conditions both be true on the same inputs?
 no latch in between. Its comment says legacy-only, but the code runs on every install and writes
 into the primary per-charger detector through the computed `_ev_taper_detector`; on #939's evening
 it would have anchored full at ~20:48 had the taper not got there first. #756 N1 ("a car that had
-declined six start ladders") may lean on it, so it is not a cheap sweep.
+declined six start ladders") may lean on it, so it is not a cheap sweep. The re-offer clear has a
+cost of its own: a car whose last taper was cut short by a withdrawal and that stays silent after the
+re-offer is never taper-anchored. The primary charger has the stall path behind it; a non-primary
+kWh charger has nothing, which widens #756 N1's existing gap there (a car that arrives full is
+already never anchored on a non-primary).
 Refs #939 #708 #774 #756.

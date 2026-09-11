@@ -91,27 +91,43 @@ def estimate_stop_step(
 
     ``bounds`` is ``(name, target_soc)`` in evaluation order (``min`` then
     ``max``). Returns ``(latched_bound, event, target_soc)``: the latch to
-    keep, ``"stop"`` / ``"resume"`` / ``None``, and the target the event is
-    about.
+    keep; ``"stop"``, ``"resume"``, the silent ``"release"`` or ``None``;
+    and the target the event is about.
 
-    A stop is announced for the first bound the sensor alone has NOT reached
-    but the measured cap has; a resume only when THAT bound's effective need
-    re-opens — a fresh reading landing below it, or its target raised. The
-    latch used to be a bare flag, so the resume ran against every bound:
-    stopped at Min (90 %), it was released on the next cycle by Max (100 %),
-    which the capped estimate had of course not reached — and the stop
-    re-fired the cycle after. Live 10.09: the pair alternated several times
-    a minute until the owner moved Min. With the bound kept, identical
-    inputs cannot produce a second event.
+    * stop — the first bound the sensor alone has NOT reached but the
+      measured cap has. The latch keeps THAT bound.
+    * resume — only when the latched bound's effective need re-opens (a
+      fresh reading below it, or its target raised). It names the first
+      re-opened bound in evaluation order: a reading back under Min is a
+      top-up to Min, whichever bound the stop was at.
+    * release — the sensor itself has reached the latched bound: the stop
+      is no longer the estimate's, nothing resumes and nothing is sent, and
+      the next estimate stop (say at Max, the next day) may be announced.
+
+    The latch used to be a bare flag, so the resume ran against every
+    bound: stopped at Min (90 %), it was released on the next cycle by Max
+    (100 %), which the capped estimate had of course not reached — and the
+    stop re-fired the cycle after. Live 10.09: the pair alternated several
+    times a minute until the owner moved Min. With the bound kept,
+    identical inputs cannot produce a second announcement.
     """
-    for name, target in bounds:
-        if latched_bound is not None and name != latched_bound:
-            continue
-        need = soc_remaining_need(target, vehicle_soc, ceiling_soc, capacity_kwh)
-        sensor_rem = need.sensor_kwh or 0.0
-        eff_rem = need.effective_kwh or 0.0
-        if latched_bound is None and sensor_rem > 0.1 and eff_rem <= 0.1:
-            return name, "stop", target
-        if latched_bound is not None and eff_rem > 0.1:
-            return None, "resume", target
+    needs = {name: soc_remaining_need(target, vehicle_soc, ceiling_soc, capacity_kwh)
+             for name, target in bounds}
+
+    def _eff_rem(name: str) -> float:
+        return needs[name].effective_kwh or 0.0
+
+    if latched_bound is None:
+        for name, target in bounds:
+            if (needs[name].sensor_kwh or 0.0) > 0.1 and _eff_rem(name) <= 0.1:
+                return name, "stop", target
+        return None, None, None
+    if latched_bound not in needs:
+        return None, "release", None
+    if _eff_rem(latched_bound) > 0.1:
+        reopened = next(t for name, t in bounds if _eff_rem(name) > 0.1)
+        return None, "resume", reopened
+    sensor_rem = needs[latched_bound].sensor_kwh
+    if sensor_rem is not None and sensor_rem <= 0.1:
+        return None, "release", dict(bounds)[latched_bound]
     return latched_bound, None, None

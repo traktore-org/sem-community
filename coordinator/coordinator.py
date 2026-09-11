@@ -7744,31 +7744,29 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         charger's draw (``_charger_power_w``, the canonical per-charger
         read) against the charger's own handshake threshold.
 
-        (#939) Not asked at all for a SOC-target charger whose car reports
-        its SOC. That charger's night need is already ``target − the car's
-        own reading`` (``build_night_target_map`` →
-        ``_calculate_remaining_need``) — the number the reactive layer
-        charges on — and a car at its target is skipped there
-        (``kwh <= 0.05``). The anchor is the weaker witness of the same
-        fact, and when the two disagreed the layers fought: live, a false
-        taper anchor said "full" over a Tesla reading 71 %, the plan dropped
-        the car, the reactive layer started it for the deadline, the draw
+        (#939) Not asked at all for a SOC-target charger. Its night need is
+        already car-derived — ``target −`` the car's own reading, or, while
+        the sensor is dark, the anchored virtual SOC the anchor itself pins
+        (``_resolve_charger_soc``) — and a car at its target is skipped
+        there (``kwh <= 0.05``). So the anchor adds nothing but a chance to
+        disagree, and when it did the layers fought: live, a false taper
+        anchor said "full" over a Tesla reading 71 %, the plan dropped the
+        car, the reactive layer started it for the deadline, the draw
         un-fulled it (the N2 meter rule), the plan covered it again and
-        stopped it outside the window — 60 s on, 20 s off, all evening. The
-        anchor still answers where the need does not know the car: a kWh
-        target (the calendar counter #756 was built for) and a SOC target
-        whose sensor is dark.
+        stopped it outside the window — 60 s on, 20 s off, all evening.
+        Keyed on the target TYPE, not on whether the sensor reads this
+        cycle: a gate that changed hands with sensor availability would
+        restamp the night on every blink. A kWh target — the calendar
+        counter #756 was built for — still asks the anchor.
         """
         from .ev_availability import plan_car_fullness
-        from .ev_night_targets import charger_soc_reading, charger_target_type
+        from .ev_night_targets import charger_target_type
         try:
             config = getattr(self, "config", None) or {}
             cfg = next((c for c in (config.get("ev_chargers") or [])
                         if isinstance(c, dict)
                         and str(c.get("id") or "") == str(cid)), None) or {}
-            if (charger_target_type(config, cfg) == "soc"
-                    and charger_soc_reading(getattr(self, "hass", None), cfg)
-                    is not None):
+            if charger_target_type(config, cfg) == "soc":
                 return None
         except Exception:  # noqa: BLE001 — unevaluable: the anchor answers, as before
             pass
@@ -9848,6 +9846,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 sensor_soc=soc_708, target_soc=tgt,
                 charger_name=charger_name, flag_key=cid,
             )
+        elif event == "release":
+            # The sensor caught up with the stop: nothing to say, but the
+            # next estimate stop this session must be able to announce.
+            self._notification_manager.release_ev_estimate_stop(
+                charger_name=charger_name, flag_key=cid,
+            )
 
     async def _retry_ev_device_with_backoff(self) -> None:
         """Retry EV device setup with exponential backoff (#27).
@@ -10232,10 +10236,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
     def _resolve_charger_soc(self, cid: str, cfg: dict) -> float | None:
         """Per-charger vehicle SOC: real sensor, else anchored virtual SOC, else None."""
-        from .ev_night_targets import charger_soc_reading
-        reading = charger_soc_reading(getattr(self, "hass", None), cfg)
-        if reading is not None:
-            return reading
+        ent = cfg.get("vehicle_soc_entity")
+        if ent:
+            st = self.hass.states.get(ent)
+            if st and st.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+                try:
+                    return float(st.state)
+                except (ValueError, TypeError):
+                    pass
         det = (getattr(self, "_ev_taper_detectors", {}) or {}).get(cid)
         if det is not None and getattr(det, "_soc_anchored", False):
             return det.get_virtual_soc(None)

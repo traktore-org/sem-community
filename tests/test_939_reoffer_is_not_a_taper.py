@@ -18,13 +18,30 @@ draw — the 60 s on / 20 s off the owner filmed.
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 
+import pytest
+
+from custom_components.solar_energy_management.coordinator import (
+    ev_taper_detector as etd,
+)
 from custom_components.solar_energy_management.coordinator.ev_availability import (
     plan_car_fullness,
 )
 from custom_components.solar_energy_management.coordinator.ev_taper_detector import (
     EVTaperDetector,
 )
+
+# The detector stamps samples and cuts its five-minute trend window with
+# ``time.monotonic()``. Driven at test speed, every sample would land inside
+# one window; the simulated clock gives it the 10-second cycles it has live.
+_CLOCK = [0.0]
+
+
+@pytest.fixture(autouse=True)
+def _simulated_monotonic(monkeypatch):
+    _CLOCK[0] = 0.0
+    monkeypatch.setattr(etd, "time", SimpleNamespace(monotonic=lambda: _CLOCK[0]))
 
 CONFIG = {"ev_battery_capacity_kwh": 60}
 BASE = datetime(2026, 9, 9, 17, 0, 0)
@@ -40,6 +57,7 @@ HANDSHAKE_W = 500.0
 
 def _feed(det, power_w, setpoint_a, count, cursor):
     for _ in range(count):
+        _CLOCK[0] = float(cursor)
         det.update(power_w, setpoint_a, True, BASE + timedelta(seconds=cursor))
         cursor += 10
     return cursor

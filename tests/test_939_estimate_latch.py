@@ -10,21 +10,26 @@ The latch was one flag for two bounds. The announcement loops over Min then
 Max: Min's stop condition set the flag, and on the next cycle Max's resume
 condition — "the capped estimate has not reached 100 %", true all night —
 released it. The next cycle Min set it again. The latch now holds WHICH
-bound stopped, and only that bound's need re-opening resumes.
+bound stopped; only that bound re-opening resumes, and the sensor reaching
+it releases the latch silently so a later stop is still announced.
 
-Guard: for any inputs, a latch that starts clear announces at most once
-over repeated identical cycles, and no latch ever alternates. The vacuity
-twin runs the old bare-flag rule through the same property and must fail
-it on the live numbers.
+Guard: over a grid of inputs, a clear latch announces at most once across
+repeated identical cycles, no latch announces more than twice (safety), and
+a stop that becomes due once the latched bound's sensor has caught up is
+announced within two cycles (liveness). The vacuity twin runs the old
+bare-flag rule through the safety property and must fail it.
 """
 from __future__ import annotations
 
 import itertools
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from custom_components.solar_energy_management.coordinator import (
+    notifications as notif_mod,
+)
 from custom_components.solar_energy_management.coordinator.coordinator import (
     SEMCoordinator,
 )
@@ -40,6 +45,7 @@ CAP = 60.0
 LIVE_BOUNDS = (("min", 90.0), ("max", 100.0))
 LIVE_SENSOR = 89.0
 LIVE_CEILING = 90.2
+ANNOUNCEMENTS = ("stop", "resume")
 
 
 def _old_bare_flag_step(active, bounds, sensor, ceiling, cap):
@@ -55,13 +61,16 @@ def _old_bare_flag_step(active, bounds, sensor, ceiling, cap):
     return active, None, None
 
 
-def _events(step, latch, bounds, sensor, ceiling, cycles=30):
-    out = []
+def _run(step, latch, bounds, sensor, ceiling, cycles=30):
+    events = []
     for _ in range(cycles):
         latch, event, _target = step(latch, bounds, sensor, ceiling, CAP)
-        if event is not None:
-            out.append(event)
-    return out
+        events.append(event)
+    return events
+
+
+def _announced(events):
+    return [e for e in events if e in ANNOUNCEMENTS]
 
 
 class TestTheLiveMorning:
@@ -69,8 +78,8 @@ class TestTheLiveMorning:
         latch, event, target = estimate_stop_step(
             None, LIVE_BOUNDS, LIVE_SENSOR, LIVE_CEILING, CAP)
         assert (latch, event, target) == ("min", "stop", 90.0)
-        assert _events(estimate_stop_step, latch, LIVE_BOUNDS,
-                       LIVE_SENSOR, LIVE_CEILING) == []
+        assert _announced(_run(estimate_stop_step, latch, LIVE_BOUNDS,
+                               LIVE_SENSOR, LIVE_CEILING)) == []
 
     def test_a_fresh_reading_below_the_bound_resumes(self):
         """The #708 resume the latch exists for: the car reports 87 %, the
@@ -85,17 +94,39 @@ class TestTheLiveMorning:
             None, "resume", 100.0)
 
     def test_a_stop_at_max_is_not_released_by_min(self):
-        """Sensor already past Min, the cap past Max: stopped at Max, and
-        Min — satisfied — has nothing to say about it."""
-        latch, event, _ = estimate_stop_step(
-            None, (("min", 80.0), ("max", 95.0)), 93.0, 96.0, CAP)
+        bounds = (("min", 80.0), ("max", 95.0))
+        latch, event, _ = estimate_stop_step(None, bounds, 93.0, 96.0, CAP)
         assert (latch, event) == ("max", "stop")
-        assert _events(estimate_stop_step, latch, (("min", 80.0), ("max", 95.0)),
-                       93.0, 96.0) == []
+        assert _announced(_run(estimate_stop_step, latch, bounds, 93.0, 96.0)) == []
+
+    def test_a_reading_back_under_min_names_min(self):
+        """Stopped at Max on the sun, then a reading below Min: the top-up
+        SEM runs is to Min, and the message must not promise Max."""
+        bounds = (("min", 80.0), ("max", 85.0))
+        assert estimate_stop_step("max", bounds, 78.0, 78.0, CAP) == (
+            None, "resume", 80.0)
+
+
+class TestTheSensorCatchingUp:
+    def test_it_releases_silently_and_the_next_stop_is_announced(self):
+        """Review catch (liveness): stopped at Min overnight, the sensor then
+        confirms Min — nothing resumes, but the next day's estimate stop at
+        Max must still reach the phone."""
+        bounds = (("min", 80.0), ("max", 90.0))
+        latch, event, _ = estimate_stop_step(None, bounds, 76.0, 80.3, CAP)
+        assert (latch, event) == ("min", "stop")
+        latch, event, _ = estimate_stop_step(latch, bounds, 80.5, 80.5, CAP)
+        assert (latch, event) == (None, "release")
+        latch, event, target = estimate_stop_step(latch, bounds, 86.0, 90.2, CAP)
+        assert (latch, event, target) == ("max", "stop", 90.0)
+
+    def test_a_dark_sensor_is_not_a_sensor_that_caught_up(self):
+        assert estimate_stop_step("min", LIVE_BOUNDS, None, LIVE_CEILING, CAP) == (
+            "min", None, None)
 
 
 # The class guard's input space: every ordering of sensor / cap / Min / Max
-# that the loop can see, with Max >= Min as ``_resolve_target`` clamps it.
+# the loop can see, with Max >= Min as ``_resolve_target`` clamps it.
 _SENSORS = (70.0, 85.0, 89.0, 90.0, 95.0, 100.0)
 _CEILINGS = (None, 70.0, 89.5, 90.2, 95.0, 100.0)
 _BOUND_PAIRS = [(lo, hi) for lo in (80.0, 90.0, 100.0)
@@ -103,31 +134,53 @@ _BOUND_PAIRS = [(lo, hi) for lo in (80.0, 90.0, 100.0)
 _GRID = list(itertools.product(_SENSORS, _CEILINGS, _BOUND_PAIRS))
 
 
-def _violations(step, clear_latch, latches):
+def _safety_violations(step, clear_latch, latches):
     bad = []
     for sensor, ceiling, (lo, hi) in _GRID:
         bounds = (("min", lo), ("max", hi))
-        from_clear = _events(step, clear_latch, bounds, sensor, ceiling)
-        if len(from_clear) > 1:
-            bad.append(("from clear", sensor, ceiling, lo, hi, from_clear))
+        if len(_announced(_run(step, clear_latch, bounds, sensor, ceiling))) > 1:
+            bad.append(("from clear", sensor, ceiling, lo, hi))
         for latch in latches:
-            seq = _events(step, latch, bounds, sensor, ceiling)
-            # At most a resume and one new stop, then a fixed point — a latch
-            # set under OLDER inputs may be released once; it never alternates.
-            if len(seq) > 2:
-                bad.append(("from latch", latch, sensor, ceiling, lo, hi, seq))
+            # A latch set under OLDER inputs may be released once and a new
+            # stop made; it never alternates.
+            if len(_announced(_run(step, latch, bounds, sensor, ceiling))) > 2:
+                bad.append(("from latch", latch, sensor, ceiling, lo, hi))
     return bad
 
 
-class TestIdenticalInputsNeverAnnounceTwice:
-    def test_the_rule_holds_over_the_whole_grid(self):
-        assert _violations(estimate_stop_step, None, ("min", "max")) == []
+def _stop_due(bounds, sensor, ceiling):
+    for _name, target in bounds:
+        need = soc_remaining_need(target, sensor, ceiling, CAP)
+        if (need.sensor_kwh or 0.0) > 0.1 and (need.effective_kwh or 0.0) <= 0.1:
+            return True
+    return False
 
-    def test_vacuity_twin_the_old_rule_fails_it_on_the_live_numbers(self):
-        seq = _events(_old_bare_flag_step, False, LIVE_BOUNDS,
-                      LIVE_SENSOR, LIVE_CEILING)
+
+class TestIdenticalInputsNeverAnnounceTwice:
+    def test_safety_over_the_whole_grid(self):
+        assert _safety_violations(estimate_stop_step, None, ("min", "max")) == []
+
+    def test_liveness_over_the_whole_grid(self):
+        bad = []
+        for sensor, ceiling, (lo, hi) in _GRID:
+            bounds = (("min", lo), ("max", hi))
+            if not _stop_due(bounds, sensor, ceiling):
+                continue
+            for latch in (None, "min", "max"):
+                if latch is not None:
+                    held = soc_remaining_need(dict(bounds)[latch], sensor, ceiling, CAP)
+                    if held.sensor_kwh is None or held.sensor_kwh > 0.1:
+                        continue  # still an estimate stop — holding is right
+                if "stop" not in _run(estimate_stop_step, latch, bounds,
+                                      sensor, ceiling, cycles=2):
+                    bad.append((latch, sensor, ceiling, lo, hi))
+        assert bad == []
+
+    def test_vacuity_twin_the_old_rule_fails_safety_on_the_live_numbers(self):
+        seq = _announced(_run(_old_bare_flag_step, False, LIVE_BOUNDS,
+                              LIVE_SENSOR, LIVE_CEILING))
         assert seq[:4] == ["stop", "resume", "stop", "resume"]
-        assert _violations(_old_bare_flag_step, False, (True,)), (
+        assert _safety_violations(_old_bare_flag_step, False, (True,)), (
             "the guard must be able to see the ping-pong it was written for"
         )
 
@@ -140,6 +193,7 @@ def _coord():
     c._notification_manager = SimpleNamespace(
         notify_ev_estimate_stop=AsyncMock(),
         notify_ev_estimate_resume=AsyncMock(),
+        release_ev_estimate_stop=MagicMock(),
     )
     return c, det
 
@@ -176,6 +230,17 @@ class TestTheCoordinatorSendsOneMessage:
         assert nm.notify_ev_estimate_resume.await_args.kwargs["target_soc"] == 100
         assert det._estimate_stop_active is False
 
+    async def test_the_sensor_catching_up_frees_the_next_stop(self):
+        c, det = _coord()
+        await _cycles(c, 3)
+        await _cycles(c, 3, intel={**_INTEL, "vehicle_soc": 90.5,
+                                   "energy_accounted_soc": 90.5})
+        nm = c._notification_manager
+        nm.release_ev_estimate_stop.assert_called_once_with(
+            charger_name="EV Charger", flag_key="ev_charger")
+        assert nm.notify_ev_estimate_resume.await_count == 0
+        assert det._estimate_stop_active is False
+
     @pytest.mark.parametrize("gate", ["kwh_target", "unplugged", "no_sensor"])
     async def test_the_gates_still_keep_it_quiet(self, gate):
         c, _det = _coord()
@@ -198,3 +263,14 @@ class TestTheCoordinatorSendsOneMessage:
         det.reset_session()
         assert det._estimate_stop_bound is None
         assert det._estimate_stop_active is False
+
+
+def test_the_manager_really_frees_the_stop_flag():
+    """The release must reach the dedup flag ``notify_ev_estimate_stop``
+    returns early on — otherwise the freed latch is swallowed downstream."""
+    cls = next(v for v in vars(notif_mod).values()
+               if isinstance(v, type) and hasattr(v, "release_ev_estimate_stop"))
+    nm = cls.__new__(cls)
+    nm._notified_flags = {"ev_estimate_stop_ev_charger", "unrelated"}
+    cls.release_ev_estimate_stop(nm, charger_name="EV Charger", flag_key="ev_charger")
+    assert nm._notified_flags == {"unrelated"}
