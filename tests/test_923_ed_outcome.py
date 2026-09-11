@@ -214,3 +214,40 @@ async def test_a_file_holding_json_null_is_unanswered(tmp_path):
     """The file exists — it is not the "no file" answer, whatever it holds."""
     _write(tmp_path, "null")
     assert await read_energy_dashboard_config_outcome(_hass(tmp_path)) == (None, False)
+
+
+
+# --- a quarantined store is "could not read", not "no dashboard" (#923) ----
+
+
+@pytest.mark.asyncio
+async def test_a_corrupt_store_leftover_is_unanswered_not_a_definite_no(tmp_path):
+    """HA's Store renames a corrupt .storage/energy to
+    energy.corrupt.<timestamp> and leaves no file at the plain path — which
+    looks exactly like "no dashboard was ever configured" to the file-path
+    branch and must not be answered that way (#925)."""
+    storage = tmp_path / ".storage"
+    storage.mkdir()
+    (storage / "energy.corrupt.2026-09-11T10:00:00").write_text("", encoding="utf-8")
+    assert await read_energy_dashboard_config_outcome(_hass(tmp_path)) == (None, False)
+
+
+@pytest.mark.asyncio
+async def test_a_corrupt_store_behind_a_nulled_manager_is_unanswered(tmp_path, monkeypatch):
+    """A manager holding no data looks identical whether HA never loaded a
+    dashboard or HA just quarantined a corrupt .storage/energy — only the
+    corrupt leftover on disk tells the two apart, so it must be checked
+    before answering "no dashboard" from the manager path too."""
+    from homeassistant.components.energy import data as energy_data
+
+    async def _manager(hass):
+        return SimpleNamespace(data=None)
+
+    monkeypatch.setattr(energy_data, "async_get_manager", _manager)
+    storage = tmp_path / ".storage"
+    storage.mkdir()
+    (storage / "energy.corrupt.x").write_text("", encoding="utf-8")
+    hass = _hass(tmp_path)
+    hass.config.components = {"energy"}
+
+    assert await read_energy_dashboard_config_outcome(hass) == (None, False)

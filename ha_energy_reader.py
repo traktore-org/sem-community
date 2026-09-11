@@ -287,17 +287,58 @@ async def _loaded_energy_manager(hass: HomeAssistant) -> Any | None:
     return await async_get_manager(hass)
 
 
+def _energy_store_was_corrupt(config_dir: str) -> bool:
+    """Whether ``.storage`` holds an ``energy.corrupt.*`` leftover (or that
+    could not be determined) — sync, meant for the executor.
+
+    HA's ``Store`` helper renames a corrupt ``.storage/energy`` file to
+    ``energy.corrupt.<timestamp>`` and returns no data (see
+    ``homeassistant/helpers/storage.py``), which looks identical to "no
+    Energy Dashboard was ever configured" from both the energy manager
+    (``manager.data is None``) and the raw file (absent). That is "could
+    not read", never "no dashboard" (#925: "I could not ask" is not "no").
+    """
+    storage_dir = os.path.join(config_dir, ".storage")
+    try:
+        names = os.listdir(storage_dir)
+    except FileNotFoundError:
+        # No .storage directory at all: nothing was ever written there, so
+        # there is definitely no corrupt leftover to find.
+        return False
+    except OSError as err:
+        _LOGGER.warning(
+            "Could not check %s for a corrupt Energy Dashboard store leftover "
+            "(%s) — SEM keeps every module until it can check again",
+            storage_dir, err,
+        )
+        return True
+
+    corrupt = any(name.startswith("energy.corrupt.") for name in names)
+
+    if corrupt:
+        _LOGGER.warning(
+            "HA found .storage/energy corrupt (energy.corrupt.* present) — SEM "
+            "keeps every module until the Energy Dashboard is set up again and "
+            "the corrupt file is removed"
+        )
+    return corrupt
+
+
 async def read_energy_dashboard_config_outcome(
     hass: HomeAssistant, quiet: bool = False,
 ) -> tuple[Optional[EnergyDashboardConfig], bool]:
     """Read the Energy Dashboard config AND whether the question got an answer.
 
     ``(config, True)`` — the preferences were read and parsed.
-    ``(None, True)``   — there are no preferences: HA's energy manager holds
-                         none and no ``.storage/energy`` file exists — a
-                         definite "no dashboard".
+    ``(None, True)``   — there are no preferences AND no corrupt leftover:
+                         HA's energy manager holds none and no
+                         ``.storage/energy`` file exists, and ``.storage``
+                         holds no ``energy.corrupt.*`` from a quarantined
+                         store — a definite "no dashboard".
     ``(None, False)``  — the read failed (unrecognised layout, parse error,
-                         I/O).
+                         I/O), or HA quarantined a corrupt ``.storage/energy``
+                         (or that could not be checked) — "could not read",
+                         never "no dashboard" (#925).
 
     HA's energy manager is asked FIRST; the file only when the energy
     integration is not loaded (or its manager cannot be had). The manager
@@ -329,7 +370,13 @@ async def read_energy_dashboard_config_outcome(
         try:
             if manager.data is None:
                 # HA itself holds no Energy Dashboard: nothing was loaded from
-                # disk at boot and nothing has been set since.
+                # disk at boot and nothing has been set since — unless HA's
+                # Store quarantined a corrupt file (#923); check before
+                # answering "no dashboard".
+                if await hass.async_add_executor_job(
+                    _energy_store_was_corrupt, hass.config.config_dir
+                ):
+                    return None, False
                 _info("Energy Dashboard not configured (no energy preferences)")
                 return None, True
             _info("Energy Dashboard config from HA's energy manager")
@@ -357,6 +404,13 @@ async def read_energy_dashboard_config_outcome(
         found, energy_config = await hass.async_add_executor_job(read_file)
 
         if not found:
+            # The same corrupt-store rename that empties the manager's data
+            # also leaves the plain file absent (#923) — check before
+            # answering "no dashboard".
+            if await hass.async_add_executor_job(
+                _energy_store_was_corrupt, hass.config.config_dir
+            ):
+                return None, False
             _info("Energy Dashboard not configured (file not found)")
             return None, True
 
