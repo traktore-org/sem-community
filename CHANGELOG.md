@@ -13,6 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **SEM shows what your install has** (#923, #857). SEM is now a core
+  (solar, grid, home, costs, forecast) plus modules — home battery, EV
+  charger, heat pump, hot water — and creates a module's entities, tab and
+  dashboard references only when that hardware is configured, or declared in
+  HA's Energy Dashboard. A solar-only install drops the 113 entities it never
+  used. Add the hardware later and they appear: from SEM's Configure screen
+  at once, for a battery added to the Energy Dashboard with one automatic
+  reload. When SEM cannot tell, it keeps everything. The verdict is on
+  `sensor.sem_diag_ed_config` (`install_modules`) and in the diagnostics.
+  ⚠️ A custom dashboard that references a removed entity shows it as
+  unavailable — SEM's own dashboard is updated in step.
+
 # [2.1.0-beta.16] — 11.09.2026
 
 - 🔥 **A hot-water tank or heat pump SEM had boosted is released again after
