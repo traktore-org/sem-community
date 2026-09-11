@@ -218,18 +218,23 @@ class EnergyDashboardConfig:
         }
 
 
-async def read_energy_dashboard_config(
+async def read_energy_dashboard_config_outcome(
     hass: HomeAssistant, quiet: bool = False,
-) -> Optional[EnergyDashboardConfig]:
-    """Read sensor configuration from HA Energy Dashboard.
+) -> tuple[Optional[EnergyDashboardConfig], bool]:
+    """Read the Energy Dashboard config AND whether the question got an answer.
+
+    ``(config, True)`` — the file was read and parsed.
+    ``(None, True)``   — the file does not exist: a definite "no dashboard".
+    ``(None, False)``  — the read failed (malformed, no data section, I/O).
+
+    (#923) The install-modules oracle may call a battery ABSENT only on an
+    answer; ``read_energy_dashboard_config`` folds the last two cases into
+    one ``None`` (#925: "I could not ask" is not "no").
 
     Args:
         hass: Home Assistant instance
         quiet: Demote routine INFO logs to DEBUG. Used by the cold-start
             re-derivation retry (#274) so it doesn't spam the log each cycle.
-
-    Returns:
-        EnergyDashboardConfig with extracted sensor entity IDs, or None if not configured
     """
     _info = _LOGGER.debug if quiet else _LOGGER.info
     _info("Reading Energy Dashboard config from .storage/energy...")
@@ -239,7 +244,7 @@ async def read_energy_dashboard_config(
 
         if not os.path.exists(energy_file):
             _info("Energy Dashboard not configured (file not found)")
-            return None
+            return None, True
 
         # Read the energy configuration file
         def read_file():
@@ -250,7 +255,7 @@ async def read_energy_dashboard_config(
 
         if "data" not in energy_config:
             _LOGGER.warning("Energy Dashboard has no data section")
-            return None
+            return None, False
 
         data = energy_config["data"]
         config = EnergyDashboardConfig()
@@ -289,14 +294,27 @@ async def read_energy_dashboard_config(
             config.has_ev,
         )
 
-        return config
+        return config, True
 
     except json.JSONDecodeError as e:
         _LOGGER.error("Failed to parse Energy Dashboard config: %s", e)
-        return None
+        return None, False
     except Exception as e:
         _LOGGER.error("Failed to read Energy Dashboard config: %s", e, exc_info=True)
-        return None
+        return None, False
+
+
+async def read_energy_dashboard_config(
+    hass: HomeAssistant, quiet: bool = False,
+) -> Optional[EnergyDashboardConfig]:
+    """Read sensor configuration from HA Energy Dashboard.
+
+    Returns the EnergyDashboardConfig, or None when it is not configured OR
+    not readable. Callers that must tell those apart use
+    ``read_energy_dashboard_config_outcome`` (#923).
+    """
+    config, _answered = await read_energy_dashboard_config_outcome(hass, quiet=quiet)
+    return config
 
 
 def _extract_solar_config(source: Dict[str, Any], config: EnergyDashboardConfig) -> None:
