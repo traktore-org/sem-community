@@ -2,6 +2,7 @@
   "domain": "solar_energy_management",
   "name": "Solar Energy Management",
   "after_dependencies": [
+    "energy",
     "recorder"
   ],
   "codeowners": [

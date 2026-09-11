@@ -115,8 +115,11 @@ def module_verdict(
     ``EnergyDashboardConfig``) or None. ``ed_answered`` is whether the Energy
     Dashboard question got an answer at all — only the exact value ``True``
     counts as answered; anything else (a mock, a stray tuple) is "not
-    answered", never guessed at. True means the file was parsed OR provably
-    does not exist, anything else means the read failed or has not run yet.
+    answered", never guessed at. True means the preferences were parsed OR
+    there are none — HA's energy manager holds none and no ``.storage/energy``
+    exists (``read_energy_dashboard_config_outcome`` asks the manager first,
+    because the file lags it by up to 60 s); anything else means the read
+    failed or has not run yet.
     Battery and EV can be declared there, so for them no answer means
     UNKNOWN — and so does an ``ed_config`` whose shape can't say yes or no
     (#925: "I could not ask" is never "no"). Heat pump and hot water exist
