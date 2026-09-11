@@ -2589,6 +2589,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 sg_ready_service_data=_svc_data,
                 sg_ready_state_entity=_row.get("heat_pump_sg_ready_state_entity"),
             )
+            # (#914) A reload or an HA restart leaves the relays as SEM had
+            # them (#656) — re-own a boost SEM left on, so the next stop path
+            # returns the pump to NORMAL. A relay still loading is decided on
+            # the first readable cycle (the per-cycle belief sync retries it).
+            hp_extra.adopt_if_running()
             coordinator._surplus_controller.register_device(hp_extra)
             hp_registered += 1
             _LOGGER.info(
@@ -2644,6 +2649,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 legionella_target_temp=float(full_config.get("hot_water_legionella_target", 65.0)),
                 legionella_interval_hours=float(full_config.get("hot_water_legionella_interval_hours", 168.0)),
             )
+            # (#914) …and a tank SEM left at its boost setpoint. Without this
+            # SEM came back believing it idle and the tank reheated to SEM's
+            # own setpoint all night, with nothing left to release it.
+            hw_device.adopt_if_running()
             coordinator._surplus_controller.register_device(hw_device)
             _seed_legionella_time(coordinator, hw_device)
             _LOGGER.info(

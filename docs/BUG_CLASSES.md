@@ -3201,3 +3201,54 @@ Repair, including one for another entity that still ignores writes (class 83's s
 (5) The pin verdict's first cycle is SEM's battery set at that moment: a synthetic `primary` that
 later becomes b1/b2 with a different per-battery platform can clear once and re-raise.
 Refs #933 #919 #900 #824 #915 #840 #845 #896 #911 #485 #944.
+
+### 85. A restart re-adopter reads an axis the device is not commanded on — or none is called — GUARDED
+**Symptom:** after a reload or an HA restart, a boost SEM wrote stays in force on the device while
+SEM believes the load idle. A hot-water tank keeps SEM's 50 °C setpoint and its own thermostat
+reheats to it at three in the morning; an SG-Ready heat pump stays in BOOST all night. Nothing ever
+releases it — the belief says idle, so no stop path visits the load.
+**Root shape:** #656 decided that a reload and an HA restart leave loads exactly as they are and
+rely on SEM re-adopting them when it comes back (`adopt_if_running`, #559). The re-adoption can be
+silently absent two ways: (a) the registration site never calls an adopter — the direct controllers
+in `async_setup_entry` (hot water, every heat pump) were registered bare while the registry's two
+sites did call it; (b) the adopter a device inherits reads the wrong axis — `SwitchDevice` asks
+`state == "on"`, but a water_heater's state is its operation mode ("heat_pump", "eco"), a climate's
+its hvac mode, and an SG-Ready pump's truth is a relay PAIR. The per-cycle nets miss them too: the
+#766 belief sync is switch-domain only, the reconciler files a setpoint tank as `external_on` and
+deliberately won't fight it, and SETPOINT devices reach neither.
+**Live catch (#914, hoyte, 2.0.0, monoblock heat pump behind a water_heater DHW entity):** "SEM has
+kept the state on with a setpoint of 50 during the night … when the tank dropped below its
+hysteresis it activated in the night."
+**Where it lives:** `__init__.py::async_setup_entry` (the direct registrations);
+`SwitchDevice.adopt_if_running` / `_adoptable_now` (the predicate); `HotWaterController`
+(water_heater / climate — the setpoint); `HeatPumpController` (the relay pair through the #523
+NC-inverted truth table, or a #801 service pump's state entity).
+**Closure:** the adoption and its gated claim stay one body; the predicate is per device and reads
+the axis SEM writes. A setpoint tank is adopted only while it holds one of SEM's OWN boost setpoints
+(solar or legionella target, ±0.5 K) — never a setpoint the user chose (#847/#908: release what SEM
+commanded, nothing more) — and a climate tank only in SEM's `heat` mode (the `ClimateDevice` line).
+An SG-Ready pump is adopted only in BOOST / FORCE_ON. One decision per lifetime, on the first
+READABLE observation: an entity whose integration is still loading on an HA restart keeps the window
+open and the per-cycle belief sync retries it; after that SEM never claims a boost it sees start.
+**Guard:** `tests/test_914_boost_survives_restart.py` — an AST check that every non-EV
+`register_device(x)` in `async_setup_entry` is preceded by `x.adopt_if_running()` (with a floor
+naming `hw_device` and `hp_extra`, so it cannot pass vacuously); the per-domain adoption family
+(adopted / left alone / unreadable → pending); and the end-to-end night — adopted after a restart,
+a no-surplus cycle releases the tank and returns the pump to NORMAL.
+**Sweep question:** for every command SEM leaves on a device — a setpoint, a relay pattern, a mode,
+a register — what does the NEXT lifetime read to learn it is SEM's, and does that read look at the
+axis the command was written on?
+**Left for Guido:** (1) A climate-only heat pump (the `SetpointDevice` climate boost, normal +
+offset): its boost is a thermostat setpoint the user also owns and cannot be told apart from their
+own choice — not adopted, still strands across a restart; `SetpointDevice.deactivate` also returns
+early on `_boosted = False`, so an adopted one would not be restored either. (2) A #801 service pump
+without `sg_ready_state_entity` is unobservable — not adopted. (3) The hot-water release is
+`turn_off` first, which leaves SEM's boost setpoint armed on the tank for whatever turns it back
+on; the reporter's ask — release to the minimum setpoint and leave the tank on — is the product
+decision that settles both (enhancement). (4) A direct device's control mode (Off / Peak-only) set on
+the card is persisted but never re-applied after a restart — `refresh_direct_device_overrides`
+carries priority and goals, not the mode. Re-applying it naively would flip every direct device the
+#805 upgrade froze at `peak_only` (it pins every id in `priority_overrides` / `device_goals`): a
+decision, not a sweep. (5) A solar target changed in the options between the boost and the reload
+is no longer recognised as SEM's; persisting the commanded setpoint would close it.
+Refs #914 #559 #656 #766 #779 #847 #908 #523 #801.

@@ -150,6 +150,10 @@ class HeatPumpController(SetpointDevice):
         # untouched.
         self.vacation: bool = False
 
+        # (#914) One restart adoption per lifetime, decided on the first
+        # READABLE observation of the SG-Ready surface — see adopt_if_running.
+        self._boot_adoption_pending: bool = True
+
         # #421 — telemetry surface mirroring #359/#416/#420
         # classifier_path / dampening_path / legionella_path patterns.
         # Each decision branch sets the corresponding ``*_path`` string
@@ -302,6 +306,97 @@ class HeatPumpController(SetpointDevice):
         if self.invert_sg_ready:
             return (not r1, not r2)
         return (r1, r2)
+
+    # ─── Restart adoption (#914) ─────────────────────────────
+
+    def _read_sg_ready_state(self) -> "tuple[bool, Optional[SGReadyState]]":
+        """(#914) The SG-Ready state the pump is in NOW, read from the
+        surface SEM writes: the relay pair through the same (NC-inverted,
+        #523) truth table ``_set_sg_ready_state`` drives, or a service pump's
+        state entity (#801).
+
+        Returns ``(readable, state)``. ``readable`` is False while a
+        configured entity cannot be read yet (its integration still loading
+        on a restart). A pump with nothing to read — a service pump without
+        a state entity, a climate-only pump — is readable with state None:
+        there is no evidence to wait for.
+        """
+        if self.sg_ready_service:
+            entities = [self.sg_ready_state_entity] if self.sg_ready_state_entity else []
+        elif self.relay1_entity_id and self.relay2_entity_id:
+            entities = [self.relay1_entity_id, self.relay2_entity_id]
+        else:
+            entities = []
+        if not entities:
+            return True, None
+        values = []
+        for eid in entities:
+            st = self.hass.states.get(eid)
+            v = str(getattr(st, "state", "") or "").strip().lower()
+            if v in ("", "unavailable", "unknown"):
+                return False, None
+            values.append(v)
+        if self.sg_ready_service:
+            for s in SGReadyState:
+                if values[0] in (str(int(s)), s.name.lower()):
+                    return True, s
+            return True, None
+        if any(v not in ("on", "off") for v in values):
+            return True, None
+        pair = (values[0] == "on", values[1] == "on")
+        for s in SGReadyState:
+            if self._relays_for(s) == pair:
+                return True, s
+        return True, None
+
+    def adopt_if_running(self) -> bool:
+        """(#914) Re-own an SG-Ready boost SEM left on across a restart.
+
+        The pump is registered straight into the controller with no adopter,
+        and as a SETPOINT device neither the reconciler nor the per-cycle
+        switch sync ever looks at it. A reload or an HA restart while SEM had
+        it in BOOST left the relays there (#656 leaves loads as they are)
+        with SEM believing it idle — nothing returned it to NORMAL, and the
+        pump ran its boost through the night.
+
+        Adopted only in BOOST / FORCE_ON, the states SEM commands on surplus:
+        NORMAL is nothing of SEM's, BLOCKED SEM never writes (#664). Decided
+        once per lifetime, on the first readable observation.
+        """
+        if not self._boot_adoption_pending or not self.hass:
+            return False
+        if self.is_active:
+            # SEM started it itself this lifetime — nothing left to adopt.
+            self._boot_adoption_pending = False
+            return False
+        readable, observed = self._read_sg_ready_state()
+        if not readable:
+            return False
+        self._boot_adoption_pending = False
+        if observed not in (SGReadyState.BOOST, SGReadyState.FORCE_ON):
+            return False
+        self._hp_status.sg_ready_state = observed
+        self._hp_status.is_solar_boosted = True
+        self._hp_status.boost_start_time = datetime.now()
+        self._status.state = DeviceState.ACTIVE
+        self._status.current_consumption_w = self.rated_power
+        self._status.allocated_power_w = self.rated_power
+        self._status.last_activated = datetime.now()
+        self._last_activated = self._status.last_activated  # (#644) unified clock
+        owned = self._adopt_ownership()  # (#779) gated, in one place
+        _LOGGER.info(
+            "%s: SG-Ready %s at registration — belief adopted, %s (#914)",
+            self.name, observed.name,
+            "re-owned as active" if owned
+            else f"left to the user (mode {self.control_mode.value})",
+        )
+        return True
+
+    def sync_belief_to_observation(self) -> bool:
+        """(#914) The per-cycle retry of the restart adoption, until the
+        SG-Ready surface is first readable. Nothing more: the pump is not a
+        switch, and SEM does not claim a boost it sees start later."""
+        return self.adopt_if_running()
 
     async def _set_sg_ready_state(self, state: SGReadyState) -> bool:
         """Set SG-Ready state via relay entities.

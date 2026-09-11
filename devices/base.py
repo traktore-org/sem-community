@@ -1650,6 +1650,20 @@ class SwitchDevice(ComfortBandMixin, ControllableDevice):
             return True
         return False
 
+    def _adoptable_now(self) -> Optional[bool]:
+        """(#914) Is the load running on the axis SEM commands it on?
+        ``None`` = the entity cannot be read yet.
+
+        A switch's command IS its on/off state, so ``"on"`` is the whole
+        answer here. A subclass that commands something else — a hot-water
+        tank's SETPOINT — overrides this predicate, never the adoption
+        below: the belief, the clocks and the gated claim stay in one body.
+        """
+        state = self.hass.states.get(self.entity_id)
+        if not state or state.state in ("unavailable", "unknown", None):
+            return None
+        return state.state == "on"
+
     def adopt_if_running(self) -> bool:
         """(#559) Re-own a switch that is physically ON at (re-)registration.
 
@@ -1660,8 +1674,7 @@ class SwitchDevice(ComfortBandMixin, ControllableDevice):
         """
         if not self.entity_id or not self.hass or self.is_active:
             return False
-        state = self.hass.states.get(self.entity_id)
-        if not state or state.state != "on":
+        if not self._adoptable_now():
             return False
         self._status.state = DeviceState.ACTIVE
         self._status.current_consumption_w = self.rated_power
@@ -1670,7 +1683,7 @@ class SwitchDevice(ComfortBandMixin, ControllableDevice):
         self._last_activated = self._status.last_activated  # (#644) unified clock
         owned = self._adopt_ownership()  # (#779) gated, in one place
         _LOGGER.info(
-            "%s: switch %s was ON at registration — belief adopted, %s",
+            "%s: %s was running at registration — belief adopted, %s",
             self.name, self.entity_id,
             "re-owned as active" if owned
             else f"left to the user (mode {self.control_mode.value})",
