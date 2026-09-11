@@ -13,6 +13,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.1.0-beta.13] — 11.09.2026
+
+- 🔔 **SEM no longer stands down in silence while the car keeps charging**
+  (#944). When a wallbox keeps restarting itself against SEM's stop, SEM
+  stops fighting for 30 minutes (doubling if it comes back) so the car is not
+  strobed into a charging fault — right for the car, but the only trace was
+  one log line, and the car charged on from the house battery and the grid
+  unseen. While SEM holds back and the car is drawing you now get a Repair
+  naming the charger, the draw and the two likely causes (the wallbox's own
+  auto-start, or a second controller), one message on the charger's display
+  (behind *Charger notifications*), and the EV card reads "Charging — SEM
+  stood down". It all clears as soon as the car stops drawing or SEM takes
+  control again.
+
 # [2.1.0-beta.12] — 10.09.2026
 
 - 🔌 **A switch-controlled charger could have its contactor toggled every
