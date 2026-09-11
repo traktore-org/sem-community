@@ -4,7 +4,7 @@
 
 **Goal:** SEM creates a hardware module's entities, tab and dashboard references only when the install has that hardware (battery, EV, heat pump, hot water), decided by one oracle that answers PRESENT / ABSENT / UNKNOWN.
 
-**Architecture:** A pure module `coordinator/install_modules.py` holds the verdict function, the `(platform, key) → modules` table for all 267 static entities, and the keep rules. The coordinator computes the verdict once, after the Energy Dashboard read and before the platforms load (`setup_presence`); every platform, the dashboard generator, the welcome text, the diagnostics and `validate-sem.sh` read that one answer. The platforms' existing stale-entity sweeps, fed the gated lists, remove an ABSENT module's leftovers; an Energy Dashboard update listener reloads once when a module appears.
+**Architecture:** A pure module `coordinator/install_modules.py` holds the verdict function, the `(platform, key) → modules` table for all 268 static entities, and the keep rules. The coordinator computes the verdict once, after the Energy Dashboard read and before the platforms load (`setup_presence`); every platform, the dashboard generator, the welcome text, the diagnostics and `validate-sem.sh` read that one answer. The platforms' existing stale-entity sweeps, fed the gated lists, remove an ABSENT module's leftovers; an Energy Dashboard update listener reloads once when a module appears.
 
 **Tech Stack:** Home Assistant custom integration (Python 3.13/3.14), pytest + pytest-homeassistant-custom-component, Lit card bundle (rollup, `node --test`), bash tooling in `~/bin`.
 
@@ -930,7 +930,7 @@ from ..ha_energy_reader import read_energy_dashboard_config, EnergyDashboardConf
 with
 ```python
 from ..ha_energy_reader import read_energy_dashboard_config_outcome, EnergyDashboardConfig
-from .install_modules import Module, Presence, install_modules
+from .install_modules import Module, Presence, module_verdict
 ```
 
 (b) Directly after `self._energy_dashboard_config: Optional[EnergyDashboardConfig] = None` (line ~539), add:
@@ -952,7 +952,7 @@ from .install_modules import Module, Presence, install_modules
 ```python
     def install_presence(self) -> Dict[Module, Presence]:
         """(#923) What this install has right now — see install_modules.py."""
-        return install_modules(self.config, self._ed_raw_config, self._ed_answered)
+        return module_verdict(self.config, self._ed_raw_config, self._ed_answered)
 
 ```
 
@@ -1451,10 +1451,10 @@ Replace:
 with:
 ```python
     from .coordinator.install_modules import (
-        Module, Presence, has_managed_charger, install_modules,
+        Module, Presence, has_managed_charger, module_verdict,
     )
     if presence is None:
-        presence = install_modules(config, None, False)
+        presence = module_verdict(config, None, False)
     has_ev = has_managed_charger(config)
     has_battery = presence.get(Module.BATTERY) is Presence.PRESENT
 ```
@@ -2348,7 +2348,7 @@ def module_reload_due(
 
 In `coordinator/coordinator.py`, extend the Task 4 import to:
 ```python
-from .install_modules import Module, Presence, install_modules, module_reload_due
+from .install_modules import Module, Presence, module_reload_due, module_verdict
 ```
 
 Directly below `install_presence` (Task 4), add:
@@ -2689,6 +2689,7 @@ Expected kinds of failure and the ONLY acceptable fix for each:
 | A real-hass test asserts a heat-pump / hot-water / battery / EV entity on a fixture that does not configure that hardware | Add the hardware to THAT test's config (e.g. `"hot_water_entity": "water_heater.test"`), with a one-line comment `# (#923) the module must be configured for its entities to exist`. |
 | A test counts entities (e.g. `len(entities) == N`) | Recompute N from the fixture's modules; comment why it changed. |
 | A test drives a platform with a MagicMock coordinator and expects a battery entity to be ABSENT because the config lacks battery keys | Set `coordinator.setup_presence = {...BATTERY: Presence.ABSENT...}` on the double — the platform no longer reads config. |
+| `test_653_orphan_methods.py::test_the_orphan_set_does_not_grow` lists an install_modules function | By Task 13 every public function in `install_modules.py` has a production caller (coordinator, platforms, generator, diagnostics, welcome). If one is still listed, wire it or delete it — never add it to `_BASELINE`. `presence_from_summary`'s caller is validate-sem.sh (outside the repo): if it is listed, keep it and add it to `_BASELINE` with the comment `# (#923) read by ~/bin/validate-sem.sh, outside the package`. |
 | Anything in production code | Treat as a bug in this branch: diagnose, fix, add a test. |
 
 Never add a `(platform, key)` to `CORE_BY_DECISION` just to make an old test pass — that entry needs a real reason a user can read.
@@ -2782,7 +2783,7 @@ path = os.path.join(os.environ['SEM_REPO'], 'coordinator', 'install_modules.py')
 spec = importlib.util.spec_from_file_location('install_modules', path)
 im = importlib.util.module_from_spec(spec); spec.loader.exec_module(im)
 verdict = json.loads(os.environ['MODULES_JSON'])
-presence = {im.Module(k): im.Presence(v) for k, v in verdict.items()}
+presence = im.presence_from_summary(verdict)  # tolerant: the checkout may know other modules than the build
 ids = {s['entity_id'] for s in json.load(sys.stdin)}
 print('INFO|Verdict: ' + ', '.join(f'{k}={v}' for k, v in sorted(verdict.items())))
 leftover = sorted(e for e in im.absent_entity_ids(presence) if e in ids)
@@ -3000,7 +3001,7 @@ Expected: verdict `battery=present, ev=present`; every line in `175-gone.txt` be
 1. Save .46's Energy Dashboard preferences with the `mcp__ha-test__ha_manage_energy_prefs` tool (read) to `$S/46-energy-prefs.json`.
 2. With the same tool, write them back **without** the `battery` entry in `energy_sources` and without any `device_consumption` entry that is an EV/charger sensor.
 3. Deploy the minimal install: `SEM_MINIMAL_INSTALL=1 ~/bin/deploy-test.sh` (full clean install from this branch). Expected: `Install result: create_entry`, `observer_mode: on`.
-4. Verify: `~/bin/validate-sem.sh` → section 2b `Verdict: battery=absent, ev=absent, heat_pump=absent, hot_water=absent`, `PASS|No entity of an ABSENT module exists`, count ≥150. If the verdict still says battery=present, SEM's config holds a battery wiring key — clear it on SEM's Configure screen, not by editing storage.
+4. Verify: `~/bin/validate-sem.sh` → section 2b `Verdict: battery=absent, ev=absent, heat_pump=absent, hot_water=absent`, `PASS|No entity of an ABSENT module exists`, count ≥150. If the verdict still says battery=present, SEM's config holds a battery wiring key — read which one from the diagnostics download (`config_entry.data`/`options`). `battery_discharge_control_entity` is auto-discovered at install (config_flow.py ~1037) and can be filled on a hybrid inverter WITHOUT a battery (discovery falls back to solar/grid devices, hardware_detection.py ~2477) — if that is the key, record it as a finding for the #857 audience (a harmless false PRESENT that defeats the feature for them) before clearing it on SEM's Configure screen, never by editing storage.
 5. Scan every dashboard view for error cards with the headless playwright pattern in CLAUDE.md ("Dashboard verification workflow"): walk shadow roots for `HUI-ERROR-CARD` on `/sem-dashboard/home`, `/energy`, `/control`, `/config`, `/costs`, `/system`. Expected: zero; and no Battery or EV tab. Screenshot Home and Energy to `$S/46-minimal-*.png`.
 
 - [ ] **Step 3: .46 — a battery added later appears with one reload**

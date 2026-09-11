@@ -27,7 +27,7 @@ has four behaviours.
 |---|---|---|---|
 | core | solar, grid, home, energy balance, totals, forecast, notifications | always | Home, Energy, System, Config |
 | hardware | **Battery** | configuration + Energy Dashboard | Battery |
-| hardware | **EV charger** | configuration | EV |
+| hardware | **EV charger** | configuration + Energy Dashboard | EV (tab needs a configured charger) |
 | hardware | **Heat pump** | configuration | — |
 | hardware | **Hot water** | configuration | — |
 | feature | Load management · Dynamic tariff & costs · Peak guard · VPP | a user setting | Control, Costs |
@@ -91,7 +91,7 @@ ENTITY_MODULES: Mapping[tuple[str, str], frozenset[Module]]   # (platform, key) 
 ```
 
 A table rather than a field on each description: HA's `EntityDescription` classes are frozen
-dataclasses, so a field means subclassing all 267 descriptions; the table leaves them untouched
+dataclasses, so a field means subclassing all 268 descriptions; the table leaves them untouched
 and gives the dashboard generator the same lookup. A naming ratchet keeps it complete — any key
 that *looks* like a module (`battery`, `ev_`, `heat_pump`, `hot_water`, `charg`, …) must be in
 the table or in an explicit core-by-decision list with its reason.
