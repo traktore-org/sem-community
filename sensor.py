@@ -37,7 +37,7 @@ from homeassistant.helpers import label_registry as lr
 from .const import SENSOR_LABEL_MAPPING
 from .consts.labels import SEM_LABELS
 from .coordinator import SEMCoordinator
-from .coordinator.install_modules import kept_descriptions, presence_of
+from .coordinator.install_modules import kept_descriptions, presence_of, presence_summary
 from .features.device_axes import (
     has_control_handle as _has_control_handle,
     may_actuate as _may_actuate,
@@ -3300,6 +3300,12 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                     attrs["energy_dashboard"] = detail
             except Exception:
                 pass
+            # (#923) What this install has — the verdict every platform and
+            # the dashboard were built on. Support's first stop for "where is
+            # my battery tab"; validate-sem.sh reads it too.
+            presence = getattr(self.coordinator, "setup_presence", None)
+            if isinstance(presence, dict):
+                attrs["install_modules"] = presence_summary(presence)
 
         # Battery charge scheduler (#6) — attach schedule to state sensor
         if self.entity_description.key == "battery_scheduler_state":
