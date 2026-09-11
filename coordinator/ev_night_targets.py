@@ -12,9 +12,43 @@ charger still need tonight".
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
+
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def charger_target_type(config, cfg) -> str:
+    """Which need ``build_night_target_map`` builds for this charger:
+    ``soc`` or ``kwh`` (per-charger key, the legacy ``ev_target_mode``,
+    then the integration default).
+
+    (#939) One expression, because the plan's car-full gate has to know
+    which of the two it stands in front of — see ``_plan_car_full``.
+    """
+    cfg = cfg or {}
+    return (cfg.get("ev_target_type") or cfg.get("ev_target_mode")
+            or (config or {}).get("ev_target_type", "kwh"))
+
+
+def charger_soc_reading(hass, cfg) -> Optional[float]:
+    """This charger's car as its own SOC sensor reports it, or ``None``.
+
+    The sensor only — no anchored virtual SOC behind it (that fallback is
+    ``_resolve_charger_soc``'s, one layer up). ``None`` for no entity, no
+    ``hass``, an unknown/unavailable state or a non-number.
+    """
+    ent = (cfg or {}).get("vehicle_soc_entity")
+    if not ent or hass is None:
+        return None
+    st = hass.states.get(ent)
+    if not st or st.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+        return None
+    try:
+        return float(st.state)
+    except (ValueError, TypeError):
+        return None
 
 
 def build_night_target_map(coord, energy) -> Dict[str, float]:
@@ -34,8 +68,7 @@ def build_night_target_map(coord, energy) -> Dict[str, float]:
 
     for cid in coord._ev_devices:
         cfg = charger_cfg_by_id.get(cid, {})
-        ttype = (cfg.get("ev_target_type") or cfg.get("ev_target_mode")
-                 or coord.config.get("ev_target_type", "kwh"))
+        ttype = charger_target_type(coord.config, cfg)
         if ttype == "soc":
             per_soc = coord._resolve_charger_soc(cid, cfg)
             out[cid] = coord._calculate_remaining_need(

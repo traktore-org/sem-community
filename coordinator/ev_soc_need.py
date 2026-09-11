@@ -25,7 +25,7 @@ pre-#708 behaviour (charge to the hardware taper), never a fabricated 0.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Sequence, Tuple
 
 
 @dataclass(frozen=True)
@@ -78,3 +78,40 @@ def soc_remaining_need(
 
     return SocRemaining(sensor_kwh=_need(vehicle_soc),
                         effective_kwh=_need(effective_soc))
+
+
+def estimate_stop_step(
+    latched_bound: Optional[str],
+    bounds: Sequence[Tuple[str, float]],
+    vehicle_soc: Optional[float],
+    ceiling_soc: Optional[float],
+    capacity_kwh: float,
+) -> Tuple[Optional[str], Optional[str], Optional[float]]:
+    """(#939) One cycle of the #708 estimate-stop / resume announcement.
+
+    ``bounds`` is ``(name, target_soc)`` in evaluation order (``min`` then
+    ``max``). Returns ``(latched_bound, event, target_soc)``: the latch to
+    keep, ``"stop"`` / ``"resume"`` / ``None``, and the target the event is
+    about.
+
+    A stop is announced for the first bound the sensor alone has NOT reached
+    but the measured cap has; a resume only when THAT bound's effective need
+    re-opens — a fresh reading landing below it, or its target raised. The
+    latch used to be a bare flag, so the resume ran against every bound:
+    stopped at Min (90 %), it was released on the next cycle by Max (100 %),
+    which the capped estimate had of course not reached — and the stop
+    re-fired the cycle after. Live 10.09: the pair alternated several times
+    a minute until the owner moved Min. With the bound kept, identical
+    inputs cannot produce a second event.
+    """
+    for name, target in bounds:
+        if latched_bound is not None and name != latched_bound:
+            continue
+        need = soc_remaining_need(target, vehicle_soc, ceiling_soc, capacity_kwh)
+        sensor_rem = need.sensor_kwh or 0.0
+        eff_rem = need.effective_kwh or 0.0
+        if latched_bound is None and sensor_rem > 0.1 and eff_rem <= 0.1:
+            return name, "stop", target
+        if latched_bound is not None and eff_rem > 0.1:
+            return None, "resume", target
+    return latched_bound, None, None

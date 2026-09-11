@@ -204,7 +204,11 @@ class EVTaperDetector:
         self._soc_anchor_session_kwh: Optional[float] = None
         # #708 — session latch: the estimate (not the sensor) ended a charge.
         # Read by the notification layer; cleared on resume or disconnect.
-        self._estimate_stop_active: bool = False
+        # (#939) It holds WHICH bound ("min"/"max") the estimate stopped at,
+        # not just that it did: the announcement evaluates both bounds, and a
+        # bare flag set on one was released by the other on the next cycle —
+        # see ``ev_soc_need.estimate_stop_step``.
+        self._estimate_stop_bound: Optional[str] = None
         # Hardware counter tracking for drift-free energy accounting
         self._hw_total_at_full: Optional[float] = None  # Charger total kWh when SOC was 100%
         self._hw_total_last: Optional[float] = None  # Last known charger total kWh
@@ -287,6 +291,7 @@ class EVTaperDetector:
         mono = time.monotonic()
 
         # Detect SEM setpoint changes
+        prev_setpoint = self._last_setpoint
         sem_changed = False
         if abs(current_setpoint - self._last_setpoint) > 0.5:
             sem_changed = True
@@ -312,6 +317,23 @@ class EVTaperDetector:
         if current_setpoint > 0:
             self._sem_has_offered = True
         sem_withdrew_offer = self._sem_has_offered and current_setpoint <= 0
+
+        # (#939) ...and a fresh offer is a fresh charge. Withdrawal only
+        # PAUSES the full-confirm: the decline latched before it, and the
+        # samples that latched it, sat there untouched — so when SEM offered
+        # again, the car's silence was scored against a decline that belonged
+        # to the charge before. Live (Victron EVCS + Tesla): the box wound
+        # down with the sun under a withdrawn offer, SEM re-offered 6 A when
+        # the night window opened, the car did not answer for 70 minutes, and
+        # 30 s after the offer the pack was "complete" at 71 %. The latch is
+        # re-earned by the new charge's own samples; a car that never answers
+        # never shows a decline, so it is never called full — the honest
+        # reading (#774: drop the reference, don't invent one). Absence of an
+        # offer is untouched: observer mode never crosses this edge.
+        if current_setpoint > 0 and prev_setpoint <= 0:
+            self._declining_phase = False
+            self._full_confirm_count = 0
+            self._buffer.clear()
 
         # Track session peak (only from sustained readings > threshold)
         if ev_power > self._session_peak_w and ev_power > SESSION_PEAK_MIN:
@@ -762,7 +784,7 @@ class EVTaperDetector:
         # re-arms it from the first reading of the next session.
         self._soc_anchor_value = None
         self._soc_anchor_session_kwh = None
-        self._estimate_stop_active = False
+        self._estimate_stop_bound = None
         # #438 — reset session-energy accumulator + integration state
         self._current_session_energy_kwh = 0.0
         self._last_energy_timestamp = None
@@ -1051,6 +1073,12 @@ class EVTaperDetector:
     def full_detected(self) -> bool:
         """Whether a full charge was detected this session."""
         return self._full_detected
+
+    @property
+    def _estimate_stop_active(self) -> bool:
+        """(#708) Whether the estimate-stop latch is set — derived from the
+        bound it holds (#939), so the two can never disagree."""
+        return self._estimate_stop_bound is not None
 
     @property
     def still_full(self) -> bool:
