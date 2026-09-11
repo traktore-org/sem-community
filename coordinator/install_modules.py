@@ -46,17 +46,46 @@ class Presence(Enum):
 BATTERY_WIRING_KEYS: tuple[str, ...] = (
     "battery_soc_sensor",
     "battery_power_sensor",
+    "battery_soc_entity",
+    "battery_charge_energy_sensor",
+    "battery_discharge_energy_sensor",
+    "battery_energy_discharged_sensor",
+    "battery_cycles_sensor",
+    "battery_temperature_sensor",
+    "battery_target_soc_entity",
+    # (#923, ruflo) seeded by the config flow when it finds a battery-mode
+    # select, and watched every cycle by the #845 BatteryModeWatch — a battery
+    # SEM can watch but not yet drive is still a battery.
+    "battery_operating_mode_entity",
     "battery_discharge_control_entity",
     "battery_discharge_control_entities",
     "battery_force_discharge_control_entity",
     "battery_force_discharge_entities",
     "battery_strategy_control_entity",
     "battery_strategy_entities",
+    # An explicit platform is a choice; its default "auto" is not (see
+    # _DEFAULT_VALUES below).
+    "battery_charge_platform",
 )
 EV_WIRING_KEYS: tuple[str, ...] = (
     "ev_chargers",
     "ev_charging_power_sensor",
     "ev_power_sensor",
+    # Legacy single-charger keys, still read by the coordinator.
+    "ev_connected_sensor",
+    "ev_plug_sensor",
+    "ev_charging_sensor",
+    "ev_current_sensor",
+    "ev_energy_sensor",
+    "ev_total_energy_sensor",
+    "ev_daily_energy_sensor",
+    "ev_session_energy_sensor",
+    "ev_charger_service",
+    "ev_current_control_entity",
+    "ev_start_stop_entity",
+    "ev_charge_mode_entity",
+    "ev_phase_switch_entity",
+    "ev_departure_time_entity",
 )
 HEAT_PUMP_WIRING_KEYS: tuple[str, ...] = (
     "heat_pumps",
@@ -67,8 +96,20 @@ HEAT_PUMP_WIRING_KEYS: tuple[str, ...] = (
     "heat_pump_sg_ready_state_entity",
     "heat_pump_power_sensor",
     "heat_pump_energy_sensor",
+    "heat_pump_temperature_sensor",
 )
-HOT_WATER_WIRING_KEYS: tuple[str, ...] = ("hot_water_entity",)
+HOT_WATER_WIRING_KEYS: tuple[str, ...] = (
+    "hot_water_entity",
+    "hot_water_power_sensor",
+    "hot_water_energy_sensor",
+    "hot_water_temperature_sensor",
+)
+
+# A wiring key holding its INSTALL DEFAULT says nothing: "auto" asks SEM to
+# detect a battery platform, it does not declare that a battery exists.
+_DEFAULT_VALUES: Mapping[str, tuple[str, ...]] = {
+    "battery_charge_platform": ("auto",),
+}
 
 # Every key the oracle reads. Setting one through set_option must reload the
 # entry, or the module's entities wait for the next restart — pinned by
@@ -81,7 +122,14 @@ _EMPTY: tuple[Any, ...] = (None, "", [], {}, ())
 
 
 def _wired(config: Mapping[str, Any], keys: Iterable[str]) -> bool:
-    return any(config.get(key) not in _EMPTY for key in keys)
+    for key in keys:
+        value = config.get(key)
+        if value in _EMPTY:
+            continue
+        if isinstance(value, str) and value.strip().lower() in _DEFAULT_VALUES.get(key, ()):
+            continue
+        return True
+    return False
 
 
 def _declared(ed_config: Any | None, attr: str) -> bool | None:

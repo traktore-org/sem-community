@@ -37,7 +37,9 @@ from homeassistant.helpers import label_registry as lr
 from .const import SENSOR_LABEL_MAPPING
 from .consts.labels import SEM_LABELS
 from .coordinator import SEMCoordinator
-from .coordinator.install_modules import kept_descriptions, presence_of, presence_summary
+from .coordinator.install_modules import (
+    Module, keeps, kept_descriptions, presence_of, presence_summary,
+)
 from .features.device_axes import (
     has_control_handle as _has_control_handle,
     may_actuate as _may_actuate,
@@ -1966,8 +1968,8 @@ async def async_setup_entry(
     # (#923) Only the sensors of modules this install has — UNKNOWN keeps.
     # The same list feeds the stale sweep below, which is what removes an
     # ABSENT module's leftovers from the registry.
-    static_descriptions = kept_descriptions(
-        "sensor", SENSOR_TYPES, presence_of(coordinator))
+    presence = presence_of(coordinator)
+    static_descriptions = kept_descriptions("sensor", SENSOR_TYPES, presence)
     _LOGGER.info("Got coordinator, creating %d sensors", len(static_descriptions))
 
     sensors = [
@@ -2158,6 +2160,13 @@ async def async_setup_entry(
                     suggested_display_precision=2,
                 ),
             ])
+
+    # (#923) Battery → EV needs a battery: without one the per-charger split
+    # of that flow is not built, and the stale sweep below (fed this same
+    # list) removes what an earlier setup registered.
+    if not keeps(presence, (Module.BATTERY,)):
+        per_charger_descriptions = [
+            d for d in per_charger_descriptions if "_flow_battery_to_ev_" not in d.key]
 
     for desc in per_charger_descriptions:
         sensors.append(SEMSolarSensor(coordinator, desc, entry.entry_id))

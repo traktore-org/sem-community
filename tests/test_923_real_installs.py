@@ -172,3 +172,41 @@ async def test_an_unreadable_dashboard_hides_nothing(
     assert _registered(hass, entry, "sensor", "ev_power")
     # Heat pump lives only in SEM's options — never UNKNOWN.
     assert not _registered(hass, entry, "sensor", "heat_pump_mode")
+
+
+def _charger(cid):
+    return {
+        "id": cid, "name": cid.upper(),
+        "ev_connected_sensor": f"binary_sensor.{cid}_plug",
+        "ev_charging_sensor": f"binary_sensor.{cid}_charging",
+        "ev_charging_power_sensor": f"sensor.{cid}_power",
+        "ev_charger_service": "number.set_value",
+        "ev_charger_service_entity_id": f"number.{cid}_current",
+        "ev_current_control_entity": f"number.{cid}_current",
+        "min_current": 6, "max_current": 16, "vehicle_min_current": 6,
+        "phases": 3, "voltage": 230, "charge_mode": "min_plus_solar",
+        "daily_ev_target": 10, "daily_ev_target_max": 50,
+        "ev_target_soc": 80, "ev_target_soc_max": 100,
+        "ev_target_type": "kwh", "ev_target_time": "07:00", "ev_surplus_priority": 3,
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("battery", [False, True])
+async def test_per_charger_battery_to_ev_flows_follow_the_battery(
+        hass, enable_custom_integrations, monkeypatch, battery):
+    """(#923, found live on .175) The per-charger split of battery → EV is
+    built per charger, outside the static list — it must follow the battery
+    verdict like the fleet sensor does."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    _dashboard(monkeypatch)
+    data = dict(MINIMAL_DATA, ev_chargers=[_charger("wb1"), _charger("wb2")])
+    if battery:
+        data["battery_soc_sensor"] = "sensor.test_battery_soc"
+    entry = MockConfigEntry(domain=DOMAIN, version=12, minor_version=1, data=data,
+                            options={}, title="SEM two chargers (#923)")
+    await _setup(hass, entry)
+    for cid in ("wb1", "wb2"):
+        assert _registered(hass, entry, "sensor", f"charger_{cid}_flow_solar_to_ev_power")
+        assert _registered(hass, entry, "sensor", f"charger_{cid}_flow_battery_to_ev_power") is battery
+        assert _registered(hass, entry, "sensor", f"charger_{cid}_flow_battery_to_ev_energy") is battery

@@ -345,3 +345,62 @@ class TestPresenceOf:
     def test_a_non_string_value_in_the_summary_is_unknown(self):
         p = presence_from_summary({"battery": 1})
         assert p[Module.BATTERY] is Presence.UNKNOWN
+
+
+class TestWiringIsComplete:
+    """(#923, ruflo refutation) The oracle must know every key through which
+    the code reads or drives a module — a battery known only through
+    ``battery_operating_mode_entity`` came out ABSENT and would have lost its
+    51 entities. This scans the package for every wiring-shaped config read."""
+
+    _PKG = Path(__file__).resolve().parents[1]
+    _WIRING_SHAPE = re.compile(
+        r'\.get\(\s*"((?:battery|ev|heat_pump|hot_water)_[a-z0-9_]*'
+        r'(?:_sensor|_sensors|_entity|_entities|_service|_platform)|ev_chargers|heat_pumps)"')
+
+    def _reads(self):
+        found = {}
+        for py in self._PKG.rglob("*.py"):
+            rel = py.relative_to(self._PKG).as_posix()
+            if rel.startswith(("tests/", "tools/", "scripts/")) or "/node_modules/" in rel:
+                continue
+            for m in self._WIRING_SHAPE.finditer(py.read_text(encoding="utf-8")):
+                found.setdefault(m.group(1), rel)
+        return found
+
+    def test_every_wiring_key_the_code_reads_is_evidence(self):
+        from custom_components.solar_energy_management.coordinator.install_modules import (
+            BATTERY_WIRING_KEYS, EV_WIRING_KEYS, HEAT_PUMP_WIRING_KEYS, HOT_WATER_WIRING_KEYS,
+        )
+        lists = [("battery_", BATTERY_WIRING_KEYS), ("ev_", EV_WIRING_KEYS),
+                 ("heat_pump", HEAT_PUMP_WIRING_KEYS), ("hot_water_", HOT_WATER_WIRING_KEYS)]
+        missing = []
+        for key, where in sorted(self._reads().items()):
+            for prefix, keys in lists:
+                if key.startswith(prefix) and key not in keys:
+                    missing.append(f"{key} (read in {where})")
+        assert not missing, "wiring keys the oracle does not know: " + ", ".join(missing)
+
+    def test_the_scan_finds_the_known_reads(self):
+        # A scan that finds nothing would pass the test above vacuously.
+        reads = self._reads()
+        for key in ("battery_soc_sensor", "battery_operating_mode_entity", "ev_chargers",
+                    "heat_pump_relay1_entity", "hot_water_entity"):
+            assert key in reads, key
+
+
+class TestWatchedOrChosenIsABattery:
+
+    def test_a_watched_mode_select_is_a_battery(self):
+        v = module_verdict({"battery_operating_mode_entity": "select.bat_mode"}, ED_EMPTY, True)
+        assert v[Module.BATTERY] is Presence.PRESENT
+
+    @pytest.mark.parametrize("platform", ["generic", "huawei", "deye", "goodwe"])
+    def test_an_explicit_platform_is_a_battery(self, platform):
+        v = module_verdict({"battery_charge_platform": platform}, ED_EMPTY, True)
+        assert v[Module.BATTERY] is Presence.PRESENT
+
+    @pytest.mark.parametrize("platform", ["auto", "AUTO", " auto "])
+    def test_the_default_platform_is_not(self, platform):
+        v = module_verdict({"battery_charge_platform": platform}, ED_EMPTY, True)
+        assert v[Module.BATTERY] is Presence.ABSENT
