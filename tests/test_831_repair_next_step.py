@@ -53,6 +53,9 @@ DOCS_SIDE = {
     # setting the card names, not a SEM change.
     "load_current_control_wrong_unit",
     "deye_system_work_mode_invalid",
+    # (#944) the stop war's stand-down — the box's auto-start or another
+    # controller is the next step, not a SEM change.
+    "charger_stop_war_stand_down",
     # (#896) the peak is somebody else's load — the next step is giving
     # SEM that load or raising the target, both settings, not a SEM bug.
     "load_shed_futile",

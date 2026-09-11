@@ -2582,6 +2582,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         single = getattr(self, "_ev_device", None)
         if single is not None and not any(d is single for d in devs):
             devs.append(single)
+        # (#944) The same both-shapes walk links each CHARGER back to this
+        # coordinator. The stand-down notification reaches the notifier
+        # through ``_coordinator``, and the per-charger loop was the only
+        # place that set it — so the late-discovered legacy ``_ev_device``
+        # was never linked, and its notification died in silence (the split
+        # F3 above closed for observer mode). Chargers only.
+        for dev in devs:
+            try:
+                dev._coordinator = self
+            except Exception:  # noqa: BLE001 — same contract as below
+                continue
         # EVERY commandable device, not just the chargers. ``send()`` is the
         # one seam and it withholds only when the DEVICE knows, so a device
         # this push skips is a device that acts. Loads, climate and heat
@@ -4494,6 +4505,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     (_ac or {}).get("holding"))
                 result[f"charger_{cid}_anticycle_hold_s"] = float(
                     (_ac or {}).get("remaining_s") or 0.0)
+                # (#944) SEM holding fire against a live draw — #763's
+                # ceasefire. Without it the tile passed for an ordinary charge
+                # while the house battery drained for an hour.
+                _sd = (_rec.stand_down_snapshot(time.monotonic())
+                       if _rec is not None else None) or {}
+                result[f"charger_{cid}_stop_war_stand_down"] = bool(
+                    _sd.get("standing_down"))
+                result[f"charger_{cid}_stop_war_stand_down_s"] = float(
+                    _sd.get("remaining_s") or 0.0)
+                result[f"charger_{cid}_stop_war_stand_down_w"] = float(
+                    _sd.get("power_w") or 0.0)
                 # Per-charger vehicle SOC (#193) — collected for the global
                 # vehicle_soc/range fallback below (no dedicated per-charger
                 # sensor consumes this, so don't write it into result; #245 review #2).

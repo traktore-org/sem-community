@@ -887,6 +887,33 @@ class NotificationManager:
             group="sem_charging",
         )
 
+    async def notify_charger_stand_down(
+        self, *, charger_id: str, charger_name: str, power_w: float,
+        minutes: float,
+    ) -> None:
+        """(#944) SEM stood down from a stop war (#763) and the car still draws.
+
+        One message to the charger's display, through the same path and the
+        same switch (``enable_charger_notifications``) as every charging-state
+        message. Once per onset is the reconciler's job, like the warning this
+        accompanies; this only sends. The ``sem_notification`` event fires
+        either way, so an automation can carry it to a phone.
+        """
+        self.hass.bus.async_fire(f"{DOMAIN}_notification", {
+            "category": "charging",
+            "event": "charger_stop_war_stand_down",
+            "charger_id": charger_id,
+            "charger_name": charger_name,
+            "power_w": round(power_w),
+            "minutes": round(minutes),
+        })
+        if not self.config.get("enable_charger_notifications",
+                               self.config.get("enable_keba_notifications", True)):
+            return
+        from ..utils.translate import get_text
+        await self._send_charger_notification(
+            get_text(self.hass, "notif_charger_stood_down", "SEM stood down"))
+
     def clear_deadline_warning(
         self, charger_name: str | None = None, flag_key: str | None = None,
     ) -> None:

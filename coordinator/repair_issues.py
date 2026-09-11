@@ -246,6 +246,9 @@ _DOCS_ANCHORS = {
     "keba_failsafe_active":
         "https://github.com/traktore-org/sem-community/blob/develop/docs/KEBA_FAILSAFE.md",
     "charger_failsafe_suspected": "your-wallbox-undoes-sems-stop-on-a-timer",
+    # (#944) The stop war's stand-down — the fix is on the box or in the
+    # other controller, never in SEM.
+    "charger_stop_war_stand_down": "sem-stood-down-while-the-charger-kept-charging",
     "battery_force_discharge_unsupported":
         "the-inverter-refuses-forced-discharge",
     # (#872) Same withdrawal, different culprit — the entity rather than the
@@ -819,6 +822,59 @@ def clear_charger_stop_unenforceable(hass: HomeAssistant, device_id: str) -> Non
     """Clear the #627 repair once the charger is no longer drawing."""
     try:
         ir.async_delete_issue(hass, DOMAIN, _stop_unenforceable_issue_id(device_id))
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete failed for %s: %s", device_id, e)
+
+
+def _stop_war_stand_down_issue_id(device_id: str) -> str:
+    return f"charger_stop_war_stand_down_{device_id}"
+
+
+def raise_charger_stop_war_stand_down(
+    hass: HomeAssistant,
+    device_id: str,
+    *,
+    name: str,
+    power_w: float,
+    minutes: float,
+) -> None:
+    """(#944) SEM stood down from a stop war (#763) and the car still draws.
+
+    The #627 repair's sibling with the opposite cause: there no stop
+    mechanism exists; here one exists and WORKS — every stop took — and the
+    box undid it each time, by its own auto-start or on another controller's
+    command. Standing down is right for the car; doing it with only a log
+    line left an owner to find out from a draining house battery, 80 minutes
+    in (PROD 10.09.2026).
+
+    Not persistent: the ceasefire lives in the reconciler's memory and a
+    restart forgets it, so the notice must not outlive it.
+    """
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id=_stop_war_stand_down_issue_id(device_id),
+            is_fixable=False,
+            is_persistent=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="charger_stop_war_stand_down",
+            learn_more_url=next_step_url(
+                "docs", "charger_stop_war_stand_down", **_versions(hass)),
+            translation_placeholders={
+                "name": name,
+                "power": f"{power_w:.0f}",
+                "minutes": str(max(1, int(round(minutes)))),
+            },
+        )
+    except Exception as e:  # noqa: BLE001 — never fail the cycle over a repair
+        _LOGGER.debug("issue_registry.create failed for %s: %s", device_id, e)
+
+
+def clear_charger_stop_war_stand_down(hass: HomeAssistant, device_id: str) -> None:
+    """(#944) The draw stopped, the war ended, or SEM is stopping again."""
+    try:
+        ir.async_delete_issue(hass, DOMAIN, _stop_war_stand_down_issue_id(device_id))
     except Exception as e:  # noqa: BLE001
         _LOGGER.debug("issue_registry.delete failed for %s: %s", device_id, e)
 

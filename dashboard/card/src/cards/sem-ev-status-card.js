@@ -13,6 +13,7 @@
 import { SEMLitBase, html, css, svg, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semFormatPower, semGetCurrency, semDefineCard } from '../base/sem-shared.js';
 import { resolveChargerSoc } from '../util/charger-soc.js';
+import { chargerStatusKey } from '../util/charger-status.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
 const CHARGER_COLORS = ['#8DC892', '#64B5F6'];
@@ -124,6 +125,11 @@ class SEMEVStatusCard extends SEMLitBase {
             const _cs = hass.states[`${prefix}charging_state`]?.attributes || {};
             key += '|' + [_cs.ev_tariff_waiting, _cs.ev_deadline_reachable,
                 _cs.ev_next_cheap_window].join(':');
+            // (#944) a stop-war stand-down relabels that charger's status
+            key += '|' + this._chargers.map(id =>
+                (((_cs.per_charger_stop_war || {})[id] || {}).standing_down === true)
+                    ? '1' : '0'
+            ).join(':');
 
             key += '|' + this._chargers.map(id =>
                 hass.states[`number.sem_charger_${id}_daily_ev_target`]?.state || ''
@@ -577,7 +583,11 @@ class SEMEVStatusCard extends SEMLitBase {
         const perChargerConnected = this._hass?.states[`binary_sensor.sem_charger_${id}_connected`];
         const isConnected = perChargerConnected?.state === 'on';
         const isCharging = power > 50;
-        const statusText = isCharging ? this._t('charging') : isConnected ? this._t('connected') : this._t('idle');
+        // (#944) SEM standing down from a stop war reads as its own status,
+        // not as an ordinary charge.
+        const standDown = (this._stateAttrs(`${this._prefix}charging_state`)
+            .per_charger_stop_war || {})[id];
+        const statusText = this._t(chargerStatusKey({ isCharging, isConnected, standDown }));
         // What SEM actually commanded to the charger (the set current), shown
         // next to the status so you can see SEM's transmitted A vs the car's
         // real draw — e.g. "CHARGING (8 A)".

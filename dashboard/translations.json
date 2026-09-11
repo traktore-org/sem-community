@@ -1529,7 +1529,9 @@
     "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
     "config_import_surcharge": "Variable network-owner fee",
     "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export.",
-    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports"
+    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports",
+    "charger_status_stood_down": "Nabíjení — SEM ustoupil",
+    "notif_charger_stood_down": "SEM ustoupil"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -3061,7 +3063,9 @@
     "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
     "config_import_surcharge": "Variable network-owner fee",
     "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export.",
-    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports"
+    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports",
+    "charger_status_stood_down": "Oplader — SEM trak sig",
+    "notif_charger_stood_down": "SEM trak sig"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -4593,7 +4597,9 @@
     "config_proposed_options_unmapped": "dieses Select hat keine Option namens {missing} — setze die vier Strategiewerte im Batterie-Abschnitt passend zu seinen Optionen: {options}",
     "config_import_surcharge": "Variable Netzbetreiber-Gebühr",
     "config_help_import_surcharge": "Optionale Gebühr auf jede importierte kWh (Netznutzung + Energieabgabe). Nur wenn deine dynamische Preis-Entität sie nicht enthält. Keine Grundgebühr; kein Einfluss auf die Einspeisung.",
-    "config_proposed_pair_incomplete": "halbes Paar — dieses Gerät hat keinen {missing}-Sensor, und eine Hälfte allein läse sich wie ein Zähler, der nur bezieht"
+    "config_proposed_pair_incomplete": "halbes Paar — dieses Gerät hat keinen {missing}-Sensor, und eine Hälfte allein läse sich wie ein Zähler, der nur bezieht",
+    "charger_status_stood_down": "Laden — SEM gibt nach",
+    "notif_charger_stood_down": "SEM gibt nach"
   },
   "en": {
     "% of limit": "% of limit",
@@ -6125,7 +6131,9 @@
     "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
     "config_import_surcharge": "Variable network-owner fee",
     "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export.",
-    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports"
+    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports",
+    "charger_status_stood_down": "Charging — SEM stood down",
+    "notif_charger_stood_down": "SEM stood down"
   },
   "es": {
     "% of limit": "% del límite",
@@ -7657,7 +7665,9 @@
     "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
     "config_import_surcharge": "Variable network-owner fee",
     "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export.",
-    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports"
+    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports",
+    "charger_status_stood_down": "Cargando — SEM se retira",
+    "notif_charger_stood_down": "SEM se retira"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -9189,7 +9199,9 @@
     "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
     "config_import_surcharge": "Variable network-owner fee",
     "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export.",
-    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports"
+    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports",
+    "charger_status_stood_down": "Lataus — SEM väistyi",
+    "notif_charger_stood_down": "SEM väistyi"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -10721,7 +10733,9 @@
     "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
     "config_import_surcharge": "Variable network-owner fee",
     "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export.",
-    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports"
+    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports",
+    "charger_status_stood_down": "En charge — SEM se retire",
+    "notif_charger_stood_down": "SEM se retire"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -12253,7 +12267,9 @@
     "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
     "config_import_surcharge": "Variable network-owner fee",
     "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export.",
-    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports"
+    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports",
+    "charger_status_stood_down": "Töltés — SEM visszalépett",
+    "notif_charger_stood_down": "SEM visszalépett"
   },
   "it": {
     "% of limit": "% del limite",
@@ -13785,7 +13801,9 @@
     "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
     "config_import_surcharge": "Variable network-owner fee",
     "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export.",
-    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports"
+    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports",
+    "charger_status_stood_down": "In carica — SEM si ritira",
+    "notif_charger_stood_down": "SEM si ritira"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -15317,7 +15335,9 @@
     "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
     "config_import_surcharge": "Variable network-owner fee",
     "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export.",
-    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports"
+    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports",
+    "charger_status_stood_down": "Laden — SEM geeft toe",
+    "notif_charger_stood_down": "SEM geeft toe"
   },
   "no": {
     "% of limit": "% av grense",
@@ -16849,7 +16869,9 @@
     "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
     "config_import_surcharge": "Variable network-owner fee",
     "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export.",
-    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports"
+    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports",
+    "charger_status_stood_down": "Lader — SEM trakk seg",
+    "notif_charger_stood_down": "SEM trakk seg"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -18381,7 +18403,9 @@
     "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
     "config_import_surcharge": "Variable network-owner fee",
     "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export.",
-    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports"
+    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports",
+    "charger_status_stood_down": "Ładowanie — SEM ustąpił",
+    "notif_charger_stood_down": "SEM ustąpił"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -19913,7 +19937,9 @@
     "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
     "config_import_surcharge": "Variable network-owner fee",
     "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export.",
-    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports"
+    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports",
+    "charger_status_stood_down": "A carregar — SEM recuou",
+    "notif_charger_stood_down": "SEM recuou"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -21445,7 +21471,9 @@
     "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
     "config_import_surcharge": "Variable network-owner fee",
     "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export.",
-    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports"
+    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports",
+    "charger_status_stood_down": "Încărcare — SEM s-a retras",
+    "notif_charger_stood_down": "SEM s-a retras"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -22977,7 +23005,9 @@
     "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
     "config_import_surcharge": "Variable network-owner fee",
     "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export.",
-    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports"
+    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports",
+    "charger_status_stood_down": "Laddar — SEM backade",
+    "notif_charger_stood_down": "SEM backade"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -24509,6 +24539,8 @@
     "config_proposed_options_unmapped": "this select has no option named {missing} — set the four strategy values in the battery section to match its options: {options}",
     "config_import_surcharge": "Variable network-owner fee",
     "config_help_import_surcharge": "Optional fee added to every imported kWh (transfer + energy tax). Only when your dynamic price entity excludes it. No fixed subscription; does not affect export.",
-    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports"
+    "config_proposed_pair_incomplete": "half of a split pair — this device has no {missing} sensor, and one half alone would read as a meter that only ever imports",
+    "charger_status_stood_down": "充电中 — SEM 已暂停干预",
+    "notif_charger_stood_down": "SEM 已暂停干预"
   }
 }
