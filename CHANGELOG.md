@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.1.0-beta.16] — 11.09.2026
+
+- 🔥 **A hot-water tank or heat pump SEM had boosted is released again after
+  a restart** (#914). A restart or an options change left the tank at SEM's
+  50 °C boost setpoint (or an SG-Ready heat pump in BOOST), and SEM came back
+  believing it idle — so nothing handed it back, and the tank reheated to
+  50 °C through the night. SEM now recognises its own boost when it comes
+  back and releases it as soon as there is no surplus; a setpoint SEM does
+  not write itself is left alone.
+
 # [2.1.0-beta.15] — 11.09.2026
 
 - 🔧 **Repairs now go away once you have fixed the cause** (#933). Following
