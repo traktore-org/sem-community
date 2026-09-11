@@ -89,7 +89,10 @@ def _declared(ed_config: Any | None, attr: str) -> bool | None:
     object cannot say: an unexpected shape is not a "no" (#925)."""
     if ed_config is None:
         return False
-    value = ed_config.get(attr) if isinstance(ed_config, Mapping) else getattr(ed_config, attr, None)
+    if isinstance(ed_config, Mapping):
+        value = ed_config.get(attr)
+    else:
+        value = getattr(ed_config, attr, None)
     return value if isinstance(value, bool) else None
 
 
