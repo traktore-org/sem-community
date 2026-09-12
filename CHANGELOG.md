@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🔌 **A charge the car never took no longer leaves the charger offering
+  current** (#946). When SEM started a charge and the car never drew — it was
+  full, or asleep — SEM went idle and said nothing more, so the box kept its
+  last current and stayed enabled: on PROD a KEBA still read `CONNECTED (8 A)`
+  twelve hours later. An enabled box hands that offer to whatever asks next:
+  the car waking up in a mode that had said no, its own failsafe fallback
+  while SEM is restarting, or the next car plugged in. SEM now withdraws an
+  offer it made, exactly once, and re-arms when it starts again. A box SEM
+  never enabled is still left alone, and the relay's minimum on-time is kept —
+  a held stop is retried, never dropped.
+
 # [2.1.0-beta.17] — 12.09.2026
 
 - 🐛 **A restart no longer reports the EV charger as out of SEM's control**

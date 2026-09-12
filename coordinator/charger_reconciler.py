@@ -363,6 +363,12 @@ class ChargerReconciler:
         # TRANSITION into Off — a cycle that saw some other desired state
         # first — clears it and earns the one stop.
         self._released_stop_issued = True
+        # (#946) Does an offer of SEM's OWN stand at the box? Set when SEM
+        # closes the contactor, cleared by any stop it issues. Starts False
+        # for the #942 reason one level down: a reconciler that opens its
+        # eyes in idle has offered nothing, and must not withdraw a charge
+        # somebody else set up at the box.
+        self._idle_offer_open = False
 
     def snapshot_war(self, now: float) -> dict:
         """(#763 beta.7) The war state for the diagnostics download.
@@ -479,6 +485,7 @@ class ChargerReconciler:
         for a in actions:
             if a.kind in (ActionKind.ENABLE, ActionKind.START_AND_WRITE):
                 self._note_contactor(True, now)
+                self._idle_offer_open = True     # (#946) ours to withdraw
                 break
         return actions
 
@@ -498,6 +505,7 @@ class ChargerReconciler:
         self._last_disable_at = now
         self._last_disable_issued_at = now          # (#823) gap anchor
         self._note_contactor(False, now)            # (#940) anti-cycle clock
+        self._idle_offer_open = False               # (#946) offer withdrawn
         return [Action(ActionKind.DISABLE)]
 
     def _failsafe_action(self) -> List[Action]:
@@ -553,6 +561,8 @@ class ChargerReconciler:
         if (observed.enabled is not None
                 and bool(observed.enabled) is not self._contactor_closed):
             self._contactor_closed = bool(observed.enabled)
+            if observed.enabled is False:
+                self._idle_offer_open = False        # (#946) nothing of ours stands
         # (#898) Row 0 — RELEASED: hands-off, senior to every row below.
         # Charge mode Off used to be DISABLE, and the rogue-start guard
         # (#315/#552) re-asserted it on a session the USER started. Now:
@@ -595,6 +605,7 @@ class ChargerReconciler:
                 self._last_disable_at = now
                 self._last_disable_issued_at = now
                 self._note_contactor(False, now)     # (#940) anti-cycle clock
+                self._idle_offer_open = False        # (#946) offer withdrawn
                 return [Action(ActionKind.DISABLE)]
             self._released_stop_issued = True
             return [Action(ActionKind.NONE)]
@@ -632,6 +643,7 @@ class ChargerReconciler:
                     and not self._parked_off):
                 self._parked_off = True
                 self._note_contactor(False, now)     # (#940) anti-cycle clock
+                self._idle_offer_open = False        # (#946) offer withdrawn
                 return [Action(ActionKind.PARK_OFF)]
 
         # OFF / IDLE share the convergence target (contactor open). The
@@ -668,6 +680,18 @@ class ChargerReconciler:
                         > STOP_WAR_QUIET_RESET_S):
                     self._stop_war_rounds = 0
                     self._stop_war_ceasefires = 0
+                # (#946) Converged for the LOG, not for the hardware: a car
+                # that never took SEM's offer leaves the box enabled at the
+                # last current, and an enabled box hands it to whatever asks
+                # next — the car waking up, the KEBA's failsafe fallback, the
+                # next plug-in. Withdraw an offer SEM itself made, once
+                # (_gated_disable clears the latch and keeps the relay's
+                # minimum ON, so a held stop is retried, never dropped).
+                # Silence for a box SEM never enabled, and for one it cannot
+                # stop — #627's report belongs to the drawing row.
+                if self._idle_offer_open and observed.stop_controllable:
+                    return self._gated_disable(
+                        now, bypass_anticycle=_stop_is_a_demand)
                 return [Action(ActionKind.NONE)]
             if not observed.stop_controllable:
                 # #627 — SEM has no mechanism that can open this contactor.
