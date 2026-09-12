@@ -1240,6 +1240,19 @@ def observe(adapter, power) -> ObservedState:
             enabled, controllable = _enable_state()
         except Exception as exc:  # noqa: BLE001 — never let observe() throw
             _LOGGER.debug("enable_state() failed: %s", exc)
+    # (#945) The other half of the enable-block clock. A switch that ANSWERS
+    # retires the warm-up hold — and a Repair that hold raised. It belongs
+    # here because ``observe`` is the one place that computes ``controllable``
+    # EVERY cycle; ``report_enable_blocked`` only ever runs on blocked ones,
+    # so a clock reset living there could never fire.
+    if controllable:
+        _note_ok = getattr(getattr(adapter, "_device", None),
+                           "_note_enable_controllable", None)
+        if callable(_note_ok):
+            try:
+                _note_ok()
+            except Exception as exc:  # noqa: BLE001 — never let observe() throw
+                _LOGGER.debug("_note_enable_controllable() failed: %s", exc)
     # #627 — can ANY configured mechanism open the contactor? Unknown
     # (no device / probe raised) defaults True: a false alarm here would
     # raise a repair on every working install.

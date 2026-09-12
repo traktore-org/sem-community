@@ -87,6 +87,11 @@ DECLARED: dict[str, str] = {
     "coordinator/sensor_reader.py::SensorReader._read_sensor":
         "the first live read of each reader lifetime clears once "
         "(_sensor_repair_reconciled, #933)",
+    "devices/base.py::CurrentControlDevice._note_enable_controllable":
+        "the first CONTROLLABLE observation of each device lifetime clears "
+        "once (_enable_reconciled, #945), so the restart that fixes the "
+        "switch retires the Repair its predecessor raised; a Repair this "
+        "lifetime's own writes raised owns the shared id and is left alone",
     "devices/base.py::CurrentControlDevice._clear_actuation_failure":
         "the first good write of each device instance clears once "
         "(_stale_repair_checked, #485 H5)",

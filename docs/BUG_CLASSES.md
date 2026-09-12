@@ -3262,3 +3262,62 @@ the deficit LIFO. `check_legionella_cycle` starts it with a bare `activate()` (n
 clock); the next no-surplus cycle sheds it, and the cycle then sits in `heating_to_target` without
 ever re-heating. A tank adopted at 65 °C after a restart is released the same way.
 Refs #914 #559 #656 #766 #779 #847 #908 #523 #801.
+
+### 86. Absence of evidence spent as evidence — a warm-up read raised as a verdict — GUARDED
+**Symptom:** a Repair appears seconds after every HA restart, names a device that is fine, and
+describes something that never happened. alexmc1510 (#945, 2.1.0-beta.14) got "SEM's last 3+ current
+commands to EV Charger were rejected … The charger is NOT under SEM control right now" on a restart —
+no current command had been sent at all.
+**Root shape:** a counter built for POSITIVE evidence (a command that RAISED, a write the entity
+CONTRADICTED) is reused as a convenient debounce for an observation that is merely ABSENT —
+`hass.states.get()` returns None for every entity whose integration has not finished loading, and
+`unavailable` is what the rest report meanwhile. The counter's threshold is expressed in CYCLES, so
+its real patience is whatever the coordinator interval happens to be (3 × 10 s = **30 seconds**),
+while a restart makes every integration absent for minutes. At the counter the two inputs are
+indistinguishable, so the Repair then describes the wrong one — and being persistent and ERROR, it
+outlives the warm-up that caused it.
+**Where it lives:** any surface that feeds "I cannot read or command X" into the evidence counter for
+"X refused me". `ChargerAdapterBase.report_enable_blocked` → `CurrentControlDevice.
+_record_actuation_failure` (the instance); `write_not_taken_strikes` → #915's
+`battery_control_write_not_taken`, which raised on a healthy battery about three cycles into a
+restart (**swept here**, at the *raise* site rather than the verdict: `verify_pending_write` reports
+a vanished entity as "reads missing" deliberately — that string is the evidence the Repair shows the
+owner, pinned by `test_an_entity_that_vanished_counts_as_not_reflected` — so the adapter's verdict is
+untouched and `_raise_or_clear_battery_write_repair` holds a SILENT entity for the wall-clock window
+while a contradicted one still files at once). *Assessed and already safe:* `sensor_reader`'s unavailable/stale
+Repairs and #824's control-entity pre-flight — both wall-clock `UNAVAILABLE_REPAIR_THRESHOLD_S`, and
+the precedent this row generalises; #840's unsupported-capability count (three RAISED refusals — real
+evidence); #627 `can_stop_charging`, whose input is config, not a live read (`_bound_to_entity_range`
+answers "unknown → don't cry wolf" on an unreadable entity).
+**Closure:** an entity-absence verdict is held on the WALL CLOCK, never on a cycle count, and the hold
+is the one constant `UNAVAILABLE_REPAIR_THRESHOLD_S` (#611's warm-up) rather than a fresh literal
+(class 46). Evidence counters stay for evidence: a command that raised keeps its three-strike
+contract (#462, framework-tier), and the absence path neither increments that counter nor is cleared
+by it — they share one issue id, so the write side owns the Repair whenever it has spoken. The
+clock's OTHER half lives where the HEALTHY answer is computed every cycle (`observe`), not on the
+failure path, which by construction only runs while the thing is broken. That healthy observation is
+also **class 84's edge**: the FIRST controllable observation of a device lifetime clears the Repair
+once, whether or not this instance raised it — the memo dies with the restart and the persistent
+Repair does not, so "clear only if I raised it" makes the restart that FIXES the switch the one run
+that cannot retire the notice. This change's first cut had exactly that bug and
+`tests/test_933_memo_gated_clear_registry.py` failed it, which is the registry working as designed.
+**Guard:** `tests/test_945_restart_enable_warmup.py` — the restart replayed through the real device
+and the real adapter (30 s of blocked cycles raise nothing; the threshold raises once, and only
+once), the vacuity twin (the command counter is untouched by a non-command, and #462's three rejected
+writes still raise with no time passing at all), the recovery edge driven through the real
+`observe()`, a pin that a switch recovering does NOT delete a Repair the write side raised, and the
+sibling pin that a missing battery entity spends no strike.
+**Sweep question:** for every counter that turns repeated observations into a user-visible verdict —
+is each observation EVIDENCE (something happened and was refused) or SILENCE (nothing could be read)?
+And is its patience measured in cycles or in seconds? A cycle-counted threshold on a silent input is
+a promise about the coordinator's interval, not about the fault.
+**Left for Guido:** (1) The Repair TEXT is still the write path's: past the hold, a genuinely locked
+switch is reported as "SEM's last 3+ current commands were rejected". Saying it properly needs a new
+translation key in `strings.json` + all 16 translations — a product decision, not a sweep. (2) Past
+the hold a missing start/stop entity now raises TWO ERROR Repairs for one fact — this one and #824's
+`charger_control_entity_broken`, which watches the same `ev_start_stop_entity` on the same threshold.
+Deduping them means deciding which surface owns an uncommandable control entity. (3) The hold starts
+at the first blocked observation, so an integration that takes longer than five minutes to load (a
+cloud charger re-authenticating) still cries wolf; anchoring it on `CoreState.running` would need the
+`is_running`-is-true-from-`starting` trap of class 84 handled at every site.
+Refs #945 #611 #824 #915 #462 #536 #548 #840 #627.

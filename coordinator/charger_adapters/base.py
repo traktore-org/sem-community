@@ -244,11 +244,27 @@ class ChargerAdapter(ABC):
         dev._session_active = True
 
     async def report_enable_blocked(self) -> None:
-        """Surface an uncontrollable enable switch as an actuation failure
-        so the existing repair flow raises it (debounced by the device)."""
-        rec = getattr(self._device, "_record_actuation_failure", None)
-        if rec is not None:
-            rec(RuntimeError("enable switch unavailable/locked — cannot start charging"))
+        """Surface an uncontrollable enable switch — once it has been one for
+        longer than a restart's warm-up (#945).
+
+        The switch being unreadable is not a rejected command, and it used to
+        be reported as one: this fed the device's 3-strike COMMAND counter,
+        which files its Repair after three cycles — ~30 s — so every HA
+        restart raised a persistent ERROR Repair while the charger's own
+        integration was still loading. The device owns the wall clock now
+        (#611's threshold, the same one #824 applies to this very entity);
+        below it this stays the reconciler's WARNING, which is already logged.
+        """
+        note = getattr(self._device, "_note_enable_blocked", None)
+        if not callable(note):
+            return
+        try:
+            if not note():
+                _LOGGER.debug(
+                    "enable switch not commandable — holding the Repair until "
+                    "the block outlasts a restart's warm-up (#945)")
+        except Exception as e:  # noqa: BLE001 — a repair never costs a cycle
+            _LOGGER.debug("enable-blocked surface failed: %s", e)
 
     async def report_failsafe_suspected(self, interval_s: float) -> None:
         """(#823) Raise the failsafe Repair for this charger.
