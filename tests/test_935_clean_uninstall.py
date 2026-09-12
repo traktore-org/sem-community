@@ -170,6 +170,31 @@ class TestRepairsGoWithTheIntegration:
 
 
 class TestTheFrontendResources:
+    def test_the_real_live_urls_are_recognised(self):
+        """The exact rows read off the .46 rig on 12.09 — the first cut of
+        this matcher was written against a GUESSED url shape."""
+        for url in (
+            "/local/custom_components/solar_energy_management/dashboard/card/"
+            "dist/sem-cards.js?v=2.1.0-beta.18-93ee7460",
+            "/local/custom_components/solar_energy_management/dashboard/card/"
+            "sem-localize.js?v=2.1.0-beta.18-6c9c5fbb",
+        ):
+            assert cleanup._is_sem_resource(url), url
+
+    def test_the_rigs_other_thirty_odd_resources_survive(self):
+        """Everything else on that same rig — HACS cards and hand-placed
+        /local ones. A cleanup that takes one of these is worse than the
+        leftover it was written to remove."""
+        for url in (
+            "/hacsfiles/lovelace-mushroom/mushroom.js?hacstag=444350375523",
+            "/hacsfiles/apexcharts-card/apexcharts-card.js?hacstag=331701152223",
+            "/local/community/lovelace-card-mod/card-mod.js",
+            "/local/community/k-flow-card/k-flow-card.js",
+            "/local/community/sunsynk-power-flow-card/sunsynk-power-flow-card.js",
+            "/hacsfiles/lovelace-solar-card/solar-card.js?hacstag=1050656026083",
+        ):
+            assert not cleanup._is_sem_resource(url), url
+
     def test_sems_own_resources_are_recognised(self):
         assert cleanup._is_sem_resource(
             "/solar_energy_management/dashboard/card/dist/sem-cards.js?v=2.1.0-abc")
