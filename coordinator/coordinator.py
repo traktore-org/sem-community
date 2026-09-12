@@ -5250,9 +5250,37 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             for eid in sorted(stale):
                 _ri.clear_battery_control_write_not_taken(self.hass, eid)
             raised.clear()
+            # (#945) A reflected write retires the silence clock below — for
+            # the entity it PROVED, not for every entity: a primary switch
+            # would otherwise re-arm another battery's hold from zero.
+            silent = getattr(self, "_battery_write_silent_since", None)
+            if silent and proved:
+                silent.pop(proved, None)
         elif (verdict is False and entity_id
               and strikes >= self.BATTERY_WRITE_STRIKES
               and entity_id not in raised):
+            # (#945, bug class 86) A cycle count is not a clock.
+            # ``verify_pending_write`` reports a vanished entity as "reads
+            # missing" deliberately and that evidence stays — but silence is
+            # also what EVERY entity looks like while its integration loads,
+            # so on its own it must not file an ERROR Repair three cycles
+            # into a restart. Silence waits out the same wall-clock hold
+            # #824 gives the charger's control entities (#611's warm-up); a
+            # register that answered with the WRONG number is evidence and
+            # files at once.
+            silent_since = getattr(self, "_battery_write_silent_since", None)
+            if silent_since is None:
+                silent_since = self._battery_write_silent_since = {}
+            _st = self.hass.states.get(entity_id)
+            _sv = str(getattr(_st, "state", "") or "").strip().lower()
+            if _st is None or _sv in ("unavailable", "unknown", "none", ""):
+                import time as _time
+                _now = _time.monotonic()
+                if (_now - silent_since.setdefault(entity_id, _now)
+                        < _ri.UNAVAILABLE_REPAIR_THRESHOLD_S):
+                    return
+            else:
+                silent_since.pop(entity_id, None)
             raised.add(entity_id)
             _ri.raise_battery_control_write_not_taken(
                 self.hass, entity_id=entity_id,

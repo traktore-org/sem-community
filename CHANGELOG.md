@@ -27,6 +27,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ⚠️ A custom dashboard that references a removed entity shows it as
   unavailable — SEM's own dashboard is updated in step.
 
+# [2.1.0-beta.17] — 12.09.2026
+
+- 🐛 **A restart no longer reports the EV charger as out of SEM's control**
+  (#945). About half a minute after every Home Assistant restart, SEM could
+  file an "EV charger not accepting commands" notice listing commands it had
+  never sent: the charger's own integration was still loading, so its
+  start/stop switch did not exist yet — and "not there yet" read as "renamed
+  or locked". An unreadable control entity now gets the same five minutes SEM
+  already gives a missing sensor before it is called broken, while a charger
+  that genuinely refuses SEM's commands is still reported straight away.
+
+- 🐛 **…and the same false alarm about a battery control entity** (#945). A
+  battery whose integration was still starting could be reported as ignoring
+  SEM's writes seconds into a restart. That notice waits out the same window
+  now; a register that really contradicts a write is still reported at once.
+
 # [2.1.0-beta.16] — 11.09.2026
 
 - 🔥 **A hot-water tank or heat pump SEM had boosted is released again after
