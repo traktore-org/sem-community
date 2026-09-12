@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Huawei owners: check your battery target SOC** (#950). SEM's hardware
+  roster proposed Huawei's peak-shaving SOC
+  (`storage_capacity_control_soc_peak_shaving`) as the battery's charge
+  target, one click away on the Config tab. It is a peak-shaving threshold,
+  not a target. The proposal is withdrawn; if you accepted it, clear
+  `battery_target_soc_entity`.
+
 - 🐛 **Charge pacing no longer strands the inverter's charge limit** (#949).
   The captured max-charge-power lived in memory only, and an HA restart never
   unloads the config entry — so the register kept SEM's cap, and the next
