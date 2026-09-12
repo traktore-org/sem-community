@@ -977,6 +977,22 @@ class ChargerReconciler:
             # getattr, like the #700 flag below: this loop is driven on bare
             # instances by the tests it was extracted for.
             now = getattr(self, "_last_apply_at", 0.0)
+        # (#945) The other half of the enable-block hold, keyed on this
+        # cycle's ACTIONS rather than on ``observed.enable_controllable``. A
+        # switch that is readable but stuck OFF is controllable AND blocked,
+        # so retiring the hold on readability reset it every single cycle:
+        # the window never elapsed, the #536 Repair could never stand, and
+        # the retire deleted one a previous lifetime had raised. "Did this
+        # cycle report the surface blocked?" is the question the hold is
+        # actually about, and it is answered here for both sub-cases at once.
+        if not any(a.kind is ActionKind.REPORT_ENABLE_BLOCKED for a in actions):
+            _note_ok = getattr(getattr(adapter, "_device", None),
+                               "_note_enable_unblocked", None)
+            if callable(_note_ok):
+                try:
+                    _note_ok()
+                except Exception as exc:  # noqa: BLE001 — never cost a cycle
+                    _LOGGER.debug("_note_enable_unblocked() failed: %s", exc)
         for action in actions:
             if action.kind is ActionKind.NONE:
                 continue

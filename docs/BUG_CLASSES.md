@@ -3262,3 +3262,86 @@ the deficit LIFO. `check_legionella_cycle` starts it with a bare `activate()` (n
 clock); the next no-surplus cycle sheds it, and the cycle then sits in `heating_to_target` without
 ever re-heating. A tank adopted at 65 °C after a restart is released the same way.
 Refs #914 #559 #656 #766 #779 #847 #908 #523 #801.
+
+### 86. Absence of evidence spent as evidence — a warm-up read raised as a verdict — GUARDED
+**Symptom:** a Repair appears seconds after every HA restart, names a device that is fine, and
+describes something that never happened. alexmc1510 (#945, 2.1.0-beta.14) got "SEM's last 3+ current
+commands to EV Charger were rejected … The charger is NOT under SEM control right now" on a restart —
+no current command had been sent at all.
+**Root shape:** a counter built for POSITIVE evidence (a command that RAISED, a write the entity
+CONTRADICTED) is reused as a convenient debounce for an observation that is merely ABSENT —
+`hass.states.get()` returns None for every entity whose integration has not finished loading, and
+`unavailable` is what the rest report meanwhile. The counter's threshold is expressed in CYCLES, so
+its real patience is whatever the coordinator interval happens to be (3 × 10 s = **30 seconds**),
+while a restart makes every integration absent for minutes. At the counter the two inputs are
+indistinguishable, so the Repair then describes the wrong one — and being persistent and ERROR, it
+outlives the warm-up that caused it.
+**Where it lives:** any surface that feeds "I cannot read or command X" into the evidence counter for
+"X refused me". `ChargerAdapterBase.report_enable_blocked` → `CurrentControlDevice.
+_record_actuation_failure` (the instance); `write_not_taken_strikes` → #915's
+`battery_control_write_not_taken`, which raised on a healthy battery about three cycles into a
+restart (**swept here**, at the *raise* site rather than the verdict: `verify_pending_write` reports
+a vanished entity as "reads missing" deliberately — that string is the evidence the Repair shows the
+owner, pinned by `test_an_entity_that_vanished_counts_as_not_reflected` — so the adapter's verdict is
+untouched and `_raise_or_clear_battery_write_repair` holds a SILENT entity for the wall-clock window
+while a contradicted one still files at once). *Assessed and already safe:* `sensor_reader`'s unavailable/stale
+Repairs and #824's control-entity pre-flight — both wall-clock `UNAVAILABLE_REPAIR_THRESHOLD_S`, and
+the precedent this row generalises; #840's unsupported-capability count (three RAISED refusals — real
+evidence); #627 `can_stop_charging`, whose input is config, not a live read (`_bound_to_entity_range`
+answers "unknown → don't cry wolf" on an unreadable entity).
+**Closure:** an entity-absence verdict is held on the WALL CLOCK, never on a cycle count, and the hold
+is the one constant `UNAVAILABLE_REPAIR_THRESHOLD_S` (#611's warm-up) rather than a fresh literal
+(class 46). Evidence counters stay for evidence: a command that raised keeps its three-strike
+contract (#462, framework-tier), and the absence path neither increments that counter nor is cleared
+by it — they share one issue id, so the write side owns the Repair whenever it has spoken. The
+clock's OTHER half must be retired by the CONDITION ending, and the condition is "did this cycle
+report the surface blocked?" — asked of the emitted actions, never of "can I read the entity?". Both
+halves of this fix got that wrong first and the error is instructive: only ONE of the two conditions
+reaching this surface is silence. A switch that is READABLE but stuck `off` (#536 Eco-Smart, the
+re-assert budget spent) is `enable_controllable=True` and blocked at the same time, so a hold retired
+on readability resets every cycle, never elapses, and makes that Repair unfileable — strictly worse
+than the bug, because the retire also deletes one a previous lifetime raised. Evidence keeps its
+original speed; only silence waits. Likewise a *write* is evidence about the entity it was written to
+and no other: zeroing the hold on a successful current write let a 0 A stop (one per 60 s reassert
+dwell, on every non-KEBA stop) starve a 300 s window forever.
+**Guard:** `tests/test_945_restart_enable_warmup.py` — the restart replayed through the real device
+and the real adapter (30 s of blocked cycles raise nothing; the threshold raises once, and only
+once), the vacuity twin (the command counter is untouched by a non-command, and #462's three rejected
+writes still raise with no time passing at all), the recovery edge driven through the real
+`observe()`, a pin that a switch recovering does NOT delete a Repair the write side raised, and the
+sibling pin that a missing battery entity spends no strike.
+**Sweep question:** for every counter that turns repeated observations into a user-visible verdict —
+is each observation EVIDENCE (something happened and was refused) or SILENCE (nothing could be read)?
+And is its patience measured in cycles or in seconds? A cycle-counted threshold on a silent input is
+a promise about the coordinator's interval, not about the fault.
+**Left for Guido:** (0) This surface shares ONE issue id with the write path (#462), which is why the
+unblocked-cycle clear must not fire for a predecessor's Repair (class 84's usual answer): on a
+KEBA/service/button charger there is no switch at all, so a first-of-lifetime clear there would
+delete a genuine "every command rejected" notice on the evidence of an entity that does not exist.
+The predecessor's copy is retired by #485 H5's first-good-write clear instead. Splitting the id would
+let each condition own its own lifecycle — and is what a new translation key (item 1) would want
+anyway. (1) The Repair TEXT is still the write path's: past the hold, a genuinely locked
+switch is reported as "SEM's last 3+ current commands were rejected". Saying it properly needs a new
+translation key in `strings.json` + all 16 translations — a product decision, not a sweep. (2) Past
+the hold a missing start/stop entity now raises TWO ERROR Repairs for one fact — this one and #824's
+`charger_control_entity_broken`, which watches the same `ev_start_stop_entity` on the same threshold.
+Deduping them means deciding which surface owns an uncommandable control entity. (3) The hold starts
+at the first blocked observation, so an integration that takes longer than five minutes to load (a
+cloud charger re-authenticating) still cries wolf; anchoring it on `CoreState.running` would need the
+`is_running`-is-true-from-`starting` trap of class 84 handled at every site. (4) The battery sweep
+tests SILENCE by re-reading the entity on the cycle the third strike lands, not by asking what the
+verdict actually saw: a register that contradicted three writes but happens to read `unavailable` on
+that cycle is pushed into the 300 s hold while `last_unverified_seen` still carries the contradicting
+number. A five-minute delay on a real #915 fault, never a false negative — the verdict would have to
+carry its own "was this silence?" flag to be exact. (5) The hold now accumulates only across
+CONSECUTIVE reporting cycles, where the old cycle counter accumulated across gaps: `REPORT_ENABLE_
+BLOCKED` is emitted only while desired is CHARGE, or OFF/IDLE against a live draw, so a genuinely
+app-locked charger on a fluctuating-surplus day restarts its window on every idle-and-not-drawing
+cycle and #548 can surface well after five minutes. Any five continuous minutes of charge-desire
+still files it, so it is delayed surfacing and not a false negative — but it is a real sensitivity
+change, and the fix (accumulate the block, don't restart it) needs a decision about what counts as
+the same episode. (6) Pre-existing, found in this change's review: in OBSERVER mode `send` withholds
+and returns False, so `ensure_enabled` can never close the switch — an observer install whose switch
+reads `off` walks the re-assert budget and files this ERROR Repair in ~70 s, claiming commands were
+rejected in the one mode that promises to send nothing. Unchanged here; it belongs with residual (1).
+Refs #945 #611 #824 #915 #462 #536 #548 #840 #627.
