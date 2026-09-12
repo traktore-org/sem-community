@@ -1538,3 +1538,44 @@ def clear_charger_control_entity_broken(
             hass, DOMAIN, _control_entity_issue_id(device_id, entity_id))
     except Exception as e:  # noqa: BLE001
         _LOGGER.debug("issue_registry.delete failed for %s: %s", entity_id, e)
+
+
+_PREVIOUS_INSTALL_ISSUE_ID = "previous_install_leftovers"
+
+
+def raise_previous_install_leftovers(hass: HomeAssistant, removed: int) -> None:
+    """(#935) SEM found and removed files a previous install left behind.
+
+    The stores are SEM's own and go without asking. What this card is for is
+    the half SEM must NOT take: the generated dashboard and the long-term
+    statistics of the old install's entities are the user's history, and a
+    year of solar yield is not SEM's to delete because a config entry was
+    re-created. So: say what was cleaned, name what was left, and give the one
+    action that clears the rest — ``solar_energy_management.remove_leftovers``.
+
+    Not fixable in place on purpose: the answer is a choice, not a repair, and
+    it is reversible only in the direction of keeping.
+    """
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id=_PREVIOUS_INSTALL_ISSUE_ID,
+            is_fixable=False,
+            is_persistent=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="previous_install_leftovers",
+            learn_more_url=next_step_url(
+                "docs", "previous_install_leftovers", **_versions(hass)),
+            translation_placeholders={"removed": str(removed)},
+        )
+    except Exception as e:  # noqa: BLE001 — never fail a setup over a repair
+        _LOGGER.debug("issue_registry.create failed for leftovers: %s", e)
+
+
+def clear_previous_install_leftovers(hass: HomeAssistant) -> None:
+    """The user answered — by running the service, or by not caring."""
+    try:
+        ir.async_delete_issue(hass, DOMAIN, _PREVIOUS_INSTALL_ISSUE_ID)
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete failed for leftovers: %s", e)

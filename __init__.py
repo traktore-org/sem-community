@@ -2102,6 +2102,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     # fresh writer adopts the engagement from its own record.
     _PENDING_PACING_RESTORE.pop(entry.entry_id, None)
 
+    # (#935) Sweep the stores of SEM entries that no longer exist. A removed
+    # and re-added install keeps the previous entry id's pair for ever — the
+    # .46 rig carried seven pairs and ninety-six version markers — and they
+    # make "is this a fresh install?" unanswerable. SEM's OWN files, so they
+    # go without asking; what is the user's is offered instead (the Repair
+    # below points at `remove_leftovers`).
+    hass.async_create_task(_async_sweep_orphan_stores(hass))
+
     # In-memory SEM log ring buffer for the diagnose surface (#461/#462
     # triage gap on Supervisor installs — no flat log file to tail).
     # Idempotent across reloads. Stored under its own key so code that
@@ -3047,9 +3055,73 @@ async def async_remove_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> None
             _LOGGER.info("SEM removed: %s", said)
 
     devices = _PENDING_LOAD_TEARDOWN.pop(entry.entry_id, None)
-    if not devices:
-        return
-    await _async_deactivate_surplus_loads(devices, "integration removed")
+    if devices:
+        await _async_deactivate_surplus_loads(devices, "integration removed")
+
+    # (#935) ...and then SEM takes its OWN files. Everything below belongs to
+    # SEM and to nobody else: this entry's stores, its version marker, its
+    # Repairs, and the Lovelace resources pointing at a module that is about
+    # to stop existing. What is the USER's — the generated dashboard, the
+    # long-term statistics — is deliberately NOT here; it goes through the
+    # `remove_leftovers` service, on an explicit choice.
+    await _async_take_sems_own_files(hass, entry)
+
+
+async def _async_take_sems_own_files(hass: HomeAssistant,
+                                     entry: SEMConfigEntry) -> None:
+    """(#935) Delete what SEM created, on removal. Never raises."""
+    from . import cleanup
+
+    try:
+        stores = await cleanup.async_entry_stores_removed(hass, entry.entry_id)
+        # Install-wide stores go with the LAST entry only: a second SEM entry
+        # still needs the device mappings and the load priorities.
+        remaining = [
+            e for e in hass.config_entries.async_entries(DOMAIN)
+            if e.entry_id != entry.entry_id
+        ]
+        if not remaining:
+            stores += await cleanup.async_delete_stores(
+                hass, cleanup.install_wide_store_keys())
+        repairs = cleanup.delete_repairs(hass)
+        resources = await cleanup.async_deregister_resources(hass)
+        _LOGGER.info(
+            "SEM removed: took its own files — %d store(s), %d repair(s), "
+            "%d frontend resource(s)%s",
+            len(stores), repairs, len(resources),
+            "" if remaining else " (last entry: install-wide stores too)")
+    except Exception as e:  # noqa: BLE001 — a removal must always complete
+        _LOGGER.warning("SEM removed: cleanup incomplete (non-blocking): %s", e)
+
+
+async def _async_sweep_orphan_stores(hass: HomeAssistant) -> None:
+    """(#935) Delete SEM stores whose config entry is gone, and say so.
+
+    Runs on setup rather than on removal, because the install that left them
+    behind is the one that could not clean up: every SEM before this change,
+    and any removal that never reached ``async_remove_entry`` (a disk full, a
+    kill during shutdown). Files SEM does not recognise are never touched —
+    they are named in the log and left where they are.
+    """
+    from . import cleanup
+
+    try:
+        live = [e.entry_id for e in hass.config_entries.async_entries(DOMAIN)]
+        orphans = cleanup.orphan_store_keys(hass, live)
+        if not orphans:
+            return
+        removed = await cleanup.async_delete_stores(hass, orphans)
+        _LOGGER.info(
+            "#935 — removed %d store(s) left by a previous SEM install: %s",
+            len(removed), ", ".join(removed[:6])
+            + ("…" if len(removed) > 6 else ""))
+        # What is the USER's cannot be swept: a previous install's dashboard
+        # and its long-term statistics are theirs to keep or drop. Say that
+        # once, where they will see it, and give them the one-click path.
+        from .coordinator.repair_issues import raise_previous_install_leftovers
+        raise_previous_install_leftovers(hass, len(removed))
+    except Exception as e:  # noqa: BLE001 — a sweep never blocks a setup
+        _LOGGER.debug("#935 orphan sweep skipped: %s", e)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
@@ -3397,6 +3469,44 @@ async def _async_register_services(
         _LOGGER.debug("Registered service: %s.replan", DOMAIN)
     except Exception as err:  # noqa: BLE001
         _LOGGER.error("Failed to register replan service: %s", err)
+
+    async def async_remove_leftovers_service(call) -> None:
+        """(#935) Delete what is the USER's, on their explicit say-so.
+
+        SEM takes its own files on removal without asking. This service is the
+        other half: the generated dashboard and the long-term statistics of
+        SEM's entities are the user's history — a year of solar yield is not
+        SEM's to throw away because it is being uninstalled — so they are only
+        ever removed by someone choosing to remove them.
+
+        Documented as "run this BEFORE removing SEM", because after removal
+        there is no SEM left to run it.
+        """
+        from . import cleanup
+        from .coordinator.repair_issues import clear_previous_install_leftovers
+
+        want_stats = bool(call.data.get("statistics", True))
+        want_dashboard = bool(call.data.get("dashboard", False))
+        done = {"statistics": 0, "dashboard": False}
+
+        if want_stats:
+            ids = cleanup.sem_statistic_ids(hass)
+            done["statistics"] = await cleanup.async_clear_statistics(hass, ids)
+        if want_dashboard:
+            done["dashboard"] = await cleanup.async_remove_dashboard(hass)
+
+        clear_previous_install_leftovers(hass)
+        _LOGGER.info(
+            "#935 remove_leftovers: cleared %d statistic(s), dashboard %s",
+            done["statistics"],
+            "removed" if done["dashboard"] else "kept")
+
+    try:
+        hass.services.async_register(
+            DOMAIN, "remove_leftovers", async_remove_leftovers_service)
+        _LOGGER.debug("Registered service: %s.remove_leftovers", DOMAIN)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.error("Failed to register remove_leftovers service: %s", err)
 
     # Check if services are already registered (prevents conflicts on reload)
     services_already_registered = hass.services.has_service(DOMAIN, "sync_priorities_from_dashboard")
