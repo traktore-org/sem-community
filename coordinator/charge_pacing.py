@@ -191,6 +191,9 @@ class ChargePacingWriter:
 
     def __init__(self, store: Any = None) -> None:
         self.engaged: bool = False
+        #: the entity the engagement is ON — the unload path needs it after
+        #: the coordinator is gone, and the record on disk is async to read
+        self.engaged_entity: str = ""
         self.restore_value: float | None = None
         self.last_written_w: float | None = None
         self._store = store
@@ -200,7 +203,7 @@ class ChargePacingWriter:
     async def apply(self, hass, entity_id: str, cap_w, *,
                     observer: bool) -> str:
         """Returns a short action token:
-        wrote|held|restored|idle|observer|no_limit_entity."""
+        wrote|held|restored|idle|observer|no_limit_entity|limit_unreadable."""
         if not observer:
             await self._adopt(hass, entity_id)
         if not entity_id:
@@ -215,30 +218,51 @@ class ChargePacingWriter:
         if cap_w is None:
             if self.engaged:
                 if observer:
+                    # (#949, ruflo REFUTED the first version) Stand down
+                    # WITHOUT forgetting. The record on disk is the truth and
+                    # this object is its cache: before this, flipping observer
+                    # on mid-engagement dropped the in-memory capture, left
+                    # the record alone and kept the writer marked adopted — so
+                    # the next real cycle re-captured the live register, which
+                    # still held SEM's own cap, and persisted THAT as the
+                    # hardware maximum. The exact bug this change exists to
+                    # kill, through the observer seam and with no restart:
+                    # one toggle of a switch the user is invited to use.
                     self.engaged = False
+                    self.engaged_entity = ""
                     self.restore_value = None
                     self.last_written_w = None
+                    self._adopted = self._store is None
                     return "observer"
                 value = self.restore_value
                 self.engaged = False
+                self.engaged_entity = ""
                 self.restore_value = None
                 self.last_written_w = None
+                if value is None:
+                    # Nothing to put back, and no way left to learn it. Keep
+                    # the record: erasing it would remove the only trace that
+                    # a register is still being held down (#949 review).
+                    return "idle"
                 await self._forget()
-                if value is not None:
-                    await hass.services.async_call(
-                        "number", "set_value",
-                        {"entity_id": entity_id, "value": float(value)},
-                        blocking=False)
-                    return "restored"
+                await hass.services.async_call(
+                    "number", "set_value",
+                    {"entity_id": entity_id, "value": float(value)},
+                    blocking=False)
+                return "restored"
             return "idle"
         if observer:
             return "observer"
         if not self.engaged:
-            st = hass.states.get(entity_id)
-            try:
-                self.restore_value = float(st.state) if st else None
-            except (TypeError, ValueError):
-                self.restore_value = None
+            # The capture is the ONLY way back, so a register whose prior
+            # value cannot be read is a register SEM must not write. Before
+            # this the cap went on anyway and the restore was silently
+            # skipped for good (#949 review).
+            baseline = _read_number(hass, entity_id)
+            if baseline is None:
+                return "limit_unreadable"
+            self.restore_value = baseline
+            self.engaged_entity = str(entity_id)
             self.engaged = True
         if (self.last_written_w is not None
                 and abs(cap_w - self.last_written_w) < 100.0):
@@ -288,6 +312,7 @@ class ChargePacingWriter:
             await self._forget()
             return
         self.engaged = True
+        self.engaged_entity = stored
         self.restore_value = restore
         self.last_written_w = _as_float(record.get("cap_w"))
         _LOGGER.info(
@@ -333,6 +358,56 @@ def _as_float(value) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _read_number(hass, entity_id: str) -> float | None:
+    """The entity's value as a number, or None when it cannot be read at all
+    (missing, unavailable, unknown, non-numeric)."""
+    state = hass.states.get(entity_id)
+    if state is None:
+        return None
+    return _as_float(getattr(state, "state", None))
+
+
+def pending_pacing_release(coordinator) -> tuple | None:
+    """(#949) What a still-engaged pacer is holding down, as
+    ``(entity_id, restore_value, store)``, or None.
+
+    Read at UNLOAD, where the coordinator is about to go away: a config entry
+    that is disabled or removed has no next lifetime to adopt the engagement,
+    so the register would keep SEM's cap with nothing left that knows why.
+    The battery adapters have had this since #936; the pacer writes a
+    user-named ``number`` directly and was not in that path.
+    """
+    writer = getattr(coordinator, "_charge_pacing_writer", None)
+    if writer is None or not getattr(writer, "engaged", False):
+        return None
+    entity = str(getattr(writer, "engaged_entity", "") or "")
+    value = _as_float(getattr(writer, "restore_value", None))
+    if not entity or value is None:
+        return None
+    return (entity, value, getattr(writer, "_store", None))
+
+
+async def async_release_pacing(hass, held: tuple | None, reason: str) -> str | None:
+    """Put the captured maximum back and drop the record. Never raises."""
+    if not held:
+        return None
+    entity, value, store = held
+    try:
+        await hass.services.async_call(
+            "number", "set_value",
+            {"entity_id": entity, "value": float(value)}, blocking=False)
+    except Exception:  # noqa: BLE001 — an unload must not fail on this
+        _LOGGER.warning("charge pacing: could not release %s on %s",
+                        entity, reason)
+        return None
+    if store is not None:
+        try:
+            await store.async_remove()
+        except Exception:  # noqa: BLE001
+            pass
+    return f"charge limit {entity} restored to {value:.0f} W ({reason})"
 
 
 def today_remaining_slots(*, now, sunrise, sunset, day_kwh, home_w_at,

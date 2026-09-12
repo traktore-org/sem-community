@@ -7063,6 +7063,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 "pacing has nowhere to write — no battery charge-power limit "
                 "entity is set (SEM's detected hardware proposes one)"
                 if action == "no_limit_entity" else
+                # (#949 review) A register whose current value cannot be read
+                # is one SEM must not write: the capture is the only way back.
+                "the charge-power limit entity cannot be read — SEM will not "
+                "write a value it could not put back"
+                if action == "limit_unreadable" else
                 decision.reason if decision else (
                     "pacing idle — outside daylight or no forecast"
                     if not ledger else f"pacing idle — {_why}")),

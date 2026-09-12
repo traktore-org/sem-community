@@ -227,3 +227,207 @@ class TestTheStoreIsScopedToTheEntry:
 
     def test_no_entry_means_no_record(self, hass):
         assert self._make(hass, None) is None
+
+
+class TestTheObserverSeam:
+    """ruflo REFUTED the first version of this fix here.
+
+    Flipping observer ON mid-engagement dropped the in-memory capture, left
+    the record on disk alone, and kept the writer marked adopted. The next
+    real cycle then re-captured the live register — still holding SEM's own
+    cap — and persisted THAT as the hardware maximum. The bug this whole
+    change exists to kill, reached through a switch the user is invited to
+    use, with no restart involved.
+    """
+
+    def test_an_observer_toggle_does_not_eat_the_real_maximum(self):
+        store = FakeStore()
+        w = ChargePacingWriter(store=store)
+        # A real engagement: the register held 5000 W, SEM wrote 350 W.
+        assert _run(w.apply(_hass("5000"), ENTITY, 350.0, observer=False)) == "wrote"
+
+        # Observer goes on, and the decision drops to "no cap" — target
+        # reached, trust lost, any of the several None branches.
+        assert _run(w.apply(_hass("350"), ENTITY, None, observer=True)) == "observer"
+        assert store.data is not None, "the record of a real cap must stand"
+
+        # Observer goes off and pacing wants a cap again. The register still
+        # reads SEM's own 350 W, because nothing ever restored it.
+        h = _hass("350")
+        _run(w.apply(h, ENTITY, 300.0, observer=False))
+        assert w.restore_value == 5000.0, (
+            "the writer re-captured its own cap as the hardware maximum")
+        assert store.data["restore_value"] == 5000.0
+
+    def test_and_the_maximum_still_comes_back_afterwards(self):
+        store = FakeStore()
+        w = ChargePacingWriter(store=store)
+        _run(w.apply(_hass("5000"), ENTITY, 350.0, observer=False))
+        _run(w.apply(_hass("350"), ENTITY, None, observer=True))
+        _run(w.apply(_hass("350"), ENTITY, 300.0, observer=False))
+        h = _hass("300")
+        assert _run(w.apply(h, ENTITY, None, observer=False)) == "restored"
+        assert _values_written(h) == [5000.0]
+
+
+class TestARegisterSEMCannotReadIsOneItMustNotWrite:
+    """The capture is the only way back, so an unreadable baseline is a
+    refusal, not a write with a silent hole where the restore should be."""
+
+    def test_an_unavailable_entity_is_not_written(self):
+        for dark in ("unavailable", "unknown", "", None):
+            h = _hass(dark)
+            w = ChargePacingWriter()
+            assert _run(w.apply(h, ENTITY, 400.0, observer=False)) == "limit_unreadable"
+            assert h.services.async_call.await_count == 0
+            assert not w.engaged
+
+    def test_a_missing_entity_is_not_written(self):
+        h = _hass()
+        h.states.get = MagicMock(return_value=None)
+        w = ChargePacingWriter()
+        assert _run(w.apply(h, ENTITY, 400.0, observer=False)) == "limit_unreadable"
+        assert h.services.async_call.await_count == 0
+
+    def test_it_engages_as_soon_as_the_entity_reads(self):
+        w = ChargePacingWriter(store=FakeStore())
+        _run(w.apply(_hass("unavailable"), ENTITY, 400.0, observer=False))
+        assert _run(w.apply(_hass("5000"), ENTITY, 400.0, observer=False)) == "wrote"
+        assert w.restore_value == 5000.0
+
+    def test_a_hold_with_nothing_to_restore_keeps_its_record(self):
+        """An old record with no captured value: the cap cannot be lifted, so
+        the record is the only trace that a register is still held down."""
+        store = FakeStore({"entity_id": ENTITY, "restore_value": None,
+                           "cap_w": 400.0})
+        w = ChargePacingWriter(store=store)
+        h = _hass("400")
+        assert _run(w.apply(h, ENTITY, None, observer=False)) == "idle"
+        assert h.services.async_call.await_count == 0
+        assert store.data is not None and store.removes == 0
+
+
+class TestSEMGoingAwayHandsTheRegisterBack:
+    """#936 hands back what the battery ADAPTERS commanded. The pacer writes a
+    user-named number directly and was not in that path, so a disabled or
+    removed entry left the cap on the register with no next lifetime to adopt
+    it — the claim's real hole, found by ruflo."""
+
+    def _engaged_coordinator(self):
+        from custom_components.solar_energy_management.coordinator.charge_pacing import (
+            pending_pacing_release,
+        )
+        store = FakeStore()
+        w = ChargePacingWriter(store=store)
+        _run(w.apply(_hass("5000"), ENTITY, 400.0, observer=False))
+        return SimpleNamespace(_charge_pacing_writer=w), pending_pacing_release, store
+
+    def test_an_engaged_pacer_reports_what_it_holds(self):
+        coord, pending, store = self._engaged_coordinator()
+        held = pending(coord)
+        assert held[0] == ENTITY and held[1] == 5000.0 and held[2] is store
+
+    def test_an_idle_pacer_holds_nothing(self):
+        from custom_components.solar_energy_management.coordinator.charge_pacing import (
+            pending_pacing_release,
+        )
+        assert pending_pacing_release(SimpleNamespace()) is None
+        assert pending_pacing_release(
+            SimpleNamespace(_charge_pacing_writer=ChargePacingWriter())) is None
+
+    def test_releasing_puts_the_maximum_back_and_drops_the_record(self):
+        from custom_components.solar_energy_management.coordinator.charge_pacing import (
+            async_release_pacing,
+        )
+        coord, pending, store = self._engaged_coordinator()
+        h = _hass("400")
+        said = _run(async_release_pacing(h, pending(coord), "integration removed"))
+        assert _values_written(h) == [5000.0]
+        assert store.data is None
+        assert said and "integration removed" in said
+
+    def test_releasing_nothing_is_a_no_op(self):
+        from custom_components.solar_energy_management.coordinator.charge_pacing import (
+            async_release_pacing,
+        )
+        h = _hass()
+        assert _run(async_release_pacing(h, None, "disabled")) is None
+        assert h.services.async_call.await_count == 0
+
+
+class TestTheUnloadWiring:
+    """The helpers above are only worth having if the lifecycle calls them.
+    ruflo's Defect 2 was precisely that nothing did."""
+
+    def _hass_for_unload(self):
+        from unittest.mock import AsyncMock as AM, MagicMock as MM, Mock
+        h = MM()
+        h.config_entries = MM()
+        h.config_entries.async_unload_platforms = AM(return_value=True)
+        h.services = MM()
+        h.services.async_remove = Mock()
+        h.services.async_call = AM()
+        return h
+
+    def _engaged_coordinator(self):
+        from unittest.mock import MagicMock as MM
+        store = FakeStore()
+        w = ChargePacingWriter(store=store)
+        _run(w.apply(_hass("5000"), ENTITY, 400.0, observer=False))
+        coord = MM()
+        coord._observer_mode = False
+        coord._battery_adapters = {}
+        coord._surplus_controller = None
+        coord._charge_pacing_writer = w
+        return coord, store
+
+    async def _unload(self, hass, coord, entry_id, disabled_by=None):
+        from unittest.mock import MagicMock as MM
+        from custom_components.solar_energy_management import async_unload_entry
+        hass.data = {"solar_energy_management": {entry_id: coord}}
+        entry = MM()
+        entry.entry_id = entry_id
+        entry.disabled_by = disabled_by
+        return await async_unload_entry(hass, entry)
+
+    def test_a_reload_leaves_the_cap_alone(self):
+        """The next lifetime adopts it; restoring here would be a write pair
+        on every options change (#934's lesson)."""
+        import custom_components.solar_energy_management as sem
+        hass = self._hass_for_unload()
+        coord, store = self._engaged_coordinator()
+        _run(self._unload(hass, coord, "entry-reload"))
+        assert hass.services.async_call.await_count == 0
+        assert store.data is not None
+        assert "entry-reload" in sem._PENDING_PACING_RESTORE
+
+    def test_a_disabled_entry_gets_its_register_back_now(self):
+        hass = self._hass_for_unload()
+        coord, store = self._engaged_coordinator()
+        _run(self._unload(hass, coord, "entry-off", disabled_by="user"))
+        assert _values_written(hass) == [5000.0]
+        assert store.data is None
+
+    def test_a_removal_replays_the_parked_restore(self):
+        from unittest.mock import MagicMock as MM
+        from custom_components.solar_energy_management import async_remove_entry
+        hass = self._hass_for_unload()
+        coord, store = self._engaged_coordinator()
+        _run(self._unload(hass, coord, "entry-gone"))
+        entry = MM()
+        entry.entry_id = "entry-gone"
+        _run(async_remove_entry(hass, entry))
+        assert _values_written(hass) == [5000.0]
+        assert store.data is None
+
+    def test_an_idle_pacer_parks_nothing(self):
+        import custom_components.solar_energy_management as sem
+        from unittest.mock import MagicMock as MM
+        hass = self._hass_for_unload()
+        coord = MM()
+        coord._observer_mode = False
+        coord._battery_adapters = {}
+        coord._surplus_controller = None
+        coord._charge_pacing_writer = ChargePacingWriter()
+        _run(self._unload(hass, coord, "entry-idle"))
+        assert "entry-idle" not in sem._PENDING_PACING_RESTORE

@@ -26,7 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   start captured that cap as the value to restore to. The real hardware
   maximum was gone for good. The engagement is now persisted per config entry
   and adopted on the next start; repointing or clearing the setting hands the
-  old register back.
+  old register back, and so do disabling or removing SEM. A charge-limit
+  entity SEM cannot read is no longer written at all — the captured value is
+  the only way back, so a register whose previous value is unknown is left
+  alone and says so.
 - 🐛 **Pacing says when it has nowhere to write** (#949). With the switch on
   and no battery charge-power limit entity configured it reported `idle`
   beside a computed cap and a pacing reason, while nothing was ever written.
