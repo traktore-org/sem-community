@@ -316,7 +316,6 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'battery_power': {'platform': 'sensor', 'keys': ('battery_charge_discharge_power', 'storage_charge_discharge_power'), 'options': ()},
         'battery_soc': {'platform': 'sensor', 'keys': ('state_of_capacity', 'storage_state_of_capacity'), 'options': (), 'exact_only': ('state_of_capacity',)},
         'battery_strategy': {'platform': 'select', 'keys': ('storage_working_mode_settings',), 'options': ('adaptive', 'fixed_charge_discharge', 'fully_fed_to_grid', 'maximise_self_consumption', 'time_of_use_lg', 'time_of_use_luna2000')},
-        'battery_target_soc': {'platform': 'number', 'keys': ('storage_capacity_control_soc_peak_shaving',), 'options': ()},
         'grid_power': {'platform': 'sensor', 'keys': ('meter_active_power', 'power_meter_active_power'), 'options': (), 'exact_only': ('meter_active_power',)},
         'solar_power': {'platform': 'sensor', 'keys': ('input_power',), 'options': (), 'exact_only': ('input_power',)},
         'system_size_spec': {'platform': 'sensor', 'keys': ('inverter_rated_power', 'rated_power'), 'options': (), 'exact_only': ('rated_power',)},

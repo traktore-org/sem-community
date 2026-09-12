@@ -13,6 +13,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Huawei owners: check your battery target SOC** (#950). SEM's hardware
+  roster proposed Huawei's peak-shaving SOC
+  (`storage_capacity_control_soc_peak_shaving`) as the battery's charge
+  target, one click away on the Config tab. It is a peak-shaving threshold,
+  not a target. The proposal is withdrawn; if you accepted it, clear
+  `battery_target_soc_entity`.
+
+- 🐛 **Charge pacing no longer strands the inverter's charge limit** (#949).
+  The captured max-charge-power lived in memory only, and an HA restart never
+  unloads the config entry — so the register kept SEM's cap, and the next
+  start captured that cap as the value to restore to. The real hardware
+  maximum was gone for good. The engagement is now persisted per config entry
+  and adopted on the next start; repointing or clearing the setting hands the
+  old register back, and so do disabling or removing SEM. A charge-limit
+  entity SEM cannot read is no longer written at all — the captured value is
+  the only way back, so a register whose previous value is unknown is left
+  alone and says so.
+- 🐛 **Pacing says when it has nowhere to write** (#949). With the switch on
+  and no battery charge-power limit entity configured it reported `idle`
+  beside a computed cap and a pacing reason, while nothing was ever written.
+  It now reports `no_limit_entity` and says so on the battery card — SEM's
+  detected-hardware list already proposes the entity to pick.
+
 - ✨ **SEM shows what your install has** (#923, #857). SEM is now a core
   (solar, grid, home, costs, forecast) plus modules — home battery, EV
   charger, heat pump, hot water — and creates a module's entities, tab and

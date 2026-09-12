@@ -119,6 +119,13 @@ _VERSION_STORE_KEY_PREFIX = "sem_seen_version_"
 # without deactivating anything.
 _PENDING_LOAD_TEARDOWN: Dict[str, List["ControllableDevice"]] = {}
 
+# (#949) Same shape, for the charge pacer's hold on the inverter's
+# max-charge-power register: ``(entity_id, captured_value, store)`` parked at
+# unload and either replayed by ``async_remove_entry`` or dropped by the next
+# ``async_setup_entry``. A removed or disabled entry has no next lifetime to
+# adopt the engagement, so without this the register keeps SEM's cap for good.
+_PENDING_PACING_RESTORE: Dict[str, tuple] = {}
+
 
 async def _maybe_emit_upgrade_notification(hass, entry) -> None:
     """Fire a one-shot persistent notification when SEM has upgraded.
@@ -2091,6 +2098,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     # and bouncing a running heat pump on every options change is not a safety
     # improvement.
     _PENDING_LOAD_TEARDOWN.pop(entry.entry_id, None)
+    # (#949) Same reasoning for the paced charge limit: SEM is back, and the
+    # fresh writer adopts the engagement from its own record.
+    _PENDING_PACING_RESTORE.pop(entry.entry_id, None)
 
     # In-memory SEM log ring buffer for the diagnose surface (#461/#462
     # triage gap on Supervisor installs — no flat log file to tail).
@@ -3025,6 +3035,17 @@ async def async_remove_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> None
     re-install won't fix it either: ``DeviceReconciler`` classifies a
     leftover-ON load as ``external_on`` and deliberately refuses to fight it.
     """
+    # (#949) The charge pacer's hold, before the loads: a removed SEM that
+    # leaves the inverter's max-charge-power at its last cap throttles the
+    # battery with nothing left on the system that knows why, and a re-install
+    # would capture that cap as the hardware maximum.
+    held = _PENDING_PACING_RESTORE.pop(entry.entry_id, None)
+    if held:
+        from .coordinator.charge_pacing import async_release_pacing
+        said = await async_release_pacing(hass, held, "integration removed")
+        if said:
+            _LOGGER.info("SEM removed: %s", said)
+
     devices = _PENDING_LOAD_TEARDOWN.pop(entry.entry_id, None)
     if not devices:
         return
@@ -3053,6 +3074,23 @@ async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool
             # .46 observer rig rewrote the SHARED Huawei discharge-limit
             # register (750 → 5000 W) while PROD was holding it. The #908
             # rule, extended from loads to batteries.
+            # (#949) Read the pacer's hold FIRST: the battery release below
+            # flips the coordinator into observer mode, and everything after
+            # that point is reasoning about a rig, not about this install.
+            from .coordinator.charge_pacing import (
+                async_release_pacing, pending_pacing_release,
+            )
+            _held = pending_pacing_release(coordinator)
+            if _held:
+                if entry.disabled_by is not None:
+                    # Nothing is coming back — hand the register back now.
+                    _said = await async_release_pacing(hass, _held, "disabled")
+                    if _said:
+                        _LOGGER.info("SEM disabled: %s", _said)
+                else:
+                    # A reload adopts it; a removal replays it from here.
+                    _PENDING_PACING_RESTORE[entry.entry_id] = _held
+
             from .coordinator.battery_adapters.base import (
                 async_release_batteries_on_unload,
             )

@@ -56,9 +56,14 @@ ROLE_RULES: Final[Dict[str, Dict[str, Any]]] = {
         # ``sockets_1_upper_limit`` and ``sockets_1_time_limit`` — the
         # letters s-o-c inside "sockets" — and offered a switchable wall
         # socket's schedule as the battery's charge target.
+        # (#950) ``capacity_control`` used to be an alternative here, and on
+        # a live Huawei it matched ``storage_capacity_control_soc_peak_shaving``
+        # — the PEAK SHAVING threshold, offered to the user as their battery's
+        # charge target with a one-click accept. Huawei's capacity-control
+        # family is a peak-shaving feature, not a target; there is no brand
+        # whose target SOC is named only by those two words.
         "any": (r"(target|charge|end).*(?:^|_)soc(?:_|$)",
-                r"(?:^|_)soc(?:_|$).*(limit|target)",
-                r"capacity_control"),
+                r"(?:^|_)soc(?:_|$).*(limit|target)"),
         # (#810, @Azlinon on real EG4 hardware) A declared key is not
         # automatically a key SEM may WRITE. He named three that look like a
         # target SOC and are not: ``system_charge_soc_limit`` is the global
@@ -68,6 +73,9 @@ ROLE_RULES: Final[Dict[str, Dict[str, Any]]] = {
         # grid-tie inverter. Proposing any of them behind a one-click button
         # would hand a user a register the vendor says to leave alone.
         "not": (r"power", r"current", r"voltage", r"^system_", r"cutoff",
+                # (#950) a peak-shaving floor answers "how deep may the grid
+                # peak push me", never "how full should I get"
+                r"peak_shaving",
                 r"couple", r"backup", r"global", r"off_?grid", r"eps",
                 # a smart-load threshold decides when a SECOND load runs,
                 # not how full the pack should be

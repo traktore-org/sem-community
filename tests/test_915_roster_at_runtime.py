@@ -201,6 +201,11 @@ class TestSemDoesNotOfferToWriteTheseRegisters:
         "smart_load_end_soc",
         # peak shaving is a grid-draw ceiling wearing an SOC's clothes
         "grid_peak_shaving_soc",
+        # (#950) ...and so is Huawei's, which SEM accepted for a year because
+        # it is spelled through the capacity-control family instead. One rule
+        # rejected the words "peak shaving" and another admitted them; a live
+        # PROD install had the wrong entity accepted with one click.
+        "storage_capacity_control_soc_peak_shaving",
         # off-grid reserve: what the house falls back on, not a target
         "off_grid_discharge_soc",
         "eps_soc_limit",
@@ -216,7 +221,6 @@ class TestSemDoesNotOfferToWriteTheseRegisters:
         from custom_components.solar_energy_management.consts import (
             role_lexicon as lex)
         for key in ("ac_charge_soc_limit", "battery_charge_soc_limit",
-                    "storage_capacity_control_soc_peak_shaving",
                     "soc_upper_limit"):
             assert lex.role_for("number", key) == "battery_target_soc", key
 

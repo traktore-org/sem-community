@@ -157,6 +157,18 @@ class SEMBatteryCard extends SEMLitBase {
         const a = st.attributes || {};
         const code = a.reason_code || 'none';
         if (code === 'none' || code === 'night') return nothing;
+        // (#949) A cap SEM cannot write is not a cap. Before this the line
+        // read "pace · 0.4 kW · full by 19:00" on an install that had never
+        // been given a charge-limit entity, while the battery took 3 kW.
+        const blocked = {no_limit_entity: 'pacing_no_limit',
+                         limit_unreadable: 'pacing_limit_unreadable'}[a.action];
+        if (blocked) {
+            return html`
+                <div class="tonight-row" style="opacity:.85" title="${a.reason || ''}">
+                    <span>${this._t('charge_pacing')}</span>
+                    <span>${this._t(blocked)}</span>
+                </div>`;
+        }
         const capW = Number(a.cap_w);
         const cap = Number.isFinite(capW) && capW > 0 ? `${(capW / 1000).toFixed(1)} kW` : '';
         const at = a.full_at ? String(a.full_at).slice(11, 16) : '';
