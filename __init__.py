@@ -33,6 +33,7 @@ from homeassistant.util import dt as dt_util
 import voluptuous as vol
 from homeassistant.helpers import config_validation as cv
 
+from .coordinator.install_modules import MODULE_EVIDENCE_KEYS
 from .const import (
     DOMAIN,
     MIN_PEAK_LIMIT_KW,
@@ -291,7 +292,12 @@ _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
     # #523 AC-coupled bidirectional setpoint (charge = negative on the
     # force-discharge entity) — read at adapter construction.
     "battery_setpoint_bidirectional",
-})
+    # (#923) ...plus every module wiring key the install-modules oracle
+    # reads (MODULE_EVIDENCE_KEYS, joined below): setting one through
+    # set_option must reload, or the module's entities wait for the next
+    # restart. Joined from the oracle, not listed here, so the two cannot
+    # drift — and so this file never names a key it must not write (#845).
+}) | MODULE_EVIDENCE_KEYS
 
 
 def _require_load_manager(coordinator):
@@ -358,7 +364,7 @@ def _warn_missing_charger_entities(hass, charger_name, charger_id, to_check):
     return missing
 
 
-def build_welcome_message(config: dict) -> str:
+def build_welcome_message(config: dict, presence: dict | None = None) -> str:
     """The first-run checklist, describing THIS install (#805 fix 2).
 
     The old text told everyone to "pick an EV charge mode on the EV tab",
@@ -372,12 +378,19 @@ def build_welcome_message(config: dict) -> str:
     wording promised "sensible defaults" while SEM was about to manage
     auto-discovered devices; since #805 those are monitor-only, and saying
     so is how the user can consent to it.
+
+    (#923) Both answers come from the install-modules oracle: the EV line
+    from ``has_managed_charger`` (the #595 tab rule), the battery line from
+    the setup verdict — PRESENT only, because an UNKNOWN battery must be
+    invited, not sent to a tab.
     """
-    has_ev = bool(config.get("ev_chargers")
-                  or config.get("ev_charging_power_sensor"))
-    has_battery = bool(config.get("battery_capacity_kwh")
-                       or config.get("battery_soc_sensor")
-                       or config.get("battery_power_sensor"))
+    from .coordinator.install_modules import (
+        Module, Presence, has_managed_charger, module_verdict,
+    )
+    if presence is None:
+        presence = module_verdict(config, None, False)
+    has_ev = has_managed_charger(config)
+    has_battery = presence.get(Module.BATTERY) is Presence.PRESENT
 
     lines = ["1. Confirm solar is reporting on the Energy tab"]
     if has_ev:
@@ -2016,6 +2029,44 @@ def _async_rename_actuation_switch(registry) -> None:
     registry.async_update_entity(old, **changes)
 
 
+# (#923) HA's EnergyManager.async_listen_updates has no unsubscribe, so SEM
+# registers ONE listener per hass and looks the live coordinators up when it
+# fires — binding it to a coordinator would leak a stale listener per reload.
+_ENERGY_PREFS_LISTENER = f"{DOMAIN}_energy_prefs_listener"
+
+
+async def _async_listen_energy_prefs(hass: HomeAssistant) -> None:
+    """Re-read the Energy Dashboard when the user edits it, so a battery or
+    EV consumer added there reaches SEM without a restart (#923)."""
+    if hass.data.get(_ENERGY_PREFS_LISTENER):
+        return
+    if "energy" not in hass.config.components:
+        return  # nobody can edit the Energy Dashboard without it; re-read on restart
+    try:
+        from homeassistant.components.energy.data import async_get_manager
+        manager = await async_get_manager(hass)
+    except Exception as err:  # noqa: BLE001 — no energy manager: re-read on restart
+        _LOGGER.debug("Energy Dashboard listener not installed: %s", err)
+        return
+
+    async def _on_energy_prefs_updated() -> None:
+        from homeassistant.config_entries import ConfigEntryState
+        for sem_entry in hass.config_entries.async_entries(DOMAIN):
+            if sem_entry.state is not ConfigEntryState.LOADED:
+                continue
+            coordinator = getattr(sem_entry, "runtime_data", None)
+            if coordinator is None:
+                continue
+            try:
+                await coordinator.async_initialize_energy_dashboard(quiet=True)
+            except Exception as err:  # noqa: BLE001 — never raise into HA's energy save
+                _LOGGER.debug("Energy Dashboard re-read after an edit failed: %s", err)
+
+    manager.async_listen_updates(_on_energy_prefs_updated)
+    hass.data[_ENERGY_PREFS_LISTENER] = True
+
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     """Set up Solar Energy Management from a config entry.
 
@@ -2680,10 +2731,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             "Load management features will be unavailable."
         )
 
+    # (#923) ONE module verdict for every platform: captured here, after the
+    # Energy Dashboard read above and before any platform builds entities —
+    # so sensor, number, switch, the dashboard and the welcome text can never
+    # disagree about what this install has. A verdict that cannot be formed
+    # must never fail setup: None means "keep every entity".
+    try:
+        from .coordinator.install_modules import presence_summary
+        coordinator.setup_presence = coordinator.install_presence()
+        _LOGGER.info("Install modules: %s", presence_summary(coordinator.setup_presence))
+    except Exception as err:  # noqa: BLE001 — no verdict means keep every entity
+        coordinator.setup_presence = None
+        _LOGGER.warning("Install-modules verdict failed, keeping every entity: %s", err)
+
     # Setup platforms (critical - must succeed)
     try:
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
         _LOGGER.info("Platforms setup completed: %s", PLATFORMS)
+        await _async_listen_energy_prefs(hass)
     except Exception as err:
         _LOGGER.error("Failed to setup platforms: %s", err, exc_info=True)
         # Cleanup coordinator data
@@ -2741,7 +2806,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 {
                     "notification_id": "sem_first_install_welcome",
                     "title": "Solar Energy Management installed",
-                    "message": build_welcome_message(full_config),
+                    "message": build_welcome_message(full_config, coordinator.setup_presence),
                 },
                 blocking=False,
             )

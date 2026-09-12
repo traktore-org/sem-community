@@ -34,6 +34,12 @@ The dashboard is generated automatically on first install. If you need to regene
 
 ## Dashboard Tabs
 
+> **The tabs follow your hardware (#923).** The **Battery** tab appears only
+> when SEM knows of a home battery, the **EV** tab only when a charger is
+> configured, and cards on the other tabs drop the parts that belong to
+> hardware you do not have (the sankey's battery and EV nodes, for example).
+> See [Modules](USER_GUIDE.md#modules--sem-shows-what-you-have).
+
 ### Home
 
 The main at-a-glance view with real-time power flows.

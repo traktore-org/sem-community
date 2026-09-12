@@ -15,6 +15,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .coordinator import SEMCoordinator
+from .coordinator.install_modules import kept_descriptions, presence_of
 from .persisted_flags import PERSISTED_FLAG_DEFAULTS
 
 type SEMConfigEntry = ConfigEntry[SEMCoordinator]
@@ -135,9 +136,12 @@ async def async_setup_entry(
     # The remaining global switch (``observer_mode``) is the only one
     # left in SWITCH_TYPES. The stale-entity cleanup at the bottom of
     # this function purges the removed entries from the registry.
+    # (#923) Only the switches of modules this install has — UNKNOWN keeps.
+    static_descriptions = kept_descriptions(
+        "switch", SWITCH_TYPES, presence_of(coordinator))
     switches = [
         SEMSolarSwitch(coordinator, description, entry.entry_id)
-        for description in SWITCH_TYPES
+        for description in static_descriptions
     ]
     per_charger_keys: set[str] = set()
 
@@ -146,7 +150,7 @@ async def async_setup_entry(
     # Fix entity_ids from pre-translation installs
     try:
         registry = er.async_get(hass)
-        for desc in SWITCH_TYPES:
+        for desc in static_descriptions:
             uid = f"sem_{desc.key}"
             correct_eid = f"switch.sem_{desc.key}"
             for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
@@ -161,7 +165,7 @@ async def async_setup_entry(
     # Clean up stale switch entities from previous versions
     try:
         registry = er.async_get(hass)
-        valid_keys = {d.key for d in SWITCH_TYPES} | per_charger_keys
+        valid_keys = {d.key for d in static_descriptions} | per_charger_keys
         for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
             if entity_entry.domain != "switch":
                 continue

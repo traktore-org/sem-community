@@ -400,7 +400,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     // no longer carries current_power (it made the count sensor
                     // write a row every cycle); older backends still fall back.
                     power: ((info.power_entity && this._hass?.states?.[info.power_entity])
-                        ? (parseFloat(this._hass.states[info.power_entity].state) || 0)
+                        ? (parseFloat(this._hass.states[info.power_entity]?.state) || 0)
                         : (info.current_power || 0)) / 1000,
                     // (#577) self-calibrated rated power (W) — shown dimmed when
                     // the load is off so the row keeps a meaningful number

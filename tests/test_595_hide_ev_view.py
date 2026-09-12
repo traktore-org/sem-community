@@ -1,27 +1,39 @@
-"""#595/#614 — absent hardware is hidden: the EV tab is removed when no
-charger is configured, and the diagram cards get show_ev/show_battery
-flags so they don't draw ghost nodes."""
+"""#595/#614/#923 — absent hardware is hidden.
+
+The EV tab is removed when no charger is configured (#595 — the EV tab is
+the control surface for a charger SEM was told about), the Battery tab when
+the battery module is ABSENT (#923), and the diagram cards get show_ev /
+show_battery flags so they don't draw ghost nodes (#614).
+
+Since #923 the battery verdict is not recomputed here: the generator asks
+the coordinator for the verdict its platforms were built with
+(``setup_presence``), so the dashboard and the entity set cannot disagree.
+Which configuration means "battery" is the oracle's to test
+(tests/test_923_install_modules.py)."""
 
 from unittest.mock import MagicMock
 
+from custom_components.solar_energy_management.coordinator.install_modules import (
+    Module, Presence,
+)
 from custom_components.solar_energy_management.features.dashboard_generator import (
     DashboardGenerator,
 )
 
+PRESENT = {m: Presence.PRESENT for m in Module}
+ABSENT = {m: Presence.ABSENT for m in Module}
+NO_BATTERY = {**PRESENT, Module.BATTERY: Presence.ABSENT}
 
-def _generator(full_config, *, ed_has_battery=None):
+
+def _generator(full_config, presence=None):
     hass = MagicMock()
     entry = MagicMock()
     entry.data = full_config
     entry.options = {}
+    if presence is not None:
+        entry.runtime_data.setup_presence = presence
     hass.config_entries.async_entries.return_value = [entry]
-    # Real dict — the #614 coordinator lookup iterates hass.data[DOMAIN].
     hass.data = {}
-    if ed_has_battery is not None:
-        coord = MagicMock()
-        coord._energy_dashboard_config = MagicMock(has_battery=ed_has_battery)
-        from custom_components.solar_energy_management.const import DOMAIN
-        hass.data[DOMAIN] = {"entry": coord}
     return DashboardGenerator(hass)
 
 
@@ -36,23 +48,23 @@ def _template():
 def test_ev_tab_removed_when_no_charger():
     gen = _generator({})  # no ev_chargers, no ev_charging_power_sensor
     tpl = _template()
-    gen._prune_ev_view_if_no_charger(tpl)
+    gen._prune_absent_modules(tpl)
     paths = [v["path"] for v in tpl["views"]]
     assert "ev" not in paths
-    assert paths == ["home", "battery"]  # others untouched
+    assert paths == ["home", "battery"]  # battery verdict UNKNOWN → kept
 
 
 def test_ev_tab_kept_when_charger_configured():
     gen = _generator({"ev_chargers": [{"id": "ev_charger"}]})
     tpl = _template()
-    gen._prune_ev_view_if_no_charger(tpl)
+    gen._prune_absent_modules(tpl)
     assert "ev" in [v["path"] for v in tpl["views"]]
 
 
 def test_ev_tab_kept_with_legacy_power_sensor():
     gen = _generator({"ev_charging_power_sensor": "sensor.keba_power"})
     tpl = _template()
-    gen._prune_ev_view_if_no_charger(tpl)
+    gen._prune_absent_modules(tpl)
     assert "ev" in [v["path"] for v in tpl["views"]]
 
 
@@ -61,8 +73,22 @@ def test_no_entries_is_a_noop():
     hass.config_entries.async_entries.return_value = []
     gen = DashboardGenerator(hass)
     tpl = _template()
-    gen._prune_ev_view_if_no_charger(tpl)
+    gen._prune_absent_modules(tpl)
     assert len(tpl["views"]) == 3  # unchanged
+
+
+def test_battery_tab_removed_when_the_battery_is_absent():
+    gen = _generator({"ev_chargers": [{"id": "ev_charger"}]}, NO_BATTERY)
+    tpl = _template()
+    gen._prune_absent_modules(tpl)
+    assert [v["path"] for v in tpl["views"]] == ["home", "ev"]
+
+
+def test_battery_tab_kept_while_the_verdict_is_unknown():
+    gen = _generator({"ev_chargers": [{"id": "ev_charger"}]})
+    tpl = _template()
+    gen._prune_absent_modules(tpl)
+    assert "battery" in [v["path"] for v in tpl["views"]]
 
 
 def _template_with_diagram_cards():
@@ -85,56 +111,55 @@ def test_diagram_cards_get_show_ev_false_when_no_charger():
     receive show_ev:false, including when nested in stacks."""
     gen = _generator({})
     tpl = _template_with_diagram_cards()
-    gen._prune_ev_view_if_no_charger(tpl)
+    gen._prune_absent_modules(tpl)
     diagram = tpl["views"][0]["cards"][0]["cards"][0]
     flow = tpl["views"][1]["cards"][0]  # EV view pruned → energy shifts up
     assert diagram["show_ev"] is False
     assert flow["show_ev"] is False
 
 
-def test_diagram_cards_untouched_when_charger_configured():
-    gen = _generator({"ev_chargers": [{"id": "ev_charger"}]})
+def test_diagram_cards_untouched_when_everything_is_present():
+    gen = _generator({"ev_chargers": [{"id": "ev_charger"}]}, PRESENT)
     tpl = _template_with_diagram_cards()
-    gen._prune_ev_view_if_no_charger(tpl)
+    gen._prune_absent_modules(tpl)
     diagram = tpl["views"][0]["cards"][0]["cards"][0]
     assert "show_ev" not in diagram
+    assert "show_battery" not in diagram
 
 
-def test_battery_flag_injected_when_no_battery():
-    """#614 — battery sibling of the ghost-node class: no battery sensor
-    anywhere → diagram cards get show_battery:false (independent of EV)."""
-    gen = _generator({"ev_chargers": [{"id": "ev_charger"}]})  # EV yes, battery no
+def test_battery_flag_injected_when_the_battery_is_absent():
+    """#614 — battery sibling of the ghost-node class."""
+    gen = _generator({"ev_chargers": [{"id": "ev_charger"}]}, NO_BATTERY)
     tpl = _template_with_diagram_cards()
-    gen._prune_ev_view_if_no_charger(tpl)
+    gen._prune_absent_modules(tpl)
     diagram = tpl["views"][0]["cards"][0]["cards"][0]
     assert diagram["show_battery"] is False
     assert "show_ev" not in diagram          # EV present → untouched
-    assert "ev" in [v["path"] for v in tpl["views"]]  # EV view kept
+    assert "ev" in [v["path"] for v in tpl["views"]]
 
 
-def test_battery_flag_not_injected_with_soc_sensor():
-    gen = _generator({"battery_soc_sensor": "sensor.batt_soc"})
+def test_battery_flag_not_injected_when_the_battery_is_present():
+    gen = _generator({}, {**ABSENT, Module.BATTERY: Presence.PRESENT})
     tpl = _template_with_diagram_cards()
-    gen._prune_ev_view_if_no_charger(tpl)
+    gen._prune_absent_modules(tpl)
     diagram = tpl["views"][0]["cards"][0]["cards"][0]
     assert "show_battery" not in diagram
     assert diagram["show_ev"] is False       # no charger → EV hidden
 
 
-def test_battery_flag_not_injected_with_ed_detected_battery():
-    """A battery detected only via the Energy Dashboard config (no explicit
-    sensor keys) must NOT be hidden — same test K-Flow uses."""
-    gen = _generator({}, ed_has_battery=True)
+def test_battery_flag_not_injected_while_unknown():
+    """A battery-less verdict must never come from an incomplete read."""
+    gen = _generator({})
     tpl = _template_with_diagram_cards()
-    gen._prune_ev_view_if_no_charger(tpl)
+    gen._prune_absent_modules(tpl)
     diagram = tpl["views"][0]["cards"][0]["cards"][0]
     assert "show_battery" not in diagram
 
 
 def test_both_flags_when_solar_only_install():
-    gen = _generator({})
+    gen = _generator({}, ABSENT)
     tpl = _template_with_diagram_cards()
-    gen._prune_ev_view_if_no_charger(tpl)
+    gen._prune_absent_modules(tpl)
     diagram = tpl["views"][0]["cards"][0]["cards"][0]
     assert diagram["show_ev"] is False
     assert diagram["show_battery"] is False

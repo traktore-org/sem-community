@@ -576,7 +576,9 @@ class TestReadEnergyDashboardConfig:
 
         mock_hass.async_add_executor_job = AsyncMock(side_effect=run_func)
 
-        with patch("os.path.exists", return_value=False):
+        # (#923) The reader opens the file and treats FileNotFoundError as
+        # "no dashboard" — no separate exists() check to patch.
+        with patch("builtins.open", side_effect=FileNotFoundError):
             config = await read_energy_dashboard_config(mock_hass)
 
         assert config is None

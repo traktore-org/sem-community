@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
 from .coordinator import SEMCoordinator
+from .coordinator.install_modules import presence_of, presence_summary
 from .features.device_axes import has_control_handle, may_actuate, user_hands_off
 
 _LOGGER = logging.getLogger(__name__)
@@ -505,6 +506,8 @@ async def async_get_config_entry_diagnostics(
 
     return {
         "detection": detection,
+        # (#923) the module verdict the platforms and the dashboard were built on
+        "install_modules": presence_summary(presence_of(coordinator)),
         "config_entry": {
             "entry_id": entry.entry_id,
             "version": entry.version,

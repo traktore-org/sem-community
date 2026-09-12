@@ -1,11 +1,13 @@
 """Read sensor configuration from Home Assistant Energy Dashboard.
 
-This module reads the Energy Dashboard configuration (.storage/energy) to extract
-sensor entity IDs for solar, grid, battery, and EV charger. This allows SEM to
-use the same sensors the user has already configured in the HA Energy Dashboard.
+This module reads the Energy Dashboard configuration (HA's energy manager, or
+.storage/energy when the energy integration is not loaded) to extract sensor
+entity IDs for solar, grid, battery, and EV charger. This allows SEM to use the
+same sensors the user has already configured in the HA Energy Dashboard.
 
 Requires Home Assistant 2025.12+ for stat_power fields.
 """
+import copy
 import json
 import logging
 import os
@@ -218,85 +220,234 @@ class EnergyDashboardConfig:
         }
 
 
-async def read_energy_dashboard_config(
+def _parse_prefs(
+    hass: HomeAssistant, data: Any, quiet: bool = False,
+) -> EnergyDashboardConfig:
+    """Parse Energy Dashboard preferences into an ``EnergyDashboardConfig``.
+
+    ``data`` is the preferences dict — HA's energy manager's ``data``, or the
+    ``data`` section of ``.storage/energy``; both have the same layout.
+
+    Raises ``ValueError`` on a layout it does not recognise: the caller turns
+    any exception into "not answered", never into "no battery" (#923/#925).
+    """
+    if (
+        not isinstance(data, dict)
+        or not isinstance(data.get("energy_sources"), list)
+        or not isinstance(data.get("device_consumption", []), list)
+    ):
+        raise ValueError("unrecognised Energy Dashboard layout")
+
+    _info = _LOGGER.debug if quiet else _LOGGER.info
+    config = EnergyDashboardConfig()
+
+    # Extract energy sources
+    energy_sources = data.get("energy_sources", [])
+    for source in energy_sources:
+        source_type = source.get("type")
+
+        if source_type == "solar":
+            _extract_solar_config(source, config)
+
+        elif source_type == "grid":
+            _extract_grid_config(source, config)
+
+        elif source_type == "battery":
+            _extract_battery_config(source, config)
+
+    # Extract device consumption (for EV charger)
+    device_consumption = data.get("device_consumption", [])
+    config.device_consumption = device_consumption
+    _extract_ev_from_devices(device_consumption, config)
+
+    # Derive any power sensors the Energy Dashboard left unset (no stat_rate).
+    # HA 2025.12+ power links are configured manually and are frequently absent
+    # (e.g. SolaX solax-modbus energy-only setups, issue #250). Without them SEM
+    # has no real-time power and every entity reads 0. Recover by finding a power
+    # sensor on the same device as the configured energy sensor.
+    _derive_missing_power_sensors(hass, config)
+
+    _info(
+        "Read Energy Dashboard config: solar=%s (%d sources), grid=%s (%d import, %d export), battery=%s (%d units), ev=%s",
+        config.has_solar, len(config.solar_power_list),
+        config.has_grid, len(config.grid_import_energy_list), len(config.grid_export_energy_list),
+        config.has_battery, len(config.battery_power_list),
+        config.has_ev,
+    )
+
+    return config
+
+
+async def _loaded_energy_manager(hass: HomeAssistant) -> Any | None:
+    """HA's energy manager when the energy integration is loaded, else None."""
+    if "energy" not in hass.config.components:
+        return None
+    from homeassistant.components.energy.data import async_get_manager
+
+    return await async_get_manager(hass)
+
+
+def _energy_store_was_corrupt(config_dir: str) -> bool:
+    """Whether ``.storage`` holds an ``energy.corrupt.*`` leftover (or that
+    could not be determined) — sync, meant for the executor.
+
+    HA's ``Store`` helper renames a corrupt ``.storage/energy`` file to
+    ``energy.corrupt.<timestamp>`` and returns no data (see
+    ``homeassistant/helpers/storage.py``), which looks identical to "no
+    Energy Dashboard was ever configured" from both the energy manager
+    (``manager.data is None``) and the raw file (absent). That is "could
+    not read", never "no dashboard" (#925: "I could not ask" is not "no").
+    """
+    storage_dir = os.path.join(config_dir, ".storage")
+    try:
+        names = os.listdir(storage_dir)
+    except FileNotFoundError:
+        # No .storage directory at all: nothing was ever written there, so
+        # there is definitely no corrupt leftover to find.
+        return False
+    except OSError as err:
+        _LOGGER.warning(
+            "Could not check %s for a corrupt Energy Dashboard store leftover "
+            "(%s) — SEM keeps every module until it can check again",
+            storage_dir, err,
+        )
+        return True
+
+    corrupt = any(name.startswith("energy.corrupt.") for name in names)
+
+    if corrupt:
+        _LOGGER.warning(
+            "HA found .storage/energy corrupt (energy.corrupt.* present) — SEM "
+            "keeps every module until the Energy Dashboard is set up again and "
+            "the corrupt file is removed"
+        )
+    return corrupt
+
+
+async def read_energy_dashboard_config_outcome(
     hass: HomeAssistant, quiet: bool = False,
-) -> Optional[EnergyDashboardConfig]:
-    """Read sensor configuration from HA Energy Dashboard.
+) -> tuple[Optional[EnergyDashboardConfig], bool]:
+    """Read the Energy Dashboard config AND whether the question got an answer.
+
+    ``(config, True)`` — the preferences were read and parsed.
+    ``(None, True)``   — there are no preferences AND no corrupt leftover:
+                         HA's energy manager holds none and no
+                         ``.storage/energy`` file exists, and ``.storage``
+                         holds no ``energy.corrupt.*`` from a quarantined
+                         store — a definite "no dashboard".
+    ``(None, False)``  — the read failed (unrecognised layout, parse error,
+                         I/O), or HA quarantined a corrupt ``.storage/energy``
+                         (or that could not be checked) — "could not read",
+                         never "no dashboard" (#925).
+
+    HA's energy manager is asked FIRST; the file only when the energy
+    integration is not loaded (or its manager cannot be had). The manager
+    updates its data in memory, runs its update listeners, and writes the
+    file up to 60 s later (``async_delay_save``) — so right after a user adds
+    a battery in the Energy Dashboard the file is missing or stale, and
+    reading it would answer "no battery". At boot the manager loads from that
+    very file, so there the two agree.
+
+    (#923) The install-modules oracle may call a battery ABSENT only on an
+    answer; ``read_energy_dashboard_config`` folds the last two cases into
+    one ``None`` (#925: "I could not ask" is not "no").
 
     Args:
         hass: Home Assistant instance
         quiet: Demote routine INFO logs to DEBUG. Used by the cold-start
             re-derivation retry (#274) so it doesn't spam the log each cycle.
-
-    Returns:
-        EnergyDashboardConfig with extracted sensor entity IDs, or None if not configured
     """
     _info = _LOGGER.debug if quiet else _LOGGER.info
-    _info("Reading Energy Dashboard config from .storage/energy...")
+    _info("Reading Energy Dashboard config...")
+
+    try:
+        manager = await _loaded_energy_manager(hass)
+    except Exception as err:  # noqa: BLE001 — the file is the fallback
+        _LOGGER.debug("HA's energy manager unavailable, reading .storage/energy: %s", err)
+        manager = None
+
+    if manager is not None:
+        try:
+            if manager.data is None:
+                # HA itself holds no Energy Dashboard: nothing was loaded from
+                # disk at boot and nothing has been set since — unless HA's
+                # Store quarantined a corrupt file (#923); check before
+                # answering "no dashboard".
+                if await hass.async_add_executor_job(
+                    _energy_store_was_corrupt, hass.config.config_dir
+                ):
+                    return None, False
+                _info("Energy Dashboard not configured (no energy preferences)")
+                return None, True
+            _info("Energy Dashboard config from HA's energy manager")
+            # deepcopy: the config keeps references into these lists, and the
+            # manager's data is HA's live state.
+            return _parse_prefs(hass, copy.deepcopy(dict(manager.data)), quiet), True
+        except Exception as e:
+            _LOGGER.error("Failed to read Energy Dashboard config: %s", e, exc_info=True)
+            return None, False
+
     try:
         energy_file = os.path.join(hass.config.config_dir, ".storage", "energy")
         _info("Energy Dashboard file path: %s", energy_file)
 
-        if not os.path.exists(energy_file):
-            _info("Energy Dashboard not configured (file not found)")
-            return None
-
-        # Read the energy configuration file
+        # Read the energy configuration file. A missing file is an answer;
+        # any other OSError (permissions, a directory in the way) is not,
+        # and propagates to the except below.
         def read_file():
-            with open(energy_file, "r", encoding="utf-8") as f:
-                return json.load(f)
+            try:
+                with open(energy_file, "r", encoding="utf-8") as f:
+                    return True, json.load(f)
+            except FileNotFoundError:
+                return False, None
 
-        energy_config = await hass.async_add_executor_job(read_file)
+        found, energy_config = await hass.async_add_executor_job(read_file)
 
-        if "data" not in energy_config:
-            _LOGGER.warning("Energy Dashboard has no data section")
-            return None
+        if not found:
+            # The same corrupt-store rename that empties the manager's data
+            # also leaves the plain file absent (#923) — check before
+            # answering "no dashboard".
+            if await hass.async_add_executor_job(
+                _energy_store_was_corrupt, hass.config.config_dir
+            ):
+                return None, False
+            _info("Energy Dashboard not configured (file not found)")
+            return None, True
 
-        data = energy_config["data"]
-        config = EnergyDashboardConfig()
+        if (
+            not isinstance(energy_config, dict)
+            or energy_config.get("version", 1) != 1
+            or not isinstance(energy_config.get("data"), dict)
+        ):
+            _LOGGER.warning(
+                "Energy Dashboard file %s has an unrecognised layout (version %s) — "
+                "SEM keeps every module until it can read it",
+                energy_file,
+                energy_config.get("version") if isinstance(energy_config, dict) else None,
+            )
+            return None, False
 
-        # Extract energy sources
-        energy_sources = data.get("energy_sources", [])
-        for source in energy_sources:
-            source_type = source.get("type")
-
-            if source_type == "solar":
-                _extract_solar_config(source, config)
-
-            elif source_type == "grid":
-                _extract_grid_config(source, config)
-
-            elif source_type == "battery":
-                _extract_battery_config(source, config)
-
-        # Extract device consumption (for EV charger)
-        device_consumption = data.get("device_consumption", [])
-        config.device_consumption = device_consumption
-        _extract_ev_from_devices(device_consumption, config)
-
-        # Derive any power sensors the Energy Dashboard left unset (no stat_rate).
-        # HA 2025.12+ power links are configured manually and are frequently absent
-        # (e.g. SolaX solax-modbus energy-only setups, issue #250). Without them SEM
-        # has no real-time power and every entity reads 0. Recover by finding a power
-        # sensor on the same device as the configured energy sensor.
-        _derive_missing_power_sensors(hass, config)
-
-        _info(
-            "Read Energy Dashboard config: solar=%s (%d sources), grid=%s (%d import, %d export), battery=%s (%d units), ev=%s",
-            config.has_solar, len(config.solar_power_list),
-            config.has_grid, len(config.grid_import_energy_list), len(config.grid_export_energy_list),
-            config.has_battery, len(config.battery_power_list),
-            config.has_ev,
-        )
-
-        return config
+        return _parse_prefs(hass, energy_config["data"], quiet), True
 
     except json.JSONDecodeError as e:
         _LOGGER.error("Failed to parse Energy Dashboard config: %s", e)
-        return None
+        return None, False
     except Exception as e:
         _LOGGER.error("Failed to read Energy Dashboard config: %s", e, exc_info=True)
-        return None
+        return None, False
+
+
+async def read_energy_dashboard_config(
+    hass: HomeAssistant, quiet: bool = False,
+) -> Optional[EnergyDashboardConfig]:
+    """Read sensor configuration from HA Energy Dashboard.
+
+    Returns the EnergyDashboardConfig, or None when it is not configured OR
+    not readable. Callers that must tell those apart use
+    ``read_energy_dashboard_config_outcome`` (#923).
+    """
+    config, _answered = await read_energy_dashboard_config_outcome(hass, quiet=quiet)
+    return config
 
 
 def _extract_solar_config(source: Dict[str, Any], config: EnergyDashboardConfig) -> None:

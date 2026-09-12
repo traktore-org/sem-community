@@ -14,6 +14,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .coordinator import SEMCoordinator
+from .coordinator.install_modules import Module, keeps, presence_of
 
 type SEMConfigEntry = ConfigEntry[SEMCoordinator]
 
@@ -98,19 +99,14 @@ def _battery_slugs(coordinator: SEMCoordinator) -> list[str]:
 
 
 def _has_battery(coordinator: SEMCoordinator) -> bool:
-    """Install has at least one (single/fleet) battery — so a global battery
-    mode selector is worth creating even without per-battery slugs."""
-    try:
-        reg = er.async_get(coordinator.hass)
-        if any(
-            e.entity_id == "sensor.sem_battery_soc"
-            for e in reg.entities.values()
-        ):
-            return True
-    except Exception:  # noqa: BLE001
-        pass
-    cfg = getattr(coordinator, "config", {}) or {}
-    return bool(cfg.get("battery_power_sensor") or cfg.get("battery_soc_sensor"))
+    """Install has a battery — so the global battery mode selector (and, via
+    number.py, the single-battery reserve number) is worth creating.
+
+    (#923) Asks the install-modules oracle, like every other battery entity:
+    kept unless the battery is definitively ABSENT. It used to look for
+    ``sensor.sem_battery_soc`` in the registry — circular now that the oracle
+    decides whether that sensor exists at all."""
+    return keeps(presence_of(coordinator), (Module.BATTERY,))
 
 
 SELECT_TYPES = [

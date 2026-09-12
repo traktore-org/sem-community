@@ -222,9 +222,9 @@ class DashboardGenerator:
             # Substitute weather entity (template uses weather.home as placeholder)
             self._substitute_weather_entity(template)
 
-            # #595 — drop the EV tab entirely on installs with no EV charger, so
-            # battery/solar-only setups don't get a cluttered empty EV section.
-            self._prune_ev_view_if_no_charger(template)
+            # #595/#923 — the dashboard shows what this install has: no tab,
+            # node or reference for hardware the platforms did not build.
+            self._prune_absent_modules(template)
 
             # #617 — sankey-chart is OPTIONAL (the last HACS card that was
             # genuinely load-bearing): fall back to HA's native energy-sankey
@@ -245,51 +245,65 @@ class DashboardGenerator:
             _LOGGER.error("Dashboard template not found at %s", self._dashboard_template_path)
             raise FileNotFoundError(f"Dashboard template not found: {self._dashboard_template_path}")
 
-    def _prune_ev_view_if_no_charger(self, template: Dict[str, Any]) -> None:
-        """#595/#614 — hide absent-hardware surfaces from the dashboard.
-
-        * No EV charger → the ``ev`` view is removed entirely (its cards
-          have nothing to show) and the diagram cards get ``show_ev: false``
-          so the system overview doesn't draw a ghost EV node.
-        * No battery → the diagram cards get ``show_battery: false`` (#614,
-          the battery sibling of the same ghost-node class — it used to
-          render a permanent "— W / sensor unavailable" battery).
-
-        Mirrors the ``has_ev`` / ``has_battery`` tests the K-Flow card
-        already uses (``_show_ev`` / ``_show_battery``)."""
+    def _install_presence(self) -> Dict[Any, Any]:
+        """(#923) The module verdict the platforms were built with — asked of
+        the coordinator, never recomputed here, so the dashboard and the
+        entity set cannot disagree. All UNKNOWN (prune nothing) when no
+        coordinator is loaded."""
         from ..const import DOMAIN
+        from ..coordinator.install_modules import all_unknown, presence_of
+
+        entries = self.hass.config_entries.async_entries(DOMAIN)
+        if not entries:
+            return all_unknown()
+        return presence_of(getattr(entries[0], "runtime_data", None))
+
+    def _prune_absent_modules(self, template: Dict[str, Any]) -> None:
+        """#595/#614/#923 — the dashboard shows what this install has.
+
+        * No managed charger → the ``ev`` view is removed (#595, unchanged:
+          the EV tab is the CONTROL surface for a charger SEM was told
+          about) and the diagram cards get ``show_ev: false``.
+        * Battery ABSENT → the ``battery`` view is removed (#923) and the
+          diagram cards get ``show_battery: false`` (#614).
+        * Any module ABSENT → every explicit reference to one of its
+          entities leaves the remaining views: a sankey node or children
+          link, a card whose ``entity`` it is, a stack left empty.
+
+        UNKNOWN prunes nothing — a battery-less verdict must never come from
+        an incomplete read (the #614 rule, now the oracle's). Most SEM cards
+        take ``entity_prefix`` and pick entities themselves; they are not
+        pruned here and must tolerate absence (tests/test_923_cards_*)."""
+        from ..const import DOMAIN
+        from ..coordinator.install_modules import (
+            Module, Presence, absent_entity_ids, has_managed_charger,
+        )
 
         entries = self.hass.config_entries.async_entries(DOMAIN)
         if not entries:
             return
         full = {**entries[0].data, **entries[0].options}
-        has_ev = bool(full.get("ev_chargers") or full.get("ev_charging_power_sensor"))
-        # Same battery test the K-Flow injection uses: explicit sensor OR a
-        # battery detected from the Energy Dashboard config — a battery-less
-        # verdict must never come from an incomplete config alone.
-        coordinator = None
-        if DOMAIN in self.hass.data:
-            for _eid, coord in self.hass.data[DOMAIN].items():
-                if hasattr(coord, "_energy_dashboard_config"):
-                    coordinator = coord
-                    break
-        ed_config = getattr(coordinator, "_energy_dashboard_config", None)
-        has_battery = bool(
-            full.get("battery_soc_sensor")
-            or full.get("battery_power_sensor")
-            or (ed_config and getattr(ed_config, "has_battery", False))
-        )
+        presence = self._install_presence()
+        managed_charger = has_managed_charger(full)
+        battery_absent = presence.get(Module.BATTERY) is Presence.ABSENT
+
+        drop_paths = set()
+        if not managed_charger:
+            drop_paths.add("ev")
+        if battery_absent:
+            drop_paths.add("battery")
         views = template.get("views", [])
-        if not has_ev:
-            kept = [v for v in views if v.get("path") != "ev"]
-            if len(kept) != len(views):
-                template["views"] = kept
-                views = kept
-                _LOGGER.info("#595 — no EV charger configured; removed the EV tab")
+        kept = [v for v in views if v.get("path") not in drop_paths]
+        if len(kept) != len(views):
+            template["views"] = kept
+            views = kept
+            _LOGGER.info("#595/#923 — removed tab(s) for absent hardware: %s",
+                         sorted(drop_paths))
+
         flags = {}
-        if not has_ev:
+        if not managed_charger:
             flags["show_ev"] = False
-        if not has_battery:
+        if battery_absent:
             flags["show_battery"] = False
         if flags:
             hidden = self._set_node_flags(views, flags)
@@ -298,6 +312,48 @@ class DashboardGenerator:
                     "#595/#614 — hid absent-hardware node(s) %s on %d diagram card(s)",
                     sorted(flags), hidden,
                 )
+
+        gone = absent_entity_ids(presence)
+        if gone:
+            removed = self._drop_entity_refs(views, gone)
+            if removed:
+                _LOGGER.info(
+                    "#923 — removed %d dashboard reference(s) to entities this "
+                    "install does not have", removed)
+
+    @staticmethod
+    def _entity_ref(item: Any) -> Optional[str]:
+        """The entity an item stands for: a bare id string, or the
+        ``entity_id`` / ``entity`` of a dict (sankey node, card config)."""
+        if isinstance(item, str):
+            return item
+        if isinstance(item, dict):
+            ref = item.get("entity_id", item.get("entity"))
+            return ref if isinstance(ref, str) else None
+        return None
+
+    def _drop_entity_refs(self, node: Any, gone: frozenset) -> int:
+        """Remove, recursively, every list item that references an entity in
+        ``gone`` — then any card whose ``cards`` list ended up empty.
+        Returns the number of items removed."""
+        removed = 0
+        if isinstance(node, dict):
+            for value in node.values():
+                removed += self._drop_entity_refs(value, gone)
+        elif isinstance(node, list):
+            keep = []
+            for item in node:
+                if self._entity_ref(item) in gone:
+                    removed += 1
+                    continue
+                removed += self._drop_entity_refs(item, gone)
+                if (isinstance(item, dict) and "type" in item
+                        and isinstance(item.get("cards"), list) and not item["cards"]):
+                    removed += 1
+                    continue
+                keep.append(item)
+            node[:] = keep
+        return removed
 
     async def _substitute_sankey_if_missing(self, template: Dict[str, Any]) -> None:
         """#617 — make the HACS sankey-chart card optional.
@@ -627,16 +683,17 @@ class DashboardGenerator:
         pv_strings = discover_pv_strings_from_registry(self.hass, ed_config) if ed_config else {}
         battery_details = discover_battery_details_from_registry(self.hass, ed_config) if ed_config else {}
 
-        # Determine has_battery / has_ev from config entry
+        # Determine has_battery / has_ev — (#923) the battery from the one
+        # oracle (UNKNOWN keeps the section), the EV section from the #595
+        # managed-charger rule, same as the EV tab.
+        from ..coordinator.install_modules import Module, Presence, has_managed_charger
         entries = self.hass.config_entries.async_entries(DOMAIN)
         has_battery = False
         has_ev = False
         if entries:
             full_config = {**entries[0].data, **entries[0].options}
-            has_battery = bool(full_config.get("battery_soc_sensor")) or (
-                ed_config and getattr(ed_config, "has_battery", False)
-            )
-            has_ev = bool(full_config.get("ev_chargers") or full_config.get("ev_charging_power_sensor"))
+            has_battery = self._install_presence().get(Module.BATTERY) is not Presence.ABSENT
+            has_ev = has_managed_charger(full_config)
 
         # Build K-Flow card config — SEM universal entities
         kflow_config: Dict[str, Any] = {

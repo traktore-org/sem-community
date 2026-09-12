@@ -55,14 +55,20 @@ def _dashboard(*, minimal=True, incomplete=False):
     )
 
 
-def _patched(result=None, raises=None):
+def _patched(result=None, raises=None, answered=True):
     """Patch the dashboard reader, plus the PV-string discovery helpers at
     their SOURCE module — the coordinator imports those inside the function
-    body, so there is no module-level name to patch on the coordinator."""
-    reader = AsyncMock(side_effect=raises) if raises else AsyncMock(return_value=result)
+    body, so there is no module-level name to patch on the coordinator.
+
+    The coordinator reads through ``read_energy_dashboard_config_outcome``
+    (#923), which also says whether the question got an answer:
+    ``answered=True`` with ``result=None`` is "no dashboard", ``False`` is
+    "could not read it"."""
+    reader = (AsyncMock(side_effect=raises) if raises
+              else AsyncMock(return_value=(result, answered)))
     from custom_components.solar_energy_management import hardware_detection
     return (
-        patch.object(coordinator_module, "read_energy_dashboard_config", reader),
+        patch.object(coordinator_module, "read_energy_dashboard_config_outcome", reader),
         patch.object(hardware_detection, "discover_pv_strings_from_registry",
                      MagicMock(return_value={})),
         patch.object(hardware_detection, "discover_pv_string_vi_pairs",

@@ -12,6 +12,7 @@ Complete reference for Solar Energy Management (SEM).
 
 ## Table of Contents
 
+- [Modules — SEM shows what you have](#modules--sem-shows-what-you-have)
 - [Configuration Options](#configuration-options)
 - [Charging Modes](#charging-modes)
 - **[EV Charging Logic — full decision reference](EV_CHARGING_LOGIC.md)** ⭐
@@ -28,6 +29,31 @@ Complete reference for Solar Energy Management (SEM).
 - [Daily Energy Reset](#daily-energy-reset)
 
 ---
+
+## Modules — SEM shows what you have
+
+SEM is a **core** — solar, grid, home consumption, energy balance, costs,
+forecast — plus **modules** for the hardware you own:
+
+| Module | Appears when | What it adds |
+|---|---|---|
+| Home battery | a battery sensor or control entity is set in SEM, or HA's Energy Dashboard has a battery | the Battery tab, ~60 battery entities (SOC, power, sessions, savings, zones) |
+| EV charger | a charger is configured in SEM, or HA's Energy Dashboard has an EV consumer | EV entities (power, sessions, lifetime); the EV **tab** needs a configured charger |
+| Heat pump | an SG-Ready relay, climate entity, SG-Ready service or heat-pump power/energy sensor is set | heat-pump status and energy entities |
+| Hot water | a hot-water entity is set | the tank's temperature and legionella settings |
+
+A small install therefore has fewer entities, by design — a solar-only SEM
+has no `sensor.sem_battery_soc`. Add the hardware and its entities appear:
+through SEM's Configure screen at once, and for a battery you add to HA's
+Energy Dashboard with one automatic reload.
+
+When SEM cannot tell — HA's Energy Dashboard could not be read at start-up —
+it keeps everything rather than guess. What SEM decided is on
+`sensor.sem_diag_ed_config` (attribute `install_modules`) and in the
+diagnostics download.
+
+A **custom** dashboard that references an entity of a module you do not have
+shows it as unavailable; SEM's own dashboard is updated in step.
 
 ## Configuration Options
 

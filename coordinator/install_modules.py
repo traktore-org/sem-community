@@ -1,0 +1,437 @@
+"""(#923) What this install HAS — one answer, three states.
+
+SEM is a core (solar, grid, home, energy balance, totals, forecast) plus
+hardware modules: a home battery, an EV charger, a heat pump, a hot-water
+tank. Every surface that depends on a module — its entities, its dashboard
+tab, the cards that reference it, the welcome text — asks THIS module, so
+they cannot disagree. Before #923 "has a battery" was decided in four
+places, each slightly differently (#857).
+
+Two rules make the verdict safe to act on:
+
+* It comes from CONFIGURATION, never from live sensor state. A sensor that
+  is momentarily unavailable says nothing about whether the hardware exists
+  — reading it as "absent" is #875 ("unread is not zero") at module scale.
+* "I could not read the Energy Dashboard" is UNKNOWN, never ABSENT (#925).
+  UNKNOWN keeps everything: a slow boot must never hide a real battery.
+
+Pure stdlib on purpose — no Home Assistant import — so it can be tested
+without an instance and loaded by ``~/bin/validate-sem.sh``.
+"""
+from __future__ import annotations
+
+from enum import Enum
+from typing import Any, Iterable, Mapping
+
+
+class Module(Enum):
+    BATTERY = "battery"
+    EV = "ev"
+    HEAT_PUMP = "heat_pump"
+    HOT_WATER = "hot_water"
+
+
+class Presence(Enum):
+    PRESENT = "present"
+    ABSENT = "absent"
+    UNKNOWN = "unknown"
+
+
+# Only WIRING counts — a key through which SEM reads the module's power or
+# state of charge, or drives it. ``battery_capacity_kwh`` is deliberately
+# absent: the options flow's Settings step saves it with a default for every
+# install that passes through it (config_flow.py, step "settings"), so it
+# describes a battery without proving one. Heat-pump tunables (boost offset,
+# rated power, priority) are left out for the same reason.
+BATTERY_WIRING_KEYS: tuple[str, ...] = (
+    "battery_soc_sensor",
+    "battery_power_sensor",
+    "battery_soc_entity",
+    "battery_charge_energy_sensor",
+    "battery_discharge_energy_sensor",
+    "battery_energy_discharged_sensor",
+    "battery_cycles_sensor",
+    "battery_temperature_sensor",
+    "battery_target_soc_entity",
+    # (#923, ruflo) seeded by the config flow when it finds a battery-mode
+    # select, and watched every cycle by the #845 BatteryModeWatch — a battery
+    # SEM can watch but not yet drive is still a battery.
+    "battery_operating_mode_entity",
+    "battery_charge_power_limit_entity",
+    "battery_discharge_control_entity",
+    "battery_discharge_control_entities",
+    "battery_force_discharge_control_entity",
+    "battery_force_discharge_entities",
+    "battery_strategy_control_entity",
+    "battery_strategy_entities",
+    # An explicit platform is a choice; its default "auto" is not (see
+    # _DEFAULT_VALUES below).
+    "battery_charge_platform",
+)
+EV_WIRING_KEYS: tuple[str, ...] = (
+    "ev_chargers",
+    "ev_charging_power_sensor",
+    "ev_power_sensor",
+    # Legacy single-charger keys, still read by the coordinator.
+    "ev_connected_sensor",
+    "ev_plug_sensor",
+    "ev_charging_sensor",
+    "ev_current_sensor",
+    "ev_energy_sensor",
+    "ev_total_energy_sensor",
+    "ev_daily_energy_sensor",
+    "ev_session_energy_sensor",
+    "ev_charger_service",
+    "ev_start_service",
+    "ev_stop_service",
+    "ev_current_control_entity",
+    "ev_start_stop_entity",
+    "ev_charge_mode_entity",
+    "ev_phase_switch_entity",
+    "ev_departure_time_entity",
+)
+HEAT_PUMP_WIRING_KEYS: tuple[str, ...] = (
+    "heat_pumps",
+    "heat_pump_relay1_entity",
+    "heat_pump_relay2_entity",
+    "heat_pump_climate_entity",
+    "heat_pump_sg_ready_service",
+    "heat_pump_sg_ready_state_entity",
+    "heat_pump_power_sensor",
+    "heat_pump_energy_sensor",
+    "heat_pump_temperature_sensor",
+)
+HOT_WATER_WIRING_KEYS: tuple[str, ...] = (
+    "hot_water_entity",
+    "hot_water_power_sensor",
+    "hot_water_energy_sensor",
+    "hot_water_temperature_sensor",
+)
+
+# A wiring key holding its INSTALL DEFAULT says nothing: "auto" asks SEM to
+# detect a battery platform, it does not declare that a battery exists.
+_DEFAULT_VALUES: Mapping[str, tuple[str, ...]] = {
+    "battery_charge_platform": ("auto",),
+}
+
+# Every key the oracle reads. Setting one through set_option must reload the
+# entry, or the module's entities wait for the next restart — pinned by
+# tests/test_923_structural_keys.py against _SET_OPTION_STRUCTURAL_KEYS.
+MODULE_EVIDENCE_KEYS: frozenset[str] = frozenset(
+    BATTERY_WIRING_KEYS + EV_WIRING_KEYS + HEAT_PUMP_WIRING_KEYS + HOT_WATER_WIRING_KEYS
+)
+
+_EMPTY: tuple[Any, ...] = (None, "", [], {}, ())
+
+
+def _wired(config: Mapping[str, Any], keys: Iterable[str]) -> bool:
+    for key in keys:
+        value = config.get(key)
+        if value in _EMPTY:
+            continue
+        if isinstance(value, str) and value.strip().lower() in _DEFAULT_VALUES.get(key, ()):
+            continue
+        return True
+    return False
+
+
+def _declared(ed_config: Any | None, attr: str) -> bool | None:
+    """What the Energy Dashboard declares for ``attr`` — None when the
+    object cannot say: an unexpected shape is not a "no" (#925)."""
+    if ed_config is None:
+        return False
+    if isinstance(ed_config, Mapping):
+        value = ed_config.get(attr)
+    else:
+        value = getattr(ed_config, attr, None)
+    return value if isinstance(value, bool) else None
+
+
+def has_managed_charger(config: Mapping[str, Any]) -> bool:
+    """A charger SEM was TOLD about — the #595 rule for the EV tab and the
+    welcome text's charge-mode line. Not the same question as "does this
+    install have EV data": an Energy Dashboard EV consumer feeds
+    ``sem_ev_power`` with no charger configured."""
+    return bool(config.get("ev_chargers") or config.get("ev_charging_power_sensor"))
+
+
+def module_verdict(
+    config: Mapping[str, Any],
+    ed_config: Any | None,
+    ed_answered: bool,
+) -> dict[Module, Presence]:
+    """The module verdict for one install.
+
+    ``ed_config`` is the parsed Energy Dashboard config (an
+    ``EnergyDashboardConfig``) or None. ``ed_answered`` is whether the Energy
+    Dashboard question got an answer at all — only the exact value ``True``
+    counts as answered; anything else (a mock, a stray tuple) is "not
+    answered", never guessed at. True means the preferences were parsed OR
+    there are none — HA's energy manager holds none and no ``.storage/energy``
+    exists (``read_energy_dashboard_config_outcome`` asks the manager first,
+    because the file lags it by up to 60 s); anything else means the read
+    failed or has not run yet.
+    Battery and EV can be declared there, so for them no answer means
+    UNKNOWN — and so does an ``ed_config`` whose shape can't say yes or no
+    (#925: "I could not ask" is never "no"). Heat pump and hot water exist
+    only in SEM's own options, which are always readable — they are never
+    UNKNOWN.
+    """
+    answered = ed_answered is True
+    battery_declared = _declared(ed_config, "has_battery")
+    ev_declared = _declared(ed_config, "has_ev")
+
+    def _config_or_dashboard(wired: bool, declared: bool | None) -> Presence:
+        if wired or declared is True:
+            return Presence.PRESENT
+        if answered and declared is False:
+            return Presence.ABSENT
+        return Presence.UNKNOWN
+
+    def _config_only(wired: bool) -> Presence:
+        return Presence.PRESENT if wired else Presence.ABSENT
+
+    return {
+        Module.BATTERY: _config_or_dashboard(_wired(config, BATTERY_WIRING_KEYS), battery_declared),
+        Module.EV: _config_or_dashboard(_wired(config, EV_WIRING_KEYS), ev_declared),
+        Module.HEAT_PUMP: _config_only(_wired(config, HEAT_PUMP_WIRING_KEYS)),
+        Module.HOT_WATER: _config_only(_wired(config, HOT_WATER_WIRING_KEYS)),
+    }
+
+
+_B = frozenset({Module.BATTERY})
+_E = frozenset({Module.EV})
+_BE = frozenset({Module.BATTERY, Module.EV})
+_HP = frozenset({Module.HEAT_PUMP})
+_HW = frozenset({Module.HOT_WATER})
+
+
+def _rows(platform: str, modules: frozenset, keys: tuple[str, ...]) -> dict:
+    return {(platform, key): modules for key in keys}
+
+
+def _table(*groups: Mapping[tuple[str, str], frozenset]) -> dict:
+    """Merge row groups; a (platform, key) defined twice is a bug, not an
+    override."""
+    table: dict = {}
+    for group in groups:
+        for row, modules in group.items():
+            if row in table:
+                raise ValueError(f"ENTITY_MODULES defines {row} twice")
+            table[row] = modules
+    return table
+
+
+# (platform, description key) -> the modules that entity needs. A key that is
+# not here is CORE and is always created. Cross-module entities list every
+# module they need — battery→EV assist needs both. The dashboard generator
+# and validate-sem.sh read this same table, rather than keeping their own
+# copy of "does this install have a battery". The dynamic battery entities
+# (``select.sem_battery_mode``, ``number.sem_battery_reserve_soc``) are not
+# rows here — they follow the same verdict through ``select._has_battery``.
+ENTITY_MODULES: Mapping[tuple[str, str], frozenset[Module]] = _table(
+    _rows("sensor", _B, (
+        "battery_capacity_drift_pct", "battery_charge_pacing",
+        "battery_charge_power", "battery_cycles_estimated",
+        "battery_discharge_power", "battery_dynamic_floor_pct",
+        "battery_health_score", "battery_measured_capacity_kwh", "battery_power",
+        "battery_priority_status", "battery_scheduler_deficit_kwh",
+        "battery_scheduler_reason", "battery_scheduler_state",
+        "battery_scheduler_target_soc", "battery_session_avg_power",
+        "battery_session_cost", "battery_session_duration",
+        "battery_session_energy", "battery_session_savings",
+        "battery_session_solar_share", "battery_session_type", "battery_soc",
+        "battery_spendable_kwh", "battery_status", "battery_stored_grid_share",
+        "battery_temperature", "daily_battery_charge_energy",
+        "daily_battery_charge_grid", "daily_battery_charge_solar",
+        "daily_battery_discharge_energy", "daily_battery_grid_cost",
+        "daily_battery_savings", "diag_battery_capacity", "diag_battery_sign",
+        "flow_battery_to_grid_energy", "flow_battery_to_grid_power",
+        "flow_battery_to_home_energy", "flow_battery_to_home_power",
+        "flow_grid_to_battery_energy", "flow_grid_to_battery_power",
+        "flow_solar_to_battery_energy", "flow_solar_to_battery_power",
+        "monthly_battery_charge_energy", "monthly_battery_discharge_energy",
+        "monthly_battery_savings", "yearly_battery_charge_energy",
+        "yearly_battery_discharge_energy", "yearly_battery_savings",
+    )),
+    _rows("number", _B, (
+        "battery_auto_start_soc", "battery_buffer_soc", "battery_capacity",
+        "battery_max_discharge_power", "battery_priority_soc",
+    )),
+    _rows("switch", _B, (
+        "battery_charge_pacing_enabled", "battery_may_export",
+        "forecast_spending_enabled",
+    )),
+    _rows("binary_sensor", _B, (
+        "battery_charging", "battery_discharging",
+    )),
+    _rows("button", _B, (
+        "backfill_battery_nights",
+    )),
+    _rows("sensor", _BE, (
+        "flow_battery_to_ev_energy", "flow_battery_to_ev_power",
+        "lifetime_ev_battery_share",
+    )),
+    _rows("number", _BE, (
+        "battery_assist_max_power", "battery_assist_min_surplus",
+    )),
+    _rows("switch", _BE, (
+        "battery_may_assist_ev",
+    )),
+    _rows("sensor", _E, (
+        "calculated_current", "charging_recommendation", "charging_strategy",
+        "daily_ev_energy", "diag_charger_control", "energy_ev_solar_percentage",
+        "ev_charger_count", "ev_power", "ev_remaining_range", "ev_taper_trend",
+        "flow_grid_to_ev_energy", "flow_grid_to_ev_power",
+        "flow_solar_to_ev_energy", "flow_solar_to_ev_power", "lifetime_ev_cost",
+        "lifetime_ev_energy", "lifetime_ev_grid_share", "lifetime_ev_sessions",
+        "lifetime_ev_solar", "lifetime_ev_solar_share",
+        "monthly_ev_consumption_energy", "night_charging_status", "session_cost",
+        "session_duration", "session_energy", "session_solar_share",
+        "solar_charging_status", "vehicle_soc", "yearly_ev_energy",
+    )),
+    _rows("number", _E, (
+        "ev_disable_delay_seconds", "ev_enable_delay_seconds",
+    )),
+    _rows("binary_sensor", _E, (
+        "ev_charging", "ev_connected",
+    )),
+    _rows("sensor", _HP, (
+        "heat_pump_energy_month", "heat_pump_energy_shifted_today",
+        "heat_pump_energy_today", "heat_pump_energy_total", "heat_pump_energy_year",
+        "heat_pump_mode", "heat_pump_registration_status",
+        "heat_pump_sg_ready_state",
+    )),
+    _rows("number", _HP, (
+        "heat_pump_boost_offset",
+    )),
+    _rows("binary_sensor", _HP, (
+        "heat_pump_registered", "heat_pump_solar_boost",
+    )),
+    _rows("number", _HW, (
+        "hot_water_max_temperature", "hot_water_solar_target",
+        "legionella_interval_hours", "legionella_target_temp",
+    )),
+)
+
+# Keys that LOOK like a module but are core on purpose. The naming ratchet in
+# tests/test_923_install_modules.py makes every look-alike choose a side.
+CORE_BY_DECISION: Mapping[tuple[str, str], str] = {
+    ("sensor", "charging_state"): (
+        "carries the Home tab's today_plan (solar peak, price windows, night) "
+        "and is the Config tab's set-up marker — on every install"),
+    ("sensor", "diag_charger_count"): (
+        "how '0 chargers found' stays visible on an install without one"),
+    ("sensor", "power_charge_cost"): (
+        "the tariff's demand charge (load management), not EV charging"),
+    ("number", "demand_charge_rate"): (
+        "the tariff's demand-charge rate, not EV charging"),
+}
+
+
+def all_unknown() -> dict[Module, Presence]:
+    return {module: Presence.UNKNOWN for module in Module}
+
+
+def keeps(presence: Mapping[Module, Presence], required: Iterable[Module]) -> bool:
+    """Something that needs ``required`` is kept unless one of them is
+    definitively ABSENT — UNKNOWN keeps."""
+    return all(presence.get(m, Presence.UNKNOWN) is not Presence.ABSENT for m in required)
+
+
+def entity_kept(platform: str, key: str, presence: Mapping[Module, Presence]) -> bool:
+    return keeps(presence, ENTITY_MODULES.get((platform, key), frozenset()))
+
+
+def kept_descriptions(
+    platform: str, descriptions: Iterable[Any], presence: Mapping[Module, Presence],
+) -> list:
+    """The static descriptions a platform creates for this install. The SAME
+    list must feed the platform's stale-entity sweep: that sweep is what
+    removes an ABSENT module's leftover registry entries (spec §6)."""
+    return [d for d in descriptions if entity_kept(platform, d.key, presence)]
+
+
+def presence_of(coordinator: Any) -> dict[Module, Presence]:
+    """The verdict the platforms were built with (``setup_presence``). All
+    UNKNOWN — build everything — when there is none: no coordinator, one
+    from before the setup step, or a test double."""
+    presence = getattr(coordinator, "setup_presence", None)
+    if isinstance(presence, Mapping) and presence and all(
+        isinstance(m, Module) and isinstance(p, Presence) for m, p in presence.items()
+    ):
+        return {**all_unknown(), **presence}
+    return all_unknown()
+
+
+def absent_entity_ids(presence: Mapping[Module, Presence]) -> frozenset[str]:
+    """Entity ids of every module entity this install does NOT create —
+    what the dashboard generator removes references to. SEM forces
+    ``<platform>.sem_<key>`` for every static entity."""
+    return frozenset(
+        f"{platform}.sem_{key}"
+        for (platform, key), modules in ENTITY_MODULES.items()
+        if not keeps(presence, modules)
+    )
+
+
+def presence_summary(presence: Mapping[Module, Presence]) -> dict[str, str]:
+    """``{"battery": "present", ...}`` — the diagnostic attribute and the
+    downloadable diagnostics."""
+    return {module.value: presence.get(module, Presence.UNKNOWN).value for module in Module}
+
+
+def presence_from_summary(summary: Mapping[str, Any]) -> dict[Module, Presence]:
+    """The inverse of ``presence_summary``, tolerant on purpose: a module or
+    value this build does not know is ignored/UNKNOWN, never an error — the
+    reader may be a different version than the install it reads."""
+    presence = all_unknown()
+    for key, value in summary.items():
+        if not isinstance(key, str) or not isinstance(value, str):
+            continue
+        try:
+            module = Module(key)
+        except ValueError:
+            continue
+        try:
+            presence[module] = Presence(value)
+        except ValueError:
+            continue
+    return presence
+
+
+# At most one module-driven reload per this many seconds, across reloads —
+# a flickering detection must never become a reload loop.
+MODULE_RELOAD_MIN_INTERVAL_S = 600.0
+
+
+def modules_grown(
+    at_setup: Mapping[Module, Presence], now: Mapping[Module, Presence],
+) -> tuple[Module, ...]:
+    """Modules that were ABSENT when the platforms were built and are PRESENT
+    now — the only transition that needs new entities. ABSENT → UNKNOWN is a
+    failed re-read, not hardware. PRESENT → ABSENT waits for the next
+    restart or options change: removing a user's entities on a live re-read
+    is exactly the false ABSENT this oracle exists to prevent."""
+    return tuple(
+        m for m in Module
+        if at_setup.get(m) is Presence.ABSENT and now.get(m) is Presence.PRESENT
+    )
+
+
+def module_reload_due(
+    at_setup: Mapping[Module, Presence],
+    now: Mapping[Module, Presence],
+    now_ts: float,
+    last_reload_ts: float | None,
+) -> tuple[Module, ...]:
+    """The grown modules, if a reload may run now. Once per transition holds
+    by construction — after the reload the new setup verdict is PRESENT. A
+    growth refused by the interval is picked up by the next Energy Dashboard
+    re-read, or at the next restart."""
+    grown = modules_grown(at_setup, now)
+    if not grown:
+        return ()
+    if last_reload_ts is not None and now_ts - last_reload_ts < MODULE_RELOAD_MIN_INTERVAL_S:
+        return ()
+    return grown

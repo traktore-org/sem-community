@@ -48,7 +48,8 @@ from ..const import (
     STATE_UNAVAILABLE,
 )
 from ..utils.time_manager import TimeManager
-from ..ha_energy_reader import read_energy_dashboard_config, EnergyDashboardConfig
+from ..ha_energy_reader import read_energy_dashboard_config_outcome, EnergyDashboardConfig
+from .install_modules import Module, Presence, module_reload_due, module_verdict, presence_of
 
 from .types import (
     SEMData, PowerReadings, PowerFlows, SystemStatus, LoadManagementData,
@@ -537,6 +538,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         # Energy Dashboard config
         self._energy_dashboard_config: Optional[EnergyDashboardConfig] = None
+        # (#923) The Energy Dashboard as the install-modules oracle sees it:
+        # the parsed config even when it is not "minimally configured", and
+        # whether the question got an answer at all (#925 — unread ≠ no).
+        self._ed_raw_config: Optional[EnergyDashboardConfig] = None
+        self._ed_answered: bool = False
+        # The verdict the platforms were built with — captured once in
+        # async_setup_entry, after the Energy Dashboard read and before any
+        # platform loads, so every platform gates on the SAME answer.
+        self.setup_presence: Optional[Dict[Module, Presence]] = None
         # Cold-start recovery (#274): re-derive ED power sensors each cycle while
         # they're unresolved (source integration registered after SEM), bounded.
         self._ed_resolve_pending: bool = False
@@ -1777,6 +1787,30 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 counters.append(fallback)
         return counters
 
+    def install_presence(self) -> Dict[Module, Presence]:
+        """(#923) What this install has right now — see install_modules.py."""
+        return module_verdict(self.config, self._ed_raw_config, self._ed_answered)
+
+    def _check_module_growth(self) -> None:
+        """(#923) Hardware SEM only DISCOVERS — a battery added to HA's Energy
+        Dashboard — changes no SEM option, so no options reload creates its
+        entities. When a module the platforms were built without is PRESENT
+        now, reload once (see install_modules.module_reload_due)."""
+        at_setup = self.setup_presence
+        if not isinstance(at_setup, dict) or self.config_entry is None:
+            return  # still setting up: the platforms read the fresh verdict
+        key = f"{DOMAIN}_module_reload_at"
+        now_ts = dt_util.utcnow().timestamp()
+        grown = module_reload_due(
+            at_setup, self.install_presence(), now_ts, self.hass.data.get(key))
+        if not grown:
+            return
+        self.hass.data[key] = now_ts
+        _LOGGER.info(
+            "#923 — %s appeared since setup; reloading once to create its entities",
+            ", ".join(m.value for m in grown))
+        self.hass.config_entries.async_schedule_reload(self.config_entry.entry_id)
+
     async def async_initialize_energy_dashboard(self, quiet: bool = False) -> bool:
         """Initialize sensors from HA Energy Dashboard.
 
@@ -1786,7 +1820,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         """
         _info = _LOGGER.debug if quiet else _LOGGER.info
         try:
-            dashboard_config = await read_energy_dashboard_config(self.hass, quiet=quiet)
+            dashboard_config, answered = await read_energy_dashboard_config_outcome(
+                self.hass, quiet=quiet)
+            self._ed_raw_config = dashboard_config
+            self._ed_answered = answered
 
             # Activate whenever the dashboard is minimally configured (solar + grid),
             # not only when a stat_rate power sensor exists. ha_energy_reader already
@@ -1928,6 +1965,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             and self._energy_dashboard_config.power_resolution_incomplete()
         )
 
+        self._check_module_growth()
         return self._energy_dashboard_config is not None
 
     async def _retry_energy_dashboard_resolution(self) -> None:
@@ -7064,6 +7102,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         the only difference is the adapter cache is now a dict-of-one
         keyed by ``"primary"``.
         """
+        # (#923) No battery module, no battery control. With the battery
+        # ABSENT SEM reads no SOC and no power, and a brand adapter
+        # auto-detected from a loaded inverter integration would act blind —
+        # "limit discharge 0 W, SoC unknown", seen live on .175 with the
+        # battery removed. PRESENT and UNKNOWN run exactly as before.
+        if presence_of(self).get(Module.BATTERY) is Presence.ABSENT:
+            self._last_battery_decisions = {}
+            return
         from .actuate_battery import actuate_battery
         from .battery_adapters import adapter_for, _integration_loaded
         from .charger_types import (

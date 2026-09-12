@@ -37,6 +37,9 @@ from homeassistant.helpers import label_registry as lr
 from .const import SENSOR_LABEL_MAPPING
 from .consts.labels import SEM_LABELS
 from .coordinator import SEMCoordinator
+from .coordinator.install_modules import (
+    Module, keeps, kept_descriptions, presence_of, presence_summary,
+)
 from .features.device_axes import (
     has_control_handle as _has_control_handle,
     may_actuate as _may_actuate,
@@ -1962,11 +1965,16 @@ async def async_setup_entry(
     _LOGGER.info("Setting up SEM sensors for entry %s", entry.entry_id)
 
     coordinator: SEMCoordinator = entry.runtime_data
-    _LOGGER.info("Got coordinator, creating %d sensors", len(SENSOR_TYPES))
+    # (#923) Only the sensors of modules this install has — UNKNOWN keeps.
+    # The same list feeds the stale sweep below, which is what removes an
+    # ABSENT module's leftovers from the registry.
+    presence = presence_of(coordinator)
+    static_descriptions = kept_descriptions("sensor", SENSOR_TYPES, presence)
+    _LOGGER.info("Got coordinator, creating %d sensors", len(static_descriptions))
 
     sensors = [
         SEMSolarSensor(coordinator, description, entry.entry_id)
-        for description in SENSOR_TYPES
+        for description in static_descriptions
     ]
 
     # Per-charger sensors (#131): create power + session sensors for each configured charger
@@ -2153,6 +2161,13 @@ async def async_setup_entry(
                 ),
             ])
 
+    # (#923) Battery → EV needs a battery: without one the per-charger split
+    # of that flow is not built, and the stale sweep below (fed this same
+    # list) removes what an earlier setup registered.
+    if not keeps(presence, (Module.BATTERY,)):
+        per_charger_descriptions = [
+            d for d in per_charger_descriptions if "_flow_battery_to_ev_" not in d.key]
+
     for desc in per_charger_descriptions:
         sensors.append(SEMSolarSensor(coordinator, desc, entry.entry_id))
 
@@ -2271,7 +2286,7 @@ async def async_setup_entry(
 
     # Fix entity_ids from pre-translation installs and clean up stale entities
     all_descriptions = (
-        list(SENSOR_TYPES)
+        list(static_descriptions)
         + per_charger_descriptions
         + per_string_descriptions
         + per_battery_descriptions
@@ -3294,6 +3309,12 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                     attrs["energy_dashboard"] = detail
             except Exception:
                 pass
+            # (#923) What this install has — the verdict every platform and
+            # the dashboard were built on. Support's first stop for "where is
+            # my battery tab"; validate-sem.sh reads it too.
+            presence = getattr(self.coordinator, "setup_presence", None)
+            if isinstance(presence, dict):
+                attrs["install_modules"] = presence_summary(presence)
 
         # Battery charge scheduler (#6) — attach schedule to state sensor
         if self.entity_description.key == "battery_scheduler_state":

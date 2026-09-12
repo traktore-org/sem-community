@@ -28,6 +28,7 @@ from homeassistant.helpers.entity import EntityCategory
 from .const import DEFAULT_MAX_CHARGING_CURRENT
 from .consts.bounds import BOUNDS      # (#870) one range per field
 from .coordinator import SEMCoordinator
+from .coordinator.install_modules import kept_descriptions, presence_of
 
 type SEMConfigEntry = ConfigEntry[SEMCoordinator]
 
@@ -328,9 +329,12 @@ async def async_setup_entry(
     """Set up EMS Solar Optimizer number entities."""
     coordinator: SEMCoordinator = entry.runtime_data
 
+    # (#923) Only the numbers of modules this install has — UNKNOWN keeps.
+    static_descriptions = kept_descriptions(
+        "number", NUMBER_TYPES, presence_of(coordinator))
     entities = [
         SEMNumberEntity(coordinator, description, entry)
-        for description in NUMBER_TYPES
+        for description in static_descriptions
     ]
 
     # Per-charger number entities (#193)
@@ -548,7 +552,7 @@ async def async_setup_entry(
     # Fix entity_ids from pre-translation installs and clean up stale entities.
     # per_battery_descriptions MUST be included so the stale-key sweep doesn't
     # immediately remove the reserve-SOC numbers it just created (#523).
-    all_descriptions = list(NUMBER_TYPES) + per_charger_descriptions + per_battery_descriptions
+    all_descriptions = list(static_descriptions) + per_charger_descriptions + per_battery_descriptions
     _fix_entity_ids(hass, entry, all_descriptions, "number")
     _cleanup_stale_entities(hass, entry, all_descriptions, "number")
 
@@ -589,7 +593,10 @@ def _cleanup_stale_entities(hass, entry, descriptions, platform):
         # Valid keys: both description keys AND legacy UID mapped keys
         valid_keys = {d.key for d in descriptions}
         _LEGACY_UID_MAP = {"battery_capacity": "battery_capacity_kwh"}
-        valid_keys.update(_LEGACY_UID_MAP.values())
+        # (#923) A legacy unique_id is valid only while its entity is — the
+        # unconditional add kept number.sem_battery_capacity alive on an
+        # install whose battery module is ABSENT.
+        valid_keys.update(v for k, v in _LEGACY_UID_MAP.items() if k in valid_keys)
 
         for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
             if entity_entry.domain != platform:
