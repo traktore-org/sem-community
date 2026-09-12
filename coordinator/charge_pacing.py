@@ -17,8 +17,11 @@ meanings a user must be able to tell apart on the card.
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -165,21 +168,50 @@ class ChargePacingWriter:
     * the entity's value is CAPTURED on first engage and RESTORED on
       disengage — a stale cap left on an inverter register outlives SEM's
       next restart and throttles the battery for nobody;
+    * that capture is PERSISTED, and ADOPTED by the next lifetime (#949).
+      An HA restart never unloads the entry — ``async_unload_entry`` says so
+      — and the pacer is not in the battery adapters' unload release (#936),
+      so the register simply keeps the cap. A fresh writer that re-captured
+      would then read SEM's own 400 W and store THAT as the value to restore
+      to: the real hardware maximum gone for good, every later restore
+      putting the cap back, and SEM reporting healthy throughout. Adoption
+      writes nothing of its own — a still-wanted cap dedupes, a finished
+      pacing restores the real value;
     * writes dedupe at 100 W (the force-discharge writer's threshold);
     * observer mode never writes — the decision is still published, so the
-      rig shows what WOULD happen (the house observer seam).
+      rig shows what WOULD happen (the house observer seam). It never adopts
+      either: consuming the record of a real engagement is a side effect,
+      and an observer has none.
+
+    ``store`` is injected at runtime (the ``DeyeSnapshotStore`` pattern,
+    #709) and duck-typed — ``async_load`` / ``async_save`` / ``async_remove``
+    — so this module stays free of Home Assistant imports and the tests can
+    hand it a dict.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, store: Any = None) -> None:
         self.engaged: bool = False
         self.restore_value: float | None = None
         self.last_written_w: float | None = None
+        self._store = store
+        #: nothing to adopt when nothing was persisted
+        self._adopted: bool = store is None
 
     async def apply(self, hass, entity_id: str, cap_w, *,
                     observer: bool) -> str:
-        """Returns a short action token: wrote|held|restored|idle|observer."""
+        """Returns a short action token:
+        wrote|held|restored|idle|observer|no_limit_entity."""
+        if not observer:
+            await self._adopt(hass, entity_id)
         if not entity_id:
-            return "idle"
+            # (#949) "nothing to pace" and "a cap, and nowhere to put it" are
+            # different facts, and they shared the ``idle`` token. A PROD
+            # install ran a whole day with the switch on, a computed 403 W
+            # cap, a reason reading "paced to land full at day's end" — and
+            # the battery at 3 kW, because no charge-limit entity was ever
+            # confirmed. The only tell was a null attribute. #925's rule:
+            # "I could not act" is its own value.
+            return "no_limit_entity" if cap_w is not None else "idle"
         if cap_w is None:
             if self.engaged:
                 if observer:
@@ -191,6 +223,7 @@ class ChargePacingWriter:
                 self.engaged = False
                 self.restore_value = None
                 self.last_written_w = None
+                await self._forget()
                 if value is not None:
                     await hass.services.async_call(
                         "number", "set_value",
@@ -211,11 +244,95 @@ class ChargePacingWriter:
                 and abs(cap_w - self.last_written_w) < 100.0):
             return "held"
         self.last_written_w = float(cap_w)
+        # Persisted BEFORE the write, and on every write: the record has to
+        # describe a register that may already carry the cap, never one that
+        # might not. The cap rides along so the next lifetime knows which
+        # value on the register is its own.
+        await self._remember(entity_id)
         await hass.services.async_call(
             "number", "set_value",
             {"entity_id": entity_id, "value": float(cap_w)},
             blocking=False)
         return "wrote"
+
+    # ─── the engagement, across lifetimes (#949) ───────────────────────
+
+    async def _adopt(self, hass, entity_id: str) -> None:
+        """Take over the engagement a previous lifetime left on the inverter
+        instead of discovering it as though it were the user's own setting.
+
+        Runs once, on the first cycle that could write.
+        """
+        if self._adopted:
+            return
+        self._adopted = True
+        record = await self._load()
+        if not isinstance(record, dict):
+            return
+        stored = str(record.get("entity_id") or "")
+        if not stored:
+            return
+        restore = _as_float(record.get("restore_value"))
+        if stored != str(entity_id or ""):
+            # SEM does not pace that entity any more — the user repointed the
+            # setting, or cleared it. Hand the register back before letting
+            # go of the record, or the cap stays on an entity nobody watches.
+            _LOGGER.info(
+                "charge pacing: releasing %s — it is no longer the "
+                "charge-limit entity (restoring %s)", stored, restore)
+            if restore is not None:
+                await hass.services.async_call(
+                    "number", "set_value",
+                    {"entity_id": stored, "value": float(restore)},
+                    blocking=False)
+            await self._forget()
+            return
+        self.engaged = True
+        self.restore_value = restore
+        self.last_written_w = _as_float(record.get("cap_w"))
+        _LOGGER.info(
+            "charge pacing: adopted the cap this install was left with — "
+            "%s at %s W, restores to %s W",
+            stored, self.last_written_w, self.restore_value)
+
+    async def _load(self):
+        if self._store is None:
+            return None
+        try:
+            return await self._store.async_load()
+        except Exception:  # noqa: BLE001 — a lost record is not a lost cycle
+            _LOGGER.debug("charge pacing: engagement record unreadable",
+                          exc_info=True)
+            return None
+
+    async def _remember(self, entity_id: str) -> None:
+        if self._store is None:
+            return
+        try:
+            await self._store.async_save({
+                "entity_id": str(entity_id),
+                "restore_value": self.restore_value,
+                "cap_w": self.last_written_w,
+            })
+        except Exception:  # noqa: BLE001 — persistence never costs a cycle
+            _LOGGER.debug("charge pacing: could not persist the engagement",
+                          exc_info=True)
+
+    async def _forget(self) -> None:
+        if self._store is None:
+            return
+        try:
+            await self._store.async_remove()
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug("charge pacing: could not clear the engagement",
+                          exc_info=True)
+
+
+def _as_float(value) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def today_remaining_slots(*, now, sunrise, sunset, day_kwh, home_w_at,

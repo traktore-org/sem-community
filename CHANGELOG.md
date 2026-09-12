@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Charge pacing no longer strands the inverter's charge limit** (#949).
+  The captured max-charge-power lived in memory only, and an HA restart never
+  unloads the config entry — so the register kept SEM's cap, and the next
+  start captured that cap as the value to restore to. The real hardware
+  maximum was gone for good. The engagement is now persisted per config entry
+  and adopted on the next start; repointing or clearing the setting hands the
+  old register back.
+- 🐛 **Pacing says when it has nowhere to write** (#949). With the switch on
+  and no battery charge-power limit entity configured it reported `idle`
+  beside a computed cap and a pacing reason, while nothing was ever written.
+  It now reports `no_limit_entity` and says so on the battery card — SEM's
+  detected-hardware list already proposes the entity to pick.
+
 - ✨ **SEM shows what your install has** (#923, #857). SEM is now a core
   (solar, grid, home, costs, forecast) plus modules — home battery, EV
   charger, heat pump, hot water — and creates a module's entities, tab and

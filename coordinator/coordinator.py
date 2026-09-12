@@ -6929,11 +6929,36 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             return learner.watts_for_amps(cid, phases, amps, nominal)
         return float(amps) * self._ev_watts_per_amp(cid, cfg)
 
+    def _charge_pacing_store(self):
+        """(#949) Where the pacer's engagement outlives this lifetime.
+
+        The captured max-charge-power is SEM's only record of what the
+        register held before it touched it, and an HA restart never unloads
+        the entry — so keeping that record in memory meant losing it exactly
+        when it was needed. Scoped to the config entry, like every other
+        SEM store: two entries must never adopt each other's cap.
+        """
+        entry_id = str(getattr(
+            getattr(self, "config_entry", None), "entry_id", "") or "")
+        if not entry_id:
+            # A degenerate scope would be shared by every entry. No record is
+            # better than the wrong one — the writer then behaves as before.
+            return None
+        try:
+            from homeassistant.helpers.storage import Store
+            return Store(self.hass, 1, f"sem.pacing.{entry_id}")
+        except Exception:  # noqa: BLE001 — a store never costs a cycle
+            return None
+
     async def _run_charge_pacing(self, power=None) -> None:
         """(#820) One cycle of charge pacing: decide, maybe write, publish."""
         from .charge_pacing import ChargePacingWriter, paced_charge_cap_w
         if getattr(self, "_charge_pacing_writer", None) is None:
-            self._charge_pacing_writer = ChargePacingWriter()
+            # (#949) A rig-shaped stand-in carries no store; the writer then
+            # behaves exactly as it did before the engagement was persisted.
+            _make_store = getattr(self, "_charge_pacing_store", None)
+            self._charge_pacing_writer = ChargePacingWriter(
+                store=_make_store() if callable(_make_store) else None)
         ledger = self._today_pacing_ledger()
         capacity_kwh = float(getattr(self, "battery_capacity_kwh", 0.0) or 0.0)
         # (#762 pattern) one INFO line when the tick's shape CHANGES — never
@@ -7031,9 +7056,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # confused with a restart's never-read window.
             "soc_stale_s": soc_stale_s,
             "cap_w": decision.cap_w if decision else None,
-            "reason": decision.reason if decision else (
-                "pacing idle — outside daylight or no forecast"
-                if not ledger else f"pacing idle — {_why}"),
+            # (#949) A cap with nowhere to go must not read like a cap that
+            # is being applied. The decision's own prose stays true of the
+            # DECISION; what the user needs here is the missing setting.
+            "reason": (
+                "pacing has nowhere to write — no battery charge-power limit "
+                "entity is set (SEM's detected hardware proposes one)"
+                if action == "no_limit_entity" else
+                decision.reason if decision else (
+                    "pacing idle — outside daylight or no forecast"
+                    if not ledger else f"pacing idle — {_why}")),
             "full_at": getattr(decision, "full_at", None) if decision else None,
             "reason_code": code,
             "action": action,
