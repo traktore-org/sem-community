@@ -20,13 +20,16 @@ into every restart. Every other entity-absence Repair in SEM waits out
 (#611: "a restart's warm-up window must not cry wolf"), and #824 already
 applies that hold to this very entity.
 
-These tests pin both halves: silence is held on the wall clock, and
-evidence keeps its own contract untouched.
+Two conditions reach that surface and only one of them is silence, which is
+the trap this file guards hardest: a switch that is READABLE but stuck off
+(#536 Eco-Smart) is ``controllable`` — so a hold retired on readability
+resets every cycle, never elapses, and makes that Repair unreportable.
 """
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -40,7 +43,9 @@ from custom_components.solar_energy_management.coordinator.charger_adapters impo
     GenericAdapter,
 )
 from custom_components.solar_energy_management.coordinator.charger_reconciler import (
-    observe,
+    Action,
+    ActionKind,
+    ChargerReconciler,
 )
 from custom_components.solar_energy_management.coordinator.coordinator import (
     SEMCoordinator,
@@ -52,11 +57,17 @@ from custom_components.solar_energy_management.devices.base import (
 #: The one constant, never a fresh literal (class 46).
 HOLD = ri.UNAVAILABLE_REPAIR_THRESHOLD_S
 CYCLE = 10.0  # DEFAULT_UPDATE_INTERVAL — what "three cycles" was worth
+SWITCH = "switch.cargador_coche_carga_de_ve"
 
 
-def _device(**kwargs) -> CurrentControlDevice:
+def _device(switch_state: str | None = None) -> CurrentControlDevice:
+    """A switch-controlled charger. ``switch_state=None`` is the restart: the
+    entity is not in the state machine at all."""
     hass = MagicMock()
-    defaults = dict(
+    hass.states.get = MagicMock(side_effect=lambda eid: (
+        SimpleNamespace(state=switch_state, attributes={})
+        if (eid == SWITCH and switch_state is not None) else None))
+    dev = CurrentControlDevice(
         hass=hass,
         device_id="ev_charger_1",
         name="EV Charger",
@@ -64,9 +75,7 @@ def _device(**kwargs) -> CurrentControlDevice:
         max_current=32.0,
         phases=3,
     )
-    defaults.update(kwargs)
-    dev = CurrentControlDevice(**defaults)
-    dev.start_stop_entity = "switch.cargador_coche_carga_de_ve"
+    dev.start_stop_entity = SWITCH
     return dev
 
 
@@ -112,7 +121,7 @@ class TestTheRestartWindowIsSilent:
                 patch.object(ri, "clear_charger_actuation_failed"):
             dev._note_enable_blocked(now=0.0)
             dev._note_enable_blocked(now=HOLD - 10.0)
-            dev._note_enable_controllable()          # it answered
+            dev._note_enable_unblocked()             # it answered
             dev._note_enable_blocked(now=HOLD)       # fresh window opens here
             assert dev._note_enable_blocked(now=2 * HOLD - 10.0) is False
             raised.assert_not_called()
@@ -120,54 +129,112 @@ class TestTheRestartWindowIsSilent:
 
 
 @pytest.mark.unit
+class TestTheEvidenceCaseKeepsItsSpeed:
+    """A READABLE switch sitting ``off`` while SEM wants to charge, with the
+    #536 re-assert budget spent, is not silence: SEM wrote ``turn_on`` and
+    watched it come back off. It is also ``controllable``, so a hold retired
+    on readability would reset every cycle and this Repair could NEVER be
+    filed — the regression that made the first cut of this fix worse than
+    the bug."""
+
+    @pytest.mark.asyncio
+    async def test_a_readable_but_stuck_switch_still_raises_in_three_cycles(self):
+        dev = _device(switch_state="off")
+        adapter = GenericAdapter(dev)
+        assert adapter.enable_state() == (False, True), (
+            "the premise: a switch that reads 'off' is CONTROLLABLE"
+        )
+        with patch.object(ri, "raise_charger_actuation_failed") as raised:
+            await adapter.report_enable_blocked()
+            await adapter.report_enable_blocked()
+            raised.assert_not_called()
+            await adapter.report_enable_blocked()
+            raised.assert_called_once()
+        assert dev._enable_blocked_since is None, (
+            "the wall-clock hold is for silence; evidence must not consult it"
+        )
+
+
+@pytest.mark.unit
 class TestRecovery:
 
-    def test_the_switch_answering_retires_the_repair_this_path_raised(self):
+    def test_an_unblocked_cycle_retires_the_repair_this_path_raised(self):
         dev = _device()
         with patch.object(ri, "raise_charger_actuation_failed"), \
                 patch.object(ri, "clear_charger_actuation_failed") as cleared:
             dev._note_enable_blocked(now=0.0)
             assert dev._note_enable_blocked(now=HOLD + 1.0) is True
-            dev._note_enable_controllable()
+            dev._note_enable_unblocked()
             cleared.assert_called_once_with(dev.hass, "ev_charger_1")
         assert dev._enable_blocked_repair_raised is False
         assert dev._actuation_repair_raised is False
 
-    def test_a_write_raised_repair_survives_the_switch_recovering(self):
+    def test_a_write_raised_repair_survives_an_enable_observation(self):
         """The two conditions share ONE issue id. Three rejected WRITES are
-        harder evidence than a silent switch, so a switch coming back must
-        not delete the #462 Repair the write side raised."""
+        harder evidence than an unblocked switch — and on a KEBA, service or
+        button charger there is no switch at all, so an unblocked verdict
+        there must never delete the write side's Repair."""
         dev = _device()
         with patch.object(ri, "raise_charger_actuation_failed") as raised, \
                 patch.object(ri, "clear_charger_actuation_failed") as cleared:
             for _ in range(3):
                 dev._record_actuation_failure(RuntimeError("schema rejected"))
             raised.assert_called_once()
-            dev._note_enable_controllable()
+            dev._note_enable_unblocked()
             cleared.assert_not_called()
         assert dev._actuation_repair_raised is True
 
-    def test_a_fresh_lifetime_retires_a_predecessors_repair_once(self):
-        """Class 84. The memo dies with the restart; the persistent Repair
-        does not. A device that comes back to a healthy switch must retire
-        what its predecessor raised, though it never raised anything itself
-        — otherwise the restart that FIXES the switch is the one run that
-        cannot clear the notice."""
+    def test_a_zero_amp_stop_write_does_not_retire_the_hold(self):
+        """``stop_session`` writes 0 A on every non-KEBA stop, and a charger
+        drawing against SEM's IDLE takes one per 60 s reassert dwell. A write
+        to the CURRENT entity is no evidence about the ENABLE switch, and
+        zeroing the hold there meant 300 s never elapsed."""
         dev = _device()
-        with patch.object(ri, "clear_charger_actuation_failed") as cleared:
-            dev._note_enable_controllable()
-            cleared.assert_called_once_with(dev.hass, "ev_charger_1")
-            dev._note_enable_controllable()
-            cleared.assert_called_once()  # once per lifetime, not per cycle
+        with patch.object(ri, "raise_charger_actuation_failed") as raised, \
+                patch.object(ri, "clear_charger_actuation_failed"):
+            dev._note_enable_blocked(now=0.0)
+            for stop in range(1, 5):                 # a 0 A stop each dwell
+                dev._clear_actuation_failure()
+                assert dev._enable_blocked_since is not None
+                assert dev._note_enable_blocked(now=stop * 60.0) is False
+            assert dev._note_enable_blocked(now=HOLD + 1.0) is True
+            raised.assert_called_once()
 
-    def test_a_good_write_retires_the_warm_up_clock_too(self):
+    def test_a_write_after_a_failed_one_still_does_not_retire_the_hold(self):
+        """The same claim from the OTHER side of ``_clear_actuation_failure``.
+        With a write streak in flight the function runs past its early
+        return, and zeroing the hold there would be just as wrong."""
         dev = _device()
         with patch.object(ri, "raise_charger_actuation_failed"), \
                 patch.object(ri, "clear_charger_actuation_failed"):
             dev._note_enable_blocked(now=0.0)
+            dev._record_actuation_failure(RuntimeError("one bad write"))
+            assert dev._actuation_failures == 1
+            dev._clear_actuation_failure()        # …and the next one lands
             assert dev._enable_blocked_since is not None
-            dev._clear_actuation_failure()
-        assert dev._enable_blocked_since is None
+            assert dev._note_enable_blocked(now=HOLD + 1.0) is True
+
+    def test_a_current_write_does_not_retire_the_enable_surfaces_repair(self):
+        """Once the hold HAS filed, a successful current write must not take
+        the notice down: the switch is still un-commandable, and deleting it
+        while the elapsed hold stayed armed churned the Repair — deleted per
+        write, re-raised on the next blocked cycle with no fresh wait."""
+        dev = _device()
+        with patch.object(ri, "raise_charger_actuation_failed") as raised, \
+                patch.object(ri, "clear_charger_actuation_failed") as cleared:
+            dev._note_enable_blocked(now=0.0)
+            assert dev._note_enable_blocked(now=HOLD + 1.0) is True
+            raised.assert_called_once()
+            dev._clear_actuation_failure()        # a current write landed
+            cleared.assert_not_called()
+            assert dev._enable_blocked_repair_raised is True
+            assert dev._enable_blocked_since is not None
+            # …and no re-raise churn on the next blocked cycle either.
+            assert dev._note_enable_blocked(now=HOLD + 2.0) is True
+            raised.assert_called_once()
+            # The condition ending is what retires it.
+            dev._note_enable_unblocked()
+            cleared.assert_called_once_with(dev.hass, "ev_charger_1")
 
 
 @pytest.mark.unit
@@ -187,12 +254,16 @@ class TestTheCommandCounterKeepsItsContract:
 
 @pytest.mark.unit
 class TestTheAdapterHook:
-    """End-to-end through the REAL adapter hook the reconciler calls."""
+    """End-to-end through the REAL adapter hook the reconciler calls, on the
+    reporter's own configuration: a switch that is not in the state machine."""
 
     @pytest.mark.asyncio
     async def test_the_hook_holds_through_the_warm_up_then_surfaces(self):
         dev = _device()
         adapter = GenericAdapter(dev)
+        assert adapter.enable_state() == (None, False), (
+            "the premise: a missing switch is not commandable"
+        )
         with patch.object(ri, "raise_charger_actuation_failed") as raised:
             await adapter.report_enable_blocked()
             raised.assert_not_called()
@@ -207,41 +278,42 @@ class TestTheAdapterHook:
 
 
 @pytest.mark.unit
-class TestTheOtherHalfOfTheClock:
-    """The reset has to live where the HEALTHY answer is computed every
-    cycle. On the failure path it could never fire — that path only runs
-    while the switch is unreadable."""
+class TestTheHoldIsRetiredByTheCycleNotByReadability:
+    """The hold's other half. "Did this cycle report the surface blocked?" is
+    the question — asked of the ACTIONS, because both sub-cases answer it and
+    only one of them is distinguishable by reading the switch."""
 
     @staticmethod
-    def _adapter_for(dev, enable):
+    def _apply(rec, dev, actions):
         adapter = MagicMock()
         adapter._device = dev
-        adapter.enable_state = lambda: enable
-        adapter.actual_charging = MagicMock(return_value=False)
-        adapter.is_self_charging = MagicMock(return_value=False)
-        return adapter
+        # Every surface the loop AWAITS has to be awaitable.
+        adapter.report_enable_blocked = AsyncMock()
+        adapter.command_current = AsyncMock()
+        adapter.arm_failsafe = AsyncMock()
+        asyncio.run(rec._apply_actions(
+            actions, adapter, SimpleNamespace(reason="test"),
+            SimpleNamespace(power_w=0.0), now=1.0))
 
-    def test_observe_retires_the_hold_when_the_switch_answers(self):
-        dev = _device()
-        power = SimpleNamespace(power_w=0.0, connected=True)
+    def test_a_cycle_without_the_report_retires_the_hold(self):
+        dev, rec = _device(), ChargerReconciler(charger_id="ev_charger_1",
+                                               heartbeat_s=5.0)
         with patch.object(ri, "raise_charger_actuation_failed"), \
                 patch.object(ri, "clear_charger_actuation_failed") as cleared:
             dev._note_enable_blocked(now=0.0)
             assert dev._note_enable_blocked(now=HOLD + 1.0) is True
-            out = observe(self._adapter_for(dev, (True, True)), power)
-            assert out.enable_controllable is True
+            self._apply(rec, dev, [Action(ActionKind.WRITE_CURRENT, amps=16)])
             cleared.assert_called_once()
         assert dev._enable_blocked_since is None
 
-    def test_observe_leaves_the_hold_alone_while_it_is_still_blocked(self):
-        """The twin: if observe() retired the clock unconditionally, the
-        threshold could never be reached and the Repair would be dead."""
-        dev = _device()
-        power = SimpleNamespace(power_w=0.0, connected=True)
+    def test_a_cycle_that_reports_blocked_keeps_the_hold_running(self):
+        """The twin. If this retired too, the window could never elapse."""
+        dev, rec = _device(), ChargerReconciler(charger_id="ev_charger_1",
+                                               heartbeat_s=5.0)
         with patch.object(ri, "clear_charger_actuation_failed") as cleared:
             dev._note_enable_blocked(now=0.0)
-            out = observe(self._adapter_for(dev, (None, False)), power)
-            assert out.enable_controllable is False
+            self._apply(rec, dev,
+                        [Action(ActionKind.REPORT_ENABLE_BLOCKED)])
             cleared.assert_not_called()
         assert dev._enable_blocked_since is not None
 
@@ -338,3 +410,18 @@ class TestABatteryEntityThatSaidNothing:
             SEMCoordinator._raise_or_clear_battery_write_repair(
                 owner, ad, False)
             raised.assert_called_once()
+
+    def test_a_reflected_write_retires_only_the_entity_it_proved(self):
+        ad = _battery_adapter(_hass(None))
+        owner = _strikes_out(ad, _hass(None))
+        with patch.object(ri, "raise_battery_control_write_not_taken"), \
+                patch.object(ri, "clear_battery_control_write_not_taken"):
+            with patch("time.monotonic", return_value=1000.0):
+                SEMCoordinator._raise_or_clear_battery_write_repair(
+                    owner, ad, False)
+            assert owner._battery_write_silent_since == {"number.limit": 1000.0}
+            # Another battery's hold must not be re-armed from zero by this.
+            owner._battery_write_silent_since["number.other"] = 900.0
+            ad.last_verified_entity = "number.limit"
+            SEMCoordinator._raise_or_clear_battery_write_repair(owner, ad, True)
+        assert owner._battery_write_silent_since == {"number.other": 900.0}

@@ -977,6 +977,22 @@ class ChargerReconciler:
             # getattr, like the #700 flag below: this loop is driven on bare
             # instances by the tests it was extracted for.
             now = getattr(self, "_last_apply_at", 0.0)
+        # (#945) The other half of the enable-block hold, keyed on this
+        # cycle's ACTIONS rather than on ``observed.enable_controllable``. A
+        # switch that is readable but stuck OFF is controllable AND blocked,
+        # so retiring the hold on readability reset it every single cycle:
+        # the window never elapsed, the #536 Repair could never stand, and
+        # the retire deleted one a previous lifetime had raised. "Did this
+        # cycle report the surface blocked?" is the question the hold is
+        # actually about, and it is answered here for both sub-cases at once.
+        if not any(a.kind is ActionKind.REPORT_ENABLE_BLOCKED for a in actions):
+            _note_ok = getattr(getattr(adapter, "_device", None),
+                               "_note_enable_unblocked", None)
+            if callable(_note_ok):
+                try:
+                    _note_ok()
+                except Exception as exc:  # noqa: BLE001 — never cost a cycle
+                    _LOGGER.debug("_note_enable_unblocked() failed: %s", exc)
         for action in actions:
             if action.kind is ActionKind.NONE:
                 continue
@@ -1240,19 +1256,6 @@ def observe(adapter, power) -> ObservedState:
             enabled, controllable = _enable_state()
         except Exception as exc:  # noqa: BLE001 — never let observe() throw
             _LOGGER.debug("enable_state() failed: %s", exc)
-    # (#945) The other half of the enable-block clock. A switch that ANSWERS
-    # retires the warm-up hold — and a Repair that hold raised. It belongs
-    # here because ``observe`` is the one place that computes ``controllable``
-    # EVERY cycle; ``report_enable_blocked`` only ever runs on blocked ones,
-    # so a clock reset living there could never fire.
-    if controllable:
-        _note_ok = getattr(getattr(adapter, "_device", None),
-                           "_note_enable_controllable", None)
-        if callable(_note_ok):
-            try:
-                _note_ok()
-            except Exception as exc:  # noqa: BLE001 — never let observe() throw
-                _LOGGER.debug("_note_enable_controllable() failed: %s", exc)
     # #627 — can ANY configured mechanism open the contactor? Unknown
     # (no device / probe raised) defaults True: a false alarm here would
     # raise a repair on every working install.

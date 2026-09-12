@@ -2169,10 +2169,6 @@ class CurrentControlDevice(ControllableDevice):
         # 3-strike counter above, which at a 10 s cycle is 30 seconds.
         self._enable_blocked_since: Optional[float] = None
         self._enable_blocked_repair_raised: bool = False
-        # (#933, class 84) …and whether THIS lifetime has yet reconciled the
-        # persistent Repair a predecessor may have left: the memo above dies
-        # with every restart and options reload, the Repair does not.
-        self._enable_reconciled: bool = False
         # #485 H5: whether this instance has cleared a possible STALE
         # persistent Repair left by a previous device instance.
         self._stale_repair_checked: bool = False
@@ -2572,10 +2568,17 @@ class CurrentControlDevice(ControllableDevice):
             _LOGGER.debug("actuation-failure repair raise failed: %s", exc)
 
     def _clear_actuation_failure(self) -> None:
-        """Reset the failure streak; clear the Repair after a good write."""
-        # (#945) A write that landed proves the surface is commandable —
-        # the enable-block warm-up clock retires with the streak.
-        self._enable_blocked_since = None
+        """Reset the failure streak; clear the Repair after a good write.
+
+        (#945) Deliberately does NOT touch the enable-block hold. A write to
+        the CURRENT entity says nothing about the ENABLE switch — different
+        entities — and ``stop_session`` ends in a 0 A write on every charger
+        without a discrete stop mechanism, so zeroing the hold here let a
+        charger drawing against SEM's IDLE reset it once per 60 s reassert
+        dwell, and the 300 s window then never elapsed at all.
+        The hold is retired by the reconciler, on a cycle that did not report
+        the enable surface blocked.
+        """
         if self._actuation_failures == 0 and not self._actuation_repair_raised:
             # #485 H5: the Repair is persistent (survives restart) but
             # these flags are instance state. After the reload that
@@ -2592,7 +2595,14 @@ class CurrentControlDevice(ControllableDevice):
                     _LOGGER.debug("stale actuation-repair clear failed: %s", exc)
             return
         self._actuation_failures = 0
-        self._enable_blocked_repair_raised = False
+        if self._enable_blocked_repair_raised:
+            # (#945) This Repair belongs to the ENABLE surface, and a current
+            # write is no evidence about that switch. Retiring it here deleted
+            # the notice once per write while the already-elapsed hold stayed
+            # armed, so the next blocked cycle re-raised it with no fresh
+            # wait — a persistent ERROR Repair churning per write. The
+            # condition ending retires it, in ``_note_enable_unblocked``.
+            return
         if not self._actuation_repair_raised:
             return
         self._actuation_repair_raised = False
@@ -2645,29 +2655,26 @@ class CurrentControlDevice(ControllableDevice):
             _LOGGER.debug("enable-blocked repair raise failed: %s", exc)
             return False
 
-    def _note_enable_controllable(self) -> None:
-        """(#945) The enable switch answered — retire the warm-up clock, and
-        the Repair if this path is what raised it.
+    def _note_enable_unblocked(self) -> None:
+        """(#945) This cycle did not report the enable surface blocked —
+        retire the warm-up hold, and a Repair this path raised.
 
-        Deliberately NOT ``_clear_actuation_failure``: that would also
-        delete a genuine #462 Repair raised by three REJECTED writes, which
-        is a different fact about the same charger sharing one issue id.
+        Deliberately NOT ``_clear_actuation_failure``: that would also delete
+        a genuine #462 Repair raised by three REJECTED writes, a different
+        fact about the same charger sharing one issue id.
 
-        (#933, class 84) "Clear only if I raised it" would never retire the
-        Repair a PREVIOUS lifetime left — the flag is instance state and the
-        Repair is persistent, so the restart that fixes the switch is exactly
-        the run that cannot clear it. The FIRST controllable observation of
-        each lifetime therefore clears once, whether or not this instance is
-        what raised it.
+        (class 84) And deliberately NOT a first-of-lifetime clear either. The
+        id is shared with the write side, and "the enable switch is not
+        blocked" is no evidence that current commands land — on a service- or
+        button-controlled charger there is no switch to be fine, so a
+        first-cycle clear there would delete a genuine "every command
+        rejected" Repair on the evidence of a switch that does not exist. A
+        Repair a PREVIOUS lifetime left on this id is retired by #485 H5's
+        first-good-write clear (``_stale_repair_checked``), which is evidence
+        that SEM can command this charger.
         """
         self._enable_blocked_since = None
-        first_of_lifetime = not self._enable_reconciled
-        self._enable_reconciled = True
-        if self._actuation_repair_raised and not self._enable_blocked_repair_raised:
-            # The WRITE side raised it in this lifetime: three rejected
-            # commands outrank a switch that came back, and it is one id.
-            return
-        if not (self._enable_blocked_repair_raised or first_of_lifetime):
+        if not self._enable_blocked_repair_raised:
             return
         self._enable_blocked_repair_raised = False
         self._actuation_repair_raised = False

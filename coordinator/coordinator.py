@@ -5212,10 +5212,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             for eid in sorted(stale):
                 _ri.clear_battery_control_write_not_taken(self.hass, eid)
             raised.clear()
-            # (#945) A reflected write retires the silence clock below too.
+            # (#945) A reflected write retires the silence clock below — for
+            # the entity it PROVED, not for every entity: a primary switch
+            # would otherwise re-arm another battery's hold from zero.
             silent = getattr(self, "_battery_write_silent_since", None)
-            if silent:
-                silent.clear()
+            if silent and proved:
+                silent.pop(proved, None)
         elif (verdict is False and entity_id
               and strikes >= self.BATTERY_WRITE_STRIKES
               and entity_id not in raised):

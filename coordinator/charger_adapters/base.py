@@ -254,8 +254,33 @@ class ChargerAdapter(ABC):
         integration was still loading. The device owns the wall clock now
         (#611's threshold, the same one #824 applies to this very entity);
         below it this stays the reconciler's WARNING, which is already logged.
+
+        Two conditions reach this hook and only ONE of them is silence:
+
+        * the switch is unreadable / uncontrollable — missing, ``unavailable``,
+          or a brand status of *locked*. Nothing can be inferred yet, and a
+          restart looks exactly like this, so it waits out the hold.
+        * the switch is READABLE and sits ``off`` while SEM wants to charge,
+          with the #536 re-assert budget already spent. SEM wrote ``turn_on``
+          five times and watched it come back off: that is evidence, it is
+          the Eco-Smart/Autostart fault this surface was built for, and it
+          keeps its original three-cycle speed. Holding it for five minutes
+          would have made it unreportable, because a readable switch is
+          ``controllable`` and so retires the very hold it was waiting on.
         """
-        note = getattr(self._device, "_note_enable_blocked", None)
+        dev = self._device
+        enabled, controllable = None, True
+        try:
+            enabled, controllable = self.enable_state()
+        except Exception as e:  # noqa: BLE001 — never let a report throw
+            _LOGGER.debug("enable_state() failed in report: %s", e)
+        if controllable:
+            rec = getattr(dev, "_record_actuation_failure", None)
+            if rec is not None:
+                rec(RuntimeError(
+                    "enable switch will not stay on — cannot start charging"))
+            return
+        note = getattr(dev, "_note_enable_blocked", None)
         if not callable(note):
             return
         try:
