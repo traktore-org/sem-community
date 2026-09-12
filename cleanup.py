@@ -98,30 +98,47 @@ def _storage_dir(hass) -> Optional[str]:
         return None
 
 
-def existing_store_files(hass) -> List[str]:
-    """The SEM-looking store keys actually present on disk.
+def sem_store_names(names: Iterable[str]) -> List[str]:
+    """The SEM-looking store keys out of a raw directory listing.
 
-    Reading the directory rather than trusting the inventory is deliberate:
-    the point of the orphan sweep is to find files whose owner no longer
-    exists, and an owner that no longer exists cannot name its own key.
+    Pure, so the sweep's judgement can be tested without a filesystem — and
+    so the one call that touches the disk has a single home (below).
     """
-    path = _storage_dir(hass)
-    if not path:
-        return []
-    try:
-        names = os.listdir(path)
-    except OSError:
-        return []
     return sorted(
         n for n in names
-        if (n.startswith((f"{DOMAIN}_", "sem_", "sem.")) and "." != n[-1])
+        if (n.startswith((f"{DOMAIN}_", "sem_", "sem.")) and not n.endswith("."))
         and not n.endswith(".bak")
         and ".bak." not in n
     )
 
 
-def orphan_store_keys(hass, live_entry_ids: Iterable[str]) -> List[str]:
-    """SEM store files on disk that no live config entry owns.
+def _listdir(path: str) -> List[str]:
+    try:
+        return os.listdir(path)
+    except OSError:
+        return []
+
+
+async def async_existing_store_files(hass) -> List[str]:
+    """The SEM store keys actually present on disk.
+
+    Reading the directory rather than trusting the inventory is deliberate:
+    the point of the orphan sweep is to find files whose owner no longer
+    exists, and an owner that no longer exists cannot name its own key.
+
+    Off the event loop — a config directory on a slow SD card is exactly the
+    kind of listing HA's blocking-call guard exists to catch.
+    """
+    path = _storage_dir(hass)
+    if not path:
+        return []
+    names = await hass.async_add_executor_job(_listdir, path)
+    return sem_store_names(names)
+
+
+def orphan_store_keys(names: Iterable[str],
+                      live_entry_ids: Iterable[str]) -> List[str]:
+    """Which of ``names`` no live config entry owns.
 
     An install that has been removed and re-added carries the previous entry
     id's pair for ever — seven of them on the .46 rig, ninety-six version
@@ -139,7 +156,7 @@ def orphan_store_keys(hass, live_entry_ids: Iterable[str]) -> List[str]:
         owned.update(per_entry_store_keys(entry_id))
         prefixes.extend(per_entry_store_prefixes(entry_id))
     out = []
-    for name in existing_store_files(hass):
+    for name in sem_store_names(names):
         if name in keep_whole or name in owned:
             continue
         if any(name.startswith(p) for p in prefixes):
@@ -185,8 +202,9 @@ async def async_entry_stores_removed(hass, entry_id: str) -> List[str]:
     keys = list(per_entry_store_keys(entry_id))
     prefixes = per_entry_store_prefixes(entry_id)
     if prefixes:
+        on_disk = await async_existing_store_files(hass)
         keys.extend(
-            n for n in existing_store_files(hass)
+            n for n in on_disk
             if any(n.startswith(p) for p in prefixes)
         )
     return await async_delete_stores(hass, keys)

@@ -230,6 +230,8 @@ _DOCS_ANCHORS = {
     "soc_zones_out_of_order": "your-battery-soc-zones-are-out-of-order",
     # (#911) the grid meters were guessed by name — set them explicitly
     "split_grid_guessed": "sem-guessed-your-grid-power-meters",
+    # (#935) files from an install that came before this one
+    "previous_install_leftovers": "files-from-a-previous-sem-install",
     "sensor_stale": "a-sensor-stopped-updating-stale",
     "no_forecast_integration": "no-solar-forecast-integration-found",
     "no_recorder": "the-recorder-is-not-available",

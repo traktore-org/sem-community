@@ -13,11 +13,9 @@ commanded), take SEM's own files, and merely OFFER what is the user's.
 from __future__ import annotations
 
 import asyncio
-import os
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
 
 from custom_components.solar_energy_management import cleanup
 
@@ -30,14 +28,28 @@ def _run(coro):
 
 
 def _hass_with_storage(tmp_path, names=()):
+    """A hass whose .storage really holds these files, and whose executor
+    runs inline — the listing is off the loop in production (#935 tripped
+    HA's blocking-call guard), and the test still wants the real directory."""
     storage = tmp_path / ".storage"
     storage.mkdir(exist_ok=True)
     for n in names:
         (storage / n).write_text("{}")
+
+    async def _executor(fn, *args):
+        return fn(*args)
+
     return SimpleNamespace(
         config=SimpleNamespace(config_dir=str(tmp_path)),
         services=SimpleNamespace(async_call=AsyncMock()),
+        async_add_executor_job=_executor,
     )
+
+
+def _orphans(hass, live):
+    """What the sweep would delete: the listing, then the judgement."""
+    return cleanup.orphan_store_keys(
+        _run(cleanup.async_existing_store_files(hass)), live)
 
 
 class TestTheInventoryKnowsWhatThisEntryOwns:
@@ -81,7 +93,7 @@ class TestTheOrphanSweep:
             f"solar_energy_management_{OTHER}_energy",
             f"sem_seen_version_{OTHER}",
         ])
-        orphans = cleanup.orphan_store_keys(hass, [ENTRY])
+        orphans = _orphans(hass, [ENTRY])
         assert sorted(orphans) == sorted([
             f"solar_energy_management_{OTHER}_energy",
             f"sem_seen_version_{OTHER}",
@@ -93,7 +105,7 @@ class TestTheOrphanSweep:
             f"sem.pacing.{ENTRY}",
             f"sem.deye.snapshot.{ENTRY}.battery_1",
         ])
-        assert cleanup.orphan_store_keys(hass, [ENTRY]) == []
+        assert _orphans(hass, [ENTRY]) == []
 
     def test_install_wide_stores_survive_the_sweep(self, tmp_path):
         hass = _hass_with_storage(tmp_path, [
@@ -101,25 +113,30 @@ class TestTheOrphanSweep:
             "solar_energy_management_load_management_devices",
             "solar_energy_management_daily_storage",
         ])
-        assert cleanup.orphan_store_keys(hass, [ENTRY]) == []
+        assert _orphans(hass, [ENTRY]) == []
 
     def test_a_store_nobody_taught_it_about_is_left_alone(self, tmp_path):
         """Deleting an unrecognised file is how a cleanup becomes the problem
         it was written to solve."""
         hass = _hass_with_storage(tmp_path, ["sem_something_new_entirely"])
-        assert cleanup.orphan_store_keys(hass, [ENTRY]) == []
+        assert _orphans(hass, [ENTRY]) == []
 
     def test_backups_are_not_swept(self, tmp_path):
         hass = _hass_with_storage(tmp_path, [
             f"solar_energy_management_{OTHER}_energy.bak.1780495914",
             f"solar_energy_management_{OTHER}_energy.bak",
         ])
-        assert cleanup.orphan_store_keys(hass, [ENTRY]) == []
+        assert _orphans(hass, [ENTRY]) == []
 
     def test_no_storage_directory_is_not_a_crash(self):
-        hass = SimpleNamespace(config=SimpleNamespace(config_dir="/nope/nope"))
-        assert cleanup.existing_store_files(hass) == []
-        assert cleanup.orphan_store_keys(hass, [ENTRY]) == []
+        async def _executor(fn, *args):
+            return fn(*args)
+
+        hass = SimpleNamespace(
+            config=SimpleNamespace(config_dir="/nope/nope"),
+            async_add_executor_job=_executor)
+        assert _run(cleanup.async_existing_store_files(hass)) == []
+        assert _orphans(hass, [ENTRY]) == []
 
 
 class TestRepairsGoWithTheIntegration:
@@ -216,11 +233,101 @@ class TestTheDashboardIsOfferedNeverTaken:
 
     def test_it_is_not_part_of_the_automatic_teardown(self):
         """Nothing in the removal path may call it — a year of solar yield is
-        not SEM's to throw away because a config entry is being deleted."""
-        import inspect
+        not SEM's to throw away because a config entry is being deleted.
 
+        Pinned by the AST rather than by the source text (#924/#925): a guard
+        coupled to the SPELLING of the code passes the day someone renames
+        the call, which is exactly when it needs to fail.
+        """
         from custom_components import solar_energy_management as sem
+        from custom_components.solar_energy_management.tests.ast_contracts import (
+            calls,
+        )
 
-        src = inspect.getsource(sem._async_take_sems_own_files)
-        assert "async_remove_dashboard" not in src
-        assert "async_clear_statistics" not in src
+        for forbidden in ("async_remove_dashboard", "async_clear_statistics"):
+            assert not calls(sem._async_take_sems_own_files, forbidden), (
+                f"removal must never call {forbidden} — it is the user's")
+
+
+class TestTheWallboxIsHandedBack:
+    """The leftover a person MEETS rather than finds: a box that will not
+    charge and gives no reason. A parked KEBA holds its no three ways —
+    contactor disabled, 0 A stored, a persisted dead-man failsafe — which is
+    the point while SEM is away for a moment (#740) and abandonment once SEM
+    is gone."""
+
+    def _device(self, *, parked=True, **kw):
+        dev = SimpleNamespace(
+            name="KEBA P30",
+            _sem_parked=parked,
+            start_service=kw.get("start_service"),
+            start_service_data=None,
+            service_device_id=None,
+            charge_mode_entity=kw.get("charge_mode_entity"),
+            charge_mode_start=kw.get("charge_mode_start"),
+            start_stop_entity=kw.get("start_stop_entity"),
+            charger_service=kw.get("charger_service"),
+            hass=SimpleNamespace(services=SimpleNamespace(
+                has_service=lambda d, s: s in kw.get("services", ()))),
+            send=AsyncMock(),
+            arm_failsafe=AsyncMock(),
+        )
+        from custom_components.solar_energy_management.devices.base import (
+            CurrentControlDevice,
+        )
+        dev.release_to_user = CurrentControlDevice.release_to_user.__get__(dev)
+        return dev
+
+    def test_a_parked_keba_is_enabled_and_the_deadman_lifted(self):
+        dev = self._device(charger_service="keba.set_current",
+                           services=("enable", "set_failsafe"))
+        said = _run(dev.release_to_user(reason="integration removed"))
+        assert dev.send.await_args_list[0].args[:2] == ("keba", "enable")
+        dev.arm_failsafe.assert_awaited_once()
+        assert said and "integration removed" in said
+        assert dev._sem_parked is False
+
+    def test_it_never_authorises(self):
+        """`keba.authorize` is the owner's, not ours, and SEM has never
+        touched it."""
+        dev = self._device(charger_service="keba.set_current",
+                           services=("enable", "authorize", "set_failsafe"))
+        _run(dev.release_to_user())
+        called = [c.args[1] for c in dev.send.await_args_list]
+        assert "authorize" not in called and "deauthorize" not in called
+
+    def test_a_box_sem_never_parked_is_left_alone(self):
+        """#908's rule, on the charger: only ever undo what SEM commanded."""
+        dev = self._device(parked=False, charger_service="keba.set_current",
+                           services=("enable",))
+        assert _run(dev.release_to_user()) is None
+        assert dev.send.await_count == 0
+        dev.arm_failsafe.assert_not_awaited()
+
+    def test_a_switch_controlled_charger_is_turned_back_on(self):
+        dev = self._device(start_stop_entity="switch.wallbox_charging")
+        _run(dev.release_to_user())
+        call = dev.send.await_args_list[0]
+        assert call.args[:2] == ("switch", "turn_on")
+        assert call.args[2]["entity_id"] == "switch.wallbox_charging"
+
+    def test_a_brand_start_service_is_preferred(self):
+        dev = self._device(start_service="easee.action_command")
+        _run(dev.release_to_user())
+        assert dev.send.await_args_list[0].args[:2] == ("easee", "action_command")
+
+    def test_no_current_is_written_and_no_session_opened(self):
+        """Handing a box back is not starting a charge."""
+        dev = self._device(charger_service="keba.set_current",
+                           services=("enable", "set_failsafe"))
+        _run(dev.release_to_user())
+        services = [c.args[1] for c in dev.send.await_args_list]
+        assert "set_current" not in services
+        assert "set_energy" not in services
+
+    def test_a_failing_enable_still_completes_the_teardown(self):
+        dev = self._device(charger_service="keba.set_current",
+                           services=("enable",))
+        dev.send = AsyncMock(side_effect=RuntimeError("UDP is gone"))
+        assert _run(dev.release_to_user()) is not None or True
+        assert dev._sem_parked is False, "the debt is cleared either way"

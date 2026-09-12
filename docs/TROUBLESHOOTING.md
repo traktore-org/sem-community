@@ -1089,3 +1089,37 @@ you set at 80%.
 **To fix it:** Settings → Devices & Services → SEM → Configure → Battery,
 or the Configuration tab on the SEM dashboard. Any values are fine as long
 as Priority ≤ Buffer ≤ Auto-start.
+
+### Files from a previous SEM install
+
+**Repair:** *Files from a previous SEM install were found*
+
+SEM found storage files belonging to a config entry that no longer exists —
+almost always because SEM was removed and added again on a version that could
+not clean up after itself. Those files were SEM's own, and SEM deleted them.
+The Repair is about the part it did **not** delete.
+
+**What was cleaned automatically**
+
+Per-entry storage: energy and daily totals, the version marker, the
+charge-pacing record, per-battery snapshots. A file SEM does not recognise is
+named in the log and left exactly where it is — a cleanup that deletes files
+it cannot identify is a worse problem than the one it solves.
+
+**What is still there, because it is yours**
+
+- **Long-term statistics** for the old install's sensors. This is what Spook
+  reports as leftover entries after an uninstall. They are your recorded
+  history, and SEM will not delete a year of solar yield on its own initiative.
+- **The generated dashboard**, which you may have edited.
+
+**What to do**
+
+Nothing, if you want to keep your history — the Repair can be dismissed and
+nothing further is deleted.
+
+To clear them, run **Developer tools → Actions → *SEM: Remove leftovers***.
+`statistics` is on by default, `dashboard` is off. Both are irreversible.
+
+If you are about to uninstall SEM, run that action **first** — afterwards
+there is no SEM left to run it.

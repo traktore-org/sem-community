@@ -30,6 +30,10 @@ TROUBLESHOOTING = Path(__file__).resolve().parent.parent / "docs" / "TROUBLESHOO
 
 DOCS_SIDE = {
     "split_grid_guessed",   # (#911) set the two grid power entities
+    # (#935) files from an older SEM install were found and SEM's own were
+    # cleaned. The next step is a CHOICE about the user's own history, and
+    # the docs are where the two options and their consequences live.
+    "previous_install_leftovers",
     # (#870) the three SOC zones are out of ascending order — the docs say
     # what each zone means and that any values are fine as long as they rise
     "soc_zones_out_of_order",

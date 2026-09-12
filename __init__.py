@@ -126,6 +126,11 @@ _PENDING_LOAD_TEARDOWN: Dict[str, List["ControllableDevice"]] = {}
 # adopt the engagement, so without this the register keeps SEM's cap for good.
 _PENDING_PACING_RESTORE: Dict[str, tuple] = {}
 
+# (#935) And the same for a wallbox SEM parked: the box holds a standing "no"
+# — disabled contactor, 0 A stored, a persisted dead-man failsafe — which is
+# the point while SEM is away for a moment, and abandonment once SEM is gone.
+_PENDING_CHARGER_RELEASE: Dict[str, List[Any]] = {}
+
 
 async def _maybe_emit_upgrade_notification(hass, entry) -> None:
     """Fire a one-shot persistent notification when SEM has upgraded.
@@ -2101,6 +2106,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     # (#949) Same reasoning for the paced charge limit: SEM is back, and the
     # fresh writer adopts the engagement from its own record.
     _PENDING_PACING_RESTORE.pop(entry.entry_id, None)
+    # (#935) A reload is not an abandonment: the charger stays parked and the
+    # fresh cycle decides again in seconds.
+    _PENDING_CHARGER_RELEASE.pop(entry.entry_id, None)
 
     # (#935) Sweep the stores of SEM entries that no longer exist. A removed
     # and re-added install keeps the previous entry id's pair for ever — the
@@ -3047,6 +3055,16 @@ async def async_remove_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> None
     # leaves the inverter's max-charge-power at its last cap throttles the
     # battery with nothing left on the system that knows why, and a re-install
     # would capture that cap as the hardware maximum.
+    # (#935) The wallbox first: it is the one leftover a person meets rather
+    # than finds — a box that will not charge and gives no reason.
+    for _dev in _PENDING_CHARGER_RELEASE.pop(entry.entry_id, None) or []:
+        try:
+            said = await _dev.release_to_user(reason="integration removed")
+            if said:
+                _LOGGER.info("SEM removed: %s", said)
+        except Exception as e:  # noqa: BLE001 — a removal always completes
+            _LOGGER.warning("SEM removed: charger hand-back failed: %s", e)
+
     held = _PENDING_PACING_RESTORE.pop(entry.entry_id, None)
     if held:
         from .coordinator.charge_pacing import async_release_pacing
@@ -3107,7 +3125,8 @@ async def _async_sweep_orphan_stores(hass: HomeAssistant) -> None:
 
     try:
         live = [e.entry_id for e in hass.config_entries.async_entries(DOMAIN)]
-        orphans = cleanup.orphan_store_keys(hass, live)
+        on_disk = await cleanup.async_existing_store_files(hass)
+        orphans = cleanup.orphan_store_keys(on_disk, live)
         if not orphans:
             return
         removed = await cleanup.async_delete_stores(hass, orphans)
@@ -3152,6 +3171,25 @@ async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool
             from .coordinator.charge_pacing import (
                 async_release_pacing, pending_pacing_release,
             )
+            # (#935) The charger, on the same "only what SEM commanded"
+            # rule and the same branch structure: a reload leaves a parked
+            # box parked (SEM is coming back in seconds and will decide
+            # again), a disable hands it back now, a removal replays it
+            # from async_remove_entry.
+            _parked = [
+                dev for dev in (getattr(coordinator, "_ev_devices", None)
+                                or {}).values()
+                if getattr(dev, "_sem_parked", False)
+            ]
+            if _parked:
+                if entry.disabled_by is not None:
+                    for _dev in _parked:
+                        _said = await _dev.release_to_user(reason="disabled")
+                        if _said:
+                            _LOGGER.info("SEM disabled: %s", _said)
+                else:
+                    _PENDING_CHARGER_RELEASE[entry.entry_id] = _parked
+
             _held = pending_pacing_release(coordinator)
             if _held:
                 if entry.disabled_by is not None:
@@ -3213,6 +3251,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool
             "register_surplus_device",
             "schedule_appliance",
             "cancel_appliance_schedule",
+            "remove_leftovers",
         ):
             hass.services.async_remove(DOMAIN, service_name)
 

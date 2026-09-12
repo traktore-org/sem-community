@@ -677,3 +677,36 @@ backfill_battery_nights:
           min: 14
           max: 730
           unit_of_measurement: days
+
+remove_leftovers:
+  name: Remove leftovers
+  description: >-
+    Delete the things SEM created that belong to YOU, before you remove SEM.
+
+    SEM takes its own files when it is removed — its stores, its Repairs, the
+    dashboard resources it registered. It deliberately does NOT take your
+    history: the long-term statistics of SEM's sensors and the dashboard it
+    generated are yours, and a year of solar yield is not SEM's to throw away
+    because it is being uninstalled. This service is how you say "take those
+    too". Run it BEFORE removing SEM — afterwards there is no SEM left to run
+    it.
+  fields:
+    statistics:
+      name: Long-term statistics
+      description: >-
+        Clear the recorder's long-term statistics for SEM's own sensors. This
+        is the ~119 leftover entries Spook reports after an uninstall. Cannot
+        be undone.
+      required: false
+      default: true
+      selector:
+        boolean:
+    dashboard:
+      name: Generated dashboard
+      description: >-
+        Delete the SEM dashboard and its sidebar entry. Off by default because
+        you may have edited it — any changes you made are lost with it.
+      required: false
+      default: false
+      selector:
+        boolean:
