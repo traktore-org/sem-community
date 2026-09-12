@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.1.0-beta.18] — 12.09.2026
+
 - 🐛 **Huawei owners: check your battery target SOC** (#950). SEM's hardware
   roster proposed Huawei's peak-shaving SOC
   (`storage_capacity_control_soc_peak_shaving`) as the battery's charge
