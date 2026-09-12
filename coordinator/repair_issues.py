@@ -1564,7 +1564,13 @@ def raise_previous_install_leftovers(hass: HomeAssistant, removed: int) -> None:
             domain=DOMAIN,
             issue_id=_PREVIOUS_INSTALL_ISSUE_ID,
             is_fixable=False,
-            is_persistent=False,
+            # Persistent, though the sweep that raises it runs once: the card
+            # is about state that OUTLIVES it — the user's statistics are
+            # still on disk — and nothing re-raises it, because after the
+            # sweep there are no orphans left to find. Non-persistent, the
+            # message would vanish at the next restart, quite possibly before
+            # anyone read it (seen on the .46 rig, 12.09).
+            is_persistent=True,
             severity=ir.IssueSeverity.WARNING,
             translation_key="previous_install_leftovers",
             learn_more_url=next_step_url(
