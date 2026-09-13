@@ -352,7 +352,7 @@ def test_ownership_is_asked_in_one_place():
     for fn in (sr_mod.SensorReader._source_is_alive,
                sr_mod.SensorReader._integration_is_reporting):
         # the docstrings name _entity_owner too — assert on the CODE
-        body = inspect.getsource(fn).split('"""')[-1]
+        body = re.sub(r'""".*?"""', '', inspect.getsource(fn), flags=re.S)
         assert "self._entity_owner(" in body, fn.__name__
         assert "config_entry_id" not in body, fn.__name__
         assert ".platform" not in body, fn.__name__
