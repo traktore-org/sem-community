@@ -1617,3 +1617,47 @@ SEM resets daily energy counters at **sunrise**, not midnight. This is intention
 - This may not align with utility billing periods that reset at midnight
 
 The sunrise time comes from HA's `sun.sun` entity (fallback: 06:00 if unavailable).
+
+## Removing SEM
+
+SEM cleans up after itself, and asks before touching anything of yours.
+
+**What SEM takes automatically, when you remove it**
+
+- Its own storage files — energy and daily totals, the version marker, the
+  charge-pacing record, per-battery snapshots.
+- Its Repair issues.
+- The dashboard resources it registered. Without this every page load kept
+  fetching a card bundle that no longer existed.
+- **Hardware it had commanded.** A load SEM switched on is switched off, a
+  battery goes back to normal, a charge-power limit SEM wrote is restored, and
+  a wallbox **SEM parked** is re-enabled. A device SEM never commanded is left
+  exactly as it was — SEM only ever undoes its own instructions.
+
+The wallbox one is worth spelling out. While SEM is running it deliberately
+leaves a parked charger disabled with a dead-man failsafe, so the box keeps
+refusing across restarts and network drops. Once SEM is gone that standing
+"no" has nobody to lift it, and the symptom is a charger that will not start
+and gives no reason. Removal now lifts it. SEM never touches your charger's
+*authorisation* — that is yours and always has been.
+
+**What SEM leaves alone unless you ask**
+
+Your history. The long-term statistics of SEM's sensors and the dashboard SEM
+generated are yours — you may have spent a year filling one and an afternoon
+editing the other.
+
+To clear them, run **Developer tools → Actions → *SEM: Remove leftovers*
+**before** you uninstall** — afterwards there is no SEM left to run it.
+
+| Option | Default | What it does |
+|---|---|---|
+| `statistics` | on | Clears the recorder's long-term statistics for SEM's sensors. This is what Spook reports as leftover entries after an uninstall. |
+| `dashboard` | off | Deletes the generated SEM dashboard and its sidebar entry, including any edits you made. |
+
+**Re-installing after an older version**
+
+SEM versions before this one could not clean up, so a re-install may find
+storage files from installs that came before. Those are swept on setup and a
+Repair tells you how many, and offers the same action for the parts that are
+yours. A file SEM does not recognise is named in the log and left where it is.

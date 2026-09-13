@@ -230,6 +230,8 @@ _DOCS_ANCHORS = {
     "soc_zones_out_of_order": "your-battery-soc-zones-are-out-of-order",
     # (#911) the grid meters were guessed by name — set them explicitly
     "split_grid_guessed": "sem-guessed-your-grid-power-meters",
+    # (#935) files from an install that came before this one
+    "previous_install_leftovers": "files-from-a-previous-sem-install",
     "sensor_stale": "a-sensor-stopped-updating-stale",
     "no_forecast_integration": "no-solar-forecast-integration-found",
     "no_recorder": "the-recorder-is-not-available",
@@ -1538,3 +1540,50 @@ def clear_charger_control_entity_broken(
             hass, DOMAIN, _control_entity_issue_id(device_id, entity_id))
     except Exception as e:  # noqa: BLE001
         _LOGGER.debug("issue_registry.delete failed for %s: %s", entity_id, e)
+
+
+_PREVIOUS_INSTALL_ISSUE_ID = "previous_install_leftovers"
+
+
+def raise_previous_install_leftovers(hass: HomeAssistant, removed: int) -> None:
+    """(#935) SEM found and removed files a previous install left behind.
+
+    The stores are SEM's own and go without asking. What this card is for is
+    the half SEM must NOT take: the generated dashboard and the long-term
+    statistics of the old install's entities are the user's history, and a
+    year of solar yield is not SEM's to delete because a config entry was
+    re-created. So: say what was cleaned, name what was left, and give the one
+    action that clears the rest — ``solar_energy_management.remove_leftovers``.
+
+    Not fixable in place on purpose: the answer is a choice, not a repair, and
+    it is reversible only in the direction of keeping.
+    """
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id=_PREVIOUS_INSTALL_ISSUE_ID,
+            is_fixable=False,
+            # Persistent, though the sweep that raises it runs once: the card
+            # is about state that OUTLIVES it — the user's statistics are
+            # still on disk — and nothing re-raises it, because after the
+            # sweep there are no orphans left to find. Non-persistent, the
+            # message would vanish at the next restart, quite possibly before
+            # anyone read it (seen on the .46 rig, 12.09).
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="previous_install_leftovers",
+            learn_more_url=next_step_url(
+                "docs", "previous_install_leftovers", **_versions(hass)),
+            translation_placeholders={"removed": str(removed)},
+        )
+    except Exception as e:  # noqa: BLE001 — never fail a setup over a repair
+        _LOGGER.debug("issue_registry.create failed for leftovers: %s", e)
+
+
+def clear_previous_install_leftovers(hass: HomeAssistant) -> None:
+    """The user answered — by running the service, or by not caring."""
+    try:
+        ir.async_delete_issue(hass, DOMAIN, _PREVIOUS_INSTALL_ISSUE_ID)
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete failed for leftovers: %s", e)

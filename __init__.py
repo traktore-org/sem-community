@@ -126,6 +126,11 @@ _PENDING_LOAD_TEARDOWN: Dict[str, List["ControllableDevice"]] = {}
 # adopt the engagement, so without this the register keeps SEM's cap for good.
 _PENDING_PACING_RESTORE: Dict[str, tuple] = {}
 
+# (#935) And the same for a wallbox SEM parked: the box holds a standing "no"
+# — disabled contactor, 0 A stored, a persisted dead-man failsafe — which is
+# the point while SEM is away for a moment, and abandonment once SEM is gone.
+_PENDING_CHARGER_RELEASE: Dict[str, List[Any]] = {}
+
 
 async def _maybe_emit_upgrade_notification(hass, entry) -> None:
     """Fire a one-shot persistent notification when SEM has upgraded.
@@ -2101,6 +2106,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     # (#949) Same reasoning for the paced charge limit: SEM is back, and the
     # fresh writer adopts the engagement from its own record.
     _PENDING_PACING_RESTORE.pop(entry.entry_id, None)
+    # (#935) A reload is not an abandonment: the charger stays parked and the
+    # fresh cycle decides again in seconds.
+    _PENDING_CHARGER_RELEASE.pop(entry.entry_id, None)
+
+    # (#935) Sweep the stores of SEM entries that no longer exist. A removed
+    # and re-added install keeps the previous entry id's pair for ever — the
+    # .46 rig carried seven pairs and ninety-six version markers — and they
+    # make "is this a fresh install?" unanswerable. SEM's OWN files, so they
+    # go without asking; what is the user's is offered instead (the Repair
+    # below points at `remove_leftovers`).
+    hass.async_create_task(_async_sweep_orphan_stores(hass))
 
     # In-memory SEM log ring buffer for the diagnose surface (#461/#462
     # triage gap on Supervisor installs — no flat log file to tail).
@@ -2539,6 +2555,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
 
             coordinator._surplus_controller.register_device(ev_device)
             coordinator._ev_devices[charger_id] = ev_device
+            # (#935) The park debt has to outlive the process that took it —
+            # see `_remember_parked`. One store per entry, every charger in
+            # it; adopted just below, once, when they are all built.
+            ev_device._park_store = _park_store(hass, entry)
+            ev_device.charger_id = charger_id
             ev_device.managed_externally = True
             _LOGGER.info(
                 "EV charger '%s' registered as CurrentControlDevice "
@@ -2740,6 +2761,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             "Load management initialization failed (non-critical). "
             "Load management features will be unavailable."
         )
+
+    # (#935) Every charger is built by now, so take back any park a previous
+    # lifetime left on the hardware — the reconciler cannot re-derive it
+    # (PARK_OFF fires on an edge; an already-empty box at boot is not one).
+    hass.async_create_task(_async_adopt_parked_chargers(hass, entry, coordinator))
 
     # (#923) ONE module verdict for every platform: captured here, after the
     # Energy Dashboard read above and before any platform builds entities —
@@ -3039,6 +3065,16 @@ async def async_remove_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> None
     # leaves the inverter's max-charge-power at its last cap throttles the
     # battery with nothing left on the system that knows why, and a re-install
     # would capture that cap as the hardware maximum.
+    # (#935) The wallbox first: it is the one leftover a person meets rather
+    # than finds — a box that will not charge and gives no reason.
+    for _dev in _PENDING_CHARGER_RELEASE.pop(entry.entry_id, None) or []:
+        try:
+            said = await _dev.release_to_user(reason="integration removed")
+            if said:
+                _LOGGER.info("SEM removed: %s", said)
+        except Exception as e:  # noqa: BLE001 — a removal always completes
+            _LOGGER.warning("SEM removed: charger hand-back failed: %s", e)
+
     held = _PENDING_PACING_RESTORE.pop(entry.entry_id, None)
     if held:
         from .coordinator.charge_pacing import async_release_pacing
@@ -3047,9 +3083,115 @@ async def async_remove_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> None
             _LOGGER.info("SEM removed: %s", said)
 
     devices = _PENDING_LOAD_TEARDOWN.pop(entry.entry_id, None)
-    if not devices:
+    if devices:
+        await _async_deactivate_surplus_loads(devices, "integration removed")
+
+    # (#935) ...and then SEM takes its OWN files. Everything below belongs to
+    # SEM and to nobody else: this entry's stores, its version marker, its
+    # Repairs, and the Lovelace resources pointing at a module that is about
+    # to stop existing. What is the USER's — the generated dashboard, the
+    # long-term statistics — is deliberately NOT here; it goes through the
+    # `remove_leftovers` service, on an explicit choice.
+    await _async_take_sems_own_files(hass, entry)
+
+
+async def _async_take_sems_own_files(hass: HomeAssistant,
+                                     entry: SEMConfigEntry) -> None:
+    """(#935) Delete what SEM created, on removal. Never raises."""
+    from . import cleanup
+
+    try:
+        stores = await cleanup.async_entry_stores_removed(hass, entry.entry_id)
+        # Install-wide stores go with the LAST entry only: a second SEM entry
+        # still needs the device mappings and the load priorities.
+        remaining = [
+            e for e in hass.config_entries.async_entries(DOMAIN)
+            if e.entry_id != entry.entry_id
+        ]
+        if not remaining:
+            stores += await cleanup.async_delete_stores(
+                hass, cleanup.install_wide_store_keys())
+        repairs = cleanup.delete_repairs(hass)
+        resources = await cleanup.async_deregister_resources(hass)
+        _LOGGER.info(
+            "SEM removed: took its own files — %d store(s), %d repair(s), "
+            "%d frontend resource(s)%s",
+            len(stores), repairs, len(resources),
+            "" if remaining else " (last entry: install-wide stores too)")
+    except Exception as e:  # noqa: BLE001 — a removal must always complete
+        _LOGGER.warning("SEM removed: cleanup incomplete (non-blocking): %s", e)
+
+
+def _park_store(hass: HomeAssistant, entry: SEMConfigEntry):
+    """(#935) Where "SEM parked this box" lives across restarts."""
+    entry_id = str(getattr(entry, "entry_id", "") or "")
+    if not entry_id:
+        return None
+    try:
+        from homeassistant.helpers.storage import Store
+        return Store(hass, 1, f"sem.parked.{entry_id}")
+    except Exception:  # noqa: BLE001
+        return None
+
+
+async def _async_adopt_parked_chargers(hass: HomeAssistant,
+                                       entry: SEMConfigEntry,
+                                       coordinator) -> None:
+    """(#935) Take over the parks a previous lifetime left on the hardware.
+
+    The reconciler cannot re-derive them: PARK_OFF fires on the
+    connect→disconnect EDGE, and a box that is already empty at boot is a
+    steady state. Without this, park → restart → remove left the charger
+    disabled with its own persisted dead-man failsafe holding it at 0 A, and
+    nothing left on the system that knew why.
+    """
+    store = _park_store(hass, entry)
+    if store is None:
         return
-    await _async_deactivate_surplus_loads(devices, "integration removed")
+    try:
+        record = await store.async_load() or {}
+        ids = record.get("parked") or []
+        if not ids:
+            return
+        for dev in (getattr(coordinator, "_ev_devices", None) or {}).values():
+            adopt = getattr(dev, "adopt_park_state", None)
+            if callable(adopt):
+                adopt(ids)
+        _LOGGER.info("#935 — adopted %d charger park(s) this install was "
+                     "left with: %s", len(ids), ", ".join(map(str, ids)))
+    except Exception as e:  # noqa: BLE001 — never block a setup
+        _LOGGER.debug("#935 park adoption skipped: %s", e)
+
+
+async def _async_sweep_orphan_stores(hass: HomeAssistant) -> None:
+    """(#935) Delete SEM stores whose config entry is gone, and say so.
+
+    Runs on setup rather than on removal, because the install that left them
+    behind is the one that could not clean up: every SEM before this change,
+    and any removal that never reached ``async_remove_entry`` (a disk full, a
+    kill during shutdown). Files SEM does not recognise are never touched —
+    they are named in the log and left where they are.
+    """
+    from . import cleanup
+
+    try:
+        live = [e.entry_id for e in hass.config_entries.async_entries(DOMAIN)]
+        on_disk = await cleanup.async_existing_store_files(hass)
+        orphans = cleanup.orphan_store_keys(on_disk, live)
+        if not orphans:
+            return
+        removed = await cleanup.async_delete_stores(hass, orphans)
+        _LOGGER.info(
+            "#935 — removed %d store(s) left by a previous SEM install: %s",
+            len(removed), ", ".join(removed[:6])
+            + ("…" if len(removed) > 6 else ""))
+        # What is the USER's cannot be swept: a previous install's dashboard
+        # and its long-term statistics are theirs to keep or drop. Say that
+        # once, where they will see it, and give them the one-click path.
+        from .coordinator.repair_issues import raise_previous_install_leftovers
+        raise_previous_install_leftovers(hass, len(removed))
+    except Exception as e:  # noqa: BLE001 — a sweep never blocks a setup
+        _LOGGER.debug("#935 orphan sweep skipped: %s", e)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
@@ -3080,6 +3222,25 @@ async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool
             from .coordinator.charge_pacing import (
                 async_release_pacing, pending_pacing_release,
             )
+            # (#935) The charger, on the same "only what SEM commanded"
+            # rule and the same branch structure: a reload leaves a parked
+            # box parked (SEM is coming back in seconds and will decide
+            # again), a disable hands it back now, a removal replays it
+            # from async_remove_entry.
+            _parked = [
+                dev for dev in (getattr(coordinator, "_ev_devices", None)
+                                or {}).values()
+                if getattr(dev, "_sem_parked", False)
+            ]
+            if _parked:
+                if entry.disabled_by is not None:
+                    for _dev in _parked:
+                        _said = await _dev.release_to_user(reason="disabled")
+                        if _said:
+                            _LOGGER.info("SEM disabled: %s", _said)
+                else:
+                    _PENDING_CHARGER_RELEASE[entry.entry_id] = _parked
+
             _held = pending_pacing_release(coordinator)
             if _held:
                 if entry.disabled_by is not None:
@@ -3141,6 +3302,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool
             "register_surplus_device",
             "schedule_appliance",
             "cancel_appliance_schedule",
+            "remove_leftovers",
         ):
             hass.services.async_remove(DOMAIN, service_name)
 
@@ -3397,6 +3559,63 @@ async def _async_register_services(
         _LOGGER.debug("Registered service: %s.replan", DOMAIN)
     except Exception as err:  # noqa: BLE001
         _LOGGER.error("Failed to register replan service: %s", err)
+
+    async def async_remove_leftovers_service(call) -> None:
+        """(#935) Delete what is the USER's, on their explicit say-so.
+
+        SEM takes its own files on removal without asking. This service is the
+        other half: the generated dashboard and the long-term statistics of
+        SEM's entities are the user's history — a year of solar yield is not
+        SEM's to throw away because it is being uninstalled — so they are only
+        ever removed by someone choosing to remove them.
+
+        Documented as "run this BEFORE removing SEM", because after removal
+        there is no SEM left to run it.
+        """
+        from . import cleanup
+        from .coordinator.repair_issues import clear_previous_install_leftovers
+
+        # The schema has already coerced and defaulted these.
+        want_stats = call.data["statistics"]
+        want_dashboard = call.data["dashboard"]
+        done = {"statistics": 0, "dashboard": False}
+
+        if want_stats:
+            # Scoped to THIS entry: a second SEM entry's history is not part
+            # of this entry's leftovers (#935 review).
+            _entry_id = str(getattr(
+                getattr(coordinator, "config_entry", None), "entry_id", "") or "")
+            ids = cleanup.sem_statistic_ids(hass, _entry_id or None)
+            done["statistics"] = await cleanup.async_clear_statistics(hass, ids)
+        if want_dashboard:
+            done["dashboard"] = await cleanup.async_remove_dashboard(hass)
+
+        clear_previous_install_leftovers(hass)
+        _LOGGER.info(
+            "#935 remove_leftovers: cleared %d statistic(s), dashboard %s",
+            done["statistics"],
+            "removed" if done["dashboard"] else "kept")
+
+    try:
+        # (#935) A SCHEMA, because the two fields are destructive and their
+        # asymmetry is the safety: statistics default on, the dashboard off.
+        # Registered bare, `dashboard: 12345` reached `bool(12345)` and the
+        # off-by-default option armed itself — the rig's dashboard was
+        # deleted by a junk value in a fault-injection call (13.09).
+        hass.services.async_register(
+            DOMAIN, "remove_leftovers", async_remove_leftovers_service,
+            schema=vol.Schema({
+                # A real boolean, not cv.boolean: that accepts any non-zero
+                # NUMBER as yes (cv.boolean(12345) is True), and a truthy
+                # number is not consent to an irreversible delete. Both of
+                # these throw away history that cannot be got back, so they
+                # take true or false and nothing else.
+                vol.Optional("statistics", default=True): bool,
+                vol.Optional("dashboard", default=False): bool,
+            }))
+        _LOGGER.debug("Registered service: %s.remove_leftovers", DOMAIN)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.error("Failed to register remove_leftovers service: %s", err)
 
     # Check if services are already registered (prevents conflicts on reload)
     services_already_registered = hass.services.has_service(DOMAIN, "sync_priorities_from_dashboard")

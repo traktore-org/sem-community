@@ -1728,6 +1728,10 @@
     "soc_zones_out_of_order": {
       "title": "Battery SOC zones are out of order",
       "description": "Your battery zones read **Priority {priority}% · Buffer {buffer}% · Auto-start {auto_start}%**, but SEM expects them to rise in that order: Priority is the reserve you never spend, Buffer is where battery assist stops, and Auto-start is where the pack is full enough to give freely.\n\nSEM is using **{used}** as the boundaries — the same three numbers, sorted — so no zone is skipped and nothing behaves unpredictably. It is telling you because the layout you typed is almost certainly not the one you meant.\n\nFix it in **Settings → Devices & Services → SEM → Configure → Battery** or on the dashboard's Configuration tab. Any values are allowed as long as they ascend; wide zones are fine — 20 / 30 / 50 is a perfectly good layout on a large pack."
+    },
+    "previous_install_leftovers": {
+      "title": "Files from a previous SEM install were found",
+      "description": "SEM removed {removed} leftover file(s) of its own from an earlier install — those were SEM's and are gone.\n\nWhat is left is yours, and SEM will not take it without being asked: the long-term statistics of the old install's sensors, and the dashboard it generated. If you want those cleared too, run the **Remove leftovers** action (Developer tools → Actions → *SEM: Remove leftovers*). If you would rather keep your history, ignore this — nothing else will be deleted."
     }
   },
   "selector": {

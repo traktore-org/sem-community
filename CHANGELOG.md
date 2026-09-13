@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **Removing SEM now hands the house back** (#935, #908). SEM used to leave
+  behind everything it had written: its stores, its version marker, its
+  Repairs, dashboard resources pointing at files that no longer existed, and
+  — if it had parked your wallbox — a charger holding a standing "no" with
+  nothing left on the system to lift it. Removal now takes SEM's own files and
+  re-enables a box only SEM parked. A re-install sweeps the stores of installs
+  that came before (files it does not recognise are logged, never deleted).
+  Your history is still yours: the long-term statistics and the generated
+  dashboard are removed only by the new **Remove leftovers** action, which is
+  worth running *before* you uninstall.
+
 # [2.1.0-beta.18] — 12.09.2026
 
 - 🐛 **Huawei owners: check your battery target SOC** (#950). SEM's hardware

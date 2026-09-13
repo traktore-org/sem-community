@@ -70,6 +70,12 @@ FAILSAFE_TIMEOUT_S = 600
 # turned off over UDP — so point it at 0 instead of fighting it.
 FAILSAFE_OFF_TIMEOUT_S = 10
 
+#: (#935) How long a teardown will wait on a charger before giving up on it.
+#: ``hass.services.async_call`` is unbounded, and a removal that hangs on a
+#: stalled integration never completes — HA awaits ``async_remove_entry``
+#: holding the entry's setup lock. Handing a box back is best-effort.
+_RELEASE_TIMEOUT_S = 15.0
+
 # #553/#545 — the quota-stop margin. Live-proven on the real P30
 # (2026-08-08): a target just ABOVE the session counter, written before
 # enable, terminates the charge at the target and HOLDS — the box's own
@@ -2173,6 +2179,10 @@ class CurrentControlDevice(ControllableDevice):
         # persistent Repair left by a previous device instance.
         self._stale_repair_checked: bool = False
         self._session_active: bool = False
+        #: (#935) True while SEM is the reason this box is refusing to charge
+        #: — a park or a stop SEM itself issued. Read at teardown, so SEM can
+        #: hand a box back that it, and only it, told to say no.
+        self._sem_parked: bool = False
         # #553 — SEM's belief that the KEBA runaway-cap energy target is
         # armed (set by stop_session, cleared by start_session). Surfaced in
         # the diagnose service's ev_actuation block.
@@ -3017,6 +3027,7 @@ class CurrentControlDevice(ControllableDevice):
                     await self.send(domain, "enable", {})
 
             self._session_active = True
+            await self._remember_parked(False)   # (#935) SEM said yes again
             _LOGGER.info("Charging session started for %s", self.name)
         except Exception as e:
             _LOGGER.error("Failed to start session on %s: %s", self.name, e)
@@ -3034,9 +3045,11 @@ class CurrentControlDevice(ControllableDevice):
         every charge — which is why a plug-in never auto-started for him.
         """
         domain = (self.charger_service or "").split(".", 1)[0]
+        _parked_it = False
         try:
             if domain and self.hass.services.has_service(domain, "disable"):
                 await self.send(domain, "disable", {})
+                _parked_it = True
                 _LOGGER.info(
                     "%s: parked OFF on disconnect via %s.disable — the box "
                     "holds the no until the next charge", self.name, domain)
@@ -3044,8 +3057,23 @@ class CurrentControlDevice(ControllableDevice):
                 sdomain = self.start_stop_entity.split(".")[0]
                 if sdomain in ("switch", "input_boolean"):
                     await self.send(sdomain, "turn_off", {"entity_id": self.start_stop_entity})
+                    _parked_it = True
         except Exception as e:  # noqa: BLE001 — surfaced, never fatal
             _LOGGER.error("park_off(%s): disable failed: %s", self.name, e)
+
+        # (#935) SEM is the reason this box is saying no, so SEM owes it a
+        # yes when SEM goes away. Recorded explicitly rather than inferred
+        # from the intent enum: ``command_disable`` and ``command_park_off``
+        # both end at DISABLE, and only one of them means "SEM parked it".
+        #
+        # (#935 review) And ONLY when a park actually landed. Set
+        # unconditionally, a charger with no disable service and no
+        # start/stop entity — the documented "stop is unenforceable" config —
+        # took the flag without a single write, and the teardown would then
+        # "hand back" a box SEM had never touched. That is the #908 rule
+        # inverted, by the code that exists to honour it.
+        if _parked_it:
+            await self._remember_parked(True)
 
         # SEM is done with this session whether or not every write landed —
         # set the bookkeeping first so a best-effort failure below cannot
@@ -3068,6 +3096,134 @@ class CurrentControlDevice(ControllableDevice):
             await self.arm_failsafe_off()
         except Exception as e:  # noqa: BLE001
             _LOGGER.debug("park_off(%s): dead-man arm skipped: %s", self.name, e)
+
+    async def _remember_parked(self, parked: bool) -> None:
+        """(#935 review) The park debt, written where it outlives this process.
+
+        ``_sem_parked`` alone was an instance attribute rebuilt False on every
+        setup, and the reconciler cannot re-derive it: ``PARK_OFF`` fires on
+        the connect→disconnect EDGE, and a box that is already empty at boot
+        is a steady state, not an edge (``charger_reconciler``: "an empty box
+        at boot has nothing to park"). So park → restart → remove left the
+        charger disabled with its persisted dead-man failsafe holding 0 A and
+        nothing on the system that knew why — the precise sentence this whole
+        issue opens with. Same hole #949 had just closed one layer over, for
+        the inverter's charge limit.
+        """
+        self._sem_parked = bool(parked)
+        store = getattr(self, "_park_store", None)
+        if store is None:
+            return
+        try:
+            record = await store.async_load() or {}
+            ids = set(record.get("parked") or [])
+            key = str(getattr(self, "charger_id", "") or self.name)
+            if parked:
+                ids.add(key)
+            else:
+                ids.discard(key)
+            await store.async_save({"parked": sorted(ids)})
+        except Exception:  # noqa: BLE001 — a record never costs a command
+            _LOGGER.debug("%s: could not record the park state", self.name,
+                          exc_info=True)
+
+    def adopt_park_state(self, parked_ids) -> None:
+        """Take over a park this install left behind in a previous lifetime."""
+        key = str(getattr(self, "charger_id", "") or self.name)
+        if key in set(parked_ids or ()):
+            self._sem_parked = True
+
+    async def release_to_user(self, *, reason: str = "removal") -> Optional[str]:
+        """(#935) Hand the box back when SEM goes away for good.
+
+        A parked box holds its "no" three ways: the contactor is disabled, the
+        stored current is 0 A, and a PERSISTED dead-man failsafe re-asserts
+        0 A every few minutes. Together that is exactly the point — the box
+        keeps refusing while SEM is not there to say otherwise (#740). It is
+        also why removing SEM leaves a charger that will not start and gives
+        no reason: the standing no outlives the thing that meant it.
+
+        So on removal and on disable, SEM undoes its own three:
+
+        1. **enable** — the same four-way ``start_session`` uses: the profile's
+           start service, a charge-mode select, a start/stop switch, or the
+           charger domain's own ``enable``. Never the domain's *authorise*
+           call: authorisation is the owner's, not ours, and SEM has never
+           touched it.
+        2. **failsafe** — re-armed at the CHARGING fallback rather than 0 A,
+           so a box left alone lands on its floor instead of on a standing
+           off. Skipped entirely when SEM never armed it (the arm-failsafe
+           option off), because then there is nothing of SEM's to undo.
+        3. **nothing else** — no current is written, no session is opened, no
+           energy target is set. Handing a box back is not starting a charge.
+
+        Gated on ``_sem_parked``: a box SEM never parked is left exactly as
+        found. That is #908's rule, which #936 extended to batteries and #949
+        to the inverter's charge limit; the charger is the last one.
+
+        Returns a one-line description of what it did, or None when there was
+        nothing to undo. Never raises — a teardown must always complete.
+        """
+        if not getattr(self, "_sem_parked", False):
+            return None
+        did: list[str] = []
+        # (#935 review) BOUNDED. ``hass.services.async_call`` takes no timeout
+        # and neither did anything here, so a charger integration whose
+        # handler stalls — an ordinary failure for a cloud-backed one — hung
+        # ``async_remove_entry``, which HA awaits while holding the entry's
+        # setup lock. The removal would simply never finish. A hand-back is
+        # best-effort by nature; nothing here is worth blocking a removal.
+        async def _bounded(coro):
+            return await asyncio.wait_for(coro, timeout=_RELEASE_TIMEOUT_S)
+
+        try:
+            if self.start_service:
+                domain, service = self.start_service.split(".", 1)
+                data = dict(self.start_service_data or {})
+                if self.service_device_id:
+                    data["device_id"] = self.service_device_id
+                await _bounded(self.send(domain, service, data))
+                did.append(self.start_service)
+            elif self.charge_mode_entity and self.charge_mode_start:
+                await _bounded(self.send("select", "select_option", {
+                    "entity_id": self.charge_mode_entity,
+                    "option": self.charge_mode_start}))
+                did.append(f"{self.charge_mode_entity}={self.charge_mode_start}")
+            elif self.start_stop_entity:
+                domain = self.start_stop_entity.split(".")[0]
+                if domain in ("switch", "input_boolean"):
+                    await _bounded(self.send(
+                        domain, "turn_on",
+                        {"entity_id": self.start_stop_entity}))
+                    did.append(f"{self.start_stop_entity} on")
+            elif self.charger_service:
+                domain = self.charger_service.split(".", 1)[0]
+                if self.hass.services.has_service(domain, "enable"):
+                    await _bounded(self.send(domain, "enable", {}))
+                    did.append(f"{domain}.enable")
+        except (Exception, asyncio.TimeoutError) as e:  # noqa: BLE001
+            _LOGGER.warning("release_to_user(%s): enable failed: %s",
+                            self.name, e)
+        try:
+            # Puts the charging fallback back over the dead-man OFF. Its own
+            # opt-out check means this is a no-op on a box SEM never armed.
+            await _bounded(self.arm_failsafe())
+            did.append("failsafe → charging fallback")
+        except (Exception, asyncio.TimeoutError) as e:  # noqa: BLE001
+            _LOGGER.debug("release_to_user(%s): failsafe reset skipped: %s",
+                          self.name, e)
+        # (#935, live on PROD 13.09) Clear the RECORD, not just the flag. The
+        # hand-back set `_sem_parked = False` and left
+        # `sem.parked.<entry>` still naming this charger, so the next setup
+        # adopted a park that had already been handed back — and the next
+        # disable would "enable" a box SEM had not disabled. The debt is paid;
+        # the ledger has to say so.
+        await self._remember_parked(False)
+        if not did:
+            return None
+        said = f"{self.name}: handed back on {reason} — " + ", ".join(did)
+        _LOGGER.info("#935 %s", said)
+        return said
 
     async def stop_session(self) -> None:
         """Stop the charging session.
@@ -3215,6 +3371,12 @@ class CurrentControlDevice(ControllableDevice):
             # the box's own standing "no" for the window where SEM is not
             # there to say it.
             await self.arm_failsafe_off()
+            # (#935) Same standing "no" as park_off, so the same debt — and
+            # only when a stop mechanism actually fired (``stop_method`` is
+            # None when SEM relied on _set_current(0) alone and wrote no
+            # standing refusal to undo).
+            if stop_method is not None:
+                await self._remember_parked(True)
             self._session_active = False
             self._status.state = DeviceState.IDLE
             self._status.current_consumption_w = 0.0
