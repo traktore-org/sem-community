@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.1.0-beta.19] — 13.09.2026
+
 - ✨ **Removing SEM now hands the house back** (#935, #908). SEM used to leave
   behind everything it had written: its stores, its version marker, its
   Repairs, dashboard resources pointing at files that no longer existed, and
