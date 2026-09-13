@@ -3360,26 +3360,41 @@ register never gave. Home Assistant does keep the fact, for every entity an enti
 registered or not: `homeassistant.helpers.entity.entity_sources()` →
 `{"domain": "template", "config_entry": ...}`.
 **Where it lives:** any registry lookup whose `None` branch decides something ABOUT the entity
-instead of declining to derive from it. `sensor_reader._source_is_alive` (the platform question) and
-`_integration_is_reporting` (the config-entry question) — **swept here** into one `_entity_owner`
-(registry first, source map second), and the entry's MEMBERSHIP too (`_entry_entity_ids`: an
-integration's entities without a `unique_id` were invisible as vouching siblings). *Assessed and
-correct as-is:* `ha_energy_reader`'s device-sibling derivations and `__init__`'s offline-twin heal
-ask for a `device_id`, which an unregistered entity genuinely does not have — "no derivation" is the
-true answer there, not a verdict. *Named, not swept:* `hardware_detection`'s seed → `platform` brand
-detection reads the same registry and answers `no_registry_entry` for a YAML-declared seed; that is
-a detection gap (no claim made), not a false accusation, and a source-map fallback there is its own
-round. `coordinator/dual_phase_guard.py` is the same FAMILY from the other side (class 63): it fails
-a safety gate closed on a flat `last_reported`, which an integration that skips identical writes
-(#912's foxess) produces on a genuinely quiet phase — a safety path, so a liveness fallback there is
-a deliberate decision, not a sweep.
+instead of declining to derive from it. **Swept here**, all in `coordinator/sensor_reader.py`:
+`_source_is_alive` (the platform question) and `_integration_is_reporting` (the config-entry
+question) now share one `_entity_owner` (registry first, source map second); the entry's MEMBERSHIP
+too (an integration's entities without a `unique_id` were invisible as vouching siblings —
+`_unregistered_entry_entity_ids`, walked only when no registered sibling already answered); the two
+brand sign SEEDS (`_seed_grid_sign_from_platform` / `_seed_battery_sign_from_platform`, where a
+YAML-declared brand sensor got no deterministic seed at all for no better reason than a missing
+`unique_id`); and the two sign DIAGNOSTICS payloads, which reported `"grid_platform": null` for
+exactly the reporter's entity — the triage surface that could have named "template" in round 1.
+*Assessed and correct as-is:* `ha_energy_reader`'s device-sibling derivations and `__init__`'s
+offline-twin heal ask for a `device_id`, which an unregistered entity genuinely does not have — "no
+derivation" is the true answer there, not a verdict. *Named, not swept:* `hardware_detection` both
+looks a seed up (`no_registry_entry` for a YAML-declared seed) and ENUMERATES `reg.entities.values()`
+in a dozen places, so an unregistered fleet is invisible to discovery — a detection gap (no false
+claim), and its own round. `coordinator/dual_phase_guard.py` is the same FAMILY from the other side
+(class 63): it fails a safety gate closed on a flat `last_reported`, which an integration that skips
+identical writes (#912's foxess) produces on a genuinely quiet phase — a safety path, so a liveness
+fallback there is a decision, not a sweep. Class 63's liveness UNIT (one config entry = one
+connection) is false for a shared broker: an MQTT hallway light vouches for a dead P1 meter on the
+same entry. True before this round for registered entities and now for YAML ones too; narrowing it
+means picking a different unit (the device), which the FoxESS case constrains.
 **Closure:** ownership is resolved in ONE place that knows both registers, and only an entity no
 entity platform owns at all (a raw `states.set`) returns "unknown" — which stays fail-closed,
-because that is the one case where the information really is missing.
+because that is the one case where the information really is missing. The derived fail-open is
+bounded by evidence rather than by platform: a helper with no config entry is followed through the
+source it publishes in its OWN attributes (`filter`/`group` → `entity_id`,
+`utility_meter`/`integration`/`derivative` → `source`), so a legacy YAML wrapper over a dead meter
+still warns. The residual — a Template, which publishes no source anywhere — is deliberate: its
+`last_reported` is a change signal, so nothing can be proved about it, and accusing it is the bug.
 **Guard:** `tests/test_912_frozen_unregistered_owner.py` — the reported YAML template goes quiet, an
 unregistered sibling can vouch, an unregistered polled sensor in a dead entry still warns, an
-unowned entity still warns, and a source-inspection test pins that the two liveness rules ask
-`_entity_owner` rather than reading `platform`/`config_entry_id` off a registry entry themselves.
+unowned entity still warns, a YAML `filter` over a DEAD meter still warns (the fail-open is bounded
+by evidence) while the same wrapper over a live one is honest, and a source-inspection test pins
+that the two liveness rules ask `_entity_owner` — no `platform`, no `config_entry_id`, and no
+registry call that looks up anything but the handle.
 **Sweep question:** for every index this code treats as authoritative — the entity registry, the
 device registry, the Energy Dashboard, the roster (#915) — which entities is it *structurally
 incapable* of listing, and does absence from it read as "no" or as "I don't know"? Refs #912 #851

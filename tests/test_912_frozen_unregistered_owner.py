@@ -170,15 +170,74 @@ class TestDetectionIsPreserved:
         assert eid in rig.r._frozen_sensors
         assert rig.raised == [eid]
 
-    def test_a_dead_shelly_through_an_unregistered_template_is_honest_anyway(
+    def test_an_unregistered_entity_of_a_non_derived_platform_still_warns(
             self, monkeypatch):
-        """A YAML template cannot be followed to its source (there is no config
-        entry to read the template string from), so it is honest even when the
-        Shelly is dead — the fail-open the untraceable-helper rule already
-        accepts. Pinned so the trade-off is explicit, not accidental."""
-        rig = _yaml_template(monkeypatch)
+        """The source map names a polled integration and gives no config entry
+        to corroborate with (a YAML modbus sensor): nothing vouches, so the
+        warning stands."""
+        eid = "sensor.yaml_modbus_grid_power"
+        sources = {eid: {"domain": "modbus", "custom_component": False}}
+        rig = _Rig(monkeypatch, {eid: _state(0, 900)}, reg_entries={},
+                   sources=sources)
+        rig.r._read_sensor(eid, "grid")
+        assert eid in rig.r._frozen_sensors
+        assert rig.raised == [eid]
+
+
+FILT = "sensor.filtered_grid_power"
+METER = "sensor.modbus_grid_power"
+
+
+def _yaml_filter(monkeypatch, *, source_age):
+    """A legacy YAML ``filter`` sensor (no unique_id, no config entry)
+    smoothing a modbus grid meter. A filter publishes its source in its own
+    attributes (``entity_id``), which is the only way to trace a helper that
+    has no config entry to read."""
+    filt = _state(2500, 900)
+    filt.attributes = {"unit_of_measurement": "W", "friendly_name": "filtered",
+                       "entity_id": METER}
+    states = {FILT: filt, METER: _state(2500, source_age)}
+    sources = {
+        FILT: {"domain": "filter", "custom_component": False},
+        METER: {"domain": "modbus", "custom_component": False},
+    }
+    return _Rig(monkeypatch, states, reg_entries={}, sources=sources)
+
+
+class TestTheFailOpenIsBounded:
+    """A YAML helper is not handed the honest verdict for free: where it
+    publishes its source, the source is what decides."""
+
+    def test_a_yaml_filter_over_a_dead_meter_still_warns(self, monkeypatch):
+        """The stall W3 exists for, behind a legacy YAML wrapper: the modbus
+        meter has been silent for 15 min and the filter holds 2500 W into the
+        energy balance. Traced through the filter's own ``entity_id``
+        attribute — a blanket 'derived platforms are honest' rule would lose
+        this."""
+        rig = _yaml_filter(monkeypatch, source_age=900)
+        rig.r._read_sensor(FILT, "grid")
+        assert FILT in rig.r._frozen_sensors
+        assert rig.raised == [FILT]
+
+    def test_a_yaml_filter_over_a_live_meter_is_honest(self, monkeypatch):
+        """The same wrapper with the meter reporting at 5 s: flat, honest,
+        quiet."""
+        rig = _yaml_filter(monkeypatch, source_age=5)
+        rig.r._read_sensor(FILT, "grid")
+        assert FILT not in rig.r._frozen_sensors
+        assert rig.raised == []
+
+    def test_a_helper_that_publishes_no_source_is_honest(self, monkeypatch):
+        """The residual, pinned deliberately: a Template publishes no source
+        anywhere — not in a config entry, not in its attributes — and its
+        ``last_reported`` is a change signal, not a poll. Nothing can be
+        proved about it, and accusing it is what broke three betas. Contrast
+        with the filter above: the trade-off is the absence of a source, not
+        the platform being derived."""
+        rig = _yaml_template(monkeypatch)          # the Shelly is dead too
         rig.r._read_sensor(TMPL, "solar")
         assert TMPL not in rig.r._frozen_sensors
+        assert rig.raised == []
 
 
 class TestTheSiblingHalf:
@@ -252,6 +311,7 @@ def test_ownership_is_asked_in_one_place():
     registry AND HA's source map, so a future rule cannot re-acquire the blind
     spot by copying the lookup."""
     import inspect
+    import re
 
     from custom_components.solar_energy_management.coordinator import (
         sensor_reader as sr_mod,
@@ -259,10 +319,15 @@ def test_ownership_is_asked_in_one_place():
 
     for fn in (sr_mod.SensorReader._source_is_alive,
                sr_mod.SensorReader._integration_is_reporting):
-        body = inspect.getsource(fn)
-        assert "_entity_owner" in body, fn.__name__
+        # the docstrings name _entity_owner too — assert on the CODE
+        body = inspect.getsource(fn).split('"""')[-1]
+        assert "self._entity_owner(" in body, fn.__name__
         assert "config_entry_id" not in body, fn.__name__
-        assert ".async_get(entity_id)" not in body, fn.__name__
+        assert ".platform" not in body, fn.__name__
+        # any registry call left in these two may only fetch the HANDLE —
+        # never look an entity up and read a verdict off the result
+        for call in re.findall(r"\.async_get\(([^)]*)\)", body):
+            assert call.strip() == "self.hass", (fn.__name__, call)
 
     owner = inspect.getsource(sr_mod.SensorReader._entity_owner)
     assert "_entity_source_info" in owner
