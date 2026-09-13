@@ -291,11 +291,19 @@ async def async_deregister_resources(hass) -> List[str]:
         return []
 
 
-def sem_statistic_ids(hass) -> List[str]:
+def sem_statistic_ids(hass, entry_id: Optional[str] = None) -> List[str]:
     """The long-term statistic ids that belong to SEM's own entities.
 
     Read from the entity registry, so it is this install's actual entities
     and not a guess from a name pattern.
+
+    Scoped to ONE config entry when given one. Filtering on the platform
+    alone was right for the common single-entry install and wrong for the
+    only case that matters here: with two SEM entries, clearing "the
+    leftovers" before removing the first would have taken the whole history
+    of the second, which has no leftover problem and was never mentioned in
+    the call (#935 review). An entry that owns no entities returns nothing,
+    which is the honest answer and clears nothing.
     """
     try:
         from homeassistant.helpers import entity_registry as er
@@ -303,6 +311,7 @@ def sem_statistic_ids(hass) -> List[str]:
         return sorted(
             e.entity_id for e in er.async_get(hass).entities.values()
             if e.platform == DOMAIN
+            and (entry_id is None or e.config_entry_id == entry_id)
         )
     except Exception:  # noqa: BLE001
         return []

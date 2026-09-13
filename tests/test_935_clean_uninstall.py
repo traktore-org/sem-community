@@ -29,6 +29,22 @@ def _run(coro):
     return asyncio.run(coro)
 
 
+class FakeStore:
+    """The three methods a Store double needs, with a visible payload."""
+
+    def __init__(self, data=None):
+        self.data = data
+
+    async def async_load(self):
+        return self.data
+
+    async def async_save(self, data):
+        self.data = dict(data)
+
+    async def async_remove(self):
+        self.data = None
+
+
 def _hass_with_storage(tmp_path, names=()):
     """A hass whose .storage really holds these files, and whose executor
     runs inline — the listing is off the loop in production (#935 tripped
@@ -484,3 +500,131 @@ class TestStatisticsGoThroughTheRecordersOwnApi:
             MagicMock(side_effect=RuntimeError("recorder not loaded")))
         assert _run(cleanup.async_clear_statistics(
             SimpleNamespace(), ["sensor.x"])) == 0
+
+
+class TestTheParkDebtOutlivesTheProcess:
+    """ruflo REFUTED the first cut here, and it broke the exact scenario this
+    issue opens with. `_sem_parked` was an instance attribute rebuilt False on
+    every setup, and the reconciler cannot re-derive it: PARK_OFF fires on the
+    connect→disconnect EDGE, and a box already empty at boot is a steady
+    state, not an edge. So park → restart → remove left the charger disabled,
+    its own persisted dead-man failsafe holding 0 A, and nothing left on the
+    system that knew why."""
+
+    def _device(self, store=None, **kw):
+        from custom_components.solar_energy_management.devices.base import (
+            CurrentControlDevice,
+        )
+        dev = SimpleNamespace(
+            name="KEBA P30", charger_id="ev_charger", _sem_parked=False,
+            _park_store=store, send=AsyncMock(), arm_failsafe=AsyncMock(),
+            start_service=None, start_service_data=None, service_device_id=None,
+            charge_mode_entity=None, charge_mode_start=None,
+            start_stop_entity=kw.get("start_stop_entity"),
+            charger_service=kw.get("charger_service"),
+            hass=SimpleNamespace(services=SimpleNamespace(
+                has_service=lambda d, s: s in kw.get("services", ()))),
+        )
+        for m in ("_remember_parked", "adopt_park_state", "release_to_user"):
+            setattr(dev, m, getattr(CurrentControlDevice, m).__get__(dev))
+        return dev
+
+    def test_a_park_is_written_where_it_survives_a_restart(self):
+        store = FakeStore()
+        dev = self._device(store=store)
+        _run(dev._remember_parked(True))
+        assert store.data == {"parked": ["ev_charger"]}
+
+    def test_the_next_lifetime_adopts_it(self):
+        """The regression, end to end: fresh process, box still parked."""
+        store = FakeStore()
+        first = self._device(store=store)
+        _run(first._remember_parked(True))
+
+        after_restart = self._device(store=store)
+        assert after_restart._sem_parked is False, "a fresh object starts clean"
+        after_restart.adopt_park_state(store.data["parked"])
+        assert after_restart._sem_parked is True, (
+            "without this the box keeps refusing and nothing knows why")
+
+    def test_a_start_clears_the_debt(self):
+        store = FakeStore({"parked": ["ev_charger"]})
+        dev = self._device(store=store)
+        _run(dev._remember_parked(False))
+        assert store.data == {"parked": []}
+
+    def test_another_chargers_park_is_not_adopted(self):
+        dev = self._device()
+        dev.adopt_park_state(["some_other_charger"])
+        assert dev._sem_parked is False
+
+    def test_a_store_that_throws_never_costs_the_command(self):
+        class Broken(FakeStore):
+            async def async_load(self):
+                raise RuntimeError("storage is having a day")
+
+        dev = self._device(store=Broken())
+        _run(dev._remember_parked(True))
+        assert dev._sem_parked is True, "the in-memory truth still stands"
+
+
+class TestAHandBackCannotBlockARemoval:
+    """`hass.services.async_call` takes no timeout, so a charger integration
+    whose handler stalls hung `async_remove_entry` — which HA awaits while
+    holding the entry's setup lock. The removal would never finish."""
+
+    def test_a_stalled_integration_is_given_up_on(self):
+        from custom_components.solar_energy_management.devices.base import (
+            CurrentControlDevice,
+        )
+
+        async def _never_returns(*a, **kw):
+            await asyncio.sleep(3600)
+
+        dev = SimpleNamespace(
+            name="KEBA P30", charger_id="c1", _sem_parked=True, _park_store=None,
+            send=_never_returns, arm_failsafe=AsyncMock(),
+            start_service=None, start_service_data=None, service_device_id=None,
+            charge_mode_entity=None, charge_mode_start=None,
+            start_stop_entity=None, charger_service="keba.set_current",
+            hass=SimpleNamespace(services=SimpleNamespace(
+                has_service=lambda d, s: True)))
+        for m in ("_remember_parked", "release_to_user"):
+            setattr(dev, m, getattr(CurrentControlDevice, m).__get__(dev))
+
+        async def _go():
+            import custom_components.solar_energy_management.devices.base as base
+            base._RELEASE_TIMEOUT_S = 0.05
+            return await asyncio.wait_for(dev.release_to_user(), timeout=5)
+
+        _run(_go())          # must return, not hang
+        assert dev._sem_parked is False
+
+
+class TestClearingIsScopedToOneEntry:
+    def _registry(self, rows):
+        return SimpleNamespace(entities=SimpleNamespace(
+            values=lambda: [SimpleNamespace(entity_id=e, platform=p,
+                                            config_entry_id=c)
+                            for e, p, c in rows]))
+
+    def test_a_second_entrys_history_is_not_this_entrys_leftovers(self, monkeypatch):
+        monkeypatch.setattr(
+            "homeassistant.helpers.entity_registry.async_get",
+            lambda hass: self._registry([
+                ("sensor.sem_a", "solar_energy_management", "entry_A"),
+                ("sensor.sem_b", "solar_energy_management", "entry_B"),
+                ("sensor.other", "another_integration", "entry_A"),
+            ]))
+        assert cleanup.sem_statistic_ids(SimpleNamespace(), "entry_A") == [
+            "sensor.sem_a"]
+
+    def test_no_scope_still_means_every_sem_entity(self, monkeypatch):
+        monkeypatch.setattr(
+            "homeassistant.helpers.entity_registry.async_get",
+            lambda hass: self._registry([
+                ("sensor.sem_a", "solar_energy_management", "entry_A"),
+                ("sensor.sem_b", "solar_energy_management", "entry_B"),
+            ]))
+        assert cleanup.sem_statistic_ids(SimpleNamespace()) == [
+            "sensor.sem_a", "sensor.sem_b"]

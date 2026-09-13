@@ -2555,6 +2555,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
 
             coordinator._surplus_controller.register_device(ev_device)
             coordinator._ev_devices[charger_id] = ev_device
+            # (#935) The park debt has to outlive the process that took it —
+            # see `_remember_parked`. One store per entry, every charger in
+            # it; adopted just below, once, when they are all built.
+            ev_device._park_store = _park_store(hass, entry)
+            ev_device.charger_id = charger_id
             ev_device.managed_externally = True
             _LOGGER.info(
                 "EV charger '%s' registered as CurrentControlDevice "
@@ -2756,6 +2761,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             "Load management initialization failed (non-critical). "
             "Load management features will be unavailable."
         )
+
+    # (#935) Every charger is built by now, so take back any park a previous
+    # lifetime left on the hardware — the reconciler cannot re-derive it
+    # (PARK_OFF fires on an edge; an already-empty box at boot is not one).
+    hass.async_create_task(_async_adopt_parked_chargers(hass, entry, coordinator))
 
     # (#923) ONE module verdict for every platform: captured here, after the
     # Energy Dashboard read above and before any platform builds entities —
@@ -3110,6 +3120,47 @@ async def _async_take_sems_own_files(hass: HomeAssistant,
             "" if remaining else " (last entry: install-wide stores too)")
     except Exception as e:  # noqa: BLE001 — a removal must always complete
         _LOGGER.warning("SEM removed: cleanup incomplete (non-blocking): %s", e)
+
+
+def _park_store(hass: HomeAssistant, entry: SEMConfigEntry):
+    """(#935) Where "SEM parked this box" lives across restarts."""
+    entry_id = str(getattr(entry, "entry_id", "") or "")
+    if not entry_id:
+        return None
+    try:
+        from homeassistant.helpers.storage import Store
+        return Store(hass, 1, f"sem.parked.{entry_id}")
+    except Exception:  # noqa: BLE001
+        return None
+
+
+async def _async_adopt_parked_chargers(hass: HomeAssistant,
+                                       entry: SEMConfigEntry,
+                                       coordinator) -> None:
+    """(#935) Take over the parks a previous lifetime left on the hardware.
+
+    The reconciler cannot re-derive them: PARK_OFF fires on the
+    connect→disconnect EDGE, and a box that is already empty at boot is a
+    steady state. Without this, park → restart → remove left the charger
+    disabled with its own persisted dead-man failsafe holding it at 0 A, and
+    nothing left on the system that knew why.
+    """
+    store = _park_store(hass, entry)
+    if store is None:
+        return
+    try:
+        record = await store.async_load() or {}
+        ids = record.get("parked") or []
+        if not ids:
+            return
+        for dev in (getattr(coordinator, "_ev_devices", None) or {}).values():
+            adopt = getattr(dev, "adopt_park_state", None)
+            if callable(adopt):
+                adopt(ids)
+        _LOGGER.info("#935 — adopted %d charger park(s) this install was "
+                     "left with: %s", len(ids), ", ".join(map(str, ids)))
+    except Exception as e:  # noqa: BLE001 — never block a setup
+        _LOGGER.debug("#935 park adoption skipped: %s", e)
 
 
 async def _async_sweep_orphan_stores(hass: HomeAssistant) -> None:
@@ -3530,7 +3581,11 @@ async def _async_register_services(
         done = {"statistics": 0, "dashboard": False}
 
         if want_stats:
-            ids = cleanup.sem_statistic_ids(hass)
+            # Scoped to THIS entry: a second SEM entry's history is not part
+            # of this entry's leftovers (#935 review).
+            _entry_id = str(getattr(
+                getattr(coordinator, "config_entry", None), "entry_id", "") or "")
+            ids = cleanup.sem_statistic_ids(hass, _entry_id or None)
             done["statistics"] = await cleanup.async_clear_statistics(hass, ids)
         if want_dashboard:
             done["dashboard"] = await cleanup.async_remove_dashboard(hass)
