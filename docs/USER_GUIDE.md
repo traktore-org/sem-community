@@ -1236,7 +1236,9 @@ whatever its mode.
 
 ### Price-responsive mode
 
-When using dynamic tariffs (Tibber, Nordpool, aWATTar), surplus distribution becomes price-aware: during cheap or negative price periods, SEM adds virtual surplus to encourage activation of **surplus-mode devices**.
+When using dynamic tariffs (Tibber, Nordpool, aWATTar), surplus distribution becomes price-aware: during **expensive** periods SEM trims the distributable surplus, so a load on the edge waits for a stronger sun instead of nibbling at the margin.
+
+Cheap and negative hours do **not** add anything (2.1, #953). Until then they injected a virtual +3 kW / +10 kW into the solar pool, which reached the ordinary surplus pass — so on a dynamic tariff a load in mode "Solar only" ran from the grid in every cheap hour, booked to its "on solar today" bar, with nothing to stop it. Buying a cheap hour is a **per-device** decision with a target behind it: that is what **Finish overnight from: Grid** is for.
 
 ---
 
@@ -1351,7 +1353,7 @@ Set tariff mode to "Dynamic" in the options flow. SEM auto-detects your provider
 - Cost calculations use actual spot prices instead of static rates
 - `sensor.sem_tariff_price_level` shows "cheap", "normal", "expensive", "very_cheap", "very_expensive"
 - `sensor.sem_tariff_next_cheap_start` shows next cheap window
-- **Price-responsive surplus**: during cheap/negative price windows, SEM adds virtual surplus to encourage device activation
+- **Price-responsive surplus**: expensive windows trim the distributable surplus (cheap windows add nothing — see *Price-responsive mode*)
 - Night charging can be scheduled for cheapest hours (mode `solar_plus_cheap`)
 - **Price card** (v1.7.3): the `sem-price-card` shows the current price, level, today's min/avg/max, the next cheap window, and an hourly price strip for the next ~24h (bars colored by level, current hour outlined). A **compact chip** lives at the top of the **Home tab** (glance), the **full panel with chart** on the **Costs tab**. **Self-hides on static tariffs** (no live curve to show).
 - **`generate_dashboard` reloads live** (v1.5.16+) — adding a charger, changing language, or any other regenerate now reflects immediately on the running dashboard. No HA restart needed; a browser hard-refresh (Ctrl+Shift+R) picks up cached card bundles.

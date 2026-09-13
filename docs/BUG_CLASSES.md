@@ -2888,17 +2888,16 @@ SoC ≥ 80 % branch redirects the whole grid charge to a `solar_only` car; #899'
 commit-then-measure veto is REACTIVE (three contradicting cycles ≈ 30 s, per plug-in, counter
 reset by any agreeing cycle), so wherever the #193 night gate is not in force (dusk/dawn) a
 nightly plug-in can get a start/stop burst — the #893 stop-rate residual. The preventive twin
-is the same `charge − import` share before the credit. **Left for Guido (product call, not a
-sweep):** `_apply_price_adjustment` adds +3 kW (cheap) / +10 kW (negative) of *virtual* surplus
-to the same pool for every dynamic-tariff install (`tariff_mode == "dynamic"`), with no
-per-device policy gate — a documented feature (USER_GUIDE "Price-responsive mode") that predates
-#559's per-device "Finish overnight from: Grid" and contradicts its "solar_only never
-grid-forces" contract: on a dynamic tariff a Solar-only load runs from the grid in every cheap
-hour. Same shape, same pool, deliberate; it is also the one other mechanism that produces an
-unmarked night run of a Solar-only switch, so it is a *candidate* cause of this very report if
-the reporter's tariff mode turns out to be dynamic (not established — the arbitrary 01:29 start
-and the untouched 1.7 kW priority-2 load, which a +3 kW pool would have started, argue for the
-reclaim). The fix is a decision about which of the two contracts wins, not a bound. **Sweep
+is the same `charge − import` share before the credit. **The residual, CLOSED in #953:** `_apply_price_adjustment` added +3 kW
+(cheap) / +10 kW (negative) of *virtual* surplus to the same pool for every dynamic-tariff
+install (`tariff_mode == "dynamic"`), with no per-device policy gate — a documented feature
+(USER_GUIDE "Price-responsive mode") that predated #559's per-device "Finish overnight from:
+Grid" and contradicted its "solar_only never grid-forces" contract. Left here as a product call
+about which contract wins; #953 made it, on the evidence that the fabricated term breaks
+everything the real cheap-hours pass gets right (per-device opt-in, deficit bound, #864
+peak-slot guard, a marker the expiry pass and the deficit LIFO can act on) and labels the result
+`source="solar"` on the "h on solar today" bar. `price_damped_pool` now clamps to its own input:
+a price signal may lower the pool or leave it alone, never raise it. **Sweep
 question:** for
 every allocation pool that is a sum, *which term carries the invariant, and does every later term
 pass through it?* And for every measured quantity re-labelled as a source ("that charge would have
@@ -3407,3 +3406,44 @@ registry call that looks up anything but the handle.
 device registry, the Energy Dashboard, the roster (#915) — which entities is it *structurally
 incapable* of listing, and does absence from it read as "no" or as "I don't know"? Refs #912 #851
 #611 #86.
+
+### 88. One control, two backend axes — the qualifier in its label binds only one of them — GUARDED
+**Symptom:** a load configured to run on surplus runs from the meter in broad morning daylight,
+at a timestamp that is nobody's round number: **07:52:39**, sunrise to the second. The card still
+reads "Solar only", the progress bar still says "0.5/4 h on solar today", and the setting the user
+actually turned on says **overnight** on its face. **Root shape:** one user-facing control fans out
+to TWO independent backend flags, and the qualifying word in the control's own label ("overnight",
+"solar", "at night") is enforced in one implementation and forgotten in the other. Each half is
+written and tested on its own terms, so neither looks wrong; the contradiction only exists at the
+control, which nothing tests. The display twin of this is class 75 (one knob, two features, and
+the knob SHOWS only one of them); this is the behaviour twin — the knob COMMANDS only one of them.
+**Live catch (#953, alexmc1510, 13.09.2026):** the "Finish overnight from" picker writes
+`battery_eligible_overnight` (Tier-2) and `top_up_policy=cheap_hours` (grid). The battery half has
+been gated to the night window since #633 — *"'Finish overnight from: Battery' must not fire in
+daytime (caught live at 09:10 in full sun)"* — and the grid half had no window at all, only the
+tariff level. So the cycle the sunrise-held meter day rolls (#703/#704) and yesterday's met target
+becomes a fresh 4 h deficit, the first cheap slot of the morning bought the whole day's target from
+the meter, with 12.6 h of sun and a 37 kWh forecast still ahead; the pump was still running at
+08:24 on 78 W of sun with the pack discharging 857 W. **Closure:** the qualifier becomes ONE
+predicate both axes read. `sun_can_still_finish(deficit, daylight_remaining_s, is_night)` — while
+today's remaining daylight is at least as long as what is still owed, the sun can deliver it and
+the meter waits; at night it is trivially open, and that arm reads `is_night` alone, so the
+promised overnight behaviour never depends on a sunset reading. Deliberately about the free
+window's LENGTH, not about cloud: a dark day is what the top-up exists for, and #559's contract is
+that free comes first. It cannot flap — running, the deficit and the daylight shrink at the same
+one second per second, so their difference is constant; idle, only the daylight shrinks — so it
+opens once a day and stays open. **Where it lives:** every control that fans out to more than one
+backend flag. `_setOvernightSource` (battery / grid — this instance); `_applyMergedMode`
+(`control_mode` + `battery_assist_enabled`, whose "Solar only" hint promises "never imports from
+grid"); the EV charge-mode select, where `consts/ev_charge_modes.py` already does this RIGHT and is
+the precedent — *"(#885) solar_plus_battery inherits solar_only's night contract wholesale"* — and
+`mode_allows_night_charging` exists precisely because two hand-copied twins were drifting.
+**Guard:** `tests/test_953_cheap_hours_finish_window.py` — the reporter's morning through a real
+`SurplusController.update()` walk (the ungated pass is shown to START the pump first, so the pass
+is not vacuous), the overnight promise and the short-winter-day tail both still topping up, the
+class-17 stop twin ending a night run at dawn, a monotonicity sweep pinning that the gate cannot
+flap, desired-state parity on `compute_load_intent`, and AST guards that BOTH halves of the
+imperative pass and the intent path call `sun_can_still_finish` and that the coordinator feeds it
+from the same sun authority `is_night_mode` uses. **Sweep question:** for every control a user can
+see — list the backend flags it writes, then read its LABEL as a specification and ask of each flag
+*"does this one honour every word of it?"* Refs #953 #633 #938 #620 #559 #885.

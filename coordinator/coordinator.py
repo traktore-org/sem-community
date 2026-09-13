@@ -5715,6 +5715,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # (#925 audit) the twin flag travels with the watts
                 grid_import_known=not bool(getattr(
                     power, "grid_power_unavailable", False)),
+                # (#953) how long the FREE window still has to run — the
+                # "finish" gate on the cheap-hours grid top-up.
+                daylight_remaining_s=self._daylight_remaining_s_now(),
             )
             surplus_data.surplus_total_w = allocation.total_surplus_w
             surplus_data.surplus_distributable_w = allocation.distributable_surplus_w
@@ -6736,6 +6739,37 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         "which sites are priced?" a question with one answer.
         """
         return float(self.config.get("electricity_export_rate", 0.075) or 0.0)
+
+    def _daylight_remaining_s_now(self) -> "Optional[float]":
+        """(#953) Seconds of daylight left today, or None if we cannot tell.
+
+        The free window's remaining LENGTH — what the cheap-hours grid
+        top-up is gated on, so "Finish overnight from: Grid" finishes
+        instead of pre-empting. Read through ``get_sunset_plus_10_time()``,
+        the same authority ``is_night_mode()`` builds the night window from
+        (one class, one day boundary — the #704 rule), with the established
+        ``now.replace`` framing ``_today_pacing_ledger`` uses.
+
+        Two deliberate consequences of that choice:
+
+        * It overstates the sun by the 10 minutes in the name. That is the
+          safe direction for a gate on SPENDING: ten more minutes of
+          believed daylight means ten more minutes before the meter pays.
+        * After sunset ``next_setting`` is TOMORROW's, so the framed time is
+          behind us and this reads 0.0 — correct, and moot anyway: the
+          caller's ``is_night`` arm has already opened the gate by then.
+
+        None only when the string cannot be framed at all; the gate then
+        keeps its pre-#953 behaviour rather than guessing at the sun.
+        """
+        try:
+            now = dt_util.now()
+            h, m = (int(x) for x in
+                    self.time_manager.get_sunset_plus_10_time().split(":"))
+            sunset = now.replace(hour=h, minute=m, second=0, microsecond=0)
+            return max(0.0, (sunset - now).total_seconds())
+        except Exception:  # noqa: BLE001 — no sun frame, no claim
+            return None
 
     def _today_pacing_ledger(self) -> list:
         """(#820) Today's remaining-day slots, or [] outside daylight /

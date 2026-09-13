@@ -600,7 +600,7 @@ The 2.0 line adds almost nothing you have to learn. It makes what SEM already di
 ### Tariff Mode Selector (#120)
 - **Three tariff modes** exposed in options flow: Static (fixed HT/NT), Dynamic (Tibber/Nordpool/aWATTar/Amber Electric/Octopus Energy), Calendar (time-based schedule)
 - **Auto-detection** — SEM scans for Tibber/Nordpool/aWATTar/Amber Electric/Octopus Energy entities when dynamic mode is selected
-- **Price-responsive surplus** — dynamic mode enables price-aware device activation during cheap/negative price windows
+- **Price-responsive surplus** — dynamic mode trims the distributable surplus in expensive windows; cheap hours are bought per device via *Finish overnight from: Grid*, never as house-wide virtual surplus (#953)
 
 ### GoodWe Support (#68)
 - **Troubleshooting guide** for GoodWe + Easee setup (Energy Dashboard configuration, sign convention auto-detection)

@@ -522,7 +522,7 @@ SEM tracks the number of hours since the water last reached the Legionella targe
 5. Variable-power devices get proportional current allocation
 6. When surplus drops: LIFO deactivation (lowest priority first)
 
-The surplus controller is always-on and runs every coordinator update (~10s). Price-responsive mode is automatic when `tariff_mode == "dynamic"`.
+The surplus controller is always-on and runs every coordinator update (~10s). Price-responsive mode is automatic when `tariff_mode == "dynamic"`; it may only DAMP the distributable pool (`price_damped_pool`, #953) — the #620 invariant "you cannot distribute more solar surplus than the sun is producing" holds at the pool's last writer.
 
 ---
 
