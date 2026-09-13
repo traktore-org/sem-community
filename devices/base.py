@@ -3212,7 +3212,13 @@ class CurrentControlDevice(ControllableDevice):
         except (Exception, asyncio.TimeoutError) as e:  # noqa: BLE001
             _LOGGER.debug("release_to_user(%s): failsafe reset skipped: %s",
                           self.name, e)
-        self._sem_parked = False
+        # (#935, live on PROD 13.09) Clear the RECORD, not just the flag. The
+        # hand-back set `_sem_parked = False` and left
+        # `sem.parked.<entry>` still naming this charger, so the next setup
+        # adopted a park that had already been handed back — and the next
+        # disable would "enable" a box SEM had not disabled. The debt is paid;
+        # the ledger has to say so.
+        await self._remember_parked(False)
         if not did:
             return None
         said = f"{self.name}: handed back on {reason} — " + ", ".join(did)

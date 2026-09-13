@@ -310,7 +310,10 @@ class TestTheWallboxIsHandedBack:
         from custom_components.solar_energy_management.devices.base import (
             CurrentControlDevice,
         )
-        dev.release_to_user = CurrentControlDevice.release_to_user.__get__(dev)
+        dev.charger_id = "ev_charger"
+        dev._park_store = None
+        for m in ("_remember_parked", "release_to_user"):
+            setattr(dev, m, getattr(CurrentControlDevice, m).__get__(dev))
         return dev
 
     def test_a_parked_keba_is_enabled_and_the_deadman_lifted(self):
@@ -628,3 +631,42 @@ class TestClearingIsScopedToOneEntry:
             ]))
         assert cleanup.sem_statistic_ids(SimpleNamespace()) == [
             "sensor.sem_a", "sensor.sem_b"]
+
+
+class TestTheLedgerIsClearedWhenTheDebtIsPaid:
+    """Seen on PROD, 13.09: the hand-back fired, `keba.enable` went out — and
+    `sem.parked.<entry>` still named the charger. The next setup adopted a
+    park that had already been handed back, and the next disable would have
+    "enabled" a box SEM had not disabled."""
+
+    def _device(self, store):
+        from custom_components.solar_energy_management.devices.base import (
+            CurrentControlDevice,
+        )
+        dev = SimpleNamespace(
+            name="KEBA P30", charger_id="ev_charger", _sem_parked=True,
+            _park_store=store, send=AsyncMock(), arm_failsafe=AsyncMock(),
+            start_service=None, start_service_data=None, service_device_id=None,
+            charge_mode_entity=None, charge_mode_start=None,
+            start_stop_entity=None, charger_service="keba.set_current",
+            hass=SimpleNamespace(services=SimpleNamespace(
+                has_service=lambda d, s: s == "enable")))
+        for m in ("_remember_parked", "adopt_park_state", "release_to_user"):
+            setattr(dev, m, getattr(CurrentControlDevice, m).__get__(dev))
+        return dev
+
+    def test_handing_back_clears_the_record(self):
+        store = FakeStore({"parked": ["ev_charger"]})
+        dev = self._device(store)
+        said = _run(dev.release_to_user(reason="disabled"))
+        assert said and "keba.enable" in said
+        assert store.data == {"parked": []}, (
+            "a paid debt must leave the ledger, or the next setup adopts it")
+
+    def test_the_next_lifetime_then_adopts_nothing(self):
+        store = FakeStore({"parked": ["ev_charger"]})
+        _run(self._device(store).release_to_user())
+        after = self._device(store)
+        after._sem_parked = False
+        after.adopt_park_state(store.data["parked"])
+        assert after._sem_parked is False
