@@ -461,6 +461,8 @@ class SensorReader:
         # ``last_reported`` on a flat value, at any hour, in any domain.
         self._entry_alive_cache: Dict[str, tuple[float, bool]] = {}
         self._ENTRY_ALIVE_CACHE_S = 5.0
+        # (#912) warn-once latch for a core with no entity source map
+        self._source_map_unavailable_logged = False
         # Cache last valid SOC to avoid 0% during sensor gaps. (#875) None
         # until the first successful read: a hold needs something to hold,
         # and 0.0 before the first report was published as an empty pack.
@@ -1312,7 +1314,8 @@ class SensorReader:
             # reason than that. _entity_owner reads the same fact from HA's
             # source map when the registry cannot see the entity.
             platform = self._entity_owner(entity_id)[0]
-        except Exception as e:  # noqa: BLE001 — registry hiccup must not block reads
+        except Exception as e:  # noqa: BLE001 — belt and braces: _entity_owner
+            # contains its own registry/source-map failures and answers None.
             _LOGGER.debug("Grid-sign brand lookup failed for %s: %s", entity_id, e)
             return
         if not isinstance(platform, str) or platform not in PLATFORM_GRID_SIGN_INVERT:
@@ -1363,7 +1366,8 @@ class SensorReader:
         try:
             # (#912, class 87) same owner lookup as the grid seed above.
             platform = self._entity_owner(power_entity)[0]
-        except Exception as e:  # noqa: BLE001 — registry hiccup must not block reads
+        except Exception as e:  # noqa: BLE001 — belt and braces: _entity_owner
+            # contains its own registry/source-map failures and answers None.
             _LOGGER.debug("Battery-sign brand lookup failed for %s (%s): %s", bid, power_entity, e)
             return
         if not isinstance(platform, str) or platform not in PLATFORM_BATTERY_SIGN_INVERT:
@@ -3855,6 +3859,19 @@ class SensorReader:
     # into ``states.sensor`` + ``x.state`` and resolve neither; capture the real
     # ``sensor.x`` from the middle two segments (a very common template style).
     _STATES_OBJ_RE = re.compile(r"\bstates\.([a-z_][a-z0-9_]*)\.([a-z0-9_]+)")
+    # (#912) The attribute keys under which HA's own helpers publish what they
+    # derive from: ``filter``/``group`` → ``entity_id``,
+    # ``derivative``/``integration``/``compensation`` → ``source``, ``min_max``
+    # → the winning entity (only for min/max/last; a mean publishes none).
+    # KEYS, not a scan of every attribute value: a Template's attributes are
+    # written by the USER, so an attribute that merely NAMES another entity
+    # ("mirrors sensor.nordpool_…") would be adopted as the thing that feeds
+    # it and the sensor declared frozen when that entity goes quiet — #912's
+    # own false positive, one layer down. Template is excluded outright for
+    # the same reason: it publishes prose, never a source.
+    _SOURCE_ATTR_KEYS = ("entity_id", "entity_ids", "source",
+                         "source_entity_id", "min_entity_id",
+                         "max_entity_id", "last_entity_id")
 
     def _source_is_alive(self, entity_id: str) -> bool:
         """(#912) True when whatever FEEDS ``entity_id`` is still live.
@@ -3872,9 +3889,10 @@ class SensorReader:
         1. its own config-entry siblings vouch (the directly-polled case), else
         2. if it is a derived/helper platform, follow the source entities it
            derives from — honest if any source reported within the threshold or
-           any source's own integration is alive; and if the source cannot be
-           traced (a YAML helper with no config entry to read), a flat derived
-           value is still not stall evidence → honest;
+           any source's own integration is alive; the source is read from the
+           helper's config entry, else from the source attribute the helper
+           publishes, and if it publishes neither, a flat derived value is
+           still not stall evidence → honest;
         3. otherwise (a real polled sensor with no live sibling) → frozen.
 
         Round 3 (bekovan again, 2026-09-12, still warning on beta.17): WHICH
@@ -3891,10 +3909,11 @@ class SensorReader:
             # real stall the check exists for. Fail closed (missing information
             # must not silence a warning) — unchanged from the shipped rule.
             return False
-        sources = self._resolve_source_entities(entity_id, cid)
+        sources = self._resolve_source_entities(entity_id, platform, cid)
         if not sources:
-            # A helper we cannot trace (no config entry / unreadable options):
-            # its ``last_reported`` is a change signal, not a poll signal, so a
+            # A helper that publishes no source anywhere — no config entry to
+            # read, no source attribute (a Template, a statistics mean): its
+            # ``last_reported`` is a change signal, not a poll signal, so a
             # flat value is honest, not frozen.
             return True
         for src in sources:
@@ -3937,10 +3956,15 @@ class SensorReader:
             from homeassistant.helpers.entity import entity_sources
             info = entity_sources(self.hass).get(entity_id)
         except Exception as e:  # noqa: BLE001 — never break a read over the source map
-            # Logged, because silence here means falling back to the registry
-            # alone — exactly the blind spot this round fixed, and a round 4
-            # should be able to see it in a log dump instead of re-deriving it.
-            _LOGGER.debug("#912 entity source map unavailable for %s: %s", entity_id, e)
+            # Logged ONCE, because silence here means falling back to the
+            # registry alone — exactly the blind spot this round fixed, and a
+            # round 4 should see it in a log dump instead of re-deriving it.
+            if not self._source_map_unavailable_logged:
+                self._source_map_unavailable_logged = True
+                _LOGGER.debug(
+                    "#912 entity source map unavailable (first time, for %s): %s",
+                    entity_id, e,
+                )
             return None
         return info if isinstance(info, dict) else None
 
@@ -4001,7 +4025,6 @@ class SensorReader:
             from homeassistant.helpers.entity import entity_sources
             srcs = entity_sources(self.hass)
         except Exception:  # noqa: BLE001 — never break a read over the source map
-            _LOGGER.debug("#912 entity source map unavailable for entry %s", cid)
             return []
         if not isinstance(srcs, dict):
             return []
@@ -4014,7 +4037,10 @@ class SensorReader:
         for eid in entity_ids:
             if eid == skip:
                 continue
-            st = self.hass.states.get(eid)
+            try:
+                st = self.hass.states.get(eid)
+            except Exception:  # noqa: BLE001 — never break a read over a sibling
+                continue
             if st is None:
                 continue
             seen = getattr(st, "last_reported", None)
@@ -4031,7 +4057,8 @@ class SensorReader:
                 return True
         return False
 
-    def _resolve_source_entities(self, entity_id: str, cid: Optional[str]) -> list[str]:
+    def _resolve_source_entities(self, entity_id: str, platform: Optional[str],
+                                 cid: Optional[str]) -> list[str]:
         """(#912) The entity ids a derived sensor draws from, read from its
         helper config entry's options/data.
 
@@ -4047,13 +4074,16 @@ class SensorReader:
         it untraceable would hand every such wrapper the honest verdict with
         no evidence at all — a legacy ``filter`` smoothing a modbus meter would
         never report the stall it exists to pass through. So when the config
-        entry says nothing, ask the entity itself: helpers publish their source
-        in their own attributes (``filter``/``group`` → ``entity_id``,
-        ``utility_meter``/``integration``/``derivative`` → ``source``,
-        ``min_max`` → the per-entity ids), and the same generic scan reads them.
-        Only a helper that publishes no source at all — a Template, whose
-        silence really is a change signal — is left untraceable, and the caller
-        treats that as honest.
+        entry says nothing, ask the entity itself: helpers publish what they
+        derive from in their own attributes, under the keys in
+        ``_SOURCE_ATTR_KEYS`` — read by key, never by scanning every attribute
+        value, and never at all for a Template (see that constant).
+
+        What stays untraceable, and therefore honest: a Template; a
+        ``statistics`` or a ``min_max`` mean, which publish no source; any
+        helper that keeps its source to itself. That is the standing
+        trade-off of this rule — a flat derived value is a change signal, not
+        a poll stall, and accusing it is the bug this issue is about.
         """
         found: set[str] = set()
         if cid:
@@ -4064,15 +4094,18 @@ class SensorReader:
             if ce is not None:
                 for blob in (getattr(ce, "options", None), getattr(ce, "data", None)):
                     self._collect_entity_ids(blob, found)
-        if not found:
+        if not found and platform != "template":
             # Fallback only: a UI helper's options are the authoritative
             # source list, so attributes are never allowed to add a second
             # opinion to it — they answer only where it is silent.
             try:
-                st = self.hass.states.get(entity_id)
+                attrs = getattr(self.hass.states.get(entity_id), "attributes", None)
             except Exception:  # noqa: BLE001 — never break a read over a state
-                st = None
-            self._collect_entity_ids(getattr(st, "attributes", None), found)
+                attrs = None
+            if isinstance(attrs, dict):
+                for key in self._SOURCE_ATTR_KEYS:
+                    if key in attrs:
+                        self._collect_entity_ids(attrs[key], found)
         found.discard(entity_id)
         return list(found)
 
@@ -4112,10 +4145,11 @@ class SensorReader:
         genuinely stalled modbus/cloud connection silences every entity of
         the entry, so no sibling corroborates and the warning stands. Cached
         per entry for a few seconds so the three fast-power reads of one
-        cycle scan the entry once. The entry and its membership come from
-        ``_entity_owner`` / ``_entry_entity_ids``, so an entity the registry
-        never saw (no ``unique_id``) still has an owner and still has
-        siblings. No owning config entry at all → False: missing information
+        cycle scan the entry once. The entry comes from ``_entity_owner`` and
+        its membership from ``_entry_entity_ids`` plus (only when no
+        registered sibling answered) ``_unregistered_entry_entity_ids``, so an
+        entity the registry never saw — as a subject OR as a vouching sibling
+        — still has an owner and still has siblings. No owning config entry at all → False: missing information
         must not silence a warning.
         """
         try:

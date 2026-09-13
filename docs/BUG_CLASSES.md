@@ -3384,15 +3384,23 @@ means picking a different unit (the device), which the FoxESS case constrains.
 **Closure:** ownership is resolved in ONE place that knows both registers, and only an entity no
 entity platform owns at all (a raw `states.set`) returns "unknown" — which stays fail-closed,
 because that is the one case where the information really is missing. The derived fail-open is
-bounded by evidence rather than by platform: a helper with no config entry is followed through the
-source it publishes in its OWN attributes (`filter`/`group` → `entity_id`,
-`utility_meter`/`integration`/`derivative` → `source`), so a legacy YAML wrapper over a dead meter
-still warns. The residual — a Template, which publishes no source anywhere — is deliberate: its
-`last_reported` is a change signal, so nothing can be proved about it, and accusing it is the bug.
+bounded wherever the helper publishes a source: a helper with no config entry is followed through
+the source attribute it declares, read BY KEY (`filter`/`group` → `entity_id`,
+`derivative`/`integration`/`compensation` → `source`, `min_max` min/max/last → the winning entity),
+so a legacy YAML `filter` over a dead meter still warns. Never by scanning all attribute VALUES, and
+never for a Template: its attributes are user prose, and one that merely names another entity
+("mirrors sensor.nordpool_…") would be adopted as its source and the sensor declared frozen when
+that entity goes quiet — this issue's own false positive, one layer down. The residual is therefore
+every helper that publishes no source — a Template, a `statistics` or `min_max` mean, a
+`utility_meter` (which publishes `status`/`last_period`, not its source) — and it is deliberate:
+a flat derived value is a change signal, so nothing can be proved about it, and accusing it is the
+bug this class is about.
 **Guard:** `tests/test_912_frozen_unregistered_owner.py` — the reported YAML template goes quiet, an
 unregistered sibling can vouch, an unregistered polled sensor in a dead entry still warns, an
 unowned entity still warns, a YAML `filter` over a DEAD meter still warns (the fail-open is bounded
-by evidence) while the same wrapper over a live one is honest, and a source-inspection test pins
+where a source is published) while the same wrapper over a live one is honest, a Template attribute
+that merely names another entity is not read as a source and a decorative attribute cannot overrule
+a published one, and a source-inspection test pins
 that the two liveness rules ask `_entity_owner` — no `platform`, no `config_entry_id`, and no
 registry call that looks up anything but the handle.
 **Sweep question:** for every index this code treats as authoritative — the entity registry, the

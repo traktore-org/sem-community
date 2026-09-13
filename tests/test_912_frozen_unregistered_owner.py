@@ -227,13 +227,45 @@ class TestTheFailOpenIsBounded:
         assert FILT not in rig.r._frozen_sensors
         assert rig.raised == []
 
+    def test_a_note_attribute_naming_another_entity_is_not_a_source(
+            self, monkeypatch):
+        """A Template's attributes are written by the USER. One that merely
+        NAMES another entity ("mirrors sensor.nordpool_kwh...") must never be
+        adopted as the thing that feeds it — the hourly price sensor is always
+        "stale" by this check's threshold, and the reporter's own sensor would
+        be declared frozen again, one layer down."""
+        rig = _yaml_template(monkeypatch)
+        rig.states[TMPL].attributes = {
+            "unit_of_measurement": "W",
+            "note": "mirrors sensor.nordpool_kwh_nl_eur",
+        }
+        rig.states["sensor.nordpool_kwh_nl_eur"] = _state(0.21, 3600, unit="EUR/kWh")
+        rig.r._read_sensor(TMPL, "solar")
+        assert TMPL not in rig.r._frozen_sensors
+        assert rig.raised == []
+
+    def test_only_the_published_source_key_is_followed(self, monkeypatch):
+        """The same rule from the other side: a ``filter`` publishes its source
+        under ``entity_id``, and a decorative attribute naming a live entity
+        must not overrule it. Source dead → frozen, whatever else the
+        attributes mention."""
+        rig = _yaml_filter(monkeypatch, source_age=900)
+        rig.states[FILT].attributes = {
+            "unit_of_measurement": "W",
+            "entity_id": METER,
+            "note": "see sensor.house_clock",
+        }
+        rig.states["sensor.house_clock"] = _state(1, 5)
+        rig.r._read_sensor(FILT, "grid")
+        assert FILT in rig.r._frozen_sensors
+
     def test_a_helper_that_publishes_no_source_is_honest(self, monkeypatch):
         """The residual, pinned deliberately: a Template publishes no source
-        anywhere — not in a config entry, not in its attributes — and its
-        ``last_reported`` is a change signal, not a poll. Nothing can be
-        proved about it, and accusing it is what broke three betas. Contrast
-        with the filter above: the trade-off is the absence of a source, not
-        the platform being derived."""
+        — a config entry it has none of, and attributes that are user prose,
+        not a declaration — and its ``last_reported`` is a change signal, not
+        a poll. Nothing can be proved about it, and accusing it is what broke
+        three betas. Contrast with the filter above: the trade-off is the
+        absence of a published source, not the platform being derived."""
         rig = _yaml_template(monkeypatch)          # the Shelly is dead too
         rig.r._read_sensor(TMPL, "solar")
         assert TMPL not in rig.r._frozen_sensors
