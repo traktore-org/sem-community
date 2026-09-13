@@ -6745,29 +6745,44 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         The free window's remaining LENGTH — what the cheap-hours grid
         top-up is gated on, so "Finish overnight from: Grid" finishes
-        instead of pre-empting. Read through ``get_sunset_plus_10_time()``,
-        the same authority ``is_night_mode()`` builds the night window from
-        (one class, one day boundary — the #704 rule), with the established
-        ``now.replace`` framing ``_today_pacing_ledger`` uses.
+        instead of pre-empting. Built from the same TimeManager sun frame
+        ``is_night_mode()`` builds the night window from (one class, one
+        day boundary — the #704 rule).
 
-        Two deliberate consequences of that choice:
+        Measured from ``max(now, sunrise)``, not from ``now``. Before
+        sunrise ALL of today's daylight is still ahead, and the difference
+        is not academic: the night window ends at ``min(sunrise, 07:00)``,
+        so on a winter morning there is a real gap — 07:00 to an 08:03
+        sunrise — where the clock says day and the sky says nothing. Ending
+        it at ``now`` would have counted that dark hour as sun.
 
-        * It overstates the sun by the 10 minutes in the name. That is the
-          safe direction for a gate on SPENDING: ten more minutes of
-          believed daylight means ten more minutes before the meter pays.
-        * After sunset ``next_setting`` is TOMORROW's, so the framed time is
-          behind us and this reads 0.0 — correct, and moot anyway: the
-          caller's ``is_night`` arm has already opened the gate by then.
+        **None means the sun integration did not answer.** That matters
+        because ``get_sunset_plus_10_time()`` FABRICATES 20:30 on any
+        failure and returns it like a reading (bug class 40); a gate on
+        SPENDING must not defer the user's target to a sunset nobody
+        measured, so the source is checked and an unmeasured one yields
+        None — the gate then keeps its pre-#953 behaviour rather than
+        guessing at the sun. It also makes the blink harmless: a cycle
+        where ``sun.sun`` is briefly absent returns None, not a four-hour
+        jump in believed daylight that would stop a running top-up.
 
-        None only when the string cannot be framed at all; the gate then
-        keeps its pre-#953 behaviour rather than guessing at the sun.
+        The 10 minutes in ``sunset_plus_10``'s name are left in: ten more
+        minutes of believed daylight means ten more minutes before the
+        meter pays, which is the safe direction for this gate.
         """
         try:
             now = dt_util.now()
-            h, m = (int(x) for x in
-                    self.time_manager.get_sunset_plus_10_time().split(":"))
+            hhmm = self.time_manager.get_sunset_plus_10_time()
+            if getattr(self.time_manager, "_last_sunset_source",
+                       None) != "sun_integration":
+                return None            # fabricated default, not a reading
+            h, m = (int(x) for x in hhmm.split(":"))
             sunset = now.replace(hour=h, minute=m, second=0, microsecond=0)
-            return max(0.0, (sunset - now).total_seconds())
+            start = now
+            sunrise = self.time_manager.get_sunrise_datetime()
+            if sunrise is not None and sunrise > start:
+                start = sunrise
+            return max(0.0, (sunset - start).total_seconds())
         except Exception:  # noqa: BLE001 — no sun frame, no claim
             return None
 

@@ -43,9 +43,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from homeassistant.util import dt as dt_util
+
 from custom_components.solar_energy_management.coordinator.surplus_controller import (
     SurplusController,
     compute_load_intent,
+    grid_top_up_defers_to_sun,
     price_damped_pool,
     solar_bounded_surplus,
     sun_can_still_finish,
@@ -262,6 +265,13 @@ class TestTheReportersMorning:
         pump.is_active = True
         pump._sem_owned = True
         pump._offpeak_forced = True
+        # Stamped the way production stamps it (#703): the load's OWN meter
+        # day, which does NOT roll until sunrise. So at night-end (07:00, or
+        # sunrise itself — the surplus pass runs before update_daily_runtime
+        # in the same cycle) the pre-existing "day rollover" branch is
+        # silent and this clause is the only thing that can end the run.
+        pump._daily_runtime_meter_day = dt_util.now().date()
+        pump._offpeak_forced_date = pump._daily_runtime_meter_day
         pump.needs_offpeak_activation = False
         pump.get_current_consumption = MagicMock(return_value=731.0)
         sc.register_device(pump)
@@ -275,6 +285,8 @@ class TestTheReportersMorning:
         pump.is_active = True
         pump._sem_owned = True
         pump._offpeak_forced = True
+        pump._daily_runtime_meter_day = dt_util.now().date()
+        pump._offpeak_forced_date = pump._daily_runtime_meter_day
         pump.needs_offpeak_activation = False
         pump.get_current_consumption = MagicMock(return_value=731.0)
         sc.register_device(pump)
@@ -333,6 +345,56 @@ class TestTheVirtualSurplusIsGone:
         assert sc.allocation_data.distributable_surplus_w == pytest.approx(700.0)
 
 
+# ── 3b. the comfort band is not something the sun can "finish" ───────────
+
+
+@pytest.mark.unit
+class TestComfortIsExempt:
+    def _dev(self, state):
+        d = _load()
+        d.comfort_state = state
+        return d
+
+    def test_a_breached_band_does_not_wait_for_the_afternoon(self):
+        # ComfortBandMixin makes a breached band read as a runtime deficit.
+        # A cold room is about NOW — deferring it to the sun would leave it
+        # cold all morning because the load also happens to have a floor.
+        assert not grid_top_up_defers_to_sun(
+            self._dev("forced"), daylight_remaining_s=DAYLIGHT_AT_0752,
+            is_night=False)
+
+    def test_a_planned_banking_block_is_the_plans_to_place(self):
+        # The #638-C5 banking pass sets _offpeak_forced on a "willing" band.
+        # The finish window must not cut a run the joint plan created.
+        assert not grid_top_up_defers_to_sun(
+            self._dev("willing"), daylight_remaining_s=DAYLIGHT_AT_0752,
+            is_night=False)
+
+    def test_a_plain_runtime_floor_still_waits(self):
+        assert grid_top_up_defers_to_sun(
+            self._dev(""), daylight_remaining_s=DAYLIGHT_AT_0752,
+            is_night=False)
+
+    async def test_a_banking_run_is_not_cut_by_the_expiry_twin(self, mock_hass):
+        # The walk, not just the predicate: the imperative force-expiry pass
+        # leaves a comfort-banking run alone in the morning, where the plain
+        # runtime-floor top-up beside it would be ended.
+        sc = SurplusController(mock_hass, regulation_offset=0)
+        dev = _load(deficit_s=3 * H)
+        dev.comfort_state = "willing"
+        dev.is_active = True
+        dev._sem_owned = True
+        dev._offpeak_forced = True
+        dev._daily_runtime_meter_day = dt_util.now().date()
+        dev._offpeak_forced_date = dev._daily_runtime_meter_day
+        dev.needs_offpeak_activation = False
+        dev.get_current_consumption = MagicMock(return_value=731.0)
+        sc.register_device(dev)
+        await _run(sc, daylight_remaining_s=DAYLIGHT_AT_0752, is_night=False)
+        assert not dev.deactivate.called
+        assert dev._offpeak_forced is True
+
+
 # ── 4. the intent path says the same thing ───────────────────────────────
 
 
@@ -382,6 +444,73 @@ class TestDesiredStateParity:
         assert i.on is True and i.source == "solar"
 
 
+# ── 4b. the number the gate is fed ───────────────────────────────────────
+
+
+class _TM:
+    """Just enough TimeManager for _daylight_remaining_s_now."""
+
+    def __init__(self, hhmm, source, sunrise=None):
+        self._hhmm, self._last_sunset_source, self._sunrise = \
+            hhmm, source, sunrise
+
+    def get_sunset_plus_10_time(self):
+        return self._hhmm
+
+    def get_sunrise_datetime(self):
+        return self._sunrise
+
+
+def _daylight(tm):
+    from custom_components.solar_energy_management.coordinator.coordinator import (
+        SEMCoordinator,
+    )
+    shim = MagicMock()
+    shim.time_manager = tm
+    return SEMCoordinator._daylight_remaining_s_now(shim)
+
+
+@pytest.mark.unit
+class TestDaylightRemaining:
+    def test_a_fabricated_sunset_is_not_a_reading(self):
+        # get_sunset_plus_10_time() returns a hard-coded 20:30 on ANY
+        # failure and marks the source. Gating a PAID action on a sunset
+        # nobody measured is bug class 40 — so this reads None, and the
+        # top-up keeps its pre-#953 behaviour instead of guessing.
+        assert _daylight(_TM("20:30", "fallback_default")) is None
+
+    def test_a_blink_reads_none_not_a_four_hour_jump(self):
+        # The cycle after a real 16:31 sunset, sun.sun is briefly absent.
+        # None leaves the gate open — it must never STOP a running top-up
+        # by inventing daylight.
+        assert _daylight(_TM("16:31", "fallback_default")) is None
+
+    def test_the_dark_hour_before_sunrise_is_not_counted_as_sun(self):
+        # Winter: night ends at 07:00 (min(sunrise, latest_end)) but the
+        # sun does not rise until 08:03. Measuring from ``now`` would book
+        # that dark hour as daylight.
+        from datetime import timedelta
+        now = dt_util.now()
+        sunset = (now + timedelta(hours=4)).replace(second=0, microsecond=0)
+        sunrise = (now + timedelta(hours=1)).replace(second=0, microsecond=0)
+        tm = _TM(sunset.strftime("%H:%M"), "sun_integration", sunrise=sunrise)
+        got = _daylight(tm)
+        # 3 h of sun ahead, not 4 — the hour before sunrise is not daylight.
+        assert got is not None and 3 * H - 120 <= got <= 3 * H + 120
+
+    def test_a_sunset_already_behind_us_is_zero_not_negative(self):
+        from datetime import timedelta
+        past = (dt_util.now() - timedelta(hours=2)).strftime("%H:%M")
+        assert _daylight(_TM(past, "sun_integration", sunrise=None)) == 0.0
+
+    def test_a_measured_sunset_is_the_seconds_to_it(self):
+        now = dt_util.now()
+        target = now + __import__("datetime").timedelta(minutes=90)
+        tm = _TM(target.strftime("%H:%M"), "sun_integration", sunrise=None)
+        got = _daylight(tm)
+        assert got is not None and 5000.0 <= got <= 5500.0
+
+
 # ── 5. the guard: neither door can be reopened ───────────────────────────
 
 
@@ -421,10 +550,19 @@ class TestSourceGuards:
     def test_the_cheap_hours_pass_consults_the_finish_window(self):
         # Both halves, in the one function PROD runs: the start gate in the
         # off-peak activation pass and the force-expiry twin.
-        assert _calls(_func("update")).count("sun_can_still_finish") >= 2
+        assert _calls(_func("update")).count("grid_top_up_defers_to_sun") >= 2
 
     def test_the_intent_path_consults_it_too(self):
-        assert "sun_can_still_finish" in _calls(_func("compute_load_intent"))
+        assert "grid_top_up_defers_to_sun" in _calls(
+            _func("compute_load_intent"))
+
+    def test_the_one_wrapper_is_the_only_door_to_the_window(self):
+        # Every caller goes through grid_top_up_defers_to_sun, so the comfort
+        # exemption cannot be forgotten at one of the three sites.
+        for name in ("update", "compute_load_intent"):
+            assert "sun_can_still_finish" not in _calls(_func(name)), name
+        assert "sun_can_still_finish" in _calls(
+            _func("grid_top_up_defers_to_sun"))
 
     def test_the_coordinator_feeds_the_window_from_the_time_manager(self):
         coord = Path(__file__).resolve().parent.parent / "coordinator" / "coordinator.py"

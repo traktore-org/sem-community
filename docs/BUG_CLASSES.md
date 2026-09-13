@@ -3432,7 +3432,17 @@ promised overnight behaviour never depends on a sunset reading. Deliberately abo
 window's LENGTH, not about cloud: a dark day is what the top-up exists for, and #559's contract is
 that free comes first. It cannot flap — running, the deficit and the daylight shrink at the same
 one second per second, so their difference is constant; idle, only the daylight shrinks — so it
-opens once a day and stays open. **Where it lives:** every control that fans out to more than one
+opens once a day and stays open. Three things the first cut got wrong and review caught, each a
+class of its own: the daylight is measured from `max(now, sunrise)`, because the night window ends
+at `min(sunrise, 07:00)` and a winter 07:00→08:03 gap would otherwise be booked as sun;
+`_daylight_remaining_s_now` returns **None** unless `TimeManager._last_sunset_source` says the sun
+integration answered, because `get_sunset_plus_10_time()` fabricates 20:30 on any failure and
+hands it back like a reading (class 40) — which also makes a one-cycle `sun.sun` blink harmless
+instead of a four-hour jump in believed daylight that would stop a running top-up; and the single
+entry point `grid_top_up_defers_to_sun(device, …)` exempts a device whose COMFORT band is speaking
+(`forced` = a cold room now, `willing` = a block the #638 joint plan placed), neither of which is
+the daily runtime floor this window is about — the same reason `ComfortBandMixin.daily_targets_met`
+already refuses to stand the paid sources down on a forced band. **Where it lives:** every control that fans out to more than one
 backend flag. `_setOvernightSource` (battery / grid — this instance); `_applyMergedMode`
 (`control_mode` + `battery_assist_enabled`, whose "Solar only" hint promises "never imports from
 grid"); the EV charge-mode select, where `consts/ev_charge_modes.py` already does this RIGHT and is
@@ -3444,6 +3454,14 @@ is not vacuous), the overnight promise and the short-winter-day tail both still 
 class-17 stop twin ending a night run at dawn, a monotonicity sweep pinning that the gate cannot
 flap, desired-state parity on `compute_load_intent`, and AST guards that BOTH halves of the
 imperative pass and the intent path call `sun_can_still_finish` and that the coordinator feeds it
-from the same sun authority `is_night_mode` uses. **Sweep question:** for every control a user can
+from the same sun authority `is_night_mode` uses. **Open residual (for Guido — a product call, not a sweep):** the window is
+about TIME, never about energy. A user whose only cheap window is midday (a Tibber/Amber negative
+midday block) on an overcast day is now deferred through that window — the daylight is long enough
+on the clock, the sun never delivers, and the target is missed until the night window, which may
+not be cheap. Pre-#953 that user was served, by the ungated pass or by the virtual pool. The
+energy-aware form of the same gate is `forecast_remaining_today_kwh` vs `deficit × rated_power`,
+which needs a decision about how much a forecast is trusted to keep the meter out (a wrong
+forecast the other way buys grid in full sun). Deliberately not guessed at here. **Sweep
+question:** for every control a user can
 see — list the backend flags it writes, then read its LABEL as a specification and ask of each flag
 *"does this one honour every word of it?"* Refs #953 #633 #938 #620 #559 #885.

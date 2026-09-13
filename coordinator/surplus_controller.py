@@ -450,6 +450,34 @@ def sun_can_still_finish(
     return float(daylight_remaining_s) >= deficit
 
 
+def grid_top_up_defers_to_sun(
+    device: "ControllableDevice",
+    *,
+    daylight_remaining_s: "Optional[float]",
+    is_night: bool,
+) -> bool:
+    """(#953) Does THIS device's cheap-hours grid top-up wait for the sun?
+
+    :func:`sun_can_still_finish` on the device's own runtime deficit, with
+    one exemption: a load whose COMFORT band is speaking is not waiting for
+    anything. ``ComfortBandMixin`` makes a breached band read as a runtime
+    deficit (``forced``) and the #638-C5 joint plan creates banking runs
+    (``willing``) — both carrying ``_offpeak_forced`` — but neither is the
+    daily runtime floor, and neither is something the afternoon sun can
+    "finish": a cold room is about NOW, and a banking block belongs to the
+    plan that placed it. Mirrors ``ComfortBandMixin.daily_targets_met``,
+    which for the same reason refuses to let a met floor stand the paid
+    sources down while the band is forced.
+    """
+    if getattr(device, "comfort_state", "") in ("willing", "forced"):
+        return False
+    return sun_can_still_finish(
+        float(getattr(device, "remaining_daily_runtime_sec", 0.0) or 0.0),
+        daylight_remaining_s=daylight_remaining_s,
+        is_night=is_night,
+    )
+
+
 def price_damped_pool(distributable: float, price_level: str) -> float:
     """(#953) A price signal may DAMP the solar pool; it may never inflate it.
 
@@ -532,11 +560,8 @@ def compute_load_intent(
     # "no source available" (stopped). The imperative passes, which PROD
     # runs, carry a sticky marker and need the twin in the force-expiry
     # pass — class 17.
-    sun_still_has_time = sun_can_still_finish(
-        float(getattr(device, "remaining_daily_runtime_sec", 0.0) or 0.0),
-        daylight_remaining_s=daylight_remaining_s,
-        is_night=is_night,
-    )
+    sun_still_has_time = grid_top_up_defers_to_sun(
+        device, daylight_remaining_s=daylight_remaining_s, is_night=is_night)
 
     # 1. Not SEM-driven. Off = monitor only; Peak-only = user-managed, but SEM
     #    still SHEDS it under peak risk.
@@ -1635,9 +1660,8 @@ class SurplusController:
                     reason = "cheap-hours disabled by user"
                 elif stale:
                     reason = "cheap-hours force expired (day rollover)"
-                elif sun_can_still_finish(
-                        float(getattr(device, "remaining_daily_runtime_sec",
-                                      0.0) or 0.0),
+                elif grid_top_up_defers_to_sun(
+                        device,
                         daylight_remaining_s=self._daylight_remaining_s,
                         is_night=self._is_night_cycle):
                     # (#953) The grid top-up is a FINISH source. A run that
@@ -2023,26 +2047,6 @@ class SurplusController:
                     continue
                 if device.stop_condition_met:
                     continue
-                # (#953) "Finish overnight from: Grid" is a FINISH source —
-                # the window its battery twin has carried since #633. While
-                # today's remaining daylight is still long enough to close
-                # the deficit, the meter waits. At night this is trivially
-                # open, so the overnight promise is untouched.
-                if sun_can_still_finish(
-                        float(getattr(device, "remaining_daily_runtime_sec",
-                                      0.0) or 0.0),
-                        daylight_remaining_s=self._daylight_remaining_s,
-                        is_night=self._is_night_cycle):
-                    log_on_change(
-                        _LOGGER, f"finishwindow:{device.device_id}",
-                        logging.INFO,
-                        "%s: cheap-hours top-up deferred — %.1f h of daylight "
-                        "left can still cover the %.1f h still owed (#953)",
-                        device.name,
-                        (self._daylight_remaining_s or 0.0) / 3600.0,
-                        device.remaining_daily_runtime_sec / 3600.0,
-                    )
-                    continue
                 # (#638 G4) the joint plan placed this load's blocks elsewhere
                 # tonight — don't start it in THIS cheap hour. Gates the start
                 # only; a run already going ends by its own terms (deficit /
@@ -2055,6 +2059,29 @@ class SurplusController:
                 # bypassing the reconciler's user-respect cooldown (and the
                 # device min_off anti-flicker).
                 if device.needs_offpeak_activation and device.can_activate():
+                    # (#953) "Finish overnight from: Grid" is a FINISH
+                    # source — the window its battery twin has carried
+                    # since #633. While today's remaining daylight is
+                    # still long enough to close the deficit, the meter
+                    # waits. At night this is trivially open, so the
+                    # overnight promise is untouched. Below
+                    # needs_offpeak_activation deliberately: a load the
+                    # sun is already carrying is not "deferred".
+                    if grid_top_up_defers_to_sun(
+                            device,
+                            daylight_remaining_s=self._daylight_remaining_s,
+                            is_night=self._is_night_cycle):
+                        log_on_change(
+                            _LOGGER, f"finishwindow:{device.device_id}",
+                            logging.INFO,
+                            "%s: cheap-hours top-up deferred — %.1f h of "
+                            "daylight left can still cover the %.1f h still "
+                            "owed (#953)",
+                            device.name,
+                            (self._daylight_remaining_s or 0.0) / 3600.0,
+                            device.remaining_daily_runtime_sec / 3600.0,
+                        )
+                        continue
                     # (#864) The security layer: a cheap-hours GRID force
                     # must FIT the billing slot before it starts. Price
                     # says go; the meter's budget says how much. Refusing
