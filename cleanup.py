@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from typing import Iterable, List, Optional, Sequence
 
 from .const import DOMAIN
@@ -170,15 +171,35 @@ def orphan_store_keys(names: Iterable[str],
     return out
 
 
+#: What a Home Assistant config-entry id looks like: a 26-character ULID
+#: (``01M2BQ1A7MWSNS021PMT5XQMQA``), or the 32-hex-character ids older
+#: installs still carry.
+_ENTRY_ID_RE = re.compile(r"^(?:[0-9A-Z]{26}|[0-9a-f]{32})$")
+
+
+def _is_entry_id(text: str) -> bool:
+    return bool(_ENTRY_ID_RE.match(text or ""))
+
+
 def _looks_entry_scoped(name: str) -> bool:
-    """True when the key carries a config-entry id in one of SEM's shapes."""
+    """True when the key carries a real config-entry id in one of SEM's shapes.
+
+    The id must LOOK like one. The first cut accepted any middle segment, and
+    a fault-injection run on the .46 rig (13.09) deleted a file a user had
+    copied aside by hand as ``solar_energy_management_mybackup_energy`` — it
+    read as an orphaned install's store. A sweep that deletes someone's own
+    file is the exact problem this module exists to avoid, so the shape is
+    checked rather than assumed: anything else is unrecognised, and
+    unrecognised is left alone and named in the log.
+    """
+    for prefix in ("sem.pacing.", "sem.deye.snapshot.", "sem.deye.unsafe."):
+        if name.startswith(prefix):
+            # deye keys carry a second scope (the battery id) after the entry
+            return _is_entry_id(name[len(prefix):].split(".", 1)[0])
     if name.startswith("sem_seen_version_"):
-        return len(name) > len("sem_seen_version_")
-    if name.startswith(("sem.pacing.", "sem.deye.snapshot.", "sem.deye.unsafe.")):
-        return True
+        return _is_entry_id(name[len("sem_seen_version_"):])
     if name.startswith(f"{DOMAIN}_") and name.endswith(("_energy", "_daily")):
-        middle = name[len(DOMAIN) + 1:].rsplit("_", 1)[0]
-        return bool(middle) and middle not in ("load_management", "totals")
+        return _is_entry_id(name[len(DOMAIN) + 1:].rsplit("_", 1)[0])
     return False
 
 

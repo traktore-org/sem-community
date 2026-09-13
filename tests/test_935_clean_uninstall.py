@@ -356,3 +356,51 @@ class TestTheWallboxIsHandedBack:
         dev.send = AsyncMock(side_effect=RuntimeError("UDP is gone"))
         assert _run(dev.release_to_user()) is not None or True
         assert dev._sem_parked is False, "the debt is cleared either way"
+
+
+class TestTheSweepOnlyEverTakesARealEntrysStore:
+    """Found by fault injection on the .46 rig, 13.09: the first cut accepted
+    ANY middle segment as a config-entry id, so a file the user had copied
+    aside by hand — `solar_energy_management_mybackup_energy` — was swept as
+    an orphaned install's store. A cleanup that deletes someone's own file is
+    the exact problem this module exists to avoid."""
+
+    REAL = "01M2BQ1A7MWSNS021PMT5XQMQA"          # a live rig entry id (ULID)
+    OLD = "0123456789abcdef0123456789abcdef"     # the 32-hex ids older installs carry
+
+    def _swept(self, names, live=()):
+        return cleanup.orphan_store_keys(names, live)
+
+    def test_a_hand_made_backup_is_not_an_orphan(self):
+        for name in (
+            "solar_energy_management_mybackup_energy",
+            "solar_energy_management_backup_daily",
+            "solar_energy_management_before_upgrade_energy",
+            "solar_energy_management_copy_daily",
+        ):
+            assert self._swept([name]) == [], name
+
+    def test_a_real_entrys_store_still_is(self):
+        for name in (
+            f"solar_energy_management_{self.REAL}_energy",
+            f"solar_energy_management_{self.OLD}_daily",
+            f"sem_seen_version_{self.REAL}",
+            f"sem.pacing.{self.REAL}",
+            f"sem.deye.snapshot.{self.REAL}.battery_1",
+        ):
+            assert self._swept([name]) == [name], name
+
+    def test_a_lowercase_or_short_middle_is_not_an_entry_id(self):
+        """ULIDs are 26 uppercase alphanumerics; anything else is a word."""
+        for middle in ("01direntry", "backup", "01M2BQ1A7MWSNS021PMT5XQMQ",
+                       "01M2BQ1A7MWSNS021PMT5XQMQAA", "x" * 26):
+            name = f"solar_energy_management_{middle}_daily"
+            assert self._swept([name]) == [], middle
+
+    def test_the_rigs_real_neighbours_survive(self):
+        """The other SEM-ish names actually sitting in the rig's .storage."""
+        for name in ("core.config_entries.bak.sem257", "energy.backup_sem",
+                     "lovelace.sem-dashboard", "lovelace.test_sem",
+                     "sem_device_mappings", "sem_device_mappings.bak",
+                     "semaphore_state", "sem_seen_version_", "sem.pacing."):
+            assert self._swept([name]) == [], name
