@@ -13,6 +13,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.1.0-beta.20] — 13.09.2026
+
+- 🐛 **"Sensor frozen" no longer fires for a template sensor written in
+  `configuration.yaml`** (#912, by @bekovan). Two earlier rounds taught the
+  check that a flat reading from a live integration is honest — but both asked
+  the entity registry which integration owns the sensor, and the registry only
+  lists entities that have a `unique_id`. A YAML-declared template has none, so
+  the lookup came back empty and SEM read that emptiness as "a polled sensor
+  whose connection died". Ownership now comes from Home Assistant's own record
+  of which integration added each entity, so an entity the registry never saw
+  is still recognised; an existing Repair clears on the first cycle after the
+  update. A genuine stall still warns — including behind a YAML helper, which
+  is now followed to the source it publishes in its own attributes.
+
 # [2.1.0-beta.19] — 13.09.2026
 
 - ✨ **Removing SEM now hands the house back** (#935, #908). SEM used to leave
