@@ -3871,21 +3871,22 @@ class SensorReader:
            traced (a YAML helper with no config entry to read), a flat derived
            value is still not stall evidence → honest;
         3. otherwise (a real polled sensor with no live sibling) → frozen.
+
+        Round 3 (bekovan again, 2026-09-12, still warning on beta.17): WHICH
+        platform an entity belongs to is asked of ``_entity_owner``, not of
+        the entity registry alone — the same template declared in
+        ``configuration.yaml`` has no ``unique_id``, is in no registry, and
+        was falling through step 2 to the polled-sensor verdict.
         """
         if self._integration_is_reporting(entity_id):
             return True
-        try:
-            reg = er.async_get(self.hass)
-            entry = reg.async_get(entity_id)
-        except Exception:  # noqa: BLE001 — never break a read over the registry
-            return False
-        platform = getattr(entry, "platform", None) if entry is not None else None
+        platform, cid = self._entity_owner(entity_id)
         if platform not in self._DERIVED_PLATFORMS:
             # A directly-polled sensor whose whole entry has gone quiet is the
             # real stall the check exists for. Fail closed (missing information
             # must not silence a warning) — unchanged from the shipped rule.
             return False
-        sources = self._resolve_source_entities(entry)
+        sources = self._resolve_source_entities(entity_id, cid)
         if not sources:
             # A helper we cannot trace (no config entry / unreadable options):
             # its ``last_reported`` is a change signal, not a poll signal, so a
@@ -3919,7 +3920,80 @@ class SensorReader:
             and age < self._STALE_THRESHOLD_S
         )
 
-    def _resolve_source_entities(self, entry) -> list[str]:
+    def _entity_source_info(self, entity_id: str) -> Optional[dict]:
+        """(#912) HA's own record of which integration added ``entity_id``.
+
+        ``entity_sources()`` is written for EVERY entity an entity platform
+        adds — ``{"domain": "template", "custom_component": ..., optionally
+        "config_entry": ...}`` — registered or not. Anything that is not a
+        plain mapping (an older core, a test double) is "no answer".
+        """
+        try:
+            from homeassistant.helpers.entity import entity_sources
+            info = entity_sources(self.hass).get(entity_id)
+        except Exception:  # noqa: BLE001 — never break a read over the source map
+            return None
+        return info if isinstance(info, dict) else None
+
+    def _entity_owner(self, entity_id: str) -> tuple[Optional[str], Optional[str]]:
+        """(#912 round 3) Which integration owns ``entity_id``, and under which
+        config entry — the entity registry first, then HA's per-entity source
+        map for what the registry cannot see.
+
+        The registry is a register of entities that have a ``unique_id``.
+        bekovan's ``sensor.inverted_power_plugin_solar`` (2026-09-12, still
+        false-warning on beta.17) is a Template sensor declared in
+        ``configuration.yaml``, so it has no ``unique_id`` and the registry has
+        NOTHING to say about it. Round 2 read that silence as an answer — no
+        platform, therefore not derived, therefore a polled sensor whose entry
+        has gone quiet — and raised the Repair for the third beta running. The
+        registry's silence about an ENTITY is not evidence about its
+        INTEGRATION; ``entity_sources()`` is where HA keeps that fact for
+        every entity it adds. Still ``(None, None)`` for an entity no platform
+        owns at all (a raw ``states.set``) — that is genuinely missing
+        information, and the caller stays fail-closed on it.
+        """
+        platform = cid = None
+        try:
+            entry = er.async_get(self.hass).async_get(entity_id)
+        except Exception:  # noqa: BLE001 — never break a read over the registry
+            entry = None
+        if entry is not None:
+            platform = getattr(entry, "platform", None)
+            cid = getattr(entry, "config_entry_id", None)
+        if platform and cid:
+            return platform, cid
+        info = self._entity_source_info(entity_id)
+        if info is not None:
+            if not platform:
+                dom = info.get("domain")
+                platform = dom if isinstance(dom, str) else None
+            if not cid:
+                ce = info.get("config_entry")
+                cid = ce if isinstance(ce, str) else None
+        return platform, cid
+
+    def _entry_entity_ids(self, cid: str, reg) -> list[str]:
+        """(#912) Every entity of config entry ``cid``: the registry's, plus
+        the ones an integration added without a ``unique_id`` — which the
+        registry never lists, while HA's source map does. Same unit (one
+        config entry = one connection), just the complete membership."""
+        ids: list[str] = []
+        try:
+            ids = [e.entity_id for e in er.async_entries_for_config_entry(reg, cid)]
+        except Exception:  # noqa: BLE001 — never break a read over the registry
+            ids = []
+        try:
+            from homeassistant.helpers.entity import entity_sources
+            srcs = entity_sources(self.hass)
+            if isinstance(srcs, dict):
+                ids += [eid for eid, info in srcs.items()
+                        if isinstance(info, dict) and info.get("config_entry") == cid]
+        except Exception:  # noqa: BLE001 — never break a read over the source map
+            pass
+        return list(dict.fromkeys(ids))
+
+    def _resolve_source_entities(self, entity_id: str, cid: Optional[str]) -> list[str]:
         """(#912) The entity ids a derived sensor draws from, read from its
         helper config entry's options/data.
 
@@ -3933,8 +4007,6 @@ class SensorReader:
         config entry to read → empty, and the caller treats an untraceable
         helper as honest (its flat value is not stall evidence).
         """
-        cid = getattr(entry, "config_entry_id", None)
-        self_eid = getattr(entry, "entity_id", None)
         if not cid:
             return []
         try:
@@ -3946,7 +4018,7 @@ class SensorReader:
         found: set[str] = set()
         for blob in (getattr(ce, "options", None), getattr(ce, "data", None)):
             self._collect_entity_ids(blob, found)
-        found.discard(self_eid)
+        found.discard(entity_id)
         return list(found)
 
     def _collect_entity_ids(self, blob, out: set, _depth: int = 0) -> None:
@@ -3985,15 +4057,17 @@ class SensorReader:
         genuinely stalled modbus/cloud connection silences every entity of
         the entry, so no sibling corroborates and the warning stands. Cached
         per entry for a few seconds so the three fast-power reads of one
-        cycle scan the registry once. No registry entry / no config entry →
-        False: missing information must not silence a warning.
+        cycle scan the entry once. The entry and its membership come from
+        ``_entity_owner`` / ``_entry_entity_ids``, so an entity the registry
+        never saw (no ``unique_id``) still has an owner and still has
+        siblings. No owning config entry at all → False: missing information
+        must not silence a warning.
         """
         try:
             reg = er.async_get(self.hass)
-            entry = reg.async_get(entity_id)
         except Exception:  # noqa: BLE001 — never break a read over the registry
             return False
-        cid = getattr(entry, "config_entry_id", None) if entry is not None else None
+        cid = self._entity_owner(entity_id)[1]
         if not cid:
             return False
         now_mono = time.monotonic()
@@ -4004,10 +4078,10 @@ class SensorReader:
         try:
             import homeassistant.util.dt as _dt
             now = _dt.utcnow()
-            for sib in er.async_entries_for_config_entry(reg, cid):
-                if sib.entity_id == entity_id:
+            for sib_eid in self._entry_entity_ids(cid, reg):
+                if sib_eid == entity_id:
                     continue
-                st = self.hass.states.get(sib.entity_id)
+                st = self.hass.states.get(sib_eid)
                 if st is None:
                     continue
                 seen = getattr(st, "last_reported", None)

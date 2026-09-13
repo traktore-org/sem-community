@@ -3345,3 +3345,42 @@ and returns False, so `ensure_enabled` can never close the switch — an observe
 reads `off` walks the re-assert budget and files this ERROR Repair in ~70 s, claiming commands were
 rejected in the one mode that promises to send nothing. Unchanged here; it belongs with residual (1).
 Refs #945 #611 #824 #915 #462 #536 #548 #840 #627.
+
+### 87. A register that lists only half the world, asked a yes/no question — GUARDED
+**Symptom:** a reporter is still getting the same false Repair three betas after it was "fixed"
+twice. bekovan (#912, 2.1.0-beta.17, 2026-09-12) kept the frozen-sensor Repair for
+`sensor.inverted_power_plugin_solar` after the sibling rule (beta.7) AND the derived-source rule
+(beta.9) — both of which were the right rules, and neither of which could ever run for their entity.
+**Root shape:** the code asks *the entity registry* which integration owns an entity. The entity
+registry is a register of entities that have a `unique_id`; an entity declared in
+`configuration.yaml` without one is not in it at all. So the lookup returns `None` — and `None` is
+read as an ANSWER ("no platform → not a helper → a polled sensor whose entry has gone quiet") rather
+than as *this register cannot see this entity*. Every later rule then reasons from a verdict the
+register never gave. Home Assistant does keep the fact, for every entity an entity platform adds,
+registered or not: `homeassistant.helpers.entity.entity_sources()` →
+`{"domain": "template", "config_entry": ...}`.
+**Where it lives:** any registry lookup whose `None` branch decides something ABOUT the entity
+instead of declining to derive from it. `sensor_reader._source_is_alive` (the platform question) and
+`_integration_is_reporting` (the config-entry question) — **swept here** into one `_entity_owner`
+(registry first, source map second), and the entry's MEMBERSHIP too (`_entry_entity_ids`: an
+integration's entities without a `unique_id` were invisible as vouching siblings). *Assessed and
+correct as-is:* `ha_energy_reader`'s device-sibling derivations and `__init__`'s offline-twin heal
+ask for a `device_id`, which an unregistered entity genuinely does not have — "no derivation" is the
+true answer there, not a verdict. *Named, not swept:* `hardware_detection`'s seed → `platform` brand
+detection reads the same registry and answers `no_registry_entry` for a YAML-declared seed; that is
+a detection gap (no claim made), not a false accusation, and a source-map fallback there is its own
+round. `coordinator/dual_phase_guard.py` is the same FAMILY from the other side (class 63): it fails
+a safety gate closed on a flat `last_reported`, which an integration that skips identical writes
+(#912's foxess) produces on a genuinely quiet phase — a safety path, so a liveness fallback there is
+a deliberate decision, not a sweep.
+**Closure:** ownership is resolved in ONE place that knows both registers, and only an entity no
+entity platform owns at all (a raw `states.set`) returns "unknown" — which stays fail-closed,
+because that is the one case where the information really is missing.
+**Guard:** `tests/test_912_frozen_unregistered_owner.py` — the reported YAML template goes quiet, an
+unregistered sibling can vouch, an unregistered polled sensor in a dead entry still warns, an
+unowned entity still warns, and a source-inspection test pins that the two liveness rules ask
+`_entity_owner` rather than reading `platform`/`config_entry_id` off a registry entry themselves.
+**Sweep question:** for every index this code treats as authoritative — the entity registry, the
+device registry, the Energy Dashboard, the roster (#915) — which entities is it *structurally
+incapable* of listing, and does absence from it read as "no" or as "I don't know"? Refs #912 #851
+#611 #86.
