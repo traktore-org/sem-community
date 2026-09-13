@@ -13,6 +13,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.1.0-beta.21] — 13.09.2026
+
+- 🐛 **"Finish overnight from: Grid" no longer buys the whole day's target at
+  sunrise** (#953, by @alexmc1510). A pool pump set to a 4 h daily target
+  switched on at 07:52:39 — sunrise to the second — and kept running on 78 W
+  of sun with the house battery discharging. Sunrise is when the day's runtime
+  counter resets, and the grid top-up had no window of its own: the first
+  cheap slot of the morning paid for the whole target before the sun had
+  produced anything, and the day's solar went to export. It is a *finish*
+  source now, like the Battery option beside it always was — it waits while
+  the daylight still left today is long enough to cover what the load is owed,
+  and steps in for the night, and for the tail of a short winter day. A top-up
+  that started overnight stops at daybreak instead of running on.
+- 🐛 **A cheap hour no longer starts a "Solar only" load from the grid**
+  (#953). On a dynamic tariff, cheap and negative hours injected a phantom
+  3–10 kW of "surplus" into the pool every load draws from, so a load told to
+  run on sun alone ran from the meter and had the hours booked to its "on
+  solar today" bar. Price now only ever damps the pool; buying a cheap hour is
+  what the per-device **Finish overnight from: Grid** setting is for.
+
 # [2.1.0-beta.20] — 13.09.2026
 
 - 🐛 **"Sensor frozen" no longer fires for a template sensor written in
