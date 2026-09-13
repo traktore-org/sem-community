@@ -3524,8 +3524,9 @@ async def _async_register_services(
         from . import cleanup
         from .coordinator.repair_issues import clear_previous_install_leftovers
 
-        want_stats = bool(call.data.get("statistics", True))
-        want_dashboard = bool(call.data.get("dashboard", False))
+        # The schema has already coerced and defaulted these.
+        want_stats = call.data["statistics"]
+        want_dashboard = call.data["dashboard"]
         done = {"statistics": 0, "dashboard": False}
 
         if want_stats:
@@ -3541,8 +3542,22 @@ async def _async_register_services(
             "removed" if done["dashboard"] else "kept")
 
     try:
+        # (#935) A SCHEMA, because the two fields are destructive and their
+        # asymmetry is the safety: statistics default on, the dashboard off.
+        # Registered bare, `dashboard: 12345` reached `bool(12345)` and the
+        # off-by-default option armed itself — the rig's dashboard was
+        # deleted by a junk value in a fault-injection call (13.09).
         hass.services.async_register(
-            DOMAIN, "remove_leftovers", async_remove_leftovers_service)
+            DOMAIN, "remove_leftovers", async_remove_leftovers_service,
+            schema=vol.Schema({
+                # A real boolean, not cv.boolean: that accepts any non-zero
+                # NUMBER as yes (cv.boolean(12345) is True), and a truthy
+                # number is not consent to an irreversible delete. Both of
+                # these throw away history that cannot be got back, so they
+                # take true or false and nothing else.
+                vol.Optional("statistics", default=True): bool,
+                vol.Optional("dashboard", default=False): bool,
+            }))
         _LOGGER.debug("Registered service: %s.remove_leftovers", DOMAIN)
     except Exception as err:  # noqa: BLE001
         _LOGGER.error("Failed to register remove_leftovers service: %s", err)

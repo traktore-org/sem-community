@@ -16,6 +16,8 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 
 from custom_components.solar_energy_management import cleanup
 
@@ -209,25 +211,17 @@ class TestTheFrontendResources:
 
 
 class TestStatisticsAreTheUsersUntilTheySaySo:
-    def test_clearing_asks_the_recorder_with_sems_own_ids(self):
-        hass = SimpleNamespace(services=SimpleNamespace(async_call=AsyncMock()))
-        n = _run(cleanup.async_clear_statistics(
-            hass, ["sensor.sem_solar_power", "sensor.sem_battery_soc"]))
-        assert n == 2
-        call = hass.services.async_call.await_args
-        assert call.args[0] == "recorder" and call.args[1] == "clear_statistics"
-        assert call.args[2]["statistic_ids"] == [
-            "sensor.sem_solar_power", "sensor.sem_battery_soc"]
-
     def test_nothing_to_clear_calls_nothing(self):
         hass = SimpleNamespace(services=SimpleNamespace(async_call=AsyncMock()))
         assert _run(cleanup.async_clear_statistics(hass, [])) == 0
         assert hass.services.async_call.await_count == 0
 
-    def test_a_missing_recorder_is_reported_not_raised(self):
-        hass = SimpleNamespace(services=SimpleNamespace(
-            async_call=AsyncMock(side_effect=RuntimeError("no recorder"))))
-        assert _run(cleanup.async_clear_statistics(hass, ["sensor.x"])) == 0
+    def test_a_missing_recorder_is_reported_not_raised(self, monkeypatch):
+        monkeypatch.setattr(
+            "homeassistant.components.recorder.get_instance",
+            MagicMock(side_effect=RuntimeError("no recorder")))
+        assert _run(cleanup.async_clear_statistics(
+            SimpleNamespace(), ["sensor.x"])) == 0
 
 
 class TestTheDashboardIsOfferedNeverTaken:
@@ -404,3 +398,89 @@ class TestTheSweepOnlyEverTakesARealEntrysStore:
                      "sem_device_mappings", "sem_device_mappings.bak",
                      "semaphore_state", "sem_seen_version_", "sem.pacing."):
             assert self._swept([name]) == [], name
+
+
+class TestTheServiceCannotBeArmedByAccident:
+    """Fault injection, 13.09: the service was registered without a schema,
+    so `dashboard: 12345` reached `bool(12345)` and the off-by-default
+    destructive option armed itself. The rig's dashboard was deleted by a
+    junk value. The asymmetry of the two defaults IS the safety, so it has
+    to survive a caller who sends nonsense."""
+
+    def _schema(self):
+        import voluptuous as vol
+
+        return vol.Schema({
+            vol.Optional("statistics", default=True): bool,
+            vol.Optional("dashboard", default=False): bool,
+        })
+
+    def test_the_registered_schema_is_this_one(self):
+        """Pinned by the AST so a rename cannot quietly drop it."""
+        import ast
+        import inspect
+
+        from custom_components import solar_energy_management as sem
+
+        src = inspect.getsource(sem._async_register_services)
+        tree = ast.parse(src.lstrip())
+        registered = [
+            n for n in ast.walk(tree)
+            if isinstance(n, ast.Call)
+            and getattr(n.func, "attr", "") == "async_register"
+            and any(isinstance(a, ast.Constant) and a.value == "remove_leftovers"
+                    for a in n.args)
+        ]
+        assert registered, "the service must still be registered"
+        assert any(k.arg == "schema" for k in registered[0].keywords), (
+            "remove_leftovers must be registered WITH a schema")
+
+    def test_junk_cannot_turn_the_dashboard_option_on(self):
+        import voluptuous as vol
+
+        # cv.boolean would pass 12345 and 2.5 — any non-zero number is
+        # "true" to it, and a truthy number is not consent to a delete.
+        for junk in (12345, "maybe", [], {"x": 1}, 2.5, 1, 0, "true"):
+            with pytest.raises(vol.Invalid):
+                self._schema()({"dashboard": junk})
+
+    def test_the_defaults_keep_their_asymmetry(self):
+        out = self._schema()({})
+        assert out["statistics"] is True, "the leftover statistics are the ask"
+        assert out["dashboard"] is False, "the dashboard may hold their edits"
+
+    def test_a_real_boolean_still_works(self):
+        assert self._schema()({"dashboard": True})["dashboard"] is True
+        assert self._schema()({"statistics": False})["statistics"] is False
+
+
+class TestStatisticsGoThroughTheRecordersOwnApi:
+    """`recorder.clear_statistics` is not a service — the recorder publishes
+    purge / purge_entities / enable / disable / get_statistics and clears
+    statistics over its websocket API. The first cut called the service, so
+    every call failed, warned "recorder may be disabled" about a recorder
+    that was loaded and running, and reported nothing cleared (.46, 13.09)."""
+
+    def test_it_hands_the_ids_to_the_recorder_instance(self, monkeypatch):
+        handed = {}
+
+        class FakeInstance:
+            def async_clear_statistics(self, ids, **kw):
+                handed["ids"] = list(ids)
+
+        monkeypatch.setattr("homeassistant.components.recorder.get_instance",
+                            lambda hass: FakeInstance())
+        hass = SimpleNamespace(services=SimpleNamespace(async_call=AsyncMock()))
+        n = _run(cleanup.async_clear_statistics(
+            hass, ["sensor.sem_solar_power", "sensor.sem_battery_soc"]))
+        assert n == 2
+        assert handed["ids"] == ["sensor.sem_solar_power", "sensor.sem_battery_soc"]
+        assert hass.services.async_call.await_count == 0, (
+            "never through a service that does not exist")
+
+    def test_a_missing_recorder_reports_zero(self, monkeypatch):
+        monkeypatch.setattr(
+            "homeassistant.components.recorder.get_instance",
+            MagicMock(side_effect=RuntimeError("recorder not loaded")))
+        assert _run(cleanup.async_clear_statistics(
+            SimpleNamespace(), ["sensor.x"])) == 0

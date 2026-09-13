@@ -315,19 +315,34 @@ async def async_clear_statistics(hass, statistic_ids: Sequence[str]) -> int:
     they are the user's history, and a year of solar yield is not SEM's to
     throw away because SEM is being uninstalled. So this is never part of the
     automatic teardown; it is behind the ``remove_leftovers`` service.
+
+    Through the recorder's own API, not a service call. The first cut called
+    ``recorder.clear_statistics``, which does not exist — the recorder
+    publishes purge / purge_entities / enable / disable / get_statistics and
+    clears statistics over its WEBSOCKET api. So every call failed, warned
+    "recorder may be disabled" about a recorder that was loaded and running,
+    and reported nothing cleared. Live on the .46 rig, 13.09.
     """
     ids = [s for s in statistic_ids if s]
     if not ids:
         return 0
     try:
-        await hass.services.async_call(
-            "recorder", "clear_statistics", {"statistic_ids": ids},
-            blocking=True)
-        return len(ids)
-    except Exception:  # noqa: BLE001
-        _LOGGER.warning("SEM cleanup: could not clear statistics (recorder "
-                        "may be disabled)")
+        from homeassistant.components.recorder import get_instance
+
+        instance = get_instance(hass)
+    except Exception:  # noqa: BLE001 — recorder genuinely absent
+        _LOGGER.warning(
+            "SEM cleanup: the recorder is not loaded — %d statistic id(s) "
+            "left untouched", len(ids))
         return 0
+    try:
+        # Queued on the recorder's own thread; the call returns once the task
+        # is accepted, which is why the count is what was HANDED OVER.
+        instance.async_clear_statistics(ids)
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.warning("SEM cleanup: the recorder refused the clear: %s", e)
+        return 0
+    return len(ids)
 
 
 #: The dashboard SEM generates, and its sidebar entry. Both are the USER's
