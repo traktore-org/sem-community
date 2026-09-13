@@ -5715,6 +5715,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # (#925 audit) the twin flag travels with the watts
                 grid_import_known=not bool(getattr(
                     power, "grid_power_unavailable", False)),
+                # (#953) how long the FREE window still has to run — the
+                # "finish" gate on the cheap-hours grid top-up.
+                daylight_remaining_s=self._daylight_remaining_s_now(),
             )
             surplus_data.surplus_total_w = allocation.total_surplus_w
             surplus_data.surplus_distributable_w = allocation.distributable_surplus_w
@@ -6736,6 +6739,52 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         "which sites are priced?" a question with one answer.
         """
         return float(self.config.get("electricity_export_rate", 0.075) or 0.0)
+
+    def _daylight_remaining_s_now(self) -> "Optional[float]":
+        """(#953) Seconds of daylight left today, or None if we cannot tell.
+
+        The free window's remaining LENGTH — what the cheap-hours grid
+        top-up is gated on, so "Finish overnight from: Grid" finishes
+        instead of pre-empting. Built from the same TimeManager sun frame
+        ``is_night_mode()`` builds the night window from (one class, one
+        day boundary — the #704 rule).
+
+        Measured from ``max(now, sunrise)``, not from ``now``. Before
+        sunrise ALL of today's daylight is still ahead, and the difference
+        is not academic: the night window ends at ``min(sunrise, 07:00)``,
+        so on a winter morning there is a real gap — 07:00 to an 08:03
+        sunrise — where the clock says day and the sky says nothing. Ending
+        it at ``now`` would have counted that dark hour as sun.
+
+        **None means the sun integration did not answer.** That matters
+        because ``get_sunset_plus_10_time()`` FABRICATES 20:30 on any
+        failure and returns it like a reading (bug class 40); a gate on
+        SPENDING must not defer the user's target to a sunset nobody
+        measured, so the source is checked and an unmeasured one yields
+        None — the gate then keeps its pre-#953 behaviour rather than
+        guessing at the sun. It also makes the blink harmless: a cycle
+        where ``sun.sun`` is briefly absent returns None, not a four-hour
+        jump in believed daylight that would stop a running top-up.
+
+        The 10 minutes in ``sunset_plus_10``'s name are left in: ten more
+        minutes of believed daylight means ten more minutes before the
+        meter pays, which is the safe direction for this gate.
+        """
+        try:
+            now = dt_util.now()
+            hhmm = self.time_manager.get_sunset_plus_10_time()
+            if getattr(self.time_manager, "_last_sunset_source",
+                       None) != "sun_integration":
+                return None            # fabricated default, not a reading
+            h, m = (int(x) for x in hhmm.split(":"))
+            sunset = now.replace(hour=h, minute=m, second=0, microsecond=0)
+            start = now
+            sunrise = self.time_manager.get_sunrise_datetime()
+            if sunrise is not None and sunrise > start:
+                start = sunrise
+            return max(0.0, (sunset - start).total_seconds())
+        except Exception:  # noqa: BLE001 — no sun frame, no claim
+            return None
 
     def _today_pacing_ledger(self) -> list:
         """(#820) Today's remaining-day slots, or [] outside daylight /

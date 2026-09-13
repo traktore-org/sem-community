@@ -401,6 +401,114 @@ def solar_bounded_reclaim(
     return max(0.0, min(reclaim, float(solar_w) - float(surplus_w or 0.0)))
 
 
+def sun_can_still_finish(
+    deficit_s: float,
+    *,
+    daylight_remaining_s: "Optional[float]",
+    is_night: bool,
+) -> bool:
+    """(#953) Is there still enough daylight left today to close this deficit?
+
+    "Finish overnight from: **Grid**" is a FINISH source — the picker's own
+    word. Its battery twin has been window-gated since #633 ("must not fire
+    in daytime", caught live at 09:10 in full sun); the grid half of the
+    same picker had no window at all, only the tariff level. So the first
+    cheap slot after the meter day rolls at sunrise bought the whole daily
+    target from the meter before the sun had produced a watt, and the day's
+    solar went to export (alexmc1510, Huawei, 13.09.2026: Solar-only pool
+    pump, 4 h/day, ON at 07:52:39 — sunrise, to the second — and still
+    running at 08:24 on 78 W of sun with the pack discharging 857 W).
+
+    The gate is the honest reading of "finish": while today's remaining
+    daylight is at least as long as the outstanding deficit, the sun can
+    still deliver it, so the grid waits. Deliberately about the free
+    window's LENGTH, not about cloud — a dark day is exactly what the
+    overnight top-up exists for, and #559's contract is that free comes
+    first ("solar_only devices accept missing the target on a dark day").
+
+    Monotone, so it cannot flap: while the load runs, the deficit and the
+    remaining daylight shrink at the same one second per second, so their
+    difference is constant; while it is off only the daylight shrinks. The
+    gate opens once per day and never closes again.
+
+    Returns ``False`` — the top-up may proceed — in every case where we
+    cannot claim the sun still has time:
+
+    * ``is_night`` — the overnight window the picker promises. Read from
+      ``TimeManager.is_night_mode()``, which has its own clock fallback, so
+      the promised behaviour never depends on a sunset reading.
+    * no ``daylight_remaining_s`` (no sun data) — unknown is not a claim.
+    * no deficit — nothing to finish.
+    """
+    if is_night:
+        return False
+    if daylight_remaining_s is None:
+        return False
+    deficit = float(deficit_s or 0.0)
+    if deficit <= 0.0:
+        return False
+    return float(daylight_remaining_s) >= deficit
+
+
+def grid_top_up_defers_to_sun(
+    device: "ControllableDevice",
+    *,
+    daylight_remaining_s: "Optional[float]",
+    is_night: bool,
+) -> bool:
+    """(#953) Does THIS device's cheap-hours grid top-up wait for the sun?
+
+    :func:`sun_can_still_finish` on the device's own runtime deficit, with
+    one exemption: a load whose COMFORT band is speaking is not waiting for
+    anything. ``ComfortBandMixin`` makes a breached band read as a runtime
+    deficit (``forced``) and the #638-C5 joint plan creates banking runs
+    (``willing``) — both carrying ``_offpeak_forced`` — but neither is the
+    daily runtime floor, and neither is something the afternoon sun can
+    "finish": a cold room is about NOW, and a banking block belongs to the
+    plan that placed it. Mirrors ``ComfortBandMixin.daily_targets_met``,
+    which for the same reason refuses to let a met floor stand the paid
+    sources down while the band is forced.
+    """
+    if getattr(device, "comfort_state", "") in ("willing", "forced"):
+        return False
+    return sun_can_still_finish(
+        float(getattr(device, "remaining_daily_runtime_sec", 0.0) or 0.0),
+        daylight_remaining_s=daylight_remaining_s,
+        is_night=is_night,
+    )
+
+
+def price_damped_pool(distributable: float, price_level: str) -> float:
+    """(#953) A price signal may DAMP the solar pool; it may never inflate it.
+
+    This used to add a *virtual* +3 kW (cheap) / +10 kW (negative) to
+    ``distributable`` "to encourage consumption". That number is not a
+    measurement of anything: it entered the pool after the coordinator had
+    bounded the real surplus by the sun (#620) and the reclaim by the sun
+    and the meter (#938), and it was handed to the ordinary SOLAR activation
+    pass. The consequences were all of a piece — a load in mode "Solar only"
+    ("SEM runs it on solar surplus — never imports from grid") ran from the
+    grid in every cheap hour of a dynamic tariff; the run was labelled
+    ``source="solar"`` and booked to the "h on solar today" bar; it carried
+    no force marker, so neither the force-expiry pass nor the deficit LIFO
+    could end it; and it applied to every device at once, with none of the
+    per-device opt-in, deficit bound, peak-slot guard (#864) or day-rollover
+    expiry that the real cheap-hours top-up pass carries. #559's
+    "Finish overnight from: Grid" IS the sanctioned way to buy a cheap hour,
+    per device and per target.
+
+    So the invariant is the #620 one, now true of the whole pool at its last
+    writer: **you cannot distribute more solar surplus than the sun is
+    producing.** The expensive-hour damping stays — lowering the pool can
+    only ever make SEM spend less — and the final ``min`` makes the
+    direction structural rather than a property of the branches.
+    """
+    damped = distributable
+    if price_level == "expensive":
+        damped = max(0.0, distributable - 500)
+    return min(damped, distributable)
+
+
 @dataclass(frozen=True)
 class LoadIntent:
     """(desired-state, phase 1) The MANAGEMENT layer's decision for one load:
@@ -425,6 +533,7 @@ def compute_load_intent(
     is_shed_target: bool = False,
     soc_above_reserve: bool = False,
     is_night: bool = True,
+    daylight_remaining_s: "Optional[float]" = None,
     plan: "PlanVerdict" = NO_OPINION,
 ) -> LoadIntent:
     """(desired-state, phase 1) Pure precedence walk → the load's desired state.
@@ -442,6 +551,17 @@ def compute_load_intent(
     # the one gate, no side channels (the legacy plan_window bool died
     # in the C5 merge).
     plan_hold = plan.hold
+    # (#953) "Finish overnight from: Grid" is a FINISH source — it waits
+    # while today's remaining daylight can still deliver the outstanding
+    # deficit. No separate stop clause is needed on THIS path: the intent is
+    # rebuilt from scratch every cycle and ``_apply_source_markers`` derives
+    # ``_offpeak_forced`` from the source, so a load whose gate has closed
+    # simply falls through to the solar clause (kept, marker cleared) or to
+    # "no source available" (stopped). The imperative passes, which PROD
+    # runs, carry a sticky marker and need the twin in the force-expiry
+    # pass — class 17.
+    sun_still_has_time = grid_top_up_defers_to_sun(
+        device, daylight_remaining_s=daylight_remaining_s, is_night=is_night)
 
     # 1. Not SEM-driven. Off = monitor only; Peak-only = user-managed, but SEM
     #    still SHEDS it under peak risk.
@@ -555,8 +675,11 @@ def compute_load_intent(
         return LoadIntent(True, rated, "tier2_battery", "overnight battery — runtime deficit")
 
     # Cheap-hours grid: finish a runtime deficit off the grid in a cheap window.
+    # (#953) ``not sun_still_has_time`` is the window its battery twin has had
+    # since #633 — at night it is trivially true, so the overnight promise is
+    # unchanged; by day the meter only pays once the sun has run out of time.
     if (deficit and can_start and price_is_cheap
-            and not plan_hold
+            and not plan_hold and not sun_still_has_time
             and getattr(device, "top_up_policy", "solar_only") == "cheap_hours"):
         return LoadIntent(True, rated, "cheap_grid", "cheap-hours grid — runtime deficit")
 
@@ -1230,6 +1353,9 @@ class SurplusController:
                 device, remaining_surplus_w=remaining, tier1_headroom_w=tier1,
                 price_is_cheap=price_is_cheap, peak_freeze=peak_freeze,
                 is_night=getattr(self, "_is_night_cycle", True),
+                # (#953) same cycle context as is_night — stamped by update()
+                daylight_remaining_s=getattr(
+                    self, "_daylight_remaining_s", None),
                 is_shed_target=device.device_id in shed, soc_above_reserve=soc_above,
                 # (#638 G4) the joint plan's per-device window verdict this
                 # cycle; absent from the dict = the plan has no say.
@@ -1316,6 +1442,10 @@ class SurplusController:
         # (#925 audit) False when the grid sensor was unreadable this
         # cycle — grid_import_w is then a fallback, not a measurement.
         grid_import_known: bool = True,
+        # (#953) Seconds of daylight left today, from the coordinator's
+        # TimeManager. None = no sun data; the cheap-hours grid top-up then
+        # keeps its pre-#953 behaviour (unknown is not a claim about the sun).
+        daylight_remaining_s: Optional[float] = None,
     ) -> SurplusAllocationData:
         """Run the surplus allocation algorithm.
 
@@ -1371,6 +1501,12 @@ class SurplusController:
         # (#633) "Finish overnight from: Battery" is a NIGHT source — the
         # Tier-2 pass and its force-expiry both gate on this cycle flag.
         self._is_night_cycle = bool(is_night)
+        # (#953) the free window's remaining length — the "finish" gate on
+        # the cheap-hours grid top-up, on both the imperative pass and the
+        # intent path. Stamped here so the two read one value per cycle.
+        self._daylight_remaining_s = (
+            None if daylight_remaining_s is None
+            else max(0.0, float(daylight_remaining_s)))
         # (#638 G4) stamp this cycle's joint-plan window verdicts for the
         # intent path AND the imperative passes below.
         self._plan_windows = dict(plan_windows or {})
@@ -1524,6 +1660,18 @@ class SurplusController:
                     reason = "cheap-hours disabled by user"
                 elif stale:
                     reason = "cheap-hours force expired (day rollover)"
+                elif grid_top_up_defers_to_sun(
+                        device,
+                        daylight_remaining_s=self._daylight_remaining_s,
+                        is_night=self._is_night_cycle):
+                    # (#953) The grid top-up is a FINISH source. A run that
+                    # legitimately started inside the overnight window must
+                    # not ride into a morning that can still deliver the
+                    # deficit for free — the daytime twin of the Tier-2
+                    # expiry below (#633), because the start gate alone
+                    # only blocks re-activation (class 17).
+                    reason = ("cheap-hours top-up ended — today's daylight "
+                              "can still finish the target")
                 elif price_level not in ("cheap", "very_cheap", "negative"):
                     reason = f"tariff now {price_level}"
             # (#620) Tier-2 overnight battery force expiry — its OWN terms: the
@@ -1911,6 +2059,29 @@ class SurplusController:
                 # bypassing the reconciler's user-respect cooldown (and the
                 # device min_off anti-flicker).
                 if device.needs_offpeak_activation and device.can_activate():
+                    # (#953) "Finish overnight from: Grid" is a FINISH
+                    # source — the window its battery twin has carried
+                    # since #633. While today's remaining daylight is
+                    # still long enough to close the deficit, the meter
+                    # waits. At night this is trivially open, so the
+                    # overnight promise is untouched. Below
+                    # needs_offpeak_activation deliberately: a load the
+                    # sun is already carrying is not "deferred".
+                    if grid_top_up_defers_to_sun(
+                            device,
+                            daylight_remaining_s=self._daylight_remaining_s,
+                            is_night=self._is_night_cycle):
+                        log_on_change(
+                            _LOGGER, f"finishwindow:{device.device_id}",
+                            logging.INFO,
+                            "%s: cheap-hours top-up deferred — %.1f h of "
+                            "daylight left can still cover the %.1f h still "
+                            "owed (#953)",
+                            device.name,
+                            (self._daylight_remaining_s or 0.0) / 3600.0,
+                            device.remaining_daily_runtime_sec / 3600.0,
+                        )
+                        continue
                     # (#864) The security layer: a cheap-hours GRID force
                     # must FIT the billing slot before it starts. Price
                     # says go; the meter's budget says how much. Refusing
@@ -2075,22 +2246,14 @@ class SurplusController:
         return soc is not None and soc > self._batt_reserve_soc
 
     def _apply_price_adjustment(self, distributable: float, price_level: str) -> float:
-        """Adjust distributable surplus based on electricity price level.
+        """(#953) Damp the distributable surplus for the price level.
 
-        - cheap: Add virtual surplus to encourage consumption
-        - expensive: Reduce surplus to minimize consumption
-        - negative: Maximize consumption (add large virtual surplus)
+        One line, and deliberately so: the whole rule lives in the pure
+        ``price_damped_pool`` — a price signal lowers the pool or leaves it
+        alone, and can never raise it above the sun the coordinator already
+        bounded it by. See that function for what the virtual surplus did.
         """
-        if price_level == "negative":
-            # Negative price — consume as much as possible
-            return distributable + 10000  # Virtual 10kW surplus
-        elif price_level == "cheap":
-            # Cheap — encourage consumption even from grid
-            return distributable + 3000  # Virtual 3kW surplus
-        elif price_level == "expensive":
-            # Expensive — only use real solar surplus, reduce buffer
-            return max(0, distributable - 500)
-        return distributable
+        return price_damped_pool(distributable, price_level)
 
     async def deactivate_all(self, reason: str = "emergency") -> None:
         """Deactivate all devices (emergency stop, or SEM going away).

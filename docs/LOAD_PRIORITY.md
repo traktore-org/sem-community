@@ -283,8 +283,15 @@ install holding a larger number is untouched.
 
 ## Finish overnight from — the overnight source (axis 2)
 
-These sources are **night-only** (#633): they engage after night mode starts and a
-load still running at daybreak is stopped — daytime supply is always the Mode above.
+These are **finish** sources: they engage once the free window can no longer
+deliver the target, and a load still running when it can again is stopped —
+daytime supply is always the Mode above. **Battery** is night-only (#633): it
+engages after night mode starts and stops at daybreak. **Grid** (2.1, #953)
+engages whenever today's remaining daylight is shorter than the runtime still
+owed — the whole night, and the tail of a short winter day — but never in a
+morning the sun still has time to cover. Before #953 the Grid half had no
+window at all: the first cheap slot after the meter day rolls at sunrise
+bought the whole day's target from the meter with the sun still to come.
 
 When the sun is gone and the daily target isn't met, a single **"Finish overnight
 from"** picker (shown for *both* solar modes) decides what — if anything — finishes

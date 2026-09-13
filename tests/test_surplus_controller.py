@@ -227,15 +227,18 @@ class TestPriceAdjustment:
         sc.price_responsive_mode = True
         return sc
 
-    def test_negative_price_adds_10kw(self, mock_hass):
+    def test_negative_price_no_longer_fabricates_10kw(self, mock_hass):
+        # (#953) A price signal may DAMP the pool, never inflate it — the
+        # virtual surplus reached the SOLAR activation pass and ran a
+        # "Solar only" load from the grid. See price_damped_pool.
         sc = self._make_controller(mock_hass)
         result = sc._apply_price_adjustment(500.0, "negative")
-        assert result == 10500.0
+        assert result == 500.0
 
-    def test_cheap_price_adds_3kw(self, mock_hass):
+    def test_cheap_price_no_longer_fabricates_3kw(self, mock_hass):
         sc = self._make_controller(mock_hass)
         result = sc._apply_price_adjustment(500.0, "cheap")
-        assert result == 3500.0
+        assert result == 500.0
 
     def test_expensive_price_reduces_by_500(self, mock_hass):
         sc = self._make_controller(mock_hass)
@@ -260,8 +263,21 @@ class TestPriceAdjustment:
         sc.register_device(dev)
 
         result = await sc.update(200.0, price_level="cheap")
-        # 200 - 50 offset = 150 + 3000 cheap bonus = 3150 distributable
-        assert result.distributable_surplus_w == 3150.0
+        # 200 - 50 offset = 150 distributable. (#953) The cheap hour adds
+        # nothing: buying a cheap hour is the per-device "Finish overnight
+        # from: Grid" pass's job, not a house-wide phantom surplus.
+        assert result.distributable_surplus_w == 150.0
+
+    @pytest.mark.asyncio
+    async def test_expensive_damping_still_applies_during_update(self, mock_hass):
+        sc = self._make_controller(mock_hass)
+        dev = _make_device(device_id="d1", priority=1, min_power=100)
+        dev.activate = AsyncMock(return_value=100.0)
+        sc.register_device(dev)
+
+        result = await sc.update(1000.0, price_level="expensive")
+        # 1000 - 50 offset = 950, damped by 500 → 450.
+        assert result.distributable_surplus_w == 450.0
 
 
 class TestDeactivateAll:
