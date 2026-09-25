@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - ✨ **A GM car over OnStar is a car, not unknown hardware** (#887, by @Azlinon).
 
+# [2.1.0-beta.40] — 25.09.2026
+
+- 🐛 **A battery with no force-charge switch is no longer told to stop every cycle** (#1005, by @RienduPre). SEM stops writing a setpoint the battery ignores.
+
 # [2.1.0-beta.39] — 23.09.2026
 
 - 🐛 **Solar only no longer buys from the grid while the battery takes the sun** (#899). SEM stops counting watts the battery keeps.
