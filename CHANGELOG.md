@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - ✨ **A running pause is visible** (#980, by @RienduPre). The EV card counts down, names the mode it returns to, and picking a mode ends it.
 
+- 🐛 **The charge-mode select now shows a pause as Off** (#980). Before, it kept the old mode, so a pause looked like nothing happened.
+
 # [2.1.0-beta.40] — 25.09.2026
 
 - 🐛 **A battery with no force-charge switch is no longer told to stop every cycle** (#1005, by @RienduPre). SEM stops writing a setpoint the battery ignores.
