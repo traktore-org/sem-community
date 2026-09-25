@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.1.0-beta.40] — 25.09.2026
+
+- 🐛 **A battery with no force-charge switch is no longer told to stop every cycle** (#1005, by @RienduPre). SEM stops writing a setpoint the battery ignores.
+
 - ✨ **NRGkick chargers are found on their own** (#917, by @aleho). SEM reads the charger's own keys; no manual setup.
 
 - ✨ **ABL eMH1 is found on its own** (#808, by @janklostermann) through matfroh's Modbus integration.
@@ -26,10 +30,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ✨ **What a brand offers as a service now counts** (#956). KEBA's set_current is proposed like an entity.
 
 - ✨ **A GM car over OnStar is a car, not unknown hardware** (#887, by @Azlinon).
-
-# [2.1.0-beta.40] — 25.09.2026
-
-- 🐛 **A battery with no force-charge switch is no longer told to stop every cycle** (#1005, by @RienduPre). SEM stops writing a setpoint the battery ignores.
 
 # [2.1.0-beta.39] — 23.09.2026
 
