@@ -50,6 +50,33 @@ class ChargeStatus:
     message: str = ""
 
 
+def _nothing_to_stop(why: str) -> ChargeStatus:
+    """A stop with nothing to stop is DONE, not FAILED (#1005).
+
+    Every ``stop_forced_charge`` below needs the actuator that its own
+    ``start_forced_charge`` refuses to run without. When that actuator is not
+    configured, no forced charge can be running, so the stop has nothing to
+    send and is already complete.
+
+    Reporting FAILED instead is what @RienduPre hit on 2× Sessy: the caller
+    (``command_stop_force_charge``) treats FAILED as "transient — retry next
+    cycle" and deliberately does NOT record the intent, which is the very
+    thing the #757 flood guard reads. A fault that can never clear then turns
+    honest retry into an endless one: the whole stop path ran on every cycle
+    for 28 h — the #523 zero-write to the battery setpoint (refused by the
+    device, so it spent the #840 strikes that withdraw battery-to-grid) and
+    the strategy write back to self-consumption. A retry policy written for a
+    dropped Modbus write was answering a config gap.
+
+    So: a permanent, knowable "there is nothing to do" is IDLE and sends
+    nothing. Only a real refusal by real hardware is FAILED.
+    """
+    return ChargeStatus(
+        status=ChargeCommandStatus.IDLE,
+        message=f"Nothing to stop — {why}",
+    )
+
+
 class BatteryChargeAdapter(ABC):
     """Abstract base class for inverter-specific forced charge control."""
 
@@ -151,13 +178,21 @@ class HuaweiChargeAdapter(BatteryChargeAdapter):
         stop MUST reach the hardware. The #757 per-cycle flood is closed one
         layer up, at ``command_stop_force_charge``'s ``_last_intent`` guard —
         which only ever calls this once, on the transition.
+
+        (#1005) No ``inverter_device_id`` is a real Huawei shape — an install
+        driven through number entities instead of the ``huawei_solar``
+        services. ``start_forced_charge`` needs the device id and refuses
+        without it, so this adapter never started a charge and has nothing to
+        stop; a forcible DISCHARGE on such an install is stopped one layer up,
+        by ``_stop_forcible`` / ``_issue_stop``'s number-entity path. FAILED
+        here was retried every cycle for the life of the install and left
+        "stop_forced_charge failed" standing in diagnostics as the last word.
         """
         device_id = self.config.get("inverter_device_id", "")
         if not device_id:
-            return ChargeStatus(
-                status=ChargeCommandStatus.FAILED,
-                message="No inverter_device_id configured",
-            )
+            self._active = False
+            self._target_soc = 0.0
+            return _nothing_to_stop("no inverter_device_id configured")
 
         try:
             await self.hass.services.async_call(
@@ -266,9 +301,19 @@ class GoodWeChargeAdapter(BatteryChargeAdapter):
         restart it must fire even though the in-memory ``_active`` is False.
         The #757 per-cycle flood is closed by the ``_last_intent`` guard in
         ``command_stop_force_charge``, which calls this only on the transition.
+
+        Unconditional in ``_active``, NOT in the work-mode entity (#1005):
+        without it ``start_forced_charge`` refuses, so no Eco Charge was ever
+        set and there is no mode to restore. ``select_option`` with an empty
+        ``entity_id`` is rejected by Home Assistant, and the FAILED that came
+        back was retried on every cycle forever.
         """
         work_mode_entity = self.config.get("inverter_work_mode_entity", "")
         normal_mode = self.config.get("inverter_normal_work_mode", "General")
+        if not work_mode_entity:
+            self._active = False
+            self._target_soc = 0.0
+            return _nothing_to_stop("no inverter_work_mode_entity configured")
 
         try:
             await self.hass.services.async_call(
@@ -370,8 +415,19 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         so after a restart it must fire even though the in-memory ``_active``
         is False. The #757 per-cycle flood is closed by the ``_last_intent``
         guard in ``command_stop_force_charge`` (called only on the transition).
+
+        Unconditional in ``_active``, NOT in the switch (#1005): with no
+        switch there is nothing this adapter could ever have turned on —
+        ``start_forced_charge`` refuses — so there is no orphan to clear and
+        nothing to stop. Sending ``turn_off`` with an empty ``entity_id`` is
+        rejected by Home Assistant, and a FAILED stop is retried every cycle
+        for the life of the install (see the class note below).
         """
         charge_switch = self.config.get("battery_force_charge_switch", "")
+        if not charge_switch:
+            self._active = False
+            self._target_soc = 0.0
+            return _nothing_to_stop("no battery_force_charge_switch configured")
 
         try:
             await self.hass.services.async_call(

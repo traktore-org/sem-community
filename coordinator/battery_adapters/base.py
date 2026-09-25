@@ -431,7 +431,7 @@ class BatteryControlAdapter(ABC):
         Both writes must succeed to record STOP_FORCE_DISCHARGE — a
         partial failure leaves ``_last_intent`` unchanged so the next
         cycle retries."""
-        ok = await self._write_force_discharge(0.0)
+        ok = await self._zero_setpoint()
         if not ok:
             self._last_error = "write_force_discharge(0) failed on stop"
             return
@@ -622,6 +622,36 @@ class BatteryControlAdapter(ABC):
             sent[ent] = want
         self._last_error = f"waiting for {ent} to read {want}"
         return False
+
+    def _setpoint_is_inert(self) -> bool:
+        """(#1005) True when the power setpoint controls nothing right now.
+
+        A DC battery's setpoint is always live, so this is False here. An
+        AC-coupled battery gates it behind a power-strategy mode and ignores
+        the setpoint in every other mode — see the override in
+        ``generic.py``.
+        """
+        return False
+
+    async def _zero_setpoint(self) -> bool:
+        """The #523 mutual-exclusion zero — the ONE door for it (#1005).
+
+        Every mode change zeroes the setpoint so the battery cannot keep
+        selling into the next mode. When the setpoint is inert the write
+        lands nowhere: the device refuses it, the refusal spends the #840
+        strikes that withdraw battery-to-grid, and the caller reads the
+        refusal as a transient fault and repeats it every cycle for ever
+        (@RienduPre, 2× Sessy — 165 refusals in 28 h). Nothing to zero is
+        done, not failed.
+
+        SEM hands control back in this order — zero the setpoint, THEN leave
+        the active mode — so the zero still lands on the cycle that matters.
+        Only the cycles after it, where the register already controls
+        nothing, are skipped.
+        """
+        if self._setpoint_is_inert():
+            return True
+        return await self._write_force_discharge(0.0)
 
     async def _write_force_discharge(self, watts: float) -> bool:
         """De-dup'd write of the battery power setpoint. ``watts`` is a
