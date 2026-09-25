@@ -153,7 +153,12 @@ class TestAutoPlanner:
         # cap reached — no further auto switches this session
         t += AUTO_DOWN_DELAY_S + 1
         assert p.desired(t, believed=3, surplus_w=1000.0) is None
+        # (#1008) A new session frees the cap — and restarts the sustain
+        # window, because starvation the LAST car sat through says nothing
+        # about this one. So the first call after a replug answers None.
         p.new_session()
+        t += AUTO_DOWN_DELAY_S + 1
+        assert p.desired(t, believed=3, surplus_w=1000.0) is None
         t += AUTO_DOWN_DELAY_S + 1
         assert p.desired(t, believed=3, surplus_w=1000.0) == 1
 

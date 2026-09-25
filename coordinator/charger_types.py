@@ -680,6 +680,11 @@ def commanded_power_w(
     mode publishes. A charger that would pull 6.9 kW must say 6.9 kW in
     both, or a two-charger simulation hands the junior charger phantom
     headroom.
+
+    A third caller asks the same arithmetic a COUNTERFACTUAL question:
+    ``ev_control._power_on_offer_w`` passes ``phases=3`` to price what an
+    Always (max) charger could draw IF it were on three phases, which is
+    the question the #804 auto planner has to answer (#1008).
     """
     if decision.intent is ChargerIntent.CHARGE_AT_AMPS:
         return max(

@@ -66,6 +66,58 @@ def amps_from_headroom(
 PHASE_NOT_TAKING_AFTER = 2
 
 
+def _power_on_offer_w(decision, charger_cfg: dict, config: dict,
+                      voltage: float, peak_allowed_w=None) -> float:
+    """(#1008) Watts this charger may draw — what the phase planner asks.
+
+    ``budget_w`` answers a narrower question: how much SOLAR ``decide``
+    sized for this car. Under ``CHARGE_MAX`` there is no such number —
+    Always (max) is not budget-limited, so the field is 0.0 by
+    construction. Read raw, the planner saw "no power at all": it never
+    scaled a one-phase car up to three, and a three-phase car scaled
+    DOWN ten minutes in. The charger may in fact draw its own ceiling,
+    with the grid paying for whatever the sun does not.
+
+    Three phases is the question, so the ceiling is priced at three —
+    a charger whose maximum is the three-phase minimum then correctly
+    shows no headroom to switch for. The ceiling itself comes from
+    ``resolve_max_current``, the one place that key is read (#746).
+
+    ``peak_allowed_w`` is what the meter may still buy for the rest of
+    this quarter hour, and it caps the answer. ``clamp_to_peak_slot``
+    prices its own clamp with the CONFIGURED phase count, so on a
+    charger configured 1-phase it can leave ``CHARGE_MAX`` standing at
+    an allowance that three phases would blow straight through. Never
+    ask for three phases the meter cannot pay for.
+
+    Every other reader of a decision's watts already asks the intent
+    first (``solar_commitment_w``, ``commanded_power_w``, the per-phase
+    guard). This is that same question, asked once, for this one.
+    """
+    from ..devices.base import resolve_max_current
+    from .charger_types import ChargerIntent, commanded_power_w
+    if decision.intent is not ChargerIntent.CHARGE_MAX:
+        return float(decision.budget_w or 0.0)
+
+    def _get(key, default=None):
+        for src in (charger_cfg, config):
+            val = (src or {}).get(key)
+            if val is not None:
+                return val
+        return default
+
+    offer = commanded_power_w(
+        decision, phases=3, voltage=float(voltage),
+        max_current_a=resolve_max_current(_get),
+    )
+    if peak_allowed_w is not None:
+        try:
+            offer = min(offer, max(0.0, float(peak_allowed_w)))
+        except (TypeError, ValueError):
+            pass
+    return offer
+
+
 class EVControlMixin:
     """EV control methods for SEMCoordinator.
 
@@ -752,7 +804,8 @@ class EVControlMixin:
 
     async def _phase_switch_tick(self, cid: str, charger_cfg: dict,
                                  decision, cp, now: float,
-                                 setpoint_a: int = 0):
+                                 setpoint_a: int = 0,
+                                 peak_allowed_w=None):
         """(#804 Phase B/C) One cycle of the phase model for this charger.
 
         Returns the decision, replaced with IDLE while the sequencer holds
@@ -867,13 +920,32 @@ class EVControlMixin:
                 contra["target"], contra["count"] = desired, 0
             if contra["count"] >= PHASE_NOT_TAKING_AFTER:
                 desired = None          # give up on this target
+        elif not cp.connected:
+            # (#1008) No car, no power question. The planner steers on the
+            # watts a decision offers, and an IDLE "EV disconnected" offers
+            # none — so a parked 3-phase charger was scaled back down to 1
+            # ten minutes after every unplug, and the next session started
+            # on one phase and had to earn its way back up.
+            desired = None
         else:
-            contra["target"], contra["count"] = None, 0
-            # auto (Phase C): the planner answers from THIS charger's
-            # allocated budget — sustained starvation scales down,
+            # auto (Phase C): the planner answers from the power THIS
+            # charger may draw — sustained starvation scales down,
             # sustained headroom scales up, caps protect the contactor.
             desired = planner.desired(
-                now, believed, float(decision.budget_w or 0.0))
+                now, believed, _power_on_offer_w(
+                    decision, charger_cfg,
+                    getattr(self, "config", {}) or {}, voltage,
+                    peak_allowed_w=peak_allowed_w),
+            )
+            # (#1008) …and the same give-up the manual target gets. Under
+            # CHARGE_MAX the offer is a constant that always clears the
+            # threshold, so a box that does not actually switch would be
+            # stopped and retried for every switch the session cap allows.
+            if desired is not None:
+                if contra["target"] != desired:
+                    contra["target"], contra["count"] = desired, 0
+                if contra["count"] >= PHASE_NOT_TAKING_AFTER:
+                    desired = None
 
         r = seq.tick(now=now, desired_phases=desired,
                      believed_phases=believed, charging=cp.charging,
@@ -912,7 +984,7 @@ class EVControlMixin:
             self._phase_believed[cid] = r.believed_phases
             contra["last_asserted"] = r.believed_phases
         if (contra["count"] >= PHASE_NOT_TAKING_AFTER
-                and str(charger_cfg.get("phase_mode") or "auto") in ("1", "3")):
+                and contra["target"] is not None):
             self._phase_switch_states[cid] = "not_taking"
 
         # Only ever WEAKEN a charge into IDLE — an emergency stop from the
