@@ -258,6 +258,49 @@ class GenericBatteryAdapter(BatteryControlAdapter):
             return True
         return self._read_strategy() == self._strategy_active
 
+    def _setpoint_is_inert(self) -> bool:
+        """(#1005) The strategy select READS a mode that ignores the setpoint.
+
+        #978's rule — the setpoint is refused unless the strategy is active,
+        and a refused setpoint spends a strike against the DEVICE for a fault
+        that is not the device's — was applied to the two force paths only.
+        The mutual-exclusion zero in NORMAL / OFF / LIMIT_DISCHARGE / the two
+        stops kept writing, so an AC-coupled battery sitting in ``nom``
+        collected a refusal per cycle: @RienduPre's 2× Sessy, 165 each in
+        28 h, three of which are enough to withdraw battery-to-grid (#840).
+
+        NOT the same test as ``_strategy_is_active``. That one asks "will a
+        write land?" and answers no when the select is unreadable. This one
+        asks "is the register already controlling nothing?", and an unreadable
+        select cannot say so (#925). Unread → write the zero: it can only
+        ever stop the battery, never start it.
+
+        "Not the active value" is NOT the same answer either, and the first
+        cut said that (found in review). ``battery_strategy_active_value`` is
+        a user-editable option and the roster rewrites the whole vocabulary
+        per brand, so a select reading a mode SEM cannot place — a Sessy in
+        ``roi``, or an install whose active value is misconfigured while the
+        battery really is in its API mode exporting 1700 W — would have been
+        read as proof the register was dead, and SEM would have reported
+        NORMAL while the battery kept selling. Only the modes SEM sets itself
+        to hand the battery back count as inert. Everything else gets the
+        zero, for the same reason an unreadable select does.
+        """
+        if not self._strategy_entity:
+            return False
+        cur = self._read_strategy()
+        return cur is not None and cur in self._inert_strategy_values()
+
+    def _inert_strategy_values(self) -> set:
+        """The modes SEM KNOWS ignore the power setpoint: the self-consumption,
+        idle and off values it sets itself on release. Never the active value,
+        however the user has configured these."""
+        return {
+            v for v in (self._strategy_self_consume, self._strategy_idle,
+                        self._strategy_off)
+            if isinstance(v, str) and v and v != self._strategy_active
+        }
+
     def _withhold_setpoint(self, what: str) -> None:
         """(#978) The setpoint is IGNORED unless the strategy is active, and
         a refused setpoint would spend a strike against the DEVICE for a
@@ -415,7 +458,7 @@ class GenericBatteryAdapter(BatteryControlAdapter):
                 "data": {"entity_id": ent, "value": value}, "why": None}
 
     async def command_normal(self) -> None:
-        await self._write_force_discharge(0.0)  # #523 mutual exclusion
+        await self._zero_setpoint()  # #523 mutual exclusion (#1005)
         # AC-coupled (Sessy): self-consumption is its OWN power strategy
         # (``nom`` = zero-on-meter), NOT the setpoint. Actively set it so a
         # battery left in eco/api/idle by a prior mode returns to self-
@@ -437,12 +480,12 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         if not self._strategy_entity:
             await super().command_off()
             return
-        await self._write_force_discharge(0.0)
+        await self._zero_setpoint()  # (#1005)
         await self._set_strategy(self._strategy_off)
         self._last_intent = BatteryIntent.OFF
 
     async def command_limit_discharge(self, watts: float) -> None:
-        await self._write_force_discharge(0.0)  # #523 mutual exclusion
+        await self._zero_setpoint()  # #523 mutual exclusion (#1005)
         await self._set_strategy(self._strategy_self_consume)
         watts = max(0.0, min(watts, self._max_discharge_w))
         if (self._last_discharge_limit_w >= 0
@@ -472,7 +515,7 @@ class GenericBatteryAdapter(BatteryControlAdapter):
                 self._last_error = "bidirectional charge write failed"
                 # _last_intent intentionally NOT updated — retry next cycle (#589)
             return
-        ok_zero = await self._write_force_discharge(0.0)  # #523 mutual exclusion
+        ok_zero = await self._zero_setpoint()  # #523 mutual exclusion (#1005)
         if not ok_zero:
             self._last_error = "mutual-exclusion zero-write failed"
             return
@@ -499,7 +542,7 @@ class GenericBatteryAdapter(BatteryControlAdapter):
     async def command_stop_force_charge(self) -> None:
         if self._force_charge_already_stopped():
             return  # (#757) already stopped — a repeat is noise, not a command
-        ok = await self._write_force_discharge(0.0)  # #523 mutual exclusion
+        ok = await self._zero_setpoint()  # #523 mutual exclusion (#1005)
         # Back to self-consumption (nom), not the old eco/idle release.
         await self._set_strategy(self._strategy_self_consume)
         if self._charge_adapter is not None:

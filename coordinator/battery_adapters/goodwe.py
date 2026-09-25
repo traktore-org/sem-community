@@ -41,12 +41,12 @@ class GoodWeBatteryAdapter(BatteryControlAdapter):
         return True
 
     async def command_normal(self) -> None:
-        await self._write_force_discharge(0.0)  # #523 mutual exclusion
+        await self._zero_setpoint()  # #523 mutual exclusion (#1005)
         await self._apply_discharge_limit(self._max_discharge_w)
         self._last_intent = BatteryIntent.NORMAL
 
     async def command_limit_discharge(self, watts: float) -> None:
-        await self._write_force_discharge(0.0)  # #523 mutual exclusion
+        await self._zero_setpoint()  # #523 mutual exclusion (#1005)
         watts = max(0.0, min(watts, self._max_discharge_w))
         if (self._last_discharge_limit_w >= 0
                 and abs(watts - self._last_discharge_limit_w) < 100.0):
@@ -58,7 +58,7 @@ class GoodWeBatteryAdapter(BatteryControlAdapter):
     async def command_force_charge(
         self, target_soc: float, charge_power_w: float, duration_min: int,
     ) -> None:
-        await self._write_force_discharge(0.0)  # #523 mutual exclusion
+        await self._zero_setpoint()  # #523 mutual exclusion (#1005)
         from .force_charge import ChargeCommand, ChargeCommandStatus
         cmd = ChargeCommand(
             target_soc=target_soc,
@@ -78,7 +78,7 @@ class GoodWeBatteryAdapter(BatteryControlAdapter):
     async def command_stop_force_charge(self) -> None:
         if self._force_charge_already_stopped():
             return  # (#757) already stopped — a repeat is noise, not a command
-        ok = await self._write_force_discharge(0.0)  # #523 mutual exclusion
+        ok = await self._zero_setpoint()  # #523 mutual exclusion (#1005)
         from .force_charge import ChargeCommandStatus
         status = await self._charge_adapter.stop_forced_charge()
         # #757 honest retry: a failed stop must not record the intent, or the

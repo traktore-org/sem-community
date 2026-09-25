@@ -536,7 +536,7 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
                     "Huawei battery: stop_forcible_charge failed: %s", e,
                 )
                 return False
-        await super()._write_force_discharge(0.0)
+        await super()._zero_setpoint()   # the one #523 door (#1005)
         return True
 
     def _forcible_status_reading(self) -> str:
