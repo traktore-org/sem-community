@@ -310,7 +310,7 @@ class TestTheButtonsSurviveSetup:
 # because picking a mode IS the cancel (Guido: "if the user sets the mode to
 # any other mode again the timer has to reset").
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from homeassistant.components.select import SelectEntityDescription
 from custom_components.solar_energy_management.select import SEMPerChargerSelect
 
@@ -323,7 +323,7 @@ def _select(charger_cfg):
                                    options=["solar_only", "solar_plus_battery", "solar_plus_cheap", "min_plus_solar", "always_max", "off"])
     entry = MagicMock(); entry.entry_id = "e1"
     return SEMPerChargerSelect(coordinator, desc, entry, "ev_charger",
-                            "charge_mode", "off", "EV Charger")
+                            "charge_mode", charger_cfg.get("charge_mode", "off"), "EV Charger")
 
 
 class TestTheRunningPauseIsVisible:
@@ -359,3 +359,36 @@ class TestTheRunningPauseIsVisible:
         attrs = _select({"id": "ev_charger", "charge_mode": "off"}).extra_state_attributes
         assert attrs["tariff_available"] is False
         assert attrs["modes_needing_tariff"] == ["solar_plus_cheap"]
+
+
+class TestTheSelectFollowsTheConfig:
+    """The Pause button writes Off into the charger's config; the select
+    used to keep showing the old mode ("nothing seems to happen")."""
+
+    def _cycle(self, sel):
+        with patch.object(sel, "async_write_ha_state"):
+            sel._handle_coordinator_update()
+
+    def test_a_pause_shows_as_off(self):
+        cfg = {"id": "ev_charger", "charge_mode": "min_plus_solar"}
+        sel = _select(cfg)
+        assert sel.current_option == "min_plus_solar"
+        cfg.update(press(cfg, "1_hour", NOW))          # what the button writes
+        self._cycle(sel)
+        assert sel.current_option == "off"
+
+    def test_the_way_back_shows_too(self):
+        cfg = {"id": "ev_charger", "charge_mode": "off",
+               PAUSE_UNTIL_KEY: deadline_for_minutes(60, NOW),
+               PAUSE_RESUME_MODE_KEY: "solar_plus_battery"}
+        sel = _select(cfg)
+        cfg.update(tick(cfg, NOW + timedelta(minutes=61)))   # it ran out
+        self._cycle(sel)
+        assert sel.current_option == "solar_plus_battery"
+
+    def test_garbage_in_the_config_is_not_adopted(self):
+        cfg = {"id": "ev_charger", "charge_mode": "min_plus_solar"}
+        sel = _select(cfg)
+        cfg["charge_mode"] = "not_a_mode"
+        self._cycle(sel)
+        assert sel.current_option == "min_plus_solar"

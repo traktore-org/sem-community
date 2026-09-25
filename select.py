@@ -536,6 +536,22 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
             return self._value
         return opts[0] if opts else None
 
+    def _handle_coordinator_update(self) -> None:
+        """(#980 follow-up) The config is the truth; the entity follows it.
+
+        ``_value`` used to change only in ``async_select_option`` — the
+        user's own pick. A mode written anywhere else never reached the
+        entity: the Pause button wrote ``off`` into the charger's config and
+        the select kept showing the old mode, so the pause was invisible
+        ("when I click pause nothing seems to happen"), and the mode the
+        pause put back at expiry was invisible too. Every cycle now adopts
+        the config's value when it is one this select may show.
+        """
+        value = self._charger_cfg().get(self._config_key)
+        if isinstance(value, str) and value in self._valid_value_set() and value != self._value:
+            self._value = value
+        super()._handle_coordinator_update()
+
     @property
     def available(self) -> bool:
         """Return if entity is available."""
