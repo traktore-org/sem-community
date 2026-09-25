@@ -3853,6 +3853,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             setpoint_a=int(float(getattr(
                                 getattr(adapter, "_device", None),
                                 "_current_setpoint", 0) or 0)),
+                            # (#1008) never ask for three phases the meter
+                            # cannot pay for this quarter hour.
+                            peak_allowed_w=getattr(
+                                view.fleet, "peak_slot_allowed_w", None),
                         )
                         # Track the highest commanded current across the
                         # fleet so the stall-detection path (line ~3725)

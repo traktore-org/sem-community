@@ -168,7 +168,12 @@ class PhaseAutoPlanner:
     def new_session(self) -> None:
         # A new car (or replug) gets a fresh switch budget; the minimum
         # interval survives the replug — it protects the box, not the car.
+        # (#1008) The sustain clocks are the new car's too: a window that
+        # filled up while the last car was still here says nothing about
+        # this one, and left standing it switched on the first cycle.
         self._session_switches = 0
+        self._up_since = None
+        self._down_since = None
 
     def desired(self, now: float, believed: Optional[int],
                 surplus_w: float) -> Optional[int]:

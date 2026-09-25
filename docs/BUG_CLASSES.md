@@ -4739,3 +4739,61 @@ the wire to one silent probe per 600 s and raises the Repair, but the intent is 
 the stop path re-enters every cycle. Closing it means deciding what a withdrawn register means for
 the state machine (record the stop that cannot be sent, or keep the flood), which is a contract
 call, not a mechanical guard. Refs #1005 #757 #589 #978 #840 #925.
+
+### 109. A field that means "not applicable" carries a number, and a new reader takes the number — GUARDED
+**Symptom:** a mode that says *unlimited* behaves as if it had nothing. coppe218's Zaptec on
+Always (max) with Phase mode Auto charged at 16 A on ONE phase (~3.3 kW) all session and never
+asked for three; the same planner would have scaled a three-phase session DOWN ten minutes in.
+**Root shape:** `ChargerDecision.budget_w` answers "how much SOLAR did `decide` size for this
+car". `AlwaysMaxMode` has no such number, so it writes `0.0` with the comment *not
+budget-limited* — a sentinel that happens to be a valid quantity. Every established reader asks
+the INTENT first (`solar_commitment_w`, `commanded_power_w`, `active_phase_guard`, all of which
+special-case `CHARGE_MAX`); the #804 phase auto planner was written later, read the field raw,
+and got the pessimistic answer. Nothing failed, nothing logged — the planner simply never had a
+reason to act.
+**The tell:** a field whose docstring names ONE intent, read by code that runs for all of them.
+Grep the field, list its readers, and ask each one *what does this mean when the other intent is
+in force?* A sentinel inside the value's own range cannot answer that question for you — this is
+class 105's disease (`None` doing two jobs) with the sentinel hidden inside the number line
+instead of beside it.
+**Where it lives:** `ChargerDecision.budget_w` (0.0 under `CHARGE_MAX`, and 0.0 on every
+grid-funded `CHARGE_AT_AMPS` — the night floor, the deadline current and the cheap-hours top-up
+all command amps the grid pays for and size no solar budget); `BatteryDecision.discharge_limit_w`
+outside `LIMIT_DISCHARGE`; `ChargerDecision.commanded_amps` under `CHARGE_MAX`, where the adapter
+resolves the real current and the 0 already bit the #804 belief once. Swept and left alone: the
+two fleet readers of `commanded_amps` — the stall-means-full detector gates on `>= 6`
+(`coordinator.py:12599`) and the W/A learner on `>= 1` with a 400 W floor
+(`coordinator.py:1073`) — so `CHARGE_MAX` reading 0 only ever makes them do less.
+**Closure:** `ev_control._power_on_offer_w` — one function that answers "watts this charger may
+draw", branching on the intent like its siblings. Under `CHARGE_MAX` that is the charger's own
+ceiling (from `resolve_max_current`, #746) priced at three phases, so a ceiling equal to the
+three-phase minimum correctly shows no headroom.
+**Two hazards the first cut of that fix opened, both found in review.** (1) *An idle decision is
+not a starved one.* `AlwaysMaxMode` also returns `budget_w = 0.0` on IDLE when the car is
+unplugged, and the tick runs every cycle, so a parked three-phase charger was scaled back down
+ten minutes after each unplug and the next session started on one phase — two contactor
+sequences per plug cycle, forever. The planner is now asked only while the car is connected, and
+`PhaseAutoPlanner.new_session` clears the sustain clocks so the last car's window is not spent on
+this one. (2) *A constant offer never falls.* Under `CHARGE_MAX` the offer always clears the
+threshold, so the up-clock could not reset and a box that does not really switch would be stopped
+and retried for every switch the session cap allows. The #804 give-up (two contradicted switches
+→ leave the target alone) was manual-mode only; the auto branch reset it every cycle. It now
+applies to both.
+**Peak safety is real but conditional.** When the slot guard or a shed order bites, the decision
+is no longer `CHARGE_MAX` and the planner reads the clamp's real budget. When it does NOT bite,
+the guard is priced with the CONFIGURED phase count, so on a charger configured 1-phase a 16 A
+ceiling prices at 3680 W, the guard passes it, and three phases would then draw 11 kW inside that
+slot. The slot allowance is therefore passed in and caps the offer: never ask for three phases
+the meter cannot pay for.
+**Guard:** `tests/test_1008_always_max_phases.py` — the reporter's session end to end (one phase
+→ switch to three), a three-phase session that is not scaled back down, a parked charger left
+alone, a replug that starts the window over, a box that gets two tries and no more, a peak-clamped
+Always (max) and a slot too small to pay, plus two pins on the wiring: `_phase_switch_tick` calls
+`_power_on_offer_w`, and it never reads `decision.budget_w` again. Seven of the eighteen fail
+when the fix is reverted.
+**Residual (for Guido).** The grid-funded `CHARGE_AT_AMPS` decisions carry the same `0.0`, so the
+auto planner is equally blind at night: a three-phase overnight floor still scales down after ten
+minutes. Feeding it the commanded watts instead would also let a one-phase 32 A floor switch UP,
+and the night rate, the deadline current and the peak slot guard are all computed from the
+`ev_phases` CONFIG — changing the phase count under them changes arithmetic they own. That is a
+contract call across three layers, not a mechanical sweep. Refs #1008 #804 #105.
