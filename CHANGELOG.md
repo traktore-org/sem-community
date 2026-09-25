@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.1.0-beta.41] — 25.09.2026
+
+- 🐛 **Always (max) can now switch to three phases** (#1008, by @coppe218). The mode set no power budget, so SEM read it as none.
+
 # [2.1.0-beta.40] — 25.09.2026
 
 - 🐛 **A battery with no force-charge switch is no longer told to stop every cycle** (#1005, by @RienduPre). SEM stops writing a setpoint the battery ignores.
