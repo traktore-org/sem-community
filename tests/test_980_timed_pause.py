@@ -392,3 +392,40 @@ class TestTheSelectFollowsTheConfig:
         cfg["charge_mode"] = "not_a_mode"
         self._cycle(sel)
         assert sel.current_option == "min_plus_solar"
+
+
+class TestPickingAModeForgetsThePauseAtOnce:
+    """Found live: pick a mode, pick Off again within one cycle, and the old
+    record was still there — the countdown came back, and the expiry would
+    have put the old mode back over a deliberate Off."""
+
+    def _pick(self, cfg, option):
+        sel = _select(cfg)
+        sel.hass = MagicMock()
+        writes = []
+        import asyncio
+        with patch("custom_components.solar_energy_management.persist_per_charger_option",
+                   side_effect=lambda hass, entry, coord, cid, key, value: writes.append((key, value))), \
+             patch.object(sel, "async_write_ha_state"):
+            asyncio.run(sel.async_select_option(option))
+        return writes
+
+    def test_a_mode_picked_during_a_pause_clears_the_record_in_the_same_write(self):
+        cfg = {"id": "ev_charger", "charge_mode": "off",
+               PAUSE_UNTIL_KEY: deadline_for_minutes(60, NOW),
+               PAUSE_RESUME_MODE_KEY: "solar_plus_battery"}
+        writes = self._pick(cfg, "min_plus_solar")
+        assert (PAUSE_UNTIL_KEY, None) in writes
+        assert (PAUSE_RESUME_MODE_KEY, None) in writes
+        assert writes[-1] == ("charge_mode", "min_plus_solar")
+
+    def test_off_during_a_pause_leaves_the_pause_running(self):
+        cfg = {"id": "ev_charger", "charge_mode": "off",
+               PAUSE_UNTIL_KEY: deadline_for_minutes(60, NOW),
+               PAUSE_RESUME_MODE_KEY: "solar_plus_battery"}
+        writes = self._pick(cfg, "off")
+        assert (PAUSE_UNTIL_KEY, None) not in writes
+
+    def test_no_pause_means_no_extra_writes(self):
+        writes = self._pick({"id": "ev_charger", "charge_mode": "min_plus_solar"}, "solar_only")
+        assert writes == [("charge_mode", "solar_only")]
