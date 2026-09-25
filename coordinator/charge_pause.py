@@ -179,20 +179,21 @@ def press(charger_cfg, option: Optional[str], now: datetime) -> dict:
     """
     cfg = charger_cfg or {}
     live_mode = str(cfg.get("charge_mode") or "")
-    armed = pause_remaining_s(cfg.get(PAUSE_UNTIL_KEY), now) is not None
     minutes = duration_minutes(option)
-    if minutes <= 0:
-        return {}                       # an option nobody offers — do nothing
-
-    # Re-arming mid-pause must not record "off" as the mode to come back to
-    # — by then "off" is SEM's own doing, and remembering it would strand
-    # the charger there for good.
-    resume_to = (cfg.get(PAUSE_RESUME_MODE_KEY) if armed and live_mode == "off"
-                 else live_mode)
-    out = {
-        PAUSE_UNTIL_KEY: deadline_for_minutes(minutes, now),
-        PAUSE_RESUME_MODE_KEY: str(resume_to or "off"),
-    }
+    if minutes <= 0 or not live_mode:
+        return {}       # an option nobody offers, or no mode to come back to
+    deadline = deadline_for_minutes(minutes, now)
     if live_mode != "off":
-        out["charge_mode"] = "off"
-    return out
+        return {PAUSE_UNTIL_KEY: deadline, PAUSE_RESUME_MODE_KEY: live_mode,
+                "charge_mode": "off"}
+
+    # Already off. Pressed mid-pause this re-arms for the new duration and
+    # keeps the mode the record remembers — by now "off" is SEM's own doing,
+    # and recording it would strand the charger there for good. The same
+    # covers a pause that ran out and is not swept yet. Off BY HAND, with
+    # nothing remembered, is not a pause: there is nothing to come back to,
+    # and the card would count down to Off, the state it is already in.
+    remembered = str(cfg.get(PAUSE_RESUME_MODE_KEY) or "")
+    if remembered in ("", "off"):
+        return {}
+    return {PAUSE_UNTIL_KEY: deadline, PAUSE_RESUME_MODE_KEY: remembered}

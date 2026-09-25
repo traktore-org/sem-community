@@ -481,6 +481,8 @@ pausing one charger and leaving the other running still works.
 | carry on now | set its Charge Mode back to whatever you want |
 
 There is no Resume button, because the Charge Mode select already is one.
+Pressing Pause on a charger you set to Off yourself does nothing: there is
+nothing to pause and no mode to come back to.
 
 Two things worth knowing:
 

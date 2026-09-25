@@ -96,10 +96,22 @@ class TestPressingPause:
         assert out[PAUSE_RESUME_MODE_KEY] == "min_plus_solar"
         assert "charge_mode" not in out, "already off — nothing to write"
 
-    def test_pausing_from_off_comes_back_to_off(self):
-        out = press(_cfg("off"), "2_hours", NOW)
-        assert out[PAUSE_RESUME_MODE_KEY] == "off"
+    def test_pausing_a_charger_that_is_off_by_hand_does_nothing(self):
+        """Nothing to pause and nothing to come back to — and the card would
+        show a countdown that ends in Off, the state it is already in."""
+        assert press(_cfg("off"), "2_hours", NOW) == {}
+
+    def test_re_arming_a_pause_that_ran_out_but_is_not_swept_yet_keeps_its_mode(self):
+        paused = _cfg("off", **{PAUSE_UNTIL_KEY: (NOW - timedelta(minutes=5)).isoformat(),
+                                PAUSE_RESUME_MODE_KEY: "min_plus_solar"})
+        out = press(paused, "1_hour", NOW)
+        assert out[PAUSE_RESUME_MODE_KEY] == "min_plus_solar"
+        assert parse_deadline(out[PAUSE_UNTIL_KEY]) == NOW + timedelta(minutes=60)
         assert "charge_mode" not in out
+
+    def test_a_charger_with_no_mode_cannot_be_paused(self):
+        """No mode means no way back — better no pause than a charger left Off."""
+        assert press({"id": "ev_charger"}, "1_hour", NOW) == {}
 
 
 
