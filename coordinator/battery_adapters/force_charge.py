@@ -77,6 +77,24 @@ def _nothing_to_stop(why: str) -> ChargeStatus:
     )
 
 
+def _say_nothing_to_stop(adapter, why: str) -> ChargeStatus:
+    """:func:`_nothing_to_stop`, said once per adapter.
+
+    ``ChargeStatus.message`` is only ever surfaced on the FAILED branch, so
+    without this the fix trades a false diagnostic line for no line at all
+    and a battery with no force-charge actuator looks like a healthy one
+    (found in review). Once, at INFO: it is a standing config fact, not an
+    event (#762).
+    """
+    if not getattr(adapter, "_nothing_to_stop_said", False):
+        adapter._nothing_to_stop_said = True
+        _LOGGER.info(
+            "Battery: asked to stop a forced charge, but %s — nothing can be "
+            "forcing, so nothing is sent (#1005)", why,
+        )
+    return _nothing_to_stop(why)
+
+
 class BatteryChargeAdapter(ABC):
     """Abstract base class for inverter-specific forced charge control."""
 
@@ -179,20 +197,28 @@ class HuaweiChargeAdapter(BatteryChargeAdapter):
         layer up, at ``command_stop_force_charge``'s ``_last_intent`` guard —
         which only ever calls this once, on the transition.
 
-        (#1005) No ``inverter_device_id`` is a real Huawei shape — an install
-        driven through number entities instead of the ``huawei_solar``
-        services. ``start_forced_charge`` needs the device id and refuses
-        without it, so this adapter never started a charge and has nothing to
-        stop; a forcible DISCHARGE on such an install is stopped one layer up,
+        (#1005) ``start_forced_charge`` needs the device id and refuses
+        without it, so with no device id this adapter never started a charge
+        and has nothing to stop. A forcible DISCHARGE is stopped one layer up,
         by ``_stop_forcible`` / ``_issue_stop``'s number-entity path. FAILED
         here was retried every cycle for the life of the install and left
         "stop_forced_charge failed" standing in diagnostics as the last word.
+
+        Read the review note on the START side before touching this: nothing
+        in production ever writes ``inverter_device_id`` into the config this
+        object holds — ``HuaweiBatteryAdapter`` autodetects it into its OWN
+        ``_inverter_device_id`` and does not pass it down — so on Huawei this
+        branch is the only branch, and ``start_forced_charge`` above answers
+        the same permanent gap with FAILED. That is this very class on the
+        paired command, and closing it would switch grid charging ON for
+        every Huawei install at once, so it is Guido's call, not a sweep.
         """
         device_id = self.config.get("inverter_device_id", "")
         if not device_id:
             self._active = False
             self._target_soc = 0.0
-            return _nothing_to_stop("no inverter_device_id configured")
+            return _say_nothing_to_stop(
+                self, "no inverter_device_id configured")
 
         try:
             await self.hass.services.async_call(
@@ -313,7 +339,8 @@ class GoodWeChargeAdapter(BatteryChargeAdapter):
         if not work_mode_entity:
             self._active = False
             self._target_soc = 0.0
-            return _nothing_to_stop("no inverter_work_mode_entity configured")
+            return _say_nothing_to_stop(
+                self, "no inverter_work_mode_entity configured")
 
         try:
             await self.hass.services.async_call(
@@ -427,7 +454,8 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         if not charge_switch:
             self._active = False
             self._target_soc = 0.0
-            return _nothing_to_stop("no battery_force_charge_switch configured")
+            return _say_nothing_to_stop(
+                self, "no battery_force_charge_switch configured")
 
         try:
             await self.hass.services.async_call(

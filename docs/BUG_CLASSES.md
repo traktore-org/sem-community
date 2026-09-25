@@ -4684,7 +4684,7 @@ either end. **Live catches (#1005):** (a) `GenericChargeAdapter.stop_forced_char
 `switch.turn_off` with an empty `entity_id` when no force-charge switch was configured — rejected
 by HA's service schema, reported FAILED, retried for ever; `start_forced_charge` had the guard, the
 stop did not. Same in `GoodWeChargeAdapter` (`select_option` with no work-mode entity) and
-`HuaweiChargeAdapter` (FAILED with no `inverter_device_id` — a real number-entity install).
+`HuaweiChargeAdapter` (FAILED with no `inverter_device_id`).
 (b) One layer up, the #523 mutual-exclusion zero wrote the power setpoint of an AC-coupled battery
 sitting in `nom`, which #978 measured that this hardware REFUSES: a refusal per cycle, and three
 withdraw battery-to-grid (#840). #978's rule — never write a setpoint the strategy select says is
@@ -4692,29 +4692,48 @@ ignored — had been applied to the two force paths and not to NORMAL / OFF / LI
 two stops. **Closure:** an unsatisfiable command is DONE, not FAILED. `_nothing_to_stop()` in
 `force_charge.py` returns IDLE and sends nothing when the actuator the matching `start` refuses to
 run without is absent — nothing could be running, so nothing needs stopping and the intent is
-recorded. `BatteryControlAdapter._zero_setpoint()` is now the one door for the #523 zero and skips
-it when `_setpoint_is_inert()`; the generic adapter overrides that to ask the strategy select.
+recorded. `BatteryControlAdapter._zero_setpoint()` is now the one door for the #523 zero (Huawei's
+number-entity stop included) and skips it when `_setpoint_is_inert()`; the generic adapter
+overrides that to ask the strategy select. A skip also FORGETS `_last_force_discharge_w`: that
+marker is the de-dup's only evidence the register holds a value, and SEM may claim it only for a
+write it made — review's repro was one dropped zero on the hand-back cycle, after which the next
+force op at the same power was de-dup'd away and SEM reported a sale that never happened.
 **Fail-safe direction matters and is not the same question as #978's:** `_strategy_is_active` asks
 "will a write land?" and says no when the select is unreadable; `_setpoint_is_inert` asks "is the
 register already controlling nothing?" and an unreadable select cannot say so (#925), so an unread
-select still gets the zero — a zero can only ever stop a battery, never start one.
+select still gets the zero — a zero can only ever stop a battery, never start one. And "not the
+active value" is not an answer either: `battery_strategy_active_value` is user-editable and the
+roster rewrites the whole vocabulary per brand, so only the modes SEM sets ITSELF on release
+(self-consume / idle / off) count as inert. Review's repro for the first cut: a battery really in
+its API mode exporting 1700 W, with the active value misconfigured, was read as "the register is
+dead" and SEM reported NORMAL while it kept selling.
 **Where it lives:** every `command_*` that returns early on a delegate's FAILED without recording
 intent (`battery_adapters/{generic,goodwe,huawei,deye}.py`), and the same shape on the EV side
-wherever a brand call reports failure for a missing entity rather than for a refusal. `deye.py` was
-already right and is the model: no snapshot to restore → record the intent and be quiet.
+wherever a brand call reports failure for a missing entity rather than for a refusal. `deye.py` is the model for the case it covers — no snapshot to
+restore → record the intent and be quiet — but not free of the class: it also returns without
+recording when `_observer_mode or not _actuation_enabled`, states that never clear by themselves.
 **Guard:** `tests/test_1005_stop_with_nothing_to_stop.py` — the reporter's night through the real
 adapter (the setpoint never written into `nom`, no strikes spent, silence after the first cycle),
 a real hardware refusal still FAILED, a configured actuator still cleared on a fresh post-restart
 adapter, an unreadable select still written, and two oracles: every delegate discovered in
 `force_charge.py` must answer an empty config without FAILED and without a service call, and every
-adapter discovered in `battery_adapters/` must fall silent after one stop. The fake `hass` REFUSES
+adapter discovered in `battery_adapters/` must fall silent after one stop. Both walk the
+package's modules with `pkgutil`, not `__init__.py`'s exports — an oracle that can only see today's
+exports is a hand-maintained list wearing discovery's clothes — and the adapter walk asserts it
+found at least four, because a discovery that finds nothing passes everything. The fake `hass` REFUSES
 an empty `entity_id` and REFLECTS `select_option` — the #757 tests mocked `stop_forced_charge` with
 a fake that always succeeded, which is why they could not see this. **Sweep question:** for every
 "failed → do not record, retry next cycle", ask *what makes this failure go away, and can it?* If
 the answer is "a config change" or "a different device mode", the retry is a permanent per-cycle
 write and the error message will name the symptom, never the cause. Report the two apart: a
 refusal by hardware is FAILED; an absent actuator is nothing to do.
-**Residual (for Guido):** a setpoint that the device refuses while the strategy READS active is
+**Residuals (for Guido).** (1) `HuaweiChargeAdapter.start_forced_charge` answers the SAME
+permanent gap with FAILED, retried every in-window cycle — and nothing in production ever writes
+`inverter_device_id` into the config the delegate holds (`HuaweiBatteryAdapter` autodetects it into
+its own `_inverter_device_id` and does not pass it down), so on Huawei that is every install and
+grid charging cannot work at all. Closing it switches grid charging ON for every Huawei install at
+once, which is a call, not a sweep. (2) a setpoint that the device refuses while the strategy READS
+active is
 still honest-retried for ever by `command_stop_force_charge`'s `if not ok: return` — #840 throttles
 the wire to one silent probe per 600 s and raises the Repair, but the intent is never recorded and
 the stop path re-enters every cycle. Closing it means deciding what a withdrawn register means for

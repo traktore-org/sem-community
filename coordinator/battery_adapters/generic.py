@@ -274,11 +274,32 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         asks "is the register already controlling nothing?", and an unreadable
         select cannot say so (#925). Unread → write the zero: it can only
         ever stop the battery, never start it.
+
+        "Not the active value" is NOT the same answer either, and the first
+        cut said that (found in review). ``battery_strategy_active_value`` is
+        a user-editable option and the roster rewrites the whole vocabulary
+        per brand, so a select reading a mode SEM cannot place — a Sessy in
+        ``roi``, or an install whose active value is misconfigured while the
+        battery really is in its API mode exporting 1700 W — would have been
+        read as proof the register was dead, and SEM would have reported
+        NORMAL while the battery kept selling. Only the modes SEM sets itself
+        to hand the battery back count as inert. Everything else gets the
+        zero, for the same reason an unreadable select does.
         """
         if not self._strategy_entity:
             return False
         cur = self._read_strategy()
-        return cur is not None and cur != self._strategy_active
+        return cur is not None and cur in self._inert_strategy_values()
+
+    def _inert_strategy_values(self) -> set:
+        """The modes SEM KNOWS ignore the power setpoint: the self-consumption,
+        idle and off values it sets itself on release. Never the active value,
+        however the user has configured these."""
+        return {
+            v for v in (self._strategy_self_consume, self._strategy_idle,
+                        self._strategy_off)
+            if isinstance(v, str) and v and v != self._strategy_active
+        }
 
     def _withhold_setpoint(self, what: str) -> None:
         """(#978) The setpoint is IGNORED unless the strategy is active, and

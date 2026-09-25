@@ -648,8 +648,17 @@ class BatteryControlAdapter(ABC):
         the active mode — so the zero still lands on the cycle that matters.
         Only the cycles after it, where the register already controls
         nothing, are skipped.
+
+        A skip FORGETS the register (``_last_force_discharge_w = None``).
+        That marker is the de-dup's whole evidence that the register already
+        holds a value, and SEM may only claim that for a write it made. If
+        the hand-back cycle's zero were dropped and the skip then kept the
+        marker at the old power, the next force op at the same power would be
+        de-dup'd away — no write, no error, no strike, and a battery that
+        does nothing while SEM reports it selling (found in review).
         """
         if self._setpoint_is_inert():
+            self._last_force_discharge_w = None
             return True
         return await self._write_force_discharge(0.0)
 

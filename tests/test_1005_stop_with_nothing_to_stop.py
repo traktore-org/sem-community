@@ -79,14 +79,24 @@ def _setpoint_state(current: float = 0.0) -> Mock:
                             "unit_of_measurement": "W"})
 
 
-def _strict_hass(states: dict | None = None) -> MagicMock:
-    """A hass whose service call refuses an empty target, like the real one.
+def _strict_hass(states: dict | None = None, gate: tuple | None = None,
+                 setpoint_raises: bool = False) -> MagicMock:
+    """A hass whose service calls refuse what the real ones refuse.
 
-    ``{"entity_id": ""}`` never reaches an integration: the service schema
-    rejects it first — ``expected 'all' or 'none' at 'entity_id'``, the exact
-    message from the reporter's diagnostics. A fake that accepts it hides
-    every bug of this shape, which is why the #757 tests could not see this
-    one.
+    Three refusals, each one a thing the fix depends on:
+
+    * ``{"entity_id": ""}`` never reaches an integration — the service schema
+      rejects it first, ``expected 'all' or 'none' at 'entity_id'``, the exact
+      message from the reporter's diagnostics. A fake that accepts it hides
+      every bug of this shape, which is why the #757 tests could not see this
+      one: they mock the delegate with a fake that always succeeds.
+    * ``gate=(setpoint, select, active)`` makes the SETPOINT refuse a write
+      while the strategy select reads anything but ``active`` — what #978
+      measured on this hardware, and the source of the reporter's 165
+      ``device_refusals``. Without it the strike assertions below are
+      vacuous (found in review).
+    * ``setpoint_raises`` refuses the setpoint unconditionally — a plain
+      dropped write.
 
     ``select_option`` is REFLECTED into the state map, the #978 rule: a fake
     that swallows a flip models away the very write it should prove.
@@ -105,13 +115,58 @@ def _strict_hass(states: dict | None = None) -> MagicMock:
             raise vol.Invalid("expected 'all' or 'none' at 'entity_id'")
         if "device_id" in data and not str(data["device_id"] or "").strip():
             raise vol.Invalid("expected a device id at 'device_id'")
+        if service == "set_value" and setpoint_raises:
+            raise RuntimeError("the device refused the setpoint")
+        if service == "set_value" and gate and ent == gate[0]:
+            seen = getattr(table.get(gate[1]), "state", None)
+            if seen != gate[2]:
+                raise RuntimeError(
+                    f"the device refuses a setpoint while its strategy "
+                    f"reads {seen}")
         if service == "select_option" and ent:
             table[ent] = _state(data["option"])
+        if service == "set_value" and ent in table:
+            table[ent] = _setpoint_state(data["value"])
         return None
 
     hass.services.async_call = AsyncMock(side_effect=_call)
     hass.sem_states = table
     return hass
+
+
+def _writes_to(hass, entity: str) -> list:
+    """Every service call that targeted ``entity``."""
+    return [
+        c for c in hass.services.async_call.await_args_list
+        if (c.args[2] if len(c.args) > 2 else {}).get("entity_id") == entity
+    ]
+
+
+def _subclasses_in_package(base) -> list:
+    """Every concrete subclass of ``base`` defined ANYWHERE in the
+    ``battery_adapters`` package.
+
+    Walks the package's modules rather than reading what ``__init__.py``
+    re-exports: an oracle that can only see today's exports is a
+    hand-maintained list wearing discovery's clothes (found in review), and a
+    brand added in a new module would slip past it in silence.
+    """
+    import importlib
+    import pkgutil
+
+    for info in pkgutil.iter_modules(pkg.__path__):
+        importlib.import_module(f"{pkg.__name__}.{info.name}")
+    found, seen = [], set()
+    stack = list(base.__subclasses__())
+    while stack:
+        cls = stack.pop()
+        if cls in seen:
+            continue
+        seen.add(cls)
+        stack.extend(cls.__subclasses__())
+        if cls.__module__.startswith(pkg.__name__) and not inspect.isabstract(cls):
+            found.append(cls)
+    return found
 
 
 # ── the reporter's own three cases, at the delegate ──────────────────────
@@ -215,19 +270,24 @@ class TestTheReportersNight:
     """2× Sessy through the generic adapter: a bidirectional setpoint, a
     power-strategy select, and no force-charge switch."""
 
-    def _sessy(self, strategy: str = "nom"):
-        hass = _strict_hass({
-            SETPOINT: _setpoint_state(0.0),
-            STRATEGY: _state(strategy),
-        })
-        adapter = GenericBatteryAdapter(hass, {
+    def _sessy(self, strategy: str = "nom", gated: bool = False,
+               setpoint_raises: bool = False, **extra):
+        """``gated`` = the device refuses a setpoint unless the strategy reads
+        the active value, which is what #978 measured on this hardware."""
+        hass = _strict_hass(
+            {SETPOINT: _setpoint_state(0.0), STRATEGY: _state(strategy)},
+            gate=(SETPOINT, STRATEGY, "api") if gated else None,
+            setpoint_raises=setpoint_raises,
+        )
+        config = {
             "battery_max_charge_power": 2200,
             "battery_max_discharge_power": 2200,
             "battery_force_discharge_control_entity": SETPOINT,
             "battery_strategy_control_entity": STRATEGY,
             "battery_setpoint_bidirectional": True,
-        })
-        return hass, adapter
+        }
+        config.update(extra)
+        return hass, GenericBatteryAdapter(hass, config)
 
     @pytest.mark.asyncio
     async def test_the_first_stop_records_the_intent(self) -> None:
@@ -256,22 +316,20 @@ class TestTheReportersNight:
 
     @pytest.mark.asyncio
     async def test_the_setpoint_is_not_written_into_nom(self) -> None:
-        """The 165 refusals. The battery reads ``nom``: it is not following
-        the setpoint at all, so the mutual-exclusion zero lands nowhere — and
-        #978 measured that this device REFUSES it, which spends the #840
-        strikes that withdraw battery-to-grid. Three are enough."""
-        hass, adapter = self._sessy(strategy="nom")
+        """The 165 refusals, with the refusal modelled. The battery reads
+        ``nom``: it is not following the setpoint, and #978 measured that it
+        REFUSES a write in that mode. Each refusal is a strike, and three
+        withdraw battery-to-grid (#840) — for a fault that is not the
+        device's."""
+        hass, adapter = self._sessy(strategy="nom", gated=True)
 
         for _ in range(50):
             await adapter.command_stop_force_charge()
 
-        setpoint_writes = [
-            c for c in hass.services.async_call.await_args_list
-            if (c.args[2] if len(c.args) > 2 else {}).get("entity_id") == SETPOINT
-        ]
-        assert setpoint_writes == []
+        assert _writes_to(hass, SETPOINT) == []
         assert adapter._force_discharge_failures == 0
         assert adapter.supports_forced_discharge is True
+        assert adapter.last_error is None
 
     @pytest.mark.asyncio
     async def test_an_unreadable_strategy_still_gets_the_zero(self) -> None:
@@ -282,10 +340,54 @@ class TestTheReportersNight:
 
         await adapter.command_stop_force_charge()
 
-        assert any(
-            (c.args[2] if len(c.args) > 2 else {}).get("entity_id") == SETPOINT
-            for c in hass.services.async_call.await_args_list
-        )
+        assert _writes_to(hass, SETPOINT)
+
+    @pytest.mark.asyncio
+    async def test_a_mode_sem_cannot_place_still_gets_the_zero(self) -> None:
+        """Found in review. "Not the active value" is not "inert": a Sessy in
+        ``roi``, or an install whose ``battery_strategy_active_value`` is
+        misconfigured while the battery really is in its API mode, would have
+        been read as proof the register was dead. Here the battery IS
+        exporting 1700 W and the select reads a mode SEM does not set — the
+        zero must go out."""
+        hass, adapter = self._sessy(strategy="roi")
+        hass.sem_states[SETPOINT] = _setpoint_state(1700.0)
+
+        await adapter.command_normal()
+
+        writes = _writes_to(hass, SETPOINT)
+        assert writes, "SEM reported NORMAL while the battery kept selling"
+        assert writes[-1].args[2]["value"] == 0.0
+
+    @pytest.mark.asyncio
+    async def test_a_dropped_zero_is_not_remembered_as_the_register(self) -> None:
+        """Found in review. A skipped zero must FORGET the register, or the
+        ±100 W de-dup trusts the old value: one dropped write on the hand-back
+        cycle and the next force op at the same power is de-dup'd away — no
+        write, no error, no strike, and SEM reporting a sale that never
+        happened."""
+        hass, adapter = self._sessy(strategy="api")
+
+        await adapter.command_force_discharge(1700.0, 20.0)
+        assert adapter._last_force_discharge_w == 1700.0
+
+        # The hand-back cycle's zero is dropped, and the select still moves.
+        hass.services.async_call = AsyncMock(
+            side_effect=RuntimeError("modbus write dropped"))
+        await adapter.command_normal()
+        hass.sem_states[STRATEGY] = _state("nom")
+
+        # Cycles pass in self-consumption; nothing is written.
+        hass.services.async_call = AsyncMock(side_effect=lambda *a, **k: None)
+        for _ in range(20):
+            await adapter.command_normal()
+        assert adapter._last_force_discharge_w is None
+
+        # The next window: the same 1700 W must reach the register.
+        hass2, adapter2 = self._sessy(strategy="api")
+        adapter2._last_force_discharge_w = adapter._last_force_discharge_w
+        await adapter2.command_force_discharge(1700.0, 20.0)
+        assert _writes_to(hass2, SETPOINT), "the de-dup swallowed the sale"
 
     @pytest.mark.asyncio
     async def test_a_real_charge_is_still_stopped(self) -> None:
@@ -318,12 +420,7 @@ class TestNoDelegateFailsForAConfigGap:
     """
 
     def _delegates(self):
-        found = [
-            obj for _, obj in inspect.getmembers(fc, inspect.isclass)
-            if issubclass(obj, fc.BatteryChargeAdapter)
-            and obj is not fc.BatteryChargeAdapter
-            and obj.__module__ == fc.__name__
-        ]
+        found = _subclasses_in_package(fc.BatteryChargeAdapter)
         assert found, "no charge delegates discovered — the oracle is blind"
         return found
 
@@ -386,11 +483,11 @@ class TestEveryAdapterGoesQuiet:
     def test_every_brand_has_a_builder(self) -> None:
         """A new brand adapter must be wired in here, or this test says so —
         a silent gap in the oracle is how the class comes back."""
-        discovered = {
-            obj for _, obj in inspect.getmembers(pkg, inspect.isclass)
-            if issubclass(obj, BatteryControlAdapter)
-            and obj is not BatteryControlAdapter
-        }
+        discovered = set(_subclasses_in_package(BatteryControlAdapter))
+        assert len(discovered) >= 4, (
+            f"the walker sees only {sorted(c.__name__ for c in discovered)} — "
+            f"an oracle that discovers nothing passes everything"
+        )
         missing = discovered - set(self._builders())
         assert not missing, (
             f"battery adapters with no #1005 oracle builder: "
