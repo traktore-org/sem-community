@@ -79,6 +79,13 @@ by domain (*"EG4 Web Monitor · 412 installs"*), and a near-miss may come with
 declares it creates, marked *unconfirmed*. Treat them as a shortcut for filling
 in the pickers, not as a verdict: SEM binds nothing it has not been told.
 
+Since 2.1 the proposals also cover **services** (KEBA's `keba.set_current`
+has no entity, and is proposed anyway), a near miss SEM can drive as-is gets
+an *add this charger* button, one it cannot says *wire by hand* with the
+reason, and a car on a transport such as MQTT is listed as a **vehicle**
+instead of unknown hardware (#956, #887). See the user guide's *What SEM
+detected* section for the three cases.
+
 ## 1. Prerequisites
 
 ### Home Assistant version
@@ -125,7 +132,7 @@ it), and it will not overwrite what you chose.
 Fronius, Enphase, Powerwall, Kostal, SolarEdge, GoodWe, Sonnen, SolaX,
 Growatt, and any inverter that exposes watt-level sensors to HA.
 
-**EV chargers:** KEBA P30 (service-based), Easee (service-based), Zaptec
+**EV chargers:** KEBA P30 (service-based), Easee (service-based), Zaptec Since 2.1 also NRGkick, ABL eMH1 (through matfroh's `ABL_emh1_modbus`) and Wallbox behind the MQTT bridge, found on their own.
 (service-based), Wallbox, go-eCharger, ChargePoint, Heidelberg, OpenWB 2.x,
 OCPP-compatible, Ohme, Peblar, V2C Trydan, Alfen Eve, Blue Current, OpenEVSE,
 and any charger with a controllable number entity.

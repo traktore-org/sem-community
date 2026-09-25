@@ -58,6 +58,13 @@ SEM monitors your solar production, battery, grid, EV charger, and household dev
 - **EV battery health** — tracks capacity degradation from partial charge sessions over months
 - **Hardware compatibility test suite** — 150+ automated tests covering all supported hardware — every inverter + charger combination verified in CI
 - **Transparent auto-detection (#814)** — the dashboard **Configuration → Detected hardware** section shows every device SEM found with the evidence for each role, and names *near-misses* (a brand almost supported) instead of silently detecting nothing. The full support matrix with an honest per-brand status is generated and CI-guarded: [docs/SUPPORTED_HARDWARE.md](docs/SUPPORTED_HARDWARE.md)
+- **Hardware SEM has never met (2.1, #915)** — SEM reads each integration's own list of entities and services, so a brand nobody reported is recognised and proposed on the Configuration tab. You confirm; SEM binds nothing it guessed.
+- **Your inverter's house figure (2.1, #891)** — name the house power sensor your inverter reports and SEM shows it beside its own, with the difference.
+- **Pause a charger (2.1, #980)** — pick a time, press Pause: the charge mode goes Off and comes back on its own.
+- **Loads set by watts (2.1, #880)** — a load with a watt number (my-PV AC-THOR and similar) is given the watts it should draw, not just switched on.
+- **Two more setpoint models (2.1, #809/#869)** — a battery whose setpoint counts the other way (Victron ESS), or takes a direction select plus watts (Anker Solix).
+- **Modules (2.1, #923)** — SEM shows what your install has. A solar-only house gets no battery entities.
+- **Removal hands the house back (2.1, #935)** — a load SEM switched on is switched off, a parked wallbox is released, and nothing else is touched.
 
 ---
 
@@ -316,13 +323,13 @@ SEM creates 70+ sensors organized by category:
 
 **Solar Inverters:** Huawei Solar, SolaX, DEYE/Sunsynk, Growatt, Sofar, Solis, Fronius, SMA, SolarEdge, Enphase, GoodWe, Tesla Powerwall, Kostal Plenticore, Sungrow, Victron, Sonnenbatterie, E3DC, GivEnergy, Fox ESS, Alpha ESS, Senec, RCT Power, KSTAR, FENECON Home — or any inverter with HA sensors. SEM reads from the HA Energy Dashboard and auto-detects both grid and battery sign conventions.
 
-**Batteries:** Any battery exposed through a supported inverter integration, plus standalone systems: Sessy (NL), Huawei LUNA2000, Tesla Powerwall, Sonnen, BYD, Pylontech, and others work automatically. Battery capacity is auto-detected from the inverter.
+**Batteries:** Any battery exposed through a supported inverter integration, plus standalone systems: Sessy (NL), Huawei LUNA2000, Tesla Powerwall, Sonnen, BYD, Pylontech, and others work automatically. Battery capacity is auto-detected from the inverter.. Since 2.1 the generic adapter also writes a mirrored setpoint (Victron ESS) or a direction select plus watts (Anker Solix).
 
 **Battery discharge control auto-detected for:** Huawei Solar, SolaX (solax-modbus), DEYE/Sunsynk (ha-solarman), Growatt, Sofar, Solis, GoodWe, SolarEdge (solaredge-modbus-multi), Enphase (IQ Battery), Tesla Powerwall, Victron, Kostal Plenticore, Sungrow
 
-**EV Chargers (auto-detected):** KEBA P30, Wallbox Pulsar, go-eCharger (HTTP + MQTT), Fronius/go-e Wattpilot, Easee, Zaptec, ChargePoint, Heidelberg Energy Control, OpenWB 2.x, OCPP-compatible (ABB Terra, Vestel, Grizzl-E, etc.), Ohme, Peblar Rocksolid, V2C Trydan, Alfen Eve, Blue Current, OpenEVSE
+**EV Chargers (auto-detected):** KEBA P30, Wallbox Pulsar, go-eCharger (HTTP + MQTT), Fronius/go-e Wattpilot, Easee, Zaptec, ChargePoint, Heidelberg Energy Control, OpenWB 2.x, OCPP-compatible (ABB Terra, Vestel, Grizzl-E, etc.), Ohme, Peblar Rocksolid, V2C Trydan, Alfen Eve, Blue Current, OpenEVSE, NRGkick, ABL eMH1 (through matfroh's ABL_emh1_modbus), Wallbox behind the MQTT bridge, GARO, JuiceBox 48
 
-**EV Chargers (manual config):** Any charger exposing power/connected/charging sensors in HA. Proven live this way (not brand-detected yet): **GARO** wallbox and **JuiceBox 48** — see the matrix for the threads.
+**EV Chargers (manual config):** Any charger exposing power/connected/charging sensors in HA. Since 2.1 SEM also proposes a charger from the integration's own words when it does not know the brand (#915) — and says when a service needs wiring by hand.
 
 > **Note:** KSTAR inverters are supported via the [ha-solarman](https://github.com/davidrapan/ha-solarman) integration with KSTAR YAML profiles, not via a dedicated KSTAR integration.
 
@@ -444,6 +451,11 @@ automation:
 | [Dashboard Guide](docs/DASHBOARD_GUIDE.md) | Dashboard tabs, cards, and multi-language support |
 | [Multi-Device Guide](docs/MULTI_DEVICE_GUIDE.md) | Multi-inverter, multi-charger, and brand-specific setup |
 | [Architecture](docs/ARCHITECTURE.md) | Developer and contributor documentation |
+| [User Guide](docs/USER_GUIDE.md) | Every setting and every decision, explained |
+| [Troubleshooting](docs/TROUBLESHOOTING.md) | Symptoms, causes and the fix |
+| [Known Limitations](docs/KNOWN_LIMITATIONS.md) | What SEM deliberately does not do, and why |
+| [Supported Hardware](docs/SUPPORTED_HARDWARE.md) | Every brand with an honest status — tested live, implemented, requested |
+| [Tariff Models](docs/TARIFF_MODELS.md) | Which price shapes SEM can plan around |
 
 ---
 
@@ -460,6 +472,53 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 ---
 
 ## Recent Improvements
+
+### v2.1 — Forecast-led planning and spending (25.09.2026, beta.40)
+2.1 looks ahead. SEM forms an honest expectation of the energy that is coming and plans how to spend it. It also learns hardware it had never met. Everything new that acts is off by default, except the peak slot guard.
+
+**Planning and spending**
+
+- **The battery's overnight floor is measured, not typed** (#778). SEM learns what your house uses at night and spends only what tonight can spare.
+- **Solar + battery keeps the car going after sunset** (#878), down to that floor and no further.
+- **The pack fills across the day, not by 11:30** (#820). Charge pacing follows the solar forecast so the battery lands full at sunset.
+- **A new install starts from your history** (#815), not from nothing.
+- **Every forecast source you run is scored against your roof** (#822), and the best one is used.
+
+**The peak limit**
+
+- **The 15-minute peak is guarded before the damage, across every device** (#864, #874). Demand tariffs bill the slot average; SEM keeps it under your limit.
+- **Houses fused per phase get a per-phase current guard** (#843).
+- **The peak card says what its number is** and shows the budget it steers (#909).
+
+**The grid is not always a sink** (#921)
+
+- **A negative export price is a cost.** SEM measures what exporting costs you (#871).
+- **The export guard caps feed-in at the inverter while the price is negative** (#955), after the house, the car and the loads had their turn.
+- **Charge pacing keeps headroom before the meter closes** (#926).
+- **The house can be a battery sink** (#879): keep the pack through cheap hours, spend it on the house in expensive ones.
+- **A morning EV window** empties the pack into the car before you leave, when today's sun will refill it (#892).
+
+**Hardware**
+
+- **SEM learns a brand from the integration's own words** (#915), so hardware nobody reported is recognised and proposed. You confirm; SEM binds nothing it guessed.
+- **An install no longer stops at the Energy Dashboard** (#915). SEM asks your integrations what they create.
+- **The Configuration tab shows what SEM found, with the evidence** (#814, #848), and names a near miss instead of guessing.
+- **New brands:** NRGkick, ABL eMH1, Wallbox behind the MQTT bridge, GARO, JuiceBox 48, the victron integration, Deye's work mode (#827), a GM car over OnStar (#887).
+- **Two more ways to write a battery setpoint** (#809, #869): inverted sign, or a direction select plus watts.
+- **SG-Ready on heat pumps whose contacts are not switches** (#801), and **more than one heat pump** (#685).
+- **A load set by watts gets the watts** (#880). **Pause a charger for a while**, then it comes back on its own (#980).
+- **Your inverter's own house figure, shown beside SEM's** (#891).
+
+**Honesty**
+
+- **SEM shows what your install has** (#923, #857). A solar-only house gets no battery entities.
+- **Observer Mode (watch-only) shows the exact commands it holds back** (#855), for every device (#874).
+- **Removing SEM hands the house back** (#935, #908). Only what SEM switched on is switched off.
+- **Charge mode Off is hands-off, and a stop is a stop** (#898, #942).
+- **Messages name the real cause** (#992, #967). No more "peak protection" for an emergency shed.
+- **Repairs go away once you fixed the cause** (#933).
+
+**Requirements:** unchanged — Home Assistant 2026.2.0 or newer.
 
 ### v2.0 — Trustworthy (29.08.2026)
 The 2.0 line adds almost nothing you have to learn. It makes what SEM already did **believable**: the same decisions, no longer changing their mind for reasons nobody can see.

@@ -88,6 +88,31 @@ diagnostics). Wrong detections are corrected in place with the pickers in the
 charger and sensor-source sections — no reinstall. The full support matrix with
 an honest per-brand status is [docs/SUPPORTED_HARDWARE.md](SUPPORTED_HARDWARE.md).
 
+**Since 2.1 SEM also reads what each integration says about itself** (#915).
+For every energy integration you run, SEM knows the entities and services its
+own repository declares. On the Configuration tab that shows as **proposals**:
+"this integration calls its discharge limit *X*, and you have an entity with
+that name". A proposal is a proposal — you confirm it with the picker, and SEM
+binds nothing it guessed.
+
+Three things the proposals can say (2.1, #956, #887):
+
+- **A capability offered as a service** counts too. KEBA has no current
+  entity; it offers `keba.set_current`. SEM proposes the service. If it can
+  drive the service as-is, a near miss becomes an *add this charger* offer.
+- **"Wire by hand", with the reason.** Some services need something SEM
+  cannot fill in — go-eCharger's `set_max_current` wants a charger name, and
+  some services target an entity. SEM names the service and says why it does
+  not offer the one-click add. Set `ev_charger_service` and the parameter name
+  in the charger's configuration yourself.
+- **A car is named as a car.** A vehicle over a transport such as MQTT (an
+  OnStar bridge, for example) used to show as "unknown hardware, please
+  report". It is now listed under *vehicles*, with its charge level, range and
+  plug sources, ready to pick as a charger's vehicle.
+
+Right after a restart the service list may not be readable yet. SEM then says
+so on the proposal ("could not be asked yet") instead of showing nothing.
+
 **What SEM makes of what you already run (#915).** Every integration
 installed on your Home Assistant is checked against what that integration's own
 source says it creates. If you run Sigenergy and it declares a discharge-power
@@ -1282,6 +1307,20 @@ rule acts on it: if you move a device to `off` *while SEM is running it*, SEM
 stops it once and hands it back. A load **you** started is never SEM's to stop,
 whatever its mode.
 
+### Loads set by watts (2.1, #880)
+
+Some loads take a **number in watts** instead of an on/off switch — a my-PV
+AC-THOR heating element, a variable heater, an inverter-fed pump. Give such a
+load its watt number as the control, and SEM sets the watts it should draw,
+from the surplus it has. Before 2.1 SEM only switched such a load on and wrote
+nothing, so it sat at 0 W for ever.
+
+- Peak shedding can turn a watt load down or off like any other load.
+- A restart does not lose a running watt load: SEM reads back what the load is
+  doing and continues from there.
+- A load set to **current** control but pointed at a **watt** entity is
+  refused out loud (a Repair says which entity), never silently misread.
+
 ### Price-responsive mode
 
 When using dynamic tariffs (Tibber, Nordpool, aWATTar), surplus distribution becomes price-aware: during **expensive** periods SEM trims the distributable surplus, so a load on the edge waits for a stronger sun instead of nibbling at the margin.
@@ -1715,6 +1754,22 @@ Per charger (`{id}` = each charger's id):
 
 ---
 
+## The house figure your inverter reports (2.1, #891)
+
+Some hybrid inverters publish their own **house consumption** figure. SEM
+computes its own from the energy balance (solar + grid + battery − car). If
+you name the inverter's sensor on the Configuration tab (*Sensor sources →
+House power sensor*), SEM publishes it beside its own:
+
+| sensor | what it is |
+|---|---|
+| `sensor.sem_house_meter_power` | the figure your inverter reports, as read |
+| `sensor.sem_house_meter_gap` | inverter figure minus SEM's own, signed (diagnostic) |
+
+SEM keeps deciding on its own balance figure. The two sensors are there so you
+can see how far the inverter and SEM disagree, and by how much. On the
+reference install the gap is 30–60 W — the inverter's own consumption.
+
 ## Charger Compatibility Notes
 
 Not all EV chargers support full SEM control. Here are the key differences:
@@ -1725,6 +1780,10 @@ Not all EV chargers support full SEM control. Here are the key differences:
 | **Myenergi Zappi** | Monitoring-only | Manages solar surplus internally via built-in diversion logic. SEM can monitor but cannot control current — the Zappi handles surplus charging on its own. |
 | **KSTAR** | Supported via ha-solarman | No dedicated HA integration. Use [ha-solarman](https://github.com/davidrapan/ha-solarman) with KSTAR YAML profiles. |
 | **Easee** | Fully supported | Easee's power sensor is disabled by default in HA. Enable it in **Settings > Devices > Easee** before configuring SEM. |
+| **NRGkick** (2.1) | Found on its own | Current, on/off and the phase count are taken from the core integration's own keys. |
+| **ABL eMH1** (2.1) | Found on its own | Through matfroh's `ABL_emh1_modbus` integration. Nobody has confirmed it on hardware yet; the first owner makes it *tested live*. |
+| **Wallbox behind the MQTT bridge** (2.1) | Found on its own | Two units on one install are told apart. The native `wallbox` integration is a different row. |
+| **OCPP** (2.1) | Stops through the switch | A 0 A limit is a lockout on OCPP, so SEM never writes it; it stops through the charge-control switch (#976). |
 
 ---
 

@@ -187,6 +187,30 @@ management, Solar forecast, Notifications, and Advanced (update
 interval, deltas, min solar power, regulation offset, Observer Mode,
 SEM status history).
 
+##### Detected hardware (2.1)
+
+What SEM found, with the evidence: every charger and its roles, the entities
+it left unmapped, and **near misses** — hardware it saw but could not place.
+Since 2.1 a near miss carries **proposals** read from the integration's own
+words (entities *and* services), and an *add this charger* button when SEM
+can drive it as-is. When it cannot, the row says why ("wire by hand: fields
+SEM cannot fill"). Cars found on a transport such as MQTT are listed as
+**vehicles**. Nothing here is bound until you confirm it in a picker.
+
+##### Battery: setpoint model (2.1)
+
+Under *Battery*, **Setpoint model** says how SEM's watts reach your setpoint
+entity: `signed` (default), `inverted` (Victron ESS, + = import), or
+`direction_select` (Anker Solix: a charge/discharge select plus an unsigned
+watt number). The last one shows two more fields: the direction select and,
+if yours uses other words, its two option values.
+
+##### Sensor sources: house power sensor (2.1)
+
+Name the house-consumption sensor your inverter reports and SEM publishes it
+beside its own figure, with the difference (`sensor.sem_house_meter_power`,
+`sensor.sem_house_meter_gap`). SEM keeps deciding on its own figure.
+
 ##### SEM status history (Advanced)
 
 SEM writes a lot of short-lived status rows — charging state, strategy,

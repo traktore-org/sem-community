@@ -12,7 +12,9 @@ Get Solar Energy Management (SEM) running in your Home Assistant in about 10 min
 
 Complete these before installing SEM:
 
-**1. Home Assistant Energy Dashboard configured**
+**1. Home Assistant Energy Dashboard configured (recommended)**
+
+Since 2.1 this is no longer required: if the Energy Dashboard is empty, SEM asks the energy integrations you run what they create and offers those sensors for you to confirm.
 
 Go to **Settings > Dashboards > Energy**. You must have at least a solar production sensor and a grid sensor set up. SEM reads all sensor configuration from here automatically.
 
@@ -137,6 +139,9 @@ Once installed, SEM runs without manual intervention:
 - **Evening** — solar charging stops; system monitors overnight. With a charger in **Solar + battery**, the home battery keeps the car going after sunset — down to the level the house needs for the night, no further
 - **Night charging** — *opt-in (off by default)*; when enabled, grid-charges the EV to your daily-target floor
 - **Smart forecast** — if tomorrow is sunny, tonight's grid charging is reduced or skipped
+- **The battery's overnight floor is measured** (2.1) — SEM learns what your house uses at night and spends only what tonight can spare
+- **The pack fills across the day** (2.1) — charge pacing follows the forecast so the battery lands full at sunset, not by 11:30
+- **The 15-minute peak is guarded** (2.1) — on a demand tariff SEM keeps every slot's average under your limit, across all devices
 
 The controls that matter most:
 

@@ -1186,6 +1186,24 @@ counter's history, so pressing it a month from now recovers that month too.
 Live recording continues meanwhile at one night per day, so the wait is a
 delay, never a dead end.
 
+## SEM proposed a service for my charger, but there is no button (2.1, #956)
+
+The proposal row says why. **"Wire by hand: fields SEM cannot fill"** means
+the service needs something SEM cannot know — go-eCharger's `set_max_current`
+wants a charger name. **"Targets an entity"** means the service must be
+called on an entity, which SEM's charger factory does not pass. In both
+cases set `ev_charger_service` and the parameter name in the charger's
+configuration yourself. **"Could not be asked yet"** means Home Assistant
+was still starting; the row fills in on the next report.
+
+## My car shows up as unknown hardware (2.1, #887)
+
+A vehicle on a transport such as MQTT (an OnStar bridge, for example) used
+to be reported as hardware SEM could not place. Since 2.1 it is listed under
+**vehicles** in the detection report and the diagnostics download, with its
+charge level, range and plug sources. Pick those in the charger's vehicle
+settings; SEM does not bind them on its own.
+
 ## Rebuilt nights cannot see what the grid contributed
 
 The rebuild worked, but some of the recovered nights could only measure what
