@@ -572,21 +572,13 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
         # mirror and reload-skip arming. Do NOT inline a copy here; the
         # copy-paste class already produced one missed writer (#469).
         from . import persist_per_charger_option
-        # (#980 follow-up) Picking a mode IS cancelling a pause, and it has
-        # to forget the pause in the SAME write. The coordinator's tick also
-        # forgets it, but once a cycle: a mode picked and Off picked again
-        # within one cycle kept the old record, the countdown came back,
-        # and at expiry the old mode would have overwritten a deliberate
-        # Off (found live on .175, 25.09).
-        if self._config_key == "charge_mode" and option != "off":
-            from .coordinator import charge_pause as _cp
-            cfg = self._charger_cfg()
-            if cfg.get(_cp.PAUSE_UNTIL_KEY) or cfg.get(_cp.PAUSE_RESUME_MODE_KEY):
-                for key in (_cp.PAUSE_UNTIL_KEY, _cp.PAUSE_RESUME_MODE_KEY):
-                    persist_per_charger_option(
-                        self.hass, self._entry, self.coordinator,
-                        self._charger_id, key, None,
-                    )
+        # (#980) Picking a mode IS cancelling a pause, and the pause has to
+        # be forgotten in the SAME write — a mode picked and Off picked
+        # again within one cycle kept the old record, and at expiry the old
+        # mode would have overwritten a deliberate Off (live on .175,
+        # 25.09). The writer itself applies that rule
+        # (``charge_pause.forget_on_mode_write``), so this entity, the
+        # set_option service and an automation all forget it the same way.
         persist_per_charger_option(
             self.hass, self._entry, self.coordinator,
             self._charger_id, self._config_key, option,
