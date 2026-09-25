@@ -504,11 +504,28 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
         """
         if self._config_key != "charge_mode":
             return None
+        # (#980 follow-up) The running pause, visible: the deadline and the
+        # mode it returns to ride here while the mode reads Off. Picking a
+        # mode IS the cancel, so the moment the live mode is not Off the two
+        # read None — even if the record has not been swept yet (the tick
+        # forgets it on the next cycle). A deadline nobody can parse is not
+        # a pause to show.
+        paused_until = None
+        resume_mode = None
+        cfg = self._charger_cfg()
+        if str(cfg.get("charge_mode") or "") == "off":
+            from .coordinator import charge_pause as _cp
+            deadline = _cp.parse_deadline(cfg.get(_cp.PAUSE_UNTIL_KEY))
+            if deadline is not None:
+                paused_until = deadline.isoformat()
+                resume_mode = cfg.get(_cp.PAUSE_RESUME_MODE_KEY) or None
         return {
             "tariff_available": (
                 self.coordinator.config.get("tariff_mode") == "dynamic"
             ),
             "modes_needing_tariff": ["solar_plus_cheap"],
+            "paused_until": paused_until,
+            "pause_resume_mode": resume_mode,
         }
 
     @property

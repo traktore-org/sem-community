@@ -301,3 +301,61 @@ class TestTheButtonsSurviveSetup:
         kept = {d.key for d in sweep.call_args.args[2]}
         assert kept == {"charger_keba_pause_charging",
                         "charger_wb2_pause_charging"}, kept
+
+
+# ── (25.09.2026) the running pause is visible ──────────────────────────────
+# RienduPre pressed Pause and saw a charger on Off with no sign it was a pause
+# or when it would end. The deadline and the mode it returns to ride on the
+# charge-mode select's attributes — and only while the mode reads Off,
+# because picking a mode IS the cancel (Guido: "if the user sets the mode to
+# any other mode again the timer has to reset").
+
+from unittest.mock import MagicMock
+from homeassistant.components.select import SelectEntityDescription
+from custom_components.solar_energy_management.select import SEMPerChargerSelect
+
+
+def _select(charger_cfg):
+    coordinator = MagicMock()
+    coordinator.config = {"ev_chargers": [charger_cfg], "tariff_mode": "static"}
+    coordinator.last_update_success = True
+    desc = SelectEntityDescription(key="charger_ev_charger_charge_mode",
+                                   options=["solar_only", "solar_plus_battery", "solar_plus_cheap", "min_plus_solar", "always_max", "off"])
+    entry = MagicMock(); entry.entry_id = "e1"
+    return SEMPerChargerSelect(coordinator, desc, entry, "ev_charger",
+                            "charge_mode", "off", "EV Charger")
+
+
+class TestTheRunningPauseIsVisible:
+    def test_while_off_and_armed_the_deadline_and_the_way_back_are_attributes(self):
+        cfg = {"id": "ev_charger", "charge_mode": "off",
+               PAUSE_UNTIL_KEY: deadline_for_minutes(60, NOW),
+               PAUSE_RESUME_MODE_KEY: "solar_plus_battery"}
+        attrs = _select(cfg).extra_state_attributes
+        assert attrs["paused_until"] == parse_deadline(cfg[PAUSE_UNTIL_KEY]).isoformat()
+        assert attrs["pause_resume_mode"] == "solar_plus_battery"
+
+    def test_picking_a_mode_hides_the_timer_at_once(self):
+        """The record may not be swept for one more cycle; the GUI must not
+        show a countdown on a charger the user just took back."""
+        cfg = {"id": "ev_charger", "charge_mode": "solar_plus_battery",
+               PAUSE_UNTIL_KEY: deadline_for_minutes(60, NOW),
+               PAUSE_RESUME_MODE_KEY: "solar_plus_battery"}
+        attrs = _select(cfg).extra_state_attributes
+        assert attrs["paused_until"] is None
+        assert attrs["pause_resume_mode"] is None
+
+    def test_off_by_hand_is_not_a_pause(self):
+        attrs = _select({"id": "ev_charger", "charge_mode": "off"}).extra_state_attributes
+        assert attrs["paused_until"] is None
+        assert attrs["pause_resume_mode"] is None
+
+    def test_an_unreadable_deadline_is_not_shown(self):
+        cfg = {"id": "ev_charger", "charge_mode": "off",
+               PAUSE_UNTIL_KEY: "not a time", PAUSE_RESUME_MODE_KEY: "solar_only"}
+        assert _select(cfg).extra_state_attributes["paused_until"] is None
+
+    def test_the_old_attributes_are_still_there(self):
+        attrs = _select({"id": "ev_charger", "charge_mode": "off"}).extra_state_attributes
+        assert attrs["tariff_available"] is False
+        assert attrs["modes_needing_tariff"] == ["solar_plus_cheap"]
