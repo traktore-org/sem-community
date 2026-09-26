@@ -34,6 +34,7 @@ from custom_components.solar_energy_management.coordinator.charge_pause import (
     PAUSE_UNTIL_KEY,
     deadline_for_minutes,
     duration_minutes,
+    forget_on_mode_write,
     parse_deadline,
     press,
     tick,
@@ -95,10 +96,22 @@ class TestPressingPause:
         assert out[PAUSE_RESUME_MODE_KEY] == "min_plus_solar"
         assert "charge_mode" not in out, "already off — nothing to write"
 
-    def test_pausing_from_off_comes_back_to_off(self):
-        out = press(_cfg("off"), "2_hours", NOW)
-        assert out[PAUSE_RESUME_MODE_KEY] == "off"
+    def test_pausing_a_charger_that_is_off_by_hand_does_nothing(self):
+        """Nothing to pause and nothing to come back to — and the card would
+        show a countdown that ends in Off, the state it is already in."""
+        assert press(_cfg("off"), "2_hours", NOW) == {}
+
+    def test_re_arming_a_pause_that_ran_out_but_is_not_swept_yet_keeps_its_mode(self):
+        paused = _cfg("off", **{PAUSE_UNTIL_KEY: (NOW - timedelta(minutes=5)).isoformat(),
+                                PAUSE_RESUME_MODE_KEY: "min_plus_solar"})
+        out = press(paused, "1_hour", NOW)
+        assert out[PAUSE_RESUME_MODE_KEY] == "min_plus_solar"
+        assert parse_deadline(out[PAUSE_UNTIL_KEY]) == NOW + timedelta(minutes=60)
         assert "charge_mode" not in out
+
+    def test_a_charger_with_no_mode_cannot_be_paused(self):
+        """No mode means no way back — better no pause than a charger left Off."""
+        assert press({"id": "ev_charger"}, "1_hour", NOW) == {}
 
 
 
@@ -301,3 +314,203 @@ class TestTheButtonsSurviveSetup:
         kept = {d.key for d in sweep.call_args.args[2]}
         assert kept == {"charger_keba_pause_charging",
                         "charger_wb2_pause_charging"}, kept
+
+
+# ── (25.09.2026) the running pause is visible ──────────────────────────────
+# RienduPre pressed Pause and saw a charger on Off with no sign it was a pause
+# or when it would end. The deadline and the mode it returns to ride on the
+# charge-mode select's attributes — and only while the mode reads Off,
+# because picking a mode IS the cancel (Guido: "if the user sets the mode to
+# any other mode again the timer has to reset").
+
+from unittest.mock import MagicMock, patch
+from homeassistant.components.select import SelectEntityDescription
+from custom_components.solar_energy_management.select import SEMPerChargerSelect
+
+
+def _select(charger_cfg, entry=None):
+    coordinator = MagicMock()
+    coordinator.config = {"ev_chargers": [charger_cfg], "tariff_mode": "static"}
+    coordinator.last_update_success = True
+    desc = SelectEntityDescription(key="charger_ev_charger_charge_mode",
+                                   options=["solar_only", "solar_plus_battery", "solar_plus_cheap", "min_plus_solar", "always_max", "off"])
+    if entry is None:
+        entry = MagicMock(); entry.entry_id = "e1"
+    return SEMPerChargerSelect(coordinator, desc, entry, "ev_charger",
+                            "charge_mode", charger_cfg.get("charge_mode", "off"), "EV Charger")
+
+
+class TestTheRunningPauseIsVisible:
+    def test_while_off_and_armed_the_deadline_and_the_way_back_are_attributes(self):
+        cfg = {"id": "ev_charger", "charge_mode": "off",
+               PAUSE_UNTIL_KEY: deadline_for_minutes(60, NOW),
+               PAUSE_RESUME_MODE_KEY: "solar_plus_battery"}
+        attrs = _select(cfg).extra_state_attributes
+        assert attrs["paused_until"] == parse_deadline(cfg[PAUSE_UNTIL_KEY]).isoformat()
+        assert attrs["pause_resume_mode"] == "solar_plus_battery"
+
+    def test_picking_a_mode_hides_the_timer_at_once(self):
+        """The record may not be swept for one more cycle; the GUI must not
+        show a countdown on a charger the user just took back."""
+        cfg = {"id": "ev_charger", "charge_mode": "solar_plus_battery",
+               PAUSE_UNTIL_KEY: deadline_for_minutes(60, NOW),
+               PAUSE_RESUME_MODE_KEY: "solar_plus_battery"}
+        attrs = _select(cfg).extra_state_attributes
+        assert attrs["paused_until"] is None
+        assert attrs["pause_resume_mode"] is None
+
+    def test_off_by_hand_is_not_a_pause(self):
+        attrs = _select({"id": "ev_charger", "charge_mode": "off"}).extra_state_attributes
+        assert attrs["paused_until"] is None
+        assert attrs["pause_resume_mode"] is None
+
+    def test_an_unreadable_deadline_is_not_shown(self):
+        cfg = {"id": "ev_charger", "charge_mode": "off",
+               PAUSE_UNTIL_KEY: "not a time", PAUSE_RESUME_MODE_KEY: "solar_only"}
+        assert _select(cfg).extra_state_attributes["paused_until"] is None
+
+    def test_the_old_attributes_are_still_there(self):
+        attrs = _select({"id": "ev_charger", "charge_mode": "off"}).extra_state_attributes
+        assert attrs["tariff_available"] is False
+        assert attrs["modes_needing_tariff"] == ["solar_plus_cheap"]
+
+
+class TestTheSelectFollowsTheConfig:
+    """The Pause button writes Off into the charger's config; the select
+    used to keep showing the old mode ("nothing seems to happen")."""
+
+    def _cycle(self, sel):
+        with patch.object(sel, "async_write_ha_state"):
+            sel._handle_coordinator_update()
+
+    def test_a_pause_shows_as_off(self):
+        cfg = {"id": "ev_charger", "charge_mode": "min_plus_solar"}
+        sel = _select(cfg)
+        assert sel.current_option == "min_plus_solar"
+        cfg.update(press(cfg, "1_hour", NOW))          # what the button writes
+        self._cycle(sel)
+        assert sel.current_option == "off"
+
+    def test_the_way_back_shows_too(self):
+        cfg = {"id": "ev_charger", "charge_mode": "off",
+               PAUSE_UNTIL_KEY: deadline_for_minutes(60, NOW),
+               PAUSE_RESUME_MODE_KEY: "solar_plus_battery"}
+        sel = _select(cfg)
+        cfg.update(tick(cfg, NOW + timedelta(minutes=61)))   # it ran out
+        self._cycle(sel)
+        assert sel.current_option == "solar_plus_battery"
+
+    def test_garbage_in_the_config_is_not_adopted(self):
+        cfg = {"id": "ev_charger", "charge_mode": "min_plus_solar"}
+        sel = _select(cfg)
+        cfg["charge_mode"] = "not_a_mode"
+        self._cycle(sel)
+        assert sel.current_option == "min_plus_solar"
+
+
+class TestAModeWriteEndsThePause:
+    """Found live: pick a mode, pick Off again within one cycle, and the old
+    record was still there — the countdown came back, and the expiry would
+    have put the old mode back over a deliberate Off.
+
+    The first fix put the rule in the select. A review then found the
+    set_option service writing a mode through the structural merge with
+    the record still attached. So the rule lives in the WRITERS now, and
+    these tests run the real ones — the earlier version patched away the
+    very function under test."""
+
+    def _paused(self):
+        return {"id": "ev_charger", "charge_mode": "off",
+                PAUSE_UNTIL_KEY: deadline_for_minutes(60, NOW),
+                PAUSE_RESUME_MODE_KEY: "solar_plus_battery"}
+
+    # -- the rule itself --------------------------------------------------
+    def test_a_mode_other_than_off_drops_the_record(self):
+        cfg = self._paused(); cfg["charge_mode"] = "min_plus_solar"
+        assert forget_on_mode_write(cfg, "charge_mode", "min_plus_solar") is True
+        assert PAUSE_UNTIL_KEY not in cfg and PAUSE_RESUME_MODE_KEY not in cfg
+        assert forget_on_mode_write(cfg, "charge_mode", "solar_only") is False   # nothing left to drop
+
+    def test_off_an_unset_mode_and_other_keys_keep_the_record(self):
+        for key, value in (("charge_mode", "off"), ("charge_mode", None),
+                           ("charge_mode", ""), ("ev_target_soc", 80)):
+            cfg = self._paused(); cfg[key] = value
+            assert forget_on_mode_write(cfg, key, value) is False, (key, value)
+            assert cfg[PAUSE_UNTIL_KEY] and cfg[PAUSE_RESUME_MODE_KEY] == "solar_plus_battery"
+
+    # -- the per-charger writer (select, button, expiry sweep) -------------
+    def _write(self, cfg, key, value):
+        """The real writer against a fake entry: (persisted, mirrored)."""
+        from custom_components.solar_energy_management import persist_per_charger_option
+        hass = MagicMock()
+        entry = MagicMock(); entry.data = {}; entry.options = {"ev_chargers": [dict(cfg)]}
+        coordinator = MagicMock(); coordinator.config = {"ev_chargers": [dict(cfg)]}
+        persist_per_charger_option(hass, entry, coordinator, "ev_charger", key, value)
+        written = hass.config_entries.async_update_entry.call_args.kwargs["options"]["ev_chargers"][0]
+        return written, coordinator.config["ev_chargers"][0]
+
+    def test_the_writer_drops_the_record_with_the_mode_in_one_write(self):
+        for c in self._write(self._paused(), "charge_mode", "min_plus_solar"):
+            assert c["charge_mode"] == "min_plus_solar"
+            assert PAUSE_UNTIL_KEY not in c and PAUSE_RESUME_MODE_KEY not in c
+
+    def test_the_writer_keeps_a_pause_when_off_is_written(self):
+        written, mirrored = self._write(self._paused(), "charge_mode", "off")
+        assert written[PAUSE_RESUME_MODE_KEY] == mirrored[PAUSE_RESUME_MODE_KEY] == "solar_plus_battery"
+
+    def test_the_writer_keeps_a_pause_when_another_key_is_written(self):
+        written, _ = self._write(self._paused(), "ev_target_soc", 80)
+        assert written["ev_target_soc"] == 80 and written[PAUSE_RESUME_MODE_KEY] == "solar_plus_battery"
+
+    def test_the_select_pick_is_one_write_through_the_real_writer(self):
+        cfg = self._paused()
+        entry = MagicMock(); entry.entry_id = "e1"; entry.data = {}
+        entry.options = {"ev_chargers": [dict(cfg)]}
+        sel = _select(cfg, entry=entry); sel.hass = MagicMock()
+        import asyncio
+        with patch.object(sel, "async_write_ha_state"):
+            asyncio.run(sel.async_select_option("min_plus_solar"))
+        upd = sel.hass.config_entries.async_update_entry
+        assert upd.call_count == 1                       # one write, not three
+        written = upd.call_args.kwargs["options"]["ev_chargers"][0]
+        assert written["charge_mode"] == "min_plus_solar"
+        assert PAUSE_UNTIL_KEY not in written and PAUSE_RESUME_MODE_KEY not in written
+        assert sel.extra_state_attributes["paused_until"] is None
+
+    def test_off_picked_during_a_pause_leaves_it_running(self):
+        cfg = self._paused()
+        entry = MagicMock(); entry.entry_id = "e1"; entry.data = {}
+        entry.options = {"ev_chargers": [dict(cfg)]}
+        sel = _select(cfg, entry=entry); sel.hass = MagicMock()
+        import asyncio
+        with patch.object(sel, "async_write_ha_state"):
+            asyncio.run(sel.async_select_option("off"))
+        written = sel.hass.config_entries.async_update_entry.call_args.kwargs["options"]["ev_chargers"][0]
+        assert written[PAUSE_RESUME_MODE_KEY] == "solar_plus_battery"
+
+    # -- the set_option service's merge (automations, Developer Tools) ------
+    def test_the_service_merge_drops_the_record_with_the_mode(self):
+        from custom_components.solar_energy_management import _merge_ev_chargers_by_id
+        merged = _merge_ev_chargers_by_id(
+            [self._paused()], [{"id": "ev_charger", "charge_mode": "min_plus_solar"}])
+        assert merged[0]["charge_mode"] == "min_plus_solar"
+        assert PAUSE_UNTIL_KEY not in merged[0] and PAUSE_RESUME_MODE_KEY not in merged[0]
+
+    def test_the_service_merge_keeps_a_pause_it_did_not_touch(self):
+        from custom_components.solar_energy_management import _merge_ev_chargers_by_id
+        merged = _merge_ev_chargers_by_id([self._paused()], [{"id": "ev_charger", "ev_target_soc": 80}])
+        assert merged[0]["ev_target_soc"] == 80
+        assert merged[0][PAUSE_RESUME_MODE_KEY] == "solar_plus_battery"
+        merged = _merge_ev_chargers_by_id([self._paused()], [{"id": "ev_charger", "charge_mode": "off"}])
+        assert merged[0][PAUSE_RESUME_MODE_KEY] == "solar_plus_battery"
+
+    def test_a_mode_then_off_through_the_service_inside_one_cycle_revives_nothing(self):
+        """The reviewer's sequence: the service sets a mode, then Off, before
+        the sweep ran. The old deadline must not come back; expiry must
+        restore nothing."""
+        from custom_components.solar_energy_management import _merge_ev_chargers_by_id
+        step1 = _merge_ev_chargers_by_id([self._paused()], [{"id": "ev_charger", "charge_mode": "min_plus_solar"}])
+        step2 = _merge_ev_chargers_by_id(step1, [{"id": "ev_charger", "charge_mode": "off"}])
+        assert step2[0]["charge_mode"] == "off"
+        assert tick(step2[0], NOW) == {}
+        assert tick(step2[0], NOW + timedelta(minutes=61)) == {}

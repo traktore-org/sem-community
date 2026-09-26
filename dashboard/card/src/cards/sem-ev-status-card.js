@@ -46,6 +46,8 @@ class SEMEVStatusCard extends SEMLitBase {
 
     disconnectedCallback() {
         super.disconnectedCallback();
+        // (#980 follow-up) the pause countdown's minute tick
+        if (this._pauseTimer) { clearInterval(this._pauseTimer); this._pauseTimer = null; }
         document.removeEventListener('visibilitychange', this._boundVisibility);
     }
 
@@ -242,6 +244,21 @@ class SEMEVStatusCard extends SEMLitBase {
      * only the fleet-level (primary charger) plan existed. Fleet plan kept
      * as the fallback for coordinators that predate the attribute.
      */
+    // (#980 follow-up) re-render once a minute while a pause runs, so the
+    // countdown moves between state changes; nothing runs otherwise.
+    updated(changed) {
+        super.updated?.(changed);
+        const paused = Object.keys(this._hass?.states || {}).some((eid) =>
+            eid.startsWith('select.sem_charger_') && eid.endsWith('_charge_mode')
+            && this._hass.states[eid]?.state === 'off'
+            && this._hass.states[eid]?.attributes?.paused_until);
+        if (paused && !this._pauseTimer) {
+            this._pauseTimer = setInterval(() => this.requestUpdate(), 60000);
+        } else if (!paused && this._pauseTimer) {
+            clearInterval(this._pauseTimer); this._pauseTimer = null;
+        }
+    }
+
     _renderPlanStrip(chargerId) {
         const cs = this._hass?.states['sensor.sem_charging_state'];
         const perPlan = chargerId
@@ -614,6 +631,21 @@ class SEMEVStatusCard extends SEMLitBase {
         const chargeModeEntityId = `select.sem_charger_${id}_charge_mode`;
         const chargeModeAttrs = this._stateAttrs(chargeModeEntityId);
         const chargeMode = this._stateStr(chargeModeEntityId) || 'min_plus_solar';
+        // (#980 follow-up) The running pause, visible. The deadline rides on
+        // the mode select's attributes while the mode reads Off; picking a
+        // mode is the cancel, so the line exists only under Off and goes the
+        // moment the select changes — before the record is even swept.
+        const pausedUntilRaw = chargeMode === 'off' ? chargeModeAttrs.paused_until : null;
+        const pausedUntil = pausedUntilRaw ? new Date(pausedUntilRaw) : null;
+        const pauseRunning = !!(pausedUntil && !isNaN(pausedUntil));
+        const pauseRemainingMin = pauseRunning
+            ? Math.max(0, Math.round((pausedUntil - Date.now()) / 60000)) : 0;
+        const pauseResumeMode = chargeModeAttrs.pause_resume_mode || '';
+        const pauseUntilLabel = pauseRunning ? pausedUntil.toLocaleTimeString([],
+            { hour: '2-digit', minute: '2-digit', timeZone: this._hass?.config?.time_zone || undefined }) : '';
+        const pauseLeftLabel = pauseRemainingMin >= 60
+            ? `${Math.floor(pauseRemainingMin / 60)} h ${pauseRemainingMin % 60} min`
+            : `${pauseRemainingMin} min`;
         const chargeModeOptions = chargeModeAttrs.options || [
             'solar_only', 'solar_plus_battery', 'solar_plus_cheap',
             'min_plus_solar', 'always_max', 'off',
@@ -842,10 +874,24 @@ class SEMEVStatusCard extends SEMLitBase {
                                     @click=${(e) => { e.stopPropagation(); this._pressButton(pauseButtonId); }}
                                     title=${this._t('pause_charging_hint')}>
                                 <ha-icon icon="mdi:pause-octagon-outline" style="--mdc-icon-size:15px"></ha-icon>
-                                ${this._t('pause_charging')}
+                                ${pauseRunning ? this._t('pause_charging_again') : this._t('pause_charging')}
                             </button>
                         </span>
                     </div>
+                    ${pauseRunning ? html`
+                    <div class="ct-subhint">
+                        <div class="ct-hint-row">
+                            <ha-icon icon="mdi:pause-circle-outline" style="--mdc-icon-size:13px;color:#8DC892"></ha-icon>
+                            <span class="ct-hint-text">${pauseRemainingMin > 0
+                                ? html`${(this._t('pause_status_line') || '')
+                                        .replace('{left}', pauseLeftLabel)
+                                        .replace('{mode}', chargeModeLabels[pauseResumeMode] || pauseResumeMode)
+                                        .replace('{time}', pauseUntilLabel)}
+                                    <span style="opacity:.75"> ${this._t('pause_resume_hint')}</span>`
+                                : this._t('pause_resuming')}</span>
+                        </div>
+                    </div>
+                    ` : nothing}
                     ` : nothing}
                     ${chargeMode === 'solar_plus_battery' && learnerLearning ? html`
                     <div class="ct-subhint">

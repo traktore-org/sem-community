@@ -504,11 +504,28 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
         """
         if self._config_key != "charge_mode":
             return None
+        # (#980 follow-up) The running pause, visible: the deadline and the
+        # mode it returns to ride here while the mode reads Off. Picking a
+        # mode IS the cancel, so the moment the live mode is not Off the two
+        # read None — even if the record has not been swept yet (the tick
+        # forgets it on the next cycle). A deadline nobody can parse is not
+        # a pause to show.
+        paused_until = None
+        resume_mode = None
+        cfg = self._charger_cfg()
+        if str(cfg.get("charge_mode") or "") == "off":
+            from .coordinator import charge_pause as _cp
+            deadline = _cp.parse_deadline(cfg.get(_cp.PAUSE_UNTIL_KEY))
+            if deadline is not None:
+                paused_until = deadline.isoformat()
+                resume_mode = cfg.get(_cp.PAUSE_RESUME_MODE_KEY) or None
         return {
             "tariff_available": (
                 self.coordinator.config.get("tariff_mode") == "dynamic"
             ),
             "modes_needing_tariff": ["solar_plus_cheap"],
+            "paused_until": paused_until,
+            "pause_resume_mode": resume_mode,
         }
 
     @property
@@ -518,6 +535,22 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
         if self._value in opts:
             return self._value
         return opts[0] if opts else None
+
+    def _handle_coordinator_update(self) -> None:
+        """(#980 follow-up) The config is the truth; the entity follows it.
+
+        ``_value`` used to change only in ``async_select_option`` — the
+        user's own pick. A mode written anywhere else never reached the
+        entity: the Pause button wrote ``off`` into the charger's config and
+        the select kept showing the old mode, so the pause was invisible
+        ("when I click pause nothing seems to happen"), and the mode the
+        pause put back at expiry was invisible too. Every cycle now adopts
+        the config's value when it is one this select may show.
+        """
+        value = self._charger_cfg().get(self._config_key)
+        if isinstance(value, str) and value in self._valid_value_set() and value != self._value:
+            self._value = value
+        super()._handle_coordinator_update()
 
     @property
     def available(self) -> bool:
@@ -539,6 +572,13 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
         # mirror and reload-skip arming. Do NOT inline a copy here; the
         # copy-paste class already produced one missed writer (#469).
         from . import persist_per_charger_option
+        # (#980) Picking a mode IS cancelling a pause, and the pause has to
+        # be forgotten in the SAME write — a mode picked and Off picked
+        # again within one cycle kept the old record, and at expiry the old
+        # mode would have overwritten a deliberate Off (live on .175,
+        # 25.09). The writer itself applies that rule
+        # (``charge_pause.forget_on_mode_write``), so this entity, the
+        # set_option service and an automation all forget it the same way.
         persist_per_charger_option(
             self.hass, self._entry, self.coordinator,
             self._charger_id, self._config_key, option,

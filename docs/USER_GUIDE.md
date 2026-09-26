@@ -465,6 +465,10 @@ install, and one **Pause Charging** button per charger.
 Press a charger's button and its charge mode goes to **Off** for the selected
 time, then back to exactly what it was.
 
+While a pause runs, the EV card shows a line under the button: the minutes
+left, the mode it goes back to, and the time. The button reads **Pause
+again**. Pick any mode and the pause ends at once.
+
 That is all it is — the mode you would have picked anyway, plus the part that
 is easy to forget. The duration is shared because "how long" is a choice you
 make in the moment, not a property of a charger; the buttons are separate, so
@@ -477,6 +481,8 @@ pausing one charger and leaving the other running still works.
 | carry on now | set its Charge Mode back to whatever you want |
 
 There is no Resume button, because the Charge Mode select already is one.
+Pressing Pause on a charger you set to Off yourself does nothing: there is
+nothing to pause and no mode to come back to.
 
 Two things worth knowing:
 

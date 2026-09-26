@@ -33,6 +33,7 @@ from homeassistant.util import dt as dt_util
 import voluptuous as vol
 from homeassistant.helpers import config_validation as cv
 
+from .coordinator.charge_pause import forget_on_mode_write
 from .coordinator.install_modules import MODULE_EVIDENCE_KEYS
 from .const import (
     DOMAIN,
@@ -589,7 +590,10 @@ def _merge_ev_chargers_by_id(
     * Each entry in ``incoming`` is merged INTO the matching entry in
       ``existing`` by ``id``, with incoming fields winning. Fields
       present in the existing entry but absent from the incoming entry
-      are preserved (no key is silently removed).
+      are preserved (no key is silently removed) — with ONE exception:
+      an incoming ``charge_mode`` other than ``off`` drops the (#980)
+      pause record, ``pause_charging_until`` / ``pause_resume_mode``. A
+      pause is Off; a charger written into another mode carries none.
     * Existing chargers whose ``id`` is NOT in the incoming list are
       kept verbatim. This is the actual fix for the cross-talk: a
       one-charger update never affects siblings.
@@ -645,11 +649,16 @@ def _merge_ev_chargers_by_id(
             continue
         base = dict(c)
         if cid in incoming_by_id:
-            base.update(incoming_by_id[cid])
+            inc = incoming_by_id[cid]
+            base.update(inc)
+            if "charge_mode" in inc:
+                forget_on_mode_write(base, "charge_mode", inc["charge_mode"])
         merged.append(base)
         merged_ids.add(cid)
     for cid in new_ids:
-        merged.append(dict(incoming_by_id[cid]))
+        fresh = dict(incoming_by_id[cid])
+        forget_on_mode_write(fresh, "charge_mode", fresh.get("charge_mode"))
+        merged.append(fresh)
     return merged
 
 
@@ -673,6 +682,9 @@ def persist_per_charger_option(
       no-op'ing the write.
     * Mirrors into ``coordinator.config`` and arms the reload-skip
       snapshot before the entry write.
+    * (#980) A ``charge_mode`` other than ``off`` drops the pause record in
+      the same write — ``charge_pause.forget_on_mode_write``, the one rule
+      both config writers apply (see ``_merge_ev_chargers_by_id``).
     """
     new_options = {**(entry.options or {})}
     data_chargers = (entry.data or {}).get("ev_chargers") or []
@@ -681,6 +693,7 @@ def persist_per_charger_option(
     for charger in ev_chargers:
         if charger.get("id") == charger_id:
             charger[key] = value
+            forget_on_mode_write(charger, key, value)    # (#980)
             break
     else:
         recovered = next(
@@ -689,6 +702,7 @@ def persist_per_charger_option(
             {"id": charger_id},
         )
         recovered[key] = value
+        forget_on_mode_write(recovered, key, value)      # (#980)
         ev_chargers.append(recovered)
         _LOGGER.warning(
             "Charger '%s' was missing from the stored ev_chargers list "

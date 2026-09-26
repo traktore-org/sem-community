@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **A running pause is visible** (#980, by @RienduPre). The EV card counts down, names the mode it returns to, and picking a mode ends it.
+
+- 🐛 **The charge-mode select now shows a pause as Off** (#980). Before, it kept the old mode, so a pause looked like nothing happened.
+
+- 🐛 **A charge mode set by service or automation now ends a running pause** (#980). Before, the old timer could come back.
+
 # [2.1.0-beta.41] — 25.09.2026
 
 - 🐛 **Always (max) can now switch to three phases** (#1008, by @coppe218). The mode set no power budget, so SEM read it as none.
