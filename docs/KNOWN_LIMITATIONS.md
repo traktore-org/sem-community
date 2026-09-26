@@ -18,7 +18,7 @@ Only one SEM config entry is supported per Home Assistant instance. Creating a s
 
 ## EV charger requirements
 
-The EV charger must be controllable via a supported HA integration (KEBA, Easee, go-eCharger, Wallbox, Zaptec, ChargePoint, Heidelberg, OpenWB, OCPP-compatible, Ohme, Peblar, V2C Trydan, Alfen Eve, Blue Current, OpenEVSE) or through a generic `number` entity for current control. Manual configuration of entity IDs is required if the charger is not auto-detected.
+The EV charger must be controllable via a supported HA integration (KEBA, Easee, go-eCharger, Wallbox, Zaptec, ChargePoint, Heidelberg, OpenWB, OCPP-compatible, Ohme, Peblar, V2C Trydan, Alfen Eve, Blue Current, OpenEVSE) or through a generic `number` entity for current control. Manual configuration of entity IDs is required if the charger is not auto-detected, NRGkick, ABL eMH1, Wallbox behind the MQTT bridge
 
 ## Battery discharge protection
 
@@ -342,4 +342,36 @@ will use the rate the integration reports at the time.
 
 Neither shape is dangerous — SEM does not act on a level it does not have —
 but neither will be optimised for.
+
+## A recognised brand is a proposal, not a binding (2.1, #915, #956)
+
+SEM reads what an integration declares about itself and proposes entities
+and services on the Configuration tab. It binds nothing you did not confirm.
+Two limits follow:
+
+- **A service SEM cannot drive as-is is named, not offered.** go-eCharger's
+  `set_max_current` wants a charger name SEM cannot fill in; some services
+  target an entity. Such a proposal reads *wire by hand* with the reason.
+- **A brand added from its source ships as *implemented*, not *tested
+  live*.** NRGkick, ABL eMH1 and Wallbox over the MQTT bridge were mapped
+  from the integrations' own code; the first owner who confirms makes the
+  row *tested live*.
+
+## Setpoint models (2.1, #809, #869)
+
+One setpoint model per install. A house with two batteries that need
+different models is not supported yet. With `direction_select` SEM writes
+the direction first and the watts only once the select reads it back, so a
+change of direction lands one cycle later by design.
+
+## The house sink is all-or-nothing (#970 open)
+
+When the battery is held, the grid pays for the whole house; when it is
+open, the battery does. A rate in between — grid up to the peak limit,
+battery for the rest — is not built.
+
+## Every control is shown (#996 open)
+
+A house on a flat tariff still sees the price controls, which can do nothing
+there. Hiding a control this house cannot use is planned, not built.
 
