@@ -275,3 +275,71 @@ def test_the_window_matters_because_of_zip_release():
     hacs = json.loads((ROOT / "hacs.json").read_text())
     assert hacs["zip_release"] is True
     assert hacs["filename"] == "solar_energy_management.zip"
+
+
+# --- #1028: the picker shows three stables, and only the line in progress ---
+
+def _rel(tag, created, pre=True):
+    return {"tag_name": tag, "prerelease": pre, "draft": False, "created_at": created}
+
+
+def _real_shape():
+    """The page on 30.09.2026, minus most betas: stables mixed with betas of
+    lines they already superseded."""
+    return [
+        _rel("v2.2.0-beta.2", "2026-10-02T19:00:00Z"),
+        _rel("v2.2.0-beta.1", "2026-10-01T19:00:00Z"),
+        _rel("v2.1.0", "2026-09-30T14:36:00Z", pre=False),
+        _rel("v2.1.0-beta.51", "2026-09-30T08:16:00Z"),
+        _rel("v2.1.0-beta.50", "2026-09-29T22:12:00Z"),
+        _rel("v2.0.0", "2026-08-29T14:43:00Z", pre=False),
+        _rel("v2.0.0-beta.21", "2026-08-29T06:16:00Z"),
+        _rel("v1.7.6", "2026-08-19T10:00:00Z", pre=False),
+        _rel("v2.0.0-beta.6", "2026-08-10T10:00:00Z"),
+        _rel("v1.7.5", "2026-07-20T10:00:00Z", pre=False),
+        _rel("v1.7.4", "2026-07-01T10:00:00Z", pre=False),
+    ]
+
+
+def test_betas_a_stable_superseded_are_retired():
+    tags = window.to_retire(_real_shape())
+    assert set(tags) == {"v2.1.0-beta.51", "v2.1.0-beta.50",
+                         "v2.0.0-beta.21", "v2.0.0-beta.6"}
+
+
+def test_the_line_in_progress_is_kept():
+    tags = window.to_retire(_real_shape())
+    assert "v2.2.0-beta.1" not in tags and "v2.2.0-beta.2" not in tags
+
+
+def test_only_the_three_newest_stables_stay():
+    assert window.stale_stables(_real_shape()) == ["v1.7.4", "v1.7.5"]   # oldest first
+
+
+def test_three_or_fewer_stables_retire_none():
+    feed = [r for r in _real_shape() if r["tag_name"] not in ("v1.7.5", "v1.7.4")]
+    assert window.stale_stables(feed) == []
+
+
+def test_after_retiring_the_picker_reads_betas_then_three_stables():
+    feed = _real_shape()
+    gone = set(window.to_retire(feed)) | set(window.stale_stables(feed))
+    left = [r["tag_name"] for r in feed if r["tag_name"] not in gone]
+    assert left == ["v2.2.0-beta.2", "v2.2.0-beta.1", "v2.1.0", "v2.0.0", "v1.7.6"]
+
+
+def test_a_named_stale_stable_may_be_retired_but_not_by_default(monkeypatch):
+    monkeypatch.setattr(window, "release_by_tag",
+                        lambda tag: {"tag_name": tag, "prerelease": False})
+    calls = []
+    monkeypatch.setattr(window, "_gh", lambda *a: calls.append(a) or "")
+    with pytest.raises(SystemExit):
+        window.retire("v1.7.5")
+    assert "retired" in window.retire("v1.7.5", stale_stable=True)
+    assert calls and "--draft=true" in calls[-1]
+
+
+def test_one_run_retires_at_most_the_guard_in_total(monkeypatch):
+    stables = [_rel(f"v1.{n}.0", f"2025-{1 + n // 28:02d}-{1 + n % 28:02d}T00:00:00Z", pre=False)
+               for n in range(80)]
+    assert len(window.stale_stables(stables)) == window.MAX_PER_RUN

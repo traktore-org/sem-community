@@ -45,6 +45,10 @@ PAGE = 30
 #: measured beta rate, about twelve days. #1012 itself went unseen for nine.
 KEEP = 10
 
+#: (#1028) How many full releases stay listed. HACS's version picker shows
+#: every listed release, stables and betas mixed; the three newest stables
+#: are the ones a user may reasonably step back to.
+KEEP_STABLE = 3
 #: Refuse to retire more than this in one run — a runaway guard, not a
 #: working limit.
 MAX_PER_RUN = 50
@@ -102,12 +106,34 @@ def to_retire(releases: list[dict], keep: int = KEEP) -> list[str]:
     this could ever pick, so a publish can never retire itself.
     """
     index = full_release_index(releases)
-    if index is None or index <= keep:
+    if index is None:
         return []
-    above = [r for r in listed(releases)[:index] if r.get("prerelease")]
-    need = min(index - keep, len(above), MAX_PER_RUN)
-    oldest_first = sorted(above, key=lambda r: r.get("created_at") or "")
-    return [r["tag_name"] for r in oldest_first[:need]]
+    shown = listed(releases)
+    newest_full = max((r.get("created_at") or "" for r in shown
+                       if not r.get("prerelease")), default="")
+    betas = [r for r in shown if r.get("prerelease")]
+    # (#1028) A beta older than the newest full release is superseded: the
+    # stable carries it. It only crowds the picker — betas and stables
+    # mixed — so it goes, whatever the window's width.
+    superseded = [r for r in betas if (r.get("created_at") or "") <= newest_full]
+    current = sorted((r for r in betas if (r.get("created_at") or "") > newest_full),
+                     key=lambda r: r.get("created_at") or "", reverse=True)
+    # The line in progress keeps its newest ``keep``.
+    crowding = current[keep:]
+    oldest_first = sorted(superseded + crowding,
+                          key=lambda r: r.get("created_at") or "")
+    return [r["tag_name"] for r in oldest_first[:MAX_PER_RUN]]
+
+
+def stale_stables(releases: list[dict], keep: int = KEEP_STABLE) -> list[str]:
+    """(#1028) Full releases older than the newest ``keep`` — listed, they
+    make the picker a history. Drafted like a beta: tag and notes stay.
+    Never one of the newest ``keep``, never when there are fewer."""
+    fulls = sorted((r for r in listed(releases) if not r.get("prerelease")),
+                   key=lambda r: r.get("created_at") or "", reverse=True)
+    stale = fulls[keep:]
+    # Oldest first and bounded, like the betas: the daily run does the rest.
+    return [r["tag_name"] for r in reversed(stale)][:MAX_PER_RUN]
 
 
 def _gh(*args: str) -> str:
@@ -147,13 +173,14 @@ def release_by_tag(tag: str) -> dict | None:
     return json.loads(done.stdout)
 
 
-def retire(tag: str) -> str:
+def retire(tag: str, *, stale_stable: bool = False) -> str:
     """Send one release back to draft, after reading it again to be sure it
-    is still a pre-release."""
+    is still a pre-release — or, with ``stale_stable``, a full release that
+    ``stale_stables()`` named (never one of the newest KEEP_STABLE)."""
     release = release_by_tag(tag)
     if release is None:
         return f"{tag} is already retired"
-    if not release.get("prerelease"):
+    if not release.get("prerelease") and not stale_stable:
         raise SystemExit(f"refusing to retire {tag}: it is a full release")
     _gh("release", "edit", tag, "-R", repo(), "--draft=true")
     return f"retired {tag} — tag and notes kept, its zip is no longer public"
@@ -191,10 +218,15 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.retire:
         tags = to_retire(releases)
-        if not tags:
+        old = stale_stables(releases)[:max(0, MAX_PER_RUN - len(tags))]
+        if not tags and not old:
             _say("Nothing to retire.")
         for tag in tags:
             _say(f"would retire {tag}" if args.dry_run else retire(tag))
+        for tag in old:
+            _say(f"would retire old stable {tag}" if args.dry_run
+                 else retire(tag, stale_stable=True))
+        tags = tags + old
         if tags and not args.dry_run:
             releases = fetch_releases()
             _say(_where(releases))
