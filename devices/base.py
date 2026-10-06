@@ -2178,7 +2178,7 @@ class CurrentControlDevice(ControllableDevice):
         self.service_param_name: str = "current"  # Overridden per integration (#82)
         self.service_device_id: Optional[str] = None  # For Easee/Zaptec device_id
         # (#1054) static fields the current service needs beside the amps —
-        # go-e's set_max_current takes the box's own name in charger_name.
+        # e.g. a service that takes the box's own name in a name field.
         # Set from the ``ev_charger_service_data`` the crawler offered.
         self.service_extra_data: Dict[str, Any] = {}
         self.needs_pilot_cycle: bool = False  # True = disable/enable cycle for session start
