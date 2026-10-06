@@ -20,6 +20,7 @@ test('the provider is named, not abbreviated to a horizon code', () => {
     assert.equal(providerName('forecast_solar'), 'Forecast.Solar');
     assert.equal(providerName('solcast'), 'Solcast');
     assert.equal(providerName('open_meteo'), 'Open-Meteo');
+    assert.equal(providerName('helios'), 'Helios');
 });
 
 test('an unknown provider degrades to something readable, never junk', () => {

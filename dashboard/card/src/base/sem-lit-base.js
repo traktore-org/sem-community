@@ -158,6 +158,7 @@ export class SEMLitBase extends LitElement {
             solcast: 'Solcast',
             forecast_solar: 'Forecast.Solar',
             open_meteo: 'Open-Meteo',
+            helios: 'Helios',
             custom: this._t('custom') || 'Custom',
         };
         return LABELS[raw] || raw;

@@ -2573,6 +2573,7 @@ class SEMConfigCard extends SEMLitBase {
             { value: 'solcast', label: 'Solcast PV Solar' },
             { value: 'forecast_solar', label: 'Forecast.Solar' },
             { value: 'open_meteo', label: 'Open-Meteo Solar Forecast' },
+            { value: 'helios', label: 'Helios Forecast' },
         ];
         const sourceOptions = [
             { value: 'auto', label: this._t('config_forecast_source_auto') },
