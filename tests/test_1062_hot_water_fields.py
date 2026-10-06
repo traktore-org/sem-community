@@ -175,6 +175,33 @@ class TestTheSurplusPassStopsIt:
         await sc.update(5000.0)
         assert not dev.is_active
 
+    async def test_a_banked_band_does_not_cut_the_legionella_cycle(self):
+        """The band reads the boiler's own sensor now, so it can read
+        "banked" above Keep at + Bank by — far below the disinfection target.
+        A cycle cut there is never started again: the tank would sit short of
+        the target with the cycle flag set for good."""
+        hass = _Hass()
+        dev = _boiler(hass)
+        dev.comfort_target, dev.comfort_offset, dev.comfort_limit = 50.0, 3.0, 36.0
+        sc = await self._running(hass, dev)
+        dev._legionella_cycle_active = True
+        hass.set("sensor.boiler_temp", "58.0")
+        assert dev.comfort_state == "banked"
+        await sc.update(5000.0)
+        assert dev.is_active
+        assert not hass.calls("turn_off")
+
+    async def test_a_stop_entity_does_not_cut_the_legionella_cycle(self):
+        hass = _Hass()
+        dev = _boiler(hass)
+        sc = await self._running(hass, dev)
+        dev._legionella_cycle_active = True
+        dev.stop_entity, dev.stop_at = "sensor.tank_top", 50.0
+        hass.set("sensor.tank_top", "60")
+        hass.set("sensor.boiler_temp", "60.0")
+        await sc.update(5000.0)
+        assert dev.is_active
+
     async def test_it_starts_again_once_the_water_has_cooled(self):
         hass = _Hass()
         dev = _boiler(hass)
@@ -236,6 +263,18 @@ class TestComfortBandReadsTheBoiler:
         hass.set("sensor.tank_bottom", "45.0")
         assert dev._comfort_reading() == 45.0
         assert dev.comfort_state == "willing"
+
+    def test_vacation_turns_the_band_off(self):
+        """#594: no comfort heating while away — no force below the limit, no
+        planned banking block, no banked stop."""
+        hass = _Hass()
+        dev = self._band(_boiler(hass))
+        hass.set("sensor.boiler_temp", "35.0")
+        assert dev.comfort_state == "forced"
+        dev.vacation = True
+        assert dev.comfort_state == "disengaged"
+        assert dev.has_runtime_deficit is False
+        assert dev.comfort_plan_demand(datetime.now()) is None
 
     def test_no_band_set_changes_nothing(self):
         """Zero config: a boiler with a sensor and no Comfort values is
@@ -305,6 +344,7 @@ class TestTheDeadFieldsAreGone:
 
 _LOGIC_ROOTS = ("coordinator", "features", "devices", "tariff", "utils", "consts")
 _LOG_NAMES = {"_LOGGER", "LOGGER", "logger", "_log"}
+_LOG_HELPERS = {"log_on_change"}  # utils/log_gate.py — a log line too
 _DISPLAY_FUNCS = {"to_dict", "__init__", "__repr__"}
 
 # A constructor value with no decision reader, kept on purpose. Each needs a
@@ -328,12 +368,19 @@ def _device_settings() -> dict:
                     continue
                 params = {a.arg for a in fn.args.args + fn.args.kwonlyargs} - {"self"}
                 for st in ast.walk(fn):
-                    if not isinstance(st, ast.Assign):
+                    if isinstance(st, ast.Assign):
+                        targets = st.targets
+                    elif isinstance(st, ast.AnnAssign) and st.value is not None:
+                        targets = [st.target]
+                    else:
                         continue
                     used = {n.id for n in ast.walk(st.value) if isinstance(n, ast.Name)}
                     if not used & params:
                         continue
-                    for tg in st.targets:
+                    flat = []
+                    for tg in targets:
+                        flat.extend(tg.elts if isinstance(tg, ast.Tuple) else [tg])
+                    for tg in flat:
                         if (isinstance(tg, ast.Attribute) and isinstance(tg.value, ast.Name)
                                 and tg.value.id == "self" and not tg.attr.startswith("__")):
                             out.setdefault(tg.attr, f"{path.name}:{cls.name}")
@@ -347,7 +394,7 @@ def _is_display_call(node) -> bool:
     if isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name) and f.value.id in _LOG_NAMES:
         return True
     name = f.id if isinstance(f, ast.Name) else (f.attr if isinstance(f, ast.Attribute) else "")
-    return name.endswith("SensorData")
+    return name.endswith("SensorData") or name in _LOG_HELPERS
 
 
 def _decision_reads(attrs) -> dict:
@@ -400,6 +447,7 @@ class TestEveryDeviceSettingReachesADecision:
         src = (
             "def to_dict(self):\n    return {'x': self.dead}\n"
             "def tick(self):\n    _LOGGER.info('%s', self.dead)\n"
+            "    log_on_change(_LOGGER, 'k', 20, '%s', self.dead)\n"
             "    data = HotWaterSensorData(v=self.dead)\n"
             "    return self.live\n"
         )
@@ -419,7 +467,7 @@ class TestEveryDeviceSettingReachesADecision:
                         break
                 kinds.setdefault(node.attr, []).append(
                     not display and func not in _DISPLAY_FUNCS)
-        assert kinds["dead"] == [False, False, False]
+        assert kinds["dead"] == [False, False, False, False]
         assert kinds["live"] == [True]
 
     def test_every_setting_has_a_decision_reader(self):

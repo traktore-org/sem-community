@@ -390,15 +390,29 @@ class HotWaterController(SwitchDevice):
         it there; a relay has no setpoint, and a boiler switched on below the
         target kept heating past it for as long as the surplus lasted. Only a
         real reading counts — a sensor that reads nothing is not a hot tank.
-        The Legionella cycle is left out: ``check_legionella_cycle`` holds and
-        ends that run itself.
+
+        Nothing stops a Legionella cycle: not this target, not a banked comfort
+        band (both sit below the disinfection target), not a stop entity. Once
+        cut, nothing starts the run again — ``check_legionella_cycle`` only
+        waits for the tank to reach the target, and ends the run itself.
         """
+        if self._legionella_cycle_active:
+            return False
         if super().stop_condition_met:
             return True
-        if self._entity_domain in _SETPOINT_DOMAINS or self._legionella_cycle_active:
+        if self._entity_domain in _SETPOINT_DOMAINS:
             return False
         temp = self.get_current_temperature()
         return temp is not None and temp >= self._active_target_temp()
+
+    @property
+    def comfort_state(self) -> str:
+        """(#594 / #1062) Vacation suspends comfort heating, so the band is off
+        while away: no force, no planned banking block, no banked stop. The
+        vacation surplus dump keeps its own cap (``_active_target_temp``)."""
+        if self.vacation:
+            return "disengaged"
+        return super().comfort_state
 
     def _comfort_fallback_reading(self):
         """(#1062) The band's thermometer when none is picked: the boiler's own
@@ -411,13 +425,8 @@ class HotWaterController(SwitchDevice):
         if self._entity_domain in _SETPOINT_DOMAINS and self.entity_id:
             state = self.hass.states.get(self.entity_id)
             raw = (state.attributes or {}).get("current_temperature") if state else None
-            try:
-                value = float(raw)
-            except (TypeError, ValueError):
-                value = None
+            value = self._attribute_temp_c(raw)
             if value is not None:
-                if self._install_unit_is_f():
-                    return (value - 32.0) * 5.0 / 9.0
                 return value
         if self.temperature_entity_id:
             state = self.hass.states.get(self.temperature_entity_id)
