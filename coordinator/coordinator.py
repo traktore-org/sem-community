@@ -67,7 +67,7 @@ from .health_check import (
 from .units import energy_state_to_kwh, power_state_to_watts
 from .distance_units import distance_to_km
 from .ev_availability import operational_ev_connected, operational_night_target
-from .departure import departure_for, departure_signature
+from .departure import departure_for, departure_signature, late_charge_s
 from .surplus_availability import SurplusAvailability
 from .sensor_reader import SensorReader
 from .energy_calculator import EnergyCalculator
@@ -8774,6 +8774,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     round(float(cfg.get("daily_ev_target") or 0.0), 1),
                     departure_signature(cfg, self.config),  # (#1023)
                     bool(cfg.get("ev_plan_one_block", False)),
+                    late_charge_s(cfg),
                     str(cfg.get("charge_mode") or ""),
                     _full,
                 ))
@@ -9852,6 +9853,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # (#1023) one continuous block, per charger, off by
                     # default
                     contiguous=bool(cfg.get("ev_plan_one_block", False)),
+                    # (#1023) the late charge right before departure
+                    late_s=late_charge_s(cfg),
                 ))
             # Load min-runtime deficits eligible for a night source.
             controller = getattr(self, "_surplus_controller", None)

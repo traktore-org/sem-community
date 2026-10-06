@@ -94,3 +94,20 @@ def departure_for(charger_cfg: Optional[Mapping[str, Any]], now: datetime,
             return candidate
     # Tomorrow's departure is always after now; kept for the type checker.
     return resolve_deadline(now, default)
+
+
+#: (#1023 A3) The late charge right before departure, per charger: 0 is off,
+#: 120 minutes the most a night gives it.
+LATE_CHARGE_KEY = "ev_late_charge_min"
+LATE_CHARGE_MAX_MIN = 120
+
+
+def late_charge_s(charger_cfg: Optional[Mapping[str, Any]]) -> int:
+    """How long before the departure the late charge starts, in seconds."""
+    try:
+        minutes = float((charger_cfg or {}).get(LATE_CHARGE_KEY) or 0)
+    except (TypeError, ValueError):
+        return 0
+    if minutes != minutes:  # NaN
+        return 0
+    return int(max(0.0, min(float(LATE_CHARGE_MAX_MIN), minutes)) * 60)

@@ -21,7 +21,7 @@ because that is what execution's ``price_is_cheap`` gate fires on.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -50,7 +50,10 @@ class Demand:
     quantizes honestly. ``priority``: one-list position, LOWER packs first
     (callers negate the drag-list number). ``contiguous`` (#1023): the need
     is met in ONE run of back-to-back slots — the cheapest such run — or,
-    when no run can hold it, slot-wise with a note saying so.
+    when no run can hold it, slot-wise with a note saying so. ``late_s``
+    (#1023): the last ``late_s`` seconds before the deadline are charged
+    first, price-blind, at the headroom there, ending AT the deadline; the
+    rest is packed to end before that window opens.
     """
     id: str
     kind: str                       # 'ev' | 'load' | 'battery'
@@ -64,6 +67,7 @@ class Demand:
     min_run_s: int = 0
     min_gap_s: int = 0
     contiguous: bool = False
+    late_s: int = 0
 
 
 @dataclass
@@ -312,8 +316,43 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
         cost = 0.0
         note = ""
         block_note = ""
-        if d.contiguous and d.source != "battery" and need > 1e-9:
-            run = _cheapest_run(d, need)
+        if (d.late_s > 0 and d.deadline is not None
+                and d.source != "battery" and need > 1e-9):
+            # (#1023) The late part first: latest slot first, each run
+            # ending where the next one starts, the last at the deadline.
+            # Never held back for price — an unpublished hour costs 0 here.
+            window = d.deadline - timedelta(seconds=d.late_s)
+            for i in reversed(idx):
+                if need - planned <= 1e-9:
+                    break
+                s = ledger[i]
+                lo, hi = max(s.start, window), min(s.end, d.deadline)
+                span_h = (hi - lo).total_seconds() / 3600.0
+                if span_h <= 0:
+                    continue
+                power = min(float(d.max_power_w), s.headroom_w)
+                if power < max(_W_EPS, float(d.min_power_w)):
+                    continue
+                run_h = min(span_h, (need - planned) / (power / 1000.0))
+                if d.min_run_s > 0 and planned <= 1e-9:
+                    run_h = min(span_h, max(run_h, d.min_run_s / 3600.0))
+                begin = hi - timedelta(hours=run_h)
+                price = 0.0 if s.price is None else float(s.price)
+                s.grid_committed_w += power
+                s.headroom_w -= power
+                allocations.append(Allocation(
+                    demand_id=d.id, start=begin, end=hi, power_w=power,
+                    price=price,
+                    reason=(f"{d.id}: {power:.0f} W {begin:%H:%M}–{hi:%H:%M} "
+                            f"@ {price:.3f} (late charge before departure)")))
+                last_block_end[d.id] = max(last_block_end.get(d.id, hi), hi)
+                planned += power / 1000.0 * run_h
+                cost += power / 1000.0 * run_h * price
+            # The rest ends before the late window opens.
+            d = replace(d, deadline=window)
+        block_done = False
+        if d.contiguous and d.source != "battery" and need - planned > 1e-9:
+            run = _cheapest_run(d, need - planned)
             if run is None:
                 block_note = "no single block fits"
             else:
@@ -329,11 +368,13 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                         reason=(f"{d.id}: {power:.0f} W {s.start:%H:%M}–"
                                 f"{end:%H:%M} @ {price:.3f} (one block, "
                                 f"headroom left {s.headroom_w:.0f} W)")))
-                    last_block_end[d.id] = end
+                    last_block_end[d.id] = max(
+                        last_block_end.get(d.id, end), end)
                     planned += power / 1000.0 * run_h
                     cost += power / 1000.0 * run_h * price
+                block_done = True
         order = (idx if d.source == "battery" else by_price)
-        if d.contiguous and not block_note and need > 1e-9:
+        if block_done:
             order = ()                  # the block holds it all
         for i in order:
             if need - planned <= 1e-9:
