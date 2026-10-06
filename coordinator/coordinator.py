@@ -67,6 +67,7 @@ from .health_check import (
 from .units import energy_state_to_kwh, power_state_to_watts
 from .distance_units import distance_to_km
 from .ev_availability import operational_ev_connected, operational_night_target
+from .departure import departure_for
 from .surplus_availability import SurplusAvailability
 from .sensor_reader import SensorReader
 from .energy_calculator import EnergyCalculator
@@ -5330,7 +5331,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     if isinstance(c, dict) and c.get("id")
                 ] or [_dl_pcfg if isinstance(_dl_pcfg, dict) else {}]
                 _fleet_plan = None
-                from .ev_tariff_planner import resolve_deadline
                 for _pcfg in _plan_cfgs:
                     _cid = _pcfg.get("id")
                     # Night plan: the per-charger one from the multi-charger
@@ -5398,8 +5398,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                     watts_per_amp=_wpa_p, gate_covered=False)
                                 # Resolve deadline from charger config — same path the
                                 # planner uses, just without the full plan computation.
-                                _tt = self._charger_target_time(_pcfg)
-                                _ev_deadline_dt = resolve_deadline(_now, _tt)
+                                _ev_deadline_dt = departure_for(
+                                    _pcfg, _now, self.config)
                                 # (#967) and the preview holds through an expensive
                                 # window open exactly as the night will (D3), so the
                                 # strip never promises a start in the peak band.
@@ -8772,7 +8772,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 sig.append((
                     "ev", cid,
                     round(float(cfg.get("daily_ev_target") or 0.0), 1),
-                    str(cfg.get("ev_target_time") or ""),
+                    self._charger_target_time(cfg),  # (#1023)
                     str(cfg.get("charge_mode") or ""),
                     _full,
                 ))
@@ -9812,7 +9812,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # EMA fallback (it learns on the call); the block sizes below
                 # read the #846 table first.
                 self._ev_watts_per_amp(cid, cfg, power)
-                deadline = resolve_deadline(now, cfg.get("ev_target_time"))
+                # (#1023) The departure the card shows: a charger without
+                # a time of its own leaves at the global one, not at the
+                # night window's end.
+                deadline = departure_for(cfg, now, self.config)
                 try:
                     # The canonical one-list slot (#576): a drag override wins
                     # immediately — the same accessor decide() uses.
