@@ -8773,6 +8773,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "ev", cid,
                     round(float(cfg.get("daily_ev_target") or 0.0), 1),
                     departure_signature(cfg, self.config),  # (#1023)
+                    bool(cfg.get("ev_plan_one_block", False)),
                     str(cfg.get("charge_mode") or ""),
                     _full,
                 ))
@@ -9848,6 +9849,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         "ev_min_block_minutes", 15)) * 60,
                     min_gap_s=int(self.config.get(
                         "ev_min_block_minutes", 15)) * 60,
+                    # (#1023) one continuous block, per charger, off by
+                    # default
+                    contiguous=bool(cfg.get("ev_plan_one_block", False)),
                 ))
             # Load min-runtime deficits eligible for a night source.
             controller = getattr(self, "_surplus_controller", None)

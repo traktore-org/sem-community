@@ -48,7 +48,9 @@ class Demand:
     ``min_run_s``/``min_gap_s``: the #688 anti-cycle windows — an allocation
     shorter than min-run would physically run min-run anyway, so the plan
     quantizes honestly. ``priority``: one-list position, LOWER packs first
-    (callers negate the drag-list number).
+    (callers negate the drag-list number). ``contiguous`` (#1023): the need
+    is met in ONE run of back-to-back slots — the cheapest such run — or,
+    when no run can hold it, slot-wise with a note saying so.
     """
     id: str
     kind: str                       # 'ev' | 'load' | 'battery'
@@ -61,6 +63,7 @@ class Demand:
     needs_cheap_level: bool = False
     min_run_s: int = 0
     min_gap_s: int = 0
+    contiguous: bool = False
 
 
 @dataclass
@@ -253,12 +256,85 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
             return False
         return True
 
+    def _grid_cell(d, i, want):
+        """What a grid demand would take from slot ``i`` toward ``want``
+        kWh: ``(power_w, run_h)``, or None when the slot cannot serve it.
+        The same sizing as the slot-wise path below."""
+        s = ledger[i]
+        h = s.hours
+        if h <= 0 or s.price is None or not _eligible(d, i):
+            return None
+        grant = min(float(d.max_power_w), s.headroom_w)
+        if grant < max(_W_EPS, float(d.min_power_w)):
+            return None
+        power = min(grant, max(float(d.min_power_w), want / h * 1000.0))
+        return power, min(h, want / (power / 1000.0))
+
+    def _cheapest_run(d, need):
+        """(#1023) The cheapest run of back-to-back priced, eligible slots
+        that covers ``need`` within headroom: ``[(i, power_w, run_h)]``, or
+        None when no run can. Ties go to the earlier run."""
+        best, best_cost = None, None
+        for a in idx:
+            cells, got, run_cost, prev_end = [], 0.0, 0.0, None
+            for b in idx[a:]:
+                s = ledger[b]
+                if prev_end is not None and s.start != prev_end:
+                    break
+                cell = _grid_cell(d, b, need - got)
+                if cell is None:
+                    break
+                power, run_h = cell
+                cells.append((b, power, run_h))
+                got += power / 1000.0 * run_h
+                run_cost += power / 1000.0 * run_h * float(s.price)
+                prev_end = s.end
+                if got >= need * _FIT_EPS:
+                    break
+            if got < need * _FIT_EPS:
+                continue
+            if d.min_run_s > 0:
+                # (#688) A block shorter than min-run would run min-run.
+                short = d.min_run_s / 3600.0 - sum(r for _, _, r in cells)
+                if short > 0:
+                    b, power, run_h = cells[-1]
+                    grown = min(ledger[b].hours, run_h + short)
+                    run_cost += (power / 1000.0 * (grown - run_h)
+                                 * float(ledger[b].price))
+                    cells[-1] = (b, power, grown)
+            if best is None or run_cost < best_cost - 1e-12:
+                best, best_cost = cells, run_cost
+        return best
+
     for d in sorted(demands, key=lambda d: (d.priority, d.id)):
         need = max(0.0, float(d.energy_kwh))
         planned = 0.0
         cost = 0.0
         note = ""
+        block_note = ""
+        if d.contiguous and d.source != "battery" and need > 1e-9:
+            run = _cheapest_run(d, need)
+            if run is None:
+                block_note = "no single block fits"
+            else:
+                for i, power, run_h in run:
+                    s = ledger[i]
+                    end = s.start + timedelta(hours=run_h)
+                    price = float(s.price)
+                    s.grid_committed_w += power
+                    s.headroom_w -= power
+                    allocations.append(Allocation(
+                        demand_id=d.id, start=s.start, end=end, power_w=power,
+                        price=price,
+                        reason=(f"{d.id}: {power:.0f} W {s.start:%H:%M}–"
+                                f"{end:%H:%M} @ {price:.3f} (one block, "
+                                f"headroom left {s.headroom_w:.0f} W)")))
+                    last_block_end[d.id] = end
+                    planned += power / 1000.0 * run_h
+                    cost += power / 1000.0 * run_h * price
         order = (idx if d.source == "battery" else by_price)
+        if d.contiguous and not block_note and need > 1e-9:
+            order = ()                  # the block holds it all
         for i in order:
             if need - planned <= 1e-9:
                 break
@@ -334,6 +410,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
         elif d.needs_cheap_level and planned == 0 and need > 1e-9:
             if not any(s.level_cheap for s in ledger):
                 note = "no cheap window tonight"
+        note = "; ".join(n for n in (block_note, note) if n)
         status = ("fits" if planned >= need * _FIT_EPS or need <= 1e-9
                   else "partial" if planned > 0 else "yields")
         results.append(DemandResult(
