@@ -379,9 +379,6 @@
       "heat_pump_boost_offset": {
         "default": "mdi:thermometer-plus"
       },
-      "hot_water_max_temperature": {
-        "default": "mdi:water-thermometer"
-      },
       "system_size_kwp": {
         "default": "mdi:solar-panel"
       }

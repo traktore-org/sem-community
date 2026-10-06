@@ -257,19 +257,19 @@ class TestHotWaterOffpeakTemperature:
     """Test HotWaterController temperature-aware needs_offpeak_activation."""
 
     def test_hot_water_offpeak_respects_temperature(self, mock_hass):
-        """At max temp, needs_offpeak_activation should return False."""
+        """At the solar target, needs_offpeak_activation should return False."""
         from custom_components.solar_energy_management.devices.hot_water_controller import (
             HotWaterController,
         )
         dev = HotWaterController(
             mock_hass,
             temperature_entity_id="sensor.water_temp",
-            max_temperature=60.0,
+            solar_target_temp=60.0,
             daily_min_runtime_sec=3600,
         )
         dev._daily_runtime_accumulated_sec = 1800  # deficit exists
 
-        # At max temp => is_temperature_safe() returns False
+        # At the solar target => is_temperature_safe() returns False
         state = MagicMock()
         state.state = "61.0"
         mock_hass.states.get.return_value = state
@@ -277,14 +277,14 @@ class TestHotWaterOffpeakTemperature:
         assert dev.needs_offpeak_activation is False
 
     def test_hot_water_offpeak_allows_when_cold(self, mock_hass):
-        """Below max temp, needs_offpeak_activation should return True."""
+        """Below the solar target, needs_offpeak_activation should return True."""
         from custom_components.solar_energy_management.devices.hot_water_controller import (
             HotWaterController,
         )
         dev = HotWaterController(
             mock_hass,
             temperature_entity_id="sensor.water_temp",
-            max_temperature=60.0,
+            solar_target_temp=60.0,
             daily_min_runtime_sec=3600,
         )
         dev._daily_runtime_accumulated_sec = 1800

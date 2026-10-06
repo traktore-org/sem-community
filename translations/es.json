@@ -1501,9 +1501,6 @@
       "heat_pump_boost_offset": {
         "name": "Offset Boost Bomba de Calor"
       },
-      "hot_water_max_temperature": {
-        "name": "Temperatura Máx Agua Caliente"
-      },
       "system_size_kwp": {
         "name": "Tamaño Instalación PV"
       },

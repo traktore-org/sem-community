@@ -1501,9 +1501,6 @@
       "heat_pump_boost_offset": {
         "name": "Warmtepomp Boost-offset"
       },
-      "hot_water_max_temperature": {
-        "name": "Warm Water Max Temperatuur"
-      },
       "system_size_kwp": {
         "name": "PV-systeemgrootte"
       },

@@ -271,14 +271,6 @@ NUMBER_TYPES = [
         native_step=0.5,
         mode=NumberMode.SLIDER,
     ),
-    NumberEntityDescription(
-        key="hot_water_max_temperature",
-        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        native_min_value=40,
-        native_max_value=80,
-        native_step=1,
-        mode=NumberMode.SLIDER,
-    ),
     # Hot water solar boost + Legionella prevention (#92)
     NumberEntityDescription(
         key="hot_water_solar_target",
@@ -711,7 +703,6 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
             DEFAULT_CHEAP_PRICE_THRESHOLD,
             DEFAULT_EXPENSIVE_PRICE_THRESHOLD,
             DEFAULT_HEAT_PUMP_BOOST_OFFSET,
-            DEFAULT_HOT_WATER_MAX_TEMP,
             DEFAULT_SYSTEM_SIZE_KWP,
             DEFAULT_EV_MIN_CURRENT,
             DEFAULT_BATTERY_CAPACITY_KWH,
@@ -737,7 +728,6 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
             "cheap_price_threshold": DEFAULT_CHEAP_PRICE_THRESHOLD,
             "expensive_price_threshold": DEFAULT_EXPENSIVE_PRICE_THRESHOLD,
             "heat_pump_boost_offset": DEFAULT_HEAT_PUMP_BOOST_OFFSET,
-            "hot_water_max_temperature": DEFAULT_HOT_WATER_MAX_TEMP,
             "hot_water_solar_target": 50.0,
             "legionella_target_temp": 65.0,
             "legionella_interval_hours": 72,
