@@ -270,13 +270,14 @@ class TestTheDeadFieldsAreGone:
         with pytest.raises(TypeError):
             HotWaterController(hass=_Hass(), max_temperature=60.0)
 
-    def test_the_config_card_shows_neither_row(self):
-        src = (ROOT / "dashboard/card/src/cards/sem-config-card.js").read_text()
-        assert "number.sem_hot_water_max_temperature" not in src
-        assert "_renderOptionSlider('hot_water_minimum_temperature'" not in src
-        bundle = (ROOT / "dashboard/card/dist/sem-cards.js").read_text()
-        assert "sem_hot_water_max_temperature" not in bundle
-        assert "config_hw_min_temperature" not in bundle
+    def test_the_config_card_offers_no_minimum(self):
+        """The card's option inventory — the same extraction the #637 routing
+        guard classifies — no longer holds the minimum. (The max row was a
+        stepper on the number entity, which no longer exists.)"""
+        from .test_637_live_options import _card_option_keys
+        options = _card_option_keys()
+        assert "hot_water_legionella_target" in options  # the extraction works
+        assert "hot_water_minimum_temperature" not in options
 
     def test_the_removed_entity_is_swept_from_the_registry(self):
         """An install that has the entity from an older version loses it on
