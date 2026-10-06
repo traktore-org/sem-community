@@ -74,8 +74,21 @@ async def replay(hass, capture: Dict[str, Any], *,
             hass.states.async_set(eid, row.get("state") or "unknown",
                                   row.get("attributes") or {})
     import voluptuous as vol
+    bare = bool(capture.get("services_without_schema"))
     for service, fields in capture.get("services", {}).items():
         if not hass.services.has_service(domain, service):
+            if bare:
+                # (#1054) The integration registers its services with NO
+                # schema: Home Assistant knows their fields only from the
+                # integration's services.yaml, through its description cache.
+                hass.services.async_register(domain, service, _noop)
+                from homeassistant.helpers.service import (
+                    SERVICE_DESCRIPTION_CACHE,
+                )
+                hass.data.setdefault(SERVICE_DESCRIPTION_CACHE, {})[
+                    (domain, service)] = {
+                        "fields": {f: {} for f in fields}}
+                continue
             schema = vol.Schema({vol.Optional(f): object for f in fields},
                                 extra=vol.ALLOW_EXTRA)
             hass.services.async_register(domain, service, _noop, schema=schema)

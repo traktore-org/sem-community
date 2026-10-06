@@ -1128,6 +1128,7 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         "ev_charge_mode_start", "ev_charge_mode_stop",
                         "ev_start_service", "ev_start_service_data",
                         "ev_stop_service", "ev_stop_service_data",
+                        "ev_charger_service_data",
                         "ev_charger_needs_cycle", "ev_surplus_priority",
                         # Wallbox-style control path (#384 Part 2 kept). The
                         # other 8 per-charger fields from #390 reverted to

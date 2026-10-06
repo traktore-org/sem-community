@@ -2177,6 +2177,10 @@ class CurrentControlDevice(ControllableDevice):
         self.charging_status_entity: str = ""
         self.service_param_name: str = "current"  # Overridden per integration (#82)
         self.service_device_id: Optional[str] = None  # For Easee/Zaptec device_id
+        # (#1054) static fields the current service needs beside the amps —
+        # go-e's set_max_current takes the box's own name in charger_name.
+        # Set from the ``ev_charger_service_data`` the crawler offered.
+        self.service_extra_data: Dict[str, Any] = {}
         self.needs_pilot_cycle: bool = False  # True = disable/enable cycle for session start
         self.global_services: bool = True  # True = services don't need entity_id (KEBA-style)
         # Start/stop control — per-integration (#82)
@@ -2741,7 +2745,8 @@ class CurrentControlDevice(ControllableDevice):
             elif self.charger_service:
                 # Service-based control — param name varies per integration (#82)
                 domain, service = self.charger_service.split(".", 1)
-                service_data = {self.service_param_name: current}
+                service_data = {**(self.service_extra_data or {}),
+                                self.service_param_name: current}
                 # Some integrations need device_id (Easee, Zaptec)
                 if self.service_device_id:
                     service_data["device_id"] = self.service_device_id

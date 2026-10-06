@@ -73,6 +73,15 @@ EXPECTED = {
         "ev_session_energy_sensor":
             "sensor.zaptec_go2_zap012345_completed_session_energy",
     },
+    "goecharger": {
+        "ev_connected_sensor": "sensor.goecharger_wallbox_go_e_car_status",
+        "ev_charging_sensor": "sensor.goecharger_wallbox_go_e_car_status",
+        "ev_charging_power_sensor": "sensor.goecharger_wallbox_go_e_p_all",
+        "ev_start_stop_entity": "switch.goecharger_wallbox_go_e_allow_charging",
+        "ev_session_energy_sensor":
+            "sensor.goecharger_wallbox_go_e_current_session_charged_energy",
+        "ev_total_energy_sensor": "sensor.goecharger_wallbox_go_e_energy_total",
+    },
     "vicare": {},
     "blue_current": {},
 }

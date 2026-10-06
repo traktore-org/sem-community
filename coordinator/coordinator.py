@@ -11053,6 +11053,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # Per-integration charger profile (#82)
         if ev_auto.get("ev_service_param_name"):
             ev_device.service_param_name = ev_auto["ev_service_param_name"]
+        from ..utils.service_data import service_extra_data
+        ev_device.service_extra_data = service_extra_data(
+            ev_auto.get("ev_charger_service_data", ""))
         if ev_auto.get("ev_service_device_id"):
             ev_device.service_device_id = ev_auto["ev_service_device_id"]
         if ev_auto.get("ev_start_stop_entity"):

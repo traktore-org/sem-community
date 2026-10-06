@@ -1,0 +1,826 @@
+{
+ "devices": {
+  "wallbox_go_e": {
+   "manufacturer": "go-e",
+   "model": "HOME",
+   "name": "wallbox_go_e"
+  }
+ },
+ "domain": "goecharger",
+ "entities": [
+  {
+   "attributes": {
+    "friendly_name": "Status"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_car_status",
+   "original_device_class": null,
+   "state": "charging",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_car_status",
+   "unit_of_measurement": null
+  },
+  {
+   "attributes": {
+    "friendly_name": "Charger max current setting",
+    "unit_of_measurement": "A"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_charger_max_current",
+   "original_device_class": null,
+   "state": "16",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_charger_max_current",
+   "unit_of_measurement": "A"
+  },
+  {
+   "attributes": {
+    "friendly_name": "Charger absolute max current setting",
+    "unit_of_measurement": "A"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_charger_absolute_max_current",
+   "original_device_class": null,
+   "state": "32",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_charger_absolute_max_current",
+   "unit_of_measurement": "A"
+  },
+  {
+   "attributes": {
+    "friendly_name": "charger_err"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_charger_err",
+   "original_device_class": null,
+   "state": "OK",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_charger_err",
+   "unit_of_measurement": null
+  },
+  {
+   "attributes": {
+    "friendly_name": "charger_access"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_charger_access",
+   "original_device_class": null,
+   "state": "free",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_charger_access",
+   "unit_of_measurement": null
+  },
+  {
+   "attributes": {
+    "friendly_name": "stop_mode"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_stop_mode",
+   "original_device_class": null,
+   "state": "manual",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_stop_mode",
+   "unit_of_measurement": null
+  },
+  {
+   "attributes": {
+    "friendly_name": "Cable lock mode"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_cable_lock_mode",
+   "original_device_class": null,
+   "state": "0",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_cable_lock_mode",
+   "unit_of_measurement": null
+  },
+  {
+   "attributes": {
+    "friendly_name": "Cable max current",
+    "unit_of_measurement": "A"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_cable_max_current",
+   "original_device_class": null,
+   "state": "20",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_cable_max_current",
+   "unit_of_measurement": "A"
+  },
+  {
+   "attributes": {
+    "friendly_name": "pre_contactor_l1"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_pre_contactor_l1",
+   "original_device_class": null,
+   "state": "unknown",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_pre_contactor_l1",
+   "unit_of_measurement": null
+  },
+  {
+   "attributes": {
+    "friendly_name": "pre_contactor_l2"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_pre_contactor_l2",
+   "original_device_class": null,
+   "state": "unknown",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_pre_contactor_l2",
+   "unit_of_measurement": null
+  },
+  {
+   "attributes": {
+    "friendly_name": "pre_contactor_l3"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_pre_contactor_l3",
+   "original_device_class": null,
+   "state": "unknown",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_pre_contactor_l3",
+   "unit_of_measurement": null
+  },
+  {
+   "attributes": {
+    "friendly_name": "post_contactor_l1"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_post_contactor_l1",
+   "original_device_class": null,
+   "state": "unknown",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_post_contactor_l1",
+   "unit_of_measurement": null
+  },
+  {
+   "attributes": {
+    "friendly_name": "post_contactor_l2"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_post_contactor_l2",
+   "original_device_class": null,
+   "state": "unknown",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_post_contactor_l2",
+   "unit_of_measurement": null
+  },
+  {
+   "attributes": {
+    "friendly_name": "post_contactor_l3"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_post_contactor_l3",
+   "original_device_class": null,
+   "state": "unknown",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_post_contactor_l3",
+   "unit_of_measurement": null
+  },
+  {
+   "attributes": {
+    "friendly_name": "Charger Temp",
+    "unit_of_measurement": "\u00b0C"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_charger_temp",
+   "original_device_class": null,
+   "state": "unknown",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_charger_temp",
+   "unit_of_measurement": "\u00b0C"
+  },
+  {
+   "attributes": {
+    "friendly_name": "Charger Temp 0",
+    "unit_of_measurement": "\u00b0C"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_charger_temp0",
+   "original_device_class": null,
+   "state": "unknown",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_charger_temp0",
+   "unit_of_measurement": "\u00b0C"
+  },
+  {
+   "attributes": {
+    "friendly_name": "Charger Temp 1",
+    "unit_of_measurement": "\u00b0C"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_charger_temp1",
+   "original_device_class": null,
+   "state": "unknown",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_charger_temp1",
+   "unit_of_measurement": "\u00b0C"
+  },
+  {
+   "attributes": {
+    "friendly_name": "Charger Temp 2",
+    "unit_of_measurement": "\u00b0C"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_charger_temp2",
+   "original_device_class": null,
+   "state": "unknown",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_charger_temp2",
+   "unit_of_measurement": "\u00b0C"
+  },
+  {
+   "attributes": {
+    "friendly_name": "Charger Temp 3",
+    "unit_of_measurement": "\u00b0C"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_charger_temp3",
+   "original_device_class": null,
+   "state": "unknown",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_charger_temp3",
+   "unit_of_measurement": "\u00b0C"
+  },
+  {
+   "attributes": {
+    "device_class": "energy",
+    "friendly_name": "Current Session charged",
+    "state_class": "total_increasing",
+    "unit_of_measurement": "kWh"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_current_session_charged_energy",
+   "original_device_class": "energy",
+   "state": "4.2",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_current_session_charged_energy",
+   "unit_of_measurement": "kWh"
+  },
+  {
+   "attributes": {
+    "device_class": "energy",
+    "friendly_name": "Current Session charged corrected",
+    "state_class": "total_increasing",
+    "unit_of_measurement": "kWh"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_current_session_charged_energy_corrected",
+   "original_device_class": "energy",
+   "state": "4.2",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_current_session_charged_energy_corrected",
+   "unit_of_measurement": "kWh"
+  },
+  {
+   "attributes": {
+    "friendly_name": "Charge limit",
+    "unit_of_measurement": "kWh"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_charge_limit",
+   "original_device_class": null,
+   "state": "0",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_charge_limit",
+   "unit_of_measurement": "kWh"
+  },
+  {
+   "attributes": {
+    "friendly_name": "adapter"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_adapter",
+   "original_device_class": null,
+   "state": "No Adapter",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_adapter",
+   "unit_of_measurement": null
+  },
+  {
+   "attributes": {
+    "friendly_name": "Card used",
+    "unit_of_measurement": "Card ID"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_unlocked_by_card",
+   "original_device_class": null,
+   "state": "unknown",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_unlocked_by_card",
+   "unit_of_measurement": "Card ID"
+  },
+  {
+   "attributes": {
+    "device_class": "energy",
+    "friendly_name": "Total Charged",
+    "state_class": "total_increasing",
+    "unit_of_measurement": "kWh"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_energy_total",
+   "original_device_class": "energy",
+   "state": "1234.5",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_energy_total",
+   "unit_of_measurement": "kWh"
+  },
+  {
+   "attributes": {
+    "device_class": "energy",
+    "friendly_name": "Total Charged corrected",
+    "state_class": "total_increasing",
+    "unit_of_measurement": "kWh"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_energy_total_corrected",
+   "original_device_class": "energy",
+   "state": "1234.5",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_energy_total_corrected",
+   "unit_of_measurement": "kWh"
+  },
+  {
+   "attributes": {
+    "friendly_name": "wifi"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_wifi",
+   "original_device_class": null,
+   "state": "unknown",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_wifi",
+   "unit_of_measurement": null
+  },
+  {
+   "attributes": {
+    "friendly_name": "Voltage L1",
+    "unit_of_measurement": "V"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_u_l1",
+   "original_device_class": null,
+   "state": "230",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_u_l1",
+   "unit_of_measurement": "V"
+  },
+  {
+   "attributes": {
+    "friendly_name": "Voltage L2",
+    "unit_of_measurement": "V"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_u_l2",
+   "original_device_class": null,
+   "state": "230",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_u_l2",
+   "unit_of_measurement": "V"
+  },
+  {
+   "attributes": {
+    "friendly_name": "Voltage L3",
+    "unit_of_measurement": "V"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_u_l3",
+   "original_device_class": null,
+   "state": "230",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_u_l3",
+   "unit_of_measurement": "V"
+  },
+  {
+   "attributes": {
+    "friendly_name": "Voltage N",
+    "unit_of_measurement": "V"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_u_n",
+   "original_device_class": null,
+   "state": "0",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_u_n",
+   "unit_of_measurement": "V"
+  },
+  {
+   "attributes": {
+    "friendly_name": "Current L1",
+    "unit_of_measurement": "A"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_i_l1",
+   "original_device_class": null,
+   "state": "16.0",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_i_l1",
+   "unit_of_measurement": "A"
+  },
+  {
+   "attributes": {
+    "friendly_name": "Current L2",
+    "unit_of_measurement": "A"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_i_l2",
+   "original_device_class": null,
+   "state": "16.0",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_i_l2",
+   "unit_of_measurement": "A"
+  },
+  {
+   "attributes": {
+    "friendly_name": "Current L3",
+    "unit_of_measurement": "A"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_i_l3",
+   "original_device_class": null,
+   "state": "16.0",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_i_l3",
+   "unit_of_measurement": "A"
+  },
+  {
+   "attributes": {
+    "friendly_name": "Power L1",
+    "unit_of_measurement": "kW"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_p_l1",
+   "original_device_class": null,
+   "state": "3.6",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_p_l1",
+   "unit_of_measurement": "kW"
+  },
+  {
+   "attributes": {
+    "friendly_name": "Power L2",
+    "unit_of_measurement": "kW"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_p_l2",
+   "original_device_class": null,
+   "state": "3.6",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_p_l2",
+   "unit_of_measurement": "kW"
+  },
+  {
+   "attributes": {
+    "friendly_name": "Power L3",
+    "unit_of_measurement": "kW"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_p_l3",
+   "original_device_class": null,
+   "state": "3.6",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_p_l3",
+   "unit_of_measurement": "kW"
+  },
+  {
+   "attributes": {
+    "friendly_name": "Power N",
+    "unit_of_measurement": "kW"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_p_n",
+   "original_device_class": null,
+   "state": "0.0",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_p_n",
+   "unit_of_measurement": "kW"
+  },
+  {
+   "attributes": {
+    "friendly_name": "Power All",
+    "unit_of_measurement": "kW"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_p_all",
+   "original_device_class": null,
+   "state": "10.89",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_p_all",
+   "unit_of_measurement": "kW"
+  },
+  {
+   "attributes": {
+    "friendly_name": "Power factor L1",
+    "unit_of_measurement": "%"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_lf_l1",
+   "original_device_class": null,
+   "state": "unknown",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_lf_l1",
+   "unit_of_measurement": "%"
+  },
+  {
+   "attributes": {
+    "friendly_name": "Power factor L2",
+    "unit_of_measurement": "%"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_lf_l2",
+   "original_device_class": null,
+   "state": "unknown",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_lf_l2",
+   "unit_of_measurement": "%"
+  },
+  {
+   "attributes": {
+    "friendly_name": "Power factor L3",
+    "unit_of_measurement": "%"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_lf_l3",
+   "original_device_class": null,
+   "state": "unknown",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_lf_l3",
+   "unit_of_measurement": "%"
+  },
+  {
+   "attributes": {
+    "friendly_name": "Loadfactor N",
+    "unit_of_measurement": "%"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_lf_n",
+   "original_device_class": null,
+   "state": "unknown",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_lf_n",
+   "unit_of_measurement": "%"
+  },
+  {
+   "attributes": {
+    "friendly_name": "firmware"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_firmware",
+   "original_device_class": null,
+   "state": "unknown",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_firmware",
+   "unit_of_measurement": null
+  },
+  {
+   "attributes": {
+    "friendly_name": "serial_number"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_serial_number",
+   "original_device_class": null,
+   "state": "unknown",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_serial_number",
+   "unit_of_measurement": null
+  },
+  {
+   "attributes": {
+    "friendly_name": "wifi_ssid"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_wifi_ssid",
+   "original_device_class": null,
+   "state": "unknown",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_wifi_ssid",
+   "unit_of_measurement": null
+  },
+  {
+   "attributes": {
+    "friendly_name": "wifi_enabled"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_wifi_enabled",
+   "original_device_class": null,
+   "state": "unknown",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_wifi_enabled",
+   "unit_of_measurement": null
+  },
+  {
+   "attributes": {
+    "friendly_name": "timezone_offset"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_timezone_offset",
+   "original_device_class": null,
+   "state": "unknown",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_timezone_offset",
+   "unit_of_measurement": null
+  },
+  {
+   "attributes": {
+    "friendly_name": "timezone_dst_offset"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.goecharger_wallbox_go_e_timezone_dst_offset",
+   "original_device_class": null,
+   "state": "unknown",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_timezone_dst_offset",
+   "unit_of_measurement": null
+  },
+  {
+   "attributes": {
+    "friendly_name": "wallbox_go_e"
+   },
+   "capabilities": {},
+   "device": "wallbox_go_e",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "switch.goecharger_wallbox_go_e_allow_charging",
+   "original_device_class": null,
+   "state": "on",
+   "translation_key": null,
+   "unique_id": "wallbox_go_e_allow_charging",
+   "unit_of_measurement": null
+  }
+ ],
+ "services": {
+  "set_absolute_max_current": [
+   "charger_absolute_max_current",
+   "charger_name"
+  ],
+  "set_cable_lock_mode": [
+   "cable_lock_mode",
+   "charger_name"
+  ],
+  "set_charge_limit": [
+   "charge_limit",
+   "charger_name"
+  ],
+  "set_max_current": [
+   "charger_name",
+   "max_current"
+  ]
+ },
+ "services_without_schema": true,
+ "source": {
+  "commit": "1d28e0f582e0a99354b520d26e1d867948e5d58c",
+  "dropped": [],
+  "kind": "declared",
+  "note": "read from sensor.py/switch.py/services.yaml (v0.27.0) and the goecharger 0.0.16 library (status words, kW scaling); entity ids set explicitly by the integration; device name = the configured charger name. Services are registered WITHOUT a schema \u2014 their fields exist only in services.yaml. No live load (needs the box). Weakest evidence: declared from source.",
+  "repo": "cathiele/homeassistant-goecharger"
+ }
+}

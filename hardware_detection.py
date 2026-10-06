@@ -1351,6 +1351,17 @@ def discover_all_ev_chargers_from_registry(
                         was["_device_id"] = device_id
                     meters_out.append(was)
                 continue
+            if result and not any(result.get(k) for k in _CHARGER_SIGNS):
+                # (#1054) a brand mapping that found only a meter — no power
+                # reading, no plug, no charging state, no control — has not
+                # found a charger. Leave the device to the roles, which read
+                # what the integration really offers: go-e's ``goecharger``
+                # brand path matched only a total-energy sensor. (A Zaptec
+                # with a plug and a resume button but no power stays: #804.)
+                _LOGGER.debug(
+                    "%s device %s: brand path found only a meter — left to "
+                    "the roles", platform, device_id or unit_label(unit_key))
+                continue
             if result:
                 # Preserve the registry's real domain for diagnostics/stable
                 # migration metadata (e.g. zaptec_custom), not just the
@@ -1396,6 +1407,13 @@ def discover_all_ev_chargers_from_registry(
     return chargers
 
 
+#: (#1054) What makes a brand mapping a charger rather than a meter.
+_CHARGER_SIGNS = ("ev_charging_power_sensor", "ev_connected_sensor",
+                  "ev_charging_sensor", "ev_current_control_entity",
+                  "ev_charger_service", "ev_start_stop_entity",
+                  "ev_charge_mode_entity", "ev_start_service")
+
+
 def _role_discovered_chargers(hass, registry, found) -> List[Dict[str, Any]]:
     """(#1032) Complete role offers for units no brand path claimed, in the
     shape discovery returns (``_platform`` / ``_device_id`` instead of the
@@ -1408,6 +1426,7 @@ def _role_discovered_chargers(hass, registry, found) -> List[Dict[str, Any]]:
              if not k.startswith("_") and isinstance(v, str) and "." in v}
     report: Dict[str, Any] = {"chargers": [], "near_misses": [], "vehicles": []}
     _roles_pass(report, registry, [], taken, _services_of(hass), state_of,
+                device_ident_of=_device_ident_of(hass),
                 include_brand_platforms=True)
     out: List[Dict[str, Any]] = []
     for n in report["near_misses"]:
@@ -1718,10 +1737,53 @@ def _services_of(hass):
                 inner = getattr(getattr(svc, "schema", None), "schema", None)
                 if isinstance(inner, dict):
                     fields = sorted(str(getattr(k, "schema", k)) for k in inner)
+                if not fields:
+                    # (#1054) a service registered with NO schema (go-e's
+                    # set_max_current) tells its fields only through its
+                    # services.yaml — Home Assistant's description cache
+                    fields = _described_fields(hass, str(domain), str(name))
                 out[str(name)] = fields
         except Exception:  # noqa: BLE001
             return _ServiceNames()
         return _ServiceNames(out)
+    return _of
+
+
+def _described_fields(hass, domain: str, service: str) -> list:
+    """The fields of ``domain.service`` from Home Assistant's cached service
+    descriptions (filled from services.yaml; SEM primes it after start)."""
+    try:
+        from homeassistant.helpers.service import (
+            async_get_cached_service_description,
+        )
+        desc = async_get_cached_service_description(hass, domain, service) or {}
+    except Exception:  # noqa: BLE001
+        return []
+    fields = desc.get("fields") if isinstance(desc, dict) else None
+    return sorted(str(f) for f in fields) if isinstance(fields, dict) else []
+
+
+def _device_ident_of(hass):
+    """(#1054) A callback answering "what does this integration call this
+    device": the registry identifier ``(domain, <name>)`` of the entities'
+    device. go-e's services take that name in ``charger_name``. None when it
+    cannot be asked or the device carries no identifier of that domain."""
+    if hass is None:
+        return None
+    try:
+        from homeassistant.helpers import device_registry as _dr
+        dreg = _dr.async_get(hass)
+    except Exception:  # noqa: BLE001
+        return None
+
+    def _of(ents, domain: str):
+        ids = {getattr(e, "device_id", None) for e in ents or ()} - {None}
+        if len(ids) != 1:
+            return None
+        dev = dreg.async_get(next(iter(ids)))
+        names = [v for d, v in (getattr(dev, "identifiers", None) or ())
+                 if d == domain and isinstance(v, str) and v]
+        return names[0] if len(names) == 1 else None
     return _of
 
 
@@ -1739,7 +1801,8 @@ class _ServiceNames(set):
 def propose_roles_from_roster(dev_entities, domain: str, *,
                               state_of=None,
                               strategy_values=None,
-                              services_of=None) -> Dict[str, Any]:
+                              services_of=None,
+                              device_ident=None) -> Dict[str, Any]:
     """(#915) Role proposals for ONE device, as an INTERSECTION.
 
     The roster says what an integration calls things; ``dev_entities`` is
@@ -1792,12 +1855,18 @@ def propose_roles_from_roster(dev_entities, domain: str, *,
                     target = meta.get("target")
                     param = _current_field(fields)
                     extra = [f for f in fields if f != param]
+                    # (#1054) a field that names the box is filled with the
+                    # device's own identifier — the integration's word for it
+                    named = _device_name_data(extra, device_ident)
+                    extra = [f for f in extra if f not in named]
                     prop = {"service": key, "matched_key": key,
                             "source": "roster", "config_key": None,
                             "action": "per_charger",
                             "per_charger_key": pck, "judged": True,
                             "param": param, "fields": list(fields),
                             "target": target}
+                    if named:
+                        prop["data"] = named
                     # (ruflo, 24.09) go-eCharger's set_max_current wants a
                     # charger_name SEM cannot fill; a targeted service wants
                     # an entity_id the charger factory does not pass. Either
@@ -1956,10 +2025,22 @@ def _first_hit(entries, rule) -> Optional[str]:
     return hits[0] if hits else None
 
 
+_UNIT_CLASS = {"w": "power", "kw": "power", "mw": "power",
+               "wh": "energy", "kwh": "energy", "mwh": "energy"}
+
+
 def _roles_dc(entry) -> str:
+    """The entity's device class; (#1054) when the integration set none, the
+    class its unit says — a sensor in kW IS a power reading (go-e's
+    ``p_all``), a sensor in kWh an energy one."""
     dc = getattr(entry, "original_device_class", None)
     dc = getattr(dc, "value", dc)
-    return dc if isinstance(dc, str) else ""
+    if isinstance(dc, str) and dc:
+        return dc
+    unit = getattr(entry, "unit_of_measurement", None)
+    if isinstance(unit, str):
+        return _UNIT_CLASS.get(unit.strip().lower(), "")
+    return ""
 
 
 def _speaks_vehicle(entries) -> bool:
@@ -2009,9 +2090,10 @@ def _charging_power(entries, *, vehicle: bool) -> Optional[str]:
         if re.search(r"(reactive|export|import|generation|generator|grid|"
                      r"battery|photovolt|solar|_pv_|\bpv\b|monitor)", words):
             continue
-        leg = (bool(re.search(r"(?:_|-)(l[123]|phase_?[123]|ct[1-9]|[123])$", eid))
+        leg = (bool(re.search(r"(?:_|-)(l[123]|phase_?[123]|ct[1-9]|[123]|n)$", eid))
                or bool(re.search(r"phase_[123]", eid)))
-        named = bool(re.search(r"charg|total|session", words))
+        # (#1054) "all" is the box's total over its phases (go-e ``p_all``)
+        named = bool(re.search(r"charg|total|session|(?:^|_)all$", words))
         # a reading that says "power" over one that only shares the class
         # (NRGkick's ``charging_rate`` carries the power class)
         says_power = "power" in " ".join(_role_words(e)).lower() + eid.lower()
@@ -2076,7 +2158,17 @@ def _is_stored_setting(entries, eid: Optional[str]) -> bool:
     return False
 
 
-def _service_current_role(domain: str, services: Dict[str, list]) -> Optional[Dict[str, Any]]:
+def _device_name_data(fields, device_ident) -> Dict[str, Any]:
+    """(#1054) The service fields that name WHICH box, filled with the
+    device's own identifier. Empty when there is no identifier."""
+    from .consts import role_lexicon as lex
+    if not device_ident:
+        return {}
+    return {f: device_ident for f in fields if f in lex.DEVICE_NAME_FIELDS}
+
+
+def _service_current_role(domain: str, services: Dict[str, list], *,
+                          device_ident=None) -> Optional[Dict[str, Any]]:
     """(#956 rule, read live) a current-setting service with a current field
     is a CONTROL — a service-driven charger is never read-only."""
     from .consts import role_lexicon as lex
@@ -2088,7 +2180,12 @@ def _service_current_role(domain: str, services: Dict[str, list]) -> Optional[Di
         if (rule and param
                 and any(re.search(p, full, re.I) for p in rule.get("any", ()))
                 and not any(re.search(p, full, re.I) for p in rule.get("not", ()))):
-            return {"service": full, "param": param, "fields": fields}
+            out = {"service": full, "param": param, "fields": fields}
+            named = _device_name_data([f for f in fields if f != param],
+                                      device_ident)
+            if named:
+                out["data"] = named
+            return out
     return None
 
 
@@ -2109,7 +2206,7 @@ def _service_field_roles(domain: str, services: Dict[str, list]) -> Dict[str, An
 
 
 def read_charger_roles(dev_entities, domain: str, *, services_of=None,
-                       state_of=None) -> Dict[str, Any]:
+                       state_of=None, device_ident=None) -> Dict[str, Any]:
     """(#1032) Every charger role ONE device carries, by its own words:
     R2 start/stop buttons, R3 a car's charge control, R5 a select read by its
     options, R6 services by their fields (plus the #956 current service)."""
@@ -2169,7 +2266,8 @@ def read_charger_roles(dev_entities, domain: str, *, services_of=None,
                                          "value_1p": "1", "value_3p": "3"}
         live = services_of(domain) if services_of else None
         if live:
-            svc = _service_current_role(domain, live)
+            svc = _service_current_role(domain, live,
+                                        device_ident=device_ident)
             if svc:
                 roles["current_service"] = svc
             roles.update(_service_field_roles(domain, live))
@@ -2195,6 +2293,23 @@ def read_charger_roles(dev_entities, domain: str, *, services_of=None,
                 continue
             opts = [o.lower() for o in _select_options(e, state_of)]
             if len(opts) < 2:
+                # (#1054) no options listed (go-e's ``car_status`` is a plain
+                # text sensor). When the device has NO other plug or charging
+                # source, a sensor that says it is the CAR's status, whose
+                # current state the shared vocabulary knows, is both. A box
+                # with a plug sensor keeps it (OpenEVSE's charging_status is
+                # not trusted for "charging"); a plain "status" (a diverter's)
+                # does not say it is about a car.
+                if "plug" in roles or "charging" in roles:
+                    continue
+                st = state_of(str(e.entity_id)) if state_of else None
+                now = str(getattr(st, "state", "") or "").lower()
+                says = [w.lower() for w in _role_words(e)] + [str(e.entity_id).lower()]
+                car_status = any(re.search(r"(?:^|_)(?:car|vehicle|ev)_?(?:status|state)$", w)
+                                 for w in says)
+                if now and car_status and is_cable_present(now) is not None:
+                    roles["plug"] = str(e.entity_id)
+                    roles["charging"] = str(e.entity_id)
                 continue
             cable = {is_cable_present(o) for o in opts}
             if "plug" not in roles and True in cable and False in cable:
@@ -2268,6 +2383,9 @@ def _roles_offer(roles: Dict[str, Any]) -> Dict[str, Any]:
     if roles.get("current_service") and "ev_current_control_entity" not in o:
         o["ev_charger_service"] = roles["current_service"]["service"]
         o["ev_service_param_name"] = roles["current_service"]["param"]
+        if roles["current_service"].get("data"):
+            o["ev_charger_service_data"] = json.dumps(
+                roles["current_service"]["data"], sort_keys=True)
     if roles.get("phase_select"):
         o["_suggested_phase_switch"] = dict(roles["phase_select"])
     return o
@@ -2337,6 +2455,9 @@ def charger_from_near_miss(dev_entities, platform: str,
             return {}
         out = {"ev_charger_service": service,
                "ev_service_param_name": control["param"]}
+        if control.get("data"):
+            out["ev_charger_service_data"] = json.dumps(control["data"],
+                                                        sort_keys=True)
     own = _own_names(dev_entities)
     # (#1032) the charging power is the whole box's reading, not one phase
     # leg or a clamp on something else (the rig: NRGkick's first power
@@ -2356,6 +2477,17 @@ def charger_from_near_miss(dev_entities, platform: str,
             out.setdefault("ev_charging_sensor", eid)
         elif eid.startswith("sensor.") and dc == "energy" and "session" in own.get(eid, ""):
             out.setdefault("ev_session_energy_sensor", eid)
+    # (#1054) what the shape walk above cannot see, the device's roles can:
+    # a status sensor read by its state (plug, charging), the charge switch,
+    # the lifetime meter. The control the offer was built around stays.
+    if roles:
+        for k, v in _roles_offer(roles).items():
+            if k.startswith("_") or k in ("ev_current_control_entity",
+                                          "ev_charger_service",
+                                          "ev_service_param_name",
+                                          "ev_charger_service_data"):
+                continue
+            out.setdefault(k, v)
     # (#886/#962) the offer must name the entities SEM would actually use —
     # the same guards the config path applies, or the near miss proposes a
     # charger whose power reading is the box's nameplate.
@@ -2394,7 +2526,8 @@ def _role_action(role: str) -> Dict[str, Any]:
 
 def propose_for_installed(registry, *, limit_per_domain: int = 8,
                           configured_entities=None, state_of=None,
-                          strategy_values=None, services_of=None) -> list:
+                          strategy_values=None, services_of=None,
+                          device_ident_of=None) -> list:
     """(#915) Every INSTALLED integration the roster has vocabulary for, with
     the controls it declares matched against this box's own entities.
 
@@ -2431,7 +2564,9 @@ def propose_for_installed(registry, *, limit_per_domain: int = 8,
         roles = {r: b for r, b in propose_roles_from_roster(
                      ents[:400], dom, state_of=state_of,
                      strategy_values=strategy_values,
-                     services_of=services_of).items()
+                     services_of=services_of,
+                     device_ident=(device_ident_of(ents[:400], dom)
+                                   if device_ident_of else None)).items()
                  # An entity SEM already drives is not news; nor is a role SEM
                  # resolves by itself every time it looks.
                  if (b.get("entity") or b.get("service")) not in used
@@ -2694,7 +2829,8 @@ def vehicle_from_device(dev_entities) -> Dict[str, Any]:
 
 
 def _roles_pass(report, registry, brand_units, configured_entities,
-                services_of, state_of, *, include_brand_platforms=False) -> None:
+                services_of, state_of, *, include_brand_platforms=False,
+                device_ident_of=None) -> None:
     """(#1032) The near-miss walk for the integrations ``_EV_CHARGER_PLATFORMS``
     does not list, then R1 (companion devices) and R4 (a read-only charger
     driven through the one car) across ALL near misses. Mutates ``report``."""
@@ -2726,8 +2862,9 @@ def _roles_pass(report, registry, brand_units, configured_entities,
         if taken & {str(e.entity_id) for e in ents}:
             continue
         platform = str(ents[0].platform or "")
+        _ident = device_ident_of(ents, platform) if device_ident_of else None
         roles = read_charger_roles(ents, platform, services_of=services_of,
-                                   state_of=state_of)
+                                   state_of=state_of, device_ident=_ident)
         roles_of[key] = roles
         offer = _roles_offer(roles)
         if roles.get("vehicle"):
@@ -2757,7 +2894,7 @@ def _roles_pass(report, registry, brand_units, configured_entities,
             "note": "a charger SEM has no row for",
             "roster": describe_domain(platform),
             "proposed_roles": propose_roles_from_roster(
-                ents, platform, services_of=services_of),
+                ents, platform, services_of=services_of, device_ident=_ident),
             "suggested_charger": {},
             "charger_roles": sorted(k for k in roles
                                     if k not in ("vehicle", "current_is_setting")),
@@ -3004,11 +3141,14 @@ def build_detection_report(hass: Optional[HomeAssistant] = None,
                         **_vehicle,
                     })
                     continue
+                _ident = _device_ident_of(hass)
+                _ident = _ident(dev_entities, platform) if _ident else None
                 _proposed = propose_roles_from_roster(
-                    dev_entities, platform, services_of=_services_of(hass))
+                    dev_entities, platform, services_of=_services_of(hass),
+                    device_ident=_ident)
                 _roles = read_charger_roles(
                     dev_entities, platform, services_of=_roles_services,
-                    state_of=_roles_state_of)
+                    state_of=_roles_state_of, device_ident=_ident)
                 if (platform in _TRANSPORT_PLATFORMS and not _proposed
                         and not _census_energy_shaped(dev_entities)):
                     continue
@@ -3105,7 +3245,8 @@ def build_detection_report(hass: Optional[HomeAssistant] = None,
     # lesson, .175 02.10: a device-less box has no device id to match on).
     try:
         _roles_pass(report, registry, brand_units, configured_entities,
-                    _roles_services, _roles_state_of)
+                    _roles_services, _roles_state_of,
+                    device_ident_of=_device_ident_of(hass))
     except Exception:  # noqa: BLE001 — a new reader never costs the report
         _LOGGER.debug("charger role pass failed", exc_info=True)
 
@@ -3177,7 +3318,8 @@ def build_detection_report(hass: Optional[HomeAssistant] = None,
         report["roster_proposals"] = propose_for_installed(
             registry, configured_entities=configured_entities,
             state_of=_state_of, strategy_values=strategy_values,
-            services_of=_services_of(hass))
+            services_of=_services_of(hass),
+            device_ident_of=_device_ident_of(hass))
         # (#915) whether proposals were judged against live states, so the
         # coordinator can rebuild an unjudged (boot-time) report once HA is up
         report["judged"] = bool(_state_of is not None)

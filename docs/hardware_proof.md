@@ -26,7 +26,7 @@ the integration could not be run offline; the reason is given.
 | OpenEVSE | `openevse` (core) | core snapshot | HA 2026.8.2 | the brand path matches none of the real entities → near miss; roster and role offer both complete (`…_charge_rate`, `…_charging_power`, `…_vehicle_connected`) | **gap** (released path); role offer fixes it |
 | Zaptec | `zaptec` (HACS) | declared from source | `ba502a99` (2026-08-26) | the brand path's `zaptec_*` patterns never match (entity ids follow the device name) → both devices are near misses, the #1032 report. Role offer: start/stop buttons, installation's `available_current` when present, installation folded in as companion | **gap** (released path); role offer fixes it |
 | Blue Current | `blue_current` (core) | core snapshot (buttons only) | HA 2026.8.2 | core snapshots only its three buttons; near miss with nothing to offer | **cannot judge** — core has no snapshot of its sensors |
-| go-eCharger (HTTP) | `goecharger` (HACS) | — | — | — | **cannot load** — no offline test data in the repo |
+| go-eCharger (HTTP) | `goecharger` (HACS) | declared from source | cathiele 1d28e0f5 | power `p_all` (kW, by unit), plug + charging `car_status` (by state), start/stop `allow_charging`, current `goecharger.set_max_current` with the box's name, session + lifetime meters | **proven by rig** (weakest: from source) |
 | go-eCharger (MQTT) | `goecharger_api2` / MQTT | — | — | — | **cannot load** — MQTT names are the user's |
 | ChargePoint | `chargepoint` (HACS) | — | — | — | **cannot load** — cloud, no offline data |
 | Heidelberg Energy Control | HACS (Modbus) | — | — | — | **cannot load** — no offline data |

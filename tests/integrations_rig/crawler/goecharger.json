@@ -1,0 +1,45 @@
+{
+ "chargers": [],
+ "meters": [],
+ "near_misses": [
+  {
+   "charger_roles": [
+    "charge_switch",
+    "charging",
+    "current_service",
+    "plug",
+    "power",
+    "session_energy",
+    "total_energy"
+   ],
+   "choose_vehicle": 0,
+   "companions": 0,
+   "entities": 50,
+   "missing": [],
+   "offer": {
+    "ev_charger_service": "goecharger.set_max_current",
+    "ev_charger_service_data": "{\"charger_name\": \"wallbox_go_e\"}",
+    "ev_charging_power_sensor": "sensor.goecharger_wallbox_go_e_p_all",
+    "ev_charging_sensor": "sensor.goecharger_wallbox_go_e_car_status",
+    "ev_connected_sensor": "sensor.goecharger_wallbox_go_e_car_status",
+    "ev_service_param_name": "max_current",
+    "ev_session_energy_sensor": "sensor.goecharger_wallbox_go_e_current_session_charged_energy",
+    "ev_start_stop_entity": "switch.goecharger_wallbox_go_e_allow_charging",
+    "ev_total_energy_sensor": "sensor.goecharger_wallbox_go_e_energy_total"
+   },
+   "paired_vehicle": false,
+   "proposed_roles": [
+    "ev_current_control"
+   ]
+  }
+ ],
+ "proposals": [
+  {
+   "ev_current_control": [
+    "goecharger.set_max_current",
+    "per_charger"
+   ]
+  }
+ ],
+ "vehicles": []
+}

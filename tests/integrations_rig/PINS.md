@@ -37,6 +37,7 @@ Nothing here ships: `tests/` is left out of the release zip
 | `zaptec`, `zaptec_no_limit` | declared | custom-components/zaptec | `ba502a9971355e60b84b0356650a50e6ab403d11` (2026-08-26); `zaptec_no_limit` is an account without the right to set the current (#1032) |
 | `keba` | live-install | the real KEBA P30 on .175 (02.10.2026), services from core 2026.8.2 | a device-less, service-driven charger |
 | `easee` | declared | nordicopen/easee_hass | `ea85bb5fa9f093594a50606a786ee9fd03d6a662` (2026-09-22) |
+| `goecharger` | declared | cathiele/homeassistant-goecharger (HACS, v0.27.0) + goecharger 0.0.16 | 1d28e0f582e0a99354b520d26e1d867948e5d58c |
 
 ## Refresh one
 
