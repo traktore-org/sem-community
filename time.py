@@ -19,6 +19,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .utils.device_names import charger_display_name  # (#1053)
 from .const import DEFAULT_EV_TARGET_TIME
 from .coordinator import SEMCoordinator
 
@@ -48,12 +49,14 @@ async def async_setup_entry(
     ev_chargers = full_config.get("ev_chargers", [])
 
     entities: list[TimeEntity] = []
-    for charger_cfg in ev_chargers:
+    for _cidx, charger_cfg in enumerate(ev_chargers):
         cid = charger_cfg.get("id", "ev_charger")
-        cname = charger_cfg.get("name", "EV Charger")
+        cname = charger_display_name(hass, charger_cfg, _cidx)  # (#1053)
         desc = TimeEntityDescription(
             key=f"charger_{cid}_target_time",
             name=f"{cname} Charge By",
+            translation_key="per_charger_target_time",
+            translation_placeholders={"charger": cname},
             icon="mdi:clock-end",
             entity_category=EntityCategory.CONFIG,
         )
@@ -88,7 +91,7 @@ class SEMPerChargerTime(CoordinatorEntity, TimeEntity):
         super().__init__(coordinator)
         self.entity_description = description
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
-        self._attr_translation_key = description.key
+        self._attr_translation_key = description.translation_key or description.key
         self._attr_suggested_object_id = f"sem_{description.key}"
         self.entity_id = f"time.sem_{description.key}"
         self._entry = entry

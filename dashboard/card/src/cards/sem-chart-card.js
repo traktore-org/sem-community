@@ -446,7 +446,9 @@ class SEMChartCard extends SEMLitBase {
             const m = eid.match(re);
             if (!m) continue;
             const id = m[1];
-            const friendly = states[eid]?.attributes?.friendly_name
+            // (#1053) the charger's own name first, in the user's language
+            const friendly = states[eid]?.attributes?.charger_name
+                || states[eid]?.attributes?.friendly_name
                 ?.replace(/^SEM\s+/i, '').replace(/\s+Power$/i, '')
                 || id.replace(/_/g, ' ');
             found.push({ id, eid, friendly });

@@ -1383,6 +1383,57 @@
           "orange": "Poor",
           "red": "Bad"
         }
+      },
+      "per_charger_commanded_current": {
+        "name": "{charger} Commanded Current"
+      },
+      "per_charger_daily_energy": {
+        "name": "{charger} Daily Energy"
+      },
+      "per_charger_estimated_soc": {
+        "name": "{charger} Estimated SOC"
+      },
+      "per_charger_flow_battery_to_ev_energy": {
+        "name": "{charger} Battery → EV Energy"
+      },
+      "per_charger_flow_battery_to_ev_power": {
+        "name": "{charger} Battery → EV Power"
+      },
+      "per_charger_flow_grid_to_ev_energy": {
+        "name": "{charger} Grid → EV Energy"
+      },
+      "per_charger_flow_grid_to_ev_power": {
+        "name": "{charger} Grid → EV Power"
+      },
+      "per_charger_flow_solar_to_ev_energy": {
+        "name": "{charger} Solar → EV Energy"
+      },
+      "per_charger_flow_solar_to_ev_power": {
+        "name": "{charger} Solar → EV Power"
+      },
+      "per_charger_power": {
+        "name": "{charger} Power"
+      },
+      "per_charger_session_energy": {
+        "name": "{charger} Session Energy"
+      },
+      "per_charger_session_energy_external": {
+        "name": "{charger} Session Energy (charger)"
+      },
+      "per_charger_session_solar_share": {
+        "name": "{charger} Solar Share"
+      },
+      "per_charger_taper_minutes_to_full": {
+        "name": "{charger} Minutes to Full"
+      },
+      "per_charger_taper_ratio": {
+        "name": "{charger} Taper Ratio"
+      },
+      "per_charger_taper_trend": {
+        "name": "{charger} Taper Trend"
+      },
+      "per_charger_vehicle_soc": {
+        "name": "{charger} Vehicle SOC"
       }
     },
     "binary_sensor": {
@@ -1637,6 +1688,11 @@
       "pause_charging": {
         "name": "{charger} Pause Charging"
       }
+    },
+    "time": {
+      "per_charger_target_time": {
+        "name": "{charger} Charge By"
+      }
     }
   },
   "exceptions": {
@@ -1838,6 +1894,48 @@
         "disabled": "Disabled",
         "grid_only": "Grid supply only",
         "hybrid_load_port": "Grid + hybrid inverter Load/EPS output"
+      }
+    },
+    "diagram_style": {
+      "options": {
+        "sem": "SEM (built-in)",
+        "kflow": "K-Flow (HACS)"
+      }
+    },
+    "tariff_mode": {
+      "options": {
+        "static": "Static (fixed HT/NT rates)",
+        "dynamic": "Dynamic / price sensor (Tibber / Nordpool / aWATTar / Amber / Octopus — or any entity with the current price)",
+        "calendar": "Calendar (time-based HT/NT schedule)"
+      }
+    },
+    "solar_forecast_source": {
+      "options": {
+        "auto": "Auto-detect (Solcast, then Forecast.Solar, then Open-Meteo)",
+        "solcast": "Solcast PV Solar",
+        "forecast_solar": "Forecast.Solar",
+        "open_meteo": "Open-Meteo Solar Forecast"
+      }
+    },
+    "tariff_classification_mode": {
+      "options": {
+        "percentile": "Percentile (relative to today's prices)",
+        "static": "Static (fixed cheap/expensive thresholds)"
+      }
+    },
+    "battery_charge_platform": {
+      "options": {
+        "auto": "Auto-detect (recommended)",
+        "huawei": "Huawei SUN2000 / LUNA2000",
+        "goodwe": "GoodWe",
+        "deye": "Deye hybrid inverter",
+        "generic": "Generic / other"
+      }
+    },
+    "deye_force_charge_work_mode": {
+      "options": {
+        "load_first": "Load First",
+        "battery_first": "Battery First"
       }
     }
   }

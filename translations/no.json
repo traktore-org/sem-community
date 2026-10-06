@@ -1383,6 +1383,57 @@
           "orange": "Svak",
           "red": "Dårlig"
         }
+      },
+      "per_charger_commanded_current": {
+        "name": "{charger} Ønsket strøm"
+      },
+      "per_charger_daily_energy": {
+        "name": "{charger} Dagsenergi"
+      },
+      "per_charger_estimated_soc": {
+        "name": "{charger} Anslått SOC"
+      },
+      "per_charger_flow_battery_to_ev_energy": {
+        "name": "{charger} Batteri → EV energi"
+      },
+      "per_charger_flow_battery_to_ev_power": {
+        "name": "{charger} Batteri → EV effekt"
+      },
+      "per_charger_flow_grid_to_ev_energy": {
+        "name": "{charger} Nett → EV energi"
+      },
+      "per_charger_flow_grid_to_ev_power": {
+        "name": "{charger} Nett → EV effekt"
+      },
+      "per_charger_flow_solar_to_ev_energy": {
+        "name": "{charger} Sol → EV energi"
+      },
+      "per_charger_flow_solar_to_ev_power": {
+        "name": "{charger} Sol → EV effekt"
+      },
+      "per_charger_power": {
+        "name": "{charger} Effekt"
+      },
+      "per_charger_session_energy": {
+        "name": "{charger} Øktenergi"
+      },
+      "per_charger_session_energy_external": {
+        "name": "{charger} Øktenergi (lader)"
+      },
+      "per_charger_session_solar_share": {
+        "name": "{charger} Solandel"
+      },
+      "per_charger_taper_minutes_to_full": {
+        "name": "{charger} Minutter til full"
+      },
+      "per_charger_taper_ratio": {
+        "name": "{charger} Nedtrappingsforhold"
+      },
+      "per_charger_taper_trend": {
+        "name": "{charger} Nedtrappingstrend"
+      },
+      "per_charger_vehicle_soc": {
+        "name": "{charger} Bilens SOC"
       }
     },
     "binary_sensor": {
@@ -1637,6 +1688,11 @@
       "pause_charging": {
         "name": "{charger} Sett lading på pause"
       }
+    },
+    "time": {
+      "per_charger_target_time": {
+        "name": "{charger} Lad innen"
+      }
     }
   },
   "exceptions": {
@@ -1838,6 +1894,48 @@
         "disabled": "Deaktivert",
         "grid_only": "Kun nettforsyning",
         "hybrid_load_port": "Nett + hybridinverterens Load/EPS-utgang"
+      }
+    },
+    "diagram_style": {
+      "options": {
+        "sem": "SEM (innebygd)",
+        "kflow": "K-Flow (HACS)"
+      }
+    },
+    "tariff_mode": {
+      "options": {
+        "static": "Fast (faste høy/lav-satser)",
+        "dynamic": "Dynamisk / prissensor (Tibber / Nordpool / aWATTar / Amber / Octopus — eller enhver enhet med gjeldende pris)",
+        "calendar": "Kalender (tidsbasert høy/lav-plan)"
+      }
+    },
+    "solar_forecast_source": {
+      "options": {
+        "auto": "Automatisk (Solcast, så Forecast.Solar, så Open-Meteo)",
+        "solcast": "Solcast PV Solar",
+        "forecast_solar": "Forecast.Solar",
+        "open_meteo": "Open-Meteo Solar Forecast"
+      }
+    },
+    "tariff_classification_mode": {
+      "options": {
+        "percentile": "Persentil (i forhold til dagens priser)",
+        "static": "Fast (faste billig/dyr-grenser)"
+      }
+    },
+    "battery_charge_platform": {
+      "options": {
+        "auto": "Automatisk (anbefalt)",
+        "huawei": "Huawei SUN2000 / LUNA2000",
+        "goodwe": "GoodWe",
+        "deye": "Deye hybridinverter",
+        "generic": "Generisk / annen"
+      }
+    },
+    "deye_force_charge_work_mode": {
+      "options": {
+        "load_first": "Load First",
+        "battery_first": "Battery First"
       }
     }
   }

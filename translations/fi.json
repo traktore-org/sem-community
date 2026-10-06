@@ -1383,6 +1383,57 @@
           "orange": "Heikko",
           "red": "Huono"
         }
+      },
+      "per_charger_commanded_current": {
+        "name": "{charger} Pyydetty virta"
+      },
+      "per_charger_daily_energy": {
+        "name": "{charger} Päivän energia"
+      },
+      "per_charger_estimated_soc": {
+        "name": "{charger} Arvioitu SOC"
+      },
+      "per_charger_flow_battery_to_ev_energy": {
+        "name": "{charger} Akku → EV energia"
+      },
+      "per_charger_flow_battery_to_ev_power": {
+        "name": "{charger} Akku → EV teho"
+      },
+      "per_charger_flow_grid_to_ev_energy": {
+        "name": "{charger} Verkko → EV energia"
+      },
+      "per_charger_flow_grid_to_ev_power": {
+        "name": "{charger} Verkko → EV teho"
+      },
+      "per_charger_flow_solar_to_ev_energy": {
+        "name": "{charger} Aurinko → EV energia"
+      },
+      "per_charger_flow_solar_to_ev_power": {
+        "name": "{charger} Aurinko → EV teho"
+      },
+      "per_charger_power": {
+        "name": "{charger} Teho"
+      },
+      "per_charger_session_energy": {
+        "name": "{charger} Istunnon energia"
+      },
+      "per_charger_session_energy_external": {
+        "name": "{charger} Istunnon energia (laturi)"
+      },
+      "per_charger_session_solar_share": {
+        "name": "{charger} Aurinko-osuus"
+      },
+      "per_charger_taper_minutes_to_full": {
+        "name": "{charger} Minuuttia täyteen"
+      },
+      "per_charger_taper_ratio": {
+        "name": "{charger} Hiipumissuhde"
+      },
+      "per_charger_taper_trend": {
+        "name": "{charger} Hiipumistrendi"
+      },
+      "per_charger_vehicle_soc": {
+        "name": "{charger} Auton SOC"
       }
     },
     "binary_sensor": {
@@ -1637,6 +1688,11 @@
       "pause_charging": {
         "name": "{charger} Keskeytä lataus"
       }
+    },
+    "time": {
+      "per_charger_target_time": {
+        "name": "{charger} Lataa mennessä"
+      }
     }
   },
   "exceptions": {
@@ -1838,6 +1894,48 @@
         "disabled": "Poistettu käytöstä",
         "grid_only": "Vain verkkosyöttö",
         "hybrid_load_port": "Sähköverkko + hybridi-invertterin Load/EPS-lähtö"
+      }
+    },
+    "diagram_style": {
+      "options": {
+        "sem": "SEM (sisäänrakennettu)",
+        "kflow": "K-Flow (HACS)"
+      }
+    },
+    "tariff_mode": {
+      "options": {
+        "static": "Kiinteä (kiinteät päivä/yö-hinnat)",
+        "dynamic": "Dynaaminen / hintasensori (Tibber / Nordpool / aWATTar / Amber / Octopus — tai mikä tahansa kohde, jossa on nykyinen hinta)",
+        "calendar": "Kalenteri (aikaan perustuva päivä/yö-aikataulu)"
+      }
+    },
+    "solar_forecast_source": {
+      "options": {
+        "auto": "Automaattinen (Solcast, sitten Forecast.Solar, sitten Open-Meteo)",
+        "solcast": "Solcast PV Solar",
+        "forecast_solar": "Forecast.Solar",
+        "open_meteo": "Open-Meteo Solar Forecast"
+      }
+    },
+    "tariff_classification_mode": {
+      "options": {
+        "percentile": "Prosenttipiste (suhteessa tämän päivän hintoihin)",
+        "static": "Kiinteä (kiinteät halpa/kallis-rajat)"
+      }
+    },
+    "battery_charge_platform": {
+      "options": {
+        "auto": "Automaattinen (suositeltu)",
+        "huawei": "Huawei SUN2000 / LUNA2000",
+        "goodwe": "GoodWe",
+        "deye": "Deye-hybridivaihtosuuntaaja",
+        "generic": "Yleinen / muu"
+      }
+    },
+    "deye_force_charge_work_mode": {
+      "options": {
+        "load_first": "Load First",
+        "battery_first": "Battery First"
       }
     }
   }

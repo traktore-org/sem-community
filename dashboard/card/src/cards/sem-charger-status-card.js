@@ -103,6 +103,8 @@ class SEMChargerStatusCard extends SEMLitBase {
     _chargerName(id) {
         const entity = this._hass?.states[`${this._prefix}charger_${id}_power`];
         let name = id.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        // (#1053) the charger's own name, in the user's language
+        if (entity?.attributes?.charger_name) return entity.attributes.charger_name;
         if (entity?.attributes?.friendly_name) {
             name = entity.attributes.friendly_name
                 .replace(/^SEM\s+/i, '')

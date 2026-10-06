@@ -1383,6 +1383,57 @@
           "orange": "Slabý",
           "red": "Špatný"
         }
+      },
+      "per_charger_commanded_current": {
+        "name": "{charger} Požadovaný proud"
+      },
+      "per_charger_daily_energy": {
+        "name": "{charger} Denní energie"
+      },
+      "per_charger_estimated_soc": {
+        "name": "{charger} Odhadovaný SOC"
+      },
+      "per_charger_flow_battery_to_ev_energy": {
+        "name": "{charger} Baterie → EV energie"
+      },
+      "per_charger_flow_battery_to_ev_power": {
+        "name": "{charger} Baterie → EV výkon"
+      },
+      "per_charger_flow_grid_to_ev_energy": {
+        "name": "{charger} Síť → EV energie"
+      },
+      "per_charger_flow_grid_to_ev_power": {
+        "name": "{charger} Síť → EV výkon"
+      },
+      "per_charger_flow_solar_to_ev_energy": {
+        "name": "{charger} Slunce → EV energie"
+      },
+      "per_charger_flow_solar_to_ev_power": {
+        "name": "{charger} Slunce → EV výkon"
+      },
+      "per_charger_power": {
+        "name": "{charger} Výkon"
+      },
+      "per_charger_session_energy": {
+        "name": "{charger} Energie relace"
+      },
+      "per_charger_session_energy_external": {
+        "name": "{charger} Energie relace (nabíječka)"
+      },
+      "per_charger_session_solar_share": {
+        "name": "{charger} Podíl slunce"
+      },
+      "per_charger_taper_minutes_to_full": {
+        "name": "{charger} Minuty do plna"
+      },
+      "per_charger_taper_ratio": {
+        "name": "{charger} Poměr útlumu"
+      },
+      "per_charger_taper_trend": {
+        "name": "{charger} Trend útlumu"
+      },
+      "per_charger_vehicle_soc": {
+        "name": "{charger} SOC vozidla"
       }
     },
     "binary_sensor": {
@@ -1637,6 +1688,11 @@
       "pause_charging": {
         "name": "{charger} Pozastavit nabíjení"
       }
+    },
+    "time": {
+      "per_charger_target_time": {
+        "name": "{charger} Nabít do"
+      }
     }
   },
   "exceptions": {
@@ -1838,6 +1894,48 @@
         "disabled": "Zakázáno",
         "grid_only": "Pouze distribuční síť",
         "hybrid_load_port": "Distribuční síť + výstup Load/EPS hybridního střídače"
+      }
+    },
+    "diagram_style": {
+      "options": {
+        "sem": "SEM (vestavěný)",
+        "kflow": "K-Flow (HACS)"
+      }
+    },
+    "tariff_mode": {
+      "options": {
+        "static": "Pevný (stálé sazby VT/NT)",
+        "dynamic": "Dynamický / cenový senzor (Tibber / Nordpool / aWATTar / Amber / Octopus — nebo jakákoli entita s aktuální cenou)",
+        "calendar": "Kalendář (časový plán VT/NT)"
+      }
+    },
+    "solar_forecast_source": {
+      "options": {
+        "auto": "Automaticky (Solcast, pak Forecast.Solar, pak Open-Meteo)",
+        "solcast": "Solcast PV Solar",
+        "forecast_solar": "Forecast.Solar",
+        "open_meteo": "Open-Meteo Solar Forecast"
+      }
+    },
+    "tariff_classification_mode": {
+      "options": {
+        "percentile": "Percentil (vůči dnešním cenám)",
+        "static": "Pevný (stálé prahy levné/drahé)"
+      }
+    },
+    "battery_charge_platform": {
+      "options": {
+        "auto": "Automaticky (doporučeno)",
+        "huawei": "Huawei SUN2000 / LUNA2000",
+        "goodwe": "GoodWe",
+        "deye": "Hybridní střídač Deye",
+        "generic": "Obecný / jiný"
+      }
+    },
+    "deye_force_charge_work_mode": {
+      "options": {
+        "load_first": "Load First",
+        "battery_first": "Battery First"
       }
     }
   }

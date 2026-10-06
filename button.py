@@ -15,6 +15,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .utils.device_names import charger_display_name  # (#1053)
 from .const import DOMAIN
 from .coordinator.install_modules import kept_descriptions, presence_of
 from .sensor import _cleanup_stale_entities, _fix_entity_ids
@@ -41,7 +42,7 @@ async def async_setup_entry(
     # (#980) One Pause button per charger. It applies the duration dropdown
     # beside it — which is how the same button also cancels.
     full_config = {**entry.data, **entry.options}
-    for charger_cfg in (full_config.get("ev_chargers") or []):
+    for _cidx, charger_cfg in enumerate(full_config.get("ev_chargers") or []):
         if not isinstance(charger_cfg, dict):
             continue
         cid = charger_cfg.get("id", "ev_charger")
@@ -52,7 +53,7 @@ async def async_setup_entry(
                 icon="mdi:pause-octagon-outline",
                 entity_category=EntityCategory.CONFIG,
             ),
-            entry, cid, charger_cfg.get("name", "EV Charger"),
+            entry, cid, charger_display_name(hass, charger_cfg, _cidx),
         ))
 
     async_add_entities(entities)

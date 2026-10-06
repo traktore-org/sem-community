@@ -1383,6 +1383,57 @@
           "orange": "较差",
           "red": "差"
         }
+      },
+      "per_charger_commanded_current": {
+        "name": "{charger} 指令电流"
+      },
+      "per_charger_daily_energy": {
+        "name": "{charger} 每日能量"
+      },
+      "per_charger_estimated_soc": {
+        "name": "{charger} 估计电量"
+      },
+      "per_charger_flow_battery_to_ev_energy": {
+        "name": "{charger} 电池 → 电动车 能量"
+      },
+      "per_charger_flow_battery_to_ev_power": {
+        "name": "{charger} 电池 → 电动车 功率"
+      },
+      "per_charger_flow_grid_to_ev_energy": {
+        "name": "{charger} 电网 → 电动车 能量"
+      },
+      "per_charger_flow_grid_to_ev_power": {
+        "name": "{charger} 电网 → 电动车 功率"
+      },
+      "per_charger_flow_solar_to_ev_energy": {
+        "name": "{charger} 太阳能 → 电动车 能量"
+      },
+      "per_charger_flow_solar_to_ev_power": {
+        "name": "{charger} 太阳能 → 电动车 功率"
+      },
+      "per_charger_power": {
+        "name": "{charger} 功率"
+      },
+      "per_charger_session_energy": {
+        "name": "{charger} 本次能量"
+      },
+      "per_charger_session_energy_external": {
+        "name": "{charger} 本次能量（充电桩）"
+      },
+      "per_charger_session_solar_share": {
+        "name": "{charger} 太阳能占比"
+      },
+      "per_charger_taper_minutes_to_full": {
+        "name": "{charger} 充满剩余分钟"
+      },
+      "per_charger_taper_ratio": {
+        "name": "{charger} 降流比例"
+      },
+      "per_charger_taper_trend": {
+        "name": "{charger} 降流趋势"
+      },
+      "per_charger_vehicle_soc": {
+        "name": "{charger} 车辆电量"
       }
     },
     "binary_sensor": {
@@ -1637,6 +1688,11 @@
       "pause_charging": {
         "name": "{charger} 暂停充电"
       }
+    },
+    "time": {
+      "per_charger_target_time": {
+        "name": "{charger} 充电截止"
+      }
     }
   },
   "exceptions": {
@@ -1838,6 +1894,48 @@
         "disabled": "已禁用",
         "grid_only": "仅电网供电",
         "hybrid_load_port": "电网 + 混合逆变器 Load/EPS 输出"
+      }
+    },
+    "diagram_style": {
+      "options": {
+        "sem": "SEM（内置）",
+        "kflow": "K-Flow（HACS）"
+      }
+    },
+    "tariff_mode": {
+      "options": {
+        "static": "固定（峰谷电价固定）",
+        "dynamic": "动态 / 价格传感器（Tibber / Nordpool / aWATTar / Amber / Octopus — 或任何带有当前价格的实体）",
+        "calendar": "日历（按时段的峰谷时间表）"
+      }
+    },
+    "solar_forecast_source": {
+      "options": {
+        "auto": "自动（先 Solcast，再 Forecast.Solar，再 Open-Meteo）",
+        "solcast": "Solcast PV Solar",
+        "forecast_solar": "Forecast.Solar",
+        "open_meteo": "Open-Meteo Solar Forecast"
+      }
+    },
+    "tariff_classification_mode": {
+      "options": {
+        "percentile": "百分位（相对于今日价格）",
+        "static": "固定（便宜/昂贵阈值固定）"
+      }
+    },
+    "battery_charge_platform": {
+      "options": {
+        "auto": "自动（推荐）",
+        "huawei": "Huawei SUN2000 / LUNA2000",
+        "goodwe": "GoodWe",
+        "deye": "德业混合逆变器",
+        "generic": "通用 / 其他"
+      }
+    },
+    "deye_force_charge_work_mode": {
+      "options": {
+        "load_first": "Load First",
+        "battery_first": "Battery First"
       }
     }
   }

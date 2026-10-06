@@ -1617,7 +1617,16 @@
     "actual": "Skutečnost",
     "tariff_static": "Pevné sazby",
     "tariff_calendar": "Kalendář",
-    "error": "Chyba"
+    "error": "Chyba",
+    "flow_continue_chargers": "Pokračovat (nastavené nabíječky: {count})",
+    "flow_continue_heat_pumps": "Pokračovat (nastavená tepelná čerpadla: {count})",
+    "flow_edit_item": "Upravit: {name}",
+    "flow_remove_item": "Odebrat: {name}",
+    "flow_add_charger": "Přidat další nabíječku",
+    "flow_remove_charger": "Odebrat nabíječku",
+    "flow_rename_pv": "Přejmenovat FV řetězce",
+    "flow_add_heat_pump": "Přidat další tepelné čerpadlo",
+    "flow_none": "Žádná"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -3237,7 +3246,16 @@
     "actual": "Faktisk",
     "tariff_static": "Faste priser",
     "tariff_calendar": "Kalender",
-    "error": "Fejl"
+    "error": "Fejl",
+    "flow_continue_chargers": "Fortsæt ({count} ladere sat op)",
+    "flow_continue_heat_pumps": "Fortsæt ({count} varmepumper sat op)",
+    "flow_edit_item": "Rediger: {name}",
+    "flow_remove_item": "Fjern: {name}",
+    "flow_add_charger": "Tilføj en lader mere",
+    "flow_remove_charger": "Fjern en lader",
+    "flow_rename_pv": "Omdøb PV-strenge",
+    "flow_add_heat_pump": "Tilføj en varmepumpe mere",
+    "flow_none": "Ingen"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -4857,7 +4875,16 @@
     "actual": "Tatsächlich",
     "tariff_static": "Feste Preise",
     "tariff_calendar": "Kalender",
-    "error": "Fehler"
+    "error": "Fehler",
+    "flow_continue_chargers": "Weiter ({count} Ladegeräte eingerichtet)",
+    "flow_continue_heat_pumps": "Weiter ({count} Wärmepumpen eingerichtet)",
+    "flow_edit_item": "Bearbeiten: {name}",
+    "flow_remove_item": "Entfernen: {name}",
+    "flow_add_charger": "Weiteres Ladegerät hinzufügen",
+    "flow_remove_charger": "Ladegerät entfernen",
+    "flow_rename_pv": "PV-Strings umbenennen",
+    "flow_add_heat_pump": "Weitere Wärmepumpe hinzufügen",
+    "flow_none": "Keine"
   },
   "en": {
     "% of limit": "% of limit",
@@ -6477,7 +6504,16 @@
     "actual": "Actual",
     "tariff_static": "Fixed rates",
     "tariff_calendar": "Calendar",
-    "error": "Error"
+    "error": "Error",
+    "flow_continue_chargers": "Continue ({count} chargers set up)",
+    "flow_continue_heat_pumps": "Continue ({count} heat pumps set up)",
+    "flow_edit_item": "Edit: {name}",
+    "flow_remove_item": "Remove: {name}",
+    "flow_add_charger": "Add another EV charger",
+    "flow_remove_charger": "Remove a charger",
+    "flow_rename_pv": "Rename PV strings",
+    "flow_add_heat_pump": "Add another heat pump",
+    "flow_none": "None"
   },
   "es": {
     "% of limit": "% del límite",
@@ -8097,7 +8133,16 @@
     "actual": "Real",
     "tariff_static": "Tarifas fijas",
     "tariff_calendar": "Calendario",
-    "error": "Error"
+    "error": "Error",
+    "flow_continue_chargers": "Continuar ({count} cargadores configurados)",
+    "flow_continue_heat_pumps": "Continuar ({count} bombas de calor configuradas)",
+    "flow_edit_item": "Editar: {name}",
+    "flow_remove_item": "Quitar: {name}",
+    "flow_add_charger": "Añadir otro cargador",
+    "flow_remove_charger": "Quitar un cargador",
+    "flow_rename_pv": "Renombrar strings FV",
+    "flow_add_heat_pump": "Añadir otra bomba de calor",
+    "flow_none": "Ninguno"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -9717,7 +9762,16 @@
     "actual": "Toteutunut",
     "tariff_static": "Kiinteät hinnat",
     "tariff_calendar": "Kalenteri",
-    "error": "Virhe"
+    "error": "Virhe",
+    "flow_continue_chargers": "Jatka ({count} laturia asetettu)",
+    "flow_continue_heat_pumps": "Jatka ({count} lämpöpumppua asetettu)",
+    "flow_edit_item": "Muokkaa: {name}",
+    "flow_remove_item": "Poista: {name}",
+    "flow_add_charger": "Lisää toinen laturi",
+    "flow_remove_charger": "Poista laturi",
+    "flow_rename_pv": "Nimeä aurinkopaneeliketjut uudelleen",
+    "flow_add_heat_pump": "Lisää toinen lämpöpumppu",
+    "flow_none": "Ei mitään"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -11337,7 +11391,16 @@
     "actual": "Réel",
     "tariff_static": "Tarifs fixes",
     "tariff_calendar": "Calendrier",
-    "error": "Erreur"
+    "error": "Erreur",
+    "flow_continue_chargers": "Continuer ({count} chargeurs configurés)",
+    "flow_continue_heat_pumps": "Continuer ({count} pompes à chaleur configurées)",
+    "flow_edit_item": "Modifier : {name}",
+    "flow_remove_item": "Supprimer : {name}",
+    "flow_add_charger": "Ajouter un autre chargeur",
+    "flow_remove_charger": "Supprimer un chargeur",
+    "flow_rename_pv": "Renommer les chaînes PV",
+    "flow_add_heat_pump": "Ajouter une autre pompe à chaleur",
+    "flow_none": "Aucun"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -12957,7 +13020,16 @@
     "actual": "Tényleges",
     "tariff_static": "Fix díjak",
     "tariff_calendar": "Naptár",
-    "error": "Hiba"
+    "error": "Hiba",
+    "flow_continue_chargers": "Tovább ({count} töltő beállítva)",
+    "flow_continue_heat_pumps": "Tovább ({count} hőszivattyú beállítva)",
+    "flow_edit_item": "Szerkesztés: {name}",
+    "flow_remove_item": "Eltávolítás: {name}",
+    "flow_add_charger": "Újabb töltő hozzáadása",
+    "flow_remove_charger": "Töltő eltávolítása",
+    "flow_rename_pv": "PV-füzérek átnevezése",
+    "flow_add_heat_pump": "Újabb hőszivattyú hozzáadása",
+    "flow_none": "Nincs"
   },
   "it": {
     "% of limit": "% del limite",
@@ -14577,7 +14649,16 @@
     "actual": "Reale",
     "tariff_static": "Tariffe fisse",
     "tariff_calendar": "Calendario",
-    "error": "Errore"
+    "error": "Errore",
+    "flow_continue_chargers": "Continua ({count} caricatori configurati)",
+    "flow_continue_heat_pumps": "Continua ({count} pompe di calore configurate)",
+    "flow_edit_item": "Modifica: {name}",
+    "flow_remove_item": "Rimuovi: {name}",
+    "flow_add_charger": "Aggiungi un altro caricatore",
+    "flow_remove_charger": "Rimuovi un caricatore",
+    "flow_rename_pv": "Rinomina stringhe FV",
+    "flow_add_heat_pump": "Aggiungi un'altra pompa di calore",
+    "flow_none": "Nessuno"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -16197,7 +16278,16 @@
     "actual": "Werkelijk",
     "tariff_static": "Vaste tarieven",
     "tariff_calendar": "Kalender",
-    "error": "Fout"
+    "error": "Fout",
+    "flow_continue_chargers": "Doorgaan ({count} laders ingesteld)",
+    "flow_continue_heat_pumps": "Doorgaan ({count} warmtepompen ingesteld)",
+    "flow_edit_item": "Bewerken: {name}",
+    "flow_remove_item": "Verwijderen: {name}",
+    "flow_add_charger": "Nog een lader toevoegen",
+    "flow_remove_charger": "Een lader verwijderen",
+    "flow_rename_pv": "PV-strings hernoemen",
+    "flow_add_heat_pump": "Nog een warmtepomp toevoegen",
+    "flow_none": "Geen"
   },
   "no": {
     "% of limit": "% av grense",
@@ -17817,7 +17907,16 @@
     "actual": "Faktisk",
     "tariff_static": "Faste priser",
     "tariff_calendar": "Kalender",
-    "error": "Feil"
+    "error": "Feil",
+    "flow_continue_chargers": "Fortsett ({count} ladere satt opp)",
+    "flow_continue_heat_pumps": "Fortsett ({count} varmepumper satt opp)",
+    "flow_edit_item": "Rediger: {name}",
+    "flow_remove_item": "Fjern: {name}",
+    "flow_add_charger": "Legg til en lader til",
+    "flow_remove_charger": "Fjern en lader",
+    "flow_rename_pv": "Gi PV-strenger nytt navn",
+    "flow_add_heat_pump": "Legg til en varmepumpe til",
+    "flow_none": "Ingen"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -19437,7 +19536,16 @@
     "actual": "Rzeczywiste",
     "tariff_static": "Stałe stawki",
     "tariff_calendar": "Kalendarz",
-    "error": "Błąd"
+    "error": "Błąd",
+    "flow_continue_chargers": "Dalej (skonfigurowane ładowarki: {count})",
+    "flow_continue_heat_pumps": "Dalej (skonfigurowane pompy ciepła: {count})",
+    "flow_edit_item": "Edytuj: {name}",
+    "flow_remove_item": "Usuń: {name}",
+    "flow_add_charger": "Dodaj kolejną ładowarkę",
+    "flow_remove_charger": "Usuń ładowarkę",
+    "flow_rename_pv": "Zmień nazwy łańcuchów PV",
+    "flow_add_heat_pump": "Dodaj kolejną pompę ciepła",
+    "flow_none": "Brak"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -21057,7 +21165,16 @@
     "actual": "Real",
     "tariff_static": "Tarifas fixas",
     "tariff_calendar": "Calendário",
-    "error": "Erro"
+    "error": "Erro",
+    "flow_continue_chargers": "Continuar ({count} carregadores configurados)",
+    "flow_continue_heat_pumps": "Continuar ({count} bombas de calor configuradas)",
+    "flow_edit_item": "Editar: {name}",
+    "flow_remove_item": "Remover: {name}",
+    "flow_add_charger": "Adicionar outro carregador",
+    "flow_remove_charger": "Remover um carregador",
+    "flow_rename_pv": "Renomear strings FV",
+    "flow_add_heat_pump": "Adicionar outra bomba de calor",
+    "flow_none": "Nenhum"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -22677,7 +22794,16 @@
     "actual": "Real",
     "tariff_static": "Tarife fixe",
     "tariff_calendar": "Calendar",
-    "error": "Eroare"
+    "error": "Eroare",
+    "flow_continue_chargers": "Continuă ({count} încărcătoare configurate)",
+    "flow_continue_heat_pumps": "Continuă ({count} pompe de căldură configurate)",
+    "flow_edit_item": "Editează: {name}",
+    "flow_remove_item": "Elimină: {name}",
+    "flow_add_charger": "Adaugă alt încărcător",
+    "flow_remove_charger": "Elimină un încărcător",
+    "flow_rename_pv": "Redenumește șirurile PV",
+    "flow_add_heat_pump": "Adaugă altă pompă de căldură",
+    "flow_none": "Niciunul"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -24297,7 +24423,16 @@
     "actual": "Faktisk",
     "tariff_static": "Fasta priser",
     "tariff_calendar": "Kalender",
-    "error": "Fel"
+    "error": "Fel",
+    "flow_continue_chargers": "Fortsätt ({count} laddare inställda)",
+    "flow_continue_heat_pumps": "Fortsätt ({count} värmepumpar inställda)",
+    "flow_edit_item": "Redigera: {name}",
+    "flow_remove_item": "Ta bort: {name}",
+    "flow_add_charger": "Lägg till en laddare till",
+    "flow_remove_charger": "Ta bort en laddare",
+    "flow_rename_pv": "Byt namn på PV-strängar",
+    "flow_add_heat_pump": "Lägg till en värmepump till",
+    "flow_none": "Ingen"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -25917,6 +26052,15 @@
     "actual": "实际",
     "tariff_static": "固定电价",
     "tariff_calendar": "日历",
-    "error": "错误"
+    "error": "错误",
+    "flow_continue_chargers": "继续（已设置 {count} 个充电桩）",
+    "flow_continue_heat_pumps": "继续（已设置 {count} 台热泵）",
+    "flow_edit_item": "编辑：{name}",
+    "flow_remove_item": "移除：{name}",
+    "flow_add_charger": "再添加一个充电桩",
+    "flow_remove_charger": "移除一个充电桩",
+    "flow_rename_pv": "重命名光伏组串",
+    "flow_add_heat_pump": "再添加一台热泵",
+    "flow_none": "无"
   }
 }

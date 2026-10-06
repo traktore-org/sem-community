@@ -25,6 +25,7 @@ from homeassistant.const import (
 
 from homeassistant.helpers.entity import EntityCategory
 
+from .utils.device_names import charger_display_name  # (#1053)
 from .const import DEFAULT_MAX_CHARGING_CURRENT
 from .consts.bounds import BOUNDS      # (#870) one range per field
 from .coordinator import SEMCoordinator
@@ -363,9 +364,9 @@ async def async_setup_entry(
     ev_chargers = full_config.get("ev_chargers", [])
     per_charger_descriptions = []
     if len(ev_chargers) >= 1:
-        for charger_cfg in ev_chargers:
+        for _cidx, charger_cfg in enumerate(ev_chargers):
             cid = charger_cfg.get("id", "ev_charger")
-            cname = charger_cfg.get("name", "EV Charger")
+            cname = charger_display_name(hass, charger_cfg, _cidx)  # (#1053)
             for base_desc, config_key, default_val in [
                 (NumberEntityDescription(
                     key=f"charger_{cid}_daily_ev_target",
