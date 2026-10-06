@@ -1684,6 +1684,12 @@
     },
     "battery_boost_bad_floor": {
       "message": "“{floor}”不是有效的电池电量：请输入 0 到 100 % 之间的下限。"
+    },
+    "charger_not_found": {
+      "message": "SEM 中没有充电桩“{charger}”。"
+    },
+    "departure_bad_time": {
+      "message": "“{day}: {time}”不是有效的出发时间：日期为 mon … sun，时间格式为 HH:MM（00:00 至 23:59）。"
     }
   },
   "issues": {

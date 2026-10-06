@@ -168,6 +168,8 @@ class Allocation:
     power_w: float
     price: float
     reason: str
+    #: (#1023) the top-up before departure — the card hatches it
+    late: bool = False
 
     @property
     def energy_kwh(self) -> float:
@@ -344,7 +346,8 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                     demand_id=d.id, start=begin, end=hi, power_w=power,
                     price=price,
                     reason=(f"{d.id}: {power:.0f} W {begin:%H:%M}–{hi:%H:%M} "
-                            f"@ {price:.3f} (late charge before departure)")))
+                            f"@ {price:.3f} (late charge before departure)"),
+                    late=True))
                 last_block_end[d.id] = max(last_block_end.get(d.id, hi), hi)
                 planned += power / 1000.0 * run_h
                 cost += power / 1000.0 * run_h * price

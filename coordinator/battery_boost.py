@@ -32,6 +32,8 @@ class BatteryBoost:
     #: the charger's mode when the boost started: a change ends it
     mode: str
     started: datetime
+    #: the pack's SOC at the start, when read — the card's progress bar
+    start_soc: Optional[float] = None
 
 
 class BoostRefused(Exception):
@@ -61,7 +63,8 @@ def _floor(value: Any, config: Mapping[str, Any]) -> float:
 def start_boost(charger_id: str, charger_cfg: Mapping[str, Any],
                 config: Mapping[str, Any], *, mode: str,
                 connected: Optional[bool], now: datetime,
-                floor_soc: Any = None) -> BatteryBoost:
+                floor_soc: Any = None,
+                soc: Optional[float] = None) -> BatteryBoost:
     """A boost for ``charger_id``, or :class:`BoostRefused` saying why not.
 
     ``connected`` is the plan layer's tri-state: only a definite False
@@ -74,7 +77,8 @@ def start_boost(charger_id: str, charger_cfg: Mapping[str, Any],
         raise BoostRefused("battery_boost_not_connected", charger=charger_id)
     return BatteryBoost(charger_id=str(charger_id),
                         floor_soc=_floor(floor_soc, config),
-                        mode=str(mode), started=now)
+                        mode=str(mode), started=now,
+                        start_soc=None if soc is None else float(soc))
 
 
 def boost_end_reason(boost: BatteryBoost, *, connected: Optional[bool],

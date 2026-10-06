@@ -1684,6 +1684,12 @@
     },
     "battery_boost_bad_floor": {
       "message": "„{floor}” nie jest poziomem baterii: podaj dolną granicę od 0 do 100 %."
+    },
+    "charger_not_found": {
+      "message": "SEM nie ma ładowarki „{charger}”."
+    },
+    "departure_bad_time": {
+      "message": "„{day}: {time}” nie jest godziną wyjazdu: dni to mon … sun, godziny w formacie HH:MM od 00:00 do 23:59."
     }
   },
   "issues": {

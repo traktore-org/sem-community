@@ -673,6 +673,47 @@ stop_battery_boost:
   name: Stop the battery boost
   description: (#1025) End the running battery boost.
 
+set_charger_departure:
+  name: Set a charger's departure plan
+  description: >-
+    (#1023) What the EV card's departure rows set, without reloading SEM:
+    each weekday's own departure time, one continuous charging block, and the
+    top-up right before leaving. Leave a field out to keep it as it is. The
+    night is re-planned on the next cycle.
+  fields:
+    charger_id:
+      name: Charger
+      description: "The charger's id, as in SEM's configuration."
+      required: true
+      selector:
+        text:
+    by_weekday:
+      name: Departure per weekday
+      description: >-
+        The days that leave at a time of their own, as mon … sun → "HH:MM".
+        A day left out or empty leaves at the charger's Charge-by time. The
+        whole week is replaced.
+      required: false
+      example: '{"mon": "06:15", "tue": "06:15"}'
+      selector:
+        object:
+    one_block:
+      name: Charge in one block
+      description: "One continuous run in the cheapest stretch of the night instead of the cheapest pieces."
+      required: false
+      selector:
+        boolean:
+    late_charge_min:
+      name: Top up before leaving
+      description: "Minutes right before the departure that charge whatever the price. 0 is off."
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 120
+          step: 15
+          unit_of_measurement: min
+
 replan:
   name: Re-plan the energy day
   description: >-

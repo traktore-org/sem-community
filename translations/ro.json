@@ -1684,6 +1684,12 @@
     },
     "battery_boost_bad_floor": {
       "message": "„{floor}” nu este un nivel al bateriei: indică o limită de la 0 la 100 %."
+    },
+    "charger_not_found": {
+      "message": "SEM nu are niciun încărcător „{charger}”."
+    },
+    "departure_bad_time": {
+      "message": "„{day}: {time}” nu este o plecare: zilele sunt mon … sun, orele HH:MM, de la 00:00 la 23:59."
     }
   },
   "issues": {

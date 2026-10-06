@@ -1684,6 +1684,12 @@
     },
     "battery_boost_bad_floor": {
       "message": "„{floor}“ není úroveň baterie: zadejte spodní mez od 0 do 100 %."
+    },
+    "charger_not_found": {
+      "message": "SEM nemá nabíječku „{charger}“."
+    },
+    "departure_bad_time": {
+      "message": "„{day}: {time}“ není odjezd: dny jsou mon … sun, časy HH:MM od 00:00 do 23:59."
     }
   },
   "issues": {

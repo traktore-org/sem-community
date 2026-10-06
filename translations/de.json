@@ -1684,6 +1684,12 @@
     },
     "battery_boost_bad_floor": {
       "message": "„{floor}“ ist kein Batteriestand: gib eine Untergrenze von 0 bis 100 % an."
+    },
+    "charger_not_found": {
+      "message": "SEM hat keine Ladestation „{charger}“."
+    },
+    "departure_bad_time": {
+      "message": "„{day}: {time}“ ist keine Abfahrt: Tage sind mon … sun, Zeiten HH:MM von 00:00 bis 23:59."
     }
   },
   "issues": {

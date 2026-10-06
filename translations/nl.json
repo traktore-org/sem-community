@@ -1684,6 +1684,12 @@
     },
     "battery_boost_bad_floor": {
       "message": "“{floor}” is geen batterijniveau: geef een ondergrens van 0 tot 100 %."
+    },
+    "charger_not_found": {
+      "message": "SEM heeft geen laadpaal “{charger}”."
+    },
+    "departure_bad_time": {
+      "message": "“{day}: {time}” is geen vertrek: dagen zijn mon … sun, tijden HH:MM van 00:00 tot 23:59."
     }
   },
   "issues": {

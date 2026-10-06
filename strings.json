@@ -1684,6 +1684,12 @@
     },
     "battery_boost_bad_floor": {
       "message": "“{floor}” is not a battery level: give a floor from 0 to 100 %."
+    },
+    "charger_not_found": {
+      "message": "SEM has no charger “{charger}”."
+    },
+    "departure_bad_time": {
+      "message": "“{day}: {time}” is not a departure: days are mon … sun, times HH:MM from 00:00 to 23:59."
     }
   },
   "issues": {

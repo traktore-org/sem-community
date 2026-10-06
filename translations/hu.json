@@ -1684,6 +1684,12 @@
     },
     "battery_boost_bad_floor": {
       "message": "A(z) „{floor}” nem akkumulátorszint: adj meg egy alsó határt 0 és 100 % között."
+    },
+    "charger_not_found": {
+      "message": "A SEM-ben nincs „{charger}” nevű töltő."
+    },
+    "departure_bad_time": {
+      "message": "A(z) „{day}: {time}” nem indulási idő: a napok mon … sun, az időpontok HH:MM alakúak, 00:00 és 23:59 között."
     }
   },
   "issues": {

@@ -289,7 +289,7 @@ def test_an_unknown_charger_is_not_found():
     c = _coordinator()
     with pytest.raises(BoostRefused) as err:
         c.start_battery_boost("ghost")
-    assert err.value.key == "device_not_found"
+    assert err.value.key == "charger_not_found"
 
 
 def test_the_battery_view_gets_the_floor():

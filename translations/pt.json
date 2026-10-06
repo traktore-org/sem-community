@@ -1684,6 +1684,12 @@
     },
     "battery_boost_bad_floor": {
       "message": "«{floor}» não é um nível de bateria: indique um limite de 0 a 100 %."
+    },
+    "charger_not_found": {
+      "message": "O SEM não tem nenhum carregador «{charger}»."
+    },
+    "departure_bad_time": {
+      "message": "«{day}: {time}» não é uma partida: os dias são mon … sun e as horas HH:MM, de 00:00 a 23:59."
     }
   },
   "issues": {

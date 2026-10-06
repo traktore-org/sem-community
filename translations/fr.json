@@ -1684,6 +1684,12 @@
     },
     "battery_boost_bad_floor": {
       "message": "« {floor} » n’est pas un niveau de batterie : indiquez un seuil de 0 à 100 %."
+    },
+    "charger_not_found": {
+      "message": "SEM n’a pas de borne « {charger} »."
+    },
+    "departure_bad_time": {
+      "message": "« {day} : {time} » n’est pas un départ : les jours sont mon … sun, les heures HH:MM de 00:00 à 23:59."
     }
   },
   "issues": {

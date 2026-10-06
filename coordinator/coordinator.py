@@ -67,7 +67,13 @@ from .health_check import (
 from .units import energy_state_to_kwh, power_state_to_watts
 from .distance_units import distance_to_km
 from .ev_availability import operational_ev_connected, operational_night_target
-from .departure import departure_for, departure_signature, late_charge_s
+from .departure import (
+    departure_for,
+    departure_hhmm,
+    departure_signature,
+    late_charge_s,
+    weekday_departures,
+)
 from ..consts.ev_charge_modes import effective_charge_mode_for as _ev_mode_now
 from .surplus_availability import SurplusAvailability
 from .sensor_reader import SensorReader
@@ -4895,6 +4901,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     _sd.get("remaining_s") or 0.0)
                 result[f"charger_{cid}_stop_war_stand_down_w"] = float(
                     _sd.get("power_w") or 0.0)
+                # (#1023/#1025) the EV card's departure and boost rows
+                result[f"charger_{cid}_departure"] = self._departure_view(
+                    cid, _per_charger_cfg)
                 # Per-charger vehicle SOC (#193) — collected for the global
                 # vehicle_soc/range fallback below (no dedicated per-charger
                 # sensor consumes this, so don't write it into result; #245 review #2).
@@ -4994,6 +5003,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # (#1025) the battery boost for the card: running, or how it ended
             result["battery_boost"] = self.battery_boost_status(
                 getattr(self, "_boost_power_seen", None))
+            # …and what the card needs to say what one would give before it
+            # starts: the default floor (D4) and the pack's capacity.
+            result["battery_boost_preview"] = self._battery_boost_preview()
             _night_plan = self._cycle_night_plan
             if _night_plan is not None:
                 result["ev_deadline_reachable"] = _night_plan.reachable
@@ -8636,7 +8648,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         from .battery_boost import BoostRefused, start_boost
         cfg = self._charger_cfg_by_id(charger_id)
         if cfg is None:
-            raise BoostRefused("device_not_found", device_id=charger_id)
+            raise BoostRefused("charger_not_found", charger=charger_id)
         # The last cycle's readings: a definite unplug refuses, nothing read
         # yet does not (the next cycle ends a boost on an unplug).
         power = getattr(self, "_boost_power_seen", None)
@@ -8644,7 +8656,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             charger_id, cfg, self.config,
             mode=self._effective_charge_mode_for(cfg),
             connected=self._plan_ev_connected(charger_id, cfg, power),
-            now=dt_util.now(), floor_soc=floor_soc)
+            now=dt_util.now(), floor_soc=floor_soc,
+            soc=(getattr(power, "battery_soc", None)
+                 if getattr(power, "battery_soc_known", True) else None))
         self._battery_boost = boost
         self._battery_boost_ended = None
         _LOGGER.info("Battery boost started for %s, down to %.0f%%",
@@ -8703,7 +8717,66 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         return {
             "active": True, "charger_id": boost.charger_id,
             "floor_soc": boost.floor_soc, "started": boost.started.isoformat(),
+            "start_soc": boost.start_soc, "soc": soc,
             "remaining_kwh": round(boost_remaining_kwh(soc, boost.floor_soc, cap), 2),
+        }
+
+    def _battery_boost_preview(self) -> Dict[str, Any]:
+        """(#1025) The default floor (D4) and the capacity, for the card's
+        "about N kWh for the car" before a boost starts."""
+        from .battery_boost import DEFAULT_FLOOR_KEY, DEFAULT_FLOOR_SOC
+        floor = self.config.get(DEFAULT_FLOOR_KEY)
+        try:
+            floor = float(DEFAULT_FLOOR_SOC if floor is None else floor)
+        except (TypeError, ValueError):
+            floor = DEFAULT_FLOOR_SOC
+        try:
+            cap = float(self.battery_capacity_kwh or 0.0)
+        except Exception:  # noqa: BLE001 — no capacity, nothing to show
+            cap = 0.0
+        return {"default_floor": floor, "capacity_kwh": round(cap, 2)}
+
+    def _departure_view(self, cid: str, charger_cfg) -> Dict[str, Any]:
+        """(#1023) One charger's departure, as the EV card shows it: the
+        default time, each weekday's own, the departure tonight is planned
+        for, the two plan knobs, the stamped top-up (when the plan covers
+        the car) and whether the battery may be boosted into it (D5)."""
+        from .build_view import _battery_may_assist_ev
+        cfg = charger_cfg or {}
+        now = dt_util.now()
+        late_min = late_charge_s(cfg) // 60
+        late = None
+        if late_min:
+            kwh = cost = 0.0
+            spans = []
+            for b in self._ev_blocks_for(cid, now) or []:
+                if not b.get("late"):
+                    continue
+                bs = dt_util.parse_datetime(str(b.get("start")))
+                be = dt_util.parse_datetime(str(b.get("end")))
+                if bs is None or be is None:
+                    continue
+                try:
+                    e = float(b["power_w"]) / 1000.0 * max(
+                        0.0, (be - bs).total_seconds() / 3600.0)
+                    price = float(b.get("price") or 0.0)
+                except (KeyError, TypeError, ValueError):
+                    continue
+                spans.append((bs, be))
+                kwh += e
+                cost += e * price
+            if spans:
+                late = {"start": min(s for s, _ in spans).isoformat(),
+                        "end": max(e for _, e in spans).isoformat(),
+                        "kwh": round(kwh, 2), "cost": round(cost, 2)}
+        return {
+            "default": departure_hhmm(cfg, self.config),
+            "by_weekday": weekday_departures(cfg),
+            "next": departure_for(cfg, now, self.config).isoformat(),
+            "one_block": bool(cfg.get("ev_plan_one_block", False)),
+            "late_min": late_min,
+            "late": late,
+            "boost_allowed": _battery_may_assist_ev(self.config, cfg),
         }
 
     def _plan_ev_connected(self, cid: str, charger_cfg, power):
@@ -10594,6 +10667,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 "end": a.end.isoformat(),
                 "power_w": round(a.power_w, 0),
                 "price": a.price,
+                # (#1023) only on the top-up: the strip hatches it
+                **({"late": True} if a.late else {}),
             } for a in plan.allocations]
             self._energy_plan_shadow = {
                 "computed_at": now.isoformat(),

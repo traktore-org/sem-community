@@ -1684,6 +1684,12 @@
     },
     "battery_boost_bad_floor": {
       "message": "«{floor}» er ikke et batterinivå: oppgi en nedre grense fra 0 til 100 %."
+    },
+    "charger_not_found": {
+      "message": "SEM har ingen lader «{charger}»."
+    },
+    "departure_bad_time": {
+      "message": "«{day}: {time}» er ikke en avreise: dagene er mon … sun, tidene HH:MM fra 00:00 til 23:59."
     }
   },
   "issues": {

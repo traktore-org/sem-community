@@ -3648,6 +3648,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool
             "remove_leftovers",
             "start_battery_boost",
             "stop_battery_boost",
+            "set_charger_departure",
         ):
             hass.services.async_remove(DOMAIN, service_name)
 
@@ -3932,9 +3933,9 @@ async def _async_register_services(
                     translation_domain=DOMAIN,
                     translation_key="battery_boost_bad_floor",
                     translation_placeholders=_p) from err
-            raise HomeAssistantError(
+            raise ServiceValidationError(
                 translation_domain=DOMAIN,
-                translation_key="device_not_found",
+                translation_key="charger_not_found",
                 translation_placeholders=_p) from err
         await coordinator.async_request_refresh()
 
@@ -3958,6 +3959,60 @@ async def _async_register_services(
         _LOGGER.debug("Registered services: %s.start/stop_battery_boost", DOMAIN)
     except Exception as err:  # noqa: BLE001
         _LOGGER.error("Failed to register the battery boost services: %s", err)
+
+    async def async_set_charger_departure(call) -> None:
+        """(#1023) The EV card's departure rows: each weekday's own time,
+        one block, the top-up before leaving. Written like the charger's own
+        entities write — no reload, so a click never tears down the
+        coordinator (or a running boost) — and the plan's demand signature
+        re-plans the night."""
+        from .coordinator.departure import (
+            LATE_CHARGE_KEY, WEEKDAY_KEY, WEEKDAYS, _hm,
+        )
+        cid = call.data["charger_id"]
+        if coordinator._charger_cfg_by_id(cid) is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="charger_not_found",
+                translation_placeholders={"charger": cid})
+        writes: dict = {}
+        if "by_weekday" in call.data:
+            days = {}
+            for day, value in (call.data["by_weekday"] or {}).items():
+                if value is None or str(value).strip() == "":
+                    continue    # an empty day leaves at the default
+                hm = _hm(value)
+                if day not in WEEKDAYS or hm is None:
+                    raise ServiceValidationError(
+                        translation_domain=DOMAIN,
+                        translation_key="departure_bad_time",
+                        translation_placeholders={
+                            "day": str(day), "time": str(value)})
+                days[day] = f"{hm[0]:02d}:{hm[1]:02d}"
+            writes[WEEKDAY_KEY] = days
+        if "one_block" in call.data:
+            writes["ev_plan_one_block"] = bool(call.data["one_block"])
+        if "late_charge_min" in call.data:
+            writes[LATE_CHARGE_KEY] = int(call.data["late_charge_min"])
+        for key, value in writes.items():
+            persist_per_charger_option(
+                hass, coordinator.config_entry, coordinator, cid, key, value)
+        await coordinator.async_request_refresh()
+
+    try:
+        hass.services.async_register(
+            DOMAIN, "set_charger_departure", async_set_charger_departure,
+            schema=vol.Schema({
+                vol.Required("charger_id"): cv.string,
+                vol.Optional("by_weekday"): vol.Any(None, dict),
+                vol.Optional("one_block"): cv.boolean,
+                vol.Optional("late_charge_min"): vol.All(
+                    vol.Coerce(int), vol.Range(min=0, max=120)),
+            }),
+        )
+        _LOGGER.debug("Registered service: %s.set_charger_departure", DOMAIN)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.error("Failed to register set_charger_departure: %s", err)
 
     async def async_remove_leftovers_service(call) -> None:
         """(#935) Delete what is the USER's, on their explicit say-so.

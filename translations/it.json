@@ -1684,6 +1684,12 @@
     },
     "battery_boost_bad_floor": {
       "message": "«{floor}» non è un livello di batteria: indica una soglia da 0 a 100 %."
+    },
+    "charger_not_found": {
+      "message": "SEM non ha alcun caricatore «{charger}»."
+    },
+    "departure_bad_time": {
+      "message": "«{day}: {time}» non è una partenza: i giorni sono mon … sun, gli orari HH:MM da 00:00 a 23:59."
     }
   },
   "issues": {

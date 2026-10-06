@@ -282,6 +282,10 @@ class SEMEVStatusCard extends SEMLitBase {
                 (((_cs.per_charger_stop_war || {})[id] || {}).standing_down === true)
                     ? '1' : '0'
             ).join(':');
+            // (#1023/#1025) the departure rows, the boost and the SOC its
+            // preview is figured from
+            key += '|' + JSON.stringify([_cs.per_charger_departure || {},
+                _cs.battery_boost || null, Math.round(Number(_cs.battery_soc) || 0)]);
 
             key += '|' + this._chargers.map(id =>
                 hass.states[`number.sem_charger_${id}_daily_ev_target`]?.state || ''
@@ -408,6 +412,316 @@ class SEMEVStatusCard extends SEMLitBase {
         }
     }
 
+    /**
+     * (#1023) One charger's departure view from the charging-state sensor,
+     * with a click's write laid over it until the coordinator echoes it back
+     * (the service refreshes at once; 20 s covers a slow cycle).
+     */
+    _departureFor(id, csAttrs) {
+        const dep = { ...(((csAttrs || {}).per_charger_departure || {})[id] || {}) };
+        const pend = (this._depPending || {})[id];
+        if (pend && Date.now() - pend.at < 20000) Object.assign(dep, pend.values);
+        return dep;
+    }
+
+    _writeDeparture(id, values) {
+        const prev = ((this._depPending || {})[id] || {}).values || {};
+        this._depPending = {
+            ...(this._depPending || {}),
+            [id]: { at: Date.now(), values: { ...prev, ...values } },
+        };
+        this.requestUpdate();
+        const data = { charger_id: id };
+        if ('by_weekday' in values) data.by_weekday = values.by_weekday;
+        if ('one_block' in values) data.one_block = values.one_block;
+        if ('late_min' in values) data.late_charge_min = values.late_min;
+        this._callService('solar_energy_management', 'set_charger_departure', data);
+    }
+
+    /** "{a} … {b}" with each placeholder replaced — the card's one formatter
+     *  for the departure and boost sentences. */
+    _fmtT(key, values) {
+        let out = this._t(key) || '';
+        for (const [k, v] of Object.entries(values || {})) {
+            out = out.split(`{${k}}`).join(String(v));
+        }
+        return out;
+    }
+
+    _hhmm(date) {
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit',
+            timeZone: this._hass?.config?.time_zone || undefined });
+    }
+
+    /**
+     * (#1023) The departure rows — approved mockup 06.10, inside Charge
+     * Target: a chip per weekday (a day with its own time in teal, the
+     * departure tonight is planned for outlined), the next departure, one
+     * block, and the top-up before leaving with what the plan booked for it.
+     */
+    _renderDepartureRows(id, dep, depDefault) {
+        const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+        const own = dep.by_weekday || {};
+        const lang = this._hass?.language || 'en';
+        const tz = this._hass?.config?.time_zone || undefined;
+        // 1 Jan 2024 was a Monday: the locale names the days, no table needed
+        const dayName = (i, style) => {
+            try {
+                return new Intl.DateTimeFormat(lang, { weekday: style, timeZone: 'UTC' })
+                    .format(new Date(Date.UTC(2024, 0, 1 + i, 12)));
+            } catch (e) { return DAYS[i]; }
+        };
+        const next = dep.next ? new Date(dep.next) : null;
+        const nextOk = !!(next && !isNaN(next));
+        let nextKey = null;
+        if (nextOk) {
+            try {
+                nextKey = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: tz })
+                    .format(next).toLowerCase().slice(0, 3);
+            } catch (e) { nextKey = null; }
+        }
+        const editing = this._depEdit && this._depEdit.id === id ? this._depEdit.day : null;
+        const setDay = (day, value) => {
+            const map = { ...own };
+            // the default is no day of its own: the chip follows Charge by
+            if (!value || value === depDefault) delete map[day];
+            else map[day] = value;
+            this._writeDeparture(id, { by_weekday: map });
+        };
+        const toggleDay = (day) => {
+            this._depEdit = editing === day ? null : { id, day };
+            this.requestUpdate();
+        };
+
+        const oneBlock = !!dep.one_block;
+        const LATE = [0, 15, 30, 45, 60, 90, 120];
+        const lateMin = Number(dep.late_min) || 0;
+        const lateOpts = LATE.includes(lateMin) ? LATE : [...LATE, lateMin].sort((a, b) => a - b);
+        let lateHint = '';
+        if (lateMin > 0 && nextOk) {
+            const late = dep.late || null;
+            const ls = late && late.start ? new Date(late.start) : new Date(next.getTime() - lateMin * 60000);
+            const le = late && late.end ? new Date(late.end) : next;
+            if (!isNaN(ls) && !isNaN(le)) {
+                const span = `${this._hhmm(ls)}–${this._hhmm(le)}`;
+                lateHint = late
+                    ? this._fmtT('ev_dep_late_hint_plan', {
+                        span, kwh: Number(late.kwh || 0).toFixed(1),
+                        cost: `${Number(late.cost || 0).toFixed(2)} ${semGetCurrency(this._hass)}` })
+                    : this._fmtT('ev_dep_late_hint', { span });
+            }
+        }
+        const [nextPre, nextPost = ''] = (this._t('ev_dep_next') || '{when}').split('{when}');
+        const nextLabel = !nextOk ? ''
+            : DAYS.includes(nextKey) ? `${dayName(DAYS.indexOf(nextKey), 'short')} ${this._hhmm(next)}`
+            : this._hhmm(next);
+        const help = (key) => this._showHelp ? html`
+            <div class="ct-subhint dep-hint">
+                <div class="ct-hint-row"><span class="ct-hint-text">${this._t(key)}</span></div>
+            </div>` : nothing;
+
+        return html`
+            <div class="dep-days">
+                ${DAYS.map((d, i) => html`
+                    <button class="dep-day ${own[d] ? 'own' : ''} ${d === nextKey ? 'next' : ''} ${d === editing ? 'open' : ''}"
+                            title=${dayName(i, 'long')}
+                            @click=${(e) => { e.stopPropagation(); toggleDay(d); }}>
+                        <span class="d">${dayName(i, 'short')}</span>
+                        <span class="t">${own[d] || depDefault}</span>
+                    </button>`)}
+            </div>
+            ${editing ? html`
+            <div class="ct-row dep-edit">
+                <span class="ct-label">${dayName(DAYS.indexOf(editing), 'long')}</span>
+                <span class="ct-ctl">
+                    <input type="time" class="dep-time-input"
+                           .value=${own[editing] || depDefault}
+                           @click=${(e) => e.stopPropagation()}
+                           @change=${(e) => setDay(editing, e.target.value)}>
+                    ${own[editing] ? html`
+                    <button class="dep-clear"
+                            @click=${(e) => { e.stopPropagation(); setDay(editing, ''); }}>
+                        ${this._fmtT('ev_dep_use_default', { time: depDefault })}
+                    </button>` : nothing}
+                </span>
+            </div>` : nothing}
+            <div class="ct-subhint dep-hint">
+                <div class="ct-hint-row">
+                    <span class="ct-hint-text">${nextOk ? html`${nextPre}<b class="dep-next">${nextLabel}</b>${nextPost} · ` : nothing}${this._fmtT('ev_dep_tap_hint', { time: depDefault })}</span>
+                </div>
+            </div>
+            ${help('ev_dep_help_days')}
+            <div class="ct-row">
+                <span class="ct-label">${this._t('ev_dep_one_block')}</span>
+                <span class="ct-ctl">
+                    <span class="ct-sw ${oneBlock ? 'on' : 'off'}" role="switch"
+                          aria-checked=${oneBlock ? 'true' : 'false'}
+                          @click=${(e) => { e.stopPropagation(); this._writeDeparture(id, { one_block: !oneBlock }); }}>
+                        <span class="ct-knob"></span>
+                    </span>
+                </span>
+            </div>
+            ${help('ev_dep_help_one_block')}
+            <div class="ct-row">
+                <span class="ct-label">${this._t('ev_dep_late_charge')}</span>
+                <span class="ct-ctl">
+                    <select class="ct-mode-select" .value=${String(lateMin)}
+                            @click=${(e) => e.stopPropagation()}
+                            @change=${(e) => this._writeDeparture(id, { late_min: Number(e.target.value) })}>
+                        ${lateOpts.map(m => html`
+                            <option value=${String(m)} ?selected=${m === lateMin}>
+                                ${m ? this._fmtT('ev_dep_minutes', { n: m }) : this._t('ev_dep_late_off')}
+                            </option>`)}
+                    </select>
+                </span>
+            </div>
+            ${lateHint ? html`
+            <div class="ct-subhint dep-hint">
+                <div class="ct-hint-row"><span class="ct-hint-text">${lateHint}</span></div>
+            </div>` : nothing}
+            ${help('ev_dep_help_late')}
+        `;
+    }
+
+    /**
+     * (#1025) The battery boost row — approved mockup 06.10: a floor and a
+     * Boost button; while it runs, what is left, a bar and how it ends; when
+     * the battery may not feed this car, the reason instead of a button that
+     * would only be refused. Only on a house with a battery.
+     */
+    _renderBoostRow(id, dep, csAttrs) {
+        if (!('sensor.sem_battery_soc' in (this._hass?.states || {}))) return nothing;
+        const boost = csAttrs.battery_boost || null;
+        const preview = csAttrs.battery_boost_preview || {};
+        const running = !!(boost && boost.active && boost.charger_id === id);
+        const allowed = dep.boost_allowed !== false;
+        const floorDefault = Math.round(Number(preview.default_floor ?? 50));
+        const chosen = (this._boostFloor || {})[id];
+        const floor = chosen != null ? chosen : floorDefault;
+        const FLOORS = [10, 20, 30, 40, 50, 60, 70, 80, 90];
+        const floorOpts = FLOORS.includes(floor) ? FLOORS : [...FLOORS, floor].sort((a, b) => a - b);
+        const soc = Number(csAttrs.battery_soc);
+        const socOk = Number.isFinite(soc);
+        const cap = Number(preview.capacity_kwh) || 0;
+        const err = this._boostError && this._boostError.id === id ? this._boostError.message : null;
+        const help = this._showHelp ? html`
+            <div class="ct-subhint boost-hint">
+                <div class="ct-hint-row"><span class="ct-hint-text">${this._t('ev_boost_help')}</span></div>
+            </div>` : nothing;
+
+        if (running) {
+            const bFloor = Math.round(Number(boost.floor_soc));
+            const start = Number(boost.start_soc);
+            const now = Number.isFinite(Number(boost.soc)) ? Number(boost.soc) : soc;
+            const pct = Number.isFinite(start) && Number.isFinite(now) && start > bFloor
+                ? Math.max(0, Math.min(100, (start - now) / (start - bFloor) * 100)) : null;
+            return html`
+                <div class="ct-row boost-row">
+                    <span class="ct-label">${this._t('ev_boost_title')}</span>
+                    <span class="ct-ctl">
+                        <span class="ct-time boost-floor">${this._fmtT('ev_boost_down_to', { floor: bFloor })}</span>
+                        <button class="ct-boost-btn stop"
+                                @click=${(e) => { e.stopPropagation(); this._callService('solar_energy_management', 'stop_battery_boost', {}); }}>
+                            <ha-icon icon="mdi:stop" style="--mdc-icon-size:14px"></ha-icon>
+                            ${this._t('ev_boost_stop')}
+                        </button>
+                    </span>
+                </div>
+                <div class="ct-subhint boost-hint">
+                    <div class="ct-hint-row"><span class="ct-hint-text">${this._fmtT('ev_boost_left', {
+                        kwh: Number(boost.remaining_kwh || 0).toFixed(1),
+                        soc: Number.isFinite(now) ? Math.round(now) : '—', floor: bFloor })}</span></div>
+                    ${pct != null ? html`<div class="boost-bar"><i style="width:${pct.toFixed(0)}%"></i></div>` : nothing}
+                    <div class="ct-hint-row"><span class="ct-hint-text">${this._fmtT('ev_boost_ends', { floor: bFloor })}</span></div>
+                </div>
+                ${help}
+            `;
+        }
+
+        const kwh = socOk && cap > 0 ? Math.max(0, (soc - floor) / 100 * cap) : null;
+        const lastEnd = boost && !boost.active && boost.last_end
+            && boost.last_end.charger_id === id ? boost.last_end : null;
+        const endedAt = lastEnd ? new Date(lastEnd.at) : null;
+        // a boost that ended last night is news this morning, not next week
+        const showEnd = !!(endedAt && !isNaN(endedAt) && Date.now() - endedAt.getTime() < 12 * 3600 * 1000);
+        const REASONS = {
+            'unplugged': 'ev_boost_end_unplugged',
+            'mode changed': 'ev_boost_end_mode_changed',
+            'permission off': 'ev_boost_end_permission_off',
+            'battery at its floor': 'ev_boost_end_floor',
+            'stopped': 'ev_boost_end_stopped',
+            'charger removed': 'ev_boost_end_charger_removed',
+        };
+        let line = nothing;
+        if (!allowed) {
+            line = html`
+                <div class="ct-warn">
+                    <ha-icon icon="mdi:battery-lock" style="--mdc-icon-size:14px;color:#f06292"></ha-icon>
+                    <span>${this._t('ev_boost_not_permitted')}</span>
+                </div>`;
+        } else if (err) {
+            line = html`
+                <div class="ct-warn">
+                    <ha-icon icon="mdi:alert-circle-outline" style="--mdc-icon-size:14px;color:#f06292"></ha-icon>
+                    <span>${err}</span>
+                </div>`;
+        } else if (showEnd) {
+            const reasonKey = REASONS[lastEnd.reason];
+            line = html`
+                <div class="ct-subhint boost-hint">
+                    <div class="ct-hint-row"><span class="ct-hint-text">${this._fmtT('ev_boost_last_end', {
+                        time: this._hhmm(endedAt),
+                        reason: reasonKey ? this._t(reasonKey) : lastEnd.reason })}</span></div>
+                </div>`;
+        } else {
+            line = html`
+                <div class="ct-subhint boost-hint">
+                    <div class="ct-hint-row"><span class="ct-hint-text">${this._fmtT('ev_boost_hint', {
+                        soc: socOk ? Math.round(soc) : '—',
+                        kwh: kwh != null ? kwh.toFixed(1) : '—' })}</span></div>
+                </div>`;
+        }
+        return html`
+            <div class="ct-row boost-row">
+                <span class="ct-label">${this._t('ev_boost_title')}</span>
+                <span class="ct-ctl">
+                    <select class="ct-mode-select" .value=${String(floor)}
+                            @click=${(e) => e.stopPropagation()}
+                            @change=${(e) => {
+                                this._boostFloor = { ...(this._boostFloor || {}), [id]: Number(e.target.value) };
+                                this.requestUpdate();
+                            }}>
+                        ${floorOpts.map(f => html`
+                            <option value=${String(f)} ?selected=${f === floor}>
+                                ${this._fmtT('ev_boost_down_to', { floor: f })}
+                            </option>`)}
+                    </select>
+                    <button class="ct-boost-btn" ?disabled=${!allowed}
+                            @click=${(e) => { e.stopPropagation(); this._startBoost(id, floor); }}>
+                        <ha-icon icon="mdi:home-battery-outline" style="--mdc-icon-size:14px"></ha-icon>
+                        ${this._t('ev_boost_start')}
+                    </button>
+                </span>
+            </div>
+            ${line}
+            ${help}
+        `;
+    }
+
+    /** (#1025) Start a boost and keep a refusal on the card: the service
+     *  says why (no car plugged in, …), and a console line is no answer. */
+    async _startBoost(id, floor) {
+        if (!this._hass) return;
+        this._boostError = null;
+        try {
+            await this._hass.callService('solar_energy_management', 'start_battery_boost',
+                { charger_id: id, floor_soc: floor });
+        } catch (e) {
+            this._boostError = { id, message: (e && e.message) || String(e) };
+        }
+        this.requestUpdate();
+    }
+
     _renderPlanStrip(chargerId) {
         const cs = this._hass?.states['sensor.sem_charging_state'];
         const perPlan = chargerId
@@ -475,6 +789,9 @@ class SEMEVStatusCard extends SEMLitBase {
             }
         }
 
+        // (#1023) the top-up before departure is hatched — one pattern per
+        // charger, so two strips in one card never share an id
+        const hatchId = `sem-late-${String(chargerId || 'fleet').replace(/[^A-Za-z0-9_-]/g, '_')}`;
         const stateColor = (s) => ({
             idle:     '#566072',
             wait:     '#8353d1',
@@ -484,7 +801,9 @@ class SEMEVStatusCard extends SEMLitBase {
             estimate: '#b8a6e8',
             charging: '#8DC892',
             done:     '#4db6ac',
+            late:     '#5BC8D8',
         })[s] || '#566072';
+        const hasLate = segments.some(s => s.state === 'late');
         // Tariff overlay colours are deliberately distinct from the segment
         // palette — cheap is a deeper leaf-green so it can't be mistaken for
         // the 'charging' sea-green it used to share (#464 legend feedback).
@@ -511,9 +830,17 @@ class SEMEVStatusCard extends SEMLitBase {
                     <span>${_hrs('plan_strip_title')}</span>
                 </div>
                 <svg viewBox="0 0 ${w} 16" preserveAspectRatio="none" class="strip-svg">
+                    ${hasLate ? svg`
+                        <defs>
+                            <pattern id="${hatchId}" patternUnits="userSpaceOnUse"
+                                     width="1.6" height="16" patternTransform="skewX(-14)">
+                                <rect x="0" y="0" width="1.6" height="16" fill="#5BC8D8" />
+                                <rect x="0" y="0" width="0.8" height="16" fill="#3d97a3" />
+                            </pattern>
+                        </defs>` : nothing}
                     ${segments.map(s => svg`
                         <rect x="${xOf(s.s)}" y="5" width="${xOf(s.e)-xOf(s.s)}"
-                              height="10" fill="${stateColor(s.state)}" />
+                              height="10" fill="${s.state === 'late' ? `url(#${hatchId})` : stateColor(s.state)}" />
                     `)}
                     ${overlays.map(o => svg`
                         <rect x="${xOf(o.s)}" y="0" width="${xOf(o.e)-xOf(o.s)}"
@@ -532,6 +859,7 @@ class SEMEVStatusCard extends SEMLitBase {
                     <span><i style="background:${stateColor('estimate')}"></i>${this._t('plan_strip_estimate')}</span>
                     <span><i style="background:${stateColor('charging')}"></i>${this._t('plan_strip_charging')}</span>
                     <span><i style="background:${stateColor('done')}"></i>${this._t('plan_strip_done')}</span>
+                    ${hasLate ? html`<span><i class="hatch"></i>${this._t('plan_strip_late')}</span>` : nothing}
                     <span><i class="line" style="background:${overlayColor('cheap')}"></i>${this._t('plan_strip_cheap')}</span>
                     <span><i class="line" style="background:${overlayColor('expensive')}"></i>${this._t('plan_strip_expensive')}</span>
                 </div>
@@ -862,6 +1190,11 @@ class SEMEVStatusCard extends SEMLitBase {
         // Deadline / cheap-window status live on the charging_state sensor (primary).
         const csAttrs = this._stateAttrs(`${this._prefix}charging_state`);
         const deadlineUnreachable = csAttrs.ev_deadline_reachable === false;
+        // (#1023) This charger's departure: the weekdays with a time of their
+        // own, the next departure, one block, the top-up. Charge by (the time
+        // entity) is the default every other day leaves at.
+        const dep = this._departureFor(id, csAttrs);
+        const depDefault = targetTimeRaw ? targetTimeRaw.slice(0, 5) : (dep.default || '07:00');
         const ncRaw = csAttrs.ev_next_cheap_window;
         let nextCheapLabel = '';
         if (ncRaw) {
@@ -1110,6 +1443,7 @@ class SEMEVStatusCard extends SEMLitBase {
                         <span class="ct-ctl ct-time">
                             <ha-icon icon="mdi:clock-end" style="--mdc-icon-size:13px;color:#5BC8D8"></ha-icon>
                             ${targetTimeLabel}
+                            ${Object.keys(dep.by_weekday || {}).length ? html`<span class="dep-most">· ${this._t('ev_dep_most_days')}</span>` : nothing}
                         </span>
                     </div>
                     ${deadlineUnreachable ? html`
@@ -1118,7 +1452,9 @@ class SEMEVStatusCard extends SEMLitBase {
                             <span>${this._t('ev_deadline_unreachable_short')}</span>
                         </div>
                     ` : nothing}
+                    ${this._renderDepartureRows(id, dep, depDefault)}
                     ${this._renderPlanStrip(id)}
+                    ${this._renderBoostRow(id, dep, csAttrs)}
                 </div>
 
                 <div class="charger-settings ${this._showHelp ? 'help-mode' : ''}">
@@ -1715,6 +2051,61 @@ class SEMEVStatusCard extends SEMLitBase {
                 display: flex; align-items: center; gap: 6px;
                 font-size: 12px; color: #f06292; padding: 5px 0 2px;
             }
+            /* (#1023/#1025) Departure + boost rows — approved mockup 06.10 */
+            .dep-most { font-weight: 400; color: var(--secondary-text-color, #9b9b9b); }
+            .dep-days {
+                display: flex; gap: 4px; padding: 2px 0 6px 16px; margin-left: 2px;
+                border-left: 2px solid rgba(91,200,216,0.25);
+            }
+            .dep-day {
+                flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center;
+                gap: 1px; padding: 3px 0 4px; border-radius: 7px; cursor: pointer;
+                font: inherit; color: inherit;
+                border: 1px solid rgba(255,255,255,0.10); background: rgba(255,255,255,0.03);
+            }
+            .dep-day .d {
+                font-size: 10px; letter-spacing: .03em; text-transform: uppercase;
+                color: var(--secondary-text-color, #9b9b9b);
+                max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            }
+            .dep-day .t { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; color: #8a8a8a; }
+            .dep-day.own { border-color: rgba(91,200,216,0.55); background: rgba(91,200,216,0.10); }
+            .dep-day.own .t { color: #5BC8D8; }
+            .dep-day.next { box-shadow: 0 0 0 1px #5BC8D8 inset; }
+            .dep-day.open { background: rgba(91,200,216,0.22); }
+            .dep-hint { border-left-color: rgba(91,200,216,0.25); }
+            .dep-next { color: #5BC8D8; }
+            .dep-time-input {
+                background: var(--secondary-background-color, rgba(255,255,255,0.07));
+                color: var(--primary-text-color, #e0e0e0);
+                border: 1px solid var(--divider-color, rgba(255,255,255,0.12));
+                border-radius: 8px; padding: 3px 8px; font: inherit; font-size: 12px;
+                font-weight: 600; color-scheme: dark light;
+            }
+            .dep-clear, .ct-boost-btn {
+                display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+                border-radius: 8px; padding: 4px 10px; font: inherit; font-size: 12px; font-weight: 600;
+            }
+            .dep-clear {
+                border: 1px solid rgba(91,200,216,0.45); color: #5BC8D8; background: rgba(91,200,216,0.10);
+            }
+            .ct-boost-btn {
+                border: 1px solid rgba(77,182,172,.55); color: #4db6ac; background: rgba(77,182,172,.12);
+            }
+            .ct-boost-btn.stop {
+                border-color: rgba(240,98,146,.5); color: #f06292; background: rgba(240,98,146,.10);
+            }
+            .ct-boost-btn[disabled] { opacity: .45; cursor: default; }
+            .boost-row { margin-top: 6px; border-top: 1px solid rgba(255,255,255,0.06); }
+            .boost-floor { color: #4db6ac; }
+            .boost-hint { border-left-color: rgba(77,182,172,0.3); }
+            .boost-bar {
+                height: 6px; border-radius: 3px; background: rgba(255,255,255,.10);
+                position: relative; margin: 5px 0 3px;
+            }
+            .boost-bar i {
+                position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: #4db6ac;
+            }
             /* (#1024) Sessions list — approved mockup 01.10 */
             .sessions-block {
                 margin: 10px 0 12px; padding: 8px 10px; border-radius: 12px;
@@ -1773,6 +2164,10 @@ class SEMEVStatusCard extends SEMLitBase {
                full segment (#464). */
             .strip-legend i.line {
                 height: 4px; border-radius: 1px;
+            }
+            /* (#1023) the top-up before departure, hatched like the strip */
+            .strip-legend i.hatch {
+                background: repeating-linear-gradient(135deg, #5BC8D8 0 3px, #3d97a3 3px 6px);
             }
             .strip-help { margin-top: 6px; }
             /* #355 — split affordance shown only when the two range
