@@ -23,7 +23,7 @@ side has followed since #921: *an unknown price is OPEN, never CLOSED*.
 | **Flat / single rate** | nothing — there is one price | **`unknown`**. Nothing waits, nothing holds, no cheap blocks are drawn. |
 | **HT/NT (two rates, a clock)** | the two configured rates, *on a day that contains both* | `cheap` in NT, `normal` in HT — **only when the rates differ**. A weekend, which is NT all day, has one price and therefore no level. |
 | **Multi-tier ToU** (Spanish 2.0TD, US "Nighttime Savers") | the distinct tier prices (#728) | the tier's own level; tier detection is unchanged. |
-| **Dynamic / spot** (Nord Pool, Tibber, EPEX, aWATTar…) | today's own curve, by percentile | the five words; `unknown` when the curve is missing, has fewer than four points, or is flat. |
+| **Dynamic / spot** (Nord Pool, Tibber, EPEX, ENTSO-e, aWATTar…) | today's own curve, by percentile | the five words; `unknown` when the curve is missing, has fewer than four points, or is flat. |
 | **Variable peak (VPP)** | today's curve — it *is* a curve | as dynamic. |
 | **Critical peak (CPP)** | **not modelled** | an announced critical event is not a percentile of today. See *Known limitations*. |
 | **Block / tiered by consumption** (e.g. 31 ct → 42 ct past a monthly baseline) | **not modelled** | the price depends on the month's cumulative kWh, not on the hour. A level cannot express it. |
@@ -80,3 +80,29 @@ without a spread behind it. Being paid to consume says nothing about any
 other hour and needs nothing from one, so a spot entity that publishes only
 its current state — no curve, nothing to compute a spread from — still holds
 the pack for the house in a negative hour.
+
+## ENTSO-e: a market price (#1051)
+
+SEM finds the [ENTSO-e integration](https://github.com/JaccoR/hass-entso-e)
+by itself: choose Dynamic and leave the price entity empty. It reads two of
+ENTSO-e's sensors, because ENTSO-e splits what SEM needs over two: the price
+now from *Current electricity market price*, and the day-ahead curve from
+*Average electricity price*, which is where ENTSO-e keeps it. The average
+sensor's own value is the day's average, so it is never read as the price
+now. An entity name given in the ENTSO-e setup changes nothing.
+
+- **Per kWh.** ENTSO-e can report per MWh. SEM reads prices per kWh, so it
+  does not take a per-MWh setup and says so in the log. Set the ENTSO-e
+  energy scale to kWh.
+- **A market price is not what you pay.** ENTSO-e publishes the wholesale
+  day-ahead price: no tax, no grid fee, no supplier margin. The level does
+  not mind — adding a fee to every hour, or VAT on every hour, keeps the
+  hours in the same order. The cost figures do mind. Add the rest in one of
+  two places, not both, or it counts twice:
+  - in ENTSO-e's own setup (advanced options: a price modifier template
+    and VAT). Every price SEM reads is then what you pay, and a negative
+    hour is one you are paid for.
+  - as SEM's *Variable network-owner fee* (Tariff & Advanced). SEM adds it
+    to every imported kWh. VAT on the market price cannot be expressed this
+    way, and the level keeps reading the market price: a negative market
+    hour reads `negative` even when the fee makes your price positive.

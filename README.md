@@ -44,7 +44,7 @@ SEM monitors your solar production, battery, grid, EV charger, and household dev
 - **Peak load management** — two halves. *Reactive:* automatic device shedding once the rolling average approaches your grid limit. *Preventive (2.1, #864):* demand tariffs bill the average import of each fixed 15-minute clock slot, so waiting for the average to cross is too late by definition — an EV was measured charging at **9.9 kW under a 6.0 kW target** with the state reading `normal` throughout. SEM now tracks each billing slot's remaining budget at the meter and bounds **everything it commands** by it before writing — the EV offer in every mode, the battery's cheap-hours grid charging, and cheap-hours load starts that cannot fit. It floors at minimum current rather than stopping a car on a transient. Off-switch is the one that already exists: the Target Limit slider at MAX
 - **The grid is not always a sink (2.1, #921)** — on a spot feed-in tariff the export price goes negative. SEM measures what that costs, gives every destination a per-cycle OPEN/HELD/CLOSED verdict, keeps the energy in the battery, the car, the house and the loads first, and — with the export guard on — caps feed-in at zero at the inverter for the duration, with hysteresis and a hand-back. Huawei (services), Deye (work mode), any writable export-limit number. All of it off by default.
 - **Solar forecast integration** — Solcast, Forecast.Solar or Open-Meteo Solar Forecast for smart charging decisions
-- **Dynamic tariff support** — Tibber, Nordpool, aWATTar, Amber Electric, Octopus Energy price-responsive charging
+- **Dynamic tariff support** — Tibber, Nordpool, ENTSO-e, aWATTar, Amber Electric, Octopus Energy price-responsive charging
 - **200+ sensors and entities** — power, energy, flows, costs, performance, forecasts, and more
 - **Per-PV-string visibility** — auto-discovered per-string power + daily-energy sensors and a chip strip on the system diagram + flow cards (when your inverter exposes per-string data). Works on Huawei, GoodWe, Growatt, Kostal, Sungrow, Fronius, SolarEdge, SolaX, with V·I synthesis fallback for inverters that expose voltage + current separately.
 - **Built-in dashboard** — theme-aware styling (works on both dark and light HA themes), animated system diagram, Sankey, and native HA energy cards
@@ -132,7 +132,7 @@ Before setting up SEM, make sure you have:
   - Battery SOC (%) and power (W) sensors
   - An EV charger controllable via HA (KEBA, Wallbox, go-eCharger, Easee, Zaptec, ChargePoint, Heidelberg, etc.)
   - [Solcast PV Solar](https://github.com/BJReplay/ha-solcast-solar), [Forecast.Solar](https://www.home-assistant.io/integrations/forecast_solar/) or [Open-Meteo Solar Forecast](https://github.com/rany2/ha-open-meteo-solar-forecast) for solar forecasts
-  - Tibber, Nordpool, or aWATTar integration for dynamic tariffs
+  - Tibber, Nordpool, ENTSO-e, or aWATTar integration for dynamic tariffs
 
 ---
 

@@ -1600,9 +1600,14 @@ Set tariff mode to "Dynamic" in the options flow. SEM auto-detects your provider
 | **Tibber** | Nordics, Germany, NL | Auto (`sensor.*electricity_price*`) | 60 min | Static |
 | **Nordpool** | Nordics, Baltics | Auto (`sensor.nordpool*`) | 60 min | Static |
 | **aWATTar** | Austria, Germany | Auto (`sensor.awattar`) | 60 min | Static |
+| **ENTSO-e** | Europe | Auto (by integration; two of its sensors) | 15 or 60 min | Static |
 | **Amber Electric** | Australia | Auto (`sensor.amber_*_general_price`) | 30 min | Dynamic (live feed-in rate) |
 | **Octopus Energy** | UK | Auto (`sensor.octopus_energy_*_current_rate`) | 30 min | Dynamic (export rate sensor) |
 | **Any other** | Any | Manual (select price entity) | Auto-detected | Static or dynamic |
+
+#### ENTSO-e setup (Europe)
+
+SEM finds the [ENTSO-e integration](https://github.com/JaccoR/hass-entso-e) by itself — leave the price entity empty. It takes the price now from *Current electricity market price* and the day's curve from *Average electricity price*, where ENTSO-e keeps it. Set ENTSO-e's energy scale to kWh. ENTSO-e's prices are market prices without tax and fees; [Tariff models](TARIFF_MODELS.md#entso-e-a-market-price-1051) says where to add them.
 
 #### Amber Electric setup (Australia)
 
