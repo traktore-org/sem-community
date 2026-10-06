@@ -4945,7 +4945,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
             }
         `}},{type:"sem-today-plan-card",name:"SEM Today's Plan",description:"Forward-looking schedule combining tariff, solar, and EV",documentationURL:"https://github.com/traktore-org/sem-community/blob/develop/docs/DASHBOARD_GUIDE.md#sem-today-plan-card"});const Yt={ev:{icon:"mdi:ev-station",color:"#8DC892",label:"energy_plan_kind_ev"},load:{icon:"mdi:power-plug",color:"#5BC8D8",label:"energy_plan_kind_load"},battery:{icon:"mdi:home-battery",color:"#f06292",label:"energy_plan_kind_battery"},comfort:{icon:"mdi:thermometer",color:"#4db6ac",label:"energy_plan_kind_comfort"}},Xt=Object.fromEntries(Object.entries(Yt).map(([e,t])=>[e,t.label])),Zt={actuation:{docs:"https://github.com/traktore-org/sem-community/blob/develop/docs/ENERGY_PLANNER.md#actuation-g4"},arbitrage:{docs:"https://github.com/traktore-org/sem-community/blob/develop/docs/ENERGY_PLANNER.md#the-arbitrage-advisor"}},Jt={fits:{icon:"mdi:check-circle",color:"#8DC892"},partial:{icon:"mdi:circle-slice-4",color:"#ff9800"},yields:{icon:"mdi:alert-circle-outline",color:"#f06292"}};class Qt extends Fe{setConfig(e){super.setConfig(e),this._entity=e.entity||"sensor.sem_energy_plan"}set hass(e){this._hass=e;const t=e?.states[this._entity],s=t?.attributes||{},i=!0===s.actuation&&Array.isArray(s.demands)?s.demands.map(e=>this._liveState(e,s.blocks)).join(","):"",r=s.tomorrow||{},a=s.coverage?Object.entries(s.coverage).map(([e,t])=>e+"="+t).join(","):"",o=[t?.state,s.computed_at,s.actuation,i,a,this._view||"today",r.prices,r.forecast_kwh,r.stamps_at,e?.states["switch.sem_energy_plan_actuation"]?.state,e?.states["sensor.sem_night_start_time"]?.state,e?.language].join("|"),n="function"==typeof semLocalize;(o!==this._lastKey||n&&!this._localizeReady)&&(this._lastKey=o,this._lang=e?.language,this._localizeReady=n,this.requestUpdate())}get hass(){return this._hass}_liveState(e,t){if(!e||"battery"===e.kind)return null;if("fits"!==e.status)return"reactive";const s=Date.now();let i=null,r=!1;for(const a of Array.isArray(t)?t:[]){if(a.id!==e.id)continue;const t=Date.parse(a.start),o=Date.parse(a.end);if(Number.isFinite(t)&&Number.isFinite(o)){if(r=!0,t<=s&&s<o)return"now";t>s&&(null===i||t<i)&&(i=t)}}return null!==i?"wait:"+i:r?"done":null}_covKey(e){if(!e||"covered"===e)return null;if(e.startsWith("verdict"))return"energy_plan_cov_yields";return{"no plan":"energy_plan_cov_no_plan","stale stamp":"energy_plan_cov_stale","outside span":"energy_plan_cov_outside","not in plan":"energy_plan_cov_not_in_plan","actuation off":"energy_plan_cov_actuation_off","nothing planned":"energy_plan_cov_nothing_planned"}[e]||"energy_plan_cov_unreadable"}_covChip(e){const t=this._covKey(e);return t?W`<span class="chip chip-reactive"
             title="${this._t("energy_plan_reactive_tip")} — ${this._t(t)}"
-            >${this._t("energy_plan_reactive")} · ${this._t(t)}</span>`:K}_liveChip(e){if(!e)return K;if("now"===e)return W`<span class="live now">▶ ${this._t("energy_plan_live_now")}</span>`;if(e.startsWith("wait:")){const t=this._hm(new Date(Number(e.slice(5))).toISOString());return W`<span class="live wait">${this._format("energy_plan_live_wait",{time:t})||t}</span>`}return"done"===e?W`<span class="live done">${this._t("energy_plan_live_done")}</span>`:W`<span class="live react">${this._t("energy_plan_live_reactive")}</span>`}_hm(e){return e?ue(e,this._hass?.config?.time_zone||void 0):"—"}_demandName(e,t,s){return function(e,t,s,i,r){if(e)return e;const a=String(t||"").split(":")[0];return r(i[s]||i[a]||i.load)}(e,t,s,Xt,e=>this._t(e))}_format(e,t){let s=this._t(e);if(!s||s===e)return null;for(const[e,i]of Object.entries(t||{}))s=s.replace(new RegExp("\\{"+e+"\\}","g"),i);return s}_runs(e,t,s,i){const r=[];for(const t of e){const e=i(t),s=Date.parse(t.start),a=Date.parse(t.end);if(!Number.isFinite(s)||!Number.isFinite(a))continue;const o=r[r.length-1];o&&o.v===e&&Math.abs(o.endMs-s)<1e3?o.endMs=a:r.push({v:e,startMs:s,endMs:a})}return r.map(e=>({v:e.v,left:(e.startMs-t)/s*100,width:(e.endMs-e.startMs)/s*100}))}_modeChip(e){return W`<span class="chip ${e?"chip-active":""}"
+            >${this._t("energy_plan_reactive")} · ${this._t(t)}</span>`:K}_liveChip(e){if(!e)return K;if("now"===e)return W`<span class="live now">▶ ${this._t("energy_plan_live_now")}</span>`;if(e.startsWith("wait:")){const t=this._hm(new Date(Number(e.slice(5))).toISOString());return W`<span class="live wait">${this._format("energy_plan_live_wait",{time:t})||t}</span>`}return"done"===e?W`<span class="live done">${this._t("energy_plan_live_done")}</span>`:W`<span class="live react">${this._t("energy_plan_live_reactive")}</span>`}_hm(e){return e?ue(e,this._hass?.config?.time_zone||void 0):"—"}_demandName(e,t,s){return function(e,t,s,i,r){if(e)return e;const a=String(t||"").split(":")[0];return r(i[s]||i[a]||i.load)}(e,t,s,Xt,e=>this._t(e))}_format(e,t){let s=this._t(e);if(!s||s===e)return null;for(const[e,i]of Object.entries(t||{}))s=s.replace(new RegExp("\\{"+e+"\\}","g"),i);return s}_runs(e,t,s,i){const r=[];for(const[t,s]of e.entries()){const e=i(s,t),a=Date.parse(s.start),o=Date.parse(s.end);if(!Number.isFinite(a)||!Number.isFinite(o))continue;const n=r[r.length-1];n&&n.v===e&&Math.abs(n.endMs-a)<1e3?n.endMs=o:r.push({v:e,startMs:a,endMs:o})}return r.map(e=>({v:e.v,left:(e.startMs-t)/s*100,width:(e.endMs-e.startMs)/s*100}))}_modeChip(e){return W`<span class="chip ${e?"chip-active":""}"
             title="${this._t(e?"energy_plan_active_note":"energy_plan_shadow_note")}">${this._t(e?"energy_plan_active":"energy_plan_shadow")}</span>`}_docsLink(e="actuation"){return W`<a class="docs-link" href="${Zt[e].docs}" target="_blank"
             rel="noopener" title="${this._t("config_docs")}">
             <ha-icon icon="mdi:book-open-variant" style="--mdc-icon-size:13px"></ha-icon>
@@ -5025,7 +5025,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     <div class="legend">
                         <span class="key"><i class="sw tmw-sun-key"></i>${this._t("energy_plan_legend_surplus")}</span>
                         <span class="key"><i class="sw cheapkey"></i>${this._t("energy_plan_legend_cheap")}</span>
-                        <span class="key"><i class="sw" style="background:#f06292"></i>${this._t("energy_plan_legend_battery_charge")}</span>
+                        ${p.length>1?W`<span class="key"><i class="sw" style="background:#f06292"></i>${this._t("energy_plan_legend_battery_charge")}</span>`:K}
                     </div>
                     <div class="idle">
                         ☀ ${(e.forecast_kwh||0).toFixed(1)} kWh ·
@@ -5106,7 +5106,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                 ${null!==u?W`
                     <div class="nowline" style="left:${u}%"></div>`:K}
             </div>
-        `;let f=a.filter(e=>0===new Date(e.start).getMinutes());f.length||(f=a);const v=Math.max(1,Math.ceil(f.length/8)),y=f.filter((e,t)=>t%v===0).map(e=>({left:(Date.parse(e.start)-n)/c*100,text:this._hm(e.start)})).filter(e=>e.left<=94),b=this._runs(a,n,c,e=>(e.home_grid_w||0)<=1),x=s.takeover?this._format("energy_plan_takeover",{time:this._hm(s.takeover)}):this._t("energy_plan_all_night"),$=s.takeover?W`
+        `;let f=a.filter(e=>0===new Date(e.start).getMinutes());f.length||(f=a);const v=Math.max(1,Math.ceil(f.length/8)),y=f.filter((e,t)=>t%v===0).map(e=>({left:(Date.parse(e.start)-n)/c*100,text:this._hm(e.start)})).filter(e=>e.left<=94),b=function(e){if(!Array.isArray(e))return null;const t=new Set;for(const s of e){if(!Array.isArray(s))continue;const e=Number(s[0]),i=Number(s[1]);if(Number.isInteger(e)&&Number.isInteger(i))for(let s=e;s<=i;s++)t.add(s)}return t}(s.batt_runs),x=this._runs(a,n,c,(e,t)=>{return s=e,i=b?b.has(t):void 0,(s&&s.home_grid_w||0)>1?"grid":void 0===i||i?"batt":"sun";var s,i}),$=new Set(x.map(e=>e.v)),w=!1!==s.has_battery,k=w?s.takeover?this._format("energy_plan_takeover",{time:this._hm(s.takeover)}):this._t("energy_plan_all_night"):"",S=w?s.takeover?W`
                 <ha-icon icon="mdi:transmission-tower"
                          style="--mdc-icon-size:12px;color:#488fc2"></ha-icon>
                 <span>${this._hm(s.takeover)}</span>
@@ -5114,7 +5114,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                 <ha-icon icon="mdi:home-battery-outline"
                          style="--mdc-icon-size:12px;color:#4db6ac"></ha-icon>
                 <span>${this._t("energy_plan_all_night_short")}</span>
-              `,w=fe(this._hass),k=Number(s.total_cost),S=Number.isFinite(k)?`${this._t("energy_plan_est")} ${k.toFixed(2)} ${w}`:null,C=!1!==s.fits,z={};for(const e of o)(z[e.id]=z[e.id]||[]).push(e);return W`
+              `:K,C=fe(this._hass),z=Number(s.total_cost),M=Number.isFinite(z)?`${this._t("energy_plan_est")} ${z.toFixed(2)} ${C}`:null,D=!1!==s.fits,E={};for(const e of o)(E[e.id]=E[e.id]||[]).push(e);return W`
             <ha-card>
                 <div class="wrap">
                     <div class="head">
@@ -5128,12 +5128,12 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
 
                     <div class="verdict">
                         <ha-icon
-                            icon="${C?"mdi:check-circle":"mdi:alert-circle-outline"}"
-                            style="--mdc-icon-size:15px;color:${C?"#8DC892":"#f06292"}"></ha-icon>
+                            icon="${D?"mdi:check-circle":"mdi:alert-circle-outline"}"
+                            style="--mdc-icon-size:15px;color:${D?"#8DC892":"#f06292"}"></ha-icon>
                         <span class="vtext">
-                            ${C?this._t("energy_plan_fits"):this._t("energy_plan_yields")}
+                            ${D?this._t("energy_plan_fits"):this._t("energy_plan_yields")}
                         </span>
-                        ${S?W`<span class="cost">${S}</span>`:K}
+                        ${M?W`<span class="cost">${M}</span>`:K}
                     </div>
 
                     <div class="strip ${d?"":"nostrip"}">
@@ -5145,28 +5145,29 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                                     <span class="tick ${e.left<4?"first":""}"
                                           style="left:${e.left}%">${e.text}</span>
                                 `)}
-                                ${a.map(e=>{const t=(Date.parse(e.start)-n)/c*100,s=(Date.parse(e.end)-Date.parse(e.start))/c*100;if(!Number.isFinite(t)||!Number.isFinite(s))return K;const i=null===e.price||void 0===e.price?"—":`${e.price} ${w}`,r=`${this._hm(e.start)}–${this._hm(e.end)} · ${i}`+(e.cheap?` · ${this._t("energy_plan_legend_cheap")}`:"");return W`<div class="slotcell" title="${r}"
+                                ${a.map(e=>{const t=(Date.parse(e.start)-n)/c*100,s=(Date.parse(e.end)-Date.parse(e.start))/c*100;if(!Number.isFinite(t)||!Number.isFinite(s))return K;const i=null===e.price||void 0===e.price?"—":`${e.price} ${C}`,r=`${this._hm(e.start)}–${this._hm(e.end)} · ${i}`+(e.cheap?` · ${this._t("energy_plan_legend_cheap")}`:"");return W`<div class="slotcell" title="${r}"
                                         style="left:${t}%;width:${s}%"></div>`})}
                             </div>
                             <div class="stat axis"></div>
                         `:K}
 
                         <div class="lbl">
-                            <ha-icon icon="mdi:home-battery" style="--mdc-icon-size:13px;color:#4db6ac"></ha-icon>
+                            <ha-icon icon="${w?"mdi:home-battery":"mdi:home"}"
+                                     style="--mdc-icon-size:13px;color:${w?"#4db6ac":"#5BC8D8"}"></ha-icon>
                             <span class="name">${this._t("energy_plan_home")}</span>
                         </div>
                         ${d?W`
                             <div class="track">
                                 ${m}
-                                ${b.map(e=>W`
-                                    <div class="seg ${e.v?"batt":"grid"}"
+                                ${x.map(e=>W`
+                                    <div class="seg ${e.v}"
                                          style="left:${e.left}%;width:${e.width}%"></div>
                                 `)}
                             </div>
                         `:K}
-                        <div class="stat" title="${x}">${$}</div>
+                        <div class="stat" title="${k}">${S}</div>
 
-                        ${r.map(e=>{const t=Yt[e.kind]||Yt.load,r=Jt[e.status]||Jt.yields,a=z[e.id]||[],l=e.label||this._t(t.label),p="fits"===e.status?`${(e.planned_kwh||0).toFixed(1)} kWh`:`${(e.planned_kwh||0).toFixed(1)}/${(e.needed_kwh||0).toFixed(1)} kWh`,h=[l,"comfort"===e.kind?this._t("energy_plan_comfort_tip"):null,a.map(e=>`${this._hm(e.start)}–${this._hm(e.end)} · ${(e.power_w/1e3).toFixed(1)} kW${null!=e.price?` · ${e.price}`:""}`).join("\n")||null,`${(e.planned_kwh||0).toFixed(1)} / ${(e.needed_kwh||0).toFixed(1)} kWh · ${this._t("energy_plan_est")} ${(e.est_cost||0).toFixed(2)} ${w}`,e.note||null].filter(Boolean).join("\n"),_=i?this._liveState(e,o):null,g=e.note||("fits"!==e.status?this._format("energy_plan_yield_reason",{planned:(e.planned_kwh||0).toFixed(1),needed:(e.needed_kwh||0).toFixed(1)}):null);return W`
+                        ${r.map(e=>{const t=Yt[e.kind]||Yt.load,r=Jt[e.status]||Jt.yields,a=E[e.id]||[],l=e.label||this._t(t.label),p="fits"===e.status?`${(e.planned_kwh||0).toFixed(1)} kWh`:`${(e.planned_kwh||0).toFixed(1)}/${(e.needed_kwh||0).toFixed(1)} kWh`,h=[l,"comfort"===e.kind?this._t("energy_plan_comfort_tip"):null,a.map(e=>`${this._hm(e.start)}–${this._hm(e.end)} · ${(e.power_w/1e3).toFixed(1)} kW${null!=e.price?` · ${e.price}`:""}`).join("\n")||null,`${(e.planned_kwh||0).toFixed(1)} / ${(e.needed_kwh||0).toFixed(1)} kWh · ${this._t("energy_plan_est")} ${(e.est_cost||0).toFixed(2)} ${C}`,e.note||null].filter(Boolean).join("\n"),_=i?this._liveState(e,o):null,g=e.note||("fits"!==e.status?this._format("energy_plan_yield_reason",{planned:(e.planned_kwh||0).toFixed(1),needed:(e.needed_kwh||0).toFixed(1)}):null);return W`
                                 <div class="lbl ${_?"col":""}" title="${h}">
                                     <div class="lname">
                                         <ha-icon icon="${t.icon}" style="--mdc-icon-size:13px;color:${t.color}"></ha-icon>
@@ -5199,8 +5200,9 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
 
                     ${d?W`
                         <div class="legend">
-                            <span class="key"><i class="sw batt"></i>${this._t("energy_plan_legend_battery")}</span>
-                            <span class="key"><i class="sw grid"></i>${this._t("energy_plan_legend_grid")}</span>
+                            ${$.has("sun")?W`<span class="key"><i class="sw sun"></i>${this._t("energy_plan_legend_sun")}</span>`:K}
+                            ${$.has("batt")?W`<span class="key"><i class="sw batt"></i>${this._t("energy_plan_legend_battery")}</span>`:K}
+                            ${$.has("grid")?W`<span class="key"><i class="sw grid"></i>${this._t("energy_plan_legend_grid")}</span>`:K}
                             <span class="key"><i class="sw cheapkey"></i>${this._t("energy_plan_legend_cheap")}</span>
                         </div>
                     `:W`
@@ -5432,6 +5434,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
             }
             .seg.batt { background: #4db6ac; }
             .seg.grid { background: #488fc2; }
+            .seg.sun { background: #ff9800; }
             .seg.run { top: 1px; bottom: 1px; }
             .tick {
                 position: absolute; top: 0;
@@ -5470,6 +5473,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
             }
             .sw.batt { background: #4db6ac; }
             .sw.grid { background: #488fc2; }
+            .sw.sun { background: #ff9800; }
             .sw.cheapkey { background: rgba(141,200,146,0.35); }
             .warn {
                 display: flex; align-items: center; gap: 5px;

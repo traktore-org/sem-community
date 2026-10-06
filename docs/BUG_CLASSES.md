@@ -3372,7 +3372,35 @@ on its own mode, dropped the switch, and five re-asserts later SEM filed
 `charger_actuation_failed` ("enable switch will not stay on") against healthy hardware — while the
 relay cycled once per coordinator cycle from UNDERNEATH #940's anti-cycle floor, whose clocks arm
 only on SEM's own operations and so never saw the box's opens.
-**Where it lives:** `coordinator/ev_taper_detector.py` (`_declining_phase`, `_full_confirm_count`,
+**Live catch (#820, 05.10.2026, ArneGollin1987's Sungrow — mkaiser template number):**
+`ChargePacingWriter._taken` — the verdict on ONE write (`last_written_w`) — was what `apply`
+published as the pacing action. One lost write (a Modbus error, a template script still running)
+left `write_refused` on the Battery tab while the register sat at exactly the cap SEM wanted: the
+re-solve came back to the register's value, nothing was left to write, and the old verdict was all
+the action could say. The same shape on the first cycle after a restart: a cap from disk that is not
+on the register was rewritten even when the register already held the wish — a write equal to the
+register never reads as taken, so a healthy inverter was "refusing" 90 s later. Closure: a register
+inside the writer's own deadband of the CURRENT cap is `held`. The verdict itself is kept — the
+02.10 rule that a refused cap is not sent again is keyed to it, and a register at the wish says
+nothing about whether it takes writes (review 2: retiring it re-sent refused caps every 5 minutes
+on a register that never takes one). Only the first cycle after adoption, where no write of this
+lifetime was judged, takes the register's value as the cap (`_take_register`, no write). A
+register away from the wish still says `write_refused`. Guard:
+`tests/test_820_refusal_belongs_to_its_write.py` — over seeded days of random caps and lost writes,
+`write_refused` never appears on a cycle where the register holds the wish, with liveness twins
+(refusals do happen, and a refused verdict does meet a register at the wish); the refused cap is
+still not re-sent; the restart case writes nothing.
+Siblings assessed: the battery adapters' `write_not_taken_strikes` (#915) raise a Repair keyed to
+the entity, and a same-value skip is no evidence either way, so the raise stays as it is — its
+install-wide clear is the known residual, class 84 (4). **Left for Guido:** (1) a refused cap is
+never sent again while the wish stays near it (the 02.10 rule, pinned by
+`test_a_refused_cap_is_not_retried_with_a_slightly_different_value`) — one lost Modbus write keeps
+the old cap until the wish moves; a single retry after `PACING_MIN_WRITE_INTERVAL_S` would close
+it, a policy call. (2) `coordinator/export_guard.py::report_refused` — one transient
+`export control failed` holds `refused` for the whole closed-meter window with no retry: one
+write's verdict standing for the window.
+**Where it lives:** `coordinator/charge_pacing.py::ChargePacingWriter.apply` (`_taken` vs the
+current cap), `coordinator/ev_taper_detector.py` (`_declining_phase`, `_full_confirm_count`,
 `_estimate_stop_bound`), `coordinator/ev_soc_need.py::estimate_stop_step`,
 `coordinator.py::_announce_estimate_stop`, `coordinator/charger_adapters/base.py::ensure_enabled`
 with `devices/base.py::CurrentControlDevice._session_active`. Sibling assessed and safe: the
@@ -5552,3 +5580,13 @@ Refs #1055 #716 #897 #913.
 **Sweep question:** for every part a card builds — a chart, a watcher, a timer, a subscription — what builds it again when HA puts the same card back on the page?
 **Left for Guido:** (1) a range picked in the period selector (Costs tab) is worked out once, at the click; on return, and while you stay, the chart shows that window, so "Today" picked yesterday still shows yesterday. A fix moves the selector's period maths into one helper the chart can roll. (2) Redrawing rebuilds the chart: a series hidden in the legend shows again and a hover tooltip drops (now every 5 minutes for power, battery and forecast too). `chart.update()` in place would keep them. (3) The source check knows the ways cards free a part today; it does not see `clearTimeout`, `cancelAnimationFrame` or observers held in a list, and it counts a call inside a `setTimeout` or `.then` as made on return.
 Refs #1058 #541 #476 #457.
+
+### 124. A battery shown because nothing said it was missing — a saved size and an empty meter taken as proof — GUARDED
+**Symptom:** on a home with no battery the Energy Plan card drew one (#1063, lostcontrol, 2.2.0-beta.11, Fronius). Today: the sunny hours wore the "battery covers home" colour. Tomorrow: a "Battery" row filled from 0.0 to 7.4 kWh. Load planning was right; only what the card showed was wrong.
+**Root shape:** two claims that a battery exists, neither from a fact about a battery. (a) A size: `battery_capacity_kwh` answered the built-in 15 kWh, and the settings step saves a size on every install, so "has a size" was true everywhere. The tomorrow preview walked that pack. (b) A colour by elimination: the card painted a slot "battery" when the meter carried none of the house. A sun slot carries none either (the ledger sets its net draw to 0), so every home's sunny hours read as battery — the battery-less home only made it plain.
+**Where it lives:** the capacity property (tomorrow's battery row, the plan's battery flag, `forecast_surplus_kwh`, which took a 15 kWh empty battery's need off a battery-less home's surplus — **swept by the source**); the plan card's Home row colour, icon, hand-over time and legend; tomorrow's "battery charging" key; the battery-night recorder, which sealed nights of zeros on a battery-less home and could put "drained 0.0 kWh overnight — the promised refill never came" on the card (**swept**: no battery, no record; the backfill service now says so); `battery_redirect_w`, where a size of 0 read as "full" and gave the car the whole charge of a battery added since the last reload (**swept**: no size, no redirect; a saved size is at least 1 kWh, so only the ABSENT answer is 0).
+**Closure:** a battery is claimed only from a fact about one. The property returns 0 when the battery module is ABSENT (#923); UNKNOWN keeps the old answer, so a slow boot never hides a real battery. The plan marks a slot `batt` only where its walk drew the battery for the house, and says `has_battery`; the entity carries the marks as index runs (`batt_runs` — a flag per slot pushed a 15-minute day over the recorder budget). The card colours each slot grid / battery / sun through `util/plan-cover.js` and shows no battery icon, hand-over time or battery legend without them. A plan stamped before the fix has no runs (`None`, not `[]`) and keeps the old colours until the next stamp, so a battery home's night is not drawn as sun after the update.
+**Guard:** `tests/test_1063_plan_card_no_battery.py` — the property over ABSENT / UNKNOWN / PRESENT; a real plan stamped at 14:00 with and without a battery (no `batt` anywhere without one; sunny hours never `batt` with one; every evening hour the battery covers is marked); the quiet night carries the flag; the entity carries the runs and the flag, an old plan carries neither, and the runs cost a 96-slot day at most 12 bytes; tomorrow has no curve without a battery and keeps one with it; a saved 15 kWh on a battery-less home walks no battery today or tomorrow; the ready check still decides when plans run exactly as before; a battery-less night alone earns a review row, and the recorder records nothing when the battery is ABSENT; a size of 0 redirects nothing. (The backfill service's log line has no test: there is no harness for the service handlers.) `dashboard/card/test/plan-cover.test.js` pins the colour rule, the runs, the old-plan rule and the card's use of them. Four mutants of the fix fail the Python file.
+**Sweep question:** for every place that shows a part — is it shown because something says the part is there, or because nothing says it is not?
+**Left for Guido:** (0) the plan's ready check (`_energy_plan_tick`) still asks the saved key: on a battery-less home the SOC reads "unavailable" every cycle, so one that saved the Settings step (15 kWh) never stamps a plan — the card stays "pending" and nothing is planned. Asking the module verdict there would start plans (and plan actuation) on those homes: a control change, not part of a display fix. (1) an install whose Energy Dashboard could not be read is UNKNOWN and still walks the 15 kWh default — by design (#925). (2) Other readers of the saved key keep their own defaults (`build_view.py` 15, `energy_calculator.py` 15, the battery scheduler 10, the battery ETA 15.0, the battery runtime 0): on an ABSENT home they sit in battery paths that do not run or show nothing, so they were left. One of them pairs with the property: `decide.py` sizes the redirect from `build_view.py`'s saved key while the EV budget reads the property, so in the minutes between adding a battery and the reload (still ABSENT) the two disagree (15 vs 0). They already disagreed whenever the size was auto-detected; one source for both is the fix. (3) A slot with no house draw and no sun (a house profile of 0 W at night) is drawn as sun.
+Refs #1063 #923 #925 #857.

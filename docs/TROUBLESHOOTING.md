@@ -943,7 +943,8 @@ Press **Diagnose** in the Battery section of the Configuration tab. The
 - `register` — what the limit entity holds now, and its min, max and step.
 - `writer` — what SEM last sent, and whether the register ever showed it.
 - `decision` — the cap SEM wants and its `action`: `held` is fine;
-  `write_refused` means the register did not move for 90 seconds;
+  `write_refused` means the register did not show SEM's last value within
+  90 seconds and is still away from the cap SEM wants now;
   `applied_differs` means the inverter took the write as another number.
 - `foreign_log` — lines other integrations logged about that entity.
 

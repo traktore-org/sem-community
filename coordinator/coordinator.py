@@ -1420,7 +1420,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
     @property
     def battery_capacity_kwh(self) -> float:
-        """Battery capacity in kWh — auto-detected or from config (#84)."""
+        """Battery capacity in kWh — auto-detected or from config (#84).
+
+        (#1063) 0 when the install has no battery (module ABSENT, #923).
+        The settings step saves a capacity for every install and the
+        fallback below is a default, so neither proves a battery: read as
+        one, the plan walked a 15 kWh pack that does not exist and the card
+        drew it. UNKNOWN keeps the old answer — a slow boot must never hide
+        a real battery.
+        """
+        if presence_of(self).get(Module.BATTERY) is Presence.ABSENT:
+            return 0.0
         val = self.config.get("battery_capacity_kwh")
         if val is not None and val > 0:
             return float(val)
@@ -9206,6 +9216,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         from .battery_night import BatteryNightTracker, Sample
 
+        # (#1063) No battery module, no battery night. With the battery
+        # ABSENT every flow reads 0 and the SOC its 0.0 default, so the
+        # nights sealed as trainable and the plan card's review said
+        # "drained 0.0 kWh overnight — the promised refill never came"
+        # about a battery that does not exist.
+        if presence_of(self).get(Module.BATTERY) is Presence.ABSENT:
+            return
         tr = getattr(self, "_battery_night", None)
         if tr is None:
             tr = self._battery_night = BatteryNightTracker(
@@ -10149,6 +10166,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 bug wearing this fix. ``home_grid_w > 0`` is the takeover
                 made visible per slot — the hour the battery stopped
                 covering the house on its own.
+
+                (#1063) ``home_grid_w == 0`` alone does not say WHO covers
+                the house: a sun slot has no net draw at all. ``batt`` is
+                set only where the walk really drew the battery for the
+                house, so the card never paints a battery the plan did not
+                use — on a home with none, never. The entity carries the
+                marks as index runs (``sensor._batt_runs``), not per slot.
                 """
                 return [{
                     "start": s.start.isoformat(),
@@ -10163,6 +10187,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "home_w": round(s.home_w, 1),
                     "soc_kwh": round(s.soc_kwh, 2),
                     "home_grid_w": round(s.home_grid_w, 1),
+                    **({"batt": True} if s.home_batt_kwh > 1e-6 else {}),
                 } for s in rows]
 
             def _quiet_answer(arb=None, fsell=None, ledger_rows=(), self_cons=None):
@@ -10219,6 +10244,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "forecast_sell": fsell,
                     "self_consumption": self_cons,
                     "battery_fleet_partial": partial_note,
+                    # (#1063) whether this ledger walked a battery at all.
+                    "has_battery": cap_kwh > 0,
                     # (night 3, finding 3) a re-stamped night must be
                     # distinguishable from the first answer.
                     "replan_cause": replan_cause,
@@ -10510,7 +10537,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 tag, len(demands), len(slots), plan.total_cost, plan.fits,
                 real_ev,
             )
-            if plan.takeover is not None:
+            if cap_kwh <= 0:
+                # (#1063) no battery: there is nothing to hand over.
+                _LOGGER.info("ENERGY-PLAN (%s): no home battery — the house "
+                             "runs on the sun or the grid", tag)
+            elif plan.takeover is not None:
                 _LOGGER.info(
                     "ENERGY-PLAN (%s): battery carries home until "
                     "%s — the grid takes over from there "
@@ -10587,6 +10618,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # finding #3). Never silently absent: a degraded plan that
                 # reads like a healthy one is what made this bug invisible.
                 "battery_fleet_partial": partial_note,
+                # (#1063) False when the ledger walked no battery: the card
+                # then draws no battery icon and no hand-over time.
+                "has_battery": cap_kwh > 0,
                 # (night 3, finding 3) a re-stamped night must be
                 # distinguishable from the first answer.
                 "replan_cause": replan_cause,
