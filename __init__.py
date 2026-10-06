@@ -4704,6 +4704,8 @@ async def _async_register_services(
             "min_on_time_min", "min_off_time_min",
             # (#705) thermal comfort band
             "comfort_entity", "comfort_target", "comfort_offset", "comfort_limit",
+            # (#1020) a Schedule helper that sets the mode while it is on
+            "schedule_entity", "schedule_mode",
         ):
             # (#559/#620) goal engine — persisted + applied live
             registry = getattr(coordinator, "_device_registry", None)
@@ -4719,6 +4721,25 @@ async def _async_register_services(
                     translation_domain=DOMAIN,
                     translation_key="device_not_found",
                     translation_placeholders={"device_id": device_id},
+                )
+            # (#1020) a mode the device knows, or empty to clear; a Schedule
+            # helper, or empty to clear. Anything else would store and then
+            # silently be no schedule.
+            if prop == "schedule_mode" and str(value) not in (
+                "", "off", "peak_only", "surplus"
+            ):
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="invalid_device_property",
+                    translation_placeholders={"property": f"{prop}={value}"},
+                )
+            if prop == "schedule_entity" and str(value) and not str(
+                value
+            ).startswith("schedule."):
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="invalid_device_property",
+                    translation_placeholders={"property": f"{prop}={value}"},
                 )
             if prop == "top_up_policy" and str(value) not in (
                 "solar_only", "cheap_hours"
@@ -4794,6 +4815,8 @@ async def _async_register_services(
                     "min_on_time_min", "min_off_time_min",
                     # (#705) thermal comfort band
                     "comfort_entity", "comfort_target", "comfort_offset", "comfort_limit",
+                    # (#1020) a Schedule helper that sets the mode while on
+                    "schedule_entity", "schedule_mode",
                 ]),
                 vol.Required("value"): cv.string,
             }),
@@ -5273,6 +5296,8 @@ async def _async_register_phase_services(
                 "battery_eligible_overnight",
                 # (#705) thermal comfort band
                 "comfort_entity", "comfort_target", "comfort_offset", "comfort_limit",
+                # (#1020) a Schedule helper that sets the mode while on
+                "schedule_entity", "schedule_mode",
             )
             if k in call.data
         }
@@ -5348,6 +5373,11 @@ async def _async_register_phase_services(
             ),
             vol.Optional("battery_assist_enabled"): cv.boolean,
             vol.Optional("battery_eligible_overnight"): cv.boolean,
+            # (#1020) a Schedule helper that sets the mode while it is on
+            vol.Optional("schedule_entity"): vol.Any(
+                "", vol.All(cv.string, vol.Match(r"^schedule\."))),
+            vol.Optional("schedule_mode"): vol.In(
+                ["", "off", "peak_only", "surplus"]),
         }),
         supports_response=SupportsResponse.OPTIONAL,
     )

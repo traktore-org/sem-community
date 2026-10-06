@@ -345,6 +345,23 @@ register_surplus_device:
         number:
           min: 0
           max: 100000
+    schedule_entity:
+      name: Schedule
+      description: "(#1020) Optional Home Assistant Schedule helper. While it is on, the device runs in Schedule Mode; when it ends, its own mode applies again. Switch devices only."
+      required: false
+      selector:
+        entity:
+          domain: schedule
+    schedule_mode:
+      name: Schedule Mode
+      description: "The mode while the schedule is on: off (SEM keeps its hands off; a run SEM started is stopped), peak_only or surplus."
+      required: false
+      selector:
+        select:
+          options:
+            - "off"
+            - peak_only
+            - surplus
 
 unregister_surplus_device:
   name: Unregister Surplus Device

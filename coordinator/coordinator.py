@@ -68,6 +68,7 @@ from .units import energy_state_to_kwh, power_state_to_watts
 from .distance_units import distance_to_km
 from .ev_availability import operational_ev_connected, operational_night_target
 from .departure import departure_for, departure_signature, late_charge_s
+from ..consts.ev_charge_modes import effective_charge_mode_for as _ev_mode_now
 from .surplus_availability import SurplusAvailability
 from .sensor_reader import SensorReader
 from .energy_calculator import EnergyCalculator
@@ -1308,7 +1309,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         an opt-in.
         """
         from ..consts.ev_charge_modes import mode_allows_night_charging
-        return mode_allows_night_charging(self.config, charger_cfg)
+        return mode_allows_night_charging(
+            self.config, charger_cfg, getattr(self, "hass", None))
 
     def _mode_uses_tariff(self, charger_cfg: dict) -> bool:
         """Does this charger's mode defer to tariff-cheap windows?
@@ -8775,7 +8777,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     departure_signature(cfg, self.config),  # (#1023)
                     bool(cfg.get("ev_plan_one_block", False)),
                     late_charge_s(cfg),
-                    str(cfg.get("charge_mode") or ""),
+                    # (#1020) the mode it runs in, a schedule's included, so
+                    # a schedule switching it re-plans (no VPP: per cycle)
+                    _ev_mode_now(getattr(self, "hass", None), self.config, cfg),
                     _full,
                 ))
             except Exception:  # noqa: BLE001 — one odd charger cfg is not fatal
