@@ -2749,8 +2749,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 # runtime provider's detection (it missed Octopus and
                 # Amber despite the dropdown label promising them).
                 from .tariff.tariff_provider import DynamicTariffProvider
+                # (#1051) ENTSO-e is left to the runtime, which pairs its
+                # current-price sensor with the one carrying the curve.
+                entsoe = DynamicTariffProvider.entsoe_entity_ids(self.hass)
                 for state in self.hass.states.async_all("sensor"):
                     eid = state.entity_id
+                    if eid in entsoe:
+                        continue
                     if DynamicTariffProvider.is_price_entity_candidate(eid):
                         user_input["dynamic_tariff_entity"] = eid
                         _LOGGER.info("Auto-detected dynamic tariff entity: %s", eid)
