@@ -137,7 +137,7 @@ Growatt, and any inverter that exposes watt-level sensors to HA.
 OCPP-compatible, Ohme, Peblar, V2C Trydan, Alfen Eve, Blue Current, OpenEVSE,
 and any charger with a controllable number entity.
 
-**Solar forecasts (optional):** Solcast, Forecast.Solar, Open-Meteo Solar Forecast. Required for smart
+**Solar forecasts (optional):** Solcast, Forecast.Solar, Open-Meteo Solar Forecast, Helios Forecast. Required for smart
 night charging and battery charge scheduling.
 
 > **Easee note:** Easee's charging power sensor is disabled by default in HA.
@@ -629,12 +629,13 @@ must be stable for 60 seconds before a notification fires).
 ### Forecast settings
 
 SEM reads a solar forecast for smart night charging, the battery scheduler
-and the recommendation tips. **Three integrations are supported**, and SEM
+and the recommendation tips. **Four integrations are supported**, and SEM
 auto-detects them in this order:
 
 1. [Solcast PV Solar](https://github.com/BJReplay/ha-solcast-solar)
 2. [Forecast.Solar](https://www.home-assistant.io/integrations/forecast_solar/)
 3. [Open-Meteo Solar Forecast](https://github.com/rany2/ha-open-meteo-solar-forecast)
+4. [Helios Forecast](https://github.com/ReikanYsora/Helios-Forecast)
 
 The first one installed wins. If you run several side by side, choose one
 explicitly with **Solar forecast source** below — the picker offers only the
@@ -643,12 +644,12 @@ integrations actually installed on your system.
 > There is **no** support for pointing SEM at your own forecast sensor.
 > This section used to imply otherwise, which is what made #819 look like a
 > missing setting rather than a missing feature. If you use a forecast
-> integration that is not one of the three, please open an issue — a named
+> integration that is not one of the four, please open an issue — a named
 > integration is a data row, not a rewrite.
 
 | Setting | Default | What it does and when to change it |
 |---------|---------|-------------------------------------|
-| Solar forecast source | Auto | Which forecast **integration** SEM reads. Auto walks Solcast → Forecast.Solar → Open-Meteo and takes the first one installed. Choose one explicitly if you run several side by side — SEM then uses that one and falls back to auto-detection only if it is no longer installed (the fallback is recorded in diagnostics, never silent). |
+| Solar forecast source | Auto | Which forecast **integration** SEM reads. Auto walks Solcast → Forecast.Solar → Open-Meteo → Helios and takes the first one installed. Choose one explicitly if you run several side by side — SEM then uses that one and falls back to auto-detection only if it is no longer installed (the fallback is recorded in diagnostics, never silent). |
 | Price forecast entity | Auto | *(Dynamic tariffs only.)* The sensor carrying hourly **price** forecasts. This is a tariff setting, not a solar one — it used to be listed here as "Forecast entity", which is what made #819 look like a missing override. |
 | Weather entity | Auto | Feeds the weather card and forecast dampening. Auto-generated `weather.forecast_*` subentities are skipped (they lack the needed attributes) — any real `weather.*` entity is preferred. |
 
@@ -1049,7 +1050,7 @@ separate from EV night charging.
 
 The scheduler requires:
 
-- A solar forecast integration (Solcast, Forecast.Solar or Open-Meteo Solar Forecast)
+- A solar forecast integration (Solcast, Forecast.Solar, Open-Meteo Solar Forecast or Helios Forecast)
 - An inverter that supports forced battery charging via a HA service or
   number entity
 - The battery charge scheduler enabled in the options flow

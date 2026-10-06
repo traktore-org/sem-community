@@ -49,7 +49,7 @@ not created, so nothing shows a live number that changes nothing:
 |---|---|
 | Cheap / expensive price thresholds, next cheap window | the tariff mode is dynamic |
 | Export guard (switches, holds, state) | you name an export-limit entity, or SEM finds one on the inverter's device |
-| Forecast rows, forecast spending, charge pacing | a forecast entity is set, or SEM finds Solcast, Forecast.Solar or Open-Meteo |
+| Forecast rows, forecast spending, charge pacing | a forecast entity is set, or SEM finds Solcast, Forecast.Solar, Open-Meteo or Helios |
 | kWh per kWp and the degradation trend | a plant size (kWp) is set |
 | ROI rows | an investment figure is set |
 
@@ -1631,7 +1631,7 @@ Set tariff mode to "Calendar" for a fixed time-of-use tariff, then pick a HA Sch
 
 ## Solar Forecast
 
-Install [Solcast PV Solar](https://github.com/BJReplay/ha-solcast-solar), [Forecast.Solar](https://www.home-assistant.io/integrations/forecast_solar/) or [Open-Meteo Solar Forecast](https://github.com/rany2/ha-open-meteo-solar-forecast) for forecast-based features:
+Install [Solcast PV Solar](https://github.com/BJReplay/ha-solcast-solar), [Forecast.Solar](https://www.home-assistant.io/integrations/forecast_solar/), [Open-Meteo Solar Forecast](https://github.com/rany2/ha-open-meteo-solar-forecast) or [Helios Forecast](https://github.com/ReikanYsora/Helios-Forecast) for forecast-based features:
 
 - `sensor.sem_forecast_today_kwh` — expected total production today (kWh)
 - `sensor.sem_forecast_tomorrow_kwh` — expected total production tomorrow (kWh)
