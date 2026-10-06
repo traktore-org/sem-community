@@ -18,7 +18,7 @@ from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from ..consts.devices import names_a_reboot
+from ..consts.devices import DEFAULT_LOAD_PHASE, names_a_reboot
 from ..utils.log_gate import log_on_change
 from ..utils.select_option import listed_option
 from ..utils.switch_sense import reads_running, switch_service
@@ -237,6 +237,9 @@ class ControllableDevice(ABC):
         self._enabled = True
         self._managed_externally = False
         self.control_mode = DeviceControlMode.PEAK_ONLY  # Default: peak protection only (#49)
+        # (#1048) the supply phase it sits on — the phase guard sheds a
+        # phase's own loads first. Unknown until the user says.
+        self.phase: str = DEFAULT_LOAD_PHASE
 
         # Power-change cooldown
         self._min_power_change_interval: float = 0.0  # seconds, 0 = disabled

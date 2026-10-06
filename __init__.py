@@ -4704,6 +4704,8 @@ async def _async_register_services(
             "min_on_time_min", "min_off_time_min",
             # (#705) thermal comfort band
             "comfort_entity", "comfort_target", "comfort_offset", "comfort_limit",
+            # (#1048) the supply phase the load sits on
+            "phase",
         ):
             # (#559/#620) goal engine — persisted + applied live
             registry = getattr(coordinator, "_device_registry", None)
@@ -4728,6 +4730,16 @@ async def _async_register_services(
                     translation_key="invalid_device_property",
                     translation_placeholders={"property": f"{prop}={value}"},
                 )
+            # (#1048) L1 / L2 / L3 / 3ph / unknown — a typo must not place a
+            # load on no phase at all
+            if prop == "phase":
+                from .consts.devices import is_load_phase
+                if not is_load_phase(str(value)):
+                    raise ServiceValidationError(
+                        translation_domain=DOMAIN,
+                        translation_key="invalid_device_property",
+                        translation_placeholders={"property": f"{prop}={value}"},
+                    )
             # (#620) normalize the two battery flags to a canonical bool string
             # so the stored dict + live apply agree regardless of "true"/"1"/"on".
             if prop in ("battery_assist_enabled", "battery_eligible_overnight"):
@@ -4794,6 +4806,8 @@ async def _async_register_services(
                     "min_on_time_min", "min_off_time_min",
                     # (#705) thermal comfort band
                     "comfort_entity", "comfort_target", "comfort_offset", "comfort_limit",
+                    # (#1048) the supply phase
+                    "phase",
                 ]),
                 vol.Required("value"): cv.string,
             }),
@@ -5273,6 +5287,8 @@ async def _async_register_phase_services(
                 "battery_eligible_overnight",
                 # (#705) thermal comfort band
                 "comfort_entity", "comfort_target", "comfort_offset", "comfort_limit",
+                # (#1048) the supply phase
+                "phase",
             )
             if k in call.data
         }
@@ -5348,6 +5364,10 @@ async def _async_register_phase_services(
             ),
             vol.Optional("battery_assist_enabled"): cv.boolean,
             vol.Optional("battery_eligible_overnight"): cv.boolean,
+            # (#1048) the supply phase the load sits on
+            vol.Optional("phase"): vol.In(
+                ["L1", "L2", "L3", "3ph", "unknown"]
+            ),
         }),
         supports_response=SupportsResponse.OPTIONAL,
     )

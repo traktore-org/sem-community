@@ -412,6 +412,12 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     isOn: info.is_on || false,
                     isShed: info.is_shed || false,
                     shedReason: info.shed_reason || null,
+                    // (#1048) the phase guard's shed names its phase
+                    shedPhase: info.shed_phase || null,
+                    // (#1048) the supply phase: a load's is the user's goal,
+                    // a charger's is measured (read-only)
+                    phase: (info.goals && info.goals.phase) || info.phase || 'unknown',
+                    phaseMeasured: info.phase_measured === true,
                     // (#780) two axes, two fields. The toggle on this row is
                     // the user's "SEM may touch this load" permission; the
                     // handle is a discovery fact the toggle must not erase.
@@ -605,7 +611,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 </div>
                 ${device.blockedBy ? html`<div style="font-size:13px;color:#ff9800;padding:2px 0 0 28px">&#9203; Waiting for: ${device.blockedBy}</div>` : nothing}
                 ${device.dependsOn.length ? html`<div style="font-size:13px;opacity:0.55;padding:0 0 0 28px">&#8618; ${this._t('requires')}: ${device.dependsOn.join(', ')}</div>` : nothing}
-                ${device.isShed && device.shedReason ? html`<div style="font-size:13px;color:#f44336;padding:2px 0 0 28px">${this._t(shedReasonKey(device.shedReason))}</div>` : nothing}
+                ${device.isShed && device.shedReason ? html`<div style="font-size:13px;color:#f44336;padding:2px 0 0 28px">${(this._t(shedReasonKey(device.shedReason)) || '').replace('{phase}', device.shedPhase || '?')}</div>` : nothing}
                 <div class="device-bottom">
                     <div class="status-dot ${onOff ? 'on' : (device.isShed ? 'shed' : '')}" data-field="status-${device.id}"></div>
                     <span class="dim" data-field="onoff-${device.id}">${onOff ? this._t('on') : (device.isShed ? this._t('shed_label') : this._t('off'))}</span>
@@ -633,6 +639,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                             )}
                         </select>
                     </label>`}
+                    ${isBattery ? nothing : this._renderPhase(device)}
                     <div class="arrows">
                         <button class="arrow-btn" data-action="move-up"   data-device="${device.id}" title="${this._t('move_up')}">&#9650;</button>
                         <button class="arrow-btn" data-action="move-down" data-device="${device.id}" title="${this._t('move_down')}">&#9660;</button>
@@ -651,6 +658,32 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 ${this._goalOpen[device.id] ? this._renderGoalEditor(device) : nothing}
             </div>
         </div>`;
+    }
+
+    /**
+     * (#1048) The supply phase a load sits on — when a phase is over its
+     * limit, the phase guard sheds that phase's loads (and three-phase ones)
+     * first, loads on an unknown phase only after them. A charger's phase is
+     * measured, so it is shown, never set.
+     */
+    _renderPhase(device) {
+        const g = device.goals || {};
+        const phase = g.phase || device.phase || 'unknown';
+        const label = (p) => p === 'unknown' ? this._t('load_phase_unknown')
+            : p === '3ph' ? this._t('load_phase_3ph') : p;
+        const isEv = device.deviceType === 'ev_charger' || device.deviceType === 'ev_charging';
+        if (isEv) {
+            return phase === 'unknown' ? nothing : html`
+                <span class="dim" title="${this._t('load_phase_measured_hint')}">${label(phase)}</span>`;
+        }
+        return html`
+            <label class="toggle-label" title="${this._t('load_phase_tooltip')}">
+                <span class="dim">${this._t('load_phase_label')}</span>
+                <select class="mode-select" data-goal="phase" data-device="${device.id}">
+                    ${['unknown', 'L1', 'L2', 'L3', '3ph'].map(p => html`
+                        <option value="${p}" ?selected="${phase === p}">${label(p)}</option>`)}
+                </select>
+            </label>`;
     }
 
     // ── (#559) goal engine UI — EV-charger look (one merged mode picker) ──

@@ -7,9 +7,11 @@ import assert from 'node:assert';
 import { shedReasonKey } from '../src/util/shed-reason.js';
 
 test('the backend\'s own spelling is what the card must match', () => {
-    // these two are the ONLY values load_management.py writes
+    // these three are the ONLY values load_management.py writes
     assert.equal(shedReasonKey('EMERGENCY'), 'shed_emergency');
     assert.equal(shedReasonKey('PROGRESSIVE'), 'shed_peak');
+    // (#1048) a phase over its limit — its own label, never "peak protection"
+    assert.equal(shedReasonKey('PHASE'), 'shed_phase');
 });
 
 test('case never decides the label again', () => {

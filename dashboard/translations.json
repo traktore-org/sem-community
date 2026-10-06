@@ -1617,7 +1617,13 @@
     "actual": "Skutečnost",
     "tariff_static": "Pevné sazby",
     "tariff_calendar": "Kalendář",
-    "error": "Chyba"
+    "error": "Chyba",
+    "load_phase_label": "Fáze",
+    "load_phase_tooltip": "Fáze napájení, na které tato zátěž je. Když fáze překročí svůj limit, SEM nejprve vypne zátěže této fáze a třífázové zátěže, zátěže s neznámou fází až po nich.",
+    "load_phase_unknown": "neznámá",
+    "load_phase_3ph": "3fázové",
+    "load_phase_measured_hint": "změřeno z vlastního proudu nabíječky",
+    "shed_phase": "Odpojeno: fáze {phase} nad limitem"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -3237,7 +3243,13 @@
     "actual": "Faktisk",
     "tariff_static": "Faste priser",
     "tariff_calendar": "Kalender",
-    "error": "Fejl"
+    "error": "Fejl",
+    "load_phase_label": "Fase",
+    "load_phase_tooltip": "Den forsyningsfase, denne belastning sidder på. Når en fase er over sin grænse, slukker SEM først den fases belastninger og trefasede belastninger, belastninger på ukendt fase først efter dem.",
+    "load_phase_unknown": "ukendt",
+    "load_phase_3ph": "3-faset",
+    "load_phase_measured_hint": "målt ud fra laderens egen strøm",
+    "shed_phase": "Afkoblet: fase {phase} over sin grænse"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -4857,7 +4869,13 @@
     "actual": "Tatsächlich",
     "tariff_static": "Feste Preise",
     "tariff_calendar": "Kalender",
-    "error": "Fehler"
+    "error": "Fehler",
+    "load_phase_label": "Phase",
+    "load_phase_tooltip": "Die Phase, an der diese Last hängt. Liegt eine Phase über ihrem Limit, schaltet SEM zuerst die Lasten dieser Phase und dreiphasige Lasten ab, Lasten mit unbekannter Phase erst danach.",
+    "load_phase_unknown": "unbekannt",
+    "load_phase_3ph": "3-phasig",
+    "load_phase_measured_hint": "aus dem eigenen Strom der Ladestation gemessen",
+    "shed_phase": "Abgeschaltet: Phase {phase} über ihrem Limit"
   },
   "en": {
     "% of limit": "% of limit",
@@ -6477,7 +6495,13 @@
     "actual": "Actual",
     "tariff_static": "Fixed rates",
     "tariff_calendar": "Calendar",
-    "error": "Error"
+    "error": "Error",
+    "load_phase_label": "Phase",
+    "load_phase_tooltip": "The supply phase this load sits on. When a phase is over its limit, SEM switches off that phase's loads and three-phase loads first, loads on an unknown phase only after them.",
+    "load_phase_unknown": "unknown",
+    "load_phase_3ph": "3-phase",
+    "load_phase_measured_hint": "measured from the charger's own current",
+    "shed_phase": "Shed: phase {phase} over its limit"
   },
   "es": {
     "% of limit": "% del límite",
@@ -8097,7 +8121,13 @@
     "actual": "Real",
     "tariff_static": "Tarifas fijas",
     "tariff_calendar": "Calendario",
-    "error": "Error"
+    "error": "Error",
+    "load_phase_label": "Fase",
+    "load_phase_tooltip": "La fase de suministro en la que está esta carga. Cuando una fase supera su límite, SEM apaga primero las cargas de esa fase y las trifásicas; las de fase desconocida, solo después.",
+    "load_phase_unknown": "desconocida",
+    "load_phase_3ph": "trifásica",
+    "load_phase_measured_hint": "medida a partir de la corriente del propio cargador",
+    "shed_phase": "Desconectado: fase {phase} por encima de su límite"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -9717,7 +9747,13 @@
     "actual": "Toteutunut",
     "tariff_static": "Kiinteät hinnat",
     "tariff_calendar": "Kalenteri",
-    "error": "Virhe"
+    "error": "Virhe",
+    "load_phase_label": "Vaihe",
+    "load_phase_tooltip": "Syöttövaihe, jossa tämä kuorma on. Kun vaihe ylittää rajansa, SEM katkaisee ensin sen vaiheen kuormat ja kolmivaiheiset kuormat, tuntemattoman vaiheen kuormat vasta niiden jälkeen.",
+    "load_phase_unknown": "tuntematon",
+    "load_phase_3ph": "3-vaiheinen",
+    "load_phase_measured_hint": "mitattu laturin omasta virrasta",
+    "shed_phase": "Katkaistu: vaihe {phase} yli rajansa"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -11337,7 +11373,13 @@
     "actual": "Réel",
     "tariff_static": "Tarifs fixes",
     "tariff_calendar": "Calendrier",
-    "error": "Erreur"
+    "error": "Erreur",
+    "load_phase_label": "Phase",
+    "load_phase_tooltip": "La phase d’alimentation sur laquelle se trouve cette charge. Quand une phase dépasse sa limite, SEM coupe d’abord les charges de cette phase et les charges triphasées, celles de phase inconnue seulement ensuite.",
+    "load_phase_unknown": "inconnue",
+    "load_phase_3ph": "triphasé",
+    "load_phase_measured_hint": "mesurée à partir du courant de la borne elle-même",
+    "shed_phase": "Délesté : phase {phase} au-dessus de sa limite"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -12957,7 +12999,13 @@
     "actual": "Tényleges",
     "tariff_static": "Fix díjak",
     "tariff_calendar": "Naptár",
-    "error": "Hiba"
+    "error": "Hiba",
+    "load_phase_label": "Fázis",
+    "load_phase_tooltip": "A tápfázis, amelyre ez a fogyasztó csatlakozik. Ha egy fázis túllépi a korlátját, a SEM először az adott fázis fogyasztóit és a háromfázisú fogyasztókat kapcsolja le, az ismeretlen fázisúakat csak utánuk.",
+    "load_phase_unknown": "ismeretlen",
+    "load_phase_3ph": "3 fázisú",
+    "load_phase_measured_hint": "a töltő saját áramából mérve",
+    "shed_phase": "Lekapcsolva: a(z) {phase} fázis a korlátja felett"
   },
   "it": {
     "% of limit": "% del limite",
@@ -14577,7 +14625,13 @@
     "actual": "Reale",
     "tariff_static": "Tariffe fisse",
     "tariff_calendar": "Calendario",
-    "error": "Errore"
+    "error": "Errore",
+    "load_phase_label": "Fase",
+    "load_phase_tooltip": "La fase di alimentazione su cui si trova questo carico. Quando una fase supera il suo limite, SEM spegne prima i carichi di quella fase e quelli trifase, quelli di fase sconosciuta solo dopo.",
+    "load_phase_unknown": "sconosciuta",
+    "load_phase_3ph": "trifase",
+    "load_phase_measured_hint": "misurata dalla corrente del caricatore stesso",
+    "shed_phase": "Staccato: fase {phase} oltre il suo limite"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -16197,7 +16251,13 @@
     "actual": "Werkelijk",
     "tariff_static": "Vaste tarieven",
     "tariff_calendar": "Kalender",
-    "error": "Fout"
+    "error": "Fout",
+    "load_phase_label": "Fase",
+    "load_phase_tooltip": "De fase waarop deze last zit. Gaat een fase over haar limiet, dan schakelt SEM eerst de lasten van die fase en driefasige lasten uit, lasten met een onbekende fase pas daarna.",
+    "load_phase_unknown": "onbekend",
+    "load_phase_3ph": "3-fase",
+    "load_phase_measured_hint": "gemeten uit de eigen stroom van de laadpaal",
+    "shed_phase": "Afgeschakeld: fase {phase} boven haar limiet"
   },
   "no": {
     "% of limit": "% av grense",
@@ -17817,7 +17877,13 @@
     "actual": "Faktisk",
     "tariff_static": "Faste priser",
     "tariff_calendar": "Kalender",
-    "error": "Feil"
+    "error": "Feil",
+    "load_phase_label": "Fase",
+    "load_phase_tooltip": "Forsyningsfasen denne lasten sitter på. Når en fase er over grensen sin, slår SEM først av den fasens laster og trefaselaster, laster på ukjent fase først etter dem.",
+    "load_phase_unknown": "ukjent",
+    "load_phase_3ph": "3-fase",
+    "load_phase_measured_hint": "målt fra laderens egen strøm",
+    "shed_phase": "Frakoblet: fase {phase} over grensen sin"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -19437,7 +19503,13 @@
     "actual": "Rzeczywiste",
     "tariff_static": "Stałe stawki",
     "tariff_calendar": "Kalendarz",
-    "error": "Błąd"
+    "error": "Błąd",
+    "load_phase_label": "Faza",
+    "load_phase_tooltip": "Faza zasilania, na której jest to obciążenie. Gdy faza przekroczy swój limit, SEM najpierw wyłącza obciążenia tej fazy i obciążenia trójfazowe, a obciążenia o nieznanej fazie dopiero po nich.",
+    "load_phase_unknown": "nieznana",
+    "load_phase_3ph": "3-fazowe",
+    "load_phase_measured_hint": "zmierzona z prądu samej ładowarki",
+    "shed_phase": "Odcięte: faza {phase} ponad swoim limitem"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -21057,7 +21129,13 @@
     "actual": "Real",
     "tariff_static": "Tarifas fixas",
     "tariff_calendar": "Calendário",
-    "error": "Erro"
+    "error": "Erro",
+    "load_phase_label": "Fase",
+    "load_phase_tooltip": "A fase de alimentação em que esta carga está. Quando uma fase passa o seu limite, o SEM desliga primeiro as cargas dessa fase e as trifásicas; as de fase desconhecida só depois.",
+    "load_phase_unknown": "desconhecida",
+    "load_phase_3ph": "trifásica",
+    "load_phase_measured_hint": "medida a partir da corrente do próprio carregador",
+    "shed_phase": "Desligado: fase {phase} acima do seu limite"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -22677,7 +22755,13 @@
     "actual": "Real",
     "tariff_static": "Tarife fixe",
     "tariff_calendar": "Calendar",
-    "error": "Eroare"
+    "error": "Eroare",
+    "load_phase_label": "Fază",
+    "load_phase_tooltip": "Faza de alimentare pe care se află acest consumator. Când o fază își depășește limita, SEM oprește mai întâi consumatorii acelei faze și pe cei trifazați, pe cei cu fază necunoscută abia după ei.",
+    "load_phase_unknown": "necunoscută",
+    "load_phase_3ph": "trifazat",
+    "load_phase_measured_hint": "măsurată din curentul propriu al încărcătorului",
+    "shed_phase": "Deconectat: faza {phase} peste limita ei"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -24297,7 +24381,13 @@
     "actual": "Faktisk",
     "tariff_static": "Fasta priser",
     "tariff_calendar": "Kalender",
-    "error": "Fel"
+    "error": "Fel",
+    "load_phase_label": "Fas",
+    "load_phase_tooltip": "Matningsfasen den här lasten sitter på. När en fas är över sin gräns stänger SEM först av den fasens laster och trefaslaster, laster på okänd fas först efter dem.",
+    "load_phase_unknown": "okänd",
+    "load_phase_3ph": "3-fas",
+    "load_phase_measured_hint": "mätt från laddarens egen ström",
+    "shed_phase": "Urkopplad: fas {phase} över sin gräns"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -25917,6 +26007,12 @@
     "actual": "实际",
     "tariff_static": "固定电价",
     "tariff_calendar": "日历",
-    "error": "错误"
+    "error": "错误",
+    "load_phase_label": "相位",
+    "load_phase_tooltip": "此负载所在的供电相位。当某一相超过其限值时，SEM 会先关闭该相的负载和三相负载，相位未知的负载随后才关闭。",
+    "load_phase_unknown": "未知",
+    "load_phase_3ph": "三相",
+    "load_phase_measured_hint": "根据充电桩自身电流测得",
+    "shed_phase": "削减：{phase} 相超过限值"
   }
 }

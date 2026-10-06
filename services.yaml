@@ -74,9 +74,12 @@ update_device_config:
           options:
             - controllable
             - critical
+            - phase
     value:
       name: Value
-      description: New boolean value
+      description: >-
+        New boolean value — or, for phase (#1048), the supply phase the load
+        sits on: L1, L2, L3, 3ph or unknown.
       required: true
       selector:
         boolean:
@@ -320,6 +323,19 @@ register_surplus_device:
       default: false
       selector:
         boolean:
+    phase:
+      name: Supply phase
+      description: "(#1048) The phase this load sits on. When a phase is over its limit, the phase guard sheds that phase's loads (and three-phase loads) first; unknown loads only after them."
+      required: false
+      default: unknown
+      selector:
+        select:
+          options:
+            - L1
+            - L2
+            - L3
+            - 3ph
+            - unknown
     top_up_policy:
       name: Top-up Policy
       description: "What to do when solar surplus alone will not meet the target: solar_only (never grid power — accept missing the target on a dark day), cheap_hours (top up during cheap tariff windows)."

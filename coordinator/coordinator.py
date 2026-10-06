@@ -1238,6 +1238,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             per = getattr(self, "_last_ev_connected_per_charger", None)
             if isinstance(per, dict):
                 connected = bool(per.get(cid, False))
+            # (#1048) A charger's phase is measured, not said: the held
+            # belief from the W/A estimate (#804), else the nameplate. Three
+            # phases are "3ph"; one is a line SEM cannot name.
+            believed = (getattr(self, "_phase_believed", None) or {}).get(cid)
+            n_phases = believed if believed in (1, 3) else ph
             rows.append({
                 "id": cid,
                 "name": getattr(dev, "name", cid),
@@ -1265,6 +1270,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 "min_power_w": min_a * ph * volt,
                 "max_power_w": max_a * ph * volt,
                 "connected": connected,
+                "phase": "3ph" if n_phases == 3 else "unknown",
+                "phase_measured": believed in (1, 3),
             })
         return rows
 
