@@ -4399,6 +4399,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "Battery pipeline error: %s", e, exc_info=True,
                 )
 
+            # Step 7.5a2 (#1048): the chargers have had their turn — a phase
+            # still over its limit sheds loads, held until the guard's latch
+            # clears. Before 7.5b: the peak's restore must see the hold.
+            await self._phase_guard_loads(power)
+
             # Step 7.5b: Load management (peak tracking + device shedding, no EV)
             if self._load_manager:
                 self._load_manager._observer_mode = self._observer_mode
@@ -8616,6 +8621,60 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         if msg:
             _LOGGER.info("#638 coverage: %s", msg)
         return gate
+
+    async def _phase_guard_loads(self, power) -> None:
+        """(#1048 C2) A phase over its limit sheds loads, not only chargers.
+
+        Runs after the chargers were filtered, so the guard has had its first
+        answer — stopping the car. A phase still over after that (or over
+        with no car drawing) asks load management for its loads; the surplus
+        controller gets the holds for the loads it owns. While the guard's
+        latch stands nothing taken comes back. A guard that is off releases
+        whatever it held."""
+        from ..features.phase_shed import EV_DRAWING_W, single_phase_supply
+        from .active_phase_guard import ActivePhaseGuard
+        lm = getattr(self, "_load_manager", None)
+        enforcer = getattr(self, "_active_phase_guard", None)
+        verdict: Dict[str, Any] = {}
+        try:
+            if (self.config.get("phase_guard_enabled", False)
+                    and isinstance(enforcer, ActivePhaseGuard)):
+                snap = getattr(self, "_phase_guard_snapshot", None)
+                request = enforcer.phase_shed_request(
+                    ev_drawing=float(getattr(power, "ev_power", 0.0) or 0.0)
+                    > EV_DRAWING_W)
+                if lm is not None:
+                    lm._observer_mode = self._observer_mode
+                    verdict = await lm.process_phase_guard(
+                        request, may_restore=enforcer.loads_may_return,
+                        latched=enforcer.latched_phases,
+                        single_phase=single_phase_supply(
+                            snap if isinstance(snap, dict) else {}))
+                elif request:
+                    # nothing to shed with: say so where the guard is read
+                    verdict = {"over": request, "path": "load_management_off"}
+                if isinstance(snap, dict) and verdict:
+                    snap["loads"] = {
+                        k: verdict[k]
+                        for k in ("over", "thrown", "latched", "shed", "path")
+                        if k in verdict}
+            elif lm is not None:
+                verdict = await lm.process_phase_guard({}, may_restore=True)
+        except Exception:  # noqa: BLE001 — never costs a cycle; logged
+            _LOGGER.warning("Phase guard load shed failed", exc_info=True)
+            verdict = {}
+        self._apply_phase_holds(verdict)
+
+    def _apply_phase_holds(self, verdict: Optional[Dict[str, Any]]) -> None:
+        """(#1048) Hand the cycle's holds to the loads the surplus
+        controller owns: ``hold`` blocks a start, ``shed`` also backs it off.
+        Every other load is free — a hold is never left behind."""
+        hold = (verdict or {}).get("hold") or {}
+        shed = (verdict or {}).get("shed") or {}
+        sc = getattr(self, "_surplus_controller", None)
+        for did, dev in (getattr(sc, "_devices", None) or {}).items():
+            dev._phase_hold = hold.get(did)
+            dev._phase_shed = did in shed
 
     def _plan_ev_connected(self, cid: str, charger_cfg, power):
         """(#638) THE plan layer's answer to "is this car connected?".
@@ -14612,6 +14671,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "state_decision_path", "process_path", "action_path",
                     "last_error", "shed_path", "shed_need_w",
                     "shed_sheddable_w", "shed_futile", "uncontrolled_w",
+                    # (#1048) the phase guard's half
+                    "phase_shed_path", "phase_held",
                 ):
                     if key in lm_info:
                         setattr(lm_data, key, lm_info[key])

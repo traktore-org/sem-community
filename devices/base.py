@@ -240,6 +240,11 @@ class ControllableDevice(ABC):
         # (#1048) the supply phase it sits on — the phase guard sheds a
         # phase's own loads first. Unknown until the user says.
         self.phase: str = DEFAULT_LOAD_PHASE
+        # (#1048) the phase guard's hold, set each cycle by the coordinator:
+        # the phase it is held for (None = free). A held load does not
+        # start; one the guard took for its phase is also backed off.
+        self._phase_hold: Optional[str] = None
+        self._phase_shed: bool = False
 
         # Power-change cooldown
         self._min_power_change_interval: float = 0.0  # seconds, 0 = disabled
@@ -995,6 +1000,10 @@ class ControllableDevice(ABC):
 
     def can_activate(self) -> bool:
         """Check if device can be activated (respects dependencies, min_off, activation_delay)."""
+        # (#1048) a phase over its limit, or not yet recovered: a fuse
+        # outranks surplus, schedules and the cheap hours alike
+        if isinstance(self._phase_hold, str):
+            return False
         # (#620) daily maximum cap — a capped-out device never re-activates
         # today. Gated first: it overrides surplus, off-peak and deadline
         # passes alike (the cap is a hard "done for today").

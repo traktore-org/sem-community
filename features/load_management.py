@@ -31,6 +31,13 @@ from ..const import (
 from ..devices.power_setpoint import SETPOINT_DOMAINS, setpoint_domain
 from .device_axes import may_actuate
 from .load_device_discovery import LoadDeviceDiscovery
+from ..consts.devices import load_phase
+from .phase_shed import (
+    DEFAULT_VOLTAGE_V,
+    draws_on,
+    order_candidates,
+    relief_a,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -225,6 +232,19 @@ class LoadManagementCoordinator:
         # (#933) has this shedder reconciled the persistent Repair once?
         self._futile_reconciled: bool = False
         self._shed_notified: bool = False
+        # (#1048) the phase guard's shed path: surplus-owned loads held for
+        # a phase (device → phase), whether shed loads may return yet, the
+        # cycle's verdict, and the episode's notification
+        self._phase_held: Dict[str, str] = {}
+        # …and this manager's own loads it switched off for a phase. Kept
+        # HERE, not on the device row: a registry rebuild (a drag, a config
+        # change, the re-discovery after a start) replaces the rows, and a
+        # phase shed that read as a peak shed would come back before the
+        # guard's latch clears.
+        self._phase_shed_ids: Dict[str, str] = {}
+        self._phase_may_restore: bool = True
+        self._phase_shed_path: str = "clear"
+        self._phase_notified: bool = False
 
     async def async_initialize(self):
         """Initialize the load management system."""
@@ -973,6 +993,7 @@ class LoadManagementCoordinator:
 
         for device_id in stale:
             self._devices_shed.remove(device_id)
+            self._phase_shed_ids.pop(device_id, None)   # (#1048)
             if device_id in self._devices:
                 self._devices[device_id].pop("_ran_since_shed", None)
             _LOGGER.debug(
@@ -1028,7 +1049,8 @@ class LoadManagementCoordinator:
         elif peak_to_check >= warning_level:
             # If we have devices shed and peak is still in warning zone,
             # stay in SHEDDING to allow controlled restoration
-            if self._devices_shed:
+            # (#1048) a load shed for a phase is the guard's, not the peak's
+            if any(not self._is_phase_shed(d) for d in self._devices_shed):
                 self._last_state_decision_path = "warning_zone_keep_shedding"
                 return LoadManagementState.SHEDDING
             self._last_state_decision_path = "warning_zone_clean"
@@ -1378,6 +1400,206 @@ class LoadManagementCoordinator:
         except Exception as e:  # noqa: BLE001
             _LOGGER.debug("shed notification dismiss failed: %s", e)
 
+    # -- (#1048) a phase over its limit sheds loads ------------------------
+
+    def _is_phase_shed(self, device_id: str) -> bool:
+        return device_id in self._phase_shed_ids
+
+    def _phase_episode_open(self) -> bool:
+        return bool(self._phase_held) or bool(self._phase_shed_ids)
+
+    def _phase_overlay(self, device_id: str) -> Dict[str, Any]:
+        """What the card shows for a load taken for a phase — from this
+        manager's own record, so a rebuilt row still says why it is off."""
+        phase = self._phase_shed_ids.get(device_id) or self._phase_held.get(device_id)
+        return {"shed_reason": "PHASE", "shed_phase": phase} if phase else {}
+
+    def _phase_candidates(self) -> List[Tuple[str, Dict, float]]:
+        """Every load that may answer for a phase: permitted, available,
+        not critical, on and drawing. Chargers are the guard's own (it stops
+        them before loads are asked); a surplus-owned load is a candidate too
+        — it is HELD for its owner to back off, never switched from here."""
+        rows: List[Tuple[str, Dict, float]] = []
+        for did, info in self._devices.items():
+            if info.get("device_type") == "ev_charger":
+                continue
+            if not may_actuate(info) or info.get("is_critical", False):
+                continue
+            if did in self._devices_shed or did in self._phase_held:
+                continue
+            if not info.get("is_available", False):
+                continue
+            state = self._device_discovery.get_device_current_state(info)
+            if not state.get("is_on"):
+                continue
+            draw_w = float(state.get("current_power") or 0.0)
+            if not state.get("power_known", True):
+                draw_w = float(info.get("power_rating") or 0.0)
+            if draw_w > 0:
+                rows.append((did, info, draw_w))
+        return rows
+
+    async def _throw_for_phase(self, device_id: str, info: Dict, phase: str) -> bool:
+        """Take one load off for ``phase``: hold a surplus-owned one for its
+        owner (#649 — one writer per load), switch off one of ours."""
+        if self._peak_managed_elsewhere(info):
+            if self._observer_mode:
+                return False
+            self._phase_held[device_id] = phase
+            info["shed_reason"] = "PHASE"
+            info["shed_phase"] = phase
+            _LOGGER.info("Phase %s over its limit: holding %s for its owner",
+                         phase, info.get("friendly_name", device_id))
+            return True
+        if not self._can_shed_device(device_id, info):
+            return False
+        if await self._shed_device(device_id, "PHASE"):
+            info["shed_phase"] = phase
+            self._phase_shed_ids[device_id] = phase
+            return True
+        return False
+
+    async def process_phase_guard(
+        self, over: Dict[str, float], *, may_restore: bool,
+        latched: Any = (), single_phase: bool = False,
+        voltage_v: float = DEFAULT_VOLTAGE_V,
+    ) -> Dict[str, Any]:
+        """(#1048) A phase over its limit: take that phase's loads off.
+
+        ``over`` is the guard's request this cycle — the phases still over
+        after the chargers had their turn (or with no car to stop), by how
+        many amps. For each, the loads known to draw on it go first, highest
+        priority number first, until the amps they free cover the excess; one
+        load of unknown phase per cycle when they cannot, so the meter says
+        whether it helped. Critical loads, hands-off loads and chargers are
+        never taken.
+
+        While the guard's latch stands (``may_restore`` False) nothing taken
+        here comes back, and the surplus-owned loads known to sit on a
+        latched phase do not start. After it, one returns per restore delay:
+        ours through the ordinary restore path, held ones released here.
+
+        Returns the verdict for the guard's snapshot, with ``hold`` (no start)
+        and ``shed`` (back off now) for the surplus controller.
+        """
+        self._phase_may_restore = bool(may_restore)
+        for did in [d for d in self._phase_held if d not in self._devices]:
+            self._phase_held.pop(did, None)
+        for did in [d for d in self._phase_shed_ids if d not in self._devices_shed]:
+            self._phase_shed_ids.pop(did, None)
+        latched_phases = set(latched or ()) | set(over or {})
+        thrown: List[str] = []
+        if over:
+            for phase, excess_a in sorted(over.items(), key=lambda kv: -kv[1]):
+                known, unknown = order_candidates(
+                    self._phase_candidates(), phase, single_phase=single_phase)
+                freed = 0.0
+                for did, info, draw_w in known:
+                    if freed >= excess_a:
+                        break
+                    if await self._throw_for_phase(did, info, phase):
+                        thrown.append(did)
+                        freed += relief_a(info.get("phase"), draw_w, phase,
+                                          single_phase=single_phase,
+                                          voltage_v=voltage_v)
+                if freed < excess_a:
+                    for did, info, _draw_w in unknown:
+                        if await self._throw_for_phase(did, info, phase):
+                            thrown.append(did)
+                            break
+            if thrown:
+                self._phase_shed_path = f"shed:{len(thrown)}"
+                self._announce_phase_episode(over, thrown)
+            elif self._observer_mode:
+                self._phase_shed_path = "observer:withheld"
+            else:
+                self._phase_shed_path = "nothing_on_phase"
+        elif not may_restore:
+            self._phase_shed_path = "held:latch"
+        elif self._phase_held:
+            if (not self._last_restore_time
+                    or dt_util.now() - self._last_restore_time
+                    >= timedelta(seconds=DEFAULT_LOAD_RESTORE_DELAY)):
+                did = sorted(self._phase_held,
+                             key=lambda d: self._devices.get(d, {}).get("priority", 5),
+                             reverse=True)[0]
+                self._phase_held.pop(did, None)
+                info = self._devices.get(did) or {}
+                info.pop("shed_reason", None)
+                info.pop("shed_phase", None)
+                self._last_restore_time = dt_util.now()
+                self._phase_shed_path = f"released:{did}"
+                _LOGGER.info("Phase guard recovered: %s may run again",
+                             info.get("friendly_name", did))
+            else:
+                self._phase_shed_path = "waiting:restore_delay"
+        else:
+            self._phase_shed_path = "clear"
+        if not self._phase_episode_open():
+            self._end_phase_episode()
+
+        hold: Dict[str, str] = dict(self._phase_held)
+        if not may_restore:
+            for did, info in self._devices.items():
+                if did in hold or not self._peak_managed_elsewhere(info):
+                    continue
+                if info.get("device_type") == "ev_charger":
+                    continue
+                # an unknown load draws on no phase here (unless the supply
+                # has only one): its starts are not held on a guess
+                p = load_phase(info.get("phase"))
+                for ph in sorted(latched_phases):
+                    if draws_on(p, ph, single_phase=single_phase):
+                        hold[did] = ph
+                        break
+        return {
+            "over": dict(over or {}),
+            "thrown": thrown,
+            "latched": sorted(latched_phases),
+            "hold": hold,
+            "shed": dict(self._phase_held),
+            "path": self._phase_shed_path,
+        }
+
+    def _announce_phase_episode(self, over: Dict[str, float], thrown: List[str]) -> None:
+        """One persistent notification per episode, like the peak's (#896),
+        and the bus event the notification layer listens on."""
+        names = [self._devices.get(d, {}).get("friendly_name", d) for d in thrown]
+        phases = ", ".join(f"{p} {a:.1f} A over" for p, a in sorted(over.items()))
+        message = (
+            f"SEM switched off {', '.join(names)}: {phases} its limit. "
+            f"They come back once every phase has had its margin back for "
+            f"the phase guard's recovery cycles."
+        )
+        try:
+            from homeassistant.components import persistent_notification
+            persistent_notification.async_create(
+                self.hass, message, title="Phase over its limit",
+                notification_id="sem_phase_shed",
+            )
+            self._phase_notified = True
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.debug("phase shed notification failed: %s", e)
+        try:
+            self.hass.bus.async_fire(f"{DOMAIN}_notification", {
+                "category": "alerts",
+                "event": "phase_shed",
+                "devices": list(thrown),
+                "over_a": {p: round(a, 1) for p, a in over.items()},
+            })
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.debug("phase shed event failed: %s", e)
+
+    def _end_phase_episode(self) -> None:
+        if not self._phase_notified:
+            return
+        self._phase_notified = False
+        try:
+            from homeassistant.components import persistent_notification
+            persistent_notification.async_dismiss(self.hass, "sem_phase_shed")
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.debug("phase shed notification dismiss failed: %s", e)
+
     async def _restore_loads(self):
         """Restore loads that were shed."""
         if not self._devices_shed:
@@ -1389,8 +1611,11 @@ class LoadManagementCoordinator:
             return
 
         # Restore devices in reverse priority order (low priority restored first)
+        # (#1048) — but a load shed for a phase waits for the guard's latch:
+        # the house's peak being fine says nothing about the fuse.
         devices_to_restore = sorted(
-            self._devices_shed,
+            (d for d in self._devices_shed
+             if self._phase_may_restore or not self._is_phase_shed(d)),
             key=lambda device_id: self._devices[device_id].get("priority", 5),
             reverse=True
         )
@@ -1509,7 +1734,9 @@ class LoadManagementCoordinator:
             return False
 
         # Check if enough time has passed since last shedding
-        if (reason != "EMERGENCY" and self._last_shedding_time and
+        # (#1048) A phase over its limit is a fuse, not a tariff: like an
+        # emergency, its sheds are bounded by the excess, not by a timer.
+        if (reason not in ("EMERGENCY", "PHASE") and self._last_shedding_time and
             dt_util.now() - self._last_shedding_time < timedelta(seconds=DEFAULT_LOAD_SHEDDING_DELAY)):
             _LOGGER.debug("Cannot shed %s: shedding delay active", device_id)
             return False
@@ -1833,10 +2060,14 @@ class LoadManagementCoordinator:
                 self._last_restore_time = dt_util.now()
                 self._devices[device_id]["last_turned_on"] = dt_util.now()
                 self._devices[device_id].pop("shed_reason", None)
+                self._devices[device_id].pop("shed_phase", None)
                 self._devices[device_id].pop("_ran_since_shed", None)
+                self._phase_shed_ids.pop(device_id, None)
                 _LOGGER.info("Restored device %s", device_info.get('friendly_name', device_id))
                 if not self._devices_shed:
                     self._end_shed_episode()
+                if not self._phase_episode_open():
+                    self._end_phase_episode()
 
         except Exception as e:
             _LOGGER.error("Failed to restore device %s: %s", device_id, e)
@@ -1900,9 +2131,14 @@ class LoadManagementCoordinator:
             "available_load_reduction": round(available_reduction, 2),
             "enabled": self._enabled,
             "devices": {
-                did: {**dinfo, "is_shed": did in self._devices_shed}
+                did: {**dinfo, "is_shed": did in self._devices_shed
+                      or did in self._phase_held, **self._phase_overlay(did)}
                 for did, dinfo in self._devices.items()
             },
+            # (#1048) the phase guard's shed path: this cycle's verdict and
+            # the surplus-owned loads held for a phase
+            "phase_shed_path": self._phase_shed_path,
+            "phase_held": dict(self._phase_held),
             "consecutive_peak_15min": self._consecutive_peak_15min,
             "monthly_consecutive_peak": self._monthly_consecutive_peak,
             # #433 — telemetry surface (mirrors classifier_path /

@@ -757,6 +757,10 @@ class LoadManagementData:
     shed_sheddable_w: float = 0.0
     shed_futile: bool = False
     uncontrolled_w: float = 0.0
+    # (#1048) the phase guard's shed path: this cycle's verdict and the
+    # surplus-owned loads held for a phase (device → phase)
+    phase_shed_path: str = "clear"
+    phase_held: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -1430,6 +1434,9 @@ class SEMData:
             "shed_sheddable_w": self.load_management.shed_sheddable_w,
             "shed_futile": self.load_management.shed_futile,
             "uncontrolled_w": self.load_management.uncontrolled_w,
+            # (#1048) the phase guard's half of the shed path
+            "phase_shed_path": self.load_management.phase_shed_path,
+            "phase_held": self.load_management.phase_held,
 
             # Timestamp
             "last_update": self.last_update,
