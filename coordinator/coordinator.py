@@ -6492,9 +6492,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             hot_water_solar_target=(
                 float(hw_controller.solar_target_temp) if hw_controller else None
             ),
-            hot_water_max_temperature=(
-                float(hw_controller.max_temperature) if hw_controller else None
-            ),
             hot_water_legionella_target=(
                 float(hw_controller.legionella_target_temp) if hw_controller else None
             ),
@@ -14384,7 +14381,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     from ..devices.hot_water_controller import (
                         DEFAULT_LEGIONELLA_MIN_TEMP,
                     )
-                    hw.max_temperature = float(cfg.get("hot_water_max_temperature", 70.0))
                     hw.min_temperature = float(
                         cfg.get("hot_water_minimum_temperature", 40.0)
                     )

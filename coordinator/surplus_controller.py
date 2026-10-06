@@ -1797,9 +1797,13 @@ class SurplusController:
                     # EV floor/ceiling contract).
                     done_reason = "daily target met — ending battery/grid top-up"
                 elif device.stop_condition_met:
+                    # (#1062) A device can meet its stop without a stop
+                    # entity (a boiler at its target, a banked comfort band)
+                    # — then there is no "<entity> >= <value>" to print.
                     done_reason = (
                         f"stop condition met ({device.stop_entity} >= "
-                        f"{device.stop_at:g})"
+                        f"{device.stop_at:g})" if device.stop_entity
+                        else "stop condition met (target reached)"
                     )
                 if done_reason:
                     if device.is_active and device.can_deactivate():

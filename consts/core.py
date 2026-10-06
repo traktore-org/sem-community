@@ -349,7 +349,6 @@ DEFAULT_HEAT_PUMP_FORCE_ON_THRESHOLD: Final = 5000  # Watts
 DEFAULT_HOT_WATER_ENABLED: Final = False
 DEFAULT_HOT_WATER_PRIORITY: Final = 6
 DEFAULT_HOT_WATER_POWER: Final = 2000  # Watts
-DEFAULT_HOT_WATER_MAX_TEMP: Final = 60.0  # Degrees
 
 # ============================================
 # PV PERFORMANCE (Phase 5)

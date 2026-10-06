@@ -1696,12 +1696,11 @@ class SEMConfigCard extends SEMLitBase {
                     { min: 100, max: 30000, step: 50, unit: 'W', default: 2500 }, opts, 'config_help_hw_rated_power')}
                 ${this._renderStepper('number.sem_hot_water_solar_target', 'hot_water_solar_target',
                     T, 'config_help_hw_solar_target')}
-                ${this._renderStepper('number.sem_hot_water_max_temperature', 'hot_water_max_temperature',
-                    T, 'config_help_hw_max_temperature')}
                 ${this._renderOptionSlider('hot_water_legionella_target', 'config_hw_legionella_target',
                     { min: 55, max: 80, step: 1, unit: '°C', default: 65 }, opts, 'config_help_hw_legionella_target')}
-                ${this._renderOptionSlider('hot_water_minimum_temperature', 'config_hw_min_temperature',
-                    { min: 30, max: 55, step: 1, unit: '°C', default: 40 }, opts, 'config_help_hw_min_temperature')}
+                ${/* (#1062) "Max temperature" and "Minimum temperature" retired: no
+                      decision read either. The solar target is the ceiling;
+                      forcing is the Control tab's "Run now past". */ ''}
                 ${/* #602/#576 — hot_water_priority slider retired: hot water is a
                       draggable row in the device-priority list now (single axis). */ ''}
             </div>

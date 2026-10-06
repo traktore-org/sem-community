@@ -5,7 +5,7 @@
     "reason; removing one is the point of the issue.",
     "Regenerate:  python3 scripts/audit_options.py --baseline"
   ],
-  "total": 196,
+  "total": 195,
   "first_run_fields": 16,
   "first_run_steps": 3,
   "first_run_fields_best": 10,
@@ -183,7 +183,6 @@
     "export_guard_engage_s",
     "export_guard_release_s",
     "heat_pump_boost_offset",
-    "hot_water_max_temperature",
     "hot_water_solar_target",
     "legionella_interval_hours",
     "legionella_target_temp",
