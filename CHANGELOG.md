@@ -13,7 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Heat pump and hot water names follow your language** (#1053). A Dutch home now reads "Warmtepomp", not "Heat Pump". A name you set stays.
+
 - 🐛 **The Control tab shows your saved grid limit** (#1055). With load management off it always showed 5 kW, even when set to no limit.
+- 🐛 **Charts draw again when you come back to a tab** (#1058). They were empty until you reloaded the page.
+- 🐛 **The battery card no longer says "refused" when the charge limit is right** (#820). One lost write kept that message for hours.
+- 🐛 **The Energy Plan card shows no battery on homes without one** (#1063). Sunny hours now look like sun, on every home.
 
 # [2.2.0-beta.11] — 05.10.2026
 

@@ -55,6 +55,9 @@ class SEMDiagnoseButton extends SEMLitBase {
         if (this._copiedTimer) {
             clearTimeout(this._copiedTimer);
             this._copiedTimer = null;
+            // #1058: the same card comes back when you return to the tab;
+            // the timer would have hidden "Copied", so hide it now.
+            this._copied = false;
         }
     }
 

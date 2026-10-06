@@ -104,6 +104,19 @@ class SEMFlowCard extends SEMLitBase {
 
     // ── Observers ──
     firstUpdated() {
+        if (this.isConnected) this._observe();
+    }
+
+    // #1058: HA takes a tab's cards off the page when you leave the tab and
+    // puts the SAME cards back when you return. firstUpdated() runs once, so
+    // the watchers disconnectedCallback() stops are started again here.
+    connectedCallback() {
+        super.connectedCallback();
+        if (this.hasUpdated) this._observe();
+    }
+
+    _observe() {
+        this._unobserve();
         this._resizeTimeout = null;
         this._resizeObserver = new ResizeObserver(entries => {
             if (this._resizeTimeout) clearTimeout(this._resizeTimeout);
@@ -145,16 +158,20 @@ class SEMFlowCard extends SEMLitBase {
         document.addEventListener('visibilitychange', this._onVisibility);
     }
 
-    disconnectedCallback() {
-        super.disconnectedCallback();
+    _unobserve() {
         if (this._resizeObserver) { this._resizeObserver.disconnect(); this._resizeObserver = null; }
         if (this._intersectionObserver) { this._intersectionObserver.disconnect(); this._intersectionObserver = null; }
-        clearTimeout(this._updateTimer);
         clearTimeout(this._resizeTimeout);
         if (this._onVisibility) {
             document.removeEventListener('visibilitychange', this._onVisibility);
             this._onVisibility = null;
         }
+    }
+
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        this._unobserve();
+        clearTimeout(this._updateTimer);
         for (const id of Object.keys(this._animFrames)) cancelAnimationFrame(this._animFrames[id]);
         this._animFrames = {};
     }

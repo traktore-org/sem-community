@@ -7,10 +7,10 @@
  *
  * Key migration notes:
  * - render() provides the canvas + empty-state skeleton
- * - firstUpdated() initialises the chart instance
- * - updated() refreshes data on each render cycle
+ * - firstUpdated() sets the opening window, which fetches and draws
  * - Chart.js loaded from CDN via module-level singleton _loadChartJs()
- * - Chart instance destroyed in disconnectedCallback()
+ * - Chart instance destroyed in disconnectedCallback(), drawn again in
+ *   connectedCallback() when HA puts the same card back (#1058)
  */
 
 import { SEMLitBase, html, css, nothing, semGlassCss } from '../base/sem-lit-base.js';
@@ -182,6 +182,7 @@ class SEMChartCard extends SEMLitBase {
         this._prefix = 'sensor.sem_';
         this._preset = null;
         this._emptyMsg = '';
+        this._fetchSeq = 0;
     }
 
     setConfig(config) {
@@ -218,6 +219,13 @@ class SEMChartCard extends SEMLitBase {
         this._rollInterval = setInterval(() => this._rollRelativePeriod(), 5 * 60 * 1000);
         this._boundVisibility = () => { if (!document.hidden) this._rollRelativePeriod(); };
         document.addEventListener('visibilitychange', this._boundVisibility);
+        // #1058: HA takes a tab's cards off the page when you leave the tab
+        // and puts the SAME cards back when you return. disconnectedCallback()
+        // destroys the chart and firstUpdated() runs only once, so the canvas
+        // stayed empty until a page reload. Draw it again on every return —
+        // and on a first connect if a window was already set (hass arrived
+        // twice before the card was put on the page; its fetch was dropped).
+        if (this._period) this._redraw();
     }
 
     disconnectedCallback() {
@@ -227,6 +235,15 @@ class SEMChartCard extends SEMLitBase {
         clearInterval(this._rollInterval);
         if (this._chart) { this._chart.destroy(); this._chart = null; }
         clearTimeout(this._fetchTimer);
+        this._fetchSeq++;   // a fetch still on its way must not draw on a card that left
+    }
+
+    /** #1058: the card is back on the page — fetch and draw again. Its own
+     *  opening window is moved to end now; a range the user picked is kept. */
+    _redraw() {
+        if (!this._period) return;
+        if (this._period.key === this._defaultKey()) this._setDefaultPeriod();
+        else this._onPeriodChange(this._period);
     }
 
     /** #541: recompute the card's default relative window from "now" and
@@ -235,10 +252,7 @@ class SEMChartCard extends SEMLitBase {
      *  window — a user-changed/custom range is left untouched. */
     _rollRelativePeriod() {
         if (!this._period || !this._hass) return;
-        const dp = this._config?.default_period || this._preset?.defaultPeriod;
-        const defaultKey = dp === '24h' ? '24h' : dp === '7d' ? '7d'
-            : dp === 'today' ? 'today' : 'week';
-        if (this._period.key !== defaultKey) return;
+        if (this._period.key !== this._defaultKey()) return;
         this._setDefaultPeriod();   // recomputes start/end from now + re-fetches
     }
 
@@ -325,23 +339,33 @@ class SEMChartCard extends SEMLitBase {
         return startOfDayInHaTz(now, this._hass?.config?.time_zone);
     }
 
-    _setDefaultPeriod() {
-        const now = new Date();
+    /** The key of the window the card opens on. One answer for opening and
+     *  for rolling it to now: the roll asked its own question and read an
+     *  hourly-only preset (power, battery, forecast) as 'week', so those
+     *  charts never moved to now (#1058). */
+    _defaultKey() {
         const p = this._preset;
         // A per-card ``default_period`` config wins over the preset's own.
         const defaultPeriod = this._config?.default_period || (p && p.defaultPeriod);
         // Presets with defaultPeriod 'today' (since-midnight) or '24h'
         // (rolling) or hourly-only presets default to an hourly view.
-        const wantToday = defaultPeriod === 'today';
-        const isHourly = p && (wantToday || defaultPeriod === '24h' || (p.hourly && !p.daily));
-        if (isHourly) {
+        if (p && (defaultPeriod === 'today' || defaultPeriod === '24h' || (p.hourly && !p.daily))) {
+            return defaultPeriod === 'today' ? 'today' : '24h';
+        }
+        return defaultPeriod === '7d' ? '7d' : 'week';
+    }
+
+    _setDefaultPeriod() {
+        const now = new Date();
+        const key = this._defaultKey();
+        if (key === 'today' || key === '24h') {
+            const wantToday = key === 'today';
             const start = wantToday
                 ? this._startOfDayInHaTz(now)
                 : new Date(now.getTime() - 24 * 60 * 60 * 1000);
             const labelKey = wantToday ? 'period_today' : 'last_24h';
-            const key = wantToday ? 'today' : '24h';
             this._onPeriodChange({ start, end: now, granularity: 'hour', labelKey, key });
-        } else if (defaultPeriod === '7d') {
+        } else if (key === '7d') {
             // Rolling last-7-days (#523): always 7 day-buckets, no Monday
             // single-bar collapse, matching the "Last 7 days" title.
             const start = this._startOfDayInHaTz(now);
@@ -439,20 +463,28 @@ class SEMChartCard extends SEMLitBase {
 
     // ── Data fetch + render ──
     async _fetchAndRender() {
-        if (!this._hass || !this._period) return;
+        if (!this._hass || !this._period || !this.isConnected) return;
         const series = this._resolveSeries();
         if (!series.length) return;
 
         const { start, end, granularity } = this._period;
+        // #1058: an answer that lands after the card left the page, or after a
+        // newer fetch, draws nothing. A chart made on a card off the page that
+        // never comes back is never destroyed (Chart.js keeps every instance
+        // in Chart.instances).
+        const seq = ++this._fetchSeq;
+        const stale = () => seq !== this._fetchSeq || !this.isConnected;
 
         let datasets;
         try {
             datasets = await this._fetchStatistics(series, start.toISOString(), end.toISOString(), granularity);
         } catch (err) {
+            if (stale()) return;
             console.debug('sem-chart-card: fetch error', err);
             this._showEmpty(this._t('data_unavailable'));
             return;
         }
+        if (stale()) return;
 
         if (!datasets || datasets.every(ds => !ds.data.length)) {
             this._showEmpty(this._t('no_data_for_period'));
@@ -463,7 +495,8 @@ class SEMChartCard extends SEMLitBase {
         // Canvas visibility is lit-bound to _emptyMsg now — wait for the
         // update to land so Chart.js sizes against a visible canvas.
         await this.updateComplete;
-        await this._renderChart(datasets, series);
+        if (stale()) return;
+        await this._renderChart(datasets, series, stale);
     }
 
     async _fetchStatistics(series, startISO, endISO, granularity) {
@@ -509,8 +542,9 @@ class SEMChartCard extends SEMLitBase {
         }));
     }
 
-    async _renderChart(datasets, series) {
+    async _renderChart(datasets, series, stale = () => false) {
         const Chart = await _loadChartJs();
+        if (stale()) return;
         const canvas = this.renderRoot.querySelector('canvas');
         if (!canvas) return;
 

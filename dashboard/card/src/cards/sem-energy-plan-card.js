@@ -21,6 +21,7 @@
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { semDefineCard, semFormatTime, semGetCurrency } from '../base/sem-shared.js';
 import { demandName } from '../util/demand-name.js';
+import { battIndexes, homeCover } from '../util/plan-cover.js';
 
 const DEFAULT_ENTITY = 'sensor.sem_energy_plan';
 
@@ -49,10 +50,6 @@ const STATUS = {
     partial: { icon: 'mdi:circle-slice-4',     color: '#ff9800' },
     yields:  { icon: 'mdi:alert-circle-outline', color: '#f06292' },
 };
-
-// Below this the slot's home draw is considered fully battery-covered. The
-// backend rounds home_grid_w to 1 decimal, so anything under a watt is noise.
-const GRID_EPS_W = 1.0;
 
 class SEMEnergyPlanCard extends SEMLitBase {
     setConfig(config) {
@@ -192,10 +189,11 @@ class SEMEnergyPlanCard extends SEMLitBase {
     }
 
     // Merge consecutive slots that share a predicate into % runs on the axis.
+    // ``pick`` gets the slot and its index.
     _runs(slots, t0, span, pick) {
         const out = [];
-        for (const s of slots) {
-            const v = pick(s);
+        for (const [i, s] of slots.entries()) {
+            const v = pick(s, i);
             const start = Date.parse(s.start);
             const end = Date.parse(s.end);
             if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
@@ -370,7 +368,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
                     <div class="legend">
                         <span class="key"><i class="sw tmw-sun-key"></i>${this._t('energy_plan_legend_surplus')}</span>
                         <span class="key"><i class="sw cheapkey"></i>${this._t('energy_plan_legend_cheap')}</span>
-                        <span class="key"><i class="sw" style="background:#f06292"></i>${this._t('energy_plan_legend_battery_charge')}</span>
+                        ${curve.length > 1 ? html`<span class="key"><i class="sw" style="background:#f06292"></i>${this._t('energy_plan_legend_battery_charge')}</span>` : nothing}
                     </div>
                     <div class="idle">
                         ☀ ${(t.forecast_kwh || 0).toFixed(1)} kWh ·
@@ -616,15 +614,24 @@ class SEMEnergyPlanCard extends SEMLitBase {
         // without its last tick.
         })).filter(t => t.left <= 94);
 
-        const battRuns = this._runs(slots, t0, span,
-                                    s => (s.home_grid_w || 0) <= GRID_EPS_W);
+        // (#1063) grid / batt / sun per slot — see util/plan-cover.js.
+        const battAt = battIndexes(a.batt_runs);
+        const homeRuns = this._runs(slots, t0, span,
+            (s, i) => homeCover(s, battAt ? battAt.has(i) : undefined));
+        const drawn = new Set(homeRuns.map(r => r.v));
+        // (#1063) A plan that walked no battery has no hand-over to show,
+        // and its Home row wears a house, not a battery. An older payload
+        // without the flag keeps the old drawing.
+        const hasBatt = a.has_battery !== false;
         // The status cell is narrow by design (the track is the point), so
         // the takeover reads as icon + hour there and carries the full
         // localized sentence as its tooltip.
-        const takeoverFull = a.takeover
+        const takeoverFull = !hasBatt ? ''
+            : a.takeover
             ? this._format('energy_plan_takeover', { time: this._hm(a.takeover) })
             : this._t('energy_plan_all_night');
-        const takeoverCell = a.takeover
+        const takeoverCell = !hasBatt ? nothing
+            : a.takeover
             ? html`
                 <ha-icon icon="mdi:transmission-tower"
                          style="--mdc-icon-size:12px;color:#488fc2"></ha-icon>
@@ -695,14 +702,15 @@ class SEMEnergyPlanCard extends SEMLitBase {
                         ` : nothing}
 
                         <div class="lbl">
-                            <ha-icon icon="mdi:home-battery" style="--mdc-icon-size:13px;color:#4db6ac"></ha-icon>
+                            <ha-icon icon="${hasBatt ? 'mdi:home-battery' : 'mdi:home'}"
+                                     style="--mdc-icon-size:13px;color:${hasBatt ? '#4db6ac' : '#5BC8D8'}"></ha-icon>
                             <span class="name">${this._t('energy_plan_home')}</span>
                         </div>
                         ${hasStrip ? html`
                             <div class="track">
                                 ${cheapLayer}
-                                ${battRuns.map(r => html`
-                                    <div class="seg ${r.v ? 'batt' : 'grid'}"
+                                ${homeRuns.map(r => html`
+                                    <div class="seg ${r.v}"
                                          style="left:${r.left}%;width:${r.width}%"></div>
                                 `)}
                             </div>
@@ -787,8 +795,9 @@ class SEMEnergyPlanCard extends SEMLitBase {
 
                     ${hasStrip ? html`
                         <div class="legend">
-                            <span class="key"><i class="sw batt"></i>${this._t('energy_plan_legend_battery')}</span>
-                            <span class="key"><i class="sw grid"></i>${this._t('energy_plan_legend_grid')}</span>
+                            ${drawn.has('sun') ? html`<span class="key"><i class="sw sun"></i>${this._t('energy_plan_legend_sun')}</span>` : nothing}
+                            ${drawn.has('batt') ? html`<span class="key"><i class="sw batt"></i>${this._t('energy_plan_legend_battery')}</span>` : nothing}
+                            ${drawn.has('grid') ? html`<span class="key"><i class="sw grid"></i>${this._t('energy_plan_legend_grid')}</span>` : nothing}
                             <span class="key"><i class="sw cheapkey"></i>${this._t('energy_plan_legend_cheap')}</span>
                         </div>
                     ` : html`
@@ -1025,6 +1034,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
             }
             .seg.batt { background: #4db6ac; }
             .seg.grid { background: #488fc2; }
+            .seg.sun { background: #ff9800; }
             .seg.run { top: 1px; bottom: 1px; }
             .tick {
                 position: absolute; top: 0;
@@ -1063,6 +1073,7 @@ class SEMEnergyPlanCard extends SEMLitBase {
             }
             .sw.batt { background: #4db6ac; }
             .sw.grid { background: #488fc2; }
+            .sw.sun { background: #ff9800; }
             .sw.cheapkey { background: rgba(141,200,146,0.35); }
             .warn {
                 display: flex; align-items: center; gap: 5px;

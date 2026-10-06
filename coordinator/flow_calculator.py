@@ -179,6 +179,11 @@ def battery_redirect_w(
     # car with those watts makes the meter fund them.
     if battery_commanded:
         return 0
+    # (#1063) No pack size — the battery module is ABSENT, and a battery
+    # added since reads as charging until the reload takes it in. A need of
+    # 0 read as "full" and handed the car the pack's whole charge. Keep it.
+    if battery_capacity_kwh <= 0:
+        return 0
 
     battery_need_kwh = max(0, (100 - battery_soc) / 100 * battery_capacity_kwh)
 

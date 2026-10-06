@@ -465,6 +465,22 @@ class SEMSystemDiagramCard extends SEMLitBase {
 
     // ── Observers: compact toggle + visibility ──
     firstUpdated() {
+        if (this.isConnected) this._observe();
+    }
+
+    // #1058: HA takes a tab's cards off the page when you leave the tab and
+    // puts the SAME cards back when you return. firstUpdated() runs once, so
+    // what disconnectedCallback() stops is started again here: the watchers,
+    // and a number count it stopped half way.
+    connectedCallback() {
+        super.connectedCallback();
+        if (!this.hasUpdated) return;
+        this._observe();
+        if (this._targets) this._startTickIfIdle();
+    }
+
+    _observe() {
+        this._unobserve();
         this._resizeObserver = new ResizeObserver(entries => {
             if (this._resizeTimeout) clearTimeout(this._resizeTimeout);
             this._resizeTimeout = setTimeout(() => {
@@ -489,11 +505,15 @@ class SEMSystemDiagramCard extends SEMLitBase {
         this._intersectionObserver.observe(this);
     }
 
-    disconnectedCallback() {
-        super.disconnectedCallback();
+    _unobserve() {
         if (this._resizeObserver) { this._resizeObserver.disconnect(); this._resizeObserver = null; }
         if (this._intersectionObserver) { this._intersectionObserver.disconnect(); this._intersectionObserver = null; }
         clearTimeout(this._resizeTimeout);
+    }
+
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        this._unobserve();
         if (this._counterRaf) { cancelAnimationFrame(this._counterRaf); this._counterRaf = null; }
     }
 

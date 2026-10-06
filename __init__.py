@@ -1791,13 +1791,17 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
     return True
 
 
+from .utils.device_names import (  # noqa: E402  (#1053)
+    HEAT_PUMP_DEFAULT, device_display_name,
+)
+
 def _heat_pump_rows(full_config: dict) -> list[dict]:
     """#685: one row per heat pump — flat keys are the PRIMARY unit
     (device_id "heat_pump", full back-compat), the ``heat_pumps`` list
     holds additional units with the same key names."""
     rows: list[dict] = [{
         "id": "heat_pump",
-        "name": full_config.get("heat_pump_name", "Heat Pump"),
+        "name": full_config.get("heat_pump_name", HEAT_PUMP_DEFAULT),
         **{k: full_config.get(k) for k in (
             "heat_pump_relay1_entity", "heat_pump_relay2_entity",
             "heat_pump_climate_entity", "heat_pump_power_sensor",
@@ -1835,7 +1839,7 @@ def _heat_pump_rows(full_config: dict) -> list[dict]:
             _id = f"heat_pump_{_n}"
         _seen.add(_id)
         rows.append({**_row, "id": _id,
-                     "name": _row.get("name") or f"Heat Pump {_i + 2}"})
+                     "name": _row.get("name") or f"{HEAT_PUMP_DEFAULT} {_i + 2}"})
     return rows
 
 
@@ -2841,7 +2845,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             hp_extra = HeatPumpController(
                 hass=hass,
                 device_id=str(_row["id"]),
-                name=str(_row.get("name") or "Heat Pump"),
+                name=device_display_name(hass, _row.get("name"), "heat_pump"),
                 rated_power=float(_row.get("heat_pump_rated_power", 2000)),
                 priority=int(_row.get("heat_pump_priority", 4)),
                 relay1_entity_id=_r1,
@@ -2909,7 +2913,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             hw_device = HotWaterController(
                 hass=hass,
                 device_id="hot_water",
-                name=full_config.get("hot_water_name", "Hot Water"),
+                name=device_display_name(
+                    hass, full_config.get("hot_water_name"), "hot_water"),
                 rated_power=float(full_config.get("hot_water_rated_power", 2500)),
                 priority=int(full_config.get("hot_water_priority", 6)),
                 entity_id=hw_entity,
@@ -3754,6 +3759,14 @@ async def _async_register_services(
 
         days = call.data.get("days") or 365
         tracker = getattr(coordinator, "_battery_night", None)
+        from .coordinator.install_modules import Module, Presence, presence_of
+        if presence_of(coordinator).get(Module.BATTERY) is Presence.ABSENT:
+            # (#1063) No battery, no battery nights — the recorder skips
+            # such a home, so "try again later" would never come true.
+            _LOGGER.warning(
+                "backfill_battery_nights: this install has no battery — "
+                "there are no battery nights to rebuild")
+            return
         if tracker is None:
             _LOGGER.warning(
                 "backfill_battery_nights: no night tracker on the coordinator "

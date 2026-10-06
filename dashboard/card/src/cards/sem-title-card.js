@@ -17,12 +17,12 @@ class SEMTitleCard extends SEMLitBase {
         this._renderedSubtitle = null;
         this._templateUnsub = null;
         this._templateSubbed = false;
+        this._templateGen = 0;
     }
 
     setConfig(config) {
         super.setConfig(config);
         this._unsubTemplate();
-        this._templateSubbed = false;
         this._renderedSubtitle = null;
     }
 
@@ -43,8 +43,9 @@ class SEMTitleCard extends SEMLitBase {
             this.requestUpdate();
         }
 
-        // Subscribe to HA template rendering for Jinja subtitles
-        if (this._hasJinja(this._config?.subtitle) && !this._templateSubbed) {
+        // Subscribe to HA template rendering for Jinja subtitles — only while
+        // on the page; connectedCallback() opens it when the card is put there.
+        if (this.isConnected && this._hasJinja(this._config?.subtitle) && !this._templateSubbed) {
             this._subscribeTemplate();
         }
     }
@@ -52,10 +53,12 @@ class SEMTitleCard extends SEMLitBase {
     _subscribeTemplate() {
         if (!this._hass?.connection || this._templateSubbed) return;
         this._templateSubbed = true;
+        const gen = this._templateGen;
 
         const template = this._config.subtitle;
         this._hass.connection.subscribeMessage(
             (msg) => {
+                if (gen !== this._templateGen) return;
                 const result = msg.result;
                 if (result !== this._renderedSubtitle) {
                     this._renderedSubtitle = result;
@@ -64,18 +67,33 @@ class SEMTitleCard extends SEMLitBase {
             },
             { type: 'render_template', template, variables: {} }
         ).then(unsub => {
+            // #1058: the card left the page (or got a new config) before
+            // the server answered — close it; a new one is already open.
+            if (gen !== this._templateGen) { unsub(); return; }
             this._templateUnsub = unsub;
         }).catch(() => {
+            if (gen !== this._templateGen) return;
             this._renderedSubtitle = this._config.subtitle;
             this.requestUpdate();
         });
     }
 
     _unsubTemplate() {
+        this._templateGen++;
+        this._templateSubbed = false;
         if (this._templateUnsub) {
             this._templateUnsub();
             this._templateUnsub = null;
         }
+    }
+
+    // #1058: HA takes a tab's cards off the page when you leave the tab and
+    // puts the SAME cards back when you return. disconnectedCallback() closes
+    // the subscription, and hass does not change when nothing changed while
+    // you were away, so open it again here.
+    connectedCallback() {
+        super.connectedCallback();
+        if (this._hass && this._hasJinja(this._config?.subtitle)) this._subscribeTemplate();
     }
 
     disconnectedCallback() {
