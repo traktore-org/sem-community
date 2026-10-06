@@ -67,7 +67,7 @@ from .health_check import (
 from .units import energy_state_to_kwh, power_state_to_watts
 from .distance_units import distance_to_km
 from .ev_availability import operational_ev_connected, operational_night_target
-from .departure import departure_for
+from .departure import departure_for, departure_signature
 from .surplus_availability import SurplusAvailability
 from .sensor_reader import SensorReader
 from .energy_calculator import EnergyCalculator
@@ -8772,7 +8772,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 sig.append((
                     "ev", cid,
                     round(float(cfg.get("daily_ev_target") or 0.0), 1),
-                    self._charger_target_time(cfg),  # (#1023)
+                    departure_signature(cfg, self.config),  # (#1023)
                     str(cfg.get("charge_mode") or ""),
                     _full,
                 ))
