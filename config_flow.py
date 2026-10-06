@@ -13,6 +13,7 @@ from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 
+from .utils.device_names import HEAT_PUMP_DEFAULT, device_display_name  # (#1053)
 from .consts.devices import CONTACT_VALUE_SERVICES, SG_READY_CONTACT_DOMAINS
 from .const import (
     DOMAIN,
@@ -3203,9 +3204,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                              f"{'s' if pumps else ''} configured)"}]
         for i, hp in enumerate(pumps):
             options.append({"value": f"edit_heat_pump:{i}",
-                            "label": f"Edit: {hp.get('name') or f'Heat Pump {i + 2}'}"})
+                            "label": f"Edit: {device_display_name(getattr(self, 'hass', None), hp.get('name'), 'heat_pump', number=i + 2)}"})
             options.append({"value": f"remove_heat_pump:{i}",
-                            "label": f"Remove: {hp.get('name') or f'Heat Pump {i + 2}'}"})
+                            "label": f"Remove: {device_display_name(getattr(self, 'hass', None), hp.get('name'), 'heat_pump', number=i + 2)}"})
         options.append({"value": "add_heat_pump", "label": "Add another heat pump"})
         return self.async_show_form(
             step_id="heat_pump_menu",
@@ -3260,7 +3261,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     while f"heat_pump_{n}" in used:
                         n += 1
                     new_row.setdefault("id", f"heat_pump_{n}")
-                    new_row.setdefault("name", f"Heat Pump {n}")
+                    new_row.setdefault("name", f"{HEAT_PUMP_DEFAULT} {n}")
                     pumps.append(new_row)
                 self._data["heat_pumps"] = pumps
                 self._edit_hp_index = None

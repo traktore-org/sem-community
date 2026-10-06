@@ -132,6 +132,20 @@ def _merge_plan_blocks(blocks: Any) -> List[Dict[str, Any]]:
     return out
 
 
+def _batt_runs(slots: Any) -> List[List[int]]:
+    """(#1063) ``[[first, last], ...]`` — the slot indexes the plan marked
+    ``batt`` (the battery covered the house), merged into runs."""
+    runs: List[List[int]] = []
+    for i, s in enumerate(slots or []):
+        if not (isinstance(s, dict) and s.get("batt")):
+            continue
+        if runs and runs[-1][1] == i - 1:
+            runs[-1][1] = i
+        else:
+            runs.append([i, i])
+    return runs
+
+
 def _energy_plan_attrs(
     plan: Any, extra: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
@@ -174,11 +188,23 @@ def _energy_plan_attrs(
             "price": s.get("price"), "cheap": s.get("cheap"),
             "home_grid_w": s.get("home_grid_w"),
         } for s in (plan.get("slots") or [])],
+        # (#1063) Where the plan drew the battery for the house, as
+        # inclusive index runs over ``slots``. A flag per slot cost 14
+        # bytes each and pushed a 15-minute day past the budget; the
+        # battery covers one or two stretches, so runs cost a few bytes.
+        # None for a plan stamped before #1063 (no ``has_battery``): it
+        # never marked a slot, and the card then keeps its old drawing.
+        "batt_runs": (_batt_runs(plan.get("slots"))
+                      if "has_battery" in plan else None),
         "blocks": _merge_plan_blocks(plan.get("blocks")),
         # A string here means the battery figures behind this plan came from
         # a SUBSET of the fleet (#638 finding #3) — the card says so rather
         # than presenting a degraded plan as a healthy one.
         "battery_fleet_partial": plan.get("battery_fleet_partial"),
+        # (#1063) False on a home with no battery — the card drops the
+        # battery icon and the hand-over time. None (a stash from before
+        # #1063) keeps the card's old drawing.
+        "has_battery": plan.get("has_battery"),
         # (#638 G4) True while the actuation switch is on — the plan's
         # blocks feed the night signals; the card swaps its shadow chip.
         "actuation": bool(plan.get("actuation", False)),
@@ -213,6 +239,7 @@ def _energy_plan_attrs(
     if _too_big():
         attrs["slots"] = []
         attrs["blocks"] = []
+        attrs["batt_runs"] = []
         attrs["timeline_omitted"] = True
     # (#758) The timeline is the biggest term, but it is not the only one,
     # and going over means the recorder keeps NOTHING. If dropping it was

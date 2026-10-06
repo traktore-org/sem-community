@@ -369,6 +369,13 @@ class SEMConfigCard extends SEMLitBase {
         // is switched away mid-save (#476).
         for (const t of this._statusTimers) clearTimeout(t);
         this._statusTimers.clear();
+        // #1058: HA puts this same card back when you return to the tab. The
+        // timers above would have cleared the ✓ marks, so clear them now —
+        // else a ✓ from before you left stays on screen. Errors stay.
+        if (Object.values(this._saveStatus || {}).includes('ok')) {
+            this._saveStatus = Object.fromEntries(
+                Object.entries(this._saveStatus).filter(([, v]) => v !== 'ok'));
+        }
     }
 
     setConfig(config) {

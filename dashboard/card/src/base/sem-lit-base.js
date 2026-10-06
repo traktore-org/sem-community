@@ -321,6 +321,12 @@ export class SEMLitBase extends LitElement {
         if (window._semDebug) {
             console.log(`[SEM DEBUG] ${this.tagName} connectedCallback`);
         }
+        // #1058: HA takes a tab's cards off the page when you leave the tab
+        // and puts the SAME cards back when you return. Lit does not render a
+        // card that comes back, and hass does not change if nothing changed
+        // while you were away — so the card showed what it drew before you
+        // left, and updated() (where some cards start a timer) never ran.
+        if (this.hasUpdated) this.requestUpdate();
         // Wait for semLocalize via event (instant) instead of polling
         if (!this._localizeReady && typeof semLocalize !== 'function') {
             this._onLocalizeReady = () => {
