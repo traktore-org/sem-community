@@ -18,7 +18,7 @@ from typing import Any, Dict, Optional
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from .base import SwitchDevice, DeviceState
+from .base import ComfortBandMixin, SwitchDevice, DeviceState
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -391,13 +391,14 @@ class HotWaterController(SwitchDevice):
         target kept heating past it for as long as the surplus lasted. Only a
         real reading counts — a sensor that reads nothing is not a hot tank.
 
-        Nothing stops a Legionella cycle: not this target, not a banked comfort
-        band (both sit below the disinfection target), not a stop entity. Once
-        cut, nothing starts the run again — ``check_legionella_cycle`` only
-        waits for the tank to reach the target, and ends the run itself.
+        During a Legionella cycle SEM's own stops do not apply: this target and
+        a banked comfort band both sit below the disinfection target, and
+        ``check_legionella_cycle`` ends the run itself. A stop entity the user
+        set still counts, as it did before (#1062).
         """
         if self._legionella_cycle_active:
-            return False
+            # The base stop only (the stop entity) — skip the band's banked.
+            return super(ComfortBandMixin, self).stop_condition_met
         if super().stop_condition_met:
             return True
         if self._entity_domain in _SETPOINT_DOMAINS:

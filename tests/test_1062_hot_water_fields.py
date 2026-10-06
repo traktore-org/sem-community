@@ -191,16 +191,26 @@ class TestTheSurplusPassStopsIt:
         assert dev.is_active
         assert not hass.calls("turn_off")
 
-    async def test_a_stop_entity_does_not_cut_the_legionella_cycle(self):
+    async def test_the_solar_target_does_not_cut_the_legionella_cycle(self):
         hass = _Hass()
         dev = _boiler(hass)
         sc = await self._running(hass, dev)
         dev._legionella_cycle_active = True
-        dev.stop_entity, dev.stop_at = "sensor.tank_top", 50.0
-        hass.set("sensor.tank_top", "60")
         hass.set("sensor.boiler_temp", "60.0")
         await sc.update(5000.0)
         assert dev.is_active
+
+    async def test_a_stop_entity_still_ends_the_cycle_as_before(self):
+        """A stop the USER set is not SEM's to overrule — unchanged."""
+        hass = _Hass()
+        dev = _boiler(hass)
+        sc = await self._running(hass, dev)
+        dev._legionella_cycle_active = True
+        dev.stop_entity, dev.stop_at = "sensor.tank_top", 70.0
+        hass.set("sensor.tank_top", "75")
+        hass.set("sensor.boiler_temp", "62.0")
+        await sc.update(5000.0)
+        assert not dev.is_active
 
     async def test_it_starts_again_once_the_water_has_cooled(self):
         hass = _Hass()
@@ -274,7 +284,11 @@ class TestComfortBandReadsTheBoiler:
         dev.vacation = True
         assert dev.comfort_state == "disengaged"
         assert dev.has_runtime_deficit is False
-        assert dev.comfort_plan_demand(datetime.now()) is None
+        # banked at 53 °C (Keep at 50 + Bank by 3) — but not while away
+        hass.set("sensor.boiler_temp", "53.5")
+        assert dev.stop_condition_met is False
+        dev.vacation = False
+        assert dev.stop_condition_met is True
 
     def test_no_band_set_changes_nothing(self):
         """Zero config: a boiler with a sensor and no Comfort values is
