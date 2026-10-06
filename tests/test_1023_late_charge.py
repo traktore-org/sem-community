@@ -161,7 +161,7 @@ def test_with_one_block_the_rest_is_one_block_before_the_window():
                       peak_limit_w=11000.0)
     early = sorted((a for a in plan.allocations
                     if "late charge" not in a.reason), key=lambda a: a.start)
-    for prev, nxt in zip(early, early[1:]):
+    for prev, nxt in zip(early, early[1:], strict=False):
         assert prev.end == nxt.start
     assert early[-1].end <= DEPART - timedelta(minutes=30)
     assert plan.results[0].planned_kwh == pytest.approx(10.0)
