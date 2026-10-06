@@ -430,13 +430,26 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
     # car deliberately, down to the drain floor — the EV protection clamp
     # below must not fight a window the user opened. Bounded by the floor
     # and by a SOC that was actually read.
-    if bool(getattr(view, "morning_window_open", False)):
-        _floor = float(cfg.get("battery_morning_drain_floor_soc", 50.0) or 50.0)
+    # (#1025) A battery boost is the same spend on the user's one-off, to the
+    # boost's own floor. Both open: each was consented to its own depth, so
+    # the pack may go to the deeper one.
+    _window = bool(getattr(view, "morning_window_open", False))
+    _boost = getattr(view, "battery_boost_floor_soc", None)
+    if _window or _boost is not None:
+        _floors = []
+        if _window:
+            _floors.append(float(
+                cfg.get("battery_morning_drain_floor_soc", 50.0) or 50.0))
+        if _boost is not None:
+            _floors.append(float(_boost))
+        _floor = min(_floors)
+        _why = ("battery boost" if _boost is not None and _floor == float(_boost)
+                else "morning window")
         _soc = rt.last_known_soc
         if rt.available and _soc is not None and _soc > _floor:
             return BatteryDecision(
                 battery_id=rt.battery_id, intent=BatteryIntent.NORMAL,
-                reason=(f"morning window — the pack feeds the car down to "
+                reason=(f"{_why} — the pack feeds the car down to "
                         f"{_floor:.0f}% (SOC {_soc:.0f}%)"),
             )
 

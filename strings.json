@@ -1675,6 +1675,15 @@
     },
     "load_management_failed_to_start": {
       "message": "Load management is switched on but failed to start, so SEM cannot use its device list. Check the Home Assistant log for \"Failed to initialize load management\" and reload the integration."
+    },
+    "battery_boost_not_permitted": {
+      "message": "The battery may not feed “{charger}”: its permission is off. Switch it on in the battery settings to boost."
+    },
+    "battery_boost_not_connected": {
+      "message": "No car is plugged into “{charger}”."
+    },
+    "battery_boost_bad_floor": {
+      "message": "“{floor}” is not a battery level: give a floor from 0 to 100 %."
     }
   },
   "issues": {

@@ -1675,6 +1675,15 @@
     },
     "load_management_failed_to_start": {
       "message": "Lasthantering är påslagen men kunde inte starta, så SEM kan inte använda sin enhetslista. Kontrollera Home Assistant-loggen efter \"Failed to initialize load management\" och ladda om integrationen."
+    },
+    "battery_boost_not_permitted": {
+      "message": "Batteriet får inte mata ”{charger}”: behörigheten är avstängd. Slå på den i batteriinställningarna för att boosta."
+    },
+    "battery_boost_not_connected": {
+      "message": "Ingen bil är ansluten till ”{charger}”."
+    },
+    "battery_boost_bad_floor": {
+      "message": "”{floor}” är ingen batterinivå: ange en nedre gräns från 0 till 100 %."
     }
   },
   "issues": {

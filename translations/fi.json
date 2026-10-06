@@ -1675,6 +1675,15 @@
     },
     "load_management_failed_to_start": {
       "message": "Kuormanhallinta on päällä, mutta se ei käynnistynyt, joten SEM ei voi käyttää laitelistaansa. Tarkista Home Assistantin lokista \"Failed to initialize load management\" ja lataa integraatio uudelleen."
+    },
+    "battery_boost_not_permitted": {
+      "message": "Akku ei saa syöttää laitetta ”{charger}”: lupa on pois päältä. Kytke se päälle akun asetuksista käyttääksesi tehostusta."
+    },
+    "battery_boost_not_connected": {
+      "message": "Laitteeseen ”{charger}” ei ole kytketty autoa."
+    },
+    "battery_boost_bad_floor": {
+      "message": "”{floor}” ei ole akun varaustaso: anna alaraja väliltä 0–100 %."
     }
   },
   "issues": {

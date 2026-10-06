@@ -901,6 +901,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # / switch / calendar — active while its state is ``on``).
         self._vacation_switch_on = config.get("vacation_mode", False)
         self._vacation_active = False
+        # (#1025) the one battery boost, in memory only — a restart ends it
+        self._battery_boost = None
+        self._battery_boost_ended: Optional[Dict[str, Any]] = None
 
         # Tracking flags
         self._initial_update_done = False
@@ -4988,6 +4991,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             _dl_pcfg = self._primary_charger_cfg()
             result["ev_target_time"] = self._charger_target_time(_dl_pcfg)
             result["ev_tariff_optimized"] = self._tariff_optimized_for(_dl_pcfg)
+            # (#1025) the battery boost for the card: running, or how it ended
+            result["battery_boost"] = self.battery_boost_status(
+                getattr(self, "_boost_power_seen", None))
             _night_plan = self._cycle_night_plan
             if _night_plan is not None:
                 result["ev_deadline_reachable"] = _night_plan.reachable
@@ -8158,6 +8164,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             export_guard_enabled=bool(getattr(_fs, "export_guard_enabled", False)),
             sink_verdicts=dict(getattr(_fs, "sink_verdicts", None) or {}),
             ev_morning_window_open=bool(getattr(_fs, "morning_window_open", False)),
+            # (#1025) the battery boost — both producers of this context
+            boost_charger_id=getattr(_fs, "boost_charger_id", None),
+            boost_floor_soc=getattr(_fs, "boost_floor_soc", None),
             # (#1003) The ceiling, and whether this cycle could see. Same
             # class as the export axis above and found the same way: the
             # battery decider hands part of the house's draw to the meter (the
@@ -8352,6 +8361,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     getattr((getattr(self, "_sink_verdicts", None) or {}).get("ev"),
                             "state", "") == "open"
                     and self.config.get("ev_morning_window_enabled", False)),
+                # (#1025) a running battery boost's floor, else None
+                battery_boost_floor_soc=getattr(
+                    getattr(self, "_battery_boost", None), "floor_soc", None),
                 forecast_sell=_fsell,
             )
 
@@ -8611,6 +8623,88 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         if msg:
             _LOGGER.info("#638 coverage: %s", msg)
         return gate
+
+    # ── (#1025) battery boost ─────────────────────────────────────────
+    def _charger_cfg_by_id(self, charger_id: str) -> Optional[Dict[str, Any]]:
+        return next((c for c in (self.config.get("ev_chargers") or [])
+                     if isinstance(c, dict) and c.get("id") == charger_id), None)
+
+    def start_battery_boost(self, charger_id: str, floor_soc=None):
+        """(#1025) Start the one-off boost for ``charger_id``, replacing one
+        that runs. Raises ``BoostRefused`` (the user's sentence) when it may
+        not start. In memory only: a restart ends it."""
+        from .battery_boost import BoostRefused, start_boost
+        cfg = self._charger_cfg_by_id(charger_id)
+        if cfg is None:
+            raise BoostRefused("device_not_found", device_id=charger_id)
+        # The last cycle's readings: a definite unplug refuses, nothing read
+        # yet does not (the next cycle ends a boost on an unplug).
+        power = getattr(self, "_boost_power_seen", None)
+        boost = start_boost(
+            charger_id, cfg, self.config,
+            mode=self._effective_charge_mode_for(cfg),
+            connected=self._plan_ev_connected(charger_id, cfg, power),
+            now=dt_util.now(), floor_soc=floor_soc)
+        self._battery_boost = boost
+        self._battery_boost_ended = None
+        _LOGGER.info("Battery boost started for %s, down to %.0f%%",
+                     charger_id, boost.floor_soc)
+        return boost
+
+    def stop_battery_boost(self, reason: str = "stopped") -> None:
+        """(#1025) End the boost, if one runs, and say why."""
+        boost = self._battery_boost
+        if boost is None:
+            return
+        self._battery_boost = None
+        self._battery_boost_ended = {
+            "charger_id": boost.charger_id, "reason": reason,
+            "at": dt_util.now().isoformat()}
+        _LOGGER.info("Battery boost for %s ended: %s", boost.charger_id, reason)
+
+    def _tick_battery_boost(self, power) -> None:
+        """(#1025) Once per cycle: end the boost when its car unplugs, its
+        charger's mode changes, the pack reaches the floor or the permission
+        goes off. An unknown plug or an unread SOC ends nothing."""
+        self._boost_power_seen = power
+        boost = getattr(self, "_battery_boost", None)
+        if boost is None:
+            return
+        from .battery_boost import boost_end_reason
+        from .build_view import _battery_may_assist_ev
+        cfg = self._charger_cfg_by_id(boost.charger_id)
+        if cfg is None:
+            self.stop_battery_boost("charger removed")
+            return
+        soc = (getattr(power, "battery_soc", None)
+               if getattr(power, "battery_soc_known", True) else None)
+        reason = boost_end_reason(
+            boost,
+            connected=self._plan_ev_connected(boost.charger_id, cfg, power),
+            mode=self._effective_charge_mode_for(cfg),
+            soc=soc,
+            may_assist=_battery_may_assist_ev(self.config, cfg))
+        if reason:
+            self.stop_battery_boost(reason)
+
+    def battery_boost_status(self, power=None) -> Optional[Dict[str, Any]]:
+        """(#1025) For the card: the running boost and what it may still
+        give, or how the last one ended."""
+        from .battery_boost import boost_remaining_kwh
+        boost = getattr(self, "_battery_boost", None)
+        if boost is None:
+            ended = getattr(self, "_battery_boost_ended", None)
+            return {"active": False, "last_end": ended} if ended else None
+        soc = getattr(power, "battery_soc", None) if power is not None else None
+        try:
+            cap = float(self.battery_capacity_kwh or 0.0)
+        except Exception:  # noqa: BLE001 — no capacity, nothing to show
+            cap = 0.0
+        return {
+            "active": True, "charger_id": boost.charger_id,
+            "floor_soc": boost.floor_soc, "started": boost.started.isoformat(),
+            "remaining_kwh": round(boost_remaining_kwh(soc, boost.floor_soc, cap), 2),
+        }
 
     def _plan_ev_connected(self, cid: str, charger_cfg, power):
         """(#638) THE plan layer's answer to "is this car connected?".
@@ -11870,6 +11964,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             morning_window_open=bool(
                 getattr(_verdicts.get("ev"), "state", "") == "open"
                 and self.config.get("ev_morning_window_enabled", False)),
+            # (#1025) the battery boost running this cycle, if any
+            boost_charger_id=getattr(
+                getattr(self, "_battery_boost", None), "charger_id", None),
+            boost_floor_soc=getattr(
+                getattr(self, "_battery_boost", None), "floor_soc", None),
         )
 
     def _curtailment_grant_w(self, power) -> float:
@@ -12112,6 +12211,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # plumbing-asymmetry class: any new fleet input lands as a
         # field on FleetCycleState and is automatically visible to
         # every charger's decide() in this cycle.
+        self._tick_battery_boost(power)   # (#1025) before the fleet state
         fleet_state = self._build_fleet_cycle_state(power, energy)
         self._cycle_fleet_state = fleet_state
         forecast_remaining = fleet_state.forecast_remaining_kwh

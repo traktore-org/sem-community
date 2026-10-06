@@ -1675,6 +1675,15 @@
     },
     "load_management_failed_to_start": {
       "message": "Das Lastmanagement ist eingeschaltet, konnte aber nicht starten, daher kann SEM seine Geräteliste nicht verwenden. Prüfe das Home-Assistant-Protokoll auf \"Failed to initialize load management\" und lade die Integration neu."
+    },
+    "battery_boost_not_permitted": {
+      "message": "Die Batterie darf „{charger}“ nicht versorgen: die Freigabe ist aus. Schalte sie in den Batterie-Einstellungen ein, um den Boost zu nutzen."
+    },
+    "battery_boost_not_connected": {
+      "message": "An „{charger}“ ist kein Auto angeschlossen."
+    },
+    "battery_boost_bad_floor": {
+      "message": "„{floor}“ ist kein Batteriestand: gib eine Untergrenze von 0 bis 100 % an."
     }
   },
   "issues": {

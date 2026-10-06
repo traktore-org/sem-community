@@ -644,6 +644,35 @@ set_option:
       selector:
         text:
 
+start_battery_boost:
+  name: Start a battery boost
+  description: >-
+    (#1025) Put the house battery into this car for this one charge, down to a
+    floor. It ends when the car unplugs, the charger's mode changes, the
+    battery reaches the floor or its permission is switched off — and a
+    restart ends it. Refused while the battery may not feed this car. The
+    standing permission is not changed.
+  fields:
+    charger_id:
+      name: Charger
+      description: "The charger's id, as in SEM's configuration."
+      required: true
+      selector:
+        text:
+    floor_soc:
+      name: Floor
+      description: "Down to this battery level, in percent. Default: the morning drain floor (50 %)."
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+
+stop_battery_boost:
+  name: Stop the battery boost
+  description: (#1025) End the running battery boost.
+
 replan:
   name: Re-plan the energy day
   description: >-

@@ -3646,6 +3646,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool
             "schedule_appliance",
             "cancel_appliance_schedule",
             "remove_leftovers",
+            "start_battery_boost",
+            "stop_battery_boost",
         ):
             hass.services.async_remove(DOMAIN, service_name)
 
@@ -3902,6 +3904,60 @@ async def _async_register_services(
         _LOGGER.debug("Registered service: %s.replan", DOMAIN)
     except Exception as err:  # noqa: BLE001
         _LOGGER.error("Failed to register replan service: %s", err)
+
+    async def async_start_battery_boost(call) -> None:
+        """(#1025) The house battery into this car for this one charge,
+        down to a floor. Refused — with the sentence the user gets — when it
+        may not start."""
+        from .coordinator.battery_boost import BoostRefused
+        try:
+            coordinator.start_battery_boost(
+                call.data["charger_id"], call.data.get("floor_soc"))
+        except BoostRefused as err:
+            # Each key spelled at its raise: the exception block is checked
+            # against the keys production raises (#913).
+            _p = err.placeholders
+            if err.key == "battery_boost_not_permitted":
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="battery_boost_not_permitted",
+                    translation_placeholders=_p) from err
+            if err.key == "battery_boost_not_connected":
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="battery_boost_not_connected",
+                    translation_placeholders=_p) from err
+            if err.key == "battery_boost_bad_floor":
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="battery_boost_bad_floor",
+                    translation_placeholders=_p) from err
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="device_not_found",
+                translation_placeholders=_p) from err
+        await coordinator.async_request_refresh()
+
+    async def async_stop_battery_boost(call) -> None:
+        """(#1025) End the running battery boost."""
+        coordinator.stop_battery_boost("stopped")
+        await coordinator.async_request_refresh()
+
+    try:
+        hass.services.async_register(
+            DOMAIN, "start_battery_boost", async_start_battery_boost,
+            schema=vol.Schema({
+                vol.Required("charger_id"): cv.string,
+                vol.Optional("floor_soc"): vol.Coerce(float),
+            }),
+        )
+        hass.services.async_register(
+            DOMAIN, "stop_battery_boost", async_stop_battery_boost,
+            schema=vol.Schema({}),
+        )
+        _LOGGER.debug("Registered services: %s.start/stop_battery_boost", DOMAIN)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.error("Failed to register the battery boost services: %s", err)
 
     async def async_remove_leftovers_service(call) -> None:
         """(#935) Delete what is the USER's, on their explicit say-so.
