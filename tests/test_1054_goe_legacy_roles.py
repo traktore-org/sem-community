@@ -37,6 +37,7 @@ from custom_components.solar_energy_management.utils.service_data import (
 from .integrations_rig.rig import crawl, load_capture, replay
 
 BOX = "wallbox_go_e"
+BOX2 = "garage_go_e"
 P = f"goecharger_{BOX}"
 
 
@@ -200,3 +201,197 @@ async def test_every_current_write_names_the_box():
     data = calls[-1].args[2]
     assert data["charger_name"] == BOX
     assert data["max_current"] == 10
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# (#1054 review) end to end: what the add step saves is what SEM sends
+# ═══════════════════════════════════════════════════════════════════════
+
+_GOE_SERVICES = {"set_max_current": ("charger_name", "max_current"),
+                 "set_absolute_max_current": ("charger_absolute_max_current",
+                                              "charger_name"),
+                 "set_cable_lock_mode": ("cable_lock_mode", "charger_name"),
+                 "set_charge_limit": ("charge_limit", "charger_name")}
+
+
+async def _two_goe_boxes(hass):
+    """Two go-e boxes on the one integration, its services registered
+    schema-less the way it registers them, and a recorder on the current."""
+    from homeassistant.helpers.service import SERVICE_DESCRIPTION_CACHE
+    calls = []
+
+    async def _record(call):
+        calls.append(dict(call.data))
+
+    for name, fields in _GOE_SERVICES.items():
+        hass.services.async_register("goecharger", name,
+                                     _record if name == "set_max_current"
+                                     else (lambda c: None))
+        hass.data.setdefault(SERVICE_DESCRIPTION_CACHE, {})[
+            ("goecharger", name)] = {"fields": {f: {} for f in fields}}
+    cap = load_capture("goecharger")
+    await replay(hass, cap)
+    # the second box as the integration names it: its own name in every id
+    await replay(hass, json.loads(json.dumps(cap).replace(BOX, BOX2)))
+    return calls
+
+
+def _submission(result) -> dict:
+    """Submit the add form as the user would: every prefilled value kept."""
+    out = {}
+    for key in result["data_schema"].schema:
+        name = str(key)
+        default = key.default() if callable(getattr(key, "default", None)) else None
+        suggested = (getattr(key, "description", None) or {}).get("suggested_value")
+        val = suggested if suggested not in (None, "") else default
+        if val not in (None, ""):
+            out[name] = val
+    return out
+
+
+async def _add(flow):
+    shown = await flow.async_step_ev_charger_add()
+    assert shown["type"] == "form", shown
+    await flow.async_step_ev_charger_add(_submission(shown))
+    return flow._data["ev_chargers"][-1]
+
+
+async def test_the_add_step_saves_the_wiring_and_each_box_sends_its_own_name(
+        sem_real_hass, sem_config_entry):
+    from custom_components.solar_energy_management.config_flow import (
+        OptionsFlowHandler,
+    )
+    from .test_services_real import _seed_sem_input_sensors
+
+    from unittest.mock import patch
+
+    hass = sem_real_hass
+    calls = await _two_goe_boxes(hass)
+    sem_config_entry.add_to_hass(hass)
+    flow = OptionsFlowHandler(sem_config_entry)
+    flow.hass = hass
+    flow._data = {"ev_chargers": []}
+    with patch.object(type(flow), "config_entry",
+                      new_callable=lambda: property(lambda self: sem_config_entry)):
+        first = await _add(flow)
+        second = await _add(flow)
+
+    for saved, box in ((first, BOX), (second, BOX2)):
+        assert saved.get("ev_charger_service"), (saved, flow._add_discovered)
+        assert saved["ev_charger_service"] == "goecharger.set_max_current"
+        assert saved["ev_service_param_name"] == "max_current"
+        assert json.loads(saved["ev_charger_service_data"]) == {"charger_name": box}
+
+    # SEM built from what was saved: the exact call each box gets
+    _seed_sem_input_sensors(hass)
+    for saved in (first, second):
+        hass.states.async_set(saved["ev_charging_power_sensor"], "0",
+                              {"unit_of_measurement": "kW"})
+    data = dict(sem_config_entry.data)
+    data["ev_chargers"] = [first, second]
+    hass.config_entries.async_update_entry(
+        sem_config_entry, data=data,
+        options={**sem_config_entry.options, "observer_mode": False})
+    assert await hass.config_entries.async_setup(sem_config_entry.entry_id)
+    await hass.async_block_till_done()
+    devices = sem_config_entry.runtime_data._ev_devices
+    for cid, box in ((first["id"], BOX), (second["id"], BOX2)):
+        dev = devices[cid]
+        dev.observer_mode = False
+        calls.clear()
+        await dev._set_current(10)
+        await hass.async_block_till_done()
+        assert calls == [{"charger_name": box, "max_current": 10}], calls
+
+
+async def test_a_user_who_picks_another_service_gets_no_stale_box_name(hass):
+    from custom_components.solar_energy_management.config_flow import (
+        _carry_hidden_wiring, _drop_stale_service_wiring,
+    )
+    found = {"ev_charger_service": "goecharger.set_max_current",
+             "ev_service_param_name": "max_current",
+             "ev_charger_service_data": '{"charger_name": "a"}',
+             "ev_charging_power_sensor": "sensor.p"}
+    saved = {}
+    _carry_hidden_wiring(found, {"ev_charger_service": "other.set_current",
+                                 "ev_charging_power_sensor": "sensor.p"}, saved)
+    assert "ev_service_param_name" not in saved
+    assert "ev_charger_service_data" not in saved
+    # edit: changing the service drops the old one's wiring
+    charger = dict(found)
+    before = dict(charger)
+    charger["ev_charger_service"] = "other.set_current"
+    _drop_stale_service_wiring(before, {"ev_charger_service": "other.set_current"},
+                               charger)
+    assert "ev_charger_service_data" not in charger
+    # edit: keeping the service keeps it
+    charger = dict(found)
+    _drop_stale_service_wiring(dict(found),
+                               {"ev_charger_service": found["ev_charger_service"]},
+                               charger)
+    assert charger["ev_charger_service_data"] == found["ev_charger_service_data"]
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# (#1054 review) a power class read from the unit alone picks only when
+# it is unambiguous
+# ═══════════════════════════════════════════════════════════════════════
+
+def _pick(*entries):
+    from custom_components.solar_energy_management.hardware_detection import (
+        _charging_power,
+    )
+    return _charging_power(list(entries), vehicle=False)
+
+
+def test_three_unnamed_kw_readings_pick_nothing():
+    assert _pick(_entry("sensor.box_house_power", unit="kW"),
+                 _entry("sensor.box_heatpump_power", unit="kW"),
+                 _entry("sensor.box_meter_reading", unit="kW")) is None
+
+
+def test_the_one_that_names_itself_is_picked():
+    """The review's trio: two readings that say nothing, one that says it is
+    the charger's. Never alphabetical luck (heatpump_power)."""
+    assert _pick(_entry("sensor.box_house_power", unit="kW"),
+                 _entry("sensor.box_heatpump_power", unit="kW"),
+                 _entry("sensor.box_real_charger_reading", unit="kW")) == \
+        "sensor.box_real_charger_reading"
+
+
+def test_go_e_p_all_is_still_picked_over_its_phase_legs():
+    legs = [_entry(f"sensor.{P}_p_l{i}", unit="kW") for i in (1, 2, 3)]
+    assert _pick(*legs, _entry(f"sensor.{P}_p_n", unit="kW"),
+                 _entry(f"sensor.{P}_p_all", unit="kW")) == f"sensor.{P}_p_all"
+
+
+def test_a_declared_power_class_beats_any_unit_guess():
+    assert _pick(_entry("sensor.box_total_kw", unit="kW"),
+                 _entry("sensor.box_power", dc="power", unit="W")) == "sensor.box_power"
+
+
+async def test_editing_a_go_e_charger_keeps_its_wiring(sem_real_hass, sem_config_entry):
+    """Edit: submit the form unchanged — the service field and the box name
+    the form does not show are still on the charger afterwards."""
+    from unittest.mock import patch
+
+    from custom_components.solar_energy_management.config_flow import (
+        OptionsFlowHandler,
+    )
+    hass = sem_real_hass
+    await _two_goe_boxes(hass)
+    sem_config_entry.add_to_hass(hass)
+    flow = OptionsFlowHandler(sem_config_entry)
+    flow.hass = hass
+    flow._data = {"ev_chargers": []}
+    with patch.object(type(flow), "config_entry",
+                      new_callable=lambda: property(lambda self: sem_config_entry)):
+        saved = await _add(flow)
+        flow._edit_charger_id = saved["id"]
+        shown = await flow.async_step_ev_charger_edit()
+        assert shown["type"] == "form"
+        await flow.async_step_ev_charger_edit(_submission(shown))
+    after = flow._data["ev_chargers"][-1]
+    assert after["ev_charger_service"] == "goecharger.set_max_current"
+    assert after["ev_service_param_name"] == "max_current"
+    assert json.loads(after["ev_charger_service_data"]) == {"charger_name": BOX}

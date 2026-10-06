@@ -2029,6 +2029,13 @@ _UNIT_CLASS = {"w": "power", "kw": "power", "mw": "power",
                "wh": "energy", "kwh": "energy", "mwh": "energy"}
 
 
+def _declared_dc(entry) -> str:
+    """The device class the integration itself set — no unit fallback."""
+    dc = getattr(entry, "original_device_class", None)
+    dc = getattr(dc, "value", dc)
+    return dc if isinstance(dc, str) else ""
+
+
 def _roles_dc(entry) -> str:
     """The entity's device class; (#1054) when the integration set none, the
     class its unit says — a sensor in kW IS a power reading (go-e's
@@ -2080,6 +2087,7 @@ def _charging_power(entries, *, vehicle: bool) -> Optional[str]:
     """The charging power reading: a power sensor that is not one phase leg
     or a clamp on something else; on a car it must say it is the charger's."""
     cands = []
+    unit_only = []
     for e in entries:
         eid = str(e.entity_id)
         if not eid.startswith("sensor.") or _roles_dc(e) != "power":
@@ -2097,9 +2105,27 @@ def _charging_power(entries, *, vehicle: bool) -> Optional[str]:
         # a reading that says "power" over one that only shares the class
         # (NRGkick's ``charging_rate`` carries the power class)
         says_power = "power" in " ".join(_role_words(e)).lower() + eid.lower()
-        cands.append((leg, not says_power, not named, eid))
-    cands.sort()
-    return cands[0][-1] if cands else None
+        row = (leg, not says_power, not named, eid)
+        if _declared_dc(e) == "power":
+            cands.append(row)
+        else:
+            unit_only.append(row)
+    if cands:
+        # what the integration itself calls power wins; the unit fallback
+        # never competes with it (#1054 review)
+        cands.sort()
+        return cands[0][-1]
+    # (#1054 review) a power class read from the unit alone is a guess the
+    # integration did not make. Pick only when it is unambiguous: exactly
+    # one whole-box reading, or exactly one that names itself (charg, total,
+    # session, all). Otherwise the user chooses — never alphabetical luck.
+    whole = [r for r in unit_only if not r[0]]
+    if len(whole) == 1:
+        return whole[0][-1]
+    hinted = [r for r in whole if not r[2]]
+    if len(hinted) == 1:
+        return hinted[0][-1]
+    return None
 
 
 def _plugged(entries) -> Optional[str]:
