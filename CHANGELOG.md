@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Hot water: two settings that did nothing are gone** (#1062). Max and Minimum temperature are removed. A switch boiler now stops at its solar target.
+
 - 🌍 **Dutch: 15 more dashboard texts** — thanks @RienduPre. (#1056)
 
 # [2.2.0-beta.12] — 06.10.2026
