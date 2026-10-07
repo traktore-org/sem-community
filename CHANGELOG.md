@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Calendar tariff: the off-peak rate shows, and the schedule saves with Apply** (#1040). An unsaved off-peak rate now equals the import rate.
+
 - 🐛 **Hot water: two settings that did nothing are gone** (#1062). Max and Minimum temperature are removed. A switch boiler now stops at its solar target.
 
 - 🌍 **Dutch: 15 more dashboard texts** — thanks @RienduPre. (#1056)
