@@ -1412,6 +1412,13 @@ source. Radio, meter and field-bus pairing remain the responsibility of the
 hardware and its Home Assistant integration; SEM consumes only the resulting
 HA sensor entities.
 
+With enforcement on, the guard acts once per coordinator cycle (the update
+interval, 10 seconds by default): it stops or clamps SEM's chargers, and since 2.2 a phase still over
+its limit after that — or over with no car charging — sheds the loads known
+to sit on that phase, then those of unknown phase, held down until the
+guard's recovery latch clears. Give each load its phase in the priority list;
+see [A phase over its limit](LOAD_PRIORITY.md#a-phase-over-its-limit-1048).
+
 In Observer Mode SEM still runs its **full** decision logic against your live
 sensors every cycle — it just never actuates. It logs each command it *would*
 have sent (e.g. `OBSERVER · WOULD ACTIVATE Heizband @ 800W [source=solar]`), so

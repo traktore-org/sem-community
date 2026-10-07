@@ -330,3 +330,71 @@ generic-device deadlines; both throttle continuously by priority. #620 instead
 gives you the **"Finish overnight from"** picker — battery (stored solar) or grid
 (cheap-tariff window) — to complete the runtime when the sun runs short, never a
 hard forced-import deadline.
+
+---
+
+# A phase over its limit (#1048)
+
+*Added in 2.2.* A three-phase house has a limit per phase — a fuse, or a
+grid connection rated per conductor. The phase guard measures each phase
+(see *Direct per-phase grid-current sensors* in the
+[Setup Guide](SETUP_GUIDE.md)) and, with enforcement on, keeps SEM's own
+chargers inside the headroom: it clamps an increase to what the phase has
+left and stops a charger outright when a phase is over. Since 2.2 it also
+sheds **loads** when stopping the car is not enough — or when no car is
+charging at all.
+
+## Tell SEM which phase a load sits on
+
+Each load in the priority list has a **Phase** select beside *Mode* and
+*Requires*: **L1**, **L2**, **L3**, **3-phase**, or **unknown** (the default
+— SEM cannot see your wiring). A charger's phase is measured from its own
+current and shown, not set. The same setting is the `phase` property of
+`solar_energy_management.update_device_config` and a field of
+`register_surplus_device`.
+
+## The shed order
+
+On a cycle where a phase is over its limit:
+
+1. **The chargers first.** The guard stops them the moment a phase is over.
+   If a car was charging, the loads are asked only when the phase is still
+   over on the next cycle — one cycle for the stop to land.
+2. **Loads known to draw on that phase** — on that line, or three-phase —
+   highest priority number first (the bottom of the list goes first), until
+   the amps they free cover the excess. A load on that line frees all of its
+   current; a three-phase load a third of it on each line.
+3. **Loads of unknown phase** only after those, and **one per cycle**: SEM
+   cannot know which line an unknown load is on, so it lets the meter answer
+   before taking the next.
+
+**Never taken:** critical loads, loads you keep hands off, loads in mode
+*Off*, and the chargers (the guard handles them itself). A load on another
+line never answers for this one. On a one-phase supply every load sits on
+L1.
+
+**Who switches what.** A load that load management drives is switched off
+by it. A load the surplus controller runs is *held* for that controller
+instead — it backs the load off and starts nothing held — so a load always
+has one writer (#649). Load shedding for a phase needs load management to
+be switched on: without it the guard can only act on the chargers, and its
+status says so (`load_management_off`).
+
+**When they come back.** Not when the phase is merely under its limit
+again: when the guard's own recovery latch clears — every phase back to the
+recovery margin (2 A by default) for the recovery cycles (3 by default), the
+rule the chargers wait for too. Until then nothing that was taken returns,
+and a load *known* to sit on that phase does not start. After it, the loads
+return one at a time with the usual restore delay, so a shed load does not
+flap.
+
+**Reaction time.** The guard reads the phases once per coordinator cycle —
+the update interval, 10 seconds by default (at 60 seconds it is once a
+minute); a breaker that trips faster than that is not something SEM can
+outrun. Evaluating the guard on every sensor change is not part of this
+release.
+
+**SG-Ready state 1 stays the operator's relay.** SEM never commands the grid
+operator's block state of a heat pump (SG-Ready state 1, *EVU-Sperre*). The
+phase guard switches loads the way load management always has — never
+through that relay.

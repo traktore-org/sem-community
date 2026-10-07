@@ -240,6 +240,16 @@ def _reserved_for_seniors(devices, *, below_priority, cap_w, axis,
     return min(cap, reserved)
 
 
+def _phase_held(device) -> bool:
+    """(#1048) Held for a phase over its limit: the hold names the phase."""
+    return isinstance(getattr(device, "_phase_hold", None), str)
+
+
+def _phase_shed(device) -> bool:
+    """(#1048) Taken by the phase guard: back it off."""
+    return getattr(device, "_phase_shed", False) is True
+
+
 def _would_start(device) -> bool:
     """Cheap, READ-ONLY "is this device even a candidate to switch on".
 
@@ -258,6 +268,9 @@ def _would_start(device) -> bool:
     senior device, which is the whole point of the walk.
     """
     if getattr(device, "daily_max_runtime_reached", False):
+        return False
+    # (#1048) held for a phase over its limit
+    if _phase_held(device):
         return False
     until = getattr(device, "_external_off_until", None)
     if until is not None:
@@ -1341,6 +1354,10 @@ class SurplusController:
                     shed.add(d.device_id)
                     if not peak_shed_all:
                         break
+        # (#1048) …and every load the phase guard took for its phase.
+        for d in devices:
+            if _phase_shed(d) and d.is_active:
+                shed.add(d.device_id)
 
         remaining = float(remaining_surplus)
         reclaim_handed = False
@@ -1970,6 +1987,29 @@ class SurplusController:
                             device.name,
                         )
 
+        # (#1048) The phase guard took these for a phase over its limit. The
+        # load manager may not switch a load this controller owns (#649), so
+        # the guard's order arrives here as a hold: back them off now —
+        # anti-flicker still holds a compressor through its minimum run.
+        for device in devices:
+            if not _phase_shed(device):
+                continue
+            if not device.is_active or not device.can_deactivate():
+                continue
+            consumption = device.get_current_consumption()
+            if await _deactivate_owned(device):
+                active_count = max(0, active_count - 1)
+                remaining_surplus += consumption
+                _LOGGER.info(
+                    "Phase %s over its limit: shed %s (%.0f W)",
+                    device._phase_hold, device.name, consumption,
+                )
+                for a in allocations:
+                    if a.device_id == device.device_id:
+                        a.allocated_watts = 0.0
+                        a.actual_consumption_watts = 0.0
+                        a.state = DeviceState.IDLE.value
+
         # #508 W2 — peak shed pass. On SHEDDING/EMERGENCY, back the
         # controller's own active discretionary (SURPLUS-mode) devices off
         # by reverse priority. EMERGENCY sheds every one this cycle;
@@ -2016,7 +2056,10 @@ class SurplusController:
         # rated_power. Do not add a peak gate here.
         from ..devices.base import ScheduleDevice
         for device in devices:
-            if isinstance(device, ScheduleDevice) and device.is_deadline_approaching and not device.is_active:
+            if (isinstance(device, ScheduleDevice) and device.is_deadline_approaching
+                    and not device.is_active
+                    # (#1048) a deadline outranks the peak, not a fuse
+                    and not _phase_held(device)):
                 consumed = await _activate_owned(device, device.rated_power)
                 if consumed > 0:
                     active_count += 1

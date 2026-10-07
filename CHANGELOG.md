@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **A phase over its limit sheds loads, not only chargers** (#1048) — thanks @RienduPre. Give each load its phase, and that phase's loads go first.
+
 - 🐛 **Calendar tariff: the off-peak rate shows, and the schedule saves with Apply** (#1040). An unsaved off-peak rate now equals the import rate.
 
 - 🐛 **Hot water: two settings that did nothing are gone** (#1062). Max and Minimum temperature are removed. A switch boiler now stops at its solar target.
