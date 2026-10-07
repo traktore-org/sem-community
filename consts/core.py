@@ -334,7 +334,8 @@ DEFAULT_TARIFF_MODE: Final = "static"  # static, dynamic
 DEFAULT_CHEAP_PRICE_THRESHOLD: Final = 0.15  # CHF/kWh
 DEFAULT_EXPENSIVE_PRICE_THRESHOLD: Final = 0.35  # CHF/kWh
 DEFAULT_ELECTRICITY_IMPORT_RATE: Final = 0.3387  # CHF/kWh daytime (HT) incl. VAT
-DEFAULT_ELECTRICITY_NT_RATE: Final = 0.3387  # CHF/kWh nighttime incl. VAT (default flat rate = HT)
+# (#1040) No off-peak default: an unsaved off-peak rate IS the import rate
+# (coordinator._cfg_tariff_rates). DEFAULT_ELECTRICITY_NT_RATE had no reader.
 DEFAULT_DEMAND_CHARGE_RATE: Final = 4.32  # CHF/kW/month incl. VAT (default residential base tariff)
 
 # ============================================

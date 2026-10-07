@@ -18,6 +18,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { register } from 'node:module';
+import { readFileSync } from 'node:fs';
 
 const FAKE_LIT = `
 export class LitElement {
@@ -102,7 +103,7 @@ test('Advanced still shows the off-peak rate in every mode', () => {
 
 test('picking Calendar shows its fields before Apply', () => {
     const el = card({ tariff_mode: 'static' });
-    el._stage('opt:tariff_mode', 'option', 'calendar');
+    el._pickTariffMode('calendar');
     assert.equal(el._tariffMode(), 'calendar');
     assert.equal(el._showsControl('electricity_off_peak_rate'), true);
     renderTariff(el);
@@ -130,7 +131,7 @@ test('the Tariff section counts a picked schedule as unsaved', () => {
 
 test("the section's Apply saves the schedule, with the rest, in one call", async () => {
     const el = card({ tariff_mode: 'static' });
-    el._stage('opt:tariff_mode', 'option', 'calendar');
+    el._pickTariffMode('calendar');
     renderTariff(el);
     el._stage('opt:electricity_off_peak_rate', 'option', 0.22);
     el._pending = { tariff_schedule_entity: HELPER };
@@ -188,21 +189,55 @@ test('a structural toggle belongs to its section as well', () => {
     assert.deepEqual(el._sectionPending('tariff'), ['battery_setpoint_bidirectional']);
 });
 
-test('going back to Static holds the Calendar edits out of Apply', async () => {
+test('going back to Static drops the Calendar edits', async () => {
     const el = card({ tariff_mode: 'static' });
-    el._stage('opt:tariff_mode', 'option', 'calendar');
+    el._pickTariffMode('calendar');
     renderTariff(el);
     el._stage('opt:electricity_off_peak_rate', 'option', 0.22);
     el._pending = { tariff_schedule_entity: HELPER };
-    el._stage('opt:tariff_mode', 'option', 'static');        // back to the saved mode
+    assert.equal(el._sectionUnsaved('tariff'), 3);
+    el._pickTariffMode('static');                 // back to the saved mode
     renderTariff(el);
-    assert.equal(el._sectionUnsaved('tariff'), 0, 'hidden fields are counted');
+    assert.equal(el._sectionUnsaved('tariff'), 0, 'hidden fields are still unsaved');
+    assert.deepEqual(el._pending, {});
     await el._applySection('tariff');
     assert.equal(el.calls.length, 0, 'Apply saved fields the page no longer shows');
-    // Picked again, they come back as the user left them.
-    el._stage('opt:tariff_mode', 'option', 'calendar');
+});
+
+test('leaving Dynamic drops its unsaved price grouping', () => {
+    const el = card({ tariff_mode: 'dynamic' });
     renderTariff(el);
-    assert.equal(el._sectionUnsaved('tariff'), 3);
+    el._stage('opt:tariff_classification_mode', 'option', 'static');
+    el._pickTariffMode('calendar');
+    assert.equal(el._isDirty('opt:tariff_classification_mode'), false);
+});
+
+test('in Advanced the off-peak rate stays, so its edit stays', () => {
+    const el = card({ tariff_mode: 'calendar' }, { advanced: true });
+    renderTariff(el);
+    el._stage('opt:electricity_off_peak_rate', 'option', 0.22);
+    el._pickTariffMode('static');
+    assert.equal(el._isDirty('opt:electricity_off_peak_rate'), true);
+    assert.equal(el._sectionUnsaved('tariff'), 2);   // the mode and the rate
+});
+
+test('an edit hidden by turning Advanced off still counts and saves', async () => {
+    // Only a mode change drops edits. Hiding a row by view keeps it on the
+    // section's count, so nothing waits without the user seeing a number.
+    const el = card({ tariff_mode: 'static' }, { advanced: true });
+    renderTariff(el);
+    el._stage('opt:demand_charge_rate', 'option', 5);
+    el._advanced = false;
+    renderTariff(el);
+    assert.equal(el._sectionUnsaved('tariff'), 1);
+    await el._applySection('tariff');
+    assert.deepEqual(el.calls[0].data.options, { demand_charge_rate: 5 });
+});
+
+test('the mode select picks through _pickTariffMode', () => {
+    const src = readFileSync(new URL('../src/cards/sem-config-card.js', import.meta.url), 'utf8');
+    assert.match(src, /_renderOptionSelect\('tariff_mode',[^;]*?\(m\) => this\._pickTariffMode\(m\)\)/s);
+    assert.match(src, /onPick\s*\?\s*onPick\(e\.target\.value\)/);
 });
 
 test('an unsaved off-peak rate shows the import rate', () => {

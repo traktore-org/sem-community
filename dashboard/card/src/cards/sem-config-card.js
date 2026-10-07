@@ -538,6 +538,20 @@ class SEMConfigCard extends SEMLitBase {
         const saved = (this._options || {}).tariff_mode || 'static';
         return String(this._stagedVal('opt:tariff_mode', saved));
     }
+    // (#1040) Picking a mode hides the other modes' fields, and drops their
+    // unsaved edits with them: Apply must not save a field the page stopped
+    // showing. A field the mode still shows (the off-peak rate in Advanced)
+    // keeps its edit.
+    _pickTariffMode(mode) {
+        this._stage('opt:tariff_mode', 'option', mode);
+        const pend = { ...this._pending };
+        const st = { ...this._staged };
+        if (mode !== 'calendar') delete pend.tariff_schedule_entity;
+        if (mode !== 'dynamic') delete st['opt:tariff_classification_mode'];
+        if (!this._showsControl('electricity_off_peak_rate')) delete st['opt:electricity_off_peak_rate'];
+        this._pending = pend;
+        this._staged = st;
+    }
     _toggleSection(id) {
         // `_collapsed` is a plain instance property (not a Lit reactive
         // state) — mutating it does NOT schedule a re-render on its own.
@@ -1448,7 +1462,8 @@ class SEMConfigCard extends SEMLitBase {
                 <span class="readonly-value tariff-rate-value">${rate} ${unit}</span>
             </div>
             ${this._renderOptionSelect('tariff_mode', 'config_tariff_mode',
-                tariffModeOptions, opts, 'config_help_tariff_mode', 'static')}
+                tariffModeOptions, opts, 'config_help_tariff_mode', 'static',
+                (m) => this._pickTariffMode(m))}
             ${mode === 'dynamic' ? html`
                 ${this._renderPicker('dynamic_tariff_entity', 'config_dynamic_tariff_entity',
                     'sensor', null, opts, 'config_help_dynamic_tariff_entity')}
@@ -2112,12 +2127,12 @@ class SEMConfigCard extends SEMLitBase {
         const keys = Object.keys(this._pending);
         // (#1040) A section's Apply may be sending these same keys.
         if (!keys.length || this._applying || this._secApplying) return;
-        const entryId = await this._ensureEntryId();
         this._applying = true;
         // Clear any prior apply error before retrying.
         const ss = { ...this._saveStatus }; delete ss._apply; this._saveStatus = ss;
         this.requestUpdate();
         try {
+            const entryId = await this._ensureEntryId();
             const options = { ...this._pending };
             await this._hass.callService('solar_energy_management', 'set_option', {
                 options, ...(entryId ? { entry_id: entryId } : {}),
@@ -2153,7 +2168,7 @@ class SEMConfigCard extends SEMLitBase {
                             ? html`⚠ ${err}`
                             : this._t('config_pending_changes').replace(/\{n\}/g, String(n)))}
                 </span>
-                ${this._applying ? nothing : html`
+                ${this._applying || this._secApplying ? nothing : html`
                     <button class="apply-discard" @click=${() => this._discardPending()}>${this._t('config_discard')}</button>
                     <button class="apply-btn" @click=${() => this._applyPending()}>${this._t('config_apply')}</button>
                 `}
@@ -2312,7 +2327,7 @@ class SEMConfigCard extends SEMLitBase {
     // Toggle bound to an entry.options key. Use when no runtime
     // ``switch.sem_*`` entity exists for the option.
     // Native <select> bound to an entry.options key.
-    _renderOptionSelect(optionKey, labelKey, options, opts, helpKey, defaultVal) {
+    _renderOptionSelect(optionKey, labelKey, options, opts, helpKey, defaultVal, onPick) {
         // (#830) One choke point for the default view: a control not on
         // the essential list is simply not rendered until advanced is on.
         if (!this._showsControl(optionKey)) return nothing;
@@ -2328,7 +2343,9 @@ class SEMConfigCard extends SEMLitBase {
                     <span class="ctrl-label">${this._t(labelKey)}${dirty ? html`<span class="dirty-dot">●</span>` : nothing}${this._helpBtn(helpKey)}</span>
                     <select class="sem-select"
                             .value=${cur}
-                            @change=${(e) => this._stage(sid, 'option', e.target.value)}>
+                            @change=${(e) => (onPick
+                                ? onPick(e.target.value)
+                                : this._stage(sid, 'option', e.target.value))}>
                         ${options.map(o => html`
                             <option value="${o.value}" ?selected=${o.value === cur}>${o.label}</option>
                         `)}
@@ -3138,17 +3155,11 @@ class SEMConfigCard extends SEMLitBase {
         // #605 — bind every tunable rendered inside this section to it (the
         // renderers call _reg() while _sec is set), so the footer knows which
         // staged edits belong here.
-        // (#1040) Afresh on every render: a field the view no longer shows
-        // (another tariff mode's, an Advanced row) must not ride along on
-        // this section's Apply. Its edit is kept and comes back with it.
-        for (const id of Object.keys(this._secOf)) {
-            if (this._secOf[id] === section.id) delete this._secOf[id];
-        }
         this._sec = section.id;
         const body = contentFn(T);
         this._sec = null;
         const dirty = this._sectionUnsaved(section.id);
-        const busy = this._secApplying === section.id;
+        const busy = this._secApplying === section.id || this._applying;
         const err = this._saveStatus['_sec_' + section.id];
         const footer = dirty ? html`
             <div class="section-stage-bar">
