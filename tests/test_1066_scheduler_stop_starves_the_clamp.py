@@ -64,7 +64,8 @@ from custom_components.solar_energy_management.coordinator.battery_adapters.deye
     DeyeBatteryAdapter,
 )
 from custom_components.solar_energy_management.coordinator.decide_battery import (
-    _SCHEDULER_STOP_STATES, decide_battery, forced_ops,
+    _SCHEDULER_STOP_STATES, STOP_FIRST_TRIES, decide_battery, forced_ops,
+    stop_misses,
 )
 from custom_components.solar_energy_management.coordinator.sink_verdicts import (
     HELD, SinkVerdict,
@@ -104,7 +105,7 @@ def _gate(*, covered, in_block=False):
     return g
 
 
-def _view(*, sched=None, gate=None, forced=(None, None), ev=True, solar=0.0,
+def _view(*, sched=None, gate=None, forced=(None, None), misses=0, ev=True, solar=0.0,
           home=1076.0, soc=66.0, n=2, perms=None, protection=True,
           grid_funded=0.0, house=None, window=False, boost=None,
           wants_pack=False, spendable=0.0, mode="auto"):
@@ -132,6 +133,7 @@ def _view(*, sched=None, gate=None, forced=(None, None), ev=True, solar=0.0,
         battery_spendable_kwh=spendable,
         sem_forced_charge=forced[0],
         sem_forced_discharge=forced[1],
+        sem_stop_misses=misses,
     )
 
 
@@ -269,6 +271,33 @@ class TestWhatSemStartedIsStoppedFirst:
             d = decide_battery(_view(ev=ev, forced=(None, None)))
             assert d.intent in (BatteryIntent.NORMAL, BatteryIntent.LIMIT_DISCHARGE)
 
+    def test_both_open_take_turns_discharge_first(self):
+        want = {0: BatteryIntent.STOP_FORCE_DISCHARGE,
+                1: BatteryIntent.STOP_FORCE_DISCHARGE,
+                2: BatteryIntent.STOP_FORCE_CHARGE,
+                4: BatteryIntent.STOP_FORCE_DISCHARGE,
+                6: BatteryIntent.STOP_FORCE_CHARGE}
+        for m, intent in want.items():
+            assert decide_battery(_view(forced=(True, True), misses=m)).intent \
+                is intent, m
+
+    @pytest.mark.parametrize("forced", [(True, False), (False, True), (True, True)])
+    def test_a_stop_that_never_lands_lets_protection_through_every_other_cycle(self, forced):
+        """Review round 2: stop-only forever was worse than develop, whose
+        NORMAL / LIMIT wrote the limit even when their zero-write failed."""
+        for m in range(STOP_FIRST_TRIES):
+            assert decide_battery(_view(forced=forced, misses=m)).intent in (
+                BatteryIntent.STOP_FORCE_CHARGE, BatteryIntent.STOP_FORCE_DISCHARGE)
+        for m in range(STOP_FIRST_TRIES, STOP_FIRST_TRIES + 6):
+            d = decide_battery(_view(forced=forced, misses=m))
+            if m % 2:
+                assert d.intent is BatteryIntent.LIMIT_DISCHARGE, m
+                assert d.discharge_limit_w == pytest.approx(538.0)
+                assert f"has not landed in {m} cycles" in d.reason
+            else:
+                assert d.intent in (BatteryIntent.STOP_FORCE_CHARGE,
+                                    BatteryIntent.STOP_FORCE_DISCHARGE), m
+
     @pytest.mark.parametrize("mode,want", [
         ("force_charge", BatteryIntent.FORCE_CHARGE),
         ("off", BatteryIntent.OFF)])
@@ -317,7 +346,8 @@ class TestForcedOps:
         assert sites
         for call in sites:
             kw = {k.arg for k in call.keywords}
-            assert {"sem_forced_charge", "sem_forced_discharge"} <= kw
+            assert {"sem_forced_charge", "sem_forced_discharge",
+                    "sem_stop_misses"} <= kw
         assigns = [n for n in ast.walk(tree) if isinstance(n, ast.Assign)
                    and any(getattr(t, "id", None) == "_forced" for t in n.targets)]
         assert len(assigns) == 1
@@ -490,7 +520,7 @@ async def test_the_diagnose_block_carries_the_gap():
 
 async def _cycle(ad, **kw):
     kw.setdefault("sched", _sched("not_needed"))
-    v = _view(forced=forced_ops(ad), n=1, **kw)
+    v = _view(forced=forced_ops(ad), misses=stop_misses(ad), n=1, **kw)
     d = decide_battery(v)
     await actuate_battery(d, ad)
     return d
@@ -634,7 +664,7 @@ async def test_a_deye_sale_is_ended_when_nothing_asks_for_it():
     ad, st = _deye()
     assert ad.supports_forced_discharge
     sell = _sched("discharging_arbitrage", floor_soc=0.0, discharge_power_w=3000.0)
-    v = _view(ev=False, sched=sell, forced=forced_ops(ad), n=1,
+    v = _view(ev=False, sched=sell, forced=forced_ops(ad), misses=stop_misses(ad), n=1,
               soc=80.0, mode="allow_arbitrage")
     v = type(v)(**{**v.__dict__, "arbitrage_sell": (True, 3000.0),
                    "config": {**v.config, "battery_grid_arbitrage_enabled": True}})
@@ -650,3 +680,52 @@ async def test_a_deye_sale_is_ended_when_nothing_asks_for_it():
     assert st.state == "Zero Export To Load"
     assert ad._sem_forced_discharge is False
     assert (await _cycle(ad, sched=None, ev=False)).intent is BatteryIntent.NORMAL
+
+
+@pytest.mark.asyncio
+async def test_a_failed_start_notes_nothing():
+    from custom_components.solar_energy_management.coordinator.battery_adapters.force_charge import (
+        ChargeCommandStatus,
+    )
+    ad = GenericBatteryAdapter(_hass({}), {
+        "battery_max_discharge_power": 5000,
+        "battery_force_charge_switch": "switch.fc",
+        "battery_target_soc_entity": "number.target"})
+    failed = Mock(status=ChargeCommandStatus.FAILED, message="refused")
+    ad._charge_adapter = Mock(start_forced_charge=AsyncMock(return_value=failed))
+    d = await _cycle(ad, sched=_sched("scheduled"),
+                     gate=_gate(covered=True, in_block=True))
+    assert d.intent is BatteryIntent.FORCE_CHARGE
+    assert ad._sem_forced_charge is None, "a charge that never started was noted"
+
+
+@pytest.mark.asyncio
+async def test_a_sale_whose_stop_is_refused_still_gets_the_cap_out():
+    """Review round 2, the MEDIUM: a manual sale lands, then the setpoint
+    register refuses every write, the mode goes back to auto and a car is
+    plugged in. The stop is retried, and the cap still reaches the limit
+    entity — on develop LIMIT wrote it at once."""
+    ent = "number.batt_max_discharge"
+    sp = "number.batt_setpoint"
+    hass = _hass({ent: _num(5000.0), sp: _num(0.0, -2200.0, 2200.0)})
+    ad = GenericBatteryAdapter(hass, {
+        "battery_max_discharge_power": 5000,
+        "battery_discharge_control_entity": ent,
+        "battery_force_discharge_control_entity": sp})
+    d = await _cycle(ad, sched=None, mode="force_discharge", ev=False)
+    assert d.intent is BatteryIntent.FORCE_DISCHARGE
+    assert ad._sem_forced_discharge is True
+    ad._zero_setpoint = AsyncMock(return_value=False)      # the register refuses
+    seen = [(await _cycle(ad, sched=None)).intent for _ in range(STOP_FIRST_TRIES + 4)]
+    assert seen[:STOP_FIRST_TRIES] == [BatteryIntent.STOP_FORCE_DISCHARGE] * STOP_FIRST_TRIES
+    assert BatteryIntent.LIMIT_DISCHARGE in seen
+    assert float(hass.table[ent].state) == 1250.0, "the cap never went out"
+    # …and the stop keeps being tried in between.
+    assert seen[STOP_FIRST_TRIES:].count(BatteryIntent.STOP_FORCE_DISCHARGE) >= 2
+    assert ad._sem_forced_discharge is True
+    # The register comes back: the stop lands and the cap is all that remains.
+    ad._zero_setpoint = AsyncMock(return_value=True)
+    for _ in range(3):
+        d = await _cycle(ad, sched=None)
+    assert ad._sem_forced_discharge is False
+    assert d.intent is BatteryIntent.LIMIT_DISCHARGE

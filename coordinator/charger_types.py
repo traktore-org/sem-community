@@ -485,6 +485,9 @@ class BatteryView:
     #: precedence.
     sem_forced_charge: Optional[bool] = None
     sem_forced_discharge: Optional[bool] = None
+    #: (#1066) cycles in a row the stop of such an op has not landed
+    #: (:func:`decide_battery.stop_misses`); 0 when nothing is pending.
+    sem_stop_misses: int = 0
 
 
 # ─────────────────────────────────────────────────────────────────

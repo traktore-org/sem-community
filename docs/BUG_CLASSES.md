@@ -605,7 +605,9 @@ the adapter is still in FORCE_CHARGE intent"; nothing asked the adapter. **Fix:*
 flag per direction (\`_sem_forced_charge\` / \`_sem_forced_discharge\`: unknown / started / stopped), set by
 \`actuate_battery\` only on evidence the command LANDED (the recorded intent, or Deye's \`True\`). A stop
 verdict wins only while ITS direction is not known stopped; a forced op SEM started and has not seen stop
-is stopped before any NORMAL or LIMIT_DISCHARGE (\`_stop_what_sem_started\`). The first cut used one
+is stopped before any NORMAL or LIMIT_DISCHARGE (\`_stop_what_sem_started\`; both open take turns,
+discharge first; a stop that has not landed in three cycles lets protection out every other cycle, since
+develop's LIMIT wrote the cap even when its zero-write failed — review round 2). The first cut used one
 "may anything run" answer from the last intent, and review found two ways it let a forced op run on: an
 arbitrage stop (a DISCHARGE stop) after a night charge left a switch-based charge on, and a Deye sale
 records no intent at all. Under observer nothing lands, so the view gets "stopped" and the shadow shows
@@ -621,15 +623,18 @@ of an install without the scheduler (intent, watts, reason); each verdict still 
 may run and is silent once it is stopped; real adapters across cycles: the cap is written, held and
 released when the car leaves; a car plugged in after NORMAL is capped at once; a failed stop keeps the
 stop first; an arbitrage stop after a switch-based night charge still ends the charge; a real Deye sale
-is ended when nothing asks for it. Seven mutants (stop always wins, no stop-first, flags never noted,
-Deye's \`True\` ignored, dwell on entry, permission unread, adapters pretend) each fail it.
+is ended when nothing asks for it; a sale whose stop is refused still gets the cap out; a failed start
+notes nothing. Nine mutants (stop always wins, no stop-first, flags never noted, Deye's \`True\` ignored,
+dwell on entry, permission unread, adapters pretend, never yields, yield cycle not counted) each fail it.
 **Left for Guido:** (1) a Sessy has no discharge-limit setting, so SEM still cannot keep its NOM loop
 out of the car — it now says so. Using the power setpoint as a cap (\`api\` + house/N, tracked each
 cycle, released to \`nom\`) is a new control mode. (2) The #879 hold's blind release (LIMIT at max)
 sits above the EV clamp, so a blind cycle in a held hour lets the pack feed a plugged-in car. (3) The
 per-charger \`ev_battery_may_assist\` is read on the charger side only; the battery clamp cannot tell
 which car it feeds. (4) OFF is not stopped first: the generic \`command_off\` hand-off zeroes the
-setpoint but does not turn a forced-charge switch off (older than this fix).
+setpoint but does not turn a forced-charge switch off (older than this fix). (5) Huawei's
+\`command_force_charge\` records FORCE_CHARGE on its orphan-clear and stop-a-sale early returns without
+starting a charge, so the flag reads "started" and the clamp comes ~2 cycles late after such a cycle.
 
 ---
 

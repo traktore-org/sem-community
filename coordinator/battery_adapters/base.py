@@ -250,6 +250,8 @@ class BatteryControlAdapter(ABC):
     #: not seen either). Written by ``actuate_battery._note_forced_op`` only.
     _sem_forced_charge: "Optional[bool]" = None
     _sem_forced_discharge: "Optional[bool]" = None
+    #: (#1066) cycles in a row a stop has not landed while a flag is True
+    _sem_stop_misses: int = 0
 
     #: (#1066) what ``last_error`` says when SEM is asked to limit discharge
     #: and has no entity to write the limit to.

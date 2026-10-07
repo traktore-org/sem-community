@@ -7920,7 +7920,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             FleetContext,
         )
         from .decide_battery import (
-            decide_battery, effective_battery_count, forced_ops,
+            decide_battery, effective_battery_count, forced_ops, stop_misses,
         )
 
         # Per-battery adapter cache (#375 — was a single
@@ -8423,6 +8423,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # state rather than a stop that never lands.
                 sem_forced_charge=_forced[0],
                 sem_forced_discharge=_forced[1],
+                sem_stop_misses=(0 if self._observer_mode
+                                 else stop_misses(adapter)),
             )
 
             # 3. Decide

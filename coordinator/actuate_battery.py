@@ -117,11 +117,34 @@ def _note_forced_op(adapter, attr: str, ret, landed_intent, value: bool) -> None
     direction (an arbitrage stop after a night charge) leaves this one
     ``True`` — a discharge stop does not end a switch-based forced charge.
     """
-    if ret is True or getattr(adapter, "last_intent", None) is landed_intent:
-        try:
-            setattr(adapter, attr, value)
-        except Exception:  # noqa: BLE001 — a read-only stub is not a failure
-            pass
+    landed = ret is True or getattr(adapter, "last_intent", None) is landed_intent
+    if landed:
+        _set(adapter, attr, value)
+    if value is False:
+        # A stop: count the cycles it has not landed (#1066 review round 2 —
+        # decide_battery lets protection through every other cycle after a
+        # few, so a stop that can never land does not starve it for good).
+        _set(adapter, "_sem_stop_misses", 0 if landed else
+             int(getattr(adapter, "_sem_stop_misses", 0) or 0) + 1)
+    else:
+        _set(adapter, "_sem_stop_misses", 0)
+
+
+def _set(adapter, attr: str, value) -> None:
+    try:
+        setattr(adapter, attr, value)
+    except Exception:  # noqa: BLE001 — a read-only stub is not a failure
+        pass
+
+
+def _note_protection_cycle(adapter) -> None:
+    """(#1066) NORMAL / LIMIT_DISCHARGE went out while a forced op SEM started
+    is still not seen to stop — decide_battery yielded to protection this
+    cycle. Advance the count so the next cycle tries the stop again."""
+    if (getattr(adapter, "_sem_forced_charge", None) is True
+            or getattr(adapter, "_sem_forced_discharge", None) is True):
+        _set(adapter, "_sem_stop_misses",
+             int(getattr(adapter, "_sem_stop_misses", 0) or 0) + 1)
 
 
 async def actuate_battery(
@@ -183,6 +206,7 @@ async def actuate_battery(
 
     if decision.intent is BatteryIntent.NORMAL:
         await adapter.command_normal()
+        _note_protection_cycle(adapter)
         log_on_change(   # (#762) 1424 identical lines/day on .175
             _LOGGER, f"actuate:{decision.battery_id}", logging.DEBUG,
             "actuate_battery(%s): NORMAL — %s",
@@ -212,6 +236,7 @@ async def actuate_battery(
         except Exception:  # noqa: BLE001 — a read-only stub is not a failure
             pass
         await adapter.command_limit_discharge(limit_w)
+        _note_protection_cycle(adapter)
         log_on_change(   # (#762) the watts wobble; the gate strips digits
             _LOGGER, f"actuate:{decision.battery_id}", logging.DEBUG,
             "actuate_battery(%s): LIMIT_DISCHARGE %.0f W (raw %.0f W) — %s",

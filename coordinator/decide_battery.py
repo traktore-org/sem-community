@@ -83,6 +83,18 @@ def forced_ops(adapter) -> "tuple":
     return charge, discharge
 
 
+def stop_misses(adapter) -> int:
+    """(#1066) Cycles in a row a stop has not landed (``actuate_battery``)."""
+    v = getattr(adapter, "_sem_stop_misses", 0) if adapter is not None else 0
+    return v if isinstance(v, int) and not isinstance(v, bool) else 0
+
+
+#: (#1066) Stop tries before protection is let through every other cycle.
+#: Three, as the #840 strikes: a dropped write is retried, a stop that can
+#: never land does not hold every protection branch off for good.
+STOP_FIRST_TRIES = 3
+
+
 def _stop_what_sem_started(view, decision: BatteryDecision) -> BatteryDecision:
     """(#1066) A forced op SEM started and has not seen stop is stopped
     before NORMAL or LIMIT_DISCHARGE — whichever branch asked for them.
@@ -91,24 +103,43 @@ def _stop_what_sem_started(view, decision: BatteryDecision) -> BatteryDecision:
     that ended one, and it was also what starved the protection branches.
     Only ``True`` counts here: an unknown flag never sends a stop on an
     install whose scheduler is off, so those decide exactly as before.
+
+    A stop that does not land (a refusing register, a stop service that
+    raises) is retried — but after ``STOP_FIRST_TRIES`` the protection goes
+    out every other cycle (review round 2: develop's NORMAL / LIMIT wrote the
+    limit even when their zero-write failed, so stop-only was worse there).
+    With both directions open the stops take turns, discharge first: a sale
+    left running empties the pack.
     """
     if decision.intent not in (BatteryIntent.NORMAL, BatteryIntent.LIMIT_DISCHARGE):
         return decision
-    if getattr(view, "sem_forced_charge", None) is True:
+    charge = getattr(view, "sem_forced_charge", None) is True
+    discharge = getattr(view, "sem_forced_discharge", None) is True
+    if not (charge or discharge):
+        return decision
+    m = int(getattr(view, "sem_stop_misses", 0) or 0)
+    if m >= STOP_FIRST_TRIES and m % 2 == 1:
+        return BatteryDecision(
+            battery_id=decision.battery_id, intent=decision.intent,
+            discharge_limit_w=decision.discharge_limit_w,
+            reason=(f"{decision.reason} (a stop SEM sent has not landed in "
+                    f"{m} cycles — it is retried every other cycle)"),
+        )
+    if charge and discharge:
+        charge = (m // 2) % 2 == 1
+    if charge:
         return BatteryDecision(
             battery_id=decision.battery_id,
             intent=BatteryIntent.STOP_FORCE_CHARGE,
             reason=("a forced charge SEM started has not been seen to stop "
                     f"— stopping it before {decision.intent.value}"),
         )
-    if getattr(view, "sem_forced_discharge", None) is True:
-        return BatteryDecision(
-            battery_id=decision.battery_id,
-            intent=BatteryIntent.STOP_FORCE_DISCHARGE,
-            reason=("a forced discharge SEM started has not been seen to stop "
-                    f"— stopping it before {decision.intent.value}"),
-        )
-    return decision
+    return BatteryDecision(
+        battery_id=decision.battery_id,
+        intent=BatteryIntent.STOP_FORCE_DISCHARGE,
+        reason=("a forced discharge SEM started has not been seen to stop "
+                f"— stopping it before {decision.intent.value}"),
+    )
 
 
 def effective_battery_count(pbcs: "list[dict]") -> int:
