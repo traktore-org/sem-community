@@ -2751,8 +2751,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 # runtime provider's detection (it missed Octopus and
                 # Amber despite the dropdown label promising them).
                 from .tariff.tariff_provider import DynamicTariffProvider
+                # (#1051) ENTSO-e is left to the runtime, which pairs its
+                # current-price sensor with the one carrying the curve.
+                entsoe = DynamicTariffProvider.entsoe_entity_ids(self.hass)
                 for state in self.hass.states.async_all("sensor"):
                     eid = state.entity_id
+                    if eid in entsoe:
+                        continue
                     if DynamicTariffProvider.is_price_entity_candidate(eid):
                         user_input["dynamic_tariff_entity"] = eid
                         _LOGGER.info("Auto-detected dynamic tariff entity: %s", eid)
@@ -2820,18 +2825,19 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 # Deliberately next to the price-forecast entity above,
                 # because the setup guide confused the two and promised
                 # this override on that field. "Auto" keeps the historic
-                # ladder (Solcast, then Forecast.Solar, then Open-Meteo);
-                # naming one wins only while it is actually installed.
+                # ladder (Solcast, then Forecast.Solar, then Open-Meteo, then
+                # Helios); naming one wins only while it is actually installed.
                 vol.Optional(
                     "solar_forecast_source",
                     default=current_config.get("solar_forecast_source", "auto"),
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
                         options=[
-                            {"value": "auto", "label": "Auto-detect (Solcast, then Forecast.Solar, then Open-Meteo)"},
+                            {"value": "auto", "label": "Auto-detect (Solcast, then Forecast.Solar, then Open-Meteo, then Helios)"},
                             {"value": "solcast", "label": "Solcast PV Solar"},
                             {"value": "forecast_solar", "label": "Forecast.Solar"},
                             {"value": "open_meteo", "label": "Open-Meteo Solar Forecast"},
+                            {"value": "helios", "label": "Helios Forecast"},
                         ],
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )

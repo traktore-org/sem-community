@@ -74,6 +74,16 @@ DAY_KEYED_PRICE_ATTRS: Tuple[str, ...] = (
     "prices", "today_raw", "tomorrow_raw", "raw_today", "raw_tomorrow",
 )
 
+# (#1051) ENTSO-e (JaccoR/hass-entso-e) is found by its registry platform,
+# never by an entity id: an entity name given in its setup goes into every
+# id. It splits what SEM reads over two sensors (v0.7.5, the rig's
+# ``entsoe`` capture): the price now sits on the one whose unique id ends in
+# its ``current_price`` key and carries no curve; the day-ahead arrays
+# (``prices`` / ``prices_today`` / ``prices_tomorrow``) sit on its average
+# sensor, whose state is the day's average and not a price to pay now.
+ENTSOE_PLATFORM = "entsoe"
+ENTSOE_CURRENT_PRICE_KEY = "current_price"
+
 
 def _flat_list_base(key: str) -> Optional[datetime]:
     """Local midnight anchoring a *flat numeric* price array under ``key``.
@@ -727,7 +737,9 @@ class DynamicTariffProvider(TariffProvider):
         missed Octopus and Amber despite its own dropdown label
         promising them, while knowing the official Nord Pool shape the
         runtime had just learned. Keep this in sync with the provider
-        branches in ``detect_provider``.
+        branches in ``detect_provider``. ENTSO-e is the exception: it is
+        found by registry platform, from two of its sensors, so the flow
+        leaves the field empty for it (``entsoe_entity_ids``, #1051).
         """
         eid = entity_id.lower()
         if "nord_pool" in eid and eid.endswith("_current_price"):
@@ -739,6 +751,91 @@ class DynamicTariffProvider(TariffProvider):
         if "octopus_energy" in eid and "current_rate" in eid:
             return True
         return any(p in eid for p in ("nordpool", "awattar"))
+
+    @staticmethod
+    def _entsoe_registry_rows(hass) -> list:
+        """ENTSO-e's enabled sensors in the entity registry. Empty when the
+        registry cannot be read (a mocked hass, or one still starting)."""
+        try:
+            from homeassistant.helpers import entity_registry as er
+            entries = list(er.async_get(hass).entities.values())
+        except Exception:  # noqa: BLE001 — no registry, no ENTSO-e
+            return []
+        return [e for e in entries
+                if getattr(e, "platform", None) == ENTSOE_PLATFORM
+                and getattr(e, "domain", None) == "sensor"
+                and getattr(e, "disabled_by", None) is None]
+
+    @staticmethod
+    def entsoe_entity_ids(hass) -> set:
+        """(#1051) Every ENTSO-e sensor, for the options-flow auto-fill to
+        pass over. Its average sensor's id contains ``electricity_price``,
+        which the Tibber pattern above matches, and saving it as the price
+        entity would make the day's average read as the price now."""
+        return {e.entity_id
+                for e in DynamicTariffProvider._entsoe_registry_rows(hass)}
+
+    def _detect_entsoe(self) -> Optional[str]:
+        """(#1051) ENTSO-e: the price now from its ``current_price`` sensor,
+        the curve from the sensor of the same setup that carries ``prices``.
+
+        Both must be there. Without a curve the integration has not
+        published yet, and the next read tries again — ``_price_entity``
+        stays empty, so ``_read_current_price_value`` asks once more. A
+        sensor set to report per MWh is refused: SEM reads currency per kWh,
+        and a price a thousand times too high would classify and cost as
+        such.
+        """
+        by_setup: Dict[str, list] = {}
+        for row in self._entsoe_registry_rows(self.hass):
+            by_setup.setdefault(str(row.config_entry_id or ""), []).append(row)
+        for _setup, rows in sorted(by_setup.items()):
+            rows = sorted(rows, key=lambda r: r.entity_id)
+            current = next(
+                (r for r in rows
+                 if str(r.unique_id).endswith(ENTSOE_CURRENT_PRICE_KEY)),
+                None,
+            )
+            if current is None:
+                continue
+            curve = None
+            # The current-price sensor first: an integration version that
+            # puts the arrays on it needs no second entity.
+            for row in [current] + [r for r in rows if r is not current]:
+                state = self.hass.states.get(row.entity_id)
+                if state is not None and isinstance(
+                    state.attributes.get("prices"), list,
+                ):
+                    curve = row.entity_id
+                    break
+            if curve is None:
+                continue
+            state = self.hass.states.get(current.entity_id)
+            unit = str(
+                (state.attributes.get("unit_of_measurement") if state else None)
+                or current.unit_of_measurement or ""
+            )
+            if unit.lower().endswith("/mwh"):
+                if not getattr(self, "_entsoe_mwh_warned", False):
+                    self._entsoe_mwh_warned = True
+                    _LOGGER.warning(
+                        "ENTSO-e prices are per MWh (%s, %s); SEM reads them "
+                        "per kWh. Set the ENTSO-e energy scale to kWh, or "
+                        "choose a price entity in kWh.",
+                        current.entity_id, unit,
+                    )
+                continue
+            self._price_entity = current.entity_id
+            self._forecast_entity = (
+                curve if curve != current.entity_id else None
+            )
+            self._provider_name = "entsoe"
+            _LOGGER.info(
+                "Detected ENTSO-e: price now from %s, day-ahead curve from %s",
+                current.entity_id, curve,
+            )
+            return "entsoe"
+        return None
 
     def detect_provider(self) -> Optional[str]:
         """Auto-detect available price integration."""
@@ -846,7 +943,9 @@ class DynamicTariffProvider(TariffProvider):
             _LOGGER.info("Detected aWATTar price entity")
             return "awattar"
 
-        return None
+        # ENTSO-e last (#1051): an install that already found its prices
+        # above keeps them.
+        return self._detect_entsoe()
 
     def _read_current_price(self) -> float:
         """The current price. See ``_read_current_price_with_source``."""
@@ -1047,66 +1146,76 @@ class DynamicTariffProvider(TariffProvider):
         # recognised attribute NAME is never rejected for its element
         # SHAPE — the exact failure #732 reported (the name was listed in
         # the warning, the flat array was silently dropped anyway).
-        for key in DAY_KEYED_PRICE_ATTRS:
-            price_list = attrs.get(key, [])
-            if not isinstance(price_list, list):
-                continue
-            flat_base = _flat_list_base(key)
-            # A flat numeric array is anchored by INDEX from the day's
-            # midnight, so its length must be one day's worth of slots.
-            # >96 (finer than 15-min for a single day) means it
-            # concatenates multiple days or is malformed: the length→
-            # granularity heuristic can't tell "one day, fine" from "many
-            # days, coarse", so refuse to guess rather than silently pack
-            # N days into one (#732 review). Dict items in an over-long
-            # list still parse — they carry their own timestamps.
-            flat_ok = flat_base is not None and len(price_list) <= 96
-            flat_interval = _flat_list_interval(len(price_list))
-            for idx, item in enumerate(price_list):
-                if isinstance(item, dict):
-                    # Timestamp key vocabulary — ``time`` (ENTSO-E) and
-                    # ``hour`` (NL template sensors) beside ``start`` /
-                    # ``startsAt``; price keys ``total`` / ``price`` /
-                    # ``value`` (``value`` also covers Nordpool raw_*).
-                    ts = (
-                        item.get("start")
-                        or item.get("startsAt")
-                        or item.get("time")
-                        or item.get("hour")
-                    )
-                    price = item.get("total", item.get("price", item.get("value")))
-                    if ts and price is not None:
+        # (#1051) The forecast entity's arrays count too, read only when the
+        # price entity yields none: ENTSO-e keeps its day-ahead curve on a
+        # sibling of the sensor that holds the price now. The #994 rule
+        # above holds for that entity as well.
+        _fc_readable = (
+            bool(fc_state) and fc_state.state not in ("unknown", "unavailable")
+        )
+        for day_attrs in (attrs, fc_state.attributes if _fc_readable else {}):
+            if prices:
+                break
+            for key in DAY_KEYED_PRICE_ATTRS:
+                price_list = day_attrs.get(key, [])
+                if not isinstance(price_list, list):
+                    continue
+                flat_base = _flat_list_base(key)
+                # A flat numeric array is anchored by INDEX from the day's
+                # midnight, so its length must be one day's worth of slots.
+                # >96 (finer than 15-min for a single day) means it
+                # concatenates multiple days or is malformed: the length→
+                # granularity heuristic can't tell "one day, fine" from "many
+                # days, coarse", so refuse to guess rather than silently pack
+                # N days into one (#732 review). Dict items in an over-long
+                # list still parse — they carry their own timestamps.
+                flat_ok = flat_base is not None and len(price_list) <= 96
+                flat_interval = _flat_list_interval(len(price_list))
+                for idx, item in enumerate(price_list):
+                    if isinstance(item, dict):
+                        # Timestamp key vocabulary — ``time`` (ENTSO-E) and
+                        # ``hour`` (NL template sensors) beside ``start`` /
+                        # ``startsAt``; price keys ``total`` / ``price`` /
+                        # ``value`` (``value`` also covers Nordpool raw_*).
+                        ts = (
+                            item.get("start")
+                            or item.get("startsAt")
+                            or item.get("time")
+                            or item.get("hour")
+                        )
+                        price = item.get("total", item.get("price", item.get("value")))
+                        if ts and price is not None:
+                            try:
+                                if isinstance(ts, str):
+                                    dt = datetime.fromisoformat(ts)
+                                else:
+                                    dt = ts
+                                prices.append(PricePoint(
+                                    timestamp=dt,
+                                    price=float(price),
+                                    currency=self.currency,
+                                    level=self._classify_price(float(price)),
+                                ))
+                            except (ValueError, TypeError):
+                                continue
+                    elif flat_ok and not isinstance(item, bool):
+                        # Flat numeric list (#732): the index IS the slot,
+                        # counted from the day's local midnight. ``enumerate``
+                        # keeps the positional index so null/gap padding
+                        # (Nordpool leaves ``None`` for unpublished hours) is
+                        # skipped without shifting the remaining slots.
                         try:
-                            if isinstance(ts, str):
-                                dt = datetime.fromisoformat(ts)
-                            else:
-                                dt = ts
-                            prices.append(PricePoint(
-                                timestamp=dt,
-                                price=float(price),
-                                currency=self.currency,
-                                level=self._classify_price(float(price)),
-                            ))
+                            val = float(item)
                         except (ValueError, TypeError):
                             continue
-                elif flat_ok and not isinstance(item, bool):
-                    # Flat numeric list (#732): the index IS the slot,
-                    # counted from the day's local midnight. ``enumerate``
-                    # keeps the positional index so null/gap padding
-                    # (Nordpool leaves ``None`` for unpublished hours) is
-                    # skipped without shifting the remaining slots.
-                    try:
-                        val = float(item)
-                    except (ValueError, TypeError):
-                        continue
-                    prices.append(PricePoint(
-                        timestamp=flat_base + flat_interval * idx,
-                        price=val,
-                        currency=self.currency,
-                        level=self._classify_price(val),
-                    ))
-            if prices and not self._last_parsed_attribute:
-                self._last_parsed_attribute = key
+                        prices.append(PricePoint(
+                            timestamp=flat_base + flat_interval * idx,
+                            price=val,
+                            currency=self.currency,
+                            level=self._classify_price(val),
+                        ))
+                if prices and not self._last_parsed_attribute:
+                    self._last_parsed_attribute = key
 
         # Generic forecast: "forecasts" or "rates" attribute (Amber Electric,
         # Octopus Energy, or any provider that stores an array of price dicts).

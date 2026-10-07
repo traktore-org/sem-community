@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **ENTSO-e prices are found on their own** (#1051, by @rdehuyss).
+- ✨ **Helios Forecast is a solar forecast source** (#1050, by @xg5x48kmfc-blip).
+
 - ✨ **A phase over its limit sheds loads, not only chargers** (#1048) — thanks @RienduPre. Give each load its phase, and that phase's loads go first.
 
 - 🐛 **Calendar tariff: the off-peak rate shows, and the schedule saves with Apply** (#1040). An unsaved off-peak rate now equals the import rate.
