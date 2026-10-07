@@ -7919,7 +7919,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             BatteryIntent, BatteryRuntime, BatteryView,
             FleetContext,
         )
-        from .decide_battery import decide_battery, effective_battery_count
+        from .decide_battery import (
+            decide_battery, effective_battery_count, forced_op_may_run,
+        )
 
         # Per-battery adapter cache (#375 — was a single
         # ``self._battery_adapter``). Adapters carry the
@@ -8413,6 +8415,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 battery_boost_floor_soc=getattr(
                     getattr(self, "_battery_boost", None), "floor_soc", None),
                 forecast_sell=_fsell,
+                # (#1066) the scheduler's stop outranks the protection
+                # branches only while a forced op SEM started may still run
+                forced_op_may_run=forced_op_may_run(adapter),
             )
 
             # 3. Decide

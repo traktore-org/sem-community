@@ -323,5 +323,8 @@ def active_discharge_limit(adapters) -> "float | None":
         a._last_discharge_limit_w for a in (adapters or {}).values()
         if a.last_intent is BatteryIntent.LIMIT_DISCHARGE
         and a._last_discharge_limit_w is not None
+        # (#1066) -1 is "no limit written" — an adapter with no limit entity
+        # is asked to limit and cannot; it holds no cap to show.
+        and a._last_discharge_limit_w >= 0
     ]
     return min(limits) if limits else None

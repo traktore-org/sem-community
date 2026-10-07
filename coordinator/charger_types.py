@@ -475,6 +475,13 @@ class BatteryView:
     #: (#1025) a battery boost runs: the pack may feed the car down to THIS
     #: floor, in percent. None without a boost.
     battery_boost_floor_soc: Optional[float] = None
+    #: (#1066) May a forced charge or discharge SEM started still be running
+    #: on this battery? From the adapter's last LANDED command
+    #: (:func:`decide_battery.forced_op_may_run`). While True the scheduler's
+    #: stop verdicts win, as they always did; once the stop has landed they
+    #: say nothing and the protection branches decide. Default True keeps a
+    #: view built without an adapter on the old precedence.
+    forced_op_may_run: bool = True
 
 
 # ─────────────────────────────────────────────────────────────────

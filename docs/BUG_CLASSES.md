@@ -595,6 +595,30 @@ logs exposed it. **Fix pattern:** merge the branches' authorities explicitly
 \`test_629_ev_orchestration.py\`. **Sweep question:** for every decision function with ordered
 branches, can the LATER branches actually be reached under production-shaped inputs? (A
 reachability/coverage check against scenario corpora catches this class.)
+**Live catch 2 (#1066, @RienduPre, 2× Sessy, 07.10.2026):** \`decide_battery\` answered the night
+scheduler's stop verdicts (idle, not needed, target reached, not profitable, outside or without a
+plan block) before every protection branch. The scheduler is never without a verdict once it is on,
+so on those installs the EV clamp, the #620 grid-funded clamp, the #879 house hold and the #892/#1025
+window and boost never ran, on any brand. The diagnose line read \`intent=stop_force_charge\` while
+2.3 kW went from the packs into the car. The module docstring already said the stop wins only "while
+the adapter is still in FORCE_CHARGE intent"; nothing asked the adapter. **Fix:** the view carries
+\`forced_op_may_run\` (from the adapter's last LANDED intent: unknown or a forced op → True, Huawei's
+own flags too); the stop wins only while it is True, then the tree goes on. Two faults sat under it in
+the same report: the battery-side clamp never read \`may_assist_ev\` (class 88), and with no
+discharge-limit entity the generic, GoodWe and Huawei writers recorded the asked watts as a limit in
+force (class 97's sibling — no call at all, still recorded). Both fixed: the permission holds the clamp
+in every arm, and \`_discharge_limit_unwritable\` records no limit and says so in \`last_error\`.
+**Guard (this instance):** \`tests/test_1066_scheduler_stop_starves_the_clamp.py\` — an isolation check:
+every stop verdict × a 384-case protection grid, with no forced op running, gives exactly the decision
+of an install without the scheduler (intent, watts, reason); the stop still wins while one may run; a
+real adapter across cycles stops, caps, holds and releases the cap when the car leaves; a failed stop
+keeps the stop first. Three mutants (stop always wins, permission unread, adapters pretend) each fail it.
+**Left for Guido:** (1) a Sessy has no discharge-limit setting, so SEM still cannot keep its NOM loop
+out of the car — it now says so. Using the power setpoint as a cap (\`api\` + house/N, tracked each
+cycle, released to \`nom\`) is a new control mode. (2) The #879 hold's blind release (LIMIT at max)
+sits above the EV clamp, so a blind cycle in a held hour lets the pack feed a plugged-in car. (3) The
+per-charger \`ev_battery_may_assist\` is read on the charger side only; the battery clamp cannot tell
+which car it feeds.
 
 ---
 
@@ -3975,6 +3999,9 @@ backend flag. `_setOvernightSource` (battery / grid — this instance); `_applyM
 grid"); the EV charge-mode select, where `consts/ev_charge_modes.py` already does this RIGHT and is
 the precedent — *"(#885) solar_plus_battery inherits solar_only's night contract wholesale"* — and
 `mode_allows_night_charging` exists precisely because two hand-copied twins were drifting.
+`may_assist_ev` (#1066): the charger side asks it before any window or boost; the battery-side clamp,
+which is what keeps the inverter from covering the car on the meter, never did — **swept**, it now holds
+the clamp in every arm (surplus, spend consent, window, boost, protection switch off).
 **Guard:** `tests/test_953_cheap_hours_finish_window.py` — the reporter's morning through a real
 `SurplusController.update()` walk (the ungated pass is shown to START the pump first, so the pass
 is not vacuous), the overnight promise and the short-winter-day tail both still topping up, the
@@ -4375,8 +4402,9 @@ and no noise; a landing after misses clears the ledger. The `_hass()` fake in
 flip models the very dropped write the fix refuses.
 **Sweep question:** wherever SEM keeps a "last written" value for de-dup — *is it assigned from
 the entity's answer, or from the call's return?* A de-dup keyed on what was SENT turns one dropped
-write into a permanent one.
-Refs #978 #915 #925.
+write into a permanent one. (#1066) The degenerate case: no entity, no call, and the limit was still
+recorded — generic, GoodWe and Huawei **swept** (`_discharge_limit_unwritable`).
+Refs #978 #915 #925 #1066.
 
 
 ### 98. An observer surface that spends less than it holds — GUARDED

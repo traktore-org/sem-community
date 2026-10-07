@@ -741,6 +741,7 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
             self._last_intent = BatteryIntent.NORMAL
             return
         await self._apply_discharge_limit(self._max_discharge_w)
+        self._clear_no_limit_error()                    # (#1066)
         self._last_intent = BatteryIntent.NORMAL
 
     async def command_limit_discharge(self, watts: float) -> None:
@@ -753,6 +754,9 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         # Forced discharge is mutually exclusive with limiting it (#523).
         # If forcing, stop cleanly this cycle and apply the limit next cycle.
         if await self._stop_forcible():
+            self._last_intent = BatteryIntent.LIMIT_DISCHARGE
+            return
+        if self._discharge_limit_unwritable():          # (#1066)
             self._last_intent = BatteryIntent.LIMIT_DISCHARGE
             return
         # Clamp to [0, max]

@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **The battery is capped while a car charges, also with night charging on** (#1066) — thanks @RienduPre. "Battery may charge the car" off now counts too.
+
 # [2.2.0-beta.13] — 07.10.2026
 
 - 🐛 **Charger names and the setup menus follow your language** (#1053). An unnamed charger reads "EV-lader Vermogen" in Dutch; your own names stay.

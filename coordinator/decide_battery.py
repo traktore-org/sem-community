@@ -12,10 +12,13 @@ Decision tree (precedence top-down):
 1. FORCE_CHARGE — scheduler decided SCHEDULED and we're in the
    charge window.
 2. STOP_FORCE_CHARGE — scheduler decided TARGET_REACHED / NOT_NEEDED /
-   IDLE but the adapter is still in FORCE_CHARGE intent.
+   IDLE but the adapter is still in FORCE_CHARGE intent. (#1066) "Still"
+   is ``view.forced_op_may_run``: once the stop has landed the verdict is
+   no command at all, and the branches below decide.
 3. LIMIT_DISCHARGE (EV) — EV charging AND either solar surplus is below
    the ``battery_assist_min_surplus`` gate OR battery SoC is below the
-   ``battery_buffer_soc`` floor (any mode/time); clamp battery to home
+   ``battery_buffer_soc`` floor OR this battery may not feed the car
+   (``may_assist_ev`` off, #1066) (any mode/time); clamp battery to home
    consumption (1:1 protection) so grid+solar fund the car. Grid-funded
    cheap-hours load draw is excluded from the home budget.
 4. LIMIT_DISCHARGE (grid-funded loads, #620) — cheap-hours top-up loads
@@ -31,11 +34,46 @@ from typing import TYPE_CHECKING
 from .charger_types import BatteryDecision, BatteryIntent
 from .peak_guard import cover_for_peak_w
 from ..consts.battery_modes import arbitrage_allowed_for_mode
+from ..consts.battery_permissions import effective_permissions, may_assist_ev
 
 if TYPE_CHECKING:  # pragma: no cover
     from .charger_types import BatteryView
 
 _LOGGER = logging.getLogger(__name__)
+
+
+#: The scheduler states that mean "no forced op wanted" — each one answered
+#: with a STOP, and only while a forced op may still run (#1066).
+_SCHEDULER_STOP_STATES = ("target_reached", "not_needed", "idle", "not_profitable")
+
+
+def forced_op_may_run(adapter) -> bool:
+    """(#1066) May a forced charge or discharge SEM started still be running?
+
+    The scheduler's stop verdicts (idle, not needed, outside the block…) are
+    on EVERY cycle the night scheduler is on — it never has no verdict. They
+    were returned before the protection branches, so with the scheduler on
+    the EV clamp, the #620 grid-funded clamp, the #879 house hold and the
+    #892 morning window could never run: @RienduPre's evening read
+    ``intent=stop_force_charge`` while 2.3 kW went from the pack into the car.
+
+    A stop is a command only while there is something to stop. The answer
+    comes from the adapter's ``last_intent``, which records only a write that
+    LANDED (#589): unknown (a fresh adapter — a forced op from a prior
+    instance may run) or a forced op → True. Huawei's own flags are asked
+    too, as #757 does. Anything else → False, and the tree goes on.
+    No adapter → True: the old precedence.
+    """
+    if adapter is None:
+        return True
+    last = getattr(adapter, "last_intent", None)
+    if last is None or last in (BatteryIntent.FORCE_CHARGE,
+                                BatteryIntent.FORCE_DISCHARGE):
+        return True
+    if not isinstance(last, BatteryIntent):
+        return True          # a stand-in we cannot read: keep the stop
+    return bool(getattr(adapter, "_forcible_charging", False) is True
+                or getattr(adapter, "_forcible_discharging", False) is True)
 
 
 def effective_battery_count(pbcs: "list[dict]") -> int:
@@ -243,6 +281,11 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
     # a forced-charge window. Pure read of its state field — the
     # scheduler's evaluate() did the work in BatteryChargeScheduler.
     sched = view.scheduler_decision
+    # (#1066) A stop verdict is a command only while a forced op may still
+    # run. After it has landed it says nothing, and the protection branches
+    # below decide — the night scheduler is never without a verdict, so
+    # letting it win here starved every branch under it.
+    _stop_wins = bool(getattr(view, "forced_op_may_run", True))
     if sched is not None:
         state = getattr(sched, "state", None)
         state_value = getattr(state, "value", state) if state is not None else None
@@ -282,20 +325,24 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
                     )
                 nxt = getattr(gate, "next_block_start", None)
                 when = f" (opens {nxt:%H:%M})" if nxt else ""
-                return BatteryDecision(
-                    battery_id=rt.battery_id,
-                    intent=BatteryIntent.STOP_FORCE_CHARGE,
-                    reason="scheduler SCHEDULED — outside the planned "
-                           f"block{when}",
-                )
-            why = getattr(gate, "reason", "") if gate is not None else "no gate"
-            return BatteryDecision(
-                battery_id=rt.battery_id,
-                intent=BatteryIntent.STOP_FORCE_CHARGE,
-                reason=f"scheduled but the plan does not cover the battery "
-                       f"({why or 'uncovered'}) — pre-charge is "
-                       "optimization, not guarantee",
-            )
+                if _stop_wins:
+                    return BatteryDecision(
+                        battery_id=rt.battery_id,
+                        intent=BatteryIntent.STOP_FORCE_CHARGE,
+                        reason="scheduler SCHEDULED — outside the planned "
+                               f"block{when}",
+                    )
+            else:
+                why = (getattr(gate, "reason", "") if gate is not None
+                       else "no gate")
+                if _stop_wins:
+                    return BatteryDecision(
+                        battery_id=rt.battery_id,
+                        intent=BatteryIntent.STOP_FORCE_CHARGE,
+                        reason=f"scheduled but the plan does not cover the "
+                               f"battery ({why or 'uncovered'}) — pre-charge "
+                               "is optimization, not guarantee",
+                    )
 
         # Export arbitrage — the scheduler decided to SELL to the grid
         # this cycle (#523). Pure actuation of the scheduler's verdict, the
@@ -401,7 +448,7 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
         # NOTE: ``target_reached`` is only ever produced by the night-charge
         # ``evaluate()``, never by ``evaluate_arbitrage`` — so target_reached +
         # from_arbitrage is unreachable (harmless; kept for symmetry) (ruflo L4).
-        if state_value in ("target_reached", "not_needed", "idle", "not_profitable"):
+        if state_value in _SCHEDULER_STOP_STATES and _stop_wins:
             # Route the stop by WHICH scheduler produced the verdict (#533):
             # an arbitrage verdict (from_arbitrage) was selling → STOP_FORCE_
             # DISCHARGE; the night charge scheduler's same-named states stop a
@@ -433,9 +480,16 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
     # (#1025) A battery boost is the same spend on the user's one-off, to the
     # boost's own floor. Both open: each was consented to its own depth, so
     # the pack may go to the deeper one.
+    # (#1066) …unless THIS battery may not feed the car at all. The charger
+    # side asks ``may_assist_ev`` before any window or boost (``decide.
+    # _battery_assist_split``); the battery side never asked, so a pack the
+    # user had kept for the house still covered the car on the meter. One
+    # permission, both readers.
+    _assist_ok = may_assist_ev(
+        mode, effective_permissions(mode, getattr(view, "battery_permissions", None)))
     _window = bool(getattr(view, "morning_window_open", False))
     _boost = getattr(view, "battery_boost_floor_soc", None)
-    if _window or _boost is not None:
+    if (_window or _boost is not None) and _assist_ok:
         _floors = []
         if _window:
             _floors.append(float(
@@ -541,7 +595,12 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
     # back to ev_charging so older views (no ev_connected) still gate.
     protection_enabled = bool(cfg.get("battery_discharge_protection_enabled", True))
 
-    if protection_enabled and (view.ev_connected or view.ev_charging):
+    # (#1066) A battery the user has said may not feed the car is clamped
+    # whenever a car is plugged in — with or without the legacy protection
+    # switch, whatever the surplus or the spend consent: the newer, more
+    # specific "no" wins (the class-75 rule). UNSET resolves to True, so no
+    # install that has not asked moves.
+    if (protection_enabled or not _assist_ok) and (view.ev_connected or view.ev_charging):
         f = view.fleet
         # Pure solar-vs-house surplus. Intentionally does NOT subtract
         # battery_charge_w (unlike decide.self_consumption_surplus_w): the
@@ -586,7 +645,7 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
              or bool(getattr(view, "ev_wants_pack", False)))
             and float(getattr(view, "battery_spendable_kwh", 0.0) or 0.0) > 0.0
         )
-        if (surplus_w < gate_w and not spend_open) or below_buffer:
+        if (surplus_w < gate_w and not spend_open) or below_buffer or not _assist_ok:
             # #531: split the home budget across the fleet — N batteries each
             # told to inject the FULL home load over-injects N× and leaks the
             # surplus to the EV, defeating the protection. Each gets home/N.
@@ -601,7 +660,11 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
             _floored_w = peak_cover_floor_w(view, home_w, n)
             _peak_raised = _floored_w > home_w
             home_w = _floored_w
-            if not getattr(f, "battery_soc_known", True):
+            if not _assist_ok:
+                # (#1066) The permission alone decides here — name it, not
+                # a surplus or SOC comparison that did not choose (#983).
+                why = "ev plugged in + this battery may not feed the car (may_assist_ev off)"
+            elif not getattr(f, "battery_soc_known", True):
                 # (#983) ``below_buffer`` is a disjunction, and the unread
                 # arm has no comparison in it: printing "SoC unknown < buffer
                 # 70%" states a relation nobody evaluated, on the one input
