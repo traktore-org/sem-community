@@ -223,7 +223,9 @@ class TestRefreshRuntimeConfig:
         coord = _coord({"electricity_export_rate": 0.05}, tariff=tp)  # no rate keys
         SEMCoordinator.refresh_runtime_config(coord)
         assert tp.peak_rate == 0.35       # unchanged, NOT nudged to 0.3387
-        assert tp.off_peak_rate == 0.30   # unchanged
+        # (#1040) An unsaved off-peak rate IS the import rate — one price.
+        # Keeping 0.30 here kept a spread that no saved key says exists.
+        assert tp.off_peak_rate == 0.35
         assert tp.export_rate == 0.05     # the one key present applied
 
     def test_no_controllers_is_safe(self):
