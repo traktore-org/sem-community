@@ -13,7 +13,7 @@ from typing import Dict, Any, List, Optional, Set, Tuple
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from ..const import DOMAIN
+from ..const import DEFAULT_ELECTRICITY_IMPORT_RATE, DOMAIN
 
 from .types import (
     PowerReadings, EnergyTotals, CostData, PerformanceMetrics,
@@ -298,7 +298,8 @@ class EnergyCalculator:
         self._last_update: Optional[datetime] = None
 
         # Cost rates
-        self._import_rate = config.get("electricity_import_rate", 0.3387)
+        self._import_rate = config.get("electricity_import_rate",
+                                       DEFAULT_ELECTRICITY_IMPORT_RATE)
         self._export_rate = config.get("electricity_export_rate", 0.075)
 
         # Rate history for 7-day averaging (dynamic tariffs)

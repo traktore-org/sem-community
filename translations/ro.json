@@ -1501,9 +1501,6 @@
       "heat_pump_boost_offset": {
         "name": "Decalaj de stimulare pompă de căldură"
       },
-      "hot_water_max_temperature": {
-        "name": "Temperatură maximă apă caldă"
-      },
       "system_size_kwp": {
         "name": "Puterea instalată PV"
       },

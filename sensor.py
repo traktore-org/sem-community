@@ -3391,6 +3391,8 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "state_decision_path", "process_path", "action_path",
                 "last_error", "shed_path", "shed_futile",
                 "shed_need_w", "shed_sheddable_w", "uncontrolled_w",
+                # (#1048) the phase guard's verdict and its held loads
+                "phase_shed_path", "phase_held",
             ):
                 attrs[key] = self.coordinator.data.get(key)
             # Add device list details for dashboard table

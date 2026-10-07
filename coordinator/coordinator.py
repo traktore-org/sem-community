@@ -38,6 +38,7 @@ from ..const import (
     DOMAIN,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_BATTERY_CAPACITY_KWH,
+    DEFAULT_ELECTRICITY_IMPORT_RATE,
     DEFAULT_MAX_CHARGING_CURRENT,
     DEFAULT_LOAD_MANAGEMENT_ENABLED,
     ED_RESOLVE_MAX_ATTEMPTS,
@@ -150,6 +151,20 @@ def _cfg_rate(config: dict, *keys: str, default: float) -> float:
         except (TypeError, ValueError):
             continue
     return default
+
+
+def _cfg_tariff_rates(config: dict, peak_default: float = DEFAULT_ELECTRICITY_IMPORT_RATE,
+                      ) -> tuple[float, float]:
+    """(#1040) The import (peak) and off-peak rates of a Static or Calendar tariff.
+
+    An unsaved off-peak rate IS the import rate: one price, so no spread
+    nobody entered. A fixed default made the night dearer than the day for
+    anyone whose saved import rate was below it — and still called it cheap.
+    """
+    peak = _cfg_rate(config, "electricity_import_rate", default=peak_default)
+    off_peak = _cfg_rate(config, "electricity_off_peak_rate", "electricity_nt_rate",
+                         default=peak)
+    return peak, off_peak
 
 
 # (#625 phase 3) moved to publish_diag; alias kept for existing imports.
@@ -659,14 +674,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # (#1040) The Tariff page now has the field this mode lacked:
             # `tariff_schedule_entity`, a HA Schedule helper whose blocks
             # are the peak hours. It wins over the hand-written nested key.
+            #
+            # (#1040) An unsaved rate is the one the card and the Tariff page
+            # show. Calendar used its own 0.35/0.22, so the screen showed one
+            # price and SEM charged at a spread nobody entered.
             schedule = config.get("tariff_schedule", {}) or {}
+            peak, off_peak = _cfg_tariff_rates(config)
             self._tariff_provider = CalendarTariffProvider(
                 hass,
-                peak_rate=config.get("electricity_import_rate", 0.35),
-                off_peak_rate=_cfg_rate(
-                    config, "electricity_off_peak_rate", "electricity_nt_rate",
-                    default=0.22,
-                ),
+                peak_rate=peak,
+                off_peak_rate=off_peak,
                 export_rate=config.get("electricity_export_rate", 0.075),
                 rules=schedule.get("rules", []),
                 default_tariff=schedule.get("default_tariff", "off_peak"),
@@ -676,12 +693,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 currency=currency,
             )
         else:
+            peak, off_peak = _cfg_tariff_rates(config)
             self._tariff_provider = StaticTariffProvider(
-                peak_rate=config.get("electricity_import_rate", 0.3387),
-                off_peak_rate=_cfg_rate(
-                    config, "electricity_off_peak_rate", "electricity_nt_rate",
-                    default=0.3387,
-                ),
+                peak_rate=peak,
+                off_peak_rate=off_peak,
                 export_rate=config.get("electricity_export_rate", 0.075),
                 currency=currency,
             )
@@ -1249,6 +1264,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             per = getattr(self, "_last_ev_connected_per_charger", None)
             if isinstance(per, dict):
                 connected = bool(per.get(cid, False))
+            # (#1048) A charger's phase is measured, not said: the held
+            # belief from the W/A estimate (#804), else the nameplate. Three
+            # phases are "3ph"; one is a line SEM cannot name.
+            believed = (getattr(self, "_phase_believed", None) or {}).get(cid)
+            n_phases = believed if believed in (1, 3) else ph
             rows.append({
                 "id": cid,
                 "name": getattr(dev, "name", cid),
@@ -1276,6 +1296,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 "min_power_w": min_a * ph * volt,
                 "max_power_w": max_a * ph * volt,
                 "connected": connected,
+                "phase": "3ph" if n_phases == 3 else "unknown",
+                "phase_measured": believed in (1, 3),
             })
         return rows
 
@@ -4414,6 +4436,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "Battery pipeline error: %s", e, exc_info=True,
                 )
 
+            # Step 7.5a2 (#1048): the chargers have had their turn — a phase
+            # still over its limit sheds loads, held until the guard's latch
+            # clears. Before 7.5b: the peak's restore must see the hold.
+            await self._phase_guard_loads(power)
+
             # Step 7.5b: Load management (peak tracking + device shedding, no EV)
             if self._load_manager:
                 self._load_manager._observer_mode = self._observer_mode
@@ -6511,9 +6538,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             hot_water_current_temperature=hw_current_temp,
             hot_water_solar_target=(
                 float(hw_controller.solar_target_temp) if hw_controller else None
-            ),
-            hot_water_max_temperature=(
-                float(hw_controller.max_temperature) if hw_controller else None
             ),
             hot_water_legionella_target=(
                 float(hw_controller.legionella_target_temp) if hw_controller else None
@@ -8788,6 +8812,60 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             "late": late,
             "boost_allowed": _battery_may_assist_ev(self.config, cfg),
         }
+
+    async def _phase_guard_loads(self, power) -> None:
+        """(#1048 C2) A phase over its limit sheds loads, not only chargers.
+
+        Runs after the chargers were filtered, so the guard has had its first
+        answer — stopping the car. A phase still over after that (or over
+        with no car drawing) asks load management for its loads; the surplus
+        controller gets the holds for the loads it owns. While the guard's
+        latch stands nothing taken comes back. A guard that is off releases
+        whatever it held."""
+        from ..features.phase_shed import EV_DRAWING_W, single_phase_supply
+        from .active_phase_guard import ActivePhaseGuard
+        lm = getattr(self, "_load_manager", None)
+        enforcer = getattr(self, "_active_phase_guard", None)
+        verdict: Dict[str, Any] = {}
+        try:
+            if (self.config.get("phase_guard_enabled", False)
+                    and isinstance(enforcer, ActivePhaseGuard)):
+                snap = getattr(self, "_phase_guard_snapshot", None)
+                request = enforcer.phase_shed_request(
+                    ev_drawing=float(getattr(power, "ev_power", 0.0) or 0.0)
+                    > EV_DRAWING_W)
+                if lm is not None:
+                    lm._observer_mode = self._observer_mode
+                    verdict = await lm.process_phase_guard(
+                        request, may_restore=enforcer.loads_may_return,
+                        latched=enforcer.latched_phases,
+                        single_phase=single_phase_supply(
+                            snap if isinstance(snap, dict) else {}))
+                elif request:
+                    # nothing to shed with: say so where the guard is read
+                    verdict = {"over": request, "path": "load_management_off"}
+                if isinstance(snap, dict) and verdict:
+                    snap["loads"] = {
+                        k: verdict[k]
+                        for k in ("over", "thrown", "latched", "shed", "path")
+                        if k in verdict}
+            elif lm is not None:
+                verdict = await lm.process_phase_guard({}, may_restore=True)
+        except Exception:  # noqa: BLE001 — never costs a cycle; logged
+            _LOGGER.warning("Phase guard load shed failed", exc_info=True)
+            verdict = {}
+        self._apply_phase_holds(verdict)
+
+    def _apply_phase_holds(self, verdict: Optional[Dict[str, Any]]) -> None:
+        """(#1048) Hand the cycle's holds to the loads the surplus
+        controller owns: ``hold`` blocks a start, ``shed`` also backs it off.
+        Every other load is free — a hold is never left behind."""
+        hold = (verdict or {}).get("hold") or {}
+        shed = (verdict or {}).get("shed") or {}
+        sc = getattr(self, "_surplus_controller", None)
+        for did, dev in (getattr(sc, "_devices", None) or {}).items():
+            dev._phase_hold = hold.get(did)
+            dev._phase_shed = did in shed
 
     def _plan_ev_connected(self, cid: str, charger_cfg, power):
         """(#638) THE plan layer's answer to "is this car connected?".
@@ -14573,7 +14651,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     from ..devices.hot_water_controller import (
                         DEFAULT_LEGIONELLA_MIN_TEMP,
                     )
-                    hw.max_temperature = float(cfg.get("hot_water_max_temperature", 70.0))
                     hw.min_temperature = float(
                         cfg.get("hot_water_minimum_temperature", 40.0)
                     )
@@ -14701,18 +14778,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         )
                     )
                 else:
-                    # Static / Calendar share peak/off-peak rate fields. Fall
-                    # back to the provider's CURRENT value when the key is
-                    # absent so a factory-default calendar install (different
-                    # construction default 0.35 vs static 0.3387) isn't nudged
-                    # to a wrong rate by the refresh (MEDIUM, review).
-                    tp.peak_rate = float(
-                        cfg.get("electricity_import_rate", tp.peak_rate)
-                    )
-                    tp.off_peak_rate = _cfg_rate(
-                        cfg, "electricity_off_peak_rate", "electricity_nt_rate",
-                        default=tp.off_peak_rate,
-                    )
+                    # Static / Calendar share peak/off-peak rate fields. An
+                    # unsaved import rate keeps the provider's value; an
+                    # unsaved off-peak rate follows the import rate (#1040),
+                    # so a new import rate never opens a spread on its own.
+                    tp.peak_rate, tp.off_peak_rate = _cfg_tariff_rates(
+                        cfg, peak_default=tp.peak_rate)
             except (TypeError, ValueError):
                 pass
 
@@ -14828,6 +14899,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "state_decision_path", "process_path", "action_path",
                     "last_error", "shed_path", "shed_need_w",
                     "shed_sheddable_w", "shed_futile", "uncontrolled_w",
+                    # (#1048) the phase guard's half
+                    "phase_shed_path", "phase_held",
                 ):
                     if key in lm_info:
                         setattr(lm_data, key, lm_info[key])

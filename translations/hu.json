@@ -1501,9 +1501,6 @@
       "heat_pump_boost_offset": {
         "name": "Hőszivattyú emelési eltolása"
       },
-      "hot_water_max_temperature": {
-        "name": "Melegvíz max. hőmérséklete"
-      },
       "system_size_kwp": {
         "name": "PV-rendszer mérete"
       },

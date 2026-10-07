@@ -1282,11 +1282,14 @@ path, the hot-water boiler is a simple on/off device controlled by SEM.
 |---|---|
 | Boiler control entity | The `switch.`, `water_heater.`, or `climate.` entity that turns the boiler on/off |
 | Temperature sensor (optional) | A `sensor.` reporting current water temperature in °C |
-| Solar target | Boiler runs on surplus until water reaches this (default 50 °C) |
-| Max temperature | Safety ceiling — SEM never activates above this regardless of mode (default 70 °C) |
+| Solar target | Boiler runs on surplus until water reaches this, then SEM stops it (default 50 °C). It is the highest temperature SEM heats to, except for the Legionella cycle |
 | Legionella target | Target temperature for the periodic Legionella cycle (default 65 °C) |
-| Minimum temperature | Below this, SEM force-heats from any source — not just solar (default 40 °C) |
-| Priority | Surplus-dispatch order (lower = served first, default 6) |
+
+Mode, priority, and when to stop or force heating are set on the **Control
+tab**, in the boiler's row. Under **Comfort**, "Keep at" plus "Bank by" is a
+second stop (SEM stops at whichever is lower), and "Run now past" forces
+heating below that temperature from the sources you allow there. With no
+thermometer picked, the Comfort section reads the boiler's own temperature.
 
 **If the temperature sensor is omitted:** SEM operates the boiler "blind" —
 it controls the on/off but relies on the boiler's internal thermostat to
@@ -1407,6 +1410,13 @@ wrong-unit, negative and non-finite readings instead of silently changing
 source. Radio, meter and field-bus pairing remain the responsibility of the
 hardware and its Home Assistant integration; SEM consumes only the resulting
 HA sensor entities.
+
+With enforcement on, the guard acts once per coordinator cycle (the update
+interval, 10 seconds by default): it stops or clamps SEM's chargers, and since 2.2 a phase still over
+its limit after that — or over with no car charging — sheds the loads known
+to sit on that phase, then those of unknown phase, held down until the
+guard's recovery latch clears. Give each load its phase in the priority list;
+see [A phase over its limit](LOAD_PRIORITY.md#a-phase-over-its-limit-1048).
 
 In Observer Mode SEM still runs its **full** decision logic against your live
 sensors every cycle — it just never actuates. It logs each command it *would*

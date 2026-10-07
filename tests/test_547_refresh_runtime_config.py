@@ -84,17 +84,17 @@ class TestRefreshRuntimeConfig:
 
     def test_hot_water_targets_pushed_timer_preserved(self):
         # The legionella timer state must NOT be reset by the refresh.
-        hw = _Dev(max_temperature=0, min_temperature=0, solar_target_temp=0,
+        hw = _Dev(min_temperature=0, solar_target_temp=0,
                   legionella_target_temp=0, legionella_interval_hours=0, priority=1,
                   hours_since_legionella=99.0, _legionella_cycle_active=True)
         sc = _SurplusController({"hot_water": hw})
         coord = _coord({
-            "hot_water_max_temperature": 65, "hot_water_minimum_temperature": 42,
+            "hot_water_minimum_temperature": 42,
             "hot_water_solar_target": 52, "hot_water_legionella_target": 70,
             "hot_water_legionella_interval_hours": 200, "hot_water_priority": 5,
         }, surplus=sc)
         SEMCoordinator.refresh_runtime_config(coord)
-        assert hw.max_temperature == 65.0
+        assert hw.min_temperature == 42.0
         assert hw.solar_target_temp == 52.0
         assert hw.legionella_interval_hours == 200.0
         # #602/#576 — priority is the drag-list position now, not clobbered from
@@ -223,7 +223,9 @@ class TestRefreshRuntimeConfig:
         coord = _coord({"electricity_export_rate": 0.05}, tariff=tp)  # no rate keys
         SEMCoordinator.refresh_runtime_config(coord)
         assert tp.peak_rate == 0.35       # unchanged, NOT nudged to 0.3387
-        assert tp.off_peak_rate == 0.30   # unchanged
+        # (#1040) An unsaved off-peak rate IS the import rate — one price.
+        # Keeping 0.30 here kept a spread that no saved key says exists.
+        assert tp.off_peak_rate == 0.35
         assert tp.export_rate == 0.05     # the one key present applied
 
     def test_no_controllers_is_safe(self):

@@ -2921,7 +2921,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 power_entity_id=full_config.get("hot_water_power_sensor"),
                 energy_entity_id=full_config.get("hot_water_energy_sensor"),  # #600
                 temperature_entity_id=full_config.get("hot_water_temperature_sensor"),
-                max_temperature=float(full_config.get("hot_water_max_temperature", 70.0)),
                 min_temperature=float(full_config.get("hot_water_minimum_temperature", 40.0)),
                 solar_target_temp=float(full_config.get("hot_water_solar_target", 50.0)),
                 legionella_target_temp=float(full_config.get("hot_water_legionella_target", 65.0)),
@@ -2935,10 +2934,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             _seed_legionella_time(coordinator, hw_device)
             _LOGGER.info(
                 "Hot water registered (entity=%s, priority=%d, "
-                "temp_sensor=%s, solar_target=%.0f°C, max=%.0f°C)",
+                "temp_sensor=%s, solar_target=%.0f°C)",
                 hw_entity, hw_device.priority,
                 hw_device.temperature_entity_id or "—",
-                hw_device.solar_target_temp, hw_device.max_temperature,
+                hw_device.solar_target_temp,
             )
         else:
             _LOGGER.debug(
@@ -4830,6 +4829,8 @@ async def _async_register_services(
             "comfort_entity", "comfort_target", "comfort_offset", "comfort_limit",
             # (#1020) a Schedule helper that sets the mode while it is on
             "schedule_entity", "schedule_mode",
+            # (#1048) the supply phase the load sits on
+            "phase",
         ):
             # (#559/#620) goal engine — persisted + applied live
             registry = getattr(coordinator, "_device_registry", None)
@@ -4873,6 +4874,16 @@ async def _async_register_services(
                     translation_key="invalid_device_property",
                     translation_placeholders={"property": f"{prop}={value}"},
                 )
+            # (#1048) L1 / L2 / L3 / 3ph / unknown — a typo must not place a
+            # load on no phase at all
+            if prop == "phase":
+                from .consts.devices import is_load_phase
+                if not is_load_phase(str(value)):
+                    raise ServiceValidationError(
+                        translation_domain=DOMAIN,
+                        translation_key="invalid_device_property",
+                        translation_placeholders={"property": f"{prop}={value}"},
+                    )
             # (#620) normalize the two battery flags to a canonical bool string
             # so the stored dict + live apply agree regardless of "true"/"1"/"on".
             if prop in ("battery_assist_enabled", "battery_eligible_overnight"):
@@ -4941,6 +4952,8 @@ async def _async_register_services(
                     "comfort_entity", "comfort_target", "comfort_offset", "comfort_limit",
                     # (#1020) a Schedule helper that sets the mode while on
                     "schedule_entity", "schedule_mode",
+                    # (#1048) the supply phase
+                    "phase",
                 ]),
                 vol.Required("value"): cv.string,
             }),
@@ -5422,6 +5435,8 @@ async def _async_register_phase_services(
                 "comfort_entity", "comfort_target", "comfort_offset", "comfort_limit",
                 # (#1020) a Schedule helper that sets the mode while on
                 "schedule_entity", "schedule_mode",
+                # (#1048) the supply phase
+                "phase",
             )
             if k in call.data
         }
@@ -5502,6 +5517,10 @@ async def _async_register_phase_services(
                 "", vol.All(cv.string, vol.Match(r"^schedule\."))),
             vol.Optional("schedule_mode"): vol.In(
                 ["", "off", "peak_only", "surplus"]),
+            # (#1048) the supply phase the load sits on
+            vol.Optional("phase"): vol.In(
+                ["L1", "L2", "L3", "3ph", "unknown"]
+            ),
         }),
         supports_response=SupportsResponse.OPTIONAL,
     )
@@ -6255,7 +6274,7 @@ async def _async_register_phase_services(
     # when the controller is hooked up).
     _DIAGNOSE_HOT_WATER_OPTION = {
         "hot_water_entity", "hot_water_temperature_sensor",
-        "hot_water_solar_target", "hot_water_max_temperature",
+        "hot_water_solar_target",
         "hot_water_legionella_target", "hot_water_minimum_temperature",
         "hot_water_priority", "hot_water_rated_power",
     }
@@ -6267,7 +6286,7 @@ async def _async_register_phase_services(
         "hot_water_registered", "hot_water_entity",
         "hot_water_temperature_sensor",
         "hot_water_current_temperature",
-        "hot_water_solar_target", "hot_water_max_temperature",
+        "hot_water_solar_target",
         "hot_water_legionella_target", "hot_water_hours_since_legionella",
         "hot_water_legionella_cycle_active",
         "hot_water_activation_path", "hot_water_deactivation_path",

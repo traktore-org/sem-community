@@ -757,6 +757,10 @@ class LoadManagementData:
     shed_sheddable_w: float = 0.0
     shed_futile: bool = False
     uncontrolled_w: float = 0.0
+    # (#1048) the phase guard's shed path: this cycle's verdict and the
+    # surplus-owned loads held for a phase (device → phase)
+    phase_shed_path: str = "clear"
+    phase_held: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -918,7 +922,6 @@ class HotWaterSensorData:
     hot_water_temperature_sensor: Optional[str] = None
     hot_water_current_temperature: Optional[float] = None
     hot_water_solar_target: Optional[float] = None
-    hot_water_max_temperature: Optional[float] = None
     hot_water_legionella_target: Optional[float] = None
     hot_water_hours_since_legionella: Optional[float] = None
     hot_water_legionella_cycle_active: bool = False
@@ -1430,6 +1433,9 @@ class SEMData:
             "shed_sheddable_w": self.load_management.shed_sheddable_w,
             "shed_futile": self.load_management.shed_futile,
             "uncontrolled_w": self.load_management.uncontrolled_w,
+            # (#1048) the phase guard's half of the shed path
+            "phase_shed_path": self.load_management.phase_shed_path,
+            "phase_held": self.load_management.phase_held,
 
             # Timestamp
             "last_update": self.last_update,
@@ -1529,7 +1535,6 @@ class SEMData:
             "hot_water_temperature_sensor": self.hot_water.hot_water_temperature_sensor,
             "hot_water_current_temperature": self.hot_water.hot_water_current_temperature,
             "hot_water_solar_target": self.hot_water.hot_water_solar_target,
-            "hot_water_max_temperature": self.hot_water.hot_water_max_temperature,
             "hot_water_legionella_target": self.hot_water.hot_water_legionella_target,
             "hot_water_hours_since_legionella": self.hot_water.hot_water_hours_since_legionella,
             "hot_water_legionella_cycle_active": self.hot_water.hot_water_legionella_cycle_active,

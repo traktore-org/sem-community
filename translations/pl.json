@@ -1501,9 +1501,6 @@
       "heat_pump_boost_offset": {
         "name": "Podbicie temperatury pompy ciepła"
       },
-      "hot_water_max_temperature": {
-        "name": "Maks. temperatura ciepłej wody"
-      },
       "system_size_kwp": {
         "name": "Moc instalacji PV"
       },

@@ -162,3 +162,29 @@ def names_a_charge_pause(name: object) -> bool:
     pause of the charge and nothing else, so its "on" is the stop."""
     words = _name_words(name)
     return bool(words & PAUSE_WORDS) and words <= PAUSE_WORDS | CHARGE_PAUSE_WORDS
+
+
+# (#1048, D6) Which supply phase a load sits on. The phase guard sheds a
+# phase's own loads first: ``L1``/``L2``/``L3`` draw on that line alone,
+# ``3ph`` on all three; ``unknown`` — the default, because SEM cannot see a
+# wiring diagram — is shed for a phase only after every load known to sit on
+# it. A load's phase is the user's to say; a charger's is measured.
+LOAD_PHASES: Final = ("L1", "L2", "L3", "3ph", "unknown")
+DEFAULT_LOAD_PHASE: Final = "unknown"
+_PHASE_ALIASES: Final = {
+    "l1": "L1", "l2": "L2", "l3": "L3",
+    "3ph": "3ph", "3": "3ph", "3p": "3ph", "three": "3ph",
+    "unknown": "unknown", "": "unknown",
+}
+
+
+def load_phase(value: object) -> str:
+    """The phase a stored or typed value names, ``unknown`` for anything
+    that names none — a load is never placed on a line it was not given."""
+    return _PHASE_ALIASES.get(str(value if value is not None else "").strip().lower(),
+                              DEFAULT_LOAD_PHASE)
+
+
+def is_load_phase(value: object) -> bool:
+    """True when ``value`` names a phase exactly as the service takes it."""
+    return isinstance(value, str) and value in LOAD_PHASES

@@ -1552,6 +1552,15 @@ Everything below is **off by default** and lives on the Config tab under
   on its own; `homeassistant.update_entity` on the mode sensor forces it.
 - **House as a battery sink** — keep the pack through cheap and negative
   hours (let the house import) and spend it on the house in expensive ones.
+  The **peak limit is the hold's floor** (#970, #1003): while the pack is
+  held, the meter may still only buy what the current 15-minute slot has
+  left of its budget, and the pack covers the rest of the house. A house of
+  5 kW under 2 kW of sun with a 2.5 kW limit imports 2.5 kW and draws 0.5 kW
+  from the pack; a slot that already bought more than its share asks the
+  pack for more, one that ran cold for less. With no peak limit configured
+  the hold keeps the whole pack. On a cycle whose house load SEM cannot
+  measure (a dark grid sensor), it does not hold at all — nothing would show
+  the slot is safe — and the pack covers the house as before.
 - **Morning EV window** — before the configured departure, empty the pack
   into the car down to the *Morning drain floor*, only when today's forecast
   refills the pack.

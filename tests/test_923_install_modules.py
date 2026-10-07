@@ -159,7 +159,7 @@ class TestHotWater:
         assert v[Module.HOT_WATER] is Presence.PRESENT
 
     def test_settings_alone_are_not_evidence(self):
-        v = module_verdict({"hot_water_max_temperature": 60}, None, False)
+        v = module_verdict({"hot_water_solar_target": 60}, None, False)
         assert v[Module.HOT_WATER] is Presence.ABSENT
 
 
