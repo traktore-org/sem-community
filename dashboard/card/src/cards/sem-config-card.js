@@ -1471,8 +1471,12 @@ class SEMConfigCard extends SEMLitBase {
                   like LKR/IDR/VND); fine step keeps decimal currencies exact. */ ''}
             ${this._renderOptionNumberInput('electricity_import_rate', 'config_import_rate',
                 { min: 0, max: 10000, step: 0.001, unit: `${currency}/kWh`, default: 0.3387 }, opts, 'config_help_import_rate')}
+            ${/* (#1040) Unsaved, the off-peak rate is the import rate — one
+                  price, as the backend reads it (_cfg_tariff_rates). */ ''}
             ${this._renderOptionNumberInput('electricity_off_peak_rate', 'config_off_peak_rate',
-                { min: 0, max: 10000, step: 0.001, unit: `${currency}/kWh`, default: 0.3387 }, opts, 'config_help_off_peak_rate')}
+                { min: 0, max: 10000, step: 0.001, unit: `${currency}/kWh`,
+                  default: opts.electricity_nt_rate ?? opts.electricity_import_rate ?? 0.3387 },
+                opts, 'config_help_off_peak_rate')}
             ${this._renderOptionNumberInput('electricity_export_rate', 'config_export_rate',
                 { min: 0, max: 10000, step: 0.001, unit: `${currency}/kWh`, default: 0.075 }, opts, 'config_help_export_rate')}
             ${this._renderOptionNumberInput('grid_import_surcharge', 'config_import_surcharge',
@@ -2106,7 +2110,8 @@ class SEMConfigCard extends SEMLitBase {
     // entry reload for the whole batch) and clear the buffer.
     async _applyPending() {
         const keys = Object.keys(this._pending);
-        if (!keys.length || this._applying) return;
+        // (#1040) A section's Apply may be sending these same keys.
+        if (!keys.length || this._applying || this._secApplying) return;
         const entryId = await this._ensureEntryId();
         this._applying = true;
         // Clear any prior apply error before retrying.
@@ -2227,7 +2232,7 @@ class SEMConfigCard extends SEMLitBase {
     async _applySection(secId) {
         const keys = this._sectionStaged(secId);
         const pendingKeys = this._sectionPending(secId);
-        if ((!keys.length && !pendingKeys.length) || this._secApplying) return;
+        if ((!keys.length && !pendingKeys.length) || this._secApplying || this._applying) return;
         this._secApplying = secId;
         try {
             const optPayload = {};
@@ -3133,6 +3138,12 @@ class SEMConfigCard extends SEMLitBase {
         // #605 — bind every tunable rendered inside this section to it (the
         // renderers call _reg() while _sec is set), so the footer knows which
         // staged edits belong here.
+        // (#1040) Afresh on every render: a field the view no longer shows
+        // (another tariff mode's, an Advanced row) must not ride along on
+        // this section's Apply. Its edit is kept and comes back with it.
+        for (const id of Object.keys(this._secOf)) {
+            if (this._secOf[id] === section.id) delete this._secOf[id];
+        }
         this._sec = section.id;
         const body = contentFn(T);
         this._sec = null;

@@ -438,10 +438,10 @@ CARD = ROOT / "dashboard" / "card" / "src" / "cards" / "sem-config-card.js"
 
 
 def _card_default(key):
-    """The number the config card shows for an unsaved option."""
+    """The number the config card shows for an option when nothing is saved."""
     import re
     src = CARD.read_text(encoding="utf-8")
-    m = re.search(r"_renderOptionNumberInput\('" + key + r"',.*?default: ([0-9.]+)",
+    m = re.search(r"_renderOptionNumberInput\('" + key + r"',.*?default: (?:[^,}]*\?\? )?([0-9.]+)",
                   src, re.DOTALL)
     assert m, key
     return float(m.group(1))
@@ -473,6 +473,37 @@ class TestAnUnsavedRateIsTheShownRate:
         assert p.get_price_level() is None
         assert p.get_tariff_data().level_absence == "flat"
 
+    @pytest.mark.parametrize("mode", ["calendar", "static"])
+    def test_an_unsaved_off_peak_rate_is_the_import_rate(self, mock_hass, mode):
+        """Review finding: a fixed 0.3387 made the night dearer than a saved
+        0.25 day — and still called it cheap."""
+        mock_hass.states.get = lambda eid: (
+            SimpleNamespace(state="off", last_updated="t0", attributes={})
+            if eid == HELPER else None)
+        p = self._coord_provider(mock_hass, mode, tariff_schedule_entity=HELPER,
+                                 electricity_import_rate=0.25)
+        assert (p.peak_rate, p.off_peak_rate) == (0.25, 0.25)
+        assert p.get_price_level() is None
+
+    def test_a_legacy_night_rate_still_counts(self, mock_hass):
+        p = self._coord_provider(mock_hass, "calendar", tariff_schedule_entity=HELPER,
+                                 electricity_import_rate=0.32, electricity_nt_rate=0.2)
+        assert p.off_peak_rate == 0.2
+
+    def test_a_new_import_rate_does_not_open_a_spread(self, mock_hass):
+        """The live refresh used to keep the old off-peak rate while the
+        import rate moved — a spread from one edit."""
+        from custom_components.solar_energy_management.coordinator import SEMCoordinator
+        coord = SEMCoordinator(mock_hass, {"tariff_mode": "calendar", "update_interval": 30,
+                                           "tariff_schedule_entity": HELPER})
+        coord.config["electricity_import_rate"] = 0.25
+        coord.refresh_runtime_config()
+        p = coord._tariff_provider
+        assert (p.peak_rate, p.off_peak_rate) == (0.25, 0.25)
+        coord.config["electricity_off_peak_rate"] = 0.1
+        coord.refresh_runtime_config()
+        assert (p.peak_rate, p.off_peak_rate) == (0.25, 0.1)
+
     def test_saved_rates_are_used(self, mock_hass):
         p = self._coord_provider(mock_hass, "calendar", tariff_schedule_entity=HELPER,
                                  electricity_import_rate=0.32,
@@ -493,6 +524,17 @@ class TestAnUnsavedRateIsTheShownRate:
         for key in ("electricity_import_rate", "electricity_off_peak_rate"):
             marker = next(m for m in result["data_schema"].schema if m.schema == key)
             assert marker.default() == _card_default(key), key
+
+    @pytest.mark.asyncio
+    async def test_the_tariff_page_shows_the_import_rate_for_an_unsaved_night(
+            self, mock_hass, config_entry):
+        for key in ("electricity_off_peak_rate", "electricity_nt_rate"):
+            config_entry.data.pop(key, None)
+        result = await _step(_flow(mock_hass, config_entry,
+                                   {"electricity_import_rate": 0.25}), config_entry)
+        marker = next(m for m in result["data_schema"].schema
+                      if m.schema == "electricity_off_peak_rate")
+        assert marker.default() == 0.25
 
     @pytest.mark.asyncio
     async def test_the_tariff_page_keeps_a_saved_zero(self, mock_hass, config_entry):

@@ -187,3 +187,48 @@ test('a structural toggle belongs to its section as well', () => {
     el._pending = { battery_setpoint_bidirectional: true };
     assert.deepEqual(el._sectionPending('tariff'), ['battery_setpoint_bidirectional']);
 });
+
+test('going back to Static holds the Calendar edits out of Apply', async () => {
+    const el = card({ tariff_mode: 'static' });
+    el._stage('opt:tariff_mode', 'option', 'calendar');
+    renderTariff(el);
+    el._stage('opt:electricity_off_peak_rate', 'option', 0.22);
+    el._pending = { tariff_schedule_entity: HELPER };
+    el._stage('opt:tariff_mode', 'option', 'static');        // back to the saved mode
+    renderTariff(el);
+    assert.equal(el._sectionUnsaved('tariff'), 0, 'hidden fields are counted');
+    await el._applySection('tariff');
+    assert.equal(el.calls.length, 0, 'Apply saved fields the page no longer shows');
+    // Picked again, they come back as the user left them.
+    el._stage('opt:tariff_mode', 'option', 'calendar');
+    renderTariff(el);
+    assert.equal(el._sectionUnsaved('tariff'), 3);
+});
+
+test('an unsaved off-peak rate shows the import rate', () => {
+    const el = card({ tariff_mode: 'calendar', electricity_import_rate: 0.25 });
+    const seen = [];
+    const real = el._renderOptionNumberInput.bind(el);
+    el._renderOptionNumberInput = (key, label, cfg, opts, help) => {
+        if (key === 'electricity_off_peak_rate') seen.push(cfg.default);
+        return real(key, label, cfg, opts, help);
+    };
+    renderTariff(el);
+    assert.deepEqual(seen, [0.25]);
+    el._options = { tariff_mode: 'calendar', electricity_import_rate: 0.25, electricity_nt_rate: 0.2 };
+    renderTariff(el);
+    assert.deepEqual(seen, [0.25, 0.2]);
+});
+
+test('the two Apply buttons wait for each other', async () => {
+    const el = card({ tariff_mode: 'calendar' });
+    renderTariff(el);
+    el._pending = { tariff_schedule_entity: HELPER };
+    el._secApplying = 'tariff';
+    await el._applyPending();
+    el._secApplying = '';
+    el._applying = true;
+    await el._applySection('tariff');
+    assert.equal(el.calls.length, 0);
+    assert.deepEqual(el._pending, { tariff_schedule_entity: HELPER });
+});
