@@ -1672,6 +1672,21 @@
     },
     "load_management_failed_to_start": {
       "message": "Řízení zátěže je zapnuté, ale nepodařilo se ho spustit, takže SEM nemůže použít svůj seznam zařízení. Zkontrolujte protokol Home Assistant na \"Failed to initialize load management\" a znovu načtěte integraci."
+    },
+    "battery_boost_not_permitted": {
+      "message": "Baterie nesmí napájet „{charger}“: oprávnění je vypnuté. Zapněte ho v nastavení baterie, abyste mohli použít boost."
+    },
+    "battery_boost_not_connected": {
+      "message": "K „{charger}“ není připojeno žádné auto."
+    },
+    "battery_boost_bad_floor": {
+      "message": "„{floor}“ není úroveň baterie: zadejte spodní mez od 0 do 100 %."
+    },
+    "charger_not_found": {
+      "message": "SEM nemá nabíječku „{charger}“."
+    },
+    "departure_bad_time": {
+      "message": "„{day}: {time}“ není odjezd: dny jsou mon … sun, časy HH:MM od 00:00 do 23:59."
     }
   },
   "issues": {

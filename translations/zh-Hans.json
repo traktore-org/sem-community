@@ -1672,6 +1672,21 @@
     },
     "load_management_failed_to_start": {
       "message": "负载管理已开启但启动失败，因此 SEM 无法使用其设备列表。请在 Home Assistant 日志中查找 \"Failed to initialize load management\" 并重新加载该集成。"
+    },
+    "battery_boost_not_permitted": {
+      "message": "电池不得为“{charger}”供电：该权限已关闭。请在电池设置中开启后再使用加速充电。"
+    },
+    "battery_boost_not_connected": {
+      "message": "“{charger}”未连接车辆。"
+    },
+    "battery_boost_bad_floor": {
+      "message": "“{floor}”不是有效的电池电量：请输入 0 到 100 % 之间的下限。"
+    },
+    "charger_not_found": {
+      "message": "SEM 中没有充电桩“{charger}”。"
+    },
+    "departure_bad_time": {
+      "message": "“{day}: {time}”不是有效的出发时间：日期为 mon … sun，时间格式为 HH:MM（00:00 至 23:59）。"
     }
   },
   "issues": {

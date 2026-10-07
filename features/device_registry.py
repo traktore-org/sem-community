@@ -38,6 +38,7 @@ from .load_device_discovery import LoadDeviceDiscovery, resolve_load_is_on
 from .device_axes import user_hands_off
 from ..devices.base import (
     CurrentControlDevice,
+    SwitchDevice,
     surplus_device_from_spec,
 )
 from ..devices.power_setpoint import (   # (#880) ONE producer, over there
@@ -506,6 +507,9 @@ class UnifiedDeviceRegistry:
         # (#705) thermal comfort band — Phase 1 consumes them on climate
         # devices; stored against any device (Phase 2 opens switch loads).
         "comfort_entity", "comfort_target", "comfort_offset", "comfort_limit",
+        # (#1020) a Schedule helper that sets the mode while it is on —
+        # applied to switch loads only.
+        "schedule_entity", "schedule_mode",
         # (#1048) the supply phase the load sits on
         "phase",
     )
@@ -564,6 +568,13 @@ class UnifiedDeviceRegistry:
         # without comfort goals keep their constructor values; plain setattr
         # so a comfort goal stored against a non-climate device lands as an
         # unused attribute instead of crashing the rebuild (Phase 2 reads it).
+        # (#1020) The schedule, on switch loads only (key-present, the #688
+        # pattern). It is read where the mode is read; nothing is written
+        # into the stored mode.
+        if isinstance(device, SwitchDevice):
+            for _sk in ("schedule_entity", "schedule_mode"):
+                if _sk in goals:
+                    setattr(device, _sk, str(goals.get(_sk) or ""))
         if "comfort_entity" in goals:
             device.comfort_entity = str(goals.get("comfort_entity", "") or "")
         for _ck in ("comfort_target", "comfort_offset", "comfort_limit"):
@@ -2339,6 +2350,13 @@ class UnifiedDeviceRegistry:
                 "comfort_target": goals.get("comfort_target", 0),
                 "comfort_offset": goals.get("comfort_offset", 0),
                 "comfort_limit": goals.get("comfort_limit", 0),
+                # (#1020) the schedule, and whether it is running now
+                "schedule_entity": goals.get("schedule_entity", ""),
+                "schedule_mode": goals.get("schedule_mode", ""),
+                "schedule_active": bool(
+                    live is not None
+                    and getattr(live, "scheduled_control_mode", lambda: None)()
+                    is not None),
             },
             "progress": {
                 "runtime_today_min": int(round(runtime_min)),

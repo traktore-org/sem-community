@@ -107,12 +107,15 @@ def _merge_plan_blocks(blocks: Any) -> List[Dict[str, Any]]:
     for b in blocks or []:
         if not isinstance(b, dict):
             continue
-        by_id.setdefault(b.get("id"), []).append({
+        row = {
             "id": b.get("id"),
             "start": b.get("start"),
             "end": b.get("end"),
             "power_w": b.get("power_w"),
-        })
+        }
+        if b.get("late"):
+            row["late"] = True      # (#1023) the top-up stays its own run
+        by_id.setdefault(b.get("id"), []).append(row)
     out: List[Dict[str, Any]] = []
     for rows in by_id.values():
         rows.sort(key=lambda r: str(r["start"]))
@@ -120,6 +123,7 @@ def _merge_plan_blocks(blocks: Any) -> List[Dict[str, Any]]:
         for row in rows:
             prev = run[-1] if run else None
             if (prev and prev["power_w"] == row["power_w"]
+                    and prev.get("late") == row.get("late")
                     and prev["end"] == row["start"]):
                 prev["end"] = row["end"]
                 continue
@@ -2426,6 +2430,11 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         "device_list",
         "per_charger_states",
         "per_charger_plans",
+        # (#1023/#1025) the EV card's departure and boost rows — config
+        # echoes and a live "kWh left", no charting value
+        "per_charger_departure",
+        "battery_boost",
+        "battery_boost_preview",
         "today_plan",
         "upcoming",
         "schedule_today",
@@ -2955,6 +2964,14 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                         "phase_verdict": self.coordinator.data.get(
                             f"charger_{cid}_phase_verdict"),
                     }
+            # (#1023/#1025) The EV card's departure rows per charger: the
+            # default time, each weekday's own, the next departure, the two
+            # plan knobs, the stamped top-up and the boost permission.
+            _per_charger_departure = {}
+            for k, v in self.coordinator.data.items():
+                if k.startswith("charger_") and k.endswith("_departure"):
+                    cid = k[len("charger_"):-len("_departure")]
+                    _per_charger_departure[cid] = v
             attrs.update({
                 "battery_soc": self.coordinator.data.get("battery_soc"),
                 "calculated_current": self.coordinator.data.get("calculated_current"),
@@ -2998,6 +3015,12 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 # ``sensor.sem_export_guard_state``.
                 "sink_verdicts": self.coordinator.data.get("sink_verdicts") or {},
                 "export_guard": self.coordinator.data.get("export_guard") or {},
+                "per_charger_departure": _per_charger_departure,
+                # (#1025) the boost that runs or how the last one ended, and
+                # what the card needs to say what one would give
+                "battery_boost": self.coordinator.data.get("battery_boost"),
+                "battery_boost_preview": self.coordinator.data.get(
+                    "battery_boost_preview"),
             })
         elif self.entity_description.key in (
             "roi_payback_years", "roi_annual_savings",

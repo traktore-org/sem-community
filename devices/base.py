@@ -210,6 +210,45 @@ class ControllableDevice(ABC):
     to each device that meets its minimum threshold.
     """
 
+    @property
+    def control_mode(self) -> DeviceControlMode:
+        """What SEM may do with this device NOW (#49): the scheduled mode
+        while the device's Schedule helper is on (#1020), else the stored
+        one. Substituted here, where every reader reads it; the stored mode
+        is never written, so a restart, an unavailable helper or a deleted
+        one needs no restore."""
+        scheduled = self.scheduled_control_mode()
+        return scheduled if scheduled is not None else self.stored_control_mode
+
+    @control_mode.setter
+    def control_mode(self, mode: DeviceControlMode) -> None:
+        """Writers set the STORED mode — the one a schedule hands back."""
+        self._control_mode = mode
+
+    @property
+    def stored_control_mode(self) -> DeviceControlMode:
+        """The mode the user chose, whatever a schedule says now."""
+        return self.__dict__.get("_control_mode", DeviceControlMode.PEAK_ONLY)
+
+    def scheduled_control_mode(self) -> Optional[DeviceControlMode]:
+        """(#1020) The schedule's mode while its helper is ON, else None.
+        A helper that is unavailable, unknown or gone is no schedule."""
+        entity = getattr(self, "schedule_entity", "") or ""
+        mode = getattr(self, "schedule_mode", "") or ""
+        hass = getattr(self, "hass", None)
+        if not entity or not mode or hass is None:
+            return None
+        try:
+            state = hass.states.get(entity)
+        except Exception:  # noqa: BLE001 — no state machine, no schedule
+            return None
+        if state is None or state.state != "on":
+            return None
+        try:
+            return DeviceControlMode(mode)
+        except ValueError:
+            return None
+
     def __init__(
         self,
         hass: HomeAssistant,
@@ -236,6 +275,10 @@ class ControllableDevice(ABC):
         self._status = DeviceStatus()
         self._enabled = True
         self._managed_externally = False
+        # (#1020) A Schedule helper that sets the mode while it is on —
+        # switch loads only (the device registry applies it). Empty = none.
+        self.schedule_entity: str = ""
+        self.schedule_mode: str = ""
         self.control_mode = DeviceControlMode.PEAK_ONLY  # Default: peak protection only (#49)
         # (#1048) the supply phase it sits on — the phase guard sheds a
         # phase's own loads first. Unknown until the user says.

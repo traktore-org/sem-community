@@ -452,20 +452,13 @@ class EnergyCalculator:
         return clamped
 
     def _ev_deadlines(self) -> list[str]:
-        """Every configured ``Charge by`` time: per charger, else the global
-        default. Empty only pre-setup (no chargers AND no default)."""
-        from ..consts.core import DEFAULT_EV_TARGET_TIME
+        """Every charger's ``Charge by`` time (#1023: the one resolver's
+        answer); the global one, or 07:00, before any charger exists."""
+        from .departure import departure_hhmm
 
-        deadlines = []
-        for c in self.config.get("ev_chargers") or []:
-            tt = c.get("ev_target_time") or self.config.get("ev_target_time")
-            if tt:
-                deadlines.append(str(tt))
-        if not deadlines:
-            global_tt = self.config.get("ev_target_time") or DEFAULT_EV_TARGET_TIME
-            if global_tt:
-                deadlines.append(str(global_tt))
-        return deadlines
+        chargers = self.config.get("ev_chargers") or []
+        return ([departure_hhmm(c, self.config) for c in chargers]
+                or [departure_hhmm(None, self.config)])
 
     def _seed_ev_day_memo_from_legacy_rule(self) -> None:
         """(#724) Upgrade seam: adopt the new fleet rule at a rollover, not

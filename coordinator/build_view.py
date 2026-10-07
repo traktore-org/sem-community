@@ -202,6 +202,9 @@ def build_charger_view(
         export_command=getattr(fleet_state, "export_command", None),
         export_guard_enabled=bool(getattr(fleet_state, "export_guard_enabled", False)),
         ev_morning_window_open=bool(getattr(fleet_state, "morning_window_open", False)),
+        # (#1025) the battery boost rides the same one-place thread
+        boost_charger_id=getattr(fleet_state, "boost_charger_id", None),
+        boost_floor_soc=getattr(fleet_state, "boost_floor_soc", None),
         home_w=float(getattr(power_reading, "home_consumption_power", 0.0) or 0.0),
         battery_charge_w=float(getattr(power_reading, "battery_charge_power", 0.0) or 0.0),
         battery_discharge_w=float(getattr(power_reading, "battery_discharge_power", 0.0) or 0.0),

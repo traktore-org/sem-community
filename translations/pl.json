@@ -1672,6 +1672,21 @@
     },
     "load_management_failed_to_start": {
       "message": "Zarządzanie obciążeniem jest włączone, ale nie udało się go uruchomić, więc SEM nie może użyć swojej listy urządzeń. Sprawdź dziennik Home Assistant pod kątem \"Failed to initialize load management\" i przeładuj integrację."
+    },
+    "battery_boost_not_permitted": {
+      "message": "Bateria nie może zasilać „{charger}”: uprawnienie jest wyłączone. Włącz je w ustawieniach baterii, aby użyć wspomagania."
+    },
+    "battery_boost_not_connected": {
+      "message": "Do „{charger}” nie jest podłączony żaden samochód."
+    },
+    "battery_boost_bad_floor": {
+      "message": "„{floor}” nie jest poziomem baterii: podaj dolną granicę od 0 do 100 %."
+    },
+    "charger_not_found": {
+      "message": "SEM nie ma ładowarki „{charger}”."
+    },
+    "departure_bad_time": {
+      "message": "„{day}: {time}” nie jest godziną wyjazdu: dni to mon … sun, godziny w formacie HH:MM od 00:00 do 23:59."
     }
   },
   "issues": {

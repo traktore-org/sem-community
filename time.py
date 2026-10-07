@@ -21,6 +21,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DEFAULT_EV_TARGET_TIME
 from .coordinator import SEMCoordinator
+from .coordinator.departure import departure_hhmm
 
 type SEMConfigEntry = ConfigEntry[SEMCoordinator]
 
@@ -57,9 +58,10 @@ async def async_setup_entry(
             icon="mdi:clock-end",
             entity_category=EntityCategory.CONFIG,
         )
-        initial = charger_cfg.get("ev_target_time") or full_config.get(
-            "ev_target_time", DEFAULT_EV_TARGET_TIME
-        )
+        # (#1023) The time SEM plans with, from the coordinator's config: a
+        # charger without its own shows the one it is planned to.
+        initial = departure_hhmm(
+            charger_cfg, getattr(coordinator, "config", None) or full_config)
         entities.append(
             SEMPerChargerTime(coordinator, desc, entry, cid, "ev_target_time", initial)
         )

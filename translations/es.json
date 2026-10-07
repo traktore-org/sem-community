@@ -1672,6 +1672,21 @@
     },
     "load_management_failed_to_start": {
       "message": "La gestión de cargas está activada pero no pudo iniciarse, así que SEM no puede usar su lista de dispositivos. Revisa el registro de Home Assistant en busca de \"Failed to initialize load management\" y recarga la integración."
+    },
+    "battery_boost_not_permitted": {
+      "message": "La batería no puede alimentar «{charger}»: el permiso está desactivado. Actívalo en los ajustes de la batería para usar el impulso."
+    },
+    "battery_boost_not_connected": {
+      "message": "No hay ningún coche conectado a «{charger}»."
+    },
+    "battery_boost_bad_floor": {
+      "message": "«{floor}» no es un nivel de batería: indica un mínimo de 0 a 100 %."
+    },
+    "charger_not_found": {
+      "message": "SEM no tiene ningún cargador «{charger}»."
+    },
+    "departure_bad_time": {
+      "message": "«{day}: {time}» no es una salida: los días son mon … sun y las horas HH:MM, de 00:00 a 23:59."
     }
   },
   "issues": {
