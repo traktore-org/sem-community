@@ -1501,9 +1501,6 @@
       "heat_pump_boost_offset": {
         "name": "Offset de boost da bomba de calor"
       },
-      "hot_water_max_temperature": {
-        "name": "Temperatura máx. da água quente"
-      },
       "system_size_kwp": {
         "name": "Potência do sistema FV"
       },
@@ -1675,6 +1672,21 @@
     },
     "load_management_failed_to_start": {
       "message": "A gestão de cargas está ligada mas não conseguiu arrancar, por isso o SEM não pode usar a sua lista de dispositivos. Verifique o registo do Home Assistant por \"Failed to initialize load management\" e recarregue a integração."
+    },
+    "battery_boost_not_permitted": {
+      "message": "A bateria não pode alimentar «{charger}»: a permissão está desligada. Ative-a nas definições da bateria para usar o reforço."
+    },
+    "battery_boost_not_connected": {
+      "message": "Nenhum carro está ligado a «{charger}»."
+    },
+    "battery_boost_bad_floor": {
+      "message": "«{floor}» não é um nível de bateria: indique um limite de 0 a 100 %."
+    },
+    "charger_not_found": {
+      "message": "O SEM não tem nenhum carregador «{charger}»."
+    },
+    "departure_bad_time": {
+      "message": "«{day}: {time}» não é uma partida: os dias são mon … sun e as horas HH:MM, de 00:00 a 23:59."
     }
   },
   "issues": {

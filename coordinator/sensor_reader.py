@@ -3656,6 +3656,7 @@ class SensorReader:
 
     _FORECAST_PLATFORMS = frozenset({
         "forecast_solar", "open_meteo_solar_forecast", "solcast_solar",
+        "helios_forecast",
     })
     _FORECAST_NAME_MARKERS = ("forecast", "_next_", "estimate", "predict")
 

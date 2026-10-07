@@ -90,19 +90,48 @@ def effective_charge_mode_for(
     [_tariff_optimized_for], [today_plan]) pass them as part of a
     stable signature.
 
+    (#1020) A charger may take ``schedule_entity`` (a Home Assistant
+    Schedule helper) and ``schedule_mode``: while the helper is on, that is
+    the mode. Substituted here, at read time — the stored ``charge_mode`` is
+    never written, so a restart, an unavailable helper or a deleted one
+    needs no restore. Without ``hass`` there is no schedule to see.
+
     Returns one of ``EV_CHARGE_MODES`` keys; never raises.
     """
     if not isinstance(charger_cfg, dict):
         return DEFAULT_EV_CHARGE_MODE
+    scheduled = scheduled_charge_mode(hass, charger_cfg)
+    if scheduled is not None:
+        return scheduled
     stored = charger_cfg.get("charge_mode")
     if stored in EV_CHARGE_MODES:
         return stored
     return DEFAULT_EV_CHARGE_MODE
 
 
+def scheduled_charge_mode(hass: Any, charger_cfg: Any) -> "str | None":
+    """(#1020) The charger's scheduled mode while its helper is ON, else
+    None. A helper that is unavailable, unknown or gone is no schedule; an
+    unknown mode is no mode."""
+    if hass is None or not isinstance(charger_cfg, dict):
+        return None
+    entity = charger_cfg.get("schedule_entity") or ""
+    mode = charger_cfg.get("schedule_mode") or ""
+    if not entity or mode not in EV_CHARGE_MODES:
+        return None
+    try:
+        state = hass.states.get(entity)
+    except Exception:  # noqa: BLE001 — no state machine, no schedule
+        return None
+    if state is None or getattr(state, "state", None) != "on":
+        return None
+    return mode
+
+
 def mode_allows_night_charging(
     full_config: Mapping[str, Any],
     charger_cfg: Any,
+    hass: Any = None,
 ) -> bool:
     """Does this charger's mode permit night/grid charging at all? (#679)
 
@@ -137,7 +166,8 @@ def mode_allows_night_charging(
     docstrings each said "keep in sync" — the standing invitation to drift that
     this module exists to remove.
     """
-    mode = effective_charge_mode_for(None, full_config, charger_cfg)  # type: ignore[arg-type]
+    # (#1020) ``hass`` so a schedule's mode is seen here too.
+    mode = effective_charge_mode_for(hass, full_config, charger_cfg)
     if mode in MODE_NIGHT_ALLOWED:
         return True
     if mode not in ("solar_only", "solar_plus_battery"):

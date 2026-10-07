@@ -49,7 +49,7 @@ not created, so nothing shows a live number that changes nothing:
 |---|---|
 | Cheap / expensive price thresholds, next cheap window | the tariff mode is dynamic |
 | Export guard (switches, holds, state) | you name an export-limit entity, or SEM finds one on the inverter's device |
-| Forecast rows, forecast spending, charge pacing | a forecast entity is set, or SEM finds Solcast, Forecast.Solar or Open-Meteo |
+| Forecast rows, forecast spending, charge pacing | a forecast entity is set, or SEM finds Solcast, Forecast.Solar, Open-Meteo or Helios |
 | kWh per kWp and the degradation trend | a plant size (kWp) is set |
 | ROI rows | an investment figure is set |
 
@@ -1552,6 +1552,15 @@ Everything below is **off by default** and lives on the Config tab under
   on its own; `homeassistant.update_entity` on the mode sensor forces it.
 - **House as a battery sink** — keep the pack through cheap and negative
   hours (let the house import) and spend it on the house in expensive ones.
+  The **peak limit is the hold's floor** (#970, #1003): while the pack is
+  held, the meter may still only buy what the current 15-minute slot has
+  left of its budget, and the pack covers the rest of the house. A house of
+  5 kW under 2 kW of sun with a 2.5 kW limit imports 2.5 kW and draws 0.5 kW
+  from the pack; a slot that already bought more than its share asks the
+  pack for more, one that ran cold for less. With no peak limit configured
+  the hold keeps the whole pack. On a cycle whose house load SEM cannot
+  measure (a dark grid sensor), it does not hold at all — nothing would show
+  the slot is safe — and the pack covers the house as before.
 - **Morning EV window** — before the configured departure, empty the pack
   into the car down to the *Morning drain floor*, only when today's forecast
   refills the pack.
@@ -1600,9 +1609,14 @@ Set tariff mode to "Dynamic" in the options flow. SEM auto-detects your provider
 | **Tibber** | Nordics, Germany, NL | Auto (`sensor.*electricity_price*`) | 60 min | Static |
 | **Nordpool** | Nordics, Baltics | Auto (`sensor.nordpool*`) | 60 min | Static |
 | **aWATTar** | Austria, Germany | Auto (`sensor.awattar`) | 60 min | Static |
+| **ENTSO-e** | Europe | Auto (by integration; two of its sensors) | 15 or 60 min | Static |
 | **Amber Electric** | Australia | Auto (`sensor.amber_*_general_price`) | 30 min | Dynamic (live feed-in rate) |
 | **Octopus Energy** | UK | Auto (`sensor.octopus_energy_*_current_rate`) | 30 min | Dynamic (export rate sensor) |
 | **Any other** | Any | Manual (select price entity) | Auto-detected | Static or dynamic |
+
+#### ENTSO-e setup (Europe)
+
+SEM finds the [ENTSO-e integration](https://github.com/JaccoR/hass-entso-e) by itself — leave the price entity empty. It takes the price now from *Current electricity market price* and the day's curve from *Average electricity price*, where ENTSO-e keeps it. Set ENTSO-e's energy scale to kWh. ENTSO-e's prices are market prices without tax and fees; [Tariff models](TARIFF_MODELS.md#entso-e-a-market-price-1051) says where to add them.
 
 #### Amber Electric setup (Australia)
 
@@ -1626,7 +1640,7 @@ Set tariff mode to "Calendar" for a fixed time-of-use tariff, then pick a HA Sch
 
 ## Solar Forecast
 
-Install [Solcast PV Solar](https://github.com/BJReplay/ha-solcast-solar), [Forecast.Solar](https://www.home-assistant.io/integrations/forecast_solar/) or [Open-Meteo Solar Forecast](https://github.com/rany2/ha-open-meteo-solar-forecast) for forecast-based features:
+Install [Solcast PV Solar](https://github.com/BJReplay/ha-solcast-solar), [Forecast.Solar](https://www.home-assistant.io/integrations/forecast_solar/), [Open-Meteo Solar Forecast](https://github.com/rany2/ha-open-meteo-solar-forecast) or [Helios Forecast](https://github.com/ReikanYsora/Helios-Forecast) for forecast-based features:
 
 - `sensor.sem_forecast_today_kwh` — expected total production today (kWh)
 - `sensor.sem_forecast_tomorrow_kwh` — expected total production tomorrow (kWh)

@@ -38,6 +38,7 @@ from ..const import (
     DOMAIN,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_BATTERY_CAPACITY_KWH,
+    DEFAULT_ELECTRICITY_IMPORT_RATE,
     DEFAULT_MAX_CHARGING_CURRENT,
     DEFAULT_LOAD_MANAGEMENT_ENABLED,
     ED_RESOLVE_MAX_ATTEMPTS,
@@ -67,6 +68,14 @@ from .health_check import (
 from .units import energy_state_to_kwh, power_state_to_watts
 from .distance_units import distance_to_km
 from .ev_availability import operational_ev_connected, operational_night_target
+from .departure import (
+    departure_for,
+    departure_hhmm,
+    departure_signature,
+    late_charge_s,
+    weekday_departures,
+)
+from ..consts.ev_charge_modes import effective_charge_mode_for as _ev_mode_now
 from .surplus_availability import SurplusAvailability
 from .sensor_reader import SensorReader
 from .energy_calculator import EnergyCalculator
@@ -142,6 +151,20 @@ def _cfg_rate(config: dict, *keys: str, default: float) -> float:
         except (TypeError, ValueError):
             continue
     return default
+
+
+def _cfg_tariff_rates(config: dict, peak_default: float = DEFAULT_ELECTRICITY_IMPORT_RATE,
+                      ) -> tuple[float, float]:
+    """(#1040) The import (peak) and off-peak rates of a Static or Calendar tariff.
+
+    An unsaved off-peak rate IS the import rate: one price, so no spread
+    nobody entered. A fixed default made the night dearer than the day for
+    anyone whose saved import rate was below it — and still called it cheap.
+    """
+    peak = _cfg_rate(config, "electricity_import_rate", default=peak_default)
+    off_peak = _cfg_rate(config, "electricity_off_peak_rate", "electricity_nt_rate",
+                         default=peak)
+    return peak, off_peak
 
 
 # (#625 phase 3) moved to publish_diag; alias kept for existing imports.
@@ -651,14 +674,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # (#1040) The Tariff page now has the field this mode lacked:
             # `tariff_schedule_entity`, a HA Schedule helper whose blocks
             # are the peak hours. It wins over the hand-written nested key.
+            #
+            # (#1040) An unsaved rate is the one the card and the Tariff page
+            # show. Calendar used its own 0.35/0.22, so the screen showed one
+            # price and SEM charged at a spread nobody entered.
             schedule = config.get("tariff_schedule", {}) or {}
+            peak, off_peak = _cfg_tariff_rates(config)
             self._tariff_provider = CalendarTariffProvider(
                 hass,
-                peak_rate=config.get("electricity_import_rate", 0.35),
-                off_peak_rate=_cfg_rate(
-                    config, "electricity_off_peak_rate", "electricity_nt_rate",
-                    default=0.22,
-                ),
+                peak_rate=peak,
+                off_peak_rate=off_peak,
                 export_rate=config.get("electricity_export_rate", 0.075),
                 rules=schedule.get("rules", []),
                 default_tariff=schedule.get("default_tariff", "off_peak"),
@@ -668,12 +693,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 currency=currency,
             )
         else:
+            peak, off_peak = _cfg_tariff_rates(config)
             self._tariff_provider = StaticTariffProvider(
-                peak_rate=config.get("electricity_import_rate", 0.3387),
-                off_peak_rate=_cfg_rate(
-                    config, "electricity_off_peak_rate", "electricity_nt_rate",
-                    default=0.3387,
-                ),
+                peak_rate=peak,
+                off_peak_rate=off_peak,
                 export_rate=config.get("electricity_export_rate", 0.075),
                 currency=currency,
             )
@@ -899,6 +922,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # / switch / calendar — active while its state is ``on``).
         self._vacation_switch_on = config.get("vacation_mode", False)
         self._vacation_active = False
+        # (#1025) the one battery boost, in memory only — a restart ends it
+        self._battery_boost = None
+        self._battery_boost_ended: Optional[Dict[str, Any]] = None
 
         # Tracking flags
         self._initial_update_done = False
@@ -1238,6 +1264,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             per = getattr(self, "_last_ev_connected_per_charger", None)
             if isinstance(per, dict):
                 connected = bool(per.get(cid, False))
+            # (#1048) A charger's phase is measured, not said: the held
+            # belief from the W/A estimate (#804), else the nameplate. Three
+            # phases are "3ph"; one is a line SEM cannot name.
+            believed = (getattr(self, "_phase_believed", None) or {}).get(cid)
+            n_phases = believed if believed in (1, 3) else ph
             rows.append({
                 "id": cid,
                 "name": getattr(dev, "name", cid),
@@ -1265,6 +1296,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 "min_power_w": min_a * ph * volt,
                 "max_power_w": max_a * ph * volt,
                 "connected": connected,
+                "phase": "3ph" if n_phases == 3 else "unknown",
+                "phase_measured": believed in (1, 3),
             })
         return rows
 
@@ -1307,7 +1340,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         an opt-in.
         """
         from ..consts.ev_charge_modes import mode_allows_night_charging
-        return mode_allows_night_charging(self.config, charger_cfg)
+        return mode_allows_night_charging(
+            self.config, charger_cfg, getattr(self, "hass", None))
 
     def _mode_uses_tariff(self, charger_cfg: dict) -> bool:
         """Does this charger's mode defer to tariff-cheap windows?
@@ -1413,7 +1447,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
     @property
     def battery_capacity_kwh(self) -> float:
-        """Battery capacity in kWh — auto-detected or from config (#84)."""
+        """Battery capacity in kWh — auto-detected or from config (#84).
+
+        (#1063) 0 when the install has no battery (module ABSENT, #923).
+        The settings step saves a capacity for every install and the
+        fallback below is a default, so neither proves a battery: read as
+        one, the plan walked a 15 kWh pack that does not exist and the card
+        drew it. UNKNOWN keeps the old answer — a slow boot must never hide
+        a real battery.
+        """
+        if presence_of(self).get(Module.BATTERY) is Presence.ABSENT:
+            return 0.0
         val = self.config.get("battery_capacity_kwh")
         if val is not None and val > 0:
             return float(val)
@@ -4392,6 +4436,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "Battery pipeline error: %s", e, exc_info=True,
                 )
 
+            # Step 7.5a2 (#1048): the chargers have had their turn — a phase
+            # still over its limit sheds loads, held until the guard's latch
+            # clears. Before 7.5b: the peak's restore must see the hold.
+            await self._phase_guard_loads(power)
+
             # Step 7.5b: Load management (peak tracking + device shedding, no EV)
             if self._load_manager:
                 self._load_manager._observer_mode = self._observer_mode
@@ -4889,6 +4938,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     _sd.get("remaining_s") or 0.0)
                 result[f"charger_{cid}_stop_war_stand_down_w"] = float(
                     _sd.get("power_w") or 0.0)
+                # (#1023/#1025) the EV card's departure and boost rows
+                result[f"charger_{cid}_departure"] = self._departure_view(
+                    cid, _per_charger_cfg)
                 # Per-charger vehicle SOC (#193) — collected for the global
                 # vehicle_soc/range fallback below (no dedicated per-charger
                 # sensor consumes this, so don't write it into result; #245 review #2).
@@ -4985,6 +5037,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             _dl_pcfg = self._primary_charger_cfg()
             result["ev_target_time"] = self._charger_target_time(_dl_pcfg)
             result["ev_tariff_optimized"] = self._tariff_optimized_for(_dl_pcfg)
+            # (#1025) the battery boost for the card: running, or how it ended
+            result["battery_boost"] = self.battery_boost_status(
+                getattr(self, "_boost_power_seen", None))
+            # …and what the card needs to say what one would give before it
+            # starts: the default floor (D4) and the pack's capacity.
+            result["battery_boost_preview"] = self._battery_boost_preview()
             _night_plan = self._cycle_night_plan
             if _night_plan is not None:
                 result["ev_deadline_reachable"] = _night_plan.reachable
@@ -5330,7 +5388,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     if isinstance(c, dict) and c.get("id")
                 ] or [_dl_pcfg if isinstance(_dl_pcfg, dict) else {}]
                 _fleet_plan = None
-                from .ev_tariff_planner import resolve_deadline
                 for _pcfg in _plan_cfgs:
                     _cid = _pcfg.get("id")
                     # Night plan: the per-charger one from the multi-charger
@@ -5398,8 +5455,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                     watts_per_amp=_wpa_p, gate_covered=False)
                                 # Resolve deadline from charger config — same path the
                                 # planner uses, just without the full plan computation.
-                                _tt = self._charger_target_time(_pcfg)
-                                _ev_deadline_dt = resolve_deadline(_now, _tt)
+                                _ev_deadline_dt = departure_for(
+                                    _pcfg, _now, self.config)
                                 # (#967) and the preview holds through an expensive
                                 # window open exactly as the night will (D3), so the
                                 # strip never promises a start in the peak band.
@@ -6481,9 +6538,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             hot_water_current_temperature=hw_current_temp,
             hot_water_solar_target=(
                 float(hw_controller.solar_target_temp) if hw_controller else None
-            ),
-            hot_water_max_temperature=(
-                float(hw_controller.max_temperature) if hw_controller else None
             ),
             hot_water_legionella_target=(
                 float(hw_controller.legionella_target_temp) if hw_controller else None
@@ -8156,6 +8210,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             export_guard_enabled=bool(getattr(_fs, "export_guard_enabled", False)),
             sink_verdicts=dict(getattr(_fs, "sink_verdicts", None) or {}),
             ev_morning_window_open=bool(getattr(_fs, "morning_window_open", False)),
+            # (#1025) the battery boost — both producers of this context
+            boost_charger_id=getattr(_fs, "boost_charger_id", None),
+            boost_floor_soc=getattr(_fs, "boost_floor_soc", None),
             # (#1003) The ceiling, and whether this cycle could see. Same
             # class as the export axis above and found the same way: the
             # battery decider hands part of the house's draw to the meter (the
@@ -8350,6 +8407,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     getattr((getattr(self, "_sink_verdicts", None) or {}).get("ev"),
                             "state", "") == "open"
                     and self.config.get("ev_morning_window_enabled", False)),
+                # (#1025) a running battery boost's floor, else None
+                battery_boost_floor_soc=getattr(
+                    getattr(self, "_battery_boost", None), "floor_soc", None),
                 forecast_sell=_fsell,
             )
 
@@ -8610,6 +8670,203 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             _LOGGER.info("#638 coverage: %s", msg)
         return gate
 
+    # ── (#1025) battery boost ─────────────────────────────────────────
+    def _charger_cfg_by_id(self, charger_id: str) -> Optional[Dict[str, Any]]:
+        return next((c for c in (self.config.get("ev_chargers") or [])
+                     if isinstance(c, dict) and c.get("id") == charger_id), None)
+
+    def start_battery_boost(self, charger_id: str, floor_soc=None):
+        """(#1025) Start the one-off boost for ``charger_id``, replacing one
+        that runs. Raises ``BoostRefused`` (the user's sentence) when it may
+        not start. In memory only: a restart ends it."""
+        from .battery_boost import BoostRefused, start_boost
+        cfg = self._charger_cfg_by_id(charger_id)
+        if cfg is None:
+            raise BoostRefused("charger_not_found", charger=charger_id)
+        # The last cycle's readings: a definite unplug refuses, nothing read
+        # yet does not (the next cycle ends a boost on an unplug).
+        power = getattr(self, "_boost_power_seen", None)
+        boost = start_boost(
+            charger_id, cfg, self.config,
+            mode=self._effective_charge_mode_for(cfg),
+            connected=self._plan_ev_connected(charger_id, cfg, power),
+            now=dt_util.now(), floor_soc=floor_soc,
+            soc=(getattr(power, "battery_soc", None)
+                 if getattr(power, "battery_soc_known", True) else None))
+        self._battery_boost = boost
+        self._battery_boost_ended = None
+        _LOGGER.info("Battery boost started for %s, down to %.0f%%",
+                     charger_id, boost.floor_soc)
+        return boost
+
+    def stop_battery_boost(self, reason: str = "stopped") -> None:
+        """(#1025) End the boost, if one runs, and say why."""
+        boost = self._battery_boost
+        if boost is None:
+            return
+        self._battery_boost = None
+        self._battery_boost_ended = {
+            "charger_id": boost.charger_id, "reason": reason,
+            "at": dt_util.now().isoformat()}
+        _LOGGER.info("Battery boost for %s ended: %s", boost.charger_id, reason)
+
+    def _tick_battery_boost(self, power) -> None:
+        """(#1025) Once per cycle: end the boost when its car unplugs, its
+        charger's mode changes, the pack reaches the floor or the permission
+        goes off. An unknown plug or an unread SOC ends nothing."""
+        self._boost_power_seen = power
+        boost = getattr(self, "_battery_boost", None)
+        if boost is None:
+            return
+        from .battery_boost import boost_end_reason
+        from .build_view import _battery_may_assist_ev
+        cfg = self._charger_cfg_by_id(boost.charger_id)
+        if cfg is None:
+            self.stop_battery_boost("charger removed")
+            return
+        soc = (getattr(power, "battery_soc", None)
+               if getattr(power, "battery_soc_known", True) else None)
+        reason = boost_end_reason(
+            boost,
+            connected=self._plan_ev_connected(boost.charger_id, cfg, power),
+            mode=self._effective_charge_mode_for(cfg),
+            soc=soc,
+            may_assist=_battery_may_assist_ev(self.config, cfg))
+        if reason:
+            self.stop_battery_boost(reason)
+
+    def battery_boost_status(self, power=None) -> Optional[Dict[str, Any]]:
+        """(#1025) For the card: the running boost and what it may still
+        give, or how the last one ended."""
+        from .battery_boost import boost_remaining_kwh
+        boost = getattr(self, "_battery_boost", None)
+        if boost is None:
+            ended = getattr(self, "_battery_boost_ended", None)
+            return {"active": False, "last_end": ended} if ended else None
+        soc = getattr(power, "battery_soc", None) if power is not None else None
+        try:
+            cap = float(self.battery_capacity_kwh or 0.0)
+        except Exception:  # noqa: BLE001 — no capacity, nothing to show
+            cap = 0.0
+        return {
+            "active": True, "charger_id": boost.charger_id,
+            "floor_soc": boost.floor_soc, "started": boost.started.isoformat(),
+            "start_soc": boost.start_soc, "soc": soc,
+            "remaining_kwh": round(boost_remaining_kwh(soc, boost.floor_soc, cap), 2),
+        }
+
+    def _battery_boost_preview(self) -> Dict[str, Any]:
+        """(#1025) The default floor (D4) and the capacity, for the card's
+        "about N kWh for the car" before a boost starts."""
+        from .battery_boost import DEFAULT_FLOOR_KEY, DEFAULT_FLOOR_SOC
+        floor = self.config.get(DEFAULT_FLOOR_KEY)
+        try:
+            floor = float(DEFAULT_FLOOR_SOC if floor is None else floor)
+        except (TypeError, ValueError):
+            floor = DEFAULT_FLOOR_SOC
+        try:
+            cap = float(self.battery_capacity_kwh or 0.0)
+        except Exception:  # noqa: BLE001 — no capacity, nothing to show
+            cap = 0.0
+        return {"default_floor": floor, "capacity_kwh": round(cap, 2)}
+
+    def _departure_view(self, cid: str, charger_cfg) -> Dict[str, Any]:
+        """(#1023) One charger's departure, as the EV card shows it: the
+        default time, each weekday's own, the departure tonight is planned
+        for, the two plan knobs, the stamped top-up (when the plan covers
+        the car) and whether the battery may be boosted into it (D5)."""
+        from .build_view import _battery_may_assist_ev
+        cfg = charger_cfg or {}
+        now = dt_util.now()
+        late_min = late_charge_s(cfg) // 60
+        late = None
+        if late_min:
+            kwh = cost = 0.0
+            spans = []
+            for b in self._ev_blocks_for(cid, now) or []:
+                if not b.get("late"):
+                    continue
+                bs = dt_util.parse_datetime(str(b.get("start")))
+                be = dt_util.parse_datetime(str(b.get("end")))
+                if bs is None or be is None:
+                    continue
+                try:
+                    e = float(b["power_w"]) / 1000.0 * max(
+                        0.0, (be - bs).total_seconds() / 3600.0)
+                    price = float(b.get("price") or 0.0)
+                except (KeyError, TypeError, ValueError):
+                    continue
+                spans.append((bs, be))
+                kwh += e
+                cost += e * price
+            if spans:
+                late = {"start": min(s for s, _ in spans).isoformat(),
+                        "end": max(e for _, e in spans).isoformat(),
+                        "kwh": round(kwh, 2), "cost": round(cost, 2)}
+        return {
+            "default": departure_hhmm(cfg, self.config),
+            "by_weekday": weekday_departures(cfg),
+            "next": departure_for(cfg, now, self.config).isoformat(),
+            "one_block": bool(cfg.get("ev_plan_one_block", False)),
+            "late_min": late_min,
+            "late": late,
+            "boost_allowed": _battery_may_assist_ev(self.config, cfg),
+        }
+
+    async def _phase_guard_loads(self, power) -> None:
+        """(#1048 C2) A phase over its limit sheds loads, not only chargers.
+
+        Runs after the chargers were filtered, so the guard has had its first
+        answer — stopping the car. A phase still over after that (or over
+        with no car drawing) asks load management for its loads; the surplus
+        controller gets the holds for the loads it owns. While the guard's
+        latch stands nothing taken comes back. A guard that is off releases
+        whatever it held."""
+        from ..features.phase_shed import EV_DRAWING_W, single_phase_supply
+        from .active_phase_guard import ActivePhaseGuard
+        lm = getattr(self, "_load_manager", None)
+        enforcer = getattr(self, "_active_phase_guard", None)
+        verdict: Dict[str, Any] = {}
+        try:
+            if (self.config.get("phase_guard_enabled", False)
+                    and isinstance(enforcer, ActivePhaseGuard)):
+                snap = getattr(self, "_phase_guard_snapshot", None)
+                request = enforcer.phase_shed_request(
+                    ev_drawing=float(getattr(power, "ev_power", 0.0) or 0.0)
+                    > EV_DRAWING_W)
+                if lm is not None:
+                    lm._observer_mode = self._observer_mode
+                    verdict = await lm.process_phase_guard(
+                        request, may_restore=enforcer.loads_may_return,
+                        latched=enforcer.latched_phases,
+                        single_phase=single_phase_supply(
+                            snap if isinstance(snap, dict) else {}))
+                elif request:
+                    # nothing to shed with: say so where the guard is read
+                    verdict = {"over": request, "path": "load_management_off"}
+                if isinstance(snap, dict) and verdict:
+                    snap["loads"] = {
+                        k: verdict[k]
+                        for k in ("over", "thrown", "latched", "shed", "path")
+                        if k in verdict}
+            elif lm is not None:
+                verdict = await lm.process_phase_guard({}, may_restore=True)
+        except Exception:  # noqa: BLE001 — never costs a cycle; logged
+            _LOGGER.warning("Phase guard load shed failed", exc_info=True)
+            verdict = {}
+        self._apply_phase_holds(verdict)
+
+    def _apply_phase_holds(self, verdict: Optional[Dict[str, Any]]) -> None:
+        """(#1048) Hand the cycle's holds to the loads the surplus
+        controller owns: ``hold`` blocks a start, ``shed`` also backs it off.
+        Every other load is free — a hold is never left behind."""
+        hold = (verdict or {}).get("hold") or {}
+        shed = (verdict or {}).get("shed") or {}
+        sc = getattr(self, "_surplus_controller", None)
+        for did, dev in (getattr(sc, "_devices", None) or {}).items():
+            dev._phase_hold = hold.get(did)
+            dev._phase_shed = did in shed
+
     def _plan_ev_connected(self, cid: str, charger_cfg, power):
         """(#638) THE plan layer's answer to "is this car connected?".
 
@@ -8772,8 +9029,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 sig.append((
                     "ev", cid,
                     round(float(cfg.get("daily_ev_target") or 0.0), 1),
-                    str(cfg.get("ev_target_time") or ""),
-                    str(cfg.get("charge_mode") or ""),
+                    departure_signature(cfg, self.config),  # (#1023)
+                    bool(cfg.get("ev_plan_one_block", False)),
+                    late_charge_s(cfg),
+                    # (#1020) the mode it runs in, a schedule's included, so
+                    # a schedule switching it re-plans (no VPP: per cycle)
+                    _ev_mode_now(getattr(self, "hass", None), self.config, cfg),
                     _full,
                 ))
             except Exception:  # noqa: BLE001 — one odd charger cfg is not fatal
@@ -9140,6 +9401,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         from .battery_night import BatteryNightTracker, Sample
 
+        # (#1063) No battery module, no battery night. With the battery
+        # ABSENT every flow reads 0 and the SOC its 0.0 default, so the
+        # nights sealed as trainable and the plan card's review said
+        # "drained 0.0 kWh overnight — the promised refill never came"
+        # about a battery that does not exist.
+        if presence_of(self).get(Module.BATTERY) is Presence.ABSENT:
+            return
         tr = getattr(self, "_battery_night", None)
         if tr is None:
             tr = self._battery_night = BatteryNightTracker(
@@ -9812,7 +10080,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # EMA fallback (it learns on the call); the block sizes below
                 # read the #846 table first.
                 self._ev_watts_per_amp(cid, cfg, power)
-                deadline = resolve_deadline(now, cfg.get("ev_target_time"))
+                # (#1023) The departure the card shows: a charger without
+                # a time of its own leaves at the global one, not at the
+                # night window's end.
+                deadline = departure_for(cfg, now, self.config)
                 try:
                     # The canonical one-list slot (#576): a drag override wins
                     # immediately — the same accessor decide() uses.
@@ -9845,6 +10116,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         "ev_min_block_minutes", 15)) * 60,
                     min_gap_s=int(self.config.get(
                         "ev_min_block_minutes", 15)) * 60,
+                    # (#1023) one continuous block, per charger, off by
+                    # default
+                    contiguous=bool(cfg.get("ev_plan_one_block", False)),
+                    # (#1023) the late charge right before departure
+                    late_s=late_charge_s(cfg),
                 ))
             # Load min-runtime deficits eligible for a night source.
             controller = getattr(self, "_surplus_controller", None)
@@ -10083,6 +10359,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 bug wearing this fix. ``home_grid_w > 0`` is the takeover
                 made visible per slot — the hour the battery stopped
                 covering the house on its own.
+
+                (#1063) ``home_grid_w == 0`` alone does not say WHO covers
+                the house: a sun slot has no net draw at all. ``batt`` is
+                set only where the walk really drew the battery for the
+                house, so the card never paints a battery the plan did not
+                use — on a home with none, never. The entity carries the
+                marks as index runs (``sensor._batt_runs``), not per slot.
                 """
                 return [{
                     "start": s.start.isoformat(),
@@ -10097,6 +10380,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "home_w": round(s.home_w, 1),
                     "soc_kwh": round(s.soc_kwh, 2),
                     "home_grid_w": round(s.home_grid_w, 1),
+                    **({"batt": True} if s.home_batt_kwh > 1e-6 else {}),
                 } for s in rows]
 
             def _quiet_answer(arb=None, fsell=None, ledger_rows=(), self_cons=None):
@@ -10153,6 +10437,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "forecast_sell": fsell,
                     "self_consumption": self_cons,
                     "battery_fleet_partial": partial_note,
+                    # (#1063) whether this ledger walked a battery at all.
+                    "has_battery": cap_kwh > 0,
                     # (night 3, finding 3) a re-stamped night must be
                     # distinguishable from the first answer.
                     "replan_cause": replan_cause,
@@ -10444,7 +10730,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 tag, len(demands), len(slots), plan.total_cost, plan.fits,
                 real_ev,
             )
-            if plan.takeover is not None:
+            if cap_kwh <= 0:
+                # (#1063) no battery: there is nothing to hand over.
+                _LOGGER.info("ENERGY-PLAN (%s): no home battery — the house "
+                             "runs on the sun or the grid", tag)
+            elif plan.takeover is not None:
                 _LOGGER.info(
                     "ENERGY-PLAN (%s): battery carries home until "
                     "%s — the grid takes over from there "
@@ -10486,6 +10776,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 "end": a.end.isoformat(),
                 "power_w": round(a.power_w, 0),
                 "price": a.price,
+                # (#1023) only on the top-up: the strip hatches it
+                **({"late": True} if a.late else {}),
             } for a in plan.allocations]
             self._energy_plan_shadow = {
                 "computed_at": now.isoformat(),
@@ -10521,6 +10813,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # finding #3). Never silently absent: a degraded plan that
                 # reads like a healthy one is what made this bug invisible.
                 "battery_fleet_partial": partial_note,
+                # (#1063) False when the ledger walked no battery: the card
+                # then draws no battery icon and no hand-over time.
+                "has_battery": cap_kwh > 0,
                 # (night 3, finding 3) a re-stamped night must be
                 # distinguishable from the first answer.
                 "replan_cause": replan_cause,
@@ -11859,6 +12154,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             morning_window_open=bool(
                 getattr(_verdicts.get("ev"), "state", "") == "open"
                 and self.config.get("ev_morning_window_enabled", False)),
+            # (#1025) the battery boost running this cycle, if any
+            boost_charger_id=getattr(
+                getattr(self, "_battery_boost", None), "charger_id", None),
+            boost_floor_soc=getattr(
+                getattr(self, "_battery_boost", None), "floor_soc", None),
         )
 
     def _curtailment_grant_w(self, power) -> float:
@@ -12101,6 +12401,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # plumbing-asymmetry class: any new fleet input lands as a
         # field on FleetCycleState and is automatically visible to
         # every charger's decide() in this cycle.
+        self._tick_battery_boost(power)   # (#1025) before the fleet state
         fleet_state = self._build_fleet_cycle_state(power, energy)
         self._cycle_fleet_state = fleet_state
         forecast_remaining = fleet_state.forecast_remaining_kwh
@@ -14353,7 +14654,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     from ..devices.hot_water_controller import (
                         DEFAULT_LEGIONELLA_MIN_TEMP,
                     )
-                    hw.max_temperature = float(cfg.get("hot_water_max_temperature", 70.0))
                     hw.min_temperature = float(
                         cfg.get("hot_water_minimum_temperature", 40.0)
                     )
@@ -14481,18 +14781,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         )
                     )
                 else:
-                    # Static / Calendar share peak/off-peak rate fields. Fall
-                    # back to the provider's CURRENT value when the key is
-                    # absent so a factory-default calendar install (different
-                    # construction default 0.35 vs static 0.3387) isn't nudged
-                    # to a wrong rate by the refresh (MEDIUM, review).
-                    tp.peak_rate = float(
-                        cfg.get("electricity_import_rate", tp.peak_rate)
-                    )
-                    tp.off_peak_rate = _cfg_rate(
-                        cfg, "electricity_off_peak_rate", "electricity_nt_rate",
-                        default=tp.off_peak_rate,
-                    )
+                    # Static / Calendar share peak/off-peak rate fields. An
+                    # unsaved import rate keeps the provider's value; an
+                    # unsaved off-peak rate follows the import rate (#1040),
+                    # so a new import rate never opens a spread on its own.
+                    tp.peak_rate, tp.off_peak_rate = _cfg_tariff_rates(
+                        cfg, peak_default=tp.peak_rate)
             except (TypeError, ValueError):
                 pass
 
@@ -14608,6 +14902,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "state_decision_path", "process_path", "action_path",
                     "last_error", "shed_path", "shed_need_w",
                     "shed_sheddable_w", "shed_futile", "uncontrolled_w",
+                    # (#1048) the phase guard's half
+                    "phase_shed_path", "phase_held",
                 ):
                     if key in lm_info:
                         setattr(lm_data, key, lm_info[key])

@@ -245,6 +245,21 @@ def reclaimed_pack_w(view: ChargerView) -> float:
                - self_consumption_surplus_w(view, allow_reclaim=False))
 
 
+def _boost_floor_for(view: ChargerView) -> Optional[float]:
+    """(#1025) The running battery boost's floor when the boost is for THIS
+    charger and the pack's SOC has been read, else None."""
+    f = view.fleet
+    boosted = getattr(f, "boost_charger_id", None)
+    floor = getattr(f, "boost_floor_soc", None)
+    if boosted is None or floor is None:
+        return None
+    if boosted != getattr(getattr(view, "power", None), "charger_id", None):
+        return None
+    if not getattr(f, "battery_soc_known", True):
+        return None
+    return float(floor)
+
+
 def _battery_assist_split(view: ChargerView) -> tuple[float, float]:
     """(#885) The Zone 3/4 budget, kept SPLIT into its two parts:
     ``(surplus, assist)`` — what the sun is giving and what the pack is.
@@ -297,8 +312,12 @@ def _battery_assist_split(view: ChargerView) -> tuple[float, float]:
     if not getattr(f, "battery_may_assist_ev", True):
         return surplus, 0.0
 
+    # (#1025) A battery boost for THIS charger — the user's one-off "into
+    # the car down to N %". It has its own floor, so the buffer's zone does
+    # not apply; an unread SOC still offers nothing.
+    boost_floor = _boost_floor_for(view)
     zone = fleet_soc_zone(f)
-    if zone < 3:
+    if zone < 3 and boost_floor is None:
         return surplus, 0.0
     # Solar gate: assist only SUPPLEMENTS real solar. Below the
     # configured surplus threshold (default 1200 W) the battery is
@@ -325,7 +344,8 @@ def _battery_assist_split(view: ChargerView) -> tuple[float, float]:
         # (#892) a morning window the user opened is consent AND budget: the
         # pack is spent into the car on purpose, bounded by the drain floor
         # decide_battery enforces — so the solar gate does not apply.
-        _window = bool(getattr(f, "ev_morning_window_open", False))
+        _window = (bool(getattr(f, "ev_morning_window_open", False))
+                   or boost_floor is not None)
         _consent = (getattr(view, "mode", None) == "solar_plus_battery"
                     or bool(getattr(f, "forecast_spending_enabled", False))
                     or _window)
@@ -335,7 +355,9 @@ def _battery_assist_split(view: ChargerView) -> tuple[float, float]:
             return surplus, 0.0
     potential = battery_assist_potential_w(
         f.battery_soc,
-        f.buffer_soc,
+        # (#1025) a boost draws the pack to ITS floor — the user's explicit
+        # one-off, below the buffer if they said so.
+        f.buffer_soc if boost_floor is None else boost_floor,
         f.auto_start_soc,
         f.battery_assist_max_power_w,
         # (#878) The budget was the KEY — "may the car have any of the pack?"
@@ -343,7 +365,8 @@ def _battery_assist_split(view: ChargerView) -> tuple[float, float]:
         # being covered overnight. The sell sink has taken the same floor
         # since #778; this one was still stopping at the static buffer, so
         # the two sinks disagreed about the same pack.
-        dynamic_floor_soc=getattr(f, "dynamic_floor_pct", None),
+        dynamic_floor_soc=(getattr(f, "dynamic_floor_pct", None)
+                           if boost_floor is None else None),
     )
     # (#878) ONE battery, one allowance. The potential above is derived from
     # fleet-wide values — SOC, buffer, floor, cap — so every charger computes

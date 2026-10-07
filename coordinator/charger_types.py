@@ -472,6 +472,9 @@ class BatteryView:
     — the SPEND twin of ``arbitrage_sell``, fleet-split by the pipeline.
     decide_battery consults THIS gate when the verdict carries
     ``from_forecast_spend``; arbitrage verdicts never read it."""
+    #: (#1025) a battery boost runs: the pack may feed the car down to THIS
+    #: floor, in percent. None without a boost.
+    battery_boost_floor_soc: Optional[float] = None
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -775,6 +778,14 @@ class FleetContext:
     """(#892) the ev sink verdict is OPEN this cycle — the pack may feed the
     car below the solar gate, down to the drain floor."""
 
+    boost_charger_id: Optional[str] = None
+    """(#1025) the charger a battery boost runs for this cycle, or None. For
+    THAT charger the pack may feed the car below the solar gate, down to
+    ``boost_floor_soc`` — like the morning window, on the user's one-off."""
+
+    boost_floor_soc: Optional[float] = None
+    """(#1025) the running boost's floor, in percent; None without one."""
+
     home_w: float = 0.0
     """Home consumption (W). Pre-priority-attribution this was
     the slack variable; post-#349 it's a first-class demand."""
@@ -1051,6 +1062,10 @@ class FleetCycleState:
     #: (#892) the ev sink verdict is OPEN this cycle — a morning window the
     #: user opened; the charger side may offer the pack below the solar gate.
     morning_window_open: bool = False
+    #: (#1025) the battery boost running this cycle, if any: which charger,
+    #: and the floor it may draw the pack down to. Never persisted.
+    boost_charger_id: Optional[str] = None
+    boost_floor_soc: Optional[float] = None
 
 
 @dataclass(frozen=True)

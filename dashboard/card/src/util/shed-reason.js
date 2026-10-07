@@ -13,7 +13,8 @@
  * during an emergency.
  */
 export function shedReasonKey(shedReason) {
-    return String(shedReason || '').toUpperCase() === 'EMERGENCY'
-        ? 'shed_emergency'
-        : 'shed_peak';
+    if (String(shedReason || '').toUpperCase() === 'EMERGENCY') return 'shed_emergency';
+    // (#1048) the phase guard's own shed — a fuse, not the peak tariff
+    if (String(shedReason || '').toUpperCase() === 'PHASE') return 'shed_phase';
+    return 'shed_peak';
 }

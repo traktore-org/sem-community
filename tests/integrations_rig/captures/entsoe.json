@@ -1,0 +1,598 @@
+{
+ "devices": {
+  "entsoe:rig_entsoe_entsoe": {
+   "manufacturer": "entso-e",
+   "model": "",
+   "name": "entso-e"
+  }
+ },
+ "domain": "entsoe",
+ "entities": [
+  {
+   "attributes": {
+    "attribution": "Data provided by ENTSO-e Transparency Platform",
+    "friendly_name": "Average electricity price",
+    "icon": "mdi:currency-eur",
+    "prices": [
+     {
+      "price": 0.06704,
+      "time": "2024-10-06 00:00:00+02:00"
+     },
+     {
+      "price": 0.06397,
+      "time": "2024-10-06 01:00:00+02:00"
+     },
+     {
+      "price": 0.06283,
+      "time": "2024-10-06 02:00:00+02:00"
+     },
+     {
+      "price": 0.06335,
+      "time": "2024-10-06 03:00:00+02:00"
+     },
+     {
+      "price": 0.06271,
+      "time": "2024-10-06 04:00:00+02:00"
+     },
+     {
+      "price": 0.06397,
+      "time": "2024-10-06 05:00:00+02:00"
+     },
+     {
+      "price": 0.06341,
+      "time": "2024-10-06 06:00:00+02:00"
+     },
+     {
+      "price": 0.07281,
+      "time": "2024-10-06 07:00:00+02:00"
+     },
+     {
+      "price": 0.0772,
+      "time": "2024-10-06 08:00:00+02:00"
+     },
+     {
+      "price": 0.06606,
+      "time": "2024-10-06 09:00:00+02:00"
+     },
+     {
+      "price": 0.03528,
+      "time": "2024-10-06 10:00:00+02:00"
+     },
+     {
+      "price": 0.01668,
+      "time": "2024-10-06 11:00:00+02:00"
+     },
+     {
+      "price": 0.00525,
+      "time": "2024-10-06 12:00:00+02:00"
+     },
+     {
+      "price": -1e-05,
+      "time": "2024-10-06 13:00:00+02:00"
+     },
+     {
+      "price": -1e-05,
+      "time": "2024-10-06 14:00:00+02:00"
+     },
+     {
+      "price": 0.0002,
+      "time": "2024-10-06 15:00:00+02:00"
+     },
+     {
+      "price": 0.0596,
+      "time": "2024-10-06 16:00:00+02:00"
+     },
+     {
+      "price": 0.09094,
+      "time": "2024-10-06 17:00:00+02:00"
+     },
+     {
+      "price": 0.1063,
+      "time": "2024-10-06 18:00:00+02:00"
+     },
+     {
+      "price": 0.09722,
+      "time": "2024-10-06 19:00:00+02:00"
+     },
+     {
+      "price": 0.07298,
+      "time": "2024-10-06 20:00:00+02:00"
+     },
+     {
+      "price": 0.05937,
+      "time": "2024-10-06 21:00:00+02:00"
+     },
+     {
+      "price": 0.05869,
+      "time": "2024-10-06 22:00:00+02:00"
+     },
+     {
+      "price": 0.05171,
+      "time": "2024-10-06 23:00:00+02:00"
+     },
+     {
+      "price": 0.03458,
+      "time": "2024-10-07 00:00:00+02:00"
+     },
+     {
+      "price": 0.03534,
+      "time": "2024-10-07 01:00:00+02:00"
+     },
+     {
+      "price": 0.03325,
+      "time": "2024-10-07 02:00:00+02:00"
+     },
+     {
+      "price": 0.03015,
+      "time": "2024-10-07 03:00:00+02:00"
+     },
+     {
+      "price": 0.03609,
+      "time": "2024-10-07 04:00:00+02:00"
+     },
+     {
+      "price": 0.04673,
+      "time": "2024-10-07 05:00:00+02:00"
+     },
+     {
+      "price": 0.06759,
+      "time": "2024-10-07 06:00:00+02:00"
+     },
+     {
+      "price": 0.10092,
+      "time": "2024-10-07 07:00:00+02:00"
+     },
+     {
+      "price": 0.10832,
+      "time": "2024-10-07 08:00:00+02:00"
+     },
+     {
+      "price": 0.09186,
+      "time": "2024-10-07 09:00:00+02:00"
+     },
+     {
+      "price": 0.06609,
+      "time": "2024-10-07 10:00:00+02:00"
+     },
+     {
+      "price": 0.06022,
+      "time": "2024-10-07 11:00:00+02:00"
+     },
+     {
+      "price": 0.05411,
+      "time": "2024-10-07 12:00:00+02:00"
+     },
+     {
+      "price": 0.04329,
+      "time": "2024-10-07 13:00:00+02:00"
+     },
+     {
+      "price": 0.055,
+      "time": "2024-10-07 14:00:00+02:00"
+     },
+     {
+      "price": 0.06701,
+      "time": "2024-10-07 15:00:00+02:00"
+     },
+     {
+      "price": 0.0979,
+      "time": "2024-10-07 16:00:00+02:00"
+     },
+     {
+      "price": 0.12071,
+      "time": "2024-10-07 17:00:00+02:00"
+     },
+     {
+      "price": 0.23765,
+      "time": "2024-10-07 18:00:00+02:00"
+     },
+     {
+      "price": 0.22953,
+      "time": "2024-10-07 19:00:00+02:00"
+     },
+     {
+      "price": 0.12198,
+      "time": "2024-10-07 20:00:00+02:00"
+     },
+     {
+      "price": 0.09993,
+      "time": "2024-10-07 21:00:00+02:00"
+     },
+     {
+      "price": 0.09191,
+      "time": "2024-10-07 22:00:00+02:00"
+     },
+     {
+      "price": 0.07912,
+      "time": "2024-10-07 23:00:00+02:00"
+     }
+    ],
+    "prices_today": [
+     {
+      "price": 0.06704,
+      "time": "2024-10-06 00:00:00+02:00"
+     },
+     {
+      "price": 0.06397,
+      "time": "2024-10-06 01:00:00+02:00"
+     },
+     {
+      "price": 0.06283,
+      "time": "2024-10-06 02:00:00+02:00"
+     },
+     {
+      "price": 0.06335,
+      "time": "2024-10-06 03:00:00+02:00"
+     },
+     {
+      "price": 0.06271,
+      "time": "2024-10-06 04:00:00+02:00"
+     },
+     {
+      "price": 0.06397,
+      "time": "2024-10-06 05:00:00+02:00"
+     },
+     {
+      "price": 0.06341,
+      "time": "2024-10-06 06:00:00+02:00"
+     },
+     {
+      "price": 0.07281,
+      "time": "2024-10-06 07:00:00+02:00"
+     },
+     {
+      "price": 0.0772,
+      "time": "2024-10-06 08:00:00+02:00"
+     },
+     {
+      "price": 0.06606,
+      "time": "2024-10-06 09:00:00+02:00"
+     },
+     {
+      "price": 0.03528,
+      "time": "2024-10-06 10:00:00+02:00"
+     },
+     {
+      "price": 0.01668,
+      "time": "2024-10-06 11:00:00+02:00"
+     },
+     {
+      "price": 0.00525,
+      "time": "2024-10-06 12:00:00+02:00"
+     },
+     {
+      "price": -1e-05,
+      "time": "2024-10-06 13:00:00+02:00"
+     },
+     {
+      "price": -1e-05,
+      "time": "2024-10-06 14:00:00+02:00"
+     },
+     {
+      "price": 0.0002,
+      "time": "2024-10-06 15:00:00+02:00"
+     },
+     {
+      "price": 0.0596,
+      "time": "2024-10-06 16:00:00+02:00"
+     },
+     {
+      "price": 0.09094,
+      "time": "2024-10-06 17:00:00+02:00"
+     },
+     {
+      "price": 0.1063,
+      "time": "2024-10-06 18:00:00+02:00"
+     },
+     {
+      "price": 0.09722,
+      "time": "2024-10-06 19:00:00+02:00"
+     },
+     {
+      "price": 0.07298,
+      "time": "2024-10-06 20:00:00+02:00"
+     },
+     {
+      "price": 0.05937,
+      "time": "2024-10-06 21:00:00+02:00"
+     },
+     {
+      "price": 0.05869,
+      "time": "2024-10-06 22:00:00+02:00"
+     },
+     {
+      "price": 0.05171,
+      "time": "2024-10-06 23:00:00+02:00"
+     }
+    ],
+    "prices_tomorrow": [
+     {
+      "price": 0.03458,
+      "time": "2024-10-07 00:00:00+02:00"
+     },
+     {
+      "price": 0.03534,
+      "time": "2024-10-07 01:00:00+02:00"
+     },
+     {
+      "price": 0.03325,
+      "time": "2024-10-07 02:00:00+02:00"
+     },
+     {
+      "price": 0.03015,
+      "time": "2024-10-07 03:00:00+02:00"
+     },
+     {
+      "price": 0.03609,
+      "time": "2024-10-07 04:00:00+02:00"
+     },
+     {
+      "price": 0.04673,
+      "time": "2024-10-07 05:00:00+02:00"
+     },
+     {
+      "price": 0.06759,
+      "time": "2024-10-07 06:00:00+02:00"
+     },
+     {
+      "price": 0.10092,
+      "time": "2024-10-07 07:00:00+02:00"
+     },
+     {
+      "price": 0.10832,
+      "time": "2024-10-07 08:00:00+02:00"
+     },
+     {
+      "price": 0.09186,
+      "time": "2024-10-07 09:00:00+02:00"
+     },
+     {
+      "price": 0.06609,
+      "time": "2024-10-07 10:00:00+02:00"
+     },
+     {
+      "price": 0.06022,
+      "time": "2024-10-07 11:00:00+02:00"
+     },
+     {
+      "price": 0.05411,
+      "time": "2024-10-07 12:00:00+02:00"
+     },
+     {
+      "price": 0.04329,
+      "time": "2024-10-07 13:00:00+02:00"
+     },
+     {
+      "price": 0.055,
+      "time": "2024-10-07 14:00:00+02:00"
+     },
+     {
+      "price": 0.06701,
+      "time": "2024-10-07 15:00:00+02:00"
+     },
+     {
+      "price": 0.0979,
+      "time": "2024-10-07 16:00:00+02:00"
+     },
+     {
+      "price": 0.12071,
+      "time": "2024-10-07 17:00:00+02:00"
+     },
+     {
+      "price": 0.23765,
+      "time": "2024-10-07 18:00:00+02:00"
+     },
+     {
+      "price": 0.22953,
+      "time": "2024-10-07 19:00:00+02:00"
+     },
+     {
+      "price": 0.12198,
+      "time": "2024-10-07 20:00:00+02:00"
+     },
+     {
+      "price": 0.09993,
+      "time": "2024-10-07 21:00:00+02:00"
+     },
+     {
+      "price": 0.09191,
+      "time": "2024-10-07 22:00:00+02:00"
+     },
+     {
+      "price": 0.07912,
+      "time": "2024-10-07 23:00:00+02:00"
+     }
+    ],
+    "state_class": "measurement",
+    "unit_of_measurement": "EUR/kWh"
+   },
+   "capabilities": {
+    "state_class": "measurement"
+   },
+   "device": "entsoe:rig_entsoe_entsoe",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.average_electricity_price",
+   "original_device_class": null,
+   "state": "0.06931",
+   "translation_key": null,
+   "unique_id": "entsoe.avg_price",
+   "unit_of_measurement": "EUR/kWh"
+  },
+  {
+   "attributes": {
+    "attribution": "Data provided by ENTSO-e Transparency Platform",
+    "friendly_name": "Current electricity market price",
+    "icon": "mdi:currency-eur",
+    "state_class": "measurement",
+    "unit_of_measurement": "EUR/kWh"
+   },
+   "capabilities": {
+    "state_class": "measurement"
+   },
+   "device": "entsoe:rig_entsoe_entsoe",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.current_electricity_market_price",
+   "original_device_class": null,
+   "state": "-1e-05",
+   "translation_key": null,
+   "unique_id": "entsoe.current_price",
+   "unit_of_measurement": "EUR/kWh"
+  },
+  {
+   "attributes": {
+    "attribution": "Data provided by ENTSO-e Transparency Platform",
+    "friendly_name": "Current percentage in electricity price range",
+    "icon": "mdi:percent",
+    "state_class": "measurement",
+    "unit_of_measurement": "%"
+   },
+   "capabilities": {
+    "state_class": "measurement"
+   },
+   "device": "entsoe:rig_entsoe_entsoe",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.current_percentage_in_electricity_price_range",
+   "original_device_class": null,
+   "state": "0.0",
+   "translation_key": null,
+   "unique_id": "entsoe.percentage_of_range",
+   "unit_of_measurement": "%"
+  },
+  {
+   "attributes": {
+    "attribution": "Data provided by ENTSO-e Transparency Platform",
+    "friendly_name": "Current percentage of highest electricity price",
+    "icon": "mdi:percent",
+    "state_class": "measurement",
+    "unit_of_measurement": "%"
+   },
+   "capabilities": {
+    "state_class": "measurement"
+   },
+   "device": "entsoe:rig_entsoe_entsoe",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.current_percentage_of_highest_electricity_price",
+   "original_device_class": null,
+   "state": "-0.0",
+   "translation_key": null,
+   "unique_id": "entsoe.percentage_of_max",
+   "unit_of_measurement": "%"
+  },
+  {
+   "attributes": {
+    "attribution": "Data provided by ENTSO-e Transparency Platform",
+    "friendly_name": "Highest energy price",
+    "icon": "mdi:currency-eur",
+    "state_class": "measurement",
+    "unit_of_measurement": "EUR/kWh"
+   },
+   "capabilities": {
+    "state_class": "measurement"
+   },
+   "device": "entsoe:rig_entsoe_entsoe",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.highest_energy_price",
+   "original_device_class": null,
+   "state": "0.23765",
+   "translation_key": null,
+   "unique_id": "entsoe.max_price",
+   "unit_of_measurement": "EUR/kWh"
+  },
+  {
+   "attributes": {
+    "attribution": "Data provided by ENTSO-e Transparency Platform",
+    "friendly_name": "Lowest energy price",
+    "icon": "mdi:currency-eur",
+    "state_class": "measurement",
+    "unit_of_measurement": "EUR/kWh"
+   },
+   "capabilities": {
+    "state_class": "measurement"
+   },
+   "device": "entsoe:rig_entsoe_entsoe",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.lowest_energy_price",
+   "original_device_class": null,
+   "state": "-1e-05",
+   "translation_key": null,
+   "unique_id": "entsoe.min_price",
+   "unit_of_measurement": "EUR/kWh"
+  },
+  {
+   "attributes": {
+    "attribution": "Data provided by ENTSO-e Transparency Platform",
+    "friendly_name": "Next hour electricity market price",
+    "icon": "mdi:currency-eur",
+    "state_class": "measurement",
+    "unit_of_measurement": "EUR/kWh"
+   },
+   "capabilities": {
+    "state_class": "measurement"
+   },
+   "device": "entsoe:rig_entsoe_entsoe",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.next_hour_electricity_market_price",
+   "original_device_class": null,
+   "state": "0.0002",
+   "translation_key": null,
+   "unique_id": "entsoe.next_hour_price",
+   "unit_of_measurement": "EUR/kWh"
+  },
+  {
+   "attributes": {
+    "attribution": "Data provided by ENTSO-e Transparency Platform",
+    "device_class": "timestamp",
+    "friendly_name": "Time of highest price",
+    "icon": "mdi:clock"
+   },
+   "capabilities": {},
+   "device": "entsoe:rig_entsoe_entsoe",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.time_of_highest_price",
+   "original_device_class": "timestamp",
+   "state": "2024-10-07T16:00:00+00:00",
+   "translation_key": null,
+   "unique_id": "entsoe.highest_price_time_today",
+   "unit_of_measurement": null
+  },
+  {
+   "attributes": {
+    "attribution": "Data provided by ENTSO-e Transparency Platform",
+    "device_class": "timestamp",
+    "friendly_name": "Time of lowest price",
+    "icon": "mdi:clock"
+   },
+   "capabilities": {},
+   "device": "entsoe:rig_entsoe_entsoe",
+   "disabled_by": null,
+   "entity_category": null,
+   "entity_id": "sensor.time_of_lowest_price",
+   "original_device_class": "timestamp",
+   "state": "2024-10-06T11:00:00+00:00",
+   "translation_key": null,
+   "unique_id": "entsoe.lowest_price_time_today",
+   "unit_of_measurement": null
+  }
+ ],
+ "services": {
+  "get_energy_prices": [
+   "config_entry",
+   "end",
+   "start"
+  ]
+ },
+ "source": {
+  "commit": "cbdf67ac0e73fd685a02e27ad7b6bef2c5af7ca6",
+  "data": "the integration's own test/datasets/DE_60M_15M_overlap.xml as the API's answer, area DE, period PT60M, name '', at 2024-10-06 14:07 Europe/Berlin",
+  "kind": "live-load",
+  "repo": "JaccoR/hass-entso-e"
+ }
+}

@@ -74,9 +74,12 @@ update_device_config:
           options:
             - controllable
             - critical
+            - phase
     value:
       name: Value
-      description: New boolean value
+      description: >-
+        New boolean value — or, for phase (#1048), the supply phase the load
+        sits on: L1, L2, L3, 3ph or unknown.
       required: true
       selector:
         boolean:
@@ -320,6 +323,19 @@ register_surplus_device:
       default: false
       selector:
         boolean:
+    phase:
+      name: Supply phase
+      description: "(#1048) The phase this load sits on. When a phase is over its limit, the phase guard sheds that phase's loads (and three-phase loads) first; unknown loads only after them."
+      required: false
+      default: unknown
+      selector:
+        select:
+          options:
+            - L1
+            - L2
+            - L3
+            - 3ph
+            - unknown
     top_up_policy:
       name: Top-up Policy
       description: "What to do when solar surplus alone will not meet the target: solar_only (never grid power — accept missing the target on a dark day), cheap_hours (top up during cheap tariff windows)."
@@ -345,6 +361,23 @@ register_surplus_device:
         number:
           min: 0
           max: 100000
+    schedule_entity:
+      name: Schedule
+      description: "(#1020) Optional Home Assistant Schedule helper. While it is on, the device runs in Schedule Mode; when it ends, its own mode applies again. Switch devices only."
+      required: false
+      selector:
+        entity:
+          domain: schedule
+    schedule_mode:
+      name: Schedule Mode
+      description: "The mode while the schedule is on: off (SEM keeps its hands off; a run SEM started is stopped), peak_only or surplus."
+      required: false
+      selector:
+        select:
+          options:
+            - "off"
+            - peak_only
+            - surplus
 
 unregister_surplus_device:
   name: Unregister Surplus Device
@@ -626,6 +659,76 @@ set_option:
       required: false
       selector:
         text:
+
+start_battery_boost:
+  name: Start a battery boost
+  description: >-
+    (#1025) Put the house battery into this car for this one charge, down to a
+    floor. It ends when the car unplugs, the charger's mode changes, the
+    battery reaches the floor or its permission is switched off — and a
+    restart ends it. Refused while the battery may not feed this car. The
+    standing permission is not changed.
+  fields:
+    charger_id:
+      name: Charger
+      description: "The charger's id, as in SEM's configuration."
+      required: true
+      selector:
+        text:
+    floor_soc:
+      name: Floor
+      description: "Down to this battery level, in percent. Default: the morning drain floor (50 %)."
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+
+stop_battery_boost:
+  name: Stop the battery boost
+  description: (#1025) End the running battery boost.
+
+set_charger_departure:
+  name: Set a charger's departure plan
+  description: >-
+    (#1023) What the EV card's departure rows set, without reloading SEM:
+    each weekday's own departure time, one continuous charging block, and the
+    top-up right before leaving. Leave a field out to keep it as it is. The
+    night is re-planned on the next cycle.
+  fields:
+    charger_id:
+      name: Charger
+      description: "The charger's id, as in SEM's configuration."
+      required: true
+      selector:
+        text:
+    by_weekday:
+      name: Departure per weekday
+      description: >-
+        The days that leave at a time of their own, as mon … sun → "HH:MM".
+        A day left out or empty leaves at the charger's Charge-by time. The
+        whole week is replaced.
+      required: false
+      example: '{"mon": "06:15", "tue": "06:15"}'
+      selector:
+        object:
+    one_block:
+      name: Charge in one block
+      description: "One continuous run in the cheapest stretch of the night instead of the cheapest pieces."
+      required: false
+      selector:
+        boolean:
+    late_charge_min:
+      name: Top up before leaving
+      description: "Minutes right before the departure that charge whatever the price. 0 is off."
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 120
+          step: 15
+          unit_of_measurement: min
 
 replan:
   name: Re-plan the energy day

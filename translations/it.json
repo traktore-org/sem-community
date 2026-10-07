@@ -1501,9 +1501,6 @@
       "heat_pump_boost_offset": {
         "name": "Offset Boost Pompa di Calore"
       },
-      "hot_water_max_temperature": {
-        "name": "Temperatura Max Acqua Calda"
-      },
       "system_size_kwp": {
         "name": "Dimensione Impianto PV"
       },
@@ -1675,6 +1672,21 @@
     },
     "load_management_failed_to_start": {
       "message": "La gestione dei carichi è attiva ma non è riuscita ad avviarsi, quindi SEM non può usare il suo elenco dispositivi. Controlla il log di Home Assistant per \"Failed to initialize load management\" e ricarica l'integrazione."
+    },
+    "battery_boost_not_permitted": {
+      "message": "La batteria non può alimentare «{charger}»: l’autorizzazione è disattivata. Attivala nelle impostazioni della batteria per usare il boost."
+    },
+    "battery_boost_not_connected": {
+      "message": "Nessuna auto è collegata a «{charger}»."
+    },
+    "battery_boost_bad_floor": {
+      "message": "«{floor}» non è un livello di batteria: indica una soglia da 0 a 100 %."
+    },
+    "charger_not_found": {
+      "message": "SEM non ha alcun caricatore «{charger}»."
+    },
+    "departure_bad_time": {
+      "message": "«{day}: {time}» non è una partenza: i giorni sono mon … sun, gli orari HH:MM da 00:00 a 23:59."
     }
   },
   "issues": {

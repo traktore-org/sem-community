@@ -107,12 +107,15 @@ def _merge_plan_blocks(blocks: Any) -> List[Dict[str, Any]]:
     for b in blocks or []:
         if not isinstance(b, dict):
             continue
-        by_id.setdefault(b.get("id"), []).append({
+        row = {
             "id": b.get("id"),
             "start": b.get("start"),
             "end": b.get("end"),
             "power_w": b.get("power_w"),
-        })
+        }
+        if b.get("late"):
+            row["late"] = True      # (#1023) the top-up stays its own run
+        by_id.setdefault(b.get("id"), []).append(row)
     out: List[Dict[str, Any]] = []
     for rows in by_id.values():
         rows.sort(key=lambda r: str(r["start"]))
@@ -120,12 +123,27 @@ def _merge_plan_blocks(blocks: Any) -> List[Dict[str, Any]]:
         for row in rows:
             prev = run[-1] if run else None
             if (prev and prev["power_w"] == row["power_w"]
+                    and prev.get("late") == row.get("late")
                     and prev["end"] == row["start"]):
                 prev["end"] = row["end"]
                 continue
             run.append(row)
         out.extend(run)
     return out
+
+
+def _batt_runs(slots: Any) -> List[List[int]]:
+    """(#1063) ``[[first, last], ...]`` — the slot indexes the plan marked
+    ``batt`` (the battery covered the house), merged into runs."""
+    runs: List[List[int]] = []
+    for i, s in enumerate(slots or []):
+        if not (isinstance(s, dict) and s.get("batt")):
+            continue
+        if runs and runs[-1][1] == i - 1:
+            runs[-1][1] = i
+        else:
+            runs.append([i, i])
+    return runs
 
 
 def _energy_plan_attrs(
@@ -170,11 +188,23 @@ def _energy_plan_attrs(
             "price": s.get("price"), "cheap": s.get("cheap"),
             "home_grid_w": s.get("home_grid_w"),
         } for s in (plan.get("slots") or [])],
+        # (#1063) Where the plan drew the battery for the house, as
+        # inclusive index runs over ``slots``. A flag per slot cost 14
+        # bytes each and pushed a 15-minute day past the budget; the
+        # battery covers one or two stretches, so runs cost a few bytes.
+        # None for a plan stamped before #1063 (no ``has_battery``): it
+        # never marked a slot, and the card then keeps its old drawing.
+        "batt_runs": (_batt_runs(plan.get("slots"))
+                      if "has_battery" in plan else None),
         "blocks": _merge_plan_blocks(plan.get("blocks")),
         # A string here means the battery figures behind this plan came from
         # a SUBSET of the fleet (#638 finding #3) — the card says so rather
         # than presenting a degraded plan as a healthy one.
         "battery_fleet_partial": plan.get("battery_fleet_partial"),
+        # (#1063) False on a home with no battery — the card drops the
+        # battery icon and the hand-over time. None (a stash from before
+        # #1063) keeps the card's old drawing.
+        "has_battery": plan.get("has_battery"),
         # (#638 G4) True while the actuation switch is on — the plan's
         # blocks feed the night signals; the card swaps its shadow chip.
         "actuation": bool(plan.get("actuation", False)),
@@ -209,6 +239,7 @@ def _energy_plan_attrs(
     if _too_big():
         attrs["slots"] = []
         attrs["blocks"] = []
+        attrs["batt_runs"] = []
         attrs["timeline_omitted"] = True
     # (#758) The timeline is the biggest term, but it is not the only one,
     # and going over means the recorder keeps NOTHING. If dropping it was
@@ -2399,6 +2430,11 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         "device_list",
         "per_charger_states",
         "per_charger_plans",
+        # (#1023/#1025) the EV card's departure and boost rows — config
+        # echoes and a live "kWh left", no charting value
+        "per_charger_departure",
+        "battery_boost",
+        "battery_boost_preview",
         "today_plan",
         "upcoming",
         "schedule_today",
@@ -2928,6 +2964,14 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                         "phase_verdict": self.coordinator.data.get(
                             f"charger_{cid}_phase_verdict"),
                     }
+            # (#1023/#1025) The EV card's departure rows per charger: the
+            # default time, each weekday's own, the next departure, the two
+            # plan knobs, the stamped top-up and the boost permission.
+            _per_charger_departure = {}
+            for k, v in self.coordinator.data.items():
+                if k.startswith("charger_") and k.endswith("_departure"):
+                    cid = k[len("charger_"):-len("_departure")]
+                    _per_charger_departure[cid] = v
             attrs.update({
                 "battery_soc": self.coordinator.data.get("battery_soc"),
                 "calculated_current": self.coordinator.data.get("calculated_current"),
@@ -2971,6 +3015,12 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 # ``sensor.sem_export_guard_state``.
                 "sink_verdicts": self.coordinator.data.get("sink_verdicts") or {},
                 "export_guard": self.coordinator.data.get("export_guard") or {},
+                "per_charger_departure": _per_charger_departure,
+                # (#1025) the boost that runs or how the last one ended, and
+                # what the card needs to say what one would give
+                "battery_boost": self.coordinator.data.get("battery_boost"),
+                "battery_boost_preview": self.coordinator.data.get(
+                    "battery_boost_preview"),
             })
         elif self.entity_description.key in (
             "roi_payback_years", "roi_annual_savings",
@@ -3341,6 +3391,8 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "state_decision_path", "process_path", "action_path",
                 "last_error", "shed_path", "shed_futile",
                 "shed_need_w", "shed_sheddable_w", "uncontrolled_w",
+                # (#1048) the phase guard's verdict and its held loads
+                "phase_shed_path", "phase_held",
             ):
                 attrs[key] = self.coordinator.data.get(key)
             # Add device list details for dashboard table

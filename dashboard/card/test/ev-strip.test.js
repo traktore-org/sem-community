@@ -168,3 +168,62 @@ test('an unparsable or past row cannot shrink the window', () => {
     assert.equal(evStripWindow(null, NOW).hours, 12);
     assert.equal(evStripWindow([], NOW).hours, 12);
 });
+
+
+/**
+ * (#1023) A night in two parts: the cheap hours, then the top-up right
+ * before departure. Each start row carries its window's end (`until`), so the
+ * hours between them are WAITING — before, the strip drew one charging bar
+ * from the first start to the last end — and the top-up is its own state,
+ * hatched on the card.
+ */
+test('a gap between two windows waits instead of charging', () => {
+    const segs = evStripSegments([
+        { kind: 'night_open', when: T(20, 36) },
+        { kind: 'ev_charge_start', when: T(0, 0, 1), detail: 'plan_ev_charge_joint', until: T(1, 0, 1) },
+        { kind: 'ev_charge_start', when: T(1, 30, 1), detail: 'plan_ev_charge_late', until: T(2, 0, 1) },
+        { kind: 'ev_min_reached', when: T(2, 0, 1) },
+    ], { now: NOW, end: END });
+    assert.equal(at(segs, T(0, 30, 1)), 'charging');
+    assert.equal(at(segs, T(1, 15, 1)), 'wait', 'the old walk painted charging here');
+    assert.equal(at(segs, T(1, 45, 1)), 'late');
+    assert.equal(at(segs, T(2, 1, 1)), 'done');
+});
+
+test('a top-up touching the rest is still drawn as its own state', () => {
+    const segs = evStripSegments([
+        { kind: 'ev_charge_start', when: T(0, 0, 1), detail: 'plan_ev_charge_joint', until: T(1, 30, 1) },
+        { kind: 'ev_charge_start', when: T(1, 30, 1), detail: 'plan_ev_charge_late', until: T(2, 0, 1) },
+        { kind: 'ev_min_reached', when: T(2, 0, 1) },
+    ], { now: NOW, end: END });
+    assert.ok(!states(segs).includes('wait'), 'touching windows leave no gap');
+    assert.equal(at(segs, T(1, 29, 1)), 'charging');
+    assert.equal(at(segs, T(1, 31, 1)), 'late');
+});
+
+test('a window ending at the horizon edge or beyond it is clamped, not extended', () => {
+    const segs = evStripSegments([
+        { kind: 'ev_charge_start', when: T(1, 0, 1), detail: 'plan_ev_charge_joint', until: T(4, 0, 1) },
+    ], { now: NOW, end: END });
+    assert.equal(segs.at(-1).e, END);
+    assert.equal(segs.at(-1).state, 'charging');
+});
+
+test('rows without until keep the old walk', () => {
+    const segs = evStripSegments([
+        { kind: 'ev_charge_start', when: T(22, 0), detail: 'plan_ev_charge_joint' },
+        { kind: 'ev_charge_start', when: T(0, 0, 1), detail: 'plan_ev_charge_joint' },
+        { kind: 'ev_min_reached', when: T(1, 0, 1) },
+    ], { now: NOW, end: END });
+    assert.deepEqual(states(segs), ['idle', 'charging', 'charging', 'done']);
+});
+
+test('an until before its own start, or unparsable, is ignored', () => {
+    for (const until of [T(21, 0), 'soon']) {
+        const segs = evStripSegments([
+            { kind: 'ev_charge_start', when: T(22, 0), detail: 'plan_ev_charge_joint', until },
+            { kind: 'ev_min_reached', when: T(1, 0, 1) },
+        ], { now: NOW, end: END });
+        assert.equal(at(segs, T(23, 0)), 'charging', String(until));
+    }
+});

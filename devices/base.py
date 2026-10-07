@@ -18,7 +18,7 @@ from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from ..consts.devices import names_a_reboot
+from ..consts.devices import DEFAULT_LOAD_PHASE, names_a_reboot
 from ..utils.log_gate import log_on_change
 from ..utils.select_option import listed_option
 from ..utils.switch_sense import reads_running, switch_service
@@ -210,6 +210,45 @@ class ControllableDevice(ABC):
     to each device that meets its minimum threshold.
     """
 
+    @property
+    def control_mode(self) -> DeviceControlMode:
+        """What SEM may do with this device NOW (#49): the scheduled mode
+        while the device's Schedule helper is on (#1020), else the stored
+        one. Substituted here, where every reader reads it; the stored mode
+        is never written, so a restart, an unavailable helper or a deleted
+        one needs no restore."""
+        scheduled = self.scheduled_control_mode()
+        return scheduled if scheduled is not None else self.stored_control_mode
+
+    @control_mode.setter
+    def control_mode(self, mode: DeviceControlMode) -> None:
+        """Writers set the STORED mode — the one a schedule hands back."""
+        self._control_mode = mode
+
+    @property
+    def stored_control_mode(self) -> DeviceControlMode:
+        """The mode the user chose, whatever a schedule says now."""
+        return self.__dict__.get("_control_mode", DeviceControlMode.PEAK_ONLY)
+
+    def scheduled_control_mode(self) -> Optional[DeviceControlMode]:
+        """(#1020) The schedule's mode while its helper is ON, else None.
+        A helper that is unavailable, unknown or gone is no schedule."""
+        entity = getattr(self, "schedule_entity", "") or ""
+        mode = getattr(self, "schedule_mode", "") or ""
+        hass = getattr(self, "hass", None)
+        if not entity or not mode or hass is None:
+            return None
+        try:
+            state = hass.states.get(entity)
+        except Exception:  # noqa: BLE001 — no state machine, no schedule
+            return None
+        if state is None or state.state != "on":
+            return None
+        try:
+            return DeviceControlMode(mode)
+        except ValueError:
+            return None
+
     def __init__(
         self,
         hass: HomeAssistant,
@@ -236,7 +275,19 @@ class ControllableDevice(ABC):
         self._status = DeviceStatus()
         self._enabled = True
         self._managed_externally = False
+        # (#1020) A Schedule helper that sets the mode while it is on —
+        # switch loads only (the device registry applies it). Empty = none.
+        self.schedule_entity: str = ""
+        self.schedule_mode: str = ""
         self.control_mode = DeviceControlMode.PEAK_ONLY  # Default: peak protection only (#49)
+        # (#1048) the supply phase it sits on — the phase guard sheds a
+        # phase's own loads first. Unknown until the user says.
+        self.phase: str = DEFAULT_LOAD_PHASE
+        # (#1048) the phase guard's hold, set each cycle by the coordinator:
+        # the phase it is held for (None = free). A held load does not
+        # start; one the guard took for its phase is also backed off.
+        self._phase_hold: Optional[str] = None
+        self._phase_shed: bool = False
 
         # Power-change cooldown
         self._min_power_change_interval: float = 0.0  # seconds, 0 = disabled
@@ -992,6 +1043,10 @@ class ControllableDevice(ABC):
 
     def can_activate(self) -> bool:
         """Check if device can be activated (respects dependencies, min_off, activation_delay)."""
+        # (#1048) a phase over its limit, or not yet recovered: a fuse
+        # outranks surplus, schedules and the cheap hours alike
+        if isinstance(self._phase_hold, str):
+            return False
         # (#620) daily maximum cap — a capped-out device never re-activates
         # today. Gated first: it overrides surplus, off-peak and deadline
         # passes alike (the cap is a hard "done for today").
@@ -1347,6 +1402,19 @@ class ComfortBandMixin:
         except Exception:  # noqa: BLE001 — unit lookup must never kill the band
             unit = ""
         return unit in ("°F", "F", "fahrenheit", "Fahrenheit")
+
+    def _attribute_temp_c(self, raw):
+        """An entity ATTRIBUTE temperature (``current_temperature``,
+        ``temperature``) in °C, or None. Attributes carry no unit — they are
+        in the install's display unit. (#1062) One copy for every device
+        that reads one; the climate unit and the hot water tank both do."""
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            return None
+        if self._install_unit_is_f():
+            return (value - 32.0) * 5.0 / 9.0
+        return value
 
     def _comfort_thresholds_c(self):
         """(target, offset, limit) in °C.
@@ -1916,13 +1984,7 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
             raw = attrs.get("target_temp_high"
                             if self._comfort_direction() == "cool"
                             else "target_temp_low")
-        try:
-            value = float(raw)
-        except (TypeError, ValueError):
-            return None
-        if self._install_unit_is_f():
-            return (value - 32.0) * 5.0 / 9.0
-        return value
+        return self._attribute_temp_c(raw)
 
     def _comfort_fallback_reading(self):
         """Zero-config thermometer: the climate entity's own
@@ -1935,13 +1997,7 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
         if state is None:
             return None
         raw = (state.attributes or {}).get("current_temperature")
-        try:
-            value = float(raw)
-        except (TypeError, ValueError):
-            return None
-        if self._install_unit_is_f():
-            return (value - 32.0) * 5.0 / 9.0
-        return value
+        return self._attribute_temp_c(raw)
 
     def adopt_if_running(self) -> bool:
         """(#559) Re-own a climate unit that SEM is running at (re-)registration.

@@ -28,6 +28,7 @@ from .const import (
     DEFAULT_BATTERY_ASSIST_MIN_SURPLUS,
     DEFAULT_BATTERY_CAPACITY_KWH,
     DEFAULT_BATTERY_DISCHARGE_PROTECTION_ENABLED,
+    DEFAULT_ELECTRICITY_IMPORT_RATE,
     DEFAULT_BATTERY_MAX_DISCHARGE_POWER,
     DEFAULT_PREFER_HARDWARE_ENERGY,
     DEFAULT_ENERGY_SOURCE_AUTO,
@@ -2804,8 +2805,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 # runtime provider's detection (it missed Octopus and
                 # Amber despite the dropdown label promising them).
                 from .tariff.tariff_provider import DynamicTariffProvider
+                # (#1051) ENTSO-e is left to the runtime, which pairs its
+                # current-price sensor with the one carrying the curve.
+                entsoe = DynamicTariffProvider.entsoe_entity_ids(self.hass)
                 for state in self.hass.states.async_all("sensor"):
                     eid = state.entity_id
+                    if eid in entsoe:
+                        continue
                     if DynamicTariffProvider.is_price_entity_candidate(eid):
                         user_input["dynamic_tariff_entity"] = eid
                         _LOGGER.info("Auto-detected dynamic tariff entity: %s", eid)
@@ -2873,18 +2879,19 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 # Deliberately next to the price-forecast entity above,
                 # because the setup guide confused the two and promised
                 # this override on that field. "Auto" keeps the historic
-                # ladder (Solcast, then Forecast.Solar, then Open-Meteo);
-                # naming one wins only while it is actually installed.
+                # ladder (Solcast, then Forecast.Solar, then Open-Meteo, then
+                # Helios); naming one wins only while it is actually installed.
                 vol.Optional(
                     "solar_forecast_source",
                     default=current_config.get("solar_forecast_source", "auto"),
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
                         options=[
-                            {"value": "auto", "label": "Auto-detect (Solcast, then Forecast.Solar, then Open-Meteo)"},
+                            {"value": "auto", "label": "Auto-detect (Solcast, then Forecast.Solar, then Open-Meteo, then Helios)"},
                             {"value": "solcast", "label": "Solcast PV Solar"},
                             {"value": "forecast_solar", "label": "Forecast.Solar"},
                             {"value": "open_meteo", "label": "Open-Meteo Solar Forecast"},
+                            {"value": "helios", "label": "Helios Forecast"},
                         ],
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
@@ -2914,13 +2921,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 # forced a wrong fallback on those markets.
                 vol.Optional(
                     "electricity_import_rate",
-                    default=_c("electricity_import_rate", 0.3387),
+                    default=_c("electricity_import_rate", DEFAULT_ELECTRICITY_IMPORT_RATE),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=0.0, max=10000.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")  # #549 currency-agnostic
                 ),
                 vol.Optional(
                     "electricity_off_peak_rate",
-                    default=_c("electricity_off_peak_rate", None) or _c("electricity_nt_rate", 0.3387),
+                    # (#1040) Unsaved, it is the import rate — one price, as
+                    # the backend reads it. A saved 0 is a free night, not
+                    # "unset": the old `or` showed 0.3387 and Submit saved it.
+                    default=_c("electricity_off_peak_rate", _c(
+                        "electricity_nt_rate",
+                        _c("electricity_import_rate", DEFAULT_ELECTRICITY_IMPORT_RATE))),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=0.0, max=10000.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")  # #549 currency-agnostic
                 ),

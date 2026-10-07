@@ -1501,9 +1501,6 @@
       "heat_pump_boost_offset": {
         "name": "Decalaj de stimulare pompă de căldură"
       },
-      "hot_water_max_temperature": {
-        "name": "Temperatură maximă apă caldă"
-      },
       "system_size_kwp": {
         "name": "Puterea instalată PV"
       },
@@ -1675,6 +1672,21 @@
     },
     "load_management_failed_to_start": {
       "message": "Gestionarea sarcinilor este pornită, dar nu a reușit să pornească, deci SEM nu își poate folosi lista de dispozitive. Verificați jurnalul Home Assistant pentru \"Failed to initialize load management\" și reîncărcați integrarea."
+    },
+    "battery_boost_not_permitted": {
+      "message": "Bateria nu poate alimenta „{charger}”: permisiunea este dezactivată. Activeaz-o în setările bateriei pentru a folosi boost-ul."
+    },
+    "battery_boost_not_connected": {
+      "message": "Nicio mașină nu este conectată la „{charger}”."
+    },
+    "battery_boost_bad_floor": {
+      "message": "„{floor}” nu este un nivel al bateriei: indică o limită de la 0 la 100 %."
+    },
+    "charger_not_found": {
+      "message": "SEM nu are niciun încărcător „{charger}”."
+    },
+    "departure_bad_time": {
+      "message": "„{day}: {time}” nu este o plecare: zilele sunt mon … sun, orele HH:MM, de la 00:00 la 23:59."
     }
   },
   "issues": {

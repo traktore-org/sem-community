@@ -169,7 +169,7 @@ class TestTheSettingIsActuallyWired:
         doc = (Path(__file__).resolve().parent.parent / "docs"
                / "SETUP_GUIDE.md").read_text()
         human = {"solcast": "Solcast", "forecast_solar": "Forecast.Solar",
-                 "open_meteo": "Open-Meteo"}
+                 "open_meteo": "Open-Meteo", "helios": "Helios"}
         for key in FORECAST_SOURCES:
             assert human[key] in doc, (
                 f"SEM supports {key} but the setup guide never names it"
