@@ -1383,6 +1383,57 @@
           "orange": "Faible",
           "red": "Mauvais"
         }
+      },
+      "per_charger_commanded_current": {
+        "name": "{charger} Courant demandé"
+      },
+      "per_charger_daily_energy": {
+        "name": "{charger} Énergie du jour"
+      },
+      "per_charger_estimated_soc": {
+        "name": "{charger} SOC estimé"
+      },
+      "per_charger_flow_battery_to_ev_energy": {
+        "name": "{charger} Batterie → VE énergie"
+      },
+      "per_charger_flow_battery_to_ev_power": {
+        "name": "{charger} Batterie → VE puissance"
+      },
+      "per_charger_flow_grid_to_ev_energy": {
+        "name": "{charger} Réseau → VE énergie"
+      },
+      "per_charger_flow_grid_to_ev_power": {
+        "name": "{charger} Réseau → VE puissance"
+      },
+      "per_charger_flow_solar_to_ev_energy": {
+        "name": "{charger} Solaire → VE énergie"
+      },
+      "per_charger_flow_solar_to_ev_power": {
+        "name": "{charger} Solaire → VE puissance"
+      },
+      "per_charger_power": {
+        "name": "{charger} Puissance"
+      },
+      "per_charger_session_energy": {
+        "name": "{charger} Énergie de session"
+      },
+      "per_charger_session_energy_external": {
+        "name": "{charger} Énergie de session (chargeur)"
+      },
+      "per_charger_session_solar_share": {
+        "name": "{charger} Part solaire"
+      },
+      "per_charger_taper_minutes_to_full": {
+        "name": "{charger} Minutes avant plein"
+      },
+      "per_charger_taper_ratio": {
+        "name": "{charger} Rapport de palier"
+      },
+      "per_charger_taper_trend": {
+        "name": "{charger} Tendance de palier"
+      },
+      "per_charger_vehicle_soc": {
+        "name": "{charger} SOC du véhicule"
       }
     },
     "binary_sensor": {
@@ -1634,6 +1685,11 @@
       "pause_charging": {
         "name": "{charger} Mettre la charge en pause"
       }
+    },
+    "time": {
+      "per_charger_target_time": {
+        "name": "{charger} Charger avant"
+      }
     }
   },
   "exceptions": {
@@ -1850,6 +1906,49 @@
         "disabled": "Désactivé",
         "grid_only": "Alimentation réseau seule",
         "hybrid_load_port": "Réseau + sortie Load/EPS de l'onduleur hybride"
+      }
+    },
+    "diagram_style": {
+      "options": {
+        "sem": "SEM (intégré)",
+        "kflow": "K-Flow (HACS)"
+      }
+    },
+    "tariff_mode": {
+      "options": {
+        "static": "Fixe (tarifs HP/HC fixes)",
+        "dynamic": "Dynamique / capteur de prix (Tibber / Nordpool / aWATTar / Amber / Octopus — ou toute entité avec le prix actuel)",
+        "calendar": "Calendrier (plages HP/HC horaires)"
+      }
+    },
+    "solar_forecast_source": {
+      "options": {
+        "auto": "Automatique (Solcast, puis Forecast.Solar, puis Open-Meteo, puis Helios)",
+        "solcast": "Solcast PV Solar",
+        "forecast_solar": "Forecast.Solar",
+        "open_meteo": "Open-Meteo Solar Forecast",
+        "helios": "Helios Forecast"
+      }
+    },
+    "tariff_classification_mode": {
+      "options": {
+        "percentile": "Percentile (par rapport aux prix du jour)",
+        "static": "Fixe (seuils bon marché/cher fixes)"
+      }
+    },
+    "battery_charge_platform": {
+      "options": {
+        "auto": "Automatique (recommandé)",
+        "huawei": "Huawei SUN2000 / LUNA2000",
+        "goodwe": "GoodWe",
+        "deye": "Onduleur hybride Deye",
+        "generic": "Générique / autre"
+      }
+    },
+    "deye_force_charge_work_mode": {
+      "options": {
+        "load_first": "Load First",
+        "battery_first": "Battery First"
       }
     }
   }

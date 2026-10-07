@@ -1383,6 +1383,57 @@
           "orange": "Gyenge",
           "red": "Rossz"
         }
+      },
+      "per_charger_commanded_current": {
+        "name": "{charger} Kért áram"
+      },
+      "per_charger_daily_energy": {
+        "name": "{charger} Napi energia"
+      },
+      "per_charger_estimated_soc": {
+        "name": "{charger} Becsült SOC"
+      },
+      "per_charger_flow_battery_to_ev_energy": {
+        "name": "{charger} Akkumulátor → EV energia"
+      },
+      "per_charger_flow_battery_to_ev_power": {
+        "name": "{charger} Akkumulátor → EV teljesítmény"
+      },
+      "per_charger_flow_grid_to_ev_energy": {
+        "name": "{charger} Hálózat → EV energia"
+      },
+      "per_charger_flow_grid_to_ev_power": {
+        "name": "{charger} Hálózat → EV teljesítmény"
+      },
+      "per_charger_flow_solar_to_ev_energy": {
+        "name": "{charger} Nap → EV energia"
+      },
+      "per_charger_flow_solar_to_ev_power": {
+        "name": "{charger} Nap → EV teljesítmény"
+      },
+      "per_charger_power": {
+        "name": "{charger} Teljesítmény"
+      },
+      "per_charger_session_energy": {
+        "name": "{charger} Munkamenet energia"
+      },
+      "per_charger_session_energy_external": {
+        "name": "{charger} Munkamenet energia (töltő)"
+      },
+      "per_charger_session_solar_share": {
+        "name": "{charger} Napenergia aránya"
+      },
+      "per_charger_taper_minutes_to_full": {
+        "name": "{charger} Perc a telítésig"
+      },
+      "per_charger_taper_ratio": {
+        "name": "{charger} Csökkenési arány"
+      },
+      "per_charger_taper_trend": {
+        "name": "{charger} Csökkenési trend"
+      },
+      "per_charger_vehicle_soc": {
+        "name": "{charger} Jármű SOC"
       }
     },
     "binary_sensor": {
@@ -1634,6 +1685,11 @@
       "pause_charging": {
         "name": "{charger} Töltés szüneteltetése"
       }
+    },
+    "time": {
+      "per_charger_target_time": {
+        "name": "{charger} Töltés eddig"
+      }
     }
   },
   "exceptions": {
@@ -1850,6 +1906,49 @@
         "disabled": "Letiltva",
         "grid_only": "Csak hálózati ellátás",
         "hybrid_load_port": "Hálózat + hibrid inverter Load/EPS kimenete"
+      }
+    },
+    "diagram_style": {
+      "options": {
+        "sem": "SEM (beépített)",
+        "kflow": "K-Flow (HACS)"
+      }
+    },
+    "tariff_mode": {
+      "options": {
+        "static": "Fix (állandó nappali/éjszakai díj)",
+        "dynamic": "Dinamikus / árszenzor (Tibber / Nordpool / aWATTar / Amber / Octopus — vagy bármely entitás az aktuális árral)",
+        "calendar": "Naptár (időalapú nappali/éjszakai rend)"
+      }
+    },
+    "solar_forecast_source": {
+      "options": {
+        "auto": "Automatikus (Solcast, majd Forecast.Solar, majd Open-Meteo, majd Helios)",
+        "solcast": "Solcast PV Solar",
+        "forecast_solar": "Forecast.Solar",
+        "open_meteo": "Open-Meteo Solar Forecast",
+        "helios": "Helios Forecast"
+      }
+    },
+    "tariff_classification_mode": {
+      "options": {
+        "percentile": "Percentilis (a mai árakhoz képest)",
+        "static": "Fix (állandó olcsó/drága küszöb)"
+      }
+    },
+    "battery_charge_platform": {
+      "options": {
+        "auto": "Automatikus (ajánlott)",
+        "huawei": "Huawei SUN2000 / LUNA2000",
+        "goodwe": "GoodWe",
+        "deye": "Deye hibrid inverter",
+        "generic": "Általános / egyéb"
+      }
+    },
+    "deye_force_charge_work_mode": {
+      "options": {
+        "load_first": "Load First",
+        "battery_first": "Battery First"
       }
     }
   }

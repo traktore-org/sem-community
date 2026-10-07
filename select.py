@@ -13,6 +13,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .utils.device_names import charger_display_name  # (#1053)
 from .coordinator import SEMCoordinator
 from .coordinator.charge_pause import (   # (#980)
     DEFAULT_PAUSE_DURATION, PAUSE_DURATIONS,
@@ -174,9 +175,9 @@ async def async_setup_entry(
     ev_chargers = full_config.get("ev_chargers", [])
     per_charger_keys: set[str] = set()
     if len(ev_chargers) >= 1:
-        for charger_cfg in ev_chargers:
+        for _cidx, charger_cfg in enumerate(ev_chargers):
             cid = charger_cfg.get("id", "ev_charger")
-            cname = charger_cfg.get("name", "EV Charger")
+            cname = charger_display_name(hass, charger_cfg, _cidx)  # (#1053)
             target_key = f"charger_{cid}_ev_target_type"
             mode_key = f"charger_{cid}_charge_mode"
             per_charger_keys.update({target_key, mode_key})

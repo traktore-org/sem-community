@@ -72,8 +72,17 @@ def per_charger_translation_keys() -> dict[str, tuple[str, ...]]:
             r'_attr_translation_key\s*=\s*"([a-z_0-9]+)"',
             button_src[button_src.index("class SEMChargerPauseButton"):])
 
+    # (#1053) Per-charger sensors and the charge-by time carry their key on
+    # the description (``translation_key="per_charger_…"``) with the charger's
+    # name as a placeholder — read off the source the same way.
+    sensors = re.findall(r'translation_key="(per_charger_[a-z_0-9]+)"',
+                         (_ROOT / "sensor.py").read_text(encoding="utf-8"))
+    times = re.findall(r'translation_key="(per_charger_[a-z_0-9]+)"',
+                       (_ROOT / "time.py").read_text(encoding="utf-8"))
+
     return {"number": tuple(numbers), "select": tuple(selects),
-            "button": tuple(buttons)}
+            "button": tuple(buttons), "sensor": tuple(dict.fromkeys(sensors)),
+            "time": tuple(dict.fromkeys(times))}
 
 
 class TestPerChargerNamesResolve677:

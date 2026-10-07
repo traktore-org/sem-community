@@ -1383,6 +1383,57 @@
           "orange": "Slabă",
           "red": "Proastă"
         }
+      },
+      "per_charger_commanded_current": {
+        "name": "{charger} Curent cerut"
+      },
+      "per_charger_daily_energy": {
+        "name": "{charger} Energie zilnică"
+      },
+      "per_charger_estimated_soc": {
+        "name": "{charger} SOC estimat"
+      },
+      "per_charger_flow_battery_to_ev_energy": {
+        "name": "{charger} Baterie → VE energie"
+      },
+      "per_charger_flow_battery_to_ev_power": {
+        "name": "{charger} Baterie → VE putere"
+      },
+      "per_charger_flow_grid_to_ev_energy": {
+        "name": "{charger} Rețea → VE energie"
+      },
+      "per_charger_flow_grid_to_ev_power": {
+        "name": "{charger} Rețea → VE putere"
+      },
+      "per_charger_flow_solar_to_ev_energy": {
+        "name": "{charger} Solar → VE energie"
+      },
+      "per_charger_flow_solar_to_ev_power": {
+        "name": "{charger} Solar → VE putere"
+      },
+      "per_charger_power": {
+        "name": "{charger} Putere"
+      },
+      "per_charger_session_energy": {
+        "name": "{charger} Energie sesiune"
+      },
+      "per_charger_session_energy_external": {
+        "name": "{charger} Energie sesiune (încărcător)"
+      },
+      "per_charger_session_solar_share": {
+        "name": "{charger} Pondere solară"
+      },
+      "per_charger_taper_minutes_to_full": {
+        "name": "{charger} Minute până la plin"
+      },
+      "per_charger_taper_ratio": {
+        "name": "{charger} Raport de reducere"
+      },
+      "per_charger_taper_trend": {
+        "name": "{charger} Tendință de reducere"
+      },
+      "per_charger_vehicle_soc": {
+        "name": "{charger} SOC vehicul"
       }
     },
     "binary_sensor": {
@@ -1634,6 +1685,11 @@
       "pause_charging": {
         "name": "{charger} Pune încărcarea pe pauză"
       }
+    },
+    "time": {
+      "per_charger_target_time": {
+        "name": "{charger} Încărcare până la"
+      }
     }
   },
   "exceptions": {
@@ -1850,6 +1906,49 @@
         "disabled": "Dezactivat",
         "grid_only": "Doar alimentare din rețea",
         "hybrid_load_port": "Rețea + ieșire Load/EPS a invertorului hibrid"
+      }
+    },
+    "diagram_style": {
+      "options": {
+        "sem": "SEM (integrat)",
+        "kflow": "K-Flow (HACS)"
+      }
+    },
+    "tariff_mode": {
+      "options": {
+        "static": "Fix (tarife zi/noapte fixe)",
+        "dynamic": "Dinamic / senzor de preț (Tibber / Nordpool / aWATTar / Amber / Octopus — sau orice entitate cu prețul curent)",
+        "calendar": "Calendar (program zi/noapte pe ore)"
+      }
+    },
+    "solar_forecast_source": {
+      "options": {
+        "auto": "Automat (Solcast, apoi Forecast.Solar, apoi Open-Meteo, apoi Helios)",
+        "solcast": "Solcast PV Solar",
+        "forecast_solar": "Forecast.Solar",
+        "open_meteo": "Open-Meteo Solar Forecast",
+        "helios": "Helios Forecast"
+      }
+    },
+    "tariff_classification_mode": {
+      "options": {
+        "percentile": "Percentilă (față de prețurile de azi)",
+        "static": "Fix (praguri ieftin/scump fixe)"
+      }
+    },
+    "battery_charge_platform": {
+      "options": {
+        "auto": "Automat (recomandat)",
+        "huawei": "Huawei SUN2000 / LUNA2000",
+        "goodwe": "GoodWe",
+        "deye": "Invertor hibrid Deye",
+        "generic": "Generic / altul"
+      }
+    },
+    "deye_force_charge_work_mode": {
+      "options": {
+        "load_first": "Load First",
+        "battery_first": "Battery First"
       }
     }
   }

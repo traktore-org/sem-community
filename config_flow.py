@@ -13,7 +13,22 @@ from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 
-from .utils.device_names import HEAT_PUMP_DEFAULT, device_display_name  # (#1053)
+from .utils.device_names import (  # (#1053)
+    HEAT_PUMP_DEFAULT, charger_display_name, device_display_name,
+)
+
+
+def _flow_text(flow, key, default, **kwargs):
+    """(#1053) A flow label in Home Assistant's language, from the shared
+    translation file; English when the language or key is unknown."""
+    from .utils.translate import get_text
+    hass = getattr(flow, "hass", None)
+    if hass is None or getattr(hass, "config", None) is None:
+        try:
+            return default.format(**kwargs)
+        except (KeyError, IndexError, ValueError):
+            return default
+    return get_text(hass, key, default, **kwargs)
 from .consts.devices import CONTACT_VALUE_SERVICES, SG_READY_CONTACT_DOMAINS
 from .const import (
     DOMAIN,
@@ -1223,7 +1238,7 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 )
 
         # Get available notification services (notify.* and rest_command.*)
-        notify_services = [{"value": "", "label": "None"}]
+        notify_services = [{"value": "", "label": _flow_text(self, "flow_none", "None")}]
         try:
             services_dict = self.hass.services.async_services()
             if "notify" in services_dict:
@@ -1771,23 +1786,30 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
         # Show charger list + options
         options = [
-            {"value": "continue", "label": f"Continue ({charger_count} charger{'s' if charger_count != 1 else ''} configured)"},
+            {"value": "continue", "label": _flow_text(self, "flow_continue_chargers",
+                                                      "Continue ({count} chargers set up)",
+                                                      count=charger_count)},
         ]
         # Edit option per charger
-        for c in ev_chargers:
+        for _ci, c in enumerate(ev_chargers):
             options.append(
-                {"value": f"edit_charger:{c['id']}", "label": f"Edit: {c.get('name', c['id'])}"},
+                {"value": f"edit_charger:{c['id']}",
+                 "label": _flow_text(self, "flow_edit_item", "Edit: {name}",
+                                     name=charger_display_name(getattr(self, "hass", None), c, _ci))},
             )
-        options.append({"value": "add_charger", "label": "Add another EV charger"})
+        options.append({"value": "add_charger",
+                        "label": _flow_text(self, "flow_add_charger", "Add another EV charger")})
         if charger_count > 1:
             options.append(
-                {"value": "remove_charger", "label": "Remove a charger"},
+                {"value": "remove_charger",
+                 "label": _flow_text(self, "flow_remove_charger", "Remove a charger")},
             )
         # (#566) Direct entry point to PV-string naming when ≥2 strings exist —
         # so it's discoverable, not buried at the end of the settings chain.
         if len(self._discovered_pv_strings()) >= 2:
             options.append(
-                {"value": "rename_pv", "label": "Rename PV strings"},
+                {"value": "rename_pv",
+                 "label": _flow_text(self, "flow_rename_pv", "Rename PV strings")},
             )
 
         return self.async_show_form(
@@ -1848,7 +1870,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             data_schema=vol.Schema({
                 vol.Required(
                     "charger_name",
-                    default=suggestions.get("name", f"EV Charger {len(self._data.get('ev_chargers', [])) + 1}"),
+                    default=suggestions.get("name") or charger_display_name(
+                        getattr(self, "hass", None), {},
+                        len(self._data.get("ev_chargers", []))),  # (#1053)
                 ): selector.TextSelector(),
                 vol.Required(
                     "ev_connected_sensor",
@@ -2067,7 +2091,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             data_schema=vol.Schema({
                 vol.Required(
                     "charger_name",
-                    default=charger.get("name", "EV Charger"),
+                    default=charger_display_name(getattr(self, "hass", None), charger),  # (#1053)
                 ): selector.TextSelector(),
                 vol.Required(
                     "ev_connected_sensor",
@@ -2288,7 +2312,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         if not removable:
             return await self.async_step_ev_charger_menu()
 
-        options = [{"value": c["id"], "label": c.get("name", c["id"])} for c in removable]
+        options = [{"value": c["id"],
+                    "label": charger_display_name(getattr(self, "hass", None), c, _ci + 1)}
+                   for _ci, c in enumerate(removable)]
 
         return self.async_show_form(
             step_id="ev_charger_remove",
@@ -2378,10 +2404,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=_c("diagram_style", "sem"),
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
-                        options=[
-                            {"value": "sem", "label": "SEM (built-in)"},
-                            {"value": "kflow", "label": "K-Flow (HACS)"},
-                        ],
+                        options=["sem", "kflow"],
+                        translation_key="diagram_style",
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
@@ -2786,11 +2810,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=_c("tariff_mode", "static"),
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
-                        options=[
-                            {"value": "static", "label": "Static (fixed HT/NT rates)"},
-                            {"value": "dynamic", "label": "Dynamic / price sensor (Tibber / Nordpool / aWATTar / Amber / Octopus — or any entity with the current price as state, e.g. a template sensor)"},
-                            {"value": "calendar", "label": "Calendar (time-based HT/NT schedule)"},
-                        ],
+                        options=["static", "dynamic", "calendar"],
+                        translation_key="tariff_mode",
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
@@ -2832,13 +2853,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=current_config.get("solar_forecast_source", "auto"),
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
-                        options=[
-                            {"value": "auto", "label": "Auto-detect (Solcast, then Forecast.Solar, then Open-Meteo, then Helios)"},
-                            {"value": "solcast", "label": "Solcast PV Solar"},
-                            {"value": "forecast_solar", "label": "Forecast.Solar"},
-                            {"value": "open_meteo", "label": "Open-Meteo Solar Forecast"},
-                            {"value": "helios", "label": "Helios Forecast"},
-                        ],
+                        options=["auto", "solcast", "forecast_solar", "open_meteo", "helios"],
+                        translation_key="solar_forecast_source",
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
@@ -2852,10 +2868,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=_c("tariff_classification_mode", "percentile"),
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
-                        options=[
-                            {"value": "percentile", "label": "Percentile (relative to today's prices)"},
-                            {"value": "static", "label": "Static (fixed cheap/expensive thresholds)"},
-                        ],
+                        options=["percentile", "static"],
+                        translation_key="tariff_classification_mode",
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
@@ -3212,14 +3226,16 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
         pumps = _draft_list(self, "heat_pumps")
         options = [{"value": "continue",
-                    "label": f"Continue ({1 + len(pumps)} heat pump"
-                             f"{'s' if pumps else ''} configured)"}]
+                    "label": _flow_text(self, "flow_continue_heat_pumps",
+                                        "Continue ({count} heat pumps set up)",
+                                        count=1 + len(pumps))}]
         for i, hp in enumerate(pumps):
             options.append({"value": f"edit_heat_pump:{i}",
-                            "label": f"Edit: {device_display_name(getattr(self, 'hass', None), hp.get('name'), 'heat_pump', number=i + 2)}"})
+                            "label": _flow_text(self, "flow_edit_item", "Edit: {name}", name=device_display_name(getattr(self, 'hass', None), hp.get('name'), 'heat_pump', number=i + 2))})
             options.append({"value": f"remove_heat_pump:{i}",
-                            "label": f"Remove: {device_display_name(getattr(self, 'hass', None), hp.get('name'), 'heat_pump', number=i + 2)}"})
-        options.append({"value": "add_heat_pump", "label": "Add another heat pump"})
+                            "label": _flow_text(self, "flow_remove_item", "Remove: {name}", name=device_display_name(getattr(self, 'hass', None), hp.get('name'), 'heat_pump', number=i + 2))})
+        options.append({"value": "add_heat_pump",
+                        "label": _flow_text(self, "flow_add_heat_pump", "Add another heat pump")})
         return self.async_show_form(
             step_id="heat_pump_menu",
             data_schema=vol.Schema({
@@ -3422,13 +3438,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=_c("battery_charge_platform", "auto"),
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
-                        options=[
-                            {"value": "auto", "label": "Auto-detect (recommended)"},
-                            {"value": "huawei", "label": "Huawei SUN2000 / LUNA2000"},
-                            {"value": "goodwe", "label": "GoodWe"},
-                            {"value": "deye", "label": "Deye hybrid inverter"},
-                            {"value": "generic", "label": "Generic / other"},
-                        ],
+                        options=["auto", "huawei", "goodwe", "deye", "generic"],
+                        translation_key="battery_charge_platform",
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
@@ -3785,10 +3796,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         default=_c("deye_force_charge_work_mode", "battery_first"),
                     ): selector.SelectSelector(
                         selector.SelectSelectorConfig(
-                            options=[
-                                {"value": "load_first", "label": "Load First"},
-                                {"value": "battery_first", "label": "Battery First"},
-                            ],
+                            options=["load_first", "battery_first"],
+                            translation_key="deye_force_charge_work_mode",
                             mode=selector.SelectSelectorMode.DROPDOWN,
                         )
                     ),
@@ -3983,7 +3992,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             "mobile_notification_service": _c("mobile_notification_service", ""),
         }
 
-        notify_services = [{"value": "", "label": "None"}]
+        notify_services = [{"value": "", "label": _flow_text(self, "flow_none", "None")}]
         try:
             services_dict = self.hass.services.async_services()
             if "notify" in services_dict:

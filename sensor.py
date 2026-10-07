@@ -38,6 +38,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import label_registry as lr
 
+from .utils.device_names import charger_display_name  # (#1053)
 from .const import SENSOR_LABEL_MAPPING
 from .consts.labels import SEM_LABELS
 from .coordinator import SEMCoordinator
@@ -2081,13 +2082,15 @@ async def async_setup_entry(
     ev_chargers = full_config.get("ev_chargers", [])
     _LOGGER.info("Per-charger setup: %d charger(s) in config", len(ev_chargers))
     per_charger_descriptions = []
-    for charger_cfg in ev_chargers:
+    for _cidx, charger_cfg in enumerate(ev_chargers):
         cid = charger_cfg.get("id", "ev_charger")
-        cname = charger_cfg.get("name", "EV Charger")
+        cname = charger_display_name(hass, charger_cfg, _cidx)  # (#1053)
         per_charger_descriptions.extend([
             SensorEntityDescription(
                 key=f"charger_{cid}_power",
                 name=f"{cname} Power",
+                translation_key="per_charger_power",
+                translation_placeholders={"charger": cname},
                 device_class=SensorDeviceClass.POWER,
                 state_class=SensorStateClass.MEASUREMENT,
                 native_unit_of_measurement=UnitOfPower.WATT,
@@ -2104,6 +2107,8 @@ async def async_setup_entry(
             SensorEntityDescription(
                 key=f"charger_{cid}_commanded_current",
                 name=f"{cname} Commanded Current",
+                translation_key="per_charger_commanded_current",
+                translation_placeholders={"charger": cname},
                 device_class=SensorDeviceClass.CURRENT,
                 state_class=SensorStateClass.MEASUREMENT,
                 native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
@@ -2113,6 +2118,8 @@ async def async_setup_entry(
             SensorEntityDescription(
                 key=f"charger_{cid}_session_energy",
                 name=f"{cname} Session Energy",
+                translation_key="per_charger_session_energy",
+                translation_placeholders={"charger": cname},
                 device_class=SensorDeviceClass.ENERGY,
                 state_class=SensorStateClass.TOTAL,
                 native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
@@ -2130,6 +2137,8 @@ async def async_setup_entry(
             SensorEntityDescription(
                 key=f"charger_{cid}_session_energy_external",
                 name=f"{cname} Session Energy (charger)",
+                translation_key="per_charger_session_energy_external",
+                translation_placeholders={"charger": cname},
                 device_class=SensorDeviceClass.ENERGY,
                 state_class=SensorStateClass.TOTAL,
                 native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
@@ -2138,16 +2147,22 @@ async def async_setup_entry(
             SensorEntityDescription(
                 key=f"charger_{cid}_session_solar_share",
                 name=f"{cname} Solar Share",
+                translation_key="per_charger_session_solar_share",
+                translation_placeholders={"charger": cname},
                 native_unit_of_measurement=PERCENTAGE,
                 suggested_display_precision=0,
             ),
             SensorEntityDescription(
                 key=f"charger_{cid}_taper_trend",
                 name=f"{cname} Taper Trend",
+                translation_key="per_charger_taper_trend",
+                translation_placeholders={"charger": cname},
             ),
             SensorEntityDescription(
                 key=f"charger_{cid}_taper_ratio",
                 name=f"{cname} Taper Ratio",
+                translation_key="per_charger_taper_ratio",
+                translation_placeholders={"charger": cname},
                 native_unit_of_measurement=PERCENTAGE,
                 suggested_display_precision=0,
             ),
@@ -2155,6 +2170,8 @@ async def async_setup_entry(
             SensorEntityDescription(
                 key=f"charger_{cid}_daily_energy",
                 name=f"{cname} Daily Energy",
+                translation_key="per_charger_daily_energy",
+                translation_placeholders={"charger": cname},
                 device_class=SensorDeviceClass.ENERGY,
                 state_class=SensorStateClass.TOTAL_INCREASING,
                 native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
@@ -2164,6 +2181,8 @@ async def async_setup_entry(
             SensorEntityDescription(
                 key=f"charger_{cid}_estimated_soc",
                 name=f"{cname} Estimated SOC",
+                translation_key="per_charger_estimated_soc",
+                translation_placeholders={"charger": cname},
                 device_class=SensorDeviceClass.BATTERY,
                 state_class=SensorStateClass.MEASUREMENT,
                 native_unit_of_measurement=PERCENTAGE,
@@ -2180,6 +2199,8 @@ async def async_setup_entry(
             SensorEntityDescription(
                 key=f"charger_{cid}_vehicle_soc",
                 name=f"{cname} Vehicle SOC",
+                translation_key="per_charger_vehicle_soc",
+                translation_placeholders={"charger": cname},
                 device_class=SensorDeviceClass.BATTERY,
                 state_class=SensorStateClass.MEASUREMENT,
                 native_unit_of_measurement=PERCENTAGE,
@@ -2191,6 +2212,8 @@ async def async_setup_entry(
             SensorEntityDescription(
                 key=f"charger_{cid}_taper_minutes_to_full",
                 name=f"{cname} Minutes to Full",
+                translation_key="per_charger_taper_minutes_to_full",
+                translation_placeholders={"charger": cname},
                 native_unit_of_measurement=UnitOfTime.MINUTES,
                 suggested_display_precision=0,
             ),
@@ -2203,13 +2226,15 @@ async def async_setup_entry(
     # would just clutter the entity registry. The dashboard generator's
     # Sankey card per-charger split (also v1.6.15) reads these entities.
     if len(ev_chargers) > 1:
-        for charger_cfg in ev_chargers:
+        for _cidx, charger_cfg in enumerate(ev_chargers):
             cid = charger_cfg.get("id", "ev_charger")
-            cname = charger_cfg.get("name", "EV Charger")
+            cname = charger_display_name(hass, charger_cfg, _cidx)  # (#1053)
             per_charger_descriptions.extend([
                 SensorEntityDescription(
                     key=f"charger_{cid}_flow_solar_to_ev_power",
                     name=f"{cname} Solar → EV Power",
+                    translation_key="per_charger_flow_solar_to_ev_power",
+                    translation_placeholders={"charger": cname},
                     device_class=SensorDeviceClass.POWER,
                     state_class=SensorStateClass.MEASUREMENT,
                     native_unit_of_measurement=UnitOfPower.WATT,
@@ -2218,6 +2243,8 @@ async def async_setup_entry(
                 SensorEntityDescription(
                     key=f"charger_{cid}_flow_grid_to_ev_power",
                     name=f"{cname} Grid → EV Power",
+                    translation_key="per_charger_flow_grid_to_ev_power",
+                    translation_placeholders={"charger": cname},
                     device_class=SensorDeviceClass.POWER,
                     state_class=SensorStateClass.MEASUREMENT,
                     native_unit_of_measurement=UnitOfPower.WATT,
@@ -2226,6 +2253,8 @@ async def async_setup_entry(
                 SensorEntityDescription(
                     key=f"charger_{cid}_flow_battery_to_ev_power",
                     name=f"{cname} Battery → EV Power",
+                    translation_key="per_charger_flow_battery_to_ev_power",
+                    translation_placeholders={"charger": cname},
                     device_class=SensorDeviceClass.POWER,
                     state_class=SensorStateClass.MEASUREMENT,
                     native_unit_of_measurement=UnitOfPower.WATT,
@@ -2237,6 +2266,8 @@ async def async_setup_entry(
                 SensorEntityDescription(
                     key=f"charger_{cid}_flow_solar_to_ev_energy",
                     name=f"{cname} Solar → EV Energy",
+                    translation_key="per_charger_flow_solar_to_ev_energy",
+                    translation_placeholders={"charger": cname},
                     device_class=SensorDeviceClass.ENERGY,
                     state_class=SensorStateClass.TOTAL,
                     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
@@ -2245,6 +2276,8 @@ async def async_setup_entry(
                 SensorEntityDescription(
                     key=f"charger_{cid}_flow_grid_to_ev_energy",
                     name=f"{cname} Grid → EV Energy",
+                    translation_key="per_charger_flow_grid_to_ev_energy",
+                    translation_placeholders={"charger": cname},
                     device_class=SensorDeviceClass.ENERGY,
                     state_class=SensorStateClass.TOTAL,
                     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
@@ -2253,6 +2286,8 @@ async def async_setup_entry(
                 SensorEntityDescription(
                     key=f"charger_{cid}_flow_battery_to_ev_energy",
                     name=f"{cname} Battery → EV Energy",
+                    translation_key="per_charger_flow_battery_to_ev_energy",
+                    translation_placeholders={"charger": cname},
                     device_class=SensorDeviceClass.ENERGY,
                     state_class=SensorStateClass.TOTAL,
                     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
@@ -2521,7 +2556,10 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         self.entity_description = description
 
         self._attr_unique_id = f"sem_{description.key}"
-        self._attr_translation_key = description.key
+        # (#1053) A per-charger sensor carries its own translation key with
+        # the charger's name as a placeholder; its key (charger_<id>_power)
+        # can never be declared in strings.json.
+        self._attr_translation_key = description.translation_key or description.key
         self._attr_device_info = coordinator.device_info
         self._attr_suggested_object_id = f"sem_{description.key}"
         # Force stable entity ID regardless of HA language
@@ -2851,6 +2889,15 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         # Unbound on purpose: a test double may call the property's fget on
         # a MagicMock ``self`` (test_708) — the real base must still run.
         attrs = SEMSolarSensor._extra_state_attributes_base(self)
+        # (#1053) The EV card names a charger from its power sensor. It used
+        # to cut " Power" off the friendly name, which breaks once the name
+        # is translated ("EV-lader Vermogen"); the name itself rides along.
+        _desc = getattr(self, "entity_description", None)
+        _ph = getattr(_desc, "translation_placeholders", None) or {}
+        if (_ph.get("charger") and getattr(_desc, "translation_key", "")
+                == "per_charger_power"):
+            attrs = dict(attrs or {})
+            attrs["charger_name"] = _ph["charger"]
         if getattr(self, "_stale_s", 0):
             attrs = dict(attrs or {})
             attrs["stale_s"] = int(self._stale_s)

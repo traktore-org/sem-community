@@ -12,6 +12,8 @@ This is a slim orchestrator that delegates to specialized modules:
 
 from __future__ import annotations
 
+from ..utils.device_names import charger_display_name, charger_own_name  # (#1053)
+
 import logging
 import time
 from datetime import date, timedelta
@@ -5825,7 +5827,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 self._control_repair_raised.add((cid, entity_id))
                 _ri.raise_charger_control_entity_broken(
                     self.hass, str(cid),
-                    name=str(charger_cfg.get("name") or cid),
+                    name=charger_display_name(self.hass, charger_cfg),  # (#1053)
                     entity_id=entity_id,
                     capability=capability,
                     reason=verdict.reason or "unavailable",
@@ -9682,7 +9684,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         continue
                     asks.append({
                         "kind": "ev",
-                        "label": str(_cfg.get("name") or "").strip() or None,
+                        "label": charger_own_name(_cfg),  # (#1053)
                         "kwh": round(_tgt, 2),
                     })
                 except Exception:  # noqa: BLE001
@@ -10090,7 +10092,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     ev_prio = int(self._ev_priority_for(cid))
                 except Exception:  # noqa: BLE001
                     ev_prio = int(cfg.get("priority") or 0)
-                labels[f"ev:{cid}"] = str(cfg.get("name") or "").strip() or None
+                labels[f"ev:{cid}"] = charger_own_name(cfg)  # (#1053)
                 demands.append(Demand(
                     id=f"ev:{cid}", kind="ev", energy_kwh=float(kwh),
                     # (#846) sized from the measured table per setpoint —
@@ -11458,7 +11460,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         if ttype == "soc" and real_soc is None and charging and connected:
             target = self._resolve_target(cfg, "ev_target_soc", "max", 80, 100)
             _ri.raise_soc_cap_unenforceable(
-                self.hass, cid, name=cfg.get("name") or "EV", target_soc=target,
+                self.hass, cid, name=charger_display_name(self.hass, cfg), target_soc=target,
             )
         else:
             _ri.clear_soc_cap_unenforceable(self.hass, cid)
