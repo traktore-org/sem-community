@@ -475,6 +475,19 @@ class BatteryView:
     #: (#1025) a battery boost runs: the pack may feed the car down to THIS
     #: floor, in percent. None without a boost.
     battery_boost_floor_soc: Optional[float] = None
+    #: (#1066) What SEM knows about a forced charge / discharge on this
+    #: battery, one per direction (:func:`decide_battery.forced_ops`):
+    #: ``None`` — unknown (a fresh adapter; one from a prior instance may
+    #: run), ``True`` — SEM started one and its stop has not landed,
+    #: ``False`` — stopped. A scheduler stop verdict wins only while its
+    #: direction is not ``False``; a ``True`` is stopped before any other
+    #: command. ``None`` keeps a view built without an adapter on the old
+    #: precedence.
+    sem_forced_charge: Optional[bool] = None
+    sem_forced_discharge: Optional[bool] = None
+    #: (#1066) cycles in a row the stop of such an op has not landed
+    #: (:func:`decide_battery.stop_misses`); 0 when nothing is pending.
+    sem_stop_misses: int = 0
 
 
 # ─────────────────────────────────────────────────────────────────

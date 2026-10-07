@@ -245,6 +245,51 @@ class BatteryControlAdapter(ABC):
         none yet — the anchor the actuator quantises the next one against."""
         return float(getattr(self, "_last_discharge_limit_w", -1.0))
 
+    #: (#1066) Per direction: did a forced charge / discharge SEM started
+    #: land, and has its stop landed since? None = unknown (this adapter has
+    #: not seen either). Written by ``actuate_battery._note_forced_op`` only.
+    _sem_forced_charge: "Optional[bool]" = None
+    _sem_forced_discharge: "Optional[bool]" = None
+    #: (#1066) cycles in a row a stop has not landed while a flag is True
+    _sem_stop_misses: int = 0
+
+    #: (#1066) what ``last_error`` says when SEM is asked to limit discharge
+    #: and has no entity to write the limit to.
+    NO_DISCHARGE_LIMIT_ERROR = (
+        "no discharge limit entity — SEM cannot cap this battery, so it "
+        "covers any load on the meter, the car included")
+
+    def _discharge_limit_unwritable(self) -> bool:
+        """(#1066) True when a LIMIT_DISCHARGE has nowhere to go — and say so.
+
+        With no ``battery_discharge_control_entity`` the brand writers used
+        to record the asked-for watts as the limit in force and return. No
+        write went out, nothing said so, and the discharge-limit sensor and
+        the Diagnose block both showed a cap the battery never had.
+        @RienduPre's 2× Sessy (no discharge-limit setting at all, only the
+        power setpoint) covered 2.3 kW of car from the pack that way.
+
+        Records no limit (-1, "none written") and puts the gap in
+        ``last_error`` — the Deye convention for a limit it cannot apply.
+        The intent is still recorded by the caller: it is what SEM asked for.
+        """
+        if getattr(self, "_discharge_control_entity", ""):
+            return False
+        self._last_discharge_limit_w = -1.0
+        self._last_error = self.NO_DISCHARGE_LIMIT_ERROR
+        if not getattr(self, "_no_limit_said", False):
+            self._no_limit_said = True
+            _LOGGER.warning(
+                "Battery: asked to limit discharge, but no discharge limit "
+                "entity is set — SEM cannot keep this battery out of the car "
+                "(%s, #1066)", type(self).__name__)
+        return True
+
+    def _clear_no_limit_error(self) -> None:
+        """(#1066) The gap is only an error while a limit is asked for."""
+        if self._last_error == self.NO_DISCHARGE_LIMIT_ERROR:
+            self._last_error = None
+
     def __init__(self, hass, config: dict) -> None:
         self._hass = hass
         self._config = config

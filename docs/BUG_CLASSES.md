@@ -595,6 +595,46 @@ logs exposed it. **Fix pattern:** merge the branches' authorities explicitly
 \`test_629_ev_orchestration.py\`. **Sweep question:** for every decision function with ordered
 branches, can the LATER branches actually be reached under production-shaped inputs? (A
 reachability/coverage check against scenario corpora catches this class.)
+**Live catch 2 (#1066, @RienduPre, 2× Sessy, 07.10.2026):** \`decide_battery\` answered the night
+scheduler's stop verdicts (idle, not needed, target reached, not profitable, outside or without a
+plan block) before every protection branch. The scheduler is never without a verdict once it is on,
+so on those installs the EV clamp, the #620 grid-funded clamp, the #879 house hold and the #892/#1025
+window and boost never ran, on any brand. The diagnose line read \`intent=stop_force_charge\` while
+2.3 kW went from the packs into the car. The module docstring already said the stop wins only "while
+the adapter is still in FORCE_CHARGE intent"; nothing asked the adapter. **Fix:** the adapter keeps one
+flag per direction (\`_sem_forced_charge\` / \`_sem_forced_discharge\`: unknown / started / stopped), set by
+\`actuate_battery\` only on evidence the command LANDED (the recorded intent, or Deye's \`True\`). A stop
+verdict wins only while ITS direction is not known stopped; a forced op SEM started and has not seen stop
+is stopped before any NORMAL or LIMIT_DISCHARGE (\`_stop_what_sem_started\`; both open take turns,
+discharge first; a stop that has not landed in three cycles lets protection out every other cycle, since
+develop's LIMIT wrote the cap even when its zero-write failed — review round 2). The first cut used one
+"may anything run" answer from the last intent, and review found two ways it let a forced op run on: an
+arbitrage stop (a DISCHARGE stop) after a night charge left a switch-based charge on, and a Deye sale
+records no intent at all. Under observer nothing lands, so the view gets "stopped" and the shadow shows
+the armed steady state. The #900 lowering wait now applies only to a limit already in force — from NORMAL
+the anchor is the pack's max, so a newly plugged-in car was fed for six cycles. Two faults sat under it in
+the same report: the battery-side clamp never read \`may_assist_ev\` (class 88), and with no
+discharge-limit entity the generic, GoodWe and Huawei writers recorded the asked watts as a limit in
+force (class 97's sibling — no call at all, still recorded). Both fixed: the permission holds the clamp
+in every arm, and \`_discharge_limit_unwritable\` records no limit and says so in \`last_error\`.
+**Guard (this instance):** \`tests/test_1066_scheduler_stop_starves_the_clamp.py\` — an isolation check:
+every stop verdict × a 384-case protection grid, with both directions stopped, gives exactly the decision
+of an install without the scheduler (intent, watts, reason); each verdict still stops while its direction
+may run and is silent once it is stopped; real adapters across cycles: the cap is written, held and
+released when the car leaves; a car plugged in after NORMAL is capped at once; a failed stop keeps the
+stop first; an arbitrage stop after a switch-based night charge still ends the charge; a real Deye sale
+is ended when nothing asks for it; a sale whose stop is refused still gets the cap out; a failed start
+notes nothing. Nine mutants (stop always wins, no stop-first, flags never noted, Deye's \`True\` ignored,
+dwell on entry, permission unread, adapters pretend, never yields, yield cycle not counted) each fail it.
+**Left for Guido:** (1) a Sessy has no discharge-limit setting, so SEM still cannot keep its NOM loop
+out of the car — it now says so. Using the power setpoint as a cap (\`api\` + house/N, tracked each
+cycle, released to \`nom\`) is a new control mode. (2) The #879 hold's blind release (LIMIT at max)
+sits above the EV clamp, so a blind cycle in a held hour lets the pack feed a plugged-in car. (3) The
+per-charger \`ev_battery_may_assist\` is read on the charger side only; the battery clamp cannot tell
+which car it feeds. (4) OFF is not stopped first: the generic \`command_off\` hand-off zeroes the
+setpoint but does not turn a forced-charge switch off (older than this fix). (5) Huawei's
+\`command_force_charge\` records FORCE_CHARGE on its orphan-clear and stop-a-sale early returns without
+starting a charge, so the flag reads "started" and the clamp comes ~2 cycles late after such a cycle.
 
 ---
 
@@ -3975,6 +4015,9 @@ backend flag. `_setOvernightSource` (battery / grid — this instance); `_applyM
 grid"); the EV charge-mode select, where `consts/ev_charge_modes.py` already does this RIGHT and is
 the precedent — *"(#885) solar_plus_battery inherits solar_only's night contract wholesale"* — and
 `mode_allows_night_charging` exists precisely because two hand-copied twins were drifting.
+`may_assist_ev` (#1066): the charger side asks it before any window or boost; the battery-side clamp,
+which is what keeps the inverter from covering the car on the meter, never did — **swept**, it now holds
+the clamp in every arm (surplus, spend consent, window, boost, protection switch off).
 **Guard:** `tests/test_953_cheap_hours_finish_window.py` — the reporter's morning through a real
 `SurplusController.update()` walk (the ungated pass is shown to START the pump first, so the pass
 is not vacuous), the overnight promise and the short-winter-day tail both still topping up, the
@@ -4375,8 +4418,9 @@ and no noise; a landing after misses clears the ledger. The `_hass()` fake in
 flip models the very dropped write the fix refuses.
 **Sweep question:** wherever SEM keeps a "last written" value for de-dup — *is it assigned from
 the entity's answer, or from the call's return?* A de-dup keyed on what was SENT turns one dropped
-write into a permanent one.
-Refs #978 #915 #925.
+write into a permanent one. (#1066) The degenerate case: no entity, no call, and the limit was still
+recorded — generic, GoodWe and Huawei **swept** (`_discharge_limit_unwritable`).
+Refs #978 #915 #925 #1066.
 
 
 ### 98. An observer surface that spends less than it holds — GUARDED

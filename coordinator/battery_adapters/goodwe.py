@@ -43,10 +43,14 @@ class GoodWeBatteryAdapter(BatteryControlAdapter):
     async def command_normal(self) -> None:
         await self._zero_setpoint()  # #523 mutual exclusion (#1005)
         await self._apply_discharge_limit(self._max_discharge_w)
+        self._clear_no_limit_error()                    # (#1066)
         self._last_intent = BatteryIntent.NORMAL
 
     async def command_limit_discharge(self, watts: float) -> None:
         await self._zero_setpoint()  # #523 mutual exclusion (#1005)
+        if self._discharge_limit_unwritable():          # (#1066)
+            self._last_intent = BatteryIntent.LIMIT_DISCHARGE
+            return
         watts = max(0.0, min(watts, self._max_discharge_w))
         if (self._last_discharge_limit_w >= 0
                 and abs(watts - self._last_discharge_limit_w) < 100.0):

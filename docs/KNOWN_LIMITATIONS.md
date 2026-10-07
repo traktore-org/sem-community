@@ -31,6 +31,8 @@ The EV charger must be controllable via a supported HA integration (KEBA, Easee,
 
 Battery discharge protection requires a Huawei Solar inverter (or compatible) that exposes a `number` entity for the battery discharge power limit. Other inverters without this entity cannot have their discharge actively clamped.
 
+This includes **Battery may charge the car** turned off (2.2, #1066). A battery that follows the meter on its own, such as a Sessy in `nom`, covers the car too, and SEM has no limit to write. SEM says so in the Diagnose download (`last_error`: "no discharge limit entity").
+
 ## Export guard: what the inverter allows (2.1, #955)
 
 The export guard works with what the brand integration exposes, and the
