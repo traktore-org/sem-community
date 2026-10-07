@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **A departure per weekday, one charging block, a top-up before leaving** (#1023). Set on the EV card; all off by default.
+- ✨ **Battery boost: the house battery into the car for this one charge** (#1025). Down to a floor you pick; ends on unplug, mode change, the floor, or a restart.
+- ✨ **A Schedule helper can set a device's mode** (#1020). For example the heat rod off from 07:00 to 13:00, or the charger on solar only at the weekend.
+
 - ✨ **ENTSO-e prices are found on their own** (#1051, by @rdehuyss).
 - ✨ **Helios Forecast is a solar forecast source** (#1050, by @xg5x48kmfc-blip).
 
