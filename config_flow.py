@@ -28,6 +28,7 @@ from .const import (
     DEFAULT_BATTERY_ASSIST_MIN_SURPLUS,
     DEFAULT_BATTERY_CAPACITY_KWH,
     DEFAULT_BATTERY_DISCHARGE_PROTECTION_ENABLED,
+    DEFAULT_ELECTRICITY_IMPORT_RATE,
     DEFAULT_BATTERY_MAX_DISCHARGE_POWER,
     DEFAULT_PREFER_HARDWARE_ENERGY,
     DEFAULT_ENERGY_SOURCE_AUTO,
@@ -2866,13 +2867,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 # forced a wrong fallback on those markets.
                 vol.Optional(
                     "electricity_import_rate",
-                    default=_c("electricity_import_rate", 0.3387),
+                    default=_c("electricity_import_rate", DEFAULT_ELECTRICITY_IMPORT_RATE),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=0.0, max=10000.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")  # #549 currency-agnostic
                 ),
                 vol.Optional(
                     "electricity_off_peak_rate",
-                    default=_c("electricity_off_peak_rate", None) or _c("electricity_nt_rate", 0.3387),
+                    # (#1040) Unsaved, it is the import rate — one price, as
+                    # the backend reads it. A saved 0 is a free night, not
+                    # "unset": the old `or` showed 0.3387 and Submit saved it.
+                    default=_c("electricity_off_peak_rate", _c(
+                        "electricity_nt_rate",
+                        _c("electricity_import_rate", DEFAULT_ELECTRICITY_IMPORT_RATE))),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=0.0, max=10000.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")  # #549 currency-agnostic
                 ),

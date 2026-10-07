@@ -18,12 +18,11 @@ from typing import Any, Dict, Optional
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from .base import SwitchDevice, DeviceState
+from .base import ComfortBandMixin, SwitchDevice, DeviceState
 
 _LOGGER = logging.getLogger(__name__)
 
 DEFAULT_SOLAR_TARGET_TEMP = 50.0  # Normal solar heating target
-DEFAULT_MAX_TEMPERATURE = 55.0    # Solar heating cutoff (below Legionella target)
 DEFAULT_MIN_TEMPERATURE = 40.0    # Minimum useful temperature
 DEFAULT_HOT_WATER_POWER = 2000    # Typical immersion heater power
 
@@ -67,7 +66,6 @@ class HotWaterController(SwitchDevice):
         entity_id: Optional[str] = None,
         power_entity_id: Optional[str] = None,
         temperature_entity_id: Optional[str] = None,
-        max_temperature: float = DEFAULT_MAX_TEMPERATURE,
         min_temperature: float = DEFAULT_MIN_TEMPERATURE,
         solar_target_temp: float = DEFAULT_SOLAR_TARGET_TEMP,
         legionella_target_temp: float = DEFAULT_LEGIONELLA_TARGET,
@@ -100,7 +98,11 @@ class HotWaterController(SwitchDevice):
             energy_entity_id=energy_entity_id,  # #600 — DHW kWh counter → derived power
         )
         self.temperature_entity_id = temperature_entity_id
-        self.max_temperature = max_temperature
+        # (#1062) The lowest useful temperature: the vacation surplus cap and
+        # the setpoint a water_heater is left at when it cannot be turned off.
+        # It never STARTS heating — forcing lives on the comfort band's limit
+        # ("Run now past"). There is no separate maximum: the solar target is
+        # the ceiling SEM heats to (#92), the Legionella target its own.
         self.min_temperature = min_temperature
         self.solar_target_temp = solar_target_temp
         self.legionella_target_temp = max(legionella_target_temp, DEFAULT_LEGIONELLA_MIN_TEMP)
@@ -379,16 +381,65 @@ class HotWaterController(SwitchDevice):
         self._last_temperature_safety_path = "normal_at_solar_target"
         return False
 
-    def needs_heating(self) -> bool:
-        """Check if water temperature is below minimum."""
-        temp = self.get_current_temperature()
-        if temp is None:
+    @property
+    def stop_condition_met(self) -> bool:
+        """(#1062) A running SWITCH boiler stops at the active target.
+
+        The target gate in ``activate`` only refuses a START. A water_heater or
+        climate tank holds the setpoint SEM wrote, so its own thermostat stops
+        it there; a relay has no setpoint, and a boiler switched on below the
+        target kept heating past it for as long as the surplus lasted. Only a
+        real reading counts — a sensor that reads nothing is not a hot tank.
+
+        During a Legionella cycle SEM's own stops do not apply: this target and
+        a banked comfort band both sit below the disinfection target, and
+        ``check_legionella_cycle`` ends the run itself. A stop entity the user
+        set still counts, as it did before (#1062).
+        """
+        if self._legionella_cycle_active:
+            # The base stop only (the stop entity) — skip the band's banked.
+            return super(ComfortBandMixin, self).stop_condition_met
+        if super().stop_condition_met:
             return True
-        return temp < self.min_temperature
+        if self._entity_domain in _SETPOINT_DOMAINS:
+            return False
+        temp = self.get_current_temperature()
+        return temp is not None and temp >= self._active_target_temp()
+
+    @property
+    def comfort_state(self) -> str:
+        """(#594 / #1062) Vacation suspends comfort heating, so the band is off
+        while away: no force, no planned banking block, no banked stop. The
+        vacation surplus dump keeps its own cap (``_active_target_temp``)."""
+        if self.vacation:
+            return "disengaged"
+        return super().comfort_state
+
+    def _comfort_fallback_reading(self):
+        """(#1062) The band's thermometer when none is picked: the boiler's own
+        — the water_heater / climate ``current_temperature``, else the sensor
+        set on the Configuration tab — in °C, like every band reading. The
+        Control tab says "device's own thermometer"; without this the band
+        read nothing on a boiler and "Run now past" never forced a run."""
+        if not self.hass:
+            return None
+        if self._entity_domain in _SETPOINT_DOMAINS and self.entity_id:
+            state = self.hass.states.get(self.entity_id)
+            raw = (state.attributes or {}).get("current_temperature") if state else None
+            value = self._attribute_temp_c(raw)
+            if value is not None:
+                return value
+        if self.temperature_entity_id:
+            state = self.hass.states.get(self.temperature_entity_id)
+            if state is None:
+                return None
+            from ..coordinator.units import temperature_state_to_celsius
+            return temperature_state_to_celsius(state, None)
+        return None
 
     @property
     def needs_offpeak_activation(self) -> bool:
-        """Temperature-aware override: don't force-heat if already at max temp."""
+        """Temperature-aware override: don't force-heat at the active target."""
         if self.vacation:
             # #594 — no cheap-tariff comfort forcing while away (the optional
             # surplus dump is solar-surplus-only by design).
@@ -416,9 +467,9 @@ class HotWaterController(SwitchDevice):
             return 0.0
         if not self.is_temperature_safe():
             _LOGGER.info(
-                "Hot water at %.1f°C — above max %.1f°C, skipping",
+                "Hot water at %.1f°C — target %.1f°C reached, skipping",
                 self.get_current_temperature() or 0,
-                self.legionella_target_temp if self._legionella_cycle_active else self.max_temperature,
+                self._active_target_temp(),
             )
             self._last_activation_path = "blocked_unsafe"
             return 0.0
@@ -675,10 +726,8 @@ class HotWaterController(SwitchDevice):
             "entity_domain": self._entity_domain,
             "current_temperature": self.get_current_temperature(),
             "solar_target_temp": self.solar_target_temp,
-            "max_temperature": self.max_temperature,
             "min_temperature": self.min_temperature,
             "temperature_safe": self.is_temperature_safe(),
-            "needs_heating": self.needs_heating(),
             "legionella_target_temp": self.legionella_target_temp,
             "legionella_interval_hours": self.legionella_interval_hours,
             "legionella_overdue": self.legionella_overdue,

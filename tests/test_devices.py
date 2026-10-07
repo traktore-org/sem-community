@@ -149,7 +149,6 @@ def hot_water(mock_hass):
         priority=6,
         entity_id="switch.hot_water_relay",
         temperature_entity_id="sensor.hot_water_temp",
-        max_temperature=60.0,
         min_temperature=40.0,
     )
 
@@ -766,7 +765,7 @@ def test_heat_pump_get_current_temperature_unavailable(heat_pump):
 
 @pytest.mark.asyncio
 async def test_hot_water_activate_safe(hot_water):
-    """Test activates when temperature is below max."""
+    """Test activates when temperature is below the solar target."""
     mock_state = MagicMock()
     mock_state.state = "45.0"
     hot_water.hass.states.get = MagicMock(return_value=mock_state)
@@ -777,7 +776,7 @@ async def test_hot_water_activate_safe(hot_water):
 
 @pytest.mark.asyncio
 async def test_hot_water_activate_unsafe(hot_water):
-    """Test skips activation when temperature >= max."""
+    """Test skips activation when temperature >= the solar target."""
     mock_state = MagicMock()
     mock_state.state = "62.0"
     hot_water.hass.states.get = MagicMock(return_value=mock_state)
@@ -786,27 +785,10 @@ async def test_hot_water_activate_unsafe(hot_water):
     assert not hot_water.is_active
 
 
-def test_hot_water_needs_heating(hot_water):
-    """Test needs_heating when temp < min."""
-    mock_state = MagicMock()
-    mock_state.state = "35.0"
-    hot_water.hass.states.get = MagicMock(return_value=mock_state)
-    assert hot_water.needs_heating() is True
-
-
-def test_hot_water_does_not_need_heating(hot_water):
-    """Test needs_heating returns False when temp >= min."""
-    mock_state = MagicMock()
-    mock_state.state = "50.0"
-    hot_water.hass.states.get = MagicMock(return_value=mock_state)
-    assert hot_water.needs_heating() is False
-
-
 def test_hot_water_no_temp_sensor(mock_hass):
     """Test is_temperature_safe returns True when no sensor configured."""
     hw = HotWaterController(hass=mock_hass, device_id="hw", name="HW", rated_power=2000.0)
     assert hw.is_temperature_safe() is True
-    assert hw.needs_heating() is True  # No sensor -> assume needs heating
 
 
 def test_hot_water_get_current_temperature(hot_water):
@@ -1003,10 +985,11 @@ def test_device_to_dict_hot_water(hot_water):
     """Test HotWaterController serialization."""
     hot_water.hass.states.get = MagicMock(return_value=None)
     d = hot_water.to_dict()
-    assert d["max_temperature"] == 60.0
     assert d["min_temperature"] == 40.0
     assert "temperature_safe" in d
-    assert "needs_heating" in d
+    # (#1062) neither ever reached a decision — gone, not published.
+    assert "max_temperature" not in d
+    assert "needs_heating" not in d
 
 
 def test_device_enable_disable(switch_device):

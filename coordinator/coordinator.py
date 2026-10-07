@@ -38,6 +38,7 @@ from ..const import (
     DOMAIN,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_BATTERY_CAPACITY_KWH,
+    DEFAULT_ELECTRICITY_IMPORT_RATE,
     DEFAULT_MAX_CHARGING_CURRENT,
     DEFAULT_LOAD_MANAGEMENT_ENABLED,
     ED_RESOLVE_MAX_ATTEMPTS,
@@ -142,6 +143,20 @@ def _cfg_rate(config: dict, *keys: str, default: float) -> float:
         except (TypeError, ValueError):
             continue
     return default
+
+
+def _cfg_tariff_rates(config: dict, peak_default: float = DEFAULT_ELECTRICITY_IMPORT_RATE,
+                      ) -> tuple[float, float]:
+    """(#1040) The import (peak) and off-peak rates of a Static or Calendar tariff.
+
+    An unsaved off-peak rate IS the import rate: one price, so no spread
+    nobody entered. A fixed default made the night dearer than the day for
+    anyone whose saved import rate was below it — and still called it cheap.
+    """
+    peak = _cfg_rate(config, "electricity_import_rate", default=peak_default)
+    off_peak = _cfg_rate(config, "electricity_off_peak_rate", "electricity_nt_rate",
+                         default=peak)
+    return peak, off_peak
 
 
 # (#625 phase 3) moved to publish_diag; alias kept for existing imports.
@@ -651,14 +666,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # (#1040) The Tariff page now has the field this mode lacked:
             # `tariff_schedule_entity`, a HA Schedule helper whose blocks
             # are the peak hours. It wins over the hand-written nested key.
+            #
+            # (#1040) An unsaved rate is the one the card and the Tariff page
+            # show. Calendar used its own 0.35/0.22, so the screen showed one
+            # price and SEM charged at a spread nobody entered.
             schedule = config.get("tariff_schedule", {}) or {}
+            peak, off_peak = _cfg_tariff_rates(config)
             self._tariff_provider = CalendarTariffProvider(
                 hass,
-                peak_rate=config.get("electricity_import_rate", 0.35),
-                off_peak_rate=_cfg_rate(
-                    config, "electricity_off_peak_rate", "electricity_nt_rate",
-                    default=0.22,
-                ),
+                peak_rate=peak,
+                off_peak_rate=off_peak,
                 export_rate=config.get("electricity_export_rate", 0.075),
                 rules=schedule.get("rules", []),
                 default_tariff=schedule.get("default_tariff", "off_peak"),
@@ -668,12 +685,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 currency=currency,
             )
         else:
+            peak, off_peak = _cfg_tariff_rates(config)
             self._tariff_provider = StaticTariffProvider(
-                peak_rate=config.get("electricity_import_rate", 0.3387),
-                off_peak_rate=_cfg_rate(
-                    config, "electricity_off_peak_rate", "electricity_nt_rate",
-                    default=0.3387,
-                ),
+                peak_rate=peak,
+                off_peak_rate=off_peak,
                 export_rate=config.get("electricity_export_rate", 0.075),
                 currency=currency,
             )
@@ -6491,9 +6506,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             hot_water_current_temperature=hw_current_temp,
             hot_water_solar_target=(
                 float(hw_controller.solar_target_temp) if hw_controller else None
-            ),
-            hot_water_max_temperature=(
-                float(hw_controller.max_temperature) if hw_controller else None
             ),
             hot_water_legionella_target=(
                 float(hw_controller.legionella_target_temp) if hw_controller else None
@@ -14384,7 +14396,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     from ..devices.hot_water_controller import (
                         DEFAULT_LEGIONELLA_MIN_TEMP,
                     )
-                    hw.max_temperature = float(cfg.get("hot_water_max_temperature", 70.0))
                     hw.min_temperature = float(
                         cfg.get("hot_water_minimum_temperature", 40.0)
                     )
@@ -14512,18 +14523,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         )
                     )
                 else:
-                    # Static / Calendar share peak/off-peak rate fields. Fall
-                    # back to the provider's CURRENT value when the key is
-                    # absent so a factory-default calendar install (different
-                    # construction default 0.35 vs static 0.3387) isn't nudged
-                    # to a wrong rate by the refresh (MEDIUM, review).
-                    tp.peak_rate = float(
-                        cfg.get("electricity_import_rate", tp.peak_rate)
-                    )
-                    tp.off_peak_rate = _cfg_rate(
-                        cfg, "electricity_off_peak_rate", "electricity_nt_rate",
-                        default=tp.off_peak_rate,
-                    )
+                    # Static / Calendar share peak/off-peak rate fields. An
+                    # unsaved import rate keeps the provider's value; an
+                    # unsaved off-peak rate follows the import rate (#1040),
+                    # so a new import rate never opens a spread on its own.
+                    tp.peak_rate, tp.off_peak_rate = _cfg_tariff_rates(
+                        cfg, peak_default=tp.peak_rate)
             except (TypeError, ValueError):
                 pass
 
