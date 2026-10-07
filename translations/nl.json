@@ -1552,9 +1552,6 @@
       "heat_pump_boost_offset": {
         "name": "Warmtepomp Boost-offset"
       },
-      "hot_water_max_temperature": {
-        "name": "Warm Water Max Temperatuur"
-      },
       "system_size_kwp": {
         "name": "PV-systeemgrootte"
       },
@@ -1731,6 +1728,21 @@
     },
     "load_management_failed_to_start": {
       "message": "Lastbeheer staat aan maar kon niet starten, dus SEM kan zijn apparatenlijst niet gebruiken. Controleer het Home Assistant-logboek op \"Failed to initialize load management\" en herlaad de integratie."
+    },
+    "battery_boost_not_permitted": {
+      "message": "De batterij mag “{charger}” niet voeden: de toestemming staat uit. Zet die aan in de batterij-instellingen om te boosten."
+    },
+    "battery_boost_not_connected": {
+      "message": "Er is geen auto aangesloten op “{charger}”."
+    },
+    "battery_boost_bad_floor": {
+      "message": "“{floor}” is geen batterijniveau: geef een ondergrens van 0 tot 100 %."
+    },
+    "charger_not_found": {
+      "message": "SEM heeft geen laadpaal “{charger}”."
+    },
+    "departure_bad_time": {
+      "message": "“{day}: {time}” is geen vertrek: dagen zijn mon … sun, tijden HH:MM van 00:00 tot 23:59."
     }
   },
   "issues": {
@@ -1911,10 +1923,11 @@
     },
     "solar_forecast_source": {
       "options": {
-        "auto": "Automatisch (Solcast, dan Forecast.Solar, dan Open-Meteo)",
+        "auto": "Automatisch (Solcast, dan Forecast.Solar, dan Open-Meteo, dan Helios)",
         "solcast": "Solcast PV Solar",
         "forecast_solar": "Forecast.Solar",
-        "open_meteo": "Open-Meteo Solar Forecast"
+        "open_meteo": "Open-Meteo Solar Forecast",
+        "helios": "Helios Forecast"
       }
     },
     "tariff_classification_mode": {

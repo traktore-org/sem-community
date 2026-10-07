@@ -527,6 +527,8 @@ the strand case (instance-5 lineage) stays covered while the user's own loads ar
 not owned → not actuated) + `::test_mode_off_transition_releases_running_load` (SEM-owned → still
 released). Refs #559 #779 #847.
 
+**Instance 8 — a temperature gate on the start only (#1062).** `HotWaterController.activate` refused a start at the solar target, but nothing stopped a boiler already running: a relay switched on at 50 °C heated past a 55 °C target for as long as the surplus lasted. A water_heater or climate tank was safe only because its own thermostat holds the setpoint SEM wrote. **Fixed:** the switch boiler's `stop_condition_met` is true once a real reading reaches the active target (solar target, or the minimum in the vacation surplus dump), so the stop block and `compute_load_intent` clause 3 end the run. SEM's own stops skip a Legionella cycle: this target and a banked comfort band both sit below the disinfection target, and `check_legionella_cycle` never starts a cut run again (the review caught the band case — the class 125 fix gave the band a thermometer). A stop entity the user set still ends the cycle, as before. **Guard:** `tests/test_1062_hot_water_fields.py::TestTheSurplusPassStopsIt` (real `SurplusController.update`, the Legionella cases included).
+
 ### 18. Forced-marker set in one pass, leaks because another pass didn't clear it — PARTIAL
 **Symptom:** a transient control marker (`_offpeak_forced`, `_batt_overnight_forced`) set when
 one pass activates a load stays `True` after the load stops, so later cycles mis-treat an
@@ -1028,7 +1030,11 @@ pump short-cycled and the user could neither see the window nor lengthen it); **
 tariff mode sat in the Tariff menu since #120, and the setup guide promised a calendar field, but
 nothing ever wrote the schedule the provider reads — the mode ran at the off-peak price all day.
 Closed by `tariff_schedule_entity`, a Schedule-helper field the page refuses Calendar without, on
-the options page and the config card; guard `tests/test_1040_calendar_schedule_field.py`).
+the options page and the config card; guard `tests/test_1040_calendar_schedule_field.py`). **#1040 second round (07.10.2026):** the default view showed
+Calendar with one of its two prices. The off-peak rate sat behind Advanced, so a helper alone gave
+"no price difference". Closed by `ESSENTIAL_IN_MODE` (the off-peak rate is essential in Calendar
+mode only) and by showing the picked mode's fields before Apply; guard
+`dashboard/card/test/calendar-setup.test.js`.
 **Second half (16.08.2026):** a field you can type into is not yet a surface you can *correct* —
 the class also lives in what a form does with the value you did **not** type. HA drops a cleared
 optional field out of `user_input` entirely, so `update(user_input)` cannot tell "left alone" from
@@ -2133,6 +2139,25 @@ argument form and would have passed while three of the five 16s were still in th
 **Sweep question:** for a config key, grep the *readers* and compare their defaults before reading
 any logic — if they disagree, that is the bug, whatever the issue says it is about. And when a key
 has no write path, its default is not a fallback, it is the value.
+**Live catch (#1040), shape (a):** Calendar mode built its provider with 0.35/0.22 for an unsaved
+rate, while the card, the Tariff page and Static used 0.3387 for both. A Calendar user who never
+saved a rate saw two equal prices and SEM priced hours at a spread nobody entered. Review found the
+worse half: a fixed off-peak default is wrong for anyone who saved only an import rate. With 0.25
+saved, Static (its 0.3387 fallback dates from #485) and the first fix priced nights at 0.3387 and
+still called them cheap.
+And the live refresh kept the old off-peak rate when the import rate moved. Closed by one reader,
+`_cfg_tariff_rates`: an unsaved off-peak rate IS the import rate (one price), for both providers
+and the refresh; the Tariff page and the card show that same default. `DEFAULT_ELECTRICITY_IMPORT_RATE`
+replaces the literal in the providers' construction, the Tariff page, the import-rate number and the
+cost calculator (the card's JS and `StaticTariffProvider`'s own parameter defaults still say 0.3387);
+the unused `DEFAULT_ELECTRICITY_NT_RATE` is gone. The Tariff page's off-peak default was `_c(...) or 0.3387`, so
+a saved 0 (a free night) showed 0.3387 and Submit wrote it back — also fixed. Guard:
+`tests/test_1040_calendar_schedule_field.py::TestAnUnsavedRateIsTheShownRate`.
+**Left for Guido:** the dynamic fallback price (`fallback_price`, `default=0.30`, two sites) and the
+battery break-even fallback (`0.22` off-peak, `0.30` peak in `_maybe_run_scheduler_evaluation`) still
+restate their own numbers; changing them moves battery and dynamic-tariff decisions. And the Tariff
+page saves every field it shows: change the import rate there and leave the off-peak rate, and the
+old import rate is saved as the off-peak rate — a spread from one edit (older than #1040).
 Refs #789 #788 #716 #746 #685 #678 #833 #1038.
 
 ### 47. One word names two axes, so every reader picks the axis it expected — GUARDED
@@ -3372,7 +3397,35 @@ on its own mode, dropped the switch, and five re-asserts later SEM filed
 `charger_actuation_failed` ("enable switch will not stay on") against healthy hardware — while the
 relay cycled once per coordinator cycle from UNDERNEATH #940's anti-cycle floor, whose clocks arm
 only on SEM's own operations and so never saw the box's opens.
-**Where it lives:** `coordinator/ev_taper_detector.py` (`_declining_phase`, `_full_confirm_count`,
+**Live catch (#820, 05.10.2026, ArneGollin1987's Sungrow — mkaiser template number):**
+`ChargePacingWriter._taken` — the verdict on ONE write (`last_written_w`) — was what `apply`
+published as the pacing action. One lost write (a Modbus error, a template script still running)
+left `write_refused` on the Battery tab while the register sat at exactly the cap SEM wanted: the
+re-solve came back to the register's value, nothing was left to write, and the old verdict was all
+the action could say. The same shape on the first cycle after a restart: a cap from disk that is not
+on the register was rewritten even when the register already held the wish — a write equal to the
+register never reads as taken, so a healthy inverter was "refusing" 90 s later. Closure: a register
+inside the writer's own deadband of the CURRENT cap is `held`. The verdict itself is kept — the
+02.10 rule that a refused cap is not sent again is keyed to it, and a register at the wish says
+nothing about whether it takes writes (review 2: retiring it re-sent refused caps every 5 minutes
+on a register that never takes one). Only the first cycle after adoption, where no write of this
+lifetime was judged, takes the register's value as the cap (`_take_register`, no write). A
+register away from the wish still says `write_refused`. Guard:
+`tests/test_820_refusal_belongs_to_its_write.py` — over seeded days of random caps and lost writes,
+`write_refused` never appears on a cycle where the register holds the wish, with liveness twins
+(refusals do happen, and a refused verdict does meet a register at the wish); the refused cap is
+still not re-sent; the restart case writes nothing.
+Siblings assessed: the battery adapters' `write_not_taken_strikes` (#915) raise a Repair keyed to
+the entity, and a same-value skip is no evidence either way, so the raise stays as it is — its
+install-wide clear is the known residual, class 84 (4). **Left for Guido:** (1) a refused cap is
+never sent again while the wish stays near it (the 02.10 rule, pinned by
+`test_a_refused_cap_is_not_retried_with_a_slightly_different_value`) — one lost Modbus write keeps
+the old cap until the wish moves; a single retry after `PACING_MIN_WRITE_INTERVAL_S` would close
+it, a policy call. (2) `coordinator/export_guard.py::report_refused` — one transient
+`export control failed` holds `refused` for the whole closed-meter window with no retry: one
+write's verdict standing for the window.
+**Where it lives:** `coordinator/charge_pacing.py::ChargePacingWriter.apply` (`_taken` vs the
+current cap), `coordinator/ev_taper_detector.py` (`_declining_phase`, `_full_confirm_count`,
 `_estimate_stop_bound`), `coordinator/ev_soc_need.py::estimate_stop_step`,
 `coordinator.py::_announce_estimate_stop`, `coordinator/charger_adapters/base.py::ensure_enabled`
 with `devices/base.py::CurrentControlDevice._session_active`. Sibling assessed and safe: the
@@ -5552,3 +5605,33 @@ Refs #1055 #716 #897 #913.
 **Sweep question:** for every part a card builds — a chart, a watcher, a timer, a subscription — what builds it again when HA puts the same card back on the page?
 **Left for Guido:** (1) a range picked in the period selector (Costs tab) is worked out once, at the click; on return, and while you stay, the chart shows that window, so "Today" picked yesterday still shows yesterday. A fix moves the selector's period maths into one helper the chart can roll. (2) Redrawing rebuilds the chart: a series hidden in the legend shows again and a hover tooltip drops (now every 5 minutes for power, battery and forecast too). `chart.update()` in place would keep them. (3) The source check knows the ways cards free a part today; it does not see `clearTimeout`, `cancelAnimationFrame` or observers held in a list, and it counts a call inside a `setTimeout` or `.then` as made on return.
 Refs #1058 #541 #476 #457.
+
+### 124. A battery shown because nothing said it was missing — a saved size and an empty meter taken as proof — GUARDED
+**Symptom:** on a home with no battery the Energy Plan card drew one (#1063, lostcontrol, 2.2.0-beta.11, Fronius). Today: the sunny hours wore the "battery covers home" colour. Tomorrow: a "Battery" row filled from 0.0 to 7.4 kWh. Load planning was right; only what the card showed was wrong.
+**Root shape:** two claims that a battery exists, neither from a fact about a battery. (a) A size: `battery_capacity_kwh` answered the built-in 15 kWh, and the settings step saves a size on every install, so "has a size" was true everywhere. The tomorrow preview walked that pack. (b) A colour by elimination: the card painted a slot "battery" when the meter carried none of the house. A sun slot carries none either (the ledger sets its net draw to 0), so every home's sunny hours read as battery — the battery-less home only made it plain.
+**Where it lives:** the capacity property (tomorrow's battery row, the plan's battery flag, `forecast_surplus_kwh`, which took a 15 kWh empty battery's need off a battery-less home's surplus — **swept by the source**); the plan card's Home row colour, icon, hand-over time and legend; tomorrow's "battery charging" key; the battery-night recorder, which sealed nights of zeros on a battery-less home and could put "drained 0.0 kWh overnight — the promised refill never came" on the card (**swept**: no battery, no record; the backfill service now says so); `battery_redirect_w`, where a size of 0 read as "full" and gave the car the whole charge of a battery added since the last reload (**swept**: no size, no redirect; a saved size is at least 1 kWh, so only the ABSENT answer is 0).
+**Closure:** a battery is claimed only from a fact about one. The property returns 0 when the battery module is ABSENT (#923); UNKNOWN keeps the old answer, so a slow boot never hides a real battery. The plan marks a slot `batt` only where its walk drew the battery for the house, and says `has_battery`; the entity carries the marks as index runs (`batt_runs` — a flag per slot pushed a 15-minute day over the recorder budget). The card colours each slot grid / battery / sun through `util/plan-cover.js` and shows no battery icon, hand-over time or battery legend without them. A plan stamped before the fix has no runs (`None`, not `[]`) and keeps the old colours until the next stamp, so a battery home's night is not drawn as sun after the update.
+**Guard:** `tests/test_1063_plan_card_no_battery.py` — the property over ABSENT / UNKNOWN / PRESENT; a real plan stamped at 14:00 with and without a battery (no `batt` anywhere without one; sunny hours never `batt` with one; every evening hour the battery covers is marked); the quiet night carries the flag; the entity carries the runs and the flag, an old plan carries neither, and the runs cost a 96-slot day at most 12 bytes; tomorrow has no curve without a battery and keeps one with it; a saved 15 kWh on a battery-less home walks no battery today or tomorrow; the ready check still decides when plans run exactly as before; a battery-less night alone earns a review row, and the recorder records nothing when the battery is ABSENT; a size of 0 redirects nothing. (The backfill service's log line has no test: there is no harness for the service handlers.) `dashboard/card/test/plan-cover.test.js` pins the colour rule, the runs, the old-plan rule and the card's use of them. Four mutants of the fix fail the Python file.
+**Sweep question:** for every place that shows a part — is it shown because something says the part is there, or because nothing says it is not?
+**Left for Guido:** (0) the plan's ready check (`_energy_plan_tick`) still asks the saved key: on a battery-less home the SOC reads "unavailable" every cycle, so one that saved the Settings step (15 kWh) never stamps a plan — the card stays "pending" and nothing is planned. Asking the module verdict there would start plans (and plan actuation) on those homes: a control change, not part of a display fix. (1) an install whose Energy Dashboard could not be read is UNKNOWN and still walks the 15 kWh default — by design (#925). (2) Other readers of the saved key keep their own defaults (`build_view.py` 15, `energy_calculator.py` 15, the battery scheduler 10, the battery ETA 15.0, the battery runtime 0): on an ABSENT home they sit in battery paths that do not run or show nothing, so they were left. One of them pairs with the property: `decide.py` sizes the redirect from `build_view.py`'s saved key while the EV budget reads the property, so in the minutes between adding a battery and the reload (still ABSENT) the two disagree (15 vs 0). They already disagreed whenever the size was auto-detected; one source for both is the fix. (3) A slot with no house draw and no sun (a house profile of 0 W at night) is drawn as sun.
+Refs #1063 #923 #925 #857.
+
+### 125. A field on the screen that no decision reads — the value stops at a log line — GUARDED
+**Symptom:** Configuration tab → Hot water showed "Max temperature" ("SEM never activates above this") and "Minimum temperature" ("below this, SEM force-heats from any source"). Neither did anything. With Solar target 70 °C and Max 60 °C the tank heated to 70 °C, and only the Control tab's "Run now past" forced heating, so users set one thing in two places and could not tell which counted (#1062, lostcontrol, #1059).
+**Root shape:** #92 made the solar target the ceiling on purpose and dropped the separate maximum. 1.7.2-beta.2 put both fields back on the card "config-only for now", with help text for what they should do. #454 then wired the controller and gave a decision only to the solar target and Legionella. The max value reached `HotWaterController.max_temperature` and stopped at a log line, `to_dict` and a published `HotWaterSensorData` field. `tests/test_knob_wiring.py` passed, because it asks whether the config key is read — and it was, into an attribute nothing decides on.
+**Where it lives:** hot water `max_temperature` (number entity, card row, published value) — **removed**, and the stale-entity sweep drops the entity on the next load. The `hot_water_minimum_temperature` card row — **removed**; the key stays for its two real uses. `needs_heating()` (diagnostics only) — **removed**. The Control-tab comfort band on a boiler said "device's own thermometer" but read nothing unless one was picked, so "Run now past" never forced a boiler — **swept** (`HotWaterController._comfort_fallback_reading`, in °C). Vacation now turns the band off (#594: no comfort heating while away), so the newly working band cannot plan a grid block or force a run while away. A scan of every device constructor value found one more with no reader, `SetpointDevice.min_setpoint`; nothing sets it and no screen shows it, so it is allowed with that reason.
+**Closure:** remove the dead fields and their surface (the #830 option list only shrinks), so each meaning has one place. Configuration: boiler, sensor, solar target, Legionella. Control: mode, priority, the stop ("Keep at" + "Bank by") and the force ("Run now past").
+**Guard:** `tests/test_1062_hot_water_fields.py::TestEveryDeviceSettingReachesADecision` — AST: every `self.<x> = <a parameter>` in a device `__init__` (plain, annotated or tuple assignment) needs a reader in the logic layer that is not inside a log call (`_LOGGER.*`, `log_on_change`), `to_dict` or a `*SensorData(...)` field; an allowance needs a reason and fails once it is no longer needed. It fails on the old code with `max_temperature`. It counts any `.<name>` read as a decision, so a same-named attribute elsewhere can hide a dead one — a floor, not proof. Behaviour pins in the same file: the switch-boiler stop through the real surplus pass, the Legionella cycle not cut by SEM's own stops (a user's stop entity still ends it), the band's fallback thermometer (°F included), vacation turning the band off, zero config unchanged, the card's option list without the minimum.
+**Sweep question:** for every field a screen shows, follow the value past the attribute it lands in. Which decision changes when it changes? A log line, a diagnostic and a published copy are not decisions.
+**Left for Guido:** (1) `min_temperature` keeps two narrow uses with no card field: the vacation surplus cap (its switch `vacation_dhw_surplus` has no surface either) and the setpoint a water_heater is left at when `turn_off` fails. Both belong with #914's open "release to the minimum setpoint" decision. (2) SEM does not stop a water_heater or climate tank at the target; its setpoint does. A target changed while it runs is not re-written. (3) A switch boiler whose sensor breaks while it runs is not stopped, because no reading is not proof of a hot tank; the start is still refused. (4) No gap between the stop (at the target) and the next start (below it): with a sensor near the element, the boiler can cycle at the anti-cycle limit (10 min on, 5 min off). (5) °F installs: `get_current_temperature` returns the raw reading and compares it with °C targets (older than this fix) — SEM never starts the boiler, and now also stops a switch boiler someone else turned on. `natural_achievement` and the written setpoints have the same fault. (6) Tanks no longer overshoot to 60 °C on sun, so forced Legionella runs come more often, at whatever hour they fall due; a solar target ≥ 60 °C still covers it. (7) The #638 comfort-banking pass runs a "willing" band on cheap grid whatever `top_up_policy` says, for every band device; it now reaches boilers whose band was set but read nothing. (8) Those banking and forced runs carry `_offpeak_forced`; a Legionella cycle that falls due during one is cut by force-expiry or the plan hold, which do not check `_legionella_cycle_active` — the older #914 "Legionella vs LIFO" stall, now reachable from a band.
+Refs #1062 #1059 #92 #454 #705 #830.
+
+### 126. A change waits in a second store that the section's "unsaved" count does not read — GUARDED
+**Symptom:** Config tab → Tariff, Calendar mode: a user picked a Schedule helper as "Peak-time schedule" and read "no price difference" at the off-peak price (#1040, @mdscgan, 2.2.0-beta.11). The helper was never saved. The field had a small dot, but its section showed no unsaved count and no Apply button; the only Apply sat in a bar at the top of the card. Our own reply sent the user to the section's "Apply changes", which did not appear.
+**Root shape:** the card has two places an edit can wait. `_staged` (#605) holds numbers, toggles and selects; the section counts it and its footer applies it. `_pending` (#528) holds entity pickers and toggles that reload the entry; only the top bar reads it. Each store is right on its own. The section's count read one of the two, so "nothing unsaved" was true of `_staged` and false of the section.
+**Where it lives:** every structural picker (`_renderPicker`) and structural toggle (`_renderOptionToggle`) — Tariff (the schedule, the battery control entities, the bidirectional flag), Sensor sources, Battery zones (`battery_discharge_protection_enabled`, on the default view), Heat pump and Hot water entities. All **swept** by one change: both renderers bind their pending edit to the section (`_regPending`).
+**Closure:** the section owns every edit made in it, whichever store holds it. `_sectionUnsaved` counts both stores; the section's Apply sends staged and pending keys in one `set_option` call (one reload); Revert drops both. Picking another tariff mode drops the unsaved edits of the fields that mode hides (`_pickTariffMode`), so Apply never saves a field of a mode the user left. A row hidden by the view (Advanced off, a closed fold) keeps its edit on the count, as #605 did — a first try that unbound every hidden row held such edits back with no number anywhere (review). The top bar stays for edits in several sections; the two Apply buttons wait for each other.
+**Guard:** `dashboard/card/test/calendar-setup.test.js` — the real card: a picked schedule counts in its section, the section's Apply sends it with the staged mode and rate in one call, a failed Apply keeps it, Revert drops it, another section's edit stays waiting, a structural toggle binds too, a mode picked and left again sends nothing, an Advanced-hidden edit still counts, the two Apply buttons wait for each other.
+**Sweep question:** for every "unsaved" count or "dirty" flag — list every store an edit can wait in, and ask whether the count reads all of them.
+**Left for Guido:** (1) per-charger pickers (`_renderPickerNested`) save at once and have no unsaved state at all — a third way; so do the Dynamic pickers, which now show (and save) as soon as Dynamic is picked, before its Apply. (2) With a structural edit waiting, the section footer and the top bar now both offer Apply; the top bar could go. (3) `_renderTextOption` saves `battery_setpoint_model` and the direction values at once on blur, though they are structural keys — each edit reloads the entry.
+Refs #1040 #528 #605.

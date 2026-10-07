@@ -15,10 +15,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 🐛 **Charger names and the setup menus follow your language** (#1053). An unnamed charger reads "EV-lader Vermogen" in Dutch; your own names stay.
 
+- ✨ **A departure per weekday, one charging block, a top-up before leaving** (#1023). Set on the EV card; all off by default.
+- ✨ **Battery boost: the house battery charges the car, this charge only** (#1025). Down to a floor you pick; unplugging or a restart ends it.
+- ✨ **A Schedule helper can set a device's mode** (#1020). For example the heat rod off 07:00–13:00, or solar-only charging at weekends.
+
+- ✨ **ENTSO-e prices are found on their own** (#1051, by @rdehuyss).
+- ✨ **Helios Forecast is a solar forecast source** (#1050, by @xg5x48kmfc-blip).
+
+- ✨ **A phase over its limit sheds loads, not only chargers** (#1048) — thanks @RienduPre. Give each load its phase, and that phase's loads go first.
+
+- 🐛 **Calendar tariff: the off-peak rate shows, and the schedule saves with Apply** (#1040). An unsaved off-peak rate now equals the import rate.
+
+- 🐛 **Hot water: two settings that did nothing are gone** (#1062). Max and Minimum temperature are removed. A switch boiler now stops at its solar target.
+
+- 🌍 **Dutch: 15 more dashboard texts** — thanks @RienduPre. (#1056)
+
+# [2.2.0-beta.12] — 06.10.2026
+
 - 🐛 **Heat pump and hot water names follow your language** (#1053). A Dutch home now reads "Warmtepomp", not "Heat Pump". A name you set stays.
 
 - 🐛 **The Control tab shows your saved grid limit** (#1055). With load management off it always showed 5 kW, even when set to no limit.
 - 🐛 **Charts draw again when you come back to a tab** (#1058). They were empty until you reloaded the page.
+- 🐛 **The battery card no longer says "refused" when the charge limit is right** (#820). One lost write kept that message for hours.
+- 🐛 **The Energy Plan card shows no battery on homes without one** (#1063). Sunny hours now look like sun, on every home.
 
 # [2.2.0-beta.11] — 05.10.2026
 

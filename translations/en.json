@@ -1552,9 +1552,6 @@
       "heat_pump_boost_offset": {
         "name": "Heat Pump Boost Offset"
       },
-      "hot_water_max_temperature": {
-        "name": "Hot Water Max Temperature"
-      },
       "system_size_kwp": {
         "name": "PV System Size"
       },
@@ -1731,6 +1728,21 @@
     },
     "load_management_failed_to_start": {
       "message": "Load management is switched on but failed to start, so SEM cannot use its device list. Check the Home Assistant log for \"Failed to initialize load management\" and reload the integration."
+    },
+    "battery_boost_not_permitted": {
+      "message": "The battery may not feed “{charger}”: its permission is off. Switch it on in the battery settings to boost."
+    },
+    "battery_boost_not_connected": {
+      "message": "No car is plugged into “{charger}”."
+    },
+    "battery_boost_bad_floor": {
+      "message": "“{floor}” is not a battery level: give a floor from 0 to 100 %."
+    },
+    "charger_not_found": {
+      "message": "SEM has no charger “{charger}”."
+    },
+    "departure_bad_time": {
+      "message": "“{day}: {time}” is not a departure: days are mon … sun, times HH:MM from 00:00 to 23:59."
     }
   },
   "issues": {
@@ -1911,10 +1923,11 @@
     },
     "solar_forecast_source": {
       "options": {
-        "auto": "Auto-detect (Solcast, then Forecast.Solar, then Open-Meteo)",
+        "auto": "Auto-detect (Solcast, then Forecast.Solar, then Open-Meteo, then Helios)",
         "solcast": "Solcast PV Solar",
         "forecast_solar": "Forecast.Solar",
-        "open_meteo": "Open-Meteo Solar Forecast"
+        "open_meteo": "Open-Meteo Solar Forecast",
+        "helios": "Helios Forecast"
       }
     },
     "tariff_classification_mode": {

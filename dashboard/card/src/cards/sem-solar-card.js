@@ -156,7 +156,7 @@ class SEMSolarCard extends SEMLitBase {
         const fcRemaining = this._val('forecast_remaining_today_kwh');
         const peakW       = this._val('forecast_peak_power_today_w');
         const peakTime    = this._valStr('forecast_peak_time_today');
-        // (#867) Only Solcast publishes a peak-power value. Forecast.Solar
+        // (#867) Only Solcast and Helios publish a peak-power value. Forecast.Solar
         // and Open-Meteo publish the peak TIME but no peak power, and expose
         // no series to derive one from - so a dash there means unsupported,
         // not broken, and the tooltip says which.

@@ -68,9 +68,12 @@ class PlanRow:
     label: str
     detail: Optional[str] = None
     values: Dict[str, Any] = field(default_factory=dict)
+    #: (#1023) where a charge window ends — the EV strip draws the gap after
+    #: it as waiting, not as one bar to the last block's end
+    until: Optional[datetime] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        out = {
             # (#829) Minute resolution. A plan is a minute-grained promise and
             # the card renders it with an hours:minutes formatter, but the raw
             # stamp carried seconds AND microseconds — so rows whose ``when``
@@ -83,6 +86,9 @@ class PlanRow:
             "detail": self.detail,
             "values": self.values,
         }
+        if self.until is not None:
+            out["until"] = self.until.replace(second=0, microsecond=0).isoformat()
+        return out
 
 
 _DEFAULT_SLOT = timedelta(hours=1)
@@ -359,6 +365,7 @@ def compose_today_plan(
         # rows — the live 08.08 regression was this strip painting the
         # reactive prediction while the Energy Plan card said WAITS·00:00.
         parsed_blocks = []
+        late_blocks = set()
         for b in (ev_plan_blocks or []):
             try:
                 bs = datetime.fromisoformat(str(b["start"]))
@@ -367,6 +374,8 @@ def compose_today_plan(
                 parsed_blocks = []
                 break  # one malformed block distrusts the set (gate rule)
             parsed_blocks.append((bs, be))
+            if b.get("late"):
+                late_blocks.add((bs, be))
         if parsed_blocks:
             parsed_blocks.sort()
             # (#963, @HorizonKane: "scheduler full of events that won't
@@ -379,19 +388,32 @@ def compose_today_plan(
             # Merge blocks that TOUCH into windows and announce each window's
             # start once. A real gap stays a real second start: his 17:00 hole
             # is SEM stopping and starting again, which is worth a row.
-            windows = _merge_touching(parsed_blocks)
-            for bs, _be in windows:
+            #
+            # (#1023) The top-up before departure is its own window even when
+            # it touches the rest: it runs whatever the price, and the row
+            # says so. Each start carries its window's end, so the strip draws
+            # a gap as waiting instead of one bar to the last block's end.
+            windows = sorted(
+                [(ws, we, False) for ws, we in _merge_touching(
+                    [p for p in parsed_blocks if p not in late_blocks])]
+                + [(ws, we, True) for ws, we in _merge_touching(
+                    [p for p in parsed_blocks if p in late_blocks])])
+            for bs, be, is_late in windows:
                 if now < bs < horizon:
-                    rows.append(PlanRow(
-                        when=bs, kind=KIND_EV_CHARGE_START,
-                        label="plan_ev_charge_start",
-                        detail="plan_ev_charge_joint",
-                    ))
+                    # Two literal keys, so the translation guard sees both.
+                    rows.append(
+                        PlanRow(when=bs, kind=KIND_EV_CHARGE_START,
+                                label="plan_ev_charge_start",
+                                detail="plan_ev_charge_late", until=be)
+                        if is_late else
+                        PlanRow(when=bs, kind=KIND_EV_CHARGE_START,
+                                label="plan_ev_charge_start",
+                                detail="plan_ev_charge_joint", until=be))
             # The last WINDOW's end, not the last block's: for touching,
             # non-overlapping allocations (what pack_night emits) these are
             # the same instant; for a block contained in an earlier one it is
             # the honest answer where the old value was the inner block's.
-            last_end = windows[-1][1]
+            last_end = max(we for _ws, we, _late in windows)
             if now < last_end < horizon:
                 # The plan's own promise — not a rate estimate.
                 rows.append(PlanRow(

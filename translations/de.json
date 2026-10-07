@@ -1552,9 +1552,6 @@
       "heat_pump_boost_offset": {
         "name": "Wärmepumpe Boost-Offset"
       },
-      "hot_water_max_temperature": {
-        "name": "Warmwasser Max-Temperatur"
-      },
       "system_size_kwp": {
         "name": "PV-Anlagengröße"
       },
@@ -1731,6 +1728,21 @@
     },
     "load_management_failed_to_start": {
       "message": "Das Lastmanagement ist eingeschaltet, konnte aber nicht starten, daher kann SEM seine Geräteliste nicht verwenden. Prüfe das Home-Assistant-Protokoll auf \"Failed to initialize load management\" und lade die Integration neu."
+    },
+    "battery_boost_not_permitted": {
+      "message": "Die Batterie darf „{charger}“ nicht versorgen: die Freigabe ist aus. Schalte sie in den Batterie-Einstellungen ein, um den Boost zu nutzen."
+    },
+    "battery_boost_not_connected": {
+      "message": "An „{charger}“ ist kein Auto angeschlossen."
+    },
+    "battery_boost_bad_floor": {
+      "message": "„{floor}“ ist kein Batteriestand: gib eine Untergrenze von 0 bis 100 % an."
+    },
+    "charger_not_found": {
+      "message": "SEM hat keine Ladestation „{charger}“."
+    },
+    "departure_bad_time": {
+      "message": "„{day}: {time}“ ist keine Abfahrt: Tage sind mon … sun, Zeiten HH:MM von 00:00 bis 23:59."
     }
   },
   "issues": {
@@ -1911,10 +1923,11 @@
     },
     "solar_forecast_source": {
       "options": {
-        "auto": "Automatisch (Solcast, dann Forecast.Solar, dann Open-Meteo)",
+        "auto": "Automatisch (Solcast, dann Forecast.Solar, dann Open-Meteo, dann Helios)",
         "solcast": "Solcast PV Solar",
         "forecast_solar": "Forecast.Solar",
-        "open_meteo": "Open-Meteo Solar Forecast"
+        "open_meteo": "Open-Meteo Solar Forecast",
+        "helios": "Helios Forecast"
       }
     },
     "tariff_classification_mode": {

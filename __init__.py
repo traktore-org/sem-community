@@ -2921,7 +2921,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 power_entity_id=full_config.get("hot_water_power_sensor"),
                 energy_entity_id=full_config.get("hot_water_energy_sensor"),  # #600
                 temperature_entity_id=full_config.get("hot_water_temperature_sensor"),
-                max_temperature=float(full_config.get("hot_water_max_temperature", 70.0)),
                 min_temperature=float(full_config.get("hot_water_minimum_temperature", 40.0)),
                 solar_target_temp=float(full_config.get("hot_water_solar_target", 50.0)),
                 legionella_target_temp=float(full_config.get("hot_water_legionella_target", 65.0)),
@@ -2935,10 +2934,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             _seed_legionella_time(coordinator, hw_device)
             _LOGGER.info(
                 "Hot water registered (entity=%s, priority=%d, "
-                "temp_sensor=%s, solar_target=%.0f°C, max=%.0f°C)",
+                "temp_sensor=%s, solar_target=%.0f°C)",
                 hw_entity, hw_device.priority,
                 hw_device.temperature_entity_id or "—",
-                hw_device.solar_target_temp, hw_device.max_temperature,
+                hw_device.solar_target_temp,
             )
         else:
             _LOGGER.debug(
@@ -3651,6 +3650,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool
             "schedule_appliance",
             "cancel_appliance_schedule",
             "remove_leftovers",
+            "start_battery_boost",
+            "stop_battery_boost",
+            "set_charger_departure",
         ):
             hass.services.async_remove(DOMAIN, service_name)
 
@@ -3759,6 +3761,14 @@ async def _async_register_services(
 
         days = call.data.get("days") or 365
         tracker = getattr(coordinator, "_battery_night", None)
+        from .coordinator.install_modules import Module, Presence, presence_of
+        if presence_of(coordinator).get(Module.BATTERY) is Presence.ABSENT:
+            # (#1063) No battery, no battery nights — the recorder skips
+            # such a home, so "try again later" would never come true.
+            _LOGGER.warning(
+                "backfill_battery_nights: this install has no battery — "
+                "there are no battery nights to rebuild")
+            return
         if tracker is None:
             _LOGGER.warning(
                 "backfill_battery_nights: no night tracker on the coordinator "
@@ -3907,6 +3917,114 @@ async def _async_register_services(
         _LOGGER.debug("Registered service: %s.replan", DOMAIN)
     except Exception as err:  # noqa: BLE001
         _LOGGER.error("Failed to register replan service: %s", err)
+
+    async def async_start_battery_boost(call) -> None:
+        """(#1025) The house battery into this car for this one charge,
+        down to a floor. Refused — with the sentence the user gets — when it
+        may not start."""
+        from .coordinator.battery_boost import BoostRefused
+        try:
+            coordinator.start_battery_boost(
+                call.data["charger_id"], call.data.get("floor_soc"))
+        except BoostRefused as err:
+            # Each key spelled at its raise: the exception block is checked
+            # against the keys production raises (#913).
+            _p = err.placeholders
+            if err.key == "battery_boost_not_permitted":
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="battery_boost_not_permitted",
+                    translation_placeholders=_p) from err
+            if err.key == "battery_boost_not_connected":
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="battery_boost_not_connected",
+                    translation_placeholders=_p) from err
+            if err.key == "battery_boost_bad_floor":
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="battery_boost_bad_floor",
+                    translation_placeholders=_p) from err
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="charger_not_found",
+                translation_placeholders=_p) from err
+        await coordinator.async_request_refresh()
+
+    async def async_stop_battery_boost(call) -> None:
+        """(#1025) End the running battery boost."""
+        coordinator.stop_battery_boost("stopped")
+        await coordinator.async_request_refresh()
+
+    try:
+        hass.services.async_register(
+            DOMAIN, "start_battery_boost", async_start_battery_boost,
+            schema=vol.Schema({
+                vol.Required("charger_id"): cv.string,
+                vol.Optional("floor_soc"): vol.Coerce(float),
+            }),
+        )
+        hass.services.async_register(
+            DOMAIN, "stop_battery_boost", async_stop_battery_boost,
+            schema=vol.Schema({}),
+        )
+        _LOGGER.debug("Registered services: %s.start/stop_battery_boost", DOMAIN)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.error("Failed to register the battery boost services: %s", err)
+
+    async def async_set_charger_departure(call) -> None:
+        """(#1023) The EV card's departure rows: each weekday's own time,
+        one block, the top-up before leaving. Written like the charger's own
+        entities write — no reload, so a click never tears down the
+        coordinator (or a running boost) — and the plan's demand signature
+        re-plans the night."""
+        from .coordinator.departure import (
+            LATE_CHARGE_KEY, WEEKDAY_KEY, WEEKDAYS, _hm,
+        )
+        cid = call.data["charger_id"]
+        if coordinator._charger_cfg_by_id(cid) is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="charger_not_found",
+                translation_placeholders={"charger": cid})
+        writes: dict = {}
+        if "by_weekday" in call.data:
+            days = {}
+            for day, value in (call.data["by_weekday"] or {}).items():
+                if value is None or str(value).strip() == "":
+                    continue    # an empty day leaves at the default
+                hm = _hm(value)
+                if day not in WEEKDAYS or hm is None:
+                    raise ServiceValidationError(
+                        translation_domain=DOMAIN,
+                        translation_key="departure_bad_time",
+                        translation_placeholders={
+                            "day": str(day), "time": str(value)})
+                days[day] = f"{hm[0]:02d}:{hm[1]:02d}"
+            writes[WEEKDAY_KEY] = days
+        if "one_block" in call.data:
+            writes["ev_plan_one_block"] = bool(call.data["one_block"])
+        if "late_charge_min" in call.data:
+            writes[LATE_CHARGE_KEY] = int(call.data["late_charge_min"])
+        for key, value in writes.items():
+            persist_per_charger_option(
+                hass, coordinator.config_entry, coordinator, cid, key, value)
+        await coordinator.async_request_refresh()
+
+    try:
+        hass.services.async_register(
+            DOMAIN, "set_charger_departure", async_set_charger_departure,
+            schema=vol.Schema({
+                vol.Required("charger_id"): cv.string,
+                vol.Optional("by_weekday"): vol.Any(None, dict),
+                vol.Optional("one_block"): cv.boolean,
+                vol.Optional("late_charge_min"): vol.All(
+                    vol.Coerce(int), vol.Range(min=0, max=120)),
+            }),
+        )
+        _LOGGER.debug("Registered service: %s.set_charger_departure", DOMAIN)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.error("Failed to register set_charger_departure: %s", err)
 
     async def async_remove_leftovers_service(call) -> None:
         """(#935) Delete what is the USER's, on their explicit say-so.
@@ -4709,6 +4827,10 @@ async def _async_register_services(
             "min_on_time_min", "min_off_time_min",
             # (#705) thermal comfort band
             "comfort_entity", "comfort_target", "comfort_offset", "comfort_limit",
+            # (#1020) a Schedule helper that sets the mode while it is on
+            "schedule_entity", "schedule_mode",
+            # (#1048) the supply phase the load sits on
+            "phase",
         ):
             # (#559/#620) goal engine — persisted + applied live
             registry = getattr(coordinator, "_device_registry", None)
@@ -4725,6 +4847,25 @@ async def _async_register_services(
                     translation_key="device_not_found",
                     translation_placeholders={"device_id": device_id},
                 )
+            # (#1020) a mode the device knows, or empty to clear; a Schedule
+            # helper, or empty to clear. Anything else would store and then
+            # silently be no schedule.
+            if prop == "schedule_mode" and str(value) not in (
+                "", "off", "peak_only", "surplus"
+            ):
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="invalid_device_property",
+                    translation_placeholders={"property": f"{prop}={value}"},
+                )
+            if prop == "schedule_entity" and str(value) and not str(
+                value
+            ).startswith("schedule."):
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="invalid_device_property",
+                    translation_placeholders={"property": f"{prop}={value}"},
+                )
             if prop == "top_up_policy" and str(value) not in (
                 "solar_only", "cheap_hours"
             ):
@@ -4733,6 +4874,16 @@ async def _async_register_services(
                     translation_key="invalid_device_property",
                     translation_placeholders={"property": f"{prop}={value}"},
                 )
+            # (#1048) L1 / L2 / L3 / 3ph / unknown — a typo must not place a
+            # load on no phase at all
+            if prop == "phase":
+                from .consts.devices import is_load_phase
+                if not is_load_phase(str(value)):
+                    raise ServiceValidationError(
+                        translation_domain=DOMAIN,
+                        translation_key="invalid_device_property",
+                        translation_placeholders={"property": f"{prop}={value}"},
+                    )
             # (#620) normalize the two battery flags to a canonical bool string
             # so the stored dict + live apply agree regardless of "true"/"1"/"on".
             if prop in ("battery_assist_enabled", "battery_eligible_overnight"):
@@ -4799,6 +4950,10 @@ async def _async_register_services(
                     "min_on_time_min", "min_off_time_min",
                     # (#705) thermal comfort band
                     "comfort_entity", "comfort_target", "comfort_offset", "comfort_limit",
+                    # (#1020) a Schedule helper that sets the mode while on
+                    "schedule_entity", "schedule_mode",
+                    # (#1048) the supply phase
+                    "phase",
                 ]),
                 vol.Required("value"): cv.string,
             }),
@@ -5278,6 +5433,10 @@ async def _async_register_phase_services(
                 "battery_eligible_overnight",
                 # (#705) thermal comfort band
                 "comfort_entity", "comfort_target", "comfort_offset", "comfort_limit",
+                # (#1020) a Schedule helper that sets the mode while on
+                "schedule_entity", "schedule_mode",
+                # (#1048) the supply phase
+                "phase",
             )
             if k in call.data
         }
@@ -5353,6 +5512,15 @@ async def _async_register_phase_services(
             ),
             vol.Optional("battery_assist_enabled"): cv.boolean,
             vol.Optional("battery_eligible_overnight"): cv.boolean,
+            # (#1020) a Schedule helper that sets the mode while it is on
+            vol.Optional("schedule_entity"): vol.Any(
+                "", vol.All(cv.string, vol.Match(r"^schedule\."))),
+            vol.Optional("schedule_mode"): vol.In(
+                ["", "off", "peak_only", "surplus"]),
+            # (#1048) the supply phase the load sits on
+            vol.Optional("phase"): vol.In(
+                ["L1", "L2", "L3", "3ph", "unknown"]
+            ),
         }),
         supports_response=SupportsResponse.OPTIONAL,
     )
@@ -6106,7 +6274,7 @@ async def _async_register_phase_services(
     # when the controller is hooked up).
     _DIAGNOSE_HOT_WATER_OPTION = {
         "hot_water_entity", "hot_water_temperature_sensor",
-        "hot_water_solar_target", "hot_water_max_temperature",
+        "hot_water_solar_target",
         "hot_water_legionella_target", "hot_water_minimum_temperature",
         "hot_water_priority", "hot_water_rated_power",
     }
@@ -6118,7 +6286,7 @@ async def _async_register_phase_services(
         "hot_water_registered", "hot_water_entity",
         "hot_water_temperature_sensor",
         "hot_water_current_temperature",
-        "hot_water_solar_target", "hot_water_max_temperature",
+        "hot_water_solar_target",
         "hot_water_legionella_target", "hot_water_hours_since_legionella",
         "hot_water_legionella_cycle_active",
         "hot_water_activation_path", "hot_water_deactivation_path",

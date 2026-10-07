@@ -44,7 +44,11 @@ MAX_SECTIONS = 4
 #: that mode, as dynamic_tariff_entity is of Dynamic, and the card shows only
 #: one of the two at a time — so what a user sees does not grow. Without it
 #: the default view offered Calendar and no way to set its times.
-MAX_CONTROLS = 8
+#: 8 → 9 (#1040, second round): Calendar's off-peak rate. The mode prices
+#: every hour at one of two rates; with the second hidden, two users set up
+#: Calendar and read "no price difference". It shows in Calendar mode only
+#: (``ESSENTIAL_IN_MODE``), so Static and Dynamic users see no change.
+MAX_CONTROLS = 9
 
 
 def test_the_default_view_shows_at_most_four_sections():

@@ -56,6 +56,10 @@ const ESSENTIAL_CONTROLS = new Set([
     // Dynamic. Only one of the two shows at a time, and without it the
     // default view offers a mode it cannot set up.
     'tariff_schedule_entity',
+    // (#1040) …and Calendar's second price. Hours inside the schedule cost
+    // the import rate, all others this one; hidden, the mode had one price
+    // and said "no price difference". Shown in Calendar mode only.
+    'electricity_off_peak_rate',
     // Battery: the safety floor. Everything else in that section is a
     // sensor override that detection normally supplies.
     'battery_discharge_protection_enabled',
@@ -68,7 +72,15 @@ const ESSENTIAL_CONTROLS = new Set([
     'target_peak_limit',
 ]);
 
+// (#1040) An essential control that only one tariff mode needs. The default
+// view shows it in that mode; Static keeps its one rate.
+const ESSENTIAL_IN_MODE = {
+    electricity_off_peak_rate: 'calendar',
+};
+
 const ADV_KEY = 'sem_config_advanced_v1';
+// (#1040) `_secOf` id of a structural edit waiting in `_pending`.
+const PENDING_ID = 'pending:';
 
 const SECTIONS = [
     {
@@ -517,7 +529,28 @@ class SEMConfigCard extends SEMLitBase {
         // Entity-backed controls carry their domain; compare on the
         // config key, which is what the tier list is written in.
         const k = String(key || '').replace(/^[a-z_]+\.sem_/, '');
-        return ESSENTIAL_CONTROLS.has(k);
+        if (!ESSENTIAL_CONTROLS.has(k)) return false;
+        return !ESSENTIAL_IN_MODE[k] || ESSENTIAL_IN_MODE[k] === this._tariffMode();
+    }
+    // (#1040) The tariff mode the page shows: the picked one, before Apply.
+    // Picking Calendar shows its fields at once, so one Apply sets it up.
+    _tariffMode() {
+        const saved = (this._options || {}).tariff_mode || 'static';
+        return String(this._stagedVal('opt:tariff_mode', saved));
+    }
+    // (#1040) Picking a mode hides the other modes' fields, and drops their
+    // unsaved edits with them: Apply must not save a field the page stopped
+    // showing. A field the mode still shows (the off-peak rate in Advanced)
+    // keeps its edit.
+    _pickTariffMode(mode) {
+        this._stage('opt:tariff_mode', 'option', mode);
+        const pend = { ...this._pending };
+        const st = { ...this._staged };
+        if (mode !== 'calendar') delete pend.tariff_schedule_entity;
+        if (mode !== 'dynamic') delete st['opt:tariff_classification_mode'];
+        if (!this._showsControl('electricity_off_peak_rate')) delete st['opt:electricity_off_peak_rate'];
+        this._pending = pend;
+        this._staged = st;
     }
     _toggleSection(id) {
         // `_collapsed` is a plain instance property (not a Lit reactive
@@ -1421,7 +1454,7 @@ class SEMConfigCard extends SEMLitBase {
             { value: 'percentile', label: this._t('config_tariff_class_percentile') },
             { value: 'static', label: this._t('config_tariff_class_static') },
         ];
-        const mode = opts.tariff_mode || 'static';
+        const mode = this._tariffMode();
         return html`
             <div class="readonly-row tariff-rate-row">
                 <ha-icon icon="mdi:flash" style="--mdc-icon-size:18px;color:#ff9800"></ha-icon>
@@ -1429,7 +1462,8 @@ class SEMConfigCard extends SEMLitBase {
                 <span class="readonly-value tariff-rate-value">${rate} ${unit}</span>
             </div>
             ${this._renderOptionSelect('tariff_mode', 'config_tariff_mode',
-                tariffModeOptions, opts, 'config_help_tariff_mode', 'static')}
+                tariffModeOptions, opts, 'config_help_tariff_mode', 'static',
+                (m) => this._pickTariffMode(m))}
             ${mode === 'dynamic' ? html`
                 ${this._renderPicker('dynamic_tariff_entity', 'config_dynamic_tariff_entity',
                     'sensor', null, opts, 'config_help_dynamic_tariff_entity')}
@@ -1452,8 +1486,12 @@ class SEMConfigCard extends SEMLitBase {
                   like LKR/IDR/VND); fine step keeps decimal currencies exact. */ ''}
             ${this._renderOptionNumberInput('electricity_import_rate', 'config_import_rate',
                 { min: 0, max: 10000, step: 0.001, unit: `${currency}/kWh`, default: 0.3387 }, opts, 'config_help_import_rate')}
+            ${/* (#1040) Unsaved, the off-peak rate is the import rate — one
+                  price, as the backend reads it (_cfg_tariff_rates). */ ''}
             ${this._renderOptionNumberInput('electricity_off_peak_rate', 'config_off_peak_rate',
-                { min: 0, max: 10000, step: 0.001, unit: `${currency}/kWh`, default: 0.3387 }, opts, 'config_help_off_peak_rate')}
+                { min: 0, max: 10000, step: 0.001, unit: `${currency}/kWh`,
+                  default: opts.electricity_nt_rate ?? opts.electricity_import_rate ?? 0.3387 },
+                opts, 'config_help_off_peak_rate')}
             ${this._renderOptionNumberInput('electricity_export_rate', 'config_export_rate',
                 { min: 0, max: 10000, step: 0.001, unit: `${currency}/kWh`, default: 0.075 }, opts, 'config_help_export_rate')}
             ${this._renderOptionNumberInput('grid_import_surcharge', 'config_import_surcharge',
@@ -1696,12 +1734,11 @@ class SEMConfigCard extends SEMLitBase {
                     { min: 100, max: 30000, step: 50, unit: 'W', default: 2500 }, opts, 'config_help_hw_rated_power')}
                 ${this._renderStepper('number.sem_hot_water_solar_target', 'hot_water_solar_target',
                     T, 'config_help_hw_solar_target')}
-                ${this._renderStepper('number.sem_hot_water_max_temperature', 'hot_water_max_temperature',
-                    T, 'config_help_hw_max_temperature')}
                 ${this._renderOptionSlider('hot_water_legionella_target', 'config_hw_legionella_target',
                     { min: 55, max: 80, step: 1, unit: '°C', default: 65 }, opts, 'config_help_hw_legionella_target')}
-                ${this._renderOptionSlider('hot_water_minimum_temperature', 'config_hw_min_temperature',
-                    { min: 30, max: 55, step: 1, unit: '°C', default: 40 }, opts, 'config_help_hw_min_temperature')}
+                ${/* (#1062) "Max temperature" and "Minimum temperature" retired: no
+                      decision read either. The solar target is the ceiling;
+                      forcing is the Control tab's "Run now past". */ ''}
                 ${/* #602/#576 — hot_water_priority slider retired: hot water is a
                       draggable row in the device-priority list now (single axis). */ ''}
             </div>
@@ -2052,6 +2089,7 @@ class SEMConfigCard extends SEMLitBase {
         // edit locally and commit on Apply so the reload fires once for the
         // whole batch. Non-structural keys save live on change (unchanged).
         const structural = STRUCTURAL_KEYS.has(optionKey);
+        if (structural) this._regPending(optionKey);
         const staged = structural && Object.prototype.hasOwnProperty.call(this._pending, optionKey);
         const cur = staged ? this._pending[optionKey] : (opts[optionKey] || '');
         const onChange = (val) => {
@@ -2087,13 +2125,14 @@ class SEMConfigCard extends SEMLitBase {
     // entry reload for the whole batch) and clear the buffer.
     async _applyPending() {
         const keys = Object.keys(this._pending);
-        if (!keys.length || this._applying) return;
-        const entryId = await this._ensureEntryId();
+        // (#1040) A section's Apply may be sending these same keys.
+        if (!keys.length || this._applying || this._secApplying) return;
         this._applying = true;
         // Clear any prior apply error before retrying.
         const ss = { ...this._saveStatus }; delete ss._apply; this._saveStatus = ss;
         this.requestUpdate();
         try {
+            const entryId = await this._ensureEntryId();
             const options = { ...this._pending };
             await this._hass.callService('solar_energy_management', 'set_option', {
                 options, ...(entryId ? { entry_id: entryId } : {}),
@@ -2129,7 +2168,7 @@ class SEMConfigCard extends SEMLitBase {
                             ? html`⚠ ${err}`
                             : this._t('config_pending_changes').replace(/\{n\}/g, String(n)))}
                 </span>
-                ${this._applying ? nothing : html`
+                ${this._applying || this._secApplying ? nothing : html`
                     <button class="apply-discard" @click=${() => this._discardPending()}>${this._t('config_discard')}</button>
                     <button class="apply-btn" @click=${() => this._applyPending()}>${this._t('config_apply')}</button>
                 `}
@@ -2181,18 +2220,38 @@ class SEMConfigCard extends SEMLitBase {
         return Object.keys(this._staged).filter(k => this._secOf[k] === secId);
     }
 
+    // (#1040) A structural edit waits in `_pending` (#528), not `_staged`.
+    // Its section still owns it: the count, Apply and Revert include it.
+    // The section said nothing was unsaved while the Peak-time schedule
+    // waited for the bar at the top of the card.
+    _regPending(optionKey) {
+        this._reg(PENDING_ID + optionKey);
+    }
+    _sectionPending(secId) {
+        return Object.keys(this._pending)
+            .filter(k => this._secOf[PENDING_ID + k] === secId);
+    }
+    _sectionUnsaved(secId) {
+        return this._sectionStaged(secId).length + this._sectionPending(secId).length;
+    }
+
     _revertSection(secId) {
         const st = { ...this._staged };
         this._sectionStaged(secId).forEach(k => delete st[k]);
         this._staged = st;
+        const pend = { ...this._pending };
+        this._sectionPending(secId).forEach(k => delete pend[k]);
+        this._pending = pend;
     }
 
     async _applySection(secId) {
         const keys = this._sectionStaged(secId);
-        if (!keys.length || this._secApplying) return;
+        const pendingKeys = this._sectionPending(secId);
+        if ((!keys.length && !pendingKeys.length) || this._secApplying || this._applying) return;
         this._secApplying = secId;
         try {
             const optPayload = {};
+            pendingKeys.forEach(k => { optPayload[k] = this._pending[k]; });
             for (const k of keys) {
                 const s = this._staged[k];
                 if (s.kind === 'option') {
@@ -2219,6 +2278,9 @@ class SEMConfigCard extends SEMLitBase {
             const st = { ...this._staged };
             keys.forEach(k => delete st[k]);
             this._staged = st;
+            const pend = { ...this._pending };
+            pendingKeys.forEach(k => delete pend[k]);
+            this._pending = pend;
         } catch (err) {
             console.error('[sem-config-card] section apply failed', err);
             this._saveStatus = {
@@ -2265,7 +2327,7 @@ class SEMConfigCard extends SEMLitBase {
     // Toggle bound to an entry.options key. Use when no runtime
     // ``switch.sem_*`` entity exists for the option.
     // Native <select> bound to an entry.options key.
-    _renderOptionSelect(optionKey, labelKey, options, opts, helpKey, defaultVal) {
+    _renderOptionSelect(optionKey, labelKey, options, opts, helpKey, defaultVal, onPick) {
         // (#830) One choke point for the default view: a control not on
         // the essential list is simply not rendered until advanced is on.
         if (!this._showsControl(optionKey)) return nothing;
@@ -2281,7 +2343,9 @@ class SEMConfigCard extends SEMLitBase {
                     <span class="ctrl-label">${this._t(labelKey)}${dirty ? html`<span class="dirty-dot">●</span>` : nothing}${this._helpBtn(helpKey)}</span>
                     <select class="sem-select"
                             .value=${cur}
-                            @change=${(e) => this._stage(sid, 'option', e.target.value)}>
+                            @change=${(e) => (onPick
+                                ? onPick(e.target.value)
+                                : this._stage(sid, 'option', e.target.value))}>
                         ${options.map(o => html`
                             <option value="${o.value}" ?selected=${o.value === cur}>${o.label}</option>
                         `)}
@@ -2306,7 +2370,7 @@ class SEMConfigCard extends SEMLitBase {
 
         const structural = STRUCTURAL_KEYS.has(optionKey);
         const sid = 'opt:' + optionKey;
-        if (!structural) this._reg(sid);
+        if (structural) this._regPending(optionKey); else this._reg(sid);
         const stagedStructural = structural && Object.prototype.hasOwnProperty.call(this._pending, optionKey);
         const liveOn = opts[optionKey] != null ? !!opts[optionKey] : !!defaultVal;
         const dirty = stagedStructural || (!structural && this._isDirty(sid));
@@ -2580,6 +2644,7 @@ class SEMConfigCard extends SEMLitBase {
             { value: 'solcast', label: 'Solcast PV Solar' },
             { value: 'forecast_solar', label: 'Forecast.Solar' },
             { value: 'open_meteo', label: 'Open-Meteo Solar Forecast' },
+            { value: 'helios', label: 'Helios Forecast' },
         ];
         const sourceOptions = [
             { value: 'auto', label: this._t('config_forecast_source_auto') },
@@ -3066,8 +3131,8 @@ class SEMConfigCard extends SEMLitBase {
                 <div class="section-dot" style="background:${section.color}"></div>
                 <ha-icon icon="${section.icon}" style="--mdc-icon-size:20px;color:${section.color}"></ha-icon>
                 <span class="section-title-text">${this._t(section.titleKey)}</span>
-                ${this._sectionStaged(section.id).length ? html`
-                    <span class="header-dirty-badge" title="${this._t('config_pending_hint')}">● ${this._sectionStaged(section.id).length}</span>` : nothing}
+                ${this._sectionUnsaved(section.id) ? html`
+                    <span class="header-dirty-badge" title="${this._t('config_pending_hint')}">● ${this._sectionUnsaved(section.id)}</span>` : nothing}
                 ${section.docs ? html`
                     <a class="section-docs-link" href="${section.docs}" target="_blank" rel="noopener"
                        title="${this._t('config_docs')}" @click=${(e) => e.stopPropagation()}>
@@ -3094,12 +3159,12 @@ class SEMConfigCard extends SEMLitBase {
         this._sec = section.id;
         const body = contentFn(T);
         this._sec = null;
-        const dirty = this._sectionStaged(section.id);
-        const busy = this._secApplying === section.id;
+        const dirty = this._sectionUnsaved(section.id);
+        const busy = this._secApplying === section.id || this._applying;
         const err = this._saveStatus['_sec_' + section.id];
-        const footer = dirty.length ? html`
+        const footer = dirty ? html`
             <div class="section-stage-bar">
-                <span class="stage-count">● ${dirty.length} ${this._t('config_unsaved')}</span>
+                <span class="stage-count">● ${dirty} ${this._t('config_unsaved')}</span>
                 ${err ? html`<span class="stage-err">⚠ ${err}</span>` : nothing}
                 <button class="stage-btn revert" ?disabled=${busy}
                         @click=${() => this._revertSection(section.id)}>↩ ${this._t('config_revert')}</button>

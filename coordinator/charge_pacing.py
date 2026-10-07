@@ -250,7 +250,8 @@ class ChargePacingWriter:
       non-blocking call never hears it), the repeat check compares with
       what the register holds (100 W, or one step if coarser), and a
       write the register never takes is reported as ``write_refused`` —
-      once, never re-sent every cycle (#538);
+      once, never re-sent every cycle (#538), and only while the register
+      is away from the cap SEM wants now (a verdict is about one write);
     * a release gives the pack the larger of the captured value and the
       hardware maximum, clamped to the register: below the buffer means
       full power, and a capture of SEM's own cap is never taken for the
@@ -428,8 +429,23 @@ class ChargePacingWriter:
             await self._remember(entity_id)
         first_after_adoption = self._adopt_check
         self._adopt_check = False
+        # (#820, 06.10, bug class 83) The register already holds the cap SEM
+        # wants NOW — inside the same deadband every write is gated on.
+        at_wish = abs(register_w - target_w) <= deadband
         if verdict == "pending":
             if first_after_adoption:
+                restore = self.restore_value
+                if at_wish and (restore is None
+                                or abs(register_w - restore) >= 1.0):
+                    # The cap from disk is not on the register, but what
+                    # SEM wants is: nothing to write. Writing it anyway
+                    # sent the register its own value, which can never
+                    # read as taken (review, 06.10). Never when it holds
+                    # the value to put back (an inverter rebooted to the
+                    # user's setting): saved as SEM's cap, the #949 own-cap
+                    # rule would erase it from the record (review 3, 06.10).
+                    await self._take_register(entity_id, register_w)
+                    return "held"
                 # (review 3) The first reading after adoption is out of the
                 # band. If it also left the value the register had settled
                 # at, someone moved it while SEM was away (down, or
@@ -438,6 +454,15 @@ class ChargePacingWriter:
                 if acc is None or abs(register_w - acc) > deadband:
                     return await self._write(hass, entity_id, native,
                                              target_w, register_w, now)
+            return "held"
+        if at_wish:
+            # A verdict is about ONE write, ``last_written_w``; the action
+            # says what pacing is doing. Arne's register sat at 1700 W, the
+            # cap SEM wanted, while the card said "the inverter refused the
+            # limit" — about an older write that was lost. The verdict
+            # itself stays: the 02.10 rule (a refused cap is not sent
+            # again) is keyed to it, and the register being at the wish
+            # says nothing about whether it takes writes.
             return "held"
         # (#820, 02.10, decision) SEM rewrites when (a) the NEW cap differs
         # from the last SENT cap by more than the deadband — a refused cap
@@ -452,8 +477,6 @@ class ChargePacingWriter:
             and abs(register_w - self._accepted_w) > deadband)
         settled = "held" if self._taken else "write_refused"
         if not (wish_changed or moved_by_someone):
-            return settled
-        if abs(register_w - target_w) <= deadband:
             return settled
         if (self._write_at is not None
                 and now - self._write_at < PACING_MIN_WRITE_INTERVAL_S):
@@ -557,6 +580,27 @@ class ChargePacingWriter:
             {"entity_id": entity_id, "value": native},
             blocking=False)
         return "wrote"
+
+    async def _take_register(self, entity_id: str, register_w: float) -> None:
+        """(#820, 06.10, bug class 83) First cycle after adoption: the cap
+        from disk is not on the register, but the register holds a value
+        inside the deadband of the cap SEM wants now. That value becomes
+        SEM's cap, as if written and seen taken; no write goes out.
+
+        Only here, where no write of this lifetime was judged: writing the
+        register its own value can never read as taken (it does not
+        change), so a healthy inverter was "refusing" 90 s later. A cap
+        REFUSED in this lifetime is never retired this way — the 02.10
+        rule that it is not sent again is keyed to that verdict."""
+        self.last_written_w = register_w
+        self._own_cap_w = register_w
+        self._pre_write_w = None
+        self._accepted_w = register_w
+        self._taken = True
+        self.applied_differs = None
+        self._last_in_band_w = None
+        self._confirm(entity_id)
+        await self._remember(entity_id)
 
     def _confirm(self, entity_id: str) -> None:
         """The register shows SEM's cap: a refusal, if one was logged, is

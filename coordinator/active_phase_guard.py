@@ -14,6 +14,7 @@ from typing import Any, Dict
 
 from ..const import DEFAULT_PHASE_GUARD_TOPOLOGY
 from .charger_types import ChargerDecision, ChargerIntent
+from ..features.phase_shed import CHARGERS_FIRST_CYCLES, over_phases
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -46,9 +47,53 @@ class ActivePhaseGuard:
         self._block_reason = "phase_guard_not_evaluated"
         self._guard_snapshot: Dict[str, Any] = {}
         self._reserved_increase_a = 0.0
+        # (#1048) per phase: consecutive cycles over the limit, and the
+        # phases that have been over since the latch last cleared
+        self._over_cycles: Dict[str, int] = {}
+        self._latched_phases: set = set()
 
     def update(self, guard: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
         """Consume one measurement snapshot and return runtime diagnostics."""
+        over = over_phases(guard if isinstance(guard, dict) else {})
+        self._over_cycles = {p: self._over_cycles.get(p, 0) + 1 for p in over}
+        runtime = self._update(guard, config)
+        # (#1048) A phase that went over stays latched — its loads stay
+        # down, its known loads do not start — until the same recovery the
+        # chargers wait for: every margin back for the recovery cycles.
+        if self._enforcing and not self.control_authorized:
+            self._latched_phases |= set(over)
+        else:
+            self._latched_phases = set()
+        return runtime
+
+    def phase_shed_request(self, *, ev_drawing: bool) -> Dict[str, float]:
+        """(#1048) The phases whose LOADS must answer this cycle, by how
+        many amps: over their limit, and either no car is drawing (stopping
+        the chargers cannot help) or the phase stayed over after the chargers
+        were told to stop. Empty unless enforcing: an observing guard sheds
+        nothing."""
+        if not self._enforcing:
+            return {}
+        return {
+            phase: excess
+            for phase, excess in over_phases(self._guard_snapshot).items()
+            if not ev_drawing
+            or self._over_cycles.get(phase, 0) >= CHARGERS_FIRST_CYCLES
+        }
+
+    @property
+    def latched_phases(self) -> frozenset:
+        """(#1048) Phases over since the latch last cleared."""
+        return frozenset(self._latched_phases)
+
+    @property
+    def loads_may_return(self) -> bool:
+        """(#1048) A load shed for a phase comes back only after the latch
+        clears — the rule that lets the chargers resume, so it does not
+        flap."""
+        return not self._enforcing or self.control_authorized
+
+    def _update(self, guard: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
         self._guard_snapshot = dict(guard) if isinstance(guard, dict) else {}
         # One update is one coordinator cycle.  Allocations made while filtering
         # several chargers below share this per-cycle reservation.

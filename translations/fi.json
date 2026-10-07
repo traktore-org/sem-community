@@ -1552,9 +1552,6 @@
       "heat_pump_boost_offset": {
         "name": "Lämpöpumpun boost-poikkeama"
       },
-      "hot_water_max_temperature": {
-        "name": "Käyttöveden enimmäislämpötila"
-      },
       "system_size_kwp": {
         "name": "PV-järjestelmän koko"
       },
@@ -1731,6 +1728,21 @@
     },
     "load_management_failed_to_start": {
       "message": "Kuormanhallinta on päällä, mutta se ei käynnistynyt, joten SEM ei voi käyttää laitelistaansa. Tarkista Home Assistantin lokista \"Failed to initialize load management\" ja lataa integraatio uudelleen."
+    },
+    "battery_boost_not_permitted": {
+      "message": "Akku ei saa syöttää laitetta ”{charger}”: lupa on pois päältä. Kytke se päälle akun asetuksista käyttääksesi tehostusta."
+    },
+    "battery_boost_not_connected": {
+      "message": "Laitteeseen ”{charger}” ei ole kytketty autoa."
+    },
+    "battery_boost_bad_floor": {
+      "message": "”{floor}” ei ole akun varaustaso: anna alaraja väliltä 0–100 %."
+    },
+    "charger_not_found": {
+      "message": "SEM:llä ei ole laturia ”{charger}”."
+    },
+    "departure_bad_time": {
+      "message": "”{day}: {time}” ei ole lähtöaika: päivät ovat mon … sun ja ajat muotoa HH:MM väliltä 00:00–23:59."
     }
   },
   "issues": {
@@ -1911,10 +1923,11 @@
     },
     "solar_forecast_source": {
       "options": {
-        "auto": "Automaattinen (Solcast, sitten Forecast.Solar, sitten Open-Meteo)",
+        "auto": "Automaattinen (Solcast, sitten Forecast.Solar, sitten Open-Meteo, sitten Helios)",
         "solcast": "Solcast PV Solar",
         "forecast_solar": "Forecast.Solar",
-        "open_meteo": "Open-Meteo Solar Forecast"
+        "open_meteo": "Open-Meteo Solar Forecast",
+        "helios": "Helios Forecast"
       }
     },
     "tariff_classification_mode": {

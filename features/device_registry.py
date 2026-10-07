@@ -38,6 +38,7 @@ from .load_device_discovery import LoadDeviceDiscovery, resolve_load_is_on
 from .device_axes import user_hands_off
 from ..devices.base import (
     CurrentControlDevice,
+    SwitchDevice,
     surplus_device_from_spec,
 )
 from ..devices.power_setpoint import (   # (#880) ONE producer, over there
@@ -45,6 +46,7 @@ from ..devices.power_setpoint import (   # (#880) ONE producer, over there
 )
 from ..hardware_detection import discover_ev_charger_from_registry
 from ..const import LOAD_PRIORITY_BASE as _LOAD_PRIORITY_BASE
+from ..consts.devices import load_phase
 
 #: (#880) Domains whose control is a watt SETPOINT rather than a contact.
 #: The reporter configured "Control type: Number entity" and got a
@@ -505,7 +507,18 @@ class UnifiedDeviceRegistry:
         # (#705) thermal comfort band — Phase 1 consumes them on climate
         # devices; stored against any device (Phase 2 opens switch loads).
         "comfort_entity", "comfort_target", "comfort_offset", "comfort_limit",
+        # (#1020) a Schedule helper that sets the mode while it is on —
+        # applied to switch loads only.
+        "schedule_entity", "schedule_mode",
+        # (#1048) the supply phase the load sits on
+        "phase",
     )
+
+    def phase_for(self, device_id: str) -> str:
+        """(#1048) The phase the user put this load on, ``unknown`` until
+        they say — the one answer for the shedder's row and the card."""
+        goals = getattr(self, "_device_goals", None) or {}
+        return load_phase((goals.get(device_id) or {}).get("phase"))
 
     def _apply_goals(self, device) -> None:
         """Apply the persisted goal config onto a live device object.
@@ -516,6 +529,9 @@ class UnifiedDeviceRegistry:
         goals = self._device_goals.get(device.device_id)
         if not goals:
             return
+        # (#1048) key-present-only, like the anti-cycle windows below
+        if "phase" in goals:
+            device.phase = load_phase(goals.get("phase"))
         device.daily_min_runtime_sec = int(
             float(goals.get("daily_min_runtime_min", 0)) * 60
         )
@@ -552,6 +568,13 @@ class UnifiedDeviceRegistry:
         # without comfort goals keep their constructor values; plain setattr
         # so a comfort goal stored against a non-climate device lands as an
         # unused attribute instead of crashing the rebuild (Phase 2 reads it).
+        # (#1020) The schedule, on switch loads only (key-present, the #688
+        # pattern). It is read where the mode is read; nothing is written
+        # into the stored mode.
+        if isinstance(device, SwitchDevice):
+            for _sk in ("schedule_entity", "schedule_mode"):
+                if _sk in goals:
+                    setattr(device, _sk, str(goals.get(_sk) or ""))
         if "comfort_entity" in goals:
             device.comfort_entity = str(goals.get("comfort_entity", "") or "")
         for _ck in ("comfort_target", "comfort_offset", "comfort_limit"):
@@ -580,6 +603,12 @@ class UnifiedDeviceRegistry:
             device = self._surplus_controller.get_device(device_id)
             if device:
                 self._apply_goals(device)
+            # (#1048) the shedder reads the phase off its own row: put it
+            # there now, not at the next registry sync
+            if prop == "phase" and self._load_manager is not None:
+                row = self._load_manager._devices.get(device_id)
+                if isinstance(row, dict):
+                    row["phase"] = load_phase(value)
             await self._save_storage()
         _LOGGER.info("Device goal updated: %s.%s = %s", device_id, prop, value)
 
@@ -1322,6 +1351,8 @@ class UnifiedDeviceRegistry:
                 # this cycle's registrations.
                 "surplus_managed": self._surplus_controller is not None
                 and self._surplus_controller.get_device(device.device_id) is not None,
+                # (#1048) the phase guard sheds a phase's own loads first
+                "phase": self.phase_for(device.device_id),
             }
 
             # Backwards-compatible switch_entity
@@ -2025,6 +2056,8 @@ class UnifiedDeviceRegistry:
             # it sheds the load is the mode's question (surplus → the surplus
             # controller's; peak_only → this row is the shedder's).
             "surplus_managed": live is not None,
+            # (#1048) as the ED rows
+            "phase": self.phase_for(device_id),
         }
 
     def refresh_direct_device_overrides(self) -> None:
@@ -2268,6 +2301,9 @@ class UnifiedDeviceRegistry:
             "control_mode": "surplus",
             "sem_owned": False,
             "connected": bool(charger.get("connected", False)),
+            # (#1048) measured, never set — the card shows it read-only
+            "phase": load_phase(charger.get("phase")),
+            "phase_measured": bool(charger.get("phase_measured", False)),
             "is_ev": True,
         }
 
@@ -2307,11 +2343,20 @@ class UnifiedDeviceRegistry:
                 "min_off_effective_min": (
                     None if live is None or getattr(live, "min_off_seconds", None) is None
                     else round(float(live.min_off_seconds) / 60.0, 1)),
+                # (#1048) the supply phase — the editor's select
+                "phase": load_phase(goals.get("phase")),
                 # (#705) the comfort band — pre-fill for the editor.
                 "comfort_entity": goals.get("comfort_entity", ""),
                 "comfort_target": goals.get("comfort_target", 0),
                 "comfort_offset": goals.get("comfort_offset", 0),
                 "comfort_limit": goals.get("comfort_limit", 0),
+                # (#1020) the schedule, and whether it is running now
+                "schedule_entity": goals.get("schedule_entity", ""),
+                "schedule_mode": goals.get("schedule_mode", ""),
+                "schedule_active": bool(
+                    live is not None
+                    and getattr(live, "scheduled_control_mode", lambda: None)()
+                    is not None),
             },
             "progress": {
                 "runtime_today_min": int(round(runtime_min)),

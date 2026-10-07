@@ -1552,9 +1552,6 @@
       "heat_pump_boost_offset": {
         "name": "Offset Boost Pompe à Chaleur"
       },
-      "hot_water_max_temperature": {
-        "name": "Température Max Eau Chaude"
-      },
       "system_size_kwp": {
         "name": "Taille Installation PV"
       },
@@ -1731,6 +1728,21 @@
     },
     "load_management_failed_to_start": {
       "message": "La gestion de charge est activée mais n'a pas pu démarrer, SEM ne peut donc pas utiliser sa liste d'appareils. Vérifiez le journal Home Assistant pour \"Failed to initialize load management\" et rechargez l'intégration."
+    },
+    "battery_boost_not_permitted": {
+      "message": "La batterie ne peut pas alimenter « {charger} » : l’autorisation est désactivée. Activez-la dans les réglages de la batterie pour lancer le boost."
+    },
+    "battery_boost_not_connected": {
+      "message": "Aucune voiture n’est branchée sur « {charger} »."
+    },
+    "battery_boost_bad_floor": {
+      "message": "« {floor} » n’est pas un niveau de batterie : indiquez un seuil de 0 à 100 %."
+    },
+    "charger_not_found": {
+      "message": "SEM n’a pas de borne « {charger} »."
+    },
+    "departure_bad_time": {
+      "message": "« {day} : {time} » n’est pas un départ : les jours sont mon … sun, les heures HH:MM de 00:00 à 23:59."
     }
   },
   "issues": {
@@ -1911,10 +1923,11 @@
     },
     "solar_forecast_source": {
       "options": {
-        "auto": "Automatique (Solcast, puis Forecast.Solar, puis Open-Meteo)",
+        "auto": "Automatique (Solcast, puis Forecast.Solar, puis Open-Meteo, puis Helios)",
         "solcast": "Solcast PV Solar",
         "forecast_solar": "Forecast.Solar",
-        "open_meteo": "Open-Meteo Solar Forecast"
+        "open_meteo": "Open-Meteo Solar Forecast",
+        "helios": "Helios Forecast"
       }
     },
     "tariff_classification_mode": {

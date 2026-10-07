@@ -395,7 +395,7 @@ class ChargingStateMachine:
         # (#679) This used to be a hand-copy of the coordinator's gate, with a
         # "keep in sync" note on both. Shared now, so they cannot disagree.
         return any(
-            mode_allows_night_charging(self.config, c)
+            mode_allows_night_charging(self.config, c, self.hass)
             for c in chargers if isinstance(c, dict)
         )
 

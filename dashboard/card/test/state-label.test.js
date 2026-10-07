@@ -41,6 +41,7 @@ test('the tariff source: own words translated, brands by name', () => {
     assert.equal(stateLabel('tariff_provider', 'calendar', t), '«tariff_calendar»');
     assert.equal(stateLabel('tariff_provider', 'nordpool_official', t), 'Nord Pool');
     assert.equal(stateLabel('tariff_provider', 'tibber', t), 'Tibber');
+    assert.equal(stateLabel('tariff_provider', 'entsoe', t), 'ENTSO-e');
 });
 
 test('charger control: a label, and nothing for no charger', () => {

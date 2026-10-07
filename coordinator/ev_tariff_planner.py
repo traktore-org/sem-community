@@ -204,6 +204,7 @@ def plan_night_charge(
     tariff_optimized: bool = False,
     peak_managed_amps: Optional[int] = None,
     level_at=None,
+    deadline_at: Optional[datetime] = None,
 ) -> NightChargePlan:
     """Decide this cycle's night-charging action for one charger.
 
@@ -213,6 +214,9 @@ def plan_night_charge(
         min_amps / max_amps: Charger current limits.
         watts_per_amp: Effective W per A (phases x voltage, or measured).
         target_time: ``HH:MM`` user deadline ("reach Min by"), or None.
+        deadline_at: The same deadline as a moment, which wins over
+            ``target_time`` (#1023): a weekday departure can be more than a
+            day away, which an ``HH:MM`` resolved from now cannot say.
         night_end: ``HH:MM`` night-window end, used as the deadline when no
             explicit ``target_time`` is set.
         tariff_optimized: Whether the user opted into tariff-timed
@@ -234,7 +238,7 @@ def plan_night_charge(
     plan.remaining_kwh = max(0.0, remaining_to_min_kwh)
     watts_per_amp = max(1.0, watts_per_amp)
 
-    explicit_deadline = resolve_deadline(now, target_time)
+    explicit_deadline = deadline_at or resolve_deadline(now, target_time)
     night_end_dt = resolve_deadline(now, night_end)
     deadline = explicit_deadline or night_end_dt
     plan.deadline_dt = deadline

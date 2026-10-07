@@ -418,7 +418,7 @@ ENTITY_MODULES: Mapping[tuple[str, str], frozenset[Module]] = _table(
         "heat_pump_registered", "heat_pump_solar_boost",
     )),
     _rows("number", _HW, (
-        "hot_water_max_temperature", "hot_water_solar_target",
+        "hot_water_solar_target",
         "legionella_interval_hours", "legionella_target_temp",
     )),
     # (#996) A dynamic tariff: the thresholds feed the dynamic provider

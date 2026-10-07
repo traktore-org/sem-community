@@ -1552,9 +1552,6 @@
       "heat_pump_boost_offset": {
         "name": "Varmepumpe boost-offset"
       },
-      "hot_water_max_temperature": {
-        "name": "Varmt vand maks. temperatur"
-      },
       "system_size_kwp": {
         "name": "PV-anlæggets størrelse"
       },
@@ -1731,6 +1728,21 @@
     },
     "load_management_failed_to_start": {
       "message": "Laststyring er slået til, men kunne ikke starte, så SEM kan ikke bruge sin enhedsliste. Tjek Home Assistant-loggen for \"Failed to initialize load management\", og genindlæs integrationen."
+    },
+    "battery_boost_not_permitted": {
+      "message": "Batteriet må ikke forsyne ”{charger}”: tilladelsen er slået fra. Slå den til i batteriindstillingerne for at booste."
+    },
+    "battery_boost_not_connected": {
+      "message": "Der er ingen bil tilsluttet ”{charger}”."
+    },
+    "battery_boost_bad_floor": {
+      "message": "”{floor}” er ikke et batteriniveau: angiv en nedre grænse fra 0 til 100 %."
+    },
+    "charger_not_found": {
+      "message": "SEM har ingen lader ”{charger}”."
+    },
+    "departure_bad_time": {
+      "message": "”{day}: {time}” er ikke en afgang: dagene er mon … sun, tiderne HH:MM fra 00:00 til 23:59."
     }
   },
   "issues": {
@@ -1911,10 +1923,11 @@
     },
     "solar_forecast_source": {
       "options": {
-        "auto": "Automatisk (Solcast, så Forecast.Solar, så Open-Meteo)",
+        "auto": "Automatisk (Solcast, så Forecast.Solar, så Open-Meteo, så Helios)",
         "solcast": "Solcast PV Solar",
         "forecast_solar": "Forecast.Solar",
-        "open_meteo": "Open-Meteo Solar Forecast"
+        "open_meteo": "Open-Meteo Solar Forecast",
+        "helios": "Helios Forecast"
       }
     },
     "tariff_classification_mode": {

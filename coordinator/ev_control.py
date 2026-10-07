@@ -30,6 +30,7 @@ from ..const import (
     DEFAULT_VOLTAGE_PER_PHASE,
 )
 from .types import PowerReadings, PowerFlows, SessionData
+from .departure import departure_for, departure_hhmm
 from .ev_tariff_planner import NightChargePlan, plan_night_charge
 from .units import power_state_to_watts
 
@@ -243,12 +244,9 @@ class EVControlMixin:
         ) in MODE_USES_TARIFF
 
     def _charger_target_time(self, charger_cfg: dict) -> str:
-        """Per-charger ``HH:MM`` charge-by deadline (#246), or global / default."""
-        cfg = charger_cfg or {}
-        val = cfg.get("ev_target_time")
-        if val is None:
-            val = self.config.get("ev_target_time", DEFAULT_EV_TARGET_TIME)
-        return val or DEFAULT_EV_TARGET_TIME
+        """Per-charger ``HH:MM`` charge-by deadline (#246), or global / default
+        — the one resolver's answer (#1023)."""
+        return departure_hhmm(charger_cfg, self.config)
 
     def _compute_night_plan(
         self, charger_cfg: dict, remaining_to_min_kwh: float, energy: Any = None,
@@ -351,8 +349,9 @@ class EVControlMixin:
         # dwell hysteresis died with the selector: it damped the selector's
         # own price flapping, and plan blocks do not flap — the packer's
         # min_run/min_gap quantization protects the contactor instead.
+        now = dt_util.now()
         plan = plan_night_charge(
-            now=dt_util.now(),
+            now=now,
             remaining_to_min_kwh=remaining_to_min_kwh,
             min_amps=min_amps,
             max_amps=max_amps,
@@ -367,6 +366,9 @@ class EVControlMixin:
             # joint plan covers the car.
             level_at=getattr(getattr(self, "_tariff_provider", None),
                              "get_price_level_at", None),
+            # (#1023) The next departure as a moment: a weekday's time may
+            # be more than a day away.
+            deadline_at=departure_for(cfg, now, self.config),
         )
         return plan
 
@@ -387,10 +389,14 @@ class EVControlMixin:
         off), matching the mode's documented daytime behaviour.
         """
         try:
-            night_start, night_end = self.time_manager.get_night_window()
+            night_start, _ = self.time_manager.get_night_window()
             window_h = self.time_manager.get_night_window_hours()
             cfg = charger_cfg if isinstance(charger_cfg, dict) else {}
-            deadline = str(cfg.get("ev_target_time") or night_end)
+            # (#1023) The departure the card shows, not the window's end —
+            # the next one, so tonight's window ends at tomorrow's weekday
+            # time.
+            deadline = departure_for(cfg, dt_util.now(), self.config).strftime(
+                "%H:%M")
             sh, sm = night_start.split(":")[:2]
             dh, dm = deadline.split(":")[:2]
             start_min = int(sh) * 60 + int(sm)
