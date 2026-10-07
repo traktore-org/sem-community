@@ -707,6 +707,21 @@ class SensorReader:
             ev_charging_sensor=config.get("ev_charging_sensor", ""),
         )
 
+    def _read_solar_power(self, entity_id: Optional[str]) -> float:
+        """(#1065) Read one solar power sensor — the ONE door for every
+        fleet/per-inverter solar read (a structural test pins it).
+
+        An inverter asleep at night reads 0 W, not the last value its
+        integration sent before it went quiet. RienduPre's Growatt (Grott over
+        MQTT) froze at 8.1 W at dusk and SEM published 8 W of solar all
+        night, though #851 had already called that exact reading asleep —
+        for the warning only. See ``_asleep_at_night``.
+        """
+        value = self._read_sensor(entity_id, "solar")
+        if value and self._asleep_at_night((entity_id,), value):
+            return 0.0
+        return value
+
     def _read_pv_string_source(self, slot: str, source) -> float:
         """Read one per-PV-string source (v1.7.0 / #312).
 
@@ -726,14 +741,25 @@ class SensorReader:
         through the same ``solar_power_per_string`` dict as a
         directly-read value; downstream consumers don't need to
         know the source shape.
+
+        (#1065) The ONE door for every per-string read: a string whose
+        inverter is asleep at night reads 0 W, the same rule as the total
+        (``_read_solar_power``), so the strings still add up to it. A V+I
+        pair is asleep only when BOTH halves have gone quiet.
         """
         if isinstance(source, tuple):
             v_entity, i_entity = source
             v = self._read_sensor(v_entity, f"pv_{slot}_voltage")
             i = self._read_sensor(i_entity, f"pv_{slot}_current")
-            return float(v) * float(i)
-        # Direct power entity — keep the legacy fast path.
-        return self._read_sensor(source, f"pv_{slot}")
+            watts = float(v) * float(i)
+            entities = (v_entity, i_entity)
+        else:
+            # Direct power entity — keep the legacy fast path.
+            watts = self._read_sensor(source, f"pv_{slot}")
+            entities = (source,)
+        if watts and self._asleep_at_night(entities, watts):
+            return 0.0
+        return watts
 
     def set_pv_strings(
         self,
@@ -2176,7 +2202,7 @@ class SensorReader:
         if len(ed.solar_power_list) > 1:
             per_inverter_total = 0.0
             for entity in ed.solar_power_list:
-                w = self._read_sensor(entity, "solar")
+                w = self._read_solar_power(entity)
                 per_inverter_total += w
                 readings.inverters[entity] = InverterPower(
                     inverter_id=entity, power_w=w, name=entity,
@@ -2190,11 +2216,11 @@ class SensorReader:
             # None and the Home balance read solar=0 (→ Home clamped to 0); the
             # override lets the user supply a real solar power sensor. Sibling of
             # the #597 battery override.
-            readings.solar_power = self._read_sensor(
-                self.config.solar_power_sensor, "solar"
+            readings.solar_power = self._read_solar_power(
+                self.config.solar_power_sensor
             )
         elif ed.solar_power:
-            readings.solar_power = self._read_sensor(ed.solar_power, "solar")
+            readings.solar_power = self._read_solar_power(ed.solar_power)
 
         # v1.7.0 / #312: per-PV-string power. Gated on len ≥ 2 — single-
         # string setups get nothing here and downstream readers fall
@@ -4044,16 +4070,18 @@ class SensorReader:
 
         # Solar power
         if self.config.solar_power_sensor:
-            readings.solar_power = self._read_sensor(
-                self.config.solar_power_sensor, "solar"
+            readings.solar_power = self._read_solar_power(
+                self.config.solar_power_sensor
             )
 
         # v1.7.0 / #312: per-PV-string power on the legacy path too.
-        # Same len ≥ 2 gate as the Energy Dashboard path.
+        # Same len ≥ 2 gate as the Energy Dashboard path. (#1065) Through
+        # the same per-string door, so a string asleep at night reads 0 W
+        # here too (and a V+I pair is multiplied, not read as an entity id).
         if len(self._pv_strings) >= 2:
-            for slot, entity_id in self._pv_strings.items():
-                readings.solar_power_per_string[slot] = self._read_sensor(
-                    entity_id, f"pv_{slot}",
+            for slot, source in self._pv_strings.items():
+                readings.solar_power_per_string[slot] = self._read_pv_string_source(
+                    slot, source,
                 )
 
         # Grid power (hardware convention: negative=import, positive=export)
@@ -4421,6 +4449,17 @@ class SensorReader:
         """
         if name != "solar":
             return False
+        return self._near_zero_at_night(value)
+
+    def _near_zero_at_night(self, value: float | None) -> bool:
+        """(#851/#1065) A solar figure at or below ``_SOLAR_ASLEEP_W`` with the
+        sun below the horizon — what an inverter asleep at night shows.
+
+        The ONE rule both sides ask: the frozen-sensor warning
+        (``_stillness_is_expected``) and the value (``_asleep_at_night``). Two
+        copies could drift apart, and the warning would again call a reading
+        asleep while the balance spends it as production.
+        """
         if value is None or abs(float(value)) > self._SOLAR_ASLEEP_W:
             return False
         try:
@@ -4428,6 +4467,73 @@ class SensorReader:
         except Exception:  # noqa: BLE001 — never break a read over the sun
             return False
         return sun is not None and getattr(sun, "state", None) == "below_horizon"
+
+    def _asleep_at_night(self, entity_ids, watts: float | None) -> bool:
+        """(#1065) Is this solar reading an inverter asleep at night? Then its
+        honest value is 0 W, not the last one its integration sent.
+
+        #851 found this exact shape — a solar sensor that stopped reporting,
+        ≤ 25 W, sun down — and used it to silence the frozen-sensor warning.
+        Only the warning: the read returned the held value unchanged, so
+        RienduPre's Growatt (asleep from 19:23, frozen at 8.1 W) put 8 W of
+        solar into the balance, the flow sensors and the per-string sensor
+        all night.
+
+        Asleep = EVERY entity behind the reading has stopped reporting for the
+        frozen-sensor threshold AND ``_near_zero_at_night`` holds. Everything
+        else keeps its value: a fresh reading (an inverter still reporting a
+        few watts after sunset is measuring them), a V+I pair with one half
+        still live, a stall in daylight or above 25 W (what solar WAS there is
+        not knowable — the W3 warning flags it instead), an unknown sun. It
+        only ever lowers a near-zero night figure to zero; it never invents
+        production. Never raises: a read must not break over this.
+        """
+        try:
+            if not entity_ids or not self._near_zero_at_night(watts):
+                return False
+            for eid in entity_ids:
+                state = self.hass.states.get(eid) if eid else None
+                seen = self._last_report(state) if state is not None else None
+                if seen is None or seen[1] < self._STALE_THRESHOLD_S:
+                    return False
+            return True
+        except Exception:  # noqa: BLE001 — never break a read over this
+            return False
+
+    @staticmethod
+    def _last_report(state) -> Optional[tuple]:
+        """``(last_seen, age_s)`` of a state's last report, or None.
+
+        Freshness = time since the entity last *reported* its state, NOT since
+        its value last *changed*. HA only advances ``last_updated`` when the
+        state/attributes actually change; ``last_reported`` advances on every
+        write to the state machine, even when the value is identical. A fast
+        power sensor legitimately holds a constant value for long stretches —
+        a split discharge-power sensor sits at 0 W while the battery charges
+        (Fronius exposes separate charge + discharge sensors), grid_export is
+        0 while importing, solar is 0 overnight — and would look "frozen" for
+        >10 min on ``last_updated`` though it is reporting fine every poll
+        (#611). Only a genuine upstream stall (modbus/cloud) freezes
+        ``last_reported`` too. Fall back to ``last_updated`` when
+        ``last_reported`` is absent (pre-2024.4 HA / a test mock).
+        """
+        last_seen = getattr(state, "last_reported", None)
+        if last_seen is None:
+            last_seen = getattr(state, "last_updated", None)
+        if last_seen is None:
+            return None
+        try:
+            import homeassistant.util.dt as _dt
+            age_s = (_dt.utcnow() - last_seen).total_seconds()
+        except Exception:  # noqa: BLE001 — never break a read over freshness
+            return None
+        # Guard a non-datetime last_updated (test MagicMock / naive dt): a
+        # non-numeric age must never reach ``int(age_s//60)`` in the audit,
+        # whose TypeError would be swallowed by _read_sensor's except → a
+        # wrong 0.0.
+        if not isinstance(age_s, (int, float)) or isinstance(age_s, bool):
+            return None
+        return last_seen, age_s
 
     def _audit_sensor_freshness(
         self, entity_id: str, name: str, state, value: float | None = None,
@@ -4444,33 +4550,12 @@ class SensorReader:
         """
         if name not in self._FAST_POWER_NAMES:
             return
-        # Freshness = time since the entity last *reported* its state, NOT since
-        # its value last *changed*. HA only advances ``last_updated`` when the
-        # state/attributes actually change; ``last_reported`` advances on every
-        # write to the state machine, even when the value is identical. A fast
-        # power sensor legitimately holds a constant value for long stretches —
-        # a split discharge-power sensor sits at 0 W while the battery charges
-        # (Fronius exposes separate charge + discharge sensors), grid_export is
-        # 0 while importing, solar is 0 overnight — and would look "frozen" for
-        # >10 min on ``last_updated`` though it is reporting fine every poll
-        # (#611). Only a genuine upstream stall (modbus/cloud) freezes
-        # ``last_reported`` too. Fall back to ``last_updated`` when
-        # ``last_reported`` is absent (pre-2024.4 HA / a test mock).
-        last_seen = getattr(state, "last_reported", None)
-        if last_seen is None:
-            last_seen = getattr(state, "last_updated", None)
-        if last_seen is None:
+        # Freshness keys off ``last_reported``, not ``last_updated`` (#611) —
+        # see ``_last_report``, shared with the #1065 asleep rule.
+        seen = self._last_report(state)
+        if seen is None:
             return
-        try:
-            import homeassistant.util.dt as _dt
-            age_s = (_dt.utcnow() - last_seen).total_seconds()
-        except Exception:  # noqa: BLE001 — never break a read over freshness
-            return
-        # Guard a non-datetime last_updated (test MagicMock / naive dt): a
-        # non-numeric age must never reach ``int(age_s//60)`` below, whose
-        # TypeError would be swallowed by _read_sensor's except → wrong 0.0.
-        if not isinstance(age_s, (int, float)) or isinstance(age_s, bool):
-            return
+        last_seen, age_s = seen
         # (#933) the report stamp this reader saw first, for the reconcile below
         first_report = self._stale_first_report.setdefault(entity_id, last_seen)
         rescued = False                 # (#933) set by the #912 live-source rule
