@@ -646,3 +646,11 @@ def role_for(platform: str, key: str) -> str | None:
         if any(re.search(p, key, re.I) for p in rule["any"]):
             return role
     return None
+
+
+#: (#1054) A service field that names WHICH box the call is for — go-e's
+#: ``set_max_current(charger_name, max_current)``. SEM fills it with the
+#: device's own identifier in that integration (the registry identifier
+#: ``(domain, <name>)``), never with a guess; without one the service stays
+#: a proposal to wire by hand.
+DEVICE_NAME_FIELDS: Final[tuple] = ("charger_name", "charger", "device_name")

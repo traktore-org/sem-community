@@ -948,6 +948,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
                     "ev_charger_service_entity_id", "ev_current_control_entity",
                     "ev_current_sensor", "ev_total_energy_sensor",
                     "ev_session_energy_sensor", "ev_service_param_name",
+                    "ev_charger_service_data",
                     "ev_service_device_id", "ev_start_stop_entity",
                     "ev_charge_mode_entity", "ev_charge_mode_start",
                     "ev_charge_mode_stop", "ev_start_service",
@@ -2718,6 +2719,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             # Per-integration charger profile (#82)
             if _cfg("ev_service_param_name"):
                 ev_device.service_param_name = _cfg("ev_service_param_name")
+            from .utils.service_data import service_extra_data
+            ev_device.service_extra_data = service_extra_data(
+                _cfg("ev_charger_service_data", ""))
             if _cfg("ev_service_device_id"):
                 ev_device.service_device_id = _cfg("ev_service_device_id")
             if _cfg("ev_start_stop_entity"):
@@ -3150,6 +3154,23 @@ def _schedule_post_startup_tasks(
                          (getattr(coordinator, "_detection_report", None) or {}).get("judged"))
         except Exception:  # noqa: BLE001 — evidence never costs startup
             _LOGGER.debug("post-startup detection refresh failed", exc_info=True)
+
+        async def _prime_service_fields() -> None:
+            """(#1054) An integration that registers its services with no
+            schema (go-e's set_max_current) names their fields only in its
+            services.yaml. Home Assistant loads those descriptions on
+            demand; load them once, then read the report again so the
+            crawler sees the fields."""
+            try:
+                from homeassistant.helpers.service import (
+                    async_get_all_descriptions,
+                )
+                await async_get_all_descriptions(hass)
+                coordinator.refresh_detection_report()
+            except Exception:  # noqa: BLE001 — evidence never costs startup
+                _LOGGER.debug("service description prime failed", exc_info=True)
+
+        hass.async_create_task(_prime_service_fields())
 
     @callback
     def _on_new_sensor(event) -> None:

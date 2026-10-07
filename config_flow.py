@@ -208,6 +208,48 @@ def _suggest_discovered(saved: dict, discovered: dict, key: str):
     return discovered.get(key) or None
 
 
+#: (#1054 review) Wiring the crawler found that no charger form shows. Each
+#: group belongs to the control named first: it is saved with the charger
+#: only while the submitted form still carries that same control, so a user
+#: who picks another service or another box never inherits stale wiring.
+_HIDDEN_CHARGER_WIRING: tuple = (
+    ("ev_charger_service", ("ev_service_param_name", "ev_charger_service_data",
+                            "ev_service_device_id")),
+    ("ev_charging_power_sensor", ("ev_start_service", "ev_start_service_data",
+                                  "ev_stop_service", "ev_stop_service_data",
+                                  "ev_session_energy_sensor",
+                                  "ev_total_energy_sensor",
+                                  "ev_charger_needs_cycle")),
+)
+
+
+def _carry_hidden_wiring(discovered: dict, submitted: dict, target: dict) -> None:
+    """Copy the crawler's hidden wiring into ``target`` (the saved charger)
+    where the user kept the control it belongs to. A key the form DID show
+    is the user's and is never overwritten."""
+    if not discovered:
+        return
+    for anchor, keys in _HIDDEN_CHARGER_WIRING:
+        want = discovered.get(anchor)
+        if not want or submitted.get(anchor, target.get(anchor)) != want:
+            continue
+        for k in keys:
+            if k in submitted or discovered.get(k) in (None, ""):
+                continue
+            target[k] = discovered[k]
+
+
+def _drop_stale_service_wiring(before: dict, submitted: dict, target: dict) -> None:
+    """Edit: a service the user CHANGED takes no field names or box name
+    from the one it replaced."""
+    if "ev_charger_service" not in submitted:
+        return
+    if (submitted.get("ev_charger_service") or "") == (before.get("ev_charger_service") or ""):
+        return
+    for k in _HIDDEN_CHARGER_WIRING[0][1]:
+        target.pop(k, None)
+
+
 def _merge_form_input(flow: Any, target: dict, user_input: dict) -> None:
     """Merge a submitted form into ``target``, honouring CLEARED fields.
 
@@ -919,7 +961,10 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             if not errors:
                 # Store EV charger entities and continue to the hardware step
+                _submitted = dict(user_input)
                 _merge_form_input(self, self._data, user_input)
+                _carry_hidden_wiring(getattr(self, "_ev_discovered", None) or {},
+                                     _submitted, self._data)
                 return await self.async_step_hardware()
 
         # Primary: integration-aware registry discovery (KEBA, Easee, go-eCharger, Wallbox).
@@ -928,6 +973,9 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # (#1032) the user confirms this form, so a charger the roster's roles
         # found may be offered here
         suggestions = discover_ev_charger_from_registry(self.hass, include_roles=True)
+        # (#1054 review) what the crawler found, kept for the submit: the
+        # wiring no field shows travels with the charger from here
+        self._ev_discovered = dict(suggestions or {})
 
         # (#1032) ONE reader: a field the crawler cannot fill is left for the
         # user — never filled from a second, pattern-based reader.
@@ -1144,6 +1192,7 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         "ev_charge_mode_start", "ev_charge_mode_stop",
                         "ev_start_service", "ev_start_service_data",
                         "ev_stop_service", "ev_stop_service_data",
+                        "ev_charger_service_data",
                         "ev_charger_needs_cycle", "ev_surplus_priority",
                         # Wallbox-style control path (#384 Part 2 kept). The
                         # other 8 per-charger fields from #390 reverted to
@@ -1839,6 +1888,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 "name": charger_name,
                 **user_input,
             }
+            _carry_hidden_wiring(getattr(self, "_add_discovered", None) or {},
+                                 user_input, new_charger)
             ev_chargers.append(new_charger)
             self._data["ev_chargers"] = ev_chargers
             _LOGGER.info("Added EV charger '%s' (total: %d)", charger_name, len(ev_chargers))
@@ -1855,6 +1906,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             c for c in all_discovered if not _charger_already_installed(c, installed)
         ]
         suggestions = new_discoveries[0] if new_discoveries else {}
+        self._add_discovered = dict(suggestions)
         # (#804 B4c) detection may carry a threshold-model phase-switch
         # SUGGESTION (Zaptec: the installation's 3→1 current). Feed the
         # entity AND its values into the form's suggested values — the user
@@ -2080,7 +2132,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is not None:
             # Update charger with new values
             charger_name = user_input.pop("charger_name", charger.get("name", "EV Charger"))
+            _before = dict(charger)
             _merge_form_input(self, charger, user_input)
+            _drop_stale_service_wiring(_before, user_input, charger)
             charger["name"] = charger_name
             self._data["ev_chargers"] = ev_chargers
             _LOGGER.info("Updated EV charger '%s'", charger_name)

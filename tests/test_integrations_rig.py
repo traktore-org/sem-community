@@ -37,6 +37,11 @@ UPSTREAM_KEYS = {
                "total_charge_power"),
     "zaptec_no_limit": ("resume_charging", "stop_charging_final"),
     "easee": ("power", "status"),
+    # unique ids are "<the box's name>_<key>"; the rig's box is wallbox_go_e
+    "goecharger": ("wallbox_go_e_p_all", "wallbox_go_e_car_status",
+                   "wallbox_go_e_allow_charging",
+                   "wallbox_go_e_current_session_charged_energy",
+                   "wallbox_go_e_energy_total"),
 }
 
 
