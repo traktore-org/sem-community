@@ -122,6 +122,8 @@ def _stop_what_sem_started(view, decision: BatteryDecision) -> BatteryDecision:
         return BatteryDecision(
             battery_id=decision.battery_id, intent=decision.intent,
             discharge_limit_w=decision.discharge_limit_w,
+            # CAUSE: `m` is `view.sem_stop_misses` — the count actuate_battery
+            # keeps of stops whose landing it did not see (`_note_forced_op`).
             reason=(f"{decision.reason} (a stop SEM sent has not landed in "
                     f"{m} cycles — it is retried every other cycle)"),
         )
@@ -131,12 +133,16 @@ def _stop_what_sem_started(view, decision: BatteryDecision) -> BatteryDecision:
         return BatteryDecision(
             battery_id=decision.battery_id,
             intent=BatteryIntent.STOP_FORCE_CHARGE,
+            # CAUSE: `charge` is `view.sem_forced_charge is True` — a forced
+            # charge landed and no charge stop has landed since.
             reason=("a forced charge SEM started has not been seen to stop "
                     f"— stopping it before {decision.intent.value}"),
         )
     return BatteryDecision(
         battery_id=decision.battery_id,
         intent=BatteryIntent.STOP_FORCE_DISCHARGE,
+        # CAUSE: `discharge` is `view.sem_forced_discharge is True` — a sale
+        # landed and no discharge stop has landed since.
         reason=("a forced discharge SEM started has not been seen to stop "
                 f"— stopping it before {decision.intent.value}"),
     )
