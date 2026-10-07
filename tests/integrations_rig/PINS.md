@@ -37,6 +37,8 @@ Nothing here ships: `tests/` is left out of the release zip
 | `zaptec`, `zaptec_no_limit` | declared | custom-components/zaptec | `ba502a9971355e60b84b0356650a50e6ab403d11` (2026-08-26); `zaptec_no_limit` is an account without the right to set the current (#1032) |
 | `keba` | live-install | the real KEBA P30 on .175 (02.10.2026), services from core 2026.8.2 | a device-less, service-driven charger |
 | `easee` | declared | nordicopen/easee_hass | `ea85bb5fa9f093594a50606a786ee9fd03d6a662` (2026-09-22) |
+| `entsoe`, `entsoe_named_15m` | live-load | JaccoR/hass-entso-e | v0.7.5, `cbdf67ac0e73fd685a02e27ad7b6bef2c5af7ca6` (2026-02-16); the API's answer is its own `test/datasets` (DE-LU hourly; BE 15-minute with an entity name), 6 October 2024 14:07 local (#1051) |
+| `helios_forecast` | live-load | ReikanYsora/Helios-Forecast | 2026.9.6, `da8fa3e7218aaedf47e50518c21df74b9aef70e0` (2026-09-08); weather from its own `tests/ha/_weather.py`, one 10 kWp line, Zurich, 21 June 2026 12:00 local. Sensors it ships disabled stay disabled (#1050) |
 
 ## Refresh one
 

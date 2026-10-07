@@ -18,6 +18,7 @@ const PROVIDER_NAMES = {
     solcast: 'Solcast',
     forecast_solar: 'Forecast.Solar',
     open_meteo: 'Open-Meteo',
+    helios: 'Helios',
 };
 
 /**

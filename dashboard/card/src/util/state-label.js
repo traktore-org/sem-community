@@ -77,6 +77,7 @@ export const TARIFF_BRANDS = {
     nordpool: 'Nord Pool',
     nordpool_official: 'Nord Pool',
     awattar: 'aWATTar',
+    entsoe: 'ENTSO-e',
 };
 
 // Sensor key (without the sensor.sem_ prefix) → its table.
