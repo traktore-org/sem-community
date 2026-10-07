@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
-- 🐛 **The battery is capped while a car charges, also with night charging on** (#1066) — thanks @RienduPre. "Battery may charge the car" off now counts too.
+- 🐛 **With night charging on, a charging car no longer empties a battery SEM can limit** (#1066) — thanks @RienduPre. A Sessy has no limit; Diagnose says so.
 
 # [2.2.0-beta.13] — 07.10.2026
 

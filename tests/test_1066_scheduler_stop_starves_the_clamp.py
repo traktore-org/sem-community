@@ -60,8 +60,11 @@ from custom_components.solar_energy_management.coordinator.battery_diag import (
 from custom_components.solar_energy_management.coordinator.charger_types import (
     BatteryIntent, BatteryRuntime, BatteryView, FleetContext,
 )
+from custom_components.solar_energy_management.coordinator.battery_adapters.deye import (
+    DeyeBatteryAdapter,
+)
 from custom_components.solar_energy_management.coordinator.decide_battery import (
-    _SCHEDULER_STOP_STATES, decide_battery, forced_op_may_run,
+    _SCHEDULER_STOP_STATES, decide_battery, forced_ops,
 )
 from custom_components.solar_energy_management.coordinator.sink_verdicts import (
     HELD, SinkVerdict,
@@ -101,7 +104,7 @@ def _gate(*, covered, in_block=False):
     return g
 
 
-def _view(*, sched=None, gate=None, may_run=True, ev=True, solar=0.0,
+def _view(*, sched=None, gate=None, forced=(None, None), ev=True, solar=0.0,
           home=1076.0, soc=66.0, n=2, perms=None, protection=True,
           grid_funded=0.0, house=None, window=False, boost=None,
           wants_pack=False, spendable=0.0, mode="auto"):
@@ -127,7 +130,8 @@ def _view(*, sched=None, gate=None, may_run=True, ev=True, solar=0.0,
         battery_boost_floor_soc=boost,
         ev_wants_pack=wants_pack,
         battery_spendable_kwh=spendable,
-        forced_op_may_run=may_run,
+        sem_forced_charge=forced[0],
+        sem_forced_discharge=forced[1],
     )
 
 
@@ -150,23 +154,24 @@ class TestTheReportersEvening:
     """20:30, no sun, 1076 W of house, 4 kW of car, two packs, the scheduler
     on and saying ``not_needed``, ``may_assist_ev`` off."""
 
-    def _evening(self, may_run):
-        return _view(sched=_sched("not_needed"), may_run=may_run,
+    def _evening(self, forced):
+        return _view(sched=_sched("not_needed"), forced=forced,
                      perms={"may_assist_ev": False})
 
     def test_once_the_stop_has_landed_the_packs_are_capped_at_the_house(self):
-        d = decide_battery(self._evening(may_run=False))
+        d = decide_battery(self._evening(forced=(False, None)))
         assert d.intent is BatteryIntent.LIMIT_DISCHARGE
         assert d.discharge_limit_w == pytest.approx(1076.0 / 2)
         assert "may not feed the car" in d.reason
 
-    def test_while_a_forced_op_may_run_the_stop_still_goes_first(self):
-        d = decide_battery(self._evening(may_run=True))
+    @pytest.mark.parametrize("charge", [None, True])
+    def test_while_a_forced_charge_may_run_the_stop_still_goes_first(self, charge):
+        d = decide_battery(self._evening(forced=(charge, False)))
         assert d.intent is BatteryIntent.STOP_FORCE_CHARGE
 
     def test_the_old_code_path_is_what_the_reporter_saw(self):
-        """The default view keeps the old precedence — that IS the line in
-        the report. Pins that the default is not what fixed it."""
+        """The default view (nothing known) keeps the old precedence — that
+        IS the line in the report. Pins that the default is not what fixed it."""
         v = _view(sched=_sched("not_needed"), perms={"may_assist_ev": False})
         assert decide_battery(v).reason == (
             "scheduler not_needed → ensure not force-charging")
@@ -197,9 +202,9 @@ def test_an_idle_verdict_changes_nothing_once_no_forced_op_can_run(sched, gate):
     for ev, solar, soc, perms, prot, gf, house, window in _GRID:
         kw = dict(ev=ev, solar=solar, soc=soc, perms=perms, protection=prot,
                   grid_funded=gf, house=house, window=window)
-        bare = decide_battery(_view(sched=None, may_run=False, **kw))
+        bare = decide_battery(_view(sched=None, forced=(False, False), **kw))
         with_sched = decide_battery(_view(sched=sched, gate=gate,
-                                          may_run=False, **kw))
+                                          forced=(False, False), **kw))
         assert (with_sched.intent, with_sched.discharge_limit_w,
                 with_sched.reason) == (bare.intent, bare.discharge_limit_w,
                                        bare.reason), kw
@@ -208,18 +213,67 @@ def test_an_idle_verdict_changes_nothing_once_no_forced_op_can_run(sched, gate):
     assert {BatteryIntent.LIMIT_DISCHARGE, BatteryIntent.NORMAL} <= seen
 
 
+@pytest.mark.parametrize("forced", [(None, None), (True, True)])
 @pytest.mark.parametrize("sched,gate", _STOP_VERDICTS)
-def test_while_a_forced_op_may_run_every_verdict_still_stops(sched, gate):
-    d = decide_battery(_view(sched=sched, gate=gate, may_run=True))
-    assert d.intent in (BatteryIntent.STOP_FORCE_CHARGE,
-                        BatteryIntent.STOP_FORCE_DISCHARGE)
+def test_while_its_direction_may_run_every_verdict_still_stops(sched, gate, forced):
+    d = decide_battery(_view(sched=sched, gate=gate, forced=forced))
+    want = (BatteryIntent.STOP_FORCE_DISCHARGE if sched.from_arbitrage
+            else BatteryIntent.STOP_FORCE_CHARGE)
+    assert d.intent is want
+
+
+@pytest.mark.parametrize("sched,gate", _STOP_VERDICTS)
+def test_a_verdict_for_the_stopped_direction_says_nothing(sched, gate):
+    """Each verdict asks only about ITS direction: a night stop is silent once
+    the charge stop landed, even with the discharge never seen."""
+    forced = (None, False) if sched.from_arbitrage else (False, None)
+    d = decide_battery(_view(sched=sched, gate=gate, forced=forced))
+    assert d.intent is BatteryIntent.LIMIT_DISCHARGE
 
 
 def test_a_scheduled_charge_in_its_block_still_wins_over_the_clamp():
     d = decide_battery(_view(sched=_sched("scheduled"),
                              gate=_gate(covered=True, in_block=True),
-                             may_run=False))
+                             forced=(False, False)))
     assert d.intent is BatteryIntent.FORCE_CHARGE
+
+
+class TestWhatSemStartedIsStoppedFirst:
+    """A forced op SEM started and has not seen stop goes before NORMAL or
+    LIMIT_DISCHARGE, whatever branch asked for them (review: an arbitrage
+    stop after a night charge left a switch-based charge running; a Deye
+    sell records no intent)."""
+
+    @pytest.mark.parametrize("ev", [True, False])
+    def test_a_charge_left_running_is_stopped(self, ev):
+        d = decide_battery(_view(ev=ev, forced=(True, False)))
+        assert d.intent is BatteryIntent.STOP_FORCE_CHARGE
+
+    @pytest.mark.parametrize("ev", [True, False])
+    def test_a_sale_left_running_is_stopped(self, ev):
+        d = decide_battery(_view(ev=ev, forced=(False, True)))
+        assert d.intent is BatteryIntent.STOP_FORCE_DISCHARGE
+
+    def test_the_export_held_hold_stops_a_running_sale(self):
+        sell = _sched("discharging_arbitrage", from_forecast_spend=True,
+                      floor_soc=0.0, discharge_power_w=2000.0)
+        v = _view(ev=False, sched=sell, forced=(False, True))
+        v = type(v)(**{**v.__dict__, "forecast_sell": (True, 2000.0),
+                       "forecast_spending_enabled": True,
+                       "battery_spendable_kwh": 0.0})
+        assert decide_battery(v).intent is BatteryIntent.STOP_FORCE_DISCHARGE
+
+    def test_unknown_never_sends_a_stop_without_a_scheduler(self):
+        """Zero config: no scheduler, nothing known → exactly as before."""
+        for ev in (True, False):
+            d = decide_battery(_view(ev=ev, forced=(None, None)))
+            assert d.intent in (BatteryIntent.NORMAL, BatteryIntent.LIMIT_DISCHARGE)
+
+    @pytest.mark.parametrize("mode,want", [
+        ("force_charge", BatteryIntent.FORCE_CHARGE),
+        ("off", BatteryIntent.OFF)])
+    def test_a_forced_mode_or_off_is_not_overridden(self, mode, want):
+        assert decide_battery(_view(mode=mode, forced=(True, True))).intent is want
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -227,51 +281,51 @@ def test_a_scheduled_charge_in_its_block_still_wins_over_the_clamp():
 # ─────────────────────────────────────────────────────────────────
 
 class _Stub:
-    def __init__(self, last, **flags):
-        self.last_intent = last
-        for k, v in flags.items():
+    def __init__(self, **attrs):
+        for k, v in attrs.items():
             setattr(self, k, v)
 
 
-class TestForcedOpMayRun:
-    def test_no_adapter_keeps_the_old_precedence(self):
-        assert forced_op_may_run(None) is True
+class TestForcedOps:
+    def test_no_adapter_is_unknown(self):
+        assert forced_ops(None) == (None, None)
 
-    def test_a_fresh_adapter_may_have_one_from_a_prior_instance(self):
-        assert forced_op_may_run(_Stub(None)) is True
+    def test_a_fresh_adapter_is_unknown(self):
+        assert forced_ops(GenericBatteryAdapter(_hass({}), {})) == (None, None)
 
-    @pytest.mark.parametrize("last", [BatteryIntent.FORCE_CHARGE,
-                                      BatteryIntent.FORCE_DISCHARGE])
-    def test_a_forced_op_runs(self, last):
-        assert forced_op_may_run(_Stub(last)) is True
+    @pytest.mark.parametrize("c,d", [(True, False), (False, True), (False, False)])
+    def test_the_flags_are_read_per_direction(self, c, d):
+        assert forced_ops(_Stub(_sem_forced_charge=c, _sem_forced_discharge=d)) == (c, d)
 
-    @pytest.mark.parametrize("last", [
-        BatteryIntent.STOP_FORCE_CHARGE, BatteryIntent.STOP_FORCE_DISCHARGE,
-        BatteryIntent.NORMAL, BatteryIntent.LIMIT_DISCHARGE, BatteryIntent.OFF])
-    def test_after_any_other_landed_command_nothing_runs(self, last):
-        assert forced_op_may_run(_Stub(last)) is False
+    @pytest.mark.parametrize("flag,want", [("_forcible_charging", (True, False)),
+                                           ("_forcible_discharging", (False, True))])
+    def test_huaweis_own_flags_count_as_started(self, flag, want):
+        st = _Stub(_sem_forced_charge=False, _sem_forced_discharge=False,
+                   **{flag: True})
+        assert forced_ops(st) == want
 
-    @pytest.mark.parametrize("flag", ["_forcible_charging", "_forcible_discharging"])
-    def test_huaweis_own_flags_are_asked_too(self, flag):
-        assert forced_op_may_run(_Stub(BatteryIntent.NORMAL, **{flag: True})) is True
+    def test_a_stand_in_we_cannot_read_is_unknown(self):
+        assert forced_ops(MagicMock()) == (None, None)
 
-    def test_a_stand_in_we_cannot_read_keeps_the_stop(self):
-        assert forced_op_may_run(MagicMock()) is True
-
-    def test_the_coordinator_hands_it_to_the_view(self):
-        """One producer of BatteryView; it must pass the adapter's answer."""
-        tree = ast.parse((ROOT / "coordinator/coordinator.py").read_text(
-            encoding="utf-8"))
+    def test_the_coordinator_hands_both_to_the_view(self):
+        """One producer of BatteryView; it passes the adapter's answer, and
+        under observer — which commands nothing — the armed steady state."""
+        src = (ROOT / "coordinator/coordinator.py").read_text(encoding="utf-8")
+        tree = ast.parse(src)
         sites = [n for n in ast.walk(tree) if isinstance(n, ast.Call)
                  and getattr(n.func, "id", None) == "BatteryView"]
         assert sites
         for call in sites:
-            kw = {k.arg: k.value for k in call.keywords}
-            assert "forced_op_may_run" in kw
-            v = kw["forced_op_may_run"]
-            assert (isinstance(v, ast.Call)
-                    and getattr(v.func, "id", None) == "forced_op_may_run"
-                    and [getattr(a, "id", None) for a in v.args] == ["adapter"])
+            kw = {k.arg for k in call.keywords}
+            assert {"sem_forced_charge", "sem_forced_discharge"} <= kw
+        assigns = [n for n in ast.walk(tree) if isinstance(n, ast.Assign)
+                   and any(getattr(t, "id", None) == "_forced" for t in n.targets)]
+        assert len(assigns) == 1
+        val = assigns[0].value
+        assert isinstance(val, ast.IfExp)
+        assert ast.unparse(val.test) == "self._observer_mode"
+        assert ast.unparse(val.body) == "(False, False)"
+        assert ast.unparse(val.orelse) == "forced_ops(adapter)"
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -390,8 +444,8 @@ _BRANDS = [
 async def test_no_entity_limit_is_said_not_recorded(cls, extra):
     hass = _hass({})
     ad = cls(hass, {"battery_max_discharge_power": 5000, **extra})
-    if hasattr(ad, "_orphan_guard"):
-        ad._orphan_cleared = True
+    if isinstance(ad, HuaweiBatteryAdapter):
+        ad._startup_orphan_checked = True
     await ad.command_limit_discharge(538.0)
     assert ad.last_intent is BatteryIntent.LIMIT_DISCHARGE
     assert ad.last_error == NO_LIMIT
@@ -410,8 +464,8 @@ async def test_with_an_entity_the_limit_is_written_and_no_error(cls, extra):
     hass = _hass({ent: _num(5000.0)})
     ad = cls(hass, {"battery_max_discharge_power": 5000,
                     "battery_discharge_control_entity": ent, **extra})
-    if hasattr(ad, "_orphan_guard"):
-        ad._orphan_cleared = True
+    if isinstance(ad, HuaweiBatteryAdapter):
+        ad._startup_orphan_checked = True
     await ad.command_limit_discharge(538.0)
     assert ad.last_error is None
     assert ad.last_discharge_limit_w == 538.0
@@ -435,8 +489,8 @@ async def test_the_diagnose_block_carries_the_gap():
 # ─────────────────────────────────────────────────────────────────
 
 async def _cycle(ad, **kw):
-    v = _view(sched=_sched("not_needed"), may_run=forced_op_may_run(ad),
-              n=1, **kw)
+    kw.setdefault("sched", _sched("not_needed"))
+    v = _view(forced=forced_ops(ad), n=1, **kw)
     d = decide_battery(v)
     await actuate_battery(d, ad)
     return d
@@ -444,8 +498,8 @@ async def _cycle(ad, **kw):
 
 @pytest.mark.asyncio
 async def test_a_limitable_battery_is_capped_and_released():
-    """Huawei-shaped: a real limit entity. Cycle 1 stops (fresh adapter),
-    cycle 2 writes the cap, the car leaves and the cap goes back to max."""
+    """A real limit entity. Cycle 1 stops (fresh adapter), cycle 2 writes the
+    cap, the car leaves and the cap goes back to max."""
     ent = "number.batt_max_discharge"
     hass = _hass({ent: _num(5000.0)})
     ad = GenericBatteryAdapter(hass, {"battery_max_discharge_power": 5000,
@@ -456,12 +510,31 @@ async def test_a_limitable_battery_is_capped_and_released():
     assert d2.intent is BatteryIntent.LIMIT_DISCHARGE
     # the #900 quantiser rounds the house figure UP to its step
     assert float(hass.table[ent].state) == quantise_discharge_limit_w(1076.0, -1.0)
-    assert 1076.0 <= float(hass.table[ent].state) < 5000.0
     d3 = await _cycle(ad)                       # steady: no flap back to STOP
     assert d3.intent is BatteryIntent.LIMIT_DISCHARGE
     d4 = await _cycle(ad, ev=False)             # the car leaves
     assert d4.intent is BatteryIntent.NORMAL
     assert float(hass.table[ent].state) == 5000.0, "the cap outlived the car"
+
+
+@pytest.mark.asyncio
+async def test_a_car_plugged_in_after_normal_is_capped_at_once():
+    """From NORMAL the last limit is the pack's MAX; the #900 lowering wait
+    read the first cap as a dip and let the pack feed the car for six cycles
+    (review). The wait is for a limit already in force."""
+    ent = "number.batt_max_discharge"
+    hass = _hass({ent: _num(5000.0)})
+    ad = GenericBatteryAdapter(hass, {"battery_max_discharge_power": 5000,
+                                      "battery_discharge_control_entity": ent})
+    await _cycle(ad, ev=False)                  # the stop lands
+    assert (await _cycle(ad, ev=False)).intent is BatteryIntent.NORMAL
+    assert ad.last_discharge_limit_w == 5000.0
+    assert (await _cycle(ad)).intent is BatteryIntent.LIMIT_DISCHARGE
+    assert float(hass.table[ent].state) == 1250.0
+    # …and inside the clamp a dip still waits (#900 unchanged).
+    for _ in range(3):
+        await _cycle(ad, home=500.0)
+    assert float(hass.table[ent].state) == 1250.0
 
 
 @pytest.mark.asyncio
@@ -479,18 +552,101 @@ async def test_the_reporters_sessy_now_says_it_cannot_cap():
 
 @pytest.mark.asyncio
 async def test_a_failed_stop_keeps_the_stop_first():
-    """Honest retry (#589): a stop that did not land leaves the intent, so the
+    """Honest retry (#589): a stop that did not land leaves the flag, so the
     next cycle stops again instead of moving on to the clamp."""
-    hass = _hass({})
-    ad = GenericBatteryAdapter(hass, {"battery_max_discharge_power": 5000,
-                                      "battery_force_charge_switch": "switch.fc"})
-    ad._last_intent = BatteryIntent.FORCE_CHARGE
     from custom_components.solar_energy_management.coordinator.battery_adapters.force_charge import (
         ChargeCommandStatus,
     )
+    ad = GenericBatteryAdapter(_hass({}), {"battery_max_discharge_power": 5000,
+                                           "battery_force_charge_switch": "switch.fc"})
+    ad._last_intent = BatteryIntent.FORCE_CHARGE
+    ad._sem_forced_charge = True
     failed = Mock(status=ChargeCommandStatus.FAILED, message="dropped")
     ad._charge_adapter = Mock(stop_forced_charge=AsyncMock(return_value=failed))
     for _ in range(2):
         d = await _cycle(ad)
         assert d.intent is BatteryIntent.STOP_FORCE_CHARGE
-    assert ad.last_intent is BatteryIntent.FORCE_CHARGE
+    assert ad._sem_forced_charge is True
+    assert ad._charge_adapter.stop_forced_charge.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_an_arbitrage_stop_after_a_night_charge_still_ends_the_charge():
+    """Review HIGH 1. A switch-based forced charge runs; the target is met
+    and the arbitrage verdict (``not_profitable``) takes the slot. Its stop
+    is a DISCHARGE stop, which does not turn the switch off. The charge must
+    still be stopped — and only then does the clamp run."""
+    from custom_components.solar_energy_management.coordinator.battery_adapters.force_charge import (
+        ChargeCommandStatus,
+    )
+    ad = GenericBatteryAdapter(_hass({}), {
+        "battery_max_discharge_power": 5000,
+        "battery_force_charge_switch": "switch.fc",
+        "battery_target_soc_entity": "number.target"})
+    started = Mock(status=ChargeCommandStatus.CHARGING, message="")
+    stopped = Mock(status=ChargeCommandStatus.IDLE, message="")
+    ad._charge_adapter = Mock(start_forced_charge=AsyncMock(return_value=started),
+                              stop_forced_charge=AsyncMock(return_value=stopped))
+    d = await _cycle(ad, sched=_sched("scheduled"),
+                     gate=_gate(covered=True, in_block=True))
+    assert d.intent is BatteryIntent.FORCE_CHARGE
+    assert ad._sem_forced_charge is True
+    arb = _sched("not_profitable", from_arbitrage=True)
+    seen = [(await _cycle(ad, sched=arb)).intent for _ in range(4)]
+    assert seen == [BatteryIntent.STOP_FORCE_DISCHARGE,
+                    BatteryIntent.STOP_FORCE_CHARGE,
+                    BatteryIntent.LIMIT_DISCHARGE,
+                    BatteryIntent.LIMIT_DISCHARGE], seen
+    assert ad._charge_adapter.stop_forced_charge.await_count == 1
+
+
+def _deye():
+    """Review HIGH 2: a real Deye whose sell is a work-mode select. Its sell
+    and its stop answer a bool and record no intent."""
+    opts = ["Selling First", "Zero Export To Load", "Zero Export To CT"]
+    hass = MagicMock()
+    st = MagicMock()
+    st.state = "Zero Export To Load"
+    st.attributes = {"options": opts}
+    hass.states.get.return_value = st
+    hass.services.async_call = AsyncMock()
+    ad = DeyeBatteryAdapter(hass, {
+        "battery_platform": "deye",
+        "battery_force_discharge_control_entity": "number.deye_export",
+        "deye_system_work_mode_control": True,
+        "deye_system_work_mode_entity": "select.deye_system_work_mode",
+        "deye_system_work_mode_selling_option": "Selling First",
+        "deye_system_work_mode_zero_load_option": "Zero Export To Load",
+        "deye_system_work_mode_zero_ct_option": "Zero Export To CT",
+    })
+    ad._observer_mode = False
+    ad._actuation_enabled = True
+
+    async def _write(entity, value, domain):
+        st.state = value
+        return True
+    ad._write_and_verify = AsyncMock(side_effect=_write)
+    return ad, st
+
+
+@pytest.mark.asyncio
+async def test_a_deye_sale_is_ended_when_nothing_asks_for_it():
+    ad, st = _deye()
+    assert ad.supports_forced_discharge
+    sell = _sched("discharging_arbitrage", floor_soc=0.0, discharge_power_w=3000.0)
+    v = _view(ev=False, sched=sell, forced=forced_ops(ad), n=1,
+              soc=80.0, mode="allow_arbitrage")
+    v = type(v)(**{**v.__dict__, "arbitrage_sell": (True, 3000.0),
+                   "config": {**v.config, "battery_grid_arbitrage_enabled": True}})
+    d = decide_battery(v)
+    assert d.intent is BatteryIntent.FORCE_DISCHARGE
+    await actuate_battery(d, ad)
+    assert st.state == "Selling First"
+    assert ad._sem_forced_discharge is True, "a sale that landed was not noted"
+    # The sell block closes with no scheduler verdict at all: NORMAL before
+    # the fix, which leaves Deye's work mode alone — the pack sells on.
+    d = await _cycle(ad, sched=None, ev=False)
+    assert d.intent is BatteryIntent.STOP_FORCE_DISCHARGE
+    assert st.state == "Zero Export To Load"
+    assert ad._sem_forced_discharge is False
+    assert (await _cycle(ad, sched=None, ev=False)).intent is BatteryIntent.NORMAL

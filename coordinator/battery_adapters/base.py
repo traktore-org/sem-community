@@ -245,6 +245,12 @@ class BatteryControlAdapter(ABC):
         none yet — the anchor the actuator quantises the next one against."""
         return float(getattr(self, "_last_discharge_limit_w", -1.0))
 
+    #: (#1066) Per direction: did a forced charge / discharge SEM started
+    #: land, and has its stop landed since? None = unknown (this adapter has
+    #: not seen either). Written by ``actuate_battery._note_forced_op`` only.
+    _sem_forced_charge: "Optional[bool]" = None
+    _sem_forced_discharge: "Optional[bool]" = None
+
     #: (#1066) what ``last_error`` says when SEM is asked to limit discharge
     #: and has no entity to write the limit to.
     NO_DISCHARGE_LIMIT_ERROR = (

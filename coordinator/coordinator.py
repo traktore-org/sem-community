@@ -7920,7 +7920,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             FleetContext,
         )
         from .decide_battery import (
-            decide_battery, effective_battery_count, forced_op_may_run,
+            decide_battery, effective_battery_count, forced_ops,
         )
 
         # Per-battery adapter cache (#375 — was a single
@@ -8359,6 +8359,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             battery_id, type(adapter).__name__,
                         )
 
+            _forced = ((False, False) if self._observer_mode
+                       else forced_ops(adapter))
             view = BatteryView(
                 runtime=runtime,
                 config=self._vpp_apply_battery_override(
@@ -8416,8 +8418,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     getattr(self, "_battery_boost", None), "floor_soc", None),
                 forecast_sell=_fsell,
                 # (#1066) the scheduler's stop outranks the protection
-                # branches only while a forced op SEM started may still run
-                forced_op_may_run=forced_op_may_run(adapter),
+                # branches only while its forced op may still run. Observer
+                # commands nothing, so its shadow shows the armed steady
+                # state rather than a stop that never lands.
+                sem_forced_charge=_forced[0],
+                sem_forced_discharge=_forced[1],
             )
 
             # 3. Decide

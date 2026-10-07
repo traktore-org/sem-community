@@ -102,6 +102,28 @@ def quantise_discharge_limit_w(raw_w: float, last_w: float) -> float:
     return float(last_w)                      # noise — hold
 
 
+def _note_forced_op(adapter, attr: str, ret, landed_intent, value: bool) -> None:
+    """(#1066) Record, per direction, that a forced op started or stopped.
+
+    Only on evidence it LANDED: the adapter recorded the intent (every brand
+    does on success, #589), or the command answered ``True`` (Deye's sell
+    and its stop return a bool and record no intent — review). A command
+    that failed leaves the flag as it was, so a stop is retried and a start
+    that never happened stops nothing.
+
+    ``decide_battery`` reads these through ``forced_ops``: the scheduler's
+    stop verdict wins only while its direction is not known stopped, and a
+    ``True`` is stopped before anything else. A stop routed as the OTHER
+    direction (an arbitrage stop after a night charge) leaves this one
+    ``True`` — a discharge stop does not end a switch-based forced charge.
+    """
+    if ret is True or getattr(adapter, "last_intent", None) is landed_intent:
+        try:
+            setattr(adapter, attr, value)
+        except Exception:  # noqa: BLE001 — a read-only stub is not a failure
+            pass
+
+
 async def actuate_battery(
     decision: "BatteryDecision",
     adapter: "BatteryControlAdapter",
@@ -174,8 +196,12 @@ async def actuate_battery(
         last_w = float(getattr(adapter, "last_discharge_limit_w", -1.0) or -1.0)
         limit_w = quantise_discharge_limit_w(decision.discharge_limit_w, last_w)
         # Lowering waits for the drop to persist; raising never waits.
+        # (#1066) …and the wait is for a limit already in force. Coming from
+        # NORMAL the anchor is the pack's MAX, so the first cap read as a
+        # "lowering" and the pack fed a newly plugged-in car for six cycles.
         streak = int(getattr(adapter, "_limit_lower_streak", 0) or 0)
-        if last_w >= 0 and limit_w < last_w:
+        _in_force = getattr(adapter, "last_intent", None) is BatteryIntent.LIMIT_DISCHARGE
+        if last_w >= 0 and limit_w < last_w and _in_force:
             streak += 1
             if streak < DISCHARGE_LIMIT_LOWER_DWELL_CYCLES:
                 limit_w = last_w
@@ -202,11 +228,13 @@ async def actuate_battery(
                 decision.battery_id, decision.reason,
             )
             return
-        await adapter.command_force_charge(
+        ret = await adapter.command_force_charge(
             decision.target_soc,
             decision.charge_power_w,
             decision.duration_min,
         )
+        _note_forced_op(adapter, "_sem_forced_charge", ret,
+                        BatteryIntent.FORCE_CHARGE, True)
         _LOGGER.debug(
             "actuate_battery(%s): FORCE_CHARGE target_soc=%.0f%% "
             "power=%.0f W duration=%dm — %s",
@@ -217,7 +245,9 @@ async def actuate_battery(
         return
 
     if decision.intent is BatteryIntent.STOP_FORCE_CHARGE:
-        await adapter.command_stop_force_charge()
+        ret = await adapter.command_stop_force_charge()
+        _note_forced_op(adapter, "_sem_forced_charge", ret,
+                        BatteryIntent.STOP_FORCE_CHARGE, False)
         _LOGGER.debug(
             "actuate_battery(%s): STOP_FORCE_CHARGE — %s",
             decision.battery_id, decision.reason,
@@ -232,9 +262,11 @@ async def actuate_battery(
                 decision.battery_id, decision.reason,
             )
             return
-        await adapter.command_force_discharge(
+        ret = await adapter.command_force_discharge(
             decision.discharge_power_w, decision.floor_soc,
         )
+        _note_forced_op(adapter, "_sem_forced_discharge", ret,
+                        BatteryIntent.FORCE_DISCHARGE, True)
         _LOGGER.info(
             "actuate_battery(%s): FORCE_DISCHARGE %.0f W (floor %.0f%%) — %s",
             decision.battery_id, decision.discharge_power_w,
@@ -243,7 +275,9 @@ async def actuate_battery(
         return
 
     if decision.intent is BatteryIntent.STOP_FORCE_DISCHARGE:
-        await adapter.command_stop_force_discharge()
+        ret = await adapter.command_stop_force_discharge()
+        _note_forced_op(adapter, "_sem_forced_discharge", ret,
+                        BatteryIntent.STOP_FORCE_DISCHARGE, False)
         _LOGGER.debug(
             "actuate_battery(%s): STOP_FORCE_DISCHARGE — %s",
             decision.battery_id, decision.reason,
