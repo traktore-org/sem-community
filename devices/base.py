@@ -1360,6 +1360,19 @@ class ComfortBandMixin:
             unit = ""
         return unit in ("°F", "F", "fahrenheit", "Fahrenheit")
 
+    def _attribute_temp_c(self, raw):
+        """An entity ATTRIBUTE temperature (``current_temperature``,
+        ``temperature``) in °C, or None. Attributes carry no unit — they are
+        in the install's display unit. (#1062) One copy for every device
+        that reads one; the climate unit and the hot water tank both do."""
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            return None
+        if self._install_unit_is_f():
+            return (value - 32.0) * 5.0 / 9.0
+        return value
+
     def _comfort_thresholds_c(self):
         """(target, offset, limit) in °C.
 
@@ -1928,13 +1941,7 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
             raw = attrs.get("target_temp_high"
                             if self._comfort_direction() == "cool"
                             else "target_temp_low")
-        try:
-            value = float(raw)
-        except (TypeError, ValueError):
-            return None
-        if self._install_unit_is_f():
-            return (value - 32.0) * 5.0 / 9.0
-        return value
+        return self._attribute_temp_c(raw)
 
     def _comfort_fallback_reading(self):
         """Zero-config thermometer: the climate entity's own
@@ -1947,13 +1954,7 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
         if state is None:
             return None
         raw = (state.attributes or {}).get("current_temperature")
-        try:
-            value = float(raw)
-        except (TypeError, ValueError):
-            return None
-        if self._install_unit_is_f():
-            return (value - 32.0) * 5.0 / 9.0
-        return value
+        return self._attribute_temp_c(raw)
 
     def adopt_if_running(self) -> bool:
         """(#559) Re-own a climate unit that SEM is running at (re-)registration.

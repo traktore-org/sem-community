@@ -2921,7 +2921,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 power_entity_id=full_config.get("hot_water_power_sensor"),
                 energy_entity_id=full_config.get("hot_water_energy_sensor"),  # #600
                 temperature_entity_id=full_config.get("hot_water_temperature_sensor"),
-                max_temperature=float(full_config.get("hot_water_max_temperature", 70.0)),
                 min_temperature=float(full_config.get("hot_water_minimum_temperature", 40.0)),
                 solar_target_temp=float(full_config.get("hot_water_solar_target", 50.0)),
                 legionella_target_temp=float(full_config.get("hot_water_legionella_target", 65.0)),
@@ -2935,10 +2934,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             _seed_legionella_time(coordinator, hw_device)
             _LOGGER.info(
                 "Hot water registered (entity=%s, priority=%d, "
-                "temp_sensor=%s, solar_target=%.0f°C, max=%.0f°C)",
+                "temp_sensor=%s, solar_target=%.0f°C)",
                 hw_entity, hw_device.priority,
                 hw_device.temperature_entity_id or "—",
-                hw_device.solar_target_temp, hw_device.max_temperature,
+                hw_device.solar_target_temp,
             )
         else:
             _LOGGER.debug(
@@ -6134,7 +6133,7 @@ async def _async_register_phase_services(
     # when the controller is hooked up).
     _DIAGNOSE_HOT_WATER_OPTION = {
         "hot_water_entity", "hot_water_temperature_sensor",
-        "hot_water_solar_target", "hot_water_max_temperature",
+        "hot_water_solar_target",
         "hot_water_legionella_target", "hot_water_minimum_temperature",
         "hot_water_priority", "hot_water_rated_power",
     }
@@ -6146,7 +6145,7 @@ async def _async_register_phase_services(
         "hot_water_registered", "hot_water_entity",
         "hot_water_temperature_sensor",
         "hot_water_current_temperature",
-        "hot_water_solar_target", "hot_water_max_temperature",
+        "hot_water_solar_target",
         "hot_water_legionella_target", "hot_water_hours_since_legionella",
         "hot_water_legionella_cycle_active",
         "hot_water_activation_path", "hot_water_deactivation_path",

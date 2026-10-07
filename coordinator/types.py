@@ -922,7 +922,6 @@ class HotWaterSensorData:
     hot_water_temperature_sensor: Optional[str] = None
     hot_water_current_temperature: Optional[float] = None
     hot_water_solar_target: Optional[float] = None
-    hot_water_max_temperature: Optional[float] = None
     hot_water_legionella_target: Optional[float] = None
     hot_water_hours_since_legionella: Optional[float] = None
     hot_water_legionella_cycle_active: bool = False
@@ -1536,7 +1535,6 @@ class SEMData:
             "hot_water_temperature_sensor": self.hot_water.hot_water_temperature_sensor,
             "hot_water_current_temperature": self.hot_water.hot_water_current_temperature,
             "hot_water_solar_target": self.hot_water.hot_water_solar_target,
-            "hot_water_max_temperature": self.hot_water.hot_water_max_temperature,
             "hot_water_legionella_target": self.hot_water.hot_water_legionella_target,
             "hot_water_hours_since_legionella": self.hot_water.hot_water_hours_since_legionella,
             "hot_water_legionella_cycle_active": self.hot_water.hot_water_legionella_cycle_active,
