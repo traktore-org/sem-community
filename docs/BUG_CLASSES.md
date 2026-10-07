@@ -89,15 +89,27 @@ halves blank with their input (the `grid_active_power` rule). **Guard:**
 `tests/test_1047_home_holds_a_dark_input.py` — the PROD replay through the real reader, smoothing,
 hold, publish and snapshot; steering untouched (no phantom surplus); the grace edge; overlapping
 blinks; an input dark all night; never-read; a cycle-order pin; and an AST pin that every
-`*_unavailable` flag `to_dict` blanks a power input on is a flag the hold listens to. **Open siblings:** the frozen value still *feeds* the
-balance (observe-only, not yet held); multi-unit partial-availability sums silently under-report
+`*_unavailable` flag `to_dict` blanks a power input on is a flag the hold listens to. **Asleep at
+night (#1065, RienduPre, Grott/Growatt):** an inverter that powers down at dusk stops sending and its
+entity holds the last value — 8.1 W, published as solar (total, flow, per-string) all night. #851's
+predicate already called that reading asleep, but only the WARNING asked it; the value path never
+did. **Closure:** one predicate (`SensorReader._near_zero_at_night`) for both sides, and
+`_asleep_at_night` reads 0 W when every entity behind a solar reading stopped reporting for the frozen
+threshold, ≤ 25 W, sun below the horizon. Every fleet/per-inverter solar read goes through
+`_read_solar_power`, every per-string read (direct or V+I) through `_read_pv_string_source`.
+**Guard:** `tests/test_1065_asleep_solar_reads_zero.py` — the reporter's night through `read_power`,
+every solar read path, the kept cases (daylight, > 25 W, fresh, no sun, one live V+I half), one
+threshold for warning and value, and an AST pin that no `_read_sensor(…, "solar")` or `pv_…` read
+lives outside the two doors. **Open siblings:** the frozen value still *feeds* the
+balance when what it should be is not knowable (daylight, grid, battery, solar above 25 W: warned,
+not changed); multi-unit partial-availability sums silently under-report
 (audit W6; the lifetime seed's half closed by #1043, see class 52) — one dark unit of N is still 0 W
 in home AND in the published total; the flow figures and the daily home energy still integrate the
 dark cycle's raw home (they share the steering figure; the #771 partition check ties them together);
 the steering home itself still reads a dark battery as idle (safe for the EV budget — the meter
 answers — but the discharge limit home/n is wide for the gap; holding it needs the battery charge
 held beside it); an EV power dropout is not in the dark tally at all (its own #910 hold + the 2-cycle
-spike guard, whose count the dip hold can spend first). Refs #274 #461 #589 #611 #1047.
+spike guard, whose count the dip hold can spend first). Refs #274 #461 #589 #611 #1047 #1065.
 
 ### 6. Multi-unit over-command (N× / partial split) — PARTIAL
 **Symptom:** a fleet-level power target handed to *each* of N units → N× the intended
