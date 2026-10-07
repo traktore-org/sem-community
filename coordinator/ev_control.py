@@ -11,6 +11,8 @@ Mixin class providing all EV charging control logic:
 """
 from __future__ import annotations
 
+from ..utils.device_names import charger_display_name  # (#1053)
+
 import logging
 import math
 from typing import Any, Optional
@@ -461,7 +463,7 @@ class EVControlMixin:
         nm = getattr(self, "_notification_manager", None)
         if nm is None or plan.deadline_dt is None:
             return
-        name = (charger_cfg or {}).get("name") or "EV"
+        name = charger_display_name(getattr(self, "hass", None), charger_cfg)  # (#1053)
         flag_key = cid or (charger_cfg or {}).get("id") or name  # dedup by id (#274/M3)
         # Only warn when the user opted into deadline/tariff behaviour (#274/C1) —
         # plan.should_warn_unreachable already encodes (not reachable) AND

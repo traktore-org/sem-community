@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Charger names and the setup menus follow your language** (#1053). An unnamed charger reads "EV-lader Vermogen" in Dutch; your own names stay.
+
 - ✨ **A departure per weekday, one charging block, a top-up before leaving** (#1023). Set on the EV card; all off by default.
 - ✨ **Battery boost: the house battery charges the car, this charge only** (#1025). Down to a floor you pick; unplugging or a restart ends it.
 - ✨ **A Schedule helper can set a device's mode** (#1020). For example the heat rod off 07:00–13:00, or solar-only charging at weekends.

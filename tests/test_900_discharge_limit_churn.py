@@ -249,7 +249,11 @@ class TestWizardPlatformSelect:
         flow.hass.data = {"_entry": config_entry}
         result = await _run_step(flow, "async_step_battery_scheduler")
         key, sel = _platform_field(result["data_schema"])
-        values = [o["value"] for o in sel.config["options"]]
+        # (#1053) options are plain values; their labels come from the
+        # selector's translation key
+        values = [o["value"] if isinstance(o, dict) else o
+                  for o in sel.config["options"]]
+        assert sel.config.get("translation_key") == "battery_charge_platform"
         assert values[0] == "auto", values
         assert set(values) >= {"auto", "huawei", "goodwe", "deye", "generic"}, values
         assert key.default() == "auto"

@@ -1793,7 +1793,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
 
 
 from .utils.device_names import (  # noqa: E402  (#1053)
-    HEAT_PUMP_DEFAULT, device_display_name,
+    HEAT_PUMP_DEFAULT, charger_display_name, device_display_name,
 )
 
 def _heat_pump_rows(full_config: dict) -> list[dict]:
@@ -2626,7 +2626,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                     charger_id, idx,
                 )
             _seen_charger_ids.add(charger_id)
-            charger_name = charger_cfg.get("name", f"EV Charger {idx + 1}")
+            charger_name = charger_display_name(hass, charger_cfg, idx)  # (#1053)
 
             # Resolve config: charger-specific keys, fall back to global config.
             # ``_this`` binds the loop variable at definition time — today every
