@@ -38,6 +38,8 @@ from ..const import (
     DOMAIN,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_BATTERY_CAPACITY_KWH,
+    DEFAULT_ELECTRICITY_IMPORT_RATE,
+    DEFAULT_ELECTRICITY_NT_RATE,
     DEFAULT_MAX_CHARGING_CURRENT,
     DEFAULT_LOAD_MANAGEMENT_ENABLED,
     ED_RESOLVE_MAX_ATTEMPTS,
@@ -651,13 +653,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # (#1040) The Tariff page now has the field this mode lacked:
             # `tariff_schedule_entity`, a HA Schedule helper whose blocks
             # are the peak hours. It wins over the hand-written nested key.
+            #
+            # (#1040) An unsaved rate is the one the card and the Tariff page
+            # show. Calendar used its own 0.35/0.22, so the screen showed one
+            # price and SEM charged at a spread nobody entered.
             schedule = config.get("tariff_schedule", {}) or {}
             self._tariff_provider = CalendarTariffProvider(
                 hass,
-                peak_rate=config.get("electricity_import_rate", 0.35),
+                peak_rate=_cfg_rate(
+                    config, "electricity_import_rate",
+                    default=DEFAULT_ELECTRICITY_IMPORT_RATE,
+                ),
                 off_peak_rate=_cfg_rate(
                     config, "electricity_off_peak_rate", "electricity_nt_rate",
-                    default=0.22,
+                    default=DEFAULT_ELECTRICITY_NT_RATE,
                 ),
                 export_rate=config.get("electricity_export_rate", 0.075),
                 rules=schedule.get("rules", []),
@@ -669,10 +678,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             )
         else:
             self._tariff_provider = StaticTariffProvider(
-                peak_rate=config.get("electricity_import_rate", 0.3387),
+                peak_rate=_cfg_rate(
+                    config, "electricity_import_rate",
+                    default=DEFAULT_ELECTRICITY_IMPORT_RATE,
+                ),
                 off_peak_rate=_cfg_rate(
                     config, "electricity_off_peak_rate", "electricity_nt_rate",
-                    default=0.3387,
+                    default=DEFAULT_ELECTRICITY_NT_RATE,
                 ),
                 export_rate=config.get("electricity_export_rate", 0.075),
                 currency=currency,
@@ -14510,9 +14522,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 else:
                     # Static / Calendar share peak/off-peak rate fields. Fall
                     # back to the provider's CURRENT value when the key is
-                    # absent so a factory-default calendar install (different
-                    # construction default 0.35 vs static 0.3387) isn't nudged
-                    # to a wrong rate by the refresh (MEDIUM, review).
+                    # absent, so the refresh never moves an unsaved rate.
+                    # (#1040: both now start at the defaults the card shows.)
                     tp.peak_rate = float(
                         cfg.get("electricity_import_rate", tp.peak_rate)
                     )

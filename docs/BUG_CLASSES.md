@@ -1030,7 +1030,11 @@ pump short-cycled and the user could neither see the window nor lengthen it); **
 tariff mode sat in the Tariff menu since #120, and the setup guide promised a calendar field, but
 nothing ever wrote the schedule the provider reads — the mode ran at the off-peak price all day.
 Closed by `tariff_schedule_entity`, a Schedule-helper field the page refuses Calendar without, on
-the options page and the config card; guard `tests/test_1040_calendar_schedule_field.py`).
+the options page and the config card; guard `tests/test_1040_calendar_schedule_field.py`). **#1040 second round (07.10.2026):** the default view showed
+Calendar with one of its two prices. The off-peak rate sat behind Advanced, so a helper alone gave
+"no price difference". Closed by `ESSENTIAL_IN_MODE` (the off-peak rate is essential in Calendar
+mode only) and by showing the picked mode's fields before Apply; guard
+`dashboard/card/test/calendar-setup.test.js`.
 **Second half (16.08.2026):** a field you can type into is not yet a surface you can *correct* —
 the class also lives in what a form does with the value you did **not** type. HA drops a cleared
 optional field out of `user_input` entirely, so `update(user_input)` cannot tell "left alone" from
@@ -2135,6 +2139,16 @@ argument form and would have passed while three of the five 16s were still in th
 **Sweep question:** for a config key, grep the *readers* and compare their defaults before reading
 any logic — if they disagree, that is the bug, whatever the issue says it is about. And when a key
 has no write path, its default is not a fallback, it is the value.
+**Live catch (#1040), shape (a):** Calendar mode built its provider with 0.35/0.22 for an unsaved
+rate, while the card, the Tariff page and Static used 0.3387 for both. A Calendar user who never
+saved a rate saw two equal prices and SEM priced hours at a spread nobody entered. Closed by
+`DEFAULT_ELECTRICITY_IMPORT_RATE` beside `DEFAULT_ELECTRICITY_NT_RATE`, read by both providers,
+the Tariff page, the import-rate number and the cost calculator. The Tariff page's off-peak default
+was `_c(...) or 0.3387`, so a saved 0 (a free night) showed 0.3387 and Submit wrote it back — also
+fixed. Guard: `tests/test_1040_calendar_schedule_field.py::TestAnUnsavedRateIsTheShownRate`.
+**Left for Guido:** the dynamic fallback price (`fallback_price`, `default=0.30`, two sites) and the
+battery break-even fallback (`0.22` off-peak, `0.30` peak in `_maybe_run_scheduler_evaluation`) still
+restate their own numbers; changing them moves battery and dynamic-tariff decisions.
 Refs #789 #788 #716 #746 #685 #678 #833 #1038.
 
 ### 47. One word names two axes, so every reader picks the axis it expected — GUARDED
@@ -5602,3 +5616,13 @@ Refs #1063 #923 #925 #857.
 **Sweep question:** for every field a screen shows, follow the value past the attribute it lands in. Which decision changes when it changes? A log line, a diagnostic and a published copy are not decisions.
 **Left for Guido:** (1) `min_temperature` keeps two narrow uses with no card field: the vacation surplus cap (its switch `vacation_dhw_surplus` has no surface either) and the setpoint a water_heater is left at when `turn_off` fails. Both belong with #914's open "release to the minimum setpoint" decision. (2) SEM does not stop a water_heater or climate tank at the target; its setpoint does. A target changed while it runs is not re-written. (3) A switch boiler whose sensor breaks while it runs is not stopped, because no reading is not proof of a hot tank; the start is still refused. (4) No gap between the stop (at the target) and the next start (below it): with a sensor near the element, the boiler can cycle at the anti-cycle limit (10 min on, 5 min off). (5) °F installs: `get_current_temperature` returns the raw reading and compares it with °C targets (older than this fix) — SEM never starts the boiler, and now also stops a switch boiler someone else turned on. `natural_achievement` and the written setpoints have the same fault. (6) Tanks no longer overshoot to 60 °C on sun, so forced Legionella runs come more often, at whatever hour they fall due; a solar target ≥ 60 °C still covers it. (7) The #638 comfort-banking pass runs a "willing" band on cheap grid whatever `top_up_policy` says, for every band device; it now reaches boilers whose band was set but read nothing. (8) Those banking and forced runs carry `_offpeak_forced`; a Legionella cycle that falls due during one is cut by force-expiry or the plan hold, which do not check `_legionella_cycle_active` — the older #914 "Legionella vs LIFO" stall, now reachable from a band.
 Refs #1062 #1059 #92 #454 #705 #830.
+
+### 126. A change waits in a second store that the section's "unsaved" count does not read — GUARDED
+**Symptom:** Config tab → Tariff, Calendar mode: a user picked a Schedule helper as "Peak-time schedule" and read "no price difference" at the off-peak price (#1040, @mdscgan, 2.2.0-beta.11). The helper was never saved. The field had a small dot, but its section showed no unsaved count and no Apply button; the only Apply sat in a bar at the top of the card. Our own reply sent the user to the section's "Apply changes", which did not appear.
+**Root shape:** the card has two places an edit can wait. `_staged` (#605) holds numbers, toggles and selects; the section counts it and its footer applies it. `_pending` (#528) holds entity pickers and toggles that reload the entry; only the top bar reads it. Each store is right on its own. The section's count read one of the two, so "nothing unsaved" was true of `_staged` and false of the section.
+**Where it lives:** every structural picker (`_renderPicker`) and structural toggle (`_renderOptionToggle`) — Tariff (the schedule, the battery control entities, the bidirectional flag), Sensor sources, Battery zones (`battery_discharge_protection_enabled`, on the default view), Heat pump and Hot water entities. All **swept** by one change: both renderers bind their pending edit to the section (`_regPending`).
+**Closure:** the section owns every edit made in it, whichever store holds it. `_sectionUnsaved` counts both; the section's Apply sends staged and pending keys in one `set_option` call (one reload); Revert drops both. The top bar stays for edits in several sections.
+**Guard:** `dashboard/card/test/calendar-setup.test.js` — the real card: a picked schedule counts in its section, the section's Apply sends it with the staged mode and rate in one call, a failed Apply keeps it, Revert drops it, another section's edit stays waiting, a structural toggle binds too. 8 of its 11 tests fail on the old card.
+**Sweep question:** for every "unsaved" count or "dirty" flag — list every store an edit can wait in, and ask whether the count reads all of them.
+**Left for Guido:** (1) per-charger pickers (`_renderPickerNested`) save at once and have no unsaved state at all — a third way. (2) With a structural edit waiting, the section footer and the top bar now both offer Apply; the top bar could go. (3) `_renderTextOption` saves `battery_setpoint_model` and the direction values at once on blur, though they are structural keys — each edit reloads the entry.
+Refs #1040 #528 #605.

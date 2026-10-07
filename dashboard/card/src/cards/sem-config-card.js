@@ -56,6 +56,10 @@ const ESSENTIAL_CONTROLS = new Set([
     // Dynamic. Only one of the two shows at a time, and without it the
     // default view offers a mode it cannot set up.
     'tariff_schedule_entity',
+    // (#1040) …and Calendar's second price. Hours inside the schedule cost
+    // the import rate, all others this one; hidden, the mode had one price
+    // and said "no price difference". Shown in Calendar mode only.
+    'electricity_off_peak_rate',
     // Battery: the safety floor. Everything else in that section is a
     // sensor override that detection normally supplies.
     'battery_discharge_protection_enabled',
@@ -68,7 +72,15 @@ const ESSENTIAL_CONTROLS = new Set([
     'target_peak_limit',
 ]);
 
+// (#1040) An essential control that only one tariff mode needs. The default
+// view shows it in that mode; Static keeps its one rate.
+const ESSENTIAL_IN_MODE = {
+    electricity_off_peak_rate: 'calendar',
+};
+
 const ADV_KEY = 'sem_config_advanced_v1';
+// (#1040) `_secOf` id of a structural edit waiting in `_pending`.
+const PENDING_ID = 'pending:';
 
 const SECTIONS = [
     {
@@ -517,7 +529,14 @@ class SEMConfigCard extends SEMLitBase {
         // Entity-backed controls carry their domain; compare on the
         // config key, which is what the tier list is written in.
         const k = String(key || '').replace(/^[a-z_]+\.sem_/, '');
-        return ESSENTIAL_CONTROLS.has(k);
+        if (!ESSENTIAL_CONTROLS.has(k)) return false;
+        return !ESSENTIAL_IN_MODE[k] || ESSENTIAL_IN_MODE[k] === this._tariffMode();
+    }
+    // (#1040) The tariff mode the page shows: the picked one, before Apply.
+    // Picking Calendar shows its fields at once, so one Apply sets it up.
+    _tariffMode() {
+        const saved = (this._options || {}).tariff_mode || 'static';
+        return String(this._stagedVal('opt:tariff_mode', saved));
     }
     _toggleSection(id) {
         // `_collapsed` is a plain instance property (not a Lit reactive
@@ -1421,7 +1440,7 @@ class SEMConfigCard extends SEMLitBase {
             { value: 'percentile', label: this._t('config_tariff_class_percentile') },
             { value: 'static', label: this._t('config_tariff_class_static') },
         ];
-        const mode = opts.tariff_mode || 'static';
+        const mode = this._tariffMode();
         return html`
             <div class="readonly-row tariff-rate-row">
                 <ha-icon icon="mdi:flash" style="--mdc-icon-size:18px;color:#ff9800"></ha-icon>
@@ -2051,6 +2070,7 @@ class SEMConfigCard extends SEMLitBase {
         // edit locally and commit on Apply so the reload fires once for the
         // whole batch. Non-structural keys save live on change (unchanged).
         const structural = STRUCTURAL_KEYS.has(optionKey);
+        if (structural) this._regPending(optionKey);
         const staged = structural && Object.prototype.hasOwnProperty.call(this._pending, optionKey);
         const cur = staged ? this._pending[optionKey] : (opts[optionKey] || '');
         const onChange = (val) => {
@@ -2180,18 +2200,38 @@ class SEMConfigCard extends SEMLitBase {
         return Object.keys(this._staged).filter(k => this._secOf[k] === secId);
     }
 
+    // (#1040) A structural edit waits in `_pending` (#528), not `_staged`.
+    // Its section still owns it: the count, Apply and Revert include it.
+    // The section said nothing was unsaved while the Peak-time schedule
+    // waited for the bar at the top of the card.
+    _regPending(optionKey) {
+        this._reg(PENDING_ID + optionKey);
+    }
+    _sectionPending(secId) {
+        return Object.keys(this._pending)
+            .filter(k => this._secOf[PENDING_ID + k] === secId);
+    }
+    _sectionUnsaved(secId) {
+        return this._sectionStaged(secId).length + this._sectionPending(secId).length;
+    }
+
     _revertSection(secId) {
         const st = { ...this._staged };
         this._sectionStaged(secId).forEach(k => delete st[k]);
         this._staged = st;
+        const pend = { ...this._pending };
+        this._sectionPending(secId).forEach(k => delete pend[k]);
+        this._pending = pend;
     }
 
     async _applySection(secId) {
         const keys = this._sectionStaged(secId);
-        if (!keys.length || this._secApplying) return;
+        const pendingKeys = this._sectionPending(secId);
+        if ((!keys.length && !pendingKeys.length) || this._secApplying) return;
         this._secApplying = secId;
         try {
             const optPayload = {};
+            pendingKeys.forEach(k => { optPayload[k] = this._pending[k]; });
             for (const k of keys) {
                 const s = this._staged[k];
                 if (s.kind === 'option') {
@@ -2218,6 +2258,9 @@ class SEMConfigCard extends SEMLitBase {
             const st = { ...this._staged };
             keys.forEach(k => delete st[k]);
             this._staged = st;
+            const pend = { ...this._pending };
+            pendingKeys.forEach(k => delete pend[k]);
+            this._pending = pend;
         } catch (err) {
             console.error('[sem-config-card] section apply failed', err);
             this._saveStatus = {
@@ -2305,7 +2348,7 @@ class SEMConfigCard extends SEMLitBase {
 
         const structural = STRUCTURAL_KEYS.has(optionKey);
         const sid = 'opt:' + optionKey;
-        if (!structural) this._reg(sid);
+        if (structural) this._regPending(optionKey); else this._reg(sid);
         const stagedStructural = structural && Object.prototype.hasOwnProperty.call(this._pending, optionKey);
         const liveOn = opts[optionKey] != null ? !!opts[optionKey] : !!defaultVal;
         const dirty = stagedStructural || (!structural && this._isDirty(sid));
@@ -3065,8 +3108,8 @@ class SEMConfigCard extends SEMLitBase {
                 <div class="section-dot" style="background:${section.color}"></div>
                 <ha-icon icon="${section.icon}" style="--mdc-icon-size:20px;color:${section.color}"></ha-icon>
                 <span class="section-title-text">${this._t(section.titleKey)}</span>
-                ${this._sectionStaged(section.id).length ? html`
-                    <span class="header-dirty-badge" title="${this._t('config_pending_hint')}">● ${this._sectionStaged(section.id).length}</span>` : nothing}
+                ${this._sectionUnsaved(section.id) ? html`
+                    <span class="header-dirty-badge" title="${this._t('config_pending_hint')}">● ${this._sectionUnsaved(section.id)}</span>` : nothing}
                 ${section.docs ? html`
                     <a class="section-docs-link" href="${section.docs}" target="_blank" rel="noopener"
                        title="${this._t('config_docs')}" @click=${(e) => e.stopPropagation()}>
@@ -3093,12 +3136,12 @@ class SEMConfigCard extends SEMLitBase {
         this._sec = section.id;
         const body = contentFn(T);
         this._sec = null;
-        const dirty = this._sectionStaged(section.id);
+        const dirty = this._sectionUnsaved(section.id);
         const busy = this._secApplying === section.id;
         const err = this._saveStatus['_sec_' + section.id];
-        const footer = dirty.length ? html`
+        const footer = dirty ? html`
             <div class="section-stage-bar">
-                <span class="stage-count">● ${dirty.length} ${this._t('config_unsaved')}</span>
+                <span class="stage-count">● ${dirty} ${this._t('config_unsaved')}</span>
                 ${err ? html`<span class="stage-err">⚠ ${err}</span>` : nothing}
                 <button class="stage-btn revert" ?disabled=${busy}
                         @click=${() => this._revertSection(section.id)}>↩ ${this._t('config_revert')}</button>

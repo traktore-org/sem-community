@@ -25,7 +25,7 @@ from homeassistant.const import (
 
 from homeassistant.helpers.entity import EntityCategory
 
-from .const import DEFAULT_MAX_CHARGING_CURRENT
+from .const import DEFAULT_ELECTRICITY_IMPORT_RATE, DEFAULT_MAX_CHARGING_CURRENT
 from .consts.bounds import BOUNDS      # (#870) one range per field
 from .coordinator import SEMCoordinator
 from .coordinator.install_modules import kept_descriptions, presence_of
@@ -737,7 +737,7 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
             "ev_disable_delay_seconds": 300,
             "ev_phases": 3,
             "ev_kwh_per_100km": 18,
-            "electricity_import_rate": 0.3387,
+            "electricity_import_rate": DEFAULT_ELECTRICITY_IMPORT_RATE,
             "electricity_export_rate": 0.075,
             "battery_buffer_soc": 70,
             "battery_auto_start_soc": 90,
