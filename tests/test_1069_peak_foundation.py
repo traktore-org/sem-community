@@ -517,3 +517,13 @@ def test_every_ledger_in_the_coordinator_sizes_against_the_planning_limit():
     raw = [s for s in call_sites("_get_peak_limit_w")
            if s[0].endswith("coordinator/coordinator.py")]
     assert raw == []
+
+
+@pytest.mark.unit
+def test_a_blind_cycle_does_not_count_the_sun_as_room():
+    """(#1069) A dark read makes the house a guess; the sun past it is not
+    room the grid may be spent against on that cycle."""
+    v = _charge_view(ev_committed_w=4000.0, solar_w=2500.0)
+    object.__setattr__(v.fleet, "inputs_degraded", True)
+    d = decide_battery(v)
+    assert d.intent is BatteryIntent.STOP_FORCE_CHARGE, d.reason

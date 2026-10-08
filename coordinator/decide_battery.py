@@ -291,8 +291,11 @@ def forced_charge_room_w(view: "BatteryView"):
     allowed_w = getattr(f, "peak_slot_allowed_w", None)
     if allowed_w is None:
         return None
-    room_w = (float(allowed_w)
-              + max(0.0, float(getattr(f, "solar_w", 0.0) or 0.0))
+    # The sun counts as room only on a cycle that can see: a dark read
+    # makes the house figure a guess, and a guess may not buy grid watts.
+    sun_w = (max(0.0, float(getattr(f, "solar_w", 0.0) or 0.0))
+             if house_load_is_measured(f) else 0.0)
+    room_w = (float(allowed_w) + sun_w
               - max(0.0, float(view.home_consumption_w or 0.0))
               - max(0.0, float(getattr(f, "peak_committed_w", 0.0) or 0.0)))
     n = max(1, int(getattr(f, "battery_count", 1) or 1))
