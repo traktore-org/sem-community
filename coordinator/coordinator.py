@@ -9094,6 +9094,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         ctl = getattr(self, "_surplus_controller", None)
         if ctl is not None:
             ctl.shed_signal = sig
+        # (#1021) Germany: the load manager defends the operator's limit
+        # while the relay is on. Handed over every cycle, never saved.
+        lm = getattr(self, "_load_manager", None)
+        if lm is not None and hasattr(lm, "set_operator_cap"):
+            lm.set_operator_cap(sig.cap_kw if sig.active else None)
         return sig
 
     def _shed_signal_payload(self) -> dict:
@@ -12154,15 +12159,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             self._peak_slot_tracker.update(_now, _grid_w)
             if _store:
                 _store.set_peak_slot_state(self._peak_slot_tracker.to_state())
-            _lm = self._load_manager
             # The off-switch is the EXISTING one: the Control-tab slider's
             # MAX notch sets peak_limit_unlimited atomically (#717), and an
             # unlimited install computes no allowance — one mechanism, no
             # second toggle (#830: options are outsourced thinking).
-            if (_lm is not None
-                    and not getattr(_lm, "_peak_unlimited", True)):
+            # (#1021) …unless the grid operator's relay is on: its limit
+            # holds either way, and reaches the car, the battery's cover
+            # and the forced charge through this one allowance.
+            _ceiling_kw = self._slot_ceiling_kw()
+            if _ceiling_kw is not None:
                 allowed = slot_allowed_import_w(
-                    float(getattr(_lm, "_target_peak_limit", 0.0) or 0.0),
+                    _ceiling_kw,
                     self._peak_slot_tracker.imported_kwh,
                     self._peak_slot_tracker.elapsed_s,
                     blind=bool(getattr(self._peak_slot_tracker, "blind", False)),
@@ -12178,6 +12185,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             )
             allowed = None
         self._peak_slot_allowed_w = allowed
+
+    def _slot_ceiling_kw(self) -> Optional[float]:
+        """(#1021) The limit the 15-minute slot allowance defends, or None.
+
+        With a load manager: its limit in force (the user's, lowered by the
+        operator's). Without one the slot guard was off before, and stays
+        off — unless the operator's relay is on, whose limit holds anyway."""
+        lm = getattr(self, "_load_manager", None)
+        if lm is not None:
+            try:
+                if not lm._limit_active():
+                    return None
+                return float(lm._active_target_kw())
+            except (AttributeError, TypeError, ValueError):
+                return None
+        return self._operator_cap_kw()
 
     def _battery_forced_grid_w(self, power: PowerReadings) -> float:
         """(#1069) Grid watts of a forced battery charge SEM is running.

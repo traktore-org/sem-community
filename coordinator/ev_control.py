@@ -508,9 +508,28 @@ class EVControlMixin:
         an explicit boolean and never inferred — a limit that fails open is how
         a 5 kW house got handed a 10 kW EV slot (#638 finding #5).
         """
-        if self._peak_limit_unlimited():
-            return math.inf
-        return self._target_peak_limit_kw() * 1000
+        # (#1021) The grid operator's limit lowers the user's while its
+        # relay is on — and holds even when the user has none of their own.
+        cap = self._operator_cap_kw()
+        saved_w = (math.inf if self._peak_limit_unlimited()
+                   else self._target_peak_limit_kw() * 1000)
+        if cap is None:
+            return saved_w
+        return min(saved_w, cap * 1000)
+
+    def _operator_cap_kw(self) -> Optional[float]:
+        """(#1021) The grid operator's limit while its relay is on, or None.
+
+        Read from the relay the coordinator reads once per cycle. Never
+        saved anywhere: the user's own limit stays underneath it."""
+        sig = getattr(self, "_shed_signal", None)
+        if sig is None or not getattr(sig, "active", False):
+            return None
+        try:
+            cap = float(getattr(sig, "cap_kw", None))
+        except (TypeError, ValueError):
+            return None
+        return cap if cap > 0 else None
 
     def _target_peak_limit_kw(self) -> float:
         """The saved grid ceiling in kW — always the number, never infinity.

@@ -459,6 +459,8 @@ class TestEveryLimitReadGoesThroughTheAccessor:
             "get_load_management_data", "update_target_peak_limit",
             "update_warning_peak_level", "update_emergency_peak_level",
             "__init__",
+            # the startup log line names the saved limit
+            "async_initialize",
         }
         for attr in ("_target_peak_limit", "_peak_unlimited"):
             bad = self._reads("features/load_management.py", attr) - allowed
