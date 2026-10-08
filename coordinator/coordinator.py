@@ -9827,8 +9827,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 _floor2 = _reserve / 100.0 * cap_kwh2
                 _md_w = float(self.config.get(
                     "battery_max_discharge_power", 5000.0) or 5000.0)
+                # (#1069) the PLANNING limit (cap − hysteresis), as the real
+                # ledger uses: the preview sized against the raw cap and
+                # promised a band the night it previews would not book.
                 try:
-                    _peak_w = float(self._get_peak_limit_w() or 0.0)
+                    _peak_w = float(self._planning_peak_w() or 0.0)
                 except Exception:  # noqa: BLE001
                     _peak_w = 0.0
                 ledger2 = build_night_ledger(

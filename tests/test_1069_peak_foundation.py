@@ -505,3 +505,15 @@ class TestFinding5TheSlotSurvivesARestart:
         for bad in (None, {}, {"slot_start": "garbage"}, "x"):
             tr = tracker_from_state(bad, datetime(2026, 10, 8, 14, 0, 0))
             assert tr.imported_kwh == 0.0
+
+
+@pytest.mark.unit
+def test_every_ledger_in_the_coordinator_sizes_against_the_planning_limit():
+    """(#1069) The tomorrow preview packed against the raw cap while the
+    real night packs against cap − hysteresis: one forecast, two answers.
+    The coordinator reads the raw cap for no ledger."""
+    from .ast_contracts import call_sites
+
+    raw = [s for s in call_sites("_get_peak_limit_w")
+           if s[0].endswith("coordinator/coordinator.py")]
+    assert raw == []
