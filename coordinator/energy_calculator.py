@@ -2460,11 +2460,12 @@ class EnergyCalculator:
         Same baseline/anchor/delta model as ``_reconcile_solar_energy``, with
         three deliberate differences:
 
-        - **BIDIRECTIONAL.** Solar and EV adopt upward only, because their
-          counters can only ever reveal energy the integrator missed. A grid
-          meter can prove the integrator counted energy that never flowed
-          (#628: export integrated 3.06 kWh against a meter reading 0.16),
-          so a downward correction has to be legal. Safe because every daily
+        - **BIDIRECTIONAL.** Solar adopts upward only: on a hybrid its counter
+          measures AC yield and trails PV production all day (bug class 28).
+          A grid meter can prove the integrator counted energy that never
+          flowed (#628: export integrated 3.06 kWh against a meter reading
+          0.16), so a downward correction has to be legal. EV joined this side
+          in #1049, once the box is idle — see ``_ev_adoption``. Safe because every daily
           energy sensor is ``SensorStateClass.TOTAL`` — a decrease is a
           correction, not a statistics reset.
         - **ALL-OR-NOTHING per category.** Upward-only was the safety net that
