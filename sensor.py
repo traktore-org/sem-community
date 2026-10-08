@@ -3420,6 +3420,24 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "pre_clamp": d.get("forecast_dampening_pre_clamp"),
                 "correction_factor_historical": d.get("forecast_correction_factor"),
             })
+        elif self.entity_description.key == "forecast_remaining_today_kwh":
+            # (#1068) The state stays raw (#598: same basis as "Forecast
+            # today"). The attributes say what the rest of the day looks
+            # like once today's real yield is counted — the number the
+            # plan's day reads while the intraday flag is on.
+            d = self.coordinator.data
+            factor = d.get("forecast_corrected_factor")
+            raw = d.get("forecast_remaining_today_kwh")
+            corrected = None
+            if isinstance(factor, (int, float)) and isinstance(raw, (int, float)):
+                corrected = round(max(0.0, raw) * factor, 2)
+            attrs.update({
+                "corrected_kwh": corrected,
+                "correction_floor": d.get("forecast_corrected_floor"),
+                "correction_path": d.get("forecast_dampening_path"),
+                "intraday_forecast": bool(self.coordinator.config.get(
+                    "intraday_forecast", False)),
+            })
         elif self.entity_description.key == "forecast_correction_factor":
             d = self.coordinator.data
             attrs.update({

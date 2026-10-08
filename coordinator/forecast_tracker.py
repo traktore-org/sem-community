@@ -697,6 +697,10 @@ class ForecastTracker:
                 if self._smoothed_normalized_ratio is not None else None
             ),
             "forecast_dampening_pre_clamp": self._last_blended_pre_clamp,
+            # (#1068) the evidenced correction beside the published one:
+            # what the plan's day reads when the intraday flag is on.
+            "forecast_corrected_factor": round(self.corrected_factor(), 3),
+            "forecast_corrected_floor": self._last_corrected_floor,
         }
 
     def get_state(self) -> Dict[str, Any]:

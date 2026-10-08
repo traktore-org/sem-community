@@ -173,3 +173,35 @@ def test_the_775_branch_uses_it_only_under_the_flag():
     call = src.index("keep_decision_take_trajectory(_prev_plan_775")
     assert "intraday_forecast_on(self)" in src[call - 300:call]
     assert "self._energy_plan_shadow = _prev_plan_775" in src[call:call + 400]
+
+
+# ── Task 5: the remaining sensor says the corrected value ──
+def test_remaining_sensor_shows_corrected_beside_raw(mock_coordinator):
+    from custom_components.solar_energy_management.sensor import (
+        SEMSolarSensor, SENSOR_TYPES,
+    )
+    desc = next(d for d in SENSOR_TYPES
+                if d.key == "forecast_remaining_today_kwh")
+    mock_coordinator.data = dict(mock_coordinator.data)
+    mock_coordinator.data.update({
+        "forecast_remaining_today_kwh": 7.1,
+        "forecast_corrected_factor": 0.3,
+        "forecast_corrected_floor": 0.1,
+        "forecast_dampening_path": "blended_live+clamped_low",
+    })
+    s = SEMSolarSensor(coordinator=mock_coordinator, description=desc,
+                       entry_id="e")
+    attrs = s.extra_state_attributes
+    assert attrs["corrected_kwh"] == 2.13
+    assert attrs["correction_floor"] == 0.1
+    assert attrs["correction_path"] == "blended_live+clamped_low"
+    assert attrs["intraday_forecast"] is False
+
+
+def test_tracker_publishes_the_corrected_factor():
+    t = _tracker(18.3, 3.0, TZ_NOON)
+    with patch(_NOW, return_value=TZ_NOON):
+        d = t.get_data()
+    assert d["forecast_corrected_factor"] < 0.4
+    assert d["forecast_corrected_floor"] == 0.1
+    assert d["forecast_dampening_factor"] == 0.5
