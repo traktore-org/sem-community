@@ -184,6 +184,11 @@ _FLEET_CALENDAR_OFFSET = "00:00"
 
 
 
+def _finite(value: Any) -> bool:
+    return (isinstance(value, (int, float)) and not isinstance(value, bool)
+            and math.isfinite(value))
+
+
 def _ev_counter_drop(value: float, ref: Optional[float]) -> Optional[str]:
     """(#1049) ``"dip"`` or ``"reset"`` for a reading below ``ref``, else None."""
     if ref is None or value >= ref - 0.001:
@@ -2294,15 +2299,11 @@ class EnergyCalculator:
         set with this very set, complete, all reading — only then does the
         target cover everything the row holds. Mutates ``bl`` in place.
         """
-        anchor = bl.get("anchor")
+        maps = [bl.get("base"), bl.get("last"), bl.get("owed", {})]
         if (bl.get("date") != day_str
-                or not isinstance(bl.get("base"), dict)
-                or not isinstance(bl.get("last"), dict)
-                or not isinstance(bl.get("owed", {}), dict)
-                or (anchor is not None and (
-                    isinstance(anchor, bool)
-                    or not isinstance(anchor, (int, float))
-                    or not math.isfinite(anchor)))):
+                or not all(isinstance(m, dict) for m in maps)
+                or not all(_finite(v) for m in maps for v in m.values())
+                or ("anchor" in bl and not _finite(bl["anchor"]))):
             # Day rollover (or first run / legacy or damaged shape):
             # fresh baselines for the new day.
             bl.clear()
@@ -2365,8 +2366,12 @@ class EnergyCalculator:
         owed = bl.setdefault("owed", {})
         for entity_id, value in readings.items():
             if entity_id in owed and value > bl["base"][entity_id] + 0.001:
-                bl["base"][entity_id] += min(
-                    value - bl["base"][entity_id], float(owed.pop(entity_id)))
+                # A counter can report a late session in several steps.
+                paid = min(value - bl["base"][entity_id], owed[entity_id])
+                bl["base"][entity_id] += paid
+                owed[entity_id] -= paid
+                if owed[entity_id] <= 0.001:
+                    del owed[entity_id]
 
         counter_daily = sum(
             value - bl["base"][entity_id]

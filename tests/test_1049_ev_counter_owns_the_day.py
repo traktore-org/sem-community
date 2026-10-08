@@ -470,6 +470,32 @@ class TestEachChargerFollowsItsOwnCounter:
             assert calc.follow_charger_counter(
                 "links", "2026-10-04", row, LINKS) == 0.0
 
+    def test_a_late_report_in_steps_is_paid_off_in_steps(self):
+        values = {LINKS: 0.0, RECHTS: 0.0}
+        with freeze_time("2026-10-03 23:40:00") as clock:
+            calc = _calc(values)
+            _cycle(calc)
+            _charge(calc, clock, values, meter=0.0)  # 5.0 unreported
+            clock.move_to("2026-10-04 00:05:00")
+            _cycle(calc)
+            values[LINKS] = 2.0
+            _stop(calc, clock)
+            values[LINKS] = 4.0
+            _stop(calc, clock)
+            assert _rows(calc, "2026-10-04")[1] == 0.0
+
+    @pytest.mark.parametrize("bad", [
+        {"last": {LINKS: "x"}}, {"base": {LINKS: None}}, {"owed": {LINKS: "x"}},
+        {"anchor": True}, {"owed": []},
+    ])
+    def test_a_damaged_stored_value_reanchors_instead_of_raising(self, bad):
+        calc = _calc({LINKS: 100.0, RECHTS: 0.0})
+        blob = {"date": "2026-10-03", "base": {LINKS: 99.0}, "last": {LINKS: 99.0},
+                "anchor": 0.0, "owed": {}, "counter": LINKS}
+        blob.update(bad)
+        calc._charger_counter_baselines["links"] = blob
+        assert calc.follow_charger_counter("links", "2026-10-03", 2.0, LINKS) == 2.0
+
     def test_a_damaged_inner_blob_reanchors_instead_of_raising(self):
         calc = _calc({LINKS: 100.0, RECHTS: 0.0})
         calc._charger_counter_baselines["links"] = {
