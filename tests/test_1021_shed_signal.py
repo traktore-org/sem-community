@@ -283,3 +283,191 @@ class TestTheDeviceFlagIsPersisted:
         reg._device_goals = {"boiler": {"behind_operator_relay": "False"}}
         reg._apply_goals(d)
         assert d.behind_operator_relay is False
+
+
+# ── Task 7: Germany — the operator's limit lowers the one grid limit ──
+import math  # noqa: E402
+from unittest.mock import MagicMock  # noqa: E402
+
+from custom_components.solar_energy_management.features.load_management import (  # noqa: E402
+    LoadManagementCoordinator,
+)
+
+
+def _ev_host(config, sig=None, lm=None):
+    from custom_components.solar_energy_management.coordinator.ev_control import (
+        EVControlMixin,
+    )
+
+    class _Host(EVControlMixin):
+        def __init__(self, cfg):
+            self.config = cfg
+            self._load_manager = lm
+            self._shed_signal = sig or INERT
+
+    return _Host(config)
+
+
+def _lm(**opts):
+    entry = MagicMock()
+    entry.data = {}
+    entry.options = {"target_peak_limit": 8.0, "warning_peak_level": 7.5,
+                     "emergency_peak_level": 9.0, **opts}
+    hass = MagicMock()
+    lm = LoadManagementCoordinator.__new__(LoadManagementCoordinator)
+    LoadManagementCoordinator.__init__(lm, hass, entry)
+    return lm, hass
+
+
+class TestTheOperatorCapOnTheEV:
+    def test_the_cap_lowers_the_limit(self):
+        h = _ev_host({"target_peak_limit": 8.0}, _ON)
+        assert h._get_peak_limit_w() == 4200.0
+        assert h._planning_peak_w() == 4000.0
+
+    def test_the_cap_applies_when_unlimited(self):
+        h = _ev_host({"target_peak_limit": 8.0, "peak_limit_unlimited": True}, _ON)
+        assert h._get_peak_limit_w() == 4200.0
+
+    def test_a_lower_user_limit_stays(self):
+        h = _ev_host({"target_peak_limit": 3.0}, _ON)
+        assert h._get_peak_limit_w() == 3000.0
+
+    def test_no_signal_is_todays_behaviour(self):
+        assert _ev_host({"target_peak_limit": 8.0})._get_peak_limit_w() == 8000.0
+        assert _ev_host({"target_peak_limit": 8.0,
+                         "peak_limit_unlimited": True})._get_peak_limit_w() == math.inf
+        off = ShedSignal(False, "binary_sensor.relay", "off", None)
+        assert _ev_host({"target_peak_limit": 8.0}, off)._get_peak_limit_w() == 8000.0
+
+    def test_the_published_limit_stays_the_users(self):
+        """The slider must never jump under the user's finger."""
+        h = _ev_host({"target_peak_limit": 8.0}, _ON)
+        assert h._target_peak_limit_kw() == 8.0
+
+
+class TestTheOperatorCapOnTheLoadManager:
+    def test_it_sheds_against_the_cap(self):
+        lm, _ = _lm()
+        assert lm._determine_load_management_state(4.5, 4.5) != "shedding"
+        lm.set_operator_cap(4.2)
+        assert lm._active_target_kw() == 4.2
+        assert lm._determine_load_management_state(4.5, 4.5) == "shedding"
+        lm.set_operator_cap(None)
+        assert lm._active_target_kw() == 8.0
+
+    def test_unlimited_still_defends_the_cap(self):
+        lm, _ = _lm(peak_limit_unlimited=True)
+        assert lm._determine_load_management_state(6.0, 6.0) == "normal"
+        lm.set_operator_cap(4.2)
+        assert lm._determine_load_management_state(6.0, 6.0) != "normal"
+
+    def test_the_cap_is_never_saved(self):
+        lm, hass = _lm()
+        lm.set_operator_cap(4.2)
+        lm.set_operator_cap(None)
+        lm.set_operator_cap(4.2)
+        hass.config_entries.async_update_entry.assert_not_called()
+        assert lm._target_peak_limit == 8.0
+        assert lm.get_load_management_data()["target_peak_limit"] == 8.0
+
+    def test_the_emergency_level_stays_the_users(self):
+        """House fuse first: the cap never moves the emergency level."""
+        lm, _ = _lm()
+        lm.set_operator_cap(4.2)
+        warning, emergency = lm._effective_levels()
+        assert emergency == 9.0
+        assert warning < 4.2
+
+
+class TestTheSlotCeiling:
+    def _coord(self, lm=None, sig=None, config=None):
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        c = SEMCoordinator.__new__(SEMCoordinator)
+        c.config = config or {"target_peak_limit": 8.0}
+        c._load_manager = lm
+        c._shed_signal = sig or INERT
+        return c
+
+    def test_the_slot_reads_the_cap(self):
+        lm, _ = _lm()
+        c = self._coord(lm, _ON)
+        lm.set_operator_cap(4.2)
+        assert c._slot_ceiling_kw() == 4.2
+
+    def test_the_slot_without_a_cap_is_the_users(self):
+        lm, _ = _lm()
+        assert self._coord(lm)._slot_ceiling_kw() == 8.0
+
+    def test_unlimited_without_a_cap_has_no_slot(self):
+        lm, _ = _lm(peak_limit_unlimited=True)
+        assert self._coord(lm)._slot_ceiling_kw() is None
+
+    def test_unlimited_with_a_cap_has_the_caps_slot(self):
+        lm, _ = _lm(peak_limit_unlimited=True)
+        lm.set_operator_cap(4.2)
+        assert self._coord(lm, _ON)._slot_ceiling_kw() == 4.2
+
+    def test_no_load_manager_still_obeys_the_cap(self):
+        assert self._coord(None, _ON)._slot_ceiling_kw() == 4.2
+        assert self._coord(None)._slot_ceiling_kw() is None
+
+    def test_the_cycle_hands_the_cap_to_the_load_manager(self, hass):
+        lm, _ = _lm()
+        c = self._coord(lm)
+        c.hass = hass
+        c.config = {"shed_signal_entity": "binary_sensor.relay",
+                    "shed_signal_limit": 4.2}
+        c._surplus_controller = SurplusController(hass)
+        c._shed_signal_since = None
+        hass.states.async_set("binary_sensor.relay", "on")
+        c._refresh_shed_signal()
+        assert lm._active_target_kw() == 4.2
+        hass.states.async_set("binary_sensor.relay", "off")
+        c._refresh_shed_signal()
+        assert lm._active_target_kw() == 8.0
+
+
+class TestEveryLimitReadGoesThroughTheAccessor:
+    """(#1021) The operator's limit works only if every decision reads the
+    limit through the one accessor. A bare read of the saved number sheds,
+    sizes or allows against the user's limit while the rest obeys the cap."""
+
+    _ROOT = __import__("pathlib").Path(__file__).resolve().parent.parent
+
+    def _reads(self, rel, attr):
+        import ast
+        tree = ast.parse((self._ROOT / rel).read_text(encoding="utf-8"))
+        out = []
+        for fn in ast.walk(tree):
+            if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            for n in ast.walk(fn):
+                if (isinstance(n, ast.Attribute) and n.attr == attr
+                        and isinstance(n.ctx, ast.Load)):
+                    out.append(fn.name)
+                if (isinstance(n, ast.Constant) and n.value == attr):
+                    out.append(fn.name)
+        return set(out)
+
+    def test_the_load_manager_reads_the_saved_limit_in_named_places(self):
+        allowed = {
+            "_active_target_kw", "_limit_active",
+            # the setting itself: published and persisted as the user's
+            "get_load_management_data", "update_target_peak_limit",
+            "update_warning_peak_level", "update_emergency_peak_level",
+            "__init__",
+        }
+        for attr in ("_target_peak_limit", "_peak_unlimited"):
+            bad = self._reads("features/load_management.py", attr) - allowed
+            assert not bad, (attr, sorted(bad))
+
+    def test_the_coordinator_never_reads_the_load_managers_fields(self):
+        for attr in ("_target_peak_limit", "_peak_unlimited"):
+            assert not self._reads("coordinator/coordinator.py", attr), attr
+
+    def test_the_ev_sizing_reads_the_accessor(self):
+        src = (self._ROOT / "coordinator/ev_control.py").read_text()
+        assert "self._operator_cap_kw()" in src
