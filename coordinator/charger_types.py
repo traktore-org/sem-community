@@ -384,6 +384,10 @@ class BatteryDecision:
     """Used iff intent == FORCE_DISCHARGE (#523) — stop discharging at
     this reserve SOC."""
     reason: str = ""
+    room_capped: bool = False
+    """(#1069) FORCE_CHARGE / STOP_FORCE_CHARGE shaped by the room under the
+    grid limit: actuation lowers it at once, raises it only after the room
+    held, and restarts after a no-room stop only with clear room."""
 
 
 @dataclass(frozen=True)
