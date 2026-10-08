@@ -893,6 +893,12 @@ class FleetContext:
     peak_committed_w: float = 0.0
     """Watts already committed to higher-priority chargers in
     this cycle (the #274/H1 share-one-peak-budget invariant)."""
+    battery_forced_grid_w: float = 0.0
+    """(#1069) The grid watts of a forced battery charge SEM itself is
+    running. They sit in ``grid_import_w``, but the battery yields them to
+    the car next cycle (it sizes its charge from what the chargers were
+    offered), so the peak clamp counts them as room, not as somebody
+    else's draw — the car comes before the battery."""
 
     arbitrage: Optional["ArbitrageSignals"] = None
     """Battery→grid arbitrage market signals (#533), computed once per cycle.
@@ -1062,6 +1068,8 @@ class FleetCycleState:
     # (#864) the slot-budget allowance, resolved once per cycle; None when
     # no target peak limit is configured.
     peak_slot_allowed_w: Optional[float] = None
+    # (#1069) grid watts of SEM's own forced battery charge (FleetContext).
+    battery_forced_grid_w: float = 0.0
     # #576 — fleet-level priority-list inputs (one home battery). Threaded
     # here so every charger's view sees the same slot + command state.
     battery_priority: "Optional[int]" = None

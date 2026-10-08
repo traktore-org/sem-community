@@ -31,6 +31,7 @@ Decision tree (precedence top-down):
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from .charger_types import BatteryDecision, BatteryIntent
@@ -266,12 +267,72 @@ def peak_cover_floor_w(view: "BatteryView", limit_w: float, n: int) -> float:
     return max(float(limit_w), cover_w)
 
 
+#: (#1069) A forced charge follows the room in these steps, so the room's
+#: wobble does not re-send a new power every cycle; below one step it stops.
+FORCED_CHARGE_STEP_W = 250.0
+
+
+def forced_charge_room_w(view: "BatteryView"):
+    """(#1069) The watts this battery may charge without the meter going over
+    the limit, or ``None`` when no limit is configured.
+
+    The limit is on the meter, so the room is the allowance plus the sun,
+    less the house and less what the chargers were offered this cycle
+    (``peak_committed_w`` — they run first, and the car comes before the
+    battery). ``home_consumption_w`` excludes the car and the pack's own
+    charging, so nothing is counted twice. Split across the batteries like
+    every other battery budget (#531).
+
+    Before this a planned block, a negative price and a manual force charge
+    all charged at full power: a 4.2 kW limit, the car offered 4.0 kW and a
+    3 kW block put 7 kW on the meter (review, 08.10).
+    """
+    f = view.fleet
+    allowed_w = getattr(f, "peak_slot_allowed_w", None)
+    if allowed_w is None:
+        return None
+    room_w = (float(allowed_w)
+              + max(0.0, float(getattr(f, "solar_w", 0.0) or 0.0))
+              - max(0.0, float(view.home_consumption_w or 0.0))
+              - max(0.0, float(getattr(f, "peak_committed_w", 0.0) or 0.0)))
+    n = max(1, int(getattr(f, "battery_count", 1) or 1))
+    return max(0.0, room_w) / n
+
+
+def _cap_forced_charge(view, decision: BatteryDecision) -> BatteryDecision:
+    """(#1069) Every FORCE_CHARGE answers to the limit — the peak guard sits
+    above every mode of every device, a manual force charge included."""
+    if decision.intent is not BatteryIntent.FORCE_CHARGE:
+        return decision
+    room_w = forced_charge_room_w(view)
+    if room_w is None or float(decision.charge_power_w) <= room_w:
+        return decision
+    stepped_w = (room_w // FORCED_CHARGE_STEP_W) * FORCED_CHARGE_STEP_W
+    allowed_w = float(view.fleet.peak_slot_allowed_w)
+    if stepped_w < FORCED_CHARGE_STEP_W:
+        return BatteryDecision(
+            battery_id=decision.battery_id,
+            intent=BatteryIntent.STOP_FORCE_CHARGE,
+            # CAUSE: `room_w` is forced_charge_room_w's sum of the allowance,
+            # the sun, the house and the chargers' offers, all read above.
+            reason=(f"{decision.reason} — no room under the grid limit "
+                    f"({allowed_w:.0f} W allowed, {room_w:.0f} W left after "
+                    "the house and the car)"),
+        )
+    return replace(
+        decision, charge_power_w=stepped_w,
+        reason=(f"{decision.reason} — {stepped_w:.0f} W, the room left under "
+                f"the grid limit ({allowed_w:.0f} W allowed)"),
+    )
+
+
 def decide_battery(view: "BatteryView") -> BatteryDecision:
     """Compute this battery's per-cycle decision.
 
     Pure function — same input → same output.
     """
-    return _stop_what_sem_started(view, _decide_battery(view))
+    return _stop_what_sem_started(
+        view, _cap_forced_charge(view, _decide_battery(view)))
 
 
 def _decide_battery(view: "BatteryView") -> BatteryDecision:

@@ -258,3 +258,116 @@ class TestFinding2TheCoverStopsAtTheReserve:
         # home 5000 − grid-funded 4500 = 500 W; the 800 W excess over the
         # limit would have raised it — not from a pack below its reserve.
         assert d.discharge_limit_w == pytest.approx(500.0), d.reason
+
+
+# ─── Finding 1: a forced grid charge of the battery stays under the limit ───
+
+
+def _charge_view(*, allowed_w=4200.0, home_w=500.0, solar_w=0.0,
+                 ev_committed_w=0.0, mode="auto", batteries=1, charge_w=3000.0):
+    cfg = {"battery_max_discharge_power": 9000, "battery_mode": mode,
+           "battery_reserve_soc": 20.0, "battery_max_charge_power_w": charge_w}
+    fleet = FleetContext(
+        solar_w=solar_w, home_w=home_w, battery_soc=40.0,
+        battery_soc_known=True, battery_count=batteries,
+        peak_slot_allowed_w=allowed_w, peak_committed_w=ev_committed_w,
+    )
+    sched = SimpleNamespace(state="scheduled", charge_power_w=charge_w,
+                            target_soc=90.0, duration_min=60,
+                            price_forced=False)
+    gate = SimpleNamespace(covered=True, in_block=True, block_power_w=charge_w)
+    return BatteryView(
+        runtime=BatteryRuntime(battery_id="b1", last_known_soc=40.0),
+        config=cfg, fleet=fleet, charging_state="idle", ev_charging=False,
+        ev_connected=False, home_consumption_w=home_w,
+        scheduler_decision=sched, plan_gate=gate,
+        sem_forced_charge=True,
+    )
+
+
+@pytest.mark.unit
+class TestFinding1TheForcedChargeAnswersToTheLimit:
+    """Reviewer's scenario: a 4.2 kW limit, the car offered 4.0 kW this
+    cycle, and the planned battery block charging 3 kW from the grid — 7 kW
+    on the meter while every sensor read "under the limit"."""
+
+    def test_the_cars_claim_leaves_no_room_so_the_charge_stops(self):
+        d = decide_battery(_charge_view(ev_committed_w=4000.0))
+        assert d.intent is BatteryIntent.STOP_FORCE_CHARGE, d.reason
+        assert "limit" in d.reason
+
+    def test_the_charge_takes_only_the_room_left(self):
+        # 4200 − 500 house − 2000 car = 1700 W, in 250 W steps.
+        d = decide_battery(_charge_view(ev_committed_w=2000.0))
+        assert d.intent is BatteryIntent.FORCE_CHARGE
+        assert d.charge_power_w == pytest.approx(1500.0), d.reason
+
+    def test_sun_on_top_is_room_too(self):
+        # The limit is on the meter: 2 kW of sun past the house adds room.
+        d = decide_battery(_charge_view(ev_committed_w=4000.0, solar_w=2500.0))
+        assert d.intent is BatteryIntent.FORCE_CHARGE
+        assert d.charge_power_w == pytest.approx(2000.0), d.reason
+
+    def test_two_batteries_share_the_room(self):
+        d = decide_battery(_charge_view(ev_committed_w=2000.0, batteries=2))
+        assert d.charge_power_w == pytest.approx(750.0), d.reason
+
+    def test_a_manual_force_charge_answers_to_the_limit_too(self):
+        d = decide_battery(_charge_view(ev_committed_w=2000.0,
+                                        mode="force_charge"))
+        assert d.intent is BatteryIntent.FORCE_CHARGE
+        assert d.charge_power_w == pytest.approx(1500.0), d.reason
+
+    def test_no_limit_leaves_the_charge_alone(self):
+        d = decide_battery(_charge_view(allowed_w=None, ev_committed_w=4000.0))
+        assert d.intent is BatteryIntent.FORCE_CHARGE
+        assert d.charge_power_w == pytest.approx(3000.0)
+
+
+@pytest.mark.unit
+class TestFinding1TheCarComesBeforeTheBattery:
+    """The battery runs after the cars. Its running forced charge sits in
+    the meter reading, so the car's clamp read it as somebody else's draw
+    and shrank — the battery kept the room the car should have had. The
+    car's clamp counts SEM's own forced charge as room (the battery yields
+    next cycle)."""
+
+    def _v(self, forced_w):
+        v = _clamp_view(allowed_w=6000.0, grid_import_w=500.0 + 3000.0,
+                        this_w=0.0)
+        v.fleet.battery_forced_grid_w = forced_w
+        return v
+
+    def test_without_a_forced_charge_the_draw_is_somebody_elses(self):
+        out = clamp_to_peak_slot(_ask(), self._v(0.0))
+        assert out.intent is ChargerIntent.IDLE      # 2500 W < 6 A + hyst
+
+    def test_sems_own_forced_charge_yields_to_the_car(self):
+        out = clamp_to_peak_slot(_ask(), self._v(3000.0))
+        assert out.intent is ChargerIntent.CHARGE_AT_AMPS, out.reason
+        assert out.commanded_amps == 7      # 5500 W of room → 7 A
+
+
+# ─── Finding 4: the battery planner keeps no copy of the limit ──────────────
+
+@pytest.mark.unit
+class TestFinding4NoCopyOfTheLimit:
+    """``SchedulerConfig`` snapshot the limit once at setup, never refreshed,
+    and nothing read it — a planner that looked peak-aware and was not."""
+
+    def test_the_scheduler_config_has_no_peak_fields(self):
+        from custom_components.solar_energy_management.coordinator.battery_charge_scheduler import (
+            SchedulerConfig,
+        )
+        cfg = SchedulerConfig.from_config({"target_peak_limit": 4.2,
+                                           "battery_max_grid_import_w": 3000})
+        assert not hasattr(cfg, "peak_limit_w")
+        assert not hasattr(cfg, "max_grid_import_w")
+
+    def test_a_lowered_limit_reaches_the_forced_charge_in_the_same_cycle(self):
+        # The live allowance is the only number the cap reads: change it and
+        # the very next decision follows, no restart, no options reload.
+        high = decide_battery(_charge_view(allowed_w=11000.0))
+        low = decide_battery(_charge_view(allowed_w=2000.0))
+        assert high.charge_power_w == pytest.approx(3000.0)
+        assert low.charge_power_w == pytest.approx(1500.0)

@@ -225,6 +225,9 @@ def build_charger_view(
         peak_state=getattr(fleet_state, "peak_state", "normal"),
         # (#864) so does the slot-budget allowance.
         peak_slot_allowed_w=getattr(fleet_state, "peak_slot_allowed_w", None),
+        # (#1069) SEM's own forced battery charge yields to the car.
+        battery_forced_grid_w=float(
+            getattr(fleet_state, "battery_forced_grid_w", 0.0) or 0.0),
         # (#864/#885) what higher-priority chargers already claimed this
         # cycle — PER-CHARGER, like its two siblings above. It rode the
         # frozen ``fleet_state`` until #885: that object is built once,

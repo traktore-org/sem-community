@@ -1326,6 +1326,10 @@ def clamp_to_peak_slot(result, view):
     if getattr(view.fleet, "grid_import_known", True):
         _others_w = max(0.0, float(view.fleet.grid_import_w)
                         - min(_this_w, float(view.fleet.grid_import_w)))
+        # (#1069) SEM's own forced battery charge is in that reading, and it
+        # yields to the car next cycle — room for the car, not a rival.
+        _others_w -= min(_others_w, max(0.0, float(
+            getattr(view.fleet, "battery_forced_grid_w", 0.0) or 0.0)))
     else:
         # (#906) The meter is blind this cycle: ``grid_import_w`` is the
         # reader's 0.0, so "grid minus this charger" would read the whole

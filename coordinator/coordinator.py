@@ -8266,6 +8266,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # #864/#818 on and never this second producer. Bug class: two
             # producers of one context, a field threaded through one of them.
             peak_slot_allowed_w=getattr(_fs, "peak_slot_allowed_w", None),
+            # (#1069) …and what the chargers were offered this cycle. They
+            # run first, so a forced battery charge takes only the room the
+            # car left; without it the pack charged at full power on top.
+            # The accumulator is reset only inside the charger loop, so an
+            # install without chargers reads 0, never a stale total.
+            peak_committed_w=float(
+                getattr(self, "_peak_committed_w_per_cycle", 0.0) or 0.0)
+            if getattr(self, "_ev_devices", None) else 0.0,
             # (#818) any dark steering read moves the energy balance, and
             # ``home_consumption_power`` IS that balance's residual — so the
             # floor that reads it must know when it is not a measurement.
@@ -12016,6 +12024,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             allowed = None
         self._peak_slot_allowed_w = allowed
 
+    def _battery_forced_grid_w(self, power: PowerReadings) -> float:
+        """(#1069) Grid watts of a forced battery charge SEM is running.
+
+        Only SEM's own: a pack the inverter charges by itself does not
+        yield to the car, so it stays somebody else's draw. Only the grid
+        share: the sun past the house reaches the pack before the meter.
+        """
+        adapters = getattr(self, "_battery_adapters", None) or {}
+        if not any(getattr(a, "_sem_forced_charge", None) is True
+                   or getattr(a, "_forcible_charging", False) is True
+                   for a in adapters.values()):
+            return 0.0
+        charge_w = max(0.0, float(getattr(power, "battery_charge_power", 0.0) or 0.0))
+        sun_left_w = max(0.0, float(getattr(power, "solar_power", 0.0) or 0.0)
+                         - float(getattr(power, "home_consumption_power", 0.0) or 0.0))
+        return max(0.0, charge_w - sun_left_w)
+
     def _build_fleet_cycle_state(
         self, power: PowerReadings, energy: Any,
     ) -> "FleetCycleState":
@@ -12183,6 +12208,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             config=self.config,
             peak_state=_peak_state,
             peak_slot_allowed_w=self._peak_slot_allowed_w,
+            battery_forced_grid_w=self._battery_forced_grid_w(power),
             is_night=self.time_manager.is_night_mode(),
             tariff_level=tariff_level,
             forecast_remaining_kwh=float(forecast_remaining),
