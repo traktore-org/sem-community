@@ -85,6 +85,8 @@ function loadCard(callService = async () => {}) {
     const el = new (customElements.get('sem-load-priority-card'))();
     el.setConfig({ entity_prefix: 'sensor.sem_' });
     el.hass = { language: 'en', states: lmOffStates(7), callService };
+    el.hass = next(el.hass, {});                     // HA sets hass again and again
+    assert.equal(el.targetPeakLimit, 7, 'the card read the first limit');
     return el;
 }
 
