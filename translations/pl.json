@@ -280,7 +280,9 @@
           "emergency_peak_level": "Awaryjny poziom szczytu (kW)",
           "vehicle_soc_entity": "SOC akumulatora pojazdu",
           "ev_battery_capacity_kwh": "Pojemność akumulatora EV (kWh)",
-          "ev_target_soc": "Uznaj za pełny przy (%)"
+          "ev_target_soc": "Uznaj za pełny przy (%)",
+          "shed_signal_entity": "Przekaźnik operatora sieci",
+          "shed_signal_limit": "Limit sieci gdy jest włączony (kW)"
         },
         "data_description": {
           "load_management_enabled": "Włącz/wyłącz automatyczne zrzucanie obciążeń przez SEM, aby utrzymać się poniżej limitu szczytu sieci.",
@@ -290,7 +292,9 @@
           "emergency_peak_level": "Poziom mocy (kW), przy którym SEM agresywnie zrzuca obciążenia, aby uniknąć opłat mocowych. Musi być wyższy niż docelowy limit szczytu.",
           "vehicle_soc_entity": "Opcjonalny czujnik raportujący bieżący stan naładowania pojazdu (0–100%).",
           "ev_battery_capacity_kwh": "Całkowita użyteczna pojemność akumulatora EV w kWh.",
-          "ev_target_soc": "Od tego momentu SEM uznaje samochód za naładowany. To definicja \"pełnego\", nie limit ładowania."
+          "ev_target_soc": "Od tego momentu SEM uznaje samochód za naładowany. To definicja \"pełnego\", nie limit ładowania.",
+          "shed_signal_entity": "Styk, który przełącza operator sieci (§14a, sterowanie centralne). Zostaw puste, jeśli go nie masz.",
+          "shed_signal_limit": "Gdy przekaźnik jest włączony, SEM utrzymuje pobór z sieci poniżej tego limitu. Słońce ponad to jest dozwolone."
         }
       },
       "notifications": {

@@ -280,7 +280,9 @@
           "emergency_peak_level": "Vészhelyzeti csúcsszint (kW)",
           "vehicle_soc_entity": "Jármű akkumulátor SOC",
           "ev_battery_capacity_kwh": "EV akkumulátor kapacitása (kWh)",
-          "ev_target_soc": "Tekintsd tele ennél (%)"
+          "ev_target_soc": "Tekintsd tele ennél (%)",
+          "shed_signal_entity": "A hálózati szolgáltató reléje",
+          "shed_signal_limit": "Hálózati korlát bekapcsolt állapotban (kW)"
         },
         "data_description": {
           "load_management_enabled": "A SEM automatikus terheléslekapcsolásának be- és kikapcsolása, hogy a hálózati csúcskorlát alatt maradjon.",
@@ -290,7 +292,9 @@
           "emergency_peak_level": "Az a teljesítményszint (kW), amelynél a SEM agresszíven kapcsol le terheléseket a teljesítménydíjak elkerülése érdekében. A cél csúcsteljesítmény-korlát fölött kell lennie.",
           "vehicle_soc_entity": "Opcionális érzékelő, amely a jármű aktuális töltöttségi szintjét jelenti (0–100%).",
           "ev_battery_capacity_kwh": "Az EV akkumulátorának teljes hasznos kapacitása kWh-ban.",
-          "ev_target_soc": "Ettől a SEM töltöttnek tekinti az autót. Ez a \"tele\" definíciója, nem töltési korlát."
+          "ev_target_soc": "Ettől a SEM töltöttnek tekinti az autót. Ez a \"tele\" definíciója, nem töltési korlát.",
+          "shed_signal_entity": "Az érintkező, amelyet a hálózati szolgáltató kapcsol (§14a, központi vezérlés). Hagyja üresen, ha nincs ilyen.",
+          "shed_signal_limit": "Amíg a relé be van kapcsolva, a SEM a ház hálózati vételezését e korlát alatt tartja. A napenergia ezen felül megengedett."
         }
       },
       "notifications": {

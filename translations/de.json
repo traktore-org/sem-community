@@ -280,7 +280,9 @@
           "emergency_peak_level": "Notfall-Spitzenlaststufe (kW)",
           "vehicle_soc_entity": "Fahrzeug-Batterie SOC",
           "ev_battery_capacity_kwh": "EV-Batteriekapazität (kWh)",
-          "ev_target_soc": "Als voll gelten ab (%)"
+          "ev_target_soc": "Als voll gelten ab (%)",
+          "shed_signal_entity": "Relais des Netzbetreibers",
+          "shed_signal_limit": "Netzlimit während es an ist (kW)"
         },
         "data_description": {
           "load_management_enabled": "SEMs automatischen Lastabwurf aktivieren/deaktivieren, um unter Ihrer Netz-Spitzenlastgrenze zu bleiben.",
@@ -290,7 +292,9 @@
           "emergency_peak_level": "Leistungsstufe (kW), ab der SEM Lasten aggressiv abwirft, um Leistungspreise zu vermeiden. Muss über dem Ziel-Spitzenlimit liegen.",
           "vehicle_soc_entity": "Optionaler Sensor, der den aktuellen Ladezustand des Fahrzeugs meldet (0–100 %).",
           "ev_battery_capacity_kwh": "Gesamte nutzbare Kapazität der EV-Batterie in kWh.",
-          "ev_target_soc": "Ab hier gilt das Auto für SEM als geladen. Das ist eine Definition von \"voll\", keine Ladegrenze."
+          "ev_target_soc": "Ab hier gilt das Auto für SEM als geladen. Das ist eine Definition von \"voll\", keine Ladegrenze.",
+          "shed_signal_entity": "Der Kontakt, den Ihr Netzbetreiber schaltet (§14a, Rundsteuerung). Leer lassen, wenn Sie keinen haben.",
+          "shed_signal_limit": "Solange das Relais an ist, hält SEM den Netzbezug des Hauses unter diesem Limit. Solarstrom zusätzlich ist erlaubt."
         }
       },
       "notifications": {

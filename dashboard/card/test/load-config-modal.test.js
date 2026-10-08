@@ -142,3 +142,21 @@ test('buildLoadConfigModalHTML shows Remove button only for a manual mapping', (
     assert.match(withManual, /id="cfg-remove"/);
     assert.doesNotMatch(noManual, /id="cfg-remove"/);
 });
+
+// ── #1021: the "Behind the grid operator's relay" switch ──
+test('the relay switch shows for a load, with its saved state', () => {
+    const values = controlToFormValues({ type: 'switch', entity: 'switch.boiler' });
+    const on = buildLoadConfigModalHTML({ deviceName: 'Boiler', values, t, behindRelay: true });
+    assert.match(on, /id="cfg-relay"/);
+    assert.match(on, /aria-checked="true"/);
+    assert.match(on, /cfg_behind_operator_relay/);
+    assert.match(on, /cfg_help_behind_operator_relay/);
+    const off = buildLoadConfigModalHTML({ deviceName: 'Boiler', values, t, behindRelay: false });
+    assert.match(off, /aria-checked="false"/);
+});
+
+test('no relay switch for a charger or the battery (null)', () => {
+    const values = controlToFormValues(null);
+    const html = buildLoadConfigModalHTML({ deviceName: 'Keba', values, t });
+    assert.doesNotMatch(html, /cfg-relay/);
+});

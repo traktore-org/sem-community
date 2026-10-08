@@ -280,7 +280,9 @@
           "emergency_peak_level": "Nível de pico de emergência (kW)",
           "vehicle_soc_entity": "SOC da bateria do veículo",
           "ev_battery_capacity_kwh": "Capacidade da bateria do VE (kWh)",
-          "ev_target_soc": "Considerar cheio a (%)"
+          "ev_target_soc": "Considerar cheio a (%)",
+          "shed_signal_entity": "Relé do operador da rede",
+          "shed_signal_limit": "Limite da rede enquanto ativo (kW)"
         },
         "data_description": {
           "load_management_enabled": "Ativar/desativar a redução automática de cargas do SEM para se manter abaixo do seu limite de pico de rede.",
@@ -290,7 +292,9 @@
           "emergency_peak_level": "Nível de potência (kW) a partir do qual o SEM reduz cargas de forma agressiva para evitar custos de potência contratada. Tem de ser superior ao limite de pico alvo.",
           "vehicle_soc_entity": "Sensor opcional que reporta o estado de carga atual do veículo (0–100%).",
           "ev_battery_capacity_kwh": "Capacidade total utilizável da bateria do VE em kWh.",
-          "ev_target_soc": "A partir daqui o SEM considera o carro carregado. É uma definição de \"cheio\", não um limite de carga."
+          "ev_target_soc": "A partir daqui o SEM considera o carro carregado. É uma definição de \"cheio\", não um limite de carga.",
+          "shed_signal_entity": "O contacto que o operador da rede comuta (§14a, telecomando). Deixe vazio se não tiver.",
+          "shed_signal_limit": "Enquanto o relé está ativo, o SEM mantém o consumo da rede da casa abaixo deste limite. Solar adicional é permitido."
         }
       },
       "notifications": {

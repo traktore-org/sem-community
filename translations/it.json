@@ -280,7 +280,9 @@
           "emergency_peak_level": "Livello di picco di emergenza (kW)",
           "vehicle_soc_entity": "SOC batteria veicolo",
           "ev_battery_capacity_kwh": "Capacità batteria VE (kWh)",
-          "ev_target_soc": "Considera pieno al (%)"
+          "ev_target_soc": "Considera pieno al (%)",
+          "shed_signal_entity": "Relè del gestore di rete",
+          "shed_signal_limit": "Limite di rete mentre è attivo (kW)"
         },
         "data_description": {
           "load_management_enabled": "Attiva/disattiva il distacco automatico dei carichi di SEM per restare sotto il tuo limite di picco di rete.",
@@ -290,7 +292,9 @@
           "emergency_peak_level": "Livello di potenza (kW) al quale SEM distacca i carichi in modo aggressivo per evitare costi di potenza impegnata. Deve essere superiore al limite di picco obiettivo.",
           "vehicle_soc_entity": "Sensore opzionale che riporta lo stato di carica attuale del veicolo (0–100%).",
           "ev_battery_capacity_kwh": "Capacità utilizzabile totale della batteria del VE in kWh.",
-          "ev_target_soc": "Da qui SEM considera l'auto carica. È una definizione di \"pieno\", non un limite di ricarica."
+          "ev_target_soc": "Da qui SEM considera l'auto carica. È una definizione di \"pieno\", non un limite di ricarica.",
+          "shed_signal_entity": "Il contatto che il gestore di rete comanda (§14a, telecomando centralizzato). Lascia vuoto se non ne hai.",
+          "shed_signal_limit": "Finché il relè è attivo, SEM mantiene il prelievo dalla rete sotto questo limite. Il solare in più è consentito."
         }
       },
       "notifications": {

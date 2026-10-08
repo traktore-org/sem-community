@@ -5,7 +5,7 @@
     "reason; removing one is the point of the issue.",
     "Regenerate:  python3 scripts/audit_options.py --baseline"
   ],
-  "total": 195,
+  "total": 197,
   "first_run_fields": 16,
   "first_run_steps": 3,
   "first_run_fields_best": 10,
@@ -151,6 +151,8 @@
     "phase_guard_recovery_cycles",
     "phase_guard_recovery_margin_a",
     "phase_guard_topology",
+    "shed_signal_entity",
+    "shed_signal_limit",
     "solar_forecast_source",
     "solar_power_sensor",
     "target_peak_limit",

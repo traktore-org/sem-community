@@ -280,7 +280,9 @@
           "emergency_peak_level": "Nödnivå för effekttopp (kW)",
           "vehicle_soc_entity": "Fordonets batteri-SOC",
           "ev_battery_capacity_kwh": "EV batterikapacitet (kWh)",
-          "ev_target_soc": "Betrakta som full vid (%)"
+          "ev_target_soc": "Betrakta som full vid (%)",
+          "shed_signal_entity": "Nätbolagets relä",
+          "shed_signal_limit": "Nätgräns medan det är på (kW)"
         },
         "data_description": {
           "load_management_enabled": "Aktivera/inaktivera SEM:s automatiska lastbortkoppling för att hålla dig under din effekttoppsgräns.",
@@ -290,7 +292,9 @@
           "emergency_peak_level": "Effektnivå (kW) vid vilken SEM aggressivt kopplar bort laster för att undvika effektavgifter. Måste ligga över den målsatta toppgränsen.",
           "vehicle_soc_entity": "Valfri sensor som rapporterar fordonets aktuella laddningsnivå (0–100 %).",
           "ev_battery_capacity_kwh": "Total användbar kapacitet i elbilens batteri i kWh.",
-          "ev_target_soc": "Härifrån betraktar SEM bilen som laddad. Det är en definition av \"full\", inte en laddgräns."
+          "ev_target_soc": "Härifrån betraktar SEM bilen som laddad. Det är en definition av \"full\", inte en laddgräns.",
+          "shed_signal_entity": "Kontakten ditt nätbolag styr (§14a, rundstyrning). Lämna tomt om du inte har någon.",
+          "shed_signal_limit": "Medan reläet är på håller SEM husets nätuttag under denna gräns. Sol utöver är tillåten."
         }
       },
       "notifications": {

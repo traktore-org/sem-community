@@ -3458,6 +3458,10 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "shed_need_w", "shed_sheddable_w", "uncontrolled_w",
                 # (#1048) the phase guard's verdict and its held loads
                 "phase_shed_path", "phase_held",
+                # (#1021) the grid operator's relay — the Control banner
+                "shed_signal_state", "shed_signal_active",
+                "shed_signal_cap_kw", "shed_signal_since",
+                "shed_signal_locked",
             ):
                 attrs[key] = self.coordinator.data.get(key)
             # Add device list details for dashboard table

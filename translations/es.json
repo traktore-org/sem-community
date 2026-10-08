@@ -280,7 +280,9 @@
           "emergency_peak_level": "Nivel de pico de emergencia (kW)",
           "vehicle_soc_entity": "SOC batería vehículo",
           "ev_battery_capacity_kwh": "Capacidad batería VE (kWh)",
-          "ev_target_soc": "Considerar lleno al (%)"
+          "ev_target_soc": "Considerar lleno al (%)",
+          "shed_signal_entity": "Relé de la distribuidora",
+          "shed_signal_limit": "Límite de red mientras está activo (kW)"
         },
         "data_description": {
           "load_management_enabled": "Activar/desactivar la desconexión automática de cargas de SEM para mantenerse por debajo de su límite de pico de red.",
@@ -290,7 +292,9 @@
           "emergency_peak_level": "Nivel de potencia (kW) a partir del cual SEM desconecta cargas de forma agresiva para evitar recargos por demanda. Debe ser superior al límite de pico objetivo.",
           "vehicle_soc_entity": "Sensor opcional que indica el estado de carga actual del vehículo (0–100 %).",
           "ev_battery_capacity_kwh": "Capacidad útil total de la batería del VE en kWh.",
-          "ev_target_soc": "A partir de aquí SEM considera el coche cargado. Es una definición de \"lleno\", no un límite de carga."
+          "ev_target_soc": "A partir de aquí SEM considera el coche cargado. Es una definición de \"lleno\", no un límite de carga.",
+          "shed_signal_entity": "El contacto que conmuta tu distribuidora (§14a, telemando). Déjalo vacío si no tienes.",
+          "shed_signal_limit": "Mientras el relé está activo, SEM mantiene el consumo de red de la casa bajo este límite. La solar adicional está permitida."
         }
       },
       "notifications": {

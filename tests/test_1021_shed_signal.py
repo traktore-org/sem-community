@@ -205,3 +205,81 @@ class TestTheCycleReadsItOnce:
         sig = c._refresh_shed_signal()
         assert sig.active and sig.cap_kw == 5.0
         assert ctl.shed_signal is sig is c._shed_signal
+
+
+class TestTheSignalHasCallers:
+    """(#1021) #664 removed a utility-signal surface nobody could reach: no
+    form field, no card, no caller. Its guard said a real implementation
+    must replace it. This is that replacement: every part of #1021 has a
+    caller, so the orphan state #664 cleared cannot come back."""
+
+    _ROOT = __import__("pathlib").Path(__file__).resolve().parent.parent
+
+    def _src(self, rel):
+        return (self._ROOT / rel).read_text(encoding="utf-8")
+
+    def test_the_cycle_reads_the_relay(self):
+        src = self._src("coordinator/coordinator.py")
+        assert "self._refresh_shed_signal()" in src
+        assert "read_shed_signal(" in src
+
+    def test_the_load_walk_reads_the_lock(self):
+        src = self._src("coordinator/surplus_controller.py")
+        assert src.count('"locked_by_operator", False) is True') >= 2
+
+    def test_the_relay_is_in_the_gui_and_the_options_flow(self):
+        assert '"shed_signal_entity"' in self._src("config_flow.py")
+        card = self._src("dashboard/card/src/cards/sem-config-card.js")
+        assert "'shed_signal_entity'" in card and "'shed_signal_limit'" in card
+
+    def test_the_device_switch_is_in_the_gui_and_the_service(self):
+        assert '"behind_operator_relay"' in self._src("__init__.py")
+        assert "behind_operator_relay" in self._src(
+            "dashboard/card/src/cards/sem-load-priority-card.js")
+        assert '"behind_operator_relay"' in self._src(
+            "features/device_registry.py")
+
+    def test_the_old_surface_stays_gone(self):
+        assert not (self._ROOT / "utility_signals.py").exists()
+
+
+class TestTheBannerPayload:
+    def test_since_is_set_on_and_cleared_off(self, hass):
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        c = SEMCoordinator.__new__(SEMCoordinator)
+        c.hass = hass
+        c.config = {"shed_signal_entity": "binary_sensor.relay"}
+        c._surplus_controller = SurplusController(hass)
+        c._shed_signal = INERT
+        c._shed_signal_since = None
+        hass.states.async_set("binary_sensor.relay", "on")
+        c._refresh_shed_signal()
+        p = c._shed_signal_payload()
+        assert p["shed_signal_active"] is True
+        assert p["shed_signal_cap_kw"] == 4.2
+        first = p["shed_signal_since"]
+        assert first
+        c._refresh_shed_signal()                       # still on: same since
+        assert c._shed_signal_payload()["shed_signal_since"] == first
+        hass.states.async_set("binary_sensor.relay", "off")
+        c._refresh_shed_signal()
+        p = c._shed_signal_payload()
+        assert p["shed_signal_active"] is False and p["shed_signal_since"] is None
+
+
+class TestTheDeviceFlagIsPersisted:
+    def test_the_goal_reaches_the_live_device(self, hass):
+        from custom_components.solar_energy_management.features.device_registry import (
+            UnifiedDeviceRegistry as DeviceRegistry,
+        )
+        assert "behind_operator_relay" in DeviceRegistry.GOAL_PROPERTIES
+        d = _boiler(hass, behind=False)
+        reg = DeviceRegistry.__new__(DeviceRegistry)
+        reg._device_goals = {"boiler": {"behind_operator_relay": "True"}}
+        reg._apply_goals(d)
+        assert d.behind_operator_relay is True
+        reg._device_goals = {"boiler": {"behind_operator_relay": "False"}}
+        reg._apply_goals(d)
+        assert d.behind_operator_relay is False

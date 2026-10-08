@@ -807,6 +807,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # (#1021) the operator's relay this cycle; INERT until first read
         from .shed_signal import INERT as _SHED_INERT
         self._shed_signal = _SHED_INERT
+        self._shed_signal_since = None
         self._cycle_vehicle_soc: Optional[float] = None
         # (#657) The cycle's canonical EVBudget. ``_build_charging_context``
         # sets it on every cycle before ``SEMData`` is built, so this default
@@ -5012,6 +5013,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             if tracker_data:
                 result.update(tracker_data)
 
+            # (#1021) the grid operator's relay — the Control tab's banner
+            result.update(self._shed_signal_payload())
+
             # Add night window sensors
             try:
                 night_start, night_end = self.time_manager.get_night_window()
@@ -9025,11 +9029,38 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 self.hass.states.get)
         else:
             sig = INERT
+        # since when — the banner says it; cleared the moment it lifts
+        if sig.active and not getattr(getattr(self, "_shed_signal", None),
+                                      "active", False):
+            self._shed_signal_since = dt_util.now().isoformat()
+        elif not sig.active:
+            self._shed_signal_since = None
         self._shed_signal = sig
         ctl = getattr(self, "_surplus_controller", None)
         if ctl is not None:
             ctl.shed_signal = sig
         return sig
+
+    def _shed_signal_payload(self) -> dict:
+        """(#1021) The relay for the cards and diagnostics."""
+        sig = getattr(self, "_shed_signal", None)
+        ctl = getattr(self, "_surplus_controller", None)
+        locked = []
+        try:
+            locked = sorted(
+                str(d.device_id) for d in (
+                    ctl.get_devices_sorted() if ctl is not None else [])
+                if getattr(d, "locked_by_operator", False) is True)
+        except Exception:  # noqa: BLE001 — a roster read never breaks a cycle
+            locked = []
+        return {
+            "shed_signal_entity": getattr(sig, "source", None),
+            "shed_signal_state": getattr(sig, "state", "none"),
+            "shed_signal_active": bool(getattr(sig, "active", False)),
+            "shed_signal_cap_kw": getattr(sig, "cap_kw", None),
+            "shed_signal_since": getattr(self, "_shed_signal_since", None),
+            "shed_signal_locked": locked,
+        }
 
     def _intraday_forecast_on(self) -> bool:
         """(#1068) The soak flag: the day follows measured yield."""

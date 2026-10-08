@@ -280,7 +280,9 @@
           "emergency_peak_level": "Nødnivå for topplast (kW)",
           "vehicle_soc_entity": "Kjøretøyets batteri-SOC",
           "ev_battery_capacity_kwh": "Elbilbatteriets kapasitet (kWh)",
-          "ev_target_soc": "Regn som full ved (%)"
+          "ev_target_soc": "Regn som full ved (%)",
+          "shed_signal_entity": "Nettselskapets relé",
+          "shed_signal_limit": "Nettgrense mens det er på (kW)"
         },
         "data_description": {
           "load_management_enabled": "Slå av/på SEMs automatiske utkobling av laster for å holde seg under nettets topplastgrense.",
@@ -290,7 +292,9 @@
           "emergency_peak_level": "Effektnivået (kW) der SEM aggressivt kobler ut laster for å unngå effekttariffkostnader. Må være over mål-toppgrensen.",
           "vehicle_soc_entity": "Valgfri sensor som rapporterer kjøretøyets nåværende ladenivå (0–100 %).",
           "ev_battery_capacity_kwh": "Total brukbar kapasitet på elbilbatteriet i kWh.",
-          "ev_target_soc": "Herfra regner SEM bilen som ladet. Det er en definisjon av \"full\", ikke en ladegrense."
+          "ev_target_soc": "Herfra regner SEM bilen som ladet. Det er en definisjon av \"full\", ikke en ladegrense.",
+          "shed_signal_entity": "Kontakten nettselskapet ditt styrer (§14a, fjernstyring). La feltet stå tomt om du ikke har en.",
+          "shed_signal_limit": "Mens reléet er på, holder SEM husets nettuttak under denne grensen. Sol i tillegg er tillatt."
         }
       },
       "notifications": {

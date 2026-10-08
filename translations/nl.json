@@ -280,7 +280,9 @@
           "emergency_peak_level": "Noodniveau piekvermogen (kW)",
           "vehicle_soc_entity": "Voertuig batterij SOC",
           "ev_battery_capacity_kwh": "EV batterijcapaciteit (kWh)",
-          "ev_target_soc": "Beschouw als vol bij (%)"
+          "ev_target_soc": "Beschouw als vol bij (%)",
+          "shed_signal_entity": "Relais van de netbeheerder",
+          "shed_signal_limit": "Netlimiet zolang het aan is (kW)"
         },
         "data_description": {
           "load_management_enabled": "Schakel SEM's automatische lastafschakeling in of uit om onder uw netpieklimiet te blijven.",
@@ -290,7 +292,9 @@
           "emergency_peak_level": "Vermogensniveau (kW) waarbij SEM agressief verbruikers afschakelt om piekkosten te vermijden. Moet boven de doel-pieklimiet liggen.",
           "vehicle_soc_entity": "Optionele sensor die het huidige laadniveau van het voertuig toont (0–100%).",
           "ev_battery_capacity_kwh": "Totale bruikbare capaciteit van de EV-accu in kWh.",
-          "ev_target_soc": "Vanaf hier beschouwt SEM de auto als geladen. Dit is een definitie van \"vol\", geen laadlimiet."
+          "ev_target_soc": "Vanaf hier beschouwt SEM de auto als geladen. Dit is een definitie van \"vol\", geen laadlimiet.",
+          "shed_signal_entity": "Het contact dat je netbeheerder schakelt (§14a, rimpelsturing). Laat leeg als je er geen hebt.",
+          "shed_signal_limit": "Zolang het relais aan is, houdt SEM de netafname van het huis onder deze limiet. Zon erbovenop mag."
         }
       },
       "notifications": {
