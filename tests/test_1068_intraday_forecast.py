@@ -66,3 +66,67 @@ def test_zero_and_garbage_stay_safe():
         assert t.corrected_remaining_kwh(0) == 0.0
         assert t.corrected_remaining_kwh(None) == 0.0
         assert t.corrected_remaining_kwh("x") == 0.0
+
+
+# ── Task 3: the plan's day reads the corrected remaining (soak flag) ──
+from types import SimpleNamespace  # noqa: E402
+
+from custom_components.solar_energy_management.consts.core import (  # noqa: E402
+    CONF_INTRADAY_FORECAST,
+)
+from custom_components.solar_energy_management.coordinator.coordinator import (  # noqa: E402
+    SEMCoordinator,
+)
+
+
+def _coord(flag, remaining=7.1, tracker=None):
+    c = SEMCoordinator.__new__(SEMCoordinator)
+    c.config = {CONF_INTRADAY_FORECAST: True} if flag else {}
+    c._forecast_reader = SimpleNamespace(forecast_data=SimpleNamespace(
+        forecast_today_kwh=18.3, forecast_remaining_today_kwh=remaining,
+        forecast_tomorrow_kwh=22.1))
+    c._forecast_tracker = tracker or _tracker(18.3, 3.0, TZ_NOON)
+    return c
+
+
+def test_flag_off_is_todays_behaviour():
+    c = _coord(flag=False)
+    with patch(_NOW, return_value=TZ_NOON):
+        assert c._plan_day_remaining_kwh() == 7.1
+
+
+def test_day_slots_follow_measured_yield():
+    c = _coord(flag=True)
+    with patch(_NOW, return_value=TZ_NOON):
+        rem = c._plan_day_remaining_kwh()
+    assert rem == pytest.approx(7.1 * 0.35, abs=0.4)
+
+
+def test_the_signature_reads_the_same_helper():
+    """The anchor watches what the plan reads: with the flag on, a grey
+    noon re-anchors on the corrected number, not the provider's."""
+    c = _coord(flag=True)
+    with patch(_NOW, return_value=TZ_NOON):
+        sig = dict(t for t in c._energy_plan_demand_signature(
+            SimpleNamespace(ev_connected=False, ev_connected_per_charger=None))
+            if isinstance(t, tuple) and len(t) == 2
+            and t[0] in ("solar", "solar_tomorrow"))
+        expected = round(c._plan_day_remaining_kwh() / 2.0) * 2.0
+    assert sig["solar"] == expected
+
+
+def test_both_day_readers_go_through_the_one_helper():
+    """No second derivation: the slot builder and the signature both read
+    the remaining via ``_plan_day_remaining_kwh`` (AST)."""
+    import ast
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[1] / "coordinator"
+           / "coordinator.py").read_text()
+    tree = ast.parse(src)
+    fns = {n.name: n for n in ast.walk(tree)
+           if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    for name in ("_energy_plan_demand_signature", "_shadow_energy_plan"):
+        body = ast.unparse(fns[name])
+        assert "plan_day_remaining_kwh(self)" in body, name
+        assert "forecast_remaining_today_kwh" not in body, (
+            f"{name} reads the raw remaining directly (#1068)")

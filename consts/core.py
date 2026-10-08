@@ -394,3 +394,9 @@ RECORDER_MAX_STATE_ATTRS_BYTES: Final = 16384
 # refuted a 90 % rule that had moved it by 255 bytes).
 RECORDER_ATTR_HEADROOM_BYTES: Final = 1384
 RECORDER_ATTR_BUDGET_BYTES: Final = RECORDER_MAX_STATE_ATTRS_BYTES - RECORDER_ATTR_HEADROOM_BYTES
+
+# (#1068) Soak flag, not a setting: the plan's day follows measured yield.
+# Off until the PROD soak proves it; then the default flips and the key
+# retires. Set with the set_option service, never a GUI control.
+CONF_INTRADAY_FORECAST: Final = "intraday_forecast"
+DEFAULT_INTRADAY_FORECAST: Final = False

@@ -36,6 +36,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.util import dt as dt_util
 
 from ..consts.core import CAPABILITY_MISS_CONFIRM_READS, CAPABILITY_MISS_HOLD_S
+from ..consts.core import CONF_INTRADAY_FORECAST, DEFAULT_INTRADAY_FORECAST
 from ..const import (
     DOMAIN,
     DEFAULT_UPDATE_INTERVAL,
@@ -226,6 +227,31 @@ def plan_decision_core(plan) -> tuple:
         )
     except Exception:  # noqa: BLE001 — an unreadable plan restamps, safely
         return ("<unreadable>", id(plan))
+
+
+def intraday_forecast_on(owner) -> bool:
+    """(#1068) The soak flag: the plan's day follows measured yield."""
+    return bool((getattr(owner, "config", None) or {}).get(
+        CONF_INTRADAY_FORECAST, DEFAULT_INTRADAY_FORECAST))
+
+
+def plan_day_remaining_kwh(owner) -> float:
+    """(#1068) What the plan's day slots believe is left today.
+
+    Flag off: the provider's raw remaining, exactly as before. Flag on: the
+    same number scaled by what today has really made — PROD 08.10.2026
+    planned 0 W grid for the afternoon of a 4.3-kWh day because this read
+    18 kWh worth of sky that never came. A module function, not a method,
+    so the plan builder's test fakes reach it the same way the cycle does."""
+    _fd = getattr(getattr(owner, "_forecast_reader", None),
+                  "forecast_data", None)
+    raw = float(getattr(_fd, "forecast_remaining_today_kwh", 0.0) or 0.0)
+    if not intraday_forecast_on(owner):
+        return raw
+    tracker = getattr(owner, "_forecast_tracker", None)
+    if tracker is None:
+        return raw
+    return tracker.corrected_remaining_kwh(raw)
 
 
 def demand_signature_changed(old, new) -> bool:
@@ -5984,6 +6010,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 dampened_remaining = round(
                     forecast_data.forecast_remaining_today_kwh * dampening, 2
                 )
+                if intraday_forecast_on(self):
+                    # (#1068) one producer: the outlook reads what the
+                    # plan's day reads, evidenced floor included.
+                    dampened_remaining = (
+                        self._forecast_tracker.corrected_remaining_kwh(
+                            forecast_data.forecast_remaining_today_kwh))
                 battery_target_soc = self.config.get("battery_priority_soc", 90)
                 battery_need_kwh = max(0, (battery_target_soc - power.battery_soc) / 100 * self.battery_capacity_kwh)
                 predicted_home = self._predictor.predict_consumption_today_kwh(dt_util.now())
@@ -8954,6 +8986,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         return plan_car_fullness(detector, drawing_w=drawing_w,
                                  handshake_w=handshake_w)
 
+    def _intraday_forecast_on(self) -> bool:
+        """(#1068) The soak flag: the day follows measured yield."""
+        return intraday_forecast_on(self)
+
+    def _plan_day_remaining_kwh(self) -> float:
+        """(#1068) See :func:`plan_day_remaining_kwh`."""
+        return plan_day_remaining_kwh(self)
+
     def _energy_plan_demand_signature(self, power, energy=None) -> tuple:
         """(#638) What the night is being ASKED for, as a comparable value.
 
@@ -9122,8 +9162,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         try:
             _fd = getattr(getattr(self, "_forecast_reader", None),
                           "forecast_data", None)
-            _rem = float(getattr(_fd, "forecast_remaining_today_kwh", 0.0)
-                         or 0.0)
+            # (#1068) the SAME helper the day slots read — the anchor
+            # watches what the plan reads.
+            _rem = plan_day_remaining_kwh(self)
             _tom = float(getattr(_fd, "forecast_tomorrow_kwh", 0.0) or 0.0)
             _made = getattr(energy, "daily_solar", None)
             _made = (float(_made) if isinstance(_made, (int, float))
@@ -10543,10 +10584,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 day_kwh = 0.0
                 sunrise = sunset = now
                 try:
-                    _fd = getattr(getattr(self, "_forecast_reader", None),
-                                  "forecast_data", None)
-                    day_kwh = float(getattr(
-                        _fd, "forecast_remaining_today_kwh", 0.0) or 0.0)
+                    day_kwh = plan_day_remaining_kwh(self)
                 except Exception:  # noqa: BLE001 — no forecast, priced day
                     day_kwh = 0.0
                 try:
