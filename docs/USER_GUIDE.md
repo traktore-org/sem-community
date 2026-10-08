@@ -307,6 +307,21 @@ Declaring no limit is its own explicit switch, so it is never reached by
 accident. Your kW numbers stay in config while it is on and come back
 untouched when you turn it off.
 
+#### Grid operator relay (#1021)
+
+If your grid operator can cut your load (§14a in Germany, ripple control in
+Switzerland), pick its relay under *Load management*. While it is on, the
+Control tab says so, SEM keeps grid draw under the limit you set, and devices
+marked *Behind the grid operator's relay* show *Locked by the grid operator*.
+Setup: SETUP_GUIDE section 7.
+
+#### The rest of today's solar follows the sky (#1068)
+
+The *Forecast remaining today* sensor shows the provider's number. Its
+`corrected_kwh` attribute is the same number scaled by what today has really
+made: on a grey day it drops well below the forecast by midday. This is being
+tested; once proven, the day plan will use it.
+
 ### Other Settings
 
 | Setting | Default | Description |

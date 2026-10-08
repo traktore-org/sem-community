@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- ✨ **The day plan follows the sky** (#1068). From midday, the rest of today's solar is scaled by what was really made. Off by default.
+- ✨ **Grid operator relay** (#1021). While it is on, SEM keeps grid draw under the operator's limit and skips the devices it switches off.
 - 🐛 **The Control tab shows a grid limit you change on the Configuration tab** (#1055) — thanks @lostcontrol. No page reload needed; saving no longer restarts SEM.
 - 🐛 **A sleeping inverter no longer shows solar all night** (#1065) — thanks @RienduPre. Its last value from dusk now reads 0 W.
 - 🐛 **With night charging on, a car no longer empties a battery SEM can limit** (#1066) — thanks @RienduPre. A Sessy has no limit; Diagnose says so.

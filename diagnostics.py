@@ -213,6 +213,8 @@ def _build_deye_diagnostics(adapters: dict[str, Any]) -> dict[str, Any] | None:
 
 # Config keys that could contain user-specific entity IDs (not secrets, but privacy)
 REDACT_CONFIG_KEYS = {
+    # (#1021) the grid operator's relay — an entity id, same class as below
+    "shed_signal_entity",
     "ev_connected_sensor",
     "ev_charging_sensor",
     "ev_charging_power_sensor",
@@ -767,6 +769,25 @@ async def async_get_config_entry_diagnostics(
             "tomorrow_kwh": data.get("forecast_tomorrow_kwh"),
             "source": data.get("forecast_source"),
             "available": data.get("forecast_available"),
+            # (#1068) the rest of the day as measured so far: the factor the
+            # plan's day reads when the intraday flag is on, and its floor
+            "remaining_today_kwh": data.get("forecast_remaining_today_kwh"),
+            "dampening_factor": data.get("forecast_dampening_factor"),
+            "dampening_path": data.get("forecast_dampening_path"),
+            "corrected_factor": data.get("forecast_corrected_factor"),
+            "corrected_floor": data.get("forecast_corrected_floor"),
+            "intraday_forecast": bool((getattr(coordinator, "config", None) or {})
+                                      .get("intraday_forecast", False)),
+        },
+        # (#1021) the grid operator's relay: whether one is set (never its
+        # id), what it says now, the limit, since when, which loads it holds
+        "shed_signal": {
+            "configured": bool(data.get("shed_signal_entity")),
+            "state": data.get("shed_signal_state"),
+            "active": data.get("shed_signal_active"),
+            "cap_kw": data.get("shed_signal_cap_kw"),
+            "since": data.get("shed_signal_since"),
+            "locked_devices": data.get("shed_signal_locked"),
         },
         "tariff": {
             "import_rate": data.get("tariff_current_import_rate"),

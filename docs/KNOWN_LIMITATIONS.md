@@ -196,6 +196,18 @@ was silently off for those installs.
 
 Peak load management requires controllable devices with switch entities for shedding. Devices without a discoverable switch entity must be configured manually. The 15-minute rolling average calculation starts fresh after each HA restart.
 
+## Grid operator relay: SEM follows it, the operator enforces it (#1021)
+
+- Only loads SEM controls obey the limit. An oven or a load SEM does not drive
+  still draws; the operator's own relay remains the hard stop.
+- SEM sets one limit for the house. The 4.2 kW-per-device floor is the
+  operator's rule; SEM does not split it per device.
+- No EEBus in SEM. The relay, and the limit if you have one, come from an
+  integration.
+- In Switzerland SEM only knows a device is locked if you mark it *Behind the
+  grid operator's relay*. An unmarked device still gets planned.
+- An unreadable relay counts as off. An unreadable limit counts as 4.2 kW.
+
 ## OCPP chargers stop through the charge-control switch (2.1, #976)
 
 On the OCPP integration the maximum-current number is a charging profile the
