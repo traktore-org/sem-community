@@ -418,7 +418,11 @@ class UnifiedDeviceRegistry:
                 }
                 # (#1067) A store from before the held rule: every saved
                 # rating may be one start peak, so each gets checked again.
-                if data.get("rated_power_rule") != RATED_POWER_RULE:
+                try:
+                    rule = int(data.get("rated_power_rule") or 0)
+                except (TypeError, ValueError):
+                    rule = 0
+                if rule < RATED_POWER_RULE:
                     self._ratings_to_recheck = set(self._rated_power_overrides)
                 else:
                     marks = data.get("rated_power_recheck")
@@ -977,6 +981,8 @@ class UnifiedDeviceRegistry:
         Skips EV charger — it's registered separately in __init__.py with
         special CurrentControlDevice config (phases, min/max current, service).
         """
+        # (#1067) Who was built from a saved rating is this sync's answer only.
+        self._built_from_store.clear()
         # Unregister old registry-managed devices (prefix: energy_dashboard_).
         # (#559) NEVER wipe a SERVICE-registered device, even when the user
         # picked an energy_dashboard_* id: the wipe removed it and the rebuild
@@ -3106,10 +3112,16 @@ class UnifiedDeviceRegistry:
             held = float(held_by_did.get(did, 0.0) or 0.0)
             if did in self._ratings_to_recheck:
                 # (#1067) Saved under the old rule: it may be a start peak.
-                # Until the history answers, nothing is applied — a device
-                # built from it already has it, and a device given its own
-                # rating must not be raised to a peak.
+                # Until the history answers, it is applied only over the 1 kW
+                # placeholder (#744: any measurement beats an invention) — a
+                # device built from it already has it, and a device given its
+                # own rating must not be raised to a peak.
                 if held <= 0 or held * RATED_POWER_START_PEAK_RATIO < override:
+                    if not measured and override > 0:
+                        dev.rated_power = override
+                        dev.rated_power_measured = True
+                        if hasattr(dev, "min_power_threshold"):
+                            dev.min_power_threshold = override
                     continue   # no run in the history, or only idle: ask again
                 self._rated_power_overrides[did] = held
                 self._ratings_to_recheck.discard(did)
@@ -3161,10 +3173,14 @@ class UnifiedDeviceRegistry:
         if not states:
             return 0.0
         # A week of a 1 s sensor is a lot of rows: not on the event loop.
-        return float(await self.hass.async_add_executor_job(
-            held_power_from_states, states, power_unit_scale(live),
-            dt_util.utcnow().timestamp(), _MAX_PLAUSIBLE_LOAD_W,
-        ) or 0.0)
+        try:
+            return float(await self.hass.async_add_executor_job(
+                held_power_from_states, states, power_unit_scale(live),
+                dt_util.utcnow().timestamp(), _MAX_PLAUSIBLE_LOAD_W,
+            ) or 0.0)
+        except Exception as err:  # noqa: BLE001 — a rating never costs a rebuild
+            _LOGGER.debug("held-power history for %s failed: %s", power_sensor, err)
+            return 0.0
 
     async def async_seed_ratings_from_history(self) -> None:
         """(#967) The recorder pass, once Home Assistant has started.

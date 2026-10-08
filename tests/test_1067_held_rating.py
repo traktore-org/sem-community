@@ -145,9 +145,10 @@ class TestTheLivePathLearnsTheHeldLevel:
             dev.calibrate_rated_power(now=t)
         assert dev.rated_power == RUNNING_W
 
-    def test_a_rebuild_keeps_the_hold(self):
-        # The registry re-registers a FRESH object on every rediscovery; a
-        # hold that reset each time would never reach the hold time.
+    def test_a_re_registration_keeps_the_hold(self):
+        # A service device re-registered (an edit) is a FRESH object; the
+        # hold travels with the other volatile fields. Energy Dashboard
+        # loads are unregistered first, so theirs starts again (class 129).
         from custom_components.solar_energy_management.coordinator.surplus_controller import (
             SurplusController,
         )
@@ -240,7 +241,8 @@ class TestTheHistoryRead:
         assert held == 0.0
 
     async def test_a_value_no_load_can_draw_breaks_the_run(self):
-        # The unit changed from W to kW inside the week: old rows read 1000x.
+        # The unit changed from W to kW inside the week: old rows read 1000x
+        # (caught for loads above 100 W only — class 129).
         held = await self._held(
             [(0, 0), (100, 200.0), (1000, 0.2), (1900, 0)], "kW")
         assert held == 200.0
@@ -355,6 +357,13 @@ class TestAnOldRatingIsCheckedAgain:
         assert devs["d"].rated_power_measured is True
         assert reg._ratings_to_recheck == set()
 
+    async def test_a_start_fifteen_times_the_run_is_still_a_start(self):
+        # A small fan: 100 W running, 1.5 kW for a moment at each start.
+        reg, devs = _old_store_reg({"fan": 1500.0}, {"fan": None})
+        reg._history_held_power = AsyncMock(return_value=100.0)
+        await reg._seed_and_apply_ratings()
+        assert devs["fan"].rated_power == 100.0
+
     async def test_without_history_nothing_changes_and_it_asks_again(self):
         reg, devs = _old_store_reg({"d": 1400.0}, {"d": None})
         reg._history_held_power = AsyncMock(return_value=0.0)
@@ -384,6 +393,47 @@ class TestAnOldRatingIsCheckedAgain:
         assert devs["d"].rated_power == 198.0
         assert reg._rated_power_overrides["d"] == 198.0
         reg._save_storage.assert_awaited()
+
+    async def test_a_placeholder_still_gets_the_saved_number(self):
+        # A service device registered with no rating holds the 1 kW guess;
+        # the saved 2500 is a measurement and wins until history answers.
+        reg, devs = _old_store_reg(
+            {"svc": 2500.0}, {"svc": _live(1000.0, measured=False)})
+        reg._history_held_power = AsyncMock(return_value=0.0)
+        await reg._seed_and_apply_ratings()
+        assert devs["svc"].rated_power == 2500.0
+        assert devs["svc"].rated_power_measured is True
+        assert reg._ratings_to_recheck == {"svc"}
+
+    async def test_a_store_from_a_later_rule_is_not_checked_again(self):
+        reg = TestAnOldRatingIsCheckedAgain._store_reg(self, {
+            "legacy_flags_adopted": True, "rated_power_rule": RATED_POWER_RULE + 1,
+            "rated_power_overrides": {"d": 200.0}})
+        await reg._load_storage()
+        assert reg._ratings_to_recheck == set()
+
+    def test_a_build_record_lasts_one_sync(self):
+        reg = _reg()
+        reg._rated_power_overrides["d"] = 1400.0
+        reg._initial_rated_power("d", "sensor.p")
+        assert reg._built_from_store == {"d": 1400.0}
+        reg._devices = []
+        reg._ev_charger_rows = []
+        reg._surplus_controller._devices = {}
+        reg._sync_to_surplus_controller()
+        assert reg._built_from_store == {}
+
+    async def test_a_failed_history_job_is_no_level(self):
+        reg = _reg()
+        reg.hass.states.get = MagicMock(return_value=SimpleNamespace(
+            state="0", attributes={"unit_of_measurement": "W"}))
+        reg.hass.async_add_executor_job = AsyncMock(side_effect=RuntimeError("shutdown"))
+        with patch(
+            "custom_components.solar_energy_management.coordinator."
+            "recorder_history.read_states",
+            AsyncMock(return_value=[_state(200, 0.0)]),
+        ):
+            assert await reg._history_held_power("sensor.p") == 0.0
 
     async def test_a_rating_the_device_was_given_is_not_lowered(self):
         # A hot-water heater configured at 2500 W; the old store saved the

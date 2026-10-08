@@ -75,9 +75,10 @@ RATED_POWER_SAMPLE_GAP_S: Final = 90.0
 RATED_POWER_RULE: Final = 2
 # A start reads at most this many times what the load then holds. The
 # re-check lowers a saved rating only to a level at least this share of
-# it: a load left on but idle (a boiler at 4 W under a 2 kW rating) is
-# not a start peak, and must not take the place of its rating.
-RATED_POWER_START_PEAK_RATIO: Final = 10.0
+# it: a load left on but idle (a boiler at 4 W under a 2.5 kW rating) is
+# not a start peak, and must not take the place of its rating. Generous
+# on purpose: a rating set too low heals after one hold, a kept peak never.
+RATED_POWER_START_PEAK_RATIO: Final = 20.0
 
 # Battery Discharge Protection
 DEFAULT_BATTERY_DISCHARGE_PROTECTION_ENABLED: Final = True  # Enable discharge protection during night charging
