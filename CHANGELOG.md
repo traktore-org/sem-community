@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **A load's power is what it draws while running, not its start-up peak** (#1067) — thanks @lostcontrol. A 200 W dehumidifier read 1.4 kW and never started.
 - 🐛 **Car energy matches the charger's own meter once charging stops** (#1049) — thanks @RienduPre. A high power reading no longer makes home use too low.
 - 🐛 **The Control tab shows a grid limit you change on the Configuration tab** (#1055) — thanks @lostcontrol. No page reload needed; saving no longer restarts SEM.
 - 🐛 **A sleeping inverter no longer shows solar all night** (#1065) — thanks @RienduPre. Its last value from dusk now reads 0 W.
