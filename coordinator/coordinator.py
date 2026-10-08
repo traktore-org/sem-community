@@ -1952,6 +1952,45 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 counters.append(fallback)
         return counters
 
+    def _own_ev_counters(self) -> Dict[str, Optional[str]]:
+        """(#1049) Per charger id: the energy counter that is its ALONE.
+
+        The same choice as ``_collect_ev_counter_entities`` level 1 — the
+        charger's own ``ev_total_energy_sensor``, the top-level one for the
+        primary (by position) only. A counter two chargers name is neither's:
+        it maps to None, because each would read the other's kWh as its own.
+        The fallbacks (legacy daily sensor, Energy Dashboard ``ev_energy``)
+        are never a charger's own — they are not tied to one box.
+        """
+        top_level = self.config.get("ev_total_energy_sensor")
+        if not [c for c in (self.config.get("ev_chargers") or [])
+                if isinstance(c, dict)]:
+            # One box set up with flat keys registers as ``ev_charger``
+            # (``primary_charger_id``); its top-level counter is its own.
+            return {"ev_charger": top_level} if top_level else {}
+        own: Dict[str, Optional[str]] = {}
+        for index, charger in enumerate(self.config.get("ev_chargers") or []):
+            if not isinstance(charger, dict):
+                continue
+            # Registration's id fallback (__init__), by the same position.
+            cid = charger.get("id") or f"ev_charger_{index}"
+            own[cid] = (charger.get("ev_total_energy_sensor")
+                        or (top_level if index == 0 else None)) or None
+        named = [e for e in own.values() if e]
+        return {cid: (e if e and named.count(e) == 1 else None)
+                for cid, e in own.items()}
+
+    def _ev_counter_owners(self) -> Dict[str, str]:
+        """(#1049) Counter → the charger whose power it counts."""
+        return {e: cid for cid, e in self._own_ev_counters().items() if e}
+
+    def _ev_counters_cover_fleet(self) -> bool:
+        """(#1049) Does every charger have a counter of its own? Only then
+        does the counter set see all the charging the power integral sees,
+        and only then may it pull the EV rows down."""
+        own = self._own_ev_counters()
+        return bool(own) and all(own.values())
+
     def install_presence(self) -> Dict[Module, Presence]:
         """(#923) What this install has right now — see install_modules.py."""
         # Called through the class so a bare test double (a SimpleNamespace
@@ -2197,6 +2236,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             self.hass,
             self._collect_ev_counter_entities(),
             self.config.get("prefer_hardware_energy", True),
+            complete=self._ev_counters_cover_fleet(),
+            owners=self._ev_counter_owners(),
         )
 
         # Log EV sensor configuration
@@ -13085,6 +13126,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         primary_taper_data = None
         # Multi-charger (#112): run per-charger taper detection
         if self._ev_devices and len(self._ev_devices) >= 1:
+            own_counters = self._own_ev_counters()  # (#1049)
             for cid, ev_dev in self._ev_devices.items():
                 if cid not in self._ev_taper_detectors:
                     self._ev_taper_detectors[cid] = EVTaperDetector(self.config)
@@ -13146,6 +13188,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     self._daily_ev_per_charger[cid] = (
                         self._daily_ev_per_charger.get(cid, 0.0) + increment
                     )
+                # (#1049) …held to this charger's own counter, like the fleet
+                # row: a power sensor that reads high is not kept.
+                self._daily_ev_per_charger[cid] = (
+                    self._energy_calculator.follow_charger_counter(
+                        cid, ev_day,
+                        self._daily_ev_per_charger.get(cid, 0.0),
+                        own_counters.get(cid),
+                    )
+                )
 
                 if charger_power > 0 or charger_connected:
                     _td = self._ev_taper_detectors[cid].update(
