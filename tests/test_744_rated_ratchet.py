@@ -41,7 +41,10 @@ class TestCalibrationNeedsARealSensor:
         dev._status.state = DeviceState.ACTIVE
         # The deriver hands back a tick spike — 1 kW "instant".
         dev.observed_power_w = lambda: 1000.0
-        dev.calibrate_rated_power()
+        # (#1067) held for the whole hold time, so only the sensor rule stops it
+        dev.calibrate_rated_power(now=0.0)
+        dev.calibrate_rated_power(now=60.0)
+        dev.calibrate_rated_power(now=120.0)
         assert dev.rated_power == 24.0  # not adopted
 
     def test_a_power_sensor_still_calibrates(self):

@@ -14,7 +14,7 @@ live reading at a time; ``held_power_w`` answers it over recorder history.
 from __future__ import annotations
 
 from collections import deque
-from typing import Deque, Iterable, Optional, Tuple
+from typing import Any, Deque, Iterable, Optional, Tuple
 
 from ..consts.core import RATED_POWER_HOLD_S, RATED_POWER_SAMPLE_GAP_S
 
@@ -22,31 +22,34 @@ from ..consts.core import RATED_POWER_HOLD_S, RATED_POWER_SAMPLE_GAP_S
 class HeldPower:
     """The lowest reading over the last ``hold_s`` seconds of an unbroken run
     of readings — the level the load has held for all of them. ``None`` until
-    the run is ``hold_s`` long."""
+    the run covers ``hold_s``."""
 
     def __init__(self, hold_s: float = RATED_POWER_HOLD_S,
                  gap_s: float = RATED_POWER_SAMPLE_GAP_S) -> None:
         self._hold_s = float(hold_s)
         self._gap_s = float(gap_s)
         self._samples: Deque[Tuple[float, float]] = deque()
-        self._since: Optional[float] = None
+
+    @property
+    def running(self) -> bool:
+        """True while a run of readings is open."""
+        return bool(self._samples)
 
     def reset(self) -> None:
         """The load stopped (or we stopped watching it): start again."""
         self._samples.clear()
-        self._since = None
 
     def add(self, t: float, watts: float) -> Optional[float]:
         """Take one reading at monotonic time ``t``; return the held level."""
         if self._samples and (t - self._samples[-1][0] > self._gap_s
                               or t < self._samples[-1][0]):
             self.reset()       # we did not see the time between: no hold
-        if self._since is None:
-            self._since = t
         self._samples.append((t, float(watts)))
-        while self._samples[0][0] < t - self._hold_s:
+        # Keep the reading that was in force at ``t - hold_s``: the window
+        # must cover the whole hold, not only the readings inside it.
+        while len(self._samples) > 1 and self._samples[1][0] <= t - self._hold_s:
             self._samples.popleft()
-        if t - self._since < self._hold_s:
+        if self._samples[0][0] > t - self._hold_s:
             return None
         return min(w for _, w in self._samples)
 
@@ -84,3 +87,28 @@ def held_power_w(points: Iterable[Tuple[float, Optional[float]]],
             break                    # not enough time left after state i
         best = max(best, vs[window[0]])
     return best
+
+
+def held_power_from_states(states: Iterable[Any], scale: float, end: float,
+                           cap_w: float) -> float:
+    """``held_power_w`` over recorder ``State`` rows, in watts.
+
+    ``scale`` turns the sensor's unit into watts (the rows carry no unit). A
+    value above ``cap_w`` is not a reading of one load — a unit changed in
+    the window, or a counter glitch — and breaks a run like an unreadable
+    one. Plain work on plain data, so it can run in the executor.
+    """
+    points = []
+    for st in states:
+        try:
+            t = st.last_changed.timestamp()
+        except (AttributeError, TypeError, ValueError):
+            continue
+        try:
+            w: Optional[float] = float(st.state) * scale
+        except (ValueError, TypeError):
+            w = None
+        if w is not None and (w != w or w > cap_w):
+            w = None
+        points.append((t, w))
+    return held_power_w(points, end)

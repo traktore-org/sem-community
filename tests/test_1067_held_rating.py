@@ -13,8 +13,9 @@ it was ever shown:
   * ``_capture_calibrated_ratings`` then saved it, up only, for good.
 
 Now each path asks for the level the sensor held for ``RATED_POWER_HOLD_S``.
-Ratings saved under the old rule are checked once more against history, and
-until then held as a guess, so the first held level replaces them either way.
+Ratings saved under the old rule are checked once more against history. Only
+a device built from the saved number moves down, and only to a level a start
+peak could be at most ``RATED_POWER_START_PEAK_RATIO`` times of.
 """
 from __future__ import annotations
 
@@ -27,6 +28,9 @@ import pytest
 from custom_components.solar_energy_management.consts.core import (
     RATED_POWER_HOLD_S as HOLD,
     RATED_POWER_RULE,
+)
+from custom_components.solar_energy_management.devices.base import (
+    _MAX_PLAUSIBLE_LOAD_W,
 )
 from custom_components.solar_energy_management.devices.base import (
     DeviceState, SwitchDevice,
@@ -119,9 +123,27 @@ class TestTheLivePathLearnsTheHeldLevel:
     def test_the_daily_tick_resets_the_hold_while_off(self):
         dev = _dehumidifier()
         _feed(dev, [START_PEAK_W] * 7)
+        assert dev._held_power.running
         dev._status.state = DeviceState.IDLE
         dev.update_daily_runtime(datetime.now().date())
-        assert dev._held_power._since is None
+        assert not dev._held_power.running
+
+    def test_the_longest_update_interval_still_learns(self):
+        # The options allow a 60 s cycle; HA adds a little each time.
+        dev = _dehumidifier()
+        for i, w in enumerate([START_PEAK_W, RUNNING_W, RUNNING_W, RUNNING_W]):
+            dev.observed_power_w = lambda w=w: w
+            dev.calibrate_rated_power(now=i * 60.01)
+        assert dev.rated_power == RUNNING_W
+
+    def test_a_peak_held_ninety_seconds_is_not_held_for_two_minutes(self):
+        # 30 s cycles: the reading in force when the hold began counts too.
+        dev = _dehumidifier(rated=RUNNING_W)
+        for t, w in [(0.0, RUNNING_W), (30.1, START_PEAK_W), (60.2, START_PEAK_W),
+                     (90.3, START_PEAK_W), (120.4, START_PEAK_W)]:
+            dev.observed_power_w = lambda w=w: w
+            dev.calibrate_rated_power(now=t)
+        assert dev.rated_power == RUNNING_W
 
     def test_a_rebuild_keeps_the_hold(self):
         # The registry re-registers a FRESH object on every rediscovery; a
@@ -190,10 +212,12 @@ def _state(value, ts):
 
 @pytest.mark.unit
 class TestTheHistoryRead:
-    async def _held(self, states, unit):
+    async def _held(self, states, unit, live=True):
         reg = _reg()
         reg.hass.states.get = MagicMock(return_value=SimpleNamespace(
-            state="0", attributes={"unit_of_measurement": unit}))
+            state="0", attributes={"unit_of_measurement": unit}) if live else None)
+        reg.hass.async_add_executor_job = AsyncMock(
+            side_effect=lambda f, *a: f(*a))
         now = datetime.now(tz=timezone.utc).timestamp()
         rows = [_state(v, now - 3600 + t) for t, v in states]
         with patch(
@@ -210,6 +234,17 @@ class TestTheHistoryRead:
     async def test_a_kilowatt_sensor_is_read_in_watts(self):
         held = await self._held([(0, 0), (100, 2.0), (1000, 0)], "kW")
         assert held == 2000.0
+
+    async def test_a_missing_sensor_has_no_unit_to_read_with(self):
+        held = await self._held([(0, 0), (100, 2.0), (1000, 0)], "kW", live=False)
+        assert held == 0.0
+
+    async def test_a_value_no_load_can_draw_breaks_the_run(self):
+        # The unit changed from W to kW inside the week: old rows read 1000x.
+        held = await self._held(
+            [(0, 0), (100, 200.0), (1000, 0.2), (1900, 0)], "kW")
+        assert held == 200.0
+        assert 200.0 * 1000 > _MAX_PLAUSIBLE_LOAD_W
 
 
 # ── the build path ────────────────────────────────────────────────────────
@@ -249,6 +284,20 @@ def _live(rated, measured=True, mpt=None):
     )
 
 
+def _old_store_reg(saved, devices):
+    """A registry upgraded from a store with ``saved`` ratings, each marked
+    for its re-check. A device whose value is None is built here the way the
+    registry builds an Energy Dashboard load: from the saved number."""
+    reg = _reg({})
+    reg._rated_power_overrides = dict(saved)
+    reg._ratings_to_recheck = set(saved)
+    for did, dev in devices.items():
+        if dev is None:
+            devices[did] = _live(reg._initial_rated_power(did, "sensor.p"))
+    reg._surplus_controller._devices = devices
+    return reg, devices
+
+
 @pytest.mark.unit
 class TestAnOldRatingIsCheckedAgain:
     def _store_reg(self, store):
@@ -285,11 +334,19 @@ class TestAnOldRatingIsCheckedAgain:
         await reg._load_storage()
         assert reg._ratings_to_recheck == set()
 
+    @pytest.mark.parametrize("marks", [5, [["d"]], "d", None])
+    async def test_a_damaged_mark_list_loses_nothing_else(self, marks):
+        reg = self._store_reg({"legacy_flags_adopted": True,
+                               "rated_power_rule": RATED_POWER_RULE,
+                               "rated_power_overrides": {"d": 200.0},
+                               "rated_power_recheck": marks,
+                               "device_goals": {"d": {"x": 1}}})
+        await reg._load_storage()
+        assert reg._ratings_to_recheck == set()
+        assert reg._device_goals == {"d": {"x": 1}}
+
     async def test_history_moves_the_old_peak_down(self):
-        devs = {"d": _live(1400.0)}          # built from the saved 1.4 kW
-        reg = _reg(devs)
-        reg._rated_power_overrides["d"] = 1400.0
-        reg._ratings_to_recheck = {"d"}
+        reg, devs = _old_store_reg({"d": 1400.0}, {"d": None})
         reg._history_held_power = AsyncMock(return_value=198.0)
         assert await reg._seed_and_apply_ratings() is True
         assert reg._rated_power_overrides["d"] == 198.0
@@ -298,66 +355,85 @@ class TestAnOldRatingIsCheckedAgain:
         assert devs["d"].rated_power_measured is True
         assert reg._ratings_to_recheck == set()
 
-    async def test_without_history_the_old_number_is_held_as_a_guess(self):
-        devs = {"d": _live(1400.0)}
-        reg = _reg(devs)
-        reg._rated_power_overrides["d"] = 1400.0
-        reg._ratings_to_recheck = {"d"}
+    async def test_without_history_nothing_changes_and_it_asks_again(self):
+        reg, devs = _old_store_reg({"d": 1400.0}, {"d": None})
         reg._history_held_power = AsyncMock(return_value=0.0)
-        await reg._seed_and_apply_ratings()
+        assert await reg._seed_and_apply_ratings() is False
         assert devs["d"].rated_power == 1400.0
-        assert devs["d"].rated_power_measured is False
+        assert devs["d"].rated_power_measured is True
         assert reg._ratings_to_recheck == {"d"}
-        # the next rebuild, history already tried: still a guess
-        devs["d"].rated_power_measured = True
-        await reg._seed_and_apply_ratings()
-        assert devs["d"].rated_power_measured is False
 
-    async def test_setup_without_the_recorder_holds_it_as_a_guess_too(self):
-        devs = {"d": _live(1400.0)}
-        reg = _reg(devs)
+    async def test_an_idle_load_does_not_replace_its_rating(self):
+        # A boiler left on with its thermostat satisfied holds 4 W all week.
+        # 4 W is no start peak's running level for a 2.5 kW rating.
+        reg, devs = _old_store_reg({"boiler": 2500.0}, {"boiler": None})
+        reg._history_held_power = AsyncMock(return_value=4.0)
+        await reg._seed_and_apply_ratings()
+        assert devs["boiler"].rated_power == 2500.0
+        assert reg._rated_power_overrides["boiler"] == 2500.0
+        assert reg._ratings_to_recheck == {"boiler"}
+
+    async def test_setup_waits_and_the_started_pass_settles_it(self):
+        reg, devs = _old_store_reg({"d": 1400.0}, {"d": None})
         reg._history_seeds_enabled = False
-        reg._rated_power_overrides["d"] = 1400.0
-        reg._ratings_to_recheck = {"d"}
         reg._history_held_power = AsyncMock(return_value=198.0)
         await reg._seed_and_apply_ratings()
-        assert devs["d"].rated_power_measured is False
+        assert devs["d"].rated_power == 1400.0
+        reg._history_held_power.assert_not_awaited()
         await reg.async_seed_ratings_from_history()
         assert devs["d"].rated_power == 198.0
-        assert devs["d"].rated_power_measured is True
         assert reg._rated_power_overrides["d"] == 198.0
-
-    def test_the_first_held_level_live_is_saved_downward(self):
-        dev = _dehumidifier(rated=1400.0)
-        dev.rated_power_measured = False      # marked by the re-check
-        _feed(dev, _start_then_run(5 * 60))
-        assert dev.rated_power == RUNNING_W
-        reg = _reg({"d": dev})
-        reg._rated_power_overrides["d"] = 1400.0
-        reg._ratings_to_recheck = {"d"}
-        assert reg._capture_calibrated_ratings() is True
-        assert reg._rated_power_overrides["d"] == RUNNING_W
-        assert reg._ratings_to_recheck == set()
-
-    def test_a_guess_is_not_saved(self):
-        reg = _reg({"d": _live(1400.0, measured=False)})
-        reg._rated_power_overrides["d"] = 1400.0
-        reg._ratings_to_recheck = {"d"}
-        assert reg._capture_calibrated_ratings() is False
-        assert reg._ratings_to_recheck == {"d"}
+        reg._save_storage.assert_awaited()
 
     async def test_a_rating_the_device_was_given_is_not_lowered(self):
-        # A heat pump built with its own 2000 W; the old store raised it to a
-        # 2500 W peak. History settles the store, the device keeps its 2000.
-        devs = {"hp": _live(2000.0)}
-        reg = _reg(devs)
-        reg._rated_power_overrides["hp"] = 2500.0
-        reg._ratings_to_recheck = {"hp"}
+        # A hot-water heater configured at 2500 W; the old store saved the
+        # same number. History settles the store; the device keeps 2500.
+        reg, devs = _old_store_reg({"hw": 2500.0}, {"hw": _live(2500.0)})
         reg._history_held_power = AsyncMock(return_value=1800.0)
         await reg._seed_and_apply_ratings()
-        assert reg._rated_power_overrides["hp"] == 1800.0
+        assert reg._rated_power_overrides["hw"] == 1800.0
+        assert devs["hw"].rated_power == 2500.0
+
+    async def test_a_given_rating_is_not_raised_to_an_old_peak(self):
+        # Given 2000 W, the old store raised it to a 2500 W peak. Before the
+        # history answers (setup, the 35 s rediscovery) nothing is applied.
+        reg, devs = _old_store_reg({"hp": 2500.0}, {"hp": _live(2000.0)})
+        reg._history_seeds_enabled = False
+        await reg._seed_and_apply_ratings()
         assert devs["hp"].rated_power == 2000.0
-        assert devs["hp"].rated_power_measured is True
+        reg._history_held_power = AsyncMock(return_value=1800.0)
+        await reg.async_seed_ratings_from_history()
+        assert devs["hp"].rated_power == 2000.0
+        assert reg._rated_power_overrides["hp"] == 1800.0
+
+    async def test_a_level_learned_live_is_not_overwritten(self):
+        # The load held 1600 W live before the history answered with less.
+        reg, devs = _old_store_reg({"d": 1400.0}, {"d": None})
+        devs["d"].rated_power = 1600.0
+        reg._history_held_power = AsyncMock(return_value=900.0)
+        await reg._seed_and_apply_ratings()
+        assert devs["d"].rated_power == 1600.0
+
+    def test_a_live_level_above_the_saved_number_settles_it(self):
+        reg, devs = _old_store_reg({"d": 1400.0}, {"d": None})
+        devs["d"].rated_power = 1600.0
+        assert reg._capture_calibrated_ratings() is True
+        assert reg._rated_power_overrides["d"] == 1600.0
+        assert reg._ratings_to_recheck == set()
+
+    async def test_a_rebuild_during_the_history_read_keeps_the_answer(self):
+        # The 35 s rediscovery replaces the device object while the recorder
+        # read is waiting: the answer must land on the object that is live.
+        reg, devs = _old_store_reg({"d": 1400.0}, {"d": None})
+        fresh = _live(reg._initial_rated_power("d", "sensor.p"))
+
+        async def slow_read(sensor):
+            devs["d"] = fresh            # the rebuild swapped the object
+            return 198.0
+
+        reg._history_held_power = slow_read
+        await reg._seed_and_apply_ratings()
+        assert fresh.rated_power == 198.0
 
     async def test_a_settled_rating_only_moves_up_again(self):
         devs = {"d": _live(198.0)}

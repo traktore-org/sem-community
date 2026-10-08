@@ -65,13 +65,19 @@ DEFAULT_DEVICE_RATED_POWER: Final = 1000
 # only ever goes up, so one start pinned it for life. Live and from
 # history, a level counts only once the sensor stayed at or above it
 # for this long. A gap between live readings longer than
-# ``RATED_POWER_SAMPLE_GAP_S`` starts the hold again.
+# ``RATED_POWER_SAMPLE_GAP_S`` starts the hold again; it must stay above
+# the longest update interval the options allow (60 s).
 RATED_POWER_HOLD_S: Final = 120.0
-RATED_POWER_SAMPLE_GAP_S: Final = 60.0
+RATED_POWER_SAMPLE_GAP_S: Final = 90.0
 # The rule a saved rating was learned under. A store without it (or with
 # an older one) holds ratings learned from single readings: each is
 # checked once more against the recorder before it is trusted (#1067).
 RATED_POWER_RULE: Final = 2
+# A start reads at most this many times what the load then holds. The
+# re-check lowers a saved rating only to a level at least this share of
+# it: a load left on but idle (a boiler at 4 W under a 2 kW rating) is
+# not a start peak, and must not take the place of its rating.
+RATED_POWER_START_PEAK_RATIO: Final = 10.0
 
 # Battery Discharge Protection
 DEFAULT_BATTERY_DISCHARGE_PROTECTION_ENABLED: Final = True  # Enable discharge protection during night charging
