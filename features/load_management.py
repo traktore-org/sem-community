@@ -804,18 +804,16 @@ class LoadManagementCoordinator:
             await self._save_device_configuration()
             _LOGGER.debug("Updated %s hands-off to %s", device_id, hands_off)
 
-    def _update_peak_tracking(self, grid_import_w: float) -> bool:
-        """Update 15-minute rolling average peak and monthly maximum.
+    def _update_peak_tracking(self, grid_import_w: float) -> None:
+        """Update the 15-minute rolling average the shed states key off.
 
-        Called every coordinator cycle (~10s). Maintains a sliding window
-        of grid import samples over the last 15 minutes, computes the
-        rolling average, and updates the monthly peak if exceeded.
+        Called every coordinator cycle (~10s). The rolling average is the
+        instrument for calm — it drives warning / shedding / emergency and
+        their restore. It is NOT the billed peak: (#1069) that is booked by
+        :meth:`record_closed_slot` from the utility's clock slots.
 
         Args:
             grid_import_w: Current grid import in Watts.
-
-        Returns:
-            True if monthly peak was updated (caller should persist).
         """
         now = dt_util.now()
         grid_import_kw = grid_import_w / 1000.0
@@ -835,23 +833,33 @@ class LoadManagementCoordinator:
         else:
             self._consecutive_peak_15min = 0.0
 
-        # Monthly peak reset on month change
-        current_month = now.month
-        if self._monthly_peak_month is not None and current_month != self._monthly_peak_month:
+    def record_closed_slot(self, slot_start: datetime, average_kw: float) -> bool:
+        """(#1069) Book one closed clock slot against the monthly peak.
+
+        The bill averages fixed :00/:15/:30/:45 slots, so the monthly peak
+        is the highest CLOSED slot — read from the coordinator's one slot
+        tracker (``peak_guard.PeakSlotTracker``). It used to be the highest
+        value of a free-sliding window, which reads a 10-minute spike across
+        a boundary at twice what the bill sees. A slot of a new month starts
+        that month's peak.
+
+        Returns True when the monthly peak changed (caller persists).
+        """
+        month = slot_start.month
+        if self._monthly_peak_month is not None and month != self._monthly_peak_month:
             _LOGGER.info(
                 "Monthly peak reset: previous month peak was %.3f kW",
                 self._monthly_consecutive_peak,
             )
             self._monthly_consecutive_peak = 0.0
-        self._monthly_peak_month = current_month
-
-        # Update monthly peak if current 15-min average exceeds it
-        peak_changed = False
-        if self._consecutive_peak_15min > self._monthly_consecutive_peak:
-            self._monthly_consecutive_peak = self._consecutive_peak_15min
-            peak_changed = True
-
-        return peak_changed
+            self._monthly_peak_month = month
+            self._monthly_consecutive_peak = round(float(average_kw), 3)
+            return True
+        self._monthly_peak_month = month
+        if float(average_kw) > self._monthly_consecutive_peak:
+            self._monthly_consecutive_peak = round(float(average_kw), 3)
+            return True
+        return False
 
     async def process_peak_update(
         self,
@@ -861,6 +869,7 @@ class LoadManagementCoordinator:
         grid_import_w: float = 0,
         ev_power_w: float = 0,
         grid_import_known: bool = True,
+        closed_slot: "Optional[tuple]" = None,
     ):
         """Process peak power update and manage loads accordingly.
 
@@ -900,8 +909,9 @@ class LoadManagementCoordinator:
                 0.0, float(current_peak or 0.0) * 1000.0)
 
         # Update rolling peak tracking from actual grid import
-        peak_changed = self._update_peak_tracking(grid_import_w)
-        if peak_changed:
+        self._update_peak_tracking(grid_import_w)
+        # (#1069) …and the billed peak from the slot that just closed, if any.
+        if closed_slot is not None and self.record_closed_slot(*closed_slot):
             await self._save_device_configuration()
 
         try:

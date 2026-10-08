@@ -371,3 +371,92 @@ class TestFinding4NoCopyOfTheLimit:
         low = decide_battery(_charge_view(allowed_w=2000.0))
         assert high.charge_power_w == pytest.approx(3000.0)
         assert low.charge_power_w == pytest.approx(1500.0)
+
+
+# ─── Finding 3: the monthly peak is booked on the utility's clock slots ─────
+
+from datetime import datetime, timedelta  # noqa: E402
+
+from custom_components.solar_energy_management.coordinator.peak_guard import (  # noqa: E402
+    PeakSlotTracker,
+)
+
+
+def _feed(tracker, start, minutes_w, step_s=10):
+    """Feed ``[(minutes, watts), …]`` at ``step_s``; collect closed slots."""
+    closed, t = [], start
+    for minutes, w in minutes_w:
+        for _ in range(int(minutes * 60 / step_s)):
+            tracker.update(t, w)
+            c = tracker.pop_closed()
+            if c is not None:
+                closed.append(c)
+            t += timedelta(seconds=step_s)
+    tracker.update(t, 0.0)
+    c = tracker.pop_closed()
+    if c is not None:
+        closed.append(c)
+    return closed
+
+
+@pytest.mark.unit
+class TestFinding3OneTrackerClockSlots:
+    """Reviewer's scenario: 8 kW from 14:10 to 14:20 straddles the 14:15
+    boundary. The bill sees two slots of ~2.7 kW; the sliding window booked
+    ~5.3 kW as it slid through."""
+
+    def test_the_tracker_closes_each_clock_slot_with_its_average(self):
+        tr = PeakSlotTracker()
+        closed = _feed(tr, datetime(2026, 10, 8, 14, 0, 0),
+                       [(10, 0.0), (10, 8000.0), (11, 0.0)])
+        by_start = {s.strftime("%H:%M"): kw for s, kw in closed}
+        assert by_start["14:00"] == pytest.approx(8.0 / 3, abs=0.05)
+        assert by_start["14:15"] == pytest.approx(8.0 / 3, abs=0.05)
+
+    def test_a_slot_the_tracker_saw_only_partly_is_not_booked(self):
+        # Started at 14:07: the 14:00 slot was not watched from its start,
+        # so its average is unknown — never booked as a peak.
+        tr = PeakSlotTracker()
+        closed = _feed(tr, datetime(2026, 10, 8, 14, 7, 0),
+                       [(8, 6000.0), (16, 1000.0)])
+        starts = [s.strftime("%H:%M") for s, _ in closed]
+        assert "14:00" not in starts
+        assert "14:15" in starts
+
+    def test_the_monthly_peak_takes_closed_slots_only(self, lm):
+        # The rolling average alone never books a monthly peak now.
+        for _ in range(100):
+            lm._update_peak_tracking(8000.0)
+        assert lm._monthly_consecutive_peak == 0.0
+        assert lm.record_closed_slot(datetime(2026, 10, 8, 14, 0), 2.667)
+        assert lm.record_closed_slot(datetime(2026, 10, 8, 14, 15), 2.0) is False
+        assert lm._monthly_consecutive_peak == pytest.approx(2.667)
+
+    def test_a_new_month_starts_from_its_first_slot(self, lm):
+        lm.record_closed_slot(datetime(2026, 10, 31, 23, 45), 6.0)
+        lm.record_closed_slot(datetime(2026, 11, 1, 0, 0), 1.5)
+        assert lm._monthly_consecutive_peak == pytest.approx(1.5)
+
+
+@pytest.fixture
+def lm(mock_hass):
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from custom_components.solar_energy_management.load_management import (
+        LoadManagementCoordinator,
+    )
+    entry = MagicMock()
+    entry.options = {"load_management_enabled": True, "target_peak_limit": 5.0,
+                     "warning_peak_level": 4.5, "emergency_peak_level": 6.0,
+                     "peak_hysteresis": 0.3}
+    entry.entry_id = "test_entry"
+    base = "custom_components.solar_energy_management.features.load_management"
+    with patch(f"{base}.LoadDeviceDiscovery") as disc, patch(f"{base}.Store") as store:
+        disc.return_value = MagicMock()
+        st = MagicMock()
+        st.async_load = AsyncMock(return_value=None)
+        st.async_save = AsyncMock()
+        store.return_value = st
+        coordinator = LoadManagementCoordinator(mock_hass, entry)
+        coordinator._store = st
+        yield coordinator

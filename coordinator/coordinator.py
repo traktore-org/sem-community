@@ -4504,6 +4504,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         # FLEET-READ: load manager peak budget is a
                         # whole-house concept; fleet EV total is correct.
                         ev_power_w=power.ev_power,
+                        # (#1069) the billed peak is the slot tracker's —
+                        # one tracker, the utility's clock slots.
+                        closed_slot=(
+                            self._peak_slot_tracker.pop_closed()
+                            if getattr(self, "_peak_slot_tracker", None)
+                            is not None else None),
                     )
                 except (HomeAssistantError, ServiceValidationError) as e:
                     _LOGGER.error("Load management service call failed: %s", e)
