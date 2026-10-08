@@ -196,3 +196,65 @@ class TestFinding6OneStabilityRuleForSurplusAndPeak:
                     lambda: _view(mode, power_w=0.0, night=night),
                     ad, t1 + _ENABLE_S + _LAG, t1 + _ENABLE_S + _LAG)
         assert late.intent is ChargerIntent.CHARGE_AT_AMPS, late.reason
+
+
+# ─── Finding 2: the peak cover never drains the pack below its reserve ──────
+
+from custom_components.solar_energy_management.coordinator.charger_types import (  # noqa: E402
+    BatteryIntent, BatteryRuntime, BatteryView,
+)
+from custom_components.solar_energy_management.coordinator.decide_battery import (  # noqa: E402
+    decide_battery,
+)
+from custom_components.solar_energy_management.coordinator.sink_verdicts import (  # noqa: E402
+    HELD, SinkVerdict,
+)
+
+
+def _bview(*, soc, reserve=20.0, available=True, allowed_w=4200.0,
+           home_w=5000.0, held=True, grid_funded_w=0.0, ev=False):
+    cfg = {"battery_max_discharge_power": 9000, "battery_mode": "auto",
+           "battery_reserve_soc": reserve}
+    fleet = FleetContext(
+        solar_w=0.0, home_w=home_w, battery_soc=soc, battery_soc_known=True,
+        battery_count=1, peak_slot_allowed_w=allowed_w, buffer_soc=70.0,
+    )
+    return BatteryView(
+        runtime=BatteryRuntime(battery_id="b1", last_known_soc=soc,
+                               available=available),
+        config=cfg, fleet=fleet, charging_state="idle", ev_charging=ev,
+        ev_connected=ev, home_consumption_w=home_w, scheduler_decision=None,
+        grid_funded_load_w=grid_funded_w,
+        sink_verdicts=({"house": SinkVerdict("house", HELD, "cheap hour")}
+                       if held else {}),
+    )
+
+
+@pytest.mark.unit
+class TestFinding2TheCoverStopsAtTheReserve:
+    """Reviewer's scenario: SOC 15 %, the house over a 4.2 kW limit, no sun.
+    The cover raised the discharge limit no matter how empty the pack was."""
+
+    def test_above_the_reserve_the_pack_covers_the_excess(self):
+        d = decide_battery(_bview(soc=50.0))
+        assert d.intent is BatteryIntent.LIMIT_DISCHARGE
+        assert d.discharge_limit_w == pytest.approx(800.0)
+
+    def test_below_the_reserve_the_hold_stays_at_zero(self):
+        d = decide_battery(_bview(soc=15.0))
+        assert d.discharge_limit_w == 0.0, d.reason
+        assert "reserve" in d.reason
+
+    def test_at_the_reserve_the_hold_stays_at_zero(self):
+        d = decide_battery(_bview(soc=20.0))
+        assert d.discharge_limit_w == 0.0, d.reason
+
+    def test_an_unreadable_soc_is_not_spent(self):
+        d = decide_battery(_bview(soc=50.0, available=False))
+        assert d.discharge_limit_w == 0.0, d.reason
+
+    def test_the_grid_funded_clamp_is_not_raised_below_the_reserve(self):
+        d = decide_battery(_bview(soc=15.0, held=False, grid_funded_w=4500.0))
+        # home 5000 − grid-funded 4500 = 500 W; the 800 W excess over the
+        # limit would have raised it — not from a pack below its reserve.
+        assert d.discharge_limit_w == pytest.approx(500.0), d.reason

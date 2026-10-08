@@ -207,6 +207,27 @@ def house_load_is_measured(fleet) -> bool:
             and float(getattr(fleet, "home_residual_clamped_w", 0.0) or 0.0) <= 0.0)
 
 
+def reserve_stops_peak_cover(view: "BatteryView"):
+    """(#1069) Why this pack may not cover a peak breach, or ``None``.
+
+    The cover RAISES a discharge limit so the pack pays for what the meter
+    may not buy. That is a spend, and a spend stops at the backup reserve:
+    the review found the cover raising the limit at 15 % SOC with no floor
+    at all. A SOC SEM cannot read is not spent either (#531's rule: when in
+    doubt, hold). The limit then stays what its own branch asked for.
+    """
+    rt = view.runtime
+    if not getattr(rt, "available", True) or not getattr(
+            view.fleet, "battery_soc_known", True):
+        return "the battery SOC is not readable"
+    reserve = float(view.config.get("battery_reserve_soc") or 0.0)
+    soc = float(getattr(rt, "last_known_soc", 0.0) or 0.0)
+    if soc <= reserve:
+        return (f"the battery is at {soc:.0f}%, at or below its "
+                f"{reserve:.0f}% reserve")
+    return None
+
+
 def peak_cover_floor_w(view: "BatteryView", limit_w: float, n: int) -> float:
     """Raise a per-battery discharge limit to what the meter may not buy (#1003).
 
@@ -224,13 +245,16 @@ def peak_cover_floor_w(view: "BatteryView", limit_w: float, n: int) -> float:
     what answers for the car. Split by ``n`` like the limit it floors
     (#531/#691), so N batteries cover the excess once, and never lowering.
 
-    Returns ``limit_w`` untouched when no limit is configured, and on a cycle
+    Returns ``limit_w`` untouched when no limit is configured, on a cycle
     whose house figure is not a measurement (see
-    :func:`house_load_is_measured`).
+    :func:`house_load_is_measured`), and (#1069) when the pack is at its
+    reserve or its SOC cannot be read (:func:`reserve_stops_peak_cover`).
     """
     f = view.fleet
     allowed_w = getattr(f, "peak_slot_allowed_w", None)
     if allowed_w is None or not house_load_is_measured(f):
+        return float(limit_w)
+    if reserve_stops_peak_cover(view) is not None:
         return float(limit_w)
     house_w = max(0.0, float(view.home_consumption_w or 0.0))
     # ``cover_for_peak_w`` cannot exceed the house it is derived from; the
@@ -630,7 +654,15 @@ def _decide_battery(view: "BatteryView") -> BatteryDecision:
             )
         _cover_w = peak_cover_floor_w(view, 0.0, _n)
         _why = f"house sink held — {getattr(_house_v, 'reason', '')}"
-        if _cover_w > 0.0:
+        _stop = reserve_stops_peak_cover(view)
+        if _stop is not None and cover_for_peak_w(
+                _allowed, max(0.0, float(view.home_consumption_w or 0.0)),
+                float(getattr(_f, "solar_w", 0.0) or 0.0)) > 0.0:
+            # CAUSE: `_stop` is reserve_stops_peak_cover's own sentence —
+            # the SOC and reserve it compared, or the unreadable SOC.
+            _why = (f"{_why}; the meter is over its limit, but {_stop} — "
+                    "the pack does not cover it")
+        elif _cover_w > 0.0:
             _why = (
                 f"{_why}; the meter may buy {float(_allowed):.0f} W for the "
                 f"rest of this quarter hour, so the pack covers "
