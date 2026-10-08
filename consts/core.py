@@ -400,3 +400,13 @@ RECORDER_ATTR_BUDGET_BYTES: Final = RECORDER_MAX_STATE_ATTRS_BYTES - RECORDER_AT
 # retires. Set with the set_option service, never a GUI control.
 CONF_INTRADAY_FORECAST: Final = "intraday_forecast"
 DEFAULT_INTRADAY_FORECAST: Final = False
+
+# (#1021) The grid operator's reduce-load relay (§14a EnWG, ripple control).
+# Unset = inert. Any binary_sensor / input_boolean the user picks.
+CONF_SHED_SIGNAL_ENTITY: Final = "shed_signal_entity"
+# kW cap while the relay is on, or a sensor entity publishing it (EEBus LPC
+# through an integration). Unreadable → 4.2 kW, the legal floor.
+CONF_SHED_SIGNAL_LIMIT: Final = "shed_signal_limit"
+DEFAULT_SHED_SIGNAL_LIMIT: Final = 4.2
+# Per device: this load sits behind the operator's relay (CH ripple control).
+CONF_BEHIND_OPERATOR_RELAY: Final = "behind_operator_relay"
