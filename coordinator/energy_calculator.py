@@ -21,6 +21,7 @@ from .types import (
 )
 from ..utils.time_manager import TimeManager
 from .units import energy_state_to_kwh
+from .sensor_reader import EV_ACTIVE_CHARGE_FLOOR_W
 from .repair_issues import UNAVAILABLE_REPAIR_THRESHOLD_S
 from ..ha_energy_reader import ENERGY_COUNTER_CATEGORIES, energy_counters
 from .battery_provenance import (
@@ -40,6 +41,13 @@ MAX_INTEGRATION_GAP_SECONDS = 120  # 2 minutes
 
 # Threshold for hardware reconciliation (kWh)
 RECONCILIATION_THRESHOLD = 0.5
+
+# (#1049) How long every charger must have drawn no power before the EV day
+# rows may move DOWN to the wallbox counters. While a car charges, a cloud
+# counter can trail the power by minutes; held to it, the day would freeze and
+# the Charge-by target would overshoot. Once the box is idle this long the
+# counter has caught up, and what it still lacks was never charged.
+EV_COUNTER_SETTLE_SECONDS = 30 * 60
 
 # Adoption threshold for a metered category (#628). Much finer than the solar/EV
 # 0.5 kWh: those correct a large one-way shortfall, while a grid row is often
@@ -172,6 +180,9 @@ _COST_ESTIMATE_BASIS = {
 # same ``get_current_meter_day_offset_based`` path (and the same day memo) as a
 # real deadline — "00:00" is calendar midnight by construction.
 _FLEET_CALENDAR_OFFSET = "00:00"
+
+# (#1049) The idle-clock key of the whole fleet, beside one per charger id.
+_FLEET_KEY = "_fleet"
 
 
 def _valid_hhmm(value) -> bool:
@@ -351,6 +362,16 @@ class EnergyCalculator:
         self._ev_counter_enabled: bool = False
         self._ev_counter_logged: bool = False
         self._ev_counter_baselines: Dict[str, Any] = {}
+        # (#1049) Every charger has a counter of its own, so the counters see
+        # all the charging the power integral sees. Only then may the EV rows
+        # move down to them — see ``_ev_adoption``.
+        self._ev_counter_complete: bool = False
+        # (#1049) Per charger id: the same baseline model for that charger's
+        # own daily row (``follow_charger_counter``). Persisted.
+        self._charger_counter_baselines: Dict[str, Dict[str, Any]] = {}
+        # (#1049) Per charger id, and ``_FLEET_KEY`` for the fleet: when it was
+        # first seen idle. Runtime only — after a restart the wait starts again.
+        self._ev_idle_since: Dict[str, datetime] = {}
         # (#556) Daily-solar reconciliation against hardware production
         # counters — closes the cloud-poll undercount (integrating a power
         # sensor that reports 0/unavailable between polls). Baselines are
@@ -676,8 +697,11 @@ class EnergyCalculator:
         # (#658) wallbox-counter reconciliation — recovers charging SEM was not
         # running to integrate; must run before the reads below, exactly like
         # its solar sibling.
-        self._reconcile_ev_energy(ev_day, month_key, year_key)
-        self._reconcile_midnight_ev_energy(today)  # (#628)
+        # (#1049) Every charger idle long enough for its counter to catch up:
+        # only then may the EV rows move down to the counters.
+        settled = self._ev_settled(_FLEET_KEY, now, float(power.ev_power or 0.0))
+        self._reconcile_ev_energy(ev_day, month_key, year_key, settled=settled)
+        self._reconcile_midnight_ev_energy(today, settled=settled)  # (#628)
 
         energy.daily_ev = self._get_daily(EV_CATEGORY, ev_day)
         self._daily_ev_day = ev_day  # (#1046) the key ev_day_flows reads
@@ -923,7 +947,8 @@ class EnergyCalculator:
         return energy
 
     def configure_ev_counters(
-        self, hass: HomeAssistant, entity_ids: List[str], enabled: bool
+        self, hass: HomeAssistant, entity_ids: List[str], enabled: bool,
+        complete: bool = False,
     ) -> None:
         """Enable daily-EV reconciliation against wallbox counters (#658).
 
@@ -938,6 +963,10 @@ class EnergyCalculator:
         set is still safe rather than wrong: adoption is upward-only against a
         fleet integration that already includes every charger, so a missing
         counter simply means that charger's downtime energy can't be recovered.
+
+        ``complete`` (#1049): every charger has a counter of its own, so the set
+        sees all the charging the power integral sees. Only a complete set may
+        pull the EV rows DOWN; a partial one stays upward-only.
 
         Gated by the same ``prefer_hardware_energy`` option as the solar
         counters — it is the same promise ("trust the hardware over my
@@ -961,6 +990,7 @@ class EnergyCalculator:
             self._midnight_ev_baselines.clear()
         self._ev_counter_entities = new_entities
         self._ev_counter_enabled = bool(enabled) and bool(self._ev_counter_entities)
+        self._ev_counter_complete = bool(complete)
         if self._ev_counter_enabled and not self._ev_counter_logged:
             self._ev_counter_logged = True
             _LOGGER.info(
@@ -2094,7 +2124,8 @@ class EnergyCalculator:
             accumulators[key] = accumulators.get(key, 0.0) + delta
 
     def _reconcile_ev_energy(
-        self, ev_day: date, month_key: str, year_key: str
+        self, ev_day: date, month_key: str, year_key: str,
+        settled: bool = False,
     ) -> None:
         """Daily EV energy follows the wallbox counters (#658).
 
@@ -2117,9 +2148,15 @@ class EnergyCalculator:
         - Counters may be lifetime or daily-resetting; only deltas are used.
         - Counter going backwards (charger reboot, midnight reset of a daily
           counter) → re-baseline; the accumulated value keeps.
-        - ADOPTION IS UPWARD-ONLY: integration remains the floor, so an
-          unavailable/stale/partial counter set can never shrink the day. The
-          delta propagates to monthly, yearly and lifetime so all periods stay
+        - ADOPTION IS UPWARD-ONLY while a car charges, or while the counter
+          set is partial or part-unreadable: integration is then the floor,
+          so a stale or missing counter can never shrink the day. Once every
+          charger has its own counter, all of them read, and the fleet has
+          been idle ``EV_COUNTER_SETTLE_SECONDS``, the counters own the row in
+          BOTH directions (#1049): a charger power sensor can read high — a
+          Wallbox behind the MQTT bridge booked 19.56 kWh against 10.99 on its
+          own meter — and upward-only kept every kWh of it. The delta
+          propagates to monthly, yearly and lifetime so all periods stay
           consistent (#666: they are written by one call, so they are corrected
           by one call too).
         - The bucket is the FLEET daily total, so ``_ev_counter_entities`` must
@@ -2136,9 +2173,12 @@ class EnergyCalculator:
                 (self._yearly_accumulators, f"{EV_CATEGORY}_{year_key}"),
                 (self._lifetime_accumulators, f"lifetime_{EV_CATEGORY}"),
             ),
+            settled=settled,
         )
 
-    def _reconcile_midnight_ev_energy(self, today: date) -> None:
+    def _reconcile_midnight_ev_energy(
+        self, today: date, settled: bool = False,
+    ) -> None:
         """Reconcile the CALENDAR-day EV mirror the home balance subtracts (#628).
 
         Identical model to ``_reconcile_ev_energy`` — same counters, same
@@ -2158,6 +2198,7 @@ class EnergyCalculator:
         """
         self._reconcile_ev_bucket(
             MIDNIGHT_EV_CATEGORY, today, self._midnight_ev_baselines,
+            settled=settled,
         )
 
     def _reconcile_ev_bucket(
@@ -2166,6 +2207,7 @@ class EnergyCalculator:
         day: date,
         baselines: Dict[str, Any],
         periods: tuple = (),
+        settled: bool = False,
     ) -> None:
         """Shared body of the two EV counter reconciliations (#658, #628).
 
@@ -2173,6 +2215,8 @@ class EnergyCalculator:
         calendar-day mirror the home balance needs. They differ only in their
         day key and in which longer periods they feed, so they are parameters —
         a second hand-written copy of a delta model is how the two drift apart.
+        A third instance, one charger's own row, is ``follow_charger_counter``;
+        all three share ``_ev_counter_target`` and ``_ev_adoption``.
 
         ``baselines`` is mutated IN PLACE (never rebound) so the caller's
         attribute keeps pointing at the live dict across a day rollover.
@@ -2180,19 +2224,58 @@ class EnergyCalculator:
         if not self._ev_counter_enabled or not self._hass:
             return
 
-        day_str = str(day)
-        bl = baselines
+        daily_key = f"{category}_{day}"
+        integrated = self._daily_accumulators.get(daily_key, 0.0)
+        target, all_read = self._ev_counter_target(
+            baselines, str(day), self._ev_counter_entities, integrated,
+        )
+        if target is None:
+            return
+
+        # Sanity cap — the fleet's own physical ceiling, from the configured
+        # charger limits. Catches a counter in the wrong magnitude that
+        # ``_energy_state_kwh`` could not classify from its unit string.
+        max_daily = self._max_daily_ev_kwh()
+        if target > max_daily:
+            _LOGGER.warning(
+                "EV counter reconciliation target %.1f kWh exceeds the fleet's "
+                "%.0f kWh/day ceiling — ignoring this cycle (unit mismatch?)",
+                target, max_daily,
+            )
+            return
+
+        owned = settled and all_read and self._ev_counter_complete
+        if not self._ev_adoption(category, target, integrated, owned):
+            return
+        delta = target - integrated
+        self._daily_accumulators[daily_key] = target
+        for accumulators, key in periods:
+            # max(0.0) — a delta can be negative since #1049, and a longer
+            # period must never be dragged below zero by one day's correction.
+            accumulators[key] = max(0.0, accumulators.get(key, 0.0) + delta)
+
+    def _ev_counter_target(
+        self,
+        bl: Dict[str, Any],
+        day_str: str,
+        entities: List[str],
+        integrated: float,
+    ) -> "tuple[Optional[float], bool]":
+        """The day's kWh by the counters: ``anchor + Σ counter deltas``.
+
+        Returns ``(target, all_read)``; ``target`` is None when no counter
+        reads. ``all_read``: every counter read this cycle AND had its base
+        since the anchor — only then does the target cover the whole row.
+        Mutates ``bl`` (date / base / last / anchor / whole) in place.
+        """
         if bl.get("date") != day_str or "base" not in bl or "last" not in bl:
             # Day rollover (or first run / legacy or damaged shape):
             # fresh baselines for the new day.
             bl.clear()
             bl.update({"date": day_str, "base": {}, "last": {}})
 
-        daily_key = f"{category}_{day}"
-        integrated = self._daily_accumulators.get(daily_key, 0.0)
-
         readings: Dict[str, float] = {}
-        for entity_id in self._ev_counter_entities:
+        for entity_id in entities:
             state = self._hass.states.get(entity_id)
             if not state or state.state in ("unknown", "unavailable", None):
                 continue
@@ -2201,7 +2284,7 @@ class EnergyCalculator:
                 readings[entity_id] = value
 
         if not readings:
-            return
+            return None, False
 
         # A counter that went BACKWARDS since its last reading invalidates the
         # whole baseline set: its past contribution is already inside the
@@ -2223,38 +2306,99 @@ class EnergyCalculator:
         # that (SEM down over the EV-day boundary, charger added late) is only
         # known to the integrator — anchor on the daily value at baseline time:
         # target = anchor + counter deltas.
-        bl.setdefault("anchor", integrated)
+        if "anchor" not in bl:
+            bl["anchor"] = integrated
+            # (#1049) Did every counter read when the anchor was set? One
+            # first seen later starts its delta late: what its charger drew
+            # before then is in the integral and not in the target, so the
+            # target may not pull the row down until the next re-anchor.
+            bl["whole"] = len(readings) == len(entities)
 
         counter_daily = sum(
             value - bl["base"][entity_id]
             for entity_id, value in readings.items()
         )
-        target = bl["anchor"] + counter_daily
-
-        # Sanity cap — the fleet's own physical ceiling, from the configured
-        # charger limits. Catches a counter in the wrong magnitude that
-        # ``_energy_state_kwh`` could not classify from its unit string.
-        max_daily = self._max_daily_ev_kwh()
-        if target > max_daily:
-            _LOGGER.warning(
-                "EV counter reconciliation target %.1f kWh exceeds the fleet's "
-                "%.0f kWh/day ceiling — ignoring this cycle (unit mismatch?)",
-                target, max_daily,
-            )
-            return
-
-        delta = target - integrated
-        if delta <= RECONCILIATION_THRESHOLD:
-            return  # Upward-only; small drift stays with the integrator.
-
-        _LOGGER.info(
-            "%s energy reconciliation: counter=%.2f kWh > integrated=%.2f kWh "
-            "— adopting counter value (+%.2f kWh)",
-            category, target, integrated, delta,
+        return (
+            max(0.0, bl["anchor"] + counter_daily),
+            len(readings) == len(entities) and bl.get("whole") is True,
         )
-        self._daily_accumulators[daily_key] = target
-        for accumulators, key in periods:
-            accumulators[key] = accumulators.get(key, 0.0) + delta
+
+    @staticmethod
+    def _ev_adoption(
+        label: str, target: float, integrated: float, owned: bool,
+    ) -> bool:
+        """Should an EV row take the counters' ``target``? (#658, #1049)
+
+        ``owned``: the counters own the row — every charger has its own
+        counter, all of them read this cycle, and the box has been idle
+        ``EV_COUNTER_SETTLE_SECONDS``. Then the row follows them both ways,
+        as finely as a grid meter. Otherwise only a material shortfall is
+        taken: the integrator is the floor, as before #1049.
+        """
+        delta = target - integrated
+        if owned:
+            if abs(delta) <= METER_RECONCILIATION_THRESHOLD:
+                return False
+        elif delta <= RECONCILIATION_THRESHOLD:
+            return False  # Upward-only; small drift stays with the integrator.
+        log = (
+            _LOGGER.info
+            if abs(delta) > RECONCILIATION_THRESHOLD
+            else _LOGGER.debug
+        )
+        log(
+            "%s energy reconciliation: counter=%.2f kWh vs integrated=%.2f kWh "
+            "— adopting counter value (%+.2f kWh)",
+            label, target, integrated, delta,
+        )
+        return True
+
+    def _ev_settled(self, key: str, now: datetime, watts: float) -> bool:
+        """(#1049) Has ``key`` (a charger id, or ``_FLEET_KEY``) drawn no
+        charging power for ``EV_COUNTER_SETTLE_SECONDS``? Standby draw is
+        not charging — ``EV_ACTIVE_CHARGE_FLOOR_W`` (bug class 36)."""
+        if watts > EV_ACTIVE_CHARGE_FLOOR_W:
+            self._ev_idle_since.pop(key, None)
+            return False
+        since = self._ev_idle_since.setdefault(key, now)
+        return (now - since).total_seconds() >= EV_COUNTER_SETTLE_SECONDS
+
+    def follow_charger_counter(
+        self,
+        cid: str,
+        day: str,
+        value: float,
+        counter: Optional[str],
+        watts: float,
+    ) -> float:
+        """(#1049) One charger's daily kWh, held to its OWN counter.
+
+        The fleet rows follow the counters (``_reconcile_ev_bucket``); the
+        per-charger rows the coordinator integrates must follow them too, or
+        the members would sum above a fleet row that moved down, and the
+        per-charger card would keep the high read. Same model, one member:
+        up whenever the counter shows more, down once this charger has been
+        idle ``EV_COUNTER_SETTLE_SECONDS``. ``counter`` must be this charger's
+        alone — a shared one would hand each charger the other's kWh.
+        Returns the row's new value; ``value`` when there is nothing to follow.
+        """
+        if not self._ev_counter_enabled or not self._hass or not counter:
+            return value
+        settled = self._ev_settled(cid, dt_util.now(), watts)
+        bl = self._charger_counter_baselines.setdefault(cid, {})
+        if bl.get("counter") != counter:
+            # Another counter: its deltas start now, on the row as it stands.
+            # Kept, the old anchor would meet the new counter's zero delta and
+            # pull the day's earlier charging out of the row.
+            bl.clear()
+        target, all_read = self._ev_counter_target(bl, day, [counter], value)
+        bl["counter"] = counter
+        if target is None or target > self._max_daily_ev_kwh():
+            return value
+        if not self._ev_adoption(f"charger {cid}", target, value,
+                                 settled and all_read):
+            return value
+        return target
 
     def _tally_backing(self, category: str, today_str: str, backed: bool) -> None:
         """(#628 visibility) Count and announce counter-backing transitions.
@@ -3664,6 +3808,11 @@ class EnergyCalculator:
             # restart and the first cycle re-baselines at the current counter
             # value — the downtime delta is silently discarded.
             "ev_counter_baselines": dict(self._ev_counter_baselines),
+            # (#1049) each charger's own row, same reason.
+            "charger_counter_baselines": {
+                cid: dict(bl)
+                for cid, bl in self._charger_counter_baselines.items()
+            },
             # (#628) same again for the grid/battery meters — a restart in the
             # middle of the day must not forget where today's registers
             # started, or the anchor re-lands on the current daily value and
@@ -3791,6 +3940,13 @@ class EnergyCalculator:
             ev_baselines = state.get("ev_counter_baselines")
             if isinstance(ev_baselines, dict):
                 self._ev_counter_baselines = ev_baselines
+            charger_baselines = state.get("charger_counter_baselines")
+            if isinstance(charger_baselines, dict):
+                # A damaged entry is dropped; that charger re-anchors.
+                self._charger_counter_baselines = {
+                    str(cid): bl for cid, bl in charger_baselines.items()
+                    if isinstance(bl, dict)
+                }
             meter_baselines = state.get("meter_baselines")
             if isinstance(meter_baselines, dict):
                 # Per-category shape check — a damaged blob for one category

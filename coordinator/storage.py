@@ -67,6 +67,8 @@ CALCULATOR_STATE_KEYS: tuple[str, ...] = (
     "solar_counter_baselines",
     # (#658) EV wallbox-counter baselines
     "ev_counter_baselines",
+    # (#1049) each charger's own counter baselines
+    "charger_counter_baselines",
     # (#628) grid/battery meter baselines, keyed by category
     "meter_baselines",
     # (#628) the CALENDAR-day EV mirror the home balance subtracts, and the
