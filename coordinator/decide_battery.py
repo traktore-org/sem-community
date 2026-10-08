@@ -31,6 +31,7 @@ Decision tree (precedence top-down):
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from .charger_types import BatteryDecision, BatteryIntent
@@ -207,6 +208,27 @@ def house_load_is_measured(fleet) -> bool:
             and float(getattr(fleet, "home_residual_clamped_w", 0.0) or 0.0) <= 0.0)
 
 
+def reserve_stops_peak_cover(view: "BatteryView"):
+    """(#1069) Why this pack may not cover a peak breach, or ``None``.
+
+    The cover RAISES a discharge limit so the pack pays for what the meter
+    may not buy. That is a spend, and a spend stops at the backup reserve:
+    the review found the cover raising the limit at 15 % SOC with no floor
+    at all. A SOC SEM cannot read is not spent either (#531's rule: when in
+    doubt, hold). The limit then stays what its own branch asked for.
+    """
+    rt = view.runtime
+    if not getattr(rt, "available", True) or not getattr(
+            view.fleet, "battery_soc_known", True):
+        return "the battery SOC is not readable"
+    reserve = float(view.config.get("battery_reserve_soc") or 0.0)
+    soc = float(getattr(rt, "last_known_soc", 0.0) or 0.0)
+    if soc <= reserve:
+        return (f"the battery is at {soc:.0f}%, at or below its "
+                f"{reserve:.0f}% reserve")
+    return None
+
+
 def peak_cover_floor_w(view: "BatteryView", limit_w: float, n: int) -> float:
     """Raise a per-battery discharge limit to what the meter may not buy (#1003).
 
@@ -224,13 +246,16 @@ def peak_cover_floor_w(view: "BatteryView", limit_w: float, n: int) -> float:
     what answers for the car. Split by ``n`` like the limit it floors
     (#531/#691), so N batteries cover the excess once, and never lowering.
 
-    Returns ``limit_w`` untouched when no limit is configured, and on a cycle
+    Returns ``limit_w`` untouched when no limit is configured, on a cycle
     whose house figure is not a measurement (see
-    :func:`house_load_is_measured`).
+    :func:`house_load_is_measured`), and (#1069) when the pack is at its
+    reserve or its SOC cannot be read (:func:`reserve_stops_peak_cover`).
     """
     f = view.fleet
     allowed_w = getattr(f, "peak_slot_allowed_w", None)
     if allowed_w is None or not house_load_is_measured(f):
+        return float(limit_w)
+    if reserve_stops_peak_cover(view) is not None:
         return float(limit_w)
     house_w = max(0.0, float(view.home_consumption_w or 0.0))
     # ``cover_for_peak_w`` cannot exceed the house it is derived from; the
@@ -242,12 +267,77 @@ def peak_cover_floor_w(view: "BatteryView", limit_w: float, n: int) -> float:
     return max(float(limit_w), cover_w)
 
 
+#: (#1069) A forced charge follows the room in these steps, so the room's
+#: wobble does not re-send a new power every cycle; below one step it stops.
+FORCED_CHARGE_STEP_W = 250.0
+
+
+def forced_charge_room_w(view: "BatteryView"):
+    """(#1069) The watts this battery may charge without the meter going over
+    the limit, or ``None`` when no limit is configured.
+
+    The limit is on the meter, so the room is the allowance plus the sun,
+    less the house and less what the chargers were offered this cycle
+    (``peak_committed_w`` — they run first, and the car comes before the
+    battery). ``home_consumption_w`` excludes the car and the pack's own
+    charging, so nothing is counted twice. Split across the batteries like
+    every other battery budget (#531).
+
+    Before this a planned block, a negative price and a manual force charge
+    all charged at full power: a 4.2 kW limit, the car offered 4.0 kW and a
+    3 kW block put 7 kW on the meter (review, 08.10).
+    """
+    f = view.fleet
+    allowed_w = getattr(f, "peak_slot_allowed_w", None)
+    if allowed_w is None:
+        return None
+    # The sun counts as room only on a cycle that can see: a dark read
+    # makes the house figure a guess, and a guess may not buy grid watts.
+    sun_w = (max(0.0, float(getattr(f, "solar_w", 0.0) or 0.0))
+             if house_load_is_measured(f) else 0.0)
+    room_w = (float(allowed_w) + sun_w
+              - max(0.0, float(view.home_consumption_w or 0.0))
+              - max(0.0, float(getattr(f, "peak_committed_w", 0.0) or 0.0)))
+    n = max(1, int(getattr(f, "battery_count", 1) or 1))
+    return max(0.0, room_w) / n
+
+
+def _cap_forced_charge(view, decision: BatteryDecision) -> BatteryDecision:
+    """(#1069) Every FORCE_CHARGE answers to the limit — the peak guard sits
+    above every mode of every device, a manual force charge included."""
+    if decision.intent is not BatteryIntent.FORCE_CHARGE:
+        return decision
+    room_w = forced_charge_room_w(view)
+    if room_w is None or float(decision.charge_power_w) <= room_w:
+        return decision
+    stepped_w = (room_w // FORCED_CHARGE_STEP_W) * FORCED_CHARGE_STEP_W
+    allowed_w = float(view.fleet.peak_slot_allowed_w)
+    if stepped_w < FORCED_CHARGE_STEP_W:
+        return BatteryDecision(
+            battery_id=decision.battery_id,
+            intent=BatteryIntent.STOP_FORCE_CHARGE,
+            # CAUSE: `room_w` is forced_charge_room_w's sum of the allowance,
+            # the sun, the house and the chargers' offers, all read above.
+            reason=(f"{decision.reason} — no room under the grid limit "
+                    f"({allowed_w:.0f} W allowed, {room_w:.0f} W left after "
+                    "the house and the car)"),
+        )
+    return replace(
+        decision, charge_power_w=stepped_w,
+        # CAUSE: `stepped_w` is `room_w` from forced_charge_room_w, floored to
+        # a step, and the branch runs only when the decision asked for more.
+        reason=(f"{decision.reason} — {stepped_w:.0f} W, the room left under "
+                f"the grid limit ({allowed_w:.0f} W allowed)"),
+    )
+
+
 def decide_battery(view: "BatteryView") -> BatteryDecision:
     """Compute this battery's per-cycle decision.
 
     Pure function — same input → same output.
     """
-    return _stop_what_sem_started(view, _decide_battery(view))
+    return _stop_what_sem_started(
+        view, _cap_forced_charge(view, _decide_battery(view)))
 
 
 def _decide_battery(view: "BatteryView") -> BatteryDecision:
@@ -630,7 +720,15 @@ def _decide_battery(view: "BatteryView") -> BatteryDecision:
             )
         _cover_w = peak_cover_floor_w(view, 0.0, _n)
         _why = f"house sink held — {getattr(_house_v, 'reason', '')}"
-        if _cover_w > 0.0:
+        _stop = reserve_stops_peak_cover(view)
+        if _stop is not None and cover_for_peak_w(
+                _allowed, max(0.0, float(view.home_consumption_w or 0.0)),
+                float(getattr(_f, "solar_w", 0.0) or 0.0)) > 0.0:
+            # CAUSE: `_stop` is reserve_stops_peak_cover's own sentence —
+            # the SOC and reserve it compared, or the unreadable SOC.
+            _why = (f"{_why}; the meter is over its limit, but {_stop} — "
+                    "the pack does not cover it")
+        elif _cover_w > 0.0:
             _why = (
                 f"{_why}; the meter may buy {float(_allowed):.0f} W for the "
                 f"rest of this quarter hour, so the pack covers "

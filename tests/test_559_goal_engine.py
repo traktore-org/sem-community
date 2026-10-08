@@ -120,7 +120,10 @@ def test_rated_power_autocalibrates_from_observed_draw():
     # default: threshold seeded from rated_power (1000W)
     assert dev.min_power_threshold == 1000
     dev._status.state = DeviceState.ACTIVE
-    dev.calibrate_rated_power()
+    # (#1067) held for the hold time, not one reading
+    dev.calibrate_rated_power(now=0.0)
+    dev.calibrate_rated_power(now=60.0)
+    dev.calibrate_rated_power(now=120.0)
     assert dev.rated_power == 2300
     assert dev.min_power_threshold == 2300
 
@@ -132,12 +135,14 @@ def test_calibrate_noop_when_off_or_no_sensor():
     dev = SwitchDevice(hass=hass, device_id="p", name="P", rated_power=1000,
                        entity_id="switch.p")
     dev._status.state = DeviceState.ACTIVE
-    dev.calibrate_rated_power()
+    for t in (0.0, 60.0, 120.0):      # (#1067) a full hold, so the gate decides
+        dev.calibrate_rated_power(now=t)
     assert dev.rated_power == 1000
     # has sensor but device OFF → no-op
     dev2 = SwitchDevice(hass=hass, device_id="p2", name="P2", rated_power=1000,
                         entity_id="switch.p2", power_entity_id="sensor.p2_w")
-    dev2.calibrate_rated_power()
+    for t in (0.0, 60.0, 120.0):
+        dev2.calibrate_rated_power(now=t)
     assert dev2.rated_power == 1000
 
 

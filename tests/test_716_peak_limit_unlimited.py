@@ -332,27 +332,17 @@ class TestLadderRepairAtReadTime:
 # --------------------------------------------------------------------------
 @pytest.mark.unit
 class TestBatterySchedulerSeed:
-    """``SchedulerConfig.peak_limit_w`` predates the flag and spells no-limit
-    as ``0.0``. #716 translates rather than plumbs infinity through, because
-    the slot arithmetic downstream has no infinity handling."""
+    """(#1069) ``SchedulerConfig.peak_limit_w`` is gone: it was seeded here
+    and read by nothing. The limit is read live (``decide_battery`` caps
+    every forced charge to the slot's room), so there is no copy to seed."""
 
-    def _cfg(self, **kw):
+    def test_the_scheduler_keeps_no_copy_of_the_limit(self):
         from custom_components.solar_energy_management.coordinator.battery_charge_scheduler import (
             SchedulerConfig,
         )
 
-        return SchedulerConfig.from_config({"target_peak_limit": 9.0, **kw})
-
-    def test_limited_seeds_the_target(self):
-        assert self._cfg().peak_limit_w == 9000.0
-
-    def test_unlimited_seeds_zero(self):
-        assert self._cfg(peak_limit_unlimited=True).peak_limit_w == 0.0
-
-    def test_unlimited_seed_is_finite(self):
-        """Not ``inf`` — see the class docstring."""
-        cfg = self._cfg(peak_limit_unlimited=True)
-        assert math.isfinite(cfg.peak_limit_w)
+        cfg = SchedulerConfig.from_config({"target_peak_limit": 9.0})
+        assert not hasattr(cfg, "peak_limit_w")
 
 
 # --------------------------------------------------------------------------
@@ -431,10 +421,8 @@ class TestConfigSurface:
 def test_no_zero_sentinel_reintroduced_for_target_peak_limit():
     """``target_peak_limit`` must never regain a magic zero.
 
-    The battery scheduler's ``peak_limit_w`` keeps its own documented
-    ``0 = no limit`` (it predates the flag and is fed by the translation
-    above), but the user-facing key must stay a plain number whose disabled
-    state is a separate boolean — see this module's docstring, property 1.
+    The user-facing key must stay a plain number whose disabled state is a
+    separate boolean — see this module's docstring, property 1.
     """
     import io
     import re

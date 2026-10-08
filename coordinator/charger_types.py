@@ -570,6 +570,13 @@ class ChargerDecision:
     never held above it by a blind-cycle hold): a limit is not a preference.
     PROD 02.09: the guard said 10 A, the wire carried 14→12 A for two more
     minutes and the slot set the month's peak."""
+    peak_paused: bool = False
+    """(#1069) An IDLE because the peak slot has no room for this charger's
+    minimum current. Not a mode's verdict: the stability layer bridges it
+    for the user's disable delay and restarts only after the enable delay —
+    in EVERY mode, day or night, the same rule surplus charging uses. Before
+    this the clamp floored at 6 A and the car flipped on/off every cycle
+    against a limit near its minimum."""
     redirect_w: float = 0.0
     """(#899) Battery-charge watts this decision credited to the car
     ("redirect"). Carried so the loop can check it against the meter
@@ -886,6 +893,12 @@ class FleetContext:
     peak_committed_w: float = 0.0
     """Watts already committed to higher-priority chargers in
     this cycle (the #274/H1 share-one-peak-budget invariant)."""
+    battery_forced_grid_w: float = 0.0
+    """(#1069) The grid watts of a forced battery charge SEM itself is
+    running. They sit in ``grid_import_w``, but the battery yields them to
+    the car next cycle (it sizes its charge from what the chargers were
+    offered), so the peak clamp counts them as room, not as somebody
+    else's draw — the car comes before the battery."""
 
     arbitrage: Optional["ArbitrageSignals"] = None
     """Battery→grid arbitrage market signals (#533), computed once per cycle.
@@ -1055,6 +1068,8 @@ class FleetCycleState:
     # (#864) the slot-budget allowance, resolved once per cycle; None when
     # no target peak limit is configured.
     peak_slot_allowed_w: Optional[float] = None
+    # (#1069) grid watts of SEM's own forced battery charge (FleetContext).
+    battery_forced_grid_w: float = 0.0
     # #576 — fleet-level priority-list inputs (one home battery). Threaded
     # here so every charger's view sees the same slot + command state.
     battery_priority: "Optional[int]" = None

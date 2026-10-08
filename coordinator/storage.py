@@ -67,6 +67,10 @@ CALCULATOR_STATE_KEYS: tuple[str, ...] = (
     "solar_counter_baselines",
     # (#658) EV wallbox-counter baselines
     "ev_counter_baselines",
+    # (#1049) each charger's own counter baselines, and what each box drew
+    # since its counter last moved
+    "charger_counter_baselines",
+    "ev_counter_pending",
     # (#628) grid/battery meter baselines, keyed by category
     "meter_baselines",
     # (#628) the CALENDAR-day EV mirror the home balance subtracts, and the
@@ -475,6 +479,16 @@ class SEMStorage:
     def set_ev_session_state(self, state: Dict[str, Any]) -> None:
         """Persist EV session state (survives restarts)."""
         self._daily_data["ev_session"] = state
+
+    # (#1069) The current 15-minute peak slot — a restart resumes it spent.
+    def get_peak_slot_state(self) -> Dict[str, Any]:
+        """The slot tracker's saved state (``PeakSlotTracker.to_state``)."""
+        return self._daily_data.get("peak_slot", {})
+
+    def set_peak_slot_state(self, state: Dict[str, Any]) -> None:
+        """Rides the daily store: written on a clean stop and every two
+        minutes, so a restart lands back inside the same slot with it."""
+        self._daily_data["peak_slot"] = dict(state)
 
     # EV intelligence persistence (survives restarts and daily resets)
     def get_pv_performance_state(self) -> Dict[str, Any]:

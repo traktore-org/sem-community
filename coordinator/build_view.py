@@ -225,6 +225,9 @@ def build_charger_view(
         peak_state=getattr(fleet_state, "peak_state", "normal"),
         # (#864) so does the slot-budget allowance.
         peak_slot_allowed_w=getattr(fleet_state, "peak_slot_allowed_w", None),
+        # (#1069) SEM's own forced battery charge yields to the car.
+        battery_forced_grid_w=float(
+            getattr(fleet_state, "battery_forced_grid_w", 0.0) or 0.0),
         # (#864/#885) what higher-priority chargers already claimed this
         # cycle — PER-CHARGER, like its two siblings above. It rode the
         # frozen ``fleet_state`` until #885: that object is built once,
@@ -316,7 +319,10 @@ def build_charger_view(
     # cascade: a 16 A charger commanded at 32 claims 22 kW of solar it
     # cannot draw, and the difference is taken off what the next charger
     # in the list is allowed to see.
-    for _key in ("ev_max_current", "ev_min_current", "ev_phases", "ev_voltage"):
+    # (#1069) ``peak_hysteresis`` is a house setting the peak slot clamp
+    # reads for the restart margin; no charger entry carries it.
+    for _key in ("ev_max_current", "ev_min_current", "ev_phases", "ev_voltage",
+                 "peak_hysteresis"):
         if cfg_resolved.get(_key) is None:
             _fleet_val = config.get(_key)
             if _fleet_val is not None:

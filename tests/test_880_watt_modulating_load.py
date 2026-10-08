@@ -351,6 +351,7 @@ def _sync_rig(control, unit="W"):
         UnifiedDeviceRegistry,
     )
     reg = UnifiedDeviceRegistry.__new__(UnifiedDeviceRegistry)
+    reg._built_from_store = {}          # (#1067)
     reg.hass = MagicMock()
     st = MagicMock()
     st.state = "0"

@@ -2001,6 +2001,45 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 counters.append(fallback)
         return counters
 
+    def _own_ev_counters(self) -> Dict[str, Optional[str]]:
+        """(#1049) Per charger id: the energy counter that is its ALONE.
+
+        The same choice as ``_collect_ev_counter_entities`` level 1 — the
+        charger's own ``ev_total_energy_sensor``, the top-level one for the
+        primary (by position) only. A counter two chargers name is neither's:
+        it maps to None, because each would read the other's kWh as its own.
+        The fallbacks (legacy daily sensor, Energy Dashboard ``ev_energy``)
+        are never a charger's own — they are not tied to one box.
+        """
+        top_level = self.config.get("ev_total_energy_sensor")
+        if not [c for c in (self.config.get("ev_chargers") or [])
+                if isinstance(c, dict)]:
+            # One box set up with flat keys registers as ``ev_charger``
+            # (``primary_charger_id``); its top-level counter is its own.
+            return {"ev_charger": top_level} if top_level else {}
+        own: Dict[str, Optional[str]] = {}
+        for index, charger in enumerate(self.config.get("ev_chargers") or []):
+            if not isinstance(charger, dict):
+                continue
+            # Registration's id fallback (__init__), by the same position.
+            cid = charger.get("id") or f"ev_charger_{index}"
+            own[cid] = (charger.get("ev_total_energy_sensor")
+                        or (top_level if index == 0 else None)) or None
+        named = [e for e in own.values() if e]
+        return {cid: (e if e and named.count(e) == 1 else None)
+                for cid, e in own.items()}
+
+    def _ev_counter_owners(self) -> Dict[str, str]:
+        """(#1049) Counter → the charger whose power it counts."""
+        return {e: cid for cid, e in self._own_ev_counters().items() if e}
+
+    def _ev_counters_cover_fleet(self) -> bool:
+        """(#1049) Does every charger have a counter of its own? Only then
+        does the counter set see all the charging the power integral sees,
+        and only then may it pull the EV rows down."""
+        own = self._own_ev_counters()
+        return bool(own) and all(own.values())
+
     def install_presence(self) -> Dict[Module, Presence]:
         """(#923) What this install has right now — see install_modules.py."""
         # Called through the class so a bare test double (a SimpleNamespace
@@ -2246,6 +2285,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             self.hass,
             self._collect_ev_counter_entities(),
             self.config.get("prefer_hardware_energy", True),
+            complete=self._ev_counters_cover_fleet(),
+            owners=self._ev_counter_owners(),
         )
 
         # Log EV sensor configuration
@@ -4515,6 +4556,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         # FLEET-READ: load manager peak budget is a
                         # whole-house concept; fleet EV total is correct.
                         ev_power_w=power.ev_power,
+                        # (#1069) the billed peak is the slot tracker's —
+                        # one tracker, the utility's clock slots.
+                        closed_slot=(
+                            self._peak_slot_tracker.pop_closed()
+                            if getattr(self, "_peak_slot_tracker", None)
+                            is not None else None),
                     )
                 except (HomeAssistantError, ServiceValidationError) as e:
                     _LOGGER.error("Load management service call failed: %s", e)
@@ -8286,6 +8333,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # #864/#818 on and never this second producer. Bug class: two
             # producers of one context, a field threaded through one of them.
             peak_slot_allowed_w=getattr(_fs, "peak_slot_allowed_w", None),
+            # (#1069) …and what the chargers were offered this cycle. They
+            # run first, so a forced battery charge takes only the room the
+            # car left; without it the pack charged at full power on top.
+            # The accumulator is reset only inside the charger loop, so an
+            # install without chargers reads 0, never a stale total.
+            peak_committed_w=float(
+                getattr(self, "_peak_committed_w_per_cycle", 0.0) or 0.0)
+            if getattr(self, "_ev_devices", None) else 0.0,
             # (#818) any dark steering read moves the energy balance, and
             # ``home_consumption_power`` IS that balance's residual — so the
             # floor that reads it must know when it is not a measurement.
@@ -9900,8 +9955,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 _floor2 = _reserve / 100.0 * cap_kwh2
                 _md_w = float(self.config.get(
                     "battery_max_discharge_power", 5000.0) or 5000.0)
+                # (#1069) the PLANNING limit (cap − hysteresis), as the real
+                # ledger uses: the preview sized against the raw cap and
+                # promised a band the night it previews would not book.
                 try:
-                    _peak_w = float(self._get_peak_limit_w() or 0.0)
+                    _peak_w = float(self._planning_peak_w() or 0.0)
                 except Exception:  # noqa: BLE001
                     _peak_w = 0.0
                 ledger2 = build_night_ledger(
@@ -12079,15 +12137,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         """
         allowed = None
         try:
-            from .peak_guard import PeakSlotTracker, slot_allowed_import_w
-            if getattr(self, "_peak_slot_tracker", None) is None:
-                self._peak_slot_tracker = PeakSlotTracker()
+            from .peak_guard import slot_allowed_import_w, tracker_from_state
             import homeassistant.util.dt as _dt
+            _now = _dt.now()
+            _store = getattr(self, "_storage", None)
+            if getattr(self, "_peak_slot_tracker", None) is None:
+                # (#1069) Resume the slot a restart interrupted — spent stays
+                # spent. A fresh tracker granted up to 3× the limit for the
+                # rest of a slot that may already have been over it.
+                self._peak_slot_tracker = tracker_from_state(
+                    _store.get_peak_slot_state() if _store else None, _now)
             # (#906) an unreadable meter is a BLIND sample (None), never 0.
             _grid_w = (
                 None if getattr(power, "grid_power_unavailable", False)
                 else float(getattr(power, "grid_import_power", 0.0) or 0.0))
-            self._peak_slot_tracker.update(_dt.now(), _grid_w)
+            self._peak_slot_tracker.update(_now, _grid_w)
+            if _store:
+                _store.set_peak_slot_state(self._peak_slot_tracker.to_state())
             _lm = self._load_manager
             # The off-switch is the EXISTING one: the Control-tab slider's
             # MAX notch sets peak_limit_unlimited atomically (#717), and an
@@ -12112,6 +12178,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             )
             allowed = None
         self._peak_slot_allowed_w = allowed
+
+    def _battery_forced_grid_w(self, power: PowerReadings) -> float:
+        """(#1069) Grid watts of a forced battery charge SEM is running.
+
+        Only SEM's own: a pack the inverter charges by itself does not
+        yield to the car, so it stays somebody else's draw. Only the grid
+        share: the sun past the house reaches the pack before the meter.
+        """
+        adapters = getattr(self, "_battery_adapters", None) or {}
+        if not any(getattr(a, "_sem_forced_charge", None) is True
+                   or getattr(a, "_forcible_charging", False) is True
+                   for a in adapters.values()):
+            return 0.0
+        charge_w = max(0.0, float(getattr(power, "battery_charge_power", 0.0) or 0.0))
+        sun_left_w = max(0.0, float(getattr(power, "solar_power", 0.0) or 0.0)
+                         - float(getattr(power, "home_consumption_power", 0.0) or 0.0))
+        return max(0.0, charge_w - sun_left_w)
 
     def _build_fleet_cycle_state(
         self, power: PowerReadings, energy: Any,
@@ -12280,6 +12363,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             config=self.config,
             peak_state=_peak_state,
             peak_slot_allowed_w=self._peak_slot_allowed_w,
+            battery_forced_grid_w=self._battery_forced_grid_w(power),
             is_night=self.time_manager.is_night_mode(),
             tariff_level=tariff_level,
             forecast_remaining_kwh=float(forecast_remaining),
@@ -13223,6 +13307,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         primary_taper_data = None
         # Multi-charger (#112): run per-charger taper detection
         if self._ev_devices and len(self._ev_devices) >= 1:
+            own_counters = self._own_ev_counters()  # (#1049)
             for cid, ev_dev in self._ev_devices.items():
                 if cid not in self._ev_taper_detectors:
                     self._ev_taper_detectors[cid] = EVTaperDetector(self.config)
@@ -13284,6 +13369,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     self._daily_ev_per_charger[cid] = (
                         self._daily_ev_per_charger.get(cid, 0.0) + increment
                     )
+                # (#1049) …held to this charger's own counter, like the fleet
+                # row: a power sensor that reads high is not kept.
+                self._daily_ev_per_charger[cid] = (
+                    self._energy_calculator.follow_charger_counter(
+                        cid, ev_day,
+                        self._daily_ev_per_charger.get(cid, 0.0),
+                        own_counters.get(cid),
+                    )
+                )
 
                 if charger_power > 0 or charger_connected:
                     _td = self._ev_taper_detectors[cid].update(

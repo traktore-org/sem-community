@@ -39,12 +39,10 @@ class TestTheSchedulerConfigReadsThemThroughIt:
             "battery_arbitrage_reserve_soc": None,
             "battery_arbitrage_min_export_price": None,
             "battery_max_discharge_power": None,
-            "battery_max_grid_import_w": None,
         })
         assert cfg.arbitrage_reserve_soc == 50.0
         assert cfg.arbitrage_min_export_price == 0.20
         assert cfg.max_discharge_power_w == 5000.0
-        assert cfg.max_grid_import_w == 0.0
 
     def test_a_missing_key_still_takes_the_default(self):
         cfg = SchedulerConfig.from_config({})
