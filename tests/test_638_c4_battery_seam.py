@@ -201,8 +201,9 @@ class TestTheScheduleEntityDerivesFromThePlan:
         )
         now = datetime(2026, 8, 12, 3, 30, tzinfo=timezone.utc)
         view = schedule_view_from_plan(self._plan(), now)
+        # (#1069 review) "peak_limit_w" left: a constant 0.0 no card read
         assert set(view) == {"slots", "total_battery_kwh", "total_ev_kwh",
-                             "total_kwh", "estimated_cost", "peak_limit_w"}
+                             "total_kwh", "estimated_cost"}
         assert len(view["slots"]) == 1  # ONLY the battery's blocks
         s = view["slots"][0]
         assert set(s) == {"start", "end", "battery_w", "ev_w", "total_w",

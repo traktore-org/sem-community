@@ -74,6 +74,14 @@ class PeakSlotTracker:
     ZOH integration of the previous sample over the elapsed step, split at
     the slot boundary so each slot owns exactly its own seconds. Negative
     import (export) accrues nothing — the bill never credits a slot.
+
+    (#1069) It is also the ONE source of the billed peak: when a slot closes,
+    its average is held for :meth:`pop_closed`, and the monthly peak books
+    only closed slots. The load manager booked it from a free-sliding
+    15-minute window, so 8 kW for ten minutes across a boundary read
+    ~5.3 kW while the bill saw two slots of ~2.7 kW. A slot the tracker did
+    not watch from its start (SEM started mid-slot) is never booked: its
+    average is unknown, not low.
     """
 
     def __init__(self) -> None:
@@ -84,6 +92,10 @@ class PeakSlotTracker:
         #: (#906) True while the latest sample was unreadable — the integral
         #: is carrying the last VALID import across the gap (ZOH), not a 0.
         self.blind: bool = False
+        #: (#1069) True while every second of the current slot was watched —
+        #: it began while we were running and no gap passed the step cap.
+        self.watched_from_start: bool = False
+        self._closed: Optional[tuple] = None
 
     @staticmethod
     def _slot_of(t: datetime) -> datetime:
@@ -105,25 +117,83 @@ class PeakSlotTracker:
         slot = self._slot_of(now)
         if self._slot_start is None:
             self._slot_start = slot
+            # (#1069) a first sample ON the boundary watched the whole slot
+            self.watched_from_start = now == slot
         if self._last_t is not None:
-            step = (now - self._last_t).total_seconds()
-            if 0 < step:
-                step = min(step, _MAX_STEP_S)
+            raw_step = (now - self._last_t).total_seconds()
+            if 0 < raw_step:
+                step = min(raw_step, _MAX_STEP_S)
                 w = max(0.0, self._last_w)
                 if slot != self._slot_start:
                     # Split the step at the boundary: only the seconds
                     # inside the NEW slot survive the reset.
                     inside_new = min(step, (now - slot).total_seconds())
+                    # (#1069) …and the seconds before it close the old slot —
+                    # booked only when every second of it was watched: a gap
+                    # past the step cap left seconds nobody measured.
+                    seen = raw_step <= _MAX_STEP_S
+                    if self.watched_from_start and seen:
+                        tail_kwh = w * max(0.0, step - inside_new) / 3.6e6
+                        self._closed = (
+                            self._slot_start,
+                            round((self.imported_kwh + tail_kwh)
+                                  * 3600.0 / SLOT_S, 3),
+                        )
                     self.imported_kwh = w * max(0.0, inside_new) / 3600.0 / 1000.0
                     self._slot_start = slot
+                    self.watched_from_start = seen
                 else:
                     self.imported_kwh += w * step / 3600.0 / 1000.0
+                    if raw_step > _MAX_STEP_S:
+                        self.watched_from_start = False   # (#1069) a hole
         self._last_t = now
         if grid_import_w is None:
             self.blind = True          # hold ``_last_w`` — ZOH over the gap
         else:
             self.blind = False
             self._last_w = float(grid_import_w or 0.0)
+
+    def to_state(self) -> dict:
+        """(#1069) What a restart needs to resume THIS slot."""
+        return {
+            "slot_start": self._slot_start.isoformat() if self._slot_start else None,
+            "last_t": self._last_t.isoformat() if self._last_t else None,
+            "last_w": float(self._last_w),
+            "imported_kwh": float(self.imported_kwh),
+            "watched_from_start": bool(self.watched_from_start),
+        }
+
+    def pop_closed(self) -> Optional[tuple]:
+        """``(slot_start, average_kw)`` of the slot that just closed, once."""
+        closed, self._closed = self._closed, None
+        return closed
+
+
+def tracker_from_state(state, now: datetime) -> PeakSlotTracker:
+    """(#1069) A tracker resumed from its saved state — same slot only.
+
+    A restart set the slot's import back to zero, and the guard then granted
+    up to three times the limit for the rest of a slot that may already have
+    been spent. Spent stays spent: the saved import comes back when the
+    restart lands inside the same clock slot. The seconds HA was down are a
+    hole — the next sample sees the gap and the slot is not booked as a
+    monthly peak. Anything else (another slot, a broken state) is a fresh
+    tracker, exactly as before.
+    """
+    tracker = PeakSlotTracker()
+    try:
+        slot_start = datetime.fromisoformat(state["slot_start"])
+        last_t = datetime.fromisoformat(state["last_t"])
+        if PeakSlotTracker._slot_of(now) != slot_start or last_t > now:
+            return tracker
+        tracker._slot_start = slot_start
+        tracker._last_t = last_t
+        tracker._last_w = max(0.0, float(state.get("last_w") or 0.0))
+        tracker.imported_kwh = max(0.0, float(state.get("imported_kwh") or 0.0))
+        tracker.watched_from_start = bool(state.get("watched_from_start"))
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return PeakSlotTracker()
+    return tracker
 
 
 def clamp_import_command(

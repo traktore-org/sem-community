@@ -102,8 +102,6 @@ def scheduler_config():
         pessimism_weight=0.3,
         replan_soc_deviation_pct=5.0,
         replan_on_ev_change=True,
-        peak_limit_w=0.0,
-        max_grid_import_w=0.0,
         ev_priority=True,
         force_charge_on_negative_price=True,
     )
@@ -624,8 +622,8 @@ class TestSchedulerConfig:
         assert config.min_deficit_kwh == 3.0
         assert config.forecast_confidence == 0.9
         assert config.max_target_soc == 100.0
-        # 9.0 kW → 9000 W; the dead ``peak_limit_w: 4000`` above must lose.
-        assert config.peak_limit_w == 9000.0
+        # (#1069) the scheduler keeps no copy of the limit at all.
+        assert not hasattr(config, "peak_limit_w")
         # #604: the legacy ev_priority_over_battery read is retired — the
         # internal knob keeps its default regardless of the config key.
         assert config.ev_priority is True
@@ -1027,7 +1025,7 @@ class TestSchedulerConfigExtended:
         assert config.pessimism_weight == 0.4
         assert config.replan_soc_deviation_pct == 10.0
         assert config.replan_on_ev_change is False
-        assert config.max_grid_import_w == 6000.0
+        assert not hasattr(config, "max_grid_import_w")   # (#1069) dead
         assert config.force_charge_on_negative_price is False
 
     def test_defaults_disabled(self):

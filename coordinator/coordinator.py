@@ -4504,6 +4504,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         # FLEET-READ: load manager peak budget is a
                         # whole-house concept; fleet EV total is correct.
                         ev_power_w=power.ev_power,
+                        # (#1069) the billed peak is the slot tracker's —
+                        # one tracker, the utility's clock slots.
+                        closed_slot=(
+                            self._peak_slot_tracker.pop_closed()
+                            if getattr(self, "_peak_slot_tracker", None)
+                            is not None else None),
                     )
                 except (HomeAssistantError, ServiceValidationError) as e:
                     _LOGGER.error("Load management service call failed: %s", e)
@@ -8266,6 +8272,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # #864/#818 on and never this second producer. Bug class: two
             # producers of one context, a field threaded through one of them.
             peak_slot_allowed_w=getattr(_fs, "peak_slot_allowed_w", None),
+            # (#1069) …and what the chargers were offered this cycle. They
+            # run first, so a forced battery charge takes only the room the
+            # car left; without it the pack charged at full power on top.
+            # The accumulator is reset only inside the charger loop, so an
+            # install without chargers reads 0, never a stale total.
+            peak_committed_w=float(
+                getattr(self, "_peak_committed_w_per_cycle", 0.0) or 0.0)
+            if getattr(self, "_ev_devices", None) else 0.0,
             # (#818) any dark steering read moves the energy balance, and
             # ``home_consumption_power`` IS that balance's residual — so the
             # floor that reads it must know when it is not a measurement.
@@ -9813,8 +9827,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 _floor2 = _reserve / 100.0 * cap_kwh2
                 _md_w = float(self.config.get(
                     "battery_max_discharge_power", 5000.0) or 5000.0)
+                # (#1069) the PLANNING limit (cap − hysteresis), as the real
+                # ledger uses: the preview sized against the raw cap and
+                # promised a band the night it previews would not book.
                 try:
-                    _peak_w = float(self._get_peak_limit_w() or 0.0)
+                    _peak_w = float(self._planning_peak_w() or 0.0)
                 except Exception:  # noqa: BLE001
                     _peak_w = 0.0
                 ledger2 = build_night_ledger(
@@ -11982,15 +11999,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         """
         allowed = None
         try:
-            from .peak_guard import PeakSlotTracker, slot_allowed_import_w
-            if getattr(self, "_peak_slot_tracker", None) is None:
-                self._peak_slot_tracker = PeakSlotTracker()
+            from .peak_guard import slot_allowed_import_w, tracker_from_state
             import homeassistant.util.dt as _dt
+            _now = _dt.now()
+            _store = getattr(self, "_storage", None)
+            if getattr(self, "_peak_slot_tracker", None) is None:
+                # (#1069) Resume the slot a restart interrupted — spent stays
+                # spent. A fresh tracker granted up to 3× the limit for the
+                # rest of a slot that may already have been over it.
+                self._peak_slot_tracker = tracker_from_state(
+                    _store.get_peak_slot_state() if _store else None, _now)
             # (#906) an unreadable meter is a BLIND sample (None), never 0.
             _grid_w = (
                 None if getattr(power, "grid_power_unavailable", False)
                 else float(getattr(power, "grid_import_power", 0.0) or 0.0))
-            self._peak_slot_tracker.update(_dt.now(), _grid_w)
+            self._peak_slot_tracker.update(_now, _grid_w)
+            if _store:
+                _store.set_peak_slot_state(self._peak_slot_tracker.to_state())
             _lm = self._load_manager
             # The off-switch is the EXISTING one: the Control-tab slider's
             # MAX notch sets peak_limit_unlimited atomically (#717), and an
@@ -12015,6 +12040,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             )
             allowed = None
         self._peak_slot_allowed_w = allowed
+
+    def _battery_forced_grid_w(self, power: PowerReadings) -> float:
+        """(#1069) Grid watts of a forced battery charge SEM is running.
+
+        Only SEM's own: a pack the inverter charges by itself does not
+        yield to the car, so it stays somebody else's draw. Only the grid
+        share: the sun past the house reaches the pack before the meter.
+        """
+        adapters = getattr(self, "_battery_adapters", None) or {}
+        if not any(getattr(a, "_sem_forced_charge", None) is True
+                   or getattr(a, "_forcible_charging", False) is True
+                   for a in adapters.values()):
+            return 0.0
+        charge_w = max(0.0, float(getattr(power, "battery_charge_power", 0.0) or 0.0))
+        sun_left_w = max(0.0, float(getattr(power, "solar_power", 0.0) or 0.0)
+                         - float(getattr(power, "home_consumption_power", 0.0) or 0.0))
+        return max(0.0, charge_w - sun_left_w)
 
     def _build_fleet_cycle_state(
         self, power: PowerReadings, energy: Any,
@@ -12183,6 +12225,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             config=self.config,
             peak_state=_peak_state,
             peak_slot_allowed_w=self._peak_slot_allowed_w,
+            battery_forced_grid_w=self._battery_forced_grid_w(power),
             is_night=self.time_manager.is_night_mode(),
             tariff_level=tariff_level,
             forecast_remaining_kwh=float(forecast_remaining),

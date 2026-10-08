@@ -104,26 +104,12 @@ def test_692_a_stub_entry_without_mappings_falls_back_to_defaults():
 # #693 — the scheduler cap must come from a key installs carry
 # ──────────────────────────────────────────────────────────────────
 
-def test_693_target_peak_limit_kw_becomes_the_cap_in_w():
-    cfg = SchedulerConfig.from_config({"target_peak_limit": 6.0})
-    assert cfg.peak_limit_w == 6000.0
-
-
-def test_693_the_dead_key_is_ignored():
-    """``peak_limit_w`` is written by nothing — a lingering value (tests,
-    hand-edited storage) must not beat the real key."""
-    cfg = SchedulerConfig.from_config({
-        "target_peak_limit": 6.0,
-        "peak_limit_w": 9999.0,
-    })
-    assert cfg.peak_limit_w == 6000.0
-
-
-def test_693_no_key_means_no_cap_not_a_crash():
-    """An entry without target_peak_limit (pre-flow shapes) keeps today's
-    behaviour: 0 = no limit."""
-    cfg = SchedulerConfig.from_config({})
-    assert cfg.peak_limit_w == 0.0
+def test_693_the_scheduler_keeps_no_copy_of_the_limit():
+    """(#1069) #693 pointed the copy at the real key; nothing ever read the
+    copy. It is gone — the limit is read live, once per cycle."""
+    cfg = SchedulerConfig.from_config({"target_peak_limit": 6.0,
+                                       "peak_limit_w": 9999.0})
+    assert not hasattr(cfg, "peak_limit_w")
 
 
 # ──────────────────────────────────────────────────────────────────

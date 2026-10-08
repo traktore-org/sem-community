@@ -37,7 +37,7 @@ from abc import ABC, abstractmethod
 from dataclasses import replace
 from typing import Dict, Optional
 
-from ..consts.core import DEFAULT_MAX_CHARGING_CURRENT
+from ..consts.core import DEFAULT_MAX_CHARGING_CURRENT, DEFAULT_PEAK_HYSTERESIS
 from .watts_per_amp import amps_that_fit, predict_watts
 from .charger_types import (
     ChargerDecision,
@@ -1302,10 +1302,17 @@ def clamp_to_peak_slot(result, view):
     cascade ("lower-priority chargers see only the surplus this one didn't
     take"). One budget, one accumulator, same shape.
 
-    Never a proactive idle: the clamp floors at the effective minimum, because
-    stopping cars on a transient is the flap this project spent months
-    killing. The hard stop stays with #747's EMERGENCY, which runs after and
-    wins.
+    (#1069) When the room left cannot carry the effective minimum, the
+    answer is a PAUSE, not the minimum: an IDLE stamped ``peak_paused``. It
+    used to floor at 6 A, so against a limit near 6 A (≈ 4.1 kW, a §14a
+    4.2 kW cap) the car sat over the limit and flipped with every cycle's
+    room. The pause is transient (``bridgeable``): the stability layer holds
+    the car for the user's disable delay before it stops and waits the
+    enable delay before a restart — one rule for surplus and peak. A car
+    that is not drawing is offered a restart only with room for its minimum
+    PLUS the peak hysteresis, so the restart cannot land straight back on
+    the edge. The hard stop stays with #747's EMERGENCY, which runs after
+    and wins.
     """
     _allowed = getattr(view.fleet, "peak_slot_allowed_w", None)
     if _allowed is None or result.intent not in (
@@ -1319,6 +1326,10 @@ def clamp_to_peak_slot(result, view):
     if getattr(view.fleet, "grid_import_known", True):
         _others_w = max(0.0, float(view.fleet.grid_import_w)
                         - min(_this_w, float(view.fleet.grid_import_w)))
+        # (#1069) SEM's own forced battery charge is in that reading, and it
+        # yields to the car next cycle — room for the car, not a rival.
+        _others_w -= min(_others_w, max(0.0, float(
+            getattr(view.fleet, "battery_forced_grid_w", 0.0) or 0.0)))
     else:
         # (#906) The meter is blind this cycle: ``grid_import_w`` is the
         # reader's 0.0, so "grid minus this charger" would read the whole
@@ -1336,6 +1347,22 @@ def clamp_to_peak_slot(result, view):
             * float(view.config.get("ev_voltage") or 230))
     _max_a = int(view.config.get("ev_max_current")
                  or DEFAULT_MAX_CHARGING_CURRENT)
+    # (#1069) Room for the minimum, or a pause. A car already drawing keeps
+    # going while its minimum fits; a stopped car needs the minimum plus the
+    # peak hysteresis, so a restart does not land back on the edge.
+    _min_w = predict_watts(view.wpa_table, _min_a, _wpa)
+    _drawing = _this_w >= 0.5 * _min_w
+    _hyst_w = 0.0 if _drawing else 1000.0 * float(
+        view.config.get("peak_hysteresis", DEFAULT_PEAK_HYSTERESIS) or 0.0)
+    if _ev_allow_w < _min_w + _hyst_w:
+        return replace(
+            result, intent=ChargerIntent.IDLE, commanded_amps=0,
+            budget_w=0.0, capped_by_limit=True, peak_paused=True,
+            bridgeable=True,
+            reason=(f"{result.reason} [peak slot guard: "
+                    f"{_ev_allow_w:.0f}W room, {_min_a}A needs "
+                    f"{_min_w + _hyst_w:.0f}W — pausing]"),
+        )
     _cap_a = max(_min_a, amps_that_fit(
         view.wpa_table, _ev_allow_w, _wpa, _max_a))
     # Speak only when it BITES: an allowance at or above the hardware

@@ -78,8 +78,7 @@ class TestTwoChargersCannotEachTakeTheWholeSlot:
         assert first_w + second_w <= 6000.0 + 3 * 230 * 6, (
             f"two chargers landed {first_w + second_w:.0f} W against a "
             f"6000 W slot target — each believed the whole allowance was "
-            "its own. (The tolerance is one charger's 6 A floor: the guard "
-            "never proactively idles a car, by design.)"
+            "its own. (The tolerance is one charger's 6 A minimum.)"
         )
         assert second_a <= first_a
 
@@ -89,12 +88,13 @@ class TestTwoChargersCannotEachTakeTheWholeSlot:
         assert _clamped_amps(solo) == _clamped_amps(
             _view(allowed_w=6000.0, grid_import_w=500.0, peak_committed_w=0.0))
 
-    def test_a_committed_fleet_floors_at_the_minimum_never_idles(self):
-        """#864's own rule: the guard tightens an offer, it never stops a
-        car. Even a fully-claimed slot leaves the effective minimum."""
+    def test_a_committed_fleet_pauses_the_next_charger(self):
+        """(#1069) A fully-claimed slot leaves the next charger no room for
+        its minimum: it pauses (through the stability gate's delays)
+        instead of adding 6 A over the limit."""
         starved = _view(allowed_w=6000.0, grid_import_w=500.0,
                         peak_committed_w=99000.0)
-        assert _clamped_amps(starved) == 6
+        assert _clamped_amps(starved) == 0
 
     def test_no_allowance_means_no_clamp(self):
         """An unlimited install (slider at MAX) publishes None and must be

@@ -84,6 +84,16 @@ DISCHARGE_LIMIT_LEAK_W: float = 50.0
 # really fell is followed within a minute.
 DISCHARGE_LIMIT_LOWER_DWELL_CYCLES: int = 6
 
+#: (#1069 review) A forced charge capped by the room under the grid limit
+#: is RAISED only after the bigger room held this many cycles (~1 min).
+#: Lowering never waits: the limit must never be exceeded. Without it a
+#: room wobbling across a 250 W step re-wrote the inverter every cycle —
+#: the #538 transaction-ID churn.
+FORCED_CHARGE_RAISE_DWELL_CYCLES: int = 6
+#: …and after a stop for no room, charging restarts only with this many
+#: steps of room: one step of room would stop and start it every cycle.
+FORCED_CHARGE_RESTART_STEPS: int = 2
+
 
 def quantise_discharge_limit_w(raw_w: float, last_w: float) -> float:
     """The discharge limit to command for a house load of ``raw_w``.
@@ -145,6 +155,42 @@ def _note_protection_cycle(adapter) -> None:
             or getattr(adapter, "_sem_forced_discharge", None) is True):
         _set(adapter, "_sem_stop_misses",
              int(getattr(adapter, "_sem_stop_misses", 0) or 0) + 1)
+
+
+def _calm_capped_charge(decision, adapter):
+    """(#1069 review) The forced charge under the limit, without churn.
+
+    Lower at once; raise only after the bigger room held for
+    ``FORCED_CHARGE_RAISE_DWELL_CYCLES``; after a no-room stop, restart only
+    with ``FORCED_CHARGE_RESTART_STEPS`` steps of room. ``None`` = hold the
+    stop, write nothing. A charge not shaped by the room passes unchanged."""
+    from dataclasses import replace
+    from .decide_battery import FORCED_CHARGE_STEP_W
+    if not decision.room_capped:
+        _set(adapter, "_capped_charge_w", None)
+        _set(adapter, "_capped_raise_streak", 0)
+        _set(adapter, "_room_stopped", False)
+        return decision
+    want_w = float(decision.charge_power_w)
+    if getattr(adapter, "_room_stopped", False):
+        if want_w < FORCED_CHARGE_RESTART_STEPS * FORCED_CHARGE_STEP_W:
+            return None
+        _set(adapter, "_room_stopped", False)
+        _set(adapter, "_capped_charge_w", None)
+    last_w = getattr(adapter, "_capped_charge_w", None)
+    streak = 0
+    _charging = getattr(adapter, "last_intent", None) is BatteryIntent.FORCE_CHARGE
+    if last_w is not None and want_w > last_w and _charging:
+        streak = int(getattr(adapter, "_capped_raise_streak", 0) or 0) + 1
+        if streak < FORCED_CHARGE_RAISE_DWELL_CYCLES:
+            want_w = last_w
+        else:
+            streak = 0
+    _set(adapter, "_capped_raise_streak", streak)
+    _set(adapter, "_capped_charge_w", want_w)
+    if want_w != float(decision.charge_power_w):
+        decision = replace(decision, charge_power_w=want_w)
+    return decision
 
 
 async def actuate_battery(
@@ -245,6 +291,9 @@ async def actuate_battery(
         return
 
     if decision.intent is BatteryIntent.FORCE_CHARGE:
+        decision = _calm_capped_charge(decision, adapter)
+        if decision is None:
+            return
         if not adapter.supports_forced_charge:
             log_on_change(   # (#762) once per episode, not per cycle
                 _LOGGER, f"actuate:{decision.battery_id}", logging.WARNING,
@@ -270,6 +319,16 @@ async def actuate_battery(
         return
 
     if decision.intent is BatteryIntent.STOP_FORCE_CHARGE:
+        if decision.room_capped:
+            # (#1069 review) stopped for no room: once is enough. The
+            # scheduler keeps asking every cycle; the stop is not re-sent.
+            if (getattr(adapter, "_room_stopped", False)
+                    and getattr(adapter, "last_intent", None)
+                    is BatteryIntent.STOP_FORCE_CHARGE):
+                return
+            _set(adapter, "_room_stopped", True)
+        _set(adapter, "_capped_charge_w", None)
+        _set(adapter, "_capped_raise_streak", 0)
         ret = await adapter.command_stop_force_charge()
         _note_forced_op(adapter, "_sem_forced_charge", ret,
                         BatteryIntent.STOP_FORCE_CHARGE, False)
