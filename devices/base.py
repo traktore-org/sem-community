@@ -368,6 +368,10 @@ class ControllableDevice(ABC):
         # CONSUMES these flags lands in surplus_controller (#620 Phase 2).
         self.battery_assist_enabled: bool = False
         self.battery_eligible_overnight: bool = False
+        # (#1021) Wiring, not a choice: this load sits behind the grid
+        # operator's ripple relay (CH). While the relay is on, the relay cuts
+        # it and SEM stops counting on it. Default off.
+        self.behind_operator_relay: bool = False
 
         # (#559) Goal engine — grounded core. daily_min_runtime_sec (above,
         # pre-#559 "Feature 2") is the only target; solar_only default means
@@ -1105,6 +1109,17 @@ class ControllableDevice(ABC):
             if self.dependency_mode == "must_inactive" and dep_active:
                 return dep_id
         return None
+
+    @property
+    def locked_by_operator(self) -> bool:
+        """(#1021) Behind the operator's ripple relay and the relay is on.
+
+        The relay cuts the power itself; SEM only stops counting on the
+        load: not planned, not started, not judged."""
+        if not getattr(self, "behind_operator_relay", False):
+            return False
+        sig = getattr(self._controller, "shed_signal", None) if self._controller else None
+        return bool(sig is not None and getattr(sig, "active", False))
 
     def reset_surplus_timer(self) -> None:
         """Reset surplus timer when surplus drops below device threshold."""

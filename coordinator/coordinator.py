@@ -37,6 +37,8 @@ from homeassistant.util import dt as dt_util
 
 from ..consts.core import CAPABILITY_MISS_CONFIRM_READS, CAPABILITY_MISS_HOLD_S
 from ..consts.core import CONF_INTRADAY_FORECAST, DEFAULT_INTRADAY_FORECAST
+from ..consts.core import (CONF_SHED_SIGNAL_ENTITY, CONF_SHED_SIGNAL_LIMIT,
+                           DEFAULT_SHED_SIGNAL_LIMIT)
 from ..const import (
     DOMAIN,
     DEFAULT_UPDATE_INTERVAL,
@@ -802,6 +804,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         # Per-cycle caches (initialized here, populated in _async_update_data)
         self._cycle_forecast = None
+        # (#1021) the operator's relay this cycle; INERT until first read
+        from .shed_signal import INERT as _SHED_INERT
+        self._shed_signal = _SHED_INERT
         self._cycle_vehicle_soc: Optional[float] = None
         # (#657) The cycle's canonical EVBudget. ``_build_charging_context``
         # sets it on every cycle before ``SEMData`` is built, so this default
@@ -3295,6 +3300,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             self._forecast_reader.set_preferred_source(
                 self.config.get("solar_forecast_source"))
             self._cycle_forecast = self._forecast_reader.read_forecast()
+            # (#1021) The grid operator's relay, read ONCE per cycle so the
+            # plan, the signature and the load walk see one value.
+            self._refresh_shed_signal()
             # Cache vehicle SOC (read in both _async_update_data and _determine_charging_strategy)
             _vehicle_soc_entity = self.config.get("vehicle_soc_entity", "")
             self._cycle_vehicle_soc = None
@@ -9003,6 +9011,26 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         return plan_car_fullness(detector, drawing_w=drawing_w,
                                  handshake_w=handshake_w)
 
+    def _refresh_shed_signal(self):
+        """(#1021) Read the operator's relay and hand it to the load walk.
+
+        Inert (no write anywhere) without a configured entity."""
+        from .shed_signal import INERT, read_shed_signal
+        entity = (self.config or {}).get(CONF_SHED_SIGNAL_ENTITY)
+        if entity:
+            sig = read_shed_signal(
+                entity,
+                (self.config or {}).get(CONF_SHED_SIGNAL_LIMIT,
+                                        DEFAULT_SHED_SIGNAL_LIMIT),
+                self.hass.states.get)
+        else:
+            sig = INERT
+        self._shed_signal = sig
+        ctl = getattr(self, "_surplus_controller", None)
+        if ctl is not None:
+            ctl.shed_signal = sig
+        return sig
+
     def _intraday_forecast_on(self) -> bool:
         """(#1068) The soak flag: the day follows measured yield."""
         return intraday_forecast_on(self)
@@ -9117,10 +9145,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         #    a stopped load, so the stop clearing mid-night (the room cooled
         #    back into the band) must re-plan to re-admit it.
         controller = getattr(self, "_surplus_controller", None)
+        # (#1021) the relay locking or releasing a load changes what the
+        # night may book — one term, so the lock lifting re-plans too.
+        try:
+            sig.append(("operator_locked", tuple(sorted(
+                str(d.device_id) for d in (
+                    controller.get_devices_sorted() if controller else [])
+                if (getattr(d, "locked_by_operator", False) is True)))))
+        except Exception:  # noqa: BLE001 — no roster is a valid shape
+            pass
         for dev in (controller.get_devices_sorted() if controller else []):
             try:
                 if not getattr(dev, "has_runtime_deficit", False):
                     continue
+                if getattr(dev, "locked_by_operator", False) is True:
+                    continue  # (#1021) the collector leaves it out too
                 if not (_sem_may_switch(dev) and _night_may_serve(dev)):
                     continue  # the collector left it out before the deficit
                 deficit_h = max(0.0, (dev.daily_min_runtime_sec
@@ -10245,6 +10284,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # "yielded" 3.1 kWh) diverges from execution.
                     if getattr(dev, "control_mode", _DCM.SURPLUS) != _DCM.SURPLUS:
                         _left_out(dev, "load_mode")
+                        continue
+                    # (#1021) the operator's relay holds it: the plan must
+                    # not book energy the relay will not let through.
+                    if getattr(dev, "locked_by_operator", False) is True:
+                        _left_out(dev, "operator_lock")
                         continue
                     if not getattr(dev, "has_runtime_deficit", False):
                         _left_out(dev, "no_runtime_need")
