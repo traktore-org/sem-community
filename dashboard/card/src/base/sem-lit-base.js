@@ -88,8 +88,7 @@ export class SEMLitBase extends LitElement {
 
         let changed = false;
         for (const id of watched) {
-            const newState = hass.states[id]?.state;
-            if (this._prevVals[id] !== newState) {
+            if (this._prevVals[id] !== this._watchedValue(hass, id)) {
                 changed = true;
                 break;
             }
@@ -98,10 +97,20 @@ export class SEMLitBase extends LitElement {
 
         // Update value cache
         for (const id of watched) {
-            this._prevVals[id] = hass.states[id]?.state;
+            this._prevVals[id] = this._watchedValue(hass, id);
         }
 
         this._scheduleUpdate();
+    }
+
+    // (#1055 follow-up) The state, plus the attributes the card shows from
+    // `watchedAttributes` ({ entity_id: [attribute, ...] }). A flag that
+    // lives in an attribute — "no grid limit" — changes without the state.
+    _watchedValue(hass, id) {
+        const st = hass.states[id];
+        const names = this.constructor.watchedAttributes?.[id];
+        if (!names) return st?.state;
+        return JSON.stringify([st?.state ?? null, ...names.map((n) => st?.attributes?.[n] ?? null)]);
     }
 
     get hass() {

@@ -41,6 +41,21 @@ const COMFORT_DOCS = {
     docs: 'https://github.com/traktore-org/sem-community/blob/develop/docs/ENERGY_PLANNER.md#comfort-banking',
 };
 
+// (#1055 follow-up) Every SEM sensor _updateDeviceData() reads. The card
+// reads them again when any of them changes — state or attributes. The old
+// gate named three of them; with load management off all three stand still,
+// so a limit saved on the Configuration tab never reached the slider until
+// a page reload. dashboard/card/test/redraw-gate.test.js checks this list
+// against the reads.
+export const LOAD_PRIORITY_READS = [
+    'controllable_devices_count', 'consecutive_peak_15min',
+    'load_management_status', 'target_peak_limit', 'grid_power',
+];
+
+// How long a slider value the user let go of is shown before the sensor has
+// it — the same span as the priority hold below.
+const PEAK_HOLD_MS = 15000;
+
 class SEMLoadPriorityCard extends SEMLitBase {
     constructor() {
         super();
@@ -75,6 +90,8 @@ class SEMLoadPriorityCard extends SEMLitBase {
         if (lang !== this._lang) {
             this._lang = lang;
             this._lastDeviceSig = '';
+            this._lastReads = this._readStates(hass);
+            this._updateDeviceData();
             this.requestUpdate();
             return;
         }
@@ -89,16 +106,18 @@ class SEMLoadPriorityCard extends SEMLitBase {
         // the reorder back before it lands.
         if (this._priorityFrozenUntil && Date.now() < this._priorityFrozenUntil) return;
 
-        const devState  = hass?.states[`${this.entityPrefix}controllable_devices_count`];
-        const peakState = hass?.states[`${this.entityPrefix}consecutive_peak_15min`];
-        const lmState   = hass?.states[`${this.entityPrefix}load_management_status`];
-        const key = (devState?.state || '') + '|' + (peakState?.state || '') + '|' + (lmState?.state || '');
-
-        if (key === this._lastKey) return;
-        this._lastKey = key;
+        // HA gives a new state object only when the state or an attribute
+        // changed, so one changed object is one changed input.
+        const reads = this._readStates(hass);
+        if (this._lastReads && reads.every((s, i) => s === this._lastReads[i])) return;
+        this._lastReads = reads;
 
         this._updateDeviceData();
         this.requestUpdate();
+    }
+
+    _readStates(hass) {
+        return LOAD_PRIORITY_READS.map((s) => hass?.states?.[`${this.entityPrefix}${s}`]);
     }
 
     get hass() { return this._hass; }
@@ -381,6 +400,20 @@ class SEMLoadPriorityCard extends SEMLitBase {
 
         if (targetPeakEntity)  this.targetPeakLimit      = parseFloat(targetPeakEntity.state)  || 5.0;
         if (targetPeakEntity)  this.peakLimitUnlimited   = targetPeakEntity.attributes?.peak_limit_unlimited || false;
+        // (#1055 follow-up) Keep showing the value the user let go of until
+        // the sensor has it, so a push from before the save cannot move the
+        // slider back.
+        const hold = this._peakHold;
+        if (hold) {
+            const landed = this.peakLimitUnlimited === hold.unlimited
+                && (hold.unlimited || Math.abs(this.targetPeakLimit - hold.kw) < 0.05);
+            if (landed || Date.now() >= hold.until) {
+                this._peakHold = null;
+            } else {
+                this.targetPeakLimit = hold.kw;
+                this.peakLimitUnlimited = hold.unlimited;
+            }
+        }
         if (currentPeakEntity) this.currentPeak          = parseFloat(currentPeakEntity.state) || 0;
         // (#909) The two other quantities the peak block needs to stop reading
         // as a contradiction: what the meter shows RIGHT NOW, and the slot
@@ -903,15 +936,19 @@ class SEMLoadPriorityCard extends SEMLitBase {
             window.removeEventListener('pointercancel', onUp);
             const kw = toVal(ev.clientX);
             this._peakDrag = null;
-            const unlimited = kw >= MAX_KW - 1e-6;
-            this.targetPeakLimit = kw;
-            this.peakLimitUnlimited = unlimited;
-            this._sendTargetPeakUpdate(kw, unlimited);
-            this.requestUpdate();
+            this._commitPeakLimit(kw, kw >= MAX_KW - 1e-6);
         };
         window.addEventListener('pointermove', onMove);
         window.addEventListener('pointerup', onUp);
         window.addEventListener('pointercancel', onUp);
+    }
+
+    _commitPeakLimit(kw, unlimited) {
+        this.targetPeakLimit = kw;
+        this.peakLimitUnlimited = unlimited;
+        this._peakHold = { kw, unlimited, until: Date.now() + PEAK_HOLD_MS };
+        this._sendTargetPeakUpdate(kw, unlimited);
+        this.requestUpdate();
     }
 
     _onStopEntity(device, e) {
@@ -1473,7 +1510,12 @@ class SEMLoadPriorityCard extends SEMLitBase {
         this._hass.callService('solar_energy_management', 'update_target_peak', {
             target_peak_limit: val,
             peak_limit_unlimited: unlimited,
-        }).catch((err) => this._showServiceError(err));
+        }).catch((err) => {
+            // Refused: show the sensor again on the next push.
+            this._peakHold = null;
+            this._lastReads = null;
+            this._showServiceError(err);
+        });
     }
 
     // ── Configure modal ──
