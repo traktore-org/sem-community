@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import re
 from typing import TYPE_CHECKING, Any, Dict, List
@@ -5842,6 +5843,20 @@ async def _async_register_phase_services(
             "warning_peak_level": "update_warning_peak_level",
             "emergency_peak_level": "update_emergency_peak_level",
         }
+        # (#1055 follow-up) The grid levels are written live as numbers
+        # below. Refuse one that is not a number before anything is written.
+        for _k in _LM_LIVE_KEYS:
+            if _k in tunable_keys:
+                try:
+                    _ok = math.isfinite(float(options[_k]))
+                except (TypeError, ValueError):
+                    _ok = False
+                if not _ok:
+                    raise ServiceValidationError(
+                        translation_domain=DOMAIN,
+                        translation_key="set_option_invalid_payload",
+                    )
+
         unrouted: list[str] = []
         for key in tunable_keys:
             value = options[key]

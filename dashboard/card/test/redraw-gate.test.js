@@ -154,6 +154,22 @@ test('a slider hold ends after its time even if the sensor never has the value',
     assert.equal(el.targetPeakLimit, 7);
 });
 
+test('a refused older drag does not drop the hold of a newer one', async () => {
+    let refuse;
+    const calls = [];
+    const el = loadCard((d, s, data) => {
+        calls.push(data);
+        return calls.length === 1 ? new Promise((_, rej) => { refuse = rej; }) : Promise.resolve();
+    });
+    el._commitPeakLimit(10, false);
+    el._commitPeakLimit(12, false);
+    refuse(new Error('refused'));
+    await sleep(0);
+    el.hass = next(el.hass, { 'sensor.sem_grid_power': { state: '90', attributes: {} } });
+    assert.equal(el.targetPeakLimit, 12);
+    clearTimeout(el._serviceErrorTimer);
+});
+
 test('a refused slider write shows the sensor again on the next push', async () => {
     const el = loadCard(async () => { throw new Error('refused'); });
     el._commitPeakLimit(10, false);
@@ -207,6 +223,15 @@ test('the load list compares every SEM sensor it reads', () => {
     assert.doesNotMatch(src, /_lastKey/, 'a second, hand-made key is back');
 });
 
+// Read but not watched, on purpose. Each needs a reason.
+const NOT_WATCHED = {
+    // The Hot water live block reads sensors SEM does not create
+    // (`hot_water_registered` never exists), so the block never shows.
+    'sem-config-card.js': ['hot_water_current_temperature', 'hot_water_solar_target',
+        'hot_water_hours_since_legionella', 'hot_water_temperature_reading_path',
+        'hot_water_temperature_safety_path', 'hot_water_activation_path'],
+};
+
 // Cards that keep SEMLitBase's gate: no hass setter of their own, or one
 // that hands hass to the base.
 function baseGatedCards() {
@@ -235,7 +260,13 @@ test('every card on the base gate watches each sensor it reads', async () => {
             ...[...src.matchAll(/_val(?:Num|Str|Label)?\(\s*'([a-z0-9_]+)'/g)].map((m) => m[1]),
             ...[...src.matchAll(/\$\{this\._prefix\}([a-z0-9_]+)`/g)].map((m) => m[1]),
         ]);
-        for (const r of reads) if (!watched.has(r)) problems.push(`${f}: reads ${r}, does not watch it`);
+        const allowed = NOT_WATCHED[f] || [];
+        for (const r of reads) {
+            if (!watched.has(r) && !allowed.includes(r)) problems.push(`${f}: reads ${r}, does not watch it`);
+        }
+        for (const r of allowed) {
+            if (!reads.has(r) || watched.has(r)) problems.push(`${f}: ${r} is allowed but no longer needs it`);
+        }
         // The "no grid limit" flag is an attribute: a state compare misses it.
         if (/isUncapped\(|peakLimitText\(|attributes\??\.peak_limit_unlimited/.test(src)) {
             const names = Card.watchedAttributes?.['sensor.sem_target_peak_limit'] || [];

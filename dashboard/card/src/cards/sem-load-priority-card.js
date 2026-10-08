@@ -946,8 +946,9 @@ class SEMLoadPriorityCard extends SEMLitBase {
     _commitPeakLimit(kw, unlimited) {
         this.targetPeakLimit = kw;
         this.peakLimitUnlimited = unlimited;
-        this._peakHold = { kw, unlimited, until: Date.now() + PEAK_HOLD_MS };
-        this._sendTargetPeakUpdate(kw, unlimited);
+        const hold = { kw, unlimited, until: Date.now() + PEAK_HOLD_MS };
+        this._peakHold = hold;
+        this._sendTargetPeakUpdate(kw, unlimited, hold);
         this.requestUpdate();
     }
 
@@ -1505,14 +1506,15 @@ class SEMLoadPriorityCard extends SEMLitBase {
         }).catch((err) => this._showServiceError(err));
     }
 
-    _sendTargetPeakUpdate(val, unlimited = false) {
+    _sendTargetPeakUpdate(val, unlimited = false, hold = null) {
         if (!this._hass) return;
         this._hass.callService('solar_energy_management', 'update_target_peak', {
             target_peak_limit: val,
             peak_limit_unlimited: unlimited,
         }).catch((err) => {
-            // Refused: show the sensor again on the next push.
-            this._peakHold = null;
+            // Refused: show the sensor again on the next push — unless a
+            // newer drag holds its own value.
+            if (hold && this._peakHold === hold) this._peakHold = null;
             this._lastReads = null;
             this._showServiceError(err);
         });

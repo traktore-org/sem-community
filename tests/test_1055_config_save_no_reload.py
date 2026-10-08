@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import pytest
 
+from homeassistant.exceptions import ServiceValidationError
+
 from custom_components.solar_energy_management.const import DOMAIN
 
 from .test_services_real import _seed_sem_input_sensors
@@ -96,8 +98,18 @@ async def test_no_limit_saved_with_load_management_reaches_the_manager(
     # The limit is kept, only the flag moved.
     assert coordinator._target_peak_limit_kw() == 7.0
 
-    # Both keys in one save: the limit in the save wins, not the old one.
+    # Both keys in one save, the flag first: the flag is written with the
+    # limit in the save, not the old one.
+    real_update = lm.update_target_peak_limit
+    calls = []
+
+    async def _spy(new_limit, unlimited=None):
+        calls.append((new_limit, unlimited))
+        await real_update(new_limit, unlimited=unlimited)
+
+    lm.update_target_peak_limit = _spy
     await _save(sem_real_hass, {"peak_limit_unlimited": False, "target_peak_limit": 9.0})
+    assert calls[0] == (9.0, False), calls
     assert sem_config_entry.runtime_data is coordinator
     assert lm._peak_unlimited is False
     assert coordinator._target_peak_limit_kw() == 9.0
@@ -115,3 +127,20 @@ async def test_a_level_saved_without_load_management_does_not_reload(
     await _save(sem_real_hass, {"warning_peak_level": 3.5})
     assert sem_config_entry.runtime_data is coordinator, "the save reloaded SEM"
     assert sem_config_entry.options["warning_peak_level"] == 3.5
+
+
+@pytest.mark.asyncio
+async def test_a_limit_that_is_not_a_number_is_refused_before_any_write(
+    sem_real_hass, sem_config_entry,
+) -> None:
+    coordinator = await _setup(sem_real_hass, sem_config_entry,
+                               load_management_enabled=False,
+                               target_peak_limit=7.0)
+    for bad in ("abc", None, "nan"):
+        with pytest.raises(ServiceValidationError):
+            await _save(sem_real_hass, {"peak_limit_unlimited": True,
+                                        "target_peak_limit": bad})
+    assert sem_config_entry.runtime_data is coordinator
+    assert sem_config_entry.options["target_peak_limit"] == 7.0
+    # Nothing in the refused save was written, the flag included.
+    assert not sem_config_entry.options.get("peak_limit_unlimited", False)

@@ -249,11 +249,6 @@ const WATCHED = [
     'sensor.sem_diag_grid_sign',
     // #588: battery-sign fix, same section.
     'sensor.sem_diag_battery_sign',
-    // (#1055 follow-up) the Hot water section's live rows
-    'sensor.sem_hot_water_current_temperature', 'sensor.sem_hot_water_solar_target',
-    'sensor.sem_hot_water_hours_since_legionella',
-    'sensor.sem_hot_water_temperature_reading_path',
-    'sensor.sem_hot_water_temperature_safety_path', 'sensor.sem_hot_water_activation_path',
 ];
 
 // #528 — entity-wiring keys that trigger an entry RELOAD when changed (mirror
