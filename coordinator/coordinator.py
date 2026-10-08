@@ -12194,12 +12194,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         off — unless the operator's relay is on, whose limit holds anyway."""
         lm = getattr(self, "_load_manager", None)
         if lm is not None:
-            try:
-                if not lm._limit_active():
-                    return None
-                return float(lm._active_target_kw())
-            except (AttributeError, TypeError, ValueError):
+            # No except here: a broken accessor is a coding error, and the
+            # allowance's caller logs it loudly (#864) rather than reading
+            # it as the user's off-switch.
+            if not lm._limit_active():
                 return None
+            return float(lm._active_target_kw())
         return self._operator_cap_kw()
 
     def _battery_forced_grid_w(self, power: PowerReadings) -> float:

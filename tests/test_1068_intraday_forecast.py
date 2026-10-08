@@ -165,14 +165,40 @@ def test_an_unchanged_decision_keeps_its_stamp_and_takes_the_sky():
 
 
 def test_the_775_branch_uses_it_only_under_the_flag():
-    """Asleep means asleep: without the flag the #775 branch restores the
-    outgoing plan exactly as before."""
+    """Asleep means asleep: the fresh trajectory is taken only inside an
+    ``if intraday_forecast_on(self)``; its ``else`` restores the outgoing
+    plan exactly as before (AST)."""
+    import ast
     from pathlib import Path
-    src = (Path(__file__).resolve().parents[1] / "coordinator"
-           / "coordinator.py").read_text()
-    call = src.index("keep_decision_take_trajectory(_prev_plan_775")
-    assert "intraday_forecast_on(self)" in src[call - 300:call]
-    assert "self._energy_plan_shadow = _prev_plan_775" in src[call:call + 400]
+    tree = ast.parse((Path(__file__).resolve().parents[1] / "coordinator"
+                      / "coordinator.py").read_text())
+
+    def _calls(node, name):
+        return any(isinstance(n, ast.Call)
+                   and getattr(n.func, "id", getattr(n.func, "attr", "")) == name
+                   for n in ast.walk(node))
+
+    parent = {}
+    for n in ast.walk(tree):
+        for c in ast.iter_child_nodes(n):
+            parent[c] = n
+    sites = [n for n in ast.walk(tree) if isinstance(n, ast.Call)
+             and getattr(n.func, "id", "") == "keep_decision_take_trajectory"]
+    assert sites, "no call"
+    for call in sites:
+        node, gate = call, None
+        while node in parent:
+            up = parent[node]
+            if (isinstance(up, ast.If) and node in up.body
+                    and _calls(up.test, "intraday_forecast_on")):
+                gate = up
+                break
+            node = up
+        assert gate is not None, "the fresh trajectory is taken ungated"
+        restores = [n for n in ast.walk(ast.Module(body=gate.orelse, type_ignores=[]))
+                    if isinstance(n, ast.Assign)
+                    and getattr(n.value, "id", "") == "_prev_plan_775"]
+        assert restores, "the else must restore the outgoing plan"
 
 
 # ── Task 5: the remaining sensor says the corrected value ──

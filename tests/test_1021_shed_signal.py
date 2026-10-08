@@ -219,9 +219,12 @@ class TestTheSignalHasCallers:
         return (self._ROOT / rel).read_text(encoding="utf-8")
 
     def test_the_cycle_reads_the_relay(self):
-        src = self._src("coordinator/coordinator.py")
-        assert "self._refresh_shed_signal()" in src
-        assert "read_shed_signal(" in src
+        from .ast_contracts import calls
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            SEMCoordinator,
+        )
+        assert calls(SEMCoordinator._async_update_data, "_refresh_shed_signal")
+        assert calls(SEMCoordinator._refresh_shed_signal, "read_shed_signal")
 
     def test_the_load_walk_reads_the_lock(self):
         src = self._src("coordinator/surplus_controller.py")
@@ -471,5 +474,8 @@ class TestEveryLimitReadGoesThroughTheAccessor:
             assert not self._reads("coordinator/coordinator.py", attr), attr
 
     def test_the_ev_sizing_reads_the_accessor(self):
-        src = (self._ROOT / "coordinator/ev_control.py").read_text()
-        assert "self._operator_cap_kw()" in src
+        from .ast_contracts import calls
+        from custom_components.solar_energy_management.coordinator.ev_control import (
+            EVControlMixin,
+        )
+        assert calls(EVControlMixin._get_peak_limit_w, "_operator_cap_kw")
