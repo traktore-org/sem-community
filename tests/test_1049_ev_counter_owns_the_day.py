@@ -13,10 +13,9 @@ every kWh of it. The grid and battery rows have followed their meters both
 ways since #628.
 
 The rule now: once every charger has a counter of its own and all of them
-read, the counters own the row. What a box drew since its counter last moved
-stays with the power integral — a cloud counter reports late, and one that
-never moves must never pull a row down. So the row lies between what the
-counters reported and that plus the unreported draw. The fleet row, the
+read, the counters own the row. Up at once; down once every box has stopped
+and its counter has reported since — a counter can publish a value minutes
+old, and one that never moves must never pull a row down. The fleet row, the
 calendar-day copy the home balance subtracts, and each charger's own row all
 follow the same rule.
 """
@@ -34,7 +33,6 @@ from custom_components.solar_energy_management.coordinator.coordinator import (
 )
 from custom_components.solar_energy_management.coordinator.energy_calculator import (
     EV_CATEGORY,
-    EV_FLEET_OWNER,
     MIDNIGHT_EV_CATEGORY,
     EnergyCalculator,
 )
@@ -120,22 +118,26 @@ def _rows(calc, day: str = TODAY) -> tuple:
     )
 
 
+def _stop(calc, clock):
+    """One cycle with every box stopped."""
+    clock.tick(timedelta(seconds=10))
+    return _cycle(calc)
+
+
 @pytest.mark.unit
 class TestTheCountersOwnTheRow:
     def test_the_reporters_day_the_high_read_comes_out(self):
         """THE issue. 5.0 kWh read by the power sensor, 3.0 on the meter.
-        Before #1049 both rows kept 5.0 for good; now they keep the meter,
-        during the session too."""
+        Before #1049 both rows kept 5.0 for good; now the meter has them as
+        soon as the box stops."""
         values = {LINKS: 3135.415, RECHTS: 1094.828}
         with freeze_time(START) as clock:
             calc = _calc(values)
             _cycle(calc)  # baselines + anchors at the day's first read
-            _charge(calc, clock, values, cycles=50)
-            assert _rows(calc) == pytest.approx((1.5, 1.5), abs=0.06)
-            _charge(calc, clock, values, cycles=50)
-            assert _rows(calc) == pytest.approx((3.0, 3.0), abs=0.06)
-            power_kwh = 100 * READ_W * 10 / 3600 / 1000
-            assert power_kwh == pytest.approx(5.0), "test is vacuous"
+            _charge(calc, clock, values)
+            assert _rows(calc) == (5.0, 5.0), "vacuous, or pulled down mid-session"
+            _stop(calc, clock)
+            assert _rows(calc) == (3.0, 3.0)
 
     def test_the_longer_periods_give_the_kwh_back_too(self):
         """#666: one call writes daily, monthly, yearly and lifetime, so one
@@ -145,34 +147,35 @@ class TestTheCountersOwnTheRow:
             calc = _calc(values)
             _cycle(calc)
             _charge(calc, clock, values)
+            _stop(calc, clock)
         for acc, key in (
             (calc._monthly_accumulators, f"{EV_CATEGORY}_2026_10"),
             (calc._yearly_accumulators, f"{EV_CATEGORY}_2026"),
             (calc._lifetime_accumulators, f"lifetime_{EV_CATEGORY}"),
         ):
-            assert acc[key] == pytest.approx(3.0, abs=0.06), key
+            assert acc[key] == pytest.approx(3.0), key
         assert not any(k.startswith(MIDNIGHT_EV_CATEGORY)
                        for k in calc._monthly_accumulators)
 
     def test_a_counter_that_reports_late_never_dips_the_day(self):
         """A cloud counter can report a session minutes or an hour late. Until
-        it does, what the box drew is still owed — the day may not fall below
-        the integral, or the Charge-by target would charge it twice."""
+        it does, the day may not fall below the integral, or the Charge-by
+        target would charge it twice."""
         values = {LINKS: 0.0, RECHTS: 0.0}
         with freeze_time(START) as clock:
             calc = _calc(values)
             _cycle(calc)
             _charge(calc, clock, values, meter=0.0)  # the counter waits
-            assert _rows(calc) == (5.0, 5.0)
-            for _ in range(360):  # an hour idle, still no report
-                clock.tick(timedelta(seconds=10))
-                _cycle(calc)
+            for _ in range(360):  # an hour stopped, still no report
+                _stop(calc, clock)
             assert _rows(calc) == (5.0, 5.0), "the day dipped under a late counter"
             values[LINKS] = 3.0  # …the report lands
-            _cycle(calc)
+            _stop(calc, clock)
             assert _rows(calc) == (3.0, 3.0)
 
-    def test_a_report_mid_session_owns_only_what_it_covers(self):
+    def test_a_report_from_before_the_stop_does_not_pull_down(self):
+        """A counter that last moved mid-session has not reported the rest:
+        its value may be minutes old."""
         values = {LINKS: 0.0, RECHTS: 0.0}
         with freeze_time(START) as clock:
             calc = _calc(values)
@@ -180,8 +183,8 @@ class TestTheCountersOwnTheRow:
             _charge(calc, clock, values, cycles=50, meter=0.0)
             values[LINKS] = 1.5  # one report for the first half
             _charge(calc, clock, values, cycles=50, meter=0.0)
-            # 1.5 reported + 2.5 drawn since that report
-            assert _rows(calc) == pytest.approx((4.0, 4.0), abs=0.06)
+            _stop(calc, clock)
+            assert _rows(calc) == (5.0, 5.0)
 
     def test_a_counter_that_never_moves_never_pulls_the_day_down(self):
         values = {LINKS: 0.0, RECHTS: 0.0}
@@ -193,59 +196,84 @@ class TestTheCountersOwnTheRow:
             _cycle(calc)
             assert _rows(calc) == (5.0, 5.0)
 
+    def test_standby_draw_is_not_charging(self):
+        """Bug class 36: a box idles at ~150 W. That is not a session that
+        holds the row up."""
+        values = {LINKS: 0.0, RECHTS: 0.0}
+        with freeze_time(START) as clock:
+            calc = _calc(values)
+            _cycle(calc)
+            _charge(calc, clock, values)
+            clock.tick(timedelta(seconds=10))
+            _cycle(calc, 150.0)
+            assert _rows(calc)[0] == pytest.approx(3.0, abs=0.01)
+
     def test_upward_recovery_still_runs_at_once(self):
         """#658 is untouched: energy charged while SEM was not integrating is
-        recovered on the next read."""
+        recovered on the next read, charging or not."""
         values = {LINKS: 0.0, RECHTS: 0.0}
         with freeze_time(START) as clock:
             calc = _calc(values)
             _cycle(calc)
             values[RECHTS] = 7.0
             clock.tick(timedelta(seconds=10))
-            _cycle(calc)
+            _cycle(calc, READ_W)
             assert _rows(calc) == (7.0, 7.0)
 
     def test_a_dip_that_comes_back_is_not_booked(self):
         """Bug class 43: a dip read as a reset books the climb back as
-        charging. With the finer threshold an owned row would gain every
-        dip; held at the last reading, it gains nothing."""
+        charging. Held at the last reading, it books nothing."""
         values = {LINKS: 3135.4, RECHTS: 0.0}
         with freeze_time(START) as clock:
             calc = _calc(values)
             _cycle(calc)
             for _ in range(20):
-                clock.tick(timedelta(seconds=10))
                 values[LINKS] = 3135.2
-                _cycle(calc)
-                clock.tick(timedelta(seconds=10))
+                _stop(calc, clock)
                 values[LINKS] = 3135.4
-                _cycle(calc)
+                _stop(calc, clock)
             assert _rows(calc) == (0.0, 0.0)
 
-    def test_a_real_reset_is_still_a_reset(self):
-        """A daily or session counter drops to 0 and climbs again — that
-        climb IS charging."""
-        values = {LINKS: 10.0, RECHTS: 0.0}
+    def test_a_dip_on_the_first_read_of_a_day_is_not_booked(self):
+        values = {LINKS: 3135.4, RECHTS: 0.0}
+        with freeze_time("2026-10-03 23:59:30") as clock:
+            calc = _calc(values)
+            _cycle(calc)
+            clock.move_to("2026-10-04 00:00:10")
+            values[LINKS] = 3135.2
+            _cycle(calc)
+            values[LINKS] = 3135.4
+            _stop(calc, clock)
+            assert _rows(calc)[1] == 0.0
+
+    @pytest.mark.parametrize("before, after", [(10.0, 0.0), (1.5, 0.9), (4.0, 2.7)])
+    def test_a_real_reset_is_still_a_reset(self, before, after):
+        """A daily or session counter restarts — the first reading after can
+        land well above half the last one. The climb from there IS charging."""
+        values = {LINKS: before, RECHTS: 0.0}
         with freeze_time(START) as clock:
             calc = _calc(values)
             _cycle(calc)
-            values[LINKS] = 0.0
-            clock.tick(timedelta(seconds=10))
-            _cycle(calc)
+            values[LINKS] = after
+            _stop(calc, clock)
             _charge(calc, clock, values)
-            assert _rows(calc) == pytest.approx((3.0, 3.0), abs=0.06)
+            _stop(calc, clock)
+            assert _rows(calc) == pytest.approx((3.0, 3.0), abs=0.01)
 
-    def test_a_session_across_midnight_is_split_by_the_meter(self):
-        """Evening charging is the common case: the part before midnight is
-        corrected while it is still today, not left high on a closed day."""
+    def test_a_late_report_after_midnight_is_not_booked_twice(self):
+        """Review of #1049: the counter reports an evening session after
+        midnight. That report belongs to the closed day; booked on the new
+        one, the house would lose it and the car get it twice."""
         values = {LINKS: 0.0, RECHTS: 0.0}
-        with freeze_time("2026-10-03 23:43:00") as clock:
+        with freeze_time("2026-10-03 23:40:00") as clock:
             calc = _calc(values)
             _cycle(calc)
-            _charge(calc, clock, values, cycles=100)  # to 23:59:40
-            assert _rows(calc, "2026-10-03")[1] == pytest.approx(3.0, abs=0.06)
-            _charge(calc, clock, values, cycles=100)
-            assert _rows(calc, "2026-10-04")[1] == pytest.approx(3.0, abs=0.09)
+            _charge(calc, clock, values, meter=0.0)  # to 23:56:40, unreported
+            clock.move_to("2026-10-04 00:05:00")
+            _cycle(calc)
+            values[LINKS] = 3.0  # the late report
+            _stop(calc, clock)
+            assert _rows(calc, "2026-10-04")[1] == 0.0
 
 
 @pytest.mark.unit
@@ -340,6 +368,7 @@ class TestOnlyAWholeCounterSetPullsDown:
             clock.move_to("2026-10-05 01:00:00")  # a new calendar day
             _cycle(calc)
             _charge(calc, clock, values)
+            _stop(calc, clock)
             mirror = calc._daily_accumulators[f"{MIDNIGHT_EV_CATEGORY}_2026-10-05"]
             assert mirror == pytest.approx(3.0, abs=0.06)
 
@@ -388,6 +417,9 @@ class TestTheHomeRowGetsItsKwhBack:
                 values[LINKS] += METER_KWH
                 values[IMPORT] += METER_KWH + 0.0028  # car + 1 kW house
                 _cycle(calc, READ_W)
+            assert calc._daily_accumulators.get(f"home_{TODAY}", 0.0) == pytest.approx(
+                0.0, abs=0.01), "vacuous: home was not short"
+            _stop(calc, clock)
             home = calc._daily_accumulators.get(f"home_{TODAY}", 0.0)
             assert home == pytest.approx(0.28, abs=0.07)
             assert calc.daily_total_consumption(day) == pytest.approx(3.28, abs=0.07)
@@ -418,6 +450,32 @@ class TestEachChargerFollowsItsOwnCounter:
                 _cycle(calc, READ_W)  # the counter waits
             assert calc.follow_charger_counter(
                 "links", "2026-10-03", 5.0, LINKS) == 5.0
+
+    def test_a_late_report_after_its_day_rolled_is_not_booked_twice(self):
+        """Review of #1049: 3 kWh charged before this charger's Charge-by,
+        reported after it. The new day's row must not start at 3 — the
+        remaining need would come up 3 kWh short."""
+        values = {LINKS: 100.0, RECHTS: 0.0}
+        with freeze_time("2026-10-04 10:40:00") as clock:
+            calc = _calc(values)
+            _cycle(calc)
+            calc.follow_charger_counter("links", "2026-10-03", 0.0, LINKS)
+            _charge(calc, clock, values, meter=0.0)  # unreported at 10:56:40
+            row = calc.follow_charger_counter("links", "2026-10-03", 5.0, LINKS)
+            clock.move_to("2026-10-04 11:00:10")  # its day rolls; row reset
+            _cycle(calc)
+            row = calc.follow_charger_counter("links", "2026-10-04", 0.0, LINKS)
+            values[LINKS] = 103.0
+            _stop(calc, clock)
+            assert calc.follow_charger_counter(
+                "links", "2026-10-04", row, LINKS) == 0.0
+
+    def test_a_damaged_inner_blob_reanchors_instead_of_raising(self):
+        calc = _calc({LINKS: 100.0, RECHTS: 0.0})
+        calc._charger_counter_baselines["links"] = {
+            "date": "2026-10-03", "base": [], "last": {}, "anchor": "x",
+            "counter": LINKS}
+        assert calc.follow_charger_counter("links", "2026-10-03", 2.0, LINKS) == 2.0
 
     def test_up_at_once(self):
         values = {LINKS: 100.0, RECHTS: 0.0}
@@ -525,9 +583,12 @@ class TestWhichCountersAreAChargersOwn:
             "ev_charger_0": LINKS, "ev_charger_1": RECHTS}
 
     def test_one_box_without_a_list(self):
+        """It registers as ``ev_charger``; its own row follows the counter
+        too, or it would sum above the fleet row (#771)."""
         ns = self._ns({"ev_total_energy_sensor": LINKS})
         assert SEMCoordinator._ev_counters_cover_fleet(ns) is True
-        assert SEMCoordinator._ev_counter_owners(ns) == {LINKS: EV_FLEET_OWNER}
+        assert SEMCoordinator._own_ev_counters(ns) == {"ev_charger": LINKS}
+        assert SEMCoordinator._ev_counter_owners(ns) == {LINKS: "ev_charger"}
         assert SEMCoordinator._ev_counters_cover_fleet(self._ns({})) is False
 
     def test_the_fallback_counters_never_cover_the_fleet(self):
@@ -554,5 +615,5 @@ class TestTheWiringIsThere:
                      "follow_charger_counter")
         assert calls(SEMCoordinator._update_ev_intelligence, "_own_ev_counters")
 
-    def test_the_pending_draw_is_counted_every_cycle(self):
+    def test_the_owed_draw_is_counted_every_cycle(self):
         assert calls(EnergyCalculator.calculate_energy, "_track_ev_pending")

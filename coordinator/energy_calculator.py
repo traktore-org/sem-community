@@ -42,11 +42,13 @@ MAX_INTEGRATION_GAP_SECONDS = 120  # 2 minutes
 # Threshold for hardware reconciliation (kWh)
 RECONCILIATION_THRESHOLD = 0.5
 
-# (#1049) An EV counter reading below this share of its last reading is a
-# reset (a daily counter at midnight, a session counter at the next plug-in, a
-# new box). A smaller drop is a dip that comes back; booked as a reset it would
-# count the climb back as charging (bug class 43), so the last reading holds.
-EV_COUNTER_RESET_RATIO = 0.5
+# (#1049) A drop of an EV counter by at most the larger of these is a dip
+# that comes back (a box falling back to an older stored value on a reboot);
+# booked as a reset it would count the climb back as charging (bug class 43),
+# so the last reading holds. A larger drop is a reset — a daily counter at
+# midnight, a session counter at the next plug-in, a new box.
+EV_COUNTER_DIP_KWH = 0.1
+EV_COUNTER_DIP_SHARE = 0.01
 
 # Adoption threshold for a metered category (#628). Much finer than the solar/EV
 # 0.5 kWh: those correct a large one-way shortfall, while a grid row is often
@@ -180,9 +182,14 @@ _COST_ESTIMATE_BASIS = {
 # real deadline — "00:00" is calendar midnight by construction.
 _FLEET_CALENDAR_OFFSET = "00:00"
 
-# (#1049) The owner of a counter on a box with no charger list: the fleet
-# power is that one box's power.
-EV_FLEET_OWNER = "_fleet"
+
+
+def _ev_counter_drop(value: float, ref: Optional[float]) -> Optional[str]:
+    """(#1049) ``"dip"`` or ``"reset"`` for a reading below ``ref``, else None."""
+    if ref is None or value >= ref - 0.001:
+        return None
+    window = max(EV_COUNTER_DIP_KWH, ref * EV_COUNTER_DIP_SHARE)
+    return "dip" if ref - value <= window else "reset"
 
 
 def _valid_hhmm(value) -> bool:
@@ -369,9 +376,11 @@ class EnergyCalculator:
         # (#1049) Per charger id: the same baseline model for that charger's
         # own daily row (``follow_charger_counter``). Persisted.
         self._charger_counter_baselines: Dict[str, Dict[str, Any]] = {}
-        # (#1049) Counter → whose power it counts: a charger id, or
-        # ``EV_FLEET_OWNER``. Set with ``complete``.
+        # (#1049) Counter → the charger id whose power it counts. Set with
+        # ``complete``.
         self._ev_counter_owner: Dict[str, str] = {}
+        # (#1049) Owners drawing charging power this cycle. Runtime only.
+        self._ev_owners_drawing: Set[str] = set()
         # (#1049) Per counter: the kWh its box drew since the counter last
         # moved (``pending``), and the reading of that move (``seen``).
         # Persisted — a cloud counter can still owe a session at a restart.
@@ -972,9 +981,9 @@ class EnergyCalculator:
         ``complete`` (#1049): every charger has a counter of its own, so the set
         sees all the charging the power integral sees. Only a complete set may
         pull the EV rows DOWN; a partial one stays upward-only. ``owners`` maps
-        each counter to its charger id (``EV_FLEET_OWNER`` for a box with no
-        charger list): what that box drew since the counter last moved stays
-        with the integral. A counter without an owner leaves the set partial.
+        each counter to its charger id: until the counter reports what that
+        box charged, the rows may not move down. A counter without an owner
+        leaves the set partial.
 
         Gated by the same ``prefer_hardware_energy`` option as the solar
         counters — it is the same promise ("trust the hardware over my
@@ -2158,7 +2167,9 @@ class EnergyCalculator:
 
         - Counters may be lifetime or daily-resetting; only deltas are used.
         - Counter going backwards (charger reboot, midnight reset of a daily
-          counter) → re-baseline; the accumulated value keeps.
+          counter) → re-baseline; the accumulated value keeps. A drop within
+          ``EV_COUNTER_DIP_KWH`` / ``EV_COUNTER_DIP_SHARE`` is a dip: the last
+          reading holds (#1049).
         - ADOPTION IS UPWARD-ONLY while the counter set is partial, a counter
           does not read, or a counter's base is younger than the anchor:
           integration is then the floor, so a missing counter can never
@@ -2166,9 +2177,10 @@ class EnergyCalculator:
           them read, the counters own the row in BOTH directions (#1049): a
           charger power sensor can read high — a Wallbox behind the MQTT
           bridge booked 19.56 kWh against 10.99 on its own meter — and
-          upward-only kept every kWh of it. What a box drew since its counter
-          last moved stays with the integral (``_track_ev_pending``): a cloud
-          counter that reports late, or never, cannot pull the row down. The
+          upward-only kept every kWh of it. The row moves down only once every
+          box has stopped and its counter has reported since
+          (``_track_ev_pending``): a counter that reports late, or never,
+          cannot pull the row down. The
           delta propagates to monthly, yearly and lifetime so all periods stay
           consistent (#666: they are written by one call, so they are corrected
           by one call too).
@@ -2256,7 +2268,7 @@ class EnergyCalculator:
 
         owned = all_read and self._ev_counter_complete
         adopted = self._ev_adoption(
-            category, target, integrated, owned, self._ev_pending(entities),
+            category, target, integrated, owned, self._ev_settled(entities),
         )
         if adopted is None:
             return
@@ -2282,7 +2294,15 @@ class EnergyCalculator:
         set with this very set, complete, all reading — only then does the
         target cover everything the row holds. Mutates ``bl`` in place.
         """
-        if bl.get("date") != day_str or "base" not in bl or "last" not in bl:
+        anchor = bl.get("anchor")
+        if (bl.get("date") != day_str
+                or not isinstance(bl.get("base"), dict)
+                or not isinstance(bl.get("last"), dict)
+                or not isinstance(bl.get("owed", {}), dict)
+                or (anchor is not None and (
+                    isinstance(anchor, bool)
+                    or not isinstance(anchor, (int, float))
+                    or not math.isfinite(anchor)))):
             # Day rollover (or first run / legacy or damaged shape):
             # fresh baselines for the new day.
             bl.clear()
@@ -2295,10 +2315,12 @@ class EnergyCalculator:
                 continue
             value = self._energy_state_kwh(state)  # #551 unit-aware
             if value >= 0:
-                last = bl["last"].get(entity_id)
-                if (last is not None and value < last - 0.001
-                        and value >= last * EV_COUNTER_RESET_RATIO):
-                    value = last  # (#1049) a dip that comes back — hold
+                # (#1049) A dip that comes back holds the last reading — on a
+                # fresh day too, where only the pending tracker remembers it.
+                ref = bl["last"].get(entity_id,
+                                     self._ev_counter_seen.get(entity_id))
+                if _ev_counter_drop(value, ref) == "dip":
+                    value = ref
                 readings[entity_id] = value
 
         if not readings:
@@ -2333,6 +2355,18 @@ class EnergyCalculator:
             # target misses kWh the row holds, so it may not pull it down.
             whole = complete and len(readings) == len(entities)
             bl["whole"] = sorted(entities) if whole else None
+            # (#1049) What a box drew before the anchor and its counter has
+            # not reported yet. That counter's next move pays it first: it
+            # belongs to the row before the anchor, not to this one.
+            bl["owed"] = {
+                e: self._ev_counter_pending[e] for e in entities
+                if self._ev_counter_pending.get(e, 0.0) > 0.0
+            }
+        owed = bl.setdefault("owed", {})
+        for entity_id, value in readings.items():
+            if entity_id in owed and value > bl["base"][entity_id] + 0.001:
+                bl["base"][entity_id] += min(
+                    value - bl["base"][entity_id], float(owed.pop(entity_id)))
 
         counter_daily = sum(
             value - bl["base"][entity_id]
@@ -2347,18 +2381,19 @@ class EnergyCalculator:
     @staticmethod
     def _ev_adoption(
         label: str, target: float, integrated: float, owned: bool,
-        pending: float = 0.0,
+        settled: bool = False,
     ) -> Optional[float]:
         """The value an EV row takes from its counters, or None (#658, #1049).
 
         ``owned``: every charger has its own counter and all of them read, so
-        the counters own the row. It then lies between ``target`` (what the
-        counters reported) and ``target + pending`` (plus what the boxes drew
-        since each counter last moved), as finely as a grid meter. Otherwise
-        only a material shortfall is taken: the integral is the floor.
+        the counters own the row: it follows them up as finely as a grid
+        meter. Down only once ``settled`` — every box has stopped and its
+        counter has reported since — because a counter can publish a value
+        minutes old, and while a car charges the row may not fall under what
+        the box really drew. Not owned: only a material shortfall is taken.
         """
-        if owned and integrated > target + pending + METER_RECONCILIATION_THRESHOLD:
-            adopted = target + pending
+        if owned and settled and integrated > target + METER_RECONCILIATION_THRESHOLD:
+            adopted = target
         elif owned and target > integrated + METER_RECONCILIATION_THRESHOLD:
             adopted = target
         elif target > integrated + RECONCILIATION_THRESHOLD:
@@ -2373,30 +2408,33 @@ class EnergyCalculator:
         )
         log(
             "%s energy reconciliation: counter=%.2f kWh vs integrated=%.2f kWh "
-            "— adopting %.2f kWh (%+.2f kWh)",
-            label, target, integrated, adopted, delta,
+            "— adopting counter value (%+.2f kWh)",
+            label, target, integrated, delta,
         )
         return adopted
 
     def _track_ev_pending(self, power: PowerReadings, interval_hours: float) -> None:
-        """(#1049) Per counter: the kWh its box drew since the counter moved.
+        """(#1049) Per counter: the kWh its box charged since the counter moved.
 
         That energy is real but not in the counter yet — a cloud counter can
-        report minutes or an hour late — so it stays with the power integral;
-        everything up to the counter's last move is the counter's. A counter
-        that never moves keeps all of it pending, so it can never pull a row
-        down. Each counter is charged with ITS box's power (bug class 3).
+        report minutes or an hour late. While any is owed, or the box is
+        charging, the counters may not pull a row down (``_ev_settled``).
+        Each counter is charged with ITS box's power (bug class 3); standby
+        draw is not charging (``EV_ACTIVE_CHARGE_FLOOR_W``, bug class 36).
         """
+        self._ev_owners_drawing = set()
         if not self._ev_counter_enabled or not self._hass:
             return
         per_charger = getattr(power, "ev_power_per_charger", None) or {}
         fleet_w = float(power.ev_power or 0.0)  # FLEET-READ: the fallback when a box's own draw is not known.
         for entity_id, owner in self._ev_counter_owner.items():
             # A box whose own draw is not read (no list, an id-less entry, no
-            # power sensor of its own) is charged the fleet's: a larger
-            # pending only ever holds a row higher.
+            # power sensor of its own) is charged the fleet's: that only ever
+            # holds a row higher.
             watts = (float(per_charger.get(owner) or 0.0)
                      if owner in per_charger else fleet_w)
+            if watts > EV_ACTIVE_CHARGE_FLOOR_W:
+                self._ev_owners_drawing.add(owner)
             state = self._hass.states.get(entity_id)
             value = None
             if state is not None and state.state not in (
@@ -2406,20 +2444,25 @@ class EnergyCalculator:
             if value is not None and value >= 0 and (
                 seen is None
                 or value > seen + 0.001
-                or value < seen * EV_COUNTER_RESET_RATIO
+                or _ev_counter_drop(value, seen) == "reset"
             ):
                 # Moved, reset, or first seen: it holds everything so far.
                 self._ev_counter_seen[entity_id] = value
                 self._ev_counter_pending[entity_id] = 0.0
-            elif watts >= MIN_POWER_THRESHOLD:
+            elif watts > EV_ACTIVE_CHARGE_FLOOR_W:
                 self._ev_counter_pending[entity_id] = (
                     self._ev_counter_pending.get(entity_id, 0.0)
                     + watts * interval_hours / 1000.0
                 )
 
-    def _ev_pending(self, entities: List[str]) -> float:
-        """(#1049) kWh drawn since these counters last moved."""
-        return sum(self._ev_counter_pending.get(e, 0.0) for e in entities)
+    def _ev_settled(self, entities: List[str]) -> bool:
+        """(#1049) Every box behind these counters has stopped charging, and
+        each counter has reported since — nothing it counts is still owed."""
+        return not any(
+            self._ev_counter_pending.get(e, 0.0) > 0.0
+            or self._ev_counter_owner.get(e) in self._ev_owners_drawing
+            for e in entities
+        )
 
     def follow_charger_counter(
         self,
@@ -2457,7 +2500,7 @@ class EnergyCalculator:
             return value
         adopted = self._ev_adoption(
             f"charger {cid}", target, value, all_read,
-            self._ev_pending([counter]),
+            self._ev_settled([counter]),
         )
         return value if adopted is None else adopted
 
@@ -2526,7 +2569,8 @@ class EnergyCalculator:
           A grid meter can prove the integrator counted energy that never
           flowed (#628: export integrated 3.06 kWh against a meter reading
           0.16), so a downward correction has to be legal. EV joined this side
-          in #1049, once the box is idle — see ``_ev_adoption``. Safe because every daily
+          in #1049, once each box has stopped and its counter reported — see
+          ``_ev_adoption``. Safe because every daily
           energy sensor is ``SensorStateClass.TOTAL`` — a decrease is a
           correction, not a statistics reset.
         - **ALL-OR-NOTHING per category.** Upward-only was the safety net that

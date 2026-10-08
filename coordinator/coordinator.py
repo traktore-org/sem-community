@@ -1963,6 +1963,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         are never a charger's own — they are not tied to one box.
         """
         top_level = self.config.get("ev_total_energy_sensor")
+        if not [c for c in (self.config.get("ev_chargers") or [])
+                if isinstance(c, dict)]:
+            # One box set up with flat keys registers as ``ev_charger``
+            # (``primary_charger_id``); its top-level counter is its own.
+            return {"ev_charger": top_level} if top_level else {}
         own: Dict[str, Optional[str]] = {}
         for index, charger in enumerate(self.config.get("ev_chargers") or []):
             if not isinstance(charger, dict):
@@ -1976,25 +1981,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 for cid, e in own.items()}
 
     def _ev_counter_owners(self) -> Dict[str, str]:
-        """(#1049) Counter → the charger whose power it counts. A box with no
-        charger list owns its top-level counter as ``EV_FLEET_OWNER``: its
-        power is the fleet power."""
-        from .energy_calculator import EV_FLEET_OWNER
-
-        if not [c for c in (self.config.get("ev_chargers") or [])
-                if isinstance(c, dict)]:
-            top_level = self.config.get("ev_total_energy_sensor")
-            return {top_level: EV_FLEET_OWNER} if top_level else {}
+        """(#1049) Counter → the charger whose power it counts."""
         return {e: cid for cid, e in self._own_ev_counters().items() if e}
 
     def _ev_counters_cover_fleet(self) -> bool:
         """(#1049) Does every charger have a counter of its own? Only then
         does the counter set see all the charging the power integral sees,
-        and only then may it pull the EV rows down. A config with no charger
-        list yet is one box: its top-level counter is its own."""
-        if not [c for c in (self.config.get("ev_chargers") or [])
-                if isinstance(c, dict)]:
-            return bool(self.config.get("ev_total_energy_sensor"))
+        and only then may it pull the EV rows down."""
         own = self._own_ev_counters()
         return bool(own) and all(own.values())
 
