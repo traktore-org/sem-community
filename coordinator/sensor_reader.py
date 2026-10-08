@@ -4488,25 +4488,33 @@ class SensorReader:
         frozen-sensor threshold AND ``_near_zero_at_night`` holds. Everything
         else keeps its value: a fresh reading (an inverter still reporting a
         few watts after sunset is measuring them), a V+I pair with one half
-        still live, a stall in daylight or above 25 W (what solar WAS there is
-        not knowable — the W3 warning flags it instead), an unknown sun. It
-        only ever lowers a near-zero night figure to zero; it never invents
-        production. Never raises: a read must not break over this.
+        still live, a stall above 25 W or one first seen in daylight (what
+        solar WAS there is not knowable — the W3 warning flags it instead),
+        an unknown sun. It only ever lowers a figure of 25 W or less to zero;
+        it never invents production. Never raises: a read must not break
+        over this.
 
         The verdict belongs to the REPORT, not to the hour: a report judged
-        asleep stays asleep until the entity reports again. Sunrise brings no
-        new data — without this, the dusk report came back as 8 W of
-        production every morning until the inverter woke.
+        asleep stays asleep until the entity's state is written again.
+        Sunrise brings no new data — without this, the dusk report came back
+        as 8 W of production every morning until the inverter woke. An
+        integration that skips identical writes (MQTT by default) can hide a
+        woken inverter's first reading if it equals the dusk value exactly;
+        that costs at most 25 W until the value first changes.
 
         It does not ask ``_source_is_alive`` (#912), on purpose. Grott and
         every other MQTT device share ONE config entry, the broker's, so a
         live thermostat on the same broker would vouch for a sleeping
-        inverter. After a restart a restored state looks fresh, so the held
-        value shows for one threshold before this applies.
+        inverter. The hold lives in memory: after a restart a restored state
+        looks fresh, so the held value shows for one threshold at night — and
+        until the inverter wakes, if the restart falls between sunrise and
+        that.
         """
         try:
-            if not entity_ids:
+            if not entity_ids or watts is None:
                 return False
+            if abs(float(watts)) > self._SOLAR_ASLEEP_W:
+                return False        # a daytime read pays nothing more
             stamps = []
             for eid in entity_ids:
                 state = self.hass.states.get(eid) if eid else None
@@ -4514,9 +4522,8 @@ class SensorReader:
                 if seen is None:
                     return False
                 stamps.append((eid, seen))
-            if (abs(float(watts)) <= self._SOLAR_ASLEEP_W
-                    and all(self._asleep_reports.get(eid) == seen[0]
-                            for eid, seen in stamps)):
+            if all(self._asleep_reports.get(eid) == seen[0]
+                   for eid, seen in stamps):
                 return True     # the same report, still asleep
             if not self._near_zero_at_night(watts):
                 return False

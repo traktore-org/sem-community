@@ -243,6 +243,21 @@ class TestEveryOtherSolarRead:
         assert reader._read_pv_string_source(
             "pv1", reader._pv_strings["pv1"]) == 0.0
 
+    def test_voltage_times_current_hold_needs_both_halves(self):
+        """The hold is per report, for EVERY half: judged asleep at night, the
+        pair stays 0 W at sunrise; once the voltage reports anew, the pair
+        is a measurement again."""
+        v, i = "sensor.inv_pv_1_voltage", "sensor.inv_pv_1_current"
+        reader, table = _reader({
+            v: _state(320.0, STALE_S, unit="V"),
+            i: _state(0.03, STALE_S, unit="A"),
+        })
+        assert reader._read_pv_string_source("pv1", (v, i)) == 0.0
+        table["sun.sun"] = _sun("above_horizon")
+        assert reader._read_pv_string_source("pv1", (v, i)) == 0.0
+        table[v] = _state(320.0, FRESH_S, unit="V")
+        assert reader._read_pv_string_source("pv1", (v, i)) == pytest.approx(9.6)
+
     def test_voltage_times_current_with_one_side_live_is_kept(self):
         """A live current reading is a measurement — only a fully silent
         string is asleep."""
@@ -291,9 +306,15 @@ class TestOnePredicate:
                     return self._read_sensor(x, f"pv_{slot}")
                 def e(self, label):
                     return self._read_sensor(x, label)
+                def f(self, label):
+                    return self._read_sensor(x, f"{label}")
+                def g(self):
+                    return self._read_sensor(x, f"solar")
+                def ok(self, n):
+                    return self._read_sensor(x, f"battery_{n}")
         """)
         offenders, _ = _scan_solar_reads({"probe.py": src})
-        assert sorted(o[0] for o in offenders) == ["a", "b", "c", "d", "e"]
+        assert sorted(o[0] for o in offenders) == ["a", "b", "c", "d", "e", "f", "g"]
 
 
 _DOORS = {"solar": "_read_solar_power", "pv string": "_read_pv_string_source"}
@@ -314,6 +335,28 @@ def _package_sources() -> dict:
     return out
 
 
+def _label_kind(label) -> str | None:
+    """'solar', 'pv string', 'variable' (could be either), or None (cannot)."""
+    if isinstance(label, ast.JoinedStr) and all(
+            isinstance(v, ast.Constant) for v in label.values):
+        label = ast.Constant("".join(str(v.value) for v in label.values))
+    if isinstance(label, ast.Constant):
+        text = str(label.value)
+        return ("solar" if text == "solar"
+                else "pv string" if text.startswith("pv_") else None)
+    if isinstance(label, ast.JoinedStr):
+        head = label.values[0] if label.values else None
+        if not isinstance(head, ast.Constant):
+            return "variable"           # f"{label}" — could be anything
+        text = str(head.value)
+        if text.startswith("pv_"):
+            return "pv string"
+        if "solar".startswith(text) or "pv_".startswith(text):
+            return "variable"           # f"so{x}" — could still be one
+        return None                     # f"battery_{n}" — cannot be one
+    return "variable"
+
+
 def _scan_solar_reads(sources: dict | None = None):
     offenders, found = [], set()
     for rel, src in (sources or _package_sources()).items():
@@ -330,16 +373,7 @@ def _scan_solar_reads(sources: dict | None = None):
                     (k.value for k in call.keywords if k.arg == "name"), None)
                 if label is None:
                     continue
-                if isinstance(label, ast.Constant):
-                    text = str(label.value)
-                    kind = ("solar" if text == "solar"
-                            else "pv string" if text.startswith("pv_") else None)
-                elif isinstance(label, ast.JoinedStr):
-                    head = label.values[0] if label.values else None
-                    kind = ("pv string" if isinstance(head, ast.Constant)
-                            and str(head.value).startswith("pv_") else None)
-                else:
-                    kind = "variable"
+                kind = _label_kind(label)
                 if kind is None:
                     continue
                 if kind == "variable":
