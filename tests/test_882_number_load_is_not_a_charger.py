@@ -43,6 +43,7 @@ def _registry(entity_unit):
         UnifiedDeviceRegistry,
     )
     reg = UnifiedDeviceRegistry.__new__(UnifiedDeviceRegistry)
+    reg._built_from_store = {}          # (#1067)
     hass = MagicMock()
     st = MagicMock()
     st.state = "0"
@@ -145,6 +146,7 @@ class TestGenuineCurrentControlIsUntouched:
             UnifiedDeviceRegistry,
         )
         reg = UnifiedDeviceRegistry.__new__(UnifiedDeviceRegistry)
+        reg._built_from_store = {}          # (#1067)
         hass = MagicMock()
         hass.states.get.return_value = None
         reg.hass = hass
@@ -168,6 +170,7 @@ class TestTheRepairFollowsTheMapping:
             UnifiedDeviceRegistry,
         )
         reg = UnifiedDeviceRegistry.__new__(UnifiedDeviceRegistry)
+        reg._built_from_store = {}          # (#1067)
         reg.hass = MagicMock()
         reg._surplus_controller = MagicMock()
         reg._surplus_controller._devices = {}
