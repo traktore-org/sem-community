@@ -44,6 +44,8 @@ from ..devices.base import (
 from ..devices.power_setpoint import (   # (#880) ONE producer, over there
     PowerSetpointDevice, device_class_for_control,
 )
+from ..devices.held_power import held_power_w
+from ..consts.core import RATED_POWER_RULE
 from ..hardware_detection import discover_ev_charger_from_registry
 from ..const import LOAD_PRIORITY_BASE as _LOAD_PRIORITY_BASE
 from ..consts.devices import load_phase
@@ -259,6 +261,13 @@ class UnifiedDeviceRegistry:
         # once from the power sensor's recorder history so a fresh device shows
         # its real rating immediately rather than the placeholder.
         self._rated_power_overrides: Dict[str, float] = {}
+        # (#1067) device_ids whose saved rating was learned under the old
+        # rule — the highest single reading, so a motor or compressor start
+        # could be it. Each is checked once more: the level its sensor HELD
+        # in the recorder's history replaces it in either direction; until
+        # then the device holds it as a guess, so the first level the load
+        # holds live replaces it too. Persisted until each one is settled.
+        self._ratings_to_recheck: set = set()
         # device_ids we've already tried to seed from history this session — so
         # a device with no history yet isn't re-queried on every 35 s refresh.
         self._rating_seed_attempted: set = set()
@@ -403,6 +412,15 @@ class UnifiedDeviceRegistry:
                     data.get("rated_power_overrides", {}).items()
                     if v is not None
                 }
+                # (#1067) A store from before the held rule: every saved
+                # rating may be one start peak, so each gets checked again.
+                if data.get("rated_power_rule") != RATED_POWER_RULE:
+                    self._ratings_to_recheck = set(self._rated_power_overrides)
+                else:
+                    self._ratings_to_recheck = {
+                        str(d) for d in (data.get("rated_power_recheck") or [])
+                        if d in self._rated_power_overrides
+                    }
                 self._service_registrations = data.get("service_registrations", {})
                 self._device_goals = data.get("device_goals", {})
                 # Migrate the removed "surplus_target" mode (#235): a device set to
@@ -2885,6 +2903,8 @@ class UnifiedDeviceRegistry:
             # and a genuine opt-out set afterwards survives every upgrade.
             "legacy_flags_adopted": bool(self._legacy_flags_adopted),
             "rated_power_overrides": self._rated_power_overrides,
+            "rated_power_rule": RATED_POWER_RULE,                 # (#1067)
+            "rated_power_recheck": sorted(self._ratings_to_recheck),
             "service_registrations": self._service_registrations,
             "device_goals": self._device_goals,
         }
@@ -2957,12 +2977,19 @@ class UnifiedDeviceRegistry:
 
         A persisted, self-calibrated value wins — so a sensor-equipped load
         keeps its learned rating across a restart / rebuild instead of dropping
-        back to the 1 kW floor. Else the live sensor reading (0 when the load is
-        off), which ``SwitchDevice.__init__`` turns into the 1 kW default."""
+        back to the 1 kW floor. Else 0, which ``SwitchDevice.__init__`` turns
+        into the 1 kW default, labelled unmeasured.
+
+        (#1067) Not the live sensor reading: one reading is not a rating. A
+        load that happened to be starting when the device was built handed
+        its start peak in as a measured rating, the up-only paths kept it, and
+        the store made it permanent. The history seed and the live hold
+        (``calibrate_rated_power``) learn the level it holds instead.
+        ``power_sensor`` stays for the callers' signature."""
         override = float(self._rated_power_overrides.get(device_id, 0) or 0)
         if override > 0:
             return override
-        return self._get_power_rating(power_sensor)
+        return 0.0
 
     def _capture_calibrated_ratings(self) -> bool:
         """(#576) Snapshot any rating a live device self-calibrated UP to, into
@@ -2987,8 +3014,13 @@ class UnifiedDeviceRegistry:
                 continue          # still the invented placeholder — not ours to keep
             rated = float(rated)
             prev = float(self._rated_power_overrides.get(did, 0) or 0)
-            if rated > prev:
+            # (#1067) A saved rating still waiting for its re-check was held
+            # by the device as a guess; a measured device here has learned a
+            # level it HELD since, which replaces it in either direction.
+            recheck = did in self._ratings_to_recheck and rated != prev
+            if rated > prev or recheck:
                 self._rated_power_overrides[did] = rated
+                self._ratings_to_recheck.discard(did)
                 dirty = True
         return dirty
 
@@ -3027,8 +3059,9 @@ class UnifiedDeviceRegistry:
     async def _seed_and_apply_ratings(self) -> bool:
         """(#576) After the rebuild: (a) apply a persisted override to any live
         device that came back at a lower rating, and (b) for a sensor-equipped
-        device we haven't learned yet, seed its rating from the power sensor's
-        recorder-history running max. Returns True if anything changed."""
+        device we haven't learned yet, seed its rating from the level the power
+        sensor held in its recorder history (#1067: held, not the highest
+        reading). Returns True if anything changed."""
         dirty = False
         for did, dev in getattr(self._surplus_controller, "_devices", {}).items():
             sensor = getattr(dev, "power_entity_id", None)
@@ -3041,6 +3074,10 @@ class UnifiedDeviceRegistry:
             # placeholder? Everything below turns on that, not on 1000.
             measured = bool(getattr(dev, "rated_power_measured", True))
             rated_now = float(getattr(dev, "rated_power", 0) or 0)
+            # (#1067) A saved rating from the old single-reading rule that
+            # this device carries as its own: its re-check may move it down.
+            recheck = did in self._ratings_to_recheck
+            from_store = recheck and override > 0 and rated_now == override
             # (b) one-shot history seed for a device we've never learned. ANY
             # real history is a measurement — including 8 W. The old
             # ``> _DEFAULT_RATED_POWER`` gate discarded exactly the small loads
@@ -3051,15 +3088,30 @@ class UnifiedDeviceRegistry:
             # path.
             if (
                 self._history_seeds_enabled
-                and override <= 0
+                and (override <= 0 or recheck)
                 and did not in self._rating_seed_attempted
             ):
                 self._rating_seed_attempted.add(did)
-                hist_max = await self._history_max_power(sensor)
-                if hist_max > 0 and (not measured or hist_max > rated_now):
-                    override = hist_max
-                    self._rated_power_overrides[did] = hist_max
+                held = await self._history_held_power(sensor)
+                if held > 0 and recheck:
+                    # (#1067) the held level settles the re-check, either way
+                    override = held
+                    self._rated_power_overrides[did] = held
+                    self._ratings_to_recheck.discard(did)
+                    recheck = False
                     dirty = True
+                    if from_store:
+                        measured = False     # the old number is not kept
+                elif held > 0 and (not measured or held > rated_now):
+                    override = held
+                    self._rated_power_overrides[did] = held
+                    dirty = True
+            if recheck and from_store:
+                # (#1067) No held level in the history yet: keep the old
+                # number, but as a guess, so the first level the load holds
+                # live replaces it in either direction.
+                dev.rated_power_measured = False
+                continue
             # (a) apply the learned rating if the rebuilt device is below it —
             # or, while it still holds only the placeholder, in EITHER
             # direction: a measured 8 W beats an invented 1 kW (#744).
@@ -3070,22 +3122,36 @@ class UnifiedDeviceRegistry:
                     dev.min_power_threshold = override
         return dirty
 
-    async def _history_max_power(self, power_sensor: str, days: int = 7) -> float:
-        """(#576) Largest numeric value the power sensor reported in the last
-        ``days`` — the load's real running draw. 0.0 if the recorder is
-        unavailable or has no usable history."""
+    async def _history_held_power(self, power_sensor: str, days: int = 7) -> float:
+        """(#576) The load's real running draw from the power sensor's last
+        ``days`` of history. 0.0 if the recorder is unavailable or has no
+        usable history.
+
+        (#1067) The highest level the sensor HELD for ``RATED_POWER_HOLD_S``,
+        not the highest reading: one compressor start in seven days used to
+        be the rating. (#641) In watts — the history rows carry no unit, so
+        the sensor's unit now scales them (a kW sensor seeded 2 kW as 2 W)."""
+        from homeassistant.util import dt as dt_util
+
         from ..coordinator.recorder_history import read_states
+        from ..coordinator.units import power_unit_scale
 
         states = await read_states(self.hass, power_sensor, days)
-        mx = 0.0
-        for st in states or []:
+        if not states:
+            return 0.0
+        scale = power_unit_scale(self.hass.states.get(power_sensor))
+        points = []
+        for st in states:
             try:
-                v = float(st.state)
-            except (ValueError, TypeError):
+                t = st.last_changed.timestamp()
+            except (AttributeError, TypeError, ValueError):
                 continue
-            if v > mx:
-                mx = v
-        return mx
+            try:
+                w = float(st.state) * scale
+            except (ValueError, TypeError):
+                w = None
+            points.append((t, w))
+        return held_power_w(points, dt_util.utcnow().timestamp())
 
     async def async_seed_ratings_from_history(self) -> None:
         """(#967) The recorder pass, once Home Assistant has started.

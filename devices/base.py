@@ -106,8 +106,10 @@ _MAX_PLAUSIBLE_LOAD_W = 100_000.0
 from ..consts.core import (
     DEFAULT_DEVICE_RATED_POWER,
     DEFAULT_MAX_CHARGING_CURRENT,
+    RATED_POWER_HOLD_S,
 )
 from ..coordinator.units import energy_state_to_kwh, power_state_to_watts
+from .held_power import HeldPower
 
 from homeassistant.core import HomeAssistant, callback
 
@@ -404,6 +406,9 @@ class ControllableDevice(ABC):
         # shower light stayed pinned at 1 kW forever when the "rating" it
         # was defending was never measured at all. This is how they tell.
         self.rated_power_measured: bool = True
+        # (#1067) The run of readings ``calibrate_rated_power`` learns from:
+        # a level counts once the load has held it, never from one reading.
+        self._held_power = HeldPower()
 
         # Appliance dependencies (#122): device only activates when dependencies are met
         self.depends_on: List[str] = []  # device_ids that must be active
@@ -575,6 +580,8 @@ class ControllableDevice(ABC):
 
         if self.is_active:
             self.calibrate_rated_power()
+        else:
+            self._held_power.reset()     # (#1067) a hold is one unbroken run
 
         self._daily_runtime_last_check = now
 
@@ -824,12 +831,14 @@ class ControllableDevice(ABC):
             return self._energy_deriver.update(energy, time.monotonic(), max_power_w=cap)
         return None
 
-    def calibrate_rated_power(self) -> None:
+    def calibrate_rated_power(self, now: Optional[float] = None) -> None:
         """(#559/#576) Learn the device's real draw from its power sensor.
 
-        Runs every cycle while the device is ON: if the sensor reports a
-        larger draw than the current ``rated_power``, adopt it as both the
-        rated power and the surplus-activation threshold. Promoted from
+        Runs every cycle while the device is ON: if the sensor HELD a larger
+        draw than the current ``rated_power`` for ``RATED_POWER_HOLD_S``
+        (#1067 — one reading is a start peak, not a draw), adopt it as both
+        the rated power and the surplus-activation threshold. ``now`` is a
+        monotonic time, for tests. Promoted from
         ``SwitchDevice`` to the base (#576) so EVERY device type — switch,
         heat pump, climate — "sees where it goes", not just switches.
 
@@ -839,6 +848,7 @@ class ControllableDevice(ABC):
         (e.g. the modulating EV, which measures draw its own way)."""
         rated = getattr(self, "rated_power", None)
         if rated is None or not self.hass or not self.is_active:
+            self._held_power.reset()
             return
         # (#744) CALIBRATION ONLY FROM A REAL POWER SENSOR. The energy
         # deriver is a display/runtime-credit estimate: a 0.01 kWh tick
@@ -851,20 +861,31 @@ class ControllableDevice(ABC):
         observed = self.observed_power_w()
         if observed is None:
             return
+        # (#1067) The up-only ratchet below keeps the highest number it is
+        # ever shown, so it must only be shown levels the load HELD. Fed raw
+        # readings, a compressor start (a 200 W dehumidifier reading ~1.4 kW
+        # for a moment) became the rating for life, and SEM then waited for
+        # 1.4 kW of surplus before it would switch the load on.
+        held = self._held_power.add(
+            time.monotonic() if now is None else now, observed)
+        if held is None:
+            return
         # (#744) The up-only ratchet defends a MEASURED peak. It must not
         # defend an invented one: while ``rated_power`` is still the 1 kW
-        # placeholder, the first real reading REPLACES it — downward too.
+        # placeholder, the first real level REPLACES it — downward too.
         # That is the whole of Azlinon's "nothing below 1 kW": a 8 W bulb
         # could never argue its way past a number nobody had measured.
-        first_real = not self.rated_power_measured and observed > 0
-        if first_real or observed > self.rated_power:
+        first_real = not self.rated_power_measured and held > 0
+        if first_real or held > self.rated_power:
             _LOGGER.info(
-                "%s: calibrated rated_power %.0fW -> %.0fW from %s",
-                self.name, self.rated_power, observed,
+                "%s: calibrated rated_power %.0fW -> %.0fW from %s "
+                "(held %.0f s)",
+                self.name, self.rated_power, held,
                 self.power_entity_id or self.energy_entity_id,
+                RATED_POWER_HOLD_S,
             )
-            self.rated_power = observed
-            self.min_power_threshold = observed
+            self.rated_power = held
+            self.min_power_threshold = held
             self.rated_power_measured = True
 
     @property

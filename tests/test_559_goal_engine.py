@@ -120,7 +120,10 @@ def test_rated_power_autocalibrates_from_observed_draw():
     # default: threshold seeded from rated_power (1000W)
     assert dev.min_power_threshold == 1000
     dev._status.state = DeviceState.ACTIVE
-    dev.calibrate_rated_power()
+    # (#1067) held for the hold time, not one reading
+    dev.calibrate_rated_power(now=0.0)
+    dev.calibrate_rated_power(now=60.0)
+    dev.calibrate_rated_power(now=120.0)
     assert dev.rated_power == 2300
     assert dev.min_power_threshold == 2300
 

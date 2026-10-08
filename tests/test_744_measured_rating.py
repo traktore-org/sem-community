@@ -71,6 +71,21 @@ def _running(dev, watts):
     return dev
 
 
+_T = [0.0]
+
+
+def _hold(dev, watts=None):
+    """(#1067) The sensor reads ``watts`` for the whole hold time — a level
+    counts only once the load has held it, never from one reading."""
+    if watts is not None:
+        dev.observed_power_w = lambda: watts
+    dev._held_power.reset()
+    _T[0] += 1000.0
+    dev.calibrate_rated_power(now=_T[0])
+    dev.calibrate_rated_power(now=_T[0] + 60.0)
+    dev.calibrate_rated_power(now=_T[0] + 120.0)
+
+
 def _live(rated=8.0, measured=True, sensor="sensor.p", is_ev=False, mpt=0.0):
     return SimpleNamespace(
         rated_power=rated, rated_power_measured=measured,
@@ -128,7 +143,7 @@ class TestTheGuessIsLabelledAsOne:
 class TestTheFirstMeasurementReplacesTheGuess:
     def test_an_eight_watt_bulb_learns_eight_watts(self):
         dev = _running(_switch(), 8.0)
-        dev.calibrate_rated_power()
+        _hold(dev)
         assert dev.rated_power == 8.0
         # the activation gate follows — no more "a kilowatt of surplus
         # before we will switch on a shower light".
@@ -137,24 +152,22 @@ class TestTheFirstMeasurementReplacesTheGuess:
 
     def test_after_the_first_measurement_only_the_peak_counts(self):
         dev = _running(_switch(), 8.0)
-        dev.calibrate_rated_power()
-        dev.observed_power_w = lambda: 5.0      # a dimmed reading
-        dev.calibrate_rated_power()
+        _hold(dev)
+        _hold(dev, 5.0)                         # a dimmed level
         assert dev.rated_power == 8.0           # never ratchets back down
-        dev.observed_power_w = lambda: 40.0     # full brightness
-        dev.calibrate_rated_power()
+        _hold(dev, 40.0)                        # full brightness
         assert dev.rated_power == 40.0
 
     def test_a_load_we_were_told_about_is_not_overwritten_downward(self):
         dev = _running(_switch(rated=2200.0), 300.0)   # compressor spinning up
-        dev.calibrate_rated_power()
+        _hold(dev)
         assert dev.rated_power == 2200.0
 
     def test_a_sensorless_load_keeps_the_placeholder(self):
         # No power sensor → the energy deriver's estimate must not teach the
         # model (#744, test_744_rated_ratchet). The guess stays a guess.
         dev = _running(_switch(power_entity=None), 8.0)
-        dev.calibrate_rated_power()
+        _hold(dev)
         assert dev.rated_power == _DEFAULT_RATED_POWER
         assert dev.rated_power_measured is False
 
@@ -175,7 +188,7 @@ class TestASmallRatingSurvivesTheRebuild:
         devs = {"d": _live(rated=_DEFAULT_RATED_POWER, measured=False,
                            mpt=_DEFAULT_RATED_POWER)}
         reg = _reg(devs)
-        reg._history_max_power = AsyncMock(return_value=8.0)
+        reg._history_held_power = AsyncMock(return_value=8.0)
         assert await reg._seed_and_apply_ratings() is True
         assert reg._rated_power_overrides["d"] == 8.0
         assert devs["d"].rated_power == 8.0

@@ -49,5 +49,8 @@ class TestCalibrationNeedsARealSensor:
         from custom_components.solar_energy_management.devices.base import DeviceState
         dev._status.state = DeviceState.ACTIVE
         dev.observed_power_w = lambda: 60.0
-        dev.calibrate_rated_power()
+        # (#1067) a level counts once the load has held it for the hold time
+        dev.calibrate_rated_power(now=0.0)
+        dev.calibrate_rated_power(now=60.0)
+        dev.calibrate_rated_power(now=120.0)
         assert dev.rated_power == 60.0  # the real ratchet stays

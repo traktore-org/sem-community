@@ -1176,6 +1176,7 @@ class SurplusController:
         "_last_activated", "_last_deactivated",   # anti-cycle windows
         "_observed_off_since", "_external_off_until",
         "_surplus_since",                          # activation debounce
+        "_held_power",           # (#1067) a rating hold spans the rebuild
     )
     # _sem_owned is transplanted separately: only from an ACTIVE old object —
     # a stale False (reconciler cleared it while the entity flickered) must not

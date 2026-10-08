@@ -59,6 +59,20 @@ LOAD_PRIORITY_BASE: Final = 100
 # sensor IS present, ``calibrate_rated_power()`` learns the real draw from here.
 DEFAULT_DEVICE_RATED_POWER: Final = 1000
 
+# #1067 — a load's rating is the power it HOLDS, not one reading. A
+# compressor or motor start reads several times the running draw for a
+# few seconds (a 200 W dehumidifier read ~1.4 kW once), and the rating
+# only ever goes up, so one start pinned it for life. Live and from
+# history, a level counts only once the sensor stayed at or above it
+# for this long. A gap between live readings longer than
+# ``RATED_POWER_SAMPLE_GAP_S`` starts the hold again.
+RATED_POWER_HOLD_S: Final = 120.0
+RATED_POWER_SAMPLE_GAP_S: Final = 60.0
+# The rule a saved rating was learned under. A store without it (or with
+# an older one) holds ratings learned from single readings: each is
+# checked once more against the recorder before it is trusted (#1067).
+RATED_POWER_RULE: Final = 2
+
 # Battery Discharge Protection
 DEFAULT_BATTERY_DISCHARGE_PROTECTION_ENABLED: Final = True  # Enable discharge protection during night charging
 DEFAULT_BATTERY_MAX_DISCHARGE_POWER: Final = 5000  # Watts - Maximum allowed discharge (caps 1:1 home consumption matching)

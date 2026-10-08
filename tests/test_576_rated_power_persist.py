@@ -109,7 +109,7 @@ class TestSeedAndApplyRatings:
     async def test_seeds_from_history_when_unlearned(self):
         devs = {"d": _dev(rated=1000.0)}
         reg = _reg(devs)
-        reg._history_max_power = AsyncMock(return_value=1144.0)
+        reg._history_held_power = AsyncMock(return_value=1144.0)
         changed = await reg._seed_and_apply_ratings()
         assert changed is True
         assert reg._rated_power_overrides["d"] == 1144.0
@@ -122,7 +122,7 @@ class TestSeedAndApplyRatings:
         # test_744_measured_rating::test_history_seeds_a_small_load.
         devs = {"d": _dev(rated=1000.0)}
         reg = _reg(devs)
-        reg._history_max_power = AsyncMock(return_value=600.0)
+        reg._history_held_power = AsyncMock(return_value=600.0)
         changed = await reg._seed_and_apply_ratings()
         assert changed is False
         assert "d" not in reg._rated_power_overrides
@@ -131,10 +131,10 @@ class TestSeedAndApplyRatings:
     async def test_history_seed_attempted_only_once_per_session(self):
         devs = {"d": _dev(rated=1000.0)}
         reg = _reg(devs)
-        reg._history_max_power = AsyncMock(return_value=0.0)   # no history yet
+        reg._history_held_power = AsyncMock(return_value=0.0)   # no history yet
         await reg._seed_and_apply_ratings()
         await reg._seed_and_apply_ratings()
-        assert reg._history_max_power.await_count == 1   # not re-queried every refresh
+        assert reg._history_held_power.await_count == 1   # not re-queried every refresh
 
     async def test_does_not_lower_a_higher_live_rating(self):
         devs = {"d": _dev(rated=1500.0)}   # live already above the override
