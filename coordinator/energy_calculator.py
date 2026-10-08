@@ -699,7 +699,8 @@ class EnergyCalculator:
         # its solar sibling.
         # (#1049) Every charger idle long enough for its counter to catch up:
         # only then may the EV rows move down to the counters.
-        settled = self._ev_settled(_FLEET_KEY, now, float(power.ev_power or 0.0))
+        fleet_w = float(power.ev_power or 0.0)  # FLEET-READ: the fleet rows settle when every charger is idle.
+        settled = self._ev_settled(_FLEET_KEY, now, fleet_w)
         self._reconcile_ev_energy(ev_day, month_key, year_key, settled=settled)
         self._reconcile_midnight_ev_energy(today, settled=settled)  # (#628)
 

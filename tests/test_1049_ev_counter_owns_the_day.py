@@ -21,7 +21,6 @@ subtracts, and each charger's own row all follow the same rule.
 """
 from __future__ import annotations
 
-import inspect
 from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -40,6 +39,8 @@ from custom_components.solar_energy_management.coordinator.energy_calculator imp
 )
 from custom_components.solar_energy_management.coordinator.types import PowerReadings
 from custom_components.solar_energy_management.utils.time_manager import TimeManager
+
+from .ast_contracts import call_sites, calls
 
 LINKS = "sensor.wallbox_links_cumulative_added_energy"
 RECHTS = "sensor.wallbox_rechts_cumulative_added_energy_2"
@@ -426,13 +427,15 @@ class TestWhichCountersAreAChargersOwn:
 
 @pytest.mark.unit
 class TestTheWiringIsThere:
-    """A rule nothing calls is the #653 orphan shape."""
+    """A rule nothing calls is the #653 orphan shape. Every production call
+    is checked, not one function's text (#924)."""
 
-    def test_the_coordinator_hands_over_the_cover(self):
-        src = inspect.getsource(SEMCoordinator)
-        assert "complete=self._ev_counters_cover_fleet()" in src
+    def test_every_counter_setup_hands_over_the_cover(self):
+        sites = call_sites("configure_ev_counters")
+        assert sites, "nothing configures the EV counters"
+        assert all("complete" in kw for _, _, kw in sites), sites
 
     def test_every_charger_row_is_held_to_its_counter(self):
-        src = inspect.getsource(SEMCoordinator._update_ev_intelligence)
-        assert "follow_charger_counter(" in src
-        assert "self._own_ev_counters()" in src
+        assert calls(SEMCoordinator._update_ev_intelligence,
+                     "follow_charger_counter")
+        assert calls(SEMCoordinator._update_ev_intelligence, "_own_ev_counters")
