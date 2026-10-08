@@ -316,7 +316,10 @@ def build_charger_view(
     # cascade: a 16 A charger commanded at 32 claims 22 kW of solar it
     # cannot draw, and the difference is taken off what the next charger
     # in the list is allowed to see.
-    for _key in ("ev_max_current", "ev_min_current", "ev_phases", "ev_voltage"):
+    # (#1069) ``peak_hysteresis`` is a house setting the peak slot clamp
+    # reads for the restart margin; no charger entry carries it.
+    for _key in ("ev_max_current", "ev_min_current", "ev_phases", "ev_voltage",
+                 "peak_hysteresis"):
         if cfg_resolved.get(_key) is None:
             _fleet_val = config.get(_key)
             if _fleet_val is not None:

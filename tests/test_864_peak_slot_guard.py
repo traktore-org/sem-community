@@ -158,14 +158,16 @@ class TestTheGuardBoundsTheOffer:
         assert d.commanded_amps == 7
         assert "peak slot" in d.reason.lower()
 
-    def test_a_spent_slot_floors_at_min_never_proactive_idle(self):
-        """Stopping cars on a transient is the flap this project spent
-        months killing — the preventive guard holds the floor and leaves
-        the hard stop to #747's reactive EMERGENCY."""
+    def test_a_spent_slot_pauses_through_the_stability_gate(self):
+        """(#1069, Guido 08.10) A slot with no room for the minimum is a
+        PAUSE, not a 6 A floor that sits over the limit. It is transient
+        (bridgeable): the stability layer holds the car for the user's
+        disable delay before it stops, so a passing spike does not stop a
+        car — the flap the old floor rule guarded against."""
         v = _mk("always_max", allowed_w=0.0, grid_import_w=500.0)
         d = decide(v)
-        assert d.intent == ChargerIntent.CHARGE_AT_AMPS
-        assert d.commanded_amps == 6
+        assert d.intent == ChargerIntent.IDLE
+        assert d.peak_paused is True and d.bridgeable is True
         assert "peak slot" in d.reason.lower()
 
     def test_no_limit_configured_is_byte_identical(self):

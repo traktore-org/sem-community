@@ -313,6 +313,11 @@ class ChargeStability:
         # that lands while the car happens to blip 0 W never reaches the
         # adapter, leaving last_intent=CHARGE forever).
         self._sem_session: set[str] = set()
+        # (#1069) Chargers inside a PEAK pause: the slot guard had no room
+        # for the minimum. Kept until the car runs again or the mode itself
+        # says idle, so the restart waits the enable delay in ANY mode —
+        # the one stability rule for surplus and peak.
+        self._peak_wait: set[str] = set()
 
     # ------------------------------------------------------------------ #
     # Restart-safe timer persistence (#589)                               #
@@ -536,7 +541,16 @@ class ChargeStability:
         # The latch/hold/escalation below is SHARED — one charging
         # behaviour for both, so a fussy car (a Zoe that won't start at
         # 6 A) is handled identically day or night.
-        night = bool(view.fleet.is_night)
+        # (#1069) A peak pause takes the same gate as a surplus deficit, in
+        # every mode and by night too: stop after the user's disable delay,
+        # restart after the enable delay. Outside the surplus modes nothing
+        # else here changes — the case ends when the car runs again.
+        if getattr(decision, "peak_paused", False):
+            self._peak_wait.add(cid)
+        elif decision.intent is ChargerIntent.IDLE:
+            self._peak_wait.discard(cid)     # the mode's own idle, not ours
+        peak = cid in self._peak_wait
+        night = bool(view.fleet.is_night) and not peak
 
         # (#975) This session's interruption budget widens the anti-flap
         # delays — the start delay and the TRANSIENT bridge only. The
@@ -549,12 +563,13 @@ class ChargeStability:
         # guard) and disconnects also clear all state: the next
         # session starts a fresh window with a cold history.
         if (
-            view.mode not in SURPLUS_DAY_MODES
+            (view.mode not in SURPLUS_DAY_MODES and not peak)
             or not view.power.connected
             or decision.intent is ChargerIntent.DISABLE
             or decision.intent is ChargerIntent.RELEASE   # (#898) hands-off
         ):
             self._reset(cid)
+            self._peak_wait.discard(cid)
             # #610 — an unplug / mode change / DISABLE ends the full-car
             # backoff: a plug or user status change is exactly the signal
             # that should re-open start offers.
@@ -784,6 +799,8 @@ class ChargeStability:
             )
             if charging and (drawing or held_recently):
                 self._surplus_since.pop(cid, None)
+                if drawing:
+                    self._peak_wait.discard(cid)   # (#1069) running again
                 # First real draw of a SEM-initiated start → adopt the latch
                 # current as the steady hold and anchor the debounce clock so
                 # the existing ``ev_min_change_interval_sec`` holds it for a
@@ -812,6 +829,7 @@ class ChargeStability:
                 held = now - since
                 if night or held >= max(0.0, float(enable_delay_s)):
                     self._surplus_since.pop(cid, None)
+                    self._peak_wait.discard(cid)   # (#1069) restart granted
                     # (#893) same as the ladder default: a known latch
                     # floor starts AT the floor, not at a min the car
                     # already refused. Guard above ensures target >= floor.
@@ -972,6 +990,12 @@ class ChargeStability:
         # policy (decide) says idle, and SEM cannot vouch for a session it
         # doesn't remember starting. (Restart mid-SURPLUS still adopts via
         # the charge_wanted branch above, unchanged.)
+        # (#1069) A peak pause in a mode this filter does not own (always_max,
+        # a night floor): the session is SEM's when SEM commanded the charge.
+        # Without this the gate below passed the pause straight through and
+        # the car stopped in one cycle — no disable delay at all.
+        if peak and getattr(adapter, "last_intent", None) in _CHARGE_INTENTS:
+            self._sem_session.add(cid)
         if cid not in self._sem_session:
             self._deficit_since.pop(cid, None)
             self._deep_deficit_since.pop(cid, None)

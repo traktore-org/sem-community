@@ -570,6 +570,13 @@ class ChargerDecision:
     never held above it by a blind-cycle hold): a limit is not a preference.
     PROD 02.09: the guard said 10 A, the wire carried 14→12 A for two more
     minutes and the slot set the month's peak."""
+    peak_paused: bool = False
+    """(#1069) An IDLE because the peak slot has no room for this charger's
+    minimum current. Not a mode's verdict: the stability layer bridges it
+    for the user's disable delay and restarts only after the enable delay —
+    in EVERY mode, day or night, the same rule surplus charging uses. Before
+    this the clamp floored at 6 A and the car flipped on/off every cycle
+    against a limit near its minimum."""
     redirect_w: float = 0.0
     """(#899) Battery-charge watts this decision credited to the car
     ("redirect"). Carried so the loop can check it against the meter
