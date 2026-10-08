@@ -153,10 +153,47 @@ class PeakSlotTracker:
             self.blind = False
             self._last_w = float(grid_import_w or 0.0)
 
+    def to_state(self) -> dict:
+        """(#1069) What a restart needs to resume THIS slot."""
+        return {
+            "slot_start": self._slot_start.isoformat() if self._slot_start else None,
+            "last_t": self._last_t.isoformat() if self._last_t else None,
+            "last_w": float(self._last_w),
+            "imported_kwh": float(self.imported_kwh),
+            "watched_from_start": bool(self.watched_from_start),
+        }
+
     def pop_closed(self) -> Optional[tuple]:
         """``(slot_start, average_kw)`` of the slot that just closed, once."""
         closed, self._closed = self._closed, None
         return closed
+
+
+def tracker_from_state(state, now: datetime) -> PeakSlotTracker:
+    """(#1069) A tracker resumed from its saved state — same slot only.
+
+    A restart set the slot's import back to zero, and the guard then granted
+    up to three times the limit for the rest of a slot that may already have
+    been spent. Spent stays spent: the saved import comes back when the
+    restart lands inside the same clock slot. The seconds HA was down are a
+    hole — the next sample sees the gap and the slot is not booked as a
+    monthly peak. Anything else (another slot, a broken state) is a fresh
+    tracker, exactly as before.
+    """
+    tracker = PeakSlotTracker()
+    try:
+        slot_start = datetime.fromisoformat(state["slot_start"])
+        last_t = datetime.fromisoformat(state["last_t"])
+        if PeakSlotTracker._slot_of(now) != slot_start or last_t > now:
+            return tracker
+        tracker._slot_start = slot_start
+        tracker._last_t = last_t
+        tracker._last_w = max(0.0, float(state.get("last_w") or 0.0))
+        tracker.imported_kwh = max(0.0, float(state.get("imported_kwh") or 0.0))
+        tracker.watched_from_start = bool(state.get("watched_from_start"))
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return PeakSlotTracker()
+    return tracker
 
 
 def clamp_import_command(

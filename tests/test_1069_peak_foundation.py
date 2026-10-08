@@ -460,3 +460,48 @@ def lm(mock_hass):
         coordinator = LoadManagementCoordinator(mock_hass, entry)
         coordinator._store = st
         yield coordinator
+
+
+# ─── Finding 5: a restart does not reset the current slot ───────────────────
+
+from custom_components.solar_energy_management.coordinator.peak_guard import (  # noqa: E402
+    slot_allowed_import_w, tracker_from_state,
+)
+
+
+@pytest.mark.unit
+class TestFinding5TheSlotSurvivesARestart:
+    """A restart mid-slot set the slot's import back to 0, so the guard
+    granted up to three times the limit for the rest of a slot that may
+    already have been spent."""
+
+    def _spent(self):
+        tr = PeakSlotTracker()
+        _feed(tr, datetime(2026, 10, 8, 14, 0, 0), [(7, 8000.0)])
+        return tr
+
+    def test_the_same_slot_comes_back_spent(self):
+        tr = self._spent()
+        state = tr.to_state()
+        back = tracker_from_state(state, datetime(2026, 10, 8, 14, 8, 30))
+        assert back.imported_kwh == pytest.approx(tr.imported_kwh)
+        # 4 kW limit: 1.0 kWh budget, ~0.93 kWh spent — the room is small,
+        # not three times the limit.
+        allowed = slot_allowed_import_w(4.0, back.imported_kwh, 510.0)
+        assert allowed < 1000.0
+
+    def test_a_new_slot_starts_fresh(self):
+        back = tracker_from_state(self._spent().to_state(),
+                                  datetime(2026, 10, 8, 14, 20, 0))
+        assert back.imported_kwh == 0.0
+
+    def test_the_restart_gap_is_a_hole_the_monthly_peak_does_not_book(self):
+        back = tracker_from_state(self._spent().to_state(),
+                                  datetime(2026, 10, 8, 14, 9, 0))
+        closed = _feed(back, datetime(2026, 10, 8, 14, 10, 0), [(6, 1000.0)])
+        assert [s.strftime("%H:%M") for s, _ in closed] == []
+
+    def test_a_broken_state_is_a_fresh_tracker(self):
+        for bad in (None, {}, {"slot_start": "garbage"}, "x"):
+            tr = tracker_from_state(bad, datetime(2026, 10, 8, 14, 0, 0))
+            assert tr.imported_kwh == 0.0

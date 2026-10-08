@@ -11996,15 +11996,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         """
         allowed = None
         try:
-            from .peak_guard import PeakSlotTracker, slot_allowed_import_w
-            if getattr(self, "_peak_slot_tracker", None) is None:
-                self._peak_slot_tracker = PeakSlotTracker()
+            from .peak_guard import slot_allowed_import_w, tracker_from_state
             import homeassistant.util.dt as _dt
+            _now = _dt.now()
+            _store = getattr(self, "_storage", None)
+            if getattr(self, "_peak_slot_tracker", None) is None:
+                # (#1069) Resume the slot a restart interrupted — spent stays
+                # spent. A fresh tracker granted up to 3× the limit for the
+                # rest of a slot that may already have been over it.
+                self._peak_slot_tracker = tracker_from_state(
+                    _store.get_peak_slot_state() if _store else None, _now)
             # (#906) an unreadable meter is a BLIND sample (None), never 0.
             _grid_w = (
                 None if getattr(power, "grid_power_unavailable", False)
                 else float(getattr(power, "grid_import_power", 0.0) or 0.0))
-            self._peak_slot_tracker.update(_dt.now(), _grid_w)
+            self._peak_slot_tracker.update(_now, _grid_w)
+            if _store:
+                _store.set_peak_slot_state(self._peak_slot_tracker.to_state())
             _lm = self._load_manager
             # The off-switch is the EXISTING one: the Control-tab slider's
             # MAX notch sets peak_limit_unlimited atomically (#717), and an

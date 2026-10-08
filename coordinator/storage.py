@@ -480,6 +480,16 @@ class SEMStorage:
         """Persist EV session state (survives restarts)."""
         self._daily_data["ev_session"] = state
 
+    # (#1069) The current 15-minute peak slot — a restart resumes it spent.
+    def get_peak_slot_state(self) -> Dict[str, Any]:
+        """The slot tracker's saved state (``PeakSlotTracker.to_state``)."""
+        return self._daily_data.get("peak_slot", {})
+
+    def set_peak_slot_state(self, state: Dict[str, Any]) -> None:
+        """Rides the daily store: written on a clean stop and every two
+        minutes, so a restart lands back inside the same slot with it."""
+        self._daily_data["peak_slot"] = dict(state)
+
     # EV intelligence persistence (survives restarts and daily resets)
     def get_pv_performance_state(self) -> Dict[str, Any]:
         """(#867) The PV analyzer's monthly history.
