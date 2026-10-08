@@ -527,3 +527,98 @@ def test_a_blind_cycle_does_not_count_the_sun_as_room():
     object.__setattr__(v.fleet, "inputs_degraded", True)
     d = decide_battery(v)
     assert d.intent is BatteryIntent.STOP_FORCE_CHARGE, d.reason
+
+
+# ── Review (08.10): the forced charge under the limit must not write every cycle ──
+import asyncio  # noqa: E402
+
+from custom_components.solar_energy_management.coordinator.actuate_battery import (  # noqa: E402
+    FORCED_CHARGE_RAISE_DWELL_CYCLES, actuate_battery,
+)
+from custom_components.solar_energy_management.coordinator.decide_battery import (  # noqa: E402
+    FORCED_CHARGE_STEP_W,
+)
+
+
+class _ChargeAdapter:
+    """Records every write; lands each one like a real adapter does."""
+    supports_forced_charge = True
+
+    def __init__(self):
+        self.writes = []
+        self.last_intent = None
+
+    async def command_force_charge(self, target_soc, power_w, duration_min):
+        self.writes.append(("charge", power_w))
+        self.last_intent = BatteryIntent.FORCE_CHARGE
+        return True
+
+    async def command_stop_force_charge(self):
+        self.writes.append(("stop", 0.0))
+        self.last_intent = BatteryIntent.STOP_FORCE_CHARGE
+        return True
+
+
+def _cycle(adapter, room_w):
+    """One cycle: the house leaves ``room_w`` under the 4.2 kW limit."""
+    d = decide_battery(_charge_view(allowed_w=4200.0, home_w=4200.0 - room_w,
+                                    charge_w=3000.0))
+    asyncio.run(actuate_battery(d, adapter))
+    return d
+
+
+def _changes(writes):
+    """Writes that changed what the inverter holds."""
+    out, last = 0, None
+    for w in writes:
+        if w != last:
+            out += 1
+        last = w
+    return out
+
+
+@pytest.mark.unit
+class TestTheCappedChargeIsCalm:
+    def test_a_wobbling_room_writes_a_bounded_number_of_times(self):
+        a = _ChargeAdapter()
+        for k in range(60):                       # 10 minutes of wobble
+            _cycle(a, 1100.0 if k % 2 else 900.0)  # 1000 ↔ 750 W buckets
+        assert _changes(a.writes) <= 3, a.writes[:12]
+
+    def test_a_shrinking_room_lowers_at_once(self):
+        a = _ChargeAdapter()
+        _cycle(a, 2100.0)
+        assert a.writes[-1] == ("charge", 2000.0)
+        _cycle(a, 800.0)                          # the cap must never be exceeded
+        assert a.writes[-1] == ("charge", 750.0)
+
+    def test_a_growing_room_waits_before_it_raises(self):
+        a = _ChargeAdapter()
+        _cycle(a, 800.0)
+        for _ in range(FORCED_CHARGE_RAISE_DWELL_CYCLES - 1):
+            _cycle(a, 2100.0)
+            assert a.writes[-1] == ("charge", 750.0)
+        _cycle(a, 2100.0)
+        assert a.writes[-1] == ("charge", 2000.0)
+
+    def test_the_edge_stops_once_and_restarts_only_with_clear_room(self):
+        a = _ChargeAdapter()
+        _cycle(a, 600.0)                          # 500 W
+        for k in range(40):                       # wobble around one step
+            _cycle(a, 300.0 if k % 2 else 200.0)
+        stops = [w for w in a.writes if w[0] == "stop"]
+        assert len(stops) == 1, a.writes[:12]
+        n = len(a.writes)
+        _cycle(a, 300.0)                          # one step: not enough room
+        assert len(a.writes) == n or a.writes[-1][0] == "stop"
+        for _ in range(FORCED_CHARGE_RAISE_DWELL_CYCLES):
+            _cycle(a, 2 * FORCED_CHARGE_STEP_W + 10)
+        assert a.writes[-1][0] == "charge"
+
+
+def test_the_scheduler_plan_has_no_dead_peak_key():
+    import inspect
+    from custom_components.solar_energy_management.coordinator import (
+        battery_charge_scheduler as m,
+    )
+    assert '"peak_limit_w"' not in inspect.getsource(m)

@@ -316,6 +316,7 @@ def _cap_forced_charge(view, decision: BatteryDecision) -> BatteryDecision:
         return BatteryDecision(
             battery_id=decision.battery_id,
             intent=BatteryIntent.STOP_FORCE_CHARGE,
+            room_capped=True,
             # CAUSE: `room_w` is forced_charge_room_w's sum of the allowance,
             # the sun, the house and the chargers' offers, all read above.
             reason=(f"{decision.reason} — no room under the grid limit "
@@ -323,7 +324,7 @@ def _cap_forced_charge(view, decision: BatteryDecision) -> BatteryDecision:
                     "the house and the car)"),
         )
     return replace(
-        decision, charge_power_w=stepped_w,
+        decision, charge_power_w=stepped_w, room_capped=True,
         # CAUSE: `stepped_w` is `room_w` from forced_charge_room_w, floored to
         # a step, and the branch runs only when the decision asked for more.
         reason=(f"{decision.reason} — {stepped_w:.0f} W, the room left under "

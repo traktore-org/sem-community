@@ -858,7 +858,6 @@ def schedule_view_from_plan(plan, now) -> dict:
         "total_ev_kwh": 0.0,
         "total_kwh": round(total_kwh, 2),
         "estimated_cost": round(cost, 3),
-        "peak_limit_w": 0.0,
     }
 
 
