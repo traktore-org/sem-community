@@ -180,7 +180,7 @@ def _registry():
     reg._rated_power_overrides = {}
     reg._rating_seed_attempted = set()
     reg._save_storage = AsyncMock()
-    reg._history_max_power = AsyncMock(return_value=430.0)
+    reg._history_held_power = AsyncMock(return_value=430.0)
     return reg, dev
 
 
@@ -191,14 +191,14 @@ async def test_the_rating_seed_waits_and_then_runs() -> None:
     reg, dev = _registry()
 
     await reg._seed_and_apply_ratings()
-    assert reg._history_max_power.await_count == 0
+    assert reg._history_held_power.await_count == 0
     assert reg._rating_seed_attempted == set(), (
         "the load was marked as tried while the recorder was off limits — "
         "it would never be seeded again this session"
     )
 
     await reg.async_seed_ratings_from_history()
-    assert reg._history_max_power.await_count == 1
+    assert reg._history_held_power.await_count == 1
     assert dev.rated_power == 430.0
     reg._save_storage.assert_awaited()
 

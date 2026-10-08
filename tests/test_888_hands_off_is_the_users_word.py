@@ -175,6 +175,7 @@ class TestTheEchoInTheSecondStoreCannotRestoreIt:
         reg._critical_overrides = {}
         reg._controllable_overrides = {}
         reg._rated_power_overrides = {}
+        reg._ratings_to_recheck = set()     # (#1067)
         reg._service_registrations = {}
         reg._device_goals = {}
         reg._legacy_flags_adopted = False

@@ -101,6 +101,9 @@ class TestRestoreIdempotent:
             ControllableDevice,
             DeviceControlMode,
         )
+        from custom_components.solar_energy_management.devices.held_power import (
+            HeldPower,
+        )
 
         yesterday = (dt_util.now().date() - timedelta(days=1)).isoformat()
         storage = MagicMock()
@@ -123,6 +126,8 @@ class TestRestoreIdempotent:
             _daily_energy_source="none",
             _daily_energy_blind_s=0.0,
             _energy_counter_last_kwh=None,
+            # (#1067) an off load starts its rating hold again each cycle.
+            _held_power=HeldPower(),
         )
         surplus = MagicMock()
         surplus.get_device = lambda did: {_DEVICE_ID: dev}.get(did)

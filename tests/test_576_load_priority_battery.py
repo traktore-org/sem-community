@@ -853,7 +853,9 @@ class TestDrawCalibrationAllTypes:
         d = SwitchDevice(hass=hass, device_id="s", name="s", rated_power=1000,
                          power_entity_id="sensor.p")
         d._status.state = DeviceState.ACTIVE
-        d.calibrate_rated_power()
+        d.calibrate_rated_power(now=0.0)    # (#1067) held for the hold time
+        d.calibrate_rated_power(now=60.0)
+        d.calibrate_rated_power(now=120.0)
         assert d.rated_power == 2400        # snapped up to the observed draw
         assert d.min_power_threshold == 2400
 
