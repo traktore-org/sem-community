@@ -570,6 +570,10 @@ class SensorReader:
         # seconds) are checked, with a generous threshold, so a legitimately
         # slow sensor never false-positives.
         self._frozen_sensors: set[str] = set()
+        # (#1065) entity → the report stamp judged "asleep at night". The same
+        # report stays asleep until a NEW one arrives: at sunrise, before the
+        # inverter wakes, its last report from dusk is not production.
+        self._asleep_reports: Dict[str, Any] = {}
         # (#933) Same gap for the stale-Repair: ``_frozen_sensors`` is per
         # lifetime, the Repair is not. A predecessor's Repair is cleared
         # once this reader has SEEN the entity report — its report stamp
@@ -744,8 +748,9 @@ class SensorReader:
 
         (#1065) The ONE door for every per-string read: a string whose
         inverter is asleep at night reads 0 W, the same rule as the total
-        (``_read_solar_power``), so the strings still add up to it. A V+I
-        pair is asleep only when BOTH halves have gone quiet.
+        (``_read_solar_power``) — so when the strings ARE the Energy-Dashboard
+        sources, string and total say the same. A V+I pair is asleep only
+        when BOTH halves have gone quiet.
         """
         if isinstance(source, tuple):
             v_entity, i_entity = source
@@ -4487,15 +4492,38 @@ class SensorReader:
         not knowable — the W3 warning flags it instead), an unknown sun. It
         only ever lowers a near-zero night figure to zero; it never invents
         production. Never raises: a read must not break over this.
+
+        The verdict belongs to the REPORT, not to the hour: a report judged
+        asleep stays asleep until the entity reports again. Sunrise brings no
+        new data — without this, the dusk report came back as 8 W of
+        production every morning until the inverter woke.
+
+        It does not ask ``_source_is_alive`` (#912), on purpose. Grott and
+        every other MQTT device share ONE config entry, the broker's, so a
+        live thermostat on the same broker would vouch for a sleeping
+        inverter. After a restart a restored state looks fresh, so the held
+        value shows for one threshold before this applies.
         """
         try:
-            if not entity_ids or not self._near_zero_at_night(watts):
+            if not entity_ids:
                 return False
+            stamps = []
             for eid in entity_ids:
                 state = self.hass.states.get(eid) if eid else None
                 seen = self._last_report(state) if state is not None else None
-                if seen is None or seen[1] < self._STALE_THRESHOLD_S:
+                if seen is None:
                     return False
+                stamps.append((eid, seen))
+            if (abs(float(watts)) <= self._SOLAR_ASLEEP_W
+                    and all(self._asleep_reports.get(eid) == seen[0]
+                            for eid, seen in stamps)):
+                return True     # the same report, still asleep
+            if not self._near_zero_at_night(watts):
+                return False
+            if any(seen[1] < self._STALE_THRESHOLD_S for _eid, seen in stamps):
+                return False
+            for eid, seen in stamps:
+                self._asleep_reports[eid] = seen[0]
             return True
         except Exception:  # noqa: BLE001 — never break a read over this
             return False

@@ -95,12 +95,18 @@ entity holds the last value — 8.1 W, published as solar (total, flow, per-stri
 predicate already called that reading asleep, but only the WARNING asked it; the value path never
 did. **Closure:** one predicate (`SensorReader._near_zero_at_night`) for both sides, and
 `_asleep_at_night` reads 0 W when every entity behind a solar reading stopped reporting for the frozen
-threshold, ≤ 25 W, sun below the horizon. Every fleet/per-inverter solar read goes through
-`_read_solar_power`, every per-string read (direct or V+I) through `_read_pv_string_source`.
-**Guard:** `tests/test_1065_asleep_solar_reads_zero.py` — the reporter's night through `read_power`,
-every solar read path, the kept cases (daylight, > 25 W, fresh, no sun, one live V+I half), one
-threshold for warning and value, and an AST pin that no `_read_sensor(…, "solar")` or `pv_…` read
-lives outside the two doors. **Open siblings:** the frozen value still *feeds* the
+threshold, ≤ 25 W, sun below the horizon. The verdict belongs to the REPORT: it holds until the
+entity reports again, so sunrise (no new data) does not turn the dusk report back into production;
+the W3 warning does not share the hold, because a report that never comes in daylight is the fault
+it exists for. The value rule does not ask `_source_is_alive` (class 63): every MQTT device shares
+the broker's config entry, so any live MQTT entity would vouch for a sleeping inverter. Every
+fleet/per-inverter solar read goes through `_read_solar_power`, every per-string read (direct or
+V+I) through `_read_pv_string_source`. **Guard:** `tests/test_1065_asleep_solar_reads_zero.py` — the
+reporter's night through `read_power`, sunrise before the inverter wakes, every solar read path, the
+kept cases (daylight, > 25 W, fresh, no sun, one live V+I half, unreadable stamps), one threshold
+for warning and value, and an AST pin over the whole package that no `_read_sensor`/
+`_read_sensors_sum` solar or `pv_…` read — literal, keyword or variable label — lives outside the
+two doors (with a probe proving the walker catches each bypass). **Open siblings:** the frozen value still *feeds* the
 balance when what it should be is not knowable (daylight, grid, battery, solar above 25 W: warned,
 not changed); multi-unit partial-availability sums silently under-report
 (audit W6; the lifetime seed's half closed by #1043, see class 52) — one dark unit of N is still 0 W

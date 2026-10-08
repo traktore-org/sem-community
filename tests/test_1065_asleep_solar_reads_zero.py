@@ -20,7 +20,7 @@ stale in daylight, stale above 25 W at night, an unknown sun, a fresh reading.
 from __future__ import annotations
 
 import ast
-import inspect
+import pathlib
 import textwrap
 from datetime import timedelta
 from unittest.mock import MagicMock, Mock
@@ -152,6 +152,51 @@ class TestTheReportersNight:
         assert readings.solar_power == pytest.approx(14.0)
         assert readings.solar_power_per_string["pv1"] == pytest.approx(14.0)
 
+    def test_sunrise_before_the_inverter_wakes_stays_zero(self):
+        """Review finding: sunrise brings no new data. The dusk report, judged
+        asleep, must not come back as 8 W of production until the inverter
+        sends a NEW report."""
+        reader, table = _reporters_night()
+        assert reader.read_power().solar_power == 0.0
+        table["sun.sun"] = _sun("above_horizon")          # same reports, sun up
+        readings = reader.read_power()
+        assert readings.solar_power == 0.0
+        assert readings.solar_power_per_string["pv1"] == 0.0
+        # ...and the warning still speaks: a report that never comes in
+        # daylight is the fault W3 exists for. The hold is the value's only.
+        assert PV1 in reader._frozen_sensors
+
+    def test_a_report_never_judged_asleep_is_not_held(self):
+        """The hold needs a night verdict first: the same stale report seen
+        only in daylight keeps its value (W3 flags it)."""
+        reader, table = _reporters_night(sun="above_horizon")
+        assert reader.read_power().solar_power == pytest.approx(8.1)
+        table["sun.sun"] = _sun("below_horizon")
+        assert reader.read_power().solar_power == 0.0
+
+    def test_negative_standby_draw_reads_zero(self):
+        """Some inverters report their own night draw as −6 W."""
+        reader, _ = _reporters_night(pv1=-6.0)
+        readings = reader.read_power()
+        assert readings.solar_power == 0.0
+        assert readings.solar_power_per_string["pv1"] == 0.0
+
+
+class TestMissingInformationKeepsTheValue:
+    @pytest.mark.parametrize("stamp", ["mock", "none"])
+    def test_unreadable_report_stamp(self, stamp):
+        s = Mock()
+        s.state = "8.1"
+        s.attributes = {"unit_of_measurement": "W"}
+        if stamp == "mock":
+            s.last_reported = MagicMock()
+            s.last_updated = MagicMock()
+        else:
+            s.last_reported = None
+            s.last_updated = None
+        reader, _ = _reader({PV1: s})
+        assert reader._read_solar_power(PV1) == pytest.approx(8.1)
+
 
 class TestEveryOtherSolarRead:
     def test_single_ed_solar_sensor(self):
@@ -223,34 +268,85 @@ class TestOnePredicate:
     def test_every_solar_read_goes_through_one_door(self):
         """Structural: a NEW solar read that calls ``_read_sensor(..., "solar")``
         directly — or a per-string read that skips ``_read_pv_string_source``
-        — would bring the held night value back. Only the two doors may."""
-        tree = ast.parse(textwrap.dedent(inspect.getsource(sr_mod)))
-        offenders = []
+        — would bring the held night value back. Only the two doors may. A
+        label passed as a variable may only appear in a pass-through helper,
+        and that helper's own callers are checked by the same rule."""
+        offenders, found = _scan_solar_reads()
+        assert not offenders, offenders
+        # Vacuity: the walker must actually see both doors.
+        assert ("_read_solar_power", "solar") in found
+        assert ("_read_pv_string_source", "pv string") in found
+
+    def test_the_guard_catches_a_bypass(self):
+        """Vacuity of the walker itself, on code it was not written for."""
+        src = textwrap.dedent("""
+            class R:
+                def a(self):
+                    return self._read_sensor(x, "solar")
+                def b(self):
+                    return self._read_sensor(x, name="solar")
+                def c(self):
+                    return self._read_sensors_sum(xs, "solar")
+                def d(self, slot):
+                    return self._read_sensor(x, f"pv_{slot}")
+                def e(self, label):
+                    return self._read_sensor(x, label)
+        """)
+        offenders, _ = _scan_solar_reads({"probe.py": src})
+        assert sorted(o[0] for o in offenders) == ["a", "b", "c", "d", "e"]
+
+
+_DOORS = {"solar": "_read_solar_power", "pv string": "_read_pv_string_source"}
+# Helpers that pass a caller's label straight through. Their callers are
+# checked like any other call, because the helper is a callee below.
+_PASS_THROUGH = {"_read_sensors_sum"}
+_CALLEES = {"_read_sensor"} | _PASS_THROUGH
+
+
+def _package_sources() -> dict:
+    root = pathlib.Path(sr_mod.__file__).resolve().parent.parent
+    out = {}
+    for path in root.rglob("*.py"):
+        rel = path.relative_to(root).as_posix()
+        if rel.startswith(("tests/", "tools/")) or "__pycache__" in rel:
+            continue
+        out[rel] = path.read_text(encoding="utf-8")
+    return out
+
+
+def _scan_solar_reads(sources: dict | None = None):
+    offenders, found = [], set()
+    for rel, src in (sources or _package_sources()).items():
+        tree = ast.parse(src)
         for fn in ast.walk(tree):
             if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
             for call in ast.walk(fn):
                 if not (isinstance(call, ast.Call)
                         and isinstance(call.func, ast.Attribute)
-                        and call.func.attr == "_read_sensor"
-                        and len(call.args) >= 2):
+                        and call.func.attr in _CALLEES):
                     continue
-                label = call.args[1]
-                is_solar = isinstance(label, ast.Constant) and label.value == "solar"
-                is_string = (isinstance(label, ast.JoinedStr)
-                             and isinstance(label.values[0], ast.Constant)
-                             and str(label.values[0].value).startswith("pv_"))
-                door = {"solar": "_read_solar_power",
-                        "string": "_read_pv_string_source"}
-                if is_solar and fn.name != door["solar"]:
-                    offenders.append((fn.name, call.lineno, "solar"))
-                if is_string and fn.name != door["string"]:
-                    offenders.append((fn.name, call.lineno, "pv string"))
-        assert not offenders, offenders
-
-    def test_the_guard_sees_the_doors(self):
-        """Vacuity check: the AST walk must actually find the two doors."""
-        src = inspect.getsource(SensorReader._read_solar_power)
-        assert '_read_sensor(' in src and '"solar"' in src
-        src = inspect.getsource(SensorReader._read_pv_string_source)
-        assert 'f"pv_{slot}"' in src
+                label = call.args[1] if len(call.args) >= 2 else next(
+                    (k.value for k in call.keywords if k.arg == "name"), None)
+                if label is None:
+                    continue
+                if isinstance(label, ast.Constant):
+                    text = str(label.value)
+                    kind = ("solar" if text == "solar"
+                            else "pv string" if text.startswith("pv_") else None)
+                elif isinstance(label, ast.JoinedStr):
+                    head = label.values[0] if label.values else None
+                    kind = ("pv string" if isinstance(head, ast.Constant)
+                            and str(head.value).startswith("pv_") else None)
+                else:
+                    kind = "variable"
+                if kind is None:
+                    continue
+                if kind == "variable":
+                    if fn.name not in _PASS_THROUGH:
+                        offenders.append((fn.name, rel, call.lineno, kind))
+                    continue
+                found.add((fn.name, kind))
+                if fn.name != _DOORS[kind]:
+                    offenders.append((fn.name, rel, call.lineno, kind))
+    return offenders, found
