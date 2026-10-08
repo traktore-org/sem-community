@@ -117,10 +117,16 @@ const WATCHED = [
     'sensor.sem_peak_margin', 'sensor.sem_available_load_reduction',
     'sensor.sem_controllable_devices_count',
     'switch.sem_observer_mode',
+    // (#1055 follow-up) the peak section and the grid sign row read these
+    'sensor.sem_target_peak_limit', 'sensor.sem_diag_grid_sign',
 ];
+
+const PEAK_FLAG = { 'sensor.sem_target_peak_limit': ['peak_limit_unlimited'] };
 
 class SEMControlCard extends SEMLitBase {
     static get watchedEntities() { return WATCHED; }
+    // (#1055 follow-up) "no grid limit" changes the attribute, not the state.
+    static get watchedAttributes() { return PEAK_FLAG; }
 
     static get properties() {
         return { ...super.properties };

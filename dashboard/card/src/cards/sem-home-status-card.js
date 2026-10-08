@@ -41,6 +41,11 @@ class SEMHomeStatusCard extends SEMLitBase {
         return WATCHED;
     }
 
+    // (#1055 follow-up) "no grid limit" changes the attribute, not the state.
+    static get watchedAttributes() {
+        return { 'sensor.sem_target_peak_limit': ['peak_limit_unlimited'] };
+    }
+
     setConfig(config) {
         super.setConfig(config);
         this._prefix = config.entity_prefix || DEFAULT_PREFIX;
