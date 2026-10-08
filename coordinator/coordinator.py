@@ -1975,6 +1975,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         return {cid: (e if e and named.count(e) == 1 else None)
                 for cid, e in own.items()}
 
+    def _ev_counter_owners(self) -> Dict[str, str]:
+        """(#1049) Counter → the charger whose power it counts. A box with no
+        charger list owns its top-level counter as ``EV_FLEET_OWNER``: its
+        power is the fleet power."""
+        from .energy_calculator import EV_FLEET_OWNER
+
+        if not [c for c in (self.config.get("ev_chargers") or [])
+                if isinstance(c, dict)]:
+            top_level = self.config.get("ev_total_energy_sensor")
+            return {top_level: EV_FLEET_OWNER} if top_level else {}
+        return {e: cid for cid, e in self._own_ev_counters().items() if e}
+
     def _ev_counters_cover_fleet(self) -> bool:
         """(#1049) Does every charger have a counter of its own? Only then
         does the counter set see all the charging the power integral sees,
@@ -2232,6 +2244,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             self._collect_ev_counter_entities(),
             self.config.get("prefer_hardware_energy", True),
             complete=self._ev_counters_cover_fleet(),
+            owners=self._ev_counter_owners(),
         )
 
         # Log EV sensor configuration
@@ -13188,7 +13201,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     self._energy_calculator.follow_charger_counter(
                         cid, ev_day,
                         self._daily_ev_per_charger.get(cid, 0.0),
-                        own_counters.get(cid), charger_power,
+                        own_counters.get(cid),
                     )
                 )
 
