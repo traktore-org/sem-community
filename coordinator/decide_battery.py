@@ -324,6 +324,8 @@ def _cap_forced_charge(view, decision: BatteryDecision) -> BatteryDecision:
         )
     return replace(
         decision, charge_power_w=stepped_w,
+        # CAUSE: `stepped_w` is `room_w` from forced_charge_room_w, floored to
+        # a step, and the branch runs only when the decision asked for more.
         reason=(f"{decision.reason} — {stepped_w:.0f} W, the room left under "
                 f"the grid limit ({allowed_w:.0f} W allowed)"),
     )
