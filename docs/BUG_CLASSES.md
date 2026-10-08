@@ -605,6 +605,29 @@ config (\`coordinator.py\` ~10673) and reads \`ev_target_soc\`/\`ev_battery_capa
 \`ev_charger_efficiency\` flat for ALL chargers — while the number entities + coordinator SOC
 paths read per-charger-first. #883 keeps the two copies in sync on every options save (so this
 is mitigated, not live), but a per-charger taper detector should read \`ev_chargers[i]\`.
+**Fourth instance (#1071, 08.10.2026) — two rules pick the owner:** a battery's mode/reserve
+is stored twice — the scalar \`battery_mode\`/\`battery_reserve_soc\` (the one global
+\`select.sem_battery_mode\`/\`number.sem_battery_reserve_soc\`) and the idx-aligned
+\`battery_modes\`/\`battery_reserve_socs\` lists (the per-battery controls). The platforms
+picked the control by the slugs found at setup; \`_per_battery_config\` picked the store by
+"is a list slot set?" plus the LIVE count. A one-battery install with a leftover list (.175:
+\`['auto','auto']\`) showed the global select and the list shadowed every write — select
+\`force_charge\`, SEM \`auto\`. The same split hid two more: per-battery controls on a
+one-battery cycle (cold-start ED, #274) read the stale global key (#531's hazard), and a global
+select built before the batteries were known did nothing once two were live. **Closure:** ONE
+decision — \`coordinator/battery_controls.py::discover_battery_control_slugs\`, captured as
+\`coordinator.battery_control_slugs\` in \`async_setup_entry\` beside \`setup_presence\`; select.py
+and number.py build from it, \`_per_battery_config\` reads the store of the controls built (live
+count only before the capture). **Guard:** \`tests/test_1071_battery_mode_follows_its_control.py\`
+— an oracle over layout × live count × list × scalar: every control's shown value equals what
+drives each battery it covers, through the real platform setup; AST checks pin one capture before
+\`async_forward_entry_setups\` and no second discovery. **Open siblings (for Guido):** (a) an
+UNSET reserve shows 20 % (\`DEFAULT_BATTERY_RESERVE_SOC\`) while \`decide_battery\` and the VPP
+merge sell to 0 % (strict xfail in the same file); (b) fleet readers still read the scalar on
+per-battery installs — \`build_view._battery_may_assist_ev(self.config)\`, the permission-switch
+seed (\`switch.py\` \`_seed_state\`), and \`self.config.get("battery_reserve_soc")\` for the
+spendable floor / night backfill; (c) the battery card picks its layout from per-battery
+SENSORS, not from which mode select exists.
 
 ### 20. Shadowed decision branch (an always-true earlier branch starves a newer one) — PARTIAL
 **Symptom:** a new decision branch is added, tested in isolation, and never executes in

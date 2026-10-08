@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.config_entries import ConfigEntry
@@ -19,6 +18,10 @@ from .coordinator.charge_pause import (   # (#980)
     DEFAULT_PAUSE_DURATION, PAUSE_DURATIONS,
 )
 from .coordinator.install_modules import Module, keeps, presence_of
+from .coordinator.battery_controls import (   # (#1071)
+    captured_battery_control_slugs,
+    discover_battery_control_slugs,
+)
 
 type SEMConfigEntry = ConfigEntry[SEMCoordinator]
 
@@ -65,41 +68,18 @@ from .consts.battery_modes import BATTERY_MODES, DEFAULT_BATTERY_MODE
 _GLOBAL_BATTERY_MODE_KEY = "battery_mode"
 
 
-_BATTERY_SLUG_RE = re.compile(r"^sensor\.sem_battery_(b\d+)_power$")
-
-
 def _battery_slugs(coordinator: SEMCoordinator) -> list[str]:
-    """Short per-battery slugs (``b1`` …) for multi-battery installs.
+    """Short per-battery slugs (``b1`` …) for multi-battery installs; empty on
+    single-battery installs.
 
-    Primary source is the Energy Dashboard ``battery_power_list`` order
-    (same as the per-battery sensors in ``sensor.py``). But that depends
-    on ``_energy_dashboard_config`` being populated at platform-setup
-    time, which can lag the first refresh — so we FALL BACK to the
-    persisted per-battery power sensors in the entity registry
-    (``sensor.sem_battery_b<N>_power``). The registry survives restarts,
-    so once a multi-battery install has its sensors the control entities
-    are created deterministically on every boot. Empty on single-battery
-    installs (no per-battery control entities created).
-    """
-    sr = getattr(coordinator, "_sensor_reader", None)
-    ed = getattr(sr, "_energy_dashboard_config", None) if sr is not None else None
-    batt_list = list(getattr(ed, "battery_power_list", []) or []) if ed is not None else []
-    if len(batt_list) > 1:
-        return [f"b{i + 1}" for i in range(len(batt_list))]
-
-    # Fallback: discover from the persisted per-battery power sensors.
-    try:
-        reg = er.async_get(coordinator.hass)
-        slugs = sorted({
-            m.group(1)
-            for ent in reg.entities.values()
-            if (m := _BATTERY_SLUG_RE.match(ent.entity_id))
-        })
-        _LOGGER.debug("battery slugs (registry fallback): %s", slugs)
-        return slugs if len(slugs) > 1 else []
-    except Exception as exc:  # noqa: BLE001 — discovery must never break setup
-        _LOGGER.debug("battery slug discovery failed: %s", exc)
-        return []
+    (#1071) The answer ``async_setup_entry`` captured before the platforms
+    load, so select.py, number.py and the coordinator's
+    ``_per_battery_config`` all follow ONE decision. Discovers only when
+    nothing was captured (a platform built outside the normal setup)."""
+    captured = captured_battery_control_slugs(coordinator)
+    if captured is not None:
+        return list(captured)
+    return list(discover_battery_control_slugs(coordinator))
 
 
 def _has_battery(coordinator: SEMCoordinator) -> bool:

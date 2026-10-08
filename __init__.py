@@ -2999,6 +2999,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     except Exception as err:  # noqa: BLE001 — no verdict means keep every entity
         coordinator.setup_presence = None
         _LOGGER.warning("Install-modules verdict failed, keeping every entity: %s", err)
+    # (#1071) The same moment, for the battery controls: one answer to "one
+    # global mode select, or one per battery?" — select.py and number.py build
+    # from it, and _per_battery_config reads the store of what they built.
+    from .coordinator.battery_controls import discover_battery_control_slugs
+    coordinator.battery_control_slugs = discover_battery_control_slugs(coordinator)
+    _LOGGER.debug("Battery controls: %s",
+                  ", ".join(coordinator.battery_control_slugs) or "one global")
 
     # Setup platforms (critical - must succeed)
     try:
