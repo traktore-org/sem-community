@@ -130,3 +130,46 @@ def test_both_day_readers_go_through_the_one_helper():
         assert "plan_day_remaining_kwh(self)" in body, name
         assert "forecast_remaining_today_kwh" not in body, (
             f"{name} reads the raw remaining directly (#1068)")
+
+
+# ── Task 4: same decision, fresh trajectory ──
+from custom_components.solar_energy_management.coordinator.coordinator import (  # noqa: E402
+    keep_decision_take_trajectory, plan_decision_core,
+)
+
+
+def _plan(stamp, grid_w):
+    return {
+        "computed_at": stamp, "fits": True, "total_cost": None,
+        "takeover": None, "demands": [], "blocks": [], "not_scheduled": [],
+        "arbitrage": None, "battery_fleet_partial": None,
+        "slots": [{"start": "2026-10-08T14:00:00+02:00",
+                   "end": "2026-10-08T15:00:00+02:00",
+                   "home_grid_w": grid_w}],
+        "self_consumption": {"share": 1.0 if grid_w == 0 else 0.3},
+        "summary": ["sky"], "forecast_sell": None,
+    }
+
+
+def test_an_unchanged_decision_keeps_its_stamp_and_takes_the_sky():
+    prev = _plan("2026-10-08T09:02:43+02:00", 0.0)
+    fresh = _plan("2026-10-08T13:00:00+02:00", 950.0)
+    kept = keep_decision_take_trajectory(prev, fresh,
+                                         "2026-10-08T13:00:00+02:00")
+    assert kept["computed_at"] == prev["computed_at"]          # #775 holds
+    assert kept["slots"][0]["home_grid_w"] == 950.0            # the sky
+    assert kept["self_consumption"] == fresh["self_consumption"]
+    assert kept["trajectory_at"] == "2026-10-08T13:00:00+02:00"
+    assert plan_decision_core(kept) == plan_decision_core(prev)
+    assert prev["slots"][0]["home_grid_w"] == 0.0              # no mutation
+
+
+def test_the_775_branch_uses_it_only_under_the_flag():
+    """Asleep means asleep: without the flag the #775 branch restores the
+    outgoing plan exactly as before."""
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[1] / "coordinator"
+           / "coordinator.py").read_text()
+    call = src.index("keep_decision_take_trajectory(_prev_plan_775")
+    assert "intraday_forecast_on(self)" in src[call - 300:call]
+    assert "self._energy_plan_shadow = _prev_plan_775" in src[call:call + 400]

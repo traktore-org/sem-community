@@ -254,6 +254,23 @@ def plan_day_remaining_kwh(owner) -> float:
     return tracker.corrected_remaining_kwh(raw)
 
 
+# (#1068) The keys ``plan_decision_core`` deliberately ignores: they are the
+# sky, not the decision. An identical repack keeps its stamp (#775) but must
+# not keep a stale sky — PROD 08.10 showed "0 W grid 10–17" all afternoon.
+TRAJECTORY_KEYS = ("slots", "self_consumption", "summary", "forecast_sell")
+
+
+def keep_decision_take_trajectory(prev: dict, fresh: dict, now_iso: str) -> dict:
+    """(#1068) The outgoing plan's decision and stamp, the new build's
+    trajectory, and when that trajectory was drawn."""
+    kept = dict(prev)
+    for key in TRAJECTORY_KEYS:
+        if key in fresh:
+            kept[key] = fresh[key]
+    kept["trajectory_at"] = now_iso
+    return kept
+
+
 def demand_signature_changed(old, new) -> bool:
     """(#765) Did the night's ASK really change between two signatures?
 
@@ -9994,7 +10011,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         # does not re-fire every cycle. Manual re-plans
                         # never take this path: "decide again, now" must
                         # visibly answer, even with "same answer".
-                        self._energy_plan_shadow = _prev_plan_775
+                        if intraday_forecast_on(self) and isinstance(
+                                self._energy_plan_shadow, dict):
+                            # (#1068) same decision, fresh sky.
+                            self._energy_plan_shadow = (
+                                keep_decision_take_trajectory(_prev_plan_775,
+                                    self._energy_plan_shadow,
+                                    dt_util.now().isoformat()))
+                        else:
+                            self._energy_plan_shadow = _prev_plan_775
                         _LOGGER.debug(
                             "ENERGY-PLAN (#775): the ask moved (%s → %s) "
                             "but the packed answer is identical — "
