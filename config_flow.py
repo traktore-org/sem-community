@@ -1274,6 +1274,13 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # page at all. Without a charger the three are optional, and they
         # are checked only once the user starts filling them in.
         has_charger = has_managed_charger(current_config)
+        # A charger kept only in the list has no flat keys, so its required
+        # fields came up empty — the same wall for the homes "Add an EV
+        # charger" creates. Show charger 0's values, as the options page does.
+        _chargers = current_config.get("ev_chargers") or []
+        if _chargers and isinstance(_chargers[0], dict):
+            current_config.update({k: v for k, v in _chargers[0].items()
+                                   if k not in ("id", "name") and v is not None})
 
         if user_input is not None:
             # Validate EV charger entities if provided
@@ -1331,6 +1338,9 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="reconfigure",
             data_schema=vol.Schema({
+                # (#990) an optional entity field takes a suggestion, never
+                # default="": HA validates the default too, and "" is not an
+                # entity id, so the page could not be saved without both.
                 _charger_field(vol.Required(
                     "ev_connected_sensor",
                     default=current_config.get("ev_connected_sensor", ""),
@@ -1357,13 +1367,13 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ),
                 vol.Optional(
                     "ev_charger_service_entity_id",
-                    default=current_config.get("ev_charger_service_entity_id", ""),
+                    description={"suggested_value": current_config.get("ev_charger_service_entity_id") or None},
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=["binary_sensor", "sensor", "switch"])
                 ),
                 vol.Optional(
                     "ev_total_energy_sensor",
-                    default=current_config.get("ev_total_energy_sensor", ""),
+                    description={"suggested_value": current_config.get("ev_total_energy_sensor") or None},
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor", device_class="energy")
                 ),
@@ -1637,6 +1647,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         a deprecation warning. We just initialise our own state.
         """
         self._data: dict[str, Any] = {}
+        # (#990) saved values of a page this dialog skipped — kept as they are
+        self._unshown: dict[str, Any] = {}
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -1661,12 +1673,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         # ``entry.options`` wholesale (#690), so a key this page owns that is
         # missing from the draft would drop out of options and un-cover
         # whatever ``entry.data`` holds for it — the class-101 resurrection.
-        # Carry each of the page's saved values as it is.
+        # Keep each of the page's saved values as it is, apart from the
+        # draft: later pages read the draft for their defaults, and a saved
+        # ``None`` there is a default voluptuous rejects (#73).
         page_keys = {str(k) for k in self._ev_charger_schema(saved).schema}
         options = self.config_entry.options or {}
-        for key in page_keys:
-            if key in options:
-                self._data[key] = options[key]
+        self._unshown = {k: options[k] for k in page_keys if k in options}
         self._data["ev_chargers"] = _draft_list(self, "ev_chargers")
         return await self.async_step_ev_charger_menu()
 
@@ -1942,9 +1954,17 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             charger_name = user_input.pop("charger_name", f"EV Charger {idx + 1}")
             # (#990) The position is unique only while the list grows:
             # remove charger 2 of 3 and ``ev_charger_{len}`` is the id the
-            # last one already has — two chargers, one device id. Same fix
-            # as the heat-pump ids: the next number nobody uses.
-            used = {str(c.get("id")) for c in ev_chargers if isinstance(c, dict)}
+            # last one already has — two chargers, one device id. Take the
+            # next number nobody uses — counting the saved lists too, so a
+            # box removed in this dialog does not hand its id (and its
+            # entities and stored state) to the new one.
+            used = {
+                str(c.get("id"))
+                for c in (ev_chargers
+                          + list((self.config_entry.options or {}).get("ev_chargers") or [])
+                          + list((self.config_entry.data or {}).get("ev_chargers") or []))
+                if isinstance(c, dict)
+            }
             n = idx
             while f"ev_charger_{n}" in used:
                 n += 1
@@ -4100,7 +4120,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     for k, v in (self.config_entry.options or {}).items()
                     if k not in OPTIONS_FLOW_OWNED_KEYS
                 }
-                return self.async_create_entry(data={**carried, **self._data})
+                # (#990) then what a page this dialog skipped had saved
+                unshown = getattr(self, "_unshown", None) or {}
+                return self.async_create_entry(
+                    data={**carried, **unshown, **self._data})
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
         _c = lambda key, fb: self._cfg(current_config, key, fb)

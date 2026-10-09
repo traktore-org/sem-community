@@ -49,20 +49,23 @@ def _entry(data: dict, options: dict | None = None) -> MockConfigEntry:
                            data=data, options=options or {}, title="SEM")
 
 
-def _browser_submit(result: dict) -> dict:
-    """The data Home Assistant's frontend sends for a page left as shown.
+def _browser_submit(result: dict, typed: dict | None = None) -> dict:
+    """The data Home Assistant's frontend sends for a page.
 
     Mirrors ``computeInitialHaFormData`` + the submit check: a field starts
-    at its suggested value, else its default; empty values are not sent;
-    a required field left empty blocks the submit ("nothing happens").
+    at its suggested value, else its default; ``typed`` is what the user
+    entered on top; empty values are not sent; a required field left empty
+    blocks the submit ("nothing happens").
     """
     fields = voluptuous_serialize.convert(
         result["data_schema"], custom_serializer=cv.custom_serializer)
+    typed = typed or {}
     data = {}
     for field in fields:
         name = field["name"]
         suggested = (field.get("description") or {}).get("suggested_value")
         value = suggested if suggested is not None else field.get("default")
+        value = typed.get(name, value)
         if value in (None, ""):
             assert not field.get("required"), (
                 f"page {result['step_id']!r} requires {name!r} and pre-fills "
@@ -73,7 +76,11 @@ def _browser_submit(result: dict) -> dict:
     return data
 
 
-async def _walk(hass, entry) -> tuple[list[str], dict]:
+async def _walk(hass, entry, answers: dict | None = None) -> tuple[list[str], dict]:
+    """Walk the dialog to its end. ``answers`` maps a step to what the user
+    types on each visit, in order; every other visit takes the page as
+    shown (menus: Continue)."""
+    answers = {k: list(v) for k, v in (answers or {}).items()}
     entry.add_to_hass(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
     seen: list[str] = []
@@ -81,9 +88,11 @@ async def _walk(hass, entry) -> tuple[list[str], dict]:
         if result["type"] != FlowResultType.FORM:
             return seen, result
         assert not result.get("errors"), (result["step_id"], result["errors"])
-        seen.append(result["step_id"])
+        step = result["step_id"]
+        seen.append(step)
+        typed = answers[step].pop(0) if answers.get(step) else None
         result = await hass.config_entries.options.async_configure(
-            result["flow_id"], user_input=_browser_submit(result))
+            result["flow_id"], user_input=_browser_submit(result, typed))
     raise AssertionError(f"dialog never ended: {seen}")
 
 
@@ -108,6 +117,49 @@ async def test_a_home_without_a_charger_walks_the_whole_dialog(
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert result["data"]["ev_chargers"] == []
     assert not result["data"].get("ev_charging_power_sensor")
+
+
+@pytest.mark.asyncio
+async def test_a_home_without_a_charger_adds_a_heat_pump_and_a_charger(
+        sem_real_hass, _quiet_discovery):
+    """What the reporter came for: the second heat pump. And the first
+    charger, from the menu the dialog now opens on."""
+    seen, result = await _walk(sem_real_hass, _entry(_installed_data()), {
+        "ev_charger_menu": [{"action": "add_charger"}],
+        "ev_charger_add": [{
+            "charger_name": "Garage",
+            "ev_connected_sensor": "binary_sensor.garage_plug",
+            "ev_charging_sensor": "binary_sensor.garage_charging",
+            "ev_charging_power_sensor": "sensor.garage_power"}],
+        "heat_pump_menu": [{"action": "add_heat_pump"}],
+        "heat_pump_unit": [{"heat_pump_climate_entity": "climate.pool"}],
+    })
+    assert seen.count("ev_charger_menu") == 2, seen
+    assert "heat_pump_unit" in seen, seen
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    saved = result["data"]
+    assert [c["id"] for c in saved["ev_chargers"]] == ["ev_charger_0"]
+    assert saved["ev_chargers"][0]["ev_charging_power_sensor"] == "sensor.garage_power"
+    assert [p.get("heat_pump_climate_entity") for p in saved["heat_pumps"]] == [
+        "climate.pool"]
+
+
+@pytest.mark.asyncio
+async def test_a_saved_none_on_the_skipped_page_does_not_break_adding(
+        sem_real_hass, _quiet_discovery):
+    """The skipped page's saved values are kept apart from the draft: the add
+    page reads the draft for its defaults, and ``None`` is not one (#73)."""
+    seen, result = await _walk(
+        sem_real_hass, _entry(_installed_data(), {"ev_target_soc": None}), {
+            "ev_charger_menu": [{"action": "add_charger"}],
+            "ev_charger_add": [{
+                "ev_connected_sensor": "binary_sensor.plug",
+                "ev_charging_sensor": "binary_sensor.charging",
+                "ev_charging_power_sensor": "sensor.ev_power"}],
+        })
+    assert "ev_charger_add" in seen
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["data"]["ev_target_soc"] is None     # kept as saved
 
 
 @pytest.mark.asyncio
@@ -198,54 +250,61 @@ def test_every_language_has_the_first_charger_label():
 
 # ── the sibling: the Reconfigure page had the same three required fields ──
 
-def _reconfigure_flow(data: dict):
-    flow = SolarEnergyManagementConfigFlow()
-    flow.hass = MagicMock()
-    flow.hass.services.async_services.return_value = {}
-    flow.hass.services.has_service.return_value = True
-    entry = MagicMock(data=data, options={})
-    flow._get_reconfigure_entry = MagicMock(return_value=entry)
-    flow.async_update_reload_and_abort = MagicMock(
-        return_value={"type": "abort", "reason": "reconfigure_successful"})
-    return flow
-
-
 def _required(form) -> set[str]:
     return {str(k) for k in form["data_schema"].schema
             if isinstance(k, vol.Required)}
 
 
+async def _reconfigure(hass, entry, typed: dict | None = None):
+    entry.add_to_hass(hass)
+    form = await entry.start_reconfigure_flow(hass)
+    assert form["step_id"] == "reconfigure"
+    with patch.object(hass.config_entries, "async_schedule_reload"):
+        done = await hass.config_entries.flow.async_configure(
+            form["flow_id"], user_input=_browser_submit(form, typed))
+    return form, done
+
+
 @pytest.mark.asyncio
-async def test_reconfigure_without_a_charger_requires_no_charger_fields():
-    flow = _reconfigure_flow(_installed_data())
-    form = await flow.async_step_reconfigure()
+async def test_reconfigure_without_a_charger_can_be_saved(sem_real_hass):
+    entry = _entry(_installed_data())
+    form, done = await _reconfigure(sem_real_hass, entry)
     assert not _required(form) & {"ev_connected_sensor", "ev_charging_sensor",
                                   "ev_charging_power_sensor"}
-    done = await flow.async_step_reconfigure(_browser_submit(form))
+    assert done["type"] == FlowResultType.ABORT
     assert done["reason"] == "reconfigure_successful"
-    written = flow.async_update_reload_and_abort.call_args.kwargs["data_updates"]
-    assert "ev_charging_power_sensor" not in written
+    assert not entry.data.get("ev_charging_power_sensor")
 
 
 @pytest.mark.asyncio
-async def test_reconfigure_with_a_charger_still_requires_them():
-    flow = _reconfigure_flow(_installed_data(
-        ev_chargers=[{"id": "ev_charger", "ev_charging_power_sensor": "sensor.p"}]))
-    form = await flow.async_step_reconfigure()
+async def test_reconfigure_with_a_list_charger_shows_its_sensors(sem_real_hass):
+    """A charger kept only in the list (what "Add an EV charger" makes) has
+    no flat keys; its required fields must still come up filled."""
+    entry = _entry(_installed_data(ev_chargers=[{
+        "id": "ev_charger_0", "name": "Box",
+        "ev_connected_sensor": "binary_sensor.plug",
+        "ev_charging_sensor": "binary_sensor.charging",
+        "ev_charging_power_sensor": "sensor.ev_power"}]))
+    sem_real_hass.states.async_set("binary_sensor.plug", "off")
+    sem_real_hass.states.async_set("binary_sensor.charging", "off")
+    sem_real_hass.states.async_set("sensor.ev_power", "0",
+                                   {"unit_of_measurement": "W"})
+    form, done = await _reconfigure(sem_real_hass, entry)
     assert _required(form) >= {"ev_connected_sensor", "ev_charging_sensor",
                                "ev_charging_power_sensor"}
+    assert done["type"] == FlowResultType.ABORT, done.get("errors")
 
 
 @pytest.mark.asyncio
-async def test_reconfigure_half_a_charger_is_still_checked():
+async def test_reconfigure_half_a_charger_is_still_checked(sem_real_hass):
     """Once the user starts filling the three in, all three are checked."""
-    flow = _reconfigure_flow(_installed_data())
-    flow.hass.states.get.return_value = None
-    form = await flow.async_step_reconfigure(
-        {"ev_charging_power_sensor": "sensor.ev_power"})
-    assert form["type"] == "form"
-    assert {"ev_connected_sensor", "ev_charging_sensor"} <= set(form["errors"])
-    flow.async_update_reload_and_abort.assert_not_called()
+    entry = _entry(_installed_data())
+    with patch.object(sem_real_hass.config_entries, "async_schedule_reload"):
+        _, done = await _reconfigure(
+            sem_real_hass, entry, {"ev_charging_power_sensor": "sensor.ev_power"})
+    assert done["type"] == FlowResultType.FORM
+    assert {"ev_connected_sensor", "ev_charging_sensor"} <= set(done["errors"])
+    assert not entry.data.get("ev_charging_power_sensor")
 
 
 # ── the sibling of round 1: charger ids came from the list position ──
@@ -287,5 +346,29 @@ async def test_a_growing_list_keeps_the_old_ids():
                 "ev_charging_power_sensor": f"sensor.{name}_power"})
         assert [c["id"] for c in flow._data["ev_chargers"]] == [
             "ev_charger_0", "ev_charger_1"]
+    finally:
+        del type(flow).config_entry
+
+
+@pytest.mark.asyncio
+async def test_a_box_removed_in_this_dialog_does_not_hand_on_its_id():
+    """Remove the last of three saved chargers, add one: the new box must
+    not take ``ev_charger_2`` — that id's entities and stored state belong
+    to the box just removed."""
+    saved = [{"id": "ev_charger", "name": "A"},
+             {"id": "ev_charger_1", "name": "B"},
+             {"id": "ev_charger_2", "name": "C"}]
+    flow = _flow(_installed_data(), {"ev_chargers": saved})
+    flow._discovered_pv_strings = lambda: {}
+    flow._data["ev_chargers"] = [dict(c) for c in saved]
+    try:
+        await flow.async_step_ev_charger_remove({"charger_to_remove": "ev_charger_2"})
+        await flow.async_step_ev_charger_add({
+            "charger_name": "D",
+            "ev_connected_sensor": "binary_sensor.d_plug",
+            "ev_charging_sensor": "binary_sensor.d_charging",
+            "ev_charging_power_sensor": "sensor.d_power"})
+        ids = [c["id"] for c in flow._data["ev_chargers"]]
+        assert ids == ["ev_charger", "ev_charger_1", "ev_charger_3"]
     finally:
         del type(flow).config_entry
