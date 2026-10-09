@@ -520,10 +520,14 @@ class TestSolarEnergyManagementConfigFlow:
 
     @pytest.mark.asyncio
     async def test_options_flow_init_shows_ev_charger(self, mock_hass, config_entry):
-        """OptionsFlow init still routes to the ev_charger sub-step."""
+        """OptionsFlow init still routes to the ev_charger sub-step — for a
+        home WITH a charger. A home without one opens on the charger menu
+        (#990, tests/test_990_no_charger_dialog.py)."""
         options_flow = OptionsFlowHandler(config_entry)
         options_flow.hass = mock_hass
-        config_entry.options = {}
+        config_entry.options = {"ev_chargers": [{
+            "id": "ev_charger", "name": "Box",
+            "ev_charging_power_sensor": "sensor.ev_power"}]}
 
         with patch.object(
             type(options_flow),

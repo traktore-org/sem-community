@@ -46,6 +46,12 @@ _CLASS_BLOCK = {
     "OptionsFlowHandler": "options",
 }
 
+# (#990) A page whose schema is built by a helper method rather than inline in
+# its step, so another step can read the page's keys. Scanned as that step.
+_SCHEMA_BUILDERS = {
+    "_ev_charger_schema": "ev_charger",
+}
+
 # Steps whose field keys are built from runtime data and therefore cannot be
 # declared in a static strings file. Each needs a reason; the guard asserts the
 # set does not grow silently (a new runtime-named step is a deliberate decision,
@@ -158,9 +164,12 @@ def _collect() -> tuple[dict[tuple[str, str], set[str]], set[str], list[str]]:
         for fn in cls.body:
             if not isinstance(fn, (ast.AsyncFunctionDef, ast.FunctionDef)):
                 continue
-            if not fn.name.startswith("async_step_"):
+            if fn.name in _SCHEMA_BUILDERS:
+                step = _SCHEMA_BUILDERS[fn.name]
+            elif fn.name.startswith("async_step_"):
+                step = fn.name[len("async_step_"):]
+            else:
                 continue
-            step = fn.name[len("async_step_"):]
             literal: set[str] = set()
             unresolved: list[int] = []
 
@@ -191,7 +200,7 @@ def _collect() -> tuple[dict[tuple[str, str], set[str]], set[str], list[str]]:
                     unresolved.append(call.lineno)
 
             if literal:
-                per_step[(block, step)] = literal
+                per_step.setdefault((block, step), set()).update(literal)
             if unresolved:
                 runtime_steps.add(step)
     return per_step, runtime_steps, complaints
@@ -220,6 +229,11 @@ class TestOptionsFlowLabelCoverage737:
         )
         assert {f"deye_program_{n}_{k}" for n in range(1, 7)
                 for k in ("time", "soc", "charge")} <= deye
+        # (#990) the charger page's schema lives in a builder method — the
+        # scan must still see it, or that page drops out unchecked.
+        ev = per_step.get(("options", "ev_charger"), set())
+        assert {"ev_connected_sensor", "ev_target_soc_max",
+                "ev_charger_efficiency"} <= ev, sorted(ev)
 
     def test_every_schema_field_has_a_label(self):
         strings = self._strings()
