@@ -326,6 +326,10 @@ def _price_changed(old_price, new_price) -> bool:
     return any(old_map.get(k) != v for k, v in new_map.items())
 
 
+#: (#1063 review) how often a battery look that found nothing is retried.
+BATTERY_DETECT_RETRY_S: float = 60.0
+
+
 def battery_unseen(coordinator) -> bool:
     """(#1063 round 2) No battery SEM can see — the one question every
     battery surface asks: the pack size, the plan, the tomorrow preview,
@@ -351,17 +355,28 @@ def battery_unseen(coordinator) -> bool:
     if getattr(reader, "_last_valid_soc", None) is not None:
         return False
     detected = getattr(coordinator, "_detected_battery_capacity_kwh", None)
-    if detected is None:
-        detect = getattr(reader, "auto_detect_battery_capacity_kwh", None)
-        try:
-            found = detect() if callable(detect) else None
-        except Exception:  # noqa: BLE001 — a failed look is not a battery
-            found = None
-        detected = float(found) if found is not None else 0.0
-        try:
+    if detected:
+        return False
+    # Only a HIT is cached. A miss is looked at again (at most once a
+    # minute): at startup the pack's capacity sensor may not be loaded yet,
+    # and a cached miss would hide a real battery for the whole session.
+    now = time.monotonic()
+    last = getattr(coordinator, "_battery_detect_miss_at", None)
+    if last is not None and now - last < BATTERY_DETECT_RETRY_S:
+        return True
+    detect = getattr(reader, "auto_detect_battery_capacity_kwh", None)
+    try:
+        found = detect() if callable(detect) else None
+    except Exception:  # noqa: BLE001 — a failed look is not a battery
+        found = None
+    detected = float(found) if found is not None else 0.0
+    try:
+        if detected > 0:
             coordinator._detected_battery_capacity_kwh = detected
-        except AttributeError:  # pragma: no cover — a frozen double
-            pass
+        else:
+            coordinator._battery_detect_miss_at = now
+    except AttributeError:  # pragma: no cover — a frozen double
+        pass
     return not detected > 0
 
 

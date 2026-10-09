@@ -317,6 +317,23 @@ class TestABatteryIsSeenOrItIsNotThere:
         assert coord_mod.battery_unseen(_coord_fake(UNKNOWN)) is True
         assert coord_mod.battery_unseen(_coord_fake(None, saved=15.0)) is True
 
+    def test_a_slow_capacity_sensor_is_found_on_a_later_look(self, monkeypatch):
+        """(Review) At startup the pack's capacity sensor may not be loaded
+        yet. A miss must not be cached: once the retry interval has passed,
+        the battery is found."""
+        found = {"kwh": None}
+        fake = _coord_fake(UNKNOWN)
+        fake._sensor_reader.auto_detect_battery_capacity_kwh = lambda: found["kwh"]
+        clock = {"t": 1000.0}
+        monkeypatch.setattr(coord_mod.time, "monotonic", lambda: clock["t"])
+        assert coord_mod.battery_unseen(fake) is True
+        found["kwh"] = 10.0                      # the sensor loads
+        assert coord_mod.battery_unseen(fake) is True    # within the minute
+        clock["t"] += coord_mod.BATTERY_DETECT_RETRY_S
+        assert coord_mod.battery_unseen(fake) is False
+        found["kwh"] = None                      # a hit is kept
+        assert coord_mod.battery_unseen(fake) is False
+
     def test_a_bare_double_is_unseen(self):
         """No reader at all (a test double) reads nothing."""
         assert coord_mod.battery_unseen(SimpleNamespace(config={})) is True
