@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **A removed charger stays removed; a created one is not created twice** (#1054) — thanks @weindler. kW sensors show in the power pickers.
 - 🐛 **A home with no charger can open Configure** (#990) — thanks @damiano75. It starts at the charger list, so heat pumps and later pages work.
 - 🐛 **The battery mode and reserve you see are what SEM uses** (#1071). One mode control sets every battery. A reserve you never set is 20 %.
 - 🐛 **The battery and the monthly peak now keep to your grid limit** (#1069). Grid charging takes the room left; the peak follows 15-minute slots.
