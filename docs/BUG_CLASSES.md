@@ -621,7 +621,8 @@ to 0 %. **Closure:** ONE decision — \`coordinator/battery_controls.py::discove
 \`async_setup_entry\` right after the Energy Dashboard read, BEFORE the first refresh (which
 already commands batteries); select.py and number.py build from it, \`_per_battery_config\`
 reads the store of the controls built, and an unset reserve is the shown default in both
-layouts. **Guard:** \`tests/test_1071_battery_mode_follows_its_control.py\` — an oracle over
+layouts (\`consts/battery_modes.py::reserve_soc_of\`, read by \`decide_battery\` and the VPP merge;
+an explicit 0 still wins). **Guard:** \`tests/test_1071_battery_mode_follows_its_control.py\` — an oracle over
 layout × live count × list × scalar: every control's shown value equals what drives each battery
 it covers, through the real platform setup; AST checks pin one capture before
 \`async_config_entry_first_refresh\` and no second discovery. **Open siblings (for Guido):**
@@ -631,8 +632,10 @@ it covers, through the real platform setup; AST checks pin one capture before
 sell / night backfill; (b) the battery card picks its layout from per-battery SENSORS, not from
 which mode select exists; (c) \`sensor.py\` sweeps \`sensor.sem_battery_b*_power\` on a boot whose
 ED list reads ≤ 1, which removes the registry fallback's evidence for the next boot;
-(d) \`decide_battery\` still falls back to 0 % when a config carries no reserve key at all
-(only direct callers — production always passes through \`_per_battery_config\`).
+(d) the scalar readers turn an explicit 0 into 20 (\`reserve_pct=…or 20.0\` for the forecast sell,
+\`BatteryNightTracker(…or 20)\`) — they should call \`reserve_soc_of\`; (e) a #274 cold start whose
+ED resolves inside the first refresh now gets the global controls for that one boot (screen and
+runtime still agree).
 
 ### 20. Shadowed decision branch (an always-true earlier branch starves a newer one) — PARTIAL
 **Symptom:** a new decision branch is added, tested in isolation, and never executes in

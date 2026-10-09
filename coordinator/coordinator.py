@@ -57,7 +57,9 @@ from ..ha_energy_reader import (
 )
 from .install_modules import Module, Presence, module_reload_due, module_verdict, presence_of
 from .battery_controls import has_per_battery_controls  # (#1071)
-from ..consts.battery_modes import DEFAULT_BATTERY_MODE, DEFAULT_BATTERY_RESERVE_SOC
+from ..consts.battery_modes import (
+    DEFAULT_BATTERY_MODE, DEFAULT_BATTERY_RESERVE_SOC, reserve_soc_of,
+)
 
 from .types import (
     SEMData, PowerReadings, PowerFlows, SystemStatus, LoadManagementData,
@@ -597,8 +599,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         self.setup_presence: Optional[Dict[Module, Presence]] = None
         # (#1071) Which battery mode/reserve controls the platforms build —
         # () = the one global select/number, ("b1", "b2", …) = one per
-        # battery. Captured beside ``setup_presence``; ``_per_battery_config``
-        # reads the store of the controls that exist. None until captured.
+        # battery. Captured in async_setup_entry before the first refresh;
+        # ``_per_battery_config`` reads the store of the controls that exist.
+        # None until captured.
         self.battery_control_slugs: Optional[tuple] = None
         # Cold-start recovery (#274): re-derive ED power sensors each cycle while
         # they're unresolved (source integration registered after SEM), bounded.
@@ -6877,12 +6880,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
           list shadow every write to the select it shows (#1071).
 
         An unset reserve is ``DEFAULT_BATTERY_RESERVE_SOC`` in both cases —
-        the value its number shows. It was 0 % here while the number showed
+        the value its number shows (an unset per-battery slot here, an unset
+        scalar in ``reserve_soc_of``). It was 0 % while the number showed
         20 %, so a manual sell drained past the floor on screen.
 
         Which controls exist is ``battery_control_slugs``, captured before
-        the platforms load. ``count`` (the live battery count) stands in
-        only before that capture.
+        the first refresh. ``count`` (the live battery count) stands in only
+        where nothing was captured.
         """
         cfg = self.config
         overrides: dict = {}
@@ -6911,10 +6915,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # #531: no per-battery value → what its control shows,
                     # never the single-battery global key.
                     overrides[single_key] = shown_default
-        elif cfg.get("battery_reserve_soc") in (None, ""):
-            # (#1071) The global number shows the default for an unset
-            # reserve; an unset mode is already ``auto`` downstream.
-            overrides["battery_reserve_soc"] = DEFAULT_BATTERY_RESERVE_SOC
+        # With the one global control an unset scalar stays unset: its
+        # readers resolve it (``reserve_soc_of``, mode → ``auto``).
         return {**cfg, **overrides} if overrides else cfg
 
     def _arbitrage_enabled(self, battery_count: int = 0) -> bool:
@@ -7104,9 +7106,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         merged = {**pbc, **override}
         if "battery_reserve_soc" in override:
             try:
-                user_reserve = float(pbc.get("battery_reserve_soc") or 0.0)
+                user_reserve = reserve_soc_of(pbc)   # (#1071) unset = 20 %
             except (TypeError, ValueError):
-                user_reserve = 0.0
+                user_reserve = DEFAULT_BATTERY_RESERVE_SOC
             merged["battery_reserve_soc"] = max(
                 float(override["battery_reserve_soc"]), user_reserve,
             )

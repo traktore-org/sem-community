@@ -33,8 +33,6 @@ def test_no_lists_falls_back_to_global():
     cfg = {
         "battery_force_discharge_control_entity": "number.global_sell",
         "battery_discharge_control_entity": "number.global_limit",
-        # (#1071) set, so no shown-default reserve is overlaid either
-        "battery_reserve_soc": 20,
     }
     # No list keys → the same config object is returned (no overlay).
     assert _per(cfg, 0) is cfg

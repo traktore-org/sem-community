@@ -20,7 +20,7 @@ platforms build their controls from it and the runtime reads the store of the
 controls that were built.
 
 An UNSET reserve is the value its number shows, ``DEFAULT_BATTERY_RESERVE_SOC``
-— the runtime used 0 % while the number showed 20 %.
+— the runtime used 0 % while the number showed 20 % (``reserve_soc_of``).
 """
 from __future__ import annotations
 
@@ -40,8 +40,8 @@ def discover_battery_control_slugs(coordinator: Any) -> tuple[str, ...]:
 
     Primary source is the Energy Dashboard ``battery_power_list`` order
     (same as the per-battery sensors in ``sensor.py``). But that depends
-    on ``_energy_dashboard_config`` being populated at platform-setup
-    time, which can lag the first refresh — so we FALL BACK to the
+    on ``_energy_dashboard_config`` being populated at capture time, which
+    a cold start (#274) can miss — so we FALL BACK to the
     persisted per-battery power sensors in the entity registry
     (``sensor.sem_battery_b<N>_power``). The registry survives restarts,
     so once a multi-battery install has its sensors the control entities

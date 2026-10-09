@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING
 
 from .charger_types import BatteryDecision, BatteryIntent
 from .peak_guard import cover_for_peak_w
-from ..consts.battery_modes import arbitrage_allowed_for_mode
+from ..consts.battery_modes import arbitrage_allowed_for_mode, reserve_soc_of
 from ..consts.battery_permissions import effective_permissions, may_assist_ev
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -260,8 +260,7 @@ def _decide_battery(view: "BatteryView") -> BatteryDecision:
     # default, and the value for every single-battery install that never
     # sets a mode) falls straight through to today's behaviour.
     mode = str(cfg.get("battery_mode", "auto") or "auto").lower()
-    reserve = cfg.get("battery_reserve_soc")
-    reserve = float(reserve) if reserve is not None else 0.0
+    reserve = reserve_soc_of(cfg)   # (#1071) unset = the 20 % on screen
 
     if mode == "off":
         # #523 (RienduPre): SEM is fully hands-off this battery. Highest

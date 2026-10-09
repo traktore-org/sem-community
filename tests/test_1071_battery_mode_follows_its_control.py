@@ -88,10 +88,14 @@ async def _controls(hass, entry):
 
 
 def _runtime(coordinator, idx, count):
-    """What decide_battery reads for battery ``idx`` this cycle."""
+    """What decide_battery reads for battery ``idx`` this cycle — the mode
+    the way it reads it, the reserve through the same helper."""
+    from custom_components.solar_energy_management.consts.battery_modes import (
+        reserve_soc_of,
+    )
     cfg = SEMCoordinator._per_battery_config(coordinator, idx, count)
     mode = str(cfg.get("battery_mode", "auto") or "auto").lower()
-    return mode, cfg.get("battery_reserve_soc")
+    return mode, reserve_soc_of(cfg)
 
 
 # ── The .175 case ──────────────────────────────────────────────────────────
@@ -202,8 +206,11 @@ async def test_an_unset_reserve_shows_what_drives_the_battery(hass, slugs):
     # The number showed 20 % (DEFAULT_BATTERY_RESERVE_SOC) and a manual sell
     # used 0 %. A leftover list must not decide it on the global number
     # either (the .175 shape: battery_reserve_socs [50, 50]).
+    # An explicit 0 is a choice: shown 0, sells to 0 — never "unset".
+    explicit_zero = ({"battery_reserve_socs": [30, 0]} if slugs
+                     else {"battery_reserve_soc": 0, "battery_reserve_socs": [50, 50]})
     for options in ({}, {"battery_reserve_socs": [50, None]} if slugs
-                    else {"battery_reserve_socs": [50, 50]}):
+                    else {"battery_reserve_socs": [50, 50]}, explicit_zero):
         entry = _entry(hass, options)
         coordinator = _coordinator(hass, entry, slugs)
         controls = await _controls(hass, entry)
@@ -235,6 +242,42 @@ def test_the_registry_fallback_reads_only_this_entrys_batteries(hass):
     assert discover_battery_control_slugs(coordinator) == ("b1", "b2")
 
 
+def _sell_at(soc, cfg):
+    from custom_components.solar_energy_management.coordinator.charger_types import (
+        BatteryRuntime, BatteryView, FleetContext,
+    )
+    from custom_components.solar_energy_management.coordinator.decide_battery import (
+        decide_battery,
+    )
+    return decide_battery(BatteryView(
+        runtime=BatteryRuntime(battery_id="b1", last_known_soc=soc),
+        config={"battery_max_discharge_power": 4000, **cfg},
+        fleet=FleetContext(), charging_state="idle", ev_charging=False,
+        home_consumption_w=500.0, scheduler_decision=None))
+
+
+def test_a_manual_sell_stops_at_the_reserve_on_screen():
+    from custom_components.solar_energy_management.coordinator.charger_types import (
+        BatteryIntent,
+    )
+    unset = {"battery_mode": "force_discharge"}          # number shows 20 %
+    assert _sell_at(15.0, unset).intent != BatteryIntent.FORCE_DISCHARGE
+    d = _sell_at(25.0, unset)
+    assert d.intent == BatteryIntent.FORCE_DISCHARGE and d.floor_soc == 20.0
+    zero = {"battery_mode": "force_discharge", "battery_reserve_soc": 0}
+    assert _sell_at(15.0, zero).intent == BatteryIntent.FORCE_DISCHARGE
+
+
+def test_a_vpp_event_keeps_the_reserve_on_screen():
+    stub = SimpleNamespace(_vpp_battery_override={
+        "battery_mode": "force_discharge", "battery_reserve_soc": 10.0})
+    merged = SEMCoordinator._vpp_apply_battery_override(stub, {"battery_mode": "auto"})
+    assert merged["battery_reserve_soc"] == 20.0
+    merged = SEMCoordinator._vpp_apply_battery_override(
+        stub, {"battery_mode": "auto", "battery_reserve_soc": 0})
+    assert merged["battery_reserve_soc"] == 10.0
+
+
 # ── Wiring: one capture, before any platform builds an entity ──────────────
 
 def test_setup_captures_the_battery_controls_before_the_first_refresh():
@@ -245,6 +288,9 @@ def test_setup_captures_the_battery_controls_before_the_first_refresh():
                if isinstance(n, ast.Assign)
                and any(isinstance(t, ast.Attribute) and t.attr == "battery_control_slugs"
                        for t in n.targets)]
+    ed_read = [n.lineno for n in ast.walk(setup)
+               if isinstance(n, ast.Attribute)
+               and n.attr == "async_initialize_energy_dashboard"]
     first = [n.lineno for n in ast.walk(setup)
              if isinstance(n, ast.Attribute)
              and n.attr in ("async_config_entry_first_refresh",
@@ -252,6 +298,9 @@ def test_setup_captures_the_battery_controls_before_the_first_refresh():
     assert len(capture) == 1, "battery controls must be captured exactly once"
     # The first refresh already commands the batteries (review of #1071).
     assert first and capture[0] < min(first)
+    # …and after the Energy Dashboard read, or a multi-battery install's
+    # first boot would get the global controls.
+    assert ed_read and min(ed_read) < capture[0]
 
 
 def test_only_the_capture_and_the_platform_fallback_discover():
