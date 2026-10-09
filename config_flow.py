@@ -785,25 +785,25 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema({
                 vol.Required(
                     "solar_power_sensor", description=_sug("solar_power_sensor"),
-                ): _power_sensor_selector(self.hass),
+                ): _power_sensor_selector(getattr(self, "hass", None)),
                 vol.Optional(
                     "grid_import_power_sensor",
                     description=_sug("grid_import_power_sensor"),
-                ): _power_sensor_selector(self.hass),
+                ): _power_sensor_selector(getattr(self, "hass", None)),
                 # …or the two-sided pair, for meters that have no combined
                 # reading. Both positive; SEM computes export − import.
                 vol.Optional(
                     "grid_import_power_entity",
                     description=_sug("grid_import_power_entity"),
-                ): _power_sensor_selector(self.hass),
+                ): _power_sensor_selector(getattr(self, "hass", None)),
                 vol.Optional(
                     "grid_export_power_entity",
                     description=_sug("grid_export_power_entity"),
-                ): _power_sensor_selector(self.hass),
+                ): _power_sensor_selector(getattr(self, "hass", None)),
                 vol.Optional(
                     "battery_power_sensor",
                     description=_sug("battery_power_sensor"),
-                ): _power_sensor_selector(self.hass),
+                ): _power_sensor_selector(getattr(self, "hass", None)),
                 vol.Optional(
                     "battery_soc_sensor",
                     description=_sug("battery_soc_sensor"),
@@ -1027,7 +1027,7 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(
                     "ev_charging_power_sensor",
                     default=suggestions.get("ev_charging_power_sensor", ""),
-                ): _power_sensor_selector(self.hass),
+                ): _power_sensor_selector(getattr(self, "hass", None)),
 
                 # EV Charger Control — pick ONE of the two paths below:
                 #   • Number entity (Wallbox, go-eCharger, Heidelberg, OpenWB, Ohme, V2C, …)
@@ -1344,7 +1344,7 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _charger_field(vol.Required(
                     "ev_charging_power_sensor",
                     default=current_config.get("ev_charging_power_sensor", ""),
-                ), has_charger, current_config): _power_sensor_selector(self.hass),
+                ), has_charger, current_config): _power_sensor_selector(getattr(self, "hass", None)),
                 vol.Optional(
                     "ev_charger_service",
                     default=current_config.get("ev_charger_service", ""),
@@ -2012,7 +2012,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Required(
                     "ev_charging_power_sensor",
                     default=suggestions.get("ev_charging_power_sensor", ""),
-                ): _power_sensor_selector(self.hass),
+                ): _power_sensor_selector(getattr(self, "hass", None)),
                 vol.Optional(
                     "ev_current_control_entity",
                     description={"suggested_value": suggestions.get("ev_current_control_entity")},
@@ -3072,11 +3072,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "grid_import_power_entity",
                     description={"suggested_value": current_config.get("grid_import_power_entity")},
-                ): _power_sensor_selector(self.hass),
+                ): _power_sensor_selector(getattr(self, "hass", None)),
                 vol.Optional(
                     "grid_export_power_entity",
                     description={"suggested_value": current_config.get("grid_export_power_entity")},
-                ): _power_sensor_selector(self.hass),
+                ): _power_sensor_selector(getattr(self, "hass", None)),
             }),
             errors=errors,
         )
@@ -3286,7 +3286,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "heat_pump_power_sensor",
                     description={"suggested_value": _opt("heat_pump_power_sensor")},
-                ): _power_sensor_selector(self.hass),
+                ): _power_sensor_selector(getattr(self, "hass", None)),
                 vol.Optional(
                     "heat_pump_boost_offset",
                     default=_c("heat_pump_boost_offset", 2.0),
@@ -3486,7 +3486,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "heat_pump_power_sensor",
                     description={"suggested_value": _row("heat_pump_power_sensor")},
-                ): _power_sensor_selector(self.hass),
+                ): _power_sensor_selector(getattr(self, "hass", None)),
                 vol.Optional(
                     "heat_pump_energy_sensor",
                     description={"suggested_value": _row("heat_pump_energy_sensor")},
