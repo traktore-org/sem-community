@@ -479,3 +479,97 @@ class TestEveryLimitReadGoesThroughTheAccessor:
             EVControlMixin,
         )
         assert calls(EVControlMixin._get_peak_limit_w, "_operator_cap_kw")
+
+
+class TestThePlanningFallbackKeepsTheCap:
+    """(#1021 review) ``_planning_peak_w`` falls back to the saved option
+    when the live limit cannot be read. That fallback read the user's raw
+    limit, so the operator's cap vanished from the plan on exactly the
+    cycle the normal path failed."""
+
+    @staticmethod
+    def _broken(host):
+        def _raise():
+            raise AttributeError("no load manager yet")
+        host._get_peak_limit_w = _raise
+        return host
+
+    def test_the_cap_holds_when_the_normal_path_raises(self):
+        h = self._broken(_ev_host({"target_peak_limit": 8.0,
+                                   "peak_hysteresis": 0.2}, _ON))
+        assert h._planning_peak_w() == 4200.0 - 200.0
+
+    def test_the_cap_holds_with_no_saved_limit(self):
+        h = self._broken(_ev_host({"peak_hysteresis": 0.2}, _ON))
+        assert h._planning_peak_w() == 4200.0 - 200.0
+
+    def test_without_a_relay_the_fallback_is_the_saved_limit(self):
+        h = self._broken(_ev_host({"target_peak_limit": 8.0,
+                                   "peak_hysteresis": 0.2}))
+        assert h._planning_peak_w() == 8000.0 - 200.0
+
+
+class TestNoModuleReadsTheSavedLimitBehindTheAccessor:
+    """(#1021 review) The accessor test above scanned two files. Every
+    module under coordinator/ and features/ is scanned here: a read of the
+    saved limit is allowed only in the accessor itself and in the places
+    that publish the USER's setting."""
+
+    _ROOT = __import__("pathlib").Path(__file__).resolve().parent.parent
+    _NAMES = ("target_peak_limit", "peak_limit_unlimited",
+              "_target_peak_limit", "_peak_unlimited",
+              "_target_peak_limit_kw", "_peak_limit_unlimited")
+    _ALLOWED = {
+        # the accessor and its two halves; the fallback is pinned below
+        "coordinator/ev_control.py": {
+            "_get_peak_limit_w", "_target_peak_limit_kw",
+            "_peak_limit_unlimited", "_planning_peak_w"},
+        # publishes the user's own setting (sensor + Control tab)
+        "coordinator/coordinator.py": {"_build_load_management_data"},
+        "coordinator/types.py": {"to_dict"},
+        # the setting itself; pinned by the load-manager test above
+        "features/load_management.py": None,
+    }
+
+    def _reads(self, path):
+        import ast
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        out = set()
+        for fn in ast.walk(tree):
+            if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            for n in ast.walk(fn):
+                if (isinstance(n, ast.Attribute) and n.attr in self._NAMES
+                        and isinstance(n.ctx, ast.Load)):
+                    out.add(fn.name)
+                elif isinstance(n, ast.Constant) and n.value in self._NAMES:
+                    out.add(fn.name)
+        return out
+
+    def test_every_module_is_scanned(self):
+        bad = {}
+        files = sorted([*(self._ROOT / "coordinator").rglob("*.py"),
+                        *(self._ROOT / "features").rglob("*.py")])
+        assert len(files) > 50, "the scan must cover the whole package"
+        for path in files:
+            rel = path.relative_to(self._ROOT).as_posix()
+            allowed = self._ALLOWED.get(rel, set())
+            if allowed is None:
+                continue
+            extra = self._reads(path) - allowed
+            if extra:
+                bad[rel] = sorted(extra)
+        assert not bad, bad
+
+    def test_the_named_battery_and_surplus_modules_are_in_the_scan(self):
+        for rel in ("coordinator/ev_control.py", "coordinator/decide_battery.py",
+                    "coordinator/surplus_controller.py", "coordinator/decide.py",
+                    "coordinator/peak_guard.py"):
+            assert (self._ROOT / rel).is_file(), rel
+
+    def test_the_planning_fallback_reads_the_cap(self):
+        from .ast_contracts import calls
+        from custom_components.solar_energy_management.coordinator.ev_control import (
+            EVControlMixin,
+        )
+        assert calls(EVControlMixin._planning_peak_w, "_operator_cap_kw")

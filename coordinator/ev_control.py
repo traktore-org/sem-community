@@ -580,8 +580,19 @@ class EVControlMixin:
         try:
             peak_w = float(self._get_peak_limit_w())
         except Exception:  # noqa: BLE001 — no load manager yet (early startup)
-            peak_w = float(
-                self.config.get("target_peak_limit", 0.0) or 0.0) * 1000.0
+            # An unreadable authority must still cap (test_638_shadow_mode),
+            # so this stays broad. (#1021 review) The saved
+            # option alone dropped the operator's cap from the plan on the
+            # very cycle the live read failed — the cap still applies here.
+            try:
+                peak_w = float(
+                    self.config.get("target_peak_limit", 0.0) or 0.0) * 1000.0
+            except (TypeError, ValueError):
+                peak_w = 0.0
+            cap = self._operator_cap_kw()
+            if cap is not None:
+                peak_w = (cap * 1000.0 if peak_w <= 0.0
+                          else min(peak_w, cap * 1000.0))
         if peak_w > 0.0 and math.isfinite(peak_w):
             hyst_w = float(self.config.get(
                 "peak_hysteresis", DEFAULT_PEAK_HYSTERESIS) or 0.0) * 1000.0
