@@ -221,7 +221,7 @@ def reserve_stops_peak_cover(view: "BatteryView"):
     if not getattr(rt, "available", True) or not getattr(
             view.fleet, "battery_soc_known", True):
         return "the battery SOC is not readable"
-    reserve = float(view.config.get("battery_reserve_soc") or 0.0)
+    reserve = reserve_soc_of(view.config)   # (#1071) unset = the 20 % on screen
     soc = float(getattr(rt, "last_known_soc", 0.0) or 0.0)
     if soc <= reserve:
         return (f"the battery is at {soc:.0f}%, at or below its "

@@ -268,6 +268,26 @@ def test_a_manual_sell_stops_at_the_reserve_on_screen():
     assert _sell_at(15.0, zero).intent == BatteryIntent.FORCE_DISCHARGE
 
 
+def test_a_peak_cover_stops_at_the_reserve_on_screen():
+    # (#1069's cover is a spend; it stops at the reserve the number shows.)
+    from custom_components.solar_energy_management.coordinator.charger_types import (
+        BatteryRuntime, BatteryView, FleetContext,
+    )
+    from custom_components.solar_energy_management.coordinator.decide_battery import (
+        reserve_stops_peak_cover,
+    )
+
+    def _view(soc, cfg):
+        return BatteryView(
+            runtime=BatteryRuntime(battery_id="b1", last_known_soc=soc),
+            config=cfg, fleet=FleetContext(), charging_state="idle",
+            ev_charging=False, home_consumption_w=500.0, scheduler_decision=None)
+
+    assert reserve_stops_peak_cover(_view(15.0, {})) is not None
+    assert reserve_stops_peak_cover(_view(25.0, {})) is None
+    assert reserve_stops_peak_cover(_view(15.0, {"battery_reserve_soc": 0})) is None
+
+
 def test_a_vpp_event_keeps_the_reserve_on_screen():
     stub = SimpleNamespace(_vpp_battery_override={
         "battery_mode": "force_discharge", "battery_reserve_soc": 10.0})
