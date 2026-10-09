@@ -56,6 +56,10 @@ from ..ha_energy_reader import (
     read_energy_dashboard_config_outcome, EnergyDashboardConfig, energy_counters,
 )
 from .install_modules import Module, Presence, module_reload_due, module_verdict, presence_of
+from .battery_controls import has_per_battery_controls  # (#1071)
+from ..consts.battery_modes import (
+    DEFAULT_BATTERY_MODE, DEFAULT_BATTERY_RESERVE_SOC, reserve_soc_of,
+)
 
 from .types import (
     SEMData, PowerReadings, PowerFlows, SystemStatus, LoadManagementData,
@@ -593,6 +597,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # async_setup_entry, after the Energy Dashboard read and before any
         # platform loads, so every platform gates on the SAME answer.
         self.setup_presence: Optional[Dict[Module, Presence]] = None
+        # (#1071) Which battery mode/reserve controls the platforms build —
+        # () = the one global select/number, ("b1", "b2", …) = one per
+        # battery. Captured in async_setup_entry before the first refresh;
+        # ``_per_battery_config`` reads the store of the controls that exist.
+        # None until captured.
+        self.battery_control_slugs: Optional[tuple] = None
         # Cold-start recovery (#274): re-derive ED power sensors each cycle while
         # they're unresolved (source integration registered after SEM), bounded.
         self._ed_resolve_pending: bool = False
@@ -6862,15 +6872,27 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         global single-entity keys apply (single-battery installs and
         existing configs are unchanged).
 
-        ``count`` is the live battery count this cycle. It gates the
-        global ``battery_mode`` / ``battery_reserve_soc`` fall-through:
-        those keys are the SINGLE-battery selector's storage
-        (``select.sem_battery_mode`` → global key). In a multi-battery
-        fleet the per-battery selectors own ``battery_modes[]`` and the
-        UI shows ``auto`` for any unset slot — so the global key must NOT
-        bleed in as the fallback (#531: single→multi upgrade showed
-        ``auto`` in the UI while a stale global ``force_discharge`` drove
-        every battery). With >1 battery an unset slot defaults to ``auto``.
+        Mode + reserve follow the controls the install HAS (#1071), not
+        whichever store happens to hold a value:
+
+        * per-battery controls (``select.sem_battery_b<N>_mode``) → the
+          ``battery_modes[idx]`` slot; an unset slot is ``auto``, the value
+          that select shows. The global key must NOT bleed in (#531: a
+          single→multi upgrade showed ``auto`` in the UI while a stale
+          global ``force_discharge`` drove every battery).
+        * the one global control (``select.sem_battery_mode``) → the scalar
+          ``battery_mode`` for EVERY battery; the lists are ignored. A
+          one-battery install that kept a ``battery_modes`` list let that
+          list shadow every write to the select it shows (#1071).
+
+        An unset reserve is ``DEFAULT_BATTERY_RESERVE_SOC`` in both cases —
+        the value its number shows (an unset per-battery slot here, an unset
+        scalar in ``reserve_soc_of``). It was 0 % while the number showed
+        20 %, so a manual sell drained past the floor on screen.
+
+        Which controls exist is ``battery_control_slugs``, captured before
+        the first refresh. ``count`` (the live battery count) stands in only
+        where nothing was captured.
         """
         cfg = self.config
         overrides: dict = {}
@@ -6883,21 +6905,24 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             lst = cfg.get(list_key)
             if isinstance(lst, list) and idx < len(lst) and lst[idx]:
                 overrides[single_key] = lst[idx]
-        # Per-battery mode + reserve SOC (#523). Absent / empty → the
-        # single-key ``battery_mode`` default (``auto``) applies, so
-        # single-battery installs and untouched batteries are unchanged.
-        multi = count > 1
-        for list_key, single_key, multi_default in (
-            ("battery_modes", "battery_mode", "auto"),
-            ("battery_reserve_socs", "battery_reserve_soc", 0),
-        ):
-            lst = cfg.get(list_key)
-            if isinstance(lst, list) and idx < len(lst) and lst[idx] not in (None, ""):
-                overrides[single_key] = lst[idx]
-            elif multi:
-                # #531: multi-battery + no per-battery value → force the UI
-                # default, never inherit the single-battery global key.
-                overrides[single_key] = multi_default
+        # Per-battery mode + reserve SOC (#523). Only when the install has
+        # per-battery controls (#1071) — with the one global control the
+        # scalar keys stand as they are, for every battery.
+        if has_per_battery_controls(self, count):
+            for list_key, single_key, shown_default in (
+                ("battery_modes", "battery_mode", DEFAULT_BATTERY_MODE),
+                ("battery_reserve_socs", "battery_reserve_soc",
+                 DEFAULT_BATTERY_RESERVE_SOC),
+            ):
+                lst = cfg.get(list_key)
+                if isinstance(lst, list) and idx < len(lst) and lst[idx] not in (None, ""):
+                    overrides[single_key] = lst[idx]
+                else:
+                    # #531: no per-battery value → what its control shows,
+                    # never the single-battery global key.
+                    overrides[single_key] = shown_default
+        # With the one global control an unset scalar stays unset: its
+        # readers resolve it (``reserve_soc_of``, mode → ``auto``).
         return {**cfg, **overrides} if overrides else cfg
 
     def _arbitrage_enabled(self, battery_count: int = 0) -> bool:
@@ -7087,9 +7112,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         merged = {**pbc, **override}
         if "battery_reserve_soc" in override:
             try:
-                user_reserve = float(pbc.get("battery_reserve_soc") or 0.0)
+                user_reserve = reserve_soc_of(pbc)   # (#1071) unset = 20 %
             except (TypeError, ValueError):
-                user_reserve = 0.0
+                user_reserve = DEFAULT_BATTERY_RESERVE_SOC
             merged["battery_reserve_soc"] = max(
                 float(override["battery_reserve_soc"]), user_reserve,
             )

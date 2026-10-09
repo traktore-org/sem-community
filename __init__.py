@@ -2439,6 +2439,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     except Exception as err:
         _LOGGER.warning("Failed to read Energy Dashboard, using legacy config: %s", err, exc_info=True)
 
+    # (#1071) One answer to "one global battery mode select, or one per
+    # battery?" — taken BEFORE the first refresh, which already commands the
+    # batteries. select.py and number.py build from it, and
+    # _per_battery_config reads the store of the controls they build.
+    from .coordinator.battery_controls import discover_battery_control_slugs
+    coordinator.battery_control_slugs = discover_battery_control_slugs(coordinator)
+    _LOGGER.debug("Battery controls: %s",
+                  ", ".join(coordinator.battery_control_slugs) or "one global")
+
     # Fetch initial data - this is critical for setup
     _LOGGER.debug("Fetching initial data from coordinator")
     try:

@@ -50,6 +50,18 @@ DEFAULT_BATTERY_MODE: str = "auto"
 DEFAULT_BATTERY_RESERVE_SOC: float = 20.0
 
 
+def reserve_soc_of(cfg) -> float:
+    """(#1071) The reserve floor a battery's config asks for.
+
+    UNSET (missing, None, "") is ``DEFAULT_BATTERY_RESERVE_SOC`` — the value
+    the reserve number shows for it. It was 0 %, so a manual sell drained
+    past the 20 % on screen. An explicit 0 is a choice and is honoured."""
+    value = (cfg or {}).get("battery_reserve_soc")
+    if value in (None, ""):
+        return DEFAULT_BATTERY_RESERVE_SOC
+    return float(value)
+
+
 def arbitrage_allowed_for_mode(
     mode: str, global_enabled: bool, permissions: dict = None,
 ) -> bool:
