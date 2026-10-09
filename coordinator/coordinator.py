@@ -326,6 +326,45 @@ def _price_changed(old_price, new_price) -> bool:
     return any(old_map.get(k) != v for k, v in new_map.items())
 
 
+def battery_unseen(coordinator) -> bool:
+    """(#1063 round 2) No battery SEM can see — the one question every
+    battery surface asks: the pack size, the plan, the tomorrow preview,
+    the night recorder, the backfill service.
+
+    ABSENT (#923) is a plain no and PRESENT a plain yes. UNKNOWN is "could
+    not ask" (#925) — and that is not a battery either, unless SEM is
+    reading one: a SOC the reader has measured this process, or a pack it
+    detected on a device. The reporter's install (Fronius, no battery) was
+    UNKNOWN, not ABSENT, so the ABSENT-only check answered the 15 kWh
+    default and the plan walked a pack that does not exist: the sun filled
+    it by day and it "covered the house" in the plan's colours. A real
+    battery on a slow boot is wired (PRESENT) or declared in the Energy
+    Dashboard (PRESENT once read); one SEM neither reads nor detects is
+    not one it can plan with.
+    """
+    presence = presence_of(coordinator).get(Module.BATTERY)
+    if presence is Presence.ABSENT:
+        return True
+    if presence is Presence.PRESENT:
+        return False
+    reader = getattr(coordinator, "_sensor_reader", None)
+    if getattr(reader, "_last_valid_soc", None) is not None:
+        return False
+    detected = getattr(coordinator, "_detected_battery_capacity_kwh", None)
+    if detected is None:
+        detect = getattr(reader, "auto_detect_battery_capacity_kwh", None)
+        try:
+            found = detect() if callable(detect) else None
+        except Exception:  # noqa: BLE001 — a failed look is not a battery
+            found = None
+        detected = float(found) if found is not None else 0.0
+        try:
+            coordinator._detected_battery_capacity_kwh = detected
+        except AttributeError:  # pragma: no cover — a frozen double
+            pass
+    return not detected > 0
+
+
 class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     """Coordinator for Solar Energy Management.
 
@@ -1461,14 +1500,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
     def battery_capacity_kwh(self) -> float:
         """Battery capacity in kWh — auto-detected or from config (#84).
 
-        (#1063) 0 when the install has no battery (module ABSENT, #923).
-        The settings step saves a capacity for every install and the
-        fallback below is a default, so neither proves a battery: read as
-        one, the plan walked a 15 kWh pack that does not exist and the card
-        drew it. UNKNOWN keeps the old answer — a slow boot must never hide
-        a real battery.
+        (#1063) 0 when the install has no battery SEM can see
+        (``battery_unseen``). The settings step saves a capacity for every
+        install and the fallback below is a default, so neither proves a
+        battery: read as one, the plan walked a 15 kWh pack that does not
+        exist and the card drew it. Round 2: ABSENT alone was not enough —
+        the reporter's module was UNKNOWN. A battery being read or detected
+        keeps the old answer, so a slow boot never hides a real one.
         """
-        if presence_of(self).get(Module.BATTERY) is Presence.ABSENT:
+        if battery_unseen(self):
             return 0.0
         val = self.config.get("battery_capacity_kwh")
         if val is not None and val > 0:
@@ -9495,12 +9535,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         from .battery_night import BatteryNightTracker, Sample
 
-        # (#1063) No battery module, no battery night. With the battery
-        # ABSENT every flow reads 0 and the SOC its 0.0 default, so the
-        # nights sealed as trainable and the plan card's review said
-        # "drained 0.0 kWh overnight — the promised refill never came"
-        # about a battery that does not exist.
-        if presence_of(self).get(Module.BATTERY) is Presence.ABSENT:
+        # (#1063) No battery SEM can see, no battery night. With none every
+        # flow reads 0 and the SOC its 0.0 default, so the nights sealed as
+        # trainable and the plan card's review said "drained 0.0 kWh
+        # overnight — the promised refill never came" about a battery that
+        # does not exist. Round 2: UNKNOWN with nothing read is the same home.
+        if battery_unseen(self):
             return
         tr = getattr(self, "_battery_night", None)
         if tr is None:
@@ -10503,7 +10543,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     why_codes.append("ev_target_met")
                 if loads_seen and not loads_eligible:
                     why_codes.append("no_load_needs_night")
-                if deficit <= 0.05:
+                if cap_kwh <= 0:
+                    # (#1063 round 2) No pack was walked. ABSENT needs no
+                    # sentence (the card shows no battery); UNKNOWN says
+                    # that none was found, so "no battery" reads as an
+                    # answer and not as a missing row.
+                    if presence_of(self).get(Module.BATTERY) is Presence.UNKNOWN:
+                        why_codes.append("battery_unseen")
+                elif deficit <= 0.05:
                     why_codes.append("battery_no_deficit")
                 return {
                     "computed_at": now.isoformat(),
@@ -10828,9 +10875,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 real_ev,
             )
             if cap_kwh <= 0:
-                # (#1063) no battery: there is nothing to hand over.
-                _LOGGER.info("ENERGY-PLAN (%s): no home battery — the house "
-                             "runs on the sun or the grid", tag)
+                # (#1063) no battery: there is nothing to hand over. Round
+                # 2: UNKNOWN with nothing read walks no pack either — the
+                # log says which of the two it was.
+                _LOGGER.info("ENERGY-PLAN (%s): no home battery (%s) — the "
+                             "house runs on the sun or the grid", tag,
+                             "none found" if presence_of(self).get(
+                                 Module.BATTERY) is Presence.UNKNOWN
+                             else "module absent")
             elif plan.takeover is not None:
                 _LOGGER.info(
                     "ENERGY-PLAN (%s): battery carries home until "

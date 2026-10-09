@@ -62,20 +62,30 @@ ABSENT = {Module.BATTERY: Presence.ABSENT}
 PRESENT = {Module.BATTERY: Presence.PRESENT}
 
 
-def _capacity(presence, saved=None, detected=None):
-    """The REAL property over a minimal coordinator."""
+UNKNOWN = {Module.BATTERY: Presence.UNKNOWN}
+
+
+def _coord_fake(presence, saved=None, detected=None, soc_read=None):
+    """A minimal coordinator: the verdict, the saved size, what the
+    reader could detect and the SOC it has read (None = never)."""
     def _detect():
         if presence == ABSENT:
             raise AssertionError("no battery: nothing to detect")
         return detected
-    fake = SimpleNamespace(
+    return SimpleNamespace(
         config={} if saved is None else {"battery_capacity_kwh": saved},
         setup_presence=presence,
         _detected_battery_capacity_kwh=None,
         _sensor_reader=SimpleNamespace(
-            auto_detect_battery_capacity_kwh=_detect),
+            auto_detect_battery_capacity_kwh=_detect,
+            _last_valid_soc=soc_read),
     )
-    return SEMCoordinator.battery_capacity_kwh.fget(fake)
+
+
+def _capacity(presence, saved=None, detected=None, soc_read=None):
+    """The REAL property over a minimal coordinator."""
+    return SEMCoordinator.battery_capacity_kwh.fget(
+        _coord_fake(presence, saved, detected, soc_read))
 
 
 class TestNoBatteryHasNoCapacity:
@@ -85,12 +95,21 @@ class TestNoBatteryHasNoCapacity:
         assert _capacity(ABSENT, saved=15.0) == 0.0
         assert _capacity(ABSENT) == 0.0
 
-    def test_unknown_keeps_the_old_answer(self):
-        """A slow boot must never hide a real battery (#925)."""
-        assert _capacity(None) == float(DEFAULT_BATTERY_CAPACITY_KWH)
-        assert _capacity(None, saved=9.6) == 9.6
-        assert _capacity({Module.BATTERY: Presence.UNKNOWN},
-                         detected=7.5) == 7.5
+    def test_unknown_with_a_battery_read_keeps_the_old_answer(self):
+        """A slow boot must never hide a real battery (#925): a SOC the
+        reader has measured, or a pack it detected, is a battery."""
+        assert _capacity(None, soc_read=55.0) == float(DEFAULT_BATTERY_CAPACITY_KWH)
+        assert _capacity(None, saved=9.6, soc_read=55.0) == 9.6
+        assert _capacity(UNKNOWN, detected=7.5) == 7.5
+
+    def test_unknown_with_nothing_read_is_zero(self):
+        """(#1063 round 2) The reporter's install was not ABSENT, so the
+        first fix never reached it: UNKNOWN with no battery wired, none
+        detected and no SOC ever read still answered 15 kWh, and the plan
+        walked that pack. Nothing read, nothing detected — no battery."""
+        assert _capacity(UNKNOWN, saved=15.0) == 0.0
+        assert _capacity(UNKNOWN) == 0.0
+        assert _capacity(None) == 0.0
 
     def test_present_battery_reads_as_before(self):
         assert _capacity(PRESENT, saved=10.0) == 10.0
@@ -281,6 +300,77 @@ class TestThePlanReadsOneCapacity:
         assert prov["soc_curve"] == []
 
 
+# ---------------------------------------------------------------------------
+# Round 2 (08.10.2026): an UNKNOWN battery is not a battery
+# ---------------------------------------------------------------------------
+
+class TestABatteryIsSeenOrItIsNotThere:
+    """``battery_unseen``: the one question every battery surface asks."""
+
+    def test_present_is_seen_absent_is_not(self):
+        assert coord_mod.battery_unseen(_coord_fake(PRESENT)) is False
+        assert coord_mod.battery_unseen(_coord_fake(ABSENT)) is True
+
+    def test_unknown_is_seen_only_by_a_reading_or_a_detection(self):
+        assert coord_mod.battery_unseen(_coord_fake(UNKNOWN, soc_read=12.0)) is False
+        assert coord_mod.battery_unseen(_coord_fake(UNKNOWN, detected=5.0)) is False
+        assert coord_mod.battery_unseen(_coord_fake(UNKNOWN)) is True
+        assert coord_mod.battery_unseen(_coord_fake(None, saved=15.0)) is True
+
+    def test_a_bare_double_is_unseen(self):
+        """No reader at all (a test double) reads nothing."""
+        assert coord_mod.battery_unseen(SimpleNamespace(config={})) is True
+
+
+class TestAnUnseenBatteryIsNotWalked:
+
+    def test_today_walks_no_pack_and_says_why(self, freeze_targets, monkeypatch):
+        """The reporter's day on 08.10: hot water planned, no battery wired,
+        the module UNKNOWN. The plan says it walked no battery, marks no
+        slot and says why on the card."""
+        monkeypatch.setattr(ev_night_targets, "build_night_target_map",
+                            lambda coord, energy: {})
+        fake = _day_fake(_capacity(UNKNOWN, 15.0))
+        fake.setup_presence = UNKNOWN
+        fake._surplus_controller = SimpleNamespace(
+            get_devices_sorted=lambda: [_idle_load()])
+        plan = _stamp_at_14(monkeypatch, fake, soc=0.0)
+        assert plan["has_battery"] is False
+        assert not any(s.get("batt") for s in plan["slots"])
+        assert "battery_unseen" in plan["why_codes"]
+
+    def test_an_absent_battery_needs_no_explanation(self, freeze_targets, monkeypatch):
+        """ABSENT is a plain answer: the card shows no battery and that is
+        the whole story."""
+        monkeypatch.setattr(ev_night_targets, "build_night_target_map",
+                            lambda coord, energy: {})
+        fake = _day_fake(_capacity(ABSENT, 15.0))
+        fake.setup_presence = ABSENT
+        fake._surplus_controller = SimpleNamespace(
+            get_devices_sorted=lambda: [_idle_load()])
+        plan = _stamp_at_14(monkeypatch, fake, soc=0.0)
+        assert plan["has_battery"] is False
+        assert "battery_unseen" not in plan["why_codes"]
+
+    def test_a_full_plan_on_an_unseen_battery_walks_none(
+            self, freeze_targets, monkeypatch):
+        fake = _day_fake(_capacity(UNKNOWN, 15.0))
+        fake.setup_presence = UNKNOWN
+        plan = _stamp_at_14(monkeypatch, fake, soc=0.0)
+        assert plan["demands"], "a full plan, not the quiet answer"
+        assert plan["has_battery"] is False
+        assert not any(s.get("batt") for s in plan["slots"])
+
+    def test_tomorrow_has_no_curve(self, freeze_targets):
+        assert _preview(_capacity(UNKNOWN, 15.0), saved=15.0)["soc_curve"] == []
+
+    def test_a_read_battery_on_an_unknown_install_keeps_its_curve(
+            self, freeze_targets):
+        """Not vacuous: UNKNOWN with a SOC read walks the pack as before."""
+        assert len(_preview(_capacity(UNKNOWN, 10.0, soc_read=50.0),
+                            soc=50.0)["soc_curve"]) > 1
+
+
 class TestWhenPlansRunIsUnchanged:
     """This fix changes what the card SHOWS, not when a plan runs. The
     ready check still reads the saved key: asking the module verdict there
@@ -387,6 +477,22 @@ class TestNoBatteryNoBatteryNight:
             SimpleNamespace())
         assert getattr(fake, "_battery_night", None) is None
 
+    async def test_an_unseen_battery_records_nothing(self):
+        """(round 2) UNKNOWN with nothing read is the reporter's home."""
+        fake = self._recorder_fake(UNKNOWN)
+        await SEMCoordinator._record_battery_night(
+            fake, SimpleNamespace(battery_soc=0.0, battery_power=None),
+            SimpleNamespace())
+        assert getattr(fake, "_battery_night", None) is None
+
+    async def test_an_unknown_battery_being_read_still_records(self):
+        fake = self._recorder_fake(UNKNOWN)
+        fake._sensor_reader = SimpleNamespace(_last_valid_soc=60.0)
+        await SEMCoordinator._record_battery_night(
+            fake, SimpleNamespace(battery_soc=60.0, battery_power=-500.0),
+            SimpleNamespace(battery_to_home=500.0))
+        assert getattr(fake, "_battery_night", None) is not None
+
     async def test_a_battery_still_records(self):
         """Not vacuous: the same call with a battery opens a night."""
         fake = self._recorder_fake(PRESENT)
@@ -400,17 +506,24 @@ class TestNoBatteryNoBatteryNight:
 # The new legend word
 # ---------------------------------------------------------------------------
 
+LEGEND_SUN = "energy_plan_legend_sun"
+WHY_BATTERY_UNSEEN = "energy_plan_whyc_battery_unseen"
+
+
 def test_sun_legend_in_every_language():
     data = json.loads((REPO / "dashboard" / "translations.json")
                       .read_text(encoding="utf-8"))
     assert len(data) == 16
     for lang, table in data.items():
-        assert table.get("energy_plan_legend_sun"), lang
+        assert table.get(LEGEND_SUN), lang
+        # (round 2) the quiet face's "no battery found" sentence
+        assert table.get(WHY_BATTERY_UNSEEN), lang
     for lang in data:
         name = ("sem-localize.js" if lang == "en"
                 else f"sem-localize.{lang}.js")
         js = (REPO / "dashboard" / "card" / name).read_text(encoding="utf-8")
-        assert '"energy_plan_legend_sun"' in js, name
+        assert f'"{LEGEND_SUN}"' in js, name
+        assert f'"{WHY_BATTERY_UNSEEN}"' in js, name
 
 
 def test_the_bundle_carries_the_fix():
