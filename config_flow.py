@@ -1273,14 +1273,11 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # trio was REQUIRED, so a home with no charger could not save this
         # page at all. Without a charger the three are optional, and they
         # are checked only once the user starts filling them in.
+        # A charger kept only in the list still meets three empty required
+        # fields here, on purpose: this page saves flat keys into entry.data
+        # only, and a single charger's readers prefer those, so saving would
+        # split the charger in two. Its place is the options dialog.
         has_charger = has_managed_charger(current_config)
-        # A charger kept only in the list has no flat keys, so its required
-        # fields came up empty — the same wall for the homes "Add an EV
-        # charger" creates. Show charger 0's values, as the options page does.
-        _chargers = current_config.get("ev_chargers") or []
-        if _chargers and isinstance(_chargers[0], dict):
-            current_config.update({k: v for k, v in _chargers[0].items()
-                                   if k not in ("id", "name") and v is not None})
 
         if user_input is not None:
             # Validate EV charger entities if provided

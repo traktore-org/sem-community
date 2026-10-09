@@ -277,14 +277,13 @@ async def test_reconfigure_without_a_charger_can_be_saved(sem_real_hass):
 
 
 @pytest.mark.asyncio
-async def test_reconfigure_with_a_list_charger_shows_its_sensors(sem_real_hass):
-    """A charger kept only in the list (what "Add an EV charger" makes) has
-    no flat keys; its required fields must still come up filled."""
-    entry = _entry(_installed_data(ev_chargers=[{
-        "id": "ev_charger_0", "name": "Box",
-        "ev_connected_sensor": "binary_sensor.plug",
-        "ev_charging_sensor": "binary_sensor.charging",
-        "ev_charging_power_sensor": "sensor.ev_power"}]))
+async def test_reconfigure_with_a_charger_still_requires_them_and_saves(sem_real_hass):
+    """A charger home keeps the three required. The page also saves now
+    without the two optional entities: ``default=""`` failed HA's check."""
+    entry = _entry(_installed_data(
+        ev_connected_sensor="binary_sensor.plug",
+        ev_charging_sensor="binary_sensor.charging",
+        ev_charging_power_sensor="sensor.ev_power"))
     sem_real_hass.states.async_set("binary_sensor.plug", "off")
     sem_real_hass.states.async_set("binary_sensor.charging", "off")
     sem_real_hass.states.async_set("sensor.ev_power", "0",
@@ -293,15 +292,15 @@ async def test_reconfigure_with_a_list_charger_shows_its_sensors(sem_real_hass):
     assert _required(form) >= {"ev_connected_sensor", "ev_charging_sensor",
                                "ev_charging_power_sensor"}
     assert done["type"] == FlowResultType.ABORT, done.get("errors")
+    assert entry.data["ev_charging_power_sensor"] == "sensor.ev_power"
 
 
 @pytest.mark.asyncio
 async def test_reconfigure_half_a_charger_is_still_checked(sem_real_hass):
     """Once the user starts filling the three in, all three are checked."""
     entry = _entry(_installed_data())
-    with patch.object(sem_real_hass.config_entries, "async_schedule_reload"):
-        _, done = await _reconfigure(
-            sem_real_hass, entry, {"ev_charging_power_sensor": "sensor.ev_power"})
+    _, done = await _reconfigure(
+        sem_real_hass, entry, {"ev_charging_power_sensor": "sensor.ev_power"})
     assert done["type"] == FlowResultType.FORM
     assert {"ev_connected_sensor", "ev_charging_sensor"} <= set(done["errors"])
     assert not entry.data.get("ev_charging_power_sensor")
