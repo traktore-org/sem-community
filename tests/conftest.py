@@ -639,6 +639,48 @@ def sem_real_hass(hass, enable_custom_integrations):
     return hass
 
 
+# phacc's ``async_test_home_assistant`` sets this zone on every real ``hass``.
+_HA_TEST_TIME_ZONE = "US/Pacific"
+
+
+@pytest.fixture(autouse=True)
+def _real_hass_starts_at_noon(request):
+    """(#1076) Every real-HA test starts at 12:00 today, test-zone time.
+
+    A real-HA test used to run on the wall clock, so the hour it ran at
+    was part of its input. SEM's day boundaries (the 06:00 sunrise
+    fallback — the test ``hass`` has no ``sun.sun`` — and midnight) could
+    fall inside the run. ``test_586`` stamped its device day at 05:59:35
+    Pacific; its ~70 s run (two 35 s ``async_block_till_done`` waits)
+    put the first tick after the reload at 06:00:05, the device saw a new
+    day and reset the runtime the test was checking. CI run 37932357281.
+
+    The clock still runs (``tick=True``), so timers and sleeps behave as
+    before; only the start is fixed, at least six hours from either
+    boundary. The date stays today's, so stored test data keeps its age.
+    HA's loop reads ``time.monotonic`` through phacc's ``patch_time``, so
+    the loop clock moves with the wall clock.
+
+    A test that owns its clock (it asks for ``freezer``; pytest-freezer
+    adds that to every ``freeze_time`` marker) is left alone. One that sets
+    SEM up must pass ``tick=True``: a stopped clock never ends SEM's 35 s
+    re-discovery sleep, and ``async_block_till_done`` waits for ever.
+    """
+    if "hass" not in request.fixturenames or "freezer" in request.fixturenames:
+        yield
+        return
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    import freezegun
+
+    noon = datetime.now(ZoneInfo(_HA_TEST_TIME_ZONE)).replace(
+        hour=12, minute=0, second=0, microsecond=0,
+    )
+    with freezegun.freeze_time(noon, tick=True):
+        yield
+
+
 @pytest.fixture
 def expected_lingering_timers() -> bool:
     """Override pytest-HA's ``verify_cleanup`` strict timer check.
