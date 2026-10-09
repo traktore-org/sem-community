@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Tests no longer fail when they run near 06:00 Pacific time** (#1076). Every test that starts Home Assistant now begins at noon.
 - 🐛 **A home with no charger can open Configure** (#990) — thanks @damiano75. It starts at the charger list, so heat pumps and later pages work.
 - 🐛 **The battery mode and reserve you see are what SEM uses** (#1071). One mode control sets every battery. A reserve you never set is 20 %.
 - 🐛 **The battery and the monthly peak now keep to your grid limit** (#1069). Grid charging takes the room left; the peak follows 15-minute slots.
