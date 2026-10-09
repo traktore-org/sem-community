@@ -63,10 +63,13 @@ from .coordinator.units import energy_state_to_kwh, normalize_unit
 from .coordinator.install_modules import has_managed_charger
 from .ha_energy_reader import read_energy_dashboard_config, EnergyDashboardConfig
 from .hardware_detection import (
+    CHARGER_ENTITY_KEYS,
     EV_REQUIRED_SENSORS,
     HardwareDetector,
+    charger_entity_ids,
     discover_ev_charger_from_registry,
     discover_inverter_from_registry,
+    power_sensor_ids,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -307,25 +310,28 @@ def _charger_field(marker: Any, has_charger: bool, saved: dict) -> Any:
 # ``hardware_detection`` by tests/test_ev_charger_post_install_surface.py, so
 # a brand that starts reporting a new entity key cannot quietly slip out of
 # the comparison below.
-_CHARGER_ENTITY_KEYS = frozenset({
-    "ev_charge_mode_entity",
-    "ev_charger_service_entity_id",
-    "ev_charging_power_sensor",
-    "ev_charging_sensor",
-    "ev_connected_sensor",
-    "ev_current_control_entity",
-    "ev_current_sensor",
-    "ev_session_energy_sensor",
-    "ev_start_stop_entity",
-    "ev_total_energy_sensor",
-})
+#: (#1054 follow-up) ONE fingerprint, kept in ``hardware_detection`` so the
+#: set_option merge reads the same keys this flow does.
+_CHARGER_ENTITY_KEYS = CHARGER_ENTITY_KEYS
 
 
 def _charger_entities(charger: Any) -> set[str]:
     """The entities a charger config points at — its fingerprint."""
-    if not isinstance(charger, dict):
-        return set()
-    return {str(v) for k, v in charger.items() if k in _CHARGER_ENTITY_KEYS and v}
+    return charger_entity_ids(charger)
+
+
+def _power_sensor_selector(hass) -> selector.EntitySelector:
+    """(#1054 follow-up) The picker for a POWER sensor offers what the
+    crawler reads as power — device_class ``power``, or a unit in W/kW when
+    the integration set no class (go-e's ``p_all``). ``device_class="power"``
+    alone hid that sensor from every power picker. With nothing to list
+    (no hass, an empty registry) the class filter stands as before."""
+    ids = power_sensor_ids(hass) if hass is not None else []
+    if ids:
+        return selector.EntitySelector(
+            selector.EntitySelectorConfig(domain="sensor", include_entities=ids))
+    return selector.EntitySelector(
+        selector.EntitySelectorConfig(domain="sensor", device_class="power"))
 
 
 def _charger_already_installed(discovery: dict, installed: Any) -> bool:
@@ -779,35 +785,25 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema({
                 vol.Required(
                     "solar_power_sensor", description=_sug("solar_power_sensor"),
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor",
-                                                  device_class="power")),
+                ): _power_sensor_selector(self.hass),
                 vol.Optional(
                     "grid_import_power_sensor",
                     description=_sug("grid_import_power_sensor"),
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor",
-                                                  device_class="power")),
+                ): _power_sensor_selector(self.hass),
                 # …or the two-sided pair, for meters that have no combined
                 # reading. Both positive; SEM computes export − import.
                 vol.Optional(
                     "grid_import_power_entity",
                     description=_sug("grid_import_power_entity"),
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor",
-                                                  device_class="power")),
+                ): _power_sensor_selector(self.hass),
                 vol.Optional(
                     "grid_export_power_entity",
                     description=_sug("grid_export_power_entity"),
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor",
-                                                  device_class="power")),
+                ): _power_sensor_selector(self.hass),
                 vol.Optional(
                     "battery_power_sensor",
                     description=_sug("battery_power_sensor"),
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor",
-                                                  device_class="power")),
+                ): _power_sensor_selector(self.hass),
                 vol.Optional(
                     "battery_soc_sensor",
                     description=_sug("battery_soc_sensor"),
@@ -1031,12 +1027,7 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(
                     "ev_charging_power_sensor",
                     default=suggestions.get("ev_charging_power_sensor", ""),
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(
-                        domain="sensor",
-                        device_class="power"
-                    )
-                ),
+                ): _power_sensor_selector(self.hass),
 
                 # EV Charger Control — pick ONE of the two paths below:
                 #   • Number entity (Wallbox, go-eCharger, Heidelberg, OpenWB, Ohme, V2C, …)
@@ -1353,9 +1344,7 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _charger_field(vol.Required(
                     "ev_charging_power_sensor",
                     default=current_config.get("ev_charging_power_sensor", ""),
-                ), has_charger, current_config): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor", device_class="power")
-                ),
+                ), has_charger, current_config): _power_sensor_selector(self.hass),
                 vol.Optional(
                     "ev_charger_service",
                     default=current_config.get("ev_charger_service", ""),
@@ -2023,9 +2012,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Required(
                     "ev_charging_power_sensor",
                     default=suggestions.get("ev_charging_power_sensor", ""),
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor", device_class="power")
-                ),
+                ): _power_sensor_selector(self.hass),
                 vol.Optional(
                     "ev_current_control_entity",
                     description={"suggested_value": suggestions.get("ev_current_control_entity")},
@@ -2430,6 +2417,27 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             }),
             errors=errors,
         )
+
+    def _prune_removed_chargers_from_data(self) -> None:
+        """(#1054 follow-up) ``entry.data.ev_chargers`` keeps what setup
+        wrote; this dialog saves to options. A charger removed here must
+        leave data too: the start-up heal unions the two stores by id and
+        would restore it on the next reload (weindler's go-e came back after
+        every remove)."""
+        if "ev_chargers" not in self._data or getattr(self, "hass", None) is None:
+            return
+        keep = {c.get("id") for c in (self._data.get("ev_chargers") or [])
+                if isinstance(c, dict)}
+        data_list = (self.config_entry.data or {}).get("ev_chargers")
+        if not isinstance(data_list, list):
+            return
+        pruned = [c for c in data_list
+                  if not isinstance(c, dict) or c.get("id") in keep]
+        if len(pruned) == len(data_list):
+            return
+        self.hass.config_entries.async_update_entry(
+            self.config_entry,
+            data={**(self.config_entry.data or {}), "ev_chargers": pruned})
 
     async def async_step_ev_charger_remove(
         self, user_input: dict[str, Any] | None = None
@@ -3064,15 +3072,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "grid_import_power_entity",
                     description={"suggested_value": current_config.get("grid_import_power_entity")},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor", device_class="power")
-                ),
+                ): _power_sensor_selector(self.hass),
                 vol.Optional(
                     "grid_export_power_entity",
                     description={"suggested_value": current_config.get("grid_export_power_entity")},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor", device_class="power")
-                ),
+                ): _power_sensor_selector(self.hass),
             }),
             errors=errors,
         )
@@ -3282,9 +3286,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "heat_pump_power_sensor",
                     description={"suggested_value": _opt("heat_pump_power_sensor")},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor", device_class="power")
-                ),
+                ): _power_sensor_selector(self.hass),
                 vol.Optional(
                     "heat_pump_boost_offset",
                     default=_c("heat_pump_boost_offset", 2.0),
@@ -3484,9 +3486,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "heat_pump_power_sensor",
                     description={"suggested_value": _row("heat_pump_power_sensor")},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor", device_class="power")
-                ),
+                ): _power_sensor_selector(self.hass),
                 vol.Optional(
                     "heat_pump_energy_sensor",
                     description={"suggested_value": _row("heat_pump_energy_sensor")},
@@ -4119,6 +4119,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 }
                 # (#990) then what a page this dialog skipped had saved
                 unshown = getattr(self, "_unshown", None) or {}
+                # (#1054 follow-up) a charger removed in this dialog is
+                # removed from ``entry.data`` too, or the start-up heal
+                # restores it from there on the next reload.
+                self._prune_removed_chargers_from_data()
                 return self.async_create_entry(
                     data={**carried, **unshown, **self._data})
 

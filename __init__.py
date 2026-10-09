@@ -581,6 +581,23 @@ def _coerce_switch_on(value) -> bool:
     return bool(value)
 
 
+def chargers_without(
+    data_chargers: list | None, opts_chargers: list | None, charger_id: str,
+) -> tuple:
+    """(#1054 follow-up) Both charger stores without ``charger_id``.
+
+    Returns ``(data, options)``. A store that did not hold the id is handed
+    back as the SAME object (so a caller can tell "nothing to write"); an
+    absent store (``None``) stays absent. Pure."""
+    def _drop(lst):
+        if lst is None:
+            return None
+        if not any(isinstance(c, dict) and c.get("id") == charger_id for c in lst):
+            return lst
+        return [c for c in lst if not (isinstance(c, dict) and c.get("id") == charger_id)]
+    return _drop(data_chargers), _drop(opts_chargers)
+
+
 def _merge_ev_chargers_by_id(
     existing: list, incoming: list,
 ) -> list:
@@ -610,15 +627,34 @@ def _merge_ev_chargers_by_id(
     Pure function — no I/O, no HA dependencies. Tested in
     ``tests/test_set_option_smart_merge.py``.
     """
+    from .hardware_detection import charger_entity_ids
+
     incoming_by_id: dict[str, dict] = {}
     new_ids: list[str] = []
     existing_ids = {
         c.get("id") for c in (existing or []) if isinstance(c, dict)
     }
+    existing_fp = [(c.get("id"), charger_entity_ids(c))
+                   for c in (existing or [])
+                   if isinstance(c, dict) and c.get("id")]
     for inc in incoming or []:
         if not isinstance(inc, dict):
             continue
         cid = inc.get("id")
+        if cid and cid not in existing_ids:
+            # (#1054 follow-up) The same box under a new id — the card
+            # minted ``<id>_1`` for every further "create this charger"
+            # click — folds into the charger that already points at its
+            # entities. A service is not an identity (two KEBAs answer to
+            # the same one), so a skeleton with no entities stays new.
+            mine = charger_entity_ids(inc)
+            same = next((eid for eid, fp in existing_fp if mine and mine & fp), None)
+            if same is not None:
+                _LOGGER.info(
+                    "ev_chargers merge: %s points at the entities of %s — "
+                    "folded into it, not added twice", cid, same)
+                cid = same
+                inc = {**inc, "id": cid}
         if not cid:
             # Id-less entries are untargetable ghosts: per-charger writes
             # match on ``id``, and at registration a ghost gets assigned a
@@ -6014,11 +6050,22 @@ async def _async_register_phase_services(
         if len(kept) == len(dicts):
             _LOGGER.warning("remove_charger: id %s not found — nothing removed", charger_id)
             return
+        # (#1054 follow-up) A charger lives in TWO stores: ``entry.data``
+        # (what setup wrote) and ``entry.options`` (what the user changed).
+        # Removing it from options alone let the start-up heal put it back
+        # from data on the next reload — weindler's "Healed ev_chargers
+        # options list: stored ids [] -> healed ids ['goecharger_…']". A
+        # remove removes it everywhere it lives.
+        new_data_list, _ = chargers_without(
+            (target_entry.data or {}).get("ev_chargers"), None, charger_id)
         new_options = {**(target_entry.options or {}), "ev_chargers": kept}
         coordinator = getattr(target_entry, "runtime_data", None)
         if coordinator is not None:
             coordinator._skip_options_reload = dict(new_options)
-        hass.config_entries.async_update_entry(target_entry, options=new_options)
+        update: dict = {"options": new_options}
+        if new_data_list is not (target_entry.data or {}).get("ev_chargers"):
+            update["data"] = {**(target_entry.data or {}), "ev_chargers": new_data_list}
+        hass.config_entries.async_update_entry(target_entry, **update)
         await hass.config_entries.async_reload(target_entry.entry_id)
         _LOGGER.info("Removed EV charger '%s' (%d remain)", charger_id, len(kept))
 
