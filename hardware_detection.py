@@ -39,6 +39,14 @@ _LOGGER = logging.getLogger(__name__)
 # wizard's second prefill — is retired: the wizard reads ONE crawler (the
 # roster and its roles). A field the roles cannot fill is left for the user.
 
+# The three sensors every charger needs. (#990) The config flow reads this
+# too: a home with no charger cannot fill them, so its pages must not
+# require them.
+EV_REQUIRED_SENSORS = (
+    "ev_connected_sensor",
+    "ev_charging_sensor",
+    "ev_charging_power_sensor",
+)
 
 
 class EVChargerDetector:
@@ -99,13 +107,7 @@ class EVChargerDetector:
         """
         errors = {}
 
-        required_sensors = [
-            "ev_connected_sensor",
-            "ev_charging_sensor",
-            "ev_charging_power_sensor",
-        ]
-
-        for sensor_key in required_sensors:
+        for sensor_key in EV_REQUIRED_SENSORS:
             entity_id = config.get(sensor_key)
             if not entity_id:
                 errors[sensor_key] = "Required sensor not configured"

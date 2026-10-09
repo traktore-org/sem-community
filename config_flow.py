@@ -60,8 +60,10 @@ from .const import (
 from .consts.bounds import bounds_selector
 from .coordinator.ev_taper_detector import resolve_charge_efficiency
 from .coordinator.units import energy_state_to_kwh, normalize_unit
+from .coordinator.install_modules import has_managed_charger
 from .ha_energy_reader import read_energy_dashboard_config, EnergyDashboardConfig
 from .hardware_detection import (
+    EV_REQUIRED_SENSORS,
     HardwareDetector,
     discover_ev_charger_from_registry,
     discover_inverter_from_registry,
@@ -282,6 +284,20 @@ def _merge_form_input(flow: Any, target: dict, user_input: dict) -> None:
         if key not in user_input:
             target[key] = None
     target.update(user_input)
+
+
+def _charger_field(marker: Any, has_charger: bool, saved: dict) -> Any:
+    """(#990) A required charger field, as a page should ask it.
+
+    With a charger it stays as written. A home with no charger cannot fill
+    it, and Home Assistant will not submit a page with a required field
+    empty — so there it is optional: a suggestion, never ``default=""``
+    (HA rejects "" as an entity id).
+    """
+    if has_charger:
+        return marker
+    key = str(marker.schema)
+    return vol.Optional(key, description={"suggested_value": saved.get(key) or None})
 
 
 # Every per-charger key that names an ENTITY, i.e. that says something about
@@ -1253,15 +1269,21 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         reconfigure_entry = self._get_reconfigure_entry()
         current_config = {**reconfigure_entry.data, **reconfigure_entry.options}
+        # (#990) Same wall as the options dialog's first page: the charger
+        # trio was REQUIRED, so a home with no charger could not save this
+        # page at all. Without a charger the three are optional, and they
+        # are checked only once the user starts filling them in.
+        has_charger = has_managed_charger(current_config)
 
         if user_input is not None:
             # Validate EV charger entities if provided
             if self._detector is None:
                 self._detector = HardwareDetector(self.hass)
 
-            validation_errors = self._detector.validate_ev_configuration(user_input)
-            if validation_errors:
-                errors.update(validation_errors)
+            if has_charger or any(user_input.get(k) for k in EV_REQUIRED_SENSORS):
+                validation_errors = self._detector.validate_ev_configuration(user_input)
+                if validation_errors:
+                    errors.update(validation_errors)
 
             # Validate optional entity IDs exist in HA
             for entity_key in (
@@ -1309,22 +1331,22 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="reconfigure",
             data_schema=vol.Schema({
-                vol.Required(
+                _charger_field(vol.Required(
                     "ev_connected_sensor",
                     default=current_config.get("ev_connected_sensor", ""),
-                ): selector.EntitySelector(
+                ), has_charger, current_config): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
                 ),
-                vol.Required(
+                _charger_field(vol.Required(
                     "ev_charging_sensor",
                     default=current_config.get("ev_charging_sensor", ""),
-                ): selector.EntitySelector(
+                ), has_charger, current_config): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
                 ),
-                vol.Required(
+                _charger_field(vol.Required(
                     "ev_charging_power_sensor",
                     default=current_config.get("ev_charging_power_sensor", ""),
-                ): selector.EntitySelector(
+                ), has_charger, current_config): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor", device_class="power")
                 ),
                 vol.Optional(
@@ -1619,8 +1641,34 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Manage the options."""
-        return await self.async_step_ev_charger()
+        """Manage the options.
+
+        (#990) The dialog is one chain, and its first page is the primary
+        charger — three REQUIRED fields. Since the slim install (#442) a home
+        may own no charger at all, and Home Assistant will not submit a page
+        with a required field empty. That home could never get past page
+        one, so every setting behind it (tariff, loads, heat pumps, battery,
+        notifications) had no way in (@damiano75: "I can't fill any field,
+        if I click to send button nothing happens"). A home with no charger
+        starts on the charger menu instead, where Continue and "Add an EV
+        charger" are each one click. "No charger" is ``has_managed_charger``
+        — the same answer the EV tab and the welcome text use.
+        """
+        saved = {**self.config_entry.data, **self.config_entry.options}
+        if has_managed_charger(saved):
+            return await self.async_step_ev_charger()
+        # The skipped page must change nothing. The final save replaces
+        # ``entry.options`` wholesale (#690), so a key this page owns that is
+        # missing from the draft would drop out of options and un-cover
+        # whatever ``entry.data`` holds for it — the class-101 resurrection.
+        # Carry each of the page's saved values as it is.
+        page_keys = {str(k) for k in self._ev_charger_schema(saved).schema}
+        options = self.config_entry.options or {}
+        for key in page_keys:
+            if key in options:
+                self._data[key] = options[key]
+        self._data["ev_chargers"] = _draft_list(self, "ev_chargers")
+        return await self.async_step_ev_charger_menu()
 
     def _discovered_pv_strings(self) -> dict:
         """(#566) Live coordinator's discovered PV-string slot->source map.
@@ -1698,117 +1746,122 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             for k, v in ev_chargers[0].items():
                 if k not in ("id", "name") and v is not None:
                     current_config[k] = v
+        return self.async_show_form(
+            step_id="ev_charger",
+            data_schema=self._ev_charger_schema(current_config),
+            errors=errors
+        )
+
+    def _ev_charger_schema(self, current_config: dict) -> vol.Schema:
+        """The primary charger page — one builder, so ``async_step_init``
+        can name the keys this page owns without a second list (#990)."""
         _c = lambda key, fb: self._cfg(current_config, key, fb)
 
         def _opt(key: str):
             v = current_config.get(key)
             return v if v is not None else None
 
-        return self.async_show_form(
-            step_id="ev_charger",
-            data_schema=vol.Schema({
-                vol.Required(
-                    "ev_connected_sensor",
-                    default=current_config.get("ev_connected_sensor", "")
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
+        return vol.Schema({
+            vol.Required(
+                "ev_connected_sensor",
+                default=current_config.get("ev_connected_sensor", "")
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
+            ),
+            vol.Required(
+                "ev_charging_sensor",
+                default=current_config.get("ev_charging_sensor", "")
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
+            ),
+            vol.Required(
+                "ev_charging_power_sensor",
+                default=current_config.get("ev_charging_power_sensor", "")
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor")
+            ),
+            vol.Optional(
+                "ev_charger_service",
+                default=current_config.get("ev_charger_service", ""),
+            ): selector.TextSelector(
+                selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+            ),
+            vol.Optional(
+                "ev_charger_service_entity_id",
+                description={"suggested_value": _opt("ev_charger_service_entity_id")},
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=["binary_sensor", "sensor", "switch"])
+            ),
+            vol.Optional(
+                "ev_total_energy_sensor",
+                description={"suggested_value": _opt("ev_total_energy_sensor")},
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor")
+            ),
+            # Vehicle SOC fields — moved here from the install flow.
+            # Only meaningful when a vehicle SOC sensor is exposed in HA;
+            # see issues #97 and #98.
+            vol.Optional(
+                "vehicle_soc_entity",
+                description={"suggested_value": _opt("vehicle_soc_entity")},
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor", device_class="battery")
+            ),
+            vol.Optional(
+                "ev_battery_capacity_kwh",
+                default=_c("ev_battery_capacity_kwh", 40),
+            ): bounds_selector("ev_battery_capacity_kwh", mode="box"),
+            # #735 — AC metered → DC in the pack. Sits next to capacity
+            # because the two are read together: the estimate is
+            # ``delivered kWh × efficiency ÷ capacity``. The band matches
+            # what the detector will accept, in percent (see
+            # ``_efficiency_as_percent``); offering a value the booking
+            # then discards would be a setting that silently does nothing.
+            vol.Optional(
+                "ev_charger_efficiency",
+                default=_efficiency_as_percent(
+                    current_config.get("ev_charger_efficiency")
                 ),
-                vol.Required(
-                    "ev_charging_sensor",
-                    default=current_config.get("ev_charging_sensor", "")
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
-                ),
-                vol.Required(
-                    "ev_charging_power_sensor",
-                    default=current_config.get("ev_charging_power_sensor", "")
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor")
-                ),
-                vol.Optional(
-                    "ev_charger_service",
-                    default=current_config.get("ev_charger_service", ""),
-                ): selector.TextSelector(
-                    selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
-                ),
-                vol.Optional(
-                    "ev_charger_service_entity_id",
-                    description={"suggested_value": _opt("ev_charger_service_entity_id")},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain=["binary_sensor", "sensor", "switch"])
-                ),
-                vol.Optional(
-                    "ev_total_energy_sensor",
-                    description={"suggested_value": _opt("ev_total_energy_sensor")},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor")
-                ),
-                # Vehicle SOC fields — moved here from the install flow.
-                # Only meaningful when a vehicle SOC sensor is exposed in HA;
-                # see issues #97 and #98.
-                vol.Optional(
-                    "vehicle_soc_entity",
-                    description={"suggested_value": _opt("vehicle_soc_entity")},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor", device_class="battery")
-                ),
-                vol.Optional(
-                    "ev_battery_capacity_kwh",
-                    default=_c("ev_battery_capacity_kwh", 40),
-                ): bounds_selector("ev_battery_capacity_kwh", mode="box"),
-                # #735 — AC metered → DC in the pack. Sits next to capacity
-                # because the two are read together: the estimate is
-                # ``delivered kWh × efficiency ÷ capacity``. The band matches
-                # what the detector will accept, in percent (see
-                # ``_efficiency_as_percent``); offering a value the booking
-                # then discards would be a setting that silently does nothing.
-                vol.Optional(
-                    "ev_charger_efficiency",
-                    default=_efficiency_as_percent(
-                        current_config.get("ev_charger_efficiency")
-                    ),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=50, max=100, step=1, unit_of_measurement="%", mode="box"
-                    )
-                ),
-                # Optional real range sensor; else range is derived from
-                # SOC × capacity ÷ consumption (kWh/100km) (#245).
-                vol.Optional(
-                    "vehicle_range_entity",
-                    description={"suggested_value": _opt("vehicle_range_entity")},
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor", device_class="distance")
-                ),
-                vol.Optional(
-                    "ev_kwh_per_100km",
-                    default=_c("ev_kwh_per_100km", 18),
-                ): bounds_selector("ev_kwh_per_100km", mode="box"),
-                vol.Optional(
-                    "ev_target_soc",
-                    default=_c("ev_target_soc", 80),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=0, max=100, step=5, unit_of_measurement="%", mode="slider"
-                    )
-                ),
-                # Optional solar ceiling (Max): surplus charges up to this, then
-                # stops. Defaults to full (100) = charge freely from sun (#245).
-                vol.Optional(
-                    "daily_ev_target_max",
-                    default=_c("daily_ev_target_max", 100),
-                ): bounds_selector("daily_ev_target_max", mode="slider"),
-                vol.Optional(
-                    "ev_target_soc_max",
-                    default=_c("ev_target_soc_max", 100),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=0, max=100, step=5, unit_of_measurement="%", mode="slider"
-                    )
-                ),
-            }),
-            errors=errors
-        )
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=50, max=100, step=1, unit_of_measurement="%", mode="box"
+                )
+            ),
+            # Optional real range sensor; else range is derived from
+            # SOC × capacity ÷ consumption (kWh/100km) (#245).
+            vol.Optional(
+                "vehicle_range_entity",
+                description={"suggested_value": _opt("vehicle_range_entity")},
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor", device_class="distance")
+            ),
+            vol.Optional(
+                "ev_kwh_per_100km",
+                default=_c("ev_kwh_per_100km", 18),
+            ): bounds_selector("ev_kwh_per_100km", mode="box"),
+            vol.Optional(
+                "ev_target_soc",
+                default=_c("ev_target_soc", 80),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0, max=100, step=5, unit_of_measurement="%", mode="slider"
+                )
+            ),
+            # Optional solar ceiling (Max): surplus charges up to this, then
+            # stops. Defaults to full (100) = charge freely from sun (#245).
+            vol.Optional(
+                "daily_ev_target_max",
+                default=_c("daily_ev_target_max", 100),
+            ): bounds_selector("daily_ev_target_max", mode="slider"),
+            vol.Optional(
+                "ev_target_soc_max",
+                default=_c("ev_target_soc_max", 100),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0, max=100, step=5, unit_of_measurement="%", mode="slider"
+                )
+            ),
+        })
 
     async def async_step_ev_charger_menu(
         self, user_input: dict[str, Any] | None = None
@@ -1846,8 +1899,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                  "label": _flow_text(self, "flow_edit_item", "Edit: {name}",
                                      name=charger_display_name(getattr(self, "hass", None), c, _ci))},
             )
+        # (#990) a home with no charger now opens on this menu — "another"
+        # would be wrong for its first one
         options.append({"value": "add_charger",
-                        "label": _flow_text(self, "flow_add_charger", "Add another EV charger")})
+                        "label": _flow_text(self, "flow_add_charger", "Add another EV charger")
+                        if charger_count else
+                        _flow_text(self, "flow_add_first_charger", "Add an EV charger")})
         if charger_count > 1:
             options.append(
                 {"value": "remove_charger",
@@ -1883,8 +1940,16 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             ev_chargers = list(self._data.get("ev_chargers", []))
             idx = len(ev_chargers)
             charger_name = user_input.pop("charger_name", f"EV Charger {idx + 1}")
+            # (#990) The position is unique only while the list grows:
+            # remove charger 2 of 3 and ``ev_charger_{len}`` is the id the
+            # last one already has — two chargers, one device id. Same fix
+            # as the heat-pump ids: the next number nobody uses.
+            used = {str(c.get("id")) for c in ev_chargers if isinstance(c, dict)}
+            n = idx
+            while f"ev_charger_{n}" in used:
+                n += 1
             new_charger = {
-                "id": f"ev_charger_{idx}",
+                "id": f"ev_charger_{n}",
                 "name": charger_name,
                 **user_input,
             }
