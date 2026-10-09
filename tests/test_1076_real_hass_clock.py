@@ -8,8 +8,8 @@ was checking. Re-run, it passed: the wall clock was part of its input.
 
 conftest's ``_real_hass_starts_at_noon`` starts every test that uses
 phacc's real ``hass`` at 12:00 today, test-zone time, with the clock
-still running — six hours from the sunrise fallback and from midnight.
-These tests pin that guard and its two limits: a test that
+still running — six hours from the sunrise fallback and twelve from
+midnight. These tests pin that guard and its two limits: a test that
 owns its clock is left alone, and a test without a real ``hass`` keeps
 the real clock.
 """
@@ -59,12 +59,27 @@ async def test_the_clock_still_runs(sem_real_hass) -> None:
     assert sem_real_hass.loop.time() > loop_before
 
 
+_THREE_AM_PACIFIC = datetime(2026, 3, 1, 11, 0, tzinfo=dt_util.UTC)
+
+
+# A stopped clock is fine here only because nothing sets SEM up. A test
+# that does must pass ``tick=True``, or SEM's 35 s sleep never ends.
 @pytest.mark.freeze_time("2026-03-01 11:00:00")
 @pytest.mark.asyncio
-async def test_a_test_that_owns_its_clock_is_left_alone(hass) -> None:
-    # 11:00 UTC is 03:00 Pacific. Had the guard run too, it would have
-    # moved this test to 12:00 Pacific on the frozen date (20:00 UTC).
-    assert dt_util.utcnow() == datetime(2026, 3, 1, 11, 0, tzinfo=dt_util.UTC)
+async def test_a_test_with_a_freeze_time_marker_is_left_alone(hass) -> None:
+    # Had the guard run too, it would have moved this test to 12:00
+    # Pacific on the frozen date (20:00 UTC).
+    assert dt_util.utcnow() == _THREE_AM_PACIFIC
+
+
+@pytest.mark.asyncio
+async def test_a_test_that_asks_for_freezer_is_left_alone(hass, freezer) -> None:
+    # Asked for directly, ``freezer`` starts after the guard would, so it
+    # always sits inside and moves the time this test reads. The guard's
+    # ``freezer`` check is pinned by the marker test above, where
+    # pytest-freezer starts first.
+    freezer.move_to("2026-03-01 11:00:00")
+    assert dt_util.utcnow() == _THREE_AM_PACIFIC
 
 
 def test_a_test_without_a_real_hass_keeps_the_real_clock() -> None:

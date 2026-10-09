@@ -656,17 +656,17 @@ def _real_hass_starts_at_noon(request):
     day and reset the runtime the test was checking. CI run 37932357281.
 
     The clock still runs (``tick=True``), so timers and sleeps behave as
-    before; only the start is fixed, six hours from either boundary. The
-    date stays today's, so stored test data keeps its age. HA's loop reads
-    ``time.monotonic`` through phacc's ``patch_time``, so the loop clock
-    moves with the wall clock. A test that owns its clock (``freezer`` or
-    a ``freeze_time`` marker) is left alone.
+    before; only the start is fixed, at least six hours from either
+    boundary. The date stays today's, so stored test data keeps its age.
+    HA's loop reads ``time.monotonic`` through phacc's ``patch_time``, so
+    the loop clock moves with the wall clock.
+
+    A test that owns its clock (it asks for ``freezer``; pytest-freezer
+    adds that to every ``freeze_time`` marker) is left alone. One that sets
+    SEM up must pass ``tick=True``: a stopped clock never ends SEM's 35 s
+    re-discovery sleep, and ``async_block_till_done`` waits for ever.
     """
-    if (
-        "hass" not in request.fixturenames
-        or "freezer" in request.fixturenames
-        or request.node.get_closest_marker("freeze_time") is not None
-    ):
+    if "hass" not in request.fixturenames or "freezer" in request.fixturenames:
         yield
         return
     from datetime import datetime

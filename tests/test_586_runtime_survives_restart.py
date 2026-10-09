@@ -99,9 +99,10 @@ async def test_accrued_runtime_survives_reload(
     # (#1076) A day boundary inside the run resets the runtime ON PURPOSE —
     # that is a new day, not this bug. conftest starts every real-HA test at
     # noon so none can fall here; if one does, say so instead of "#586".
-    assert device._daily_runtime_meter_day == stamped_day, (
-        f"meter day moved {stamped_day} -> {device._daily_runtime_meter_day} "
-        "during the test: the clock crossed a day boundary (#1076)"
+    now_day = coordinator.time_manager.get_current_meter_day_sunrise_based()
+    assert now_day == stamped_day, (
+        f"meter day moved {stamped_day} -> {now_day} during the test: "
+        "the clock crossed a day boundary (#1076)"
     )
     # Accrued runtime must survive too. Pre-fix this was 0.0 because the
     # restore ran before any device existed. A single post-reload cycle may
