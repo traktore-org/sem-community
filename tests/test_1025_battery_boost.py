@@ -245,6 +245,11 @@ def _coordinator(charge_mode="min_plus_solar"):
                                  "ev_connected_sensor": "binary_sensor.plug"}]}
     c._battery_boost = None
     c._battery_boost_ended = None
+    # (#1063 round 2) the saved size alone is no battery; this home has one
+    from custom_components.solar_energy_management.coordinator.install_modules import (
+        Module, Presence,
+    )
+    c.setup_presence = {Module.BATTERY: Presence.PRESENT}
     return c
 
 

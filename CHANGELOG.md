@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **The plan card shows no battery on homes without one, now also when the battery is unread** (#1063) — thanks @lostcontrol.
 - 🐛 **A removed charger stays removed; a created one is not created twice** (#1054) — thanks @weindler. kW sensors show in the power pickers.
 
 # [2.2.0-beta.14] — 09.10.2026
