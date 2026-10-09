@@ -33,6 +33,8 @@ def test_no_lists_falls_back_to_global():
     cfg = {
         "battery_force_discharge_control_entity": "number.global_sell",
         "battery_discharge_control_entity": "number.global_limit",
+        # (#1071) set, so no shown-default reserve is overlaid either
+        "battery_reserve_soc": 20,
     }
     # No list keys → the same config object is returned (no overlay).
     assert _per(cfg, 0) is cfg
@@ -127,10 +129,16 @@ def test_multi_fleet_explicit_mode_still_wins():
     assert SEMCoordinator._per_battery_config(fake, 1, 2)["battery_mode"] == "auto"
 
 
-def test_multi_fleet_reserve_defaults_to_zero():
+def test_multi_fleet_reserve_defaults_to_what_its_number_shows():
+    # (#1071) not 0: the per-battery reserve number shows 20 % for an unset
+    # slot, and the stale global 40 must not bleed in either (#531).
+    from custom_components.solar_energy_management.consts.battery_modes import (
+        DEFAULT_BATTERY_RESERVE_SOC,
+    )
     cfg = {"battery_reserve_soc": 40}  # stale single-battery global
     fake = SimpleNamespace(config=cfg)
-    assert SEMCoordinator._per_battery_config(fake, 1, 2)["battery_reserve_soc"] == 0
+    assert SEMCoordinator._per_battery_config(fake, 1, 2)["battery_reserve_soc"] == (
+        DEFAULT_BATTERY_RESERVE_SOC)
 
 
 def test_persist_global_option_writes_scalar_no_reload():

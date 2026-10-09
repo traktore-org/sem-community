@@ -614,20 +614,25 @@ picked the control by the slugs found at setup; \`_per_battery_config\` picked t
 \`['auto','auto']\`) showed the global select and the list shadowed every write — select
 \`force_charge\`, SEM \`auto\`. The same split hid two more: per-battery controls on a
 one-battery cycle (cold-start ED, #274) read the stale global key (#531's hazard), and a global
-select built before the batteries were known did nothing once two were live. **Closure:** ONE
-decision — \`coordinator/battery_controls.py::discover_battery_control_slugs\`, captured as
-\`coordinator.battery_control_slugs\` in \`async_setup_entry\` beside \`setup_presence\`; select.py
-and number.py build from it, \`_per_battery_config\` reads the store of the controls built (live
-count only before the capture). **Guard:** \`tests/test_1071_battery_mode_follows_its_control.py\`
-— an oracle over layout × live count × list × scalar: every control's shown value equals what
-drives each battery it covers, through the real platform setup; AST checks pin one capture before
-\`async_forward_entry_setups\` and no second discovery. **Open siblings (for Guido):** (a) an
-UNSET reserve shows 20 % (\`DEFAULT_BATTERY_RESERVE_SOC\`) while \`decide_battery\` and the VPP
-merge sell to 0 % (strict xfail in the same file); (b) fleet readers still read the scalar on
-per-battery installs — \`build_view._battery_may_assist_ev(self.config)\`, the permission-switch
-seed (\`switch.py\` \`_seed_state\`), and \`self.config.get("battery_reserve_soc")\` for the
-spendable floor / night backfill; (c) the battery card picks its layout from per-battery
-SENSORS, not from which mode select exists.
+select (two-sensor batteries, #553, never get per-battery controls) did nothing once two were
+live. And an UNSET reserve showed 20 % (\`DEFAULT_BATTERY_RESERVE_SOC\`) while the runtime sold
+to 0 %. **Closure:** ONE decision — \`coordinator/battery_controls.py::discover_battery_control_slugs\`
+(registry fallback scoped to the entry), captured as \`coordinator.battery_control_slugs\` in
+\`async_setup_entry\` right after the Energy Dashboard read, BEFORE the first refresh (which
+already commands batteries); select.py and number.py build from it, \`_per_battery_config\`
+reads the store of the controls built, and an unset reserve is the shown default in both
+layouts. **Guard:** \`tests/test_1071_battery_mode_follows_its_control.py\` — an oracle over
+layout × live count × list × scalar: every control's shown value equals what drives each battery
+it covers, through the real platform setup; AST checks pin one capture before
+\`async_config_entry_first_refresh\` and no second discovery. **Open siblings (for Guido):**
+(a) fleet readers still read the scalar on per-battery installs —
+\`build_view._battery_may_assist_ev(self.config)\`, the permission-switch seed (\`switch.py\`
+\`_seed_state\`), and \`self.config.get("battery_reserve_soc")\` for the spendable floor / forecast
+sell / night backfill; (b) the battery card picks its layout from per-battery SENSORS, not from
+which mode select exists; (c) \`sensor.py\` sweeps \`sensor.sem_battery_b*_power\` on a boot whose
+ED list reads ≤ 1, which removes the registry fallback's evidence for the next boot;
+(d) \`decide_battery\` still falls back to 0 % when a config carries no reserve key at all
+(only direct callers — production always passes through \`_per_battery_config\`).
 
 ### 20. Shadowed decision branch (an always-true earlier branch starves a newer one) — PARTIAL
 **Symptom:** a new decision branch is added, tested in isolation, and never executes in

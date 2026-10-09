@@ -196,22 +196,48 @@ async def test_every_set_reserve_control_shows_what_drives_its_batteries(hass, s
             assert _runtime(coordinator, idx, 2)[1] == controls[key].native_value
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "Open sibling, not #1071: an UNSET reserve shows 20 % "
-    "(DEFAULT_BATTERY_RESERVE_SOC) and decide_battery sells to 0 %."))
 @pytest.mark.asyncio
-async def test_an_unset_reserve_shows_what_drives_the_battery(hass):
-    entry = _entry(hass, {})
-    coordinator = _coordinator(hass, entry, ())
-    controls = await _controls(hass, entry)
-    reserve = _runtime(coordinator, 0, 1)[1]
-    assert float(reserve if reserve is not None else 0.0) == (
-        controls["battery_reserve_soc"].native_value)
+@pytest.mark.parametrize("slugs", [(), ("b1", "b2")])
+async def test_an_unset_reserve_shows_what_drives_the_battery(hass, slugs):
+    # The number showed 20 % (DEFAULT_BATTERY_RESERVE_SOC) and a manual sell
+    # used 0 %. A leftover list must not decide it on the global number
+    # either (the .175 shape: battery_reserve_socs [50, 50]).
+    for options in ({}, {"battery_reserve_socs": [50, None]} if slugs
+                    else {"battery_reserve_socs": [50, 50]}):
+        entry = _entry(hass, options)
+        coordinator = _coordinator(hass, entry, slugs)
+        controls = await _controls(hass, entry)
+        covers = ({"battery_b2_reserve_soc": [1]} if slugs
+                  else {"battery_reserve_soc": [0, 1]})
+        for key, batteries in covers.items():
+            for idx in batteries:
+                reserve = _runtime(coordinator, idx, 2)[1]
+                assert float(reserve) == controls[key].native_value, (
+                    f"{key} shows {controls[key].native_value} but battery "
+                    f"{idx} sells to {reserve} (options={options})")
+
+
+def test_the_registry_fallback_reads_only_this_entrys_batteries(hass):
+    from homeassistant.helpers import entity_registry as er
+    from custom_components.solar_energy_management.coordinator.battery_controls import (
+        discover_battery_control_slugs,
+    )
+    other = _entry(hass, {})
+    mine = _entry(hass, {})
+    reg = er.async_get(hass)
+    for bid in ("b1", "b2"):
+        reg.async_get_or_create("sensor", DOMAIN, f"sem_battery_{bid}_power",
+                                suggested_object_id=f"sem_battery_{bid}_power",
+                                config_entry=other)
+    coordinator = SimpleNamespace(hass=hass, config_entry=mine, _sensor_reader=None)
+    assert discover_battery_control_slugs(coordinator) == ()
+    coordinator.config_entry = other
+    assert discover_battery_control_slugs(coordinator) == ("b1", "b2")
 
 
 # ── Wiring: one capture, before any platform builds an entity ──────────────
 
-def test_setup_captures_the_battery_controls_before_the_platforms_load():
+def test_setup_captures_the_battery_controls_before_the_first_refresh():
     tree = ast.parse((ROOT / "__init__.py").read_text())
     setup = next(n for n in ast.walk(tree)
                  if isinstance(n, ast.AsyncFunctionDef) and n.name == "async_setup_entry")
@@ -219,10 +245,13 @@ def test_setup_captures_the_battery_controls_before_the_platforms_load():
                if isinstance(n, ast.Assign)
                and any(isinstance(t, ast.Attribute) and t.attr == "battery_control_slugs"
                        for t in n.targets)]
-    forward = [n.lineno for n in ast.walk(setup)
-               if isinstance(n, ast.Attribute) and n.attr == "async_forward_entry_setups"]
+    first = [n.lineno for n in ast.walk(setup)
+             if isinstance(n, ast.Attribute)
+             and n.attr in ("async_config_entry_first_refresh",
+                            "async_forward_entry_setups")]
     assert len(capture) == 1, "battery controls must be captured exactly once"
-    assert forward and capture[0] < min(forward)
+    # The first refresh already commands the batteries (review of #1071).
+    assert first and capture[0] < min(first)
 
 
 def test_only_the_capture_and_the_platform_fallback_discover():

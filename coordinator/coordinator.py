@@ -57,6 +57,7 @@ from ..ha_energy_reader import (
 )
 from .install_modules import Module, Presence, module_reload_due, module_verdict, presence_of
 from .battery_controls import has_per_battery_controls  # (#1071)
+from ..consts.battery_modes import DEFAULT_BATTERY_MODE, DEFAULT_BATTERY_RESERVE_SOC
 
 from .types import (
     SEMData, PowerReadings, PowerFlows, SystemStatus, LoadManagementData,
@@ -6875,6 +6876,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
           one-battery install that kept a ``battery_modes`` list let that
           list shadow every write to the select it shows (#1071).
 
+        An unset reserve is ``DEFAULT_BATTERY_RESERVE_SOC`` in both cases —
+        the value its number shows. It was 0 % here while the number showed
+        20 %, so a manual sell drained past the floor on screen.
+
         Which controls exist is ``battery_control_slugs``, captured before
         the platforms load. ``count`` (the live battery count) stands in
         only before that capture.
@@ -6894,17 +6899,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # per-battery controls (#1071) — with the one global control the
         # scalar keys stand as they are, for every battery.
         if has_per_battery_controls(self, count):
-            for list_key, single_key, multi_default in (
-                ("battery_modes", "battery_mode", "auto"),
-                ("battery_reserve_socs", "battery_reserve_soc", 0),
+            for list_key, single_key, shown_default in (
+                ("battery_modes", "battery_mode", DEFAULT_BATTERY_MODE),
+                ("battery_reserve_socs", "battery_reserve_soc",
+                 DEFAULT_BATTERY_RESERVE_SOC),
             ):
                 lst = cfg.get(list_key)
                 if isinstance(lst, list) and idx < len(lst) and lst[idx] not in (None, ""):
                     overrides[single_key] = lst[idx]
                 else:
-                    # #531: no per-battery value → the per-battery default,
+                    # #531: no per-battery value → what its control shows,
                     # never the single-battery global key.
-                    overrides[single_key] = multi_default
+                    overrides[single_key] = shown_default
+        elif cfg.get("battery_reserve_soc") in (None, ""):
+            # (#1071) The global number shows the default for an unset
+            # reserve; an unset mode is already ``auto`` downstream.
+            overrides["battery_reserve_soc"] = DEFAULT_BATTERY_RESERVE_SOC
         return {**cfg, **overrides} if overrides else cfg
 
     def _arbitrage_enabled(self, battery_count: int = 0) -> bool:

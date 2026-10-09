@@ -14,9 +14,13 @@ slot set?". A one-battery install that kept a ``battery_modes`` list (.175:
 shadowed by the list — the select read ``force_charge``, SEM ran ``auto``.
 
 The fix is one decision with one owner: ``discover_battery_control_slugs``
-runs once in ``async_setup_entry``, before any platform builds an entity, and
-its answer is held on the coordinator. The platforms build their controls
-from it and the runtime reads the store of the controls that were built.
+runs once in ``async_setup_entry``, before the first refresh and before any
+platform builds an entity, and its answer is held on the coordinator. The
+platforms build their controls from it and the runtime reads the store of the
+controls that were built.
+
+An UNSET reserve is the value its number shows, ``DEFAULT_BATTERY_RESERVE_SOC``
+— the runtime used 0 % while the number showed 20 %.
 """
 from __future__ import annotations
 
@@ -50,13 +54,18 @@ def discover_battery_control_slugs(coordinator: Any) -> tuple[str, ...]:
     if len(batt_list) > 1:
         return tuple(f"b{i + 1}" for i in range(len(batt_list)))
 
-    # Fallback: discover from the persisted per-battery power sensors.
+    # Fallback: discover from the persisted per-battery power sensors —
+    # this entry's own (#1071 review: a second SEM entry's batteries are not
+    # this install's).
+    entry_id = getattr(getattr(coordinator, "config_entry", None), "entry_id", None)
     try:
         reg = er.async_get(coordinator.hass)
         slugs = sorted({
             m.group(1)
             for ent in reg.entities.values()
-            if (m := _BATTERY_SLUG_RE.match(ent.entity_id))
+            if (not isinstance(entry_id, str)
+                or ent.config_entry_id == entry_id)
+            and (m := _BATTERY_SLUG_RE.match(ent.entity_id))
         })
         _LOGGER.debug("battery slugs (registry fallback): %s", slugs)
         return tuple(slugs) if len(slugs) > 1 else ()
@@ -78,8 +87,8 @@ def has_per_battery_controls(coordinator: Any, count: int) -> bool:
     """True → the per-battery lists drive each battery; False → the scalar
     keys drive every battery.
 
-    Before the capture (the first refresh runs before the platforms) the live
-    battery count stands in for it."""
+    ``async_setup_entry`` captures before the first refresh; the live battery
+    count stands in only where nothing was captured (test doubles)."""
     slugs = captured_battery_control_slugs(coordinator)
     if slugs is not None:
         return len(slugs) > 1

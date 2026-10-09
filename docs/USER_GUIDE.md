@@ -609,7 +609,7 @@ When you have multiple batteries (e.g. Huawei + Growatt, or split Huawei units),
 - `select.sem_battery_<id>_mode` — set the mode (auto / self_consumption / force_charge / force_discharge / off)
 - `number.sem_battery_<id>_reserve_soc` — the SOC this battery will not discharge below
 
-With one battery, SEM makes one `select.sem_battery_mode` and one `number.sem_battery_reserve_soc` instead. The controls you see are the ones SEM uses.
+With one battery, SEM makes one `select.sem_battery_mode` and one `number.sem_battery_reserve_soc` instead. The same happens when the Energy Dashboard lists each battery as two sensors (charge and discharge); then these two controls set every battery. The controls you see are the ones SEM uses. A reserve you never set is 20 %.
 
 The discharge *rate* is not per-battery: **`number.sem_battery_max_discharge_power`** (default 5000 W) caps it for the whole fleet.
 
