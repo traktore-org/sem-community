@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **A removed charger stays removed; a created one is not created twice** (#1054) — thanks @weindler. kW sensors show in the power pickers.
+
 # [2.2.0-beta.14] — 09.10.2026
 
 - 🐛 **A home with no charger can open Configure** (#990) — thanks @damiano75. It starts at the charger list, so heat pumps and later pages work.

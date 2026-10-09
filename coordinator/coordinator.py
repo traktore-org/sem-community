@@ -11406,9 +11406,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                              "battery_strategy_idle_value",
                              "battery_strategy_self_consume_value",
                              "battery_strategy_off_value")}
+            # (#1054 follow-up) the chargers SEM drives: a unit one of them
+            # points at is a configured charger row, never a near miss.
+            _cfg = self.config or {}
+            _chargers = [c for c in (_cfg.get("ev_chargers") or [])
+                         if isinstance(c, dict)]
+            if not _chargers and _cfg.get("ev_charging_power_sensor"):
+                # the legacy flat-key charger (#595's has_managed_charger)
+                _chargers = [{"id": "ev_charger", **{
+                    k: v for k, v in _cfg.items()
+                    if k.startswith("ev_") and isinstance(v, str) and v}}]
             self._detection_report = build_detection_report(
                 self.hass, configured_entities=self._configured_entity_ids(),
-                strategy_values=_sv)
+                strategy_values=_sv, configured_chargers=_chargers)
         except Exception:  # noqa: BLE001 — evidence must never cost setup
             _LOGGER.debug("detection report skipped", exc_info=True)
             self._detection_report = None
