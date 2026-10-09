@@ -16,7 +16,7 @@ future page that requires a part a home may not own fails here.
 """
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 import voluptuous as vol
