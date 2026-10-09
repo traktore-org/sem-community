@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **The battery mode and reserve you see are what SEM uses** (#1071). One mode control sets every battery. A reserve you never set is 20 %.
 - 🐛 **The battery and the monthly peak now keep to your grid limit** (#1069). Grid charging takes the room left; the peak follows 15-minute slots.
 - 🐛 **A load's power is what it draws while running, not its start-up peak** (#1067) — thanks @lostcontrol. A 200 W dehumidifier read 1.4 kW.
 - 🐛 **Car energy matches the charger's own meter once charging stops** (#1049) — thanks @RienduPre. A high power reading no longer makes home use too low.
