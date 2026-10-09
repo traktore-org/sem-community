@@ -581,10 +581,52 @@ def _coerce_switch_on(value) -> bool:
     return bool(value)
 
 
+def chargers_without(
+    data_chargers: list | None, opts_chargers: list | None, charger_id: str,
+) -> tuple:
+    """(#1054 follow-up) Both charger stores without ``charger_id``.
+
+    Returns ``(data, options)``. A store that did not hold the id is handed
+    back as the SAME object (so a caller can tell "nothing to write"); an
+    absent store (``None``) stays absent. Pure."""
+    def _drop(lst):
+        if lst is None:
+            return None
+        if not any(isinstance(c, dict) and c.get("id") == charger_id for c in lst):
+            return lst
+        return [c for c in lst if not (isinstance(c, dict) and c.get("id") == charger_id)]
+    return _drop(data_chargers), _drop(opts_chargers)
+
+
+def _same_box_as(cid: str, mine: set, existing_fp: list):
+    """(#1054 follow-up) The existing charger id ``cid`` is a second copy
+    of, or ``None``. A copy points at the SAME entity set, or carries the
+    id the old card minted for a repeat click (``<existing>_<n>``) and
+    overlaps it. One shared entity is not a copy: two chargers behind one
+    meter, or sharing ``ev_charger_service_entity_id``, are two boxes."""
+    if not mine:
+        return None
+    for eid, fp in existing_fp:
+        if not fp:
+            continue
+        if mine == fp:
+            return eid
+        suffix = cid[len(eid) + 1:] if cid.startswith(f"{eid}_") else ""
+        if suffix.isdigit() and (mine & fp):
+            return eid
+    return None
+
+
 def _merge_ev_chargers_by_id(
-    existing: list, incoming: list,
+    existing: list, incoming: list, *, fold_same_box: bool = False,
 ) -> list:
     """Merge an ``ev_chargers`` list by ``id`` rather than full-replace.
+
+    ``fold_same_box`` (#1054 follow-up): an incoming charger under a NEW id
+    that is a copy of an existing one (``_same_box_as``) is merged into
+    it. Only the set_option service asks for this — the create button's
+    path; the start-up heal never folds, so an upgrade with the same box
+    saved twice under two ids keeps both for the user to sort out.
 
     Built for the set_option service path so a partial submit from the
     Config card (one charger's worth of fields) can never drop sibling
@@ -610,15 +652,34 @@ def _merge_ev_chargers_by_id(
     Pure function — no I/O, no HA dependencies. Tested in
     ``tests/test_set_option_smart_merge.py``.
     """
+    from .hardware_detection import charger_entity_ids
+
     incoming_by_id: dict[str, dict] = {}
     new_ids: list[str] = []
     existing_ids = {
         c.get("id") for c in (existing or []) if isinstance(c, dict)
     }
+    existing_fp = [(c.get("id"), charger_entity_ids(c))
+                   for c in (existing or [])
+                   if isinstance(c, dict) and c.get("id")]
     for inc in incoming or []:
         if not isinstance(inc, dict):
             continue
         cid = inc.get("id")
+        if fold_same_box and cid and cid not in existing_ids:
+            # (#1054 follow-up) The same box under a new id — the card
+            # minted ``<id>_1`` for every further "create this charger"
+            # click — folds into the charger it is a copy of. A service is
+            # not an identity (two KEBAs answer to the same one), so a
+            # skeleton with no entities stays new; so does a charger that
+            # merely shares one entity.
+            same = _same_box_as(str(cid), charger_entity_ids(inc), existing_fp)
+            if same is not None:
+                _LOGGER.info(
+                    "ev_chargers merge: %s points at the entities of %s — "
+                    "folded into it, not added twice", cid, same)
+                cid = same
+                inc = {**inc, "id": cid}
         if not cid:
             # Id-less entries are untargetable ghosts: per-charger writes
             # match on ``id``, and at registration a ghost gets assigned a
@@ -3792,8 +3853,8 @@ async def _async_register_services(
 
         days = call.data.get("days") or 365
         tracker = getattr(coordinator, "_battery_night", None)
-        from .coordinator.install_modules import Module, Presence, presence_of
-        if presence_of(coordinator).get(Module.BATTERY) is Presence.ABSENT:
+        from .coordinator.coordinator import battery_unseen
+        if battery_unseen(coordinator):
             # (#1063) No battery, no battery nights — the recorder skips
             # such a home, so "try again later" would never come true.
             _LOGGER.warning(
@@ -5775,7 +5836,7 @@ async def _async_register_phase_services(
             options = {
                 **options,
                 "ev_chargers": _merge_ev_chargers_by_id(
-                    existing_list, options["ev_chargers"],
+                    existing_list, options["ev_chargers"], fold_same_box=True,
                 ),
             }
 
@@ -6014,11 +6075,22 @@ async def _async_register_phase_services(
         if len(kept) == len(dicts):
             _LOGGER.warning("remove_charger: id %s not found — nothing removed", charger_id)
             return
+        # (#1054 follow-up) A charger lives in TWO stores: ``entry.data``
+        # (what setup wrote) and ``entry.options`` (what the user changed).
+        # Removing it from options alone let the start-up heal put it back
+        # from data on the next reload — weindler's "Healed ev_chargers
+        # options list: stored ids [] -> healed ids ['goecharger_…']". A
+        # remove removes it everywhere it lives.
+        new_data_list, _ = chargers_without(
+            (target_entry.data or {}).get("ev_chargers"), None, charger_id)
         new_options = {**(target_entry.options or {}), "ev_chargers": kept}
         coordinator = getattr(target_entry, "runtime_data", None)
         if coordinator is not None:
             coordinator._skip_options_reload = dict(new_options)
-        hass.config_entries.async_update_entry(target_entry, options=new_options)
+        update: dict = {"options": new_options}
+        if new_data_list is not (target_entry.data or {}).get("ev_chargers"):
+            update["data"] = {**(target_entry.data or {}), "ev_chargers": new_data_list}
+        hass.config_entries.async_update_entry(target_entry, **update)
         await hass.config_entries.async_reload(target_entry.entry_id)
         _LOGGER.info("Removed EV charger '%s' (%d remain)", charger_id, len(kept))
 

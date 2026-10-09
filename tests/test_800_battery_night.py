@@ -254,6 +254,12 @@ class TestCoordinatorWiring:
         h._record_battery_night = SEMCoordinator._record_battery_night.__get__(h)
         h._outdoor_temp_c = SEMCoordinator._outdoor_temp_c.__get__(h)
         h.config = {"battery_reserve_soc": 20}
+        # (#1063 round 2) a battery home says so: the recorder records
+        # only a battery SEM can see
+        from custom_components.solar_energy_management.coordinator.install_modules import (
+            Module, Presence,
+        )
+        h.setup_presence = {Module.BATTERY: Presence.PRESENT}
         h.time_manager = SimpleNamespace(is_night_mode=lambda: night["v"])
         h._cycle_forecast = SimpleNamespace(
             available=True, forecast_today_kwh=28.0)
@@ -444,6 +450,12 @@ class TestCoordinatorPersistsEveryCycle:
         h._record_battery_night = SEMCoordinator._record_battery_night.__get__(h)
         h._outdoor_temp_c = SEMCoordinator._outdoor_temp_c.__get__(h)
         h.config = {"battery_reserve_soc": 20}
+        # (#1063 round 2) a battery home says so: the recorder records
+        # only a battery SEM can see
+        from custom_components.solar_energy_management.coordinator.install_modules import (
+            Module, Presence,
+        )
+        h.setup_presence = {Module.BATTERY: Presence.PRESENT}
         h.time_manager = SimpleNamespace(is_night_mode=lambda: True)
         h._cycle_forecast = SimpleNamespace(available=False)
         h._forecast_tracker = SimpleNamespace(apply_dampening=lambda k: k)
@@ -517,6 +529,12 @@ class TestTheNightActuallyReachesDisk:
         h._record_battery_night = SEMCoordinator._record_battery_night.__get__(h)
         h._outdoor_temp_c = SEMCoordinator._outdoor_temp_c.__get__(h)
         h.config = {"battery_reserve_soc": 20}
+        # (#1063 round 2) a battery home says so: the recorder records
+        # only a battery SEM can see
+        from custom_components.solar_energy_management.coordinator.install_modules import (
+            Module, Presence,
+        )
+        h.setup_presence = {Module.BATTERY: Presence.PRESENT}
         h.time_manager = SimpleNamespace(is_night_mode=lambda: True)
         h._cycle_forecast = SimpleNamespace(available=False)
         h._forecast_tracker = SimpleNamespace(apply_dampening=lambda k: k)
@@ -557,6 +575,12 @@ class TestVerdictRefreshOnPhaseFlip:
         h._record_battery_night = SEMCoordinator._record_battery_night.__get__(h)
         h._outdoor_temp_c = SEMCoordinator._outdoor_temp_c.__get__(h)
         h.config = {"battery_reserve_soc": 20}
+        # (#1063 round 2) a battery home says so: the recorder records
+        # only a battery SEM can see
+        from custom_components.solar_energy_management.coordinator.install_modules import (
+            Module, Presence,
+        )
+        h.setup_presence = {Module.BATTERY: Presence.PRESENT}
         h._in_night = True
         h.time_manager = SimpleNamespace(is_night_mode=lambda: h._in_night)
         h._cycle_forecast = SimpleNamespace(available=False)

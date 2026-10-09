@@ -21,6 +21,7 @@
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semDefineCard, semCardSurfaceCSS } from '../base/sem-shared.js';
 import { priceLevelKey } from '../util/price-level.js';
+import { chargerAddPlan, detectRowLabelKey, isPowerEntity } from '../util/detect-rows.js';
 
 // Section index — order = visual order in the rendered tab. Each entry
 // carries a colour-accent that matches the section icon, mirroring the
@@ -1273,8 +1274,8 @@ class SEMConfigCard extends SEMLitBase {
                 </div>` : nothing}
             ${chargers.map((c) => html`
                 <div class="row" style="font-weight:600">
-                    <span class="lbl">${this._t('config_detect_charger')}: ${c.platform}</span>
-                    <span>${c.control}</span>
+                    <span class="lbl">${this._t('config_detect_charger')}: ${c.platform}${c.name ? ' · ' + c.name : ''}</span>
+                    <span>${c.control}${c.configured ? html` · <span style="opacity:.7">✓ ${this._t('config_detect_configured')}</span>` : nothing}</span>
                 </div>
                 ${Object.entries(c.mapped || {}).map(([k, v]) => roleRow(k, v))}
                 ${(c.unmapped || []).length ? html`
@@ -1285,7 +1286,7 @@ class SEMConfigCard extends SEMLitBase {
             ${misses.map((m) => html`
                 <div class="row" style="color:${T.warn || '#ffb74d'}">
                     <span class="lbl">⚠ ${m.roster?.name || m.platform}</span>
-                    <span>${this._t('config_detect_near_miss')}</span>
+                    <span>${this._t(detectRowLabelKey(m))}</span>
                 </div>
                 <div class="setting-help-text" style="margin:-2px 0 8px">
                     ${(m.entities || []).map((e) => e.entity).join(', ')}
@@ -1770,21 +1771,23 @@ class SEMConfigCard extends SEMLitBase {
     // like. Everything stays editable afterwards in the EV chargers
     // section, and nothing is written until this button is pressed.
     async _addSuggestedCharger(suggested) {
-        if (this._chargerBusy || !suggested || !suggested.id) return;
+        if (this._chargerBusy) return;
         const existing = (this._options.ev_chargers || []);
-        const ids = new Set([
+        // (#1054 follow-up) a charger that exists is there — never a
+        // ``<id>_1`` copy per click. The backend folds a same-box submit
+        // into the existing charger too (set_option merge), so a stale
+        // card cache cannot make a second one either.
+        const plan = chargerAddPlan(suggested, [
             ...existing.map(c => c && c.id).filter(Boolean),
             ...this._chargersList(),
-        ]);
-        let id = suggested.id, n = 1;
-        while (ids.has(id)) { id = `${suggested.id}_${n++}`; }
-        const charger = { ...suggested, id,
-                          ev_min_current: 6,
-                          ev_surplus_priority: existing.length + 3 };
+        ], existing.length);
+        if (plan.action === 'none') return;
         this._chargerBusy = true;
         this.requestUpdate();
         try {
-            await this._saveOption('ev_chargers', [charger], 'ev_chargers_add');
+            if (plan.action === 'add') {
+                await this._saveOption('ev_chargers', [plan.charger], 'ev_chargers_add');
+            }
             await this._refreshOptions();
         } finally {
             this._chargerBusy = false;
@@ -1975,7 +1978,8 @@ class SEMConfigCard extends SEMLitBase {
                         .hass=${this._hass}
                         .value=${cur}
                         .includeDomains=${domain ? (Array.isArray(domain) ? domain : [domain]) : undefined}
-                        .includeDeviceClasses=${deviceClass ? [deviceClass] : undefined}
+                        .includeDeviceClasses=${deviceClass && deviceClass !== 'power' ? [deviceClass] : undefined}
+                        .entityFilter=${deviceClass === 'power' ? isPowerEntity : undefined}
                         .allowCustomEntity=${false}
                         @value-changed=${(e) => onChange(e.detail?.value || '')}>
                     </ha-entity-picker>
@@ -2108,7 +2112,8 @@ class SEMConfigCard extends SEMLitBase {
                         .hass=${this._hass}
                         .value=${cur}
                         .includeDomains=${domain ? (Array.isArray(domain) ? domain : [domain]) : undefined}
-                        .includeDeviceClasses=${deviceClass ? [deviceClass] : undefined}
+                        .includeDeviceClasses=${deviceClass && deviceClass !== 'power' ? [deviceClass] : undefined}
+                        .entityFilter=${deviceClass === 'power' ? isPowerEntity : undefined}
                         .allowCustomEntity=${false}
                         @value-changed=${(e) => onChange(e.detail?.value || '')}>
                     </ha-entity-picker>

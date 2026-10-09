@@ -186,6 +186,11 @@ def _coordinator(charger, config=None, blocks=None):
     c.hass = None
     c.config = {"ev_chargers": [charger], **(config or {})}
     c._ev_blocks_for = lambda cid, now=None: blocks
+    # (#1063 round 2) the saved size alone is no battery; this home has one
+    from custom_components.solar_energy_management.coordinator.install_modules import (
+        Module, Presence,
+    )
+    c.setup_presence = {Module.BATTERY: Presence.PRESENT}
     return c
 
 
