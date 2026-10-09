@@ -598,10 +598,35 @@ def chargers_without(
     return _drop(data_chargers), _drop(opts_chargers)
 
 
+def _same_box_as(cid: str, mine: set, existing_fp: list):
+    """(#1054 follow-up) The existing charger id ``cid`` is a second copy
+    of, or ``None``. A copy points at the SAME entity set, or carries the
+    id the old card minted for a repeat click (``<existing>_<n>``) and
+    overlaps it. One shared entity is not a copy: two chargers behind one
+    meter, or sharing ``ev_charger_service_entity_id``, are two boxes."""
+    if not mine:
+        return None
+    for eid, fp in existing_fp:
+        if not fp:
+            continue
+        if mine == fp:
+            return eid
+        suffix = cid[len(eid) + 1:] if cid.startswith(f"{eid}_") else ""
+        if suffix.isdigit() and (mine & fp):
+            return eid
+    return None
+
+
 def _merge_ev_chargers_by_id(
-    existing: list, incoming: list,
+    existing: list, incoming: list, *, fold_same_box: bool = False,
 ) -> list:
     """Merge an ``ev_chargers`` list by ``id`` rather than full-replace.
+
+    ``fold_same_box`` (#1054 follow-up): an incoming charger under a NEW id
+    that is a copy of an existing one (``_same_box_as``) is merged into
+    it. Only the set_option service asks for this — the create button's
+    path; the start-up heal never folds, so an upgrade with the same box
+    saved twice under two ids keeps both for the user to sort out.
 
     Built for the set_option service path so a partial submit from the
     Config card (one charger's worth of fields) can never drop sibling
@@ -641,14 +666,14 @@ def _merge_ev_chargers_by_id(
         if not isinstance(inc, dict):
             continue
         cid = inc.get("id")
-        if cid and cid not in existing_ids:
+        if fold_same_box and cid and cid not in existing_ids:
             # (#1054 follow-up) The same box under a new id — the card
             # minted ``<id>_1`` for every further "create this charger"
-            # click — folds into the charger that already points at its
-            # entities. A service is not an identity (two KEBAs answer to
-            # the same one), so a skeleton with no entities stays new.
-            mine = charger_entity_ids(inc)
-            same = next((eid for eid, fp in existing_fp if mine and mine & fp), None)
+            # click — folds into the charger it is a copy of. A service is
+            # not an identity (two KEBAs answer to the same one), so a
+            # skeleton with no entities stays new; so does a charger that
+            # merely shares one entity.
+            same = _same_box_as(str(cid), charger_entity_ids(inc), existing_fp)
             if same is not None:
                 _LOGGER.info(
                     "ev_chargers merge: %s points at the entities of %s — "
@@ -5811,7 +5836,7 @@ async def _async_register_phase_services(
             options = {
                 **options,
                 "ev_chargers": _merge_ev_chargers_by_id(
-                    existing_list, options["ev_chargers"],
+                    existing_list, options["ev_chargers"], fold_same_box=True,
                 ),
             }
 

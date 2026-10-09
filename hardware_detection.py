@@ -1436,6 +1436,16 @@ CHARGER_ENTITY_KEYS = frozenset({
 })
 
 
+#: The keys a configured charger's report row shows: its entities and how
+#: SEM talks to it. Modes, targets and priorities are settings, not roles.
+_CONFIGURED_ROW_KEYS = CHARGER_ENTITY_KEYS | frozenset({
+    "ev_charger_service", "ev_service_param_name", "ev_charger_service_data",
+    "ev_start_service", "ev_start_service_data",
+    "ev_stop_service", "ev_stop_service_data",
+    "ev_charge_mode_start", "ev_charge_mode_stop", "ev_phase_switch_entity",
+})
+
+
 def charger_entity_ids(charger: Any) -> set:
     """The entities a charger config points at — its fingerprint."""
     if not isinstance(charger, dict):
@@ -3149,7 +3159,8 @@ def build_detection_report(hass: Optional[HomeAssistant] = None,
         first = next((_by_eid[eid] for eid in sorted(mine) if eid in _by_eid), None)
         mapped: Dict[str, Any] = {}
         for key, val in cfg.items():
-            if key.startswith("_") or key in ("id", "name") or not val:
+            # the wiring only — a mode or a priority is a setting, not a role
+            if key not in _CONFIGURED_ROW_KEYS or not val:
                 continue
             e = _by_eid.get(str(val))
             mapped[key] = _describe(e) if e is not None else {"value": val}

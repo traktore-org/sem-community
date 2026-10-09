@@ -105,11 +105,18 @@ class TestTheReportKnowsWhatIsConfigured:
                                      configured_chargers=[_configured_goe()])
         assert rep["census"]["rows_matched_nothing"] == []
 
-    def test_a_configured_row_carries_no_offer(self):
+    def test_a_configured_row_carries_no_offer_and_only_its_wiring(self):
+        cfg = {**_configured_goe(), "charge_mode": "solar_only",
+               "ev_surplus_priority": 3, "ev_target_soc": 80}
         rep = build_detection_report(registry=_registry(_goe_entities()),
-                                     configured_chargers=[_configured_goe()])
+                                     configured_chargers=[cfg])
         row = next(c for c in rep["chargers"] if c["platform"] == "goecharger")
         assert "offer" not in row
+        assert set(row["mapped"]) == {
+            "ev_charging_power_sensor", "ev_connected_sensor", "ev_charging_sensor",
+            "ev_start_stop_entity", "ev_total_energy_sensor",
+            "ev_charger_service", "ev_service_param_name"}
+        assert row["mapped"]["ev_charger_service"] == {"value": "goecharger.set_max_current"}
 
     def test_a_brand_mapping_that_found_only_a_meter_is_not_a_charger(self):
         """The config path's rule (#1054): a brand path that matched one
@@ -172,6 +179,35 @@ class TestARemoveSticks:
         data = [{"id": "a"}]
         opts = [{"id": "a"}]
         assert chargers_without(data, opts, "zzz") == (data, opts)
+
+    def test_the_dialog_remove_prunes_entry_data(self):
+        """The options dialog's remove step edits ``self._data``; its save
+        goes to options. The prune takes the removed id out of
+        ``entry.data`` too, else the heal restores it."""
+        from unittest.mock import MagicMock
+        from custom_components.solar_energy_management.config_flow import (
+            OptionsFlowHandler,
+        )
+        saved = [{"id": "ev_charger", "name": "A"}, {"id": "ev_charger_1", "name": "B"}]
+        flow = OptionsFlowHandler.__new__(OptionsFlowHandler)
+        flow._data = {"ev_chargers": [dict(saved[0])]}
+        flow.hass = MagicMock()
+        entry = MagicMock(data={"ev_chargers": [dict(c) for c in saved]},
+                          options={"ev_chargers": [dict(c) for c in saved]})
+        type(flow).config_entry = property(lambda self: entry)
+        try:
+            flow._prune_removed_chargers_from_data()
+            flow.hass.config_entries.async_update_entry.assert_called_once()
+            _, kwargs = flow.hass.config_entries.async_update_entry.call_args
+            assert [c["id"] for c in kwargs["data"]["ev_chargers"]] == ["ev_charger"]
+
+            # nothing removed → nothing written
+            flow.hass.config_entries.async_update_entry.reset_mock()
+            flow._data = {"ev_chargers": [dict(c) for c in saved]}
+            flow._prune_removed_chargers_from_data()
+            flow.hass.config_entries.async_update_entry.assert_not_called()
+        finally:
+            del type(flow).config_entry
 
     @pytest.mark.asyncio
     async def test_remove_charger_survives_a_reload(
@@ -288,9 +324,18 @@ class TestCreateIsIdempotent:
         existing = [_configured_goe()]
         again = {**_configured_goe(), "id": "goecharger_dev1_1",
                  "ev_surplus_priority": 4}
-        out = _merge_ev_chargers_by_id(existing, [again])
+        out = _merge_ev_chargers_by_id(existing, [again], fold_same_box=True)
         assert [c["id"] for c in out] == ["goecharger_dev1"]
         assert out[0]["ev_surplus_priority"] == 4
+
+    def test_a_repeat_click_whose_offer_moved_one_entity_still_folds(self):
+        """The crawler re-ran between two clicks and swapped the energy
+        sensor; the old card minted ``<id>_1``. Same box."""
+        existing = [_configured_goe()]
+        again = {**_configured_goe(), "id": "goecharger_dev1_2",
+                 "ev_total_energy_sensor": f"sensor.{P}_energy_total_corrected"}
+        out = _merge_ev_chargers_by_id(existing, [again], fold_same_box=True)
+        assert [c["id"] for c in out] == ["goecharger_dev1"]
 
     def test_a_different_box_is_still_appended(self):
         existing = [_configured_goe()]
@@ -300,14 +345,41 @@ class TestCreateIsIdempotent:
                  "ev_charging_sensor": "sensor.garage_car_status",
                  "ev_start_stop_entity": "switch.garage_allow_charging",
                  "ev_total_energy_sensor": "sensor.garage_energy_total"}
-        out = _merge_ev_chargers_by_id(existing, [other])
+        out = _merge_ev_chargers_by_id(existing, [other], fold_same_box=True)
         assert [c["id"] for c in out] == ["goecharger_dev1", "goecharger_dev2"]
+
+    def test_two_boxes_behind_one_meter_are_two_chargers(self):
+        """Review (09.10): one shared entity is not the same box. Two
+        chargers on one meter, each with its own control, stay two."""
+        left = {"id": "left", "ev_charging_power_sensor": "sensor.shared_meter",
+                "ev_current_control_entity": "number.left"}
+        right = {"id": "right", "ev_charging_power_sensor": "sensor.shared_meter",
+                 "ev_current_control_entity": "number.right", "name": "Right"}
+        out = _merge_ev_chargers_by_id([left], [right], fold_same_box=True)
+        assert [c["id"] for c in out] == ["left", "right"]
+        assert out[0]["ev_current_control_entity"] == "number.left"
+
+    def test_the_heal_never_folds(self):
+        """Upgrade: ``ev_charger`` removed before this fix (still in
+        entry.data), the same box created as ``goecharger_dev1``. The
+        start-up heal must not rename the live charger into the ghost's
+        id — its entities would vanish."""
+        from custom_components.solar_energy_management import (
+            _heal_ev_chargers_options,
+        )
+        ghost = {**_configured_goe(), "id": "ev_charger"}
+        live = _configured_goe()
+        healed = _heal_ev_chargers_options([ghost], [live])
+        assert [c["id"] for c in healed] == ["ev_charger", "goecharger_dev1"]
+        assert _merge_ev_chargers_by_id([ghost], [live])[1]["id"] == "goecharger_dev1"
 
     def test_a_charger_with_no_entities_is_never_folded(self):
         """Two KEBAs both answer to ``keba.set_current``: a service is not
         an identity, and a skeleton with no entities is a new block."""
         existing = [{"id": "A", "ev_charger_service": "keba.set_current"}]
-        out = _merge_ev_chargers_by_id(existing, [{"id": "B", "ev_charger_service": "keba.set_current"}])
+        out = _merge_ev_chargers_by_id(
+            existing, [{"id": "B", "ev_charger_service": "keba.set_current"}],
+            fold_same_box=True)
         assert [c["id"] for c in out] == ["A", "B"]
 
     def test_the_fingerprint_is_the_one_the_flow_uses(self):
