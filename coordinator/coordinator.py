@@ -6945,8 +6945,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         scalar in ``reserve_soc_of``). It was 0 % while the number showed
         20 %, so a manual sell drained past the floor on screen.
 
-        The control-entity lists follow the same rule (#1089): a slot drives
-        its battery only while the per-battery rows that write it are shown.
+        The control-entity lists drive only while more than one battery runs
+        (``count``, #1089): a slot saved while a home had two batteries must
+        not override the one shared entity it shows once it has one.
 
         Which controls exist is ``battery_control_slugs``, captured before
         the first refresh. ``count`` (the live battery count) stands in only
@@ -6954,13 +6955,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         """
         cfg = self.config
         overrides: dict = {}
-        per_battery = has_per_battery_controls(self, count)
         # Control-entity overlays (force-discharge / discharge-limit /
-        # strategy). (#1089) Only with per-battery controls, like mode +
-        # reserve below: the Config tab and Configure show a row per battery
-        # only then. A home down to one battery shows the one shared entity,
-        # and a slot saved while it had two must not override it unseen.
-        if per_battery:
+        # strategy). (#1089) Only while more than one battery runs NOW: a
+        # home down to one battery shows the one shared entity, and a slot
+        # saved while it had two must not override it unseen. The live
+        # count, not the captured slugs: the capture can be stale after a
+        # battery is removed, or empty on a cold boot while two run — and a
+        # Sessy b2 that loses its strategy select is built as the
+        # inverter's battery (#531).
+        if count > 1:
             for list_key, single_key in (
                 ("battery_force_discharge_entities", "battery_force_discharge_control_entity"),
                 ("battery_discharge_control_entities", "battery_discharge_control_entity"),
@@ -6972,7 +6975,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # Per-battery mode + reserve SOC (#523). Only when the install has
         # per-battery controls (#1071) — with the one global control the
         # scalar keys stand as they are, for every battery.
-        if per_battery:
+        if has_per_battery_controls(self, count):
             for list_key, single_key, shown_default in (
                 ("battery_modes", "battery_mode", DEFAULT_BATTERY_MODE),
                 ("battery_reserve_socs", "battery_reserve_soc",

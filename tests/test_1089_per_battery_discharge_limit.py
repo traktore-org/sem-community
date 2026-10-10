@@ -203,16 +203,38 @@ class TestWhatThePageWritesReachesEachBattery:
         # battery the whole of it while the other runs free.
         assert effective_battery_count(views) == 2
 
-    def test_a_slot_left_from_two_batteries_does_not_hide_the_shared_one(self):
+    @pytest.mark.parametrize("slugs", [(), ("b1", "b2")])
+    def test_a_slot_left_from_two_batteries_does_not_hide_the_shared_one(self, slugs):
         """Review finding: a home down to one battery shows only the shared
         field. A slot saved while it had two must not override it unseen —
-        the lists drive only where their rows are shown (#1071's rule)."""
+        also when the slugs captured at setup are stale (the registry still
+        held both power sensors)."""
         coord = SEMCoordinator.__new__(SEMCoordinator)
         coord.config = {"battery_discharge_control_entity": "number.sessy_b_maximum_power",
                         LIST_KEY: ["number.sessy_a_maximum_power", "number.sessy_b_maximum_power"]}
-        coord.battery_control_slugs = ()
+        coord.battery_control_slugs = slugs
         view = coord._per_battery_config(0, 1)
         assert view["battery_discharge_control_entity"] == "number.sessy_b_maximum_power"
+
+    def test_two_running_batteries_keep_their_lists_on_an_empty_capture(self):
+        """Second review (HIGH if broken): a cold boot can capture no slugs
+        while two batteries run. A Sessy b2 in a Huawei home must keep its
+        own strategy select and setpoint, or it is built as the inverter's
+        battery (#531)."""
+        coord = SEMCoordinator.__new__(SEMCoordinator)
+        coord.config = {
+            "battery_force_discharge_control_entity": "number.luna_forcible",
+            "battery_strategy_entities": [None, "select.sessy_power_strategy"],
+            "battery_force_discharge_entities": [None, "number.sessy_setpoint"],
+            LIST_KEY: [None, "number.sessy_maximum_power"],
+        }
+        coord.battery_control_slugs = ()
+        b2 = coord._per_battery_config(1, 2)
+        assert b2["battery_strategy_control_entity"] == "select.sessy_power_strategy"
+        assert b2["battery_force_discharge_control_entity"] == "number.sessy_setpoint"
+        assert b2["battery_discharge_control_entity"] == "number.sessy_maximum_power"
+        b1 = coord._per_battery_config(0, 2)
+        assert b1["battery_force_discharge_control_entity"] == "number.luna_forcible"
 
     def test_before_the_fix_both_batteries_shared_one_entity(self):
         """The reported state: the one field, no list."""

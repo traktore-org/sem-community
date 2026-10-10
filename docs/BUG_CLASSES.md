@@ -1136,8 +1136,10 @@ battery (`settings_battery_limit`, one field, so any count fits); guard
 `tests/test_1089_per_battery_discharge_limit.py::TestEveryPerBatteryListHasARow` (every
 control-entity list `_per_battery_config` overlays has a Config-tab row) and
 `dashboard/card/test/battery-discharge-limit.test.js`. Review: the lists now drive a battery only
-while the rows are shown (`has_per_battery_controls`, class 19's #1071 rule), so a slot left from two
-batteries cannot hide the shared field on a home down to one.
+while more than one battery runs (the live count), so a slot left from two batteries cannot hide the
+shared field on a home down to one. Not the captured slugs: they can be stale after a removal, or
+empty on a cold boot while two run — and a Sessy b2 without its strategy select is built as the
+inverter's battery (#531).
 **Second half (16.08.2026):** a field you can type into is not yet a surface you can *correct* —
 the class also lives in what a form does with the value you did **not** type. HA drops a cleared
 optional field out of `user_input` entirely, so `update(user_input)` cannot tell "left alone" from
