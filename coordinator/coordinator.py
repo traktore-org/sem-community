@@ -6945,25 +6945,34 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         scalar in ``reserve_soc_of``). It was 0 % while the number showed
         20 %, so a manual sell drained past the floor on screen.
 
+        The control-entity lists follow the same rule (#1089): a slot drives
+        its battery only while the per-battery rows that write it are shown.
+
         Which controls exist is ``battery_control_slugs``, captured before
         the first refresh. ``count`` (the live battery count) stands in only
         where nothing was captured.
         """
         cfg = self.config
         overrides: dict = {}
-        # Control-entity overlays (force-discharge / discharge-limit).
-        for list_key, single_key in (
-            ("battery_force_discharge_entities", "battery_force_discharge_control_entity"),
-            ("battery_discharge_control_entities", "battery_discharge_control_entity"),
-            ("battery_strategy_entities", "battery_strategy_control_entity"),
-        ):
-            lst = cfg.get(list_key)
-            if isinstance(lst, list) and idx < len(lst) and lst[idx]:
-                overrides[single_key] = lst[idx]
+        per_battery = has_per_battery_controls(self, count)
+        # Control-entity overlays (force-discharge / discharge-limit /
+        # strategy). (#1089) Only with per-battery controls, like mode +
+        # reserve below: the Config tab and Configure show a row per battery
+        # only then. A home down to one battery shows the one shared entity,
+        # and a slot saved while it had two must not override it unseen.
+        if per_battery:
+            for list_key, single_key in (
+                ("battery_force_discharge_entities", "battery_force_discharge_control_entity"),
+                ("battery_discharge_control_entities", "battery_discharge_control_entity"),
+                ("battery_strategy_entities", "battery_strategy_control_entity"),
+            ):
+                lst = cfg.get(list_key)
+                if isinstance(lst, list) and idx < len(lst) and lst[idx]:
+                    overrides[single_key] = lst[idx]
         # Per-battery mode + reserve SOC (#523). Only when the install has
         # per-battery controls (#1071) — with the one global control the
         # scalar keys stand as they are, for every battery.
-        if has_per_battery_controls(self, count):
+        if per_battery:
             for list_key, single_key, shown_default in (
                 ("battery_modes", "battery_mode", DEFAULT_BATTERY_MODE),
                 ("battery_reserve_socs", "battery_reserve_soc",

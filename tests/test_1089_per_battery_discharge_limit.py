@@ -124,7 +124,7 @@ class TestConfigureHasOneFieldPerBattery:
         assert flow._data[LIST_KEY] == ["number.a", "number.b2", "number.c"]
 
     @pytest.mark.asyncio
-    async def test_without_the_coordinator_the_sensor_is_sems_own(self, mock_hass, config_entry):
+    async def test_without_dashboard_sources_the_sensor_is_sems_own(self, mock_hass, config_entry):
         flow = _flow(mock_hass, config_entry, {}, _coordinator(("b1", "b2")))
         first = await _page(flow, config_entry)
         assert first["description_placeholders"]["sensor"] == "sensor.sem_battery_b1_power"
@@ -203,6 +203,17 @@ class TestWhatThePageWritesReachesEachBattery:
         # battery the whole of it while the other runs free.
         assert effective_battery_count(views) == 2
 
+    def test_a_slot_left_from_two_batteries_does_not_hide_the_shared_one(self):
+        """Review finding: a home down to one battery shows only the shared
+        field. A slot saved while it had two must not override it unseen —
+        the lists drive only where their rows are shown (#1071's rule)."""
+        coord = SEMCoordinator.__new__(SEMCoordinator)
+        coord.config = {"battery_discharge_control_entity": "number.sessy_b_maximum_power",
+                        LIST_KEY: ["number.sessy_a_maximum_power", "number.sessy_b_maximum_power"]}
+        coord.battery_control_slugs = ()
+        view = coord._per_battery_config(0, 1)
+        assert view["battery_discharge_control_entity"] == "number.sessy_b_maximum_power"
+
     def test_before_the_fix_both_batteries_shared_one_entity(self):
         """The reported state: the one field, no list."""
         config = {"battery_discharge_control_entity": "number.sessy_a_maximum_power"}
@@ -210,6 +221,26 @@ class TestWhatThePageWritesReachesEachBattery:
         assert {v["battery_discharge_control_entity"] for v in views} == {
             "number.sessy_a_maximum_power"}
         assert effective_battery_count(views) == 1
+
+
+class TestAnEmptyListIsNoBattery:
+    """Review finding: a click through Configure saves ``[None, None]``. A
+    list with no entity in it is not evidence of a battery (class 124)."""
+
+    def test_all_empty_slots_wire_nothing(self):
+        from custom_components.solar_energy_management.coordinator.install_modules import (
+            BATTERY_WIRING_KEYS, _wired,
+        )
+        assert not _wired({LIST_KEY: [None, None]}, BATTERY_WIRING_KEYS)
+        assert not _wired({LIST_KEY: ["", None],
+                           "battery_force_discharge_entities": [None]}, BATTERY_WIRING_KEYS)
+        assert _wired({LIST_KEY: [None, "number.b"]}, BATTERY_WIRING_KEYS)
+
+    def test_a_charger_list_still_wires_the_car(self):
+        from custom_components.solar_energy_management.coordinator.install_modules import (
+            EV_WIRING_KEYS, _wired,
+        )
+        assert _wired({"ev_chargers": [{"id": "ev_charger"}]}, EV_WIRING_KEYS)
 
 
 class TestEveryPerBatteryListHasARow:

@@ -44,16 +44,16 @@ def test_per_battery_force_discharge_entities():
         "battery_force_discharge_entities": ["number.b1_sell", "number.b2_sell"],
         "battery_force_discharge_control_entity": "number.global_sell",
     }
-    assert _per(cfg, 0)["battery_force_discharge_control_entity"] == "number.b1_sell"
-    assert _per(cfg, 1)["battery_force_discharge_control_entity"] == "number.b2_sell"
+    assert _per2(cfg, 0)["battery_force_discharge_control_entity"] == "number.b1_sell"
+    assert _per2(cfg, 1)["battery_force_discharge_control_entity"] == "number.b2_sell"
 
 
 def test_per_battery_discharge_limit_entities():
     cfg = {
         "battery_discharge_control_entities": ["number.b1_limit", "number.b2_limit"],
     }
-    assert _per(cfg, 0)["battery_discharge_control_entity"] == "number.b1_limit"
-    assert _per(cfg, 1)["battery_discharge_control_entity"] == "number.b2_limit"
+    assert _per2(cfg, 0)["battery_discharge_control_entity"] == "number.b1_limit"
+    assert _per2(cfg, 1)["battery_discharge_control_entity"] == "number.b2_limit"
 
 
 def test_missing_or_empty_list_entry_falls_back():
@@ -62,10 +62,10 @@ def test_missing_or_empty_list_entry_falls_back():
         "battery_force_discharge_control_entity": "number.global_sell",
     }
     # b2 (empty entry) keeps the global entity; b1 gets its own.
-    assert _per(cfg, 0)["battery_force_discharge_control_entity"] == "number.b1_sell"
-    assert _per(cfg, 1)["battery_force_discharge_control_entity"] == "number.global_sell"
+    assert _per2(cfg, 0)["battery_force_discharge_control_entity"] == "number.b1_sell"
+    assert _per2(cfg, 1)["battery_force_discharge_control_entity"] == "number.global_sell"
     # idx beyond the list → global
-    assert _per(cfg, 5)["battery_force_discharge_control_entity"] == "number.global_sell"
+    assert _per2(cfg, 5)["battery_force_discharge_control_entity"] == "number.global_sell"
 
 
 def test_global_config_not_mutated():
@@ -73,7 +73,7 @@ def test_global_config_not_mutated():
         "battery_force_discharge_entities": ["number.b1_sell"],
         "battery_force_discharge_control_entity": "number.global_sell",
     }
-    _per(cfg, 0)
+    _per2(cfg, 0)
     # The overlay must be a copy — the shared global config is untouched.
     assert cfg["battery_force_discharge_control_entity"] == "number.global_sell"
 

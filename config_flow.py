@@ -2613,12 +2613,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         """
         list_key = "battery_discharge_control_entities"
         slugs = self._battery_slugs()
-        if len(slugs) < 2:
-            saved = (self.config_entry.options or {}).get(list_key)
-            if saved is not None:
-                self._data.setdefault("battery_discharge_control_entities", saved)
-            return await self.async_step_settings_ev()
-
         idx = self._battery_limit_idx
         if user_input is not None:
             # The page's one field is THIS battery's
@@ -2632,6 +2626,14 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             self._data["battery_discharge_control_entities"] = limits
             idx += 1
             self._battery_limit_idx = idx
+        if len(slugs) < 2:
+            # Skipped (or SEM reloaded with fewer batteries mid-dialog): the
+            # key is owned, so the saved list must reach the final save.
+            saved = (self.config_entry.options or {}).get(list_key)
+            if saved is not None:
+                self._data.setdefault("battery_discharge_control_entities",
+                                      list(saved) if isinstance(saved, list) else saved)
+            return await self.async_step_settings_ev()
         if idx >= len(slugs):
             return await self.async_step_settings_ev()
 

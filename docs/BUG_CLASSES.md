@@ -1133,9 +1133,11 @@ list — Config tab and Configure showed the one shared entity. Two Sessys, one 
 first and the second discharged into the car. Closed by one row per battery on the Config tab (one
 generic `_renderBatteryListPicker` for all three per-battery lists) and one Configure page per
 battery (`settings_battery_limit`, one field, so any count fits); guard
-`tests/test_1089_per_battery_discharge_limit.py::TestEveryPerBatteryListHasARow` (every list
-`_per_battery_config` overlays has a Config-tab row) and
-`dashboard/card/test/battery-discharge-limit.test.js`.
+`tests/test_1089_per_battery_discharge_limit.py::TestEveryPerBatteryListHasARow` (every
+control-entity list `_per_battery_config` overlays has a Config-tab row) and
+`dashboard/card/test/battery-discharge-limit.test.js`. Review: the lists now drive a battery only
+while the rows are shown (`has_per_battery_controls`, class 19's #1071 rule), so a slot left from two
+batteries cannot hide the shared field on a home down to one.
 **Second half (16.08.2026):** a field you can type into is not yet a surface you can *correct* —
 the class also lives in what a form does with the value you did **not** type. HA drops a cleared
 optional field out of `user_input` entirely, so `update(user_input)` cannot tell "left alone" from
