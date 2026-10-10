@@ -99,7 +99,7 @@ const FIELD_STYLE =
  * @param {(key:string)=>string} t  translate fn
  * @param {boolean} hasManual  show the "Remove mapping" button (manual mapping set)
  */
-export function buildLoadConfigModalHTML({ deviceName, values, t, hasManual = false }) {
+export function buildLoadConfigModalHTML({ deviceName, values, t, hasManual = false, behindRelay = null }) {
     const v = values;
     const isService = v.type === 'service';
     const opt = (val, label) =>
@@ -134,6 +134,19 @@ export function buildLoadConfigModalHTML({ deviceName, values, t, hasManual = fa
                     </div>
                 </div>
             </div>
+            ${behindRelay === null ? '' : `
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:4px 0 2px">
+                <span style="font-size:14px">${t('cfg_behind_operator_relay')}</span>
+                <span id="cfg-relay" role="switch" aria-checked="${behindRelay ? 'true' : 'false'}" class="${behindRelay ? 'on' : ''}"
+                      style="cursor:pointer"></span>
+            </div>
+            <div style="font-size:12px;opacity:.65;font-style:italic;margin:0 0 12px;max-width:340px">${t('cfg_help_behind_operator_relay')}</div>
+            <style>
+                #cfg-relay { width:36px;height:20px;border-radius:10px;background:rgba(127,127,127,.45);position:relative;display:inline-block;flex:none;transition:background .15s }
+                #cfg-relay::after { content:'';position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .15s }
+                #cfg-relay.on { background:#4caf50 }
+                #cfg-relay.on::after { left:18px }
+            </style>`}
             <div class="cfg-error" style="color:#f44336;font-size:13px;margin:4px 0 8px;display:none"></div>
             <div style="display:flex;gap:8px;align-items:center">
                 ${hasManual ? `<button id="cfg-remove" style="padding:8px 12px;border-radius:6px;border:none;cursor:pointer;background:transparent;color:#f44336">${t('clear_mapping')}</button>` : ''}

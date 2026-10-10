@@ -280,7 +280,9 @@
           "emergency_peak_level": "Hätätason huipputeho (kW)",
           "vehicle_soc_entity": "Ajoneuvon akun SOC",
           "ev_battery_capacity_kwh": "Sähköauton akun kapasiteetti (kWh)",
-          "ev_target_soc": "Katso täydeksi kohdassa (%)"
+          "ev_target_soc": "Katso täydeksi kohdassa (%)",
+          "shed_signal_entity": "Verkkoyhtiön rele",
+          "shed_signal_limit": "Verkkoraja sen ollessa päällä (kW)"
         },
         "data_description": {
           "load_management_enabled": "Ota käyttöön tai poista käytöstä SEM:n automaattinen kuormien pudotus, jolla pysytään verkon huipputehorajan alapuolella.",
@@ -290,7 +292,9 @@
           "emergency_peak_level": "Tehotaso (kW), jolla SEM pudottaa kuormia voimakkaasti välttääkseen tehomaksuja. On oltava tavoitehuippurajan yläpuolella.",
           "vehicle_soc_entity": "Valinnainen anturi, joka kertoo ajoneuvon nykyisen varaustason (0–100 %).",
           "ev_battery_capacity_kwh": "Sähköauton akun käytettävissä oleva kokonaiskapasiteetti kilowattitunteina.",
-          "ev_target_soc": "Tästä lähtien SEM pitää autoa ladattuna. Tämä on \"täyden\" määritelmä, ei latausraja."
+          "ev_target_soc": "Tästä lähtien SEM pitää autoa ladattuna. Tämä on \"täyden\" määritelmä, ei latausraja.",
+          "shed_signal_entity": "Kosketin, jota verkkoyhtiösi ohjaa (§14a, kaukokäyttö). Jätä tyhjäksi, jos sinulla ei ole sitä.",
+          "shed_signal_limit": "Kun rele on päällä, SEM pitää talon verkosta oton tämän rajan alla. Aurinkosähkö sen päälle on sallittu."
         }
       },
       "notifications": {

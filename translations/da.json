@@ -280,7 +280,9 @@
           "emergency_peak_level": "Nødniveau for spidsbelastning (kW)",
           "vehicle_soc_entity": "Køretøjsbatteri SOC",
           "ev_battery_capacity_kwh": "EV-batterikapacitet (kWh)",
-          "ev_target_soc": "Betragt som fuld ved (%)"
+          "ev_target_soc": "Betragt som fuld ved (%)",
+          "shed_signal_entity": "Netselskabets relæ",
+          "shed_signal_limit": "Netgrænse mens det er til (kW)"
         },
         "data_description": {
           "load_management_enabled": "Slå SEM's automatiske lastfrakobling til/fra, så du holder dig under din spidsbelastningsgrænse.",
@@ -290,7 +292,9 @@
           "emergency_peak_level": "Effektniveau (kW), hvor SEM aggressivt frakobler laster for at undgå effekttarif-gebyrer. Skal være over den målsatte spidsgrænse.",
           "vehicle_soc_entity": "Valgfri sensor, der rapporterer køretøjets aktuelle ladetilstand (0–100 %).",
           "ev_battery_capacity_kwh": "EV-batteriets samlede anvendelige kapacitet i kWh.",
-          "ev_target_soc": "Herfra betragter SEM bilen som opladet. Det er en definition af \"fuld\", ikke en ladegrænse."
+          "ev_target_soc": "Herfra betragter SEM bilen som opladet. Det er en definition af \"fuld\", ikke en ladegrænse.",
+          "shed_signal_entity": "Kontakten dit netselskab styrer (§14a, fjernstyring). Lad feltet stå tomt, hvis du ikke har en.",
+          "shed_signal_limit": "Mens relæet er til, holder SEM husets nettræk under denne grænse. Sol oveni er tilladt."
         }
       },
       "notifications": {

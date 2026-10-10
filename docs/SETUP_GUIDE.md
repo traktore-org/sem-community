@@ -911,6 +911,30 @@ Check these in order:
 
 ---
 
+### Grid operator relay (§14a, ripple control) (#1021)
+
+Some grid operators can tell your house to use less power. SEM can follow that
+signal. It is off until you pick a relay.
+
+**Wire the relay into Home Assistant.** The operator's control box (Steuerbox,
+ripple receiver) closes a contact. Bring that contact in through any
+integration as a `binary_sensor` (or an `input_boolean`). SEM reads it; it
+needs no driver of its own and speaks no EEBus. If an integration publishes
+the EEBus limit as a sensor, SEM can read the limit from it too.
+
+**Germany (§14a EnWG).** Configuration → *Advanced* → Load management →
+*Grid operator relay*: pick the sensor. Once set, it also shows without
+*Advanced*. *Grid limit while it is on*: the limit your operator
+gave you (4.2 kW per device, times the factor in your contract). While the
+relay is on, SEM keeps the house's grid draw under that limit and shares it
+out across the car and the loads it controls. Solar on top is fine: the limit
+counts grid power only.
+
+**Switzerland (ripple control).** The operator's relay switches a boiler or
+heat pump off by itself. Open that device's *Configure device* and turn on
+*Behind the grid operator's relay*. While the relay is on, SEM does not plan
+the device, does not count on it, and shows *Locked by the grid operator*.
+
 ## 8. EV Charging Modes
 
 SEM runs two parallel state machines — one for daytime solar charging and one

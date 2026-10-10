@@ -177,6 +177,10 @@ class LoadManagementCoordinator:
             _cfg.get("peak_limit_unlimited", DEFAULT_PEAK_LIMIT_UNLIMITED)
         )
         self._logged_ladder_repair = False
+        # (#1021) The grid operator's temporary limit (§14a), kW, or None.
+        # Set by the coordinator each cycle from the relay; NEVER persisted —
+        # the user's saved limit above is untouched underneath it.
+        self._operator_cap_kw: Optional[float] = None
 
         # Device management
         self._device_discovery = LoadDeviceDiscovery(hass)
@@ -635,9 +639,16 @@ class LoadManagementCoordinator:
         would still win at the target, making SHEDDING unreachable. The ratios
         put each level back on its own side with a stage's worth of room.
         """
+        # (#1021) Against the limit in force. Under the operator's limit the
+        # warning moves below it (repair_ladder's ratio) and the emergency
+        # level — the user's fuse — stays unless it sits under the limit.
+        # That repair is the operator's doing, not a mistake to report.
+        target = self._active_target_kw()
         warning, emergency = repair_ladder(
-            self._target_peak_limit, self._warning_level, self._emergency_level
+            target, self._warning_level, self._emergency_level
         )
+        if getattr(self, "_operator_cap_kw", None) is not None:
+            return warning, emergency
         if not self._logged_ladder_repair and (
             warning != self._warning_level or emergency != self._emergency_level
         ):
@@ -647,11 +658,39 @@ class LoadManagementCoordinator:
                 "%.1f kW) — using %.1f / %.1f / %.1f for shedding decisions. "
                 "Warning must be below the target and emergency above it; fix "
                 "them under Configure → Load Management.",
-                self._warning_level, self._target_peak_limit,
+                self._warning_level, target,
                 self._emergency_level,
-                warning, self._target_peak_limit, emergency,
+                warning, target, emergency,
             )
         return warning, emergency
+
+    # ── (#1021) the one live limit ──────────────────────────────────────
+    def set_operator_cap(self, cap_kw: Optional[float]) -> None:
+        """(#1021) The grid operator's limit while its relay is on, or None.
+
+        Temporary and never saved: a relay switching on and off must not
+        overwrite the limit the user chose."""
+        try:
+            cap = float(cap_kw) if cap_kw is not None else None
+        except (TypeError, ValueError):
+            cap = None
+        self._operator_cap_kw = cap if cap is not None and cap > 0 else None
+
+    def _limit_active(self) -> bool:
+        """Is there a limit to defend: the user's, or the operator's."""
+        return (not self._peak_unlimited
+                or getattr(self, "_operator_cap_kw", None) is not None)
+
+    def _active_target_kw(self) -> float:
+        """(#1021) THE limit every shedding decision defends: the user's,
+        lowered by the operator's while its relay is on. The operator's
+        holds even when the user has no limit of their own."""
+        cap = getattr(self, "_operator_cap_kw", None)
+        if cap is None:
+            return float(self._target_peak_limit)
+        if self._peak_unlimited:
+            return cap
+        return min(float(self._target_peak_limit), cap)
 
     async def update_target_peak_limit(
         self, new_limit: float, unlimited: bool | None = None
@@ -1037,13 +1076,14 @@ class LoadManagementCoordinator:
         # (#716) No grid ceiling declared → nothing to defend. Return NORMAL
         # before any threshold is consulted, so a stale level left in config
         # can't shed on an install that opted out.
-        if self._peak_unlimited:
+        if not self._limit_active():
             self._last_state_decision_path = "peak_limit_unlimited_normal"
             return LoadManagementState.NORMAL
 
         warning_level, emergency_level = self._effective_levels()
         peak_to_check = current_peak
-        restore_threshold = self._target_peak_limit - self._hysteresis
+        target = self._active_target_kw()
+        restore_threshold = target - self._hysteresis
 
         # Emergency state - immediate action required
         if peak_to_check >= emergency_level:
@@ -1051,7 +1091,7 @@ class LoadManagementCoordinator:
             return LoadManagementState.EMERGENCY
 
         # At or above target - must shed loads
-        elif peak_to_check >= self._target_peak_limit:
+        elif peak_to_check >= target:
             self._last_state_decision_path = "above_target_shedding"
             return LoadManagementState.SHEDDING
 
@@ -1100,7 +1140,7 @@ class LoadManagementCoordinator:
         """Handle load management state changes."""
         _LOGGER.info(
             "Load management state change: %s → %s (peak: %skW, target: %skW)",
-            old_state, new_state, round(current_peak, 2), self._target_peak_limit,
+            old_state, new_state, round(current_peak, 2), self._active_target_kw(),
         )
 
         if new_state == LoadManagementState.EMERGENCY:
@@ -1204,8 +1244,8 @@ class LoadManagementCoordinator:
         ``candidates`` is the subset that can be thrown right now, highest
         priority number first — the order the drag list gives.
         """
-        target_w = float(self._target_peak_limit) * 1000.0
-        aim_w = (float(self._target_peak_limit) - float(self._hysteresis)) * 1000.0
+        target_w = self._active_target_kw() * 1000.0
+        aim_w = (self._active_target_kw() - float(self._hysteresis)) * 1000.0
         grid_import_w = float(self._last_grid_import_w)
         need_w = max(0.0, grid_import_w - aim_w)
 
@@ -2170,4 +2210,4 @@ class LoadManagementCoordinator:
 
     def get_peak_margin(self, current_peak: float) -> float:
         """Get remaining margin before target peak is reached."""
-        return max(0, self._target_peak_limit - current_peak)
+        return max(0, self._active_target_kw() - current_peak)

@@ -280,7 +280,9 @@
           "emergency_peak_level": "Emergency Peak Level (kW)",
           "vehicle_soc_entity": "Vehicle Battery SOC",
           "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "Consider full at (%)"
+          "ev_target_soc": "Consider full at (%)",
+          "shed_signal_entity": "Grid operator relay",
+          "shed_signal_limit": "Grid limit while it is on (kW)"
         },
         "data_description": {
           "load_management_enabled": "Enable/disable SEM's automatic load-shedding to stay under your grid peak limit.",
@@ -290,7 +292,9 @@
           "emergency_peak_level": "Power level (kW) at which SEM aggressively sheds loads to avoid demand charges. Must be above the target peak limit.",
           "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
           "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh.",
-          "ev_target_soc": "SEM stops treating the car as needing charge once it reaches this. It is a definition of \"full\", not a limit on charging."
+          "ev_target_soc": "SEM stops treating the car as needing charge once it reaches this. It is a definition of \"full\", not a limit on charging.",
+          "shed_signal_entity": "The contact your grid operator switches (§14a, ripple control). Leave empty if you have none.",
+          "shed_signal_limit": "While the relay is on, SEM keeps the house's grid draw under this limit. Solar on top is fine."
         }
       },
       "battery_scheduler": {

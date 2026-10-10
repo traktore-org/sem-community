@@ -36,6 +36,9 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.util import dt as dt_util
 
 from ..consts.core import CAPABILITY_MISS_CONFIRM_READS, CAPABILITY_MISS_HOLD_S
+from ..consts.core import CONF_INTRADAY_FORECAST, DEFAULT_INTRADAY_FORECAST
+from ..consts.core import (CONF_SHED_SIGNAL_ENTITY, CONF_SHED_SIGNAL_LIMIT,
+                           DEFAULT_SHED_SIGNAL_LIMIT)
 from ..const import (
     DOMAIN,
     DEFAULT_UPDATE_INTERVAL,
@@ -230,6 +233,48 @@ def plan_decision_core(plan) -> tuple:
         )
     except Exception:  # noqa: BLE001 — an unreadable plan restamps, safely
         return ("<unreadable>", id(plan))
+
+
+def intraday_forecast_on(owner) -> bool:
+    """(#1068) The soak flag: the plan's day follows measured yield."""
+    return bool((getattr(owner, "config", None) or {}).get(
+        CONF_INTRADAY_FORECAST, DEFAULT_INTRADAY_FORECAST))
+
+
+def plan_day_remaining_kwh(owner) -> float:
+    """(#1068) What the plan's day slots believe is left today.
+
+    Flag off: the provider's raw remaining, exactly as before. Flag on: the
+    same number scaled by what today has really made — PROD 08.10.2026
+    planned 0 W grid for the afternoon of a 4.3-kWh day because this read
+    18 kWh worth of sky that never came. A module function, not a method,
+    so the plan builder's test fakes reach it the same way the cycle does."""
+    _fd = getattr(getattr(owner, "_forecast_reader", None),
+                  "forecast_data", None)
+    raw = float(getattr(_fd, "forecast_remaining_today_kwh", 0.0) or 0.0)
+    if not intraday_forecast_on(owner):
+        return raw
+    tracker = getattr(owner, "_forecast_tracker", None)
+    if tracker is None:
+        return raw
+    return tracker.corrected_remaining_kwh(raw)
+
+
+# (#1068) The keys ``plan_decision_core`` deliberately ignores: they are the
+# sky, not the decision. An identical repack keeps its stamp (#775) but must
+# not keep a stale sky — PROD 08.10 showed "0 W grid 10–17" all afternoon.
+TRAJECTORY_KEYS = ("slots", "self_consumption", "summary", "forecast_sell")
+
+
+def keep_decision_take_trajectory(prev: dict, fresh: dict, now_iso: str) -> dict:
+    """(#1068) The outgoing plan's decision and stamp, the new build's
+    trajectory, and when that trajectory was drawn."""
+    kept = dict(prev)
+    for key in TRAJECTORY_KEYS:
+        if key in fresh:
+            kept[key] = fresh[key]
+    kept["trajectory_at"] = now_iso
+    return kept
 
 
 def demand_signature_changed(old, new) -> bool:
@@ -823,6 +868,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         # Per-cycle caches (initialized here, populated in _async_update_data)
         self._cycle_forecast = None
+        # (#1021) the operator's relay this cycle; INERT until first read
+        from .shed_signal import INERT as _SHED_INERT
+        self._shed_signal = _SHED_INERT
+        self._shed_signal_since = None
         self._cycle_vehicle_soc: Optional[float] = None
         # (#657) The cycle's canonical EVBudget. ``_build_charging_context``
         # sets it on every cycle before ``SEMData`` is built, so this default
@@ -3358,6 +3407,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             self._forecast_reader.set_preferred_source(
                 self.config.get("solar_forecast_source"))
             self._cycle_forecast = self._forecast_reader.read_forecast()
+            # (#1021) The grid operator's relay, read ONCE per cycle so the
+            # plan, the signature and the load walk see one value.
+            self._refresh_shed_signal()
             # Cache vehicle SOC (read in both _async_update_data and _determine_charging_strategy)
             _vehicle_soc_entity = self.config.get("vehicle_soc_entity", "")
             self._cycle_vehicle_soc = None
@@ -5073,6 +5125,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             if tracker_data:
                 result.update(tracker_data)
 
+            # (#1021) the grid operator's relay — the Control tab's banner
+            result.update(self._shed_signal_payload())
+
             # Add night window sensors
             try:
                 night_start, night_end = self.time_manager.get_night_window()
@@ -6096,6 +6151,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 dampened_remaining = round(
                     forecast_data.forecast_remaining_today_kwh * dampening, 2
                 )
+                if intraday_forecast_on(self):
+                    # (#1068) one producer: the outlook reads what the
+                    # plan's day reads, evidenced floor included.
+                    dampened_remaining = (
+                        self._forecast_tracker.corrected_remaining_kwh(
+                            forecast_data.forecast_remaining_today_kwh))
                 battery_target_soc = self.config.get("battery_priority_soc", 90)
                 battery_need_kwh = max(0, (battery_target_soc - power.battery_soc) / 100 * self.battery_capacity_kwh)
                 predicted_home = self._predictor.predict_consumption_today_kwh(dt_util.now())
@@ -9089,6 +9150,66 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         return plan_car_fullness(detector, drawing_w=drawing_w,
                                  handshake_w=handshake_w)
 
+    def _refresh_shed_signal(self):
+        """(#1021) Read the operator's relay and hand it to the load walk.
+
+        Inert (no write anywhere) without a configured entity."""
+        from .shed_signal import INERT, read_shed_signal
+        entity = (self.config or {}).get(CONF_SHED_SIGNAL_ENTITY)
+        if entity:
+            sig = read_shed_signal(
+                entity,
+                (self.config or {}).get(CONF_SHED_SIGNAL_LIMIT,
+                                        DEFAULT_SHED_SIGNAL_LIMIT),
+                self.hass.states.get)
+        else:
+            sig = INERT
+        # since when — the banner says it; cleared the moment it lifts
+        if sig.active and not getattr(getattr(self, "_shed_signal", None),
+                                      "active", False):
+            self._shed_signal_since = dt_util.now().isoformat()
+        elif not sig.active:
+            self._shed_signal_since = None
+        self._shed_signal = sig
+        ctl = getattr(self, "_surplus_controller", None)
+        if ctl is not None:
+            ctl.shed_signal = sig
+        # (#1021) Germany: the load manager defends the operator's limit
+        # while the relay is on. Handed over every cycle, never saved.
+        lm = getattr(self, "_load_manager", None)
+        if lm is not None and hasattr(lm, "set_operator_cap"):
+            lm.set_operator_cap(sig.cap_kw if sig.active else None)
+        return sig
+
+    def _shed_signal_payload(self) -> dict:
+        """(#1021) The relay for the cards and diagnostics."""
+        sig = getattr(self, "_shed_signal", None)
+        ctl = getattr(self, "_surplus_controller", None)
+        locked = []
+        try:
+            locked = sorted(
+                str(d.device_id) for d in (
+                    ctl.get_devices_sorted() if ctl is not None else [])
+                if getattr(d, "locked_by_operator", False) is True)
+        except Exception:  # noqa: BLE001 — a roster read never breaks a cycle
+            locked = []
+        return {
+            "shed_signal_entity": getattr(sig, "source", None),
+            "shed_signal_state": getattr(sig, "state", "none"),
+            "shed_signal_active": bool(getattr(sig, "active", False)),
+            "shed_signal_cap_kw": getattr(sig, "cap_kw", None),
+            "shed_signal_since": getattr(self, "_shed_signal_since", None),
+            "shed_signal_locked": locked,
+        }
+
+    def _intraday_forecast_on(self) -> bool:
+        """(#1068) The soak flag: the day follows measured yield."""
+        return intraday_forecast_on(self)
+
+    def _plan_day_remaining_kwh(self) -> float:
+        """(#1068) See :func:`plan_day_remaining_kwh`."""
+        return plan_day_remaining_kwh(self)
+
     def _energy_plan_demand_signature(self, power, energy=None) -> tuple:
         """(#638) What the night is being ASKED for, as a comparable value.
 
@@ -9195,10 +9316,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         #    a stopped load, so the stop clearing mid-night (the room cooled
         #    back into the band) must re-plan to re-admit it.
         controller = getattr(self, "_surplus_controller", None)
+        # (#1021) the relay locking or releasing a load changes what the
+        # night may book — one term, so the lock lifting re-plans too.
+        try:
+            sig.append(("operator_locked", tuple(sorted(
+                str(d.device_id) for d in (
+                    controller.get_devices_sorted() if controller else [])
+                if (getattr(d, "locked_by_operator", False) is True)))))
+        except Exception:  # noqa: BLE001 — no roster is a valid shape
+            pass
         for dev in (controller.get_devices_sorted() if controller else []):
             try:
                 if not getattr(dev, "has_runtime_deficit", False):
                     continue
+                if getattr(dev, "locked_by_operator", False) is True:
+                    continue  # (#1021) the collector leaves it out too
                 if not (_sem_may_switch(dev) and _night_may_serve(dev)):
                     continue  # the collector left it out before the deficit
                 deficit_h = max(0.0, (dev.daily_min_runtime_sec
@@ -9257,8 +9389,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         try:
             _fd = getattr(getattr(self, "_forecast_reader", None),
                           "forecast_data", None)
-            _rem = float(getattr(_fd, "forecast_remaining_today_kwh", 0.0)
-                         or 0.0)
+            # (#1068) the SAME helper the day slots read — the anchor
+            # watches what the plan reads.
+            _rem = plan_day_remaining_kwh(self)
             _tom = float(getattr(_fd, "forecast_tomorrow_kwh", 0.0) or 0.0)
             _made = getattr(energy, "daily_solar", None)
             _made = (float(_made) if isinstance(_made, (int, float))
@@ -10091,7 +10224,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         # does not re-fire every cycle. Manual re-plans
                         # never take this path: "decide again, now" must
                         # visibly answer, even with "same answer".
-                        self._energy_plan_shadow = _prev_plan_775
+                        if intraday_forecast_on(self) and isinstance(
+                                self._energy_plan_shadow, dict):
+                            # (#1068) same decision, fresh sky.
+                            self._energy_plan_shadow = (
+                                keep_decision_take_trajectory(_prev_plan_775,
+                                    self._energy_plan_shadow,
+                                    dt_util.now().isoformat()))
+                        else:
+                            self._energy_plan_shadow = _prev_plan_775
                         _LOGGER.debug(
                             "ENERGY-PLAN (#775): the ask moved (%s → %s) "
                             "but the packed answer is identical — "
@@ -10317,6 +10458,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # "yielded" 3.1 kWh) diverges from execution.
                     if getattr(dev, "control_mode", _DCM.SURPLUS) != _DCM.SURPLUS:
                         _left_out(dev, "load_mode")
+                        continue
+                    # (#1021) the operator's relay holds it: the plan must
+                    # not book energy the relay will not let through.
+                    if getattr(dev, "locked_by_operator", False) is True:
+                        _left_out(dev, "operator_lock")
                         continue
                     if not getattr(dev, "has_runtime_deficit", False):
                         _left_out(dev, "no_runtime_need")
@@ -10688,10 +10834,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 day_kwh = 0.0
                 sunrise = sunset = now
                 try:
-                    _fd = getattr(getattr(self, "_forecast_reader", None),
-                                  "forecast_data", None)
-                    day_kwh = float(getattr(
-                        _fd, "forecast_remaining_today_kwh", 0.0) or 0.0)
+                    day_kwh = plan_day_remaining_kwh(self)
                 except Exception:  # noqa: BLE001 — no forecast, priced day
                     day_kwh = 0.0
                 try:
@@ -12118,15 +12261,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             self._peak_slot_tracker.update(_now, _grid_w)
             if _store:
                 _store.set_peak_slot_state(self._peak_slot_tracker.to_state())
-            _lm = self._load_manager
             # The off-switch is the EXISTING one: the Control-tab slider's
             # MAX notch sets peak_limit_unlimited atomically (#717), and an
             # unlimited install computes no allowance — one mechanism, no
             # second toggle (#830: options are outsourced thinking).
-            if (_lm is not None
-                    and not getattr(_lm, "_peak_unlimited", True)):
+            # (#1021) …unless the grid operator's relay is on: its limit
+            # holds either way, and reaches the car, the battery's cover
+            # and the forced charge through this one allowance.
+            _ceiling_kw = self._slot_ceiling_kw()
+            if _ceiling_kw is not None:
                 allowed = slot_allowed_import_w(
-                    float(getattr(_lm, "_target_peak_limit", 0.0) or 0.0),
+                    _ceiling_kw,
                     self._peak_slot_tracker.imported_kwh,
                     self._peak_slot_tracker.elapsed_s,
                     blind=bool(getattr(self._peak_slot_tracker, "blind", False)),
@@ -12142,6 +12287,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             )
             allowed = None
         self._peak_slot_allowed_w = allowed
+
+    def _slot_ceiling_kw(self) -> Optional[float]:
+        """(#1021) The limit the 15-minute slot allowance defends, or None.
+
+        With a load manager: its limit in force (the user's, lowered by the
+        operator's). Without one the slot guard was off before, and stays
+        off — unless the operator's relay is on, whose limit holds anyway."""
+        lm = getattr(self, "_load_manager", None)
+        if lm is not None:
+            # No except here: a broken accessor is a coding error, and the
+            # allowance's caller logs it loudly (#864) rather than reading
+            # it as the user's off-switch.
+            if not lm._limit_active():
+                return None
+            return float(lm._active_target_kw())
+        return self._operator_cap_kw()
 
     def _battery_forced_grid_w(self, power: PowerReadings) -> float:
         """(#1069) Grid watts of a forced battery charge SEM is running.

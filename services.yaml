@@ -75,6 +75,7 @@ update_device_config:
             - controllable
             - critical
             - phase
+            - behind_operator_relay
     value:
       name: Value
       description: >-

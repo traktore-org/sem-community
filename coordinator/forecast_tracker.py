@@ -39,6 +39,17 @@ CONFIDENCE_RAMP_HOURS = 3.0
 # through with little lag.
 LIVE_RATIO_EMA_TAU_S = 300.0
 
+# (#1068) The 0.5 floor guards dawn, when a tiny expected fraction turns
+# sensor noise into a huge ratio. Once confidence is full AND the forecast
+# expected real energy by now, the measured ratio IS the evidence — PROD
+# 08.10 made 23 % of its forecast and the floor published 50 %. Only
+# ``corrected_remaining_kwh`` reads the evidenced floor; the published
+# dampening factor keeps the dawn floor until the soak proves the new one.
+DAMPENING_FLOOR_DAWN = 0.5
+DAMPENING_FLOOR_EVIDENCED = 0.1
+EVIDENCE_MIN_EXPECTED_KWH = 2.0
+DAMPENING_CEILING = 1.5
+
 # Outlier detection: cap actual at this multiple of forecast
 MAX_ACTUAL_RATIO = 2.0  # Cap outlier days at 2× forecast (was 3.0)
 
@@ -87,6 +98,10 @@ class ForecastTracker:
         self._last_live_ratio: float = 0.0
         self._last_normalized_ratio: float = 0.0
         self._last_blended_pre_clamp: float = 1.0
+        # (#1068) True when today has given enough evidence for the low
+        # floor (confidence 1.0 and >= EVIDENCE_MIN_EXPECTED_KWH expected).
+        self._last_evidenced: bool = False
+        self._last_corrected_floor: float = DAMPENING_FLOOR_DAWN
         # #416: most-recent end-of-confident-day snapshot. Updated only
         # while the dampening calculation is in the ``blended_live``
         # branch — i.e. when intraday confidence is meaningful. At day
@@ -520,6 +535,7 @@ class ForecastTracker:
             self._last_live_ratio = 0.0
             self._last_normalized_ratio = 0.0
             self._last_blended_pre_clamp = self._correction_factor
+            self._last_evidenced = False
             return self._correction_factor
 
         if self._today_forecast < MIN_FORECAST_KWH:
@@ -528,6 +544,7 @@ class ForecastTracker:
             self._last_live_ratio = 0.0
             self._last_normalized_ratio = 0.0
             self._last_blended_pre_clamp = self._correction_factor
+            self._last_evidenced = False
             return self._correction_factor
 
         # How many solar hours have elapsed
@@ -544,6 +561,7 @@ class ForecastTracker:
             self._last_live_ratio = self._today_actual / self._today_forecast if self._today_forecast else 0.0
             self._last_normalized_ratio = 0.0
             self._last_blended_pre_clamp = self._correction_factor
+            self._last_evidenced = False
             return self._correction_factor
 
         # Confidence ramps from 0 to 1 over CONFIDENCE_RAMP_HOURS of solar time
@@ -580,7 +598,9 @@ class ForecastTracker:
 
         # Blend: historical correction × (1 - confidence) + live ratio × confidence
         blended = (1 - confidence) * self._correction_factor + confidence * smoothed_ratio
-        clamped = max(0.5, min(1.5, blended))
+        clamped = max(DAMPENING_FLOOR_DAWN, min(DAMPENING_CEILING, blended))
+        self._last_evidenced = (confidence >= 1.0
+                                and expected_so_far >= EVIDENCE_MIN_EXPECTED_KWH)
 
         if clamped != blended:
             self._dampening_path = f"blended_live+clamped_{'high' if blended > clamped else 'low'}"
@@ -618,6 +638,31 @@ class ForecastTracker:
         """Apply real-time dampening factor to a forecast value."""
         return round(forecast_kwh * self.dampening_factor, 2)
 
+    def corrected_factor(self) -> float:
+        """(#1068) The live correction with the evidenced floor: the dawn
+        floor (0.5) until today has given real evidence, then down to 0.1."""
+        factor = self._calculate_dampening_factor()
+        floor = DAMPENING_FLOOR_DAWN
+        if self._last_evidenced:
+            floor = DAMPENING_FLOOR_EVIDENCED
+            factor = max(floor, min(DAMPENING_CEILING,
+                                    self._last_blended_pre_clamp))
+        self._last_corrected_floor = floor
+        return factor
+
+    def corrected_remaining_kwh(self, raw_remaining_kwh: float) -> float:
+        """(#1068) The rest of today's solar, scaled by what today has
+        actually delivered. The ONE producer for the intraday path: the
+        plan's day slots, the signature's supply term and the surplus
+        outlook read this, never a second derivation. 0 stays 0."""
+        try:
+            raw = max(0.0, float(raw_remaining_kwh or 0.0))
+        except (TypeError, ValueError):
+            return 0.0
+        if raw <= 0:
+            return 0.0
+        return round(raw * self.corrected_factor(), 2)
+
     def get_data(self) -> Dict[str, Any]:
         """Return current tracker data for sensors."""
         return {
@@ -652,6 +697,10 @@ class ForecastTracker:
                 if self._smoothed_normalized_ratio is not None else None
             ),
             "forecast_dampening_pre_clamp": self._last_blended_pre_clamp,
+            # (#1068) the evidenced correction beside the published one:
+            # what the plan's day reads when the intraday flag is on.
+            "forecast_corrected_factor": round(self.corrected_factor(), 3),
+            "forecast_corrected_floor": self._last_corrected_floor,
         }
 
     def get_state(self) -> Dict[str, Any]:

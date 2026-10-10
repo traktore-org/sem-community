@@ -30,6 +30,7 @@ def _flow_text(flow, key, default, **kwargs):
             return default
     return get_text(hass, key, default, **kwargs)
 from .consts.devices import CONTACT_VALUE_SERVICES, SG_READY_CONTACT_DOMAINS
+from .consts.core import DEFAULT_SHED_SIGNAL_LIMIT
 from .const import (
     DOMAIN,
     DEFAULT_PHASE_GUARD_TOPOLOGY,
@@ -1518,6 +1519,9 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "name",
     "observer_mode",
     "peak_limit_unlimited",
+    # (#1021) the grid operator's relay and its limit
+    "shed_signal_entity",
+    "shed_signal_limit",
     "phase_guard_enabled",
     "phase_guard_enforcement_enabled",
     "phase_guard_notifications_enabled",
@@ -3121,6 +3125,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             "warning_peak_level": _c("warning_peak_level", DEFAULT_WARNING_PEAK_LEVEL),
             "emergency_peak_level": _c("emergency_peak_level", DEFAULT_EMERGENCY_PEAK_LEVEL),
             "peak_limit_unlimited": _c("peak_limit_unlimited", DEFAULT_PEAK_LIMIT_UNLIMITED),
+            # (#1021) the grid operator's relay and its limit
+            "shed_signal_entity": _c("shed_signal_entity", None),
+            "shed_signal_limit": _c("shed_signal_limit", DEFAULT_SHED_SIGNAL_LIMIT),
         }
 
         return self.async_show_form(
@@ -3167,6 +3174,25 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Required(
                     "emergency_peak_level",
                     default=data_defaults["emergency_peak_level"],
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=MIN_PEAK_LIMIT_KW, max=MAX_PEAK_LIMIT_KW,
+                        step=PEAK_LIMIT_STEP_KW,
+                        unit_of_measurement="kW", mode="box"
+                    )
+                ),
+                # (#1021) The grid operator's reduce-load relay (§14a EnWG,
+                # ripple control). Optional: empty = the feature is inert.
+                vol.Optional(
+                    "shed_signal_entity",
+                    description={"suggested_value": data_defaults["shed_signal_entity"]},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(
+                        domain=["binary_sensor", "input_boolean"])
+                ),
+                vol.Required(
+                    "shed_signal_limit",
+                    default=data_defaults["shed_signal_limit"],
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=MIN_PEAK_LIMIT_KW, max=MAX_PEAK_LIMIT_KW,

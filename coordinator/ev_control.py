@@ -508,9 +508,28 @@ class EVControlMixin:
         an explicit boolean and never inferred — a limit that fails open is how
         a 5 kW house got handed a 10 kW EV slot (#638 finding #5).
         """
-        if self._peak_limit_unlimited():
-            return math.inf
-        return self._target_peak_limit_kw() * 1000
+        # (#1021) The grid operator's limit lowers the user's while its
+        # relay is on — and holds even when the user has none of their own.
+        cap = self._operator_cap_kw()
+        saved_w = (math.inf if self._peak_limit_unlimited()
+                   else self._target_peak_limit_kw() * 1000)
+        if cap is None:
+            return saved_w
+        return min(saved_w, cap * 1000)
+
+    def _operator_cap_kw(self) -> Optional[float]:
+        """(#1021) The grid operator's limit while its relay is on, or None.
+
+        Read from the relay the coordinator reads once per cycle. Never
+        saved anywhere: the user's own limit stays underneath it."""
+        sig = getattr(self, "_shed_signal", None)
+        if sig is None or not getattr(sig, "active", False):
+            return None
+        try:
+            cap = float(getattr(sig, "cap_kw", None))
+        except (TypeError, ValueError):
+            return None
+        return cap if cap > 0 else None
 
     def _target_peak_limit_kw(self) -> float:
         """The saved grid ceiling in kW — always the number, never infinity.
@@ -561,8 +580,19 @@ class EVControlMixin:
         try:
             peak_w = float(self._get_peak_limit_w())
         except Exception:  # noqa: BLE001 — no load manager yet (early startup)
-            peak_w = float(
-                self.config.get("target_peak_limit", 0.0) or 0.0) * 1000.0
+            # An unreadable authority must still cap (test_638_shadow_mode),
+            # so this stays broad. (#1021 review) The saved
+            # option alone dropped the operator's cap from the plan on the
+            # very cycle the live read failed — the cap still applies here.
+            try:
+                peak_w = float(
+                    self.config.get("target_peak_limit", 0.0) or 0.0) * 1000.0
+            except (TypeError, ValueError):
+                peak_w = 0.0
+            cap = self._operator_cap_kw()
+            if cap is not None:
+                peak_w = (cap * 1000.0 if peak_w <= 0.0
+                          else min(peak_w, cap * 1000.0))
         if peak_w > 0.0 and math.isfinite(peak_w):
             hyst_w = float(self.config.get(
                 "peak_hysteresis", DEFAULT_PEAK_HYSTERESIS) or 0.0) * 1000.0

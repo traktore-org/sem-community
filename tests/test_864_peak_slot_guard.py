@@ -320,14 +320,20 @@ class TestTheOffSwitchIsTheSlider:
             assert "peak_slot_guard_enabled" not in (root / f).read_text(), f
 
     def test_unlimited_gates_the_allowance(self):
-        import inspect
         from custom_components.solar_energy_management.coordinator import (
             coordinator as cm,
         )
-        src = inspect.getsource(cm)
-        i = src.index("slot_allowed_import_w(")
-        window = src[i - 700:i]
-        assert "_peak_unlimited" in window, (
+        from .ast_contracts import calls, reads_attribute
+        from custom_components.solar_energy_management.features.load_management import (
+            LoadManagementCoordinator,
+        )
+        # (#1021) the allowance asks the one ceiling; the ceiling asks the
+        # slider's flag (or the grid operator's relay) — still one off-switch
+        assert calls(cm.SEMCoordinator._compute_peak_slot_allowance,
+                     "_slot_ceiling_kw")
+        assert calls(cm.SEMCoordinator._slot_ceiling_kw, "_limit_active")
+        assert reads_attribute(LoadManagementCoordinator._limit_active,
+                               "self", "_peak_unlimited"), (
             "the slider's unlimited flag must be the one off-mechanism"
         )
 

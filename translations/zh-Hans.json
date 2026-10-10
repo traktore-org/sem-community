@@ -280,7 +280,9 @@
           "emergency_peak_level": "紧急峰值水平 (kW)",
           "vehicle_soc_entity": "车辆电池电量 (SOC)",
           "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
-          "ev_target_soc": "达到此值视为充满 (%)"
+          "ev_target_soc": "达到此值视为充满 (%)",
+          "shed_signal_entity": "电网运营商继电器",
+          "shed_signal_limit": "开启时的电网限值 (kW)"
         },
         "data_description": {
           "load_management_enabled": "启用/禁用 SEM 的自动减载功能，以保持在您的电网峰值限制以下。",
@@ -290,7 +292,9 @@
           "emergency_peak_level": "SEM 为避免产生需量电费而采取激进减载措施的功率水平 (kW)。 必须高于目标峰值上限。",
           "vehicle_soc_entity": "可选。报告车辆当前剩余电量的传感器 (0–100%)。",
           "ev_battery_capacity_kwh": "电动汽车电池的总可用容量 (kWh)。",
-          "ev_target_soc": "达到此值后 SEM 视车辆为已充满。这是对\"充满\"的定义，不是充电上限。"
+          "ev_target_soc": "达到此值后 SEM 视车辆为已充满。这是对\"充满\"的定义，不是充电上限。",
+          "shed_signal_entity": "电网运营商控制的触点（§14a，纹波控制）。如果没有，请留空。",
+          "shed_signal_limit": "继电器开启时，SEM 将房屋的电网取电保持在此限值以下。额外的太阳能不受限制。"
         }
       },
       "battery_scheduler": {

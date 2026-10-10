@@ -199,6 +199,12 @@ class SEMLoadPriorityCard extends SEMLitBase {
             .device-name span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
             .device-power { font-size:1em; font-weight:500; font-variant-numeric:tabular-nums; white-space:nowrap; opacity:0.7; }
             .device-bottom { display:flex; align-items:center; gap:8px; font-size:0.95em; flex-wrap:wrap; }
+            .operator-lock {
+                padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600;
+                color: #ff9800; border: 1px solid #ff9800; background: rgba(255,152,0,.10);
+                white-space: nowrap;
+            }
+            .status-dot.locked { background:#ff9800; }
             .status-dot { width:7px; height:7px; border-radius:50%; background:var(--divider-color, rgba(128,128,128,0.12)); flex-shrink:0; }
             .status-dot.on { background:#4caf50; box-shadow:0 0 6px #4caf50; }
             .status-dot.shed { background:#f44336; box-shadow:0 0 6px #f44336; }
@@ -450,6 +456,10 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     // (#1048) the supply phase: a load's is the user's goal,
                     // a charger's is measured (read-only)
                     phase: (info.goals && info.goals.phase) || info.phase || 'unknown',
+                    // (#1021) wiring behind the grid operator's relay, and
+                    // whether the relay holds it right now
+                    behindRelay: !!(info.goals && info.goals.behind_operator_relay),
+                    lockedByOperator: info.locked_by_operator === true,
                     phaseMeasured: info.phase_measured === true,
                     // (#780) two axes, two fields. The toggle on this row is
                     // the user's "SEM may touch this load" permission; the
@@ -646,10 +656,12 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 ${device.dependsOn.length ? html`<div style="font-size:13px;opacity:0.55;padding:0 0 0 28px">&#8618; ${this._t('requires')}: ${device.dependsOn.join(', ')}</div>` : nothing}
                 ${device.isShed && device.shedReason ? html`<div style="font-size:13px;color:#f44336;padding:2px 0 0 28px">${(this._t(shedReasonKey(device.shedReason)) || '').replace('{phase}', device.shedPhase || '?')}</div>` : nothing}
                 <div class="device-bottom">
-                    <div class="status-dot ${onOff ? 'on' : (device.isShed ? 'shed' : '')}" data-field="status-${device.id}"></div>
-                    <span class="dim" data-field="onoff-${device.id}">${onOff ? this._t('on') : (device.isShed ? this._t('shed_label') : this._t('off'))}</span>
+                    <div class="status-dot ${device.lockedByOperator ? 'locked' : (onOff ? 'on' : (device.isShed ? 'shed' : ''))}" data-field="status-${device.id}"></div>
+                    ${device.lockedByOperator
+                        ? html`<span class="operator-lock" data-field="onoff-${device.id}">${this._t('locked_by_grid_operator')}</span>`
+                        : html`<span class="dim" data-field="onoff-${device.id}">${onOff ? this._t('on') : (device.isShed ? this._t('shed_label') : this._t('off'))}</span>`}
                     <span class="badge priority" data-field="pri-${device.id}">${priority}</span>
-                    ${isBattery ? nothing : this._renderControlVerdict(device)}
+                    ${isBattery || device.lockedByOperator ? nothing : this._renderControlVerdict(device)}
                     <div class="spacer"></div>
                     ${isBattery ? html`<span class="dim" title="${this._t('battery_role_help')}">${this._t('battery_role_label')}</span>` : nothing}
                     ${device.deviceType === 'ev_charger' || device.deviceType === 'ev_charging' || isBattery ? nothing : html`
@@ -1560,8 +1572,11 @@ class SEMLoadPriorityCard extends SEMLitBase {
         const overlay = document.createElement('div');
         overlay.id = 'sem-config-modal';
         overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:999;display:flex;align-items:center;justify-content:center';
+        // (#1021) loads only: a charger or the battery is not behind a relay
+        const isLoad = dev && !['ev_charger', 'ev_charging', 'battery'].includes(dev.deviceType);
         overlay.innerHTML = buildLoadConfigModalHTML({
             deviceName, values, t: (k) => this._t(k), hasManual,
+            behindRelay: isLoad ? !!dev.behindRelay : null,
         });
         this.renderRoot.appendChild(overlay);
 
@@ -1597,6 +1612,18 @@ class SEMLoadPriorityCard extends SEMLitBase {
         };
         typeSel.addEventListener('change', applyType);
 
+        // (#1021) the relay switch is wiring, not part of the control
+        // mapping: it saves on its own, the moment it is flipped.
+        const relay = overlay.querySelector('#cfg-relay');
+        if (relay && dev) {
+            relay.addEventListener('click', () => {
+                const on = !relay.classList.contains('on');
+                relay.classList.toggle('on', on);
+                relay.setAttribute('aria-checked', String(on));
+                dev.behindRelay = on;
+                this._sendDeviceUpdate(dev.id, 'behind_operator_relay', String(on));
+            });
+        }
         overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
         overlay.querySelector('#cfg-cancel').addEventListener('click', () => overlay.remove());
         const removeBtn = overlay.querySelector('#cfg-remove');

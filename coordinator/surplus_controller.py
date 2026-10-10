@@ -599,6 +599,11 @@ def compute_load_intent(
             device._offpeak_forced = False
             device._batt_overnight_forced = False
         return LoadIntent(active, held, None, "off — monitor only")
+    # 1b. (#1021) Behind the grid operator's relay and the relay is on: the
+    #     relay cuts the power, so SEM keeps its hands off — no write in
+    #     either direction, nothing counted, and the reason says who holds it.
+    if getattr(device, "locked_by_operator", False) is True:
+        return LoadIntent(active, 0.0, None, "locked by the grid operator")
     if mode == DeviceControlMode.PEAK_ONLY:
         # This controller never proactively sheds peak_only loads — the load
         # manager owns their peak shedding via shed_priority. Matches the old
@@ -1125,6 +1130,11 @@ class SurplusController:
         # Stamped by update() from the coordinator; empty when actuation is
         # off or no trusted plan exists.
         self._plan_windows: dict = {}
+        # (#1021) The grid operator's relay this cycle, stamped by the
+        # coordinator. Devices marked "behind the relay" read it through
+        # ``locked_by_operator``. INERT = no relay configured.
+        from .shed_signal import INERT
+        self.shed_signal = INERT
 
     @property
     def allocation_data(self) -> SurplusAllocationData:
@@ -1636,6 +1646,12 @@ class SurplusController:
                 distributable=distributable, available_power_w=available_power_w,
                 observer=observer,
             )
+
+        # (#1021) A load behind the grid operator's relay, relay on: the
+        # relay cuts it, so the imperative passes leave it alone — no
+        # start, no stop, no runtime judged. The intent path above says why.
+        devices = [d for d in devices
+                   if not (getattr(d, "locked_by_operator", False) is True)]
 
         # Force expiry: a cheap-hours force ends with its reason (#559 review) —
         # the tariff left the cheap window, OR the day rolled over (the deficit

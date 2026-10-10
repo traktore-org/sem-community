@@ -73,6 +73,15 @@ const ESSENTIAL_CONTROLS = new Set([
     'target_peak_limit',
 ]);
 
+// (#1021) Shown in the default view only once a relay is set: most homes
+// have none, so their default view does not grow (the #830 ratchet). A home
+// with one sees its relay and limit without Advanced; setting one up the
+// first time is in Advanced, where the guide sends you.
+const ESSENTIAL_WHEN_SET = {
+    shed_signal_entity: 'shed_signal_entity',
+    shed_signal_limit: 'shed_signal_entity',
+};
+
 // (#1040) An essential control that only one tariff mode needs. The default
 // view shows it in that mode; Static keeps its one rate.
 const ESSENTIAL_IN_MODE = {
@@ -530,6 +539,7 @@ class SEMConfigCard extends SEMLitBase {
         // Entity-backed controls carry their domain; compare on the
         // config key, which is what the tier list is written in.
         const k = String(key || '').replace(/^[a-z_]+\.sem_/, '');
+        if (ESSENTIAL_WHEN_SET[k]) return !!(this._options || {})[ESSENTIAL_WHEN_SET[k]];
         if (!ESSENTIAL_CONTROLS.has(k)) return false;
         return !ESSENTIAL_IN_MODE[k] || ESSENTIAL_IN_MODE[k] === this._tariffMode();
     }
@@ -2608,9 +2618,11 @@ class SEMConfigCard extends SEMLitBase {
                     <span class="ctrl-label">${this._t('config_lm_target_peak')}</span>
                     <span class="readonly-value">${this._t('config_lm_unlimited_value')}</span>
                 </div>
+                ${this._renderOperatorRelay(opts)}
             ` : html`
                 ${this._renderOptionNumberInput('target_peak_limit', 'config_lm_target_peak',
                     { min: 1.0, max: 80.0, step: 0.1, unit: 'kW', default: 5.0 }, opts, 'config_help_lm_target_peak')}
+                ${this._renderOperatorRelay(opts)}
                 <div class="advanced-toggle-row" @click=${() => { this._lmAdvancedOpen = !this._lmAdvancedOpen; }}>
                     <ha-icon class="chevron" icon="mdi:chevron-down"
                              style="--mdc-icon-size:16px;transform:${this._lmAdvancedOpen ? 'rotate(0deg)' : 'rotate(-90deg)'}"></ha-icon>
@@ -2623,6 +2635,24 @@ class SEMConfigCard extends SEMLitBase {
                         { min: 1.0, max: 80.0, step: 0.1, unit: 'kW', default: 6.0 }, opts, 'config_help_lm_emergency_peak')}
                 ` : nothing}
             `}
+        `;
+    }
+
+    // (#1021) The grid operator's relay and the limit it sets. Shown in
+    // both branches above: the operator's limit holds even when the user's
+    // own peak limit is off. The limit row appears once a relay is picked.
+    _renderOperatorRelay(opts) {
+        const relay = opts.shed_signal_entity || '';
+        if (!this._showsControl('shed_signal_entity')) return nothing;
+        return html`
+            <div class="operator-relay">
+                <div class="operator-relay-head">${this._t('config_shed_signal_heading')}</div>
+                ${this._renderPicker('shed_signal_entity', 'config_shed_signal_entity',
+                    ['binary_sensor', 'input_boolean'], null, opts, 'config_help_shed_signal_entity')}
+                ${relay ? this._renderOptionNumberInput('shed_signal_limit', 'config_shed_signal_limit',
+                    { min: 1.0, max: 80.0, step: 0.1, unit: 'kW', default: 4.2 }, opts,
+                    'config_help_shed_signal_limit') : nothing}
+            </div>
         `;
     }
 
@@ -3647,6 +3677,15 @@ class SEMConfigCard extends SEMLitBase {
                 .chip-todo:hover { border-color: ${accent} !important; }
                 .chip-todo .c-warn { color: ${accent} !important; font-weight: 700; white-space: nowrap; }
 
+                /* (#1021) the grid operator's relay block */
+                .operator-relay {
+                    margin-top: 10px; padding-top: 8px;
+                    border-top: 1px solid ${T.surfaceBorder};
+                }
+                .operator-relay-head {
+                    font-size: 12px; font-weight: 600; letter-spacing: .04em;
+                    text-transform: uppercase; opacity: .7; margin: 2px 0 6px;
+                }
                 .setting-help-text {
                     font-size: 11px; line-height: 1.35;
                     color: var(--secondary-text-color, ${T.textSec});

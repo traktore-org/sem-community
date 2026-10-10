@@ -280,7 +280,9 @@
           "emergency_peak_level": "Niveau d'Urgence de Pointe (kW)",
           "vehicle_soc_entity": "SOC batterie véhicule",
           "ev_battery_capacity_kwh": "Capacité batterie VE (kWh)",
-          "ev_target_soc": "Considérer plein à (%)"
+          "ev_target_soc": "Considérer plein à (%)",
+          "shed_signal_entity": "Relais du gestionnaire de réseau",
+          "shed_signal_limit": "Limite réseau quand il est actif (kW)"
         },
         "data_description": {
           "load_management_enabled": "Activer/désactiver le délestage automatique de SEM pour rester sous votre limite de pointe réseau.",
@@ -290,7 +292,9 @@
           "emergency_peak_level": "Niveau de puissance (kW) auquel SEM déleste agressivement les charges pour éviter les pénalités de puissance souscrite. Doit être supérieur à la limite de pointe cible.",
           "vehicle_soc_entity": "Capteur optionnel indiquant l'état de charge actuel du véhicule (0–100 %).",
           "ev_battery_capacity_kwh": "Capacité utile totale de la batterie du VE en kWh.",
-          "ev_target_soc": "À partir de là, SEM considère la voiture comme chargée. C'est une définition de \"plein\", pas une limite de charge."
+          "ev_target_soc": "À partir de là, SEM considère la voiture comme chargée. C'est une définition de \"plein\", pas une limite de charge.",
+          "shed_signal_entity": "Le contact que votre gestionnaire de réseau commande (§14a, télécommande centralisée). Laissez vide si vous n'en avez pas.",
+          "shed_signal_limit": "Tant que le relais est actif, SEM garde la consommation réseau de la maison sous cette limite. Le solaire en plus reste permis."
         }
       },
       "notifications": {

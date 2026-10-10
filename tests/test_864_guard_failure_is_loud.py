@@ -47,8 +47,7 @@ def _coord(monkeypatch, boom=None):
         update=MagicMock(),
     )
     # A configured, LIMITED install — the guard is meant to be active.
-    coord._load_manager = SimpleNamespace(
-        _peak_unlimited=False, _target_peak_limit=6000.0)
+    coord._load_manager = _FakeLM(unlimited=False, target=6000.0)
     if boom is not None:
         # Patch at the SOURCE module: the coordinator imports this inside the
         # method body, so a name patched on the coordinator module is never
@@ -58,6 +57,21 @@ def _coord(monkeypatch, boom=None):
         )
         monkeypatch.setattr(peak_guard, "slot_allowed_import_w", boom)
     return coord, coordinator_module
+
+
+class _FakeLM:
+    """The load manager's limit fields, read through its real accessors
+    (#1021: the coordinator never reads the fields themselves)."""
+    from custom_components.solar_energy_management.features.load_management import (
+        LoadManagementCoordinator as _LMC,
+    )
+    _limit_active = _LMC._limit_active
+    _active_target_kw = _LMC._active_target_kw
+
+    def __init__(self, unlimited, target):
+        self._peak_unlimited = unlimited
+        self._target_peak_limit = target
+        self._operator_cap_kw = None
 
 
 def _broken(*args, **kwargs):
@@ -101,8 +115,7 @@ class TestABrokenGuardIsNotASilentOffSwitch:
         """MAX on the slider is the documented off-switch and must stay
         silent — the whole point is telling the two apart."""
         coord, mod = _coord(monkeypatch)
-        coord._load_manager = SimpleNamespace(
-            _peak_unlimited=True, _target_peak_limit=0.0)
+        coord._load_manager = _FakeLM(unlimited=True, target=0.0)
         with caplog.at_level(logging.WARNING):
             mod.SEMCoordinator._compute_peak_slot_allowance(
                 coord, SimpleNamespace(grid_import_power=3000.0))

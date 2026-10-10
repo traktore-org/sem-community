@@ -121,7 +121,12 @@ const WATCHED = [
     'sensor.sem_target_peak_limit', 'sensor.sem_diag_grid_sign',
 ];
 
-const PEAK_FLAG = { 'sensor.sem_target_peak_limit': ['peak_limit_unlimited'] };
+const PEAK_FLAG = {
+    'sensor.sem_target_peak_limit': ['peak_limit_unlimited'],
+    // (#1021) the grid operator's relay rides the load-management sensor
+    'sensor.sem_load_management_status': [
+        'shed_signal_active', 'shed_signal_cap_kw', 'shed_signal_since'],
+};
 
 class SEMControlCard extends SEMLitBase {
     static get watchedEntities() { return WATCHED; }
@@ -464,6 +469,10 @@ class SEMControlCard extends SEMLitBase {
         const isDark = T.isDark !== false;
         const accent = T.accent || '#42a5f5';
         const obsOn = this._switchOn('observer_mode');
+        // (#1021) the grid operator's relay, while it is on
+        const lmAttrs = this._hass?.states?.['sensor.sem_load_management_status']?.attributes || {};
+        const opOn = lmAttrs.shed_signal_active === true;
+        const opText = opOn ? this._operatorBanner(lmAttrs) : '';
 
         const sectionRenderers = {
             surplus:  (T) => this._renderSurplusSection(T),
@@ -502,6 +511,16 @@ class SEMControlCard extends SEMLitBase {
                     opacity: ${obsOn ? '1' : '0'};
                     margin-bottom: ${obsOn ? '12px' : '0'};
                     padding: ${obsOn ? '12px 16px' : '0 16px'};
+                }
+
+                /* ── (#1021) Grid operator's relay ── */
+                .operator-banner {
+                    display: flex; align-items: center; gap: 10px;
+                    border-radius: 12px; margin-bottom: 12px; padding: 12px 16px;
+                    background: rgba(255,152,0,0.08);
+                    border: 1px solid #ff9800;
+                    color: #ff9800;
+                    font-size: 13px; font-weight: 500;
                 }
 
                 /* ── Sections (polish: color accent + EV-card-matching typography) ── */
@@ -719,9 +738,29 @@ class SEMControlCard extends SEMLitBase {
                     <ha-icon icon="mdi:eye-outline" style="--mdc-icon-size:20px;color:#f44336"></ha-icon>
                     <span>${this._t('observer_mode_active')} — ${this._t('observer_mode_readonly')}</span>
                 </div>
+                ${opOn ? html`
+                <div class="operator-banner">
+                    <ha-icon icon="mdi:transmission-tower-export" style="--mdc-icon-size:20px;color:#ff9800"></ha-icon>
+                    <span>${opText}</span>
+                </div>` : nothing}
                 ${SECTIONS.map(s => this._renderSection(s, sectionRenderers[s.id], T))}
             </div>
         `;
+    }
+
+    // (#1021) "Grid operator: limit 4.2 kW since 14:05 — solar on top is fine"
+    _operatorBanner(a) {
+        const kw = typeof a.shed_signal_cap_kw === 'number'
+            ? a.shed_signal_cap_kw.toFixed(1) : '?';
+        let time = '?';
+        if (a.shed_signal_since) {
+            const d = new Date(a.shed_signal_since);
+            if (!isNaN(d)) {
+                time = d.toLocaleTimeString(this._hass?.language || undefined,
+                    { hour: '2-digit', minute: '2-digit' });
+            }
+        }
+        return this._t('operator_limit_banner').replace('{kw}', kw).replace('{time}', time);
     }
 
     getCardSize() { return 12; }

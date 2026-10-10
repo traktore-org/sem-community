@@ -539,6 +539,8 @@ class UnifiedDeviceRegistry:
         "schedule_entity", "schedule_mode",
         # (#1048) the supply phase the load sits on
         "phase",
+        # (#1021) wiring: this load sits behind the grid operator's relay
+        "behind_operator_relay",
     )
 
     def phase_for(self, device_id: str) -> str:
@@ -559,6 +561,10 @@ class UnifiedDeviceRegistry:
         # (#1048) key-present-only, like the anti-cycle windows below
         if "phase" in goals:
             device.phase = load_phase(goals.get("phase"))
+        # (#1021) key-present-only, like the phase
+        if "behind_operator_relay" in goals:
+            device.behind_operator_relay = _goal_bool(
+                goals.get("behind_operator_relay"))
         device.daily_min_runtime_sec = int(
             float(goals.get("daily_min_runtime_min", 0)) * 60
         )
@@ -2374,6 +2380,9 @@ class UnifiedDeviceRegistry:
                     else round(float(live.min_off_seconds) / 60.0, 1)),
                 # (#1048) the supply phase — the editor's select
                 "phase": load_phase(goals.get("phase")),
+                # (#1021) the Configure-device switch
+                "behind_operator_relay": _goal_bool(
+                    goals.get("behind_operator_relay")),
                 # (#705) the comfort band — pre-fill for the editor.
                 "comfort_entity": goals.get("comfort_entity", ""),
                 "comfort_target": goals.get("comfort_target", 0),
@@ -2391,6 +2400,10 @@ class UnifiedDeviceRegistry:
                 "runtime_today_min": int(round(runtime_min)),
                 "targets_met": targets_met,
             },
+            # (#1021) the relay holds it now — the row's chip
+            "locked_by_operator": bool(
+                live is not None
+                and getattr(live, "locked_by_operator", False) is True),
         } | self._comfort_payload(live)
 
     @staticmethod

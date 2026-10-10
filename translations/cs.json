@@ -280,7 +280,9 @@
           "emergency_peak_level": "Nouzová úroveň špičky (kW)",
           "vehicle_soc_entity": "SOC baterie vozidla",
           "ev_battery_capacity_kwh": "Kapacita baterie EV (kWh)",
-          "ev_target_soc": "Považovat za plné při (%)"
+          "ev_target_soc": "Považovat za plné při (%)",
+          "shed_signal_entity": "Relé provozovatele sítě",
+          "shed_signal_limit": "Limit sítě, když je zapnuto (kW)"
         },
         "data_description": {
           "load_management_enabled": "Zapnout/vypnout automatické odpojování zátěží, kterým SEM drží odběr pod vaším limitem špičky.",
@@ -290,7 +292,9 @@
           "emergency_peak_level": "Úroveň výkonu (kW), při které SEM agresivně odpojuje zátěže, aby se vyhnul poplatkům za rezervovaný příkon. Musí být vyšší než cílový limit špičky.",
           "vehicle_soc_entity": "Volitelný senzor hlásící aktuální stav nabití vozidla (0–100 %).",
           "ev_battery_capacity_kwh": "Celková využitelná kapacita baterie EV v kWh.",
-          "ev_target_soc": "Od této hodnoty SEM považuje auto za nabité. Je to definice \"plného\", ne limit nabíjení."
+          "ev_target_soc": "Od této hodnoty SEM považuje auto za nabité. Je to definice \"plného\", ne limit nabíjení.",
+          "shed_signal_entity": "Kontakt, který spíná provozovatel sítě (§14a, HDO). Nechte prázdné, pokud žádný nemáte.",
+          "shed_signal_limit": "Dokud je relé zapnuté, SEM drží odběr domu ze sítě pod tímto limitem. Solár navíc je povolen."
         }
       },
       "notifications": {

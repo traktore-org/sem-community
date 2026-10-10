@@ -280,7 +280,9 @@
           "emergency_peak_level": "Nivel de vârf de urgență (kW)",
           "vehicle_soc_entity": "SOC baterie vehicul",
           "ev_battery_capacity_kwh": "Capacitatea bateriei VE (kWh)",
-          "ev_target_soc": "Consideră plin la (%)"
+          "ev_target_soc": "Consideră plin la (%)",
+          "shed_signal_entity": "Releul operatorului de rețea",
+          "shed_signal_limit": "Limita de rețea cât este pornit (kW)"
         },
         "data_description": {
           "load_management_enabled": "Activează/dezactivează delestarea automată a sarcinilor de către SEM pentru a rămâne sub limita de vârf a rețelei.",
@@ -290,7 +292,9 @@
           "emergency_peak_level": "Nivelul de putere (kW) la care SEM delestează agresiv sarcinile pentru a evita taxele de putere. Trebuie să fie peste limita de vârf țintă.",
           "vehicle_soc_entity": "Senzor opțional care raportează starea de încărcare curentă a vehiculului (0–100%).",
           "ev_battery_capacity_kwh": "Capacitatea utilizabilă totală a bateriei VE, în kWh.",
-          "ev_target_soc": "De aici SEM consideră mașina încărcată. Este o definiție a lui \"plin\", nu o limită de încărcare."
+          "ev_target_soc": "De aici SEM consideră mașina încărcată. Este o definiție a lui \"plin\", nu o limită de încărcare.",
+          "shed_signal_entity": "Contactul pe care îl comută operatorul de rețea (§14a, telecomandă centralizată). Lăsați gol dacă nu aveți.",
+          "shed_signal_limit": "Cât timp releul este pornit, SEM ține consumul casei din rețea sub această limită. Solarul în plus este permis."
         }
       },
       "notifications": {
