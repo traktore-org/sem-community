@@ -544,6 +544,11 @@ async def async_get_config_entry_diagnostics(
                 "battery_reserve_soc": full_cfg.get("battery_reserve_soc"),
                 "battery_modes": full_cfg.get("battery_modes"),
                 "battery_reserve_socs": full_cfg.get("battery_reserve_socs"),
+                # (#1071) which of the two stores above drives the batteries
+                "battery_control_slugs": (
+                    list(coordinator.battery_control_slugs)
+                    if isinstance(getattr(coordinator, "battery_control_slugs", None), tuple)
+                    else None),
                 "battery_discharge_protection_enabled": full_cfg.get(
                     "battery_discharge_protection_enabled", True),
                 "battery_grid_arbitrage_enabled": full_cfg.get(

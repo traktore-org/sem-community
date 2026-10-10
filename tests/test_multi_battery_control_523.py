@@ -78,23 +78,30 @@ def test_global_config_not_mutated():
     assert cfg["battery_force_discharge_control_entity"] == "number.global_sell"
 
 
+def _per2(config, idx):
+    """A two-battery fleet (#1071: the lists drive only an install that has
+    per-battery controls — the live count stands in before the capture)."""
+    fake = SimpleNamespace(config=config)
+    return SEMCoordinator._per_battery_config(fake, idx, 2)
+
+
 def test_per_battery_mode_and_reserve_overlay():
     # #523 Increment 2: mode + reserve lists overlay to single keys.
     cfg = {
         "battery_modes": ["self_consumption", "allow_arbitrage"],
         "battery_reserve_socs": [30, 45],
     }
-    assert _per(cfg, 0)["battery_mode"] == "self_consumption"
-    assert _per(cfg, 0)["battery_reserve_soc"] == 30
-    assert _per(cfg, 1)["battery_mode"] == "allow_arbitrage"
-    assert _per(cfg, 1)["battery_reserve_soc"] == 45
+    assert _per2(cfg, 0)["battery_mode"] == "self_consumption"
+    assert _per2(cfg, 0)["battery_reserve_soc"] == 30
+    assert _per2(cfg, 1)["battery_mode"] == "allow_arbitrage"
+    assert _per2(cfg, 1)["battery_reserve_soc"] == 45
 
 
 def test_per_battery_mode_absent_falls_back():
     cfg = {"battery_modes": ["force_charge"]}  # only b1 set
-    assert _per(cfg, 0)["battery_mode"] == "force_charge"
-    # b2 beyond the list → no battery_mode key (decide_battery defaults to auto)
-    assert "battery_mode" not in _per(cfg, 1)
+    assert _per2(cfg, 0)["battery_mode"] == "force_charge"
+    # b2 beyond the list → the per-battery default its select shows (#531)
+    assert _per2(cfg, 1)["battery_mode"] == "auto"
 
 
 def test_global_mode_does_not_bleed_into_multi_fleet():
@@ -120,10 +127,16 @@ def test_multi_fleet_explicit_mode_still_wins():
     assert SEMCoordinator._per_battery_config(fake, 1, 2)["battery_mode"] == "auto"
 
 
-def test_multi_fleet_reserve_defaults_to_zero():
+def test_multi_fleet_reserve_defaults_to_what_its_number_shows():
+    # (#1071) not 0: the per-battery reserve number shows 20 % for an unset
+    # slot, and the stale global 40 must not bleed in either (#531).
+    from custom_components.solar_energy_management.consts.battery_modes import (
+        DEFAULT_BATTERY_RESERVE_SOC,
+    )
     cfg = {"battery_reserve_soc": 40}  # stale single-battery global
     fake = SimpleNamespace(config=cfg)
-    assert SEMCoordinator._per_battery_config(fake, 1, 2)["battery_reserve_soc"] == 0
+    assert SEMCoordinator._per_battery_config(fake, 1, 2)["battery_reserve_soc"] == (
+        DEFAULT_BATTERY_RESERVE_SOC)
 
 
 def test_persist_global_option_writes_scalar_no_reload():

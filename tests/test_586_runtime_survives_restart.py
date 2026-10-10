@@ -78,9 +78,8 @@ async def test_accrued_runtime_survives_reload(
     # run US/Pacific), and the first post-reload tick would then read the
     # restored day as a rollover and reset the accrued value.
     device._daily_runtime_accumulated_sec = _ACCRUED_SEC
-    device._daily_runtime_meter_day = (
-        coordinator.time_manager.get_current_meter_day_sunrise_based()
-    )
+    stamped_day = coordinator.time_manager.get_current_meter_day_sunrise_based()
+    device._daily_runtime_meter_day = stamped_day
     coordinator._persist_device_runtimes()
     await coordinator._storage.async_save_daily()
 
@@ -97,6 +96,14 @@ async def test_accrued_runtime_survives_reload(
     )
     # Target survived (this always worked — it's applied at registration).
     assert device.daily_min_runtime_sec == 330 * 60
+    # (#1076) A day boundary inside the run resets the runtime ON PURPOSE —
+    # that is a new day, not this bug. conftest starts every real-HA test at
+    # noon so none can fall here; if one does, say so instead of "#586".
+    now_day = coordinator.time_manager.get_current_meter_day_sunrise_based()
+    assert now_day == stamped_day, (
+        f"meter day moved {stamped_day} -> {now_day} during the test: "
+        "the clock crossed a day boundary (#1076)"
+    )
     # Accrued runtime must survive too. Pre-fix this was 0.0 because the
     # restore ran before any device existed. A single post-reload cycle may
     # add a little if the device reads as on, so allow a small tolerance —

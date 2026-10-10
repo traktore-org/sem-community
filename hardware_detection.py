@@ -39,6 +39,14 @@ _LOGGER = logging.getLogger(__name__)
 # wizard's second prefill — is retired: the wizard reads ONE crawler (the
 # roster and its roles). A field the roles cannot fill is left for the user.
 
+# The three sensors every charger needs. (#990) The config flow reads this
+# too: a home with no charger cannot fill them, so its pages must not
+# require them.
+EV_REQUIRED_SENSORS = (
+    "ev_connected_sensor",
+    "ev_charging_sensor",
+    "ev_charging_power_sensor",
+)
 
 
 class EVChargerDetector:
@@ -99,13 +107,7 @@ class EVChargerDetector:
         """
         errors = {}
 
-        required_sensors = [
-            "ev_connected_sensor",
-            "ev_charging_sensor",
-            "ev_charging_power_sensor",
-        ]
-
-        for sensor_key in required_sensors:
+        for sensor_key in EV_REQUIRED_SENSORS:
             entity_id = config.get(sensor_key)
             if not entity_id:
                 errors[sensor_key] = "Required sensor not configured"
@@ -1412,6 +1414,74 @@ _CHARGER_SIGNS = ("ev_charging_power_sensor", "ev_connected_sensor",
                   "ev_charging_sensor", "ev_current_control_entity",
                   "ev_charger_service", "ev_start_stop_entity",
                   "ev_charge_mode_entity", "ev_start_service")
+
+#: Every per-charger key that names an ENTITY — what says something about
+#: the physical box rather than about the car or about how to talk to it.
+#: Service names are deliberately absent: two KEBAs both answer to
+#: ``keba.set_current``, so a service is not an identity. The ONE
+#: fingerprint of a charger: the config flow's "already installed" check,
+#: the set_option merge (#1054 follow-up: a second "create" of the same
+#: box folds into the first) and the detection report all read it.
+CHARGER_ENTITY_KEYS = frozenset({
+    "ev_charge_mode_entity",
+    "ev_charger_service_entity_id",
+    "ev_charging_power_sensor",
+    "ev_charging_sensor",
+    "ev_connected_sensor",
+    "ev_current_control_entity",
+    "ev_current_sensor",
+    "ev_session_energy_sensor",
+    "ev_start_stop_entity",
+    "ev_total_energy_sensor",
+})
+
+
+#: The keys a configured charger's report row shows: its entities and how
+#: SEM talks to it. Modes, targets and priorities are settings, not roles.
+_CONFIGURED_ROW_KEYS = CHARGER_ENTITY_KEYS | frozenset({
+    "ev_charger_service", "ev_service_param_name", "ev_charger_service_data",
+    "ev_start_service", "ev_start_service_data",
+    "ev_stop_service", "ev_stop_service_data",
+    "ev_charge_mode_start", "ev_charge_mode_stop", "ev_phase_switch_entity",
+})
+
+
+def charger_entity_ids(charger: Any) -> set:
+    """The entities a charger config points at — its fingerprint."""
+    if not isinstance(charger, dict):
+        return set()
+    return {str(v) for k, v in charger.items() if k in CHARGER_ENTITY_KEYS and v}
+
+
+def power_sensor_ids(hass) -> List[str]:
+    """(#1054 follow-up) Every sensor the crawler reads as a POWER reading:
+    device_class ``power``, or — when the integration set no class — a unit
+    in W/kW (``_roles_dc``'s rule, the one that found go-e's ``p_all``).
+    The power pickers offer this list; a picker that filtered on the device
+    class alone could not show the very sensor the crawler had matched."""
+    out: set = set()
+    if hass is None:
+        return []
+    try:
+        registry = entity_registry.async_get(hass)
+        for e in registry.entities.values():
+            eid = str(e.entity_id)
+            if eid.startswith("sensor.") and not e.disabled_by \
+                    and _roles_dc(e) == "power":
+                out.add(eid)
+    except Exception:  # noqa: BLE001 — the registry half stands alone
+        pass
+    try:
+        for st in hass.states.async_all("sensor"):
+            attrs = getattr(st, "attributes", None) or {}
+            dc = attrs.get("device_class")
+            unit = attrs.get("unit_of_measurement")
+            if dc == "power" or (not dc and isinstance(unit, str)
+                                 and _UNIT_CLASS.get(unit.strip().lower()) == "power"):
+                out.add(str(st.entity_id))
+    except Exception:  # noqa: BLE001 — the states half stands alone
+        pass
+    return sorted(out)
 
 
 def _role_discovered_chargers(hass, registry, found) -> List[Dict[str, Any]]:
@@ -3004,8 +3074,15 @@ def _roles_pass(report, registry, brand_units, configured_entities,
 
 def build_detection_report(hass: Optional[HomeAssistant] = None,
                            registry=None, configured_entities=None,
-                           strategy_values=None) -> Dict[str, Any]:
+                           strategy_values=None,
+                           configured_chargers=None) -> Dict[str, Any]:
     """(#814 Pillar B) Detection that shows its work.
+
+    (#1054 follow-up) ``configured_chargers`` — the charger dicts SEM
+    drives. A unit one of them points at is a CONFIGURED charger row
+    (``configured: True``), never a near miss and never an offer: weindler's
+    go-e sat on the card as "entities present, no role matched" with a
+    "create this charger" button beside the charger SEM was already driving.
 
     The same walk as ``discover_all_ev_chargers_from_registry`` — platform
     by platform, device by device, the same brand functions — but the
@@ -3061,6 +3138,58 @@ def build_detection_report(hass: Optional[HomeAssistant] = None,
                            and hasattr(hass, "states")) else None)
     _roles_services = _services_of(hass)
 
+    # (#1054 follow-up) What SEM drives, first. The unit behind each
+    # configured charger is reported as that charger — the brand walk and
+    # the role pass below never see it, so it cannot come back as a near
+    # miss with a button to create it again.
+    _live_units = group_entities_by_unit([e for e in entries if not e.disabled_by])
+    _unit_of_entity: Dict[str, Any] = {
+        str(e.entity_id): key for key, ents in _live_units.items() for e in ents}
+    _by_eid = {str(e.entity_id): e for e in entries}
+    configured_charger_entities: set = set()
+    for cfg in (configured_chargers or ()):
+        if not isinstance(cfg, dict) or not cfg.get("id"):
+            continue
+        mine = charger_entity_ids(cfg)
+        if not mine:
+            continue
+        configured_charger_entities |= mine
+        unit_key = next((_unit_of_entity[eid] for eid in sorted(mine)
+                         if eid in _unit_of_entity), None)
+        first = next((_by_eid[eid] for eid in sorted(mine) if eid in _by_eid), None)
+        mapped: Dict[str, Any] = {}
+        for key, val in cfg.items():
+            # the wiring only — a mode or a priority is a setting, not a role
+            if key not in _CONFIGURED_ROW_KEYS or not val:
+                continue
+            e = _by_eid.get(str(val))
+            mapped[key] = _describe(e) if e is not None else {"value": val}
+        control = cfg.get("ev_charger_service")
+        control = (f"service: {control}" if control
+                   else "number entity" if cfg.get("ev_current_control_entity")
+                   else "start/stop only" if cfg.get("ev_start_stop_entity")
+                   else "see mapping")
+        row = {
+            "platform": str(cfg.get("_platform")
+                            or (first.platform if first is not None else "")
+                            or "configured"),
+            "device_id": unit_device_id(unit_key) if unit_key is not None
+            else (str(getattr(first, "device_id", "") or "") or None),
+            "unit": unit_label(unit_key) if unit_key is not None else None,
+            "mapped": mapped,
+            "unmapped": [],
+            "control": control,
+            "configured": True,
+            "charger_id": str(cfg["id"]),
+            "name": cfg.get("name"),
+        }
+        report["chargers"].append(row)
+        brand_units.append({
+            "platform": row["platform"], "unit": row["unit"],
+            "device_id": row["device_id"], "entities": set(mine),
+        })
+    configured_entities = set(configured_entities or ()) | configured_charger_entities
+
     def _same_brand(a: str, b: str) -> bool:
         """(#915) ``zaptec_sim`` and ``zaptec_custom`` are the brand
         ``zaptec`` — the tolerance the discovery walk and the census apply."""
@@ -3103,6 +3232,15 @@ def build_detection_report(hass: Optional[HomeAssistant] = None,
         pending_near: List[Dict[str, Any]] = []
         for unit_key, (mapping, dev_entities) in found.items():
             device_id = unit_device_id(unit_key)
+            # (#1054 follow-up) a unit SEM already drives was reported above
+            if configured_charger_entities & {str(e.entity_id) for e in dev_entities}:
+                continue
+            # (#1054) the config path's rule: a brand mapping with no charger
+            # sign — no power, no plug, no charging state, no control — found
+            # a meter, not a charger. The report said "charger — see mapping"
+            # for go-e's lone total-energy sensor; leave it to the roles.
+            if mapping and not any(mapping.get(k) for k in _CHARGER_SIGNS):
+                mapping = {}
             if unit_key in meters:
                 report["meters"].append({
                     "platform": str(dev_entities[0].platform or platform),
@@ -3248,6 +3386,7 @@ def build_detection_report(hass: Optional[HomeAssistant] = None,
                 "unmapped": [_describe(e) for e in dev_entities
                              if str(e.entity_id) not in used],
                 "control": control,
+                "configured": False,
             }
             # (#804 B4c) the one underscore key that IS report data.
             if mapping.get("_suggested_phase_switch"):
@@ -3322,10 +3461,15 @@ def build_detection_report(hass: Optional[HomeAssistant] = None,
     # knows, and the two gap lines that turn installs into detection
     # findings.
     try:
+        # (#1054 follow-up) a near miss whose offer is complete IS a match —
+        # the roles named every part; weindler's census listed go-e under
+        # "matched nothing" beside the offer that drove his box.
         report["census"] = build_integration_census(
             hass=hass, registry=registry,
-            matched_charger_platforms={
-                c.get("platform") for c in report["chargers"]})
+            matched_charger_platforms=(
+                {c.get("platform") for c in report["chargers"]}
+                | {n.get("platform") for n in report["near_misses"]
+                   if n.get("suggested_charger") and not n.get("missing")}))
     except Exception:  # noqa: BLE001 — a census never costs the report
         report["census"] = None
     # (#915) The same question asked of EVERYTHING installed, not only of the
