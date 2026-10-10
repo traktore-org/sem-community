@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - ✨ **The day plan follows the sky** (#1068). From midday, the rest of today's solar is scaled by what was really made. Off by default.
 - ✨ **Grid operator relay** (#1021). While it is on, SEM keeps grid draw under the operator's limit and skips the devices it switches off.
+- 🐛 **Each battery gets its own discharge limit field** (#1089) — thanks @RienduPre. With two Sessys, SEM limited only the first.
 
 # [2.2.0-beta.15] — 10.10.2026
 
