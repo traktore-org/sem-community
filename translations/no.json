@@ -215,7 +215,7 @@
         "title": "Batteri {battery} — utladingsgrense",
         "description": "Batteri {battery} er {sensor}.\n\nVelg number-entiteten som begrenser utladingseffekten til dette batteriet. La feltet stå tomt for å bruke den felles entiteten fra forrige side.",
         "data": {
-          "battery_discharge_limit_entity": "Entitet for utladingsgrense — batteri {battery}"
+          "battery_discharge_control_entity": "Entitet for utladingsgrense — batteri {battery}"
         }
       },
       "settings_ev": {

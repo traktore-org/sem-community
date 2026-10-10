@@ -215,7 +215,7 @@
         "title": "Batterij {battery} — ontlaadlimiet",
         "description": "Batterij {battery} is {sensor}.\n\nKies de nummer-entiteit die het ontlaadvermogen van deze batterij begrenst. Laat leeg om de gedeelde entiteit van de vorige pagina te gebruiken.",
         "data": {
-          "battery_discharge_limit_entity": "Ontlaadlimiet-entiteit — batterij {battery}"
+          "battery_discharge_control_entity": "Ontlaadlimiet-entiteit — batterij {battery}"
         }
       },
       "settings_ev": {

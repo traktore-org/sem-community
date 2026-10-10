@@ -215,7 +215,7 @@
         "title": "{battery} akkumulátor — kisütési korlát",
         "description": "A(z) {battery} akkumulátor: {sensor}.\n\nVálassza ki azt a Number entitást, amely ennek az akkumulátornak a kisütési teljesítményét korlátozza. Hagyja üresen az előző oldal közös entitásának használatához.",
         "data": {
-          "battery_discharge_limit_entity": "Kisütési korlát entitás — {battery} akkumulátor"
+          "battery_discharge_control_entity": "Kisütési korlát entitás — {battery} akkumulátor"
         }
       },
       "settings_ev": {

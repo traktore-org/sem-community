@@ -215,7 +215,7 @@
         "title": "Batterie {battery} — Entladelimit",
         "description": "Batterie {battery} ist {sensor}.\n\nWähle die Number-Entität, die die Entladeleistung dieser Batterie begrenzt. Leer lassen, um die gemeinsame Entität der vorigen Seite zu nutzen.",
         "data": {
-          "battery_discharge_limit_entity": "Entladelimit-Entität — Batterie {battery}"
+          "battery_discharge_control_entity": "Entladelimit-Entität — Batterie {battery}"
         }
       },
       "settings_ev": {

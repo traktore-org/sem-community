@@ -40,7 +40,7 @@ from custom_components.solar_energy_management.coordinator.decide_battery import
 
 ROOT = Path(__file__).resolve().parent.parent
 LIST_KEY = "battery_discharge_control_entities"
-FIELD = "battery_discharge_limit_entity"
+FIELD = "battery_discharge_control_entity"   # this battery's own
 
 
 def _coordinator(slugs, sources=()):
@@ -161,6 +161,21 @@ class TestConfigureHasOneFieldPerBattery:
     def test_the_keys_are_owned(self):
         assert LIST_KEY in OPTIONS_FLOW_OWNED_KEYS
         assert FIELD in OPTIONS_FLOW_OWNED_KEYS
+
+    @pytest.mark.asyncio
+    async def test_a_battery_page_never_touches_the_shared_entity(
+            self, mock_hass, config_entry):
+        """The page's field has the shared key's name (it is this battery's
+        value of it); the answer goes into the list slot only."""
+        flow = _flow(mock_hass, config_entry,
+                     {"battery_discharge_control_entity": "number.shared"},
+                     _coordinator(("b1", "b2")))
+        flow._data["battery_discharge_control_entity"] = "number.shared"
+        await _page(flow, config_entry)
+        await _page(flow, config_entry, {FIELD: "number.a"})
+        await _page(flow, config_entry, {})
+        assert flow._data["battery_discharge_control_entity"] == "number.shared"
+        assert flow._data[LIST_KEY] == ["number.a", None]
 
 
 class TestWhatThePageWritesReachesEachBattery:

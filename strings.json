@@ -400,7 +400,7 @@
         "title": "Battery {battery} — discharge limit",
         "description": "Battery {battery} is {sensor}.\n\nPick the number entity that limits this battery's discharge power. Leave it empty to use the shared entity from the page before.",
         "data": {
-          "battery_discharge_limit_entity": "Discharge limit entity — battery {battery}"
+          "battery_discharge_control_entity": "Discharge limit entity — battery {battery}"
         }
       },
       "settings_ev": {

@@ -215,7 +215,7 @@
         "title": "Batteria {battery} — limite di scarica",
         "description": "La batteria {battery} è {sensor}.\n\nScegli l'entità Number che limita la potenza di scarica di questa batteria. Lascia vuoto per usare l'entità comune della pagina precedente.",
         "data": {
-          "battery_discharge_limit_entity": "Entità limite di scarica — batteria {battery}"
+          "battery_discharge_control_entity": "Entità limite di scarica — batteria {battery}"
         }
       },
       "settings_ev": {

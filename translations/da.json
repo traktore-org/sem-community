@@ -215,7 +215,7 @@
         "title": "Batteri {battery} — afladningsgrænse",
         "description": "Batteri {battery} er {sensor}.\n\nVælg den number-entitet, der begrænser dette batteris afladningseffekt. Lad feltet stå tomt for at bruge den fælles entitet fra forrige side.",
         "data": {
-          "battery_discharge_limit_entity": "Entitet for afladningsgrænse — batteri {battery}"
+          "battery_discharge_control_entity": "Entitet for afladningsgrænse — batteri {battery}"
         }
       },
       "settings_ev": {

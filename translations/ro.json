@@ -215,7 +215,7 @@
         "title": "Bateria {battery} — limită de descărcare",
         "description": "Bateria {battery} este {sensor}.\n\nAlegeți entitatea Number care limitează puterea de descărcare a acestei baterii. Lăsați gol pentru a folosi entitatea comună de pe pagina anterioară.",
         "data": {
-          "battery_discharge_limit_entity": "Entitate limită de descărcare — bateria {battery}"
+          "battery_discharge_control_entity": "Entitate limită de descărcare — bateria {battery}"
         }
       },
       "settings_ev": {

@@ -215,7 +215,7 @@
         "title": "Batteri {battery} — urladdningsgräns",
         "description": "Batteri {battery} är {sensor}.\n\nVälj den number-entitet som begränsar urladdningseffekten för detta batteri. Lämna tomt för att använda den gemensamma entiteten från föregående sida.",
         "data": {
-          "battery_discharge_limit_entity": "Entitet för urladdningsgräns — batteri {battery}"
+          "battery_discharge_control_entity": "Entitet för urladdningsgräns — batteri {battery}"
         }
       },
       "settings_ev": {

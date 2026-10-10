@@ -215,7 +215,7 @@
         "title": "Baterie {battery} — limit vybíjení",
         "description": "Baterie {battery} je {sensor}.\n\nVyberte entitu Number, která omezuje vybíjecí výkon této baterie. Nechte prázdné pro použití společné entity z předchozí stránky.",
         "data": {
-          "battery_discharge_limit_entity": "Entita limitu vybíjení — baterie {battery}"
+          "battery_discharge_control_entity": "Entita limitu vybíjení — baterie {battery}"
         }
       },
       "settings_ev": {

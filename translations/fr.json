@@ -215,7 +215,7 @@
         "title": "Batterie {battery} — limite de décharge",
         "description": "La batterie {battery} est {sensor}.\n\nChoisissez l'entité Number qui limite la puissance de décharge de cette batterie. Laissez vide pour utiliser l'entité commune de la page précédente.",
         "data": {
-          "battery_discharge_limit_entity": "Entité de limite de décharge — batterie {battery}"
+          "battery_discharge_control_entity": "Entité de limite de décharge — batterie {battery}"
         }
       },
       "settings_ev": {

@@ -215,7 +215,7 @@
         "title": "蓄电池 {battery} — 放电限制",
         "description": "蓄电池 {battery} 为 {sensor}。\n\n选择限制此蓄电池放电功率的数字实体。留空则使用上一页的共用实体。",
         "data": {
-          "battery_discharge_limit_entity": "放电限制实体 — 蓄电池 {battery}"
+          "battery_discharge_control_entity": "放电限制实体 — 蓄电池 {battery}"
         }
       },
       "settings_ev": {

@@ -215,7 +215,7 @@
         "title": "Akumulator {battery} — limit rozładowania",
         "description": "Akumulator {battery} to {sensor}.\n\nWybierz encję Number, która ogranicza moc rozładowania tego akumulatora. Pozostaw puste, aby użyć wspólnej encji z poprzedniej strony.",
         "data": {
-          "battery_discharge_limit_entity": "Encja limitu rozładowania — akumulator {battery}"
+          "battery_discharge_control_entity": "Encja limitu rozładowania — akumulator {battery}"
         }
       },
       "settings_ev": {

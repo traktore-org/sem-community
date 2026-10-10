@@ -1412,7 +1412,6 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "battery_discharge_control_entity",
     # (#1089) the per-battery discharge limits, one page per battery
     "battery_discharge_control_entities",
-    "battery_discharge_limit_entity",
     "battery_operating_mode_entity",
     "battery_discharge_protection_enabled",
     "battery_force_charge_negative_price",
@@ -2622,11 +2621,14 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
         idx = self._battery_limit_idx
         if user_input is not None:
-            # The page's one field: absent from the reply = emptied.
+            # The page's one field is THIS battery's
+            # ``battery_discharge_control_entity`` — the key
+            # ``_per_battery_config`` hands it — so it goes into the list
+            # slot, never the shared key. Absent from the reply = emptied.
             limits = _draft_list(self, list_key)
             while len(limits) <= idx:
                 limits.append(None)
-            limits[idx] = user_input.get("battery_discharge_limit_entity") or None
+            limits[idx] = user_input.get("battery_discharge_control_entity") or None
             self._data["battery_discharge_control_entities"] = limits
             idx += 1
             self._battery_limit_idx = idx
@@ -2639,7 +2641,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             step_id="settings_battery_limit",
             data_schema=vol.Schema({
                 vol.Optional(
-                    "battery_discharge_limit_entity",
+                    "battery_discharge_control_entity",
                     description={"suggested_value": current or None},
                 ): selector.EntitySelector(selector.EntitySelectorConfig(domain="number")),
             }),

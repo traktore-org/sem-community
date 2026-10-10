@@ -215,7 +215,7 @@
         "title": "Akku {battery} — purkuraja",
         "description": "Akku {battery} on {sensor}.\n\nValitse Number-entiteetti, joka rajoittaa tämän akun purkutehoa. Jätä tyhjäksi, niin edellisen sivun yhteistä entiteettiä käytetään.",
         "data": {
-          "battery_discharge_limit_entity": "Purkurajan entiteetti — akku {battery}"
+          "battery_discharge_control_entity": "Purkurajan entiteetti — akku {battery}"
         }
       },
       "settings_ev": {
