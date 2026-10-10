@@ -211,6 +211,13 @@
           "battery_operating_mode_entity": "The inverter's operating-policy selector (e.g. Huawei's 'Working mode'). SEM only READS it: the mode is shown beside the battery evidence, and a one-time repair warns when it is not the self-consumption mode SEM's planning assumes. SEM never changes it. Leave empty to disable the watch."
         }
       },
+      "settings_battery_limit": {
+        "title": "Akumulator {battery} — limit rozładowania",
+        "description": "Akumulator {battery} to {sensor}.\n\nWybierz encję Number, która ogranicza moc rozładowania tego akumulatora. Pozostaw puste, aby użyć wspólnej encji z poprzedniej strony.",
+        "data": {
+          "battery_discharge_control_entity": "Encja limitu rozładowania — akumulator {battery}"
+        }
+      },
       "settings_ev": {
         "title": "Ładowanie EV i solar",
         "description": "Skonfiguruj cele ładowania EV i progi solarne.",

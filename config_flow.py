@@ -62,6 +62,7 @@ from .consts.bounds import bounds_selector
 from .coordinator.ev_taper_detector import resolve_charge_efficiency
 from .coordinator.units import energy_state_to_kwh, normalize_unit
 from .coordinator.install_modules import has_managed_charger
+from .coordinator.battery_controls import captured_battery_control_slugs
 from .ha_energy_reader import read_energy_dashboard_config, EnergyDashboardConfig
 from .hardware_detection import (
     CHARGER_ENTITY_KEYS,
@@ -1410,6 +1411,8 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "battery_charge_scheduler_enabled",
     "battery_cycle_cost",
     "battery_discharge_control_entity",
+    # (#1089) the per-battery discharge limits, one page per battery
+    "battery_discharge_control_entities",
     "battery_operating_mode_entity",
     "battery_discharge_protection_enabled",
     "battery_force_charge_negative_price",
@@ -1639,6 +1642,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         self._data: dict[str, Any] = {}
         # (#990) saved values of a page this dialog skipped — kept as they are
         self._unshown: dict[str, Any] = {}
+        # (#1089) which battery's discharge-limit page is showing
+        self._battery_limit_idx = 0
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -2484,7 +2489,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
         if user_input is not None:
             _merge_form_input(self, self._data, user_input)
-            return await self.async_step_settings_ev()
+            self._battery_limit_idx = 0
+            return await self.async_step_settings_battery_limit()
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
 
@@ -2570,6 +2576,85 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.BooleanSelector(),
             }),
             errors=errors,
+        )
+
+    def _battery_slugs(self) -> tuple[str, ...]:
+        """(#1089) The batteries that have their own controls (``b1`` …).
+
+        The same answer the per-battery mode and reserve controls are built
+        from (``battery_control_slugs``, captured at setup). Empty on a
+        one-battery install, and when SEM is not loaded.
+        """
+        coordinator = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
+        return captured_battery_control_slugs(coordinator) or ()
+
+    def _battery_label_source(self, idx: int, slug: str) -> str:
+        """(#1089) The sensor that tells the user which battery ``slug`` is:
+        its Energy-Dashboard power sensor, else SEM's own one."""
+        coordinator = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
+        reader = getattr(coordinator, "_sensor_reader", None)
+        ed = getattr(reader, "_energy_dashboard_config", None)
+        sources = list(getattr(ed, "battery_power_list", None) or [])
+        if idx < len(sources) and isinstance(sources[idx], str) and sources[idx]:
+            return sources[idx]
+        return f"sensor.sem_battery_{slug}_power"
+
+    async def async_step_settings_battery_limit(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """(#1089) One discharge-limit entity per battery — one page each.
+
+        SEM limits each battery through its own slot of
+        ``battery_discharge_control_entities`` (idx-aligned with the
+        per-battery mode and reserve, #523), but this dialog only had the one
+        shared field. Two Sessys, one picked: SEM limited the first and the
+        second kept discharging into the car. An empty slot uses the shared
+        entity from the page before (``_per_battery_config``).
+
+        One page per battery, so any number of batteries fits one labelled
+        field. A home without per-battery controls skips it, and the saved
+        list stays as it is.
+        """
+        list_key = "battery_discharge_control_entities"
+        slugs = self._battery_slugs()
+        idx = self._battery_limit_idx
+        if user_input is not None:
+            # The page's one field is THIS battery's
+            # ``battery_discharge_control_entity`` — the key
+            # ``_per_battery_config`` hands it — so it goes into the list
+            # slot, never the shared key. Absent from the reply = emptied.
+            limits = _draft_list(self, list_key)
+            while len(limits) <= idx:
+                limits.append(None)
+            limits[idx] = user_input.get("battery_discharge_control_entity") or None
+            self._data["battery_discharge_control_entities"] = limits
+            idx += 1
+            self._battery_limit_idx = idx
+        if len(slugs) < 2:
+            # Skipped (or SEM reloaded with fewer batteries mid-dialog): the
+            # key is owned, so the saved list must reach the final save.
+            saved = (self.config_entry.options or {}).get(list_key)
+            if saved is not None:
+                self._data.setdefault("battery_discharge_control_entities",
+                                      list(saved) if isinstance(saved, list) else saved)
+            return await self.async_step_settings_ev()
+        if idx >= len(slugs):
+            return await self.async_step_settings_ev()
+
+        limits = _draft_list(self, list_key)
+        current = limits[idx] if idx < len(limits) else None
+        return self.async_show_form(
+            step_id="settings_battery_limit",
+            data_schema=vol.Schema({
+                vol.Optional(
+                    "battery_discharge_control_entity",
+                    description={"suggested_value": current or None},
+                ): selector.EntitySelector(selector.EntitySelectorConfig(domain="number")),
+            }),
+            description_placeholders={
+                "battery": slugs[idx].upper(),
+                "sensor": self._battery_label_source(idx, slugs[idx]),
+            },
         )
 
     async def async_step_settings_ev(

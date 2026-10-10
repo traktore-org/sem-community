@@ -53,6 +53,10 @@ NOT_DUPLICATE = {
     # settings_ev holds the GLOBAL default; the charger pages hold that
     # charger's value and default FROM the global. Two real settings.
     "daily_ev_target": "global default + per-charger override, not duplication",
+    # (#1089) settings holds the SHARED entity; each settings_battery_limit
+    # page holds one battery's own (its slot of the per-battery list), which
+    # wins over the shared one. Two real settings.
+    "battery_discharge_control_entity": "shared entity + per-battery override, not duplication",
 }
 
 

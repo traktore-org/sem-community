@@ -168,6 +168,10 @@ def _wired(config: Mapping[str, Any], keys: Iterable[str]) -> bool:
         value = config.get(key)
         if value in _EMPTY:
             continue
+        # (#1089) A per-battery list with every slot empty (``[None, None]``,
+        # what a click through Configure saves) wires nothing.
+        if isinstance(value, (list, tuple)) and all(v in _EMPTY for v in value):
+            continue
         if isinstance(value, str) and value.strip().lower() in _DEFAULT_VALUES.get(key, ()):
             continue
         return True
