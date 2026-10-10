@@ -1413,6 +1413,17 @@ class SEMConfigCard extends SEMLitBase {
             ${this._renderZoneKnob('number.sem_battery_max_discharge_power', 'battery_max_discharge_power', T, 'config_help_batt_max_discharge')}
             ${this._renderPicker('battery_discharge_control_entity', 'config_batt_discharge_entity',
                 'number', null, opts, 'config_help_batt_discharge_entity')}
+            ${/* (#1089) one limit per battery. The one entity above limited
+                  the first battery only; the second kept discharging into
+                  the car. An empty row uses the entity above. Shown where
+                  that entity is. */ ''}
+            ${(() => {
+                const n = this._batteryCount();
+                if (n < 2 || !this._showsControl('battery_discharge_control_entity')) return nothing;
+                return html`${Array.from({ length: n }, (_, i) => this._renderBatteryListPicker(
+                    'battery_discharge_control_entities', 'config_batt_discharge_entity',
+                    ['number'], i, n, opts, 'config_help_batt_discharge_entity_each'))}`;
+            })()}
         `;
     }
 
@@ -1517,8 +1528,10 @@ class SEMConfigCard extends SEMLitBase {
                     const n = this._batteryCount();
                     if (n > 1) {
                         return html`${Array.from({ length: n }, (_, i) => html`
-                            ${this._renderBatteryDischargePicker(i, n, opts)}
-                            ${this._renderBatteryStrategyPicker(i, n, opts)}`)}`;
+                            ${this._renderBatteryListPicker('battery_force_discharge_entities',
+                                'config_force_discharge_entity', ['number', 'input_number'], i, n, opts)}
+                            ${this._renderBatteryListPicker('battery_strategy_entities',
+                                'config_strategy_entity', ['select', 'input_select'], i, n, opts)}`)}`;
                     }
                     return html`
                         ${this._renderPicker('battery_force_discharge_control_entity',
@@ -2017,11 +2030,13 @@ class SEMConfigCard extends SEMLitBase {
         );
     }
 
-    // Per-battery power-strategy select picker (#523). Writes
-    // ``battery_strategy_entities[idx]`` — the select.* (Sessy power_strategy)
-    // SEM switches to the API value while it drives the setpoint.
-    _renderBatteryStrategyPicker(idx, count, opts) {
-        const listKey = 'battery_strategy_entities';
+    // One row of an idx-aligned per-battery list option (#523): the
+    // force-discharge number (``battery_force_discharge_entities``), the
+    // power-strategy select (``battery_strategy_entities``, Sessy
+    // power_strategy) and the discharge limit
+    // (``battery_discharge_control_entities``, #1089). Battery ``idx`` is
+    // the Energy-Dashboard battery order, shown as B<idx+1>.
+    _renderBatteryListPicker(listKey, labelKey, domains, idx, count, opts, helpKey) {
         const lst = Array.isArray(opts[listKey]) ? opts[listKey] : [];
         const cur = lst[idx] || '';
         const fieldKey = `${listKey}.${idx}`;
@@ -2029,17 +2044,19 @@ class SEMConfigCard extends SEMLitBase {
         return html`
             <div class="picker-cell">
                 <div class="picker-row">
-                    <span class="picker-label">${this._t('config_strategy_entity')} — B${idx + 1}</span>
+                    <span class="picker-label">${this._t(labelKey)} — B${idx + 1}</span>
                     <ha-entity-picker
                         .hass=${this._hass}
                         .value=${cur}
-                        .includeDomains=${['select', 'input_select']}
+                        .includeDomains=${domains}
                         .allowCustomEntity=${false}
                         @value-changed=${(e) => this._saveListField(listKey, idx, e.detail?.value || '', count)}>
                     </ha-entity-picker>
                 </div>
                 ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
                 ${status === 'ok' ? html`<div class="save-status ok">✓ ${this._t('config_saved')}</div>` : nothing}
+                ${status && status !== 'saving' && status !== 'ok' ? html`<div class="save-status err">⚠ ${status}</div>` : nothing}
+                ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
             </div>
         `;
     }
@@ -2052,33 +2069,6 @@ class SEMConfigCard extends SEMLitBase {
         while (cur.length < count) cur.push(null);
         cur[idx] = value || null;
         await this._saveOption(listKey, cur, `${listKey}.${idx}`);
-    }
-
-    // Per-battery force-discharge control-entity picker (#523). Writes
-    // ``battery_force_discharge_entities[idx]`` so each battery can be sold
-    // to grid independently (number.* hardware setpoint or input_number.*).
-    _renderBatteryDischargePicker(idx, count, opts) {
-        const listKey = 'battery_force_discharge_entities';
-        const lst = Array.isArray(opts[listKey]) ? opts[listKey] : [];
-        const cur = lst[idx] || '';
-        const fieldKey = `${listKey}.${idx}`;
-        const status = this._saveStatus[fieldKey];
-        return html`
-            <div class="picker-cell">
-                <div class="picker-row">
-                    <span class="picker-label">${this._t('config_force_discharge_entity')} — B${idx + 1}</span>
-                    <ha-entity-picker
-                        .hass=${this._hass}
-                        .value=${cur}
-                        .includeDomains=${['number', 'input_number']}
-                        .allowCustomEntity=${false}
-                        @value-changed=${(e) => this._saveListField(listKey, idx, e.detail?.value || '', count)}>
-                    </ha-entity-picker>
-                </div>
-                ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
-                ${status === 'ok' ? html`<div class="save-status ok">✓ ${this._t('config_saved')}</div>` : nothing}
-            </div>
-        `;
     }
 
     // Entity picker bound to an entry.options key. Auto-saves via WebSocket
