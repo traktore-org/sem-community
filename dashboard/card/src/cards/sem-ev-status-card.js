@@ -15,11 +15,13 @@ import { semTheme, semFormatPower, semGetCurrency, semDefineCard } from '../base
 import { resolveChargerSoc } from '../util/charger-soc.js';
 import { chargerStatusKey } from '../util/charger-status.js';
 import { evStripSegments, evStripWindow } from '../util/ev-strip.js';
+import { downloadBase64 } from '../util/download.js';
 import {
-    sessionMonth, shiftMonth, rowsForMonth, monthTotals, sessionRowView, sessionsCsv,
+    sessionMonth, shiftMonth, rowsForMonth, monthTotals, sessionRowView,
 } from '../util/sessions.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const CHARGER_COLORS = ['#8DC892', '#64B5F6'];
 
 class SEMEVStatusCard extends SEMLitBase {
@@ -106,16 +108,22 @@ class SEMEVStatusCard extends SEMLitBase {
         this._setSessionState(id, { loading: false, rows, month: keep || thisMonth });
     }
 
-    _downloadSessionsCsv(id, rows) {
-        const blob = new Blob([sessionsCsv(rows)], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'sem-sessions-' + id + '.csv';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    // (#1083) An .xlsx, not a CSV: Excel splits a CSV on ";" or "," by locale.
+    async _downloadSessionsXlsx(id) {
+        if (!this._hass?.callWS) return;
+        try {
+            const res = await this._hass.callWS({
+                type: 'solar_energy_management/session_history/xlsx', charger_id: id,
+            });
+            if (res?.base64) {
+                downloadBase64(res.filename || 'sem-sessions.xlsx', res.base64, XLSX_MIME);
+                this._setSessionState(id, { error: null });
+            }
+        } catch (err) {
+            // tell the person, not only the console
+            console.warn('SEM: session download failed', err);
+            this._setSessionState(id, { error: 'download' });
+        }
     }
 
     _renderSessions(id) {
@@ -189,9 +197,10 @@ class SEMEVStatusCard extends SEMLitBase {
                         <span class="metric-label ${more > 0 ? 'clickable' : ''}"
                               @click=${() => more > 0 && this._setSessionState(id, { all: true })}>${more > 0 ? fill('sessions_more', more) + ' · ' : ''}${fill('sessions_stored', rows.length)}</span>
                         ${rows.length ? html`
-                            <span class="metric-value sessions-csv" @click=${() => this._downloadSessionsCsv(id, rows)}>
-                                <ha-icon icon="mdi:download" style="--mdc-icon-size:14px"></ha-icon>${this._t('sessions_csv')}
-                            </span>` : nothing}
+                            <span class="metric-value sessions-dl" @click=${() => this._downloadSessionsXlsx(id)}>
+                                <ha-icon icon="mdi:download" style="--mdc-icon-size:14px"></ha-icon>${this._t('sessions_xlsx')}
+                            </span>
+                            ${st.error === 'download' ? html`<span class="metric-label">${this._t('sessions_download_failed')}</span>` : nothing}` : nothing}
                     </div>`}
             </div>
         `;
@@ -2124,7 +2133,7 @@ class SEMEVStatusCard extends SEMLitBase {
             .sessions-span { color: #b5b5b5; font-weight: 400; }
             .sessions-foot { justify-content: space-between; min-height: 28px; }
             .sessions-foot .clickable { cursor: pointer; }
-            .sessions-csv { color: #5BC8D8; display: flex; gap: 4px; align-items: center; cursor: pointer; }
+            .sessions-dl { color: #5BC8D8; display: flex; gap: 4px; align-items: center; cursor: pointer; }
             .sessions-note { padding: 8px 0 4px; }
             /* 12h EV plan strip (#282, readability pass #464) */
             .plan-strip {

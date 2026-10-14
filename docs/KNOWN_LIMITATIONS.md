@@ -444,3 +444,23 @@ purpose (a dead controller must not strand the car). SEM stops once and
 does not fight the box; it raises a Repair instead. A stop only holds if
 SEM's arming is turned off (`keba_arm_failsafe: false` via `set_option`)
 and the box's own `Curr FS` is set to 0.
+
+## Simulation tab: estimates from hourly averages (#1083)
+
+The Simulation tab gives estimates, not measurements:
+
+- **Hourly averages.** It reads Home Assistant's hourly history. 15-minute
+  prices and short power peaks inside an hour are averaged away, and the
+  peak limit is checked per hour.
+- **The car and your loads stay as recorded.** Only the battery and the
+  grid change. A bigger battery does not move the car's charging.
+- **Two features are off in the simulation:** spending the battery on the
+  forecast, and the export guard.
+- **No data, no day.** Days before SEM was installed, or before Home
+  Assistant kept its history, cannot be simulated.
+- **Older days are never "sunny".** Day tags filled in from hourly history
+  cannot see a cloud pass inside an hour, so those days show as mixed at
+  best.
+- **One changed decision changes the rest.** Once the simulated battery
+  does something different from the real one, every hour after it is an
+  estimate (marked est.).

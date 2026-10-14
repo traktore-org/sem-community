@@ -103,7 +103,59 @@ SWITCH_TYPES = [
         entity_category=EntityCategory.CONFIG,
         icon="mdi:car-clock",
     ),
+    # (#1083) Shows the Simulation tab, turns day tagging on and backfills
+    # 90 days of tags. Default OFF; persisted in PERSISTED_FLAG_DEFAULTS.
+    SwitchEntityDescription(
+        key="simulation_tab",
+        entity_category=EntityCategory.CONFIG,
+        icon="mdi:flask-outline",
+    ),
 ]
+
+SIMULATION_TAB = "simulation_tab"
+
+
+def regenerate_dashboard(hass: HomeAssistant) -> None:
+    """(#1083) Rebuild the SEM dashboard through the ``generate_dashboard``
+    service — the one path, not a second generator chain.
+
+    Only when the dashboard is live: the service's first-install branch
+    restarts Home Assistant, and flipping a switch must never do that."""
+    from .const import DOMAIN
+
+    try:
+        ll_data = hass.data.get("lovelace")
+        dashboards = getattr(ll_data, "dashboards", None)
+        if dashboards is None and isinstance(ll_data, dict):
+            dashboards = ll_data.get("dashboards")
+        live = isinstance(dashboards, dict) and "sem-dashboard" in dashboards
+    except Exception:  # noqa: BLE001
+        live = False
+    if not live:
+        _LOGGER.debug("no live SEM dashboard — nothing to regenerate")
+        return
+
+    async def _run() -> None:
+        try:
+            await hass.services.async_call(
+                DOMAIN, "generate_dashboard", {}, blocking=True)
+        except Exception as err:  # noqa: BLE001 — a switch flip never fails on this
+            _LOGGER.warning("Dashboard regeneration failed: %s", err)
+
+    hass.async_create_task(_run(), "sem simulation tab dashboard")
+
+
+def notify_simulation_tab(hass: HomeAssistant, on: bool) -> None:
+    """(#1083) Tell the person to reload — the browser keeps the old views."""
+    from homeassistant.components import persistent_notification
+
+    persistent_notification.async_create(
+        hass,
+        "SEM: reload the page to see the Simulation tab." if on
+        else "SEM: reload the page — the Simulation tab is gone.",
+        title="SEM",
+        notification_id="sem_simulation_tab",
+    )
 
 # (#778 phase 6) Switch key -> its slot in the nested ``battery_permissions``
 # dict. That dict is the ONE representation the resolver reads; persisting a
@@ -462,6 +514,20 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
             pass
         self.hass.config_entries.async_update_entry(entry, options=new_options)
 
+    def _simulation_tab_changed(self, on: bool) -> None:
+        """(#1083) On: backfill day tags in the background. Off: stop it.
+        Either way the dashboard is rebuilt and the person told to reload."""
+        from .coordinator import day_tag_store
+        try:
+            if on:
+                day_tag_store.start_backfill(self.hass, self.coordinator)
+            else:
+                day_tag_store.cancel_backfill(self.coordinator)
+        except Exception:  # noqa: BLE001 — a backfill never fails the flip
+            _LOGGER.debug("day-tag backfill not changed", exc_info=True)
+        regenerate_dashboard(self.hass)
+        notify_simulation_tab(self.hass, on)
+
     @property
     def is_on(self) -> bool:
         """Return true if switch is on.
@@ -555,6 +621,8 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         # toggle on the next coordinator push, and a swallowed refresh error below
         # would silently leave HA showing the old state.
         self.async_write_ha_state()
+        if self.entity_description.key == SIMULATION_TAB:
+            self._simulation_tab_changed(True)
 
         try:
             await self.coordinator.async_request_refresh()
@@ -573,6 +641,8 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
             self.coordinator._energy_plan_actuation = False  # #638 G4 — immediate
         self._persist_flag(False)  # reload-durable (see _persist_flag)
         self.async_write_ha_state()  # reflect immediately (#259)
+        if self.entity_description.key == SIMULATION_TAB:
+            self._simulation_tab_changed(False)
 
         try:
             await self.coordinator.async_request_refresh()

@@ -24,6 +24,7 @@ Complete reference for Solar Energy Management (SEM).
 - [Peak Load Management](#peak-load-management)
 - [Tariff Integration](#tariff-integration)
 - [Solar Forecast](#solar-forecast)
+- [Simulation tab](#simulation-tab-1083)
 - [Observer Mode](#observer-mode)
 - [Sensors Reference](#sensors-reference)
 - [Daily Energy Reset](#daily-energy-reset)
@@ -1271,7 +1272,7 @@ SEM supports active control of **multiple EV chargers** (v1.4.0+). Add chargers 
 
 SEM keeps the last 400 finished charging sessions: start, end, charger,
 energy, solar share, cost and duration. The EV tab shows them per charger
-with a month view and totals, and a CSV button.
+with a month view and totals, and a download button (.xlsx).
 
 For your own log, call the service `solar_energy_management.export_session_history`
 from a script or automation. It returns the rows and the same rows as
@@ -1722,6 +1723,75 @@ automation can use it without a phone.
 "Night start" and "morning" are SEM's own night window (sunset and
 sunrise, bounded by the night settings), not fixed hours. The
 comparisons need three past nights or days first.
+
+---
+
+## Simulation tab (#1083)
+
+The Simulation tab asks "what if?" about days you already had. Pick
+recorded days, change a few battery or price settings, and SEM shows what
+those days would have cost. Every simulated number is an estimate.
+
+### Switch it on
+
+**Configuration tab → Advanced → Simulation tab**, then reload the page.
+The tab is off by default. Turning it on also tags each day and reads the
+last 90 days from Home Assistant's history once, in the background.
+
+### Pick days
+
+Each day carries tags:
+
+| Tag | Means |
+|---|---|
+| ☀️ | sunny |
+| ⛅ | mixed: sun and clouds |
+| ☁️ | grey |
+| 🚗 | the car charged |
+| 💸 | cheap or negative prices |
+| ⚠️ | data gap — you cannot pick this day |
+
+Tap a day to pick it, or use a quick pick: all sunny, all grey, days with
+a car, last 30 days. At most 90 days per run.
+
+### What if
+
+Five fields. Each shows your setting now and the value to try:
+
+- **Battery size** (kWh)
+- **Battery reserve** (%)
+- **Peak limit** (kW)
+- **Import price** — as recorded, or one flat price
+- **Export value** — as recorded, or one flat price
+
+### Run and stop
+
+**Run simulation** starts it. It runs on your Home Assistant, one day at a
+time, and shows how far it is. **Stop** ends it; the days done so far are
+kept. One run at a time.
+
+### Read the results
+
+- Each day shows the actual cost, the simulated cost and the difference.
+  Green is cheaper, orange is dearer.
+- **est.** means estimated. The simulation runs SEM's real battery
+  decisions hour by hour, but the flows after a changed decision come
+  from the energy balance, not a meter.
+- **Stored energy**: when the simulated battery ends the day fuller or
+  emptier than the real one, that energy is counted at the day's mean
+  price. Emptying the battery is not a saving.
+- **Indicative** days had a missing hour, price or battery level. Read
+  them as a rough guide.
+- Totals per day type (sunny, mixed, grey, car, cheap) and for all days
+  sit under the table.
+
+### Download
+
+**Download** saves the results as an Excel file (.xlsx). The EV tab's
+session download is an .xlsx file now too. A CSV did not open right in
+every country's Excel; an .xlsx does.
+
+Limits: [Known Limitations → Simulation tab](KNOWN_LIMITATIONS.md#simulation-tab-estimates-from-hourly-averages-1083).
 
 ---
 

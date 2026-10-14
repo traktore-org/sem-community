@@ -59,6 +59,8 @@ PERSISTED_FLAG_DEFAULTS: Final[Dict[str, bool]] = {
     "export_guard_override_external": False,
     "battery_house_sink_enabled": False,
     "ev_morning_window_enabled": False,
+    # (#1083) the Simulation tab ships hidden.
+    "simulation_tab": False,
 }
 
 

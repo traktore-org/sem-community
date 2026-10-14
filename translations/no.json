@@ -1518,6 +1518,9 @@
       },
       "ev_morning_window_enabled": {
         "name": "Morgenvindu for elbilen"
+      },
+      "simulation_tab": {
+        "name": "Simuleringsfane"
       }
     },
     "number": {

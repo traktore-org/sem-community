@@ -1518,6 +1518,9 @@
       },
       "ev_morning_window_enabled": {
         "name": "Reggeli EV-ablak"
+      },
+      "simulation_tab": {
+        "name": "Szimuláció lap"
       }
     },
     "number": {

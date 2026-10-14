@@ -5,7 +5,7 @@
     "reason; removing one is the point of the issue.",
     "Regenerate:  python3 scripts/audit_options.py --baseline"
   ],
-  "total": 197,
+  "total": 198,
   "first_run_fields": 16,
   "first_run_steps": 3,
   "first_run_fields_best": 10,
@@ -208,6 +208,7 @@
     "export_guard_override_external",
     "forecast_spending_enabled",
     "observer_mode",
+    "simulation_tab",
     "vacation_mode"
   ],
   "select_entities": [

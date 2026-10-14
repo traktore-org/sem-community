@@ -1518,6 +1518,9 @@
       },
       "ev_morning_window_enabled": {
         "name": "电动车晨间窗口"
+      },
+      "simulation_tab": {
+        "name": "模拟标签页"
       }
     },
     "number": {

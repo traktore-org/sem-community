@@ -1518,6 +1518,9 @@
       },
       "ev_morning_window_enabled": {
         "name": "Aamuikkuna sähköautolle"
+      },
+      "simulation_tab": {
+        "name": "Simulointivälilehti"
       }
     },
     "number": {

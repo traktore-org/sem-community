@@ -255,6 +255,7 @@ const WATCHED = [
     // is the single settings home; Control is live-ops only).
     'number.sem_regulation_offset',
     'switch.sem_observer_mode',
+    'switch.sem_simulation_tab',  // #1083
     // #461: grid-sign fix lives in the Advanced section now.
     'sensor.sem_diag_grid_sign',
     // #588: battery-sign fix, same section.
@@ -2902,6 +2903,7 @@ class SEMConfigCard extends SEMLitBase {
                 'config_help_vpp_reserve_soc')}
             <div style="margin-top:6px;border-top:1px solid ${T.surfaceBorder};padding-top:4px"></div>
             ${this._renderToggle('switch.sem_observer_mode', 'observer_mode', T, 'config_help_observer_mode')}
+            ${this._renderToggle('switch.sem_simulation_tab', 'simulation_tab', T, 'config_help_simulation_tab')}
             <div class="stepper-pair">
                 ${this._renderStepper('number.sem_update_interval', 'update_interval', T, 'config_help_update_interval')}
                 ${this._renderStepper('number.sem_minimum_solar_power', 'min_solar_power', T, 'config_help_min_solar_power')}

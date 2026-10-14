@@ -1518,6 +1518,9 @@
       },
       "ev_morning_window_enabled": {
         "name": "Janela matinal do VE"
+      },
+      "simulation_tab": {
+        "name": "Separador de simulação"
       }
     },
     "number": {

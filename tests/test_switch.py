@@ -47,7 +47,9 @@ class TestSEMSwitches:
                         "battery_may_export", "battery_may_assist_ev",
                         # arc #921 — four switches, all default OFF, after the permissions
                         "export_guard_enabled", "export_guard_override_external",
-                        "battery_house_sink_enabled", "ev_morning_window_enabled"]
+                        "battery_house_sink_enabled", "ev_morning_window_enabled",
+                        # #1083 — the Simulation tab, default OFF
+                        "simulation_tab"]
 
     # ``test_night_charging_default_off`` and
     # ``test_night_charging_existing_state_preserved`` removed in

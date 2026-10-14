@@ -1518,6 +1518,9 @@
       },
       "ev_morning_window_enabled": {
         "name": "Morning EV window"
+      },
+      "simulation_tab": {
+        "name": "Simulation tab"
       }
     },
     "number": {
