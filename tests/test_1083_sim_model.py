@@ -329,20 +329,22 @@ def test_from_statistics_reads_changes_and_means():
     solar = [0.0] * 24
     solar[12] = 3.0
     imp = [0.5] * 24
-    imp[4] = -120.0                      # counter reset
+    imp[4] = -0.2                        # the counter steps back
+    home = rows([0.5] * 24)
+    del home[7]                          # an hour the recorder never wrote
     day = HourlyDay.from_statistics(
         {"solar": rows(solar), "grid_import": rows(imp),
-         "grid_export": rows([0.0] * 24), "home": rows([0.5] * 24),
+         "grid_export": rows([0.0] * 24), "home": home,
          "soc": rows([40.0] * 23, key="mean"),
          "import_rate": rows([0.3] * 24, key="mean"),
          "forecast": rows([18.5] * 24, key="mean")},
         date="2026-10-12", tags=["mixed"], tz=tz)
     assert day.solar[12] == 3.0
-    assert day.grid_import[4] == 0.0 and 4 in day.missing_hours
+    assert day.grid_import[4] == 0.0 and day.grid_import[5] == pytest.approx(0.3)
     assert day.battery_charge == [0.0] * 24        # no battery role: 0, not missing
     assert day.soc_pct[23] is None and day.soc_pct[0] == 40.0
     assert day.forecast_kwh == 18.5
-    assert day.missing_hours == [4]
+    assert day.missing_hours == [7]
 
 
 def test_from_statistics_without_a_core_role_misses_every_hour():

@@ -4,10 +4,15 @@ Pure: no Home Assistant, no clock. The job reads the recorder's hourly
 long-term statistics and hands the rows here; the replay tool builds the
 same shape from its own recordings.
 
-Flows come from SEM's own TOTAL counters (midnight reset), so an hour's
-``change`` is the gross kWh of that hour. A negative change is a counter
-reset: that hour counts 0 and is marked missing — never a negative flow.
-Measurements (SOC, prices, forecast) come from the hourly ``mean``.
+Flows come from SEM's own daily counters (``last_reset`` at midnight), so
+an hour's ``change`` is the gross kWh of that hour. The recorder already
+takes the midnight reset out of ``change``: a negative change is the
+counter stepping back (SEM corrects itself by a few Wh), not a reset. It
+is netted against the role's next hours — then its earlier ones — so the
+day adds up to the counter's own total and no flow goes negative. A row
+that exists counts, even at 0 or with no change; only an absent row is a
+missing hour. Measurements (SOC, prices, forecast) come from the hourly
+``mean``.
 """
 from __future__ import annotations
 
@@ -42,6 +47,10 @@ ROLES = FLOW_ROLES + MEAN_ROLES
 #: be absent on purpose (no battery, no car) and then read as 0.
 CORE_ROLES = (SOLAR, GRID_IMPORT, GRID_EXPORT, HOME)
 
+#: a step back bigger than this (kWh) is no rounding fix: the day is
+#: still netted, but marked indicative with the hour and size
+STEP_BACK_NOTE_KWH = 0.5
+
 
 def _zeros() -> List[float]:
     return [0.0] * HOURS
@@ -70,6 +79,8 @@ class HourlyDay:
     export_rate: List[Optional[float]] = field(default_factory=_nones)
     forecast_kwh: Optional[float] = None
     missing_hours: List[int] = field(default_factory=list)
+    #: what the reading had to fix, said for the day's indicative marks
+    notes: List[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         for role in FLOW_ROLES:
@@ -84,6 +95,7 @@ class HourlyDay:
             setattr(self, name, [None if v is None else float(v) for v in vals])
         self.tags = [str(t) for t in (self.tags or [])]
         self.missing_hours = sorted({int(h) for h in self.missing_hours})
+        self.notes = [str(n) for n in (self.notes or [])]
 
     @property
     def gap(self) -> bool:
@@ -123,30 +135,31 @@ class HourlyDay:
         means: Dict[str, List[Optional[float]]] = {
             role: _nones() for role in MEAN_ROLES}
         missing = set()
+        notes: List[str] = []
         for role in FLOW_ROLES:
             rows = list(rows_by_role.get(role) or [])
             if not rows:
                 if role in CORE_ROLES:
                     missing.update(range(HOURS))
                 continue
+            raw = _zeros()
             seen = set()
             for row in rows:
                 hour = _hour_of(row.get("start"), day, tz)
                 if hour is None:
                     continue
+                seen.add(hour)      # the row is there: a value, even 0
                 change = row.get("change")
                 try:
-                    change = None if change is None else float(change)
+                    raw[hour] += 0.0 if change is None else float(change)
                 except (TypeError, ValueError):
-                    change = None
-                if change is None or change < 0:
-                    # A reset or a hole: 0 for the hour, and say so.
-                    missing.add(hour)
-                    seen.add(hour)
-                    continue
-                out[role][hour] += change
-                seen.add(hour)
+                    pass
             missing.update(h for h in range(HOURS) if h not in seen)
+            out[role] = _net_step_backs(raw)
+            for hour, kwh in enumerate(raw):
+                if kwh < -STEP_BACK_NOTE_KWH:
+                    notes.append(f"{role} counter stepped back {-kwh:.2f} kWh "
+                                 f"at {hour:02d}:00 — netted against the day")
         for role in MEAN_ROLES:
             for row in rows_by_role.get(role) or []:
                 hour = _hour_of(row.get("start"), day, tz)
@@ -162,9 +175,32 @@ class HourlyDay:
             date=day.isoformat(), tags=list(tags),
             soc_pct=means[SOC], import_rate=means[IMPORT_RATE],
             export_rate=means[EXPORT_RATE], forecast_kwh=forecast,
-            missing_hours=sorted(missing),
+            missing_hours=sorted(missing), notes=notes,
             **out,
         )
+
+
+def _net_step_backs(raw: List[float]) -> List[float]:
+    """Hourly kWh with no negative hour, adding up to ``sum(raw)`` (0 if
+    that is below 0). A step back is taken from the next hours first (the
+    counter catching up), what is left from the earlier hours, latest
+    first (a reset the counter made late)."""
+    out = _zeros()
+    debt = 0.0
+    for hour, kwh in enumerate(raw):
+        if kwh < 0:
+            debt -= kwh
+            continue
+        take = min(kwh, debt)
+        out[hour] = kwh - take
+        debt -= take
+    for hour in range(HOURS - 1, -1, -1):
+        if debt <= 0:
+            break
+        take = min(out[hour], debt)
+        out[hour] -= take
+        debt -= take
+    return out
 
 
 def _as_date(value: Any) -> _date:

@@ -492,6 +492,7 @@ def simulate_day(day: HourlyDay, params: SimParams,
     if day.missing_hours:
         marks.append(f"{len(day.missing_hours)} hour(s) missing in the "
                      "recorder — counted as 0")
+    marks.extend(day.notes)
     if day.gap:
         marks.append("the day carries the gap tag")
 
