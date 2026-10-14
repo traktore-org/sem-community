@@ -294,7 +294,9 @@ def _stat_bucket_year_month(row: Dict[str, Any]) -> Optional[tuple[int, int]]:
 
 
 # Environmental impact constants
-GRID_CO2_KG_PER_KWH = 0.128  # Swiss grid average
+GRID_CO2_KG_PER_KWH = 0.128  # Swiss grid average — the fallback (#1088)
+#: (#1088) accumulator category of the live-intensity correction, in kg
+CO2_CORRECTION_CATEGORY = "co2_live_correction"
 CO2_KG_PER_TREE_PER_YEAR = 22  # EPA estimate
 
 
@@ -308,6 +310,10 @@ class EnergyCalculator:
 
         # Accumulators for energy integration
         self._daily_accumulators: Dict[str, float] = {}
+        # (#1088) the grid's live CO2 intensity this cycle (kg/kWh), or None
+        # = no usable reading; and the soak flag that lets it count.
+        self._grid_co2_kg: Optional[float] = None
+        self._co2_live: bool = False
         self._monthly_accumulators: Dict[str, float] = {}
         self._yearly_accumulators: Dict[str, float] = {}
         self._lifetime_accumulators: Dict[str, float] = {}
@@ -757,6 +763,21 @@ class EnergyCalculator:
             "grid_export", today, month_key, year_key,
             cost_key="cost_export", rate=self._export_rate,
         )
+        # (#1088) CO2 avoided at the grid's LIVE intensity. Booked as the
+        # DIFFERENCE from the fixed Swiss average, per kWh of solar used in
+        # the house this cycle: the published totals stay
+        #   self-consumed × 0.128 + this correction
+        # so switching it on adds nothing at that moment (no jump in a
+        # lifetime total), a restart keeps it (it is an accumulator), and a
+        # cycle with no usable reading adds exactly 0 — the fixed value.
+        if self._co2_live and self._grid_co2_kg is not None:
+            used_w = max(0.0, float(power.solar_power or 0.0)
+                         - float(power.grid_export_power or 0.0))
+            if used_w >= MIN_POWER_THRESHOLD:
+                used_kwh = used_w * interval_hours / 1000
+                self._accumulate(
+                    CO2_CORRECTION_CATEGORY, today, month_key, year_key,
+                    used_kwh * (self._grid_co2_kg - GRID_CO2_KG_PER_KWH))
         energy.daily_grid_export = self._get_daily("grid_export", today)
         energy.daily_grid_export_negative = self._get_daily("grid_export_negative", today)
         energy.daily_grid_export_negative_cost = self._get_daily_cost("cost_export_negative", today)
@@ -2947,12 +2968,17 @@ class EnergyCalculator:
         lifetime_export = self._get_lifetime("grid_export")
         lifetime_self_consumed = max(0, lifetime_solar - lifetime_export)
 
-        costs.daily_co2_avoided_kg = round(daily_self_consumed * GRID_CO2_KG_PER_KWH, 2)
-        costs.yearly_co2_avoided_kg = round(yearly_self_consumed * GRID_CO2_KG_PER_KWH, 1)
+        # (#1088) + the live-intensity correction (0 while the flag is off
+        # and before it ever ran). Never below 0: CO2 avoided is a saving.
+        costs.daily_co2_avoided_kg = round(max(0.0, daily_self_consumed * GRID_CO2_KG_PER_KWH
+            + self._co2_correction("daily", today)), 2)
+        costs.yearly_co2_avoided_kg = round(max(0.0, yearly_self_consumed * GRID_CO2_KG_PER_KWH
+            + self._co2_correction("yearly", year_key)), 1)
         costs.yearly_trees_equivalent = round(
             costs.yearly_co2_avoided_kg / CO2_KG_PER_TREE_PER_YEAR, 1
         )
-        costs.lifetime_co2_avoided_kg = round(lifetime_self_consumed * GRID_CO2_KG_PER_KWH, 1)
+        costs.lifetime_co2_avoided_kg = round(max(0.0, lifetime_self_consumed * GRID_CO2_KG_PER_KWH
+            + self._co2_correction("lifetime", None)), 1)
         costs.lifetime_trees_equivalent = round(
             costs.lifetime_co2_avoided_kg / CO2_KG_PER_TREE_PER_YEAR, 1
         )
@@ -3243,6 +3269,29 @@ class EnergyCalculator:
         """Get yearly accumulated energy."""
         key = f"{category}_{year_key}"
         return round(self._yearly_accumulators.get(key, 0.0), 2)
+
+    def set_grid_co2_intensity(self, kg_per_kwh: Optional[float], live: bool) -> None:
+        """(#1088) This cycle's grid CO2 intensity (kg/kWh; None = no usable
+        reading) and whether the soak flag lets it count."""
+        self._grid_co2_kg = kg_per_kwh
+        self._co2_live = bool(live)
+
+    def grid_co2_kg_now(self) -> float:
+        """(#1088) The kg/kWh a grid kWh counts at right now: the live
+        intensity when the soak flag lets it count and a reading exists,
+        else the fixed Swiss average — one rule for every CO2 number."""
+        if self._co2_live and self._grid_co2_kg is not None:
+            return float(self._grid_co2_kg)
+        return GRID_CO2_KG_PER_KWH
+
+    def _co2_correction(self, period: str, key) -> float:
+        """(#1088) The accumulated live-intensity correction, unrounded."""
+        c = CO2_CORRECTION_CATEGORY
+        if period == "daily":
+            return self._daily_accumulators.get(f"{c}_{key}", 0.0)
+        if period == "yearly":
+            return self._yearly_accumulators.get(f"{c}_{key}", 0.0)
+        return self._lifetime_accumulators.get(f"lifetime_{c}", 0.0)
 
     def _get_lifetime(self, category: str) -> float:
         """Get lifetime accumulated energy."""

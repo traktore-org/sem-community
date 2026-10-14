@@ -256,7 +256,9 @@
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
           "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
           "tariff_classification_mode": "Modalità di classificazione dei prezzi",
-          "solar_forecast_source": "Sorgente della previsione solare"
+          "solar_forecast_source": "Sorgente della previsione solare",
+          "grid_co2_entity": "Sensore intensità CO₂ della rete (facoltativo)",
+          "outdoor_temperature_entity": "Temperatura esterna (facoltativo)"
         },
         "data_description": {
           "electricity_import_rate": "Tariffa di importazione diurna/fissa (valuta/kWh, IVA inclusa). Usata come ripiego quando il prezzo dinamico non è disponibile.",
@@ -273,7 +275,9 @@
           "grid_import_power_entity": "Sensore opzionale (W) per la potenza di importazione dalla rete. Rilevato automaticamente dalla Dashboard Energia; sovrascrivilo qui se necessario.",
           "grid_export_power_entity": "Sensore opzionale (W) per la potenza di esportazione dalla rete. Rilevato automaticamente dalla Dashboard Energia; sovrascrivilo qui se necessario.",
           "tariff_classification_mode": "Percentile classifica i prezzi rispetto all'intervallo di oggi (consigliato). Statico usa soglie fisse economico/costoso.",
-          "solar_forecast_source": "Quale integrazione di previsione legge SEM. Il rilevamento automatico preferisce Solcast, poi Forecast.Solar, poi Open-Meteo — scegline una se ne usi più di una."
+          "solar_forecast_source": "Quale integrazione di previsione legge SEM. Il rilevamento automatico preferisce Solcast, poi Forecast.Solar, poi Open-Meteo — scegline una se ne usi più di una.",
+          "grid_co2_entity": "SEM trova da solo un sensore in g o kg di CO₂ per kWh. Sceglierne uno solo se ha trovato quello sbagliato.",
+          "outdoor_temperature_entity": "SEM trova un termometro esterno dal nome, oppure usa la tua entità meteo. Sceglilo solo se ha preso quello sbagliato."
         }
       },
       "load_management": {

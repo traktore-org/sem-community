@@ -21,7 +21,7 @@
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semDefineCard, semCardSurfaceCSS } from '../base/sem-shared.js';
 import { priceLevelKey } from '../util/price-level.js';
-import { chargerAddPlan, detectRowLabelKey, isPowerEntity } from '../util/detect-rows.js';
+import { chargerAddPlan, detectRowLabelKey, isCo2IntensityEntity, isOutdoorTemperatureCandidate, isPowerEntity } from '../util/detect-rows.js';
 import { roleSource, showsRoleLegend } from '../util/role-source.js';
 
 // Section index — order = visual order in the rendered tab. Each entry
@@ -1499,6 +1499,12 @@ class SEMConfigCard extends SEMLitBase {
                 ${this._renderOptionSelect('tariff_classification_mode', 'config_tariff_class_mode',
                     classModeOptions, opts, 'config_help_tariff_class_mode', 'percentile')}
             ` : nothing}
+            ${/* (#1088) the grid's CO2 intensity: found by unit; pick only to override. */ ''}
+            ${this._renderPicker('grid_co2_entity', 'config_grid_co2_entity',
+                'sensor', 'co2_intensity', opts, 'config_help_grid_co2_entity')}
+            ${/* (#1082) the temperature outside: found by name, else the weather entity. */ ''}
+            ${this._renderPicker('outdoor_temperature_entity', 'config_outdoor_temperature_entity',
+                ['sensor', 'weather'], 'outdoor_temperature', opts, 'config_help_outdoor_temperature_entity')}
             ${/* (#1040) the times Calendar mode runs on — it had no field. */ ''}
             ${mode === 'calendar' ? this._renderPicker('tariff_schedule_entity',
                 'config_tariff_schedule_entity', 'schedule', null, opts,
@@ -2028,8 +2034,8 @@ class SEMConfigCard extends SEMLitBase {
                         .hass=${this._hass}
                         .value=${cur}
                         .includeDomains=${domain ? (Array.isArray(domain) ? domain : [domain]) : undefined}
-                        .includeDeviceClasses=${deviceClass && deviceClass !== 'power' ? [deviceClass] : undefined}
-                        .entityFilter=${deviceClass === 'power' ? isPowerEntity : undefined}
+                        .includeDeviceClasses=${deviceClass && !['power', 'co2_intensity', 'outdoor_temperature'].includes(deviceClass) ? [deviceClass] : undefined}
+                        .entityFilter=${deviceClass === 'power' ? isPowerEntity : (deviceClass === 'co2_intensity' ? isCo2IntensityEntity : (deviceClass === 'outdoor_temperature' ? isOutdoorTemperatureCandidate : undefined))}
                         .allowCustomEntity=${false}
                         @value-changed=${(e) => onChange(e.detail?.value || '')}>
                     </ha-entity-picker>
@@ -2139,8 +2145,8 @@ class SEMConfigCard extends SEMLitBase {
                         .hass=${this._hass}
                         .value=${cur}
                         .includeDomains=${domain ? (Array.isArray(domain) ? domain : [domain]) : undefined}
-                        .includeDeviceClasses=${deviceClass && deviceClass !== 'power' ? [deviceClass] : undefined}
-                        .entityFilter=${deviceClass === 'power' ? isPowerEntity : undefined}
+                        .includeDeviceClasses=${deviceClass && !['power', 'co2_intensity', 'outdoor_temperature'].includes(deviceClass) ? [deviceClass] : undefined}
+                        .entityFilter=${deviceClass === 'power' ? isPowerEntity : (deviceClass === 'co2_intensity' ? isCo2IntensityEntity : (deviceClass === 'outdoor_temperature' ? isOutdoorTemperatureCandidate : undefined))}
                         .allowCustomEntity=${false}
                         @value-changed=${(e) => onChange(e.detail?.value || '')}>
                     </ha-entity-picker>

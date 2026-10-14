@@ -71,6 +71,8 @@ class HintFacts:
     daily_home_kwh: float = 0.0
     daily_ev_kwh: float = 0.0
     daily_cost: float = 0.0
+    #: (#1088) CO2 avoided today, kg (None = not known)
+    daily_co2_kg: Optional[float] = None
     self_use_pct: float = 0.0
     currency: str = ""
     #: entity_id -> (display name, seconds dark)
@@ -195,6 +197,8 @@ class HintEngine:
             "ev": float(facts.daily_ev_kwh or 0.0),
             "cost": float(facts.daily_cost or 0.0),
             "self_use": float(facts.self_use_pct or 0.0),
+            # (#1088) None on days stored before, or when SEM had no number
+            "co2": None if facts.daily_co2_kg is None else float(facts.daily_co2_kg),
         }
 
     # ── categories ──────────────────────────────────────────────────
@@ -250,6 +254,12 @@ class HintEngine:
             "cost": round(sum(d["cost"] for d in days), 2),
             "currency": facts.currency or "",
         })
+        # (#1088) one CO2 line, only when every day of the week has a number
+        # (a week half-counted would undersell what the solar avoided)
+        co2_days = [d.get("co2") for d in days]
+        if days and all(c is not None for c in co2_days):
+            self._fire(out, "weekly_summary", key, "hint_msg_weekly_co2",
+                       {"co2": round(sum(co2_days), 1)}, slot="co2")
 
     def _silent_input(self, facts: HintFacts, out: List[Hint]) -> None:
         enabled = bool(facts.enabled.get("silent_input"))

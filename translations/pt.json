@@ -256,7 +256,9 @@
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
           "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
           "tariff_classification_mode": "Modo de classificação de preços",
-          "solar_forecast_source": "Fonte da previsão solar"
+          "solar_forecast_source": "Fonte da previsão solar",
+          "grid_co2_entity": "Sensor de intensidade de CO₂ da rede (opcional)",
+          "outdoor_temperature_entity": "Temperatura exterior (opcional)"
         },
         "data_description": {
           "electricity_import_rate": "Taxa de importação diurna/simples (moeda/kWh, com IVA). Usada como recurso quando o preço dinâmico não está disponível.",
@@ -273,7 +275,9 @@
           "grid_import_power_entity": "Sensor opcional (W) para a potência de importação da rede. Detetado automaticamente a partir do Painel de Energia; substitua aqui se necessário.",
           "grid_export_power_entity": "Sensor opcional (W) para a potência de exportação para a rede. Detetado automaticamente a partir do Painel de Energia; substitua aqui se necessário.",
           "tariff_classification_mode": "Percentil classifica os preços em relação ao intervalo de hoje (recomendado). Estático usa limiares fixos de barato/caro.",
-          "solar_forecast_source": "Qual integração de previsão o SEM lê. A deteção automática prefere Solcast, depois Forecast.Solar e depois Open-Meteo — escolha uma se usar várias em paralelo."
+          "solar_forecast_source": "Qual integração de previsão o SEM lê. A deteção automática prefere Solcast, depois Forecast.Solar e depois Open-Meteo — escolha uma se usar várias em paralelo.",
+          "grid_co2_entity": "O SEM encontra sozinho um sensor em g ou kg de CO₂ por kWh. Escolha um só se ele encontrou o errado.",
+          "outdoor_temperature_entity": "O SEM encontra um termómetro exterior pelo nome, ou usa a sua entidade meteorológica. Escolha um só se escolheu o errado."
         }
       },
       "load_management": {

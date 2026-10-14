@@ -256,7 +256,9 @@
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
           "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
           "tariff_classification_mode": "Modo de clasificación de precios",
-          "solar_forecast_source": "Fuente de la previsión solar"
+          "solar_forecast_source": "Fuente de la previsión solar",
+          "grid_co2_entity": "Sensor de intensidad de CO₂ de la red (opcional)",
+          "outdoor_temperature_entity": "Temperatura exterior (opcional)"
         },
         "data_description": {
           "electricity_import_rate": "Tarifa de importación diurna/plana (moneda/kWh, IVA incluido). Se utiliza como alternativa cuando el precio dinámico no está disponible.",
@@ -273,7 +275,9 @@
           "grid_import_power_entity": "Sensor opcional (W) para la potencia de importación de la red. Se detecta automáticamente desde el panel Energía; puede sobrescribirlo aquí si hace falta.",
           "grid_export_power_entity": "Sensor opcional (W) para la potencia de exportación a la red. Se detecta automáticamente desde el panel Energía; puede sobrescribirlo aquí si hace falta.",
           "tariff_classification_mode": "Percentil clasifica los precios respecto al rango de hoy (recomendado). Estático usa umbrales fijos de barato/caro.",
-          "solar_forecast_source": "Qué integración de previsión lee SEM. La detección automática prefiere Solcast, luego Forecast.Solar y luego Open-Meteo: elige una si utilizas varias a la vez."
+          "solar_forecast_source": "Qué integración de previsión lee SEM. La detección automática prefiere Solcast, luego Forecast.Solar y luego Open-Meteo: elige una si utilizas varias a la vez.",
+          "grid_co2_entity": "SEM encuentra solo un sensor en g o kg de CO₂ por kWh. Elija uno solo si encontró el equivocado.",
+          "outdoor_temperature_entity": "SEM encuentra un termómetro exterior por su nombre o usa tu entidad meteorológica. Elige uno solo si escogió el equivocado."
         }
       },
       "load_management": {

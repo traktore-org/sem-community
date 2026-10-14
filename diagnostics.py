@@ -215,6 +215,10 @@ def _build_deye_diagnostics(adapters: dict[str, Any]) -> dict[str, Any] | None:
 REDACT_CONFIG_KEYS = {
     # (#1021) the grid operator's relay — an entity id, same class as below
     "shed_signal_entity",
+    # (#1088) the user's grid CO2 sensor pick
+    "grid_co2_entity",
+    # (#1082) the user's outdoor temperature pick
+    "outdoor_temperature_entity",
     "ev_connected_sensor",
     "ev_charging_sensor",
     "ev_charging_power_sensor",
@@ -812,6 +816,30 @@ async def async_get_config_entry_diagnostics(
                                    "get_day_tags", lambda: [])() or [])[-7:])
                 if isinstance(t, dict)
             ],
+        },
+        # (#1088) grid CO2 intensity for the CO2 books: where it comes from
+        # (configured / detected / none — never the id), the value, whether
+        # the fixed 0.128 kg/kWh is in force, whether a forecast exists, and
+        # whether the live value counts (soak flag)
+        "grid_co2": {
+            **(getattr(coordinator, "_grid_co2_status", None) or {"source": "none"}),
+            "configured": bool((getattr(coordinator, "config", None) or {})
+                               .get("grid_co2_entity")),
+            "co2_live_intensity": bool((getattr(coordinator, "config", None) or {})
+                                       .get("co2_live_intensity", False)),
+        },
+        # (#1082) outdoor temperature: where it comes from (configured /
+        # detected / weather / none — never the id), the value, how many
+        # outdoor sensors the crawler found, and what the home-load forecast
+        # learned from it (slope in W per degree) and whether plans use it
+        "outdoor_temperature": {
+            **(getattr(coordinator, "_outdoor_temp_status", None) or {"source": "none"}),
+            "configured": bool((getattr(coordinator, "config", None) or {})
+                               .get("outdoor_temperature_entity")),
+            "forecast_rows": len(getattr(coordinator, "_temp_forecast", None) or []),
+            **{k: v for k, v in ((getattr(getattr(coordinator, "_predictor", None),
+                                          "get_diagnostics", lambda: {})() or {}).items())
+               if k.startswith("temperature_")},
         },
         # (#1021) the grid operator's relay: whether one is set (never its
         # id), what it says now, the limit, since when, which loads it holds

@@ -3438,6 +3438,18 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "intraday_forecast": bool(self.coordinator.config.get(
                     "intraday_forecast", False)),
             })
+        elif self.entity_description.key == "daily_co2_avoided":
+            # (#1088) which grid intensity the CO2 books use right now: the
+            # source kind (never its entity id), the value, whether the fixed
+            # Swiss average is in force, and whether the live value counts.
+            st = getattr(self.coordinator, "_grid_co2_status", None) or {}
+            attrs.update({
+                "co2_source": st.get("source", "none"),
+                "co2_kg_per_kwh": st.get("kg_per_kwh"),
+                "co2_fallback_kg_per_kwh": 0.128,
+                "co2_live": bool(self.coordinator.config.get(
+                    "co2_live_intensity", False)),
+            })
         elif self.entity_description.key == "forecast_correction_factor":
             d = self.coordinator.data
             attrs.update({

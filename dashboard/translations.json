@@ -1753,7 +1753,13 @@
     "sim_indicative": "Hrubý odhad",
     "sim_over_limit": "{n} kWh nad limitem špičky",
     "sim_skipped": "{n} dní přeskočeno (žádná data)",
-    "sim_limits": "Hodinové průměry: krátké výkyvy cen a špičky se vyhladí. Auto a další spotřebiče zůstávají jak zaznamenáno."
+    "sim_limits": "Hodinové průměry: krátké výkyvy cen a špičky se vyhladí. Auto a další spotřebiče zůstávají jak zaznamenáno.",
+    "hint_msg_weekly_co2": "Vaše solární energie tento týden ušetřila {co2} kg CO₂.",
+    "sessions_col_co2": "CO₂ kg",
+    "config_grid_co2_entity": "Senzor CO₂ sítě",
+    "config_help_grid_co2_entity": "Najde se podle jednotky (g nebo kg CO₂ na kWh). Vyberte jen tehdy, když SEM našel špatný.",
+    "config_outdoor_temperature_entity": "Venkovní teplota",
+    "config_help_outdoor_temperature_entity": "Najde se podle názvu, jinak vaše entita počasí. Vyberte jen tehdy, když SEM zvolil špatně."
   },
   "da": {
     "% of limit": "% af grænse",
@@ -3509,7 +3515,13 @@
     "sim_indicative": "Groft skøn",
     "sim_over_limit": "{n} kWh over spidsgrænsen",
     "sim_skipped": "{n} dage sprunget over (ingen data)",
-    "sim_limits": "Timegennemsnit: korte prisudsving og spidser udglattes. Bilen og andre forbrugere forbliver som optaget."
+    "sim_limits": "Timegennemsnit: korte prisudsving og spidser udglattes. Bilen og andre forbrugere forbliver som optaget.",
+    "hint_msg_weekly_co2": "Din solstrøm undgik {co2} kg CO₂ denne uge.",
+    "sessions_col_co2": "CO₂ kg",
+    "config_grid_co2_entity": "Nettets CO₂-sensor",
+    "config_help_grid_co2_entity": "Findes via enheden (g eller kg CO₂ pr. kWh). Vælg kun én, hvis SEM fandt den forkerte.",
+    "config_outdoor_temperature_entity": "Udetemperatur",
+    "config_help_outdoor_temperature_entity": "Findes via navnet, ellers din vejr-entitet. Vælg kun én, hvis SEM valgte forkert."
   },
   "de": {
     "% of limit": "% des Limits",
@@ -5265,7 +5277,13 @@
     "sim_indicative": "Grobe Schätzung",
     "sim_over_limit": "{n} kWh über dem Spitzenlimit",
     "sim_skipped": "{n} Tage übersprungen (keine Daten)",
-    "sim_limits": "Stundenmittel: kurze Preis- und Lastspitzen werden geglättet. Auto und andere Verbraucher bleiben wie aufgezeichnet."
+    "sim_limits": "Stundenmittel: kurze Preis- und Lastspitzen werden geglättet. Auto und andere Verbraucher bleiben wie aufgezeichnet.",
+    "hint_msg_weekly_co2": "Ihr Solarstrom hat diese Woche {co2} kg CO₂ vermieden.",
+    "sessions_col_co2": "CO₂ kg",
+    "config_grid_co2_entity": "CO₂-Sensor des Netzes",
+    "config_help_grid_co2_entity": "Wird über die Einheit gefunden (g oder kg CO₂ pro kWh). Wähle nur einen, wenn SEM den falschen fand.",
+    "config_outdoor_temperature_entity": "Aussentemperatur",
+    "config_help_outdoor_temperature_entity": "Wird über den Namen gefunden, sonst Ihre Wetter-Entität. Nur wählen, wenn SEM das falsche gewählt hat."
   },
   "en": {
     "% of limit": "% of limit",
@@ -7021,7 +7039,13 @@
     "sim_indicative": "Rough estimate",
     "sim_over_limit": "{n} kWh above the peak limit",
     "sim_skipped": "{n} days skipped (no data)",
-    "sim_limits": "Hourly averages: short price swings and peaks are smoothed. The car and other loads stay as recorded."
+    "sim_limits": "Hourly averages: short price swings and peaks are smoothed. The car and other loads stay as recorded.",
+    "hint_msg_weekly_co2": "Your solar avoided {co2} kg of CO₂ this week.",
+    "sessions_col_co2": "CO₂ kg",
+    "config_grid_co2_entity": "Grid CO₂ sensor",
+    "config_help_grid_co2_entity": "Found by its unit (g or kg CO₂ per kWh). Pick one only if SEM found the wrong one.",
+    "config_outdoor_temperature_entity": "Outdoor temperature",
+    "config_help_outdoor_temperature_entity": "Found by its name, else your weather entity. Pick one only if SEM chose the wrong one."
   },
   "es": {
     "% of limit": "% del límite",
@@ -8777,7 +8801,13 @@
     "sim_indicative": "Estimación aproximada",
     "sim_over_limit": "{n} kWh por encima del límite de pico",
     "sim_skipped": "{n} días omitidos (sin datos)",
-    "sim_limits": "Medias horarias: los cambios de precio y picos cortos se suavizan. El coche y otras cargas quedan como se registraron."
+    "sim_limits": "Medias horarias: los cambios de precio y picos cortos se suavizan. El coche y otras cargas quedan como se registraron.",
+    "hint_msg_weekly_co2": "Tu energía solar evitó {co2} kg de CO₂ esta semana.",
+    "sessions_col_co2": "CO₂ kg",
+    "config_grid_co2_entity": "Sensor de CO₂ de la red",
+    "config_help_grid_co2_entity": "Se encuentra por su unidad (g o kg de CO₂ por kWh). Elija uno solo si SEM encontró el equivocado.",
+    "config_outdoor_temperature_entity": "Temperatura exterior",
+    "config_help_outdoor_temperature_entity": "Se encuentra por su nombre; si no, tu entidad meteorológica. Elige uno solo si SEM se equivocó."
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -10533,7 +10563,13 @@
     "sim_indicative": "Karkea arvio",
     "sim_over_limit": "{n} kWh yli huippurajan",
     "sim_skipped": "{n} päivää ohitettu (ei dataa)",
-    "sim_limits": "Tuntikeskiarvot: lyhyet hintaheilahtelut ja huiput tasoittuvat. Auto ja muut kuormat pysyvät tallennetun mukaisina."
+    "sim_limits": "Tuntikeskiarvot: lyhyet hintaheilahtelut ja huiput tasoittuvat. Auto ja muut kuormat pysyvät tallennetun mukaisina.",
+    "hint_msg_weekly_co2": "Aurinkosähkösi vältti tällä viikolla {co2} kg CO₂-päästöjä.",
+    "sessions_col_co2": "CO₂ kg",
+    "config_grid_co2_entity": "Sähköverkon CO₂-anturi",
+    "config_help_grid_co2_entity": "Löytyy yksiköstä (g tai kg CO₂ / kWh). Valitse vain, jos SEM löysi väärän.",
+    "config_outdoor_temperature_entity": "Ulkolämpötila",
+    "config_help_outdoor_temperature_entity": "Löytyy nimen perusteella, muuten sääentiteettisi. Valitse vain, jos SEM valitsi väärin."
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -12289,7 +12325,13 @@
     "sim_indicative": "Estimation grossière",
     "sim_over_limit": "{n} kWh au-dessus de la limite de pointe",
     "sim_skipped": "{n} jours ignorés (pas de données)",
-    "sim_limits": "Moyennes horaires : les variations de prix et les pointes courtes sont lissées. La voiture et les autres charges restent comme enregistrées."
+    "sim_limits": "Moyennes horaires : les variations de prix et les pointes courtes sont lissées. La voiture et les autres charges restent comme enregistrées.",
+    "hint_msg_weekly_co2": "Votre solaire a évité {co2} kg de CO₂ cette semaine.",
+    "sessions_col_co2": "CO₂ kg",
+    "config_grid_co2_entity": "Capteur CO₂ du réseau",
+    "config_help_grid_co2_entity": "Trouvé par son unité (g ou kg de CO₂ par kWh). N'en choisissez un que si SEM a trouvé le mauvais.",
+    "config_outdoor_temperature_entity": "Température extérieure",
+    "config_help_outdoor_temperature_entity": "Trouvé par son nom, sinon votre entité météo. Choisissez-en un seulement si SEM s'est trompé."
   },
   "hu": {
     "% of limit": "% a határból",
@@ -14045,7 +14087,13 @@
     "sim_indicative": "Durva becslés",
     "sim_over_limit": "{n} kWh a csúcskorlát felett",
     "sim_skipped": "{n} nap kihagyva (nincs adat)",
-    "sim_limits": "Órás átlagok: a rövid árkilengések és csúcsok kisimulnak. Az autó és más fogyasztók a rögzítettek szerint maradnak."
+    "sim_limits": "Órás átlagok: a rövid árkilengések és csúcsok kisimulnak. Az autó és más fogyasztók a rögzítettek szerint maradnak.",
+    "hint_msg_weekly_co2": "A napenergiád ezen a héten {co2} kg CO₂-t takarított meg.",
+    "sessions_col_co2": "CO₂ kg",
+    "config_grid_co2_entity": "A hálózat CO₂-érzékelője",
+    "config_help_grid_co2_entity": "Az egysége alapján találja meg (g vagy kg CO₂/kWh). Csak akkor válasszon, ha a SEM rosszat talált.",
+    "config_outdoor_temperature_entity": "Külső hőmérséklet",
+    "config_help_outdoor_temperature_entity": "Név alapján találja meg, különben az időjárás-entitást. Csak akkor válasszon, ha a SEM rosszat választott."
   },
   "it": {
     "% of limit": "% del limite",
@@ -15801,7 +15849,13 @@
     "sim_indicative": "Stima approssimativa",
     "sim_over_limit": "{n} kWh sopra il limite di picco",
     "sim_skipped": "{n} giorni saltati (nessun dato)",
-    "sim_limits": "Medie orarie: oscillazioni di prezzo e picchi brevi sono attenuati. L'auto e gli altri carichi restano come registrati."
+    "sim_limits": "Medie orarie: oscillazioni di prezzo e picchi brevi sono attenuati. L'auto e gli altri carichi restano come registrati.",
+    "hint_msg_weekly_co2": "Il tuo solare ha evitato {co2} kg di CO₂ questa settimana.",
+    "sessions_col_co2": "CO₂ kg",
+    "config_grid_co2_entity": "Sensore CO₂ della rete",
+    "config_help_grid_co2_entity": "Trovato dalla sua unità (g o kg di CO₂ per kWh). Sceglierne uno solo se SEM ha trovato quello sbagliato.",
+    "config_outdoor_temperature_entity": "Temperatura esterna",
+    "config_help_outdoor_temperature_entity": "Trovato dal nome, altrimenti la tua entità meteo. Sceglilo solo se SEM ha sbagliato."
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -17557,7 +17611,13 @@
     "sim_indicative": "Ruwe schatting",
     "sim_over_limit": "{n} kWh boven de piekgrens",
     "sim_skipped": "{n} dagen overgeslagen (geen data)",
-    "sim_limits": "Uurgemiddelden: korte prijsschommelingen en pieken worden afgevlakt. De auto en andere verbruikers blijven zoals opgenomen."
+    "sim_limits": "Uurgemiddelden: korte prijsschommelingen en pieken worden afgevlakt. De auto en andere verbruikers blijven zoals opgenomen.",
+    "hint_msg_weekly_co2": "Je zonnestroom vermeed deze week {co2} kg CO₂.",
+    "sessions_col_co2": "CO₂ kg",
+    "config_grid_co2_entity": "CO₂-sensor van het net",
+    "config_help_grid_co2_entity": "Gevonden via de eenheid (g of kg CO₂ per kWh). Kies er alleen een als SEM de verkeerde vond.",
+    "config_outdoor_temperature_entity": "Buitentemperatuur",
+    "config_help_outdoor_temperature_entity": "Gevonden aan de naam, anders je weer-entiteit. Kies er alleen een als SEM de verkeerde koos."
   },
   "no": {
     "% of limit": "% av grense",
@@ -19313,7 +19373,13 @@
     "sim_indicative": "Grovt anslag",
     "sim_over_limit": "{n} kWh over toppgrensen",
     "sim_skipped": "{n} dager hoppet over (ingen data)",
-    "sim_limits": "Timesnitt: korte prissvingninger og topper jevnes ut. Bilen og andre forbrukere blir som lagret."
+    "sim_limits": "Timesnitt: korte prissvingninger og topper jevnes ut. Bilen og andre forbrukere blir som lagret.",
+    "hint_msg_weekly_co2": "Solstrømmen din unngikk {co2} kg CO₂ denne uken.",
+    "sessions_col_co2": "CO₂ kg",
+    "config_grid_co2_entity": "Nettets CO₂-sensor",
+    "config_help_grid_co2_entity": "Finnes via enheten (g eller kg CO₂ per kWh). Velg én bare hvis SEM fant feil.",
+    "config_outdoor_temperature_entity": "Utetemperatur",
+    "config_help_outdoor_temperature_entity": "Finnes ut fra navnet, ellers vær-entiteten din. Velg bare hvis SEM valgte feil."
   },
   "pl": {
     "% of limit": "% limitu",
@@ -21069,7 +21135,13 @@
     "sim_indicative": "Przybliżone oszacowanie",
     "sim_over_limit": "{n} kWh ponad limitem szczytu",
     "sim_skipped": "pominięto {n} dni (brak danych)",
-    "sim_limits": "Średnie godzinowe: krótkie wahania cen i szczyty są wygładzone. Auto i inne odbiorniki zostają jak zapisano."
+    "sim_limits": "Średnie godzinowe: krótkie wahania cen i szczyty są wygładzone. Auto i inne odbiorniki zostają jak zapisano.",
+    "hint_msg_weekly_co2": "Twoja energia słoneczna pozwoliła w tym tygodniu uniknąć {co2} kg CO₂.",
+    "sessions_col_co2": "CO₂ kg",
+    "config_grid_co2_entity": "Czujnik CO₂ sieci",
+    "config_help_grid_co2_entity": "Znajdowany po jednostce (g lub kg CO₂ na kWh). Wybierz go tylko, jeśli SEM znalazł zły.",
+    "config_outdoor_temperature_entity": "Temperatura zewnętrzna",
+    "config_help_outdoor_temperature_entity": "Znajdowany po nazwie, w przeciwnym razie encja pogody. Wybierz tylko, jeśli SEM wybrał źle."
   },
   "pt": {
     "% of limit": "% do limite",
@@ -22825,7 +22897,13 @@
     "sim_indicative": "Estimativa grosseira",
     "sim_over_limit": "{n} kWh acima do limite de pico",
     "sim_skipped": "{n} dias ignorados (sem dados)",
-    "sim_limits": "Médias horárias: variações de preço e picos curtos são suavizados. O carro e outras cargas ficam como gravados."
+    "sim_limits": "Médias horárias: variações de preço e picos curtos são suavizados. O carro e outras cargas ficam como gravados.",
+    "hint_msg_weekly_co2": "A sua energia solar evitou {co2} kg de CO₂ esta semana.",
+    "sessions_col_co2": "CO₂ kg",
+    "config_grid_co2_entity": "Sensor de CO₂ da rede",
+    "config_help_grid_co2_entity": "Encontrado pela unidade (g ou kg de CO₂ por kWh). Escolha um só se o SEM encontrou o errado.",
+    "config_outdoor_temperature_entity": "Temperatura exterior",
+    "config_help_outdoor_temperature_entity": "Encontrado pelo nome; senão, a sua entidade meteorológica. Escolha um só se o SEM errou."
   },
   "ro": {
     "% of limit": "% din limită",
@@ -24581,7 +24659,13 @@
     "sim_indicative": "Estimare aproximativă",
     "sim_over_limit": "{n} kWh peste limita de vârf",
     "sim_skipped": "{n} zile sărite (fără date)",
-    "sim_limits": "Medii orare: variațiile scurte de preț și vârfurile sunt netezite. Mașina și alți consumatori rămân ca înregistrat."
+    "sim_limits": "Medii orare: variațiile scurte de preț și vârfurile sunt netezite. Mașina și alți consumatori rămân ca înregistrat.",
+    "hint_msg_weekly_co2": "Energia solară a evitat săptămâna aceasta {co2} kg de CO₂.",
+    "sessions_col_co2": "CO₂ kg",
+    "config_grid_co2_entity": "Senzorul CO₂ al rețelei",
+    "config_help_grid_co2_entity": "Găsit după unitate (g sau kg CO₂ pe kWh). Alegeți unul doar dacă SEM a găsit unul greșit.",
+    "config_outdoor_temperature_entity": "Temperatura exterioară",
+    "config_help_outdoor_temperature_entity": "Găsit după nume, altfel entitatea meteo. Alegeți doar dacă SEM a ales greșit."
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -26337,7 +26421,13 @@
     "sim_indicative": "Grov uppskattning",
     "sim_over_limit": "{n} kWh över toppgränsen",
     "sim_skipped": "{n} dagar överhoppade (inga data)",
-    "sim_limits": "Timmedel: korta prissvängningar och toppar jämnas ut. Bilen och andra laster blir som sparat."
+    "sim_limits": "Timmedel: korta prissvängningar och toppar jämnas ut. Bilen och andra laster blir som sparat.",
+    "hint_msg_weekly_co2": "Din solel undvek {co2} kg CO₂ den här veckan.",
+    "sessions_col_co2": "CO₂ kg",
+    "config_grid_co2_entity": "Nätets CO₂-sensor",
+    "config_help_grid_co2_entity": "Hittas via enheten (g eller kg CO₂ per kWh). Välj en bara om SEM hittade fel.",
+    "config_outdoor_temperature_entity": "Utomhustemperatur",
+    "config_help_outdoor_temperature_entity": "Hittas via namnet, annars din väderentitet. Välj bara om SEM valde fel."
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -28093,6 +28183,12 @@
     "sim_indicative": "粗略估算",
     "sim_over_limit": "超出峰值限制 {n} kWh",
     "sim_skipped": "跳过 {n} 天（无数据）",
-    "sim_limits": "按小时平均：短时的价格波动和峰值被平滑。车和其他负载保持记录值。"
+    "sim_limits": "按小时平均：短时的价格波动和峰值被平滑。车和其他负载保持记录值。",
+    "hint_msg_weekly_co2": "本周您的太阳能避免了 {co2} 公斤 CO₂ 排放。",
+    "sessions_col_co2": "CO₂ 公斤",
+    "config_grid_co2_entity": "电网 CO₂ 传感器",
+    "config_help_grid_co2_entity": "按单位查找（g 或 kg CO₂/kWh）。仅在 SEM 找错时才手动选择。",
+    "config_outdoor_temperature_entity": "室外温度",
+    "config_help_outdoor_temperature_entity": "按名称查找，否则使用您的天气实体。只有 SEM 选错时才需要选择。"
   }
 }

@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ✨ **Simulation tab: replay your recorded days with another battery, reserve, peak limit or price** (#1083). Estimated cost per day type. Off by default.
 - 🔧 **You now download Simulation results and EV sessions as Excel files (.xlsx)** (#1083). A CSV did not open right in every country.
 - 🔧 **SEM can tag each finished day: sunny, grey, car, cheap prices or a data gap** (#1083). Off by default; diagnostics show the last seven.
+- ✨ **SEM finds your grid CO₂ sensor by its unit** (#1088). CO₂ avoided can use its live value, not a fixed average. Off by default.
+- ✨ **One outdoor temperature for all of SEM** (#1082). Found by its name or your weather entity; car taper, snow and battery nights use it.
+- ✨ **The home forecast learns how cold days raise your load** (#1082). The plans use it only when switched on. Off by default.
+- ✨ **Each car session shows its CO₂** (#1088), in the session list and the CSV. The weekly summary adds what your solar avoided.
 - 🐛 **Unplugging your car no longer raises a false "charger control not working" Repair** (#1032) — thanks @OddmarDam. A Wattpilot start button no longer raises it either.
 - 🐛 **SEM runs chargers it finds with only a charge-mode or start/stop control** (#1095). myenergi, Ohme and Zaptec without current rights were found, then dropped.
 - 🐛 **SEM finds a charging current named plainly "charging_current"** (#1096). Only on a charger; on an inverter that name is the battery limit.

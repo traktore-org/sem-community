@@ -5907,6 +5907,8 @@ async def _async_register_phase_services(
             # daily-rollover check (retention_is_due), so changing it takes
             # effect without a reload — a genuinely live key.
             "status_retention_days",
+            # (#1088) read fresh every cycle by _grid_co2_reading
+            "grid_co2_entity", "co2_live_intensity",
         }
         # (#637) Some options are backed by number entities under a DIFFERENT
         # name (number.py CONFIG_KEY_MAP, #542) — the naive number.sem_<key>

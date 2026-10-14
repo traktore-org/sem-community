@@ -256,7 +256,9 @@
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
           "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
           "tariff_classification_mode": "Mode de classification des prix",
-          "solar_forecast_source": "Source de la prévision solaire"
+          "solar_forecast_source": "Source de la prévision solaire",
+          "grid_co2_entity": "Capteur d'intensité CO₂ du réseau (facultatif)",
+          "outdoor_temperature_entity": "Température extérieure (facultatif)"
         },
         "data_description": {
           "electricity_import_rate": "Tarif d'import jour/forfaitaire (devise/kWh, TVA incluse). Utilisé en secours lorsque la tarification dynamique est indisponible.",
@@ -273,7 +275,9 @@
           "grid_import_power_entity": "Capteur optionnel (W) pour la puissance d'import réseau. Détecté automatiquement depuis le tableau de bord Énergie ; remplacez-le ici si nécessaire.",
           "grid_export_power_entity": "Capteur optionnel (W) pour la puissance d'export réseau. Détecté automatiquement depuis le tableau de bord Énergie ; remplacez-le ici si nécessaire.",
           "tariff_classification_mode": "« Percentile » classe les prix par rapport à la plage du jour (recommandé). « Statique » utilise des seuils fixes bon marché/cher.",
-          "solar_forecast_source": "Quelle intégration de prévision SEM utilise. La détection automatique privilégie Solcast, puis Forecast.Solar, puis Open-Meteo — choisissez-en une si vous en utilisez plusieurs."
+          "solar_forecast_source": "Quelle intégration de prévision SEM utilise. La détection automatique privilégie Solcast, puis Forecast.Solar, puis Open-Meteo — choisissez-en une si vous en utilisez plusieurs.",
+          "grid_co2_entity": "SEM trouve seul un capteur en g ou kg de CO₂ par kWh. N'en choisissez un que s'il a trouvé le mauvais.",
+          "outdoor_temperature_entity": "SEM trouve un thermomètre extérieur par son nom, ou utilise votre entité météo. Choisissez-en un seulement s'il s'est trompé."
         }
       },
       "load_management": {

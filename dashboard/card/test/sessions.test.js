@@ -51,7 +51,7 @@ test('a row formats like the approved mockup', () => {
     const v = sessionRowView(ROWS[0], 'en');
     assert.deepEqual(v, {
         day: 'Wed 30.09', span: '17:52–18:20', kwh: '2.0', solar: '88%',
-        solarHigh: true, cost: '0.31', min: '28',
+        solarHigh: true, cost: '0.31', co2: '', min: '28',
     });
 });
 
@@ -70,7 +70,15 @@ test('weekday follows the language', () => {
 test('CSV: the service columns, comma-safe, empty for missing', () => {
     const text = sessionsCsv([ROWS[2], R('2026-09-01T10:00:00+02:00', '', 1, 10, 0.1, 5, { charger_id: 'Garage, left' })]);
     const lines = text.trim().split('\n');
-    assert.equal(lines[0], 'start,end,charger,energy_kwh,solar_share_pct,cost,currency,duration_min,energy_source');
-    assert.equal(lines[1], '2026-09-12T18:00:00+02:00,,,1,50,,,20,');
+    assert.equal(lines[0], 'start,end,charger,energy_kwh,solar_share_pct,cost,currency,duration_min,energy_source,co2_kg');
+    assert.equal(lines[1], '2026-09-12T18:00:00+02:00,,,1,50,,,20,,');
     assert.match(lines[2], /,"Garage, left",/);
+});
+
+test('(#1088) CO2 per session: shown with one decimal, summed only where known', () => {
+    const a = { ...ROWS[0], co2_kg: 0.42 };
+    const b = { ...ROWS[0], co2_kg: 1.0 };
+    assert.equal(sessionRowView(a).co2, '0.4');
+    assert.equal(monthTotals([a, b, ROWS[2]]).co2, 1.4);
+    assert.equal(monthTotals([ROWS[2]]).co2, null);   // sessions from before
 });

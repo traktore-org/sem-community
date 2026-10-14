@@ -256,7 +256,9 @@
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
           "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
           "tariff_classification_mode": "Hinnan luokittelutila",
-          "solar_forecast_source": "Aurinkoennusteen lähde"
+          "solar_forecast_source": "Aurinkoennusteen lähde",
+          "grid_co2_entity": "Sähköverkon CO₂-intensiteetin anturi (valinnainen)",
+          "outdoor_temperature_entity": "Ulkolämpötila (valinnainen)"
         },
         "data_description": {
           "electricity_import_rate": "Päivä- tai kiinteä ostohinta (valuutta/kWh sis. alv). Käytetään varalla, kun dynaaminen hinnoittelu ei ole käytettävissä.",
@@ -273,7 +275,9 @@
           "grid_import_power_entity": "Valinnainen anturi (W) verkosta ostetulle teholle. Tunnistetaan automaattisesti Energia-paneelista; ohita tässä tarvittaessa.",
           "grid_export_power_entity": "Valinnainen anturi (W) verkkoon myydylle teholle. Tunnistetaan automaattisesti Energia-paneelista; ohita tässä tarvittaessa.",
           "tariff_classification_mode": "Persentiili luokittelee hinnat suhteessa päivän vaihteluväliin (suositus). Staattinen käyttää kiinteitä halpa/kallis-rajoja.",
-          "solar_forecast_source": "Mitä ennusteintegraatiota SEM lukee. Automaattinen tunnistus suosii Solcastia, sitten Forecast.Solaria, sitten Open-Meteoa — valitse yksi, jos käytät useita rinnakkain."
+          "solar_forecast_source": "Mitä ennusteintegraatiota SEM lukee. Automaattinen tunnistus suosii Solcastia, sitten Forecast.Solaria, sitten Open-Meteoa — valitse yksi, jos käytät useita rinnakkain.",
+          "grid_co2_entity": "SEM löytää itse anturin, jonka yksikkö on g tai kg CO₂ / kWh. Valitse anturi vain, jos se löysi väärän.",
+          "outdoor_temperature_entity": "SEM löytää ulkolämpömittarin nimen perusteella tai käyttää sääentiteettiäsi. Valitse vain, jos se valitsi väärin."
         }
       },
       "load_management": {

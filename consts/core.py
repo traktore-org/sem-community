@@ -433,6 +433,26 @@ DEFAULT_DAY_TAGS: Final = False
 # switch flags (``persisted_flags``).
 CONF_SIMULATION_TAB: Final = "simulation_tab"
 
+# (#1088) Grid CO2 intensity: an optional pick when the crawler's unit-based
+# find is not the source the user means. Unset = the crawler's first find.
+CONF_GRID_CO2_ENTITY: Final = "grid_co2_entity"
+# (#1088) Soak flag, not a setting: CO2 avoided counts each kWh at the
+# grid's live intensity instead of the fixed Swiss average. Off until the
+# PROD soak; then the default flips and the key retires (set_option only).
+CONF_CO2_LIVE_INTENSITY: Final = "co2_live_intensity"
+DEFAULT_CO2_LIVE_INTENSITY: Final = False
+
+# (#1082) Outdoor temperature: an optional pick (a sensor or a weather
+# entity) when the crawler's find is not the thermometer the user means.
+# Unset = the crawler's outdoor sensor, else the HA weather entity. The key
+# is the one SEM always read; it now has a picker in the GUI.
+CONF_OUTDOOR_TEMPERATURE_ENTITY: Final = "outdoor_temperature_entity"
+# (#1082) Soak flag, not a setting: the home-load forecast adds what the
+# temperature explains (degree hours). It LEARNS from day one either way;
+# the flag only lets the plans use it. Off until the PROD soak.
+CONF_TEMPERATURE_LOAD_FORECAST: Final = "temperature_load_forecast"
+DEFAULT_TEMPERATURE_LOAD_FORECAST: Final = False
+
 # (#1021) The grid operator's reduce-load relay (§14a EnWG, ripple control).
 # Unset = inert. Any binary_sensor / input_boolean the user picks.
 CONF_SHED_SIGNAL_ENTITY: Final = "shed_signal_entity"

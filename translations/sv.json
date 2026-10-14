@@ -256,7 +256,9 @@
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
           "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
           "tariff_classification_mode": "Prisklassificeringsläge",
-          "solar_forecast_source": "Källa för solprognos"
+          "solar_forecast_source": "Källa för solprognos",
+          "grid_co2_entity": "Sensor för nätets CO₂-intensitet (valfri)",
+          "outdoor_temperature_entity": "Utomhustemperatur (valfritt)"
         },
         "data_description": {
           "electricity_import_rate": "Dag-/enhetstariff för import (valuta/kWh inkl. moms). Används som reserv när dynamisk prissättning inte är tillgänglig.",
@@ -273,7 +275,9 @@
           "grid_import_power_entity": "Valfri sensor (W) för importerad näteffekt. Detekteras automatiskt från Energi-instrumentpanelen; åsidosätt här vid behov.",
           "grid_export_power_entity": "Valfri sensor (W) för exporterad näteffekt. Detekteras automatiskt från Energi-instrumentpanelen; åsidosätt här vid behov.",
           "tariff_classification_mode": "Percentil grupperar priser relativt dagens intervall (rekommenderas). Statisk använder fasta trösklar för billigt/dyrt.",
-          "solar_forecast_source": "Vilken prognosintegration SEM läser. Automatisk identifiering föredrar Solcast, sedan Forecast.Solar, sedan Open-Meteo — välj en själv om du kör flera parallellt."
+          "solar_forecast_source": "Vilken prognosintegration SEM läser. Automatisk identifiering föredrar Solcast, sedan Forecast.Solar, sedan Open-Meteo — välj en själv om du kör flera parallellt.",
+          "grid_co2_entity": "SEM hittar själv en sensor i g eller kg CO₂ per kWh. Välj en bara om den hittade fel.",
+          "outdoor_temperature_entity": "SEM hittar en utomhustermometer via namnet eller använder din väderentitet. Välj bara om den valde fel."
         }
       },
       "load_management": {

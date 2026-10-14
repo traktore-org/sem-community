@@ -256,7 +256,9 @@
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
           "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
           "tariff_classification_mode": "Ár-besorolási mód",
-          "solar_forecast_source": "Napelemes előrejelzés forrása"
+          "solar_forecast_source": "Napelemes előrejelzés forrása",
+          "grid_co2_entity": "A hálózat CO₂-intenzitás érzékelője (opcionális)",
+          "outdoor_temperature_entity": "Külső hőmérséklet (opcionális)"
         },
         "data_description": {
           "electricity_import_rate": "Nappali/egységes vételezési ár (pénznem/kWh, áfával). Tartalékként használatos, ha a dinamikus árazás nem érhető el.",
@@ -273,7 +275,9 @@
           "grid_import_power_entity": "Opcionális érzékelő (W) a hálózati vételezési teljesítményhez. Automatikusan felismerve az Energia irányítópultról; szükség esetén itt írható felül.",
           "grid_export_power_entity": "Opcionális érzékelő (W) a hálózati betáplálási teljesítményhez. Automatikusan felismerve az Energia irányítópultról; szükség esetén itt írható felül.",
           "tariff_classification_mode": "A „Percentilis” a mai tartományhoz viszonyítva sorolja be az árakat (ajánlott). A „Statikus” rögzített olcsó/drága küszöböket használ.",
-          "solar_forecast_source": "Melyik előrejelzés-integrációt olvassa a SEM. Az automatikus felismerés a Solcastot részesíti előnyben, majd a Forecast.Solart, majd az Open-Meteót — válassz egyet, ha többet is használsz."
+          "solar_forecast_source": "Melyik előrejelzés-integrációt olvassa a SEM. Az automatikus felismerés a Solcastot részesíti előnyben, majd a Forecast.Solart, majd az Open-Meteót — válassz egyet, ha többet is használsz.",
+          "grid_co2_entity": "A SEM magától megtalálja a g vagy kg CO₂/kWh egységű érzékelőt. Csak akkor válasszon, ha rosszat talált.",
+          "outdoor_temperature_entity": "A SEM név alapján megtalálja a kültéri hőmérőt, vagy az időjárás-entitást használja. Csak akkor válasszon, ha rosszat választott."
         }
       },
       "load_management": {

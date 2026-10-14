@@ -180,6 +180,8 @@ def _finished_session_record(host: Any) -> dict:
         "energy_kwh": round(host._session_data.energy_kwh, 2),
         "solar_share_pct": round(host._session_data.solar_share_pct, 1),
         "cost": round(float(host._session_data.cost_chf or 0.0), 2),
+        # (#1088) the session's grid CO2, kg
+        "co2_kg": round(float(getattr(host._session_data, "co2_kg", 0.0) or 0.0), 2),
         "currency": currency if isinstance(currency, str) else "",
         "duration_min": round(host._session_data.duration_minutes, 1),
         "energy_source": getattr(host._session_data, "energy_source", "sem_estimate"),
@@ -1365,6 +1367,22 @@ class EVControlMixin:
         sd.battery_energy_kwh = totals.battery_kwh
         sd.cost_chf = totals.cost
         sd.energy_source = totals.source
+        # (#1088) CO2 of the car's grid energy: this cycle's grid kWh at the
+        # grid's intensity now (the live reading when the CO2 soak flag is
+        # on, else the fixed average — the same rule as the CO2-avoided
+        # books). Energy-weighted: the session's grid kWh times the mean
+        # intensity over the kWh it drew, so a meter-corrected total keeps
+        # the right weight.
+        try:
+            kg_now = self._energy_calculator.grid_co2_kg_now()
+            if grid_increment > 0:
+                sd.meter["flow_co2_kg"] = sd.meter.get("flow_co2_kg", 0.0) + grid_increment * kg_now
+                sd.meter["flow_co2_grid_kwh"] = sd.meter.get("flow_co2_grid_kwh", 0.0) + grid_increment
+            g = sd.meter.get("flow_co2_grid_kwh", 0.0)
+            mean_kg = (sd.meter.get("flow_co2_kg", 0.0) / g) if g > 0 else kg_now
+            sd.co2_kg = round(max(0.0, float(sd.grid_energy_kwh or 0.0)) * mean_kg, 3)
+        except Exception:  # noqa: BLE001 — CO2 is reporting; never costs a session
+            pass
 
         # Solar share
         if self._session_data.energy_kwh > 0:

@@ -23,18 +23,18 @@ class TestCsv:
     def test_the_header_names_every_column(self):
         text = sessions_csv(ROWS)
         assert text.splitlines()[0] == (
-            "start,end,charger,energy_kwh,solar_share_pct,cost,currency,duration_min,energy_source")
-        assert len(CSV_COLUMNS) == 9
+            "start,end,charger,energy_kwh,solar_share_pct,cost,currency,duration_min,energy_source,co2_kg")
+        assert len(CSV_COLUMNS) == 10   # (#1088) co2_kg added last
 
     def test_a_comma_in_a_name_is_quoted_and_a_missing_value_is_empty(self):
         rows = list(csv.reader(io.StringIO(sessions_csv(ROWS))))
         assert rows[1][2] == "Garage, left"
         assert rows[1][3] == "2.1"
-        assert rows[2] == ["2026-09-12T18:00:00+02:00", "", "", "1.0", "", "", "", "", ""]
+        assert rows[2] == ["2026-09-12T18:00:00+02:00", "", "", "1.0", "", "", "", "", "", ""]
 
     def test_no_rows_is_a_header_alone(self):
         assert sessions_csv([]).splitlines() == [
-            "start,end,charger,energy_kwh,solar_share_pct,cost,currency,duration_min,energy_source"]
+            "start,end,charger,energy_kwh,solar_share_pct,cost,currency,duration_min,energy_source,co2_kg"]
 
 
 def _capture(mock_hass):

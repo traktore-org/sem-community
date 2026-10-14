@@ -256,7 +256,9 @@
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
           "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
           "tariff_classification_mode": "Preis-Klassifizierungsmodus",
-          "solar_forecast_source": "Quelle der Solarprognose"
+          "solar_forecast_source": "Quelle der Solarprognose",
+          "grid_co2_entity": "Sensor CO₂-Intensität des Netzes (optional)",
+          "outdoor_temperature_entity": "Aussentemperatur (optional)"
         },
         "data_description": {
           "electricity_import_rate": "Tag-/Einheitstarif für den Import (Währung/kWh inkl. MwSt.). Wird als Rückfallwert verwendet, wenn keine dynamische Preisgestaltung verfügbar ist.",
@@ -273,7 +275,9 @@
           "grid_import_power_entity": "Optionaler Sensor (W) für die Netzbezugsleistung. Wird automatisch aus dem Energie-Dashboard erkannt; hier bei Bedarf überschreiben.",
           "grid_export_power_entity": "Optionaler Sensor (W) für die Netzeinspeiseleistung. Wird automatisch aus dem Energie-Dashboard erkannt; hier bei Bedarf überschreiben.",
           "tariff_classification_mode": "„Perzentil“ ordnet Preise relativ zur heutigen Spanne ein (empfohlen). „Statisch“ nutzt feste Schwellen für günstig/teuer.",
-          "solar_forecast_source": "Welche Prognose-Integration SEM liest. Die automatische Erkennung bevorzugt Solcast, dann Forecast.Solar, dann Open-Meteo — wähle eine aus, wenn du mehrere parallel betreibst."
+          "solar_forecast_source": "Welche Prognose-Integration SEM liest. Die automatische Erkennung bevorzugt Solcast, dann Forecast.Solar, dann Open-Meteo — wähle eine aus, wenn du mehrere parallel betreibst.",
+          "grid_co2_entity": "SEM findet einen Sensor in g oder kg CO₂ pro kWh selbst. Wähle nur einen, wenn SEM den falschen gefunden hat.",
+          "outdoor_temperature_entity": "SEM findet ein Aussenthermometer über seinen Namen oder nutzt Ihre Wetter-Entität. Wählen Sie nur, wenn es das falsche gewählt hat."
         }
       },
       "load_management": {

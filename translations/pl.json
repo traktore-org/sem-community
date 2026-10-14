@@ -256,7 +256,9 @@
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
           "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
           "tariff_classification_mode": "Tryb klasyfikacji cen",
-          "solar_forecast_source": "Źródło prognozy słonecznej"
+          "solar_forecast_source": "Źródło prognozy słonecznej",
+          "grid_co2_entity": "Czujnik intensywności CO₂ sieci (opcjonalnie)",
+          "outdoor_temperature_entity": "Temperatura zewnętrzna (opcjonalnie)"
         },
         "data_description": {
           "electricity_import_rate": "Dzienna/jednostrefowa stawka importu (waluta/kWh z VAT). Używana zapasowo, gdy ceny dynamiczne są niedostępne.",
@@ -273,7 +275,9 @@
           "grid_import_power_entity": "Opcjonalny czujnik (W) mocy importu z sieci. Wykrywany automatycznie z pulpitu Energia; w razie potrzeby nadpisz tutaj.",
           "grid_export_power_entity": "Opcjonalny czujnik (W) mocy eksportu do sieci. Wykrywany automatycznie z pulpitu Energia; w razie potrzeby nadpisz tutaj.",
           "tariff_classification_mode": "„Percentyl” klasyfikuje ceny względem dzisiejszego zakresu (zalecane). „Statyczny” używa stałych progów tanio/drogo.",
-          "solar_forecast_source": "Którą integrację prognozy odczytuje SEM. Automatyczne wykrywanie preferuje Solcast, potem Forecast.Solar, potem Open-Meteo — wybierz jedną, jeśli używasz kilku naraz."
+          "solar_forecast_source": "Którą integrację prognozy odczytuje SEM. Automatyczne wykrywanie preferuje Solcast, potem Forecast.Solar, potem Open-Meteo — wybierz jedną, jeśli używasz kilku naraz.",
+          "grid_co2_entity": "SEM sam znajduje czujnik w g lub kg CO₂ na kWh. Wybierz go tylko, jeśli SEM znalazł zły.",
+          "outdoor_temperature_entity": "SEM znajduje termometr zewnętrzny po nazwie lub używa encji pogody. Wybierz tylko, jeśli wybrał źle."
         }
       },
       "load_management": {

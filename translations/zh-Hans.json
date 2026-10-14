@@ -256,7 +256,9 @@
           "grid_import_power_entity": "电网购电功率传感器（可选，自动检测）",
           "grid_export_power_entity": "电网供电功率传感器（可选，自动检测）",
           "tariff_classification_mode": "电价分类模式",
-          "solar_forecast_source": "光伏预测数据源"
+          "solar_forecast_source": "光伏预测数据源",
+          "grid_co2_entity": "电网 CO₂ 强度传感器（可选）",
+          "outdoor_temperature_entity": "室外温度（可选）"
         },
         "data_description": {
           "tariff_mode": "选择“静态”代表固定费率，“动态”代表实时计价，或选择“日历”代表分时电价计划。",
@@ -273,7 +275,9 @@
           "grid_import_power_entity": "可选。用于测量电网购电功率的传感器 (W)。默认从能源看板自动检测；如果需要，可在此处覆盖。",
           "grid_export_power_entity": "可选。用于测量电网供电功率的传感器 (W)。默认从能源看板自动检测；如果需要，可在此处覆盖。",
           "tariff_classification_mode": "“百分位”相对当天价格区间分类（推荐）。“固定”使用固定的便宜/昂贵阈值。",
-          "solar_forecast_source": "SEM 读取哪个预测集成。自动检测优先使用 Solcast，其次 Forecast.Solar，再次 Open-Meteo — 如果同时运行多个，请手动指定一个。"
+          "solar_forecast_source": "SEM 读取哪个预测集成。自动检测优先使用 Solcast，其次 Forecast.Solar，再次 Open-Meteo — 如果同时运行多个，请手动指定一个。",
+          "grid_co2_entity": "SEM 会自行找到单位为 g 或 kg CO₂/kWh 的传感器。仅在它找错时才手动选择。",
+          "outdoor_temperature_entity": "SEM 会按名称找到室外温度计，或使用您的天气实体。只有在它选错时才需要手动选择。"
         }
       },
       "load_management": {

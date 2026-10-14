@@ -83,7 +83,6 @@ _BASELINE = {
     "create_dashboard",                        # generator entry point, service-driven
     # UNTRIAGED — each is a candidate finding
     "add_update_callback", "remove_update_callback",
-    "get_diagnostics",
     "get_peak_margin",
     # TRIAGED, KEPT (#659): ``get_status`` is abstract on
     # BatteryChargeAdapter, implemented three times, and has ZERO production

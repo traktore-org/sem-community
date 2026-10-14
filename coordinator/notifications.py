@@ -56,6 +56,7 @@ _HINT_DEFAULTS = {
     "hint_msg_weekly_summary": (
         "This week: {solar} kWh solar · {self_use} % self-use · {grid} kWh from the grid"
         " · {ev} kWh into the car · {cost:.2f} {currency}."),
+    "hint_msg_weekly_co2": "Your solar avoided {co2} kg of CO₂ this week.",
 }
 
 

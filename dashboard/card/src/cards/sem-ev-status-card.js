@@ -151,7 +151,7 @@ class SEMEVStatusCard extends SEMLitBase {
         const oldest = rows.length ? sessionMonth(rows[rows.length - 1]) : month;
         const canBack = month > oldest;
         const canFwd = month < thisMonth;
-        const grid = 'display:grid;grid-template-columns:2.2fr .8fr .8fr .8fr .6fr;gap:6px;align-items:center;font-variant-numeric:tabular-nums;';
+        const grid = 'display:grid;grid-template-columns:2.1fr .7fr .7fr .7fr .7fr .5fr;gap:6px;align-items:center;font-variant-numeric:tabular-nums;';
         return html`
             <div class="sessions-block">
                 <div class="strip-title sessions-head" @click=${() => this._toggleSessions(id)}>
@@ -171,7 +171,7 @@ class SEMEVStatusCard extends SEMLitBase {
                             <span class="nav ${canFwd ? '' : 'off'}"
                                   @click=${() => canFwd && this._setSessionState(id, { month: shiftMonth(month, 1), all: false })}>›</span>
                         </span>
-                        <span class="metric-label">${totals.kwh.toFixed(1)} kWh · ${totals.solarPct} % ${this._t('sessions_solar_word')}${totals.cost === null ? '' : ' · ' + totals.cost.toFixed(2) + ' ' + currency}</span>
+                        <span class="metric-label">${totals.kwh.toFixed(1)} kWh · ${totals.solarPct} % ${this._t('sessions_solar_word')}${totals.cost === null ? '' : ' · ' + totals.cost.toFixed(2) + ' ' + currency}${totals.co2 === null ? '' : ' · ' + totals.co2.toFixed(1) + ' kg CO₂'}</span>
                     </div>
                     ${monthRows.length === 0 ? html`
                         <div class="metric-label sessions-note">${this._t('sessions_none')}</div>` : html`
@@ -180,6 +180,7 @@ class SEMEVStatusCard extends SEMLitBase {
                             <span class="metric-label num">kWh</span>
                             <span class="metric-label num">${this._t('sessions_col_solar')}</span>
                             <span class="metric-label num">${currency}</span>
+                            <span class="metric-label num">${this._t('sessions_col_co2')}</span>
                             <span class="metric-label num">${this._t('sessions_col_min')}</span>
                         </div>
                         ${shown.map(r => {
@@ -190,6 +191,7 @@ class SEMEVStatusCard extends SEMLitBase {
                                     <span class="metric-value num">${v.kwh}</span>
                                     <span class="metric-value num" style="color:${v.solarHigh ? '#ff9800' : 'var(--primary-text-color, #e0e0e0)'}">${v.solar}</span>
                                     <span class="metric-value num">${v.cost}</span>
+                                    <span class="metric-value num">${v.co2}</span>
                                     <span class="metric-value num" style="font-weight:500">${v.min}</span>
                                 </div>`;
                         })}`}

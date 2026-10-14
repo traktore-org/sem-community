@@ -1026,6 +1026,9 @@ class SessionData:
     battery_energy_kwh: float = 0
     solar_share_pct: float = 0
     cost_chf: float = 0
+    #: (#1088) CO2 of the session's grid energy, kg — each grid kWh at the
+    #: grid's intensity when it was drawn (energy-weighted)
+    co2_kg: float = 0
     avg_power_w: float = 0
     #: (#1024) where the total came from: charger_meter | lifetime_delta |
     #: sem_estimate — and the meter state behind it (session_energy.step).

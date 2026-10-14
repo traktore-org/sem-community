@@ -441,7 +441,9 @@
           "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
           "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)",
           "tariff_classification_mode": "Price classification mode",
-          "solar_forecast_source": "Solar forecast source"
+          "solar_forecast_source": "Solar forecast source",
+          "grid_co2_entity": "Grid CO₂ intensity sensor (optional)",
+          "outdoor_temperature_entity": "Outdoor temperature (optional)"
         },
         "data_description": {
           "tariff_mode": "Choose 'Static' for fixed rates, 'Dynamic' for real-time pricing, or 'Calendar' for time-of-use schedules.",
@@ -458,7 +460,9 @@
           "grid_import_power_entity": "Optional sensor (W) for grid import power. Auto-detected from the Energy Dashboard; override here if needed.",
           "grid_export_power_entity": "Optional sensor (W) for grid export power. Auto-detected from the Energy Dashboard; override here if needed.",
           "tariff_classification_mode": "Percentile buckets prices relative to today's range (recommended). Static uses fixed cheap/expensive thresholds.",
-          "solar_forecast_source": "Which forecast integration SEM reads. Auto-detect prefers Solcast, then Forecast.Solar, then Open-Meteo — pick one explicitly if you run several side by side."
+          "solar_forecast_source": "Which forecast integration SEM reads. Auto-detect prefers Solcast, then Forecast.Solar, then Open-Meteo — pick one explicitly if you run several side by side.",
+          "grid_co2_entity": "SEM finds a sensor in g or kg CO₂ per kWh by itself. Pick one only if it found the wrong one.",
+          "outdoor_temperature_entity": "SEM finds an outdoor thermometer by its name, or uses your weather entity. Pick one only if it chose the wrong one."
         }
       },
       "load_management": {

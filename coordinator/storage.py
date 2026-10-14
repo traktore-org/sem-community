@@ -316,8 +316,11 @@ class SEMStorage:
                     )
                     dropped.append(key)
                     continue
-                # Daily accumulators should never be negative
-                if acc_key == "daily_accumulators" and value < -0.01:
+                # Daily accumulators should never be negative — except
+                # (#1088) the CO2 correction, which is negative whenever the
+                # grid is cleaner than the fixed average (it is kg, not kWh).
+                if (acc_key == "daily_accumulators" and value < -0.01
+                        and not str(key).startswith("co2_live_correction_")):
                     _LOGGER.warning(
                         "Negative daily accumulator %s=%.2f kWh — resetting to 0",
                         key, value,

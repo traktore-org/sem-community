@@ -40,6 +40,9 @@ CSV_COLUMNS = (
     ("currency", "currency"),
     ("duration_min", "duration_min"),
     ("energy_source", "energy_source"),
+    # (#1088) the session's grid CO2, kg — last, so existing columns keep
+    # their place; empty for sessions stored before
+    ("co2_kg", "co2_kg"),
 )
 
 

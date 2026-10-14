@@ -36,6 +36,7 @@ const num = (v) => {
  *  only rows that carry one (sessions stored before 2.2 have none). */
 export function monthTotals(rows) {
     let kwh = 0, solarKwh = 0, cost = 0, costRows = 0, currency = '';
+    let co2 = 0, co2Rows = 0;   // (#1088) only rows that carry a CO2 value
     for (const r of rows || []) {
         const e = num(r.energy_kwh) || 0;
         kwh += e;
@@ -45,12 +46,16 @@ export function monthTotals(rows) {
             cost += c; costRows += 1;
         }
         if (!currency && r.currency) currency = String(r.currency);
+        if (r.co2_kg !== null && r.co2_kg !== undefined && r.co2_kg !== '' && num(r.co2_kg) !== null) {
+            co2 += num(r.co2_kg); co2Rows += 1;
+        }
     }
     return {
         count: (rows || []).length,
         kwh: Math.round(kwh * 10) / 10,
         solarPct: kwh > 0 ? Math.round((solarKwh / kwh) * 100) : 0,
         cost: costRows ? Math.round(cost * 100) / 100 : null,
+        co2: co2Rows ? Math.round(co2 * 10) / 10 : null,
         currency,
     };
 }
@@ -76,6 +81,8 @@ export function sessionRowView(row, lang = 'en') {
     const solar = num(row?.solar_share_pct);
     const cost = (row?.cost === null || row?.cost === undefined || row?.cost === '')
         ? null : num(row.cost);
+    const co2 = (row?.co2_kg === null || row?.co2_kg === undefined || row?.co2_kg === '')
+        ? null : num(row.co2_kg);
     const mins = num(row?.duration_min);
     const kwh = num(row?.energy_kwh);
     return {
@@ -85,6 +92,7 @@ export function sessionRowView(row, lang = 'en') {
         solar: solar === null ? '' : `${Math.round(solar)}%`,
         solarHigh: solar !== null && Math.round(solar) >= 80,   // as shown
         cost: cost === null ? '' : cost.toFixed(2),
+        co2: co2 === null ? '' : co2.toFixed(1),
         min: mins === null ? '' : String(Math.round(mins)),
     };
 }
@@ -94,7 +102,7 @@ export const CSV_COLUMNS = [
     ['start', 'timestamp'], ['end', 'end'], ['charger', 'charger_id'],
     ['energy_kwh', 'energy_kwh'], ['solar_share_pct', 'solar_share_pct'],
     ['cost', 'cost'], ['currency', 'currency'], ['duration_min', 'duration_min'],
-    ['energy_source', 'energy_source'],
+    ['energy_source', 'energy_source'], ['co2_kg', 'co2_kg'],
 ];
 
 function csvCell(v) {

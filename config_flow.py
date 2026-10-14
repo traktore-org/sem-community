@@ -1468,6 +1468,10 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "dynamic_feedin_entity",
     "dynamic_forecast_entity",
     "dynamic_tariff_entity",
+    # (#1088) the grid CO2 intensity sensor
+    "grid_co2_entity",
+    # (#1082) the outdoor temperature (a sensor or a weather entity)
+    "outdoor_temperature_entity",
     "electricity_export_rate",
     "electricity_import_rate",
     "electricity_off_peak_rate",
@@ -3101,6 +3105,24 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     description={"suggested_value": current_config.get("dynamic_feedin_entity")},
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
+                ),
+                # (#1088) The grid's CO2 intensity. Optional: SEM finds a
+                # sensor by its unit (g or kg CO2 per kWh); pick one only when
+                # it found the wrong one or none.
+                vol.Optional(
+                    "grid_co2_entity",
+                    description={"suggested_value": current_config.get("grid_co2_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor")
+                ),
+                # (#1082) The temperature outside. Optional: SEM finds an
+                # outdoor thermometer by what it says about itself, else it
+                # uses the weather entity. Pick one only when it chose wrong.
+                vol.Optional(
+                    "outdoor_temperature_entity",
+                    description={"suggested_value": current_config.get("outdoor_temperature_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["sensor", "weather"])
                 ),
                 # (#819) WHICH solar forecast integration SEM reads.
                 # Deliberately next to the price-forecast entity above,

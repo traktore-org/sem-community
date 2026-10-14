@@ -10,7 +10,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import {
-    chargerAddPlan, detectRowLabelKey, isPowerEntity,
+    chargerAddPlan, detectRowLabelKey, isCo2IntensityEntity, isPowerEntity,
 } from '../src/util/detect-rows.js';
 
 test('a near miss with a complete offer says so', () => {
@@ -54,4 +54,23 @@ test('a set class wins over the unit, and other units say nothing', () => {
     assert.equal(isPowerEntity({ attributes: { unit_of_measurement: 'A' } }), false);
     assert.equal(isPowerEntity({ attributes: {} }), false);
     assert.equal(isPowerEntity(null), false);
+});
+
+test('(#1088) the CO2 picker shows sensors by unit, whatever their integration', () => {
+    const st = (unit) => ({ attributes: { unit_of_measurement: unit } });
+    assert.equal(isCo2IntensityEntity(st('gCO2eq/kWh')), true);   // Electricity Maps
+    assert.equal(isCo2IntensityEntity(st('g CO\u2082/kWh')), true); // spaces, subscript
+    assert.equal(isCo2IntensityEntity(st('kgCO2/kWh')), true);
+    assert.equal(isCo2IntensityEntity(st('kg')), false);           // SEM's own CO2 avoided
+    assert.equal(isCo2IntensityEntity(st('%')), false);            // fossil fuel share
+    assert.equal(isCo2IntensityEntity({}), false);
+});
+
+test('(#1082) the outdoor temperature picker shows thermometers and real weather entities', async () => {
+    const { isOutdoorTemperatureCandidate: f } = await import('../src/util/detect-rows.js');
+    assert.equal(f({ entity_id: 'sensor.wetterstation_temp', attributes: { device_class: 'temperature' } }), true);
+    assert.equal(f({ entity_id: 'sensor.t', attributes: { unit_of_measurement: '°F' } }), true);
+    assert.equal(f({ entity_id: 'weather.erlen', attributes: {} }), true);
+    assert.equal(f({ entity_id: 'weather.forecast_home', attributes: {} }), false);
+    assert.equal(f({ entity_id: 'sensor.power', attributes: { unit_of_measurement: 'W' } }), false);
 });
