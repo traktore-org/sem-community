@@ -3295,6 +3295,12 @@ def _schedule_post_startup_tasks(
     try:
         from .coordinator.day_tag_store import DayTagger
         entry.async_on_unload(DayTagger(hass, coordinator).schedule())
+        # With the Simulation tab on, catch up after start: days with no
+        # tag, and backfilled tags made by an older rule (#1083). Runs
+        # after Home Assistant has started, never in setup's await (#967).
+        from .coordinator.day_tag_store import simulation_tab_on, start_backfill
+        if simulation_tab_on(entry):
+            start_backfill(hass, coordinator)
     except Exception:  # noqa: BLE001 — a tagger is never worth the setup
         _LOGGER.debug("day tagger not scheduled", exc_info=True)
 

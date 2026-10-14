@@ -458,9 +458,10 @@ The Simulation tab gives estimates, not measurements:
   forecast, and the export guard.
 - **No data, no day.** Days before SEM was installed, or before Home
   Assistant kept its history, cannot be simulated.
-- **Older days are never "sunny".** Day tags filled in from hourly history
-  cannot see a cloud pass inside an hour, so those days show as mixed at
-  best.
+- **Older days are judged by the hour.** Days older than Home Assistant's
+  history are tagged from hourly totals: sunny when the day came close to
+  the best day of the month around it and no hour dipped. A cloud that
+  passes inside one hour is not seen.
 - **One changed decision changes the rest.** Once the simulated battery
   does something different from the real one, every hour after it is an
   estimate (marked est.).

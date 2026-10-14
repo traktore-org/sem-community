@@ -88,12 +88,30 @@ def _window_days(instance: Any, days: int) -> int:
     return keep
 
 
+def raw_history_days(hass: HomeAssistant, wanted: int) -> int:
+    """How many of the last ``wanted`` days the recorder still holds as raw
+    states (``wanted`` itself when auto-purge is off). 0 when it will not
+    say — then no day counts as held."""
+    try:
+        from homeassistant.components.recorder import get_instance
+        return _window_days(get_instance(hass), wanted)
+    except Exception:  # noqa: BLE001 — no recorder
+        return 0
+
+
 async def read_states(
     hass: HomeAssistant,
     entity_id: str,
     days: int,
+    *,
+    start: Any = None,
+    end: Any = None,
 ) -> Optional[List[Any]]:
     """The states ``entity_id`` reported over the last ``days``, oldest first.
+
+    ``start``/``end`` narrow the read to one stretch inside that window
+    (a backfill reads one day, not a week); ``start`` is still never
+    earlier than the recorder keeps.
 
     ``None`` if the recorder could not answer at all — the caller may want
     to say so. ``[]`` if it answered and the entity has no history.
@@ -112,8 +130,12 @@ async def read_states(
         from homeassistant.util import dt as dt_util
 
         instance = get_instance(hass)
-        end = dt_util.utcnow()
-        start = end - timedelta(days=_window_days(instance, days))
+        now = dt_util.utcnow()
+        floor = now - timedelta(days=_window_days(instance, days))
+        start = floor if start is None else max(start, floor)
+        end = now if end is None else min(end, now)
+        if start >= end:
+            return []
         history = await instance.async_add_executor_job(
             partial(
                 state_changes_during_period,

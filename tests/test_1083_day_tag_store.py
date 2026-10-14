@@ -47,7 +47,7 @@ def _tagger(states_by_key, flag=True, storage=None, history=()):
     st = storage or _storage()
     st.get_session_history = lambda: []
 
-    async def _read(_hass, eid, _days):
+    async def _read(_hass, eid, _days, **_kw):
         return states_by_key.get(eid.removeprefix("sensor.sem_"))
 
     tg = DayTagger(SimpleNamespace(), coord, storage=st, read_states=_read)

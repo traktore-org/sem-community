@@ -1,8 +1,9 @@
 """#1083 — the Simulation tab switch.
 
 One switch a person can find: it shows the Simulation tab, turns day tagging
-on, and backfills up to 90 days of tags from hourly statistics. Hourly data
-cannot show midday steadiness, so a backfilled day is never "sunny".
+on, and backfills up to 90 days of tags from hourly statistics. Without a
+clear-sky envelope hourly data cannot show steadiness, so such a day is
+never "sunny"; the backfill passes the envelope (test_1083_backfill_sky).
 """
 import asyncio
 from datetime import date, datetime, timedelta, timezone
@@ -214,7 +215,7 @@ def _backfill_tagger(stats_by_day, storage=None, flag=True, gate=None):
     return tg, st, calls
 
 
-def test_backfill_tags_three_days_never_sunny_and_marks_the_source():
+def test_backfill_tags_three_days_and_marks_the_source():
     days = [TODAY - timedelta(days=i) for i in (1, 2, 3)]
     stats = {d: _sunny_day(d, with_car=(d == days[0])) for d in days}
     tg, st, calls = _backfill_tagger(stats)
@@ -223,7 +224,9 @@ def test_backfill_tags_three_days_never_sunny_and_marks_the_source():
     tags = st.get_day_tags()
     assert [t["date"] for t in tags] == sorted(d.isoformat() for d in days)
     assert all(t["source"] == "backfill" for t in tags)
-    assert all(t["sky"] != "sunny" for t in tags)
+    assert all(t["rule"] == 2 for t in tags)
+    # three equal, flat, full days: each at its own envelope -> sunny
+    assert all(t["sky"] == "sunny" for t in tags)
     assert all(t["prices"] == "cheap" for t in tags)
     assert tags[-1]["car"] is True and tags[0]["car"] is False
     # oldest first
@@ -237,7 +240,8 @@ def test_backfill_skips_a_day_already_tagged():
     st.put_day_tag({"date": days[0].isoformat(), "tags": ["grey"]})
     tg, st, calls = _backfill_tagger({d: _sunny_day(d) for d in days}, storage=st)
     assert asyncio.run(tg.async_backfill(days=2)) == 1
-    assert [c.date() for c in calls] == [days[1]]
+    # both days are read: the envelope needs the whole window
+    assert sorted(c.date() for c in calls) == sorted(days)
     kept = next(t for t in st.get_day_tags() if t["date"] == days[0].isoformat())
     assert kept == {"date": days[0].isoformat(), "tags": ["grey"]}
 
