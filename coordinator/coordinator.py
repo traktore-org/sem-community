@@ -672,6 +672,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         self._wpa_replay_report: Dict[str, Any] = {}
         self._wpa_replay_scheduled = False
         self._wpa_replay_unsub = None
+        # (#1083) stops the Simulation tab's day-tag backfill (day_tag_store)
+        self._day_tag_backfill_cancel = None
+        # (#1083) the Simulation tab's job: one run at a time, stopped on unload
+        from .simulation_job import SimulationJob
+        self._simulation_job = SimulationJob(hass, self)
         # (#967) True once Home Assistant has started. Every read of the
         # recorder waits for it: setup waits for the first update cycle, and
         # HA cancels a setup that overruns its start-up budget — the whole
@@ -3304,6 +3309,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         if self._storage is None and self.config_entry:
             self._storage = SEMStorage(self.hass, self.config_entry.entry_id)
             await self._storage.async_load()
+            # (#1083) a restart makes that day's data less trustworthy for
+            # a replay; the day tagger reads this mark
+            from .day_tag_store import day_tags_on
+            if day_tags_on(self):
+                try:
+                    # (#645) the coordinator's one day clock
+                    self._storage.note_start(self._tracker_date.isoformat())
+                except Exception:  # noqa: BLE001 — a tag mark never costs a refresh
+                    _LOGGER.debug("could not note the start for day tags")
             # Restore energy calculator state
             state = self._storage.export_energy_calculator_state()
             self._energy_calculator.restore_state(state)
@@ -7976,6 +7990,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 unsub()
             except Exception:  # noqa: BLE001 — teardown must finish
                 _LOGGER.debug("could not cancel the pending replay")
+        # (#1083) the Simulation tab's day-tag backfill, pending or running
+        from .day_tag_store import cancel_backfill
+        cancel_backfill(self)
+        # (#1083) a running Simulation stops; what ran stays, flagged
+        job = getattr(self, "_simulation_job", None)
+        if job is not None:
+            try:
+                job.cancel(persist=False)
+            except Exception:  # noqa: BLE001 — teardown must finish
+                _LOGGER.debug("could not stop the simulation run")
 
     async def _replay_wpa_from_history(self) -> None:
         from .wpa_replay import DEFAULT_LOOKBACK_DAYS, run_replay

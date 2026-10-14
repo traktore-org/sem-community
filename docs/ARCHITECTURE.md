@@ -1229,6 +1229,27 @@ load_management.py              — LoadManagementCoordinator (peak tracking)
 hardware_detection.py           — Auto-discover inverter/battery/charger
 ```
 
+### Replay and day tags (#1083)
+
+`analytics/day_tags.py` tags a finished day (sunny / mixed / grey, snow,
+car, negative / cheap, gap); `coordinator/day_tag_store.py` writes the
+tags nightly behind the `day_tags` soak flag. `tools/replay/` (never
+shipped) replays recorded PROD days through a tree's real code and
+compares a branch with develop — the proof step for logic changes.
+Details and limits: `docs/REPLAY.md`.
+
+### Simulation model (#1083)
+
+`analytics/simulation/` is pure and ships: `hourly_day.HourlyDay` (24
+hours of kWh, mean SOC and prices), `battery_sim.simulate_day` (SEM's real
+`decide_battery` and night plan, hour by hour), `balance` (SEM's energy
+balance and cost rule) and `summary` (per day and day type, always
+`modelled: true`). `coordinator/simulation_job.py` feeds it hourly
+statistics, one day at a time, behind the `simulation_tab` switch (off by
+default). `tools/replay/hourly.py` feeds it the replay corpus; `tools/`
+imports `analytics/`, never the reverse. User limits:
+`docs/KNOWN_LIMITATIONS.md`.
+
 ---
 
 ## 2.2 — what the house can use, and one crawler

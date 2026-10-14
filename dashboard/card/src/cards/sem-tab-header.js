@@ -82,6 +82,14 @@ const SEM_TAB_CONFIG = {
             <path d="M-16,4 L-8,-8 L0,0 L6,-12 L10,-4 L16,4" stroke-width="2" fill="none"/>
             <line x1="-16" y1="8" x2="16" y2="8" stroke-width="1" opacity="0.3"/>`,
     },
+    // #1083 — shown only while the Simulation tab switch is on (the
+    // generator drops the view otherwise). Flask, like mdi:flask-outline.
+    simulation: {
+        titleKey: 'simulation', subtitleKey: 'simulation_sub', color: '#8353d1',
+        icon: () => svg`
+            <path d="M-5,-15 L5,-15 M-4,-15 L-4,-4 L-14,13 Q-15,16 -11,16 L11,16 Q15,16 14,13 L4,-4 L4,-15" stroke-width="2"/>
+            <line x1="-9" y1="6" x2="9" y2="6" stroke-width="1.5" opacity="0.6"/>`,
+    },
 };
 
 class SEMTabHeader extends SEMLitBase {
@@ -171,6 +179,7 @@ class SEMTabHeader extends SEMLitBase {
         if (tab === 'config') return [g('charging_state'), g('heat_pump_registered'), g('battery_status')].join(',');
         if (tab === 'costs') return [g('daily_costs'), g('daily_savings'), g('daily_net_cost')].join(',');
         if (tab === 'system') return [g('energy_optimization_score'), g('lifetime_total_savings'), g('lifetime_co2_avoided')].join(',');
+        if (tab === 'simulation') return '';  // #1083 — no entity stats; the card owns the numbers
         return '';
     }
 
@@ -191,6 +200,7 @@ class SEMTabHeader extends SEMLitBase {
         if (tab === 'config') return [t('config_stat_chargers'), t('config_stat_heatpump'), t('config_stat_battery')];
         if (tab === 'costs') return [t('cost'), t('saved'), t('net')];
         if (tab === 'system') return [t('score'), t('saved'), t('co2')];
+        if (tab === 'simulation') return [t('simulation_days_stored'), t('simulation_selected'), t('simulation_gaps')];
         return ['—', '—', '—'];
     }
 

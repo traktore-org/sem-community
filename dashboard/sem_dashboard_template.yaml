@@ -3,7 +3,8 @@
 # ============================================================
 # Version: 6.1 (2026-04)
 #
-# 8 views: Home, Energy, Battery, EV, Control, Configuration, Costs, System
+# 9 views: Home, Energy, Battery, EV, Control, Configuration, Costs, System,
+# Simulation (only while the Simulation tab switch is on, #1083)
 # Dark glassmorphism theme, mobile-first responsive design
 #
 # Required HACS cards: NONE (#617 — zero-prerequisite dashboard).
@@ -436,3 +437,22 @@ views:
           - type: custom:sem-chart-card
             preset: forecast
             title: Forecast vs Actual
+
+  # ============================================================
+  # VIEW 8: SIMULATION — replay recorded days (#1083)
+  # Shown only while the Simulation tab switch is on: the generator's
+  # _prune_sleeping_tabs drops this view otherwise. Keep it last.
+  # ============================================================
+  - title: Simulation
+    path: simulation
+    icon: mdi:flask-outline
+    type: panel
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: custom:sem-tab-header
+            tab: simulation
+
+          - type: custom:sem-simulation-card
+            entity_prefix: sensor.sem_
+            header: false   # the tab header above already shows it

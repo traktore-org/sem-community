@@ -3079,6 +3079,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
         # (#1024) The EV card reads the session list over this command.
         from .session_history import async_register_websocket
         async_register_websocket(hass)
+        # (#1083) the Simulation tab's commands; its job stops on unload
+        from .simulation_ws import async_register_websocket as _sim_ws
+        _sim_ws(hass)
+        sim_job = getattr(coordinator, "_simulation_job", None)
+        if sim_job is not None:
+            entry.async_on_unload(lambda: sim_job.cancel(persist=False))
         _LOGGER.debug("Services registered successfully")
     except Exception as err:
         _LOGGER.warning(
@@ -3284,6 +3290,13 @@ def _schedule_post_startup_tasks(
             hass, _registry.async_seed_ratings_from_history,
             name="sem rated-power seed",
         ))
+    # (#1083) Tag each finished day for the replay tool, at 00:15. Asleep
+    # until the day_tags soak flag is set; it only records.
+    try:
+        from .coordinator.day_tag_store import DayTagger
+        entry.async_on_unload(DayTagger(hass, coordinator).schedule())
+    except Exception:  # noqa: BLE001 — a tagger is never worth the setup
+        _LOGGER.debug("day tagger not scheduled", exc_info=True)
 
     # React live to new sensor entities from other integrations (e.g. DSMR loading
     # after SEM's first refresh). Cheap: only fires on entity creation, not state
@@ -3708,6 +3721,14 @@ async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool
                 coordinator.cancel_pending_recorder_work()
             except Exception:  # noqa: BLE001 — teardown must finish
                 _LOGGER.debug("could not cancel pending recorder work")
+            # (#1083) a stopped Simulation run is only in the store's memory;
+            # the daily store is otherwise saved only when HA stops
+            sim_job = getattr(coordinator, "_simulation_job", None)
+            if sim_job is not None:
+                try:
+                    await sim_job.async_flush()
+                except Exception:  # noqa: BLE001 — teardown must finish
+                    _LOGGER.debug("could not save the stopped simulation run")
 
             sc = getattr(coordinator, "_surplus_controller", None)
             if sc is not None:

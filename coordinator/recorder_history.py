@@ -130,3 +130,38 @@ async def read_states(
         _LOGGER.debug("recorder history for %s unavailable: %s", entity_id, err)
         return None
     return list((history or {}).get(str(entity_id)) or [])
+
+
+async def read_hourly_statistics(
+    hass: HomeAssistant,
+    start: Any,
+    end: Any,
+    entity_ids: Any,
+    types: Any = frozenset({"change", "mean"}),
+) -> Optional[dict]:
+    """Hourly long-term statistics for ``entity_ids`` in ``[start, end)``.
+
+    ``{statistic_id: [{"start": ..., "change": ..., "mean": ...}, ...]}``.
+    Statistics outlive the recorder's state history (they are never purged),
+    which is why a backfill reads them. The query is SYNC database work, so
+    it runs on the recorder's executor.
+
+    ``None`` if the recorder could not answer at all; ``{}`` if it answered
+    and there was nothing there.
+    """
+    try:
+        from homeassistant.components.recorder import get_instance
+        from homeassistant.components.recorder.statistics import (
+            statistics_during_period,
+        )
+
+        result = await get_instance(hass).async_add_executor_job(
+            statistics_during_period,
+            hass, start, end, set(entity_ids), "hour", None, set(types),
+        )
+    except Exception as err:  # noqa: BLE001 — no recorder, or a busy one
+        _LOGGER.debug("hourly statistics unavailable: %s", err)
+        return None
+    if not isinstance(result, dict):
+        return None
+    return result

@@ -497,6 +497,9 @@ CORE_BY_DECISION: Mapping[tuple[str, str], str] = {
     ("switch", "observer_mode"): "hands-off mode applies to every command SEM could send",
     ("switch", "vacation_mode"): "vacation lowers every target on every install",
     ("switch", "energy_plan_actuation"): "the night plan drives the EV as well as the battery",
+    ("switch", "simulation_tab"): (
+        "the Simulation tab replays recorded days with a battery of any size; "
+        "a house without one asks what one would save (#1083)"),
     # (#996) Tell-tales: a flat tariff or a missing forecast stays visible.
     ("sensor", "forecast_source"): "says 'none' when there is no forecast — the tell-tale",
     ("binary_sensor", "forecast_available"): "off when there is no forecast — the tell-tale",

@@ -41,6 +41,15 @@ DAILY_SAVE_INTERVAL = 120
 # the energy store's size, and it never rides on an entity attribute.
 SESSION_HISTORY_MAX = 400
 
+# (#1083) One small record per finished day (its tags), for the replay
+# tool. ~200 bytes each; 400 days stay far under the daily store's size.
+DAY_TAGS_MAX = 400
+
+# (#1083) The Simulation tab keeps its last runs in the daily store: at most
+# this many, each at most ``SIMULATION_RUN_DAYS_MAX`` day rows (~150 bytes).
+SIMULATION_RUNS_MAX = 3
+SIMULATION_RUN_DAYS_MAX = 90
+
 # (#668) The keys of ``EnergyCalculator.get_state()`` that this layer carries.
 #
 # ONE list, deliberately. Before #668 the export and the import each had their
@@ -728,6 +737,56 @@ class SEMStorage:
         """Get EV session history (bounded to ``SESSION_HISTORY_MAX``)."""
         state = self.get_ev_intelligence_state()
         return state.get("session_history", [])
+
+    def get_day_tags(self) -> list:
+        """(#1083) The stored day tags, oldest first."""
+        tags = self._daily_data.get("day_tags")
+        return list(tags) if isinstance(tags, list) else []
+
+    def put_day_tag(self, record: Dict[str, Any]) -> None:
+        """(#1083) Store one day's tags; a second record for the same date
+        replaces the first. Bounded to ``DAY_TAGS_MAX`` days."""
+        date = str(record.get("date") or "")
+        if not date:
+            return
+        tags = [t for t in self.get_day_tags()
+                if isinstance(t, dict) and t.get("date") != date]
+        tags.append(dict(record))
+        tags.sort(key=lambda t: str(t.get("date")))
+        self._daily_data["day_tags"] = tags[-DAY_TAGS_MAX:]
+
+    def get_simulation_runs(self) -> list:
+        """(#1083) The stored Simulation runs, oldest first."""
+        runs = self._daily_data.get("simulation_runs")
+        return [r for r in runs if isinstance(r, dict)] if isinstance(runs, list) else []
+
+    def put_simulation_run(self, run: Dict[str, Any]) -> None:
+        """(#1083) Store one Simulation run; the same ``run_id`` replaces the
+        old record. Last ``SIMULATION_RUNS_MAX`` kept, each with at most
+        ``SIMULATION_RUN_DAYS_MAX`` day rows."""
+        run_id = str(run.get("run_id") or "")
+        if not run_id:
+            return
+        record = dict(run)
+        result = record.get("result")
+        if isinstance(result, dict) and isinstance(result.get("days"), list):
+            result = dict(result)
+            result["days"] = result["days"][-SIMULATION_RUN_DAYS_MAX:]
+            record["result"] = result
+        runs = [r for r in self.get_simulation_runs() if r.get("run_id") != run_id]
+        runs.append(record)
+        self._daily_data["simulation_runs"] = runs[-SIMULATION_RUNS_MAX:]
+
+    def note_start(self, iso_date: str) -> None:
+        """(#1083) Remember the days SEM started on — a restart makes that
+        day's data less trustworthy for a replay. Last 30 kept."""
+        starts = [d for d in (self._daily_data.get("sem_starts") or [])
+                  if isinstance(d, str) and d != iso_date]
+        starts.append(str(iso_date))
+        self._daily_data["sem_starts"] = sorted(starts)[-30:]
+
+    def started_on(self, iso_date: str) -> bool:
+        return iso_date in (self._daily_data.get("sem_starts") or [])
 
     # Save operations
     async def async_save_energy_delayed(self) -> None:

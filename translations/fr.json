@@ -1518,6 +1518,9 @@
       },
       "ev_morning_window_enabled": {
         "name": "Fenêtre matinale VE"
+      },
+      "simulation_tab": {
+        "name": "Onglet simulation"
       }
     },
     "number": {

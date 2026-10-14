@@ -226,6 +226,9 @@ class DashboardGenerator:
             # node or reference for hardware the platforms did not build.
             self._prune_absent_modules(template)
 
+            # #1083 — opt-in tabs show only while their switch is on.
+            self._prune_sleeping_tabs(template)
+
             # #617 — sankey-chart is OPTIONAL (the last HACS card that was
             # genuinely load-bearing): fall back to HA's native energy-sankey
             # card when the HACS one isn't installed.
@@ -320,6 +323,22 @@ class DashboardGenerator:
                 _LOGGER.info(
                     "#923 — removed %d dashboard reference(s) to entities this "
                     "install does not have", removed)
+
+    def _prune_sleeping_tabs(self, template: Dict[str, Any]) -> None:
+        """#1083 — the ``simulation`` view shows only while the Simulation
+        tab switch is on. The flag is read by ``simulation_tab_on`` (the
+        switch's own resolver), never re-resolved here. No entry → off."""
+        from ..const import DOMAIN
+        from ..coordinator.day_tag_store import simulation_tab_on
+
+        entries = self.hass.config_entries.async_entries(DOMAIN)
+        if entries and simulation_tab_on(entries[0]):
+            return
+        views = template.get("views", [])
+        kept = [v for v in views if v.get("path") != "simulation"]
+        if len(kept) != len(views):
+            template["views"] = kept
+            _LOGGER.info("#1083 — Simulation tab hidden: its switch is off")
 
     @staticmethod
     def _entity_ref(item: Any) -> Optional[str]:

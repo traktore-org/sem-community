@@ -1518,6 +1518,9 @@
       },
       "ev_morning_window_enabled": {
         "name": "Finestra mattutina EV"
+      },
+      "simulation_tab": {
+        "name": "Scheda simulazione"
       }
     },
     "number": {

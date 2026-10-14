@@ -134,3 +134,8 @@ scripts/sync_to_community.py
 tmp/
 stats/
 graphify-out/
+
+# (#1083) replay corpora are personal data — never committed
+sem-replay-corpus/
+*.json.gz
+!tests/fixtures/replay/**/*.json.gz

@@ -800,6 +800,19 @@ async def async_get_config_entry_diagnostics(
             "intraday_forecast": bool((getattr(coordinator, "config", None) or {})
                                       .get("intraday_forecast", False)),
         },
+        # (#1083) the last 7 day tags the replay tool selects on — dates
+        # and tags only, no entity ids
+        "day_tags": {
+            "enabled": bool((getattr(coordinator, "config", None) or {})
+                            .get("day_tags", False)),
+            "last_7": [
+                {"date": t.get("date"), "tags": t.get("tags"),
+                 "gap_why": t.get("gap_why")}
+                for t in ((getattr(getattr(coordinator, "_storage", None),
+                                   "get_day_tags", lambda: [])() or [])[-7:])
+                if isinstance(t, dict)
+            ],
+        },
         # (#1021) the grid operator's relay: whether one is set (never its
         # id), what it says now, the limit, since when, which loads it holds
         "shed_signal": {
