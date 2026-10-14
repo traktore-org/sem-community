@@ -1229,6 +1229,15 @@ load_management.py              — LoadManagementCoordinator (peak tracking)
 hardware_detection.py           — Auto-discover inverter/battery/charger
 ```
 
+### Replay and day tags (#1083)
+
+`analytics/day_tags.py` tags a finished day (sunny / mixed / grey, snow,
+car, negative / cheap, gap); `coordinator/day_tag_store.py` writes the
+tags nightly behind the `day_tags` soak flag. `tools/replay/` (never
+shipped) replays recorded PROD days through a tree's real code and
+compares a branch with develop — the proof step for logic changes.
+Details and limits: `docs/REPLAY.md`.
+
 ---
 
 ## 2.2 — what the house can use, and one crawler

@@ -3351,6 +3351,13 @@ def _schedule_post_startup_tasks(
             hass, _registry.async_seed_ratings_from_history,
             name="sem rated-power seed",
         ))
+    # (#1083) Tag each finished day for the replay tool, at 00:15. Asleep
+    # until the day_tags soak flag is set; it only records.
+    try:
+        from .coordinator.day_tag_store import DayTagger
+        entry.async_on_unload(DayTagger(hass, coordinator).schedule())
+    except Exception:  # noqa: BLE001 — a tagger is never worth the setup
+        _LOGGER.debug("day tagger not scheduled", exc_info=True)
 
     # React live to new sensor entities from other integrations (e.g. DSMR loading
     # after SEM's first refresh). Cheap: only fires on entity creation, not state
