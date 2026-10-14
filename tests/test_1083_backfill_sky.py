@@ -227,8 +227,8 @@ def test_retag_replaces_old_backfill_records_never_nightly_ones():
 def test_nothing_to_tag_reads_nothing():
     d1 = TODAY - timedelta(days=1)
     st = _storage()
-    st.put_day_tag({"date": d1.isoformat(), "source": "backfill",
-                    "rule": DAY_TAG_RULE})
+    st.put_day_tag({"date": d1.isoformat(), "sky": "mixed",
+                    "source": "backfill", "rule": DAY_TAG_RULE})
     calls = []
     tg, st, _ = _tagger({}, storage=st)
     orig = tg._read_stats
@@ -239,3 +239,26 @@ def test_nothing_to_tag_reads_nothing():
     tg._read_stats = _count
     assert asyncio.run(tg.async_backfill(days=1)) == 0
     assert calls == []
+
+
+def test_a_held_day_the_tracker_missed_takes_the_hourly_yield():
+    held = TODAY - timedelta(days=1)
+    hist = [SimpleNamespace(date=(held - timedelta(days=2)).isoformat(),
+                            actual_kwh=40.0, forecast_kwh=40.0)]
+    tg, st, _ = _tagger({held: _bell(39.0)}, raw_days=3,
+                        states={"solar_power": _steady_states(held)},
+                        history=hist)
+    assert asyncio.run(tg.async_backfill(days=1)) == 1
+    rec = _by_date(st)[held.isoformat()]
+    assert rec["variability"] is not None
+    assert abs(rec["actual_kwh"] - 39.0) < 0.01 and rec["sky"] == SUNNY
+
+
+def test_a_backfilled_record_without_a_sky_is_tried_again():
+    d1 = TODAY - timedelta(days=1)
+    st = _storage()
+    st.put_day_tag({"date": d1.isoformat(), "sky": None, "source": "backfill",
+                    "rule": DAY_TAG_RULE})
+    tg, st, _ = _tagger({d1: _bell(50.0)}, storage=st)
+    assert asyncio.run(tg.async_backfill(days=1)) == 1
+    assert _by_date(st)[d1.isoformat()]["sky"] == SUNNY

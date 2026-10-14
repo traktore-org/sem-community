@@ -247,9 +247,13 @@ class DayTagger:
             _LOGGER.debug("day tags for %s saved later", day.isoformat())
         return tags
 
-    async def _raw_day(self, day: _date) -> Optional[Dict[str, Any]]:
+    async def _raw_day(self, day: _date,
+                       fallback_actual: Optional[float] = None
+                       ) -> Optional[Dict[str, Any]]:
         """``day``'s record by the full rule, from the recorder's raw
-        states; ``None`` when the recorder could not answer."""
+        states; ``None`` when the recorder could not answer.
+        ``fallback_actual``: the day's yield when the forecast tracker has
+        no record of it (the backfill passes the hourly statistics' sum)."""
         from homeassistant.util import dt as dt_util
         day_start = dt_util.start_of_local_day(day)
         iso = day.isoformat()
@@ -268,6 +272,8 @@ class DayTagger:
         counter_flat = bool(counter) and max(counter) - min(counter) < 0.01
         prices = [_float(s) for _, s in reads[KEY_PRICE]]
         actual, forecast, clear = self._forecast_pair(iso)
+        if actual is None:
+            actual = fallback_actual
         tags = tag_day(
             date=iso, solar=solar, actual_kwh=actual, forecast_kwh=forecast,
             clear_sky_kwh=clear, snow=False,
@@ -292,13 +298,14 @@ class DayTagger:
             task.cancel()
 
     def _needs_tag(self, rec: Optional[dict], retag_backfilled: bool) -> bool:
-        """No record yet, or a backfilled one that is out of date. A record
-        the nightly job made is never touched."""
+        """No record yet, or a backfilled one that is out of date or could
+        not judge the sky. A record the nightly job made is never touched."""
         if rec is None:
             return True
         if rec.get("source") != SOURCE_BACKFILL:
             return False
-        return retag_backfilled or rec.get("rule") != DAY_TAG_RULE
+        return (retag_backfilled or rec.get("rule") != DAY_TAG_RULE
+                or rec.get("sky") is None)
 
     async def async_backfill(self, days: int = BACKFILL_DAYS,
                              retag_backfilled: bool = False) -> int:
@@ -367,7 +374,10 @@ class DayTagger:
                 rec = None
                 # the oldest held day is partly purged: only whole days
                 if (today - day).days < raw_days:
-                    rec = await self._raw_day(day)
+                    hourly = read.get(day) or {}
+                    rec = await self._raw_day(
+                        day, sum((hourly.get("solar") or {}).values())
+                        if hourly.get("solar") else None)
                     if rec is not None and rec.pop("_no_solar", False):
                         rec = None
                 if rec is None and read.get(day):
