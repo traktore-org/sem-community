@@ -1909,6 +1909,18 @@
     "split_grid_rejected": {
       "title": "SEM konnte deine Netzleistungs-Zähler nicht finden",
       "description": "SEM hat keinen Netzleistungs-Sensor, und die nach Namen geratenen Sensoren sind nicht dein Netzzähler: **{import_entity}** für den Bezug, **{export_entity}** für die Einspeisung. Sie passen nicht zu deinen Netz-Energiezählern, oder einer der beiden fehlt. SEM zeigt lieber keine Netzleistung als eine falsche. So wählst du deinen Zähler: Öffne das SEM-Dashboard, Tab ⚙ **Konfiguration**, und schalte oben **Erweitert** ein. Setze dann **Netzleistung** im Abschnitt **Sensorquellen**. Hat dein Zähler je einen Sensor für Bezug und Einspeisung, setze stattdessen **Netz-Bezug-Sensor** und **Netz-Einspeise-Sensor** im Abschnitt **Tarif & Preise**."
+    },
+    "charger_device_gone": {
+      "title": "Ladegerät {name}: Gerät fehlt",
+      "description": "Home Assistant kennt das Gerät hinter dem Ladegerät {name} nicht mehr. SEM kann es nicht steuern. Entferne das Ladegerät in SEM oder füge das Gerät wieder hinzu."
+    },
+    "charger_role_missing": {
+      "title": "Ladegerät {name}: eine Rolle fehlt",
+      "description": "SEM fand auf dem Gerät von {name} keine Entität für: {roles}. Wähle sie in den Ladegerät-Einstellungen oder prüfe die Integration des Geräts."
+    },
+    "charger_role_entity_gone": {
+      "title": "Ladegerät {name}: eine Entität fehlt",
+      "description": "Das Ladegerät {name} nutzt {entity}, die fehlt oder deaktiviert ist. Wähle eine andere Entität in den Ladegerät-Einstellungen oder prüfe die Integration des Geräts."
     }
   },
   "selector": {

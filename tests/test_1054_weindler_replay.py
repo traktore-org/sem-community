@@ -85,7 +85,9 @@ def _sem_entry(base, data_chargers, options_chargers):
         SolarEnergyManagementConfigFlow as Flow,
     )
     data = {k: v for k, v in base.data.items() if k != "ev_chargers"}
-    data.update({"ev_chargers": data_chargers, "has_ev": False})
+    data["has_ev"] = False
+    if data_chargers is not None:
+        data["ev_chargers"] = data_chargers
     return MockConfigEntry(domain=DOMAIN, version=Flow.VERSION,
                            minor_version=Flow.MINOR_VERSION, data=data,
                            options={"ev_chargers": options_chargers})
@@ -109,11 +111,12 @@ async def test_the_crawler_reads_his_box(sem_real_hass):
 
 
 @pytest.mark.asyncio
-async def test_beta13_stores_then_delete_the_old_card(
+async def test_beta13_stores_the_first_start_keeps_the_go_e(
     sem_real_hass, sem_multi_wallbox_config_entry,
 ):
-    """beta.13 stores → start → X on the old card. One charger left, the
-    working one, in both stores; the runtime drives it."""
+    """beta.13 stores: data = [half card], options = [half, go-e]. The first
+    start on device refs keeps ONE charger, the go-e, in the half card's
+    place. Nothing is left to delete, and nothing can come back."""
     from .test_services_real import _setup_sem
     h = sem_real_hass
     _seed(h)
@@ -122,30 +125,26 @@ async def test_beta13_stores_then_delete_the_old_card(
     entry = _sem_entry(sem_multi_wallbox_config_entry, [dict(OLD)],
                        [dict(OLD), dict(new)])
     await _setup_sem(h, entry)
-    # the start-up heal changes nothing here
-    assert _ids(entry.options["ev_chargers"]) == [OLD["id"], new["id"]]
-
-    await h.services.async_call(DOMAIN, "remove_charger",
-                                {"charger_id": OLD["id"]}, blocking=True)
-    await h.async_block_till_done()
+    assert _ids(entry.options["ev_charger_refs"]) == [new["id"]]
+    assert entry.options["ev_charger_refs"][0]["device_id"] == dev
     assert _ids(entry.options["ev_chargers"]) == [new["id"]]
-    assert _ids(entry.data["ev_chargers"]) == []
+    assert "ev_chargers" not in entry.data
+    assert list(entry.runtime_data._ev_devices) == [new["id"]]
 
     await h.config_entries.async_reload(entry.entry_id)
     await h.async_block_till_done()
-    assert _ids(entry.options["ev_chargers"]) == [new["id"]]
-    coord = entry.runtime_data
-    assert list(coord._ev_devices) == [new["id"]]
+    assert _ids(entry.options["ev_charger_refs"]) == [new["id"]]
+    assert list(entry.runtime_data._ev_devices) == [new["id"]]
 
 
 @pytest.mark.asyncio
-async def test_beta15_lost_state_then_create_from_detection(
+async def test_beta15_lost_state_the_go_e_works_again_on_start(
     sem_real_hass, sem_multi_wallbox_config_entry,
 ):
-    """His beta.15 state: only the old card, nothing running, a stale 9.45
-    kWh bucket for the lost charger. The page offers the box again; the
-    create button with the crawler's offer replaces the old card in both
-    stores; the runtime drives the go-e; no stale rows remain."""
+    """His beta.15 state: only the half card. The first start on device refs
+    resolves it against the crawler: the go-e is driven again with no click,
+    the stale 9.45 kWh bucket of the lost id is dropped, the report shows it
+    configured, and a create click adds nothing."""
     from .test_services_real import _setup_sem
     from custom_components.solar_energy_management.hardware_detection import (
         build_detection_report,
@@ -156,48 +155,48 @@ async def test_beta15_lost_state_then_create_from_detection(
     lost_id = f"goecharger_{dev}"
     entry = _sem_entry(sem_multi_wallbox_config_entry, [dict(OLD)], [dict(OLD)])
     await _setup_sem(h, entry)
-    coord = entry.runtime_data
-    assert list(coord._ev_devices) == []
 
-    # the stale state the health check kept warning about
+    assert _ids(entry.options["ev_charger_refs"]) == [OLD["id"]]
+    card = entry.options["ev_chargers"][0]
+    assert charger_is_complete(card)
+    assert card["ev_charger_service"] == "goecharger.set_max_current"
+    assert card["ev_start_stop_entity"] == f"switch.{P}_allow_charging"
+    assert "ev_chargers" not in entry.data
+    coord = entry.runtime_data
+    assert list(coord._ev_devices) == [OLD["id"]]
+
     coord._daily_ev_per_charger[lost_id] = 9.45
     coord._daily_ev_per_charger_date[lost_id] = "2026-10-11"
     await coord.async_refresh()
     await h.async_block_till_done()
     assert lost_id not in coord._daily_ev_per_charger
 
-    # the old card no longer claims the box: it is offered again
     report = build_detection_report(
         h, configured_chargers=entry.options["ev_chargers"])
-    assert not [c for c in report["chargers"] if c.get("configured")]
-    assert [i["charger_id"] for i in report["incomplete_chargers"]] == [OLD["id"]]
-    again = [n for n in report["near_misses"] if n.get("platform") == "goecharger"]
-    assert again and again[0]["suggested_charger"]["id"] == lost_id
+    rows = [c for c in report["chargers"] if c.get("configured")]
+    assert [r["charger_id"] for r in rows] == [OLD["id"]]
 
-    # the card's create button
+    # the card's create button on the same box: still ONE charger — the
+    # complete card replaces the half one it was built from, never a second
     await h.services.async_call(
         DOMAIN, "set_option", {"options": {"ev_chargers": [offer]}}, blocking=True)
     await h.async_block_till_done()
-    assert _ids(entry.options["ev_chargers"]) == [lost_id]
-    assert _ids(entry.data["ev_chargers"]) == [lost_id]
-
-    coord = entry.runtime_data
-    assert list(coord._ev_devices) == [lost_id]
-    assert set(coord._daily_ev_per_charger) <= {lost_id}
-
-    # and it stays that way through the next start
-    await h.config_entries.async_reload(entry.entry_id)
+    refs = entry.options["ev_charger_refs"]
+    assert len(refs) == 1 and refs[0]["device_id"] == dev
+    assert charger_is_complete(entry.options["ev_chargers"][0])
+    assert list(entry.runtime_data._ev_devices) == [refs[0]["id"]]
+    # and once more: a second click changes nothing
+    await h.services.async_call(
+        DOMAIN, "set_option", {"options": {"ev_chargers": [offer]}}, blocking=True)
     await h.async_block_till_done()
-    assert _ids(entry.options["ev_chargers"]) == [lost_id]
-    assert _ids(entry.data["ev_chargers"]) == [lost_id]
+    assert _ids(entry.options["ev_charger_refs"]) == [refs[0]["id"]]
 
 
 @pytest.mark.asyncio
-async def test_the_configure_dialog_offers_the_old_card(
-    sem_real_hass, sem_multi_wallbox_config_entry,
-):
-    """beta.13 stores, Configure → Remove a charger: the old card is in the
-    list (before, the only choice was the working go-e)."""
+async def test_remove_is_final(sem_real_hass, sem_multi_wallbox_config_entry):
+    """X on the charger: gone from every store, and the next start finds
+    nothing to bring back — the crawler still sees the box, so it is
+    offered, never re-added."""
     from .test_services_real import _setup_sem
     h = sem_real_hass
     _seed(h)
@@ -206,12 +205,44 @@ async def test_the_configure_dialog_offers_the_old_card(
     entry = _sem_entry(sem_multi_wallbox_config_entry, [dict(OLD)],
                        [dict(OLD), dict(new)])
     await _setup_sem(h, entry)
+    await h.services.async_call(DOMAIN, "remove_charger",
+                                {"charger_id": new["id"]}, blocking=True)
+    await h.async_block_till_done()
+    assert entry.options["ev_charger_refs"] == []
+    assert entry.options["ev_chargers"] == []
+    await h.config_entries.async_reload(entry.entry_id)
+    await h.async_block_till_done()
+    assert entry.options["ev_charger_refs"] == []
+    assert list(entry.runtime_data._ev_devices) == []
 
-    flow = await h.config_entries.options.async_init(entry.entry_id)
-    flow_obj = h.config_entries.options._progress[flow["flow_id"]]
-    # the draft the menu works on: the stored list, as async_step_init seeds it
-    flow_obj._data["ev_chargers"] = [dict(c) for c in entry.options["ev_chargers"]]
-    res = await flow_obj.async_step_ev_charger_remove()
-    field = next(iter(res["data_schema"].schema.values()))
-    assert [o["value"] for o in field.config["options"]] == [OLD["id"], new["id"]]
-    h.config_entries.options.async_abort(flow["flow_id"])
+
+@pytest.mark.asyncio
+async def test_removing_the_last_charger_brings_none_back(
+    sem_real_hass, sem_multi_wallbox_config_entry,
+):
+    """HA-TEST, 11.10.2026: X on the last charger, and the next start's
+    auto-discovery planted the KEBA that install also has. With charger refs
+    an empty list is the user's answer: setup does not re-discover, the late
+    retry does not drive one — the crawler only offers it."""
+    from .test_services_real import _setup_sem
+    h = sem_real_hass
+    _seed(h)
+    await replay(h, load_capture("keba"))
+    dev, offer = await _his_box(h)
+    new = {**offer, "id": f"goecharger_{dev}", "name": "go-eCharger"}
+    entry = _sem_entry(sem_multi_wallbox_config_entry, None, [dict(new)])
+    await _setup_sem(h, entry)
+    assert list(entry.runtime_data._ev_devices) == [new["id"]]
+
+    await h.services.async_call(DOMAIN, "remove_charger",
+                                {"charger_id": new["id"]}, blocking=True)
+    await h.async_block_till_done()
+    for _ in range(2):
+        await h.config_entries.async_reload(entry.entry_id)
+        await h.async_block_till_done()
+        coord = entry.runtime_data
+        await coord._retry_ev_device_with_backoff()
+        assert entry.options["ev_charger_refs"] == []
+        assert entry.options["ev_chargers"] == []
+        assert "ev_chargers" not in entry.data
+        assert list(coord._ev_devices) == [] and coord._ev_device is None

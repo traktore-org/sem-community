@@ -11525,6 +11525,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         """
         import time as _time
 
+        # (#1054) With charger refs, "no charger" is the user's answer (they
+        # removed it): never drive one they did not add. The crawler offers.
+        from ..charger_refs import REFS_KEY
+        _entry = getattr(self, "config_entry", None)
+        if REFS_KEY in (getattr(_entry, "options", None) or {}):
+            return
+
         if not hasattr(self, '_ev_retry_count'):
             self._ev_retry_count = 0
             self._ev_retry_next_at = 0.0

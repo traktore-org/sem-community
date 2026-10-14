@@ -1909,6 +1909,18 @@
     "split_grid_rejected": {
       "title": "SEM could not find your grid power meters",
       "description": "SEM has no grid power sensor, and its guesses by name are not your grid meter: **{import_entity}** for import, **{export_entity}** for export. They do not match your grid energy counters, or one of the two is missing. SEM shows no grid power rather than a wrong one. To pick your meter: open the SEM dashboard, tab ⚙ **Configurare**, and switch on **Avansat** at the top. Then set **Putere rețea** in section **Surse de senzori**. If your meter has one sensor for import and one for export, set **Grid import sensor** and **Grid export sensor** in section **Tariff & pricing** instead."
+    },
+    "charger_device_gone": {
+      "title": "Încărcătorul {name}: dispozitivul lipsește",
+      "description": "Home Assistant nu mai are dispozitivul încărcătorului {name}. SEM nu îl poate comanda. Șterge încărcătorul din SEM sau adaugă din nou dispozitivul."
+    },
+    "charger_role_missing": {
+      "title": "Încărcătorul {name}: lipsește un rol",
+      "description": "SEM nu a găsit nicio entitate pe dispozitivul lui {name} pentru: {roles}. Alege-o în setările încărcătorului sau verifică integrarea dispozitivului."
+    },
+    "charger_role_entity_gone": {
+      "title": "Încărcătorul {name}: o entitate a dispărut",
+      "description": "Încărcătorul {name} folosește {entity}, care a dispărut sau e dezactivată. Alege altă entitate în setările încărcătorului sau verifică integrarea dispozitivului."
     }
   },
   "selector": {

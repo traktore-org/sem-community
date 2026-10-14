@@ -1675,7 +1675,15 @@
     "cfg_behind_operator_relay": "Za relé provozovatele sítě",
     "cfg_help_behind_operator_relay": "Provozovatel toto zařízení vypíná. SEM ho neplánuje, dokud je relé zapnuté.",
     "operator_limit_banner": "Provozovatel sítě: limit {kw} kW od {time} — solár navíc je povolen",
-    "locked_by_grid_operator": "Zablokováno provozovatelem sítě"
+    "locked_by_grid_operator": "Zablokováno provozovatelem sítě",
+    "config_role_detected": "zjištěno",
+    "config_role_you": "nastaveno vámi",
+    "config_role_none": "nenalezeno",
+    "config_role_detected_was": "zjištěno:",
+    "config_role_use_detected": "použít zjištěnou",
+    "config_role_legend_lead": "SEM čte tuto nabíječku z jejího zařízení.",
+    "config_role_legend_detected": "= nalezeno SEM, sleduje přejmenování.",
+    "config_role_legend_you": "= vaše volba, zůstává."
   },
   "da": {
     "% of limit": "% af grænse",
@@ -3353,7 +3361,15 @@
     "cfg_behind_operator_relay": "Bag netselskabets relæ",
     "cfg_help_behind_operator_relay": "Netselskabet slukker denne enhed. SEM planlægger den ikke, mens relæet er til.",
     "operator_limit_banner": "Netselskab: grænse {kw} kW siden {time} — sol oveni er tilladt",
-    "locked_by_grid_operator": "Låst af netselskabet"
+    "locked_by_grid_operator": "Låst af netselskabet",
+    "config_role_detected": "fundet",
+    "config_role_you": "valgt af dig",
+    "config_role_none": "ikke fundet",
+    "config_role_detected_was": "fundet:",
+    "config_role_use_detected": "brug fundet",
+    "config_role_legend_lead": "SEM læser denne lader fra dens enhed.",
+    "config_role_legend_detected": "= fundet af SEM, følger omdøbninger.",
+    "config_role_legend_you": "= dit valg, beholdes."
   },
   "de": {
     "% of limit": "% des Limits",
@@ -5031,7 +5047,15 @@
     "cfg_behind_operator_relay": "Hinter dem Relais des Netzbetreibers",
     "cfg_help_behind_operator_relay": "Der Netzbetreiber schaltet dieses Gerät ab. SEM plant es nicht, solange das Relais an ist.",
     "operator_limit_banner": "Netzbetreiber: Limit {kw} kW seit {time} — Solarstrom zusätzlich ist erlaubt",
-    "locked_by_grid_operator": "Vom Netzbetreiber gesperrt"
+    "locked_by_grid_operator": "Vom Netzbetreiber gesperrt",
+    "config_role_detected": "erkannt",
+    "config_role_you": "von dir gesetzt",
+    "config_role_none": "nicht gefunden",
+    "config_role_detected_was": "erkannt:",
+    "config_role_use_detected": "erkannt verwenden",
+    "config_role_legend_lead": "SEM liest dieses Ladegerät von seinem Gerät.",
+    "config_role_legend_detected": "= von SEM gefunden, folgt Umbenennungen.",
+    "config_role_legend_you": "= deine Wahl, bleibt."
   },
   "en": {
     "% of limit": "% of limit",
@@ -6709,7 +6733,15 @@
     "cfg_behind_operator_relay": "Behind the grid operator's relay",
     "cfg_help_behind_operator_relay": "The operator switches this device off. SEM will not plan it while the relay is on.",
     "operator_limit_banner": "Grid operator: limit {kw} kW since {time} — solar on top is fine",
-    "locked_by_grid_operator": "Locked by the grid operator"
+    "locked_by_grid_operator": "Locked by the grid operator",
+    "config_role_detected": "detected",
+    "config_role_you": "set by you",
+    "config_role_none": "not found",
+    "config_role_detected_was": "detected:",
+    "config_role_use_detected": "use detected",
+    "config_role_legend_lead": "SEM reads this charger from its device.",
+    "config_role_legend_detected": "= found by SEM, follows renames.",
+    "config_role_legend_you": "= your choice, kept."
   },
   "es": {
     "% of limit": "% del límite",
@@ -8387,7 +8419,15 @@
     "cfg_behind_operator_relay": "Detrás del relé de la distribuidora",
     "cfg_help_behind_operator_relay": "La distribuidora apaga este aparato. SEM no lo planifica mientras el relé está activo.",
     "operator_limit_banner": "Distribuidora: límite {kw} kW desde las {time} — la solar adicional está permitida",
-    "locked_by_grid_operator": "Bloqueado por la distribuidora"
+    "locked_by_grid_operator": "Bloqueado por la distribuidora",
+    "config_role_detected": "detectado",
+    "config_role_you": "elegido por ti",
+    "config_role_none": "no encontrado",
+    "config_role_detected_was": "detectado:",
+    "config_role_use_detected": "usar detectado",
+    "config_role_legend_lead": "SEM lee este cargador desde su dispositivo.",
+    "config_role_legend_detected": "= encontrado por SEM, sigue los cambios de nombre.",
+    "config_role_legend_you": "= tu elección, se mantiene."
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -10065,7 +10105,15 @@
     "cfg_behind_operator_relay": "Verkkoyhtiön releen takana",
     "cfg_help_behind_operator_relay": "Verkkoyhtiö katkaisee tämän laitteen. SEM ei suunnittele sitä, kun rele on päällä.",
     "operator_limit_banner": "Verkkoyhtiö: raja {kw} kW klo {time} alkaen — aurinkosähkö päälle on sallittu",
-    "locked_by_grid_operator": "Verkkoyhtiön lukitsema"
+    "locked_by_grid_operator": "Verkkoyhtiön lukitsema",
+    "config_role_detected": "löydetty",
+    "config_role_you": "sinun valintasi",
+    "config_role_none": "ei löytynyt",
+    "config_role_detected_was": "löydetty:",
+    "config_role_use_detected": "käytä löydettyä",
+    "config_role_legend_lead": "SEM lukee tämän laturin sen laitteesta.",
+    "config_role_legend_detected": "= SEMin löytämä, seuraa nimien muutoksia.",
+    "config_role_legend_you": "= sinun valintasi, säilyy."
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -11743,7 +11791,15 @@
     "cfg_behind_operator_relay": "Derrière le relais du gestionnaire de réseau",
     "cfg_help_behind_operator_relay": "Le gestionnaire coupe cet appareil. SEM ne le planifie pas tant que le relais est actif.",
     "operator_limit_banner": "Gestionnaire de réseau : limite {kw} kW depuis {time} — le solaire en plus reste permis",
-    "locked_by_grid_operator": "Bloqué par le gestionnaire de réseau"
+    "locked_by_grid_operator": "Bloqué par le gestionnaire de réseau",
+    "config_role_detected": "détecté",
+    "config_role_you": "choisi par vous",
+    "config_role_none": "introuvable",
+    "config_role_detected_was": "détecté :",
+    "config_role_use_detected": "utiliser la détection",
+    "config_role_legend_lead": "SEM lit cette borne depuis son appareil.",
+    "config_role_legend_detected": "= trouvé par SEM, suit les renommages.",
+    "config_role_legend_you": "= votre choix, conservé."
   },
   "hu": {
     "% of limit": "% a határból",
@@ -13421,7 +13477,15 @@
     "cfg_behind_operator_relay": "A hálózati szolgáltató reléje mögött",
     "cfg_help_behind_operator_relay": "A szolgáltató kikapcsolja ezt az eszközt. A SEM nem tervezi be, amíg a relé be van kapcsolva.",
     "operator_limit_banner": "Hálózati szolgáltató: korlát {kw} kW {time} óta — a napenergia ezen felül megengedett",
-    "locked_by_grid_operator": "A hálózati szolgáltató letiltotta"
+    "locked_by_grid_operator": "A hálózati szolgáltató letiltotta",
+    "config_role_detected": "felismert",
+    "config_role_you": "általad beállítva",
+    "config_role_none": "nem található",
+    "config_role_detected_was": "felismert:",
+    "config_role_use_detected": "felismert használata",
+    "config_role_legend_lead": "A SEM ezt a töltőt az eszközéből olvassa.",
+    "config_role_legend_detected": "= a SEM találta, követi az átnevezést.",
+    "config_role_legend_you": "= a te választásod, megmarad."
   },
   "it": {
     "% of limit": "% del limite",
@@ -15099,7 +15163,15 @@
     "cfg_behind_operator_relay": "Dietro il relè del gestore di rete",
     "cfg_help_behind_operator_relay": "Il gestore spegne questo dispositivo. SEM non lo pianifica finché il relè è attivo.",
     "operator_limit_banner": "Gestore di rete: limite {kw} kW dalle {time} — il solare in più è consentito",
-    "locked_by_grid_operator": "Bloccato dal gestore di rete"
+    "locked_by_grid_operator": "Bloccato dal gestore di rete",
+    "config_role_detected": "rilevato",
+    "config_role_you": "scelto da te",
+    "config_role_none": "non trovato",
+    "config_role_detected_was": "rilevato:",
+    "config_role_use_detected": "usa rilevato",
+    "config_role_legend_lead": "SEM legge questo caricatore dal suo dispositivo.",
+    "config_role_legend_detected": "= trovato da SEM, segue le rinomine.",
+    "config_role_legend_you": "= la tua scelta, mantenuta."
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -16777,7 +16849,15 @@
     "cfg_behind_operator_relay": "Achter het relais van de netbeheerder",
     "cfg_help_behind_operator_relay": "De netbeheerder schakelt dit apparaat uit. SEM plant het niet zolang het relais aan is.",
     "operator_limit_banner": "Netbeheerder: limiet {kw} kW sinds {time} — zon erbovenop mag",
-    "locked_by_grid_operator": "Geblokkeerd door de netbeheerder"
+    "locked_by_grid_operator": "Geblokkeerd door de netbeheerder",
+    "config_role_detected": "gevonden",
+    "config_role_you": "door jou gekozen",
+    "config_role_none": "niet gevonden",
+    "config_role_detected_was": "gevonden:",
+    "config_role_use_detected": "gevonden gebruiken",
+    "config_role_legend_lead": "SEM leest deze lader van zijn apparaat.",
+    "config_role_legend_detected": "= door SEM gevonden, volgt hernoemingen.",
+    "config_role_legend_you": "= jouw keuze, blijft."
   },
   "no": {
     "% of limit": "% av grense",
@@ -18455,7 +18535,15 @@
     "cfg_behind_operator_relay": "Bak nettselskapets relé",
     "cfg_help_behind_operator_relay": "Nettselskapet slår av denne enheten. SEM planlegger den ikke mens reléet er på.",
     "operator_limit_banner": "Nettselskap: grense {kw} kW siden {time} — sol i tillegg er tillatt",
-    "locked_by_grid_operator": "Låst av nettselskapet"
+    "locked_by_grid_operator": "Låst av nettselskapet",
+    "config_role_detected": "funnet",
+    "config_role_you": "valgt av deg",
+    "config_role_none": "ikke funnet",
+    "config_role_detected_was": "funnet:",
+    "config_role_use_detected": "bruk funnet",
+    "config_role_legend_lead": "SEM leser denne laderen fra enheten.",
+    "config_role_legend_detected": "= funnet av SEM, følger nye navn.",
+    "config_role_legend_you": "= ditt valg, beholdes."
   },
   "pl": {
     "% of limit": "% limitu",
@@ -20133,7 +20221,15 @@
     "cfg_behind_operator_relay": "Za przekaźnikiem operatora sieci",
     "cfg_help_behind_operator_relay": "Operator wyłącza to urządzenie. SEM nie planuje go, gdy przekaźnik jest włączony.",
     "operator_limit_banner": "Operator sieci: limit {kw} kW od {time} — słońce ponad to jest dozwolone",
-    "locked_by_grid_operator": "Zablokowane przez operatora sieci"
+    "locked_by_grid_operator": "Zablokowane przez operatora sieci",
+    "config_role_detected": "wykryte",
+    "config_role_you": "wybrane przez ciebie",
+    "config_role_none": "nie znaleziono",
+    "config_role_detected_was": "wykryte:",
+    "config_role_use_detected": "użyj wykrytej",
+    "config_role_legend_lead": "SEM odczytuje tę ładowarkę z jej urządzenia.",
+    "config_role_legend_detected": "= znalezione przez SEM, śledzi zmiany nazw.",
+    "config_role_legend_you": "= twój wybór, zostaje."
   },
   "pt": {
     "% of limit": "% do limite",
@@ -21811,7 +21907,15 @@
     "cfg_behind_operator_relay": "Atrás do relé do operador da rede",
     "cfg_help_behind_operator_relay": "O operador desliga este aparelho. O SEM não o planeia enquanto o relé estiver ativo.",
     "operator_limit_banner": "Operador da rede: limite {kw} kW desde {time} — solar adicional é permitido",
-    "locked_by_grid_operator": "Bloqueado pelo operador da rede"
+    "locked_by_grid_operator": "Bloqueado pelo operador da rede",
+    "config_role_detected": "detetado",
+    "config_role_you": "escolhido por si",
+    "config_role_none": "não encontrado",
+    "config_role_detected_was": "detetado:",
+    "config_role_use_detected": "usar detetado",
+    "config_role_legend_lead": "O SEM lê este carregador a partir do seu dispositivo.",
+    "config_role_legend_detected": "= encontrado pelo SEM, segue mudanças de nome.",
+    "config_role_legend_you": "= a sua escolha, mantida."
   },
   "ro": {
     "% of limit": "% din limită",
@@ -23489,7 +23593,15 @@
     "cfg_behind_operator_relay": "În spatele releului operatorului de rețea",
     "cfg_help_behind_operator_relay": "Operatorul oprește acest aparat. SEM nu îl planifică cât timp releul este pornit.",
     "operator_limit_banner": "Operator de rețea: limită {kw} kW din {time} — solarul în plus este permis",
-    "locked_by_grid_operator": "Blocat de operatorul de rețea"
+    "locked_by_grid_operator": "Blocat de operatorul de rețea",
+    "config_role_detected": "detectat",
+    "config_role_you": "ales de tine",
+    "config_role_none": "negăsit",
+    "config_role_detected_was": "detectat:",
+    "config_role_use_detected": "folosește detectarea",
+    "config_role_legend_lead": "SEM citește acest încărcător de pe dispozitivul lui.",
+    "config_role_legend_detected": "= găsit de SEM, urmează redenumirile.",
+    "config_role_legend_you": "= alegerea ta, păstrată."
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -25167,7 +25279,15 @@
     "cfg_behind_operator_relay": "Bakom nätbolagets relä",
     "cfg_help_behind_operator_relay": "Nätbolaget stänger av denna enhet. SEM planerar den inte medan reläet är på.",
     "operator_limit_banner": "Nätbolag: gräns {kw} kW sedan {time} — sol utöver är tillåten",
-    "locked_by_grid_operator": "Låst av nätbolaget"
+    "locked_by_grid_operator": "Låst av nätbolaget",
+    "config_role_detected": "hittad",
+    "config_role_you": "vald av dig",
+    "config_role_none": "hittades inte",
+    "config_role_detected_was": "hittad:",
+    "config_role_use_detected": "använd hittad",
+    "config_role_legend_lead": "SEM läser den här laddaren från dess enhet.",
+    "config_role_legend_detected": "= hittad av SEM, följer namnbyten.",
+    "config_role_legend_you": "= ditt val, behålls."
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -26845,6 +26965,14 @@
     "cfg_behind_operator_relay": "在电网运营商继电器之后",
     "cfg_help_behind_operator_relay": "运营商会关闭此设备。继电器开启时 SEM 不会安排它。",
     "operator_limit_banner": "电网运营商：自 {time} 起限值 {kw} kW — 额外的太阳能不受限制",
-    "locked_by_grid_operator": "被电网运营商锁定"
+    "locked_by_grid_operator": "被电网运营商锁定",
+    "config_role_detected": "已检测",
+    "config_role_you": "你的设置",
+    "config_role_none": "未找到",
+    "config_role_detected_was": "检测结果：",
+    "config_role_use_detected": "使用检测结果",
+    "config_role_legend_lead": "SEM 从设备读取此充电桩。",
+    "config_role_legend_detected": "= 由 SEM 找到，跟随重命名。",
+    "config_role_legend_you": "= 你的选择，保留。"
   }
 }

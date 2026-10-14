@@ -118,8 +118,17 @@ async def test_a_dutch_home_reads_dutch_charger_entities_and_keeps_their_ids(
     _seed_sem_input_sensors(sem_real_hass)
     sem_config_entry.add_to_hass(sem_real_hass)
     base = dict(sem_config_entry.data["ev_chargers"][0])
+    # (#1054) the second box has its own entities: two cards with the same
+    # entities are one box, and SEM keeps one charger for it
+    garage_box = {k: (v.replace("sensor.", "sensor.garage_", 1)
+                      .replace("binary_sensor.", "binary_sensor.garage_", 1)
+                      .replace("number.", "number.garage_", 1)
+                      .replace("switch.", "switch.garage_", 1))
+                  if isinstance(v, str) and k.startswith("ev_") and "." in v
+                  and not k.endswith("service") else v
+                  for k, v in base.items()}
     chargers = [{**base, "name": "EV Charger"},
-                {**base, "id": "garage", "name": "Garage"}]
+                {**garage_box, "id": "garage", "name": "Garage"}]
     sem_real_hass.config_entries.async_update_entry(
         sem_config_entry, options={**sem_config_entry.options,
                                    "ev_chargers": chargers})

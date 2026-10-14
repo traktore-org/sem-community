@@ -44,6 +44,22 @@ def _device_of(eid: str):
     return "dev1" if eid.startswith(("sensor.goecharger_", "switch.goecharger_")) else None
 
 
+def _through_refs(existing, incoming, live=None):
+    """What the user sees after a write: set_option's merge (siblings kept),
+    then the next start's refs decide one charger per device (#1054)."""
+    from custom_components.solar_energy_management.charger_refs import (
+        reconcile, signature,
+    )
+    refs, resolved = reconcile(data_list=None, legacy=[dict(c) for c in existing],
+                               refs=None, sig=None, device_of=_device_of,
+                               live_by_device=live or {})
+    merged = _merge_ev_chargers_by_id(resolved, [dict(c) for c in incoming])
+    _refs, out = reconcile(data_list=None, legacy=merged, refs=refs,
+                           sig=signature(resolved), device_of=_device_of,
+                           live_by_device=live or {})
+    return out
+
+
 # ── the rule ─────────────────────────────────────────────────────────────
 
 class TestCompleteWins:
@@ -70,44 +86,36 @@ class TestCompleteWins:
     def test_the_create_replaces_the_half_filled_card_of_the_same_box(self):
         """weindler's state, then the create button: one charger, the
         working one, in the old card's place."""
-        out = _merge_ev_chargers_by_id([dict(OLD)], [dict(NEW)],
-                                       fold_same_box=True, device_of=_device_of)
+        out = _through_refs([dict(OLD)], [dict(NEW)])
         assert [c["id"] for c in out] == [NEW["id"]]
         assert out[0]["ev_charger_service"] == "goecharger.set_max_current"
 
     def test_it_takes_the_old_cards_place_so_a_primary_stays_primary(self):
         other = {"id": "keba", "name": "KEBA",
                  "ev_charging_power_sensor": "sensor.keba_power",
-                 "ev_connected_sensor": "binary_sensor.keba_plug",
-                 "ev_charging_sensor": "binary_sensor.keba_charging"}
-        out = _merge_ev_chargers_by_id([dict(OLD), dict(other)], [dict(NEW)],
-                                       fold_same_box=True, device_of=_device_of)
+                 "ev_charger_service": "keba.set_current"}
+        out = _through_refs([dict(OLD), dict(other)], [dict(NEW)])
         assert [c["id"] for c in out] == [NEW["id"], "keba"]
 
-    def test_an_existing_complete_charger_drops_the_half_card_on_update(self):
-        out = _merge_ev_chargers_by_id(
-            [dict(OLD), dict(NEW)], [{"id": NEW["id"], **{k: v for k, v in NEW.items()}}],
-            fold_same_box=True, device_of=_device_of)
+    def test_an_existing_complete_charger_drops_the_half_card(self):
+        out = _through_refs([dict(OLD), dict(NEW)], [dict(NEW)])
         assert [c["id"] for c in out] == [NEW["id"]]
 
     def test_a_complete_card_is_never_displaced(self):
         twin = {**NEW, "id": "goecharger_twin"}
-        out = _merge_ev_chargers_by_id([dict(twin)], [dict(NEW)],
-                                       fold_same_box=True, device_of=_device_of)
-        # same entity set → the older id keeps it (the #1054 fold), nothing lost
+        out = _through_refs([dict(twin)], [dict(NEW)])
+        # a copy of the running charger → the running one keeps the box
         assert [c["id"] for c in out] == ["goecharger_twin"]
         assert charger_is_complete(out[0])
 
     def test_a_half_card_on_another_box_stays(self):
         stranger = {"id": "other", "ev_total_energy_sensor": "sensor.other_energy"}
-        out = _merge_ev_chargers_by_id([dict(stranger)], [dict(NEW)],
-                                       fold_same_box=True, device_of=_device_of)
+        out = _through_refs([dict(stranger)], [dict(NEW)])
         assert [c["id"] for c in out] == ["other", NEW["id"]]
 
     def test_a_half_incoming_card_never_displaces_anything(self):
-        out = _merge_ev_chargers_by_id([dict(NEW)], [{**OLD}],
-                                       fold_same_box=True, device_of=_device_of)
-        assert [c["id"] for c in out] == [NEW["id"], OLD["id"]]
+        out = _through_refs([dict(NEW)], [{**OLD}])
+        assert [c["id"] for c in out] == [NEW["id"]]
 
     def test_the_heal_never_displaces(self):
         """No device lookup, no fold — the start-up heal keeps both for the
@@ -231,14 +239,13 @@ class TestStaleStateIsSwept:
 # ── the real set_option path: one write, both stores, survives a reload ───
 
 @pytest.mark.asyncio
-async def test_create_replaces_the_half_card_in_both_stores(
+async def test_setup_folds_a_half_card_into_the_complete_one(
     sem_real_hass, sem_multi_wallbox_config_entry,
 ):
-    """weindler's shape on a real Home Assistant: a half card for the right
-    box sits first in ``entry.data`` and ``entry.options``. The create
-    button's ``set_option`` with the complete card replaces it in BOTH
-    stores (data gets the same list, or the heal would re-sort options to
-    data's order), and the start-up heal on reload finds nothing to do."""
+    """A half card for the right box first, the complete one second (the
+    beta.13 shape). (#1054 device refs) The first start makes one ref per
+    device: the complete charger, in the half card's place; ``entry.data``
+    keeps no list, so nothing can bring the half card back."""
     from homeassistant.helpers import device_registry as dr
     from homeassistant.helpers import entity_registry as er
     from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -256,8 +263,6 @@ async def test_create_replaces_the_half_card_in_both_stores(
                            {"unit_of_measurement": "A"})
         h.states.async_set(f"binary_sensor.test_wb_{side}_cable_connected", "off")
         h.states.async_set(f"sensor.test_wb_{side}_status", "idle")
-
-    # the right box is one device in the registry
     box_entry = MockConfigEntry(domain="test_wb")
     box_entry.add_to_hass(h)
     dev = dr.async_get(h).async_get_or_create(
@@ -271,27 +276,23 @@ async def test_create_replaces_the_half_card_in_both_stores(
         reg.async_get_or_create(domain, "test_wb", obj, suggested_object_id=obj,
                                 config_entry=box_entry, device_id=dev.id)
 
-    entry = sem_multi_wallbox_config_entry
-    left, right = entry.data["ev_chargers"]
+    base = sem_multi_wallbox_config_entry
+    left, right = base.data["ev_chargers"]
     half = {"id": "right_old", "name": "Old card",
             "ev_total_energy_sensor": "sensor.test_wb_right_charging_energy"}
-    entry_data = {**entry.data, "ev_chargers": [half, left]}
-    h_entry = MockConfigEntry(domain=DOMAIN, version=entry.version,
-                              minor_version=entry.minor_version,
-                              data=entry_data,
-                              options={"ev_chargers": [dict(half), dict(left)]})
-    await _setup_sem(h, h_entry)
-
     complete = {**right, "id": "right_new",
                 "ev_total_energy_sensor": "sensor.test_wb_right_charging_energy"}
-    await h.services.async_call(DOMAIN, "set_option",
-                                {"options": {"ev_chargers": [complete]}}, blocking=True)
-    await h.async_block_till_done()
+    entry = MockConfigEntry(domain=DOMAIN, version=base.version,
+                            minor_version=base.minor_version,
+                            data={**base.data, "ev_chargers": [half, left]},
+                            options={"ev_chargers": [dict(half), dict(left), dict(complete)]})
+    await _setup_sem(h, entry)
 
-    assert [c["id"] for c in h_entry.options["ev_chargers"]] == ["right_new", "ev_charger"]
-    assert [c["id"] for c in h_entry.data["ev_chargers"]] == ["right_new", "ev_charger"]
+    assert [r["id"] for r in entry.options["ev_charger_refs"]] == ["right_new", "ev_charger"]
+    assert [c["id"] for c in entry.options["ev_chargers"]] == ["right_new", "ev_charger"]
+    assert "ev_chargers" not in entry.data
 
-    await h.config_entries.async_reload(h_entry.entry_id)
+    await h.config_entries.async_reload(entry.entry_id)
     await h.async_block_till_done()
-    assert [c["id"] for c in h_entry.options["ev_chargers"]] == ["right_new", "ev_charger"]
-    assert [c["id"] for c in h_entry.data["ev_chargers"]] == ["right_new", "ev_charger"]
+    assert [r["id"] for r in entry.options["ev_charger_refs"]] == ["right_new", "ev_charger"]
+    assert sorted(entry.runtime_data._ev_devices) == ["ev_charger", "right_new"]

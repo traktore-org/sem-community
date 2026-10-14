@@ -1673,7 +1673,14 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         — the same answer the EV tab and the welcome text use.
         """
         saved = {**self.config_entry.data, **self.config_entry.options}
-        if has_managed_charger(saved):
+        # (#1054) A half-filled primary (a name and one counter, from an
+        # older detection) meets the same wall #990 did: its page has
+        # required fields it cannot fill, so the dialog could not get past
+        # page one — nor reach "Remove a charger". Open on the list then.
+        _cards = [c for c in (saved.get("ev_chargers") or []) if isinstance(c, dict)]
+        _half_primary = bool(_cards) and not all(
+            _cards[0].get(k) for k in EV_REQUIRED_SENSORS)
+        if has_managed_charger(saved) and not _half_primary:
             return await self.async_step_ev_charger()
         # The skipped page must change nothing. The final save replaces
         # ``entry.options`` wholesale (#690), so a key this page owns that is

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **A charger is stored as its device; SEM reads its roles from it** (#1054) — thanks @weindler. Removed stays removed; the card shows what you set.
 - 🐛 **Unplugging your car no longer raises a false "charger control not working" Repair** (#1032) — thanks @OddmarDam. A Wattpilot start button no longer raises it either.
 - 🐛 **SEM runs chargers it finds with only a charge-mode or start/stop control** (#1095). myenergi, Ohme and Zaptec without current rights were found, then dropped.
 - 🐛 **SEM finds a charging current named plainly "charging_current"** (#1096). Only on a charger; on an inverter that name is the battery limit.

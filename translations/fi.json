@@ -1909,6 +1909,18 @@
     "split_grid_rejected": {
       "title": "SEM could not find your grid power meters",
       "description": "SEM has no grid power sensor, and its guesses by name are not your grid meter: **{import_entity}** for import, **{export_entity}** for export. They do not match your grid energy counters, or one of the two is missing. SEM shows no grid power rather than a wrong one. To pick your meter: open the SEM dashboard, tab ⚙ **Asetukset**, and switch on **Lisäasetukset** at the top. Then set **Verkon teho** in section **Anturilähteet**. If your meter has one sensor for import and one for export, set **Grid import sensor** and **Grid export sensor** in section **Tariff & pricing** instead."
+    },
+    "charger_device_gone": {
+      "title": "Laturi {name}: laite puuttuu",
+      "description": "Home Assistantissa ei enää ole laturin {name} laitetta. SEM ei voi ohjata sitä. Poista laturi SEMistä tai lisää laite uudelleen."
+    },
+    "charger_role_missing": {
+      "title": "Laturi {name}: rooli puuttuu",
+      "description": "SEM ei löytänyt laturin {name} laitteelta entiteettiä tehtävälle: {roles}. Valitse se laturin asetuksista tai tarkista laitteen integraatio."
+    },
+    "charger_role_entity_gone": {
+      "title": "Laturi {name}: entiteetti on poissa",
+      "description": "Laturi {name} käyttää entiteettiä {entity}, joka on poissa tai poistettu käytöstä. Valitse toinen entiteetti laturin asetuksista tai tarkista laitteen integraatio."
     }
   },
   "selector": {

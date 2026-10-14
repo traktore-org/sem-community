@@ -1909,6 +1909,18 @@
     "split_grid_rejected": {
       "title": "SEM could not find your grid power meters",
       "description": "SEM has no grid power sensor, and its guesses by name are not your grid meter: **{import_entity}** for import, **{export_entity}** for export. They do not match your grid energy counters, or one of the two is missing. SEM shows no grid power rather than a wrong one. To pick your meter: open the SEM dashboard, tab ⚙ **配置**, and switch on **高级** at the top. Then set **电网功率** in section **传感器来源**. If your meter has one sensor for import and one for export, set **电网购电传感器** and **电网馈电传感器** in section **电价与费率** instead."
+    },
+    "charger_device_gone": {
+      "title": "充电桩 {name}：设备已不存在",
+      "description": "Home Assistant 中已找不到充电桩 {name} 的设备。SEM 无法控制它。请在 SEM 中移除该充电桩，或重新添加设备。"
+    },
+    "charger_role_missing": {
+      "title": "充电桩 {name}：缺少一项功能",
+      "description": "SEM 在 {name} 的设备上没有找到以下功能的实体：{roles}。请在充电桩设置中选择，或检查该设备的集成。"
+    },
+    "charger_role_entity_gone": {
+      "title": "充电桩 {name}：实体已不存在",
+      "description": "充电桩 {name} 使用的 {entity} 已不存在或已停用。请在充电桩设置中选择其他实体，或检查该设备的集成。"
     }
   },
   "selector": {

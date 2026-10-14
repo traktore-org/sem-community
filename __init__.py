@@ -599,56 +599,12 @@ def chargers_without(
     return _drop(data_chargers), _drop(opts_chargers)
 
 
-def _same_box_as(cid: str, mine: set, existing_fp: list):
-    """(#1054 follow-up) The existing charger id ``cid`` is a second copy
-    of, or ``None``. A copy points at the SAME entity set, or carries the
-    id the old card minted for a repeat click (``<existing>_<n>``) and
-    overlaps it. One shared entity is not a copy: two chargers behind one
-    meter, or sharing ``ev_charger_service_entity_id``, are two boxes."""
-    if not mine:
-        return None
-    for eid, fp in existing_fp:
-        if not fp:
-            continue
-        if mine == fp:
-            return eid
-        suffix = cid[len(eid) + 1:] if cid.startswith(f"{eid}_") else ""
-        if suffix.isdigit() and (mine & fp):
-            return eid
-    return None
-
-
-def _devices_of(charger: Any, device_of) -> set:
-    """The devices a charger card's entities belong to (unknowns left out)."""
-    from .hardware_detection import charger_entity_ids
-    out = set()
-    for eid in charger_entity_ids(charger):
-        dev = device_of(eid)
-        if dev:
-            out.add(dev)
-    return out
-
-
-def _merge_ev_chargers_by_id(
-    existing: list, incoming: list, *, fold_same_box: bool = False,
-    device_of=None,
-) -> list:
+def _merge_ev_chargers_by_id(existing: list, incoming: list) -> list:
     """Merge an ``ev_chargers`` list by ``id`` rather than full-replace.
 
-    ``device_of`` (#1054 round 3, with ``fold_same_box``): an entity id →
-    its device id. An incoming COMPLETE charger (``charger_is_complete``)
-    displaces every existing INCOMPLETE card whose entities all sit on the
-    incoming charger's device, and takes the first one's place in the
-    list. A half-filled card from an older detection can never outrank —
-    or outlive — the working charger for the same box (weindler: the old
-    card stayed first, so it was the primary and could not be removed).
-    The caller removes displaced ids from ``entry.data`` too.
-
-    ``fold_same_box`` (#1054 follow-up): an incoming charger under a NEW id
-    that is a copy of an existing one (``_same_box_as``) is merged into
-    it. Only the set_option service asks for this — the create button's
-    path; the start-up heal never folds, so an upgrade with the same box
-    saved twice under two ids keeps both for the user to sort out.
+    (#1054) One charger per device is decided in ONE place: the charger
+    refs (``charger_refs.apply_legacy_edit``) at the next start. This merge
+    only keeps siblings — it no longer folds or displaces by guess.
 
     Built for the set_option service path so a partial submit from the
     Config card (one charger's worth of fields) can never drop sibling
@@ -674,34 +630,15 @@ def _merge_ev_chargers_by_id(
     Pure function — no I/O, no HA dependencies. Tested in
     ``tests/test_set_option_smart_merge.py``.
     """
-    from .hardware_detection import charger_entity_ids, charger_is_complete
-
     incoming_by_id: dict[str, dict] = {}
     new_ids: list[str] = []
     existing_ids = {
         c.get("id") for c in (existing or []) if isinstance(c, dict)
     }
-    existing_fp = [(c.get("id"), charger_entity_ids(c))
-                   for c in (existing or [])
-                   if isinstance(c, dict) and c.get("id")]
     for inc in incoming or []:
         if not isinstance(inc, dict):
             continue
         cid = inc.get("id")
-        if fold_same_box and cid and cid not in existing_ids:
-            # (#1054 follow-up) The same box under a new id — the card
-            # minted ``<id>_1`` for every further "create this charger"
-            # click — folds into the charger it is a copy of. A service is
-            # not an identity (two KEBAs answer to the same one), so a
-            # skeleton with no entities stays new; so does a charger that
-            # merely shares one entity.
-            same = _same_box_as(str(cid), charger_entity_ids(inc), existing_fp)
-            if same is not None:
-                _LOGGER.info(
-                    "ev_chargers merge: %s points at the entities of %s — "
-                    "folded into it, not added twice", cid, same)
-                cid = same
-                inc = {**inc, "id": cid}
         if not cid:
             # Id-less entries are untargetable ghosts: per-charger writes
             # match on ``id``, and at registration a ghost gets assigned a
@@ -721,30 +658,6 @@ def _merge_ev_chargers_by_id(
             if cid not in existing_ids:
                 new_ids.append(cid)
 
-    # (#1054 round 3) A complete charger displaces the incomplete cards
-    # of its own device. Its place in the list is the first displaced
-    # card's, so a primary stays a primary.
-    displaced_by: dict[str, str] = {}
-    if fold_same_box and device_of is not None:
-        for cid, inc in incoming_by_id.items():
-            if not charger_is_complete(inc):
-                continue
-            its_devices = _devices_of(inc, device_of)
-            if len(its_devices) != 1:
-                continue
-            for c in existing or []:
-                if not isinstance(c, dict) or not c.get("id"):
-                    continue
-                oid = c["id"]
-                if oid == cid or oid in displaced_by or charger_is_complete(c):
-                    continue
-                theirs = _devices_of(c, device_of)
-                if theirs and theirs == its_devices:
-                    displaced_by[oid] = cid
-                    _LOGGER.info(
-                        "ev_chargers merge: %s is an incomplete card for the "
-                        "device of %s — replaced by it", oid, cid)
-
     # EXISTING order is the output order (#485 G2): charger list order
     # is load-bearing — index 0 is the fleet primary for the strategy
     # sensors and default surplus priorities derive from the position.
@@ -758,15 +671,6 @@ def _merge_ev_chargers_by_id(
             continue
         cid = c.get("id")
         if not cid or cid in merged_ids:
-            continue
-        if cid in displaced_by:
-            winner = displaced_by[cid]
-            if winner in new_ids and winner not in merged_ids:
-                fresh = dict(incoming_by_id[winner])
-                forget_on_mode_write(fresh, "charge_mode", fresh.get("charge_mode"))
-                merged.append(fresh)
-                merged_ids.add(winner)
-                new_ids.remove(winner)
             continue
         base = dict(c)
         if cid in incoming_by_id:
@@ -2424,24 +2328,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     # entry.data before the merged config is evaluated, so the reseed (which
     # only fires when the merged config has no chargers at all) never plants
     # its single ``id: "ev_charger"`` entry on top of a heal-able install.
-    if "ev_chargers" in (entry.options or {}):
-        _healed = _heal_ev_chargers_options(
-            (entry.data or {}).get("ev_chargers"),
-            entry.options.get("ev_chargers"),
-        )
-        if _healed is not None:
-            _LOGGER.warning(
-                "Healed ev_chargers options list: stored ids %s -> healed ids %s "
-                "(data-side ids: %s). See #462/#464.",
-                [c.get("id") for c in (entry.options.get("ev_chargers") or [])
-                 if isinstance(c, dict)],
-                [c.get("id") for c in _healed],
-                [c.get("id") for c in ((entry.data or {}).get("ev_chargers") or [])
-                 if isinstance(c, dict)],
-            )
-            hass.config_entries.async_update_entry(
-                entry, options={**entry.options, "ev_chargers": _healed},
-            )
+    # (#1054) A charger is a DEVICE reference; the crawler fills in its
+    # roles. ``charger_refs.async_reconcile`` replaces the #462/#464 heal:
+    # first start → the old data/options cards become refs (one per device,
+    # a half card folded into the complete one); later starts fold any
+    # change a writer made to the legacy ``options.ev_chargers`` copy and
+    # resolve every ref against the crawler's live answer. ``entry.data``
+    # keeps no charger list, so a removed charger cannot be healed back.
+    # Runs before full_config is built, as the heal did (#476 ordering).
+    try:
+        from .charger_refs import async_reconcile as _reconcile_charger_refs
+        _reconcile_charger_refs(hass, entry)
+    except Exception:  # noqa: BLE001 — the stores stay as they were
+        _LOGGER.exception("charger refs: reconcile failed, chargers unchanged")
 
     # (#886) Repair a charger persisted with its OFFLINE fallback register as
     # ev_current_control_entity (pre-fix JuiceBox detection bound
@@ -2695,8 +2594,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
         # Build charger config list from config + auto-discovery
         ev_chargers_config = list(full_config.get("ev_chargers") or [])
 
-        # Auto-discover if no chargers configured
-        if not ev_chargers_config:
+        # Auto-discover if no chargers configured — only on an install that
+        # never had a charger list. (#1054) Once charger refs exist, an empty
+        # list is the user's answer: they removed their last charger, and a
+        # silent re-discovery put one back (HA-TEST 11.10: X on the go-e, the
+        # next start planted the KEBA). The crawler still OFFERS it.
+        from .charger_refs import REFS_KEY as _REFS_KEY
+        if not ev_chargers_config and _REFS_KEY not in (entry.options or {}):
             ev_auto = {}
             if coordinator._device_registry:
                 ev_auto = coordinator._device_registry.discover_ev_charger()
@@ -5919,38 +5823,17 @@ async def _async_register_phase_services(
         # and lose the existing chargers on next reload. Caught by
         # ``test_set_option_ev_chargers_partial_submit_preserves_sibling``
         # in the test_services_real.py framework tests.
-        pending_data = None
         if isinstance(options.get("ev_chargers"), list):
             existing_list = (
                 (target_entry.options or {}).get("ev_chargers")
                 or (target_entry.data or {}).get("ev_chargers")
                 or []
             )
-            from homeassistant.helpers import entity_registry as _er
-            _reg = _er.async_get(hass)
-
-            def _device_of(eid: str):
-                ent = _reg.async_get(eid)
-                return getattr(ent, "device_id", None) if ent else None
-
-            new_list = _merge_ev_chargers_by_id(
-                existing_list, options["ev_chargers"], fold_same_box=True,
-                device_of=_device_of,
-            )
-            options = {**options, "ev_chargers": new_list}
-            # (#1054 round 3) When the merge replaced a card, entry.data
-            # gets the same list. Pruning data alone is not enough: the
-            # start-up heal unions the stores by id AND puts them in data's
-            # order, so the old card came back — or the new charger lost
-            # its place as the primary.
-            _kept = {c.get("id") for c in new_list if isinstance(c, dict)}
-            _gone = [c.get("id") for c in existing_list
-                     if isinstance(c, dict) and c.get("id")
-                     and c.get("id") not in _kept]
-            if _gone and isinstance((target_entry.data or {}).get("ev_chargers"), list):
-                # written with the options below — one entry write, one reload
-                pending_data = {**(target_entry.data or {}),
-                                "ev_chargers": [dict(c) for c in new_list]}
+            options = {
+                **options,
+                "ev_chargers": _merge_ev_chargers_by_id(
+                    existing_list, options["ev_chargers"]),
+            }
 
         merged = {**(target_entry.options or {}), **options}
         if merged == (target_entry.options or {}):
@@ -6134,7 +6017,6 @@ async def _async_register_phase_services(
                     coordinator._skip_options_reload = dict(direct_merged)
                 hass.config_entries.async_update_entry(
                     target_entry, options=direct_merged,
-                    **({"data": pending_data} if pending_data is not None else {}),
                 )
                 await hass.config_entries.async_reload(target_entry.entry_id)
 
@@ -6901,6 +6783,35 @@ async def _async_register_phase_services(
                 "data": _chargers_brief(target.data),
                 "options": _chargers_brief(target.options),
             }
+            # (#1054) What is stored (which device, what the user set) and
+            # what the crawler answers for that device right now — so a
+            # report shows both sides of every charger role.
+            try:
+                from .charger_refs import REFS_KEY, ROLE_KEYS, live_charger_roles
+                refs = (target.options or {}).get(REFS_KEY)
+                if isinstance(refs, list):
+                    live = live_charger_roles(hass)
+                    payload["ev_charger_refs"] = [
+                        {
+                            "id": r.get("id"),
+                            "device_id": r.get("device_id"),
+                            "connector": (r.get("settings") or {}).get("connector"),
+                            "stored_complete": r.get("stored_complete"),
+                            "role_source": {
+                                role: ("you" if role in (r.get("overrides") or {})
+                                       else "cleared" if role in (r.get("cleared") or ())
+                                       else "crawler")
+                                for role in sorted(ROLE_KEYS)
+                                if role in (r.get("overrides") or {})
+                                or role in (r.get("cleared") or ())
+                                or role in (r.get("found") or {})
+                            },
+                            "crawler_now": live.get(r.get("device_id")) or {},
+                        }
+                        for r in refs if isinstance(r, dict)
+                    ]
+            except Exception as exc:  # noqa: BLE001 — a diagnose never raises
+                payload["ev_charger_refs"] = {"error": str(exc)}
 
             # #548 actuation truth — the load-bearing facts for "SEM says
             # stop but the charger keeps charging": per charger, the adapter's

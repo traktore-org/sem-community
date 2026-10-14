@@ -22,6 +22,7 @@ import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semDefineCard, semCardSurfaceCSS } from '../base/sem-shared.js';
 import { priceLevelKey } from '../util/price-level.js';
 import { chargerAddPlan, detectRowLabelKey, isPowerEntity } from '../util/detect-rows.js';
+import { roleSource, showsRoleLegend } from '../util/role-source.js';
 
 // Section index — order = visual order in the rendered tab. Each entry
 // carries a colour-accent that matches the section icon, mirroring the
@@ -945,6 +946,7 @@ class SEMConfigCard extends SEMLitBase {
                                 ?disabled=${this._chargerBusy}
                                 @click=${() => { if (!this._chargerBusy) { this._pendingRemove = cid; this.requestUpdate(); } }}>✕</button>`}
                     </div>
+                    ${this._renderRoleLegend(cid)}
                     ${this._pendingRemove === cid ? html`
                         <div class="charger-remove-confirm">
                             <span>${this._t('config_ev_remove_confirm')}</span>
@@ -1985,6 +1987,30 @@ class SEMConfigCard extends SEMLitBase {
         `;
     }
 
+    // (#1054) Where this charger role comes from: detected on the device,
+    // set by you (with the detected one to go back to), or not found. A
+    // device-less charger shows nothing - SEM does not ask the crawler.
+    _roleChip(cid, key, onChange) {
+        const src = roleSource(this._options, cid, key);
+        if (!src.kind) return nothing;
+        const label = src.kind === 'you' ? this._t('config_role_you')
+            : src.kind === 'none' ? this._t('config_role_none')
+            : this._t('config_role_detected');
+        return html`
+            <span class="src-chip ${src.kind}">${label}</span>
+            ${src.kind === 'you' && src.detected ? html`
+                <span class="src-sub">${this._t('config_role_detected_was')} ${src.detected}<a class="src-use"
+                    @click=${() => onChange(src.detected)}>${this._t('config_role_use_detected')}</a></span>` : nothing}`;
+    }
+
+    _renderRoleLegend(cid) {
+        if (!showsRoleLegend(this._options, cid)) return nothing;
+        return html`
+            <div class="src-legend">${this._t('config_role_legend_lead')}
+                <span class="src-chip detected">${this._t('config_role_detected')}</span> ${this._t('config_role_legend_detected')}
+                <span class="src-chip you">${this._t('config_role_you')}</span> ${this._t('config_role_legend_you')}</div>`;
+    }
+
     _renderPickerNested(chargerIndex, cid, chargerKey, labelKey, domain, deviceClass, opts, helpKey) {
         const chargers = opts.ev_chargers || [];
         const cur = chargers[chargerIndex]?.[chargerKey] || '';
@@ -1996,7 +2022,7 @@ class SEMConfigCard extends SEMLitBase {
         return html`
             <div class="picker-cell">
                 <div class="picker-row">
-                    <span class="picker-label">${this._t(labelKey)}</span>
+                    <span class="picker-label">${this._t(labelKey)}${this._roleChip(cid, chargerKey, onChange)}</span>
                     <ha-entity-picker
                         .hass=${this._hass}
                         .value=${cur}
@@ -3690,6 +3716,14 @@ class SEMConfigCard extends SEMLitBase {
                     font-size: 14px; font-weight: 500;
                     min-width: 150px; flex-shrink: 0;
                 }
+                .src-chip { display: inline-flex; align-items: center; margin-left: 8px; padding: 1px 8px;
+                    border-radius: 10px; font-size: 11px; font-weight: 500; vertical-align: middle; }
+                .src-chip.detected { background: rgba(141,200,146,.18); color: #5f9e65; }
+                .src-chip.you { background: rgba(72,143,194,.18); color: #488fc2; }
+                .src-chip.none { background: rgba(160,160,160,.15); color: #9e9e9e; }
+                .src-sub { display: block; font-size: 11px; opacity: .75; margin-top: 2px; font-weight: 400; }
+                .src-use { color: #488fc2; cursor: pointer; text-decoration: underline; margin-left: 6px; }
+                .src-legend { font-size: 12px; opacity: .85; margin: 4px 0 10px; }
                 .picker-row ha-entity-picker { flex: 1; min-width: 0; }
                 .save-status {
                     font-size: 11px; padding: 2px 0 0 154px;

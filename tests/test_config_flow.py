@@ -525,8 +525,12 @@ class TestSolarEnergyManagementConfigFlow:
         (#990, tests/test_990_no_charger_dialog.py)."""
         options_flow = OptionsFlowHandler(config_entry)
         options_flow.hass = mock_hass
+        # (#1054) a charger whose page can be submitted — a primary missing
+        # a required field opens on the charger list instead
         config_entry.options = {"ev_chargers": [{
             "id": "ev_charger", "name": "Box",
+            "ev_connected_sensor": "binary_sensor.plug",
+            "ev_charging_sensor": "binary_sensor.charging",
             "ev_charging_power_sensor": "sensor.ev_power"}]}
 
         with patch.object(
