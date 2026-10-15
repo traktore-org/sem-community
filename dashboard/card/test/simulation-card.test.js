@@ -144,6 +144,7 @@ test('start sends the picked days and the form; then polls', async () => {
     assert.deepEqual(start.days, ['2026-10-01']);
     assert.deepEqual(start.params, {
         capacity_kwh: 20, reserve_pct: 20, peak_limit_kw: null, import_rate: 'recorded', export_rate: 0.08,
+        battery_mode: 'auto', ev_mode: 'recorded',
     });
     assert.equal(pollTimers().length, 1);
     leave(el);
@@ -186,5 +187,32 @@ test('stop cancels and reads the result of what ran', async () => {
     assert.equal(count(hass, 'cancel'), 1);
     assert.equal(count(hass, 'result'), 1);
     assert.equal(pollTimers().length, 0);
+    leave(el);
+});
+
+test('own settings off by more than 5 %: no what-if numbers, the reason instead', async () => {
+    const el = await mount(fakeHass());
+    const asked = [];
+    el._t = (k) => { asked.push(k); return k; };
+    el._result = { run_id: 'r1', currency: 'CHF', calibrated: false,
+        calibration: { calibrated: false, error_pct: 12.3 }, days: [], per_tag: {}, total: { days: 3 } };
+    el._renderResults();
+    assert.ok(asked.includes('sim_cant_simulate'));
+    assert.ok(!asked.includes('sim_col_actual'));
+    asked.length = 0;
+    el._result = { ...el._result, calibrated: true, calibration: { calibrated: true, error_pct: 1.0 },
+        stored_energy: { kwh: 2.5, value: 0.8 }, ev: { moved_kwh: 4, not_delivered_kwh: 1 } };
+    el._renderResults();
+    assert.ok(asked.includes('sim_col_actual'));
+    assert.ok(asked.includes('sim_stored_end') && asked.includes('sim_ev_moved'));
+    leave(el);
+});
+
+test('a month picks its days', async () => {
+    const el = await mount(fakeHass());
+    el._pickMonth('2026-10');
+    assert.deepEqual([...el._selected], ['2026-10-01']);
+    el._pickMonth('');
+    assert.deepEqual([...el._selected], ['2026-10-01']);
     leave(el);
 });

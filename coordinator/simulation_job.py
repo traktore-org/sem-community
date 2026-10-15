@@ -7,6 +7,18 @@ sensors, found in the entity registry), one ``HourlyDay``, one
 ``simulate_day``, one small row kept — then the day is dropped and the
 loop yields to the event loop. Only one day's hours are ever held.
 
+The days chain: the simulated pack carries from one day to the next
+(``PeriodChain``); a gap in the dates starts the pack again from the
+recorded SOC. What the simulated pack holds more or less than the real
+one at the end is valued once, on its own line (``stored_energy``).
+
+The calibration check (#1083 accuracy). Before a what-if is believed, the
+same days run with the install's OWN settings, in the same walk (one day
+resident still). If that misses the real cost by more than
+``CALIBRATION_MAX_PCT`` of the money moved, the result carries
+``calibrated: false`` and the measured error, and the card shows that this
+period cannot be simulated reliably instead of what-if numbers.
+
 A day the recorder cannot answer for is skipped with a reason; it never
 stops the run. The finished run (or what a stop left of it, flagged) goes
 to the daily store under ``simulation_runs`` — never an entity attribute.
@@ -23,8 +35,9 @@ from ..analytics.simulation.battery_sim import (
     DEFAULT_EXPORT_RATE,
     DEFAULT_IMPORT_RATE,
     DEFAULTS_TAKEN,
+    MODEL_DECISIONS,
+    PeriodChain,
     SimParams,
-    simulate_day,
 )
 from ..analytics.simulation.hourly_day import CORE_ROLES, HourlyDay
 from ..analytics.simulation.summary import summarise
@@ -32,10 +45,13 @@ from .day_tag_store import BACKFILL_DAYS, BACKFILL_ROLES, simulation_tab_on
 
 _LOGGER = logging.getLogger(__name__)
 
-#: at most this many days in one run
-MAX_DAYS = 90
+#: at most this many days in one run (a year, one day resident)
+MAX_DAYS = 365
 #: the days the tab offers
 OFFERED_DAYS = BACKFILL_DAYS
+#: the own settings must give back the real cost within this share of the
+#: money moved (import cost + export revenue), or no what-if is shown
+CALIBRATION_MAX_PCT = 5.0
 
 
 class SimulationError(Exception):
@@ -65,7 +81,44 @@ def params_dict(params: SimParams) -> Dict[str, Any]:
         "max_charge_w": params.max_charge_w,
         "max_discharge_w": params.max_discharge_w,
         "roundtrip": params.roundtrip,
+        "battery_mode": params.battery_mode,
+        "ev_mode": params.ev_mode,
     }
+
+
+class Calibration:
+    """The own settings against the real cost, day by day."""
+
+    def __init__(self) -> None:
+        self.days = 0
+        self.actual = 0.0
+        self.simulated = 0.0
+        self.moved = 0.0
+
+    def add(self, own) -> None:
+        a = own.actual
+        self.days += 1
+        self.actual += float(own.actual_cost)
+        self.simulated += float(own.simulated_cost)
+        self.moved += abs(float(a.get("import_cost", 0.0))) + abs(
+            float(a.get("export_revenue", 0.0)))
+
+    @property
+    def error_pct(self) -> Optional[float]:
+        if self.days == 0 or self.moved <= 0:
+            return None
+        return 100.0 * abs(self.simulated - self.actual) / self.moved
+
+    def as_dict(self) -> Dict[str, Any]:
+        err = self.error_pct
+        return {
+            "calibrated": err is not None and err <= CALIBRATION_MAX_PCT,
+            "error_pct": None if err is None else round(err, 1),
+            "max_pct": CALIBRATION_MAX_PCT,
+            "days": self.days,
+            "actual": round(self.actual, 2),
+            "own_simulated": round(self.simulated, 2),
+        }
 
 
 class SimulationJob:
@@ -114,6 +167,8 @@ class SimulationJob:
                                          DEFAULT_IMPORT_RATE)),
             "export_rate": float(export if export is not None
                                  else DEFAULT_EXPORT_RATE),
+            "battery_mode": str(cfg.get("battery_mode") or "auto"),
+            "ev_mode": "recorded",
             "currency": self._currency(),
         }
 
@@ -182,6 +237,8 @@ class SimulationJob:
             "run_id": run_id, "started_at": started, "finished_at": None,
             "status": "running", "params": params_dict(params),
             "days": [], "results": [], "skipped": [],
+            "stored_energy": {"kwh": 0.0, "value": 0.0},
+            "calibration": None,
         }
         self.progress = {**_blank_progress(), "running": True,
                          "run_id": run_id, "status": "running",
@@ -204,6 +261,14 @@ class SimulationJob:
         cfg = self.install_config
         tz = dt_util.get_default_time_zone()
         ids = self._entity_ids()
+        chain = PeriodChain(params, cfg, MODEL_DECISIONS)
+        own_params = SimParams.from_config(cfg)
+        # the own settings, walked beside the what-if — the same chain
+        # when the what-if IS the own settings
+        own = None if params == own_params else PeriodChain(
+            own_params, cfg, MODEL_DECISIONS)
+        calib = Calibration()
+        run["_chains"] = (chain, own, calib)
         try:
             for d in dates:
                 reason = None
@@ -271,8 +336,12 @@ class SimulationJob:
             return "no hourly statistics for this day: " + ", ".join(empty)
         hourly = HourlyDay.from_statistics(rows, date=d, tags=tags, tz=tz)
         del rows, stats
-        result = simulate_day(hourly, params, cfg)
-        del hourly
+        chain, own, calib = run["_chains"]
+        result = chain.add(hourly)
+        own_res = own.add(hourly) if own is not None else result
+        if not hourly.counters_disagree:
+            calib.add(own_res)
+        del hourly, own_res
         result.hours = []           # the hour rows are not kept
         run["results"].append(result)
         return None
@@ -283,6 +352,16 @@ class SimulationJob:
         if run is None or run.get("status") != "running":
             return
         run["status"] = status
+        chains = run.pop("_chains", None)
+        if chains is not None:
+            chain, own, calib = chains
+            chain.finish()
+            if own is not None:
+                own.finish()
+            run["stored_energy"] = {
+                "kwh": round(chain.stored_energy_kwh, 2),
+                "value": round(chain.stored_energy_value, 2)}
+            run["calibration"] = calib.as_dict()
         try:
             self._store(run, status)
         finally:
@@ -316,9 +395,11 @@ class SimulationJob:
                 "actual_cost": row["actual_cost"],
                 "simulated_cost": row["simulated_cost"],
                 "delta": row["delta"],
-                "stored_energy_value": round(
-                    float(getattr(res, "stored_energy_value", 0.0)), 2),
                 "kwh_over_limit": row["kwh_over_limit"],
+                "ev_moved_kwh": round(
+                    float(getattr(res, "ev_moved_kwh", 0.0)), 2),
+                "ev_not_delivered_kwh": round(
+                    float(getattr(res, "ev_not_delivered_kwh", 0.0)), 2),
                 "indicative": row["indicative"],
                 # the defaults every day takes are said once, below
                 "reasons": [r for r in row["indicative_reasons"]
@@ -330,9 +411,22 @@ class SimulationJob:
                     "simulated": t["simulated_cost"], "delta": t["delta"]}
 
         o = summary["overall"]
+        calib = run.get("calibration") or Calibration().as_dict()
+        ev_moved = sum(float(getattr(r, "ev_moved_kwh", 0.0)) for r in results)
+        ev_short = sum(float(getattr(r, "ev_not_delivered_kwh", 0.0))
+                       for r in results)
+        ev_short_value = sum(float(getattr(r, "ev_not_delivered_value", 0.0))
+                             for r in results)
         return {
             "modelled": True,
             "currency": self._currency(),
+            "calibrated": bool(calib.get("calibrated")),
+            "calibration": calib,
+            "stored_energy": dict(run.get("stored_energy")
+                                  or {"kwh": 0.0, "value": 0.0}),
+            "ev": {"moved_kwh": round(ev_moved, 2),
+                   "not_delivered_kwh": round(ev_short, 2),
+                   "not_delivered_value": round(ev_short_value, 2)},
             "days": days,
             "per_tag": {tag: _short(t) for tag, t in summary["by_tag"].items()},
             "total": {**_short(o), "kwh_over_limit": o["kwh_over_limit"],

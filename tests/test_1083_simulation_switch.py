@@ -246,10 +246,10 @@ def test_backfill_skips_a_day_already_tagged():
     assert kept == {"date": days[0].isoformat(), "tags": ["grey"]}
 
 
-def test_backfill_is_capped_at_90_days():
+def test_backfill_is_capped_at_a_year():
     tg, st, calls = _backfill_tagger({})
     asyncio.run(tg.async_backfill(days=500))
-    assert len(calls) == 90
+    assert len(calls) == 365
 
 
 def test_a_failed_read_stores_nothing():

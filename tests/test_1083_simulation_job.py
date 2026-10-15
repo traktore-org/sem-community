@@ -6,6 +6,7 @@ a stop keeps what ran (flagged), the last 3 runs stored. The card talks to
 it over seven websocket commands; every result says it is modelled.
 """
 import asyncio
+import sys
 import base64
 import copy
 import gc
@@ -86,12 +87,17 @@ def _rows(date):
     day = datetime.fromisoformat(date).replace(tzinfo=timezone.utc)
     out = {}
     for role, value in (("solar", None), ("grid_import", 0.1),
-                        ("grid_export", 0.0), ("battery_charge", 0.0),
+                        ("grid_export", "surplus"), ("battery_charge", 0.0),
                         ("battery_discharge", 0.0), ("ev", 0.0),
                         ("home", 0.4)):
+        def val(h, value=value):
+            if value is None:
+                return SOLAR.get(h, 0.0)
+            if value == "surplus":         # the meters close the hour
+                return max(0.0, SOLAR.get(h, 0.0) - 0.3)
+            return value
         out[f"sensor.sem_{role}"] = [
-            {"start": day + timedelta(hours=h),
-             "change": SOLAR.get(h, 0.0) if value is None else value}
+            {"start": day + timedelta(hours=h), "change": val(h)}
             for h in range(24)]
     for role, value in (("soc", 50.0), ("import_rate", 0.30),
                         ("export_rate", 0.08)):
@@ -134,7 +140,8 @@ def _entity_id(key):
             "daily_ev_energy": "ev", "daily_home_energy": "home",
             "battery_soc": "soc",
             "tariff_current_import_rate": "import_rate",
-            "tariff_current_export_rate": "export_rate"}[key]
+            "tariff_current_export_rate": "export_rate",
+            "forecast_today_kwh": "forecast"}[key]
     return f"sensor.sem_{role}"
 
 
@@ -188,7 +195,13 @@ async def test_three_days_three_rows_progress_done_and_stored():
     assert [d["date"] for d in res["days"]] == DATES
     row = res["days"][0]
     assert set(row) >= {"date", "tags", "actual_cost", "simulated_cost",
-                        "delta", "stored_energy_value", "indicative", "reasons"}
+                        "delta", "ev_moved_kwh", "ev_not_delivered_kwh",
+                        "indicative", "reasons"}
+    # (accuracy) the pack's end is valued once, on its own line, and the
+    # own settings were checked against the real cost
+    assert set(res["stored_energy"]) == {"kwh", "value"}
+    assert res["calibration"]["days"] == 3
+    assert res["calibrated"] is res["calibration"]["calibrated"]
     # the defaults every day takes are said once, not per day
     assert not set(row["reasons"]) & set(DEFAULTS_TAKEN)
     assert res["defaults_taken"] == list(DEFAULTS_TAKEN)
@@ -211,11 +224,12 @@ async def test_last_three_runs_kept():
     assert job.run(ids[0]) is None
 
 
-def test_storage_caps_day_rows_at_90():
+def test_storage_caps_day_rows_at_a_year():
     st = _storage()
     st.put_simulation_run({"run_id": "a", "result": {
-        "days": [{"date": str(i)} for i in range(120)]}})
-    assert len(st.get_simulation_runs()[0]["result"]["days"]) == 90
+        "days": [{"date": str(i)} for i in range(400)]}})
+    assert len(st.get_simulation_runs()[0]["result"]["days"]) == 365
+    assert MAX_DAYS == 365
 
 
 @pytest.mark.asyncio
@@ -427,7 +441,8 @@ async def test_defaults_and_days():
     job, _, _ = _job(tags=tags)
     d = job.defaults()
     assert d == {"capacity_kwh": 10.0, "reserve_pct": 10.0, "peak_limit_kw": 6.0,
-                 "import_rate": 0.30, "export_rate": 0.08, "currency": "CHF"}
+                 "import_rate": 0.30, "export_rate": 0.08,
+                 "battery_mode": "auto", "ev_mode": "recorded", "currency": "CHF"}
     job2, _, _ = _job(cfg={"battery_capacity_kwh": 5.0})
     assert job2.defaults()["peak_limit_kw"] is None
     days = job.days()
@@ -439,12 +454,12 @@ async def test_defaults_and_days():
 
 
 @pytest.mark.asyncio
-async def test_days_offers_the_last_90():
-    tags = [_tag((datetime(2026, 5, 1) + timedelta(days=i)).date().isoformat())
-            for i in range(120)]
+async def test_days_offers_the_last_year():
+    tags = [_tag((datetime(2025, 9, 1) + timedelta(days=i)).date().isoformat())
+            for i in range(400)]
     job, _, _ = _job(tags=tags)
     days = job.days()["days"]
-    assert len(days) == 90 and days[-1]["date"] == tags[-1]["date"]
+    assert len(days) == 365 and days[-1]["date"] == tags[-1]["date"]
 
 
 # ── websocket ─────────────────────────────────────────────────────────
@@ -545,7 +560,9 @@ async def test_start_result_and_xlsx_over_websocket():
     out = _result(_call(ws.ws_xlsx, hass))
     assert out["filename"] == f"sem-simulation-{res['started_at'][:10]}.xlsx"
     sheets = _read_xlsx(base64.b64decode(out["base64"]))
-    assert list(sheets) == ["Days", "Totals"]
+    assert list(sheets) == ["Days", "Totals", "Notes"]
+    notes = {row[0][1]: row[1] for row in sheets["Notes"][1:]}
+    assert "Own settings against the real cost, % off" in notes
     head = sheets["Days"][0]
     assert head[0] == "Date" and head[-1] == "Indicative"
     assert all("(est.)" in h for h in head[3:6])
@@ -661,3 +678,60 @@ async def test_start_is_refused_while_the_tab_switch_is_off():
         job.start(DATES[:1], SimParams.from_config(CFG))
     assert err.value.code == "off"
     assert job.progress["status"] == "idle"
+
+
+# ── accuracy (#1083): chained days, the own settings checked first ────
+
+@pytest.mark.asyncio
+async def test_a_whatif_runs_the_own_settings_beside_it():
+    job, storage, _ = _job()
+    job.start(DATES, _params(capacity_kwh=20.0))
+    await _finish(job)
+    res = storage.get_simulation_runs()[0]["result"]
+    calib = res["calibration"]
+    assert calib["days"] == 3
+    assert calib["error_pct"] is not None
+    assert res["calibrated"] is (calib["error_pct"] <= calib["max_pct"])
+    assert set(res["ev"]) == {"moved_kwh", "not_delivered_kwh",
+                              "not_delivered_value"}
+
+
+@pytest.mark.asyncio
+async def test_own_settings_far_from_the_bill_say_so():
+    # The recorded house bought 2 kWh an hour at night with a full pack:
+    # the own settings (the pack covers the house) cannot give that back.
+    real = _rows
+
+    def lossy(date):
+        out = real(date)
+        for row in out["sensor.sem_grid_import"]:
+            row["change"] = 2.0
+        for row in out["sensor.sem_home"]:
+            row["change"] = 2.0
+        for row in out["sensor.sem_soc"]:
+            row["mean"] = 95.0
+        return out
+
+    with patch.object(sys.modules[__name__], "_rows", lossy):
+        job, storage, _ = _job()
+        job.start(DATES, _params())
+        await _finish(job)
+    res = storage.get_simulation_runs()[0]["result"]
+    assert res["calibrated"] is False
+    assert res["calibration"]["error_pct"] > 5.0
+
+
+@pytest.mark.asyncio
+async def test_modes_reach_the_run_over_websocket():
+    job, _, _ = _job()
+    hass = _ws_hass(job)
+    msg = {**START, "params": {**START["params"], "battery_mode": "off",
+                               "ev_mode": "solar_only"}}
+    _result(_call(ws.ws_start, hass, **msg))
+    await _finish(job)
+    res = _result(_call(ws.ws_result, hass))
+    assert res["params"]["battery_mode"] == "off"
+    assert res["params"]["ev_mode"] == "solar_only"
+    bad = {**START, "params": {**START["params"], "ev_mode": "warp"}}
+    with pytest.raises(Exception):
+        ws.ws_start._ws_schema({"type": ws.WS_START, "id": 1, **bad})

@@ -104,7 +104,10 @@ DAYS = [("2026-10-07", DAY_1, TOTALS_1), ("2026-10-08", DAY_2, TOTALS_2)]
 def test_hours_add_up_to_the_counter(date, raw, totals):
     day = _read(date, raw)
     for role in FLOW_ROLES:
-        assert day.total(role) == pytest.approx(totals[role], abs=0.01), role
+        # the house and the solar close each hour on the meters, so their
+        # day may move a few Wh; the meters' own roles do not
+        tol = 0.05 if role in ("home", "solar") else 0.01
+        assert day.total(role) == pytest.approx(totals[role], abs=tol), role
         assert min(getattr(day, role)) >= 0.0, role
 
 
@@ -113,11 +116,11 @@ def test_a_step_back_is_no_missing_hour(date, raw, totals):
     assert _read(date, raw).missing_hours == []
 
 
-def test_small_step_backs_net_against_the_next_hour():
+def test_small_step_backs_net_against_the_hour_before():
     day = _read("2026-10-07", DAY_1)
     assert day.grid_import[4] == 0.0
-    assert day.grid_import[5] == pytest.approx(0.0)       # 0.02 − 0.02
-    assert day.grid_import[6] == pytest.approx(0.02)
+    assert day.grid_import[3] == pytest.approx(0.0)       # 0.02 − 0.02
+    assert day.grid_import[5] == pytest.approx(0.02)
     assert day.notes == []
 
 
@@ -135,9 +138,9 @@ def test_a_late_reset_is_taken_back_and_said():
 
 def test_a_row_with_no_change_is_zero_not_missing():
     rows = {role: _rows("2026-10-07", DAY_1[role]) for role in FLOW_ROLES}
-    rows["home"][3]["change"] = None
+    rows["grid_export"][3]["change"] = None
     day = HourlyDay.from_statistics(rows, date="2026-10-07", tz=TZ)
-    assert day.home[3] == 0.0
+    assert day.grid_export[3] == 0.0
     assert day.missing_hours == []
 
 

@@ -26,7 +26,9 @@ Rules (each one plain, each one pinned by a test from a real day):
   forecast; else ``mixed``.
 * **snow** — PV health's own snow flag for the day, passed in, never
   recomputed here (one rule, one place).
-* **car** — at least one finished charging session that day.
+* **car** — the day's finished charging sessions add up to at least
+  ``CAR_MIN_KWH``. A session of a few Wh (a car topping up its 12 V
+  battery, a counter rounding) is no car day (PROD 03.10.2026: 0.49 kWh).
 * **prices** — ``negative`` if any slot was below 0, ``cheap`` if the
   day's cheapest slot reached the cheap threshold. Nothing on a flat
   tariff: a flat tariff has no comparison to make (#994).
@@ -62,6 +64,8 @@ HOURLY_SUNNY_SHARE = 0.85
 ENVELOPE_HALF_WIDTH = 15
 #: hourly curve: hours below this share of the peak hour are dawn or dusk
 HOURLY_LIT_SHARE = 0.10
+#: a car day: the day's sessions add up to at least this (kWh)
+CAR_MIN_KWH = 1.0
 #: hourly curve: an hour under this share of its neighbours' mean is a dip
 #: (a cloud bank that stayed most of an hour)
 HOURLY_DIP_SHARE = 0.6
@@ -272,7 +276,7 @@ def tag_day(*, date: str,
         date=str(date),
         sky=sky,
         snow=bool(snow),
-        car=bool(sessions),
+        car=sum(sessions) >= CAR_MIN_KWH,
         car_kwh=sum(sessions),
         prices=tag_prices(prices, cheap_threshold),
         gap=bool(why),

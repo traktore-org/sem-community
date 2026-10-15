@@ -23,7 +23,7 @@ import logging
 from datetime import date as _date, datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
-from ..analytics.day_tags import clear_sky_envelope, tag_day
+from ..analytics.day_tags import CAR_MIN_KWH, clear_sky_envelope, tag_day
 from ..consts.core import CONF_DAY_TAGS, CONF_SIMULATION_TAB, DEFAULT_DAY_TAGS
 
 _LOGGER = logging.getLogger(__name__)
@@ -38,8 +38,9 @@ DARK = ("unavailable", "unknown", "")
 STEP_MIN = 5
 
 
-#: the backfill reads at most this many finished days
-BACKFILL_DAYS = 90
+#: the backfill reads at most this many finished days (a year: the
+#: Simulation tab replays up to 365, #1083)
+BACKFILL_DAYS = 365
 #: the tag rule a record was made with. 2: the backfill tags days the
 #: recorder still holds with the nightly rule, older days by the hourly
 #: curve against a clear-sky envelope. A backfilled record without it is
@@ -58,10 +59,14 @@ BACKFILL_ROLES: Dict[str, Tuple[str, str]] = {
     "soc": ("battery_soc", "mean"),
     "import_rate": ("tariff_current_import_rate", "mean"),
     "export_rate": ("tariff_current_export_rate", "mean"),
+    # (#1083 accuracy) the day's forecast as SEM held it: the night plan's
+    # input (it was never read, so the plan always ran blind)
+    "forecast": ("forecast_today_kwh", "mean"),
 }
 #: a day whose car energy reached this counts as a car day when the
-#: session history no longer reaches back that far
-BACKFILL_CAR_MIN_KWH = 0.5
+#: session history no longer reaches back that far — the same bar as a
+#: session day (``day_tags.CAR_MIN_KWH``)
+BACKFILL_CAR_MIN_KWH = CAR_MIN_KWH
 _COULD_NOT_ASK = object()
 
 
@@ -309,7 +314,7 @@ class DayTagger:
 
     async def async_backfill(self, days: int = BACKFILL_DAYS,
                              retag_backfilled: bool = False) -> int:
-        """Tag up to ``days`` (max 90) finished days, oldest first. Returns
+        """Tag up to ``days`` (max ``BACKFILL_DAYS``) finished days, oldest first. Returns
         the number of days stored.
 
         A day with a nightly record is skipped. A backfilled record is

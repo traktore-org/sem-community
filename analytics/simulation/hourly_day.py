@@ -7,9 +7,13 @@ same shape from its own recordings.
 Flows come from SEM's own daily counters (``last_reset`` at midnight), so
 an hour's ``change`` is the gross kWh of that hour. The recorder already
 takes the midnight reset out of ``change``: a negative change is the
-counter stepping back (SEM corrects itself by a few Wh), not a reset. It
-is netted against the role's next hours — then its earlier ones — so the
-day adds up to the counter's own total and no flow goes negative. A row
+counter stepping back, not a reset. It is netted against the role's
+earlier hours — latest first — then its later ones, so the day adds up to
+the counter's own total and no flow goes negative. Earlier first because
+that is what a step back undoes: PROD's car counter keeps yesterday's
+total past midnight (the recorder books it as new energy at 00:00) and
+drops it at 07:00; netting forward put that phantom charge at midnight
+and took the real one out of the morning (#1083 accuracy). A row
 that exists counts, even at 0 or with no change; only an absent row is a
 missing hour. Measurements (SOC, prices, forecast) come from the hourly
 ``mean``.
@@ -37,6 +41,7 @@ FLOW_ROLES = (SOLAR, GRID_IMPORT, GRID_EXPORT, BATTERY_CHARGE,
 SOC = "soc"
 IMPORT_RATE = "import_rate"
 EXPORT_RATE = "export_rate"
+#: today's solar forecast (SEM's ``forecast_today_kwh``) — the night plan's
 FORECAST = "forecast"
 MEAN_ROLES = (SOC, IMPORT_RATE, EXPORT_RATE, FORECAST)
 
@@ -50,6 +55,17 @@ CORE_ROLES = (SOLAR, GRID_IMPORT, GRID_EXPORT, HOME)
 #: a step back bigger than this (kWh) is no rounding fix: the day is
 #: still netted, but marked indicative with the hour and size
 STEP_BACK_NOTE_KWH = 0.5
+#: an hour whose recorded house use and the balance of the other counters
+#: (solar + import + discharge − car − export − charge) differ by more than
+#: this (kWh) has a counter that jumped (PROD 24.04.2026: 144 kWh of solar
+#: and 239 kWh of car in one hour). The day cannot be trusted.
+COUNTERS_DISAGREE_KWH = 3.0
+#: what the note of such a day starts with — the harness and the job
+#: look for it
+COUNTERS_DISAGREE = "the counters disagree"
+#: the meters close each hour (``close_hours``); a day whose house and
+#: solar counters had to move more than this (kWh) in total says so
+CLOSE_NOTE_KWH = 5.0
 
 
 def _zeros() -> List[float]:
@@ -100,6 +116,54 @@ class HourlyDay:
     @property
     def gap(self) -> bool:
         return "gap" in self.tags
+
+    @property
+    def counters_disagree(self) -> bool:
+        """An hour where a counter jumped (``COUNTERS_DISAGREE_KWH``)."""
+        return any(n.startswith(COUNTERS_DISAGREE) for n in self.notes)
+
+    def close_hours(self) -> float:
+        """Make every hour close on the meters; returns the kWh moved.
+
+        The grid meter and the battery counters say what the hour's net
+        was (export + charge − import − discharge); SEM's house figure is
+        that balance's residual anyway (``home = solar + import + discharge
+        − car − export − charge``), and the day totals agree. Hour by hour
+        they do not always: PROD's solar counter booked ~0.5 kWh an hour
+        at night for weeks (July 2026) while the meters showed the pack
+        covering the house, so a model fed the solar counter kept the pack
+        full and sold the difference. Here the house takes the residual;
+        where that is below 0 (a counter late by an hour) the solar takes
+        the rest, so the hour's net is always the meters' own."""
+        moved = 0.0
+        for h in range(HOURS):
+            rest = (self.solar[h] + self.grid_import[h]
+                    + self.battery_discharge[h] - self.ev[h]
+                    - self.grid_export[h] - self.battery_charge[h])
+            if rest >= 0:
+                moved += abs(rest - self.home[h])
+                self.home[h] = rest
+            else:
+                moved += self.home[h] - rest
+                self.home[h] = 0.0
+                self.solar[h] -= rest
+        if moved > CLOSE_NOTE_KWH:
+            self.notes.append(
+                f"the house and solar counters moved {moved:.1f} kWh to "
+                "close on the meters")
+        return moved
+
+    def _check_balance(self) -> None:
+        for h in range(HOURS):
+            rest = (self.solar[h] + self.grid_import[h]
+                    + self.battery_discharge[h] - self.ev[h]
+                    - self.grid_export[h] - self.battery_charge[h])
+            off = rest - self.home[h]
+            if abs(off) > COUNTERS_DISAGREE_KWH:
+                self.notes.append(
+                    f"{COUNTERS_DISAGREE} at {h:02d}:00 by {abs(off):.1f} kWh "
+                    "— a counter jumped")
+                return
 
     def flows(self, hour: int) -> Dict[str, float]:
         """The seven flows of one hour, in kWh."""
@@ -171,35 +235,41 @@ class HourlyDay:
                 except (TypeError, ValueError):
                     means[role][hour] = None
         forecast = next((v for v in means[FORECAST] if v is not None), None)
-        return cls(
+        day_obj = cls(
             date=day.isoformat(), tags=list(tags),
             soc_pct=means[SOC], import_rate=means[IMPORT_RATE],
             export_rate=means[EXPORT_RATE], forecast_kwh=forecast,
             missing_hours=sorted(missing), notes=notes,
             **out,
         )
+        if not missing:
+            day_obj._check_balance()
+            day_obj.close_hours()
+        return day_obj
 
 
 def _net_step_backs(raw: List[float]) -> List[float]:
     """Hourly kWh with no negative hour, adding up to ``sum(raw)`` (0 if
-    that is below 0). A step back is taken from the next hours first (the
-    counter catching up), what is left from the earlier hours, latest
-    first (a reset the counter made late)."""
-    out = _zeros()
-    debt = 0.0
+    that is below 0). A step back undoes what the counter counted before
+    it: it is taken from the earlier hours, latest first; what is left
+    from the later hours, earliest first."""
+    out = [max(0.0, kwh) for kwh in raw]
     for hour, kwh in enumerate(raw):
-        if kwh < 0:
-            debt -= kwh
+        if kwh >= 0:
             continue
-        take = min(kwh, debt)
-        out[hour] = kwh - take
-        debt -= take
-    for hour in range(HOURS - 1, -1, -1):
-        if debt <= 0:
-            break
-        take = min(out[hour], debt)
-        out[hour] -= take
-        debt -= take
+        debt = -kwh
+        for back in range(hour - 1, -1, -1):
+            if debt <= 0:
+                break
+            take = min(out[back], debt)
+            out[back] -= take
+            debt -= take
+        for fwd in range(hour + 1, HOURS):
+            if debt <= 0:
+                break
+            take = min(out[fwd], debt)
+            out[fwd] -= take
+            debt -= take
     return out
 
 

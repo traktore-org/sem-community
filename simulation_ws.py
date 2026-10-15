@@ -14,6 +14,8 @@ from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 
 from .analytics.simulation.battery_sim import SimParams
+from .analytics.simulation.ev_retime import EV_MODE_CHOICES, RECORDED
+from .consts.battery_modes import BATTERY_MODES
 from .analytics.simulation.summary import SUMMARY_TAGS
 from .const import DOMAIN
 from .consts.bounds import BOUNDS
@@ -75,9 +77,17 @@ def _params(job, raw: dict) -> SimParams:
     for key in ("import_rate", "export_rate"):
         val = raw.get(key, "recorded")
         rates[key] = val if val == "recorded" else float(val)
-    return SimParams.from_config(job.install_config, capacity_kwh=cap,
+    cfg = job.install_config
+    mode = raw.get("battery_mode")
+    # the configured mode is no change: None keeps the own settings equal
+    if not mode or mode == str(cfg.get("battery_mode") or "auto"):
+        mode = None
+    return SimParams.from_config(cfg, capacity_kwh=cap,
                                  reserve_pct=reserve,
-                                 peak_limit_kw=peak or None, **rates)
+                                 peak_limit_kw=peak or None,
+                                 battery_mode=mode,
+                                 ev_mode=str(raw.get("ev_mode") or RECORDED),
+                                 **rates)
 
 
 @websocket_api.require_admin
@@ -121,6 +131,8 @@ def ws_defaults(hass: HomeAssistant, connection, msg: dict[str, Any]) -> None:
         vol.Optional("peak_limit_kw"): vol.Any(None, _NUMBER),
         vol.Optional("import_rate", default="recorded"): _RATE,
         vol.Optional("export_rate", default="recorded"): _RATE,
+        vol.Optional("battery_mode"): vol.Any(None, vol.In(list(BATTERY_MODES))),
+        vol.Optional("ev_mode", default=RECORDED): vol.In(list(EV_MODE_CHOICES)),
     },
     vol.Optional("include_gaps", default=False): bool,
 })
@@ -213,11 +225,13 @@ def run_xlsx(run: dict) -> bytes:
     money = f" ({cur})" if cur else ""
     days = [["Date", "Tags", f"Actual cost{money}",
              f"Simulated cost{money}{EST}", f"Delta{money}{EST}",
-             f"Stored energy value{money}{EST}", "Indicative"]]
+             f"Car kWh moved{EST}", f"Car kWh not delivered{EST}",
+             "Indicative"]]
     for row in res.get("days") or []:
         days.append([_day(row.get("date")), ", ".join(row.get("tags") or []),
                      row.get("actual_cost"), row.get("simulated_cost"),
-                     row.get("delta"), row.get("stored_energy_value"),
+                     row.get("delta"), row.get("ev_moved_kwh", 0.0),
+                     row.get("ev_not_delivered_kwh", 0.0),
                      bool(row.get("indicative"))])
     totals = [["Day type", "Days", f"Actual cost{money}",
                f"Simulated cost{money}{EST}", f"Delta{money}{EST}"]]
@@ -229,7 +243,17 @@ def run_xlsx(run: dict) -> bytes:
     t = res.get("total") or {}
     totals.append(["total", t.get("days", 0), t.get("actual", 0.0),
                    t.get("simulated", 0.0), t.get("delta", 0.0)])
-    return write_workbook([("Days", days), ("Totals", totals)])
+    stored = res.get("stored_energy") or {}
+    calib = res.get("calibration") or {}
+    ev = res.get("ev") or {}
+    notes = [["What", "Value"],
+             [f"Energy in the battery at the end, kWh{EST}", stored.get("kwh")],
+             [f"Energy in the battery at the end{money}{EST}", stored.get("value")],
+             ["Own settings against the real cost, % off", calib.get("error_pct")],
+             ["Own settings reproduce the real cost", calib.get("calibrated")],
+             [f"Car kWh moved{EST}", ev.get("moved_kwh")],
+             [f"Car kWh not delivered{EST}", ev.get("not_delivered_kwh")]]
+    return write_workbook([("Days", days), ("Totals", totals), ("Notes", notes)])
 
 
 @websocket_api.require_admin

@@ -1759,7 +1759,15 @@
     "config_grid_co2_entity": "Senzor CO₂ sítě",
     "config_help_grid_co2_entity": "Najde se podle jednotky (g nebo kg CO₂ na kWh). Vyberte jen tehdy, když SEM našel špatný.",
     "config_outdoor_temperature_entity": "Venkovní teplota",
-    "config_help_outdoor_temperature_entity": "Najde se podle názvu, jinak vaše entita počasí. Vyberte jen tehdy, když SEM zvolil špatně."
+    "config_help_outdoor_temperature_entity": "Najde se podle názvu, jinak vaše entita počasí. Vyberte jen tehdy, když SEM zvolil špatně.",
+    "sim_pick_last90": "Posledních 90 dní",
+    "sim_pick_last365": "Posledních 365 dní",
+    "sim_pick_month": "Měsíc",
+    "sim_battery_mode": "Režim baterie",
+    "sim_ev_mode": "Režim nabíjení auta",
+    "sim_cant_simulate": "Toto období nelze spolehlivě simulovat: vaše vlastní nastavení se liší o {pct} %.",
+    "sim_stored_end": "Energie v baterii na konci: {kwh} kWh = {value}",
+    "sim_ev_moved": "Auto: {moved} kWh přesunuto, {short} kWh nedodáno"
   },
   "da": {
     "% of limit": "% af grænse",
@@ -3521,7 +3529,15 @@
     "config_grid_co2_entity": "Nettets CO₂-sensor",
     "config_help_grid_co2_entity": "Findes via enheden (g eller kg CO₂ pr. kWh). Vælg kun én, hvis SEM fandt den forkerte.",
     "config_outdoor_temperature_entity": "Udetemperatur",
-    "config_help_outdoor_temperature_entity": "Findes via navnet, ellers din vejr-entitet. Vælg kun én, hvis SEM valgte forkert."
+    "config_help_outdoor_temperature_entity": "Findes via navnet, ellers din vejr-entitet. Vælg kun én, hvis SEM valgte forkert.",
+    "sim_pick_last90": "Sidste 90 dage",
+    "sim_pick_last365": "Sidste 365 dage",
+    "sim_pick_month": "Måned",
+    "sim_battery_mode": "Batteritilstand",
+    "sim_ev_mode": "Bilens ladetilstand",
+    "sim_cant_simulate": "Denne periode kan ikke simuleres pålideligt: dine egne indstillinger rammer {pct} % ved siden af.",
+    "sim_stored_end": "Energi i batteriet til sidst: {kwh} kWh = {value}",
+    "sim_ev_moved": "Bil: {moved} kWh flyttet, {short} kWh ikke leveret"
   },
   "de": {
     "% of limit": "% des Limits",
@@ -5283,7 +5299,15 @@
     "config_grid_co2_entity": "CO₂-Sensor des Netzes",
     "config_help_grid_co2_entity": "Wird über die Einheit gefunden (g oder kg CO₂ pro kWh). Wähle nur einen, wenn SEM den falschen fand.",
     "config_outdoor_temperature_entity": "Aussentemperatur",
-    "config_help_outdoor_temperature_entity": "Wird über den Namen gefunden, sonst Ihre Wetter-Entität. Nur wählen, wenn SEM das falsche gewählt hat."
+    "config_help_outdoor_temperature_entity": "Wird über den Namen gefunden, sonst Ihre Wetter-Entität. Nur wählen, wenn SEM das falsche gewählt hat.",
+    "sim_pick_last90": "Letzte 90 Tage",
+    "sim_pick_last365": "Letzte 365 Tage",
+    "sim_pick_month": "Monat",
+    "sim_battery_mode": "Batteriemodus",
+    "sim_ev_mode": "Lademodus Auto",
+    "sim_cant_simulate": "Dieser Zeitraum lässt sich nicht verlässlich simulieren: Ihre eigenen Einstellungen liegen {pct} % daneben.",
+    "sim_stored_end": "Energie im Speicher am Ende: {kwh} kWh = {value}",
+    "sim_ev_moved": "Auto: {moved} kWh verschoben, {short} kWh nicht geliefert"
   },
   "en": {
     "% of limit": "% of limit",
@@ -7045,7 +7069,15 @@
     "config_grid_co2_entity": "Grid CO₂ sensor",
     "config_help_grid_co2_entity": "Found by its unit (g or kg CO₂ per kWh). Pick one only if SEM found the wrong one.",
     "config_outdoor_temperature_entity": "Outdoor temperature",
-    "config_help_outdoor_temperature_entity": "Found by its name, else your weather entity. Pick one only if SEM chose the wrong one."
+    "config_help_outdoor_temperature_entity": "Found by its name, else your weather entity. Pick one only if SEM chose the wrong one.",
+    "sim_pick_last90": "Last 90 days",
+    "sim_pick_last365": "Last 365 days",
+    "sim_pick_month": "Month",
+    "sim_battery_mode": "Battery mode",
+    "sim_ev_mode": "Car charge mode",
+    "sim_cant_simulate": "Can't simulate this period reliably: your own settings are off by {pct} %.",
+    "sim_stored_end": "Energy in the battery at the end: {kwh} kWh = {value}",
+    "sim_ev_moved": "Car: {moved} kWh moved, {short} kWh not delivered"
   },
   "es": {
     "% of limit": "% del límite",
@@ -8807,7 +8839,15 @@
     "config_grid_co2_entity": "Sensor de CO₂ de la red",
     "config_help_grid_co2_entity": "Se encuentra por su unidad (g o kg de CO₂ por kWh). Elija uno solo si SEM encontró el equivocado.",
     "config_outdoor_temperature_entity": "Temperatura exterior",
-    "config_help_outdoor_temperature_entity": "Se encuentra por su nombre; si no, tu entidad meteorológica. Elige uno solo si SEM se equivocó."
+    "config_help_outdoor_temperature_entity": "Se encuentra por su nombre; si no, tu entidad meteorológica. Elige uno solo si SEM se equivocó.",
+    "sim_pick_last90": "Últimos 90 días",
+    "sim_pick_last365": "Últimos 365 días",
+    "sim_pick_month": "Mes",
+    "sim_battery_mode": "Modo de batería",
+    "sim_ev_mode": "Modo de carga del coche",
+    "sim_cant_simulate": "No se puede simular este periodo de forma fiable: su propia configuración se desvía un {pct} %.",
+    "sim_stored_end": "Energía en la batería al final: {kwh} kWh = {value}",
+    "sim_ev_moved": "Coche: {moved} kWh movidos, {short} kWh no entregados"
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -10569,7 +10609,15 @@
     "config_grid_co2_entity": "Sähköverkon CO₂-anturi",
     "config_help_grid_co2_entity": "Löytyy yksiköstä (g tai kg CO₂ / kWh). Valitse vain, jos SEM löysi väärän.",
     "config_outdoor_temperature_entity": "Ulkolämpötila",
-    "config_help_outdoor_temperature_entity": "Löytyy nimen perusteella, muuten sääentiteettisi. Valitse vain, jos SEM valitsi väärin."
+    "config_help_outdoor_temperature_entity": "Löytyy nimen perusteella, muuten sääentiteettisi. Valitse vain, jos SEM valitsi väärin.",
+    "sim_pick_last90": "Viimeiset 90 päivää",
+    "sim_pick_last365": "Viimeiset 365 päivää",
+    "sim_pick_month": "Kuukausi",
+    "sim_battery_mode": "Akun tila",
+    "sim_ev_mode": "Auton lataustila",
+    "sim_cant_simulate": "Tätä jaksoa ei voi simuloida luotettavasti: omat asetuksesi poikkeavat {pct} %.",
+    "sim_stored_end": "Akun energia lopussa: {kwh} kWh = {value}",
+    "sim_ev_moved": "Auto: {moved} kWh siirretty, {short} kWh toimittamatta"
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -12331,7 +12379,15 @@
     "config_grid_co2_entity": "Capteur CO₂ du réseau",
     "config_help_grid_co2_entity": "Trouvé par son unité (g ou kg de CO₂ par kWh). N'en choisissez un que si SEM a trouvé le mauvais.",
     "config_outdoor_temperature_entity": "Température extérieure",
-    "config_help_outdoor_temperature_entity": "Trouvé par son nom, sinon votre entité météo. Choisissez-en un seulement si SEM s'est trompé."
+    "config_help_outdoor_temperature_entity": "Trouvé par son nom, sinon votre entité météo. Choisissez-en un seulement si SEM s'est trompé.",
+    "sim_pick_last90": "90 derniers jours",
+    "sim_pick_last365": "365 derniers jours",
+    "sim_pick_month": "Mois",
+    "sim_battery_mode": "Mode batterie",
+    "sim_ev_mode": "Mode de charge de la voiture",
+    "sim_cant_simulate": "Impossible de simuler cette période de façon fiable : vos propres réglages s'écartent de {pct} %.",
+    "sim_stored_end": "Énergie dans la batterie à la fin : {kwh} kWh = {value}",
+    "sim_ev_moved": "Voiture : {moved} kWh déplacés, {short} kWh non livrés"
   },
   "hu": {
     "% of limit": "% a határból",
@@ -14093,7 +14149,15 @@
     "config_grid_co2_entity": "A hálózat CO₂-érzékelője",
     "config_help_grid_co2_entity": "Az egysége alapján találja meg (g vagy kg CO₂/kWh). Csak akkor válasszon, ha a SEM rosszat talált.",
     "config_outdoor_temperature_entity": "Külső hőmérséklet",
-    "config_help_outdoor_temperature_entity": "Név alapján találja meg, különben az időjárás-entitást. Csak akkor válasszon, ha a SEM rosszat választott."
+    "config_help_outdoor_temperature_entity": "Név alapján találja meg, különben az időjárás-entitást. Csak akkor válasszon, ha a SEM rosszat választott.",
+    "sim_pick_last90": "Utolsó 90 nap",
+    "sim_pick_last365": "Utolsó 365 nap",
+    "sim_pick_month": "Hónap",
+    "sim_battery_mode": "Akkumulátor mód",
+    "sim_ev_mode": "Autó töltési mód",
+    "sim_cant_simulate": "Ez az időszak nem szimulálható megbízhatóan: a saját beállításai {pct} %-kal eltérnek.",
+    "sim_stored_end": "Energia az akkumulátorban a végén: {kwh} kWh = {value}",
+    "sim_ev_moved": "Autó: {moved} kWh áthelyezve, {short} kWh nem leszállítva"
   },
   "it": {
     "% of limit": "% del limite",
@@ -15855,7 +15919,15 @@
     "config_grid_co2_entity": "Sensore CO₂ della rete",
     "config_help_grid_co2_entity": "Trovato dalla sua unità (g o kg di CO₂ per kWh). Sceglierne uno solo se SEM ha trovato quello sbagliato.",
     "config_outdoor_temperature_entity": "Temperatura esterna",
-    "config_help_outdoor_temperature_entity": "Trovato dal nome, altrimenti la tua entità meteo. Sceglilo solo se SEM ha sbagliato."
+    "config_help_outdoor_temperature_entity": "Trovato dal nome, altrimenti la tua entità meteo. Sceglilo solo se SEM ha sbagliato.",
+    "sim_pick_last90": "Ultimi 90 giorni",
+    "sim_pick_last365": "Ultimi 365 giorni",
+    "sim_pick_month": "Mese",
+    "sim_battery_mode": "Modalità batteria",
+    "sim_ev_mode": "Modalità di ricarica auto",
+    "sim_cant_simulate": "Impossibile simulare questo periodo in modo affidabile: le sue impostazioni si discostano del {pct} %.",
+    "sim_stored_end": "Energia nella batteria alla fine: {kwh} kWh = {value}",
+    "sim_ev_moved": "Auto: {moved} kWh spostati, {short} kWh non forniti"
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -17617,7 +17689,15 @@
     "config_grid_co2_entity": "CO₂-sensor van het net",
     "config_help_grid_co2_entity": "Gevonden via de eenheid (g of kg CO₂ per kWh). Kies er alleen een als SEM de verkeerde vond.",
     "config_outdoor_temperature_entity": "Buitentemperatuur",
-    "config_help_outdoor_temperature_entity": "Gevonden aan de naam, anders je weer-entiteit. Kies er alleen een als SEM de verkeerde koos."
+    "config_help_outdoor_temperature_entity": "Gevonden aan de naam, anders je weer-entiteit. Kies er alleen een als SEM de verkeerde koos.",
+    "sim_pick_last90": "Laatste 90 dagen",
+    "sim_pick_last365": "Laatste 365 dagen",
+    "sim_pick_month": "Maand",
+    "sim_battery_mode": "Batterijmodus",
+    "sim_ev_mode": "Laadmodus auto",
+    "sim_cant_simulate": "Deze periode is niet betrouwbaar te simuleren: uw eigen instellingen zitten er {pct} % naast.",
+    "sim_stored_end": "Energie in de batterij aan het eind: {kwh} kWh = {value}",
+    "sim_ev_moved": "Auto: {moved} kWh verschoven, {short} kWh niet geleverd"
   },
   "no": {
     "% of limit": "% av grense",
@@ -19379,7 +19459,15 @@
     "config_grid_co2_entity": "Nettets CO₂-sensor",
     "config_help_grid_co2_entity": "Finnes via enheten (g eller kg CO₂ per kWh). Velg én bare hvis SEM fant feil.",
     "config_outdoor_temperature_entity": "Utetemperatur",
-    "config_help_outdoor_temperature_entity": "Finnes ut fra navnet, ellers vær-entiteten din. Velg bare hvis SEM valgte feil."
+    "config_help_outdoor_temperature_entity": "Finnes ut fra navnet, ellers vær-entiteten din. Velg bare hvis SEM valgte feil.",
+    "sim_pick_last90": "Siste 90 dager",
+    "sim_pick_last365": "Siste 365 dager",
+    "sim_pick_month": "Måned",
+    "sim_battery_mode": "Batterimodus",
+    "sim_ev_mode": "Bilens lademodus",
+    "sim_cant_simulate": "Denne perioden kan ikke simuleres pålitelig: dine egne innstillinger bommer med {pct} %.",
+    "sim_stored_end": "Energi i batteriet til slutt: {kwh} kWh = {value}",
+    "sim_ev_moved": "Bil: {moved} kWh flyttet, {short} kWh ikke levert"
   },
   "pl": {
     "% of limit": "% limitu",
@@ -21141,7 +21229,15 @@
     "config_grid_co2_entity": "Czujnik CO₂ sieci",
     "config_help_grid_co2_entity": "Znajdowany po jednostce (g lub kg CO₂ na kWh). Wybierz go tylko, jeśli SEM znalazł zły.",
     "config_outdoor_temperature_entity": "Temperatura zewnętrzna",
-    "config_help_outdoor_temperature_entity": "Znajdowany po nazwie, w przeciwnym razie encja pogody. Wybierz tylko, jeśli SEM wybrał źle."
+    "config_help_outdoor_temperature_entity": "Znajdowany po nazwie, w przeciwnym razie encja pogody. Wybierz tylko, jeśli SEM wybrał źle.",
+    "sim_pick_last90": "Ostatnie 90 dni",
+    "sim_pick_last365": "Ostatnie 365 dni",
+    "sim_pick_month": "Miesiąc",
+    "sim_battery_mode": "Tryb baterii",
+    "sim_ev_mode": "Tryb ładowania auta",
+    "sim_cant_simulate": "Tego okresu nie da się wiarygodnie zasymulować: Twoje własne ustawienia różnią się o {pct} %.",
+    "sim_stored_end": "Energia w baterii na końcu: {kwh} kWh = {value}",
+    "sim_ev_moved": "Auto: {moved} kWh przesunięte, {short} kWh niedostarczone"
   },
   "pt": {
     "% of limit": "% do limite",
@@ -22903,7 +22999,15 @@
     "config_grid_co2_entity": "Sensor de CO₂ da rede",
     "config_help_grid_co2_entity": "Encontrado pela unidade (g ou kg de CO₂ por kWh). Escolha um só se o SEM encontrou o errado.",
     "config_outdoor_temperature_entity": "Temperatura exterior",
-    "config_help_outdoor_temperature_entity": "Encontrado pelo nome; senão, a sua entidade meteorológica. Escolha um só se o SEM errou."
+    "config_help_outdoor_temperature_entity": "Encontrado pelo nome; senão, a sua entidade meteorológica. Escolha um só se o SEM errou.",
+    "sim_pick_last90": "Últimos 90 dias",
+    "sim_pick_last365": "Últimos 365 dias",
+    "sim_pick_month": "Mês",
+    "sim_battery_mode": "Modo da bateria",
+    "sim_ev_mode": "Modo de carga do carro",
+    "sim_cant_simulate": "Não é possível simular este período com fiabilidade: as suas próprias definições desviam {pct} %.",
+    "sim_stored_end": "Energia na bateria no fim: {kwh} kWh = {value}",
+    "sim_ev_moved": "Carro: {moved} kWh movidos, {short} kWh não entregues"
   },
   "ro": {
     "% of limit": "% din limită",
@@ -24665,7 +24769,15 @@
     "config_grid_co2_entity": "Senzorul CO₂ al rețelei",
     "config_help_grid_co2_entity": "Găsit după unitate (g sau kg CO₂ pe kWh). Alegeți unul doar dacă SEM a găsit unul greșit.",
     "config_outdoor_temperature_entity": "Temperatura exterioară",
-    "config_help_outdoor_temperature_entity": "Găsit după nume, altfel entitatea meteo. Alegeți doar dacă SEM a ales greșit."
+    "config_help_outdoor_temperature_entity": "Găsit după nume, altfel entitatea meteo. Alegeți doar dacă SEM a ales greșit.",
+    "sim_pick_last90": "Ultimele 90 de zile",
+    "sim_pick_last365": "Ultimele 365 de zile",
+    "sim_pick_month": "Lună",
+    "sim_battery_mode": "Mod baterie",
+    "sim_ev_mode": "Mod de încărcare mașină",
+    "sim_cant_simulate": "Această perioadă nu poate fi simulată fiabil: propriile setări diferă cu {pct} %.",
+    "sim_stored_end": "Energie în baterie la final: {kwh} kWh = {value}",
+    "sim_ev_moved": "Mașină: {moved} kWh mutați, {short} kWh nelivrați"
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -26427,7 +26539,15 @@
     "config_grid_co2_entity": "Nätets CO₂-sensor",
     "config_help_grid_co2_entity": "Hittas via enheten (g eller kg CO₂ per kWh). Välj en bara om SEM hittade fel.",
     "config_outdoor_temperature_entity": "Utomhustemperatur",
-    "config_help_outdoor_temperature_entity": "Hittas via namnet, annars din väderentitet. Välj bara om SEM valde fel."
+    "config_help_outdoor_temperature_entity": "Hittas via namnet, annars din väderentitet. Välj bara om SEM valde fel.",
+    "sim_pick_last90": "Senaste 90 dagarna",
+    "sim_pick_last365": "Senaste 365 dagarna",
+    "sim_pick_month": "Månad",
+    "sim_battery_mode": "Batteriläge",
+    "sim_ev_mode": "Bilens laddläge",
+    "sim_cant_simulate": "Perioden kan inte simuleras tillförlitligt: dina egna inställningar avviker {pct} %.",
+    "sim_stored_end": "Energi i batteriet vid slutet: {kwh} kWh = {value}",
+    "sim_ev_moved": "Bil: {moved} kWh flyttade, {short} kWh inte levererade"
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -28189,6 +28309,14 @@
     "config_grid_co2_entity": "电网 CO₂ 传感器",
     "config_help_grid_co2_entity": "按单位查找（g 或 kg CO₂/kWh）。仅在 SEM 找错时才手动选择。",
     "config_outdoor_temperature_entity": "室外温度",
-    "config_help_outdoor_temperature_entity": "按名称查找，否则使用您的天气实体。只有 SEM 选错时才需要选择。"
+    "config_help_outdoor_temperature_entity": "按名称查找，否则使用您的天气实体。只有 SEM 选错时才需要选择。",
+    "sim_pick_last90": "最近 90 天",
+    "sim_pick_last365": "最近 365 天",
+    "sim_pick_month": "月份",
+    "sim_battery_mode": "电池模式",
+    "sim_ev_mode": "汽车充电模式",
+    "sim_cant_simulate": "无法可靠地模拟此期间：您自己的设置偏差 {pct} %。",
+    "sim_stored_end": "结束时电池中的能量：{kwh} kWh = {value}",
+    "sim_ev_moved": "汽车：移动 {moved} kWh，未送达 {short} kWh"
   }
 }

@@ -46,9 +46,10 @@ SESSION_HISTORY_MAX = 400
 DAY_TAGS_MAX = 400
 
 # (#1083) The Simulation tab keeps its last runs in the daily store: at most
-# this many, each at most ``SIMULATION_RUN_DAYS_MAX`` day rows (~150 bytes).
+# this many, each at most ``SIMULATION_RUN_DAYS_MAX`` day rows (~200 bytes:
+# a year of rows is ~75 KB, three runs ~220 KB).
 SIMULATION_RUNS_MAX = 3
-SIMULATION_RUN_DAYS_MAX = 90
+SIMULATION_RUN_DAYS_MAX = 365
 
 # (#668) The keys of ``EnergyCalculator.get_state()`` that this layer carries.
 #

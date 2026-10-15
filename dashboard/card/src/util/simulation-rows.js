@@ -31,10 +31,26 @@ export function isSelectable(day) {
 }
 
 /** The quick picks, in the order the card shows them. */
-export const QUICK_PICKS = ['sunny', 'grey', 'car', 'last30', 'clear'];
+export const QUICK_PICKS = ['sunny', 'grey', 'car', 'last30', 'last90', 'last365', 'clear'];
 
 /** The glyph a quick pick shows in front of its label. */
-export const PICK_GLYPH = { sunny: '☀️', grey: '☁️', car: '🚗', last30: '', clear: '' };
+export const PICK_GLYPH = {
+    sunny: '☀️', grey: '☁️', car: '🚗', last30: '', last90: '', last365: '', clear: '',
+};
+
+const LAST_N = { last30: 30, last90: 90, last365: 365 };
+
+/** The months the stored days cover, newest first ('YYYY-MM'). */
+export function monthsOf(days) {
+    const out = new Set((days || []).map(d => String(d.date || '').slice(0, 7)).filter(Boolean));
+    return [...out].sort().reverse();
+}
+
+/** Every selectable day of one month ('YYYY-MM'), oldest first. */
+export function pickMonth(days, month) {
+    return (days || []).filter(isSelectable)
+        .filter(d => String(d.date).slice(0, 7) === month).map(d => d.date);
+}
 
 function isoMinusDays(today, n) {
     const d = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
@@ -54,8 +70,10 @@ export function pickDays(days, pick, today = new Date()) {
     case 'grey':
     case 'car':
         return ok.filter(d => (d.tags || []).includes(pick)).map(d => d.date);
-    case 'last30': {
-        const from = isoMinusDays(today, 30);
+    case 'last30':
+    case 'last90':
+    case 'last365': {
+        const from = isoMinusDays(today, LAST_N[pick]);
         const to = isoOf(today);
         return ok.filter(d => d.date >= from && d.date < to).map(d => d.date);
     }
@@ -203,8 +221,15 @@ export function initialForm(defaults) {
         import_rate: d.import_rate ?? '',
         export_mode: 'recorded',
         export_rate: d.export_rate ?? '',
+        battery_mode: d.battery_mode ?? 'auto',
+        ev_mode: 'recorded',
     };
 }
+
+/** SEM's battery modes and the car's charge modes a what-if offers. */
+export const BATTERY_MODES = ['auto', 'self_consumption', 'force_charge', 'force_discharge', 'off'];
+export const EV_MODES = ['recorded', 'solar_only', 'solar_plus_battery', 'solar_plus_cheap',
+    'min_plus_solar', 'always_max', 'off'];
 
 const numOrNull = (v) => {
     if (v === '' || v === null || v === undefined) return null;
@@ -218,6 +243,8 @@ export function isChanged(field, form, defaults) {
     const d = defaults || {};
     if (field === 'import_rate') return f.import_mode === 'flat';
     if (field === 'export_rate') return f.export_mode === 'flat';
+    if (field === 'battery_mode') return (f.battery_mode || 'auto') !== (d.battery_mode || 'auto');
+    if (field === 'ev_mode') return (f.ev_mode || 'recorded') !== 'recorded';
     const now = numOrNull(d[field]);
     const want = numOrNull(f[field]);
     return now !== want;
@@ -236,6 +263,8 @@ export function buildParams(form) {
         const rate = numOrNull(f[`${key}_rate`]);
         out[`${key}_rate`] = f[`${key}_mode`] === 'flat' && rate !== null ? rate : 'recorded';
     }
+    if (f.battery_mode) out.battery_mode = f.battery_mode;
+    out.ev_mode = f.ev_mode || 'recorded';
     return out;
 }
 
@@ -270,4 +299,15 @@ export function fill(text, values) {
     let out = String(text || '');
     for (const [k, v] of Object.entries(values || {})) out = out.split(`{${k}}`).join(String(v));
     return out;
+}
+
+/**
+ * The calibration check: did the own settings give back the real cost?
+ * `{ ok, pct }` — `ok` false means the what-if numbers must not be shown.
+ * An older run without the check counts as not checked (ok true).
+ */
+export function calibration(result) {
+    const c = result?.calibration;
+    if (!c || result?.calibrated === undefined) return { ok: true, pct: null };
+    return { ok: !!result.calibrated, pct: c.error_pct === null || c.error_pct === undefined ? null : Number(c.error_pct) };
 }

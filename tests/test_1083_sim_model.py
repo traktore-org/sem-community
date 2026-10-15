@@ -23,6 +23,7 @@ from custom_components.solar_energy_management.analytics.simulation.battery_sim 
     SimState,
     scheduler_rates,
     simulate_day,
+    simulate_period,
     sim_config,
     synth_view,
 )
@@ -262,19 +263,31 @@ def test_synth_view_fills_the_real_view():
 def test_same_choices_cost_the_same():
     # The recorded pack sat at 90 % all day and the house bought 0.5 kWh an
     # hour. Draining the same pack is not a saving: the energy left the pack.
+    # The day itself shows the cheaper bill; the run values the emptier
+    # pack ONCE at its end, on its own line.
     day = _day(solar=[0.0] * 24, home=[0.5] * 24, grid_import=[0.5] * 24,
                soc_pct=[90.0] * 24)
-    res = simulate_day(day, _params(), {})
+    run = simulate_period([day], _params(), {"battery_capacity_kwh": 10.0})
+    res = run.days[0]
     assert res.simulated["grid_import"] < 12.0          # the sim did drain it
-    assert res.stored_energy_value < 0
-    assert res.delta == pytest.approx(0.0, abs=0.01)
+    assert res.stored_energy_value == 0.0               # no credit per day
+    assert run.stored_energy_value < 0
+    # cheaper by what left the pack, and the pack ends emptier by the same
+    assert res.delta - run.stored_energy_value == pytest.approx(0.0, abs=0.01)
 
 
 def test_a_bigger_pack_gets_no_free_start_energy():
+    # The real pack was 10 kWh at 90 %: 9 kWh. A 20 kWh what-if starts with
+    # the same 9 kWh, not 90 % of 20.
     day = _day(solar=[0.0] * 24, home=[0.5] * 24, grid_import=[0.5] * 24,
                soc_pct=[90.0] * 24)
-    res = simulate_day(day, _params(capacity_kwh=20.0), {})
-    assert res.delta == pytest.approx(0.0, abs=0.01)
+    res = simulate_day(day, _params(capacity_kwh=20.0),
+                       {"battery_capacity_kwh": 10.0})
+    assert res.start_soc_pct == pytest.approx(45.0)
+    run = simulate_period([day], _params(capacity_kwh=20.0),
+                          {"battery_capacity_kwh": 10.0})
+    assert run.days[0].delta - run.stored_energy_value == pytest.approx(
+        0.0, abs=0.01)
 
 
 def test_scheduler_reads_production_price_inputs():
@@ -302,10 +315,12 @@ def test_one_dear_evening_hour_does_not_force_a_night_charge():
     assert not any(r["intent"] == "force_charge" for r in res.hours[:5])
 
 
-def test_start_soc_lifted_to_reserve_marks_the_day():
+def test_start_soc_below_the_new_reserve_is_kept_and_said():
+    # No free energy: the pack starts where the real one was.
     res = simulate_day(_day(soc_pct=[5.0] * 24), _params(reserve_pct=30.0), {})
-    assert res.start_soc_pct == pytest.approx(30.0)
+    assert res.start_soc_pct == pytest.approx(5.0)
     assert res.indicative is True
+    assert any("below the new reserve" in r for r in res.indicative_reasons)
 
 
 def test_epoch_start_needs_a_time_zone():
@@ -340,7 +355,9 @@ def test_from_statistics_reads_changes_and_means():
          "forecast": rows([18.5] * 24, key="mean")},
         date="2026-10-12", tags=["mixed"], tz=tz)
     assert day.solar[12] == 3.0
-    assert day.grid_import[4] == 0.0 and day.grid_import[5] == pytest.approx(0.3)
+    # a step back undoes what the counter counted before it
+    assert day.grid_import[4] == 0.0 and day.grid_import[3] == pytest.approx(0.3)
+    assert day.grid_import[5] == pytest.approx(0.5)
     assert day.battery_charge == [0.0] * 24        # no battery role: 0, not missing
     assert day.soc_pct[23] is None and day.soc_pct[0] == 40.0
     assert day.forecast_kwh == 18.5

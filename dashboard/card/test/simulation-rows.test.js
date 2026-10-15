@@ -5,7 +5,7 @@ import {
     TAG_GLYPH, tagGlyphs, isSelectable, QUICK_PICKS, pickDays, activePick, toggleDay,
     chipDate, rowDate, money, formatDelta, formatPct, ESTIMATED, needsEst, visibleRows,
     tagTiles, totalLine, initialForm, isChanged, buildParams, canRun, minutesLeft,
-    progressShare, fill,
+    progressShare, fill, monthsOf, pickMonth, calibration, BATTERY_MODES, EV_MODES,
 } from '../src/util/simulation-rows.js';
 
 const D = (date, tags, extra = {}) => ({ date, tags, backfilled: false, selectable: true, ...extra });
@@ -42,7 +42,7 @@ test('a gap day is not selectable, by flag or by tag', () => {
 });
 
 test('the quick picks, in order', () => {
-    assert.deepEqual(QUICK_PICKS, ['sunny', 'grey', 'car', 'last30', 'clear']);
+    assert.deepEqual(QUICK_PICKS, ['sunny', 'grey', 'car', 'last30', 'last90', 'last365', 'clear']);
 });
 
 test('all sunny skips the gap day', () => {
@@ -59,6 +59,18 @@ test('last 30 days: the 30 days before today', () => {
     // 14.09 is 30 days back: in; 13.09 is not
     const edge = [D('2026-09-13', ['sunny']), D('2026-09-14', ['sunny']), D('2026-10-14', ['sunny'])];
     assert.deepEqual(pickDays(edge, 'last30', TODAY), ['2026-09-14']);
+});
+
+test('last 90 and last 365 days reach further back', () => {
+    const old = [D('2025-10-20', ['grey']), D('2026-07-20', ['sunny']), ...DAYS];
+    assert.deepEqual(pickDays(old, 'last90', TODAY).slice(0, 1), ['2026-07-20']);
+    assert.deepEqual(pickDays(old, 'last365', TODAY).slice(0, 2), ['2025-10-20', '2026-07-20']);
+});
+
+test('a month: its selectable days; the months newest first', () => {
+    assert.deepEqual(monthsOf(DAYS), ['2026-10', '2026-09']);
+    assert.deepEqual(pickMonth(DAYS, '2026-09'), ['2026-09-01', '2026-09-02', '2026-09-20']);
+    assert.deepEqual(monthsOf(null), []);
 });
 
 test('clear picks nothing', () => {
@@ -167,6 +179,7 @@ test('the form starts at the install, prices as recorded', () => {
     assert.deepEqual(initialForm(DEF), {
         capacity_kwh: 15, reserve_pct: 20, peak_limit_kw: 11,
         import_mode: 'recorded', import_rate: 0.3, export_mode: 'recorded', export_rate: 0.1,
+        battery_mode: 'auto', ev_mode: 'recorded',
     });
     assert.equal(initialForm({ ...DEF, peak_limit_kw: null }).peak_limit_kw, '');
 });
@@ -186,6 +199,7 @@ test('params for start: numbers, no peak as null, prices recorded or flat', () =
     const f = { ...initialForm(DEF), capacity_kwh: '20', peak_limit_kw: '8', export_mode: 'flat', export_rate: '0.08' };
     assert.deepEqual(buildParams(f), {
         capacity_kwh: 20, reserve_pct: 20, peak_limit_kw: 8, import_rate: 'recorded', export_rate: 0.08,
+        battery_mode: 'auto', ev_mode: 'recorded',
     });
     assert.equal(buildParams({ ...f, peak_limit_kw: '' }).peak_limit_kw, null);
     assert.equal(buildParams({ ...f, peak_limit_kw: '0' }).peak_limit_kw, null);
@@ -221,4 +235,21 @@ test('fill puts values in their holes', () => {
     assert.equal(fill('day {x} of {y}', { x: 3, y: 9 }), 'day 3 of 9');
     assert.equal(fill('{n} of {n}', { n: 2 }), '2 of 2');
     assert.equal(fill(null, {}), '');
+});
+
+test('the two mode selects: SEM\'s modes, changed when not the install\'s', () => {
+    assert.deepEqual(BATTERY_MODES, ['auto', 'self_consumption', 'force_charge', 'force_discharge', 'off']);
+    assert.equal(EV_MODES[0], 'recorded');
+    const f = initialForm({ ...DEF, battery_mode: 'self_consumption' });
+    assert.equal(isChanged('battery_mode', f, { battery_mode: 'self_consumption' }), false);
+    assert.equal(isChanged('battery_mode', { ...f, battery_mode: 'off' }, { battery_mode: 'self_consumption' }), true);
+    assert.equal(isChanged('ev_mode', { ...f, ev_mode: 'solar_only' }, DEF), true);
+    assert.equal(buildParams({ ...f, ev_mode: 'solar_only' }).ev_mode, 'solar_only');
+});
+
+test('calibration: a run the own settings could not reproduce shows no what-if', () => {
+    assert.deepEqual(calibration({ calibrated: false, calibration: { error_pct: 12.3 } }), { ok: false, pct: 12.3 });
+    assert.deepEqual(calibration({ calibrated: true, calibration: { error_pct: 1.2 } }), { ok: true, pct: 1.2 });
+    assert.deepEqual(calibration({}), { ok: true, pct: null });
+    assert.deepEqual(calibration(null), { ok: true, pct: null });
 });
