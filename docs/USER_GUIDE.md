@@ -612,13 +612,22 @@ Since #878 the buffer is the **minimum** assist floor rather than the only one: 
 
 When you have multiple batteries (e.g. Huawei + Growatt, or split Huawei units), SEM v1.7.3 adds per-battery control:
 
-| Mode | SEM Control | When to use |
+| Mode | What SEM does | When to use |
 |------|---|---|
-| **Auto** | Normal SOC zone strategy (Zone 1–4) | Default; SEM manages the battery like usual |
-| **Self-Consumption** | Discharge to home only, never export to grid | Night use; battery stays reserved for home |
-| **Force Charge** | Charge from grid (if tariff is cheap) or solar | Deliberate battery top-up before heavy consumption |
-| **Force Discharge** | Discharge at maximum rate | Emergency backup or battery arbitrage |
-| **Off** | SEM ignores this battery | Manual control or testing |
+| **Auto** | The inverter runs the battery as usual. SEM steps in only to: charge it from the grid in the planned cheap hours when tonight needs it (or at a negative price); sell in the plan's sell hours when selling is on; hold it to the house while a car is plugged in and the spare sun is under the Solar Gate or the battery is under the Buffer SoC; hold it to the house while grid-funded loads run. | Default |
+| **Self-Consumption** | As Auto, but it never sells to the grid, unless you turn on *Battery may sell to the grid* | Keep the battery for the house |
+| **Force Charge** | Charges to 100 % now, at the maximum charge power, from the sun and the grid, **at any price**. Only the grid peak limit slows or stops it. It keeps going until you pick another mode. | Deliberate top-up before heavy use |
+| **Force Discharge** | Sells at the maximum discharge power down to this battery's reserve, then returns to normal use. It does not sell while the battery level cannot be read. | Emergency backup or a manual sale |
+| **Off** | One clean hand-over to the inverter, then SEM sends nothing to this battery | Manual control or testing |
+
+> **Force Charge and the price.** It does not wait for a cheap hour: at night
+> in an expensive hour it buys from the grid. Open for discussion: #1116.
+>
+> **The reserve.** The reserve stops SEM's own sales (Force Discharge and the
+> planned sells). In Auto and Self-Consumption SEM does not stop the house
+> from using the battery below it; the inverter's own limit does that.
+
+Each mode promise is tested: `tests/test_docs_contracts_battery.py`.
 
 **Per-battery control entities:**
 - `select.sem_battery_<id>_mode` — set the mode (auto / self_consumption / force_charge / force_discharge / off)
@@ -728,8 +737,14 @@ conversion loss, not wear.
 
 Two switches, and they are deliberately separate rather than one setting:
 
-- **Battery may sell to the grid** — export the budget when the price is high.
-- **Battery may charge the car** — use the budget on the EV in the evening.
+- **Battery may sell to the grid** — off: SEM does not sell on a high price
+  or from the forecast budget. *Force Discharge* still sells; it is a manual
+  order.
+- **Battery may charge the car** — off: no charger is offered battery power,
+  and while a car is plugged in the battery is held to the house, even when
+  full and in the sun.
+
+Both switches are tested: `tests/test_docs_contracts_battery.py`.
 
 A single mode could not express *"may sell, may not touch the car"*. Both
 default to your current behaviour, so turning forecast spending on does not

@@ -213,10 +213,25 @@ Each load's row has a **Mode** selector:
 
 | Mode | What SEM does |
 |---|---|
-| **Off** | Monitor only — SEM never turns it on or off. |
-| **Peak only** | Your automations run it; SEM only *sheds* it to protect the grid peak. |
-| **Solar only** | Runs on PV surplus; never force-imports and never touches the battery. |
-| **Solar + battery** | Runs on PV surplus **and** lets the home battery assist above the buffer during the day (the load-side "solar + min"). |
+| **Off** | Monitor only. SEM never turns it on or off, and the peak guard does not shed it. |
+| **Peak only** | Your automations run it. SEM never starts it; it only turns it off while the grid peak is at risk, and back on when the peak falls. |
+| **Solar only** | Starts on spare sun. Stops when the house buys power from the grid for it, or when the sun makes less than the load draws. It never starts on the battery. See the note below for the evening. |
+| **Solar + battery** | As Solar only, and by day the home battery may help it, down to the Buffer SoC (or tonight's floor when that sits higher). The help starts only while at least the Solar Gate (`battery_assist_min_surplus`, 1200 W) goes to the grid. See the note below. |
+
+> **Solar only in the evening.** A running Solar-only load keeps going while
+> the sun still makes at least what the load itself draws. If the house then
+> needs more, a home battery covers the gap and the grid reads 0 W, so SEM
+> does not stop the load. Example: sun 3.2 kW, house 1.5 kW, boiler 3 kW —
+> the boiler runs on and 1.3 kW comes from the battery. Without a battery the
+> house would import instead, and the load stops. Open for discussion: #1112.
+>
+> **Solar + battery while the battery charges.** SEM measures spare sun at the
+> grid meter. While the battery is still charging from spare sun, little goes
+> to the grid, so the battery's help usually waits until the battery is full.
+> Example: sun 2 kW, house 0.5 kW, battery at 95 % taking 1.5 kW — a 3 kW
+> boiler stays off. Open for discussion: #1114.
+
+Each mode promise is tested: `tests/test_docs_contracts_loads.py`.
 
 The Mode is **axis 1 — the daytime source**. What happens *overnight* (no sun) is a
 separate choice, the **"Finish overnight from"** picker below.
@@ -299,9 +314,11 @@ the runtime:
 
 | Choice | Overnight behavior | Backend |
 |---|---|---|
-| **Off** | The load just waits for sun — may miss its target on a dark day. | `solar_only`, no battery |
-| **Battery** | Runs off the **home battery**, down to the hard reserve floor — never past it. | `battery_eligible_overnight` |
-| **Grid** | Runs off the **grid** during your cheap-tariff window (needs a tariff/cheap window). | `top_up_policy = cheap_hours` |
+| **Off** | Nothing finishes it. The load waits for the sun and may miss its target on a dark day. | `solar_only`, no battery |
+| **Battery** | At night, while runtime is still owed, it runs off the **home battery** and stops at `Battery priority SOC` (default 30 %). It does not start again below it, and it stops at daybreak. | `battery_eligible_overnight` |
+| **Grid** | While runtime is still owed and the day left is too short to cover it, it runs off the **grid** in cheap-price hours only (needs a tariff with price levels). | `top_up_policy = cheap_hours` |
+
+Each choice is tested: `tests/test_docs_contracts_loads.py`.
 
 The two axes are independent: the **Mode** picks the daytime source (solar, or
 solar + battery assist above the buffer), and **Finish overnight from** picks the
@@ -309,9 +326,10 @@ no-sun source (nothing / battery to reserve / cheap grid). Switching the picker
 also **stops a load that's already running** on the source you moved away from —
 you don't have to wait for the reserve floor or the cheap window to end.
 
-The daytime battery assist ("Solar + battery" mode) mirrors the EV assist
-(Solar Gate, `battery_assist_min_surplus`); the overnight battery drain stops at
-`Battery priority SOC` (default 30 %).
+The daytime battery help ("Solar + battery" mode) uses the same Solar Gate
+setting as the EV assist (`battery_assist_min_surplus`), but loads measure it
+at the grid meter (spare sun going out), while chargers measure solar − home.
+The overnight battery drain stops at `Battery priority SOC` (default 30 %).
 
 ## Optional stop condition
 

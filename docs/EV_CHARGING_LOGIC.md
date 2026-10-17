@@ -31,12 +31,14 @@ migrating old automations):
 
 | Mode | Grid use | Home battery | What it does |
 |---|---|---|---|
-| **Solar only** | Never, unless *you* set a floor | **Never discharges for the car** | Pure surplus charging. Idles at night. |
-| **Solar + battery** *(2.1, #885/#878)* | Never, unless *you* set a floor | Assists down to **max(Buffer SoC, tonight's computed floor)** — above the Solar Gate always, and below it when tonight's forecast budget is positive | Surplus plus the pack — the charger twin of a load's "Solar + battery" mode, restoring the legacy `pv` / `self_consumption` split. Idles at night. Works from day one; the forecast-led bypass and the dynamic floor wake once the battery learner completes (the card says so while it's still gathering). |
-| **Solar + cheapest hours** | Only in cheap tariff windows | Never | Surplus by day; grid only when the dynamic price is cheap. Always listed — shown disabled with the reason when no dynamic tariff is configured. |
-| **Min + Solar** *(default)* | Up to the Min guarantee | Assists above the Buffer SoC | Guarantees *At least X kWh* by the *Charge by* deadline (night top-up when needed); solar adds up to Max on top. |
-| **Always (max)** | Whatever it takes | — | Charge at maximum immediately. Explicit override — ignores solar, tariff and night logic. |
-| **Off** | Never | — | No charging; SEM keeps the charger idle. |
+| **Solar only** | Never by day. At night only if *you* set a floor on this charger | Never discharges for the car, with one exception: forecast spending (see below) | Charges on spare sun only. Idles at night unless you set a floor. |
+| **Solar + battery** *(2.1, #885/#878)* | Never by day. At night only if *you* set a floor | Assists down to **max(Buffer SoC, tonight's computed floor)** — above the Solar Gate always, and below it when tonight's forecast budget is positive | Spare sun plus the pack — the charger twin of a load's "Solar + battery" mode. Idles at night unless you set a floor. Works from day one; the forecast-led bypass and the dynamic floor wake once the battery learner completes (the card says so while it's still gathering). |
+| **Solar + cheapest hours** | Only in cheap-price hours, up to the floor | Never | Spare sun by day; grid only when the live price level is cheap, very cheap or negative. Always listed — shown disabled with the reason when no dynamic tariff is configured. |
+| **Min + Solar** *(default)* | Up to the floor (*At least X*) | Assists above the Buffer SoC | Tops up to *At least X kWh* by the *Charge by* deadline (at night when needed); spare sun adds up to Max on top. Nothing owed → no grid. |
+| **Always (max)** | Whatever it takes | Held to the house unless the pack is above the Buffer SoC and the spare sun passes the Solar Gate | Charges at the charger's maximum whenever a car is plugged in, day or night, at any price. The floor does not matter here: a floor of 0 does **not** stop it. It stops at the *Up to* ceiling, and the grid peak limit can slow or stop it. |
+| **Off** | — | — | Hands-off. Switching to Off stops a running charge **once**, whoever started it. After that SEM sends nothing: no start, no stop, no current. SEM still reads the charger's power and counts its energy. |
+
+Each mode promise is tested: `tests/test_docs_contracts_ev.py`.
 
 > Earlier versions of this table said Solar only's battery "may assist" — it
 > never did. `solar_only` only *redirects* power that would have charged the
@@ -56,11 +58,23 @@ The per-mode detail lives in the same card: **Charge target** (Min / Max kWh),
 > night-capable modes do follow the global, since for them the overnight top-up is the
 > mode's whole purpose.
 
-> **Charge mode Off is hands-off (#898).** SEM sends nothing to a charger in
-> *Off* — no stop, no park-on-disconnect, no failsafe. A session you start
-> elsewhere in Home Assistant runs untouched; switching to Off while SEM's
-> own charge runs ends that charge once. The VPP export pause stops the car
-> with its own explicit stop, not by borrowing Off.
+> **Charge mode Off is hands-off (#898).** Selecting *Off* while anything
+> charges sends **one** stop, whoever started the charge. From then on SEM
+> sends nothing to that charger — no stop, no park-on-disconnect, no failsafe,
+> no current. A charge you start elsewhere in Home Assistant afterwards runs
+> untouched, also after a restart, and SEM does not slow it for the grid
+> peak. SEM still reads the charger's power, counts it in the house balance
+> and the daily totals, and may raise a Repair when the box restarts itself.
+> The VPP export pause stops the car with its own explicit stop, not by
+> borrowing Off.
+>
+> **Solar only and forecast spending (#1115).** With forecast spending on and
+> a positive budget for tonight, SEM no longer holds the home battery back
+> while a Solar-only car charges on its floor. The battery may then cover the
+> car, down to the Buffer SoC or tonight's floor, whichever is higher. With
+> forecast spending off, the battery is held to the house and the grid pays.
+> The same happens when another plugged-in charger is set to *Solar +
+> battery*. Open for discussion: #1115.
 >
 > **`solar_only` and the battery "redirect" (#899).** Part of the measured
 > battery charge may be credited to the car on the assumption that the
@@ -71,7 +85,8 @@ The per-mode detail lives in the same card: **Charge target** (Min / Max kWh),
 >
 > **Turning overnight charging off — set the floor to 0 (#680).** The *At least* floor is
 > the single control for night charging: SEM tops up the gap between surplus and that
-> target, so **a floor of 0 means no overnight charge** (in any mode). There is **no
+> target, so **a floor of 0 means no overnight charge** in every mode except
+> **Always (max)**, which charges whenever a car is plugged in. There is **no
 > separate toggle** — the target you already set is the switch. This now works in both
 > units: the kWh target always reached 0, and the **% target (*Minimum SoC*) now spans
 > 0–100 %** on both the *At least* and *At most* handles (it was previously pinned at a
@@ -177,7 +192,7 @@ idle while the EV grid-charged.
 > never eats their overnight window. See
 > [LOAD_PRIORITY.md](LOAD_PRIORITY.md#spending-the-battery--and-the-sun--follows-the-same-list-too-21-885).
 
-Active in **Solar + battery** and **Min + Solar** (gated by the Solar Gate + Buffer SoC in both — *not* Solar only, which never discharges the pack for the car). Not in **Always (max)** — that mode takes everything from anywhere by definition. Pure amps — SEM issues no battery command; the inverter's own self-consumption does the discharge.
+Active in **Solar + battery** and **Min + Solar** (gated by the Solar Gate + Buffer SoC in both — *not* Solar only, which never discharges the pack for the car, except with forecast spending as described above). **Always (max)** gets no assist amps; there, as in every mode, the pack is held to the house below the Solar Gate or the Buffer SoC, so the grid pays the rest. Pure amps — SEM issues no battery command; the inverter's own self-consumption does the discharge.
 
 ### Cheapest hours (tariff-aware charging)
 
