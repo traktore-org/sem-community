@@ -8170,6 +8170,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             return (0.0 if isinstance(w, bool) or not isinstance(w, (int, float))
                     else w)
 
+        def _own_limit(adapter):
+            # (#1165 review) The discharge limit SEM last wrote (-1: none).
+            # A value that is no number may be a limit: read it as 0 W.
+            w = getattr(adapter, "last_discharge_limit_w", -1.0)
+            return (0.0 if isinstance(w, bool) or not isinstance(w, (int, float))
+                    else w)
+
         for idx, (battery_id, runtime) in enumerate(battery_items):
             cfg = self._per_battery_config(idx, count)
             mode = str(cfg.get("battery_mode", "auto") or "auto").lower()
@@ -8199,7 +8206,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         asked_w=_asked(adapter, "_sem_discharge_asked_w"),
                         sem_selling=(forced_ops(adapter)[1]
                                      if commands else None),
-                        site=site))
+                        site=site, limit_w=_own_limit(adapter)))
                 if window is not None:
                     new_sales[battery_id] = window
             if stalled:

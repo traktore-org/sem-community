@@ -509,9 +509,10 @@ async def _dispatch_battery(
         )
         _note_forced_op(adapter, "_sem_forced_discharge", ret,
                         BatteryIntent.FORCE_DISCHARGE, True)
-        # (#1165) Asked only if it went out. Deye answers True and records
-        # no intent; the other brands record the intent and clear
-        # ``last_error``, and a withheld setpoint (#978) sets it.
+        # (#1165) Asked only if it went out or stands. Deye answers True and
+        # records no intent; the other brands record the intent and clear
+        # ``last_error`` (Huawei on a repeat too); a failed write or a
+        # withheld setpoint (#978) sets it and keeps the old intent.
         if ret is True or (
                 getattr(adapter, "last_error", None) is None
                 and getattr(adapter, "last_intent", None)

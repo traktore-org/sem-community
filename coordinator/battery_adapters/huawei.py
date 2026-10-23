@@ -543,6 +543,10 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
             self._forcible_discharging = bool(self._force_discharge_entity)
             return
         if self._forcible_discharging and abs(watts - self._last_force_discharge_w) < 100.0:
+            # (#1165 review) The sale stands: a success, so no error from an
+            # earlier write is left in ``last_error`` (the base clears it on
+            # every sale it sends, de-duplicated or not).
+            self._last_error = None
             self._last_intent = BatteryIntent.FORCE_DISCHARGE
             self._sale_sent = True   # (#1178) the sale runs this cycle
             return

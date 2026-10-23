@@ -122,6 +122,17 @@ class TestTheRule:
         assert sale_stall_read(None, 0.0, **_SALE) is False
         assert sale_stall_read(30.0, None, **_SALE) is False
 
+    @pytest.mark.parametrize("limit_w", [0.0, 99.0, FORCED_CHARGE_STEP_W - 1])
+    def test_no_stall_while_sems_own_limit_holds_the_pack(self, limit_w):
+        # (review) A sale does not lift the limit SEM wrote before it (a
+        # night hold at 0 W): the pack may be held by SEM, not its inverter.
+        assert sale_stall_read(30.0, 0.0, **_SALE, limit_w=limit_w) is False
+
+    @pytest.mark.parametrize("limit_w", [None, -1.0, FORCED_CHARGE_STEP_W,
+                                         5000.0])
+    def test_no_limit_or_one_of_a_step_or_more_is_no_hold(self, limit_w):
+        assert sale_stall_read(30.0, 0.0, **_SALE, limit_w=limit_w) is True
+
     def _walk(self, start_s, end_s, soc=30.0, step_s=30.0, w=None):
         done = False
         t = start_s
@@ -183,11 +194,13 @@ class TestTheRule:
 
 # ── 2. The coordinator ends the mode ───────────────────────────────────────
 
-def _seller(landed=True, asked_w=5000.0):
-    # What actuate_battery leaves on an adapter whose sale landed.
+def _seller(landed=True, asked_w=5000.0, limit_w=-1.0):
+    # What actuate_battery leaves on an adapter whose sale landed;
+    # ``limit_w`` is the discharge limit SEM last wrote (-1: none).
     return SimpleNamespace(_sem_forced_charge=None, _sem_forced_discharge=landed,
                            _sem_charge_asked_w=0.0,
-                           _sem_discharge_asked_w=asked_w)
+                           _sem_discharge_asked_w=asked_w,
+                           last_discharge_limit_w=limit_w)
 
 
 def _sale_coordinator(hass, entry, slugs, ids):
@@ -255,6 +268,10 @@ class TestAPackThatStopsAt30:
         ("SEM stopped the sale", (30.0, 0.0), _NIGHT,
          {"_battery_adapters": {"primary": _seller(landed=False)}}),
         ("no adapter", (30.0, 0.0), _NIGHT, {"_battery_adapters": {}}),
+        ("SEM's own limit holds the pack", (30.0, 0.0), _NIGHT,
+         {"_battery_adapters": {"primary": _seller(limit_w=0.0)}}),
+        ("a limit that is no number", (30.0, 0.0), _NIGHT,
+         {"_battery_adapters": {"primary": _seller(limit_w="0")}}),
         ("observer sends nothing", (30.0, 0.0), _NIGHT, {"_observer_mode": True}),
     ])
     async def test_the_mode_stays(self, hass, clock, why, pack, site, change):
@@ -265,6 +282,16 @@ class TestAPackThatStopsAt30:
             setattr(coordinator, attr, value)
         _sell(coordinator, clock, {"primary": pack}, 120, site=site)
         assert entry.options["battery_mode"] == "force_discharge", why
+
+    @pytest.mark.asyncio
+    async def test_a_limit_at_the_max_is_no_hold(self, hass, clock):
+        # ``command_normal`` writes the max back: that limit holds nothing.
+        entry = _entry(hass, {"battery_mode": "force_discharge"})
+        coordinator = _sale_coordinator(hass, entry, (), ["primary"])
+        coordinator._battery_adapters = {"primary": _seller(limit_w=5000.0)}
+        _sell(coordinator, clock, {"primary": (30.0, 0.0)},
+              _WINDOW_MIN + _SETTLE_MIN)
+        assert entry.options["battery_mode"] == "auto"
 
     @pytest.mark.asyncio
     async def test_a_dark_power_or_level_read_keeps_the_mode(self, hass, clock):
@@ -439,6 +466,32 @@ class TestTheActuatorRecordsWhatItSent:
         a = _Seller()
         a.supports_forced_discharge = False
         assert await self._send(a, _decision(BatteryIntent.FORCE_DISCHARGE)) == 0.0
+
+    async def test_a_huawei_sale_that_stands_is_asked(self):
+        # (review) The real Huawei adapter calls the service once, then
+        # repeats without a write. An error from an earlier write must not
+        # make the standing sale read as "nothing asked".
+        from custom_components.solar_energy_management.tests.test_589_battery_command_honesty import (  # noqa: E501
+            _make_huawei,
+        )
+        a = _make_huawei()
+        a._startup_orphan_checked = True
+        d = _decision(BatteryIntent.FORCE_DISCHARGE)
+        assert await self._send(a, d) == 3000.0
+        assert a._hass.services.async_call.await_count == 1
+        a._last_error = "write not reflected by number.max_discharge"
+        assert await self._send(a, d) == 3000.0
+        assert a._hass.services.async_call.await_count == 1, "a repeat, no write"
+        assert a.last_error is None
+
+    async def test_a_huawei_sale_that_failed_asks_for_nothing(self):
+        from custom_components.solar_energy_management.tests.test_589_battery_command_honesty import (  # noqa: E501
+            _make_huawei,
+        )
+        a = _make_huawei(service_raises=True)
+        a._startup_orphan_checked = True
+        assert await self._send(a, _decision(BatteryIntent.FORCE_DISCHARGE)) == 0.0
+        assert a.last_error is not None
 
 
 def _readings(**kw):

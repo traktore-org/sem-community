@@ -418,7 +418,7 @@ def charge_stall_step(prev, now_s: float, soc, stall_read: bool):
 
 
 def sale_stall_read(soc, power_w, *, soc_read: bool, power_read: bool,
-                    asked_w, sem_selling, site) -> bool:
+                    asked_w, sem_selling, site, limit_w=None) -> bool:
     """(#1165) Does this cycle show a pack that sends no more of a sale?
 
     All of: the level and the pack's own power are readings; SEM's sale
@@ -428,7 +428,10 @@ def sale_stall_read(soc, power_w, *, soc_read: bool, power_read: bool,
     this cycle's ``(grid import W, sun W)``, shows the home buying at least
     ``MANUAL_SALE_STALL_IMPORT_W`` with no more than
     ``MANUAL_SALE_STALL_SUN_W`` of sun. ``site`` is ``None`` on a cycle
-    whose grid or sun is no measurement, and then nothing is read.
+    whose grid or sun is no measurement, and then nothing is read. Nor is it
+    when SEM's own discharge limit (``limit_w``, what the adapter last wrote;
+    ``None`` or below 0 when none) is under one step: a sale does not lift
+    it, so the pack may be held by SEM, not by its inverter (review).
 
     Why the home: an export limit holds back what goes out. A home that
     buys sends nothing out, so a pack that could sell would at least feed
@@ -437,6 +440,8 @@ def sale_stall_read(soc, power_w, *, soc_read: bool, power_read: bool,
     if not (soc_read and power_read) or soc is None or power_w is None:
         return False
     if site is None:
+        return False
+    if limit_w is not None and 0.0 <= float(limit_w) < FORCED_CHARGE_STEP_W:
         return False
     import_w, sun_w = site
     return (sem_selling is True
