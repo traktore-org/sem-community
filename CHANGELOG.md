@@ -133,7 +133,7 @@ Contributors: @OddmarDam, @RienduPre — and everyone who tested the betas and r
 - 🐛 **Daily car energy tells Home Assistant it resets at Charge-by, not midnight** (#1176). The Simulation tab reads each charger's daily energy.
 - 🐛 **Force charge goes back to Auto when the battery is full** (#1131). Force discharge does the same at the reserve.
 - 🐛 **Force charge also ends on a battery that stops below 100 %** (#1164). At 90 % or more, 15 minutes without taking charge means full.
-- 🐛 **Force discharge also ends on a battery that stops above the reserve** (#1165). At night, 15 minutes without selling while the home buys power ends it.
+- 🐛 **Force discharge ends on a battery that stops above the reserve** (#1165). At night, 15 minutes without selling while the home buys power ends it.
 - 🐛 **Force charge ends on each battery by itself** (#1167). An unavailable power sensor on one battery no longer keeps the other charging from the grid.
 - 🐛 **Plans value exported solar at your live feed-in price** (#1162). Each hour uses its own forecast price, not the fixed rate.
 - 🐛 **Charge pacing keeps one limit when the forecast sits right at what the battery needs** (#820). It no longer jumps to full power and back.
