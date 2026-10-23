@@ -343,9 +343,21 @@ def charge_stall_soc(end_soc) -> float:
         return MANUAL_CHARGE_STALL_SOC
     return min(MANUAL_CHARGE_STALL_SOC, end - MANUAL_CHARGE_END_MARGIN)
 
+#: (#1165) Some inverters end a sale at their own lower level (30 %, while
+#: SEM's reserve is 20 %), so the pack never reaches the reserve. A sale is
+#: also done when the pack sends no more, on the charge's window (the same
+#: watts, time and gap). An export limit can hold a selling pack back too,
+#: so a pack that sends nothing counts only while the home buys at least
+#: this much from the grid: a limit stops what goes out, never the home…
+MANUAL_SALE_STALL_IMPORT_W = 100.0
+#: (#1165) …and the sun gives at most this much: a hybrid inverter that is
+#: full with sun has no room for the pack, though the home may still buy.
+MANUAL_SALE_STALL_SUN_W = 100.0
+
 
 def manual_mode_done(mode, soc, *, soc_read: bool, reserve: float,
-                     charge_stalled: bool = False) -> bool:
+                     charge_stalled: bool = False,
+                     sale_stalled: bool = False) -> bool:
     """(#1131) Has a manual charge or sale finished its job?
 
     Force charge and force discharge are one job each, not a place to stay.
@@ -358,6 +370,8 @@ def manual_mode_done(mode, soc, *, soc_read: bool, reserve: float,
     (#1164) A charge is also done when the pack has stopped taking it at
     its inverter's own end-of-charge level (``charge_stalled``, from
     :func:`charge_stall_step`): a pack that stops at 95 % never reaches 100.
+    (#1165) A sale is also done when the pack has stopped sending above the
+    reserve (``sale_stalled``, from :func:`sale_stall_step`).
 
     A level SEM cannot read finishes nothing: a held or never-read SOC is
     not the battery's level (#932, #875)."""
@@ -367,7 +381,7 @@ def manual_mode_done(mode, soc, *, soc_read: bool, reserve: float,
     if m == "force_charge":
         return float(soc) >= MANUAL_CHARGE_TARGET_SOC or bool(charge_stalled)
     if m == "force_discharge":
-        return float(soc) <= float(reserve)
+        return float(soc) <= float(reserve) or bool(sale_stalled)
     return False
 
 
@@ -400,10 +414,51 @@ def charge_stall_step(prev, now_s: float, soc, stall_read: bool):
     cycle without a stall read ends the window; a level above the one it
     started at starts it again — the pack still charges, slowly — and so
     does a gap over ``MANUAL_CHARGE_STALL_GAP_S`` since the last check."""
+    return _stall_step(prev, now_s, soc, stall_read, moves=1.0)
+
+
+def sale_stall_read(soc, power_w, *, soc_read: bool, power_read: bool,
+                    asked_w, sem_selling, site) -> bool:
+    """(#1165) Does this cycle show a pack that sends no more of a sale?
+
+    All of: the level and the pack's own power are readings; SEM's sale
+    landed and is not stopped (``sem_selling``, from :func:`forced_ops`);
+    the last sale SENT asked for at least one step (``asked_w``); the pack
+    moves no more than ``MANUAL_CHARGE_STALL_W`` either way; and ``site``,
+    this cycle's ``(grid import W, sun W)``, shows the home buying at least
+    ``MANUAL_SALE_STALL_IMPORT_W`` with no more than
+    ``MANUAL_SALE_STALL_SUN_W`` of sun. ``site`` is ``None`` on a cycle
+    whose grid or sun is no measurement, and then nothing is read.
+
+    Why the home: an export limit holds back what goes out. A home that
+    buys sends nothing out, so a pack that could sell would at least feed
+    the home. Why no sun: a hybrid inverter full with sun has no room for
+    the pack, and the home can buy then too."""
+    if not (soc_read and power_read) or soc is None or power_w is None:
+        return False
+    if site is None:
+        return False
+    import_w, sun_w = site
+    return (sem_selling is True
+            and float(asked_w or 0.0) >= FORCED_CHARGE_STEP_W
+            and float(import_w) >= MANUAL_SALE_STALL_IMPORT_W
+            and float(sun_w) <= MANUAL_SALE_STALL_SUN_W
+            and abs(float(power_w)) <= MANUAL_CHARGE_STALL_W)
+
+
+def sale_stall_step(prev, now_s: float, soc, stall_read: bool):
+    """(#1165) :func:`charge_stall_step` for a sale: a level BELOW the one
+    the window started at starts it again — the pack still sells, slowly."""
+    return _stall_step(prev, now_s, soc, stall_read, moves=-1.0)
+
+
+def _stall_step(prev, now_s: float, soc, stall_read: bool, *, moves: float):
+    """The window of :func:`charge_stall_step` and :func:`sale_stall_step`.
+    ``moves`` is the way the job moves the level: +1 a charge, -1 a sale."""
     if not stall_read:
         return None, False
     now_s = float(now_s)
-    if (prev is None or float(soc) > float(prev[1])
+    if (prev is None or moves * (float(soc) - float(prev[1])) > 0
             or now_s - float(prev[2]) > MANUAL_CHARGE_STALL_GAP_S):
         return (now_s, float(soc), now_s), False
     since_s, start_soc = float(prev[0]), float(prev[1])

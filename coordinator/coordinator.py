@@ -8082,7 +8082,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
     def _finish_manual_battery_modes(
         self, battery_items, soc_read: dict, count: int,
-        power_read: "dict | None" = None,
+        power_read: "dict | None" = None, site=None,
     ) -> None:
         """(#1131) Put a battery back on Auto when its manual job is done.
 
@@ -8119,14 +8119,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         (#1166) A pack whose inverter stops it below 90 % stalls from its
         own end level (``battery_charge_end_soc_entity``, per battery) less
         a small margin; with no level read, 90 % as before.
+
+        (#1165) A sale ends the same way when the inverter stops it above
+        the reserve (its own lower level): the pack sends no more while the
+        home buys from the grid with no sun (``sale_stall_read``). ``site``
+        is this cycle's ``(grid import W, sun W)``, or ``None`` when those
+        reads are no measurement. It is the home's, not a pack's: it says
+        no export limit can be what holds the pack back.
         """
         from .decide_battery import (
             charge_stall_read, charge_stall_soc, charge_stall_step, forced_ops,
-            manual_mode_done,
+            manual_mode_done, sale_stall_read, sale_stall_step,
         )
         from ..consts.core import BATTERY_SOC_STEP_CONFIRM_READS
         if self.config_entry is None or not battery_items:
             self._manual_charge_stalls = {}
+            self._manual_sale_stalls = {}
             return          # too early to persist anything
         streaks = getattr(self, "_manual_done_streaks", None)
         if not isinstance(streaks, dict):
@@ -8138,9 +8146,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # is known, so no unit's job is finished.
             streaks.clear()
             self._manual_charge_stalls = {}
+            self._manual_sale_stalls = {}
             return
         stalls = getattr(self, "_manual_charge_stalls", None)
         stalls = stalls if isinstance(stalls, dict) else {}
+        sales = getattr(self, "_manual_sale_stalls", None)
+        sales = sales if isinstance(sales, dict) else {}
         power_read = power_read if isinstance(power_read, dict) else {}
         adapters = getattr(self, "_battery_adapters", None)
         adapters = adapters if isinstance(adapters, dict) else {}
@@ -8148,40 +8159,57 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         commands = not bool(getattr(self, "_observer_mode", False))
         now_s = _manual_stall_clock()
         new_stalls: dict = {}
+        new_sales: dict = {}
         stalled_ids: set = set()
         done: list = []
+
+        def _asked(adapter, attr):
+            # What actuate_battery last SENT this battery (0 when it sent a
+            # stop, held one, or sent anything else).
+            w = getattr(adapter, attr, 0.0)
+            return (0.0 if isinstance(w, bool) or not isinstance(w, (int, float))
+                    else w)
+
         for idx, (battery_id, runtime) in enumerate(battery_items):
             cfg = self._per_battery_config(idx, count)
             mode = str(cfg.get("battery_mode", "auto") or "auto").lower()
             soc = getattr(runtime, "last_known_soc", None)
             is_read = bool(soc_read.get(battery_id, False))
+            own_w = getattr(runtime, "last_known_w", None)
+            own_power_read = power_read.get(battery_id) is True
+            adapter = adapters.get(battery_id)
             stalled = False
             if mode == "force_charge":
-                adapter = adapters.get(battery_id)
-                # What actuate_battery last SENT this battery (0 when it sent
-                # a stop, held one, or sent anything else).
-                asked_w = getattr(adapter, "_sem_charge_asked_w", 0.0)
-                if isinstance(asked_w, bool) or not isinstance(
-                        asked_w, (int, float)):
-                    asked_w = 0.0
                 window, stalled = charge_stall_step(
                     stalls.get(battery_id), now_s, soc, charge_stall_read(
-                        soc, getattr(runtime, "last_known_w", None),
-                        soc_read=is_read,
-                        power_read=power_read.get(battery_id) is True,
-                        asked_w=asked_w,
+                        soc, own_w, soc_read=is_read,
+                        power_read=own_power_read,
+                        asked_w=_asked(adapter, "_sem_charge_asked_w"),
                         sem_charging=(forced_ops(adapter)[0]
                                       if commands else None),
                         stall_soc=charge_stall_soc(
                             self._charge_end_soc(cfg))))
                 if window is not None:
                     new_stalls[battery_id] = window
-                if stalled:
-                    stalled_ids.add(battery_id)
+            elif mode == "force_discharge":
+                window, stalled = sale_stall_step(
+                    sales.get(battery_id), now_s, soc, sale_stall_read(
+                        soc, own_w, soc_read=is_read,
+                        power_read=own_power_read,
+                        asked_w=_asked(adapter, "_sem_discharge_asked_w"),
+                        sem_selling=(forced_ops(adapter)[1]
+                                     if commands else None),
+                        site=site))
+                if window is not None:
+                    new_sales[battery_id] = window
+            if stalled:
+                stalled_ids.add(battery_id)
             done.append((mode, manual_mode_done(
                 mode, soc, soc_read=is_read, reserve=reserve_soc_of(cfg),
-                charge_stalled=stalled)))
+                charge_stalled=stalled and mode == "force_charge",
+                sale_stalled=stalled and mode == "force_discharge")))
         self._manual_charge_stalls = new_stalls
+        self._manual_sale_stalls = new_sales
         # Each control and the batteries it drives.
         groups = ({idx: [idx] for idx in range(len(done))} if per_battery
                   else {None: list(range(len(done)))})
@@ -8212,12 +8240,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 "all" if key is None else battery_items[key][0], mode,
                 ", ".join(f"{float(battery_items[i][1].last_known_soc):.0f}%"
                           for i in members),
-                (" (the pack took no more charge, #1164)"
+                ((" (the pack took no more charge, #1164)"
+                  if mode == "force_charge" else
+                  " (the pack sent no more, #1165)")
                  if any(battery_items[i][0] in stalled_ids for i in members)
                  else ""),
                 DEFAULT_BATTERY_MODE)
             for i in members:
                 self._manual_charge_stalls.pop(battery_items[i][0], None)
+                self._manual_sale_stalls.pop(battery_items[i][0], None)
 
     def _arbitrage_enabled(self, battery_count: int = 0) -> bool:
         """(#533 / #638 C6+C7) Can battery→grid arbitrage act on THIS install?
@@ -9933,9 +9964,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # (#1131) A manual charge or sale that has done its job hands the
         # battery back to Auto before this cycle decides — on a level that is
         # a reading this cycle (not held, not the never-read 0.0).
+        # (#1165) …and the home's grid import and sun, for a sale the pack
+        # stopped: only on a cycle whose steering reads are all measurements
+        # and whose balance closed (``house_load_is_measured``).
+        from .decide_battery import house_load_is_measured
+        _site = ((max(0.0, float(getattr(power, "grid_import_power", 0.0) or 0.0)),
+                  max(0.0, float(getattr(power, "solar_power", 0.0) or 0.0)))
+                 if house_load_is_measured(power) else None)
         try:
             self._finish_manual_battery_modes(
-                battery_items, soc_seen, _bat_count, power_read=power_seen)
+                battery_items, soc_seen, _bat_count, power_read=power_seen,
+                site=_site)
         except Exception as err:  # noqa: BLE001 — a mode write must not end a cycle
             # (#762/#1092-class) a persistent fault here logged a full
             # traceback every cycle; log_on_change makes it a transition.

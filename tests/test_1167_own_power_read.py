@@ -160,7 +160,7 @@ async def _pipeline(monkeypatch, power):
     stub.config = {}
     stub._vpp_apply_battery_override = lambda pbc: {}
 
-    def _finish(items, soc_read, count, power_read=None):
+    def _finish(items, soc_read, count, power_read=None, site=None):
         seen["soc_read"] = soc_read
         seen["power_read"] = power_read
 
