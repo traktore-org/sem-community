@@ -3805,12 +3805,13 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                             ${Pe?W`<span class="dep-most">· ${this._t("ev_dep_most_days")}</span>`:K}
                         </span>
                     </div>
-                    ${Pe&&Be.label?W`
+                    ${(Pe||be.from_calendar)&&Be.label?W`
                     <!-- (#1023) A weekday with its own time makes the next
-                         departure worth saying; otherwise it is Charge by. -->
+                         departure worth saying; otherwise it is Charge by.
+                         (#1087) A calendar event names itself too. -->
                     <div class="ct-subhint dep-hint">
                         <div class="ct-hint-row">
-                            <span class="ct-hint-text">${Le}<b class="dep-next">${Be.label}</b>${Oe}</span>
+                            <span class="ct-hint-text">${be.from_calendar?this._fmtT("ev_dep_next_calendar",{when:Be.label,event:be.calendar_summary||""}):W`${Le}<b class="dep-next">${Be.label}</b>${Oe}`}</span>
                         </div>
                     </div>`:K}
                     ${ye?W`

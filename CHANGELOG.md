@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ✨ **The energy plan shows a slot's grid CO2 alongside its price** (#1085). Only when your CO2 sensor carries a forecast; off otherwise.
 - ✨ **Ask Assist why the battery or car is doing something, or what tonight costs** (#1086). One sentence can set a charger's target, off by default.
 - ✨ **A heat pump's own COP sets what a kWh of heat really costs, now a sensor** (#1081). Pre-heat timing can use it.
+- ✨ **An EV charger's departure can follow a calendar's next event instead of a fixed time** (#1087). The card names the event.
 
 - 🐛 **SEM no longer flips the sign of a grid meter with two sensors (import and export)** (#1215). Before, export could read as import.
 - 🐛 **The Simulation tab and cost estimates no longer count a battery sale as solar sent out** (#1216). Before, self-consumption and solar savings read too low.

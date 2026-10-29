@@ -17,7 +17,7 @@ from ..utils.device_names import charger_display_name, charger_own_name  # (#105
 import logging
 import time
 from types import SimpleNamespace
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
@@ -145,6 +145,21 @@ from ..utils.helpers import battery_export_part, solar_export, solar_share_pct
 from ..analytics.energy_assistant import EnergyAssistant
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _calendar_next_for(host: Any, cid: str) -> Optional[datetime]:
+    """(#1087) ``host._calendar_departure_for(cid)``, or ``None`` when
+    ``host`` has no such METHOD at all — a unit test building this
+    coordinator's methods on a bare ``SimpleNamespace`` (several of the
+    ``#638`` shadow-plan tests do) has neither the method nor the cache
+    behind it, and must read as "no calendar", not crash. A ``MagicMock``
+    host answers ANY attribute, including this one, with another
+    MagicMock — real, callable, but not a ``datetime`` — so the result
+    is checked too, not just whether the call succeeded. Mirrors
+    ``ev_control.py``'s own ``_calendar_next_for``."""
+    fn = getattr(host, "_calendar_departure_for", None)
+    result = fn(cid) if callable(fn) else None
+    return result if isinstance(result, datetime) else None
 
 
 def _capability_clock() -> float:
@@ -871,6 +886,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # (#1085 Part B) one-off per-device overrides; restored from
         # storage on the first cycle, see ``_async_update_data``.
         self._plan_overrides: Dict[str, Any] = {}
+        # (#1087) a charger's departure-calendar's next event, cached —
+        # departure_for stays sync/hass-free; this is the only async
+        # reader, throttled, mirrors tariff/calendar_provider.py's hook.
+        self._ev_calendar_next: Dict[str, Optional[datetime]] = {}
+        self._ev_calendar_summary: Dict[str, str] = {}
+        self._ev_calendar_read_at: Dict[str, datetime] = {}
 
         # Energy Dashboard config
         self._energy_dashboard_config: Optional[EnergyDashboardConfig] = None
@@ -4113,6 +4134,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 except Exception as e:  # noqa: BLE001
                     _LOGGER.debug("Tariff service-price refresh failed: %s", e)
 
+            # (#1087) a departure calendar's next event, same async hook.
+            try:
+                await self._async_refresh_calendar_departures()
+            except Exception as e:  # noqa: BLE001
+                _LOGGER.debug("Calendar departure refresh failed: %s", e)
+
             # Update tariff rates before energy/cost calculation so cost accumulators
             # use the current rate for this cycle (fixes dynamic tariff mid-day bug)
             try:
@@ -6335,7 +6362,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 # Resolve deadline from charger config — same path the
                                 # planner uses, just without the full plan computation.
                                 _ev_deadline_dt = departure_for(
-                                    _pcfg, _now, self.config)
+                                    _pcfg, _now, self.config,
+                                    calendar_next=_calendar_next_for(self, _cid))
                                 # (#967) and the preview holds through an expensive
                                 # window open exactly as the night will (D3), so the
                                 # strip never promises a start in the peak band.
@@ -10458,6 +10486,91 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             cap = 0.0
         return {"default_floor": floor, "capacity_kwh": round(cap, 2)}
 
+    #: how often a charger's calendar is read again when nothing changed.
+    _CALENDAR_DEPARTURE_REFRESH_S = 900
+
+    def _calendar_departure_for(self, cid: str) -> Optional[datetime]:
+        """(#1087) The cached next-event start for this charger's
+        departure calendar, or ``None``. Pure read — ``departure_for``
+        itself stays sync/hass-free; this is what feeds it. Defensive:
+        a bare test-double coordinator built without ``__init__`` has
+        no cache at all, which must read as "no calendar", not crash."""
+        return (getattr(self, "_ev_calendar_next", None) or {}).get(cid)
+
+    async def _async_refresh_calendar_departures(self) -> None:
+        """(#1087) Each charger with ``departure_calendar_entity`` set:
+        the calendar's own next event, read via ``calendar.get_events``
+        and cached — throttled per charger, same hook/shape as
+        ``tariff/calendar_provider.py``'s ``async_refresh_service_prices``.
+        A charger with nothing configured, or a calendar read that fails,
+        simply has no cached value — ``departure_for`` then falls back to
+        the weekday table exactly as if no calendar existed."""
+        chargers = self.config.get("ev_chargers") or []
+        if not chargers:
+            return
+        services = getattr(self.hass, "services", None)
+        if services is None or not services.has_service("calendar", "get_events"):
+            return
+        now = dt_util.now()
+        for cfg in chargers:
+            if not isinstance(cfg, dict):
+                continue
+            cid = str(cfg.get("id") or "")
+            entity = str(cfg.get("departure_calendar_entity") or "").strip()
+            if not cid:
+                continue
+            if not entity:
+                self._ev_calendar_next.pop(cid, None)
+                self._ev_calendar_summary.pop(cid, None)
+                self._ev_calendar_read_at.pop(cid, None)
+                continue
+            last = self._ev_calendar_read_at.get(cid)
+            if (last is not None
+                    and (now - last).total_seconds() < self._CALENDAR_DEPARTURE_REFRESH_S):
+                continue
+            try:
+                resp = await services.async_call(
+                    "calendar", "get_events",
+                    {"entity_id": entity,
+                     "start_date_time": now,
+                     "end_date_time": now + timedelta(days=14)},
+                    blocking=True, return_response=True,
+                )
+            except Exception as err:  # noqa: BLE001 — an unreadable calendar is no calendar
+                _LOGGER.debug("calendar departure: cannot read %s: %s", entity, err)
+                continue
+            self._ev_calendar_read_at[cid] = now
+            events = ((resp or {}).get(entity) or {}).get("events") or []
+            rows = []
+            for event in events:
+                if not isinstance(event, dict):
+                    continue
+                raw = event.get("start")
+                if not isinstance(raw, str):
+                    continue
+                # (#1087) an all-day event's "start" is a bare DATE
+                # ("2026-10-30", from HA's own CalendarEvent.start_date
+                # path) — no "T" means no time, and it cannot name a
+                # departure HOUR, so it is skipped rather than guessed
+                # at (#925). ``parse_datetime`` on its own would accept
+                # a bare date as midnight, which is not a real deadline.
+                if "T" not in raw:
+                    continue
+                parsed = dt_util.parse_datetime(raw)
+                if parsed is None:
+                    continue
+                if parsed.tzinfo is None:
+                    parsed = dt_util.as_local(parsed)
+                if parsed > now:
+                    rows.append((parsed, str(event.get("summary") or "")))
+            if rows:
+                next_start, next_summary = min(rows, key=lambda r: r[0])
+                self._ev_calendar_next[cid] = next_start
+                self._ev_calendar_summary[cid] = next_summary
+            else:
+                self._ev_calendar_next[cid] = None
+                self._ev_calendar_summary.pop(cid, None)
+
     def _departure_view(self, cid: str, charger_cfg) -> Dict[str, Any]:
         """(#1023) One charger's departure, as the EV card shows it: the
         default time, each weekday's own, the departure tonight is planned
@@ -10491,10 +10604,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 late = {"start": min(s for s, _ in spans).isoformat(),
                         "end": max(e for _, e in spans).isoformat(),
                         "kwh": round(kwh, 2), "cost": round(cost, 2)}
+        _cal_next = _calendar_next_for(self, cid)
         return {
             "default": departure_hhmm(cfg, self.config),
             "by_weekday": weekday_departures(cfg),
-            "next": departure_for(cfg, now, self.config).isoformat(),
+            "next": departure_for(cfg, now, self.config,
+                                  calendar_next=_cal_next).isoformat(),
+            # (#1087) the calendar event itself, when it's what "next"
+            # came from — the card names the event, not just the time.
+            "from_calendar": bool(_cal_next and _cal_next > now),
+            "calendar_summary": (self._ev_calendar_summary.get(cid, "")
+                                 if _cal_next and _cal_next > now else ""),
             "one_block": bool(cfg.get("ev_plan_one_block", False)),
             "late_min": late_min,
             "late": late,
@@ -10894,7 +11014,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 sig.append((
                     "ev", cid,
                     round(float(cfg.get("daily_ev_target") or 0.0), 1),
-                    departure_signature(cfg, self.config),  # (#1023)
+                    departure_signature(
+                        cfg, self.config,
+                        calendar_next=_calendar_next_for(self, cid)),  # (#1023/#1087)
                     bool(cfg.get("ev_plan_one_block", False)),
                     late_charge_s(cfg),
                     # (#1020) the mode it runs in, a schedule's included, so
@@ -11981,7 +12103,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # (#1023) The departure the card shows: a charger without
                 # a time of its own leaves at the global one, not at the
                 # night window's end.
-                deadline = departure_for(cfg, now, self.config)
+                deadline = departure_for(
+                    cfg, now, self.config,
+                    calendar_next=_calendar_next_for(self, cid))
                 try:
                     # The canonical one-list slot (#576): a drag override wins
                     # immediately — the same accessor decide() uses.

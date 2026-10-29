@@ -5,7 +5,7 @@
     "reason; removing one is the point of the issue.",
     "Regenerate:  python3 scripts/audit_options.py --baseline"
   ],
-  "total": 220,
+  "total": 221,
   "first_run_fields": 19,
   "first_run_steps": 5,
   "first_run_fields_best": 19,
@@ -43,6 +43,7 @@
     "daily_ev_target",
     "daily_ev_target_max",
     "demand_charge_rate",
+    "departure_calendar_entity",
     "deye_actuation_enabled",
     "deye_battery_voltage_entity",
     "deye_battery_voltage_max_age_s",
