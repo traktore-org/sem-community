@@ -1619,6 +1619,9 @@
       "export_guard_enabled": {
         "name": "Strażnik eksportu"
       },
+      "assist_write_intents_enabled": {
+        "name": "Komendy głosowe"
+      },
       "export_guard_override_external": {
         "name": "Strażnik eksportu: pomiń sterowanie zewnętrzne"
       },

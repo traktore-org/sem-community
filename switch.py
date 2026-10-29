@@ -96,6 +96,13 @@ SWITCH_TYPES = [
         entity_category=EntityCategory.CONFIG,
         icon="mdi:car-electric-outline",
     ),
+    # (#1086 Part A) ships off: Assist's explain-intents always work; this
+    # gates the one write-intent (set a charger's target SOC by voice).
+    SwitchEntityDescription(
+        key="assist_write_intents_enabled",
+        entity_category=EntityCategory.CONFIG,
+        icon="mdi:microphone-message",
+    ),
     # (arc #921) Four switches, all default OFF — the arc ships asleep like
     # the spending arc (#778) and charge pacing (#820), and is woken
     # deliberately per install. Persisted in PERSISTED_FLAG_DEFAULTS.

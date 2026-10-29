@@ -1619,6 +1619,9 @@
       "export_guard_enabled": {
         "name": "Export-őr"
       },
+      "assist_write_intents_enabled": {
+        "name": "Hangparancsok"
+      },
       "export_guard_override_external": {
         "name": "Export-őr: külső vezérlés felülbírálása"
       },

@@ -1619,6 +1619,9 @@
       "export_guard_enabled": {
         "name": "Exportwaker"
       },
+      "assist_write_intents_enabled": {
+        "name": "Spraakopdrachten"
+      },
       "export_guard_override_external": {
         "name": "Exportwaker: externe sturing negeren"
       },

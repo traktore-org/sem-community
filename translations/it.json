@@ -1619,6 +1619,9 @@
       "export_guard_enabled": {
         "name": "Guardia dell'esportazione"
       },
+      "assist_write_intents_enabled": {
+        "name": "Comandi vocali"
+      },
       "export_guard_override_external": {
         "name": "Guardia dell'esportazione: ignora controllo esterno"
       },

@@ -2008,6 +2008,58 @@ powers only the house.*
 The log starts empty after a restart. The diagnostics keep SEM's own
 reason text (in English) and its code beside each sentence.
 
+### Ask SEM out loud (#1086)
+
+SEM answers these questions through Home Assistant Assist — the same
+sentence the logbook already shows, spoken instead of read:
+
+- "why is the battery doing that"
+- "why is the car charging" / "why is the car not charging"
+- "what will tonight cost"
+- "is now a good time to charge"
+
+One more sentence changes something: "charge the car to 80 percent".
+It only works after you turn on the **Voice commands** switch
+(Settings → Devices & Services → Solar Energy Management) — off by
+default, so Assist can always explain but never acts unless you say so.
+
+Home Assistant does not learn a new sentence on its own; you give it
+one, once. Create `config/custom_sentences/en/solar_energy_management.yaml`
+with:
+
+```yaml
+language: "en"
+intents:
+  SemWhyBattery:
+    data:
+      - sentences:
+          - "why is the battery (doing that|like this)"
+  SemWhyCharger:
+    data:
+      - sentences:
+          - "why is the car (charging|not charging)"
+          - "why is [the] {name} (charging|not charging)"
+  SemTonightCost:
+    data:
+      - sentences:
+          - "what will tonight cost"
+  SemGoodToChargeNow:
+    data:
+      - sentences:
+          - "is now a good time to charge [the car]"
+  SemSetChargerTargetSoc:
+    data:
+      - sentences:
+          - "charge [the] [car] to {percent} percent"
+          - "charge [the] {name} to {percent} percent"
+```
+
+Restart Home Assistant, then try a sentence under **Settings → Voice
+assistants → Expose → Debug** before relying on it — a sentence that
+doesn't match yet needs a small wording change, not a bug report.
+Only English ships here today; other languages are the same idea, in
+that language's own `custom_sentences/<lang>/` folder.
+
 ---
 
 ## Observer Mode

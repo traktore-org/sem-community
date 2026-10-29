@@ -1619,6 +1619,9 @@
       "export_guard_enabled": {
         "name": "Hlídač exportu"
       },
+      "assist_write_intents_enabled": {
+        "name": "Hlasové příkazy"
+      },
       "export_guard_override_external": {
         "name": "Hlídač exportu: ignorovat externí řízení"
       },

@@ -1619,6 +1619,9 @@
       "export_guard_enabled": {
         "name": "Einspeise-Wächter"
       },
+      "assist_write_intents_enabled": {
+        "name": "Sprachbefehle"
+      },
       "export_guard_override_external": {
         "name": "Einspeise-Wächter: externe Steuerung übergehen"
       },

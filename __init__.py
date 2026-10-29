@@ -3396,6 +3396,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
         # (#1174) the plain sentences the logbook names a decision with
         from .plain_reasons import async_load_plain_reasons
         await async_load_plain_reasons(hass)
+        # (#1086 Part A) Assist explain/write intents — inert until a
+        # custom_sentences file exists (docs/USER_GUIDE.md ships one to
+        # copy in; SEM does not write it itself, see assist_intents.py).
+        from .assist_intents import async_register_intents
+        async_register_intents(hass)
         sim_job = getattr(coordinator, "_simulation_job", None)
         if sim_job is not None:
             entry.async_on_unload(lambda: sim_job.cancel(persist=False))

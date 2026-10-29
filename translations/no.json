@@ -1619,6 +1619,9 @@
       "export_guard_enabled": {
         "name": "Eksportvakt"
       },
+      "assist_write_intents_enabled": {
+        "name": "Talekommandoer"
+      },
       "export_guard_override_external": {
         "name": "Eksportvakt: overstyr ekstern styring"
       },

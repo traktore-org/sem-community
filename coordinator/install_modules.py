@@ -532,6 +532,9 @@ CORE_BY_DECISION: Mapping[tuple[str, str], str] = {
     ("switch", "simulation_tab"): (
         "the Simulation tab replays recorded days with a battery of any size; "
         "a house without one asks what one would save (#1083)"),
+    ("switch", "assist_write_intents_enabled"): (
+        "gates a voice write-intent, not a hardware module — every install "
+        "runs Assist or none (#1086)"),
     # (#996) Tell-tales: a flat tariff or a missing forecast stays visible.
     ("sensor", "forecast_source"): "says 'none' when there is no forecast — the tell-tale",
     ("binary_sensor", "forecast_available"): "off when there is no forecast — the tell-tale",

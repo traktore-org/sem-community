@@ -1619,6 +1619,9 @@
       "export_guard_enabled": {
         "name": "Export guard"
       },
+      "assist_write_intents_enabled": {
+        "name": "Voice commands"
+      },
       "export_guard_override_external": {
         "name": "Export guard: override external scheduling"
       },

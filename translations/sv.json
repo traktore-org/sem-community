@@ -1619,6 +1619,9 @@
       "export_guard_enabled": {
         "name": "Exportvakt"
       },
+      "assist_write_intents_enabled": {
+        "name": "Röstkommandon"
+      },
       "export_guard_override_external": {
         "name": "Exportvakt: åsidosätt extern styrning"
       },

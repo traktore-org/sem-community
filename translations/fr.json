@@ -1619,6 +1619,9 @@
       "export_guard_enabled": {
         "name": "Garde d'export"
       },
+      "assist_write_intents_enabled": {
+        "name": "Commandes vocales"
+      },
       "export_guard_override_external": {
         "name": "Garde d'export : ignorer le pilotage externe"
       },

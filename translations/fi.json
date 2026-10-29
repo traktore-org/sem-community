@@ -1619,6 +1619,9 @@
       "export_guard_enabled": {
         "name": "Vientivahti"
       },
+      "assist_write_intents_enabled": {
+        "name": "Äänikomennot"
+      },
       "export_guard_override_external": {
         "name": "Vientivahti: ohita ulkoinen ohjaus"
       },
