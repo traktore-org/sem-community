@@ -1,6 +1,21 @@
-"""#1086 Part A — Assist intents: SEM explains a decision, states tonight's
-cost, says whether now is a cheap time to charge, and — opt-in only — can
-set a charger's target SOC.
+"""#1086 Part A/B — Assist intents: SEM explains a decision, states
+tonight's cost, says whether now is a cheap time to charge, and — opt-in
+only — can set a charger's target SOC or hold a one-off override.
+
+**Part B (time/suspend) was blocked on #1085 Part B** (``plan_override``)
+and is unblocked now it exists. "Don't charge the car tonight" and
+"charge the car now" wrap ``coordinator.set_plan_override`` — the SAME
+one-off, self-expiring mechanism #1085 built, not
+``set_charger_departure`` (the persistent weekly table #1085's own issue
+exists to stop misusing for a one-night ask). Scoped down from the
+plan's own example ("charge to 80% before 07:00"): ``plan_override``'s
+``force`` action is CHARGE_MAX, the same unconditional command #580's
+VPP import-boost already uses — it does not respect a target SOC, so a
+voice command promising "to 80%" would overshoot. "Charge the car to
+80%" (a STANDING preference, matching the dashboard slider) is
+``SetChargerTargetSocIntent`` below; "charge the car now, for an hour"
+(a ONE-OFF, self-expiring force) is the new ``ForceChargeNowIntent`` —
+two different, honest asks, not one intent over-promising both.
 
 **Explain-intents are always on; the one write-intent needs
 ``assist_write_intents_enabled``** (default off, ``persisted_flags.py``).
@@ -44,8 +59,15 @@ INTENT_WHY_CHARGER = "SemWhyCharger"
 INTENT_TONIGHT_COST = "SemTonightCost"
 INTENT_GOOD_TO_CHARGE = "SemGoodToChargeNow"
 INTENT_SET_TARGET_SOC = "SemSetChargerTargetSoc"
+INTENT_SKIP_TONIGHT = "SemSkipChargerTonight"
+INTENT_FORCE_CHARGE_NOW = "SemForceChargeNow"
+INTENT_CLEAR_OVERRIDE = "SemClearPlanOverride"
 
 _NO_ANSWER = "I don't have an answer for that right now."
+_WRITE_REFUSED = ("Voice commands are read-only — turn on \"Voice commands\" "
+                  "in SEM's settings to let me change anything.")
+#: (#1086 Part B) a one-off that names no duration holds for this long.
+_DEFAULT_OVERRIDE_MINUTES = 8 * 60
 
 
 def _coordinator_for(hass: HomeAssistant) -> Optional[SEMCoordinator]:
@@ -76,6 +98,36 @@ def _first_charger_id(coordinator: SEMCoordinator, name: Optional[str]) -> Optio
         if not hits:
             return None
     return chargers[0].get("id")
+
+
+def _entry_for(hass: HomeAssistant, coordinator: SEMCoordinator):
+    """The config entry THIS coordinator's own runtime_data points at —
+    needed by any write, since ``persist_per_charger_option`` takes the
+    entry, not the coordinator alone."""
+    return next((e for e in hass.config_entries.async_entries(DOMAIN)
+                if getattr(e, "runtime_data", None) is coordinator), None)
+
+
+def _minutes_until_departure(coordinator: SEMCoordinator, charger_id: str) -> int:
+    """(#1086 Part B) "Tonight" for THIS charger — until its own next
+    departure (weekday table or calendar, #1023/#1087), the same
+    deadline the card and the night planner already show. Falls back to
+    a plain default rather than refuse the whole intent on a bad read —
+    a voice command is not the place to surface a stack trace."""
+    try:
+        from homeassistant.util import dt as dt_util
+        from .coordinator.departure import departure_for
+        charger_cfg = next(
+            (c for c in (coordinator.config.get("ev_chargers") or [])
+             if str(c.get("id")) == charger_id), {})
+        now = dt_util.now()
+        calendar_next = coordinator._calendar_departure_for(charger_id)
+        departure = departure_for(charger_cfg, now, coordinator.config,
+                                  calendar_next=calendar_next)
+        minutes = int((departure - now).total_seconds() / 60)
+        return minutes if minutes > 0 else _DEFAULT_OVERRIDE_MINUTES
+    except Exception:  # noqa: BLE001 — a bad read is the default, not a crash
+        return _DEFAULT_OVERRIDE_MINUTES
 
 
 def _why_sentence(coordinator: SEMCoordinator, kind: str, device_id: str) -> str:
@@ -208,9 +260,7 @@ class SetChargerTargetSocIntent(intent.IntentHandler):
             response.async_set_speech(_NO_ANSWER)
             return response
         if not bool(coordinator.config.get("assist_write_intents_enabled", False)):
-            response.async_set_speech(
-                "Voice commands are read-only — turn on \"Voice commands\" "
-                "in SEM's settings to let me change anything.")
+            response.async_set_speech(_WRITE_REFUSED)
             return response
         slots = self.async_validate_slots(intent_obj.slots)
         name = slots.get("name", {}).get("value")
@@ -220,8 +270,7 @@ class SetChargerTargetSocIntent(intent.IntentHandler):
             response.async_set_speech(
                 "I don't know which charger you mean." if name else _NO_ANSWER)
             return response
-        entry = next((e for e in hass.config_entries.async_entries(DOMAIN)
-                     if getattr(e, "runtime_data", None) is coordinator), None)
+        entry = _entry_for(hass, coordinator)
         if entry is None:
             response.async_set_speech(_NO_ANSWER)
             return response
@@ -233,9 +282,109 @@ class SetChargerTargetSocIntent(intent.IntentHandler):
         return response
 
 
+class SkipChargerTonightIntent(intent.IntentHandler):
+    """(#1086 Part B) "Don't charge the car tonight" — a one-off
+    ``plan_override(action="skip")``, not the persistent weekly table:
+    tomorrow's charging is untouched, the same thing #1085 itself was
+    built to guarantee."""
+
+    intent_type = INTENT_SKIP_TONIGHT
+    slot_schema = {vol.Optional("name"): cv.string}
+
+    async def async_handle(self, intent_obj: intent.Intent) -> intent.IntentResponse:
+        response = intent_obj.create_response()
+        coordinator = _coordinator_for(intent_obj.hass)
+        if coordinator is None:
+            response.async_set_speech(_NO_ANSWER)
+            return response
+        if not bool(coordinator.config.get("assist_write_intents_enabled", False)):
+            response.async_set_speech(_WRITE_REFUSED)
+            return response
+        slots = self.async_validate_slots(intent_obj.slots)
+        name = slots.get("name", {}).get("value")
+        charger_id = _first_charger_id(coordinator, name)
+        if charger_id is None:
+            response.async_set_speech(
+                "I don't know which charger you mean." if name else _NO_ANSWER)
+            return response
+        minutes = _minutes_until_departure(coordinator, charger_id)
+        coordinator.set_plan_override(charger_id, "skip", minutes)
+        response.response_type = intent.IntentResponseType.ACTION_DONE
+        response.async_set_speech(
+            f"Stopped charging for the next {minutes // 60} hours.")
+        return response
+
+
+class ForceChargeNowIntent(intent.IntentHandler):
+    """(#1086 Part B) "Charge the car now" — a one-off
+    ``plan_override(action="force")``, the same unconditional CHARGE_MAX
+    #580's VPP import-boost already uses. Does not target a specific
+    SOC — see the module docstring for why "to 80%" is a different
+    intent (``SetChargerTargetSocIntent``), not this one."""
+
+    intent_type = INTENT_FORCE_CHARGE_NOW
+    slot_schema = {
+        vol.Optional("name"): cv.string,
+        vol.Optional("minutes"): vol.All(vol.Coerce(int), vol.Range(min=1, max=24 * 60)),
+    }
+
+    async def async_handle(self, intent_obj: intent.Intent) -> intent.IntentResponse:
+        response = intent_obj.create_response()
+        coordinator = _coordinator_for(intent_obj.hass)
+        if coordinator is None:
+            response.async_set_speech(_NO_ANSWER)
+            return response
+        if not bool(coordinator.config.get("assist_write_intents_enabled", False)):
+            response.async_set_speech(_WRITE_REFUSED)
+            return response
+        slots = self.async_validate_slots(intent_obj.slots)
+        name = slots.get("name", {}).get("value")
+        minutes = slots.get("minutes", {}).get("value") or 60
+        charger_id = _first_charger_id(coordinator, name)
+        if charger_id is None:
+            response.async_set_speech(
+                "I don't know which charger you mean." if name else _NO_ANSWER)
+            return response
+        coordinator.set_plan_override(charger_id, "force", minutes)
+        response.response_type = intent.IntentResponseType.ACTION_DONE
+        response.async_set_speech(f"Charging now, for {minutes} minutes.")
+        return response
+
+
+class ClearPlanOverrideIntent(intent.IntentHandler):
+    """(#1086 Part B) "Charge normally again" — ends a one-off override
+    now, before its own time is up. The symmetric undo for the two
+    intents above."""
+
+    intent_type = INTENT_CLEAR_OVERRIDE
+    slot_schema = {vol.Optional("name"): cv.string}
+
+    async def async_handle(self, intent_obj: intent.Intent) -> intent.IntentResponse:
+        response = intent_obj.create_response()
+        coordinator = _coordinator_for(intent_obj.hass)
+        if coordinator is None:
+            response.async_set_speech(_NO_ANSWER)
+            return response
+        if not bool(coordinator.config.get("assist_write_intents_enabled", False)):
+            response.async_set_speech(_WRITE_REFUSED)
+            return response
+        slots = self.async_validate_slots(intent_obj.slots)
+        name = slots.get("name", {}).get("value")
+        charger_id = _first_charger_id(coordinator, name)
+        if charger_id is None:
+            response.async_set_speech(
+                "I don't know which charger you mean." if name else _NO_ANSWER)
+            return response
+        coordinator.clear_plan_override(charger_id)
+        response.response_type = intent.IntentResponseType.ACTION_DONE
+        response.async_set_speech("Back to normal.")
+        return response
+
+
 _HANDLERS = (
     WhyBatteryIntent, WhyChargerIntent, TonightCostIntent,
     GoodToChargeNowIntent, SetChargerTargetSocIntent,
+    SkipChargerTonightIntent, ForceChargeNowIntent, ClearPlanOverrideIntent,
 )
 
 

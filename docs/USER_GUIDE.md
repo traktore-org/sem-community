@@ -2018,10 +2018,18 @@ sentence the logbook already shows, spoken instead of read:
 - "what will tonight cost"
 - "is now a good time to charge"
 
-One more sentence changes something: "charge the car to 80 percent".
-It only works after you turn on the **Voice commands** switch
-(Settings → Devices & Services → Solar Energy Management) — off by
-default, so Assist can always explain but never acts unless you say so.
+A few sentences change something — they only work after you turn on
+the **Voice commands** switch (Settings → Devices & Services → Solar
+Energy Management), off by default, so Assist can always explain but
+never acts unless you say so:
+
+- "charge the car to 80 percent" — a standing change, the same as
+  moving the Target SOC slider yourself.
+- "don't charge the car tonight" — a one-off: tomorrow charges as
+  normal, untouched. Held until the car's own next departure.
+- "charge the car now, for 30 minutes" — also a one-off, at full
+  power; leave out the minutes and it holds for an hour.
+- "charge normally again" — ends either one-off early.
 
 Home Assistant does not learn a new sentence on its own; you give it
 one, once. Create `config/custom_sentences/en/solar_energy_management.yaml`
@@ -2052,6 +2060,20 @@ intents:
       - sentences:
           - "charge [the] [car] to {percent} percent"
           - "charge [the] {name} to {percent} percent"
+  SemSkipChargerTonight:
+    data:
+      - sentences:
+          - "don't charge [the] [car] tonight"
+          - "don't charge [the] {name} tonight"
+  SemForceChargeNow:
+    data:
+      - sentences:
+          - "charge [the] [car] now"
+          - "charge [the] [car] now for {minutes} minutes"
+  SemClearPlanOverride:
+    data:
+      - sentences:
+          - "charge [the] [car] normally [again]"
 ```
 
 Restart Home Assistant, then try a sentence under **Settings → Voice
