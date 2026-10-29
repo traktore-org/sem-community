@@ -779,6 +779,12 @@ def compute_load_intent(
     threshold = float(getattr(device, "min_power_threshold", rated) or rated)
     can_start = active or not peak_freeze
     deficit = bool(getattr(device, "has_runtime_deficit", False))
+    # (#1156) A fresh start has nothing to measure yet and claims the
+    # rating; an already-running device with a power sensor claims what
+    # it actually draws, so a self-throttled load (its own thermostat,
+    # its own controller) frees the rest of its rating for the next load
+    # instead of exporting it.
+    claim = held if active else rated
 
     # (#688) Past the floor, only FREE surplus may extend the run — the
     # battery has nothing left to guarantee, so the Tier-1 assist stands down.
@@ -799,7 +805,7 @@ def compute_load_intent(
     if effective >= start_bar and can_start:
         battery_assisted = tier1_headroom_w > 0 and remaining_surplus_w < threshold
         src = "tier1_battery" if battery_assisted else "solar"
-        return LoadIntent(True, rated, src, f"{src}: {effective:.0f}W ≥ {threshold:.0f}W")
+        return LoadIntent(True, claim, src, f"{src}: {effective:.0f}W ≥ {threshold:.0f}W")
 
     # (#638 C5) Comfort banking: a WILLING band inside its planned block.
     # The ONE sanctioned place the plan CREATES a run — banking has no
@@ -808,7 +814,7 @@ def compute_load_intent(
     # deficit paths, and a forced room's comfort_state is not "willing".
     if (plan.in_block and can_start
             and getattr(device, "comfort_state", "") == "willing"):
-        return LoadIntent(True, rated, "cheap_grid",
+        return LoadIntent(True, claim, "cheap_grid",
                           plan.reason or "joint plan: comfort banking block open")
 
     # Overnight battery (Tier-2): finish a runtime deficit off the battery.
@@ -821,7 +827,7 @@ def compute_load_intent(
             and not plan_hold
             and getattr(device, "battery_eligible_overnight", False)
             and soc_above_reserve):
-        return LoadIntent(True, rated, "tier2_battery", "overnight battery — runtime deficit")
+        return LoadIntent(True, claim, "tier2_battery", "overnight battery — runtime deficit")
 
     # Cheap-hours grid: finish a runtime deficit off the grid in a cheap window.
     # (#953) ``not sun_still_has_time`` is the window its battery twin has had
@@ -830,7 +836,7 @@ def compute_load_intent(
     if (deficit and can_start and price_is_cheap
             and not plan_hold and not sun_still_has_time
             and getattr(device, "top_up_policy", "solar_only") == "cheap_hours"):
-        return LoadIntent(True, rated, "cheap_grid", "cheap-hours grid — runtime deficit")
+        return LoadIntent(True, claim, "cheap_grid", "cheap-hours grid — runtime deficit")
 
     # 5. No source → off. When a plan hold is what suppressed the paid
     #    sources, SAY SO — "no source available" with a block twenty

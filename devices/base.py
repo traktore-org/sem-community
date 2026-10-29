@@ -1948,7 +1948,7 @@ class SwitchDevice(ComfortBandMixin, ControllableDevice):
     async def adjust_power(self, available_watts: float) -> float:
         # Switch devices are on/off only - no adjustment possible
         if self.is_active:
-            return self.rated_power
+            return self.get_current_consumption()
         return 0.0
 
 
@@ -2212,7 +2212,7 @@ class ClimateDevice(ComfortBandMixin, ControllableDevice):
     async def adjust_power(self, available_watts: float) -> float:
         # Climate devices are on/off only — no proportional adjustment.
         if self.is_active:
-            return self.rated_power
+            return self.get_current_consumption()
         return 0.0
 
     def to_dict(self) -> Dict[str, Any]:
@@ -4191,7 +4191,7 @@ class SetpointDevice(ControllableDevice):
         if not self._is_power_change_allowed():
             return self._status.current_consumption_w
         if self.is_active:
-            return self.rated_power
+            return self.get_current_consumption()
         return 0.0
 
     def to_dict(self) -> Dict[str, Any]:
@@ -4310,7 +4310,7 @@ class ScheduleDevice(ControllableDevice):
 
     async def adjust_power(self, available_watts: float) -> float:
         if self._started:
-            return self.rated_power
+            return self.get_current_consumption()
         return 0.0
 
     def clear_schedule(self) -> None:
