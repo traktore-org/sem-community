@@ -5447,7 +5447,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                                     <span class="tick ${e.left<4?"first":""}"
                                           style="left:${e.left}%">${e.text}</span>
                                 `)}
-                                ${a.map(e=>{const t=(Date.parse(e.start)-n)/c*100,i=(Date.parse(e.end)-Date.parse(e.start))/c*100;if(!Number.isFinite(t)||!Number.isFinite(i))return K;const s=null===e.price||void 0===e.price?"—":`${e.price} ${C}`,r=`${this._hm(e.start)}–${this._hm(e.end)} · ${s}`+(e.cheap?` · ${this._t("energy_plan_legend_cheap")}`:"");return W`<div class="slotcell" title="${r}"
+                                ${a.map(e=>{const t=(Date.parse(e.start)-n)/c*100,i=(Date.parse(e.end)-Date.parse(e.start))/c*100;if(!Number.isFinite(t)||!Number.isFinite(i))return K;const s=null===e.price||void 0===e.price?"—":`${e.price} ${C}`,r=Number.isFinite(e.co2)?` · ${Math.round(1e3*e.co2)} g/kWh`:"",a=`${this._hm(e.start)}–${this._hm(e.end)} · ${s}${r}`+(e.cheap?` · ${this._t("energy_plan_legend_cheap")}`:"");return W`<div class="slotcell" title="${a}"
                                         style="left:${t}%;width:${i}%"></div>`})}
                             </div>
                             <div class="stat axis"></div>

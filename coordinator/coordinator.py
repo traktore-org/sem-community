@@ -4126,6 +4126,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             except Exception as e:  # noqa: BLE001 — a CO2 read never costs a cycle
                 _LOGGER.debug("Grid CO2 read failed: %s", e)
                 self._energy_calculator.set_grid_co2_intensity(None, False)
+            # (#1085 Part A) the forecast half, for the 24-48h plan card —
+            # reads self._grid_co2_status, just populated above.
+            try:
+                self._maybe_refresh_co2_forecast()
+            except Exception as e:  # noqa: BLE001 — a forecast read never costs a cycle
+                _LOGGER.debug("Grid CO2 forecast read failed: %s", e)
 
             # Step 2a: Compute instantaneous power flows FIRST. v1.7.0
             # reorder — the autarky + cost-savings calculators need the
@@ -10610,6 +10616,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 source = "detected"
         kg = None
         has_forecast = False
+        forecast_attribute = None
         if eid:
             st = self.hass.states.get(eid)
             if st is None and source == "detected":
@@ -10620,14 +10627,82 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             kg = read_co2_intensity_kg(st)
             if st is not None:
                 from ..hardware_detection import series_attribute
-                has_forecast = series_attribute(getattr(st, "attributes", {})) is not None
+                forecast_attribute = series_attribute(getattr(st, "attributes", {}) or {})
+                has_forecast = forecast_attribute is not None
         self._grid_co2_status = {
             "source": source or "none",
             "kg_per_kwh": None if kg is None else round(kg, 4),
             "fallback": kg is None,
             "has_forecast": has_forecast,
         }
+        # (#1085 Part A) NOT on _grid_co2_status — that dict is published to
+        # diagnostics/sensor attributes and the entity id is deliberately
+        # never in it (test_the_status_never_holds_an_entity_id). Kept on
+        # the instance instead, for _maybe_refresh_co2_forecast only.
+        self._grid_co2_eid = eid
+        self._grid_co2_forecast_attr = forecast_attribute
         return kg
+
+    #: (#1085 Part A) how often the forecast ROWS are re-parsed. The data
+    #: already sits in the entity's attributes (no I/O, unlike the weather
+    #: service call temperature forecast needs) — this only bounds the
+    #: parse cost, not a network cost.
+    _CO2_FORECAST_REFRESH_S = 1800
+
+    def _maybe_refresh_co2_forecast(self) -> None:
+        """(#1085 Part A) Re-parse the CO2 entity's own forecast attribute,
+        at most every ``_CO2_FORECAST_REFRESH_S``. Synchronous: the data is
+        already in the entity's state, read fresh by ``_grid_co2_reading``
+        this same cycle — no service call, no background task."""
+        now = time.monotonic()
+        if now - getattr(self, "_co2_forecast_at", -1e9) < self._CO2_FORECAST_REFRESH_S:
+            return
+        self._co2_forecast_at = now
+        eid = getattr(self, "_grid_co2_eid", None)
+        attribute = getattr(self, "_grid_co2_forecast_attr", None)
+        if not eid or not attribute:
+            self._co2_forecast = []
+            return
+        st = self.hass.states.get(eid)
+        if st is None:
+            self._co2_forecast = []
+            return
+        from ..hardware_detection import (
+            CO2_INTENSITY_MAX_KG, co2_unit_factor, parse_co2_forecast_rows,
+        )
+        attrs = getattr(st, "attributes", {}) or {}
+        factor = co2_unit_factor(attrs.get("unit_of_measurement"))
+        if factor is None:
+            self._co2_forecast = []
+            return
+        out = []
+        for start, raw in parse_co2_forecast_rows(attrs, attribute):
+            kg = raw * factor
+            if 0.0 <= kg <= CO2_INTENSITY_MAX_KG:
+                out.append((start, kg))
+        self._co2_forecast = out
+
+    def _co2_at(self, when) -> Optional[float]:
+        """(#1085 Part A) Grid CO2 intensity (kg/kWh) at ``when``: the live
+        reading for the next 30 minutes, else the forecast row covering
+        it — a row's span runs to the NEXT row's start (or one hour, for
+        the last row), since CO2 forecasts carry no explicit cadence the
+        way the weather service's hourly/daily split does. None beyond
+        the forecast, exactly like ``_temperature_at``."""
+        try:
+            now = dt_util.now()
+            if when <= now + timedelta(minutes=30):
+                status = getattr(self, "_grid_co2_status", None) or {}
+                return status.get("kg_per_kwh")
+            rows = getattr(self, "_co2_forecast", None) or []
+            for i, (start, kg) in enumerate(rows):
+                end = (rows[i + 1][0] if i + 1 < len(rows)
+                       else start + timedelta(hours=1))
+                if start <= when < end:
+                    return kg
+            return None
+        except Exception:  # noqa: BLE001
+            return None
 
     def _intraday_forecast_on(self) -> bool:
         """(#1068) The soak flag: the day follows measured yield."""
@@ -11440,6 +11515,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # stamped plan priced it. One forecast, one tariff,
                     # two different answers; the preview was the wrong one.
                     export_rate=self._export_rate_at(),
+                    co2_at=lambda ts: self._co2_at(ts),
                 )
                 labels2 = {}
                 demands2 = []
@@ -12123,6 +12199,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "home_w": round(s.home_w, 1),
                     "soc_kwh": round(s.soc_kwh, 2),
                     "home_grid_w": round(s.home_grid_w, 1),
+                    # (#1085 Part A) kg/kWh; None when no CO2 source is
+                    # configured or the slot is beyond the forecast.
+                    "co2": None if s.co2 is None else round(s.co2, 4),
                     **({"batt": True} if s.home_batt_kwh > 1e-6 else {}),
                 } for s in rows]
 
@@ -12244,6 +12323,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             prov = self._tariff_provider
             _price_at = lambda ts: tariff_price_at(prov, ts)  # noqa: E731
             _cheap_at = lambda ts: tariff_cheap_at(prov, ts)  # noqa: E731
+            _co2_at = lambda ts: self._co2_at(ts)  # noqa: E731
             # (Rien's shape, 08-08) slots follow the MARKET: 15-min where
             # the published curve is 15-min, hourly where there is no
             # curve to ask. An hourly slot on a 15-min market wears its
@@ -12306,6 +12386,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # night hour cheaper than the export rate could never
                     # win; priced, the preference is economic and can lose.
                     export_rate=self._export_rate_at(),
+                    co2_at=_co2_at,
                     step_s=_step_s,
                 ))
                 t = day_end
@@ -12317,11 +12398,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                           night_end)
                 if end <= t:
                     end = min(t + _td(seconds=_step_s), night_end)
+                try:
+                    co2 = _co2_at(t)
+                except Exception:  # noqa: BLE001 — no reading, honestly
+                    co2 = None
                 slots.append(LedgerSlot(
                     start=t, end=end,
                     price=_price_at(t),
                     level_cheap=_cheap_at(t),
                     home_w=_home_at(t),
+                    co2=co2,
                 ))
                 t = end
             if not slots:

@@ -3489,6 +3489,65 @@ def read_co2_intensity_kg(state: Any) -> Optional[float]:
     return kg
 
 
+#: time keys ``series_attribute`` already recognises — a row's time key
+#: is one of these; the remaining key(s) are candidates for the value.
+_SERIES_TIME_KEYS = frozenset(
+    {"start", "from", "time", "datetime", "period_start", "begin"})
+#: value key names tried first when a row has more than one candidate —
+#: shape still wins when none of these match (#1085 Part A).
+_SERIES_VALUE_KEYS = (
+    "intensity", "value", "co2", "carbon_intensity", "emission",
+    "emissions", "rate", "co2_intensity",
+)
+
+
+def parse_co2_forecast_rows(
+    attributes: Any, attribute_name: str,
+) -> List[Tuple[Any, float]]:
+    """(#1085 Part A) The ``(start, raw_value)`` pairs of a CO2 sensor's own
+    forecast attribute (found by :func:`series_attribute`). ``raw_value`` is
+    unconverted — the caller applies :func:`co2_unit_factor` for the
+    entity's ``unit_of_measurement`` once, since forecast rows don't carry
+    their own unit. A row whose time cannot be parsed, or whose value key
+    cannot be found by shape, is skipped rather than guessed at."""
+    from homeassistant.util import dt as dt_util
+
+    rows = (attributes or {}).get(attribute_name)
+    if not isinstance(rows, list):
+        return []
+    out: List[Tuple[Any, float]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        time_key = None
+        for k in row:
+            if str(k).lower() in _SERIES_TIME_KEYS:
+                time_key = k
+                break
+        if time_key is None:
+            continue
+        start = dt_util.parse_datetime(str(row.get(time_key)))
+        if start is None:
+            continue
+        candidates = [k for k in row if k != time_key]
+        value_key = next(
+            (k for name in _SERIES_VALUE_KEYS for k in candidates
+             if str(k).lower() == name), None)
+        if value_key is None:
+            numeric = [k for k in candidates
+                       if isinstance(row.get(k), (int, float))
+                       and not isinstance(row.get(k), bool)]
+            if len(numeric) != 1:
+                continue
+            value_key = numeric[0]
+        try:
+            value = float(row[value_key])
+        except (TypeError, ValueError):
+            continue
+        out.append((start, value))
+    return sorted(out, key=lambda r: r[0])
+
+
 # ── (#1082) outdoor temperature — one source every part of SEM reads ──
 #
 # The car's cold-weather taper, the battery night record, the snow flag and

@@ -30,6 +30,7 @@ from custom_components.solar_energy_management.coordinator.types import PowerRea
 from custom_components.solar_energy_management.hardware_detection import (
     co2_unit_factor,
     find_grid_co2_sensors,
+    parse_co2_forecast_rows,
     read_co2_intensity_kg,
     series_attribute,
 )
@@ -112,6 +113,57 @@ class TestForecastShape:
     def test_a_list_without_times_is_not_a_series(self):
         assert series_attribute({"forecast": [{"intensity": 120}]}) is None
         assert series_attribute({"forecast": [1, 2, 3]}) is None
+
+
+@pytest.mark.unit
+class TestParseCo2ForecastRows:
+    """(#1085 Part A) The value key is found by shape, like the time key."""
+
+    def test_the_known_intensity_key_wins(self):
+        attrs = {"forecast": [
+            {"from": "2026-10-13T12:00Z", "intensity": 0.2},
+            {"from": "2026-10-13T13:00Z", "intensity": 0.18},
+        ]}
+        rows = parse_co2_forecast_rows(attrs, "forecast")
+        assert [v for _, v in rows] == [0.2, 0.18]
+
+    def test_an_unknown_key_name_still_resolves_when_it_is_the_only_one(self):
+        attrs = {"next_hours": [{"start": "2026-10-13T12:00Z", "gco2": 210}]}
+        rows = parse_co2_forecast_rows(attrs, "next_hours")
+        assert rows == [(rows[0][0], 210.0)]
+
+    def test_rows_are_sorted_by_time_regardless_of_input_order(self):
+        attrs = {"forecast": [
+            {"from": "2026-10-13T14:00Z", "intensity": 0.3},
+            {"from": "2026-10-13T12:00Z", "intensity": 0.1},
+        ]}
+        rows = parse_co2_forecast_rows(attrs, "forecast")
+        assert [v for _, v in rows] == [0.1, 0.3]
+
+    def test_an_unparseable_time_skips_only_that_row(self):
+        attrs = {"forecast": [
+            {"from": "not a time", "intensity": 0.9},
+            {"from": "2026-10-13T12:00Z", "intensity": 0.2},
+        ]}
+        rows = parse_co2_forecast_rows(attrs, "forecast")
+        assert [v for _, v in rows] == [0.2]
+
+    def test_two_unnamed_numeric_candidates_are_ambiguous_and_skipped(self):
+        """#925: a guess is worse than nothing when the shape is genuinely
+        ambiguous — two numbers, neither a recognised value-key name."""
+        attrs = {"forecast": [
+            {"from": "2026-10-13T12:00Z", "a": 1, "b": 2}]}
+        assert parse_co2_forecast_rows(attrs, "forecast") == []
+
+    def test_a_missing_attribute_is_empty(self):
+        assert parse_co2_forecast_rows({}, "forecast") == []
+
+    def test_a_non_dict_row_is_skipped(self):
+        attrs = {"forecast": [1, 2, {"from": "2026-10-13T12:00Z", "intensity": 0.2}]}
+        # series_attribute would already reject this shape, but the parser
+        # itself must not raise on it either.
+        rows = parse_co2_forecast_rows(attrs, "forecast")
+        assert [v for _, v in rows] == [0.2]
 
 
 def _calc():

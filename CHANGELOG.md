@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # [Unreleased]
 
 - 🐛 **A surplus load that throttles itself frees the rest of its rating** (#1156). Before, the walk reserved the full rating while the load drew less.
+- ✨ **The energy plan shows a slot's grid CO2 alongside its price** (#1085). Only when your CO2 sensor carries a forecast; off otherwise.
 
 - 🐛 **SEM no longer flips the sign of a grid meter with two sensors (import and export)** (#1215). Before, export could read as import.
 - 🐛 **The Simulation tab and cost estimates no longer count a battery sale as solar sent out** (#1216). Before, self-consumption and solar savings read too low.
