@@ -939,6 +939,10 @@ class HeatPumpSensorData:
     # which may be displayed but never fed back as training data (#755).
     heat_pump_energy_source: str = "none"
     heat_pump_energy_measured: bool = False
+    # (#1081 Slice A) the configured COP and the live price/COP cost of
+    # one kWh of heat — None only when the live price itself is unknown.
+    heat_pump_cop: Optional[float] = None
+    heat_pump_cost_of_heat: Optional[float] = None
 
 
 @dataclass
@@ -1591,6 +1595,8 @@ class SEMData:
             "heat_pump_energy_shifted_total": self.heat_pump.heat_pump_energy_shifted_total,
             "heat_pump_energy_source": self.heat_pump.heat_pump_energy_source,
             "heat_pump_energy_measured": self.heat_pump.heat_pump_energy_measured,
+            "heat_pump_cop": self.heat_pump.heat_pump_cop,
+            "heat_pump_cost_of_heat": self.heat_pump.heat_pump_cost_of_heat,
 
             # Hot water (#454)
             "hot_water_registered": self.hot_water.hot_water_registered,

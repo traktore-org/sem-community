@@ -1216,6 +1216,9 @@
       "heat_pump_mode": {
         "name": "热泵模式"
       },
+      "heat_pump_cost_of_heat": {
+        "name": "热泵热量成本"
+      },
       "heat_pump_registration_status": {
         "name": "热泵注册状态"
       },
@@ -1683,6 +1686,9 @@
       },
       "heat_pump_boost_offset": {
         "name": "热泵增强运行偏置"
+      },
+      "heat_pump_cop": {
+        "name": "热泵能效系数(COP)"
       },
       "system_size_kwp": {
         "name": "光伏系统装机容量 (kWp)"

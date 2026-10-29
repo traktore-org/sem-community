@@ -1216,6 +1216,9 @@
       "heat_pump_mode": {
         "name": "Tryb pompy ciepła"
       },
+      "heat_pump_cost_of_heat": {
+        "name": "Koszt ciepła pompy ciepła"
+      },
       "heat_pump_registration_status": {
         "name": "Status rejestracji pompy ciepła"
       },
@@ -1683,6 +1686,9 @@
       },
       "heat_pump_boost_offset": {
         "name": "Podbicie temperatury pompy ciepła"
+      },
+      "heat_pump_cop": {
+        "name": "COP pompy ciepła"
       },
       "system_size_kwp": {
         "name": "Moc instalacji PV"

@@ -1216,6 +1216,9 @@
       "heat_pump_mode": {
         "name": "Lämpöpumpun tila"
       },
+      "heat_pump_cost_of_heat": {
+        "name": "Lämpöpumpun lämmön hinta"
+      },
       "heat_pump_registration_status": {
         "name": "Lämpöpumpun rekisteröinnin tila"
       },
@@ -1683,6 +1686,9 @@
       },
       "heat_pump_boost_offset": {
         "name": "Lämpöpumpun boost-poikkeama"
+      },
+      "heat_pump_cop": {
+        "name": "Lämpöpumpun COP"
       },
       "system_size_kwp": {
         "name": "PV-järjestelmän koko"

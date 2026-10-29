@@ -1216,6 +1216,9 @@
       "heat_pump_mode": {
         "name": "Mod pompă de căldură"
       },
+      "heat_pump_cost_of_heat": {
+        "name": "Costul căldurii pompei de căldură"
+      },
       "heat_pump_registration_status": {
         "name": "Stare înregistrare pompă de căldură"
       },
@@ -1683,6 +1686,9 @@
       },
       "heat_pump_boost_offset": {
         "name": "Decalaj de stimulare pompă de căldură"
+      },
+      "heat_pump_cop": {
+        "name": "COP pompă de căldură"
       },
       "system_size_kwp": {
         "name": "Puterea instalată PV"

@@ -439,9 +439,11 @@ ENTITY_MODULES: Mapping[tuple[str, str], frozenset[Module]] = _table(
         "heat_pump_energy_today", "heat_pump_energy_total", "heat_pump_energy_year",
         "heat_pump_mode", "heat_pump_registration_status",
         "heat_pump_sg_ready_state",
+        "heat_pump_cost_of_heat",  # (#1081 Slice A)
     )),
     _rows("number", _HP, (
         "heat_pump_boost_offset",
+        "heat_pump_cop",  # (#1081 Slice A)
     )),
     _rows("binary_sensor", _HP, (
         "heat_pump_registered", "heat_pump_solar_boost",

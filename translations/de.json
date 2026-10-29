@@ -1216,6 +1216,9 @@
       "heat_pump_mode": {
         "name": "Wärmepumpe Modus"
       },
+      "heat_pump_cost_of_heat": {
+        "name": "Wärmepumpe Wärmekosten"
+      },
       "heat_pump_registration_status": {
         "name": "Wärmepumpe Registrierungs-Status"
       },
@@ -1683,6 +1686,9 @@
       },
       "heat_pump_boost_offset": {
         "name": "Wärmepumpe Boost-Offset"
+      },
+      "heat_pump_cop": {
+        "name": "Wärmepumpe COP"
       },
       "system_size_kwp": {
         "name": "PV-Anlagengröße"

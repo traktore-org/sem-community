@@ -1217,6 +1217,15 @@ SENSOR_TYPES = [
         state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement="CHF",
     ),
+    # (#1081 Slice A) what one kWh of HEAT costs right now — price / COP,
+    # not the raw electricity price. "CHF/kWh" is a label, not an HA
+    # device_class unit (MONETARY only accepts a bare currency code);
+    # the real currency is set at runtime below.
+    SensorEntityDescription(
+        key="heat_pump_cost_of_heat",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="CHF/kWh",
+    ),
     # Removed: Debug sensors not needed
     # daily_cost_data_source, monthly_cost_data_source
 
@@ -2722,6 +2731,11 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         # Use HA configured currency for monetary sensors (instead of hardcoded CHF)
         if description.device_class == SensorDeviceClass.MONETARY:
             self._attr_native_unit_of_measurement = coordinator.hass.config.currency
+
+        # (#1081) a rate, not a device_class HA recognises — the real
+        # currency still comes from the house, the "/kWh" part does not.
+        if description.key == "heat_pump_cost_of_heat":
+            self._attr_native_unit_of_measurement = f"{coordinator.hass.config.currency}/kWh"
 
         # Entity category
         if description.key in self.DIAGNOSTIC_SENSORS:

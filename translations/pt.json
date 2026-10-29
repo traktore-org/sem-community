@@ -1216,6 +1216,9 @@
       "heat_pump_mode": {
         "name": "Modo da bomba de calor"
       },
+      "heat_pump_cost_of_heat": {
+        "name": "Custo do calor da bomba de calor"
+      },
       "heat_pump_registration_status": {
         "name": "Estado de registo da bomba de calor"
       },
@@ -1683,6 +1686,9 @@
       },
       "heat_pump_boost_offset": {
         "name": "Offset de boost da bomba de calor"
+      },
+      "heat_pump_cop": {
+        "name": "COP da bomba de calor"
       },
       "system_size_kwp": {
         "name": "Potência do sistema FV"

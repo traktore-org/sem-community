@@ -7638,6 +7638,27 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             except (AttributeError, TypeError, ValueError):
                 pass
 
+        # (#1081 Slice A) heat's real price is price / COP, not the raw
+        # electricity price — cheaper on a mild day than a cold one even
+        # at the same rate. The device's own tariff (#812) if it has one,
+        # else the house's; never invents a price when neither can say.
+        _hp_cop = (float(getattr(hp_controller, "cop", 3.0) or 3.0)
+                  if hp_controller is not None else None)
+        _hp_price = None
+        if hp_controller is not None:
+            try:
+                _dtariffs = getattr(
+                    getattr(self, "_surplus_controller", None),
+                    "device_tariffs", None)
+                _hp_tariff = (_dtariffs.plan_tariff(hp_controller)
+                             if _dtariffs is not None else None)
+                if _hp_tariff is not None:
+                    _hp_price = _hp_tariff.price_at(dt_util.now())
+            except Exception:  # noqa: BLE001 — a missing price is no price
+                _hp_price = None
+        from .heat_cost import cost_of_heat as _cost_of_heat_fn
+        _hp_cost_of_heat = _cost_of_heat_fn(_hp_price, _hp_cop)
+
         heat_pump_data = HeatPumpSensorData(
             heat_pump_registered=registered_flag,
             heat_pump_mode=hp_mode,
@@ -7668,6 +7689,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             heat_pump_energy_measured=bool(getattr(
                 hp_controller, "daily_energy_is_measured", False
             )),
+            heat_pump_cop=_hp_cop,
+            heat_pump_cost_of_heat=_hp_cost_of_heat,
         )
 
         # ── Hot water data (#454) ───────────────────────────────────
@@ -16851,6 +16874,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         cfg.get("heat_pump_force_on_threshold", 5000)
                     )
                     hp.invert_sg_ready = bool(cfg.get("heat_pump_invert_sg_ready", False))
+                    hp.cop = float(cfg.get("heat_pump_cop", 3.0) or 3.0)
                     # #602/#576 — priority is the DRAG-LIST position now (resolved
                     # by refresh_direct_device_overrides), NOT a standalone knob.
                     # (Previously clobbered here from heat_pump_priority every
