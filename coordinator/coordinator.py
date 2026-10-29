@@ -868,6 +868,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         # Storage will be initialized with entry_id later
         self._storage: Optional[SEMStorage] = None
+        # (#1085 Part B) one-off per-device overrides; restored from
+        # storage on the first cycle, see ``_async_update_data``.
+        self._plan_overrides: Dict[str, Any] = {}
 
         # Energy Dashboard config
         self._energy_dashboard_config: Optional[EnergyDashboardConfig] = None
@@ -3906,6 +3909,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             self._schedule_wpa_replay()
             self._restore_energy_plan(
                 self._storage.get_energy_plan_state())
+            # (#1085 Part B) a one-off override must still hold after a
+            # reboot — nobody re-sets "don't charge tonight" at 2am.
+            from . import plan_override as _po
+            self._plan_overrides = _po.deserialize(
+                self._storage.get_plan_overrides())
             # (#755) The night's outcome record restores beside the plan it
             # measures. A reboot mid-night that kept the plan but lost the
             # actuals would produce a night whose "took N kWh" starts at the
@@ -3974,6 +3982,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         "longer in the Energy Dashboard (%s): %s (#1195)",
                         entity, err)
             self._dropped_battery_limit_entities = []
+
+        # (#1085 Part B) Drop any override whose time is up, every cycle —
+        # so a device that just lapsed reads as clear everywhere below,
+        # and the persisted store does not grow forever.
+        from . import plan_override as _po
+        _now_override = dt_util.now()
+        _purged_overrides = _po.purge_expired(self._plan_overrides, _now_override)
+        if _purged_overrides != self._plan_overrides:
+            self._plan_overrides = _purged_overrides
+            if self._storage is not None:
+                self._storage.set_plan_overrides(_po.serialize(self._plan_overrides))
 
         # Run deployment health check once after startup
         if self._initial_update_done and not getattr(self, '_health_checked', False):
@@ -4890,6 +4909,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         from .vpp_dispatch import vpp_pause_override
                         decision = vpp_pause_override(
                             decision, getattr(self, "_vpp_ev_override", None) == "pause")
+                        try:
+                            from . import plan_override as _po
+                            decision = _po.apply_to_charger_decision(
+                                self._plan_overrides, cid, decision, _now_override)
+                        except Exception:  # noqa: BLE001 — a bad override is no override
+                            _LOGGER.debug("plan override read skipped for %s", cid,
+                                          exc_info=True)
                         # Hysteresis stability layer (#461 flapping):
                         # median smoothing + ramp limit + delta/debounce
                         # guards + enable/disable delays. Applied BEFORE
@@ -6518,6 +6544,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             surplus_window = self._predictor.predict_surplus_window(now)
             if surplus_window:
                 result["predicted_surplus_window"] = surplus_window
+
+            # (#1085 Part B) {device_id: {"action", "until"}} for every
+            # device with an active override, for Diagnose and the
+            # device cards. Empty dict = nothing active, the common case.
+            from . import plan_override as _po
+            _po_now = dt_util.now()
+            result["plan_overrides"] = {
+                device_id: _po.status_payload(self._plan_overrides, device_id, _po_now)
+                for device_id in self._plan_overrides
+                if _po.active_override(self._plan_overrides, device_id, _po_now) is not None
+            }
 
             # 3a — full cycle incl. enrichment succeeded; clear the degrade flag
             # so the next enrichment failure warns again (warn-once per episode).
@@ -9923,11 +9960,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
             _forced = ((False, False) if self._observer_mode
                        else forced_ops(adapter))
+            _battery_cfg = self._vpp_apply_battery_override(
+                self._per_battery_config(batt_idx, _bat_count))
+            try:
+                from . import plan_override as _po
+                _battery_cfg = _po.apply_to_battery_config(
+                    self._plan_overrides, battery_id, _battery_cfg, dt_util.now())
+            except Exception:  # noqa: BLE001 — a bad override is no override
+                _LOGGER.debug("plan override read skipped for %s", battery_id,
+                              exc_info=True)
             view = BatteryView(
                 runtime=runtime,
-                config=self._vpp_apply_battery_override(
-                    self._per_battery_config(batt_idx, _bat_count)
-                ),
+                config=_battery_cfg,
                 fleet=fleet,
                 charging_state=getattr(charging_state, "value", str(charging_state)),
                 ev_charging=bool(getattr(power, "ev_charging", False)),
@@ -10304,6 +10348,32 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             "charger_id": boost.charger_id, "reason": reason,
             "at": dt_util.now().isoformat()}
         _LOGGER.info("Battery boost for %s ended: %s", boost.charger_id, reason)
+
+    # ── (#1085 Part B) one-off plan overrides ──────────────────────────
+    def set_plan_override(
+        self, device_id: str, action: str, minutes: int,
+        value: Optional[float] = None,
+    ) -> None:
+        """Set ``device_id``'s one-off override — tonight only, survives
+        a restart, auto-expires. Replaces any override already on this
+        device. Raises ``ValueError`` on a bad action (the schema already
+        rejects one, this is belt-and-suspenders) or ``minutes &lt;= 0``."""
+        from . import plan_override as _po
+        now = dt_util.now()
+        self._plan_overrides = _po.set_override(
+            self._plan_overrides, device_id, action,
+            now + timedelta(minutes=minutes), now, value=value)
+        if self._storage is not None:
+            self._storage.set_plan_overrides(_po.serialize(self._plan_overrides))
+        _LOGGER.info("Plan override: %s %s for %d min", device_id, action, minutes)
+
+    def clear_plan_override(self, device_id: str) -> None:
+        """End ``device_id``'s override now, if one is set."""
+        from . import plan_override as _po
+        self._plan_overrides = _po.clear_override(self._plan_overrides, device_id)
+        if self._storage is not None:
+            self._storage.set_plan_overrides(_po.serialize(self._plan_overrides))
+        _LOGGER.info("Plan override cleared: %s", device_id)
 
     def _tick_battery_boost(self, power) -> None:
         """(#1025) Once per cycle: end the boost when its car unplugs, its

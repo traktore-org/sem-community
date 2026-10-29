@@ -4396,6 +4396,40 @@ async def _async_register_services(
     except Exception as err:  # noqa: BLE001
         _LOGGER.error("Failed to register the battery boost services: %s", err)
 
+    async def async_plan_override_service(call) -> None:
+        """(#1085 Part B) One-off: this device only, for this many
+        minutes — then it's gone, even across a restart."""
+        coordinator.set_plan_override(
+            call.data["device_id"], call.data["action"],
+            call.data["minutes"], call.data.get("value"))
+        await coordinator.async_request_refresh()
+
+    async def async_plan_override_clear_service(call) -> None:
+        """(#1085 Part B) End a device's override now."""
+        coordinator.clear_plan_override(call.data["device_id"])
+        await coordinator.async_request_refresh()
+
+    try:
+        from .coordinator.plan_override import ACTIONS as _PLAN_OVERRIDE_ACTIONS
+        hass.services.async_register(
+            DOMAIN, "plan_override", async_plan_override_service,
+            schema=vol.Schema({
+                vol.Required("device_id"): cv.string,
+                vol.Required("action"): vol.In(_PLAN_OVERRIDE_ACTIONS),
+                vol.Required("minutes"): vol.All(
+                    vol.Coerce(int), vol.Range(min=1, max=24 * 60)),
+                vol.Optional("value"): vol.Coerce(float),
+            }),
+        )
+        hass.services.async_register(
+            DOMAIN, "plan_override_clear", async_plan_override_clear_service,
+            schema=vol.Schema({vol.Required("device_id"): cv.string}),
+        )
+        _LOGGER.debug(
+            "Registered services: %s.plan_override/plan_override_clear", DOMAIN)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.error("Failed to register the plan override services: %s", err)
+
     async def async_set_charger_departure(call) -> None:
         """(#1023) The EV card's departure rows: each weekday's own time,
         one block, the top-up before leaving. Written like the charger's own

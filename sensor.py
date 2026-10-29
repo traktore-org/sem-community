@@ -3160,6 +3160,15 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 if k.startswith("charger_") and k.endswith("_departure"):
                     cid = k[len("charger_"):-len("_departure")]
                     _per_charger_departure[cid] = v
+            # (#1085 Part B) this charger's one-off override, if any —
+            # "override active (skip) until 22:00". Read from the same
+            # dict Diagnose reads, keyed down to the ids known above so a
+            # battery's override never shows on the EV card.
+            _plan_overrides = self.coordinator.data.get("plan_overrides", {})
+            _per_charger_plan_override = {
+                cid: _plan_overrides[cid] for cid in _per_charger_states
+                if _plan_overrides.get(cid)
+            }
             attrs.update({
                 "battery_soc": self.coordinator.data.get("battery_soc"),
                 "calculated_current": self.coordinator.data.get("calculated_current"),
@@ -3172,6 +3181,9 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "per_charger_states": _per_charger_states,
                 "per_charger_anticycle": _per_charger_anticycle,
                 "per_charger_stop_war": _per_charger_stop_war,
+                # (#1085 Part B) one-off override, per charger — empty
+                # when none is active.
+                "per_charger_plan_override": _per_charger_plan_override,
                 # (#846) fire → check → adjust: the measured watts-per-amp
                 # table, the samples still earning confidence, and every
                 # refusal with its reason — plus the cold-start replay
