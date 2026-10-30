@@ -1857,6 +1857,9 @@
     "set_option_invalid_payload": {
       "message": "set_option krever en 'options'-dict som tilordner konfigurasjonsnøkler til nye verdier."
     },
+    "battery_list_changed": {
+      "message": "Batteriene i energidashbordet er endret, så denne batteriinnstillingen ble ikke lagret. Kontroller den og prøv igjen."
+    },
     "set_option_no_entry": {
       "message": "Ingen SEM ConfigEntry funnet — installer SEM via Innstillinger → Enheter og tjenester først."
     },

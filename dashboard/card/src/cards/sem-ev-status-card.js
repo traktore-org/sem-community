@@ -16,6 +16,7 @@ import { resolveChargerSoc } from '../util/charger-soc.js';
 import { chargerStatusKey } from '../util/charger-status.js';
 import { evStripSegments, evStripWindow } from '../util/ev-strip.js';
 import { downloadBase64 } from '../util/download.js';
+import { readNumber } from '../util/missing-value.js';
 import {
     sessionMonth, shiftMonth, rowsForMonth, monthTotals, sessionRowView,
 } from '../util/sessions.js';
@@ -388,10 +389,10 @@ class SEMEVStatusCard extends SEMLitBase {
         return e?.state === 'on';
     }
 
-    _val(suffix, fallback = 0) {
-        const e = this._hass?.states[`${this._prefix}${suffix}`];
-        if (!e || e.state === 'unavailable' || e.state === 'unknown') return fallback;
-        return parseFloat(e.state) ?? fallback;
+    // (#1200) null for a sensor that is out: it prints "—", not 0. A check
+    // that wants 0 passes it.
+    _val(suffix, fallback = null) {
+        return readNumber(this._hass?.states[`${this._prefix}${suffix}`]) ?? fallback;
     }
 
     _valStr(suffix) {
@@ -399,12 +400,10 @@ class SEMEVStatusCard extends SEMLitBase {
         return e?.state || '';
     }
 
-    _entityVal(entityId, fallback = 0) {
+    _entityVal(entityId, fallback = null) {
         const frozen = this._frozenEntities[entityId];
         if (frozen) return frozen.value;
-        const e = this._hass?.states[entityId];
-        if (!e || e.state === 'unavailable' || e.state === 'unknown') return fallback;
-        return parseFloat(e.state) ?? fallback;
+        return readNumber(this._hass?.states[entityId]) ?? fallback;
     }
 
     _fmt(val, decimals = 1) {
@@ -1068,7 +1067,9 @@ class SEMEVStatusCard extends SEMLitBase {
 
     _renderChargerSection(id, idx) {
         const color = CHARGER_COLORS[idx % CHARGER_COLORS.length];
-        const power = this._val(`charger_${id}_power`, 0);
+        // (#1200) null when out: the tile prints "— W", not the 0 W of a car
+        // that is not charging; so do the counters below.
+        const power = this._val(`charger_${id}_power`);
         // #449: prefer the CHARGER's own session counter (KEBA / Wallbox /
         // go-eCharger / Easee / … session_energy sensor) over SEM's
         // internal integration. The charger's counter survives reloads +
@@ -1077,10 +1078,10 @@ class SEMEVStatusCard extends SEMLitBase {
         // for solar-share + cost calcs — kept queryable as the
         // ``session_energy`` sensor — but the user-facing "Session" tile
         // now matches what the charger itself reports.
-        const sessionExt = this._val(`charger_${id}_session_energy_external`, 0);
-        const sessionInt = this._val(`charger_${id}_session_energy`, 0);
+        const sessionExt = this._val(`charger_${id}_session_energy_external`);
+        const sessionInt = this._val(`charger_${id}_session_energy`);
         const session = sessionExt > 0 ? sessionExt : sessionInt;
-        const dailyEnergy = this._val(`charger_${id}_daily_energy`, 0);
+        const dailyEnergy = this._val(`charger_${id}_daily_energy`);
         // Solar Share sits under "Today: X kWh", so it must read the DAILY solar
         // attribution, not the per-cycle session — otherwise a plugged-in idle
         // car shows "Today 10.9 kWh · Solar Share 2%" where the 2% is just the
@@ -1089,7 +1090,7 @@ class SEMEVStatusCard extends SEMLitBase {
         // time-integrated daily flow attribution). (No per-charger daily-share
         // sensor exists yet — on a multi-charger fleet this shows the fleet's
         // daily share on each tile; a per-charger daily sensor is a follow-up.)
-        const solar = this._val('energy_ev_solar_percentage', 0);
+        const solar = this._val('energy_ev_solar_percentage');
         // Prefer real vehicle SOC over estimated (#193). The per-charger
         // ``sensor.sem_charger_<id>_vehicle_soc`` (#383) is this charger's own
         // car. The global ``sem_vehicle_soc`` is a fleet value and is only a
@@ -1321,10 +1322,13 @@ class SEMEVStatusCard extends SEMLitBase {
         // Range the charge will ADD to reach the Min (guaranteed) target, in km —
         // updates live as the Min handle moves. Solar may add more, up to Max. (#245)
         const minTarget = this._entityVal(minEntityId, isSoc ? 80 : 10);
-        const gapKwh = isSoc
+        // (#1200) no range from a reading that is out
+        const have = isSoc ? soc : dailyEnergy;
+        const gapKwh = have == null ? null : isSoc
             ? Math.max(0, (minTarget - soc) / 100 * capacityKwh)
             : Math.max(0, minTarget - dailyEnergy);
-        const chargeKm = consumption > 0 ? Math.round(gapKwh / consumption * 100) : null;
+        const chargeKm = gapKwh != null && consumption > 0
+            ? Math.round(gapKwh / consumption * 100) : null;
 
         const unitControl = ttOptions.length > 1
             ? html`<select class="ct-unit" .value=${targetType}
@@ -1646,9 +1650,13 @@ class SEMEVStatusCard extends SEMLitBase {
         // header `ev_power`/`ev_charging`, the tiles `charger_<id>_power` — which
         // lag independently and produced opposite snapshots (header CHARGING/4kW
         // while the card said Connected/0W, and vice-versa).
-        const power = (this._chargers && this._chargers.length)
-            ? this._chargers.reduce((s, id) => s + this._val(`charger_${id}_power`, 0), 0)
-            : this._val('ev_power', 0);
+        // (#1200) "— W" only when every charger's power is out; a charger
+        // that is out adds 0, as SEM's own fleet total does.
+        const chargerPowers = (this._chargers || []).map((id) => this._val(`charger_${id}_power`));
+        const power = chargerPowers.length
+            ? (chargerPowers.every((p) => p == null) ? null
+                : chargerPowers.reduce((s, p) => s + (p ?? 0), 0))
+            : this._val('ev_power');
         const charging = power > 50;
         const current = this._val('calculated_current', 0);
         const sessionEnergy = this._val('session_energy', 0);
@@ -1658,9 +1666,9 @@ class SEMEVStatusCard extends SEMLitBase {
         // 'Today 8.7 kWh · Solar Share 25%' where the 25% was just the
         // current session, not today's. Switched to energy_ev_solar_percentage
         // (time-integrated daily attribution from the flow accumulator).
-        const solarShare = this._val('energy_ev_solar_percentage', 0);
-        const sessionCost = this._val('session_cost', 0);
-        const dailyEnergy = this._val('daily_ev_energy', 0);
+        const solarShare = this._val('energy_ev_solar_percentage');
+        const sessionCost = this._val('session_cost');
+        const dailyEnergy = this._val('daily_ev_energy');
         const strategy = this._valStr('charging_state');
         const curr = semGetCurrency(this._hass);
 

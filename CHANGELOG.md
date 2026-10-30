@@ -19,10 +19,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ✨ **A heat pump's own COP sets what a kWh of heat really costs, now a sensor** (#1081). Pre-heat timing can use it.
 - ✨ **An EV charger's departure can follow a calendar's next event instead of a fixed time** (#1087). The card names the event.
 - ✨ **Ask Assist to skip or force charge for one night, or go back to normal** (#1086). Off by default, like the other voice commands.
+- ✨ **Pause or force a battery or charger for a set time** (#1085). It survives a restart and ends on its own.
+- 🐛 **Daily energy flows and solar savings no longer drop while a power sensor is out for a moment** (#1185). SEM uses its last reading.
 
+# [2.2.0] — 30.10.2026
+
+## 📦 Stable Release
+
+_Changes since [2.1.0](https://github.com/traktore-org/sem-community/releases/tag/v2.1.0)_
+
+The second stable release of the 2.x line. Needs Home Assistant 2026.2.0 or newer, and works on 2026.11, where HACS becomes Settings → Marketplace.
+
+### 🚀 Features and enhancements
+
+- **Try a what-if on your own days** — another battery, more solar, a different price, replayed against real recorded history (Simulation tab).
+- **Every change SEM makes says why** — the Why? card and the logbook give each one a plain sentence, in your language.
+- **Settings and the EV tab show only what you need** — Everyday groups the common controls; All settings holds the rest.
+- **Setup shows what SEM found as live watts**, and asks one question when it is unsure of your grid meter (#1213).
+- **SEM finds your outdoor temperature and grid CO₂ sensor on their own** — car charging, battery nights and CO₂ avoided all use them.
+- **A phase or grid-operator limit sheds ordinary loads too**, not only chargers.
+- **More hardware found on its own**: go-eCharger, ENTSO-e prices, Helios Forecast, NRGkick and OpenEVSE chargers.
+- **A heat pump or load can carry its own tariff and meter**, so its cheap hours follow its own price.
+- **The Home diagram shows the car's charge level**, and can hide it when two cars share one charger (by @OddmarDam in #1212, #1220).
+- **Dutch translations updated** (by @RienduPre in #1052, #1056).
+
+New features are off until you switch them on, except one: if you had already turned on the phase guard, it now sheds ordinary loads too, not only chargers.
+
+### 🐛 Bugfixes
+
+Fixed since 2.1: grid and battery sign errors on homes with a split meter or a second battery, CO₂ and self-consumption undercounting a battery sale, and a counter step that could grow a month or year total past its real limit. Each beta below lists them one by one.
+
+New since the last beta:
+
+- 🐛 **Cards now show "—", not 0, for a sensor that is out** (#1200). EV power, battery health, costs and peak no longer look like real zeros.
+- 🐛 **Battery, grid and solar on/off sensors no longer say Off while their power sensor is out** (#1201). They show unknown after 3 minutes.
+- 🐛 **A power sensor showing text such as "none" or "nan" now reads as out, not 0 W** (#1202). SEM no longer acts on it.
+- 🐛 **A learned battery sign now stays with its battery when one is removed or replaced** (#1205). Before, the next battery could read discharge as charge.
+- 🐛 **The learned battery sign no longer flips when you go back a version and forward again** (#1208). Homes without an Energy Dashboard keep it too.
+- 🐛 **"Reset sign detection" now stays reset when a "Fix sign" flip was on** (#1209). A reload no longer reads old saved data back.
 - 🐛 **SEM no longer flips the sign of a grid meter with two sensors (import and export)** (#1215). Before, export could read as import.
 - 🐛 **The Simulation tab and cost estimates no longer count a battery sale as solar sent out** (#1216). Before, self-consumption and solar savings read too low.
-- ✨ **Pause or force a battery or charger for a set time** (#1085). It survives a restart and ends on its own.
+- 🐛 **An emptied charger service now stays empty after Save** (#1214). A charger moved to another integration no longer gets a "device is gone" Repair.
+- 🐛 **SEM now checks each battery's sign on a home that added a second battery** (#1210). Before, a wrong sign there was never flagged.
+- 🐛 **A battery setting saved in the Config tab or Configure dialog stays with its battery when batteries change** (#1204). Before, it could move to another.
+- 🐛 **A solar string, inverter, battery or grid sensor that drops out briefly no longer counts as 0 W** (#1203, #1186). SEM keeps its last reading.
+- 🐛 **Setup's "Use the other meter" answer now names that meter and its watts** (#1213). Before, it named neither when SEM had not guessed.
+
+## 🙏 Thanks to our sponsors and contributors
+
+Sponsors: @RienduPre, @fjbruwer, @Dioko1981, @coppe218, and one private sponsor. Your support pays for the real hardware SEM is tested on.
+
+Contributors: @OddmarDam, @RienduPre — and everyone who tested the betas and reported what broke.
 
 # [2.2.0-beta.29] — 28.10.2026
 

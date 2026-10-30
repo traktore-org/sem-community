@@ -1178,15 +1178,13 @@ class ForecastReader:
         any_available = False
         for entity_id in entity_ids:
             state = self.hass.states.get(entity_id)
-            if not state or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE, None):
-                continue
-            try:
-                float(state.state)
-            except (ValueError, TypeError):
+            # (#1202) a plane that gives no number ("nan" too) is left out
+            watts = power_state_to_watts(state)
+            if watts is None:
                 continue
             if power_unit_scale(state) != 1.0:
                 self._last_unit_conversion_count += 1
-            total += power_state_to_watts(state, default=0.0)
+            total += watts
             any_available = True
         return total if any_available else default
 
@@ -1217,14 +1215,10 @@ class ForecastReader:
         if not entity_id:
             return default
         state = self.hass.states.get(entity_id)
-        if not state or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE, None):
-            return default
-        try:
-            # Load-bearing: a non-numeric state must return the CALLER's
-            # default, which units.py can't know. Once this succeeds the
-            # ``default=`` below is unreachable (#641).
-            value = float(state.state)
-        except (ValueError, TypeError):
+        # (#1202) A state that gives no number ("nan" too) returns the
+        # CALLER's default.
+        watts = power_state_to_watts(state)
+        if watts is None:
             return default
         # #641 — this rule (strip + lower + long-form synonyms) was the most
         # robust of the five inline copies, so it became the shared one in
@@ -1232,7 +1226,7 @@ class ForecastReader:
         # proved #575.
         if power_unit_scale(state) != 1.0:
             self._last_unit_conversion_count += 1
-        return power_state_to_watts(state, default=value)
+        return watts
 
     def _remaining_day_fraction(self) -> float:
         """Estimate fraction of daylight remaining (rough)."""

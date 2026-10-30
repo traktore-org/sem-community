@@ -76,7 +76,9 @@ export function slotStatus({ targetKw, usedKwh, allowedW, now = new Date() }) {
  * import — the peak block only ever asks "how much is coming in".
  */
 export function importKw(gridPowerW) {
-    const w = Number(gridPowerW);
+    // (#1200) parseFloat, not Number: Number('') is 0, an empty state is no
+    // reading.
+    const w = typeof gridPowerW === 'number' ? gridPowerW : parseFloat(gridPowerW);
     if (!Number.isFinite(w)) return null;
     return Math.max(0, -w) / 1000;
 }

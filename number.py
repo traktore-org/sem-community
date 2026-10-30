@@ -921,7 +921,6 @@ class SEMPerBatteryNumber(CoordinatorEntity, NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Persist the reserve SOC (no reload). ``idx is None`` is the
         SINGLE-battery install → scalar ``battery_reserve_soc`` key."""
-        self._attr_native_value = value
         if self._idx is None:
             from . import persist_global_option
             persist_global_option(
@@ -930,10 +929,13 @@ class SEMPerBatteryNumber(CoordinatorEntity, NumberEntity):
             )
             _LOGGER.info("Updated battery reserve SOC to %s", value)
         else:
+            # (#1204) refused when this battery is gone (reload due)
             from . import persist_per_battery_option
             persist_per_battery_option(
                 self.hass, self._entry, self.coordinator,
                 self._idx, "battery_reserve_socs", value, self._count,
+                read_units=getattr(self.coordinator, "battery_control_units", None),
             )
             _LOGGER.info("Updated battery %d reserve SOC to %s", self._idx, value)
+        self._attr_native_value = value
         self.async_write_ha_state()

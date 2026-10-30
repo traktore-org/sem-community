@@ -15,6 +15,7 @@
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semDefineCard, semGetCurrency } from '../base/sem-shared.js';
+import { fmtValue } from '../util/missing-value.js';
 
 /* ── Watched entity IDs (resolved from prefix at render time) ── */
 const SUFFIX_DAILY_EV_ENERGY       = 'daily_ev_energy';
@@ -68,6 +69,7 @@ class SEMEvProgressCard extends SEMLitBase {
     /* ── Derived helpers ── */
 
     _pct(daily, target) {
+        if (daily == null) return null;  // (#1200) out: no share, not 0 %
         if (target <= 0) return 0;
         return Math.min(100, (daily / target) * 100);
     }
@@ -114,7 +116,7 @@ class SEMEvProgressCard extends SEMLitBase {
         const color = this._barColor(target, pct);
 
         const targetLabel = target > 0
-            ? html`<span class="target-pct">${Math.round(pct)}% ${this._t('of_target')}</span>`
+            ? html`<span class="target-pct">${fmtValue(pct, 0)}% ${this._t('of_target')}</span>`
             : html`<span class="target-pct no-target">${this._t('no_target')}</span>`;
 
         /* dot-grid background: green glow matching EV palette */
@@ -286,7 +288,7 @@ class SEMEvProgressCard extends SEMLitBase {
                 <div class="progress-track">
                     <div
                         class="progress-fill"
-                        style="width:${pct}%;background:${color}"
+                        style="width:${pct ?? 0}%;background:${color}"
                     ></div>
                 </div>
 
@@ -302,7 +304,7 @@ class SEMEvProgressCard extends SEMLitBase {
                     </div>
                     <div class="stat-tile">
                         <div class="stat-icon"><ha-icon icon="mdi:weather-sunny"></ha-icon></div>
-                        <div class="stat-value">${Math.round(ltSolar)}%</div>
+                        <div class="stat-value">${fmtValue(ltSolar, 0)}%</div>
                         <div class="stat-label">${this._t('solar')}</div>
                     </div>
                     <div class="stat-tile">

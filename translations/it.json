@@ -1857,6 +1857,9 @@
     "set_option_invalid_payload": {
       "message": "set_option richiede un dizionario 'options' che associ le chiavi di configurazione ai nuovi valori."
     },
+    "battery_list_changed": {
+      "message": "Le batterie nella dashboard Energia sono cambiate, quindi questa impostazione della batteria non è stata salvata. Controllala e riprova."
+    },
     "set_option_no_entry": {
       "message": "Nessuna ConfigEntry SEM trovata — installa prima SEM da Impostazioni → Dispositivi e servizi."
     },

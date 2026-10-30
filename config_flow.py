@@ -67,7 +67,9 @@ from .tariff.value_layer import (
 from .coordinator.ev_taper_detector import resolve_charge_efficiency
 from .coordinator.units import energy_state_to_kwh, normalize_unit
 from .coordinator.install_modules import has_managed_charger
-from .coordinator.battery_controls import captured_battery_control_slugs
+from .coordinator.battery_controls import (
+    BATTERY_SLOT_UNITS_KEY, captured_battery_control_slugs, lists_in_current_order,
+)
 from .ha_energy_reader import (
     battery_units, read_energy_dashboard_config, EnergyDashboardConfig,
 )
@@ -1049,9 +1051,10 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     def _why(words, check) -> str:
-        if check.ask != ASK_GUESSED:
-            return ""
-        why = words["why_guessed"]
+        # (#1213 review) "Use the other meter" can appear even when the
+        # grid reading itself was not guessed — the hint must not be
+        # gated on ASK_GUESSED, or the option names nothing to pick.
+        why = words["why_guessed"] if check.ask == ASK_GUESSED else ""
         if check.other_grid:
             # the "use the other meter" answer must name what it pins
             why += f"\n→ {check.other_grid}, {fmt_w(check.other_grid_w)}"
@@ -1192,9 +1195,11 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="number")
                 ),
+                # (#1214) a suggestion, never a default: HA refills an
+                # emptied field with its default, so it could not be erased
                 vol.Optional(
                     "ev_charger_service",
-                    default=suggestions.get("ev_charger_service", ""),
+                    description={"suggested_value": suggestions.get("ev_charger_service") or None},
                 ): selector.TextSelector(
                     selector.TextSelectorConfig(
                         type=selector.TextSelectorType.TEXT
@@ -1454,9 +1459,22 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     errors["mobile_notification_service"] = "service_not_found"
 
             if not errors:
+                # (#1214) An emptied field is missing from ``user_input``:
+                # recorded as None, or the saved value stays. The page shows
+                # ``{**data, **options}``, so a key the options also hold is
+                # written there too, or the options copy wins the merge and
+                # the saved value comes back.
+                updates: dict[str, Any] = {}
+                _merge_form_input(self, updates, user_input)
+                # a field that was never set is not written as None
+                updates = {k: v for k, v in updates.items()
+                           if v is not None or current_config.get(k) is not None}
+                options = dict(reconfigure_entry.options or {})
                 return self.async_update_reload_and_abort(
                     reconfigure_entry,
-                    data_updates=user_input,
+                    data_updates=updates,
+                    options={**options, **{k: v for k, v in updates.items()
+                                           if k in options}},
                 )
 
         # Get available notification services (notify.* and rest_command.*)
@@ -1487,23 +1505,25 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # entity id, so the page could not be saved without both.
                 _charger_field(vol.Required(
                     "ev_connected_sensor",
-                    default=current_config.get("ev_connected_sensor", ""),
+                    default=current_config.get("ev_connected_sensor") or "",
                 ), has_charger, current_config): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
                 ),
                 _charger_field(vol.Required(
                     "ev_charging_sensor",
-                    default=current_config.get("ev_charging_sensor", ""),
+                    default=current_config.get("ev_charging_sensor") or "",
                 ), has_charger, current_config): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
                 ),
                 _charger_field(vol.Required(
                     "ev_charging_power_sensor",
-                    default=current_config.get("ev_charging_power_sensor", ""),
+                    default=current_config.get("ev_charging_power_sensor") or "",
                 ), has_charger, current_config): _power_sensor_selector(getattr(self, "hass", None)),
+                # (#1214) a suggestion, never a default: HA refills an
+                # emptied field with its default, so it could not be erased
                 vol.Optional(
                     "ev_charger_service",
-                    default=current_config.get("ev_charger_service", ""),
+                    description={"suggested_value": current_config.get("ev_charger_service") or None},
                 ): selector.TextSelector(
                     selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
                 ),
@@ -1527,9 +1547,11 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     "enable_mobile_notifications",
                     default=current_config.get("enable_mobile_notifications", False),
                 ): selector.BooleanSelector(),
+                # (#1214) "None" is the empty value, which HA does not send:
+                # a default put the old service back
                 vol.Optional(
                     "mobile_notification_service",
-                    default=current_config.get("mobile_notification_service", ""),
+                    description={"suggested_value": current_config.get("mobile_notification_service") or None},
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
                         options=notify_services,
@@ -1824,6 +1846,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         self._unshown: dict[str, Any] = {}
         # (#1089) which battery's discharge-limit page is showing
         self._battery_limit_idx = 0
+        # (#1204) the battery order the draft's per-battery lists were read
+        # in; ``_battery_lists_read`` once they are in the draft
+        self._battery_lists_read = False
+        self._battery_read_units: Any = None
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -1958,25 +1984,27 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         return vol.Schema({
             vol.Required(
                 "ev_connected_sensor",
-                default=current_config.get("ev_connected_sensor", "")
+                default=current_config.get("ev_connected_sensor") or ""
             ): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
             ),
             vol.Required(
                 "ev_charging_sensor",
-                default=current_config.get("ev_charging_sensor", "")
+                default=current_config.get("ev_charging_sensor") or ""
             ): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
             ),
             vol.Required(
                 "ev_charging_power_sensor",
-                default=current_config.get("ev_charging_power_sensor", "")
+                default=current_config.get("ev_charging_power_sensor") or ""
             ): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="sensor")
             ),
+            # (#1214) a suggestion, never a default: HA refills an emptied
+            # field with its default, so it could not be erased
             vol.Optional(
                 "ev_charger_service",
-                default=current_config.get("ev_charger_service", ""),
+                description={"suggested_value": _opt("ev_charger_service") or None},
             ): selector.TextSelector(
                 selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
             ),
@@ -2215,9 +2243,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="number")
                 ),
+                # (#1214) a suggestion: a default refills an emptied field
                 vol.Optional(
                     "ev_charger_service",
-                    default=suggestions.get("ev_charger_service", ""),
+                    description={"suggested_value": suggestions.get("ev_charger_service") or None},
                 ): selector.TextSelector(),
                 vol.Optional(
                     "ev_charger_service_entity_id",
@@ -2447,9 +2476,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="number")
                 ),
+                # (#1214) a suggestion: a default refills an emptied field
                 vol.Optional(
                     "ev_charger_service",
-                    default=charger.get("ev_charger_service", ""),
+                    description={"suggested_value": charger.get("ev_charger_service") or None},
                 ): selector.TextSelector(),
                 vol.Optional(
                     "ev_charger_service_entity_id",
@@ -2833,9 +2863,32 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         coordinator = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
         return captured_battery_control_slugs(coordinator) or ()
 
+    def _battery_draft_follows(self) -> bool:
+        """(#1204) The batteries changed while the dialog is open: each
+        battery's draft slots go to its place today, and the next pages and
+        the save follow today's order. A battery the pages never showed keeps
+        its own slots. True when the order changed."""
+        if not self._battery_lists_read:
+            return False
+        saved = {**self.config_entry.data, **self.config_entry.options}
+        today = saved.get(BATTERY_SLOT_UNITS_KEY)
+        if not isinstance(today, list) or today == self._battery_read_units:
+            return False
+        self._data.update(lists_in_current_order(
+            self._data, self._battery_read_units, saved))
+        self._battery_read_units = list(today)
+        return True
+
     def _battery_label_source(self, idx: int, slug: str) -> str:
         """(#1089) The sensor that tells the user which battery ``slug`` is:
-        its Energy-Dashboard power sensor, else SEM's own one."""
+        its Energy-Dashboard power sensor, else SEM's own one.
+
+        (#1204) The battery whose slot the page edits: its place in the order
+        the draft's lists were read in, while that order is known."""
+        read = self._battery_read_units
+        if (isinstance(read, list) and idx < len(read)
+                and isinstance(read[idx], str) and read[idx]):
+            return read[idx]
         coordinator = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
         reader = getattr(coordinator, "_sensor_reader", None)
         ed = getattr(reader, "_energy_dashboard_config", None)
@@ -2863,6 +2916,15 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         list_key = "battery_discharge_control_entities"
         # (#1166) the same page carries each pack's own end-of-charge level
         end_key = "battery_charge_end_soc_entities"
+        if not self._battery_lists_read:
+            # (#1204) The lists and the battery order they are in, read once
+            # together.
+            self._battery_lists_read = True
+            saved = self.config_entry.options or {}
+            self._battery_read_units = saved.get(BATTERY_SLOT_UNITS_KEY)
+            for key in (list_key, end_key):
+                if key not in self._data and isinstance(saved.get(key), list):
+                    self._data[key] = _draft_list(self, key)
         slugs = self._battery_slugs()
         idx = self._battery_limit_idx
         if user_input is not None:
@@ -2883,6 +2945,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 end_key, "battery_charge_end_soc_entity")
             idx += 1
             self._battery_limit_idx = idx
+        # (#1204) The answer above is for the page shown, in the order it
+        # was shown in. After a change the pages start again from the first
+        # battery, each showing what was answered for it: places moved, so
+        # going on by number would show one battery twice and skip another.
+        if self._battery_draft_follows():
+            idx = self._battery_limit_idx = 0
         if len(slugs) < 2:
             # Skipped (or SEM reloaded with fewer batteries mid-dialog): the
             # keys are owned, so the saved lists must reach the final save.
@@ -2895,7 +2963,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 self._data.setdefault("battery_charge_end_soc_entities",
                                       list(saved) if isinstance(saved, list) else saved)
             return await self.async_step_settings_ev()
-        if idx >= len(slugs):
+        pages = len(slugs)
+        read = self._battery_read_units
+        if isinstance(read, list) and read:
+            # (#1204) a page per battery the lists are kept for, also while
+            # the reload after a change is due
+            pages = min(pages, len(read))
+        if idx >= pages:
             return await self.async_step_settings_ev()
 
         limits = _draft_list(self, list_key)
@@ -4579,9 +4653,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             w_txt = f" · {watts:.0f} W" if isinstance(watts, float) else ""
             n = slot.replace("pv", "")
             mapping_lines.append(f"• PV{n}  ←  {src_label}{w_txt}")
+            # (#1214) a suggestion: with a default, an emptied name came
+            # back, so it never went back to the default name
             schema_dict[vol.Optional(
                 f"pv_name_{slot}",
-                default=saved_names.get(slot, ""),
+                description={"suggested_value": saved_names.get(slot) or None},
             )] = selector.TextSelector()
 
         return self.async_show_form(
@@ -4623,6 +4699,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 # removed from ``entry.data`` too, or the start-up heal
                 # restores it from there on the next reload.
                 self._prune_removed_chargers_from_data()
+                # (#1204) the batteries may have changed since the last page
+                self._battery_draft_follows()
                 return self.async_create_entry(
                     data=self._without_flat_wiring_of_removed_first(
                         {**carried, **unshown, **self._data}))
@@ -4666,9 +4744,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "enable_mobile_notifications",
                     default=suggestions.get("enable_mobile_notifications", False),
                 ): selector.BooleanSelector(),
+                # (#1214) "None" is the empty value, which HA does not send:
+                # a default put the old service back
                 vol.Optional(
                     "mobile_notification_service",
-                    default=suggestions.get("mobile_notification_service", ""),
+                    description={"suggested_value": suggestions.get("mobile_notification_service") or None},
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
                         options=notify_services,

@@ -8,7 +8,7 @@ so if a value reads `0`, `unavailable`, or looks wrong, you can see **what SEM e
 
 ## The resolution order (every signal)
 
-1. **Autodetect** — brand/name keywords + a scan of the sensor's device for a companion sensor.
+1. **Autodetect** — brand/name keywords + a scan of the sensor's device for a companion sensor. Several sensors fitting the same role (#1213) — one battery module, one phase, not the whole battery or plant — stays empty rather than guessing one; fill it with the manual override below.
 2. **Derive** — compute power from an energy (kWh) counter when no power sensor exists.
 3. **Manual override** — the escape hatch below, when 1–2 miss.
 

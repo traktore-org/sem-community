@@ -100,7 +100,9 @@ SEM requires **Home Assistant 2026.2.0 or newer**. Check your version at
 
 SEM is distributed through HACS (Home Assistant Community Store). If you do
 not have HACS installed, follow the official instructions at
-<https://hacs.xyz/docs/use/> before continuing.
+<https://hacs.xyz/docs/use/> before continuing. On Home Assistant 2026.11 or
+newer, HACS is built in as **Settings > Marketplace**, so there is nothing
+to install.
 
 ### The Energy Dashboard
 
@@ -153,7 +155,7 @@ night charging and battery charge scheduling.
 ### Checklist
 
 - [ ] HA 2026.2.0 or newer
-- [ ] HACS installed
+- [ ] HACS installed (on Home Assistant 2026.11 or newer it is built in as Marketplace)
 - [ ] Energy Dashboard configured (solar + grid sensors at minimum)
 - [ ] Battery sensors visible in HA (optional)
 - [ ] EV charger integration installed and power sensor enabled (optional)
@@ -168,6 +170,9 @@ night charging and battery charge scheduling.
 3. Click the result, then **Download** at the bottom right.
 4. When the download finishes, go to **Settings > System > Restart** and
    restart Home Assistant. Wait 30–60 seconds for it to come back.
+
+On Home Assistant 2026.11 or newer, open **Settings > Marketplace** instead
+of HACS in step 1. The other steps are the same.
 
 After the restart, SEM is installed but not yet active. Complete the config
 flow in the next step to start it.

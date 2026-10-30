@@ -49,7 +49,9 @@ class TestUnitAwareCounterReads:
         assert f(_state(0.320262, "MWh")) == pytest.approx(320.262)
         # unknown/missing unit keeps the previous assume-kWh behavior
         assert f(_state(42, None)) == pytest.approx(42)
-        assert f(_state("garbage", "kWh")) == 0.0
+        # (#1202) no number is no reading, not 0 kWh
+        assert f(_state("garbage", "kWh")) is None
+        assert f(_state("nan", "kWh")) is None
 
     def test_fronius_wh_lifetime_seed_produces_sane_cycles(self):
         """THE reporter scenario: Fronius Wh lifetime counters. Before the

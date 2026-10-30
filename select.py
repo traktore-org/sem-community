@@ -21,6 +21,7 @@ from .coordinator.install_modules import Module, keeps, presence_of
 from .coordinator.battery_controls import (   # (#1071)
     captured_battery_control_slugs,
     discover_battery_control_slugs,
+    slot_today,
 )
 
 type SEMConfigEntry = ConfigEntry[SEMCoordinator]
@@ -638,9 +639,15 @@ class SEMPerBatterySelect(CoordinatorEntity, SelectEntity):
             return None
         if self._idx is None:
             return cfg.get("battery_mode") or DEFAULT_BATTERY_MODE
+        # (#1204) this select's battery, also after the batteries changed
+        # and before the reload rebuilds it
+        idx = slot_today(self._idx, getattr(
+            self.coordinator, "battery_control_units", None), cfg)
+        if idx is None:
+            return None
         lst = cfg.get("battery_modes")
-        if isinstance(lst, list) and self._idx < len(lst) and lst[self._idx]:
-            return lst[self._idx]
+        if isinstance(lst, list) and idx < len(lst) and lst[idx]:
+            return lst[idx]
         return DEFAULT_BATTERY_MODE
 
     def _handle_coordinator_update(self) -> None:
@@ -669,7 +676,6 @@ class SEMPerBatterySelect(CoordinatorEntity, SelectEntity):
         otherwise write the per-battery ``battery_modes`` list."""
         if option not in self.options:
             return
-        self._value = option
         if self._idx is None:
             from . import persist_global_option
             persist_global_option(
@@ -678,10 +684,13 @@ class SEMPerBatterySelect(CoordinatorEntity, SelectEntity):
             )
             _LOGGER.info("Updated battery mode to %s", option)
         else:
+            # (#1204) refused when this battery is gone (reload due)
             from . import persist_per_battery_option
             persist_per_battery_option(
                 self.hass, self._entry, self.coordinator,
                 self._idx, "battery_modes", option, self._count,
+                read_units=getattr(self.coordinator, "battery_control_units", None),
             )
             _LOGGER.info("Updated battery %d mode to %s", self._idx, option)
+        self._value = option
         self.async_write_ha_state()

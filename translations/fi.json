@@ -1857,6 +1857,9 @@
     "set_option_invalid_payload": {
       "message": "set_option vaatii 'options'-sanakirjan, joka liittää määritysavaimet uusiin arvoihin."
     },
+    "battery_list_changed": {
+      "message": "Energiakojelaudan akut ovat muuttuneet, joten tätä akun asetusta ei tallennettu. Tarkista se ja yritä uudelleen."
+    },
     "set_option_no_entry": {
       "message": "SEM ConfigEntry -merkintää ei löytynyt — asenna SEM ensin kohdasta Asetukset → Laitteet ja palvelut."
     },

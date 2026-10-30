@@ -82,8 +82,16 @@ def build_diagnostics(coord) -> Dict[str, Any]:
     # for the grid
     _bat_inverted = dict(getattr(reader, "_battery_sign_inverted", {}))
     _bat_detected = dict(getattr(reader, "_battery_sign_detected", {}))
+    _fleet = getattr(reader, "_FLEET_BID", "__fleet__")
+    # (#1210) …and only the locks the last read applied: the one-battery
+    # lock while it reads one battery, each combined battery's while it reads
+    # each. Any other saved lock stays saved but does nothing.
+    _applied = getattr(reader, "_battery_read_locks", None)
+    if isinstance(_applied, frozenset):
+        for _locks in (_bat_inverted, _bat_detected):
+            for _bid in [b for b in _locks if b not in _applied]:
+                del _locks[_bid]
     if getattr(reader, "_battery_read_is_pair", False) is True:
-        _fleet = getattr(reader, "_FLEET_BID", "__fleet__")
         _bat_inverted[_fleet] = False
         _bat_detected[_fleet] = True
     out["diag_battery_sign"] = format_battery_sign_diag(

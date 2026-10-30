@@ -12,9 +12,19 @@ on:
     branches: [develop, main, "release/**"]
 
 jobs:
+  # (#1266) Each HA rung is split into 4 parts that run side by side, each
+  # with one pytest worker per CPU. One rung took 1:40-2:00 when the suite
+  # ran one test at a time. The part jobs are NOT the required checks: the
+  # `test-gate` job below reports "test HA <version>", the names branch
+  # protection on develop and main requires.
+  # The parts are split by TIME, from tests/.test_durations: by count, the
+  # slow tests (a real HA instance each) bunched in one part. A test missing
+  # from the file counts as the average. Refresh now and then:
+  #   semtest tests/ -n 4 --store-durations --durations-path=<file>
+  # then sort the keys and round to 2 decimals (keeps git diffs small).
   test:
     runs-on: ubuntu-latest
-    name: test HA ${{ matrix.ha }}
+    name: HA ${{ matrix.ha }} part ${{ matrix.part }}/4
     # The matrix is an HA matrix wearing a Python label (#787). Each rung
     # installs a different pytest-homeassistant-custom-component pin — see
     # tests/requirements_test.txt — so this list reads:
@@ -48,6 +58,8 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.13", "3.14"]
+        # Keep in step with `--splits` below and PARTS in test-gate.
+        part: [1, 2, 3, 4]
         include:
           - python-version: "3.13"
             ha: "2026.2"
@@ -61,6 +73,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: tests/requirements_test.txt
 
       - name: Install dependencies
         run: |
@@ -74,32 +88,114 @@ jobs:
           mkdir -p /tmp/ha-config/custom_components
           cp -r $GITHUB_WORKSPACE /tmp/ha-config/custom_components/solar_energy_management
 
-      - name: Run tests with coverage
+      - name: Run tests with coverage (part ${{ matrix.part }} of 4)
         working-directory: /tmp/ha-config
         env:
           PYTHONPATH: /tmp/ha-config
         run: |
           python -m pytest custom_components/solar_energy_management/tests/ \
+            -n auto --splits 4 --group ${{ matrix.part }} \
+            --durations-path custom_components/solar_energy_management/tests/.test_durations \
             --cov=custom_components.solar_energy_management \
-            --cov-report=term-missing \
-            --cov-report=xml:$GITHUB_WORKSPACE/coverage.xml \
-            -v --tb=short
+            --cov-report= \
+            -q --tb=short -rfE
+
+      # Each part measured a quarter of the suite; the coverage job adds
+      # them up. Hidden files are skipped by upload-artifact unless asked.
+      - name: Keep this part's coverage data
+        if: always()
+        working-directory: /tmp/ha-config
+        run: |
+          [ -f .coverage ] && mv .coverage ".coverage.part${{ matrix.part }}" || true
+
+      - name: Upload this part's coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-data-py${{ matrix.python-version }}-part${{ matrix.part }}
+          path: /tmp/ha-config/.coverage.part${{ matrix.part }}
+          include-hidden-files: true
+          if-no-files-found: ignore
+
+  # (#1266) The two required checks. Green only when every part of that HA
+  # rung succeeded. It must run even when a part failed or was cancelled:
+  # GitHub counts a SKIPPED required check as passed, so a gate that is
+  # skipped on failure would let a red suite merge. Hence `if: always()` and
+  # an explicit count of successful parts — not `needs.test.result`, which
+  # would mix both rungs into one answer.
+  test-gate:
+    name: test HA ${{ matrix.ha }}
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        ha: ["2026.2", "2026.8"]
+    steps:
+      - name: Every part of HA ${{ matrix.ha }} passed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PARTS: 4
+        run: |
+          gh api --paginate \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?filter=latest&per_page=100" \
+            --jq '.jobs[] | select(.name | startswith("HA ${{ matrix.ha }} part ")) | "\(.name)\t\(.conclusion)"' \
+            > parts.txt
+          cat parts.txt
+          seen=$(wc -l < parts.txt)
+          passed=$(grep -c $'\tsuccess$' parts.txt || true)
+          echo "parts seen: $seen, passed: $passed, expected: $PARTS"
+          [ "$seen" -eq "$PARTS" ] && [ "$passed" -eq "$PARTS" ]
+
+  # Informational only: not a required check, and it never fails the board
+  # for a missing file — the test parts are what decide.
+  coverage:
+    name: coverage py${{ matrix.python-version }}
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Same layout the parts measured
+        run: |
+          mkdir -p /tmp/ha-config/custom_components
+          cp -r $GITHUB_WORKSPACE /tmp/ha-config/custom_components/solar_energy_management
+          python -m pip install --quiet coverage
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-data-py${{ matrix.python-version }}-part*
+          path: /tmp/ha-config
+          merge-multiple: true
+
+      - name: Coverage summary
+        working-directory: /tmp/ha-config
+        run: |
+          if ! ls .coverage.part* >/dev/null 2>&1; then
+            echo "no coverage data (every part failed early)"; exit 0
+          fi
+          python -m coverage combine .coverage.part*
+          python -m coverage report --format=markdown --skip-empty
+          python -m coverage xml -o $GITHUB_WORKSPACE/coverage.xml
 
       - name: Upload coverage report
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-py${{ matrix.python-version }}
           path: coverage.xml
-
-      - name: Coverage summary
-        if: always()
-        working-directory: /tmp/ha-config
-        run: |
-          # The preceding pytest run already created .coverage.  Re-running the
-          # entire suite here doubled CI time and could leave PR checks stuck in
-          # this informational step for hours.
-          python -m coverage report --format=markdown --skip-empty
+          if-no-files-found: ignore
 
   card-test:
     # Dashboard-card JS unit tests (no browser): guards the load-device

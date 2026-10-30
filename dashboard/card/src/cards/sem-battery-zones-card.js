@@ -7,6 +7,7 @@
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semDefineCard } from '../base/sem-shared.js';
+import { fmtValue } from '../util/missing-value.js';
 
 const ZONES = [
     { id: 'autostart', entity: 'number.sem_battery_auto_start_soc', icon: 'mdi:play-circle',        labelKey: 'auto_start_soc', helpKey: 'zone_help_autostart', color: '#4db6ac' },
@@ -48,6 +49,8 @@ class SEMBatteryZonesCard extends SEMLitBase {
     _renderZoneMarkers(T) {
         return ZONES.map(z => {
             const val = this._state(z.entity);
+            // (#1200) a setting that is out has no marker, not one at 0 %.
+            if (val == null) return nothing;
             // Clamp the marker position so an out-of-range sensor value
             // (e.g. during startup) can't stretch the card horizontally.
             const pos = Math.max(0, Math.min(100, val));
@@ -101,7 +104,7 @@ class SEMBatteryZonesCard extends SEMLitBase {
                             @pointerup=${() => this._stopHold(z.entity)}
                             @pointerleave=${() => this._stopHold(z.entity)}
                         >−</button>
-                        <span class="stepper-value">${val.toFixed(decimals)}%</span>
+                        <span class="stepper-value">${fmtValue(val, decimals)}%</span>
                         <button
                             class="stepper-plus"
                             aria-label="Increase ${label}"
@@ -124,7 +127,7 @@ class SEMBatteryZonesCard extends SEMLitBase {
         const autostart = this._state(ZONES[0].entity);
         const buffer    = this._state(ZONES[1].entity);
         const priority  = this._state(ZONES[2].entity);
-        const subtitle  = `${this._t('auto_start_soc')} ${autostart.toFixed(0)}% · Buffer ${buffer.toFixed(0)}% · ${this._t('priority_soc')} ${priority.toFixed(0)}%`;
+        const subtitle  = `${this._t('auto_start_soc')} ${fmtValue(autostart, 0)}% · Buffer ${fmtValue(buffer, 0)}% · ${this._t('priority_soc')} ${fmtValue(priority, 0)}%`;
 
         return html`
             <style>

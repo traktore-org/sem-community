@@ -1857,6 +1857,9 @@
     "set_option_invalid_payload": {
       "message": "set_option 需要一个 options 字典，用于将配置键映射到新的值。"
     },
+    "battery_list_changed": {
+      "message": "能源仪表板中的电池已更改，因此此电池设置未保存。请检查后重试。"
+    },
     "set_option_no_entry": {
       "message": "未找到 SEM ConfigEntry —— 请先通过 设置 → 设备与服务 安装 SEM。"
     },

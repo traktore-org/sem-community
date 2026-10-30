@@ -15,7 +15,7 @@ import { capacityConsequence, horizonLabel, trustConsequence }
     from '../util/forecast-evidence.js';
 import { semTheme, semFormatPower, semGetCurrency, semCardSurfaceCSS, SEM_COLORS, semDefineCard } from '../base/sem-shared.js';
 import { temperatureUnit } from '../util/temperature.js';
-import { MISSING, allOut, socDisplay } from '../util/missing-value.js';
+import { MISSING, allOut, fmtValue, readNumber, socDisplay } from '../util/missing-value.js';
 import { solarSharePct } from '../util/solar-share.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
@@ -142,7 +142,9 @@ class SEMBatteryCard extends SEMLitBase {
     get hass() { return this._hass; }
 
     /* ── Prefix-scoped helpers ── */
-    _val(suffix, fallback = 0) {
+    // (#1200) null for a sensor that is out: it prints "—", not 0. A check
+    // that wants 0 passes it.
+    _val(suffix, fallback = null) {
         return this._state(`${this._prefix}${suffix}`, fallback);
     }
 
@@ -367,7 +369,7 @@ class SEMBatteryCard extends SEMLitBase {
                         <span class="bsc-stepper">
                             <button class="bsc-btn"
                                 @click=${() => this._stepNumber(reserveEntityId, -1)}>−</button>
-                            <span class="bsc-stepval">${Math.round(parseFloat(reserveState.state) || 0)}%</span>
+                            <span class="bsc-stepval">${fmtValue(readNumber(reserveState), 0)}%</span>
                             <button class="bsc-btn"
                                 @click=${() => this._stepNumber(reserveEntityId, 1)}>+</button>
                         </span>
@@ -693,13 +695,14 @@ class SEMBatteryCard extends SEMLitBase {
         // Lowercase — the sensor publishes title-cased values ("Selling",
         // "Charging"); the string comparisons below expect lowercase.
         const statusRaw = (this._valStr('battery_status') || '').toLowerCase();
-        const health = this._val('battery_health_score', 0);
-        const cycles = this._val('battery_cycles_estimated', 0);
-        const dailyCharge = this._val('daily_battery_charge_energy', 0);
-        const dailyDischarge = this._val('daily_battery_discharge_energy', 0);
-        const dailySavings = this._val('daily_battery_savings', 0);
-        const monthCharge = this._val('monthly_battery_charge_energy', 0);
-        const monthDischarge = this._val('monthly_battery_discharge_energy', 0);
+        // (#1200) null when out: the figures print "—", not 0.
+        const health = this._val('battery_health_score');
+        const cycles = this._val('battery_cycles_estimated');
+        const dailyCharge = this._val('daily_battery_charge_energy');
+        const dailyDischarge = this._val('daily_battery_discharge_energy');
+        const dailySavings = this._val('daily_battery_savings');
+        const monthCharge = this._val('monthly_battery_charge_energy');
+        const monthDischarge = this._val('monthly_battery_discharge_energy');
         const solarToBatt = this._val('flow_solar_to_battery_energy', 0);
         const gridToBatt = this._val('flow_grid_to_battery_energy', 0);
         const currency = semGetCurrency(this._hass);
@@ -746,12 +749,12 @@ class SEMBatteryCard extends SEMLitBase {
         const sessionType = this._valStr('battery_session_type');
         const sessionActive = sessionType === 'charge' || sessionType === 'discharge';
         const isChargeSess = sessionType === 'charge';
-        const sEnergy = sessionActive ? this._val('battery_session_energy', 0) : 0;
-        const sDuration = sessionActive ? this._val('battery_session_duration', 0) : 0;
-        const sAvgPower = sessionActive ? this._val('battery_session_avg_power', 0) : 0;
-        const sSolarShare = sessionActive ? this._val('battery_session_solar_share', 0) : 0;
-        const sCost = sessionActive ? this._val('battery_session_cost', 0) : 0;
-        const sSavings = sessionActive ? this._val('battery_session_savings', 0) : 0;
+        const sEnergy = sessionActive ? this._val('battery_session_energy') : 0;
+        const sDuration = sessionActive ? this._val('battery_session_duration') : 0;
+        const sAvgPower = sessionActive ? this._val('battery_session_avg_power') : 0;
+        const sSolarShare = sessionActive ? this._val('battery_session_solar_share') : 0;
+        const sCost = sessionActive ? this._val('battery_session_cost') : 0;
+        const sSavings = sessionActive ? this._val('battery_session_savings') : 0;
         const sessColor = isChargeSess ? '#f06292' : '#4db6ac';
 
         const dotCol = T.dotColor || 'rgba(128,128,128,0.05)';

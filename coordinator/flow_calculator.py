@@ -315,7 +315,8 @@ class FlowCalculator:
         self._per_string_accumulators: Dict[str, Dict[str, float]] = {}
         self._current_date: date = dt_util.now().date()
 
-    def calculate_power_flows(self, power: PowerReadings) -> PowerFlows:
+    @staticmethod
+    def calculate_power_flows(power: PowerReadings) -> PowerFlows:
         """Calculate instantaneous power flows using priority-based allocation (#349).
 
         Sources drain in priority order — ``solar → battery_discharge →
@@ -347,10 +348,26 @@ class FlowCalculator:
         slack variable) and leftover demand reads zero on the missing
         rows. Pinned in ``tests/test_349_flow_priority_attribution.py``.
 
-        v1.6.9 multi-charger split + v1.7.0 per-string passthrough
-        (see below the allocator) are unchanged.
+        v1.6.9 multi-charger split (below the allocator) + v1.7.0
+        per-string passthrough (above it, #1203) are unchanged.
+
+        (#1185) A static method: the books build their flows again from a
+        dark input's held watts (``EnergyCalculator._book_flows``).
         """
         flows = PowerFlows()
+
+        # v1.7.0 / #312: carry per-string raw power onto the flows
+        # object so ``integrate_energy_flows`` can accumulate kWh per
+        # string without an API change. Strings are SOURCES so there's
+        # no destination attribution to compute — just pass-through.
+        # (#1203) Before the idle return below: with every input dark
+        # each reads 0 W, and the strings' held watts still count.
+        if power.solar_power_per_string:
+            flows.solar_per_string = dict(power.solar_power_per_string)
+            # (#1203) a dark string's last live watts, for its daily energy
+            held = getattr(power, "solar_power_per_string_held", None)
+            if isinstance(held, dict) and held:
+                flows.solar_per_string_held = dict(held)
 
         # Get source powers (priority order: solar > battery > grid)
         solar = power.solar_power
@@ -439,13 +456,8 @@ class FlowCalculator:
         # available, split the fleet-level EV flows by each charger's
         # share of the total EV draw. Math: ``charger_share = c_draw /
         # ev_total`` × fleet ``flows.*_to_ev``. Sum invariant holds by
-        # v1.7.0 / #312: carry per-string raw power onto the flows
-        # object so ``integrate_energy_flows`` can accumulate kWh per
-        # string without an API change. Strings are SOURCES so there's
-        # no destination attribution to compute — just pass-through.
-        if power.solar_power_per_string:
-            flows.solar_per_string = dict(power.solar_power_per_string)
-
+        # construction.
+        #
         # Per-charger native attribution (Step 5 of arch/
         # multi-charger-primary, addresses #351 finding M3).
         #
@@ -621,10 +633,15 @@ class FlowCalculator:
         # kWh counter. Sum invariant pinned in tests:
         # ``sum(per_string.energy_kwh) ≈ fleet solar integration``
         # within rounding.
+        # (#1203) A dark string books its last live watts for the grace —
+        # the window its entity shows them — as the solar row does (#1186).
         if power_flows.solar_per_string:
+            held = getattr(power_flows, "solar_per_string_held", None)
+            if not isinstance(held, dict):
+                held = {}
             for sid, watts in power_flows.solar_per_string.items():
                 acc = self._per_string_accumulators.setdefault(sid, {})
-                w = watts or 0.0
+                w = held.get(sid, watts) or 0.0
                 acc["energy_kwh"] = (
                     acc.get("energy_kwh", 0.0) + w * hours / 1000.0
                 )

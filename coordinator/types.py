@@ -176,6 +176,10 @@ class PowerReadings:
     #: 0.0 for the sums, which is also what a string reads at night. A slot
     #: missing here was not read.
     solar_power_per_string_read: "Dict[str, bool]" = field(default_factory=dict)
+    #: (#1203) A dark string's last live watts, by slot, while that read is
+    #: no older than ``SENSOR_DARK_READ_GRACE_S`` — the window its entity
+    #: shows it. Only its daily energy books them; its watts above stay 0.0.
+    solar_power_per_string_held: "Dict[str, float]" = field(default_factory=dict)
 
     # v1.7.0 arch/multi-inverter-battery-primary.
     #
@@ -254,6 +258,16 @@ class PowerReadings:
     #: decide and budgets keep ``home_consumption_power``. The daily home
     #: row books this one while it is set (#1177).
     home_shown_w: Optional[float] = None
+    #: (#1186) What the dark units of a total add back to the figure SEM
+    #: SHOWS and books, by input ("solar", "grid", "battery"), in SEM's sign.
+    #: A total read from two or more sensors (inverters, batteries, the two
+    #: sides of a split grid meter) keeps each unit's last live read on its
+    #: own, for ``SENSOR_DARK_READ_GRACE_S``. An input is listed only while
+    #: a unit is held and some read of it is live; when every read is dark
+    #: its ``*_unavailable`` flag owns the hold. Never read by steering: the
+    #: input keeps the reader's 0 W for the dark unit. Read it through
+    #: ``shown_w``.
+    held_w: Dict[str, float] = field(default_factory=dict)
     # (#910) True for a cycle in which a charger's power read was a blink
     # held at its last accepted value (status still charging).
     ev_power_held: bool = False
@@ -446,6 +460,10 @@ class PowerFlows:
     # holds at the read level (sum ≈ ``solar_power``); the integrator
     # owns the persistence of per-string kWh.
     solar_per_string: "Dict[str, float]" = field(default_factory=dict)
+    #: (#1203) …and a dark string's held watts
+    #: (``PowerReadings.solar_power_per_string_held``), for its daily energy
+    #: only.
+    solar_per_string_held: "Dict[str, float]" = field(default_factory=dict)
 
 
 @dataclass
@@ -738,12 +756,13 @@ class SystemStatus:
     # None while every read of the power it is built from is dark (#1197)
     grid_status: Optional[str] = "idle"  # import, export, idle
     battery_status: Optional[str] = "idle"  # selling, charging, discharging, idle
-    solar_active: bool = False
+    # None, as the status, while its power is dark (#1201)
+    solar_active: Optional[bool] = False
     ev_connected: bool = False
     ev_charging: bool = False
-    battery_charging: bool = False
-    battery_discharging: bool = False
-    grid_export_active: bool = False
+    battery_charging: Optional[bool] = False
+    battery_discharging: Optional[bool] = False
+    grid_export_active: Optional[bool] = False
 
 
 @dataclass
@@ -1126,6 +1145,37 @@ class BatterySessionData:
             "energy_kwh": round(self.energy_kwh or 0.0, 2),
         }
 
+#: (#1186) Each power field the shown figure is built for, and its input.
+SHOWN_FIELDS = {
+    "solar_power": "solar",
+    "grid_power": "grid",
+    "grid_import_power": "grid",
+    "grid_export_power": "grid",
+    "battery_power": "battery",
+    "battery_charge_power": "battery",
+    "battery_discharge_power": "battery",
+}
+
+
+def shown_w(power, name: str):
+    """(#1186) A power field as SEM shows and books it: the reading plus
+    what its held units add (``PowerReadings.held_w``). The halves are cut
+    from the shown net, as ``calculate_derived`` cuts them from the read
+    one. With nothing held it is the field itself."""
+    held = getattr(power, "held_w", None)
+    unit = SHOWN_FIELDS.get(name)
+    if not isinstance(held, dict) or unit not in held:
+        return getattr(power, name, 0.0)
+    if unit == "solar":
+        return float(getattr(power, name, 0.0) or 0.0) + float(held[unit])
+    net = float(getattr(power, f"{unit}_power", 0.0) or 0.0) + float(held[unit])
+    if name in ("grid_power", "battery_power"):
+        return net
+    if name in ("grid_export_power", "battery_charge_power"):
+        return max(0.0, net)
+    return max(0.0, -net)
+
+
 def _w(value):
     """(#829) Whole watts at the publish seam — a watt is a watt.
 
@@ -1227,12 +1277,17 @@ class SEMData:
         _solar_dark = getattr(self.power, "solar_power_unavailable", False)
         _grid_dark = getattr(self.power, "grid_power_unavailable", False)
         _batt_dark = getattr(self.power, "battery_power_all_unavailable", False)
+        # (#1186) A dark unit of a total is shown at its last live read for
+        # the grace (``shown_w``), as its own entity shows it.
+        def _shown(name):
+            return _w(shown_w(self.power, name))
+
         data = {
             # Power readings
-            "solar_power": None if _solar_dark else _w(self.power.solar_power),
-            "grid_power": None if _grid_dark else _w(self.power.grid_power),
-            "grid_active_power": None if _grid_dark else _w(-self.power.grid_power),  # positive=import, negative=export (K-Flow convention)
-            "battery_power": None if _batt_dark else _w(self.power.battery_power),
+            "solar_power": None if _solar_dark else _shown("solar_power"),
+            "grid_power": None if _grid_dark else _shown("grid_power"),
+            "grid_active_power": None if _grid_dark else _w(-shown_w(self.power, "grid_power")),  # positive=import, negative=export (K-Flow convention)
+            "battery_power": None if _batt_dark else _shown("battery_power"),
             "ev_power": _w(self.power.ev_power),
             # (#1047) the shown figure: held while an input it is built
             # from reads dark, so a dropout is not a jump in the house
@@ -1243,10 +1298,10 @@ class SEMData:
             # cannot be more certain than it (the grid_active_power rule).
             # Published as numbers, they read 0 W beside a battery entity
             # still holding 3.9 kW.
-            "grid_import_power": None if _grid_dark else _w(self.power.grid_import_power),
-            "grid_export_power": None if _grid_dark else _w(self.power.grid_export_power),
-            "battery_charge_power": None if _batt_dark else _w(self.power.battery_charge_power),
-            "battery_discharge_power": None if _batt_dark else _w(self.power.battery_discharge_power),
+            "grid_import_power": None if _grid_dark else _shown("grid_import_power"),
+            "grid_export_power": None if _grid_dark else _shown("grid_export_power"),
+            "battery_charge_power": None if _batt_dark else _shown("battery_charge_power"),
+            "battery_discharge_power": None if _batt_dark else _shown("battery_discharge_power"),
             "battery_soc": None if self.power.battery_soc_unavailable else self.power.battery_soc,
             "battery_temperature": self.power.battery_temperature,
             "inverter_temperature": self.power.inverter_temperature,

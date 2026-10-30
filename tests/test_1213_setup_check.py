@@ -109,6 +109,17 @@ def test_the_other_meter_is_offered_only_when_there_is_one():
     assert same.other_grid is None and "other" not in same.answers()
 
 
+def test_the_other_meter_is_named_even_when_the_grid_reading_was_not_guessed():
+    """(#1213 review) The "other" option can appear on the plain
+    buying/sending screen too — it must still say which sensor and what
+    it reads, not just on the ASK_GUESSED screen."""
+    check = SetupCheck(grid_entity="sensor.meter", grid_w=900, grid_from="dashboard",
+                       other_grid="sensor.meter2", other_grid_w=150, ask=None)
+    why = cf.SolarEnergyManagementConfigFlow._why(dict(cf._SETUP_WORDS_EN), check)
+    assert "sensor.meter2" in why
+    assert "150" in why
+
+
 # ── what an answer writes ──────────────────────────────────────────────────
 
 def _guessed(w):

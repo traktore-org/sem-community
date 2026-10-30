@@ -390,6 +390,10 @@ DECLARED_READERS = {
         "the #647 audit checks combined units only",
     ("coordinator/sensor_reader.py", "_drop_locks_on_other_counters"):
         "(#1193) only combined units have saved sign locks to check",
+    ("coordinator/sensor_reader.py", "_battery_lock_bids"):
+        "(#1210) only combined units take a sign lock; pairs have none",
+    ("coordinator/sensor_reader.py", "_signs_follow_their_battery"):
+        "(#1205) a sign lock's b<N> is its place among the combined units",
     ("setup_check.py", "build_setup_check"):
         "(#1213) the setup check adds each combined sensor's watts beside the pairs",
     ("diagnostics.py", "async_get_config_entry_diagnostics"):

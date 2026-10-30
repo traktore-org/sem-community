@@ -15,7 +15,7 @@
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semFormatPower, semDefineCard } from '../base/sem-shared.js';
-import { MISSING, socDisplay } from '../util/missing-value.js';
+import { MISSING, fmtValue, readNumber, socDisplay } from '../util/missing-value.js';
 import { isUncapped, peakLimitText } from '../util/peak-slot.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
@@ -51,15 +51,10 @@ class SEMHomeStatusCard extends SEMLitBase {
         this._prefix = config.entity_prefix || DEFAULT_PREFIX;
     }
 
-    _val(suffix, fallback = 0) {
-        const e = this._hass?.states[`${this._prefix}${suffix}`];
-        if (!e || e.state === 'unavailable' || e.state === 'unknown') return fallback;
-        // (#925 audit) `??` only catches null/undefined, and parseFloat of a
-        // non-numeric state returns NaN — which sailed straight past it. A
-        // caller asking for a null fallback got NaN instead and rendered
-        // "NaN W". Unparseable is just another way of not having a reading.
-        const n = parseFloat(e.state);
-        return Number.isFinite(n) ? n : fallback;
+    // (#925, #1200) null for a sensor that is out or gives no number: the
+    // card prints "—", never 0 and never NaN.
+    _val(suffix, fallback = null) {
+        return readNumber(this._hass?.states[`${this._prefix}${suffix}`]) ?? fallback;
     }
 
     _valStr(suffix) {
@@ -68,12 +63,14 @@ class SEMHomeStatusCard extends SEMLitBase {
     }
 
     _scoreColor(score) {
+        if (score == null) return '#888';
         if (score >= 80) return '#8DC892';
         if (score >= 50) return '#ff9800';
         return '#f44336';
     }
 
     _peakColor(pct) {
+        if (pct == null) return '#888';
         if (pct > 90) return '#f44336';
         if (pct > 70) return '#ff9800';
         return '#8DC892';
@@ -114,17 +111,17 @@ class SEMHomeStatusCard extends SEMLitBase {
 
         const tip = this._valStr('energy_tip');
         const surplusWindow = this._valStr('best_surplus_window') || '—';
-        const remaining = this._val('forecast_remaining_today_kwh').toFixed(1);
+        const remaining = fmtValue(this._val('forecast_remaining_today_kwh'), 1);
 
         const peakPct = this._val('current_vs_peak_percentage');
         const peakColor = this._peakColor(peakPct);
-        const currentPeak = this._val('consecutive_peak_15min').toFixed(1);
+        const currentPeak = fmtValue(this._val('consecutive_peak_15min'), 1);
         const limitState = this._hass.states[`${this._prefix}target_peak_limit`];
         const targetLimit = peakLimitText(limitState, this._t('uncapped'));
         const uncapped = isUncapped(limitState);
 
-        const co2Today = this._val('daily_co2_avoided').toFixed(2);
-        const co2Life = this._val('lifetime_co2_avoided').toFixed(1);
+        const co2Today = fmtValue(this._val('daily_co2_avoided'), 2);
+        const co2Life = fmtValue(this._val('lifetime_co2_avoided'), 1);
 
         return html`
             <div class="wrap">
@@ -139,7 +136,7 @@ class SEMHomeStatusCard extends SEMLitBase {
                     ${this._renderChip('mdi:car-electric', '#8DC892', evPower > 0 ? semFormatPower(evPower) : '—')}
                     <div class="chip">
                         <ha-icon icon="mdi:speedometer" style="--mdc-icon-size:16px;color:${scoreColor}"></ha-icon>
-                        <span class="chip-val">${score.toFixed(0)}</span>
+                        <span class="chip-val">${fmtValue(score, 0)}</span>
                     </div>
                 </div>
 
@@ -165,12 +162,12 @@ class SEMHomeStatusCard extends SEMLitBase {
                     <div class="peak-icon-wrap">
                         <ha-icon icon="mdi:flash-alert"
                                  style="--mdc-icon-size:22px;color:#ff9800"></ha-icon>
-                        <span class="peak-pct" style="color:${peakColor}">${peakPct.toFixed(0)}%</span>
+                        <span class="peak-pct" style="color:${peakColor}">${fmtValue(peakPct, 0)}%</span>
                     </div>
                     <div class="peak-text-wrap">
-                        <span class="peak-detail">${currentPeak} kW / ${targetLimit}${uncapped ? '' : ` (${peakPct.toFixed(0)}%)`}</span>
+                        <span class="peak-detail">${currentPeak} kW / ${targetLimit}${uncapped ? '' : ` (${fmtValue(peakPct, 0)}%)`}</span>
                         <span class="peak-status-badge" style="color:${peakColor};border-color:${peakColor}">
-                            ${this._t(this._peakStatusKey(peakPct))}
+                            ${peakPct == null ? MISSING : this._t(this._peakStatusKey(peakPct))}
                         </span>
                     </div>
                 </div>

@@ -208,6 +208,144 @@ def _strip_unset_tail(slots: list) -> list:
     return out
 
 
+def _old_slot_of(record: list, units: list) -> list[int | None]:
+    """For each battery of ``units``, its slot in ``record`` (None: new).
+    A sensor named twice takes its slots in turn."""
+    unclaimed = list(range(len(record)))
+    old_slot_of: list[int | None] = []
+    for unit in units:
+        j = next((k for k in unclaimed if record[k] == unit), None)
+        if j is not None:
+            unclaimed.remove(j)
+        old_slot_of.append(j)
+    return old_slot_of
+
+
+def _battery_order(value: Any) -> list[str] | None:
+    """A ``battery_slot_units`` record, or None for none or a damaged one."""
+    if (isinstance(value, (list, tuple)) and value
+            and all(isinstance(u, str) and u for u in value)):
+        return list(value)
+    return None
+
+
+def slot_today(slot: int, read_units: Any, saved: Mapping) -> int | None:
+    """(#1204) Where the battery at ``slot`` of the order a writer read is now.
+
+    A writer that holds a per-battery list (the Config card, an open
+    Configure dialog, a Mode select) holds it in the battery order it read,
+    ``read_units`` — the ``battery_slot_units`` of that moment. The
+    alignment may have moved every slot since. With no order on either side
+    (none read, or none saved) the slot is taken as it stands, as the
+    alignment does with no record. None: that battery is gone, or the writer
+    had no battery at that place.
+    """
+    read = _battery_order(read_units)
+    now = _battery_order(saved.get(BATTERY_SLOT_UNITS_KEY))
+    if read is None or now is None or read == now:
+        return slot
+    if not 0 <= slot < len(read):
+        return None
+    return next((i for i, j in enumerate(_old_slot_of(read, now)) if j == slot),
+                None)
+
+
+def put_battery_slot(saved: Mapping, key: str, slot: int, value: Any,
+                     read_units: Any) -> list:
+    """(#1204) The saved list ``key`` with one battery's slot set.
+
+    ``slot`` is the battery's place in the order the writer read
+    (``slot_today``). Every other slot stays as saved, so a copy read
+    before another writer changed a slot does not put the old value back.
+    Raises ``LookupError`` when that battery is gone: its place now belongs
+    to another battery."""
+    target = slot_today(slot, read_units, saved)
+    if target is None:
+        raise LookupError(key)
+    stored = saved.get(key)
+    lst = list(stored) if isinstance(stored, list) else []
+    while len(lst) <= target:
+        lst.append(None)
+    lst[target] = value
+    return lst
+
+
+def lists_in_current_order(written: Mapping, read_units: Any,
+                           saved: Mapping) -> dict:
+    """(#1204) Whole per-battery lists a writer read in one order, put in
+    today's order.
+
+    Each battery takes the writer's value from its place in the order the
+    writer read. A battery the writer never saw keeps its saved value; the
+    slot of a battery that is gone is dropped. Lists already in today's
+    order (or with no order to follow) come back as they are. Only the keys
+    of ``PER_BATTERY_LIST_KEYS`` that hold a list are returned.
+    """
+    lists = {k: v for k, v in written.items()
+             if k in PER_BATTERY_LIST_KEYS and isinstance(v, list)}
+    read = _battery_order(read_units)
+    now = _battery_order(saved.get(BATTERY_SLOT_UNITS_KEY))
+    if read is None or now is None or read == now:
+        return lists
+    sources = _old_slot_of(read, now)
+    out: dict = {}
+    for key, lst in lists.items():
+        stored = saved.get(key)
+        stored = stored if isinstance(stored, list) else []
+        out[key] = _strip_unset_tail([
+            (lst[j] if j < len(lst) else None) if j is not None
+            else (stored[i] if i < len(stored) else None)
+            for i, j in enumerate(sources)])
+    return out
+
+
+#: (#1204) No home has this many batteries; a larger slot is a damaged edit.
+_MAX_BATTERY_SLOTS = 64
+
+
+def battery_slot_edits(options: Mapping, saved: Mapping) -> dict:
+    """(#1204) ``set_option`` options with each one-battery edit made whole.
+
+    The Config card sends a per-battery list as one battery's edit:
+    ``{"slot": N, "value": …, "battery_slot_units": [the order it read]}``.
+    It becomes the saved list with that battery's slot set
+    (``put_battery_slot``). A whole list (a script) is today's order and
+    passes as it is. Raises ``ValueError`` on a damaged edit and
+    ``LookupError`` when the battery is gone.
+    """
+    out = dict(options)
+    for key in PER_BATTERY_LIST_KEYS:
+        edit = options.get(key)
+        if not isinstance(edit, Mapping):
+            continue
+        slot = edit.get("slot")
+        value = edit.get("value")
+        if (not isinstance(slot, int) or isinstance(slot, bool)
+                or not 0 <= slot < _MAX_BATTERY_SLOTS or isinstance(value, bool)
+                or not (value is None or isinstance(value, (str, int, float)))):
+            raise ValueError(key)
+        out[key] = put_battery_slot(saved, key, slot, value if value != "" else None,
+                                    edit.get(BATTERY_SLOT_UNITS_KEY))
+    return out
+
+
+def _has_record(saved: Mapping) -> bool:
+    record = saved.get(BATTERY_SLOT_UNITS_KEY)
+    return isinstance(record, list) and all(isinstance(u, str) for u in record)
+
+
+def _slots_stand_in(saved: Mapping, units: list, before: Any) -> list | None:
+    """The battery order the saved slots are in: the record, else (#1226)
+    ``before`` where it differs from ``units``, else None (as they stand)."""
+    if _has_record(saved):
+        return saved[BATTERY_SLOT_UNITS_KEY]
+    if (isinstance(before, (list, tuple))
+            and all(isinstance(u, str) and u for u in before)
+            and list(before) != units):
+        return list(before)
+    return None
+
+
 def realign_battery_slots(saved: Any, units: Any,
                           before: Any = None) -> tuple[dict, bool] | None:
     """(#1195) The per-battery lists put in the order of ``units``.
@@ -241,26 +379,14 @@ def realign_battery_slots(saved: Any, units: Any,
     if not all(isinstance(u, str) and u for u in units):
         return None     # a gap would move every later battery: no answer
     units = list(units)
-    record = saved.get(BATTERY_SLOT_UNITS_KEY)
-    if not (isinstance(record, list) and all(isinstance(u, str) for u in record)):
-        record = None
-    first = record is None
-    if (first and isinstance(before, (list, tuple))
-            and all(isinstance(u, str) and u for u in before)
-            and list(before) != units):
-        record = list(before)
+    first = not _has_record(saved)
+    record = _slots_stand_in(saved, units, before)
     if record == units:
         return None
     if record is None:
         old_slot_of = list(range(len(units)))
     else:
-        unclaimed = list(range(len(record)))
-        old_slot_of = []
-        for unit in units:
-            j = next((k for k in unclaimed if record[k] == unit), None)
-            if j is not None:
-                unclaimed.remove(j)
-            old_slot_of.append(j)
+        old_slot_of = _old_slot_of(record, units)
     changes: dict = {BATTERY_SLOT_UNITS_KEY: list(units)}
     for key in PER_BATTERY_LIST_KEYS:
         old = saved.get(key)
@@ -303,6 +429,15 @@ def align_battery_slots(hass: Any, entry: Any, coordinator: Any, units: Any,
     if running and not moved:
         # the options listener must not reload for a record alone
         coordinator._skip_options_reload = dict(new_options)
+    if not running and getattr(coordinator, "_battery_controls_built", False) is not True:
+        # (#1204) the controls are built after this, from the new places
+        coordinator.battery_control_units = tuple(changes[BATTERY_SLOT_UNITS_KEY])
+    elif not moved and not isinstance(
+            getattr(coordinator, "battery_control_units", None), tuple):
+        # (#1204) built with no record, the controls hold the places the
+        # slots stood in until now (no reload follows a first record)
+        coordinator.battery_control_units = tuple(
+            _slots_stand_in(merged, list(units), before) or units)
     limits = "battery_discharge_control_entities"
     old_limits, new_limits = merged.get(limits), changes.get(limits, merged.get(limits))
     if not running and isinstance(old_limits, list):

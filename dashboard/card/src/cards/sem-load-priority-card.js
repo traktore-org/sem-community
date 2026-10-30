@@ -29,6 +29,17 @@ import {
     findDeviceForConfig,
 } from './load-config-modal.js';
 import { stateLabel } from '../util/state-label.js';
+import { MISSING, fmtValue, readNumber } from '../util/missing-value.js';
+
+// (#1200) A load's live power in kW from its own entity, or null while that
+// entity is out. Older backends carry current_power in the map instead.
+function devicePowerKw(stateObj, info) {
+    if (info.power_entity && stateObj) {
+        const w = readNumber(stateObj);
+        return w == null ? null : w / 1000;
+    }
+    return (info.current_power || 0) / 1000;
+}
 
 /* Drag-and-drop is Lit-native (pointer events) — see _dragStart/_dragMove/
    _dragEnd. SortableJS was removed (#576): an imperative DOM library and
@@ -60,9 +71,9 @@ class SEMLoadPriorityCard extends SEMLitBase {
     constructor() {
         super();
         this.devices = [];
-        this.targetPeakLimit = 5.0;
+        this.targetPeakLimit = null;     // (#1200) null until the sensor gives one
         this.peakLimitUnlimited = false;  // (#716) explicit opt-out, never inferred
-        this.currentPeak = 0;            // the BILLED metric: 15-min rolling average
+        this.currentPeak = null;         // the BILLED metric: 15-min rolling average
         this.gridImportKw = null;        // (#909) instantaneous, for contrast
         this.slotAllowedW = null;        // (#864/#909) what the rest of this slot may average
         this.slotUsedKwh = null;         // (#864/#909) energy spent in this billing slot
@@ -404,7 +415,9 @@ class SEMLoadPriorityCard extends SEMLitBase {
         const statusEntity      = this._hass.states[`${this._prefix}load_management_status`];
         const devicesEntity     = this._hass.states[`${this._prefix}controllable_devices_count`];
 
-        if (targetPeakEntity)  this.targetPeakLimit      = parseFloat(targetPeakEntity.state)  || 5.0;
+        // (#1200) null when out: the card prints "—", not a 5 kW limit or a
+        // 0 kW peak nobody measured.
+        if (targetPeakEntity)  this.targetPeakLimit      = readNumber(targetPeakEntity);
         if (targetPeakEntity)  this.peakLimitUnlimited   = targetPeakEntity.attributes?.peak_limit_unlimited || false;
         // (#1055 follow-up) Keep showing the value the user let go of until
         // the sensor has it, so a push from before the save cannot move the
@@ -420,7 +433,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 this.peakLimitUnlimited = hold.unlimited;
             }
         }
-        if (currentPeakEntity) this.currentPeak          = parseFloat(currentPeakEntity.state) || 0;
+        if (currentPeakEntity) this.currentPeak          = readNumber(currentPeakEntity);
         // (#909) The two other quantities the peak block needs to stop reading
         // as a contradiction: what the meter shows RIGHT NOW, and the slot
         // budget the #864 guard actually steers by.
@@ -440,9 +453,8 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     // (#829) live power from the device's own entity — the map
                     // no longer carries current_power (it made the count sensor
                     // write a row every cycle); older backends still fall back.
-                    power: ((info.power_entity && this._hass?.states?.[info.power_entity])
-                        ? (parseFloat(this._hass.states[info.power_entity]?.state) || 0)
-                        : (info.current_power || 0)) / 1000,
+                    // (#1200) null while that entity is out: "— W", not 0 W.
+                    power: devicePowerKw(this._hass.states[info.power_entity], info),
                     // (#577) self-calibrated rated power (W) — shown dimmed when
                     // the load is off so the row keeps a meaningful number
                     // instead of a bare "OFF".
@@ -498,8 +510,9 @@ class SEMLoadPriorityCard extends SEMLitBase {
 
         const unlimited  = this.peakLimitUnlimited;
         const peakColor  = this._getPeakColor();
-        const peakMargin = this.targetPeakLimit - this.currentPeak;
-        const peakPct    = unlimited ? 0 : (this.targetPeakLimit > 0 ? Math.min((this.currentPeak / this.targetPeakLimit) * 100, 100) : 0);
+        const peakMargin = this.targetPeakLimit == null || this.currentPeak == null
+            ? null : this.targetPeakLimit - this.currentPeak;
+        const peakPct    = unlimited || this.currentPeak == null ? 0 : (this.targetPeakLimit > 0 ? Math.min((this.currentPeak / this.targetPeakLimit) * 100, 100) : 0);
         // (#909) The billing slot the guard defends — null when the install is
         // uncapped or the guard has published nothing yet.
         const slot = unlimited ? null : slotStatus({
@@ -516,8 +529,8 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         <span id="lm-status" class="status-text">${stateLabel('load_management_status', this.loadManagementStatus || 'normal', (k) => this._t(k)).toUpperCase()}</span>
                         <div class="spacer"></div>
                         <span class="dim">${this._t('peak_15min_avg')}</span>
-                        <span id="peak-current" class="mono">${this.currentPeak.toFixed(2)} kW</span>
-                        <span class="dim">/ ${unlimited ? this._t('uncapped') : this.targetPeakLimit.toFixed(1)}</span>
+                        <span id="peak-current" class="mono">${fmtValue(this.currentPeak, 2)} kW</span>
+                        <span class="dim">/ ${unlimited ? this._t('uncapped') : fmtValue(this.targetPeakLimit, 1)}</span>
                         <button class="help-btn ${this._showHelp ? 'active' : ''}" data-action="toggle-help"
                                 title="${this._t('help')}">?</button>
                     </div>
@@ -525,7 +538,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     <div class="peak-box">
                         <div class="peak-row">
                             <span class="dim">${this._t('peak_15min_avg')}</span>
-                            <span id="peak-current2" class="mono">${this.currentPeak.toFixed(2)} kW</span>
+                            <span id="peak-current2" class="mono">${fmtValue(this.currentPeak, 2)} kW</span>
                         </div>
                         ${this.gridImportKw === null ? nothing : html`
                         <div class="peak-row">
@@ -534,12 +547,12 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         </div>`}
                         <div class="peak-row">
                             <span class="dim">${this._t('target_limit')}</span>
-                            <span id="peak-target" class="mono">${unlimited ? this._t('uncapped') : this.targetPeakLimit.toFixed(2) + ' kW'}</span>
+                            <span id="peak-target" class="mono">${unlimited ? this._t('uncapped') : fmtValue(this.targetPeakLimit, 2) + ' kW'}</span>
                         </div>
                         ${unlimited ? nothing : html`
                         <div class="peak-row">
                             <span class="dim">${this._t('margin')}</span>
-                            <span id="peak-margin" class="mono" style="color:${peakMargin > 0 ? '#4caf50' : '#f44336'}">${peakMargin.toFixed(2)} kW</span>
+                            <span id="peak-margin" class="mono" style="color:${peakMargin == null ? '' : peakMargin > 0 ? '#4caf50' : '#f44336'}">${fmtValue(peakMargin, 2)} kW</span>
                         </div>`}
                         <div class="bar">
                             <div id="peak-bar" class="bar-fill" style="width:${peakPct}%;background:${peakColor}"></div>
@@ -642,9 +655,9 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     </div>
                     <div class="device-power" data-field="power-${device.id}">
                         ${isBattery
-                            ? html`<span style="opacity:0.7">${device.soc != null ? device.soc + '% · ' : ''}${onOff ? semFormatPower(device.power * 1000) : this._t('off')}</span>`
+                            ? html`<span style="opacity:0.7">${device.soc != null ? device.soc + '% · ' : ''}${onOff ? semFormatPower(device.power == null ? null : device.power * 1000) : this._t('off')}</span>`
                             : (onOff
-                                ? semFormatPower(device.power * 1000)
+                                ? semFormatPower(device.power == null ? null : device.power * 1000)
                                 : (device.isShed
                                     ? this._t('shed_label')
                                     : (device.rating > 0
@@ -910,7 +923,10 @@ class SEMLoadPriorityCard extends SEMLitBase {
         if (drag != null) kw = drag;
         const pct = ((kw - MIN_KW) / (MAX_KW - MIN_KW)) * 100;
         const atMax = kw >= MAX_KW - 1e-6;
-        const label = atMax ? this._t('uncapped') : `${kw.toFixed(1)} kW`;
+        // (#1200) no limit read and none dragged: the dash, not the 1 kW end
+        const unread = drag == null && !this.peakLimitUnlimited && this.targetPeakLimit == null;
+        const label = unread ? `${MISSING} kW`
+            : atMax ? this._t('uncapped') : `${kw.toFixed(1)} kW`;
         return html`
             <div class="range-wrap">
                 <div class="range-labels">
@@ -1755,6 +1771,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
     // ── Helpers ──
     _getPeakColor() {
         if (this.peakLimitUnlimited) return '#4caf50';
+        if (this.currentPeak == null) return '#888';  // (#1200) no reading, no "safe"
         const pct = this.targetPeakLimit > 0 ? (this.currentPeak / this.targetPeakLimit) * 100 : 0;
         if (pct >= 100) return '#f44336';
         if (pct >= 90)  return '#ff9800';

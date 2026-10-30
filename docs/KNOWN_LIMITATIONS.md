@@ -475,3 +475,10 @@ The Simulation tab gives estimates, not measurements:
 - **More solar keeps your house and car as recorded.** Only the solar hours
   grow; nothing moves to use the extra sun, except what the car's charge
   mode does on its own.
+
+## Reconfigure cannot save a home that has a charger (#1258 open)
+
+**Settings → Devices & Services → Solar Energy Management → Reconfigure**
+asks for three EV sensors it cannot fill in when your charger is already set
+up, and will not save. Use **Configure** (the gear) instead: it holds the
+same charger and notification settings and saves them correctly.

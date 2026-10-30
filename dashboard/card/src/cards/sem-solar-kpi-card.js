@@ -13,6 +13,7 @@
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { semFormatPower, semDefineCard } from '../base/sem-shared.js';
+import { fmtValue, readNumber } from '../util/missing-value.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
 
@@ -31,11 +32,9 @@ class SEMSolarKpiCard extends SEMLitBase {
         this._prefix = config.entity_prefix || DEFAULT_PREFIX;
     }
 
-    _val(suffix, fallback = 0) {
-        const e = this._hass?.states[`${this._prefix}${suffix}`];
-        if (!e || e.state === 'unavailable' || e.state === 'unknown') return fallback;
-        const v = parseFloat(e.state);
-        return Number.isFinite(v) ? v : fallback;
+    // (#1200) null for a sensor that is out: the hero prints "—", not 0.
+    _val(suffix, fallback = null) {
+        return readNumber(this._hass?.states[`${this._prefix}${suffix}`]) ?? fallback;
     }
 
     static get styles() {
@@ -115,7 +114,7 @@ class SEMSolarKpiCard extends SEMLitBase {
                 <div class="kpi">
                     <div class="kpi-icon"><ha-icon icon="mdi:solar-power-variant"></ha-icon></div>
                     <div class="kpi-main">
-                        <div class="kpi-value">${today.toFixed(1)}<span class="unit">kWh</span></div>
+                        <div class="kpi-value">${fmtValue(today, 1)}<span class="unit">kWh</span></div>
                         <div class="kpi-label">${this._t('todays_solar_production')}</div>
                     </div>
                     ${power > 0 ? html`

@@ -15,6 +15,7 @@
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semGetCurrency, semDefineCard } from '../base/sem-shared.js';
 import { priceLevelKey } from '../util/price-level.js';
+import { MISSING, fmtValue, isMissing, readNumber } from '../util/missing-value.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
 
@@ -55,11 +56,10 @@ class SEMCostsDetailCard extends SEMLitBase {
         this._prefix = config.entity_prefix || DEFAULT_PREFIX;
     }
 
-    /** Read numeric sensor state via prefix */
-    _val(suffix, fallback = 0) {
-        const e = this._hass?.states[`${this._prefix}${suffix}`];
-        if (!e || e.state === 'unavailable' || e.state === 'unknown') return fallback;
-        return parseFloat(e.state) ?? fallback;
+    /** Read numeric sensor state via prefix — (#1200) null when out, so it
+     *  prints "—", not 0. */
+    _val(suffix, fallback = null) {
+        return readNumber(this._hass?.states[`${this._prefix}${suffix}`]) ?? fallback;
     }
 
     /** Read string sensor state via prefix */
@@ -69,12 +69,15 @@ class SEMCostsDetailCard extends SEMLitBase {
     }
 
     /** Read number entity (frozen or live) */
-    _numVal(entityId, fallback = 0) {
+    _numVal(entityId, fallback = null) {
         const frozen = this._frozenEntities[entityId];
         if (frozen) return frozen.value;
-        const e = this._hass?.states[entityId];
-        if (!e || e.state === 'unavailable' || e.state === 'unknown') return fallback;
-        return parseFloat(e.state) ?? fallback;
+        return readNumber(this._hass?.states[entityId]) ?? fallback;
+    }
+
+    // (#1200) SEM makes the lifetime EV sensors only for a home with a charger.
+    _evModule() {
+        return !!this._hass?.states[`${this._prefix}lifetime_ev_energy`];
     }
 
     _entityExists(entityId) {
@@ -90,11 +93,13 @@ class SEMCostsDetailCard extends SEMLitBase {
     _sectionSubtitle(id, curr) {
         if (id === 'ev_econ') {
             const energy = this._val('lifetime_ev_energy');
+            if (!this._evModule()) return this._t('no_ev_data');
+            if (energy == null) return MISSING;
             if (energy <= 0) return this._t('no_ev_data');
             const cost = this._val('lifetime_ev_cost');
             const share = this._val('lifetime_ev_solar_share');
-            const perKwh = energy > 0 ? (cost / energy) : 0;
-            return `${perKwh.toFixed(2)} ${curr}/kWh · ${share.toFixed(0)}% solar`;
+            const perKwh = cost == null ? null : cost / energy;
+            return `${fmtValue(perKwh, 2)} ${curr}/kWh · ${fmtValue(share, 0)}% solar`;
         }
         if (id === 'investment') {
             const inv = this._numVal('number.sem_system_investment_cost');
@@ -103,12 +108,12 @@ class SEMCostsDetailCard extends SEMLitBase {
         if (id === 'demand') {
             const peak = this._val('monthly_consecutive_peak');
             const charge = this._val('power_charge_cost');
-            return `${peak.toFixed(1)} kW · ${charge.toFixed(2)} ${curr}`;
+            return `${fmtValue(peak, 1)} kW · ${fmtValue(charge, 2)} ${curr}`;
         }
         if (id === 'tariff') {
             const imp = this._val('tariff_current_import_rate');
             const level = this._valStr('tariff_price_level');
-            return level ? `${imp.toFixed(4)} ${curr} · ${this._t(priceLevelKey(level))}` : `${imp.toFixed(4)} ${curr}`;
+            return level ? `${fmtValue(imp, 4)} ${curr} · ${this._t(priceLevelKey(level))}` : `${fmtValue(imp, 4)} ${curr}`;
         }
         return '';
     }
@@ -132,7 +137,7 @@ class SEMCostsDetailCard extends SEMLitBase {
                     <button class="stepper-minus" aria-label="Decrease"
                         @click=${() => this._stepNumber(entityId, -1)}>−</button>
                     <input class="stepper-input" type="number"
-                        .value=${String(val)}
+                        .value=${val == null ? '' : String(val)}
                         @change=${commit}
                         @keydown=${(e) => { if (e.key === 'Enter') e.target.blur(); }}>
                     ${unit ? html`<span class="stepper-unit">${unit}</span>` : nothing}
@@ -149,7 +154,7 @@ class SEMCostsDetailCard extends SEMLitBase {
         const step = entity ? (parseFloat(entity.attributes.step) || 1) : 1;
         const unit = entity?.attributes?.unit_of_measurement || '';
         const decimals = step < 1 ? 2 : 0;
-        const display = val.toFixed(decimals) + (unit ? ' ' + unit : '');
+        const display = fmtValue(val, decimals) + (unit ? ' ' + unit : '');
 
         return html`
             <div class="stepper-row">
@@ -192,24 +197,25 @@ class SEMCostsDetailCard extends SEMLitBase {
     _renderSectionBody(id, curr) {
         if (id === 'ev_econ') {
             const evEnergy = this._val('lifetime_ev_energy');
-            const hasEvData = evEnergy > 0;
-            if (!hasEvData) {
+            // (#1200) a sensor that is out is no reading, not "no EV data";
+            // a home with no charger has no such sensor at all.
+            if (!this._evModule() || (evEnergy != null && evEnergy <= 0)) {
                 return html`<div class="info-empty">${this._t('no_ev_data')}</div>`;
             }
             const evCost = this._val('lifetime_ev_cost');
             const evShare = this._val('lifetime_ev_solar_share');
             const battShare = this._val('lifetime_ev_battery_share');
             const gridShare = this._val('lifetime_ev_grid_share');
-            const perKwh = evCost / evEnergy;
+            const perKwh = evCost == null || evEnergy == null ? null : evCost / evEnergy;
             // (#793) the full three-way split — battery-sourced kWh used to
             // be in the denominator but shown nowhere, so 66% solar quietly
             // implied "34% paid grid" when a fifth of it was the battery.
             return html`
                 <div class="info-tiles">
-                    ${this._renderInfoTile('mdi:currency-usd', '#8DC892', 'cost_per_kwh', perKwh.toFixed(4) + ' ' + curr + '/kWh')}
-                    ${this._renderInfoTile('mdi:solar-power', '#ff9800', 'solar_share', evShare.toFixed(1) + '%')}
-                    ${this._renderInfoTile('mdi:battery-arrow-down', '#4db6ac', 'battery_share', battShare.toFixed(1) + '%')}
-                    ${this._renderInfoTile('mdi:transmission-tower', '#488fc2', 'grid_share', gridShare.toFixed(1) + '%')}
+                    ${this._renderInfoTile('mdi:currency-usd', '#8DC892', 'cost_per_kwh', fmtValue(perKwh, 4) + ' ' + curr + '/kWh')}
+                    ${this._renderInfoTile('mdi:solar-power', '#ff9800', 'solar_share', fmtValue(evShare, 1) + '%')}
+                    ${this._renderInfoTile('mdi:battery-arrow-down', '#4db6ac', 'battery_share', fmtValue(battShare, 1) + '%')}
+                    ${this._renderInfoTile('mdi:transmission-tower', '#488fc2', 'grid_share', fmtValue(gridShare, 1) + '%')}
                 </div>
             `;
         }
@@ -223,8 +229,8 @@ class SEMCostsDetailCard extends SEMLitBase {
             const powerCharge = this._val('power_charge_cost');
             return html`
                 <div class="info-tiles">
-                    ${this._renderInfoTile('mdi:chart-bell-curve', '#ff9800', 'monthly_peak', peak.toFixed(2) + ' kW')}
-                    ${this._renderInfoTile('mdi:currency-usd', '#f06292', 'demand_charge', powerCharge.toFixed(2) + ' ' + curr)}
+                    ${this._renderInfoTile('mdi:chart-bell-curve', '#ff9800', 'monthly_peak', fmtValue(peak, 2) + ' kW')}
+                    ${this._renderInfoTile('mdi:currency-usd', '#f06292', 'demand_charge', fmtValue(powerCharge, 2) + ' ' + curr)}
                 </div>
                 ${this._renderStepper('number.sem_demand_charge_rate', 'demand_charge_rate')}
             `;
@@ -233,12 +239,12 @@ class SEMCostsDetailCard extends SEMLitBase {
         if (id === 'tariff') {
             const impRateEnt = this._hass?.states['sensor.sem_tariff_current_import_rate'];
             const expRateEnt = this._hass?.states['sensor.sem_tariff_current_export_rate'];
-            const priceLevelEnt = this._hass?.states[`${this._prefix}tariff_price_level`];
-            const impRate = impRateEnt?.state ?? '—';
+            // (#1200) a rate that is out reads "—", not "unavailable"
+            const impRate = isMissing(impRateEnt) ? MISSING : impRateEnt.state;
             const impUnit = impRateEnt?.attributes?.unit_of_measurement || curr;
-            const expRate = expRateEnt?.state ?? '—';
+            const expRate = isMissing(expRateEnt) ? MISSING : expRateEnt.state;
             const expUnit = expRateEnt?.attributes?.unit_of_measurement || curr;
-            const priceLevel = priceLevelEnt?.state ?? '—';
+            const priceLevel = this._valStr('tariff_price_level');
 
             const hasStaticImport = this._entityExists('number.sem_electricity_import_rate');
             const hasStaticExport = this._entityExists('number.sem_electricity_export_rate');

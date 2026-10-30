@@ -1857,6 +1857,9 @@
     "set_option_invalid_payload": {
       "message": "set_option vyžaduje slovník 'options' mapující konfigurační klíče na nové hodnoty."
     },
+    "battery_list_changed": {
+      "message": "Baterie v Energetickém panelu se změnily, proto toto nastavení baterie nebylo uloženo. Zkontrolujte ho a zkuste to znovu."
+    },
     "set_option_no_entry": {
       "message": "Nebyl nalezen žádný ConfigEntry SEM — nejprve nainstalujte SEM přes Nastavení → Zařízení a služby."
     },

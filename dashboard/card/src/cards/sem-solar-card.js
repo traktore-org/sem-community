@@ -109,7 +109,8 @@ class SEMSolarCard extends SEMLitBase {
     }
 
     // ── Prefix-scoped entity helpers ──
-    _val(suffix, fallback = 0) {
+    // (#1200) null for a sensor that is out: it prints "—", not 0.
+    _val(suffix, fallback = null) {
         return this._state(`${this._prefix}${suffix}`, fallback);
     }
 
@@ -172,7 +173,7 @@ class SEMSolarCard extends SEMLitBase {
         const degradation = this._val('pv_estimated_annual_degradation');
         const trend      = this._valStr('pv_degradation_trend');
 
-        const vsFCText  = vsFC !== 0 ? this._fmt(vsFC, 0) + '%' : '—';
+        const vsFCText  = vsFC ? this._fmt(vsFC, 0) + '%' : '—';
         const vsFCColor = vsFC >= 0 ? '#8DC892' : '#f06292';
 
         // v1.7.1 / #312: per-PV-string chip strip. Auto-shown when ≥ 2
@@ -501,7 +502,7 @@ class SEMSolarCard extends SEMLitBase {
                             </div>
                             <div class="metric-row">
                                 <span class="metric-label">${this._t('degradation')}</span>
-                                <span class="metric-val">${degradation !== 0 ? this._fmt(degradation, 2) + '%/yr' : '—'}</span>
+                                <span class="metric-val">${degradation ? this._fmt(degradation, 2) + '%/yr' : '—'}</span>
                             </div>
                             <div class="metric-row">
                                 <span class="metric-label">${this._t('trend')}</span>

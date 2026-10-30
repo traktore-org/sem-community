@@ -71,10 +71,12 @@ class TestADarkPowerIsNoStatus:
         assert out["battery_status"] is None, "not 'idle'"
 
     def test_unknown_is_no_status(self):
-        # Not driven: a state that is no number ("none") is not counted
-        # dark, so the fleet power itself still reads 0 W — a gap in the
-        # fleet rule, not in the status (filed while fixing #1197).
         assert _legacy("unknown", 300)["battery_status"] is None
+
+    def test_a_state_that_is_no_number_is_no_status(self):
+        """(#1202) "none" or "nan" is dark like "unavailable"."""
+        assert _legacy("none", 300)["battery_status"] is None
+        assert _legacy("nan", 300)["battery_status"] is None
 
     def test_a_real_0_w_is_still_idle(self):
         """The twin: an idle pack reads 0 W and says so."""

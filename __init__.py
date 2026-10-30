@@ -815,6 +815,7 @@ def persist_global_option(hass, entry, coordinator, key: str, value) -> None:
 
 def persist_per_battery_option(
     hass, entry, coordinator, idx: int, list_key: str, value, count: int,
+    *, read_units: Any = None,
 ) -> None:
     """Persist ONE per-battery option without an integration reload (#523).
 
@@ -826,16 +827,29 @@ def persist_per_battery_option(
     battery 1, and the no-reload contract (copy options, mirror into
     ``coordinator.config``, arm the reload-skip snapshot) matches the
     charger path so a live mode flip doesn't bounce the integration.
+
+    (#1204) ``idx`` is a place in the battery order ``read_units``: for a
+    Mode select or reserve number the order it was built for
+    (``battery_control_units``); None for today's order (SEM's own write).
+    The batteries may have changed since the control was built (the reload
+    is due), so the value goes to that battery's slot today. A battery that
+    is gone takes no write.
     """
+    from .coordinator.battery_controls import put_battery_slot
     new_options = {**(entry.options or {})}
-    src = new_options.get(list_key)
-    if not isinstance(src, list):
-        src = (entry.data or {}).get(list_key)
-    lst = list(src) if isinstance(src, list) else []
+    saved = {**(entry.data or {}), **new_options}
+    if not isinstance(new_options.get(list_key), list):
+        saved[list_key] = (entry.data or {}).get(list_key)
+    if not 0 <= idx:
+        return
+    try:
+        lst = put_battery_slot(saved, list_key, idx, value, read_units)
+    except LookupError:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN, translation_key="battery_list_changed",
+        ) from None
     while len(lst) < count:
         lst.append(None)
-    if 0 <= idx < len(lst):
-        lst[idx] = value
     new_options[list_key] = lst
     if isinstance(getattr(coordinator, "config", None), dict):
         coordinator.config.update({**(entry.data or {}), **new_options})
@@ -2686,9 +2700,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     # batteries. select.py and number.py build from it, and
     # _per_battery_config reads the store of the controls they build.
     from .coordinator.battery_controls import (
-        adopt_shared_battery_settings, discover_battery_control_slugs,
+        BATTERY_SLOT_UNITS_KEY, adopt_shared_battery_settings,
+        discover_battery_control_slugs,
     )
     coordinator.battery_control_slugs = discover_battery_control_slugs(coordinator)
+    # (#1204) …and the battery order their slots are in. A Mode select or
+    # reserve number writes its slot in this order, also after the batteries
+    # changed and before the reload rebuilds it.
+    _slot_units = {**(entry.data or {}), **(entry.options or {})}.get(
+        BATTERY_SLOT_UNITS_KEY)
+    coordinator.battery_control_units = (
+        tuple(_slot_units) if isinstance(_slot_units, list) else None)
     # (#1171) …and the first start after one shared control: each battery
     # starts on what that control drove, before anything is commanded.
     adopt_shared_battery_settings(
@@ -2718,6 +2740,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             err,
             exc_info=True
         )
+        # (#1209) the first cycle loads the store before it can fail
+        await _async_end_store(coordinator, "failed setup")
         raise ConfigEntryNotReady(
             f"Could not fetch initial data. Check that all required sensors exist: {err}"
         ) from err
@@ -3373,6 +3397,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
 
     # Setup platforms (critical - must succeed)
     try:
+        # (#1204) from here the battery controls hold their places
+        coordinator._battery_controls_built = True
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
         _LOGGER.info("Platforms setup completed: %s", PLATFORMS)
         await _async_listen_energy_prefs(hass)
@@ -3380,6 +3406,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
         _LOGGER.error("Failed to setup platforms: %s", err, exc_info=True)
         # Cleanup coordinator data
         hass.data[DOMAIN].pop(entry.entry_id, None)
+        await _async_end_store(coordinator, "failed setup")   # (#1209)
         raise ConfigEntryNotReady(f"Platform setup failed: {err}") from err
 
     # Register services (with duplicate check)
@@ -4053,6 +4080,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool
             sim_job = getattr(coordinator, "_simulation_job", None)
             if sim_job is not None:
                 try:
+                    # (#1209) a run still going is kept as cancelled now, not
+                    # by the on-unload hook: that runs after the store ends
+                    sim_job.cancel(persist=False)
                     await sim_job.async_flush()
                 except Exception:  # noqa: BLE001 — teardown must finish
                     _LOGGER.debug("could not save the stopped simulation run")
@@ -4066,6 +4096,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool
                     await _async_deactivate_surplus_loads(devices, "disabled")
                 elif devices:
                     _PENDING_LOAD_TEARDOWN[entry.entry_id] = devices
+
+            # (#1209) Last: SEM's own store. A reload reads the files, so what
+            # this lifetime saved must be on them; and nothing of this
+            # lifetime may write after (a removal deletes the files next).
+            await _async_end_store(coordinator, "unload")
 
         hass.data[DOMAIN].pop(entry.entry_id, None)
 
@@ -4088,6 +4123,20 @@ async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool
             hass.services.async_remove(DOMAIN, service_name)
 
     return unload_ok
+
+
+async def _async_end_store(coordinator, why: str) -> None:
+    """(#1209) End a lifetime's store: what it holds goes on the file, and
+    nothing of it writes after. For an unload and for a setup that failed
+    after the store was loaded (HA retries with a new store and never
+    unloads this one). Never raises."""
+    storage = getattr(coordinator, "_storage", None)
+    if storage is None:
+        return
+    try:
+        await storage.async_close()
+    except Exception:  # noqa: BLE001 — teardown must finish
+        _LOGGER.warning("could not save SEM's store on %s", why, exc_info=True)
 
 
 async def _async_register_services(
@@ -6255,6 +6304,26 @@ async def _async_register_phase_services(
                     existing_list, options["ev_chargers"]),
             }
 
+        # (#1204) The Config card sends one battery's edit of a per-battery
+        # list, by its place in the battery order the card read. It goes to
+        # that battery's slot today, and every other slot stays as saved: a
+        # whole list from the card's copy put the old order back after the
+        # batteries changed, and emptied the others after a failed read.
+        from .coordinator.battery_controls import battery_slot_edits
+        try:
+            options = battery_slot_edits(options, {
+                **(target_entry.data or {}), **(target_entry.options or {})})
+        except LookupError:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="battery_list_changed",
+            ) from None
+        except ValueError:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="set_option_invalid_payload",
+            ) from None
+
         # (#1077) The card picks a value preset the way the options flow
         # does: the preset fills the fields it owns, and a hand-changed one
         # of those makes it "custom". These keys are read when the tariff
@@ -6656,7 +6725,13 @@ async def _async_register_phase_services(
         storage = getattr(coordinator, "_storage", None)
         if storage is not None:
             storage.set_sign_state({})
-            await storage.async_save_energy_delayed()
+            # (#1208) the record beside it, too
+            basis = reader.export_battery_basis() if reader is not None else None
+            if isinstance(basis, dict):
+                storage.set_battery_sign_basis(basis)
+            # (#1209) Now, not queued: the queued save lands only once the
+            # cycles stop, so a restart before it read the old signs back.
+            await storage.async_save_energy_now()
         # A re-learn must start clean: drop any prior one-tap user flip
         # (#461 / #588) so the freshly-learned sign isn't silently re-inverted
         # on top. Only touches the entry — and reloads — when a flip was

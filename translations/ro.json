@@ -1857,6 +1857,9 @@
     "set_option_invalid_payload": {
       "message": "set_option necesită un dicționar „options” care asociază chei de configurare cu valori noi."
     },
+    "battery_list_changed": {
+      "message": "Bateriile din panoul Energie s-au schimbat, așa că această setare a bateriei nu a fost salvată. Verificați-o și încercați din nou."
+    },
     "set_option_no_entry": {
       "message": "Nu a fost găsită nicio ConfigEntry SEM — instalați mai întâi SEM din Setări → Dispozitive și servicii."
     },

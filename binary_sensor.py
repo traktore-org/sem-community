@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, Dict
 
 from homeassistant.components.binary_sensor import (
@@ -11,11 +12,12 @@ from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .consts.core import SENSOR_DARK_READ_GRACE_S
 from .coordinator import SEMCoordinator
 from .coordinator.install_modules import kept_descriptions, presence_of
 from .sensor import _cleanup_stale_entities
@@ -41,6 +43,16 @@ def coarse_cycles(n) -> int:
 _LOGGER = logging.getLogger(__name__)
 
 PARALLEL_UPDATES = 0  # Coordinator handles all updates
+
+# (#1201) Each of these flags is built from a power, and is None while every
+# read of that power is dark (``_build_system_status``). It keeps its last
+# value through the dark-read grace, as the power and the status beside it
+# do (sensor.py), so a short blink does not flip it. Then it shows unknown,
+# never Off. Every other binary sensor shows its value at once.
+HELD_FLAG_KEYS = frozenset({
+    "solar_active", "battery_charging", "battery_discharging",
+    "grid_export_active",
+})
 
 BINARY_SENSOR_TYPES = [
     BinarySensorEntityDescription(
@@ -158,6 +170,14 @@ class SEMSolarBinarySensor(CoordinatorEntity, BinarySensorEntity):
         "forecast_available", "tariff_is_dynamic",
     }
 
+    # (#1201) The dark-read grace, as ``SEMSolarSensor`` keeps it.
+    # Overridable clock for tests.
+    _now_monotonic = staticmethod(time.monotonic)
+    _held_is_on = None
+    _last_good_value = None
+    _last_good_at = None
+    _stale_s = 0
+
     def __init__(
         self,
         coordinator: SEMCoordinator,
@@ -182,6 +202,39 @@ class SEMSolarBinarySensor(CoordinatorEntity, BinarySensorEntity):
         # Start unavailable until first coordinator update (#70)
         self._first_update_received = False
 
+        if coordinator.data:
+            self._update_from_coordinator()
+
+    def _update_from_coordinator(self) -> None:
+        """(#1201) Hold a ``HELD_FLAG_KEYS`` flag while its power is dark:
+        its last value for SENSOR_DARK_READ_GRACE_S, with ``stale_s``, then
+        None (unknown). A flag never read stays None."""
+        if (self.entity_description.key not in HELD_FLAG_KEYS
+                or not self.coordinator.data):
+            return
+        # a missing key is no read either: ``to_dict`` always publishes these
+        value = self.coordinator.data.get(self.entity_description.key)
+        now = float(self._now_monotonic())
+        if value is None and self._last_good_value is not None:
+            age = now - float(self._last_good_at or now)
+            if age <= SENSOR_DARK_READ_GRACE_S:
+                self._stale_s = int(age)
+                self._held_is_on = self._last_good_value
+                return
+            self._last_good_value = None
+            self._last_good_at = None
+        self._stale_s = 0
+        if isinstance(value, bool):
+            self._last_good_value = value
+            self._last_good_at = now
+        self._held_is_on = value
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        self._update_from_coordinator()
+        super()._handle_coordinator_update()
+
     @property
     def available(self) -> bool:
         """Return if entity is available."""
@@ -199,13 +252,18 @@ class SEMSolarBinarySensor(CoordinatorEntity, BinarySensorEntity):
             return None
 
         key = self.entity_description.key
+        if key in HELD_FLAG_KEYS:
+            return self._held_is_on
         return self.coordinator.data.get(key, False)
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any] | None:
         """#590 — for the layered-trace health sensor, name the persisted fault
         (which subsystem, e.g. ``perception:battery_sign``, and for how many
-        cycles) so it's diagnosable without the diagnose dump."""
+        cycles) so it's diagnosable without the diagnose dump. (#1201) A held
+        flag says for how long with ``stale_s``, as the sensors do."""
+        if self._stale_s:
+            return {"stale_s": int(self._stale_s)}
         if self.entity_description.key != "layer_mismatch" or not self.coordinator.data:
             return None
         return {

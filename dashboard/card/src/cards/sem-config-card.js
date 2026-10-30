@@ -21,9 +21,10 @@
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semDefineCard, semCardSurfaceCSS } from '../base/sem-shared.js';
 import { priceLevelKey } from '../util/price-level.js';
-import { socDisplay } from '../util/missing-value.js';
+import { readNumber, socDisplay } from '../util/missing-value.js';
 import { chargerAddPlan, detectRowLabelKey, isCo2IntensityEntity, isOutdoorTemperatureCandidate, isPowerEntity, nearMissAction, proposalWrite, watchOnlyHelpKey, writeIsSaved } from '../util/detect-rows.js';
 import { roleSource, showsRoleLegend } from '../util/role-source.js';
+import { batteryListEdit } from '../util/battery-slot-edit.js';
 import { getAllSettings, setAllSettings, VIEW_MODE_EVENT } from '../util/view-mode.js';
 import { sourceCheckRows, fmtWatts } from '../util/source-check.js';
 
@@ -477,8 +478,9 @@ class SEMConfigCard extends SEMLitBase {
     }
 
     // (#1224) Several keys in ONE set_option call — a split grid pair is
-    // saved whole, never one half at a time.
-    async _saveOptions(values, fieldKey) {
+    // saved whole, never one half at a time. ``shown``: what the local copy
+    // takes on success, when that is not the payload itself (#1204).
+    async _saveOptions(values, fieldKey, shown = values) {
         const entryId = await this._ensureEntryId();
         this._saveStatus = { ...this._saveStatus, [fieldKey]: 'saving' };
         try {
@@ -493,7 +495,7 @@ class SEMConfigCard extends SEMLitBase {
             this._saveStatus = { ...this._saveStatus, [fieldKey]: 'ok' };
             // Refresh local cache so the displayed value updates
             // immediately — without waiting for the next render cycle.
-            this._options = { ...this._options, ...values };
+            this._options = { ...this._options, ...shown };
             this.requestUpdate();
             const timer = setTimeout(() => {
                 this._statusTimers.delete(timer);
@@ -530,7 +532,9 @@ class SEMConfigCard extends SEMLitBase {
                 undefined,  // notifyOnError
                 true,       // returnResponse
             );
-            const cfg = resp?.response?.config || {};
+            // (#1204) a reply with no config is a failed read: keep the copy
+            const cfg = resp?.response?.config;
+            if (!cfg || typeof cfg !== 'object') return;
             this._options = cfg;
             if (resp?.response?.entry_id && !this._entryId) {
                 this._entryId = resp.response.entry_id;
@@ -664,11 +668,9 @@ class SEMConfigCard extends SEMLitBase {
     _bin(suffix) {
         return this._hass?.states[`binary_sensor.sem_${suffix}`]?.state === 'on';
     }
-    _valNum(suffix, fallback = 0) {
-        const e = this._hass?.states[`${this._prefix}${suffix}`];
-        if (!e || e.state === 'unavailable' || e.state === 'unknown') return fallback;
-        const n = parseFloat(e.state);
-        return Number.isNaN(n) ? fallback : n;
+    // (#1200) null for a sensor that is out, so it prints "—", not 0
+    _valNum(suffix, fallback = null) {
+        return readNumber(this._hass?.states[`${this._prefix}${suffix}`]) ?? fallback;
     }
     _switchOn(suffix) {
         const e = this._hass?.states[`switch.sem_${suffix}`];
@@ -684,8 +686,9 @@ class SEMConfigCard extends SEMLitBase {
         const s = this._hass?.states[entityId];
         if (!s) return;
         const step = parseFloat(s.attributes.step) || 1;
-        const min = parseFloat(s.attributes.min) ?? 0;
-        const max = parseFloat(s.attributes.max) ?? 100;
+        // `??` lets NaN through (#1200): a missing bound is 0 or 100
+        const min = Number.isFinite(parseFloat(s.attributes.min)) ? parseFloat(s.attributes.min) : 0;
+        const max = Number.isFinite(parseFloat(s.attributes.max)) ? parseFloat(s.attributes.max) : 100;
         const cur = parseFloat(s.state) || 0;
         let next = cur + dir * step;
         next = Math.max(min, Math.min(max, next));
@@ -2396,13 +2399,13 @@ class SEMConfigCard extends SEMLitBase {
     }
 
     // Write one entry of an idx-aligned list option (#523 per-battery
-    // control entities), padding to ``count`` so a sibling is never dropped.
+    // control entities). (#1204) Only this battery's slot, with the battery
+    // order this copy was read in: SEM puts it on that battery's slot today
+    // and keeps every other slot. Then read the lists again, in SEM's order.
     async _saveListField(listKey, idx, value, count) {
-        const cur = Array.isArray(this._options[listKey])
-            ? [...this._options[listKey]] : [];
-        while (cur.length < count) cur.push(null);
-        cur[idx] = value || null;
-        await this._saveOption(listKey, cur, `${listKey}.${idx}`);
+        const { payload, shown } = batteryListEdit(this._options, listKey, idx, value, count);
+        await this._saveOptions(payload, `${listKey}.${idx}`, shown);
+        await this._refreshOptions();
     }
 
     // Entity picker bound to an entry.options key. Auto-saves via WebSocket

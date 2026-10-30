@@ -1,6 +1,10 @@
 pytest>=6.0.0
 pytest-asyncio>=0.18.0
 pytest-cov>=2.10.0
+# (#1266) CI splits each HA rung into parts (pytest-split) and runs each
+# part on every CPU (pytest-xdist). phacc already pins xdist's version.
+pytest-xdist
+pytest-split>=0.10.0
 homeassistant>=2023.9.0
 
 # pytest-homeassistant-custom-component pins ONE exact Home Assistant per

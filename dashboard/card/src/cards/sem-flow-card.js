@@ -13,6 +13,7 @@
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { unsafeSVG } from 'lit/directives/unsafe-svg.js';
+import { MISSING, fmtValue, isMissing, readNumber } from '../util/missing-value.js';
 import {
     semTheme, semFormatPower, semCalcDuration, semGetCurrency, semDefineCard,
     SEM_COLORS, SEM_DEVICE_COLORS, SEM_FLOW_ACTIVE_THRESHOLD,
@@ -299,7 +300,7 @@ class SEMFlowCard extends SEMLitBase {
                         </g>
                     </g>
                     <text x="${S.cx}" y="${S.cy + S.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="600" fill="${solarColor}">${this._escSvg(this._getNodeName('solar'))}</text>
-                    <text id="val-solar" x="${S.cx}" y="${S.cy + S.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="${solarColor}">0 W</text>
+                    <text id="val-solar" x="${S.cx}" y="${S.cy + S.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="${solarColor}">— W</text>
                     <text id="val-today-solar" x="${S.cx}" y="${S.cy + S.r + 18 + fv * 0.9 + fs + 4}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="${solarColor}" opacity="0.7">\u00A0</text>
                     ` : '')}
 
@@ -325,8 +326,8 @@ class SEMFlowCard extends SEMLitBase {
                         </g>
                     </g>
                     <text x="${B.cx}" y="${B.cy + B.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="600" fill="${batteryColor}">${this._escSvg(this._getNodeName('battery'))}</text>
-                    <text id="val-battery-soc" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="${batteryColor}">0%</text>
-                    <text id="val-battery-power" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9 + fl}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="500" fill="${batteryColor}" opacity="0.7">0 W</text>
+                    <text id="val-battery-soc" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="${batteryColor}">—%</text>
+                    <text id="val-battery-power" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9 + fl}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="500" fill="${batteryColor}" opacity="0.7">— W</text>
                     <text id="label-battery-state" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9 + fl * 2}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="${batteryColor}" opacity="0.7"></text>
                     <text id="val-today-battery" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9 + fl * 2 + fs + 4}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="${batteryColor}" opacity="0.65">\u00A0</text>
                     ` : '')}
@@ -344,7 +345,7 @@ class SEMFlowCard extends SEMLitBase {
                         </g>
                     </g>
                     <text x="${G.cx}" y="${G.cy + G.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="600" fill="${gridImportColor}">${this._escSvg(this._getNodeName('grid'))}</text>
-                    <text id="val-grid" x="${G.cx}" y="${G.cy + G.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="${gridImportColor}">0 W</text>
+                    <text id="val-grid" x="${G.cx}" y="${G.cy + G.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="${gridImportColor}">— W</text>
                     <text id="label-grid" x="${G.cx}" y="${G.cy + G.r + 18 + fv * 0.9 + fl}" text-anchor="middle" font-family="${F}" font-size="${fs}" font-weight="500" fill="${gridImportColor}" opacity="0.7">GRID</text>
                     <text id="val-today-grid" x="${G.cx}" y="${G.cy + G.r + 18 + fv * 0.9 + fl + fs + 4}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="${gridImportColor}" opacity="0.65">\u00A0</text>
                     ` : '')}
@@ -363,7 +364,7 @@ class SEMFlowCard extends SEMLitBase {
                         </g>
                     </g>
                     <text x="${H.cx}" y="${H.cy + H.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl + 1}" font-weight="600" fill="${homeColor}">${this._escSvg(this._getNodeName('home'))}</text>
-                    <text id="val-home" x="${H.cx}" y="${H.cy + H.r + 18 + fhv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fhv}" font-weight="700" fill="${homeColor}">0 W</text>
+                    <text id="val-home" x="${H.cx}" y="${H.cy + H.r + 18 + fhv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fhv}" font-weight="700" fill="${homeColor}">— W</text>
                     <text id="val-autarky" x="${H.cx}" y="${H.cy + H.r + 18 + fhv * 0.9 + fs + 4}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="${homeColor}" opacity="0.7">\u00A0</text>
                     <text id="val-today-home" x="${H.cx}" y="${H.cy + H.r + 18 + fhv * 0.9 + (fs + 4) * 2}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="${homeColor}" opacity="0.65">\u00A0</text>
 
@@ -380,7 +381,7 @@ class SEMFlowCard extends SEMLitBase {
                         </g>
                     </g>
                     <text x="${E.cx}" y="${E.cy + E.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="600" fill="${evColor}">${this._escSvg(this._getNodeName('ev'))}</text>
-                    <text id="val-ev" x="${E.cx}" y="${E.cy + E.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="${evColor}">0 W</text>
+                    <text id="val-ev" x="${E.cx}" y="${E.cy + E.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="${evColor}">— W</text>
                     <text id="val-today-ev" x="${E.cx}" y="${E.cy + E.r + 18 + fv * 0.9 + fs + 4}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="${evColor}" opacity="0.65">\u00A0</text>
                     <text id="val-ev-subtitle" x="${E.cx}" y="${E.cy + E.r + 18 + fv * 0.9 + (fs + 4) * 2}" text-anchor="middle" font-family="${F}" font-size="${fs - 1}" fill="${evColor}" opacity="0.6"></text>
                     ` : '')}
@@ -424,22 +425,28 @@ class SEMFlowCard extends SEMLitBase {
             return isNaN(f) ? 0 : f;
         };
 
-        let solar = snap ? snapNum(snap.solar_w) : this._getState('solar_power');
+        // (#1200) The flows take 0 for a sensor that is out; the labels do
+        // not: a node whose sensor is out prints "— W" (`out` below).
+        const num = (key) => this._getState(key) ?? 0;
+        let solar = snap ? snapNum(snap.solar_w) : (this._getState('solar_power') ?? 0);
         if (this._entities?.solar?.reverse) solar = -solar;
 
         let battery;
-        if (this._mode === 'entities' && (this._entities?.battery?.charge || this._entities?.battery?.discharge)) {
-            battery = this._getState('battery_charge_power') - this._getState('battery_discharge_power');
+        const battSplit = this._mode === 'entities'
+            && (this._entities?.battery?.charge || this._entities?.battery?.discharge);
+        if (battSplit) {
+            battery = num('battery_charge_power') - num('battery_discharge_power');
         } else if (snap) {
             battery = snapNum(snap.battery_w);
         } else {
-            let raw = this._getState('battery_power');
+            let raw = num('battery_power');
             battery = this._entities?.battery?.reverse ? -raw : raw;
         }
 
         let gridImport, gridExport;
-        if (this._mode === 'entities' && this._entities?.grid?.entity) {
-            const gp = this._getState('grid_power');
+        const gridCombined = this._mode === 'entities' && this._entities?.grid?.entity;
+        if (gridCombined) {
+            const gp = num('grid_power');
             const rev = this._entities.grid.reverse;
             gridImport = Math.max(0, rev ? -gp : gp);
             gridExport = Math.max(0, rev ? gp : -gp);
@@ -447,14 +454,25 @@ class SEMFlowCard extends SEMLitBase {
             gridImport = snapNum(snap.grid_import_w);
             gridExport = snapNum(snap.grid_export_w);
         } else {
-            gridImport = this._getState('grid_import_power');
-            gridExport = this._getState('grid_export_power');
+            gridImport = num('grid_import_power');
+            gridExport = num('grid_export_power');
         }
 
-        let ev = snap ? snapNum(snap.ev_w) : this._getState('ev_power');
+        let ev = snap ? snapNum(snap.ev_w) : (this._getState('ev_power') ?? 0);
         if (this._entities?.ev?.invert) ev = -ev;
-        const soc     = snap ? snapNum(snap.battery_soc) : this._getState('battery_soc');
+        // The snapshot's SOC is null while the battery is dark (#699).
+        const soc     = snap
+            ? (snap.battery_soc == null ? null : snapNum(snap.battery_soc))
+            : this._getState('battery_soc');
         const autarky = this._getState('autarky_rate');
+
+        const solarOut = this._isOut('solar_power');
+        const gridOut = gridCombined ? this._isOut('grid_power')
+            : this._isOut('grid_import_power') && this._isOut('grid_export_power');
+        const battOut = battSplit
+            ? this._isOut('battery_charge_power') && this._isOut('battery_discharge_power')
+            : this._isOut('battery_power');
+        const evOut = this._isOut('ev_power');
 
         const battCharge    = Math.max(0, battery);
         const battDischarge = Math.max(0, -battery);
@@ -466,9 +484,11 @@ class SEMFlowCard extends SEMLitBase {
             const homeEId = this._getEntityId('home_consumption_power');
             if (homeEId && this._hass?.states[homeEId]) {
                 home = this._getState('home_consumption_power');
-                if (this._entities?.home?.invert) home = -home;
+                if (home != null && this._entities?.home?.invert) home = -home;
             } else {
-                home = Math.max(0, solar + gridImport + battDischarge - gridExport - battCharge - ev);
+                // A sum of the others: out when one of them is.
+                home = solarOut || gridOut ? null
+                    : Math.max(0, solar + gridImport + battDischarge - gridExport - battCharge - ev);
             }
         }
 
@@ -479,35 +499,38 @@ class SEMFlowCard extends SEMLitBase {
         const dailyBattery    = this._getStateStr('daily_battery_energy');
         const dailyHome       = this._getStateStr('daily_home_energy');
 
+        // (#1200) the out flags too: a real 0 that goes out keeps its 0 W
+        // flows, and only the flags say the label must change.
         const vals = { solar, battery, gridImport, gridExport, home, ev, soc, autarky,
-                       dailySolar, dailyEv, dailyGridImport, dailyGridExport, dailyBattery, dailyHome };
+                       dailySolar, dailyEv, dailyGridImport, dailyGridExport, dailyBattery, dailyHome,
+                       solarOut, gridOut, battOut, evOut };
         const key = JSON.stringify(vals);
         if (this._lastKey === key) return;
         this._lastKey = key;
 
         // Animated values
-        this._animateValue('val-solar', solar);
+        this._animateValue('val-solar', solarOut ? null : solar);
 
         const battPrefix = battery > 10 ? '\u25BC ' : (battery < -10 ? '\u25B2 ' : '');
-        this._animateValue('val-battery-power', Math.abs(battery), 800,
+        this._animateValue('val-battery-power', battOut ? null : Math.abs(battery), 800,
             w => battPrefix + semFormatPower(w));
 
         const isImport = gridImport > gridExport;
         const gridPrefix = isImport ? '\u2193 ' : (gridExport > 10 ? '\u2191 ' : '');
-        this._animateValue('val-grid', isImport ? gridImport : gridExport, 800,
+        this._animateValue('val-grid', gridOut ? null : (isImport ? gridImport : gridExport), 800,
             w => gridPrefix + semFormatPower(w));
 
         this._animateValue('val-home', home);
-        this._animateValue('val-ev', ev);
+        this._animateValue('val-ev', evOut ? null : ev);
 
         const evCount = this._getState('ev_charger_count');
         this._setText('val-ev-subtitle', evCount > 1 ? `(${evCount} ${this._t('chargers')})` : '');
 
-        this._animateValue('val-battery-soc', soc, 800, v => `${v.toFixed(0)}%`);
+        this._animateValue('val-battery-soc', soc, 800, v => `${fmtValue(v, 0)}%`);
 
         const autarkyEntity = this._getEntityId('autarky_rate');
         if (autarkyEntity) {
-            this._animateValue('val-autarky', autarky, 800, v => `\u26A1 ${v.toFixed(0)}% self`);
+            this._animateValue('val-autarky', autarky, 800, v => `\u26A1 ${fmtValue(v, 0)}% self`);
         }
 
         this._setText('val-inverter-status', this._getStateStr('charging_state'));
@@ -532,7 +555,7 @@ class SEMFlowCard extends SEMLitBase {
         const socArc = this.renderRoot.getElementById('soc-arc');
         if (socArc) {
             const circ = 2 * Math.PI * L.socR;
-            socArc.style.strokeDashoffset = (circ * (1 - soc / 100)).toFixed(1);
+            socArc.style.strokeDashoffset = (circ * (1 - (soc ?? 0) / 100)).toFixed(1);
             socArc.style.animation = battCharge > 10
                 ? 'socPulse 2s ease-in-out infinite'
                 : battDischarge > 10 ? 'socDrain 2.5s ease-in-out infinite' : 'none';
@@ -580,14 +603,14 @@ class SEMFlowCard extends SEMLitBase {
         this._updateFlow('flow-solar',   solar > 10,                false,            semCalcDuration(solar));
         this._updateFlow('flow-battery', Math.abs(battery) > 10,   battery < 0,       semCalcDuration(battery), battColor);
         this._updateFlow('flow-grid',    gridImport > 10 || gridExport > 10, isImport, semCalcDuration(gridImport || gridExport), gridColor);
-        this._updateFlow('flow-home',    home > 10,                false,             semCalcDuration(home));
+        this._updateFlow('flow-home',    home > 10,                false,             semCalcDuration(home ?? 0));
         this._updateFlow('flow-ev',      ev > 10,                  false,             semCalcDuration(ev));
 
         // Glow intensity
         this._setGlowIntensity('node-solar',   solar,                  10000);
         this._setGlowIntensity('node-battery', Math.abs(battery),       5000);
         this._setGlowIntensity('node-grid',    Math.max(gridImport, gridExport), 10000);
-        this._setGlowIntensity('node-home',    home,                    8000);
+        this._setGlowIntensity('node-home',    home ?? 0,               8000);
         this._setGlowIntensity('node-ev',      ev,                     11000);
 
         this._updateDeviceLabels();
@@ -756,7 +779,8 @@ class SEMFlowCard extends SEMLitBase {
         const H = L.home;
         devices.forEach(([id, info], idx) => {
             const powerEntity = info.power_entity ? this._hass.states[info.power_entity] : null;
-            const power = powerEntity ? parseFloat(powerEntity.state) || 0 : (info.current_power || 0);
+            // (#1200) null while the load's own entity is out: "— W"
+            const power = powerEntity ? readNumber(powerEntity) : (info.current_power || 0);
             const isOn  = power > 5;
             const color = info.color || SEM_DEVICE_COLORS[idx % SEM_DEVICE_COLORS.length];
             const pos   = this._devicePositions[idx];
@@ -765,7 +789,8 @@ class SEMFlowCard extends SEMLitBase {
             this._animateValue(`dev-val-${idx}`, power);
             if (info.daily_energy_entity) {
                 const de = this._hass.states[info.daily_energy_entity];
-                this._setText(`dev-daily-${idx}`, de ? `${this._t('today')} ${de.state} kWh` : '');
+                this._setText(`dev-daily-${idx}`,
+                    de ? `${this._t('today')} ${isMissing(de) ? MISSING : de.state} kWh` : '');
             }
 
             const conn = this.renderRoot.getElementById(`dev-conn-${idx}`);
@@ -955,6 +980,17 @@ class SEMFlowCard extends SEMLitBase {
         if (!el) return;
         if (this._animFrames[id]) cancelAnimationFrame(this._animFrames[id]);
         const fmt = formatFn || (v => semFormatPower(v));
+        // (#1200) a sensor that is out shows "—" at once, with no count down
+        // to 0 on the way.
+        if (newVal == null) {
+            if (this._animFrames[id]) {
+                cancelAnimationFrame(this._animFrames[id]);
+                delete this._animFrames[id];
+            }
+            this._currentValues[id] = null;
+            el.textContent = fmt(null);
+            return;
+        }
         const oldVal = this._currentValues[id] || 0;
         this._currentValues[id] = newVal;
         if (Math.abs(oldVal - newVal) < 0.5) { el.textContent = fmt(newVal); return; }
@@ -986,14 +1022,20 @@ class SEMFlowCard extends SEMLitBase {
     }
 
     // ── Entity helpers ──
+    // (#1200) null for a sensor that is out or gives no number, so a label
+    // prints "—", not 0. A flow that wants 0 says `?? 0`.
     _getState(key) {
-        if (!this._hass) return 0;
+        if (!this._hass) return null;
         const entityId = this._mode === 'prefix' ? `${this._prefix}${key}` : this._resolveEntity(key);
-        if (!entityId) return 0;
-        const entity = this._hass.states[entityId];
-        if (!entity) return 0;
-        const val = parseFloat(entity.state);
-        return isNaN(val) ? 0 : val;
+        if (!entityId) return null;
+        return readNumber(this._hass.states[entityId]);
+    }
+
+    // (#1200) Is the sensor behind this node out? An entity the user did not
+    // map is no sensor, so it is not out.
+    _isOut(key) {
+        const entityId = this._getEntityId(key);
+        return !!entityId && readNumber(this._hass?.states[entityId]) == null;
     }
 
     // (#699) The coordinator's ATOMIC balance snapshot — all values from one
@@ -1013,7 +1055,9 @@ class SEMFlowCard extends SEMLitBase {
         const entityId = this._mode === 'prefix' ? `${this._prefix}${key}` : this._resolveEntity(key);
         if (!entityId) return '';
         const entity = this._hass.states[entityId];
-        return entity ? entity.state : '';
+        // (#1200) "today unavailable kWh" is no figure
+        return entity && entity.state !== 'unavailable' && entity.state !== 'unknown'
+            ? entity.state : '';
     }
 
     _getEntityId(key) {

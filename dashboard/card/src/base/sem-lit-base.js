@@ -12,7 +12,7 @@
 import { LitElement, html, css, svg, nothing } from 'lit';
 import { semTheme } from './sem-shared.js';
 import { stateLabel } from '../util/state-label.js';
-import { allOut } from '../util/missing-value.js';
+import { allOut, readNumber } from '../util/missing-value.js';
 
 export { html, css, svg, nothing };
 
@@ -182,12 +182,12 @@ export class SEMLitBase extends LitElement {
     }
 
     // ── Entity state readers ──
-    _state(entityId, fallback = 0) {
+    // (#1200) null for a sensor that is out or gives no number, so a card
+    // prints "—", not 0. A sum that wants 0 passes it.
+    _state(entityId, fallback = null) {
         const frozen = this._frozenEntities[entityId];
         if (frozen) return frozen.value;
-        const e = this._hass?.states[entityId];
-        if (!e || e.state === 'unavailable' || e.state === 'unknown') return fallback;
-        return parseFloat(e.state) ?? fallback;
+        return readNumber(this._hass?.states[entityId]) ?? fallback;
     }
 
     _stateStr(entityId) {

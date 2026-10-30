@@ -82,7 +82,8 @@ class SEMSolarSummaryCard extends SEMLitBase {
     }
 
     // ── Prefix-scoped entity helpers ──
-    _val(suffix, fallback = 0) {
+    // (#1200) null for a sensor that is out: it prints "—", not 0.
+    _val(suffix, fallback = null) {
         return this._state(`${this._prefix}${suffix}`, fallback);
     }
 

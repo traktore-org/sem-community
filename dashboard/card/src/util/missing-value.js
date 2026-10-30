@@ -26,6 +26,32 @@ export function isMissing(stateObj) {
 }
 
 /**
+ * (#1200) A state's number, or null when the sensor gave none.
+ *
+ * Every card reader goes through here, so an unavailable, unknown or missing
+ * sensor, and a state that is no number ("n/a"), all read as null — never 0,
+ * never NaN. `parseFloat(state) ?? fallback` let NaN through, because `??`
+ * only catches null and undefined. A sum that wants 0 says so: `?? 0`.
+ * @param {object|undefined} stateObj  hass.states[entity_id]
+ * @returns {number|null}
+ */
+export function readNumber(stateObj) {
+    if (isMissing(stateObj)) return null;
+    const v = parseFloat(stateObj.state);
+    return Number.isFinite(v) ? v : null;
+}
+
+/**
+ * (#1200) A number for display: fixed-point, or MISSING for no reading.
+ * @param {number|null|undefined} value
+ * @param {number} digits  decimals (default 0)
+ */
+export function fmtValue(value, digits = 0) {
+    if (value == null || !Number.isFinite(value)) return MISSING;
+    return value.toFixed(digits);
+}
+
+/**
  * Display string for a numeric state: fixed-point, or MISSING.
  * @param {object|undefined} stateObj  hass.states[entity_id]
  * @param {number} digits              decimals (default 0)

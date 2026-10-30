@@ -1857,6 +1857,9 @@
     "set_option_invalid_payload": {
       "message": "A set_option egy 'options' szótárat igényel, amely a konfigurációs kulcsokat új értékekre képezi le."
     },
+    "battery_list_changed": {
+      "message": "Az energia-irányítópult akkumulátorai megváltoztak, ezért ez az akkumulátor-beállítás nem lett mentve. Ellenőrizze, és próbálja újra."
+    },
     "set_option_no_entry": {
       "message": "Nem található SEM ConfigEntry — először telepítse a SEM-et a Beállítások → Eszközök és szolgáltatások menüpontban."
     },

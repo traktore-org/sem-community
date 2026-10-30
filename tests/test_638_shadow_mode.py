@@ -600,7 +600,7 @@ class TestFleetSocCoverage:
         coverage is 1/2 and the planner waits."""
         rdr = self._reader(
             detect=lambda p: "sensor.b2_soc" if p == "sensor.b2_power" else None,
-            read=lambda e, k: 65.0,
+            read=lambda e, k, **kw: 65.0,
             exists=lambda p: p == "sensor.b1_power",
         )
         avg = SensorReader._read_battery_soc_average(
@@ -616,7 +616,7 @@ class TestFleetSocCoverage:
         there is nothing to wait for."""
         rdr = self._reader(
             detect=lambda p: "sensor.b1_soc" if p == "sensor.b1_power" else None,
-            read=lambda e, k: 88.0,
+            read=lambda e, k, **kw: 88.0,
         )
         avg = SensorReader._read_battery_soc_average(
             rdr, ["sensor.b1_power", "sensor.b2_power"])
@@ -630,7 +630,7 @@ class TestFleetSocCoverage:
         vals = {"sensor.b1_soc": None, "sensor.b2_soc": 65.0}
         rdr = self._reader(
             detect=lambda p: p.replace("_power", "_soc"),
-            read=lambda e, k: vals[e],
+            read=lambda e, k, **kw: vals[e],
         )
         avg = SensorReader._read_battery_soc_average(
             rdr, ["sensor.b1_power", "sensor.b2_power"])
@@ -639,7 +639,7 @@ class TestFleetSocCoverage:
 
     def test_whole_fleet_is_full_coverage(self):
         rdr = self._reader(detect=lambda p: p.replace("_power", "_soc"),
-                           read=lambda e, k: 88.0 if "b1" in e else 65.0)
+                           read=lambda e, k, **kw: 88.0 if "b1" in e else 65.0)
         avg = SensorReader._read_battery_soc_average(
             rdr, ["sensor.b1_power", "sensor.b2_power"])
         assert avg == 76.5
@@ -648,7 +648,7 @@ class TestFleetSocCoverage:
     def test_configured_count_is_recorded_separately(self):
         rdr = self._reader(
             detect=lambda p: "sensor.b1_soc" if p == "sensor.b1_power" else None,
-            read=lambda e, k: 88.0,
+            read=lambda e, k, **kw: 88.0,
         )
         SensorReader._read_battery_soc_average(
             rdr, ["sensor.b1_power", "sensor.b2_power"])
@@ -659,7 +659,7 @@ class TestFleetSocCoverage:
         used to live only on the full-coverage branch, so the second gap
         was silent."""
         rdr = self._reader(detect=lambda p: p.replace("_power", "_soc"),
-                           read=lambda e, k: None)
+                           read=lambda e, k, **kw: None)
         rdr._soc_partial_logged = True
         avg = SensorReader._read_battery_soc_average(
             rdr, ["sensor.b1_power", "sensor.b2_power"])

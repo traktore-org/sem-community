@@ -15,6 +15,7 @@
 
 import { SEMLitBase, html, css, svg, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semDefineCard } from '../base/sem-shared.js';
+import { fmtValue, readNumber } from '../util/missing-value.js';
 
 class SEMGaugeCard extends SEMLitBase {
     static get watchedEntities() { return []; }
@@ -45,9 +46,11 @@ class SEMGaugeCard extends SEMLitBase {
         if (!this._hass || !this._config) return nothing;
 
         const entity = this._hass.states[this._entity];
-        const val = entity ? parseFloat(entity.state) || 0 : 0;
+        // (#1200) null when out: the value prints "—" over an empty arc.
+        const val = readNumber(entity);
         const name = this._name || entity?.attributes?.friendly_name || this._entity;
-        const pct = Math.min(Math.max((val - this._min) / (this._max - this._min), 0), 1);
+        const pct = val == null ? 0
+            : Math.min(Math.max((val - this._min) / (this._max - this._min), 0), 1);
         const T = this._theme();
         const color = this._color;
 
@@ -101,7 +104,7 @@ class SEMGaugeCard extends SEMLitBase {
                         ` : ''}
                     </svg>
                     <div class="gauge-center">
-                        <span class="gauge-value" style="color:${dynamicColor}">${val.toFixed(1)}${this._unit}</span>
+                        <span class="gauge-value" style="color:${dynamicColor}">${fmtValue(val, 1)}${this._unit}</span>
                     </div>
                     <div class="gauge-label">${name}</div>
                 </div>

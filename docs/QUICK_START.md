@@ -20,7 +20,7 @@ Go to **Settings > Dashboards > Energy**. You must have at least a solar product
 
 **2. HACS installed**
 
-SEM is distributed through HACS. If you have not installed HACS, follow the [HACS installation guide](https://hacs.xyz/docs/use/download/download/) first.
+SEM is distributed through HACS. If you have not installed HACS, follow the [HACS installation guide](https://hacs.xyz/docs/use/download/download/) first. On Home Assistant 2026.11 or newer, HACS is built in as **Settings → Marketplace**, so there is nothing to install.
 
 **3. No EV charger? That is fine**
 
@@ -35,6 +35,8 @@ EV charger setup is optional. SEM works as a monitoring and battery management s
 3. Search for **Solar Energy Management** (SEM is in the default HACS store — no
    custom repository needed) and click **Download**.
 4. When prompted, restart Home Assistant: **Settings > System > Restart**.
+
+On Home Assistant 2026.11 or newer, open **Settings > Marketplace** instead of HACS in step 1. The other steps are the same.
 
 ![SEM on the HACS page](images/sem_hacs_page.png)
 

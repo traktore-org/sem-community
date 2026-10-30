@@ -44,6 +44,7 @@ from .const import SENSOR_LABEL_MAPPING
 from .consts.labels import SEM_LABELS
 from .coordinator import SEMCoordinator
 from .coordinator.energy_calculator import GRID_CO2_KG_PER_KWH
+from .coordinator.units import power_state_to_watts
 from .ha_energy_reader import battery_units
 from .coordinator.install_modules import (
     Module, keeps, kept_descriptions, presence_of, presence_summary,
@@ -2861,16 +2862,15 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         total = 0.0
         any_valid = False
         for eid in self._ev_power_upstream_entities:
-            st = self.hass.states.get(eid)
-            if st is None or st.state in ("unavailable", "unknown", None):
-                continue
-            try:
-                total += float(st.state)
-                any_valid = True
-            except (ValueError, TypeError):
-                # Upstream momentarily unparseable — skip; the coordinator
+            # (#1202) Only a number counts: "nan" parsed and went into the
+            # sum. In watts, as the coordinator's read of the same sensor.
+            w = power_state_to_watts(self.hass.states.get(eid))
+            if w is None:
+                # Upstream momentarily unreadable — skip; the coordinator
                 # cycle will re-read on its own cadence either way.
                 continue
+            total += w
+            any_valid = True
 
         if not any_valid:
             # Don't flip to None mid-session over a transient

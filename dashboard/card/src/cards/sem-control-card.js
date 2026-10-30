@@ -18,7 +18,7 @@ import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semFormatPower, semGetCurrency, semDefineCard } from '../base/sem-shared.js';
 import { priceLevelKey } from '../util/price-level.js';
 import { isUncapped } from '../util/peak-slot.js';
-import { socDisplay } from '../util/missing-value.js';
+import { fmtValue, readNumber, socDisplay } from '../util/missing-value.js';
 
 // EV section removed in #282 audit: every control (charging mode, night
 // charging, smart night, target, currents, phases, stall cooldown) is
@@ -30,9 +30,9 @@ const SECTIONS = [
     {
         id: 'surplus', icon: 'mdi:solar-power', color: '#ff9800', titleKey: 'surplus_control',
         subtitleFn: (c) => {
-            const active = c._valNum('surplus_active_devices').toFixed(0);
-            const total = c._valNum('surplus_total_devices').toFixed(0);
-            const alloc = c._valNum('surplus_allocated_w').toFixed(0);
+            const active = fmtValue(c._valNum('surplus_active_devices'), 0);
+            const total = fmtValue(c._valNum('surplus_total_devices'), 0);
+            const alloc = fmtValue(c._valNum('surplus_allocated_w'), 0);
             return `${active}/${total} ${c._t('devices')} · ${alloc}W`;
         },
     },
@@ -81,8 +81,8 @@ const SECTIONS = [
     {
         id: 'peak', icon: 'mdi:flash-alert', color: '#ff9800', titleKey: 'peak_load_management',
         subtitleFn: (c) => {
-            const peak = c._valNum('consecutive_peak_15min').toFixed(1);
-            const monthly = c._valNum('monthly_consecutive_peak').toFixed(1);
+            const peak = fmtValue(c._valNum('consecutive_peak_15min'), 1);
+            const monthly = fmtValue(c._valNum('monthly_consecutive_peak'), 1);
             return `${c._t('peak')} ${peak} kW · ${c._t('monthly_peak')} ${monthly} kW`;
         },
     },
@@ -162,18 +162,15 @@ class SEMControlCard extends SEMLitBase {
         return (e && e.state !== 'unavailable' && e.state !== 'unknown') ? e.state : '';
     }
 
-    /** Numeric state for a sensor.sem_ suffixed entity. */
-    _valNum(suffix, fallback = 0) {
-        const e = this._hass?.states[`${this._prefix}${suffix}`];
-        if (!e || e.state === 'unavailable' || e.state === 'unknown') return fallback;
-        return parseFloat(e.state) ?? fallback;
+    /** Numeric state for a sensor.sem_ suffixed entity — (#1200) null when
+     *  out, so it prints "—", not 0. */
+    _valNum(suffix, fallback = null) {
+        return readNumber(this._hass?.states[`${this._prefix}${suffix}`]) ?? fallback;
     }
 
     /** Numeric state for a number.sem_ suffixed entity. */
-    _numVal(suffix, fallback = 0) {
-        const e = this._hass?.states[`number.sem_${suffix}`];
-        if (!e || e.state === 'unavailable' || e.state === 'unknown') return fallback;
-        return parseFloat(e.state) ?? fallback;
+    _numVal(suffix, fallback = null) {
+        return readNumber(this._hass?.states[`number.sem_${suffix}`]) ?? fallback;
     }
 
     /** Boolean: is switch.sem_<suffix> on? */
@@ -203,11 +200,11 @@ class SEMControlCard extends SEMLitBase {
         const entity = this._hass?.states[entityId];
         if (!entity) return nothing;
         const frozen = this._frozenEntities[entityId];
-        const val = frozen ? frozen.value : (parseFloat(entity.state) || 0);
+        const val = frozen ? frozen.value : readNumber(entity);
         const step = parseFloat(entity.attributes.step) || 1;
         const unit = entity.attributes.unit_of_measurement || '';
         const decimals = step < 1 ? 1 : 0;
-        const displayVal = val.toFixed(decimals) + (unit ? ' ' + unit : '');
+        const displayVal = fmtValue(val, decimals) + (unit ? ' ' + unit : '');
 
         return html`
             <div class="stepper-cell">
@@ -259,10 +256,10 @@ class SEMControlCard extends SEMLitBase {
     // ── Section content renderers ──
 
     _renderSurplusSection(T) {
-        const total = this._valNum('surplus_total_w').toFixed(0);
-        const dist = this._valNum('surplus_distributable_w').toFixed(0);
-        const alloc = this._valNum('surplus_allocated_w').toFixed(0);
-        const free = this._valNum('surplus_unallocated_w').toFixed(0);
+        const total = fmtValue(this._valNum('surplus_total_w'), 0);
+        const dist = fmtValue(this._valNum('surplus_distributable_w'), 0);
+        const alloc = fmtValue(this._valNum('surplus_allocated_w'), 0);
+        const free = fmtValue(this._valNum('surplus_unallocated_w'), 0);
 
         return html`
             <div class="info-tiles">
@@ -383,7 +380,7 @@ class SEMControlCard extends SEMLitBase {
     _renderPeakSection(T) {
         const peakPct = this._valNum('current_vs_peak_percentage');
         const peakColor = peakPct > 90 ? '#f44336' : peakPct > 70 ? '#ff9800' : '#8DC892';
-        const shedDevices = this._valNum('controllable_devices_count').toFixed(0);
+        const shedDevices = fmtValue(this._valNum('controllable_devices_count'), 0);
         const shed = this._valNum('available_load_reduction');
         // (#1055) No grid limit: there is no "% of limit" and no margin to
         // show. The sensors keep the saved number, which is not in force.
@@ -393,7 +390,7 @@ class SEMControlCard extends SEMLitBase {
             <div class="peak-hero">
                 ${uncapped
                     ? html`<span class="peak-pct" style="color:#8DC892">${this._t('uncapped')}</span>`
-                    : html`<span class="peak-pct" style="color:${peakColor}">${peakPct.toFixed(0)}%</span>
+                    : html`<span class="peak-pct" style="color:${peakColor}">${fmtValue(peakPct, 0)}%</span>
                 <span class="peak-of-limit">${this._t('of_limit')}</span>`}
             </div>
             <div class="peak-detail">
@@ -406,14 +403,14 @@ class SEMControlCard extends SEMLitBase {
                     <ha-icon icon="mdi:shield-check" style="--mdc-icon-size:18px;color:#8DC892"></ha-icon>
                     <div class="info-tile-content">
                         <span class="info-tile-label">${this._t('peak_margin')}</span>
-                        <span class="info-tile-value">${uncapped ? this._t('uncapped') : `${this._valNum('peak_margin').toFixed(1)} kW`}</span>
+                        <span class="info-tile-value">${uncapped ? this._t('uncapped') : `${fmtValue(this._valNum('peak_margin'), 1)} kW`}</span>
                     </div>
                 </div>
                 <div class="info-tile">
                     <ha-icon icon="mdi:power-plug-off" style="--mdc-icon-size:18px;color:#ff9800"></ha-icon>
                     <div class="info-tile-content">
                         <span class="info-tile-label">${this._t('sheddable')}</span>
-                        <span class="info-tile-value">${shed.toFixed(1)} kW · ${shedDevices} ${this._t('devices')}</span>
+                        <span class="info-tile-value">${fmtValue(shed, 1)} kW · ${shedDevices} ${this._t('devices')}</span>
                     </div>
                 </div>
             </div>

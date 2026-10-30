@@ -110,22 +110,39 @@ test('the rows show where the shared field shows (Advanced)', () => {
     assert.equal(limitRows(el).length, 0);
 });
 
+// (#1204) The card sends only the slot it changed, with the battery order
+// its copy was read in; SEM keeps every other slot.
 test("picking B2's entity writes slot 2 and keeps slot 1", async () => {
-    const el = card({ [LIST]: ['number.sessy_a_maximum_power'] });
+    const el = card({ [LIST]: ['number.sessy_a_maximum_power'],
+                      battery_slot_units: ['sensor.a_power', 'sensor.b_power'] });
     await el._saveListField(LIST, 1, 'number.sessy_b_maximum_power', 2);
     const sets = el.calls.filter((c) => c.service === 'set_option');
     assert.equal(sets.length, 1);
     assert.deepEqual(sets[0].data.options, {
-        [LIST]: ['number.sessy_a_maximum_power', 'number.sessy_b_maximum_power'],
+        [LIST]: { slot: 1, value: 'number.sessy_b_maximum_power',
+                  battery_slot_units: ['sensor.a_power', 'sensor.b_power'] },
     });
     assert.deepEqual(el._options[LIST],
         ['number.sessy_a_maximum_power', 'number.sessy_b_maximum_power']);
+    // then it reads SEM's lists again (a failed read keeps the copy)
+    assert.equal(el.calls.at(-1).service, 'get_config');
 });
 
 test("emptying B1 leaves B2's entity alone", async () => {
     const el = card({ [LIST]: ['number.a', 'number.b'] });
     await el._saveListField(LIST, 0, '', 2);
-    assert.deepEqual(el.calls[0].data.options, { [LIST]: [null, 'number.b'] });
+    assert.deepEqual(el.calls[0].data.options, {
+        [LIST]: { slot: 0, value: null, battery_slot_units: null } });
+    assert.deepEqual(el._options[LIST], [null, 'number.b']);
+});
+
+test('a read with no config keeps the copy (#1204)', async () => {
+    const el = card({ [LIST]: ['number.a', 'number.b'] });
+    await el._refreshOptions();
+    assert.deepEqual(el._options[LIST], ['number.a', 'number.b']);
+    el._hass.callService = async () => ({ response: { config: { [LIST]: ['number.x'] } } });
+    await el._refreshOptions();
+    assert.deepEqual(el._options, { [LIST]: ['number.x'] });
 });
 
 test('the battery-control rows still ask for their own lists', () => {

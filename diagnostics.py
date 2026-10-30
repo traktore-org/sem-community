@@ -97,16 +97,44 @@ def _foreign_logs(hass: HomeAssistant) -> list[str]:
     return []
 
 
-def _decision_log_records(coordinator) -> list:
-    """(#1084) The decision log's ring buffer; empty when there is none."""
+def _decision_log_records(coordinator, stand_ins: dict | None = None) -> list:
+    """(#1084) The decision log's ring buffer; empty when there is none.
+
+    Each record's ``name`` is the SAME box-name privacy class #1092
+    already redacts for ``detection`` (``DecisionRecord.as_dict`` sets it
+    from the charger/battery's own configured name) — reintroduced here
+    because #1084 landed after #1092 and nothing wired this sibling path
+    through it. ``redact_box_names`` only matches its own
+    ``BOX_VALUE_FIELDS`` key names, so the field is renamed to
+    ``device_name`` for the swap and back — the shipped key stays
+    ``name``, only its value changes. ``stand_ins`` shared with
+    ``detection`` so the same box gets the same stand-in everywhere."""
     from .coordinator.decision_log import DecisionLog
     log = getattr(coordinator, "decision_log", None)
     if not isinstance(log, DecisionLog):
         return []
     try:
-        return log.records()
+        records = log.records()
     except Exception:  # noqa: BLE001 — a dump never fails on a field
         return []
+    from .hardware_detection import redact_box_names
+
+    def _to_device_name(r):
+        if isinstance(r, dict) and "name" in r:
+            out = {k: v for k, v in r.items() if k != "name"}
+            out["device_name"] = r["name"]
+            return out
+        return r
+
+    def _back_to_name(r):
+        if isinstance(r, dict) and "device_name" in r:
+            out = {k: v for k, v in r.items() if k != "device_name"}
+            out["name"] = r["device_name"]
+            return out
+        return r
+
+    redacted = redact_box_names([_to_device_name(r) for r in records], stand_ins=stand_ins)
+    return [_back_to_name(r) for r in redacted]
 
 
 async def _pacing_actuation(hass: HomeAssistant, coordinator) -> dict:
@@ -675,7 +703,10 @@ async def async_get_config_entry_diagnostics(
     # service data AND inside the entity ids, the same everywhere in the
     # section, so the download names nobody's box and still replays.
     from .hardware_detection import redact_box_names
-    detection = redact_box_names(detection, in_ids=True)
+    # (#1092 sibling fix) the same stand-in table as decision_log below,
+    # so one box reads as the same box_N in both sections.
+    _box_stand_ins: dict = {}
+    detection = redact_box_names(detection, in_ids=True, stand_ins=_box_stand_ins)
 
     return {
         "detection": detection,
@@ -715,7 +746,7 @@ async def async_get_config_entry_diagnostics(
         },
         # (#1084) why each command changed — the last 200 changes, oldest
         # first. In memory only, so it starts empty after a restart.
-        "decision_log": _decision_log_records(coordinator),
+        "decision_log": _decision_log_records(coordinator, stand_ins=_box_stand_ins),
         "power": {
             "solar_w": data.get("solar_power"),
             "grid_w": data.get("grid_power"),

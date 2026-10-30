@@ -87,7 +87,7 @@ from .types import (
     SEMData, PowerReadings, PowerFlows, SystemStatus, LoadManagementData,
     SurplusControlData, ForecastSensorData, TariffSensorData,
     HeatPumpSensorData, HotWaterSensorData, PVAnalyticsData, EnergyAssistantSensorData,
-    SessionData, BatterySessionData,
+    SessionData, BatterySessionData, shown_w,
 )
 from .health_check import (
     chargers_outside_home, home_member_evidence, home_member_totals,
@@ -2230,9 +2230,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         if seen is None:
             seen = self._shown_home_input_seen = {}
         holding = False
+        # (#1186) …and while a dark unit of an input is held: home is built
+        # from that unit's 0 W, the input SEM shows from its last read.
+        units = getattr(power, "held_w", None)
+        units = units if isinstance(units, dict) else {}
         for name, flag in self._SHOWN_HOME_INPUTS:
             if not getattr(power, flag, False):
                 seen[name] = now
+                if name in units:
+                    holding = True      # the reader holds the dark unit
             elif name in seen and now - seen[name] <= SENSOR_DARK_READ_GRACE_S:
                 holding = True          # its entity still shows a value
         if not holding and self._battery_stop_not_reported(power, now):
@@ -2829,6 +2835,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     )
             else:
                 _info("Energy Dashboard not configured or incomplete")
+                # (#1208) the reader reads without one: say if that is sure
+                self._sensor_reader.set_dashboard_answered(answered)
 
         except Exception as e:
             _LOGGER.warning("Failed to read Energy Dashboard: %s", e)
@@ -3399,7 +3407,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
              # night with 3000 here and 0 above reads "grid charge, not surplus".
              "reclaim_raw_w": cr.get("reclaim_raw_w", 0)},
         )
-        st.process = LayerRecord(LayerStatus.OK, reason, {"soc": soc})
+        # (#1201) the status word reads the shown power: with a dark unit of
+        # two held, say what it adds, or the word and the watts below differ
+        _held = getattr(power, "held_w", None)
+        _held = _held.get("battery") if isinstance(_held, dict) else None
+        st.process = LayerRecord(
+            LayerStatus.OK, reason,
+            {"soc": soc} if _held is None else {"soc": soc, "held_w": round(_held)})
         # match: an explicit force command must be observed (force_charge →
         # charging, force_discharge → discharging). Normal/idle → None.
         _bd = getattr(self, "_last_battery_decisions", None) or {}
@@ -3915,7 +3929,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # ambiguous low-power samples and could lock the wrong sign
             # until the next reload.
             self._sensor_reader.restore_sign_state(
-                self._storage.get_sign_state()
+                self._storage.get_sign_state(),
+                basis=self._storage.get_battery_sign_basis(),   # (#1208)
             )
 
             # (#638 night 2) Restore the measured W/A — in-memory only,
@@ -4201,12 +4216,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             except Exception:  # noqa: BLE001 — the books never cost a cycle
                 _LOGGER.debug("device tariff staging skipped", exc_info=True)
             energy = self._energy_calculator.calculate_energy(power, power_flows)
+            # (#1185) …and the readings and flows the books split by: a
+            # dark input's held watts, not its 0 W (bug class 58). The flow
+            # rows, the session splits, the night audit and the flow
+            # entities take these; the health check and the battery-night
+            # recorder check the cycle's own flows against its raw power.
+            book_power = self._energy_calculator.book_power
+            if not isinstance(book_power, PowerReadings):
+                book_power = power
+            book_flows = self._energy_calculator.book_flows
+            if not isinstance(book_flows, PowerFlows):
+                book_flows = power_flows
 
             # Step 2c: Time-integrate the per-cycle flows into daily
             # kWh totals. ``energy_flows.grid_to_home + grid_to_ev``
             # feeds the autarky calculator below.
             energy_flows = self._flow_calculator.integrate_energy_flows(
-                power_flows, self.update_interval.total_seconds(),
+                book_flows, self.update_interval.total_seconds(),
             )
 
             # Step 3: Calculate costs and performance. ``performance``
@@ -4248,26 +4274,26 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         self._last_ev_connected_per_charger[cid] = False
                     # #351 M3 — prefer the flow_calculator's native
                     # priority-correct per-charger attribution
-                    # (``power_flows.per_charger[cid]``) when populated.
+                    # (``book_flows.per_charger[cid]``) when populated.
                     # Higher-priority chargers got first claim on solar
                     # there; this re-proportionalisation by power share
                     # would otherwise mix the priority signal back out.
                     # Falls back to the proportional split when
                     # per_charger isn't populated (single-charger or
                     # missing per-charger power data).
-                    pc_flows = (power_flows.per_charger or {}).get(cid)
+                    pc_flows = (book_flows.per_charger or {}).get(cid)
                     if pc_flows is not None:
                         from .types import PowerFlows as _PF
                         charger_flows = _PF(
                             solar_to_ev=pc_flows.solar_to_ev,
                             grid_to_ev=pc_flows.grid_to_ev,
                             battery_to_ev=pc_flows.battery_to_ev,
-                            solar_to_home=power_flows.solar_to_home,
-                            solar_to_battery=power_flows.solar_to_battery,
-                            solar_to_grid=power_flows.solar_to_grid,
-                            grid_to_home=power_flows.grid_to_home,
-                            grid_to_battery=power_flows.grid_to_battery,
-                            battery_to_home=power_flows.battery_to_home,
+                            solar_to_home=book_flows.solar_to_home,
+                            solar_to_battery=book_flows.solar_to_battery,
+                            solar_to_grid=book_flows.solar_to_grid,
+                            grid_to_home=book_flows.grid_to_home,
+                            grid_to_battery=book_flows.grid_to_battery,
+                            battery_to_home=book_flows.battery_to_home,
                         )
                     elif total_charger_power > 0:
                         # Legacy fallback — fraction of fleet (pre-Step 5
@@ -4276,18 +4302,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         frac = charger_powers[cid] / total_charger_power
                         from .types import PowerFlows as _PF
                         charger_flows = _PF(
-                            solar_to_ev=power_flows.solar_to_ev * frac,
-                            grid_to_ev=power_flows.grid_to_ev * frac,
-                            battery_to_ev=power_flows.battery_to_ev * frac,
-                            solar_to_home=power_flows.solar_to_home,
-                            solar_to_battery=power_flows.solar_to_battery,
-                            solar_to_grid=power_flows.solar_to_grid,
-                            grid_to_home=power_flows.grid_to_home,
-                            grid_to_battery=power_flows.grid_to_battery,
-                            battery_to_home=power_flows.battery_to_home,
+                            solar_to_ev=book_flows.solar_to_ev * frac,
+                            grid_to_ev=book_flows.grid_to_ev * frac,
+                            battery_to_ev=book_flows.battery_to_ev * frac,
+                            solar_to_home=book_flows.solar_to_home,
+                            solar_to_battery=book_flows.solar_to_battery,
+                            solar_to_grid=book_flows.solar_to_grid,
+                            grid_to_home=book_flows.grid_to_home,
+                            grid_to_battery=book_flows.grid_to_battery,
+                            battery_to_home=book_flows.battery_to_home,
                         )
                     else:
-                        charger_flows = power_flows
+                        charger_flows = book_flows
                     # Swap context for per-charger session tracking
                     saved_dev, saved_sess, saved_conn = (
                         self._ev_device, self._session_data, self._last_ev_connected
@@ -4367,10 +4393,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     primary_id, self._last_ev_connected
                 )
             else:
-                self._update_session_tracking(power, power_flows)
+                self._update_session_tracking(power, book_flows)
 
-            # Step 4.5: Battery session tracking
-            self._update_battery_session_tracking(power, power_flows)
+            # Step 4.5: Battery session tracking. (#1185) The books' watts:
+            # its total and its split by source come from the same read.
+            self._update_battery_session_tracking(book_power, book_flows)
 
             # Step 4.6: EV taper detection and intelligence (#106)
             ev_intelligence = self._update_ev_intelligence(power, energy)
@@ -5471,7 +5498,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # Step 11: Build complete data structure
             sem_data = SEMData(
                 power=power,
-                power_flows=power_flows,
+                power_flows=book_flows,
                 energy=energy,
                 energy_flows=energy_flows,
                 costs=costs,
@@ -5640,6 +5667,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 self._storage.set_sign_state(
                     self._sensor_reader.export_sign_state()
                 )
+                # (#1208) …and beside it, in a key an older build keeps
+                basis = self._sensor_reader.export_battery_basis()
+                if basis is not None:
+                    self._storage.set_battery_sign_basis(basis)
                 # Persist the legionella timestamp (#508 I2).
                 _hw = self._surplus_controller._devices.get("hot_water") \
                     if hasattr(self, "_surplus_controller") else None
@@ -5688,7 +5719,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # never recorded, so "fits" has never been checked against
             # reality. Taken here, after the cycle's decisions, so the gate
             # sampled is the one this cycle's actuation actually obeyed.
-            self._record_demand_outcomes(dt_util.now(), power, power_flows)
+            self._record_demand_outcomes(dt_util.now(), power, book_flows,
+                                         book_power=book_power)
             # (#800) The battery's night rides the same cycle: drain /
             # refill / clipping series for the #778 budget's learner.
             try:
@@ -9924,9 +9956,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         try:
             self._finish_manual_battery_modes(
                 battery_items, soc_seen, _bat_count, power_read=power_seen)
-        except Exception:  # noqa: BLE001 — a mode write must not end a cycle
-            _LOGGER.warning("ending a finished manual battery mode failed "
-                            "(#1131)", exc_info=True)
+        except Exception as err:  # noqa: BLE001 — a mode write must not end a cycle
+            # (#762/#1092-class) a persistent fault here logged a full
+            # traceback every cycle; log_on_change makes it a transition.
+            log_on_change(
+                _LOGGER, "manual_battery_mode_finish_failed", logging.WARNING,
+                "ending a finished manual battery mode failed (#1131): %s", err,
+            )
 
         # (#1178) Every battery decides before any command goes out: two
         # batteries on one discharge limit entity need ONE writer, and the
@@ -11211,7 +11247,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 continue
         return windows
 
-    def _record_demand_outcomes(self, now, power, power_flows=None) -> None:
+    def _record_demand_outcomes(self, now, power, power_flows=None,
+                                book_power=None) -> None:
         """(#755 pillar 1) Write down what each planned demand actually DID.
 
         The plan has always recorded two of the three numbers that matter —
@@ -11227,6 +11264,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         Every sample carries whether it was MEASURED (see ``demand_outcome``'s
         draw helpers). Nothing downstream re-decides that question.
+
+        (#1185) The night's solar and export come from ``book_power``, the
+        readings the daily rows book (a dark input's held watts), with the
+        flows built from them. The demands' draws keep ``power``.
         """
         from .demand_outcome import (
             DemandOutcomeRecorder, battery_draw, device_draw, ev_draw,
@@ -11261,10 +11302,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # (calculate_derived); re-deriving max(0, grid_power) here
             # would open a second sign path — the exact mistake #129
             # and the #588 sign work were about.
-            export_w = float(getattr(power, "grid_export_power", 0.0) or 0.0)
+            totals = power if book_power is None else book_power
+            export_w = float(getattr(totals, "grid_export_power", 0.0) or 0.0)
             rec.observe_totals(
                 now,
-                solar_w=float(getattr(power, "solar_power", 0.0) or 0.0),
+                solar_w=float(getattr(totals, "solar_power", 0.0) or 0.0),
                 # (#1191) solar's export: the plan's share is of solar, and a
                 # battery sale in the window was never part of it
                 export_w=solar_export(export_w, battery_export_part(
@@ -16901,14 +16943,26 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # while every read of that power is dark, the status is None, as
         # ``to_dict`` publishes the power itself. The entity holds its last
         # word for the dark-read grace, on the power's clock (sensor.py
-        # ``_HELD_TEXT_KEY``), then shows unavailable.
+        # ``_HELD_TEXT_KEY``), then shows unavailable. (#1201) The on/off
+        # flags are built the same way and held the same way
+        # (binary_sensor.py ``HELD_FLAG_KEYS``). Each is built from the
+        # power SEM shows (``shown_w``): a dark unit of two adds its last
+        # read for the grace, so the word agrees with the number beside it.
+        solar_dark = getattr(power, "solar_power_unavailable", False) is True
+        grid_dark = getattr(power, "grid_power_unavailable", False) is True
+        batt_dark = getattr(power, "battery_power_all_unavailable", False) is True
+        solar_w = shown_w(power, "solar_power")
+        import_w = shown_w(power, "grid_import_power")
+        export_w = shown_w(power, "grid_export_power")
+        charge_w = shown_w(power, "battery_charge_power")
+        discharge_w = shown_w(power, "battery_discharge_power")
 
         # Grid status
-        if getattr(power, "grid_power_unavailable", False) is True:
+        if grid_dark:
             status.grid_status = None
-        elif power.grid_import_power > 50:
+        elif import_w > 50:
             status.grid_status = "import"
-        elif power.grid_export_power > 50:
+        elif export_w > 50:
             status.grid_status = "export"
         else:
             status.grid_status = "idle"
@@ -16917,24 +16971,24 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # the grid (FORCE_DISCHARGE this cycle), surface a distinct
         # "selling" state so the Battery card can show it instead of a
         # generic "discharging".
-        if getattr(power, "battery_power_all_unavailable", False) is True:
+        if batt_dark:
             status.battery_status = None
-        elif getattr(self, "_battery_arbitrage_active", False) and power.battery_discharge_power > 50:
+        elif getattr(self, "_battery_arbitrage_active", False) and discharge_w > 50:
             status.battery_status = "selling"
-        elif power.battery_charge_power > 50:
+        elif charge_w > 50:
             status.battery_status = "charging"
-        elif power.battery_discharge_power > 50:
+        elif discharge_w > 50:
             status.battery_status = "discharging"
         else:
             status.battery_status = "idle"
 
         # Status flags
-        status.solar_active = power.solar_power > 50
+        status.solar_active = None if solar_dark else solar_w > 50
         status.ev_connected = power.ev_connected
         status.ev_charging = power.ev_charging
-        status.battery_charging = power.battery_charge_power > 50
-        status.battery_discharging = power.battery_discharge_power > 50
-        status.grid_export_active = power.grid_export_power > 50
+        status.battery_charging = None if batt_dark else charge_w > 50
+        status.battery_discharging = None if batt_dark else discharge_w > 50
+        status.grid_export_active = None if grid_dark else export_w > 50
 
         return status
 

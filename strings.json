@@ -1860,6 +1860,9 @@
     "set_option_invalid_payload": {
       "message": "set_option requires an 'options' dict mapping config keys to new values."
     },
+    "battery_list_changed": {
+      "message": "The batteries in the Energy Dashboard changed, so this battery setting was not saved. Check it and try again."
+    },
     "set_option_no_entry": {
       "message": "No SEM ConfigEntry found — install SEM via Settings → Devices & Services first."
     },

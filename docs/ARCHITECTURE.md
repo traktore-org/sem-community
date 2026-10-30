@@ -1280,8 +1280,11 @@ references, the config card renders nothing for a missing entity.
 `hardware_detection.py` is the one crawler. The roles live in it
 (`read_charger_roles`, `_roles_offer`, `_roles_pass`), the words in
 `consts/role_lexicon.py`, services with their fields through `_services_of`.
-No brand code: a lint test refuses a new `_wire_<brand>` or
-`_discover_<brand>`, and the role reader may name no integration.
+No NEW brand code: a lint test refuses a new `_wire_<brand>` or
+`_discover_<brand>`, and the role reader may name no integration. A
+shrinking list of older per-brand functions is still being folded into
+roles, each on its own branch, proven on the rig first
+(`tests/test_hw_wave_no_brand_branches.py`'s `BRAND_PATHS_TODAY`).
 
 | Role | What it reads |
 |---|---|
@@ -1326,6 +1329,24 @@ the compressed-sun simulation drives them. One message per event key, the
 sent keys persisted in storage. Delivery: `notifications.notify_hint` — the
 `sem_hints` phone channel and the `solar_energy_management_notification`
 event with `category: hint`.
+
+### External control (#1079)
+
+`coordinator/external_control.py` is pure logic: `ExternalControlBook`
+tracks, per charger or for the battery, whether another party (an
+aggregator, a grid operator) currently steers it, from a user-picked
+indicator entity. Three modes: `none` (today's behaviour), `yield` (SEM
+writes nothing to the device while the indicator is active — it never
+stops or starts it, and the device's measured draw still counts in the
+home's accounting), `observe` (SEM keeps control; a Repair fires when it
+sees a write it did not make). The coordinator calls `update()` once a
+cycle and reads `book.yielding(key)` wherever a device's actuator decides
+whether to write — every write path, not only the main decide/actuate
+pass: a startup restore (`actuate_battery.restore_discharge_limit_on_startup`)
+and `charge_pacing.py`'s writer both check it too, found missing in
+review the same day the feature shipped. A restart never reads as
+"steered" (an unreadable indicator changes nothing), and a flickering
+indicator holds active for `HOLD_S` (300 s) past its last true reading.
 
 ### Charge pacing writer (#820)
 

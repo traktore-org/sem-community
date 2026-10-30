@@ -174,6 +174,7 @@ class SEMStorage:
         self._loaded = False
         self._shutdown_listener: Optional[Callable] = None
         self._last_daily_save_ts: float = 0.0  # monotonic, for the throttle
+        self._closed = False   # (#1209) set by async_close on unload
 
     @property
     def is_loaded(self) -> bool:
@@ -687,6 +688,16 @@ class SEMStorage:
         """Persist sign-detection lock state."""
         self._energy_data["sign_state"] = state
 
+    def get_battery_sign_basis(self) -> Optional[Dict[str, Any]]:
+        """(#1208) The one-battery sign as a build since #1208 last saved it
+        (``SensorReader.export_battery_basis``). A key of its own: an older
+        build writes ``sign_state`` again from the keys it knows, but keeps
+        the store's other keys."""
+        return self._energy_data.get("battery_sign_basis")
+
+    def set_battery_sign_basis(self, basis: Dict[str, Any]) -> None:
+        self._energy_data["battery_sign_basis"] = dict(basis)
+
     # VPP event history persistence (#580) — per-event energy accounting
     # for payment reconciliation (bounded to ~20 records by VppDispatcher).
     def get_vpp_events(self) -> list:
@@ -820,6 +831,8 @@ class SEMStorage:
 
         Batches multiple updates within ENERGY_SAVE_DELAY seconds.
         """
+        if self._ended("delayed energy save"):
+            return
         try:
             def get_data() -> Dict[str, Any]:
                 return {
@@ -846,6 +859,8 @@ class SEMStorage:
         Only for rare, restart-critical writes — the decay date changes at most
         once a day. Do NOT reach for this in the per-cycle path.
         """
+        if self._ended("energy save"):
+            return
         try:
             await self._energy_store.async_save({
                 **self._energy_data,
@@ -874,6 +889,8 @@ class SEMStorage:
 
     async def async_save_daily(self) -> None:
         """Save daily data immediately."""
+        if self._ended("daily save"):
+            return
         try:
             await self._daily_store.async_save(self._daily_data)
             _LOGGER.debug("Saved daily data to storage")
@@ -899,6 +916,13 @@ class SEMStorage:
 
     async def async_save_all(self) -> None:
         """Save all data immediately (for shutdown)."""
+        if self._ended("save of all data"):
+            return
+        await self._async_write_all()
+
+    async def _async_write_all(self) -> None:
+        """Write both stores now. Only ``async_save_all`` (which asks
+        ``_ended``) and ``async_close`` (which ends the store first) call it."""
         try:
             # Save energy data immediately
             energy_data = {
@@ -927,8 +951,44 @@ class SEMStorage:
 
     async def _handle_shutdown(self, event: Event) -> None:
         """Save all data before shutdown."""
+        self._shutdown_listener = None   # a once-listener: HA dropped it
         _LOGGER.info("Handling shutdown, saving all SEM data...")
         await self.async_save_all()
+
+    async def async_close(self) -> None:
+        """(#1209) End this lifetime: write both stores now, then never again.
+
+        A reload builds a new store that reads the files. A change still
+        queued in ``async_delay_save`` is not on them: that save re-arms on
+        every cycle, so it lands only once the cycles stop. The new lifetime
+        started from the old state — "Reset sign detection" got its old signs
+        back. And this store went on: its queued write and its HA-stop
+        listener wrote the old lifetime's data over the new one's, and
+        brought the files of a removed SEM back. ``async_unload_entry`` calls
+        this on every unload.
+        """
+        if getattr(self, "_closed", False):
+            return
+        # Ended BEFORE the write: a cycle still running must not queue a
+        # new write on this store while the one below waits for the disk.
+        self._closed = True
+        if getattr(self, "_shutdown_listener", None) is not None:
+            self._shutdown_listener()
+            self._shutdown_listener = None
+        if getattr(self, "_loaded", False):   # never write the empty containers of a failed load
+            # also drops a queued write and its final-write hook (HA Store)
+            await self._async_write_all()
+
+    def _ended(self, what: str) -> bool:
+        """(#1209) After ``async_close`` nothing of this lifetime writes:
+        the files belong to the next store, or to nobody after a removal."""
+        if getattr(self, "_closed", False):
+            # the cycle's own queued save is expected here; any other write
+            # is a change that will not be kept, so say it
+            _LOGGER.log(logging.DEBUG if what == "delayed energy save" else logging.INFO,
+                        "Skipped the %s: this SEM lifetime has ended", what)
+            return True
+        return False
 
     # State export/import for calculators
     def export_energy_calculator_state(self) -> Dict[str, Any]:

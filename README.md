@@ -108,6 +108,8 @@ SEM is in the default HACS store — no custom repository needed.
 
 (Or click the button above to jump straight to it in HACS.)
 
+**Home Assistant 2026.11 or newer:** HACS is built in there as **Settings → Marketplace**. Search for **Solar Energy Management** there and install it; the steps are the same. Your HACS installs move to the Marketplace by themselves when you update Home Assistant.
+
 ### Beta Releases
 
 Want to help test new features before they go stable? Enable beta updates in HACS:
@@ -115,6 +117,8 @@ Want to help test new features before they go stable? Enable beta updates in HAC
 1. Open **HACS** > **Integrations** > find **Solar Energy Management**
 2. Click the three-dot menu > **Redownload** > enable **Show beta versions**
 3. Select the latest beta and install
+
+On Home Assistant 2026.11 or newer, do the same in **Settings → Marketplace**: open **Solar Energy Management** and turn on beta versions.
 
 Beta releases are tested on real hardware before publishing but may contain rough edges. Your feedback helps us ship stable releases faster — report issues on [GitHub](https://github.com/traktore-org/sem-community/issues).
 
@@ -483,15 +487,60 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 
 ## Recent Improvements
 
-### 2.2 betas — what SEM shows you
-2.2 turns numbers SEM already had into things you can see. Everything is off or read-only until you use it.
+### v2.2.0 — Seeing what SEM already knew
+2.2 turns numbers SEM already had into things you can see, try and hear. Everything new is off or read-only until you use it, with one exception: if you had already turned the phase guard on, it now sheds ordinary loads too, not only chargers.
 
-- **Controls only where they can act** (#996). A flat tariff gets no price knobs. Wire the entity and the control appears.
-- **Charging sessions are kept** (#1024): the last 400 per charger on the EV tab, with a CSV button. The energy is the charger's own meter.
-- **PV health** (#1022): one sensor says green, yellow, orange or red from a week of yield against forecast.
-- **Hints** (#1019): a sentence when something is off, and a weekly note. One setting: off, weekly or all.
-- **Chargers found by what they offer** (#1032): buttons, a charge-mode select, a car's own amps. No brand list needed.
-- **Charge pacing is calm** (#820): on the register's step, at most one write every five minutes, and the inverter's own value is accepted.
+**Try it before it happens**
+
+- **Simulation tab**: replay your own recorded days with another battery, reserve, peak limit or price (#1083). Swipe days on a phone, pick the newest with a slider, try a battery up to 150 kWh — a car pack fits.
+- **One period at a time**: last 30/90/365 days, a month, or the newest days (#1083). The battery carries its charge across short gaps; a counter-jump day is skipped and said how many were.
+- **Results that add up**: net including stored energy, per month, a day you tap for why it differs from another (#1083). The Excel export has the per-day numbers.
+
+**Every change says why**
+
+- **The Why? card and the logbook give each change a plain sentence**, in your language, with the numbers behind it (#1084, #1174). Diagnostics keeps the last 200.
+- **Each car session shows its CO₂** in the session list and the CSV (#1088); the weekly summary adds what your solar avoided.
+
+**Finding its own way**
+
+- **One outdoor temperature for all of SEM** (#1082): found by its name or your weather entity. Car charging, battery nights and snow all use it.
+- **SEM finds your grid CO₂ sensor by its unit** (#1088): CO₂ avoided can use its live value instead of a fixed average.
+- **Chargers found by what they offer, not their brand name** (#1032): buttons, a charge-mode select, a car's own amps.
+- **More hardware found on its own**: go-eCharger (#1054), ENTSO-e prices (#1051, by @rdehuyss), Helios Forecast (#1050, by @xg5x48kmfc-blip).
+
+**The grid limit, widened**
+
+- **A phase over its limit sheds ordinary loads, not only chargers** (#1048, by @RienduPre). Give each load its phase.
+- **Grid operator relay**: while it is on, SEM keeps grid draw under the operator's own limit (#1021).
+- **SEM stops exporting when a sold kWh is worth too little** (#1090). The battery and loads take the sun first; nothing is bought to replace it.
+- **Tax, VAT and a feed-in fee can be set**, so SEM decides what a kWh is really worth (#1077).
+
+**The battery and the car, more precisely steered**
+
+- **SEM can yield a charger or the battery to another party that steers it** (#1079): it writes nothing, or watches and says if its own setting does not hold.
+- **A discharge limit can cap charging too** (#1078): a parked car no longer blocks solar from charging that battery.
+- **Charge pacing is calm**: at most one write every five minutes, and the inverter's own value is accepted (#820).
+- **SEM starts the car on a negative export price** (#1080): buys the small gap from the grid when the sun alone is not enough.
+- **A heat pump or load can carry its own tariff and meter**, so its cheap hours follow its own price (#812).
+
+**The EV tab and Settings, reorganized**
+
+- **The EV tab opens in Everyday view**: per charger, mode, target and Charge by; pause, departures, plan and sessions fold under More and Details.
+- **The Configuration tab opens on Everyday**: only what SEM needs, in three groups; All settings holds the rest (#830).
+- **A departure per weekday, one charging block, a top-up before leaving** (#1023), all off by default.
+- **Battery boost**: the house battery charges the car for this one charge, down to a floor you pick (#1025).
+- **A Schedule helper can set a device's mode** (#1020): the heat rod off 07:00–13:00, or solar-only charging at weekends, for example.
+
+**Honesty**
+
+- **PV health**: one sensor says green, yellow, orange or red from a week of yield against forecast (#1022).
+- **Hints**: a sentence when something is off, and a weekly note; one setting — off, weekly or all (#1019).
+- **Charging sessions are kept**: the last 400 per charger, with a CSV button, from the charger's own meter (#1024).
+- **Controls only where they can act** (#996): a flat tariff gets no price knobs; wire the entity and the control appears.
+
+Also fixed since 2.1: grid and battery sign errors on homes with a split meter or a second battery, CO₂ and self-consumption undercounting a battery sale, and a counter step that could grow a month or year total past its real limit.
+
+**Requirements:** unchanged — Home Assistant 2026.2.0 or newer.
 
 ### v2.1.0 — Forecast-led planning and spending
 2.1 looks ahead. SEM forms an honest expectation of the energy that is coming and plans how to spend it. It also learns hardware it had never met. Everything new that acts is off by default, with two exceptions: the peak slot guard (which also keeps the battery covering the house while a peak is near), and modules — SEM removes the entities of hardware your house does not have.
@@ -750,8 +799,9 @@ needing access to the board.
 
 ### Current phase
 
-Soaking 2.0 on real hardware: bug fixes are reviewed and merged as usual;
-feature PRs are parked until the stable release is cut.
+2.2.0 is the current stable release. Bug fixes are reviewed and merged as
+usual. New features come in beta releases first, and stay off until you turn
+them on.
 
 ## License
 

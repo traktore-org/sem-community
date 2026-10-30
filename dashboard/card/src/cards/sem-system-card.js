@@ -10,7 +10,7 @@
  */
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
-import { fmtNum, MISSING } from '../util/missing-value.js';
+import { fmtNum, MISSING, readNumber } from '../util/missing-value.js';
 import { semTheme, semFormatPower, semGetCurrency, semCardSurfaceCSS, SEM_COLORS, semDefineCard } from '../base/sem-shared.js';
 
 const SECTIONS = [
@@ -126,11 +126,10 @@ class SEMSystemCard extends SEMLitBase {
         return fmtNum(this._hass?.states[`${this._prefix}${suffix}`], digits);
     }
 
-    /** Numeric state for a sensor.sem_ suffixed entity. */
-    _valNum(suffix, fallback = 0) {
-        const e = this._hass?.states[`${this._prefix}${suffix}`];
-        if (!e || e.state === 'unavailable' || e.state === 'unknown') return fallback;
-        return parseFloat(e.state) ?? fallback;
+    /** Numeric state for a sensor.sem_ suffixed entity — (#1200) null when
+     *  out, so it prints "—", not 0. */
+    _valNum(suffix, fallback = null) {
+        return readNumber(this._hass?.states[`${this._prefix}${suffix}`]) ?? fallback;
     }
 
     /** Boolean: is switch.sem_<suffix> on? */
@@ -161,7 +160,8 @@ class SEMSystemCard extends SEMLitBase {
         const controlType = this._val('diag_charger_control') || '—';  // #1053: raw for support
         const capacity = this._valNum('diag_battery_capacity');
         const capStr = capacity > 0 ? capacity.toFixed(1) : '—';
-        const unavailable = this._val('diag_sensors_unavailable') || '0';
+        // (#1200) the count's own sensor out is no count, not 0
+        const unavailable = this._val('diag_sensors_unavailable') || MISSING;
 
         const header = `SEM ${ver} | Grid: ${gridMode} | Chargers: ${chargerCount} (${controlType}) | Battery: ${capStr}kWh | Unavailable: ${unavailable}`;
 
@@ -320,7 +320,7 @@ class SEMSystemCard extends SEMLitBase {
             </div>
             <div class="info-row">
                 <span class="info-row-label">${this._t('unavailable_sensors')}</span>
-                <span class="info-row-value">${this._val('diag_sensors_unavailable') || '0'}</span>
+                <span class="info-row-value">${this._val('diag_sensors_unavailable') || MISSING}</span>
             </div>
         `;
     }

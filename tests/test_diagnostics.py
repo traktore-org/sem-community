@@ -282,3 +282,28 @@ async def test_diagnostics_hides_the_notify_service_and_the_title(
     assert cfg["data"]["mobile_notification_service"] == "**REDACTED**"
     assert "title" not in cfg
     assert "owners_iphone" not in str(result)
+
+
+@pytest.mark.asyncio
+async def test_diagnostics_redacts_the_decision_logs_own_box_name(
+    mock_hass, entry, coordinator,
+):
+    """(#1092 sibling fix) #1084's decision log carries a record's own
+    ``name`` — the same box name #1092 already redacts for ``detection``
+    — straight into the raw download. Nothing wired the new path
+    through the existing redaction, so it shipped unredacted."""
+    from custom_components.solar_energy_management.coordinator.decision_log import (
+        DecisionLog,
+    )
+    log = DecisionLog()
+    log.record(device_id="charger1", kind="charger", verb="charge",
+               value=8.0, name="Rolands Private Wallbox")
+    coordinator.decision_log = log
+    entry.runtime_data = coordinator
+    mock_hass.data["solar_energy_management"] = {entry.entry_id: coordinator}
+    result = await async_get_config_entry_diagnostics(mock_hass, entry)
+    assert "Rolands Private Wallbox" not in str(result)
+    assert len(result["decision_log"]) == 1
+    assert result["decision_log"][0]["name"].startswith("box_")
+    # device_id is an internal slug, never the person's own name — stays.
+    assert result["decision_log"][0]["device_id"] == "charger1"

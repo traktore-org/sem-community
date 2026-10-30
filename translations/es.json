@@ -1857,6 +1857,9 @@
     "set_option_invalid_payload": {
       "message": "set_option requiere un diccionario 'options' que asigne claves de configuración a nuevos valores."
     },
+    "battery_list_changed": {
+      "message": "Las baterías del panel de energía han cambiado, así que este ajuste de batería no se ha guardado. Revíselo e inténtelo de nuevo."
+    },
     "set_option_no_entry": {
       "message": "No se ha encontrado ninguna ConfigEntry de SEM — instale SEM primero desde Ajustes → Dispositivos y servicios."
     },

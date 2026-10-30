@@ -36,10 +36,29 @@ fifth divergent copy can't be written.
 """
 from __future__ import annotations
 
+import math
 from typing import Optional
 
 # state strings that are not a reading
 _NOT_A_VALUE = (None, "", "unknown", "unavailable", "none")
+
+
+def state_number(raw) -> Optional[float]:
+    """(#1202) A state as a finite number, or None when it gives none.
+
+    Text ("none", "error"), "unknown", "unavailable" and the non-finite floats
+    are no reading. ``float("nan")`` does not fail, so a parse alone let NaN
+    into every sum; "inf" is no power either.
+    """
+    if isinstance(raw, str):
+        raw = raw.strip()
+    if raw is None or (isinstance(raw, str) and raw.lower() in _NOT_A_VALUE):
+        return None
+    try:
+        value = float(raw)
+    except (ValueError, TypeError):
+        return None
+    return value if math.isfinite(value) else None
 
 # unit (stripped + lowercased) → multiplier to reach WATTS.
 #
@@ -102,14 +121,8 @@ def normalize_unit(state) -> str:
 
 def _convert(state, table, default):
     """Shared body: parse the state, scale it by its unit."""
-    raw = getattr(state, "state", None)
-    if isinstance(raw, str):
-        raw = raw.strip()
-    if raw is None or (isinstance(raw, str) and raw.lower() in _NOT_A_VALUE):
-        return default
-    try:
-        value = float(raw)
-    except (ValueError, TypeError):
+    value = state_number(getattr(state, "state", None))
+    if value is None:
         return default
     # An unrecognised unit is NOT an error — it is very often a correctly-typed
     # sensor with a unit SEM has no opinion about. Fall through at 1.0, which is
@@ -160,14 +173,8 @@ def temperature_state_to_celsius(
     unit is assumed to already be ``°C`` (the historical behaviour, and what every
     metric install relies on).
     """
-    raw = getattr(state, "state", None)
-    if isinstance(raw, str):
-        raw = raw.strip()
-    if raw is None or (isinstance(raw, str) and raw.lower() in _NOT_A_VALUE):
-        return default
-    try:
-        value = float(raw)
-    except (ValueError, TypeError):
+    value = state_number(getattr(state, "state", None))
+    if value is None:
         return default
     unit = normalize_unit(state)
     if unit in _FAHRENHEIT_UNITS:

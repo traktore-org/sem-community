@@ -17,6 +17,7 @@ from collections import deque
 from typing import Any, Deque, Iterable, Optional, Tuple
 
 from ..consts.core import RATED_POWER_HOLD_S, RATED_POWER_SAMPLE_GAP_S
+from ..coordinator.units import state_number
 
 
 class HeldPower:
@@ -104,11 +105,11 @@ def held_power_from_states(states: Iterable[Any], scale: float, end: float,
             t = st.last_changed.timestamp()
         except (AttributeError, TypeError, ValueError):
             continue
-        try:
-            w: Optional[float] = float(st.state) * scale
-        except (ValueError, TypeError):
-            w = None
-        if w is not None and (w != w or w > cap_w):
-            w = None
+        # (#1202) a number, or None: text, "nan" and "inf" are no reading
+        w = state_number(getattr(st, "state", None))
+        if w is not None:
+            w *= scale
+            if w > cap_w:
+                w = None
         points.append((t, w))
     return held_power_w(points, end)
