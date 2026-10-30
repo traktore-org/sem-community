@@ -324,3 +324,27 @@ def test_set_override_refuses_more_than_a_day():
                         NOW + timedelta(minutes=po.MAX_OVERRIDE_MINUTES + 1), NOW)
     po.set_override({}, "charger1", "skip",
                     NOW + timedelta(minutes=po.MAX_OVERRIDE_MINUTES), NOW)
+
+
+class TestAcrossAClockChange:
+    """A day with 25 real hours (DST fall-back) must not change the cap."""
+
+    def test_a_full_day_set_on_fall_back_day_holds(self):
+        from datetime import datetime, timedelta, timezone
+        from zoneinfo import ZoneInfo
+
+        from custom_components.solar_energy_management.coordinator import (
+            plan_override as po,
+        )
+        zrh = ZoneInfo("Europe/Zurich")
+        now = datetime(2026, 10, 24, 12, 0, tzinfo=zrh)
+        # the coordinator adds the minutes to the UTC clock
+        out = po.set_override({}, "c1", "skip",
+                              now.astimezone(timezone.utc) + timedelta(hours=24), now)
+        # wall-clock +24 h is 25 real hours on this day: refused
+        with pytest.raises(ValueError):
+            po.set_override({}, "c1", "skip", now + timedelta(hours=24), now)
+        raw = po.serialize(out)
+        assert "c1" in po.deserialize(raw)
+        assert po.active_override(out, "c1", now.astimezone(timezone.utc) + timedelta(hours=23)) is not None
+        assert po.active_override(out, "c1", now.astimezone(timezone.utc) + timedelta(hours=25)) is None

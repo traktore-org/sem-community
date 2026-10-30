@@ -20,7 +20,7 @@ but no decider reads them yet; they stay inert until a part that needs them
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Mapping, Optional
 
 from . import reason_codes as RC
@@ -57,6 +57,10 @@ def set_override(
     reads, same shape as ``BoostRefused``."""
     if action not in ACTIONS:
         raise ValueError(f"not an action: {action!r} (one of {ACTIONS})")
+    # Real time, not wall clock: across a DST change the same-zone
+    # subtraction is an hour off.
+    expires_at = expires_at.astimezone(timezone.utc)
+    now = now.astimezone(timezone.utc)
     if expires_at <= now:
         raise ValueError("expiry must be in the future")
     if expires_at - now > timedelta(minutes=MAX_OVERRIDE_MINUTES):
@@ -135,7 +139,8 @@ def deserialize(raw: Any) -> Dict[str, PlanOverride]:
             # in the stash would raise on every cycle. Drop it here.
             if expires_at.tzinfo is None or (set_at is not None and set_at.tzinfo is None):
                 continue
-            if set_at is not None and expires_at - set_at > timedelta(
+            if set_at is not None and (expires_at.astimezone(timezone.utc)
+                                       - set_at.astimezone(timezone.utc)) > timedelta(
                     minutes=MAX_OVERRIDE_MINUTES):
                 continue
             value = entry.get("value")

@@ -10484,7 +10484,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         device. Raises ``ValueError`` on a bad action (the schema already
         rejects one, this is belt-and-suspenders) or ``minutes`` outside 1 to 1440."""
         from . import plan_override as _po
-        now = dt_util.now()
+        now = dt_util.utcnow()
         self._plan_overrides = _po.set_override(
             self._plan_overrides, device_id, action,
             now + timedelta(minutes=minutes), now, value=value)
