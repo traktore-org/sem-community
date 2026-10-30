@@ -197,6 +197,8 @@ def _energy_plan_attrs(
             "start": s.get("start"), "end": s.get("end"),
             "price": s.get("price"), "cheap": s.get("cheap"),
             "home_grid_w": s.get("home_grid_w"),
+            # (#1085) only when the slot has a reading: no key, no bytes
+            **({"co2": s["co2"]} if s.get("co2") is not None else {}),
         } for s in (plan.get("slots") or [])],
         # (#1063) Where the plan drew the battery for the house, as
         # inclusive index runs over ``slots``. A flag per slot cost 14

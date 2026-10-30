@@ -49,6 +49,7 @@ from homeassistant.helpers import config_validation as cv, intent
 
 from .const import DOMAIN
 from .coordinator import SEMCoordinator
+from .coordinator.plan_override import MAX_OVERRIDE_MINUTES
 from .coordinator.decision_log import KIND_BATTERY, KIND_CHARGER, DecisionLog
 from .plain_reasons import DATA_KEY as PLAIN_REASONS_DATA_KEY, plain_sentence
 
@@ -81,22 +82,23 @@ def _coordinator_for(hass: HomeAssistant) -> Optional[SEMCoordinator]:
     return None
 
 
-def _first_charger_id(coordinator: SEMCoordinator, name: Optional[str]) -> Optional[str]:
+def _first_charger_id(coordinator: SEMCoordinator, name: Optional[str],
+                      write: bool = False) -> Optional[str]:
     """``name`` matched against a configured charger's own name
-    (case-insensitive substring); omitted or ambiguous → the first
-    configured charger, a stable default, never a guess at WHICH one
-    the question meant (#925)."""
+    (case-insensitive substring). A name that fits none or several
+    chargers → ``None``. No name → the first charger for a question; a
+    change (``write``) needs a name once there is more than one charger,
+    so a command never lands on a guessed car (#925)."""
     chargers = coordinator.config.get("ev_chargers") or []
     if not chargers:
+        return None
+    if write and not name and len(chargers) > 1:
         return None
     if name:
         needle = name.strip().lower()
         hits = [c for c in chargers
                if needle in str(c.get("name") or c.get("id") or "").lower()]
-        if len(hits) == 1:
-            return hits[0].get("id")
-        if not hits:
-            return None
+        return hits[0].get("id") if len(hits) == 1 else None
     return chargers[0].get("id")
 
 
@@ -125,9 +127,18 @@ def _minutes_until_departure(coordinator: SEMCoordinator, charger_id: str) -> in
         departure = departure_for(charger_cfg, now, coordinator.config,
                                   calendar_next=calendar_next)
         minutes = int((departure - now).total_seconds() / 60)
-        return minutes if minutes > 0 else _DEFAULT_OVERRIDE_MINUTES
+        if minutes <= 0:
+            return _DEFAULT_OVERRIDE_MINUTES
+        return min(minutes, MAX_OVERRIDE_MINUTES)
     except Exception:  # noqa: BLE001 — a bad read is the default, not a crash
         return _DEFAULT_OVERRIDE_MINUTES
+
+
+def _duration_words(minutes: int) -> str:
+    if minutes < 60:
+        return f"{minutes} minute{'s' if minutes != 1 else ''}"
+    hours = round(minutes / 60)
+    return f"{hours} hour{'s' if hours != 1 else ''}"
 
 
 def _why_sentence(coordinator: SEMCoordinator, kind: str, device_id: str) -> str:
@@ -183,7 +194,9 @@ class WhyChargerIntent(intent.IntentHandler):
         charger_id = _first_charger_id(coordinator, name)
         if charger_id is None:
             response.async_set_speech(
-                "I don't know which charger you mean." if name else _NO_ANSWER)
+                "I don't know which charger you mean — say its name."
+                if name or len(coordinator.config.get("ev_chargers") or []) > 1
+                else _NO_ANSWER)
             return response
         response.async_set_speech(_why_sentence(coordinator, KIND_CHARGER, charger_id))
         return response
@@ -265,10 +278,12 @@ class SetChargerTargetSocIntent(intent.IntentHandler):
         slots = self.async_validate_slots(intent_obj.slots)
         name = slots.get("name", {}).get("value")
         percent = slots["percent"]["value"]
-        charger_id = _first_charger_id(coordinator, name)
+        charger_id = _first_charger_id(coordinator, name, write=True)
         if charger_id is None:
             response.async_set_speech(
-                "I don't know which charger you mean." if name else _NO_ANSWER)
+                "I don't know which charger you mean — say its name."
+                if name or len(coordinator.config.get("ev_chargers") or []) > 1
+                else _NO_ANSWER)
             return response
         entry = _entry_for(hass, coordinator)
         if entry is None:
@@ -302,16 +317,18 @@ class SkipChargerTonightIntent(intent.IntentHandler):
             return response
         slots = self.async_validate_slots(intent_obj.slots)
         name = slots.get("name", {}).get("value")
-        charger_id = _first_charger_id(coordinator, name)
+        charger_id = _first_charger_id(coordinator, name, write=True)
         if charger_id is None:
             response.async_set_speech(
-                "I don't know which charger you mean." if name else _NO_ANSWER)
+                "I don't know which charger you mean — say its name."
+                if name or len(coordinator.config.get("ev_chargers") or []) > 1
+                else _NO_ANSWER)
             return response
         minutes = _minutes_until_departure(coordinator, charger_id)
         coordinator.set_plan_override(charger_id, "skip", minutes)
         response.response_type = intent.IntentResponseType.ACTION_DONE
         response.async_set_speech(
-            f"Stopped charging for the next {minutes // 60} hours.")
+            f"Stopped charging for the next {_duration_words(minutes)}.")
         return response
 
 
@@ -340,10 +357,12 @@ class ForceChargeNowIntent(intent.IntentHandler):
         slots = self.async_validate_slots(intent_obj.slots)
         name = slots.get("name", {}).get("value")
         minutes = slots.get("minutes", {}).get("value") or 60
-        charger_id = _first_charger_id(coordinator, name)
+        charger_id = _first_charger_id(coordinator, name, write=True)
         if charger_id is None:
             response.async_set_speech(
-                "I don't know which charger you mean." if name else _NO_ANSWER)
+                "I don't know which charger you mean — say its name."
+                if name or len(coordinator.config.get("ev_chargers") or []) > 1
+                else _NO_ANSWER)
             return response
         coordinator.set_plan_override(charger_id, "force", minutes)
         response.response_type = intent.IntentResponseType.ACTION_DONE
@@ -370,10 +389,12 @@ class ClearPlanOverrideIntent(intent.IntentHandler):
             return response
         slots = self.async_validate_slots(intent_obj.slots)
         name = slots.get("name", {}).get("value")
-        charger_id = _first_charger_id(coordinator, name)
+        charger_id = _first_charger_id(coordinator, name, write=True)
         if charger_id is None:
             response.async_set_speech(
-                "I don't know which charger you mean." if name else _NO_ANSWER)
+                "I don't know which charger you mean — say its name."
+                if name or len(coordinator.config.get("ev_chargers") or []) > 1
+                else _NO_ANSWER)
             return response
         coordinator.clear_plan_override(charger_id)
         response.response_type = intent.IntentResponseType.ACTION_DONE

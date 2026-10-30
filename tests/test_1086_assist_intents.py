@@ -259,3 +259,62 @@ async def test_clear_override_refused_while_write_intents_are_off(hass):
     response = await intent.async_handle(hass, "test", INTENT_CLEAR_OVERRIDE, {})
     assert "read-only" in response.speech["plain"]["speech"]
     coordinator.clear_plan_override.assert_not_called()
+
+
+# ── review of the 2.3 branch: no guessed charger, bounded skip ──────────
+
+async def test_a_name_that_fits_two_chargers_declines(hass):
+    coordinator = _fake_coordinator(
+        hass, ev_chargers=[{"id": "c1", "name": "Carport left"},
+                           {"id": "c2", "name": "Carport right"}],
+        assist_write_intents_enabled=True)
+    _add_entry(hass, coordinator)
+    for kind in (INTENT_SKIP_TONIGHT, INTENT_FORCE_CHARGE_NOW, INTENT_CLEAR_OVERRIDE):
+        response = await intent.async_handle(
+            hass, "test", kind, {"name": {"value": "Carport"}})
+        assert "don't know which charger" in response.speech["plain"]["speech"]
+    coordinator.set_plan_override.assert_not_called()
+    coordinator.clear_plan_override.assert_not_called()
+    response = await intent.async_handle(
+        hass, "test", INTENT_WHY_CHARGER, {"name": {"value": "Carport"}})
+    assert "don't know which charger" in response.speech["plain"]["speech"]
+
+
+async def test_a_change_without_a_name_needs_one_with_two_chargers(hass):
+    coordinator = _fake_coordinator(
+        hass, ev_chargers=[{"id": "c1", "name": "Left"}, {"id": "c2", "name": "Right"}],
+        assist_write_intents_enabled=True)
+    _add_entry(hass, coordinator)
+    response = await intent.async_handle(hass, "test", INTENT_SKIP_TONIGHT, {})
+    assert "say its name" in response.speech["plain"]["speech"]
+    coordinator.set_plan_override.assert_not_called()
+
+
+async def test_a_question_without_a_name_still_uses_the_first_charger(hass):
+    coordinator = _fake_coordinator(
+        hass, ev_chargers=[{"id": "c1", "name": "Left"}, {"id": "c2", "name": "Right"}])
+    _add_entry(hass, coordinator)
+    response = await intent.async_handle(hass, "test", INTENT_WHY_CHARGER, {})
+    assert "don't know which charger" not in response.speech["plain"]["speech"]
+
+
+async def test_a_far_calendar_departure_is_capped_at_a_day(hass):
+    from homeassistant.util import dt as dt_util
+    coordinator = _fake_coordinator(
+        hass, ev_chargers=[{"id": "c1", "name": "Carport"}],
+        assist_write_intents_enabled=True)
+    coordinator._calendar_departure_for = MagicMock(
+        return_value=dt_util.now() + timedelta(days=40))
+    _add_entry(hass, coordinator)
+    await intent.async_handle(
+        hass, "test", INTENT_SKIP_TONIGHT, {"name": {"value": "Carport"}})
+    _, _, minutes = coordinator.set_plan_override.call_args[0]
+    assert 0 < minutes <= 24 * 60
+
+
+async def test_a_short_skip_says_minutes_not_zero_hours(hass):
+    from custom_components.solar_energy_management import assist_intents as ai
+    assert ai._duration_words(45) == "45 minutes"
+    assert ai._duration_words(1) == "1 minute"
+    assert ai._duration_words(60) == "1 hour"
+    assert ai._duration_words(8 * 60) == "8 hours"

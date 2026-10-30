@@ -183,11 +183,37 @@ def test_charger_skip_rewrites_to_disable():
     assert out.reason_params == {"time": f"{LATER:%H:%M}"}
 
 
-def test_charger_force_rewrites_to_charge_max():
+def test_charger_force_is_a_mode_input_not_a_rewrite():
+    # decide() runs with always_max, so its safety layers still apply
     overrides = po.set_override({}, "charger1", "force", LATER, NOW)
-    out = po.apply_to_charger_decision(overrides, "charger1", _decision(), NOW)
+    assert po.charger_mode_for(overrides, "charger1", "solar_only", NOW) == "always_max"
+    assert po.charger_mode_for(overrides, "charger2", "solar_only", NOW) == "solar_only"
+    assert po.charger_mode_for({}, "charger1", "solar_only", NOW) == "solar_only"
+    assert po.charger_mode_for(
+        overrides, "charger1", "solar_only", LATER + timedelta(seconds=1)) == "solar_only"
+
+
+def test_charger_force_never_wakes_a_hands_off_charger():
+    overrides = po.set_override({}, "charger1", "force", LATER, NOW)
+    assert po.charger_mode_for(overrides, "charger1", "off", NOW) == "off"
+
+
+def test_charger_force_only_labels_an_unclamped_charge_max():
+    overrides = po.set_override({}, "charger1", "force", LATER, NOW)
+    out = po.apply_to_charger_decision(
+        overrides, "charger1", _decision(intent=ChargerIntent.CHARGE_MAX), NOW)
     assert out.intent is ChargerIntent.CHARGE_MAX
     assert out.reason_code == RC.CHARGER_PLAN_OVERRIDE_RUN
+    clamped = _decision(intent=ChargerIntent.CHARGE_AT_AMPS, capped_by_limit=True)
+    assert po.apply_to_charger_decision(overrides, "charger1", clamped, NOW) is clamped
+
+
+@pytest.mark.parametrize("intent", [
+    ChargerIntent.RELEASE, ChargerIntent.IDLE, ChargerIntent.DISABLE])
+def test_charger_skip_leaves_a_non_charging_decision_alone(intent):
+    overrides = po.set_override({}, "charger1", "skip", LATER, NOW)
+    decision = _decision(intent=intent, commanded_amps=0)
+    assert po.apply_to_charger_decision(overrides, "charger1", decision, NOW) is decision
 
 
 def test_charger_no_override_passes_decision_through_unchanged():
@@ -229,3 +255,72 @@ def test_status_payload_shape():
     overrides = po.set_override({}, "battery1", "skip", LATER, NOW)
     payload = po.status_payload(overrides, "battery1", NOW)
     assert payload == {"action": "skip", "until": f"{LATER:%H:%M}"}
+
+
+# ── safety: the decide() layers still win (review of the 2.3 branch) ───
+
+def _view(**kw):
+    from custom_components.solar_energy_management.coordinator.charger_types import (
+        ChargerEnergy, ChargerPower, ChargerView, FleetContext)
+    fleet = kw.pop("fleet", FleetContext())
+    power = kw.pop("power", ChargerPower(charger_id="charger1", power_w=4000.0, connected=True, charging=True))
+    return ChargerView(power=power, energy=ChargerEnergy(charger_id="charger1"), fleet=fleet,
+                       config={}, **kw)
+
+
+def _decide_with_override(action, view_mode, **view_kw):
+    from dataclasses import replace
+    from custom_components.solar_energy_management.coordinator.decide import decide
+    overrides = po.set_override({}, "charger1", action, LATER, NOW)
+    view = _view(mode=view_mode, **view_kw)
+    view = replace(view, mode=po.charger_mode_for(overrides, "charger1", view.mode, NOW))
+    return po.apply_to_charger_decision(overrides, "charger1", decide(view), NOW)
+
+
+def test_force_on_a_hands_off_charger_still_sends_nothing():
+    out = _decide_with_override("force", "off")
+    assert out.intent is ChargerIntent.RELEASE
+
+
+def test_skip_on_a_hands_off_charger_sends_nothing():
+    out = _decide_with_override("skip", "off")
+    assert out.intent is ChargerIntent.RELEASE
+
+
+def test_force_does_not_charge_past_the_max_soc_stop():
+    out = _decide_with_override("force", "solar_only", soc_ceiling_reached=True)
+    assert out.intent is not ChargerIntent.CHARGE_MAX
+    assert out.intent is not ChargerIntent.CHARGE_AT_AMPS
+
+
+def test_force_does_not_beat_the_peak_emergency():
+    from custom_components.solar_energy_management.coordinator.charger_types import FleetContext
+    out = _decide_with_override(
+        "force", "solar_only", fleet=FleetContext(peak_state="emergency"))
+    assert out.intent not in (ChargerIntent.CHARGE_MAX, ChargerIntent.CHARGE_AT_AMPS)
+
+
+# ── stored overrides ─────────────────────────────────────────────────────
+
+def test_deserialize_drops_a_naive_timestamp():
+    raw = {"charger1": {"action": "skip", "expires_at": "2026-10-30T06:00:00",
+                        "value": None, "set_at": None}}
+    assert po.deserialize(raw) == {}
+    raw = {"charger1": {"action": "skip", "expires_at": LATER.isoformat(),
+                        "value": None, "set_at": "2026-10-29T18:00:00"}}
+    assert po.deserialize(raw) == {}
+
+
+def test_deserialize_drops_an_entry_longer_than_a_day():
+    far = NOW + timedelta(days=30)
+    raw = {"charger1": {"action": "skip", "expires_at": far.isoformat(),
+                        "value": None, "set_at": NOW.isoformat()}}
+    assert po.deserialize(raw) == {}
+
+
+def test_set_override_refuses_more_than_a_day():
+    with pytest.raises(ValueError):
+        po.set_override({}, "charger1", "skip",
+                        NOW + timedelta(minutes=po.MAX_OVERRIDE_MINUTES + 1), NOW)
+    po.set_override({}, "charger1", "skip",
+                    NOW + timedelta(minutes=po.MAX_OVERRIDE_MINUTES), NOW)

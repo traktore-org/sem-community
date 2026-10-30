@@ -133,3 +133,23 @@ class _frozen:
     def __exit__(self, *exc):
         import custom_components.solar_energy_management.coordinator.coordinator as mod
         mod.dt_util.now = self._orig
+
+
+class TestThePlanSensorCarriesCo2:
+    """The card tooltip reads ``slot.co2``; the sensor must not drop it."""
+
+    def test_a_slot_with_a_reading_keeps_it(self):
+        from custom_components.solar_energy_management.sensor import (
+            _energy_plan_attrs,
+        )
+        attrs = _energy_plan_attrs({"demands": [], "slots": [
+            {"start": "a", "end": "b", "price": 0.2, "cheap": False,
+             "home_grid_w": 0.0, "co2": 0.31},
+            {"start": "b", "end": "c", "price": 0.2, "cheap": False,
+             "home_grid_w": 0.0, "co2": None},
+            {"start": "c", "end": "d", "price": 0.2, "cheap": False,
+             "home_grid_w": 0.0},
+        ]})
+        assert attrs["slots"][0]["co2"] == 0.31
+        assert "co2" not in attrs["slots"][1]
+        assert "co2" not in attrs["slots"][2]

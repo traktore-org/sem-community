@@ -4024,11 +4024,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # and the persisted store does not grow forever.
         from . import plan_override as _po
         _now_override = dt_util.now()
-        _purged_overrides = _po.purge_expired(self._plan_overrides, _now_override)
-        if _purged_overrides != self._plan_overrides:
-            self._plan_overrides = _purged_overrides
-            if self._storage is not None:
-                self._storage.set_plan_overrides(_po.serialize(self._plan_overrides))
+        try:
+            _purged_overrides = _po.purge_expired(self._plan_overrides, _now_override)
+            if _purged_overrides != self._plan_overrides:
+                self._plan_overrides = _purged_overrides
+                if self._storage is not None:
+                    self._storage.set_plan_overrides(_po.serialize(self._plan_overrides))
+        except Exception:  # noqa: BLE001 — a bad override must not stop the cycle
+            _LOGGER.warning("Plan overrides unreadable — cleared", exc_info=True)
+            self._plan_overrides = {}
 
         # Run deployment health check once after startup
         if self._initial_update_done and not getattr(self, '_health_checked', False):
@@ -4886,6 +4890,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             if charging_context.night_target_kwh is not None
                             else per_remaining_floor
                         )
+                        try:
+                            _view_mode = _po.charger_mode_for(
+                                self._plan_overrides, cid, per_mode, _now_override)
+                        except Exception:  # noqa: BLE001 — a bad override is no override
+                            _view_mode = per_mode
                         view = build_charger_view(
                             self._cycle_fleet_state,
                             charger_id=cid,
@@ -4898,7 +4907,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             redirect_allowed=not bool(getattr(
                                 getattr(pcc, "state", None), "redirect_vetoed", False)),
                             charger_cfg=charger_cfg,
-                            mode=per_mode,
+                            mode=_view_mode,
                             daily_ev_kwh=self._charger_daily_kwh(cid, energy),
                             target_kwh=decide_target_kwh,
                             deadline_amps=int(charging_context.night_deadline_amps or 0),
@@ -8231,6 +8240,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # Observer sends nothing, so nothing was asked of the pack.
         commands = not bool(getattr(self, "_observer_mode", False))
         now_s = _manual_stall_clock()
+        from . import plan_override as _po
+        _ov_now = dt_util.now()
+        _ovs = getattr(self, "_plan_overrides", None)
+        _ovs = _ovs if isinstance(_ovs, dict) else {}
         new_stalls: dict = {}
         stalled_ids: set = set()
         done: list = []
@@ -8240,7 +8253,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             soc = getattr(runtime, "last_known_soc", None)
             is_read = bool(soc_read.get(battery_id, False))
             stalled = False
-            if mode == "force_charge":
+            # (#1085) A one-off "force" rides the same road as Force charge,
+            # so it must end the same way: at the target, or on a stall.
+            _ov = _po.active_override(_ovs, battery_id, _ov_now)
+            by_override = (_ov is not None and _ov.action == "force"
+                           and mode != "off")
+            if mode == "force_charge" or by_override:
                 adapter = adapters.get(battery_id)
                 # What actuate_battery last SENT this battery (0 when it sent
                 # a stop, held one, or sent anything else).
@@ -8265,6 +8283,26 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             done.append((mode, manual_mode_done(
                 mode, soc, soc_read=is_read, reserve=reserve_soc_of(cfg),
                 charge_stalled=stalled)))
+            if by_override:
+                okey = ("override", battery_id)
+                if manual_mode_done("force_charge", soc, soc_read=is_read,
+                                    reserve=reserve_soc_of(cfg),
+                                    charge_stalled=stalled):
+                    n_ov = streaks.get(okey, (None, 0))[1] + 1
+                    if n_ov >= BATTERY_SOC_STEP_CONFIRM_READS:
+                        streaks.pop(okey, None)
+                        self._plan_overrides = _po.clear_override(
+                            self._plan_overrides, battery_id)
+                        if self._storage is not None:
+                            self._storage.set_plan_overrides(
+                                _po.serialize(self._plan_overrides))
+                        _LOGGER.info(
+                            "Battery %s: forced charge finished at %s%% — "
+                            "plan override ended (#1085)", battery_id, soc)
+                    else:
+                        streaks[okey] = ("force_charge", n_ov)
+                else:
+                    streaks.pop(okey, None)
         self._manual_charge_stalls = new_stalls
         # Each control and the batteries it drives.
         groups = ({idx: [idx] for idx in range(len(done))} if per_battery
@@ -10444,7 +10482,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         """Set ``device_id``'s one-off override — tonight only, survives
         a restart, auto-expires. Replaces any override already on this
         device. Raises ``ValueError`` on a bad action (the schema already
-        rejects one, this is belt-and-suspenders) or ``minutes &lt;= 0``."""
+        rejects one, this is belt-and-suspenders) or ``minutes`` outside 1 to 1440."""
         from . import plan_override as _po
         now = dt_util.now()
         self._plan_overrides = _po.set_override(

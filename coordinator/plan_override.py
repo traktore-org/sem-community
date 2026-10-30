@@ -20,7 +20,7 @@ but no decider reads them yet; they stay inert until a part that needs them
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, Mapping, Optional
 
 from . import reason_codes as RC
@@ -29,6 +29,11 @@ from .charger_types import ChargerIntent, rewrite
 #: The four action words a stored override may carry. Only "skip" and
 #: "force" are consumed by a decider today — see the module docstring.
 ACTIONS = ("skip", "cap", "move", "force")
+
+#: One-off means one day at most — the service schema, the voice intents
+#: and the calendar-derived skip all stop here, and a stored entry past it
+#: is dropped on load.
+MAX_OVERRIDE_MINUTES = 24 * 60
 
 
 @dataclass(frozen=True)
@@ -54,6 +59,8 @@ def set_override(
         raise ValueError(f"not an action: {action!r} (one of {ACTIONS})")
     if expires_at <= now:
         raise ValueError("expiry must be in the future")
+    if expires_at - now > timedelta(minutes=MAX_OVERRIDE_MINUTES):
+        raise ValueError(f"an override holds at most {MAX_OVERRIDE_MINUTES} minutes")
     out = dict(overrides)
     out[device_id] = PlanOverride(
         device_id=device_id, action=action, expires_at=expires_at,
@@ -124,6 +131,13 @@ def deserialize(raw: Any) -> Dict[str, PlanOverride]:
             expires_at = datetime.fromisoformat(str(entry["expires_at"]))
             set_at_raw = entry.get("set_at")
             set_at = datetime.fromisoformat(str(set_at_raw)) if set_at_raw else None
+            # A naive stamp cannot be compared with the tz-aware clock; one
+            # in the stash would raise on every cycle. Drop it here.
+            if expires_at.tzinfo is None or (set_at is not None and set_at.tzinfo is None):
+                continue
+            if set_at is not None and expires_at - set_at > timedelta(
+                    minutes=MAX_OVERRIDE_MINUTES):
+                continue
             value = entry.get("value")
             out[str(device_id)] = PlanOverride(
                 device_id=str(device_id), action=action, expires_at=expires_at,
@@ -156,21 +170,38 @@ def apply_to_battery_config(
     return {**pbc, "battery_mode": new_mode}
 
 
+def charger_mode_for(
+    overrides: Mapping[str, PlanOverride], charger_id: str,
+    mode: str, now: datetime,
+) -> str:
+    """The charge mode ``decide()`` should run with. A ``force`` override
+    is a MODE INPUT (``always_max``), so every safety layer inside
+    ``decide()`` still wins: hands-off, max-SOC stop, disconnected car,
+    peak clamp and peak EMERGENCY. A charger in ``off`` stays hands-off —
+    a standing opt-out outranks a one-off, the same as for batteries."""
+    rec = active_override(overrides, charger_id, now)
+    if rec is None or rec.action != "force" or str(mode).lower() == "off":
+        return mode
+    return "always_max"
+
+
 def apply_to_charger_decision(
     overrides: Mapping[str, PlanOverride], charger_id: str,
     decision: Any, now: datetime,
 ) -> Any:
-    """Rewrite this charger's decision right after ``decide(view)``, the
-    same call shape as #580's ``vpp_pause_override``. ``skip`` mirrors
-    the VPP export-pause DISABLE exactly (the adapter's existing
-    dead-man/self-resume handling already covers it); ``force`` mirrors
-    the VPP import-boost CHARGE_MAX. ``cap``/``move``: not yet consumed —
-    passed through unchanged."""
+    """Label and stop, after ``decide(view)``. ``skip`` turns a decision
+    that would CHARGE into the VPP export-pause DISABLE (#580); idle and
+    hands-off decisions pass through, so a skip never commands a charger
+    SEM is not driving. ``force`` already ran inside ``decide()`` (see
+    ``charger_mode_for``); here an unclamped CHARGE_MAX only gets the
+    override's reason line. ``cap``/``move``: not yet consumed."""
     rec = active_override(overrides, charger_id, now)
     if rec is None:
         return decision
     until = f"{rec.expires_at:%H:%M}"
-    if rec.action == "skip":
+    charging = decision.intent in (ChargerIntent.CHARGE_AT_AMPS,
+                                   ChargerIntent.CHARGE_MAX)
+    if rec.action == "skip" and charging:
         return rewrite(
             decision, intent=ChargerIntent.DISABLE, commanded_amps=0,
             budget_w=0.0, bridgeable=False, safety_stop=True,
@@ -178,14 +209,15 @@ def apply_to_charger_decision(
             reason_code=RC.CHARGER_PLAN_OVERRIDE_STOP,
             reason_params={"time": until},
         )
-    if rec.action == "force":
+    if (rec.action == "force" and decision.intent is ChargerIntent.CHARGE_MAX
+            and not decision.capped_by_limit):
         return rewrite(
-            decision, intent=ChargerIntent.CHARGE_MAX,
+            decision,
             reason=f"plan override — forced to charge until {until} — {decision.reason}",
             reason_code=RC.CHARGER_PLAN_OVERRIDE_RUN,
             reason_params={"time": until},
         )
-    return decision  # cap / move: not yet consumed
+    return decision
 
 
 def status_payload(
