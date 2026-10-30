@@ -73,11 +73,19 @@ class TestTheShippedRoster:
         assert not [r for r in {**lex.ROLE_RULES, **lex.READ_ROLE_RULES}
                     if "feed_in" in r and "price" in r]
 
-    def test_the_tariff_code_still_reads_brand_names(self):
-        # Part A changes no behaviour: the live price path keeps its lookups
-        import inspect
+    def test_the_tariff_code_does_not_use_the_role(self):
+        # Part A changes no behaviour: the live price path imports neither
+        # the lexicon nor the roster, so it keeps finding prices by brand.
+        import ast
+        from pathlib import Path
 
         from custom_components.solar_energy_management.tariff import tariff_provider
-        src = inspect.getsource(tariff_provider)
-        assert '"electricity_price" in entity_id' in src
-        assert "role_lexicon" not in src and "integration_roster" not in src
+        tree = ast.parse(Path(tariff_provider.__file__).read_text(encoding="utf-8"))
+        names = set()
+        for n in ast.walk(tree):
+            if isinstance(n, ast.ImportFrom):
+                names.add(n.module or "")
+                names.update(a.name for a in n.names)
+            elif isinstance(n, ast.Import):
+                names.update(a.name for a in n.names)
+        assert not [x for x in names if "role_lexicon" in x or "integration_roster" in x]
