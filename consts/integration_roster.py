@@ -30,7 +30,7 @@ from typing import Any, Dict, Final
 SCHEMA: Final = 1
 
 
-ROSTER_META: Final[Dict[str, Any]] = {'generated_at': '2026-10-28T11:49:57Z', 'sources': {'core_analytics': 'https://analytics.home-assistant.io/data.json', 'core_index': 'https://raw.githubusercontent.com/home-assistant/core/dev/homeassistant/generated/integrations.json', 'custom_installs': 'https://analytics.home-assistant.io/custom_integrations.json', 'hacs': 'https://data-v2.hacs.xyz/integration/data.json', 'website': 'https://www.home-assistant.io/integrations.json'}, 'install_floor': 50, 'candidates': 1365, 'kept': 202, 'with_roles': 67, 'roles_mined': 191}
+ROSTER_META: Final[Dict[str, Any]] = {'generated_at': '2026-10-30T22:58:34Z', 'sources': {'core_analytics': 'https://analytics.home-assistant.io/data.json', 'core_index': 'https://raw.githubusercontent.com/home-assistant/core/dev/homeassistant/generated/integrations.json', 'custom_installs': 'https://analytics.home-assistant.io/custom_integrations.json', 'hacs': 'https://data-v2.hacs.xyz/integration/data.json', 'website': 'https://www.home-assistant.io/integrations.json'}, 'install_floor': 50, 'candidates': 1365, 'kept': 203, 'with_roles': 69, 'roles_mined': 194}
 
 #: domain -> what the ecosystem says this integration is.
 ROSTER: Final[Dict[str, Dict[str, Any]]] = {
@@ -74,7 +74,7 @@ ROSTER: Final[Dict[str, Dict[str, Any]]] = {
     'enpal_webparser': {'name': 'Enpal Solar', 'repo': 'derolli1976/enpal', 'origin': 'hacs', 'installs': 460, 'kind': 'energy', 'kind_from': 'keyword'},
     'enphase_envoy': {'name': 'Enphase Envoy', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 10437, 'kind': 'energy', 'kind_from': 'vocabulary_name_only'},
     'enphase_ev': {'name': 'Enphase Energy', 'repo': 'barneyonline/ha-enphase-energy', 'origin': 'hacs', 'installs': 347, 'kind': 'energy', 'kind_from': 'vocabulary'},
-    'entsoe': {'name': 'ENTSO-e Transparency Platform', 'repo': 'JaccoR/hass-entso-e', 'origin': 'hacs', 'installs': 1515, 'kind': 'energy', 'kind_from': 'keyword'},
+    'entsoe': {'name': 'ENTSO-e Transparency Platform', 'repo': 'JaccoR/hass-entso-e', 'origin': 'hacs', 'installs': 1515, 'kind': 'energy', 'kind_from': 'vocabulary'},
     'envertech_solar': {'name': 'Envertech Solar', 'repo': 'jimmybonesde/envertech_solar', 'origin': 'hacs', 'installs': 165, 'kind': 'energy', 'kind_from': 'keyword'},
     'epex_spot': {'name': 'EPEX Spot', 'repo': 'mampfes/ha_epex_spot', 'origin': 'hacs', 'installs': 3737, 'kind': 'energy', 'kind_from': 'keyword'},
     'ev_charger_modbus': {'name': 'ABL EMH1 EV Charger Modbus', 'repo': 'matfroh/abl_emh1_modbus', 'origin': 'hacs', 'installs': 11, 'kind': 'charger', 'kind_from': 'vocabulary'},
@@ -91,6 +91,7 @@ ROSTER: Final[Dict[str, Dict[str, Any]]] = {
     'fusion_solar': {'name': 'Fusion Solar', 'repo': 'tijsverkoyen/HomeAssistant-FusionSolar', 'origin': 'hacs', 'installs': 2831, 'kind': 'energy', 'kind_from': 'keyword'},
     'fusionsolarplus': {'name': 'FusionSolarPlus', 'repo': 'JortvanSchijndel/FusionSolarPlus', 'origin': 'hacs', 'installs': 947, 'kind': 'energy', 'kind_from': 'keyword'},
     'garo_wallbox': {'name': 'Garo Wallbox', 'repo': 'sockless-coding/garo_wallbox', 'origin': 'hacs', 'installs': 108, 'kind': 'charger', 'kind_from': 'vocabulary_name_only'},
+    'generic': {'name': 'generic', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 35054, 'kind': 'energy', 'kind_from': 'keyword'},
     'geo_home': {'name': 'Geo Home Smart Meter Integration', 'repo': 'mmillmor/geo_home', 'origin': 'hacs', 'installs': 119, 'kind': 'energy', 'kind_from': 'keyword'},
     'givenergy_local': {'name': 'GivEnergy Local', 'repo': 'dewet22/givenergy-hass', 'origin': 'hacs', 'installs': 190, 'kind': 'energy', 'kind_from': 'keyword'},
     'goecharger': {'name': 'go-eCharger', 'repo': 'cathiele/homeassistant-goecharger', 'origin': 'hacs', 'installs': 502, 'kind': 'charger', 'kind_from': 'vocabulary'},
@@ -216,7 +217,7 @@ ROSTER: Final[Dict[str, Dict[str, Any]]] = {
     'thermiq_mqtt': {'name': 'ThermIQ MQTT', 'repo': 'ThermIQ/thermiq_mqtt-ha', 'origin': 'hacs', 'installs': 56, 'kind': 'energy', 'kind_from': 'keyword'},
     'tibber': {'name': 'Tibber', 'repo': 'home-assistant/core', 'origin': 'core', 'installs': 10917, 'kind': 'energy', 'kind_from': 'vocabulary'},
     'tibber_graph': {'name': 'Tibber Graph', 'repo': 'stefanes/tibber-graph', 'origin': 'hacs', 'installs': 259, 'kind': 'other', 'kind_from': 'keyword'},
-    'tibber_prices': {'name': 'Tibber Price Information & Ratings', 'repo': 'jpawlowski/hass.tibber_prices', 'origin': 'hacs', 'installs': 1008, 'kind': 'energy', 'kind_from': 'vocabulary_name_only'},
+    'tibber_prices': {'name': 'Tibber Price Information & Ratings', 'repo': 'jpawlowski/hass.tibber_prices', 'origin': 'hacs', 'installs': 1008, 'kind': 'energy', 'kind_from': 'vocabulary'},
     'toyota': {'name': 'Toyota EU community integration', 'repo': 'pytoyoda/ha_toyota', 'origin': 'hacs', 'installs': 1344, 'kind': 'vehicle', 'kind_from': 'vocabulary'},
     'tuya_heat_pump': {'name': 'Tuya Heat Pump', 'repo': 'Korkuttum/tuya_heat_pump', 'origin': 'hacs', 'installs': 104, 'kind': 'other', 'kind_from': 'keyword'},
     'uconnect': {'name': 'Uconnect', 'repo': 'hass-uconnect/hass-uconnect', 'origin': 'hacs', 'installs': 707, 'kind': 'vehicle', 'kind_from': 'vocabulary'},
@@ -294,6 +295,9 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
     'enphase_ev': {
         'ev_charge_mode': {'platform': 'select', 'keys': ('charge_mode',), 'options': ()},
         'grid_power': {'platform': 'sensor', 'keys': ('site_grid_power',), 'options': ()},
+    },
+    'entsoe': {
+        'import_price': {'platform': 'sensor', 'keys': ('current_price',), 'options': ()},
     },
     'ev_charger_modbus': {
         'ev_current_control': {'platform': 'service', 'keys': ('ev_charger_modbus.set_charging_current',), 'options': (), 'services': {'ev_charger_modbus.set_charging_current': {'fields': ('current',), 'target': 'entity'}}},
@@ -488,7 +492,11 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'grid_export_power': {'platform': 'sensor', 'keys': ('power_flow_to_grid', 'power_production'), 'options': ()},
         'grid_import_power': {'platform': 'sensor', 'keys': ('power', 'power_flow_from_grid'), 'options': (), 'exact_only': ('power',)},
         'grid_power': {'platform': 'sensor', 'keys': ('power_flow_grid',), 'options': ()},
+        'import_price': {'platform': 'sensor', 'keys': ('electricity_price',), 'options': ()},
         'system_size_spec': {'platform': 'sensor', 'keys': ('storage_rated_power',), 'options': ()},
+    },
+    'tibber_prices': {
+        'import_price': {'platform': 'sensor', 'keys': ('current_interval_price',), 'options': ()},
     },
     'toyota': {
         'vehicle_range': {'platform': 'sensor', 'keys': ('battery_range', 'total_range'), 'options': ()},
