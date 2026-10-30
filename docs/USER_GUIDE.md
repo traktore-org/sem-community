@@ -412,6 +412,13 @@ tariff.
 Other loads get the same fields in their goals on the Load Priority card.
 More in [Tariff models](TARIFF_MODELS.md#a-tariff-per-device-812).
 
+### What a kWh of heat costs (#1081)
+
+The sensor *Heat Pump Cost of Heat* divides the price of the power the pump
+uses by its COP, so it shows what one kWh of heat costs right now. It needs
+the pump's own tariff (above); without one the sensor stays empty. Pre-heat
+timing can use it.
+
 ### How much did SG-Ready actually shift? (#769)
 
 The SG-Ready unit has its own energy row, on the same footing as the EV:
@@ -2081,6 +2088,27 @@ assistants → Expose → Debug** before relying on it — a sentence that
 doesn't match yet needs a small wording change, not a bug report.
 Only English ships here today; other languages are the same idea, in
 that language's own `custom_sentences/<lang>/` folder.
+
+### Skip or force one night (#1085)
+
+Change what one charger or battery does for a set time, without touching its
+standing mode. Use the services `solar_energy_management.plan_override` and
+`plan_override_clear`, or the Assist sentences above.
+
+| Action | What happens |
+|---|---|
+| `skip` | A charger that would charge stops. A battery is left alone (hands-off). |
+| `force` | A charger runs at full power. A battery force-charges. |
+
+- It ends on its own after the minutes you set, at most 1440 (one day), also
+  after a restart.
+- `force` does not beat safety. A car at its maximum charge, a disconnected
+  car, hands-off mode and the peak limit still stop it.
+- A battery forced to charge ends the override when it is full or stops
+  taking charge.
+- A charger or battery you set to `off` stays off.
+- With several chargers, name the one you mean. An unclear name does nothing.
+- `cap` and `move` are stored but SEM does not act on them yet.
 
 ---
 
