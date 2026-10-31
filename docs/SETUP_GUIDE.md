@@ -57,7 +57,9 @@ Two things worth knowing:
   always-positive sensors and no combined one. Fill **Grid import power** and
   **Grid export power** instead — both of them, or neither — and leave *Grid
   power* empty. SEM computes export minus import, so there is no direction
-  left to guess.
+  left to guess. If your Energy Dashboard grid entry has only kWh counters,
+  setup looks for the two power sensors itself. When it finds both, it shows
+  them and asks you nothing.
 
 Setting up the Energy Dashboard later does no harm; SEM keeps using what you
 chose. If it recognises nothing at all, every field is still a normal entity
