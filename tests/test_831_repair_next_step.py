@@ -44,6 +44,9 @@ DOCS_SIDE = {
     # (#1238) only the grid import sensor is set; the export counter moved —
     # the next step is the user's own config
     "half_grid_pair",
+    # (#1236) a second row's kWh is not inside the power SEM reads — the next
+    # step is a power sensor for it in the user's own Energy Dashboard
+    "unseen_power_row",
     # (#935) files from an older SEM install were found and SEM's own were
     # cleaned. The next step is a CHOICE about the user's own history, and
     # the docs are where the two options and their consequences live.

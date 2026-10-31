@@ -2046,6 +2046,10 @@
       "title": "SEM sieht deine Netzeinspeisung nicht",
       "description": "Nur der Netz-Bezug-Sensor **{import_entity}** ist gesetzt, daher liest SEM die Einspeisung als 0 W. Dein Einspeisezähler **{export_entity}** zeigt aber, dass Strom ins Netz ging. Öffne zur Behebung das SEM-Dashboard, Tab ⚙ **Konfiguration**, und wähle oben **Alle Einstellungen**. Setze dann den **Netz-Einspeise-Sensor** im Abschnitt **Tarif & Preise**. Oder leere den **Netz-Bezug-Sensor**, dann sucht SEM das Paar selbst."
     },
+    "unseen_power_row": {
+      "title": "SEM sieht nicht deine ganze Solar- oder Batterieleistung",
+      "description": "Das Energie-Dashboard zählt **{energy_entity}** in kWh, und sein Zähler steigt weiter. Die Leistung, die SEM liest (**{power_entity}**), enthält ihn aber nicht, daher zeigt SEM zu wenig Solar- oder Batterieleistung. SEM nimmt keinen zweiten Leistungssensor von einem Gerät, das es schon liest, weil es dieselbe Leistung doppelt zählen könnte. Füge zur Behebung einen Leistungssensor für diesen Eintrag im Energie-Dashboard hinzu."
+    },
     "charger_device_gone": {
       "title": "Ladegerät {name}: Gerät fehlt",
       "description": "Home Assistant kennt das Gerät hinter dem Ladegerät {name} nicht mehr. SEM kann es nicht steuern. Entferne das Ladegerät in SEM oder füge das Gerät wieder hinzu."

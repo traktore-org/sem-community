@@ -94,6 +94,10 @@ KEYED = {
         "keyed on the fixed source (grid/solar/battery); each is cleared the "
         "cycle the dashboard read finds its sensor or stops counting it "
         "(#1188), and a restart drops the non-persistent Repair",
+    "raise_unseen_power_row":
+        "keyed on the fixed kind (solar/battery); cleared on a reader's "
+        "first look and every cycle nothing is left alone (#1236), and a "
+        "restart drops the non-persistent Repair",
     "raise_heat_pump_contact_values_missing":
         "keyed on the fixed slot (relay1/relay2), and both slots are cleared "
         "every cycle their contact is complete or gone (#801)",

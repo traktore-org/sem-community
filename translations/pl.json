@@ -2046,6 +2046,10 @@
       "title": "SEM nie widzi Twojego oddawania do sieci",
       "description": "Ustawiony jest tylko czujnik importu z sieci **{import_entity}**, więc SEM odczytuje eksport jako 0 W. Ale Twój licznik eksportu **{export_entity}** pokazuje, że energia popłynęła do sieci. Aby to naprawić, otwórz pulpit SEM, kartę ⚙ **Konfiguracja**, i wybierz u góry **Wszystkie ustawienia**. Następnie ustaw **Czujnik eksportu do sieci** w sekcji **Taryfa i ceny**. Albo wyczyść **Czujnik importu z sieci**, a SEM sam poszuka pary."
     },
+    "unseen_power_row": {
+      "title": "SEM nie widzi całej mocy z PV lub baterii",
+      "description": "Pulpit Energia liczy **{energy_entity}** w kWh, a jego licznik stale rośnie. Ale moc, którą czyta SEM (**{power_entity}**), go nie obejmuje, więc SEM pokazuje za mało mocy z PV lub baterii. SEM nie bierze drugiego czujnika mocy z urządzenia, które już czyta, bo mógłby policzyć tę samą moc dwa razy. Aby to naprawić, dodaj czujnik mocy dla tego wpisu w pulpicie Energia."
+    },
     "charger_device_gone": {
       "title": "Ładowarka {name}: brak urządzenia",
       "description": "Home Assistant nie ma już urządzenia ładowarki {name}. SEM nie może nią sterować. Usuń ładowarkę w SEM albo dodaj urządzenie ponownie."

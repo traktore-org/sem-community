@@ -2046,6 +2046,10 @@
       "title": "O SEM não vê a sua exportação para a rede",
       "description": "Apenas o sensor de importação da rede **{import_entity}** está definido, por isso o SEM lê a exportação como 0 W. Mas o seu contador de exportação **{export_entity}** mostra que saiu energia para a rede. Para corrigir, abra o painel do SEM, separador ⚙ **Configuração**, e escolha **Todas as definições** no topo. Depois defina o **Sensor de exportação para a rede** na secção **Tarifa e preços**. Ou esvazie o **Sensor de importação da rede**, e o SEM procura o par sozinho."
     },
+    "unseen_power_row": {
+      "title": "O SEM não vê toda a sua potência solar ou da bateria",
+      "description": "O painel de Energia conta **{energy_entity}** em kWh, e o seu contador continua a subir. Mas a potência que o SEM lê (**{power_entity}**) não o inclui, por isso o SEM mostra pouca potência solar ou da bateria. O SEM não usa um segundo sensor de potência de um dispositivo que já lê, porque podia contar a mesma potência duas vezes. Para corrigir, adicione um sensor de potência para esta entrada no painel de Energia."
+    },
     "charger_device_gone": {
       "title": "Carregador {name}: dispositivo em falta",
       "description": "O Home Assistant já não tem o dispositivo do carregador {name}. O SEM não o pode controlar. Remova o carregador no SEM ou adicione o dispositivo de novo."

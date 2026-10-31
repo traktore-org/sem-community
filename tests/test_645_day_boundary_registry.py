@@ -107,6 +107,10 @@ DECLARED_AUTHORITIES = {
     ("coordinator/forecast_tracker.py", "sunrise/sunset day clamp"):
         ("calendar", "n/a — clamps a tomorrow-dated sun event back one day "
                      "within a single call"),
+    ("coordinator/sensor_reader.py", "unseen-row watch day (#1236)"):
+        ("calendar", "no, by design — the watch only counts kWh inside one "
+                     "calendar day; a restart starts a fresh watch, so a "
+                     "lost day delays the Repair, never raises it wrongly"),
     ("coordinator/sensor_reader.py", "half-pair watch day (#1238)"):
         ("calendar", "no, by design — the watch only counts export gain "
                      "inside one calendar day; a restart starts a fresh "

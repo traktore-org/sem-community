@@ -2046,6 +2046,10 @@
       "title": "SEM 看不到您的电网馈电",
       "description": "只设置了电网购电传感器 **{import_entity}**，所以 SEM 将馈电读为 0 W。但您的馈电计数器 **{export_entity}** 显示有电送入了电网。修复方法：打开 SEM 看板的 ⚙ **配置** 标签页，在顶部选择 **全部设置**。然后在 **电价与费率** 部分设置 **电网馈电传感器**。或者清空 **电网购电传感器**，SEM 会自己查找这一对传感器。"
     },
+    "unseen_power_row": {
+      "title": "SEM 没有读到你的全部光伏或电池功率",
+      "description": "能源看板以 kWh 统计 **{energy_entity}**，它的计数器仍在增长。但 SEM 读取的功率 (**{power_entity}**) 不包含它，所以 SEM 显示的光伏或电池功率偏低。SEM 不会从已读取的设备再取第二个功率传感器，因为可能把同一功率算两次。修复方法：在能源看板中为这一项添加功率传感器。"
+    },
     "charger_device_gone": {
       "title": "充电桩 {name}：设备已不存在",
       "description": "Home Assistant 中已找不到充电桩 {name} 的设备。SEM 无法控制它。请在 SEM 中移除该充电桩，或重新添加设备。"

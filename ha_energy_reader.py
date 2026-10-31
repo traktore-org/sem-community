@@ -198,6 +198,11 @@ class EnergyDashboardConfig:
     #: after the derive, by "solar" / "battery". The reader files the
     #: ``power_sensor_not_found`` Repair for them (#1188).
     unsourced_counters: Dict[str, List[str]] = field(default_factory=dict)
+    #: (#1236) The counters of the sources the derive set aside and asked for
+    #: nothing (their device is read already, or a link of the kind cannot be
+    #: placed), by "solar" / "battery". They are not called missing. The
+    #: reader only checks whether their kWh shows up in the power it reads.
+    left_alone_counters: Dict[str, List[str]] = field(default_factory=dict)
 
     def is_minimally_configured(self) -> bool:
         """Check if Energy Dashboard has minimum required configuration.
@@ -298,6 +303,17 @@ def unsourced_counters(ed_config: Any, kind: str) -> List[str]:
     that the derive found no power sensor for, in dashboard order. Each of
     them reads 0 W, also beside other units that do read."""
     found = getattr(ed_config, "unsourced_counters", None)
+    listed = found.get(kind) if isinstance(found, dict) else None
+    if not isinstance(listed, (list, tuple)):
+        return []
+    return [c for c in dict.fromkeys(listed) if isinstance(c, str) and c]
+
+
+def left_alone_counters(ed_config: Any, kind: str) -> List[str]:
+    """(#1236) The counters of the ``kind`` sources ("solar" / "battery")
+    that the derive set aside: no power sensor was asked for them, and none
+    is read for them. Their kWh may or may not be inside the power SEM reads."""
+    found = getattr(ed_config, "left_alone_counters", None)
     listed = found.get(kind) if isinstance(found, dict) else None
     if not isinstance(listed, (list, tuple)):
         return []
@@ -897,8 +913,9 @@ def _derive_battery_power_if_unrepresented(hass, config) -> None:
              for unit, counters in config.battery_unit_counters.items()]
     links += [(pair, config.battery_unit_counters.get(pair[1]) or ())
               for pair in config.battery_power_pairs]
+    aside: List[str] = []
     for (charge, discharge), found in _derive_unit_power(
-            hass, "battery", config.battery_energy_only, read, links):
+            hass, "battery", config.battery_energy_only, read, links, aside):
         if not found:
             config.unsourced_counters.setdefault("battery", []).append(
                 charge or discharge)
@@ -916,11 +933,23 @@ def _derive_battery_power_if_unrepresented(hass, config) -> None:
             "Derived battery power sensor %s from energy device of %s "
             "(no stat_rate in Energy Dashboard)", found, charge or discharge,
         )
+    _record_left_alone(config, "battery", aside)
+
+
+def _record_left_alone(config: "EnergyDashboardConfig", kind: str,
+                       counters: List[str]) -> None:
+    """(#1236) What the derive set aside THIS run replaces what an earlier
+    run set aside: the derive runs again until every source resolves."""
+    if counters:
+        config.left_alone_counters[kind] = list(dict.fromkeys(counters))
+    else:
+        config.left_alone_counters.pop(kind, None)
 
 
 def _derive_unit_power(
     hass, kind: str, sources: List[Tuple[Optional[str], ...]],
     read: List[Optional[str]], links: Any = (),
+    left_alone: Optional[List[str]] = None,
 ) -> List[Tuple[Tuple[Optional[str], ...], Optional[str]]]:
     """(#1226) Look for a power sensor for each ``kind`` source in
     ``sources`` (its kWh counters; it has no power sensor), in dashboard
@@ -940,7 +969,15 @@ def _derive_unit_power(
     then no source of this kind is asked, and none is called missing. Two
     sensors for the same watts read high, and a high surplus starts loads
     on grid power.
+
+    (#1236) The counters of every source set aside are added to
+    ``left_alone``, so the reader can check their kWh against the power it
+    reads. Nothing here adds power.
     """
+    def _set_aside(counters) -> None:
+        if left_alone is not None:
+            left_alone.extend(c for c in counters if c)
+
     def _devices(entities) -> set:
         return {d for d in (_registry_device_id(hass, e)
                             for e in entities if e) if d}
@@ -954,6 +991,8 @@ def _derive_unit_power(
                     ", ".join(p for p in powers if p),
                     ", ".join(c for c in counters if c) or "no counter",
                     kind, ", ".join(c for src in sources for c in src if c))
+                for src in sources:
+                    _set_aside(src)
                 return []
     used = _devices(read)
     asked: List[Tuple[Tuple[Optional[str], ...], Optional[str]]] = []
@@ -967,6 +1006,7 @@ def _derive_unit_power(
                 "%s counter %s is on a device SEM already reads power from; "
                 "no second power sensor is taken from it (#1226)",
                 kind, counter)
+            _set_aside(counters)
             continue
         found = _find_power_sensor_on_device(
             hass, counter, _POWER_DERIVE_RULES[kind])
@@ -1275,10 +1315,12 @@ def _derive_missing_power_sensors(
     # has a counter and no power sensor, not only when the first has none.
     powered = [c for c in config.solar_energy_list
                if c not in config.solar_energy_only]
+    aside: List[str] = []
     for (counter,), found in _derive_unit_power(
             hass, "solar", [(c,) for c in config.solar_energy_only],
             list(config.solar_power_list) + powered,
-            [((p,), (c,)) for p, c in config.solar_unit_counters.items()]):
+            [((p,), (c,)) for p, c in config.solar_unit_counters.items()],
+            aside):
         if not found:
             config.unsourced_counters.setdefault("solar", []).append(counter)
             continue
@@ -1291,6 +1333,7 @@ def _derive_missing_power_sensors(
             "Derived solar power sensor %s from energy device of %s "
             "(no stat_rate in Energy Dashboard)", found, counter,
         )
+    _record_left_alone(config, "solar", aside)
 
     # Grid: combined meter power (measured_power etc.). Sign auto-detected later.
     if not config.grid_import_power and config.grid_import_energy:

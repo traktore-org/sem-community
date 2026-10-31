@@ -32,7 +32,8 @@ from .units import (
 )
 
 from ..ha_energy_reader import (
-    battery_units, unit_energy_counters, unsourced_counters,
+    battery_units, energy_counters, left_alone_counters, unit_energy_counters,
+    unsourced_counters,
 )
 from ..utils.log_gate import log_on_change
 from ..utils.own_entity import is_sem_entity
@@ -777,6 +778,9 @@ class SensorReader:
         #: (#933) once per reader lifetime: the first PROVEN grid read clears a
         #: guess Repair a previous lifetime left, whatever tier proved it.
         self._split_proof_reconciled: bool = False
+        #: (#1236) Per kind ("solar" / "battery"): the proof that kWh of a
+        #: counter SEM set aside does not show up in the power it reads.
+        self._unseen_watch: dict[str, dict] = {}
         self._uses_split_grid: bool = False
         #: (#1188) This cycle's sources the Energy Dashboard counts in kWh and
         #: SEM reads from no power sensor: source → its kWh counter. None when
@@ -3480,6 +3484,10 @@ class SensorReader:
         elif ed.battery_charge_energy or ed.battery_discharge_energy:
             unsourced["battery"] = (ed.battery_charge_energy
                                     or ed.battery_discharge_energy)
+        # (#1236) Counters the derive set aside: is their kWh inside the power
+        # read above? Looks only; no reading is changed.
+        self._watch_unseen_row("solar", ed, readings.solar_power)
+        self._watch_unseen_row("battery", ed, readings.battery_power)
         # (#1226) …and a battery the derive found nothing for, beside others
         missing = unsourced_counters(ed, "battery")
         pick = self.config.battery_power_sensor
@@ -5160,6 +5168,99 @@ class SensorReader:
                 half_import, exports[0], watch["gain"])
             _ri.raise_half_grid_pair(
                 self.hass, import_entity=half_import, export_entity=exports[0])
+
+    #: (#1236) Smallest gain, in kWh, of a set-aside counter within ONE day
+    #: before the power SEM reads is checked against it, and the least time
+    #: SEM must have watched. Under this it is counter noise.
+    _UNSEEN_PROOF_KWH = 0.5
+    _UNSEEN_MIN_WINDOW_S = 600.0
+    #: A look further back than this is a gap, not a step: the window
+    #: restarts rather than counting power SEM did not read.
+    _UNSEEN_MAX_STEP_S = 300.0
+
+    def _watch_unseen_row(self, kind: str, ed, seen_w) -> None:
+        """(#1236) A second inverter or battery whose counter sits on a
+        device SEM already reads, or beside a link SEM cannot place, gets no
+        power sensor (a second one could count the same watts twice). Its
+        kWh counter still shows whether the power SEM reads holds it: over
+        the same time, the kWh of ALL counters of ``kind`` is set against the
+        power SEM read, summed up. If the set-aside counters gained and that
+        power explains less than half of their gain, power flowed that SEM
+        did not see. Then a Repair says so, naming the counters. A link that
+        already holds both rows leaves no gap, so nothing is said.
+
+        Nothing is added to any reading. Bug class 84: the proof is kept for
+        this reader lifetime only; the Repair is not persistent.
+        """
+        watch = self._unseen_watch.get(kind)
+        if watch is None:
+            watch = self._unseen_watch[kind] = self._fresh_unseen_watch()
+            # a new reader knows nothing: a Repair an older one raised (the
+            # entry was reloaded) is proven again or goes
+            _ri.clear_unseen_power_row(self.hass, kind)
+        left = left_alone_counters(ed, kind)
+        if not left:
+            if watch["raised"]:
+                _ri.clear_unseen_power_row(self.hass, kind)
+            self._unseen_watch[kind] = self._fresh_unseen_watch()
+            return
+        if kind == "solar":
+            counters = energy_counters(ed, "solar")
+        else:
+            counters = (energy_counters(ed, "battery_charge")
+                        + energy_counters(ed, "battery_discharge"))
+        counters = list(dict.fromkeys(counters + left))
+        total = self._sum_counter_states(counters)
+        gone = self._sum_counter_states(left)
+        now = time.monotonic()
+        power = abs(seen_w) if isinstance(seen_w, (int, float)) else None
+        prev = watch.copy()
+        watch.update(all=total, left=gone, t=now, w=power)
+        if (total is None or gone is None or power is None
+                or prev["all"] is None or prev["left"] is None
+                or prev["w"] is None or prev["t"] is None):
+            return
+        step = now - prev["t"]
+        d_all = self._counter_deltas(prev["all"], prev["left"], total, gone)
+        if d_all is None or not 0 < step <= self._UNSEEN_MAX_STEP_S:
+            return                       # a reset, or a gap: sit this one out
+        from homeassistant.util import dt as dt_util
+        today = dt_util.now().date()
+        if watch["day"] != today:        # tiny gains must not add up for weeks
+            watch.update(day=today, gain_all=0.0, gain_left=0.0,
+                         seen_kwh=0.0, window_s=0.0)
+        watch["gain_all"] += max(0.0, d_all[0])
+        watch["gain_left"] += max(0.0, d_all[1])
+        watch["seen_kwh"] += (prev["w"] + power) / 2.0 * step / 3_600_000.0
+        watch["window_s"] += step
+        gap = watch["gain_all"] - watch["seen_kwh"]
+        if (not watch["raised"]
+                and watch["window_s"] >= self._UNSEEN_MIN_WINDOW_S
+                and watch["gain_left"] >= self._UNSEEN_PROOF_KWH
+                and gap >= 0.5 * watch["gain_left"]
+                and gap >= 0.1 * watch["gain_all"]):
+            watch["raised"] = True
+            seen = (list(ed.solar_power_list) if kind == "solar"
+                    else battery_units(ed))
+            _LOGGER.warning(
+                "The %s counter(s) %s gained %.2f kWh, but the %s power SEM "
+                "reads (%s) accounts for %.2f kWh of the %.2f kWh all %s "
+                "counters gained: power flowed that SEM did not see. SEM "
+                "takes no second power sensor from a device it reads, or "
+                "beside a link it cannot place, because it could count the "
+                "same power twice. (#1236)",
+                kind, ", ".join(left), watch["gain_left"], kind,
+                ", ".join(seen) or "none", watch["seen_kwh"],
+                watch["gain_all"], kind)
+            _ri.raise_unseen_power_row(
+                self.hass, kind, energy_entity=", ".join(left),
+                power_entity=", ".join(seen))
+
+    @staticmethod
+    def _fresh_unseen_watch() -> dict:
+        return {"all": None, "left": None, "t": None, "w": None,
+                "gain_all": 0.0, "gain_left": 0.0, "seen_kwh": 0.0,
+                "window_s": 0.0, "day": None, "raised": False}
 
     def _corroborate_split_grid(self, disc: dict, ed, import_w, export_w) -> Optional[bool]:
         """(#947) Does this NAME-MATCHED pair actually measure the grid?
