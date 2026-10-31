@@ -168,8 +168,12 @@ class TestStampWaitsForTheBattery:
     def test_the_trigger_gates_on_soc_availability(self):
         src = (REPO / "coordinator" / "coordinator.py").read_text(
             encoding="utf-8")
-        i = src.index("_batt_ready = (")
-        window = src[i:i + 300]
+        # (#1284) the rule lives in one function, which the night
+        # scheduler asks too
+        assert "_batt_ready = battery_soc_ready_for_plan(self, power)" in src
+        i = src.index("def battery_soc_ready_for_plan(")
+        j = src.index("\ndef ", i + 1)
+        window = src[i:j]
         assert "battery_soc_unavailable" in window, (
             "the stamp trigger no longer waits for a live battery SOC — "
             "a boot-time stamp walks the trajectory from nothing and "
