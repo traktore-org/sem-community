@@ -5419,9 +5419,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
             # Step 9b2: (#1245) the battery sale's recorded history, read once
             # into the year, month and lifetime rows. After the seeds above:
-            # each row is held under the export they set.
+            # each row is held under the export they set. A dashboard that
+            # could not be read is not "no dashboard" (#925): it waits.
             if (
                 self._recorder_seeds_ready
+                and self._ed_answered
                 and self._energy_calculator.sale_history_pending
             ):
                 try:

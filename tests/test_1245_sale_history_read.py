@@ -30,6 +30,9 @@ from custom_components.solar_energy_management.coordinator.energy_calculator imp
     EnergyCalculator,
     _sale_history_spans,
 )
+from custom_components.solar_energy_management.ha_energy_reader import (
+    EnergyDashboardConfig,
+)
 from custom_components.solar_energy_management.utils.helpers import (
     BATTERY_SALE_SENSOR_KEY,
 )
@@ -115,6 +118,14 @@ def _running(rows=None):
     return c
 
 
+def _ed(**kw):
+    """A dashboard whose lifetime seed can run: solar, import and export."""
+    return EnergyDashboardConfig(**{
+        "solar_energy": "sensor.solar_total",
+        "grid_import_energy": "sensor.grid_import_total",
+        "grid_export_energy": "sensor.grid_export_total", **kw})
+
+
 def _costs(c):
     today = NOW.date()
     return c.calculate_costs(c._build_current_totals(today, MONTH, YEAR))
@@ -126,7 +137,7 @@ def _costs(c):
 class TestTheRunningInstall:
     async def test_the_rows_take_the_history(self, env):
         c = _running()
-        await c.read_sale_history(MagicMock(), MagicMock())
+        await c.read_sale_history(MagicMock(), _ed())
         assert c._yearly_accumulators[f"{SALE}_{YEAR}"] == pytest.approx(170.0)
         assert c._monthly_accumulators[f"{SALE}_{MONTH}"] == pytest.approx(20.0)
         assert c._lifetime_accumulators[f"lifetime_{SALE}"] == pytest.approx(230.0)
@@ -140,7 +151,7 @@ class TestTheRunningInstall:
     async def test_the_year_and_lifetime_co2_count_the_old_sales(self, env):
         c = _running()
         before = _costs(c)
-        await c.read_sale_history(MagicMock(), MagicMock())
+        await c.read_sale_history(MagicMock(), _ed())
         after = _costs(c)
         # 165 kWh of this year's sale left solar's export
         assert after.yearly_co2_avoided_kg - before.yearly_co2_avoided_kg == \
@@ -156,7 +167,7 @@ class TestTheRunningInstall:
         too. Moving the lifetime row alone paid 225 kWh as pre-SEM savings."""
         c = _running()
         before = _costs(c).lifetime_total_savings
-        await c.read_sale_history(MagicMock(), MagicMock())
+        await c.read_sale_history(MagicMock(), _ed())
         assert c._accumulated_self_consumed_kwh == pytest.approx(6225.0)
         assert _costs(c).lifetime_total_savings == pytest.approx(before)
         # twin: the lifetime row moved alone
@@ -167,9 +178,9 @@ class TestTheRunningInstall:
 
     async def test_read_once(self, env):
         c = _running()
-        await c.read_sale_history(MagicMock(), MagicMock())
+        await c.read_sale_history(MagicMock(), _ed())
         c._lifetime_accumulators[f"lifetime_{SALE}"] = 1.0
-        await c.read_sale_history(MagicMock(), MagicMock())
+        await c.read_sale_history(MagicMock(), _ed())
         assert c._lifetime_accumulators[f"lifetime_{SALE}"] == 1.0
         assert len(env["queries"]) == 1
 
@@ -180,7 +191,7 @@ class TestEachRowOnlyRises:
         c = _running({"_yearly_accumulators": {f"grid_export_{YEAR}": 100.0},
                       "_monthly_accumulators": {f"grid_export_{MONTH}": 12.0},
                       "_lifetime_accumulators": {"lifetime_grid_export": 150.0}})
-        await c.read_sale_history(MagicMock(), MagicMock())
+        await c.read_sale_history(MagicMock(), _ed())
         assert c._yearly_accumulators[f"{SALE}_{YEAR}"] == pytest.approx(100.0)
         assert c._monthly_accumulators[f"{SALE}_{MONTH}"] == pytest.approx(12.0)
         assert c._lifetime_accumulators[f"lifetime_{SALE}"] == pytest.approx(150.0)
@@ -191,7 +202,7 @@ class TestEachRowOnlyRises:
         c = _running({"_yearly_accumulators": {f"{SALE}_{YEAR}": 400.0},
                       "_monthly_accumulators": {f"{SALE}_{MONTH}": 30.0},
                       "_lifetime_accumulators": {f"lifetime_{SALE}": 400.0}})
-        await c.read_sale_history(MagicMock(), MagicMock())
+        await c.read_sale_history(MagicMock(), _ed())
         assert c._yearly_accumulators[f"{SALE}_{YEAR}"] == 400.0
         assert c._monthly_accumulators[f"{SALE}_{MONTH}"] == 30.0
         assert c._lifetime_accumulators[f"lifetime_{SALE}"] == 400.0
@@ -201,7 +212,7 @@ class TestEachRowOnlyRises:
     async def test_no_history_changes_nothing(self, env):
         env["stats"] = {}
         c = _running()
-        await c.read_sale_history(MagicMock(), MagicMock())
+        await c.read_sale_history(MagicMock(), _ed())
         assert c._yearly_accumulators[f"{SALE}_{YEAR}"] == 5.0
         assert c._lifetime_accumulators[f"lifetime_{SALE}"] == 5.0
         assert c._accumulated_self_consumed_kwh == 6000.0
@@ -215,7 +226,7 @@ class TestItWaitsForTheSeeds:
     async def test_no_yearly_seed_yet_asks_nothing(self, env):
         c = _running()
         c._yearly_seeded = False
-        await c.read_sale_history(MagicMock(), MagicMock())
+        await c.read_sale_history(MagicMock(), _ed())
         assert env["queries"] == []
         assert c._yearly_accumulators[f"{SALE}_{YEAR}"] == 5.0
         assert c.sale_history_pending
@@ -223,20 +234,39 @@ class TestItWaitsForTheSeeds:
     async def test_the_lifetime_waits_for_this_starts_lifetime_seed(self, env):
         c = _running()
         c._lifetime_seeded = False
-        await c.read_sale_history(MagicMock(), MagicMock())
+        await c.read_sale_history(MagicMock(), _ed())
         assert c._yearly_accumulators[f"{SALE}_{YEAR}"] == pytest.approx(170.0)
         assert c._lifetime_accumulators[f"lifetime_{SALE}"] == 5.0
         assert c._accumulated_self_consumed_kwh == 6000.0
         assert c.sale_history_pending and not c._sale_history_read
         # the year is done: no query each cycle while the lifetime waits
-        await c.read_sale_history(MagicMock(), MagicMock())
+        await c.read_sale_history(MagicMock(), _ed())
         assert len(env["queries"]) == 1
         # the lifetime seed raises the export, then the row follows
         c._lifetime_accumulators["lifetime_grid_export"] = 21000.0
         c._lifetime_seeded = True
-        await c.read_sale_history(MagicMock(), MagicMock())
+        await c.read_sale_history(MagicMock(), _ed())
         assert c._lifetime_accumulators[f"lifetime_{SALE}"] == pytest.approx(230.0)
         assert c._accumulated_self_consumed_kwh == pytest.approx(6225.0)
+        assert c._sale_history_read is True
+
+    @pytest.mark.parametrize("missing", [
+        {"grid_export_energy": None},
+        {"grid_export_energy": None, "grid_export_energy_list": ["meter:export"]},
+        {"solar_energy": None}, {"grid_import_energy": None}])
+    async def test_a_lifetime_seed_that_can_never_run_is_not_waited_for(
+            self, env, missing):
+        """The lifetime seed waits for solar, import and export counters that
+        read (an external statistic never has a state). Without one it never
+        seeds, and every lifetime row is SEM's own."""
+        c = _running()
+        c._lifetime_seeded = False
+        ed = _ed(**missing)
+        c.seed_lifetime_from_hardware(MagicMock(**{"states.get.return_value": None,
+                                                   "is_running": True}), ed)
+        assert c._lifetime_seeded is False
+        await c.read_sale_history(MagicMock(), ed)
+        assert c._lifetime_accumulators[f"lifetime_{SALE}"] == pytest.approx(230.0)
         assert c._sale_history_read is True
 
     async def test_without_an_energy_dashboard_it_reads_at_once(self, env):
@@ -247,16 +277,28 @@ class TestItWaitsForTheSeeds:
         assert c._lifetime_accumulators[f"lifetime_{SALE}"] == pytest.approx(230.0)
         assert c._sale_history_read is True
 
-    @pytest.mark.parametrize("cause", ["no sensor", "recorder"])
-    async def test_a_start_that_cannot_read_gives_up_until_the_next(self, env, cause):
+    @pytest.mark.parametrize("cause", ["no sensor", "recorder", "raises"])
+    async def test_a_start_that_cannot_read_gives_up_until_the_next(
+            self, env, cause, monkeypatch):
+        c = _running()
         if cause == "no sensor":
             env["registry"].clear()
-        else:
+        elif cause == "recorder":
             env["stats"] = None
-        c = _running()
+        else:
+            async def _boom(*a):
+                raise RuntimeError("recorder gone")
+            monkeypatch.setattr(c, "_recorder_stats", _boom)
         for _ in range(3):
             assert c.sale_history_pending
-            await c.read_sale_history(MagicMock(), MagicMock())
+            if cause == "raises":
+                with pytest.raises(RuntimeError):
+                    await c.read_sale_history(MagicMock(), _ed())
+            else:
+                await c.read_sale_history(MagicMock(), _ed())
+        asked = len(env["queries"])
+        await c.read_sale_history(MagicMock(), _ed())   # a 4th cycle asks nothing
+        assert len(env["queries"]) == asked
         assert not c.sale_history_pending
         assert c._sale_history_read is False
         assert c._yearly_accumulators[f"{SALE}_{YEAR}"] == 5.0
@@ -275,7 +317,7 @@ class TestTheFlagIsKept:
     @pytest.mark.asyncio
     async def test_a_restart_does_not_read_again(self, env):
         c = _running()
-        await c.read_sale_history(MagicMock(), MagicMock())
+        await c.read_sale_history(MagicMock(), _ed())
         later = _running()
         later.restore_state(c.get_state())
         assert later._sale_history_read is True
@@ -343,6 +385,45 @@ def test_the_cycle_reads_it_after_the_yearly_seed():
     assert calls["seed_yearly_from_statistics"] < calls["read_sale_history"]
     src = ast.get_source_segment(inspect.getsource(coordinator), fn)
     assert "sale_history_pending" in src
+    # a dashboard that could not be read is not "no dashboard" (#925)
+    gate = src[:src.index("read_sale_history")]
+    assert gate.rstrip().rfind("_ed_answered") > gate.rfind("Step 9b2")
+
+
+def test_every_recorder_query_asks_energy_in_kwh():
+    """Left out, the recorder hands sums in the unit each sensor's state
+    shows: a Wh counter or a sensor shown in Wh reads 1000 times too high.
+    Every ``statistics_during_period`` call in the package names the units."""
+    import pathlib
+
+    from custom_components.solar_energy_management.coordinator.units import (
+        RECORDER_UNITS,
+    )
+    assert RECORDER_UNITS == {"energy": "kWh"}
+    root = pathlib.Path(ec_module.__file__).resolve().parents[1]
+    calls = []
+    for path in root.rglob("*.py"):
+        rel = path.relative_to(root).parts
+        if rel[0] in ("tests", "tools", "scripts"):
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            args = [ast.unparse(a) for a in node.args]
+            name = ast.unparse(node.func)
+            if name.endswith("statistics_during_period"):
+                units = args[5] if len(args) > 5 else next(
+                    (ast.unparse(k.value) for k in node.keywords if k.arg == "units"),
+                    None)
+            elif args and args[0].endswith("statistics_during_period"):
+                units = args[6] if len(args) > 6 else None   # through the executor
+            else:
+                continue
+            calls.append((str(path.relative_to(root)), node.lineno, units))
+    assert len(calls) >= 6, calls
+    wrong = [c for c in calls if c[2] != "RECORDER_UNITS"]
+    assert not wrong, wrong
 
 
 # ── a real recorder ───────────────────────────────────────────────────
@@ -389,3 +470,41 @@ async def test_a_real_recorder_hands_the_month_end_sums(recorder_mock, hass):
     assert c._lifetime_accumulators[f"lifetime_{SALE}"] == pytest.approx(95.0)
     assert c._yearly_accumulators[f"{SALE}_{year}"] == pytest.approx(45.0)
     assert c._monthly_accumulators[f"{SALE}_{month}"] == pytest.approx(45.0)
+
+
+@pytest.mark.asyncio
+async def test_a_real_recorder_in_wh_reads_kwh(recorder_mock, hass):
+    """A user may show SEM's sensor in Wh. Its history is then 12,000 Wh,
+    and read without a unit it put 12,000 "kWh" into the rows — held only
+    by the export."""
+    from datetime import timedelta
+
+    from homeassistant.components.recorder.statistics import (
+        async_import_statistics,
+    )
+    from homeassistant.helpers import entity_registry as er
+    from homeassistant.util import dt as dt_util
+    from pytest_homeassistant_custom_component.components.recorder.common import (
+        async_wait_recording_done,
+    )
+
+    entry = er.async_get(hass).async_get_or_create(
+        "sensor", "solar_energy_management", f"sem_{BATTERY_SALE_SENSOR_KEY}",
+        suggested_object_id="pack_sold")
+    hass.states.async_set(entry.entity_id, "0", {"unit_of_measurement": "Wh",
+                                                 "device_class": "energy",
+                                                 "state_class": "total"})
+    now = dt_util.now()
+    hour = now.replace(minute=0, second=0, microsecond=0)
+    async_import_statistics(hass, {
+        "has_mean": False, "has_sum": True, "name": None, "source": "recorder",
+        "statistic_id": entry.entity_id, "unit_of_measurement": "kWh"},
+        [{"start": dt_util.as_utc(hour - timedelta(hours=h)), "state": s, "sum": s}
+         for h, s in ((3, 0.0), (2, 12.0))])
+    await async_wait_recording_done(hass)
+
+    c = EnergyCalculator({}, MagicMock())
+    c._lifetime_accumulators["lifetime_grid_export"] = 5000.0
+    await c.read_sale_history(hass, None)
+    assert c._lifetime_accumulators[f"lifetime_{SALE}"] == pytest.approx(12.0)
+    assert c._accumulated_self_consumed_kwh == pytest.approx(12.0)

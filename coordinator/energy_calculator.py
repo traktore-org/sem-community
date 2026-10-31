@@ -26,7 +26,7 @@ from .types import (
 )
 from .flow_calculator import FlowCalculator
 from ..utils.time_manager import TimeManager
-from .units import energy_state_to_kwh
+from .units import RECORDER_UNITS, energy_state_to_kwh
 from .sensor_reader import EV_ACTIVE_CHARGE_FLOOR_W
 from .repair_issues import UNAVAILABLE_REPAIR_THRESHOLD_S
 from ..ha_energy_reader import ENERGY_COUNTER_CATEGORIES, energy_counters
@@ -1995,7 +1995,7 @@ class EnergyCalculator:
 
         try:
             stats = await statistics_during_period(
-                hass, start_time, None, entity_ids, "hour", None, {"sum"}
+                hass, start_time, None, entity_ids, "hour", RECORDER_UNITS, {"sum"}
             )
         except Exception as e:
             _LOGGER.warning("Failed to query recorder statistics for yearly seeding: %s", e)
@@ -2060,7 +2060,8 @@ class EnergyCalculator:
                         # Try querying separately
                         try:
                             ev_result = await statistics_during_period(
-                                hass, start_time, None, [energy_sensor], "hour", None, {"sum"}
+                                hass, start_time, None, [energy_sensor], "hour",
+                                RECORDER_UNITS, {"sum"},
                             )
                             ev_stats = ev_result.get(energy_sensor, [])
                         except Exception:
@@ -2109,11 +2110,11 @@ class EnergyCalculator:
 
         Each row only rises to its history, never above the export beside it
         (``battery_export_part``): the live row also holds the meter's
-        corrections. It waits for the seeds that set that export: with an
-        Energy Dashboard, the yearly seed for the year and month, and this
-        start's lifetime seed for the lifetime row. A lifetime seed that never
-        runs (no export counter) leaves the lifetime row as booked, and the
-        year is read again at each start (it only rises).
+        corrections. It waits for the seeds that set the export: with an
+        Energy Dashboard, the yearly seed before the year and month rows, and
+        this start's lifetime seed before the lifetime row — unless that seed
+        can never run (``_lifetime_seed_never_runs``). While the lifetime row
+        waits, the year is read again at each start (it only rises).
 
         The lifetime row moves ``accumulated_self_consumed_kwh`` by the same
         kWh. Those sales were counted as solar's export there too (the day
@@ -2124,21 +2125,22 @@ class EnergyCalculator:
         if not self.sale_history_pending:
             return
         year_ready = not ed_config or self._yearly_seeded
-        lifetime_ready = not ed_config or self._lifetime_seeded
+        lifetime_ready = (not ed_config or self._lifetime_seeded
+                          or self._lifetime_seed_never_runs(ed_config))
         if not year_ready or (self._sale_history_year_done and not lifetime_ready):
             return
+        # Counted before the query, so a failure anywhere ends the tries too
+        if self._sale_history_attempts >= 3:
+            self._sale_history_given_up = True
+            _LOGGER.debug("Battery sale history not read this start")
+            return
+        self._sale_history_attempts += 1
         sale_id = _sem_stat_entity_id(hass, BATTERY_SALE_SENSOR_KEY)
         stats = None
         if sale_id:
             stats = await self._recorder_stats(
                 hass, _SALE_HISTORY_START, {sale_id}, "month", {"sum"})
         if stats is None:
-            self._sale_history_attempts += 1
-            if self._sale_history_attempts >= 3:
-                self._sale_history_given_up = True
-                _LOGGER.debug(
-                    "Battery sale history: %s — not read this start",
-                    "no sale sensor" if not sale_id else "recorder not readable")
             return
         now = dt_util.now()
         spans = _sale_history_spans(stats.get(sale_id) or [], now.year, now.month)
@@ -2162,6 +2164,16 @@ class EnergyCalculator:
         self._sale_history_year_done = True
         if lifetime_ready:
             self._sale_history_read = True
+
+    @staticmethod
+    def _lifetime_seed_never_runs(ed_config) -> bool:
+        """(#1245) Can ``seed_lifetime_from_hardware`` never seed this
+        dashboard? It waits for solar, import and export counters that read,
+        so a dashboard with none of one of them (an external statistic never
+        has a state) keeps every lifetime row as SEM books it."""
+        return not all(
+            any(":" not in e for e in energy_counters(ed_config, category))
+            for category in ("solar", "grid_import", "grid_export"))
 
     @staticmethod
     def _raise_sale_row(
@@ -2566,7 +2578,7 @@ class EnergyCalculator:
             from homeassistant.components.recorder import get_instance
             job = get_instance(hass).async_add_executor_job(
                 statistics_during_period,
-                hass, start, None, entity_ids, period, None, types,
+                hass, start, None, entity_ids, period, RECORDER_UNITS, types,
             )
             if inspect.isawaitable(job):
                 job = await job
@@ -2577,7 +2589,7 @@ class EnergyCalculator:
         if result is None:
             try:
                 direct = statistics_during_period(
-                    hass, start, None, entity_ids, period, None, types
+                    hass, start, None, entity_ids, period, RECORDER_UNITS, types
                 )
                 if inspect.isawaitable(direct):
                     direct = await direct

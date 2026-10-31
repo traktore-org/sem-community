@@ -42,6 +42,12 @@ from typing import Optional
 # state strings that are not a reading
 _NOT_A_VALUE = (None, "", "unknown", "unavailable", "none")
 
+#: (#1245) The units every recorder statistics query asks for. Left out
+#: (``None``), the recorder hands each sensor's numbers in the unit its state
+#: shows: a counter or a sensor shown in Wh reads 1000 times too high. Only
+#: energy is named; power, % and money come back as stored.
+RECORDER_UNITS = {"energy": "kWh"}
+
 
 def state_number(raw) -> Optional[float]:
     """(#1202) A state as a finite number, or None when it gives none.

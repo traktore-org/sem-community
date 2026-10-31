@@ -22,6 +22,8 @@ from __future__ import annotations
 import datetime
 from typing import Dict, Mapping, Optional, Tuple
 
+from .units import RECORDER_UNITS
+
 #: Hour (local) after which a forecast for the NEXT day is considered settled.
 #: Providers revise through the day; the evening figure is the one an overnight
 #: plan would have been built on.
@@ -146,7 +148,8 @@ async def read_statistics(hass, statistic_ids, days: int):
 
     raw = await get_instance(hass).async_add_executor_job(
         statistics.statistics_during_period,
-        hass, start, end, set(statistic_ids), "hour", None, {"state", "mean"},
+        hass, start, end, set(statistic_ids), "hour", RECORDER_UNITS,
+        {"state", "mean"},
     )
 
     out = {}
