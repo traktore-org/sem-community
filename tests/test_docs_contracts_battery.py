@@ -226,6 +226,32 @@ class TestBatteryModeTable:
         assert at.intent is not BatteryIntent.FORCE_DISCHARGE
         assert manual_mode_done("force_discharge", 30.0, soc_read=True, reserve=30)
 
+    def test_force_discharge_goes_back_to_auto_when_the_pack_sends_no_more(self):
+        """USER_GUIDE.md, "Per-Battery Modes": "Force Discharge | … Some
+        inverters stop the sale above the reserve: a battery that sends
+        nothing for 15 minutes while the home buys from the grid and there is
+        no sun also goes back to Auto." (#1165)
+
+        The window and the write are pinned in ``test_1165_sale_stall.py``."""
+        from custom_components.solar_energy_management.coordinator.decide_battery import (
+            MANUAL_CHARGE_STALL_S, sale_stall_read, sale_stall_step,
+        )
+        assert MANUAL_CHARGE_STALL_S == 15 * 60
+        read = dict(soc_read=True, power_read=True, asked_w=5000.0,
+                    sem_selling=True)
+        assert sale_stall_read(30.0, 0.0, site=(400.0, 0.0), **read)
+        assert not sale_stall_read(30.0, 0.0, site=(0.0, 3000.0), **read), (
+            "the sun feeds the home: an export limit may hold the pack")
+        assert not sale_stall_read(30.0, 0.0, site=(900.0, 1500.0), **read), (
+            "the home buys, but there is sun")
+        window, stalled = None, False
+        for t in range(0, 15 * 60 + 1, 30):      # one check every 30 s
+            assert not stalled
+            window, stalled = sale_stall_step(window, float(t), 30.0, True)
+        assert stalled
+        assert manual_mode_done("force_discharge", 30.0, soc_read=True,
+                                reserve=20, sale_stalled=stalled)
+
     def test_a_reserve_never_set_is_20_percent(self):
         """USER_GUIDE.md, "Per-Battery Modes": "A reserve you never set is
         20 %."  A forced sale stops at 20 % when no reserve was chosen."""

@@ -324,6 +324,8 @@ async def _dispatch_battery(
     # stop, a held stop after no room, observer, another intent — asks for
     # none, so a pack SEM did not ask to charge is never read as full.
     _set(adapter, "_sem_charge_asked_w", 0.0)
+    # (#1165) …and the same for a sale, set by the FORCE_DISCHARGE branch.
+    _set(adapter, "_sem_discharge_asked_w", 0.0)
     if yielded:
         # (#1079) Another party steers this battery and the user said SEM
         # yields: no adapter method runs, so nothing is written. Observer
@@ -507,6 +509,16 @@ async def _dispatch_battery(
         )
         _note_forced_op(adapter, "_sem_forced_discharge", ret,
                         BatteryIntent.FORCE_DISCHARGE, True)
+        # (#1165) Asked only if it went out or stands. One adapter answers
+        # True and records no intent; the rest record the intent and clear
+        # ``last_error``, on a repeat too; a failed write or a withheld
+        # setpoint (#978) sets it and keeps the old intent.
+        if ret is True or (
+                getattr(adapter, "last_error", None) is None
+                and getattr(adapter, "last_intent", None)
+                is BatteryIntent.FORCE_DISCHARGE):
+            _set(adapter, "_sem_discharge_asked_w",
+                 float(decision.discharge_power_w))
         _LOGGER.info(
             "actuate_battery(%s): FORCE_DISCHARGE %.0f W (floor %.0f%%) — %s",
             decision.battery_id, decision.discharge_power_w,
