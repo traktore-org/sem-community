@@ -83,6 +83,24 @@ def _parse_dt(value) -> Optional[datetime]:
         return None
 
 
+def plan_blocks(allocations) -> list:
+    """The stamped ``blocks`` rows, in the ONE shape ``plan_gate`` reads.
+
+    ``power_w`` keeps its precision: the gate rebuilds deliverable kWh from
+    it and compares with the unrounded need. Whole watts turned a complete
+    plan into a 0.4 Wh shortage (#1282). Rounding is for the card.
+    """
+    return [{
+        "id": a.demand_id,
+        "start": a.start.isoformat(),
+        "end": a.end.isoformat(),
+        "power_w": round(a.power_w, 6),
+        "price": a.price,
+        # (#1023) only on the top-up: the strip hatches it
+        **({"late": True} if a.late else {}),
+    } for a in allocations]
+
+
 def plan_gate(plan: Optional[dict], demand_id: str, now: datetime) -> PlanGate:
     """Evaluate the trust rule for one demand id against the stamped plan.
 
