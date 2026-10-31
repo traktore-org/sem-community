@@ -908,9 +908,9 @@ class EnergyCalculator:
         held_supply = {f: w for f, w in held.items() if f in _SUPPLY_INPUT}
         if not held_supply:
             return held
-        # FLEET-READ: whole-house demand the supplies are sized against
         demand = (held_w["home_consumption_power"] + held_w["grid_export_power"]
-                  + held_w["battery_charge_power"] + float(power.ev_power or 0.0))
+                  + held_w["battery_charge_power"]
+                  + float(power.ev_power or 0.0))  # FLEET-READ: whole-house demand the supplies are sized against
         live = sum(held_w[f] for f, name in _SUPPLY_INPUT.items()
                    if name not in self._integral_held)
         room = max(0.0, demand - live)

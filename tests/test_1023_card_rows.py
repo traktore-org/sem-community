@@ -91,10 +91,10 @@ def _blocks(plan):
 
 
 def test_the_stash_carries_the_mark():
-    """The coordinator's block dicts are built inline in the shadow plan:
-    its parsed tree must copy ``late`` off the allocation."""
+    """The plan's block rows are built in ``plan_blocks`` (#1282): its parsed
+    tree must copy ``late`` off the allocation."""
     import ast
-    tree = ast.parse((ROOT / "coordinator" / "coordinator.py")
+    tree = ast.parse((ROOT / "coordinator" / "energy_plan_actuation.py")
                      .read_text(encoding="utf-8"))
     found = False
     for node in ast.walk(tree):

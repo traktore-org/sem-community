@@ -21,9 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **A Deye battery keeps its saved settings when another battery above it is removed** (#1257). They now move to its new number.
 - 🐛 **A battery sale now ends a grid charge SEM started first** (#1280). Before, the switch or work mode stayed on while it sold.
 - 🐛 **A restart no longer turns off a charge switch you set yourself** (#1281). SEM now stops only the charges it started.
-- 🐛 **After a restart, an export cut now goes back to the setting SEM found** (#1274). The saved value was lost before the battery was set up.
+- 🐛 **After a restart, an export cut goes back to the setting SEM found** (#1274). The saved value was lost before the battery was set up.
 - 🐛 **One battery's false 0 % read no longer drags the fleet level down** (#1285). Each battery's level now has the same jump check as the fleet.
-- 🐛 **A sensor state of "nan" or "inf" is no number in every sensor read** (#1262). Before, the car's level, forecasts, tariffs and loads took it as a value.
+- 🐛 **A sensor state of "nan" or "inf" is no number** (#1262). The car level, forecasts, tariffs and loads read it as a value.
 - 🐛 **Savings no longer count the house twice when the sun drops while the inverter reads dark** (#1269). The battery's share wins over the held solar.
 - 🐛 **A home reading 1–2 % off during a big EV session no longer warns about a stale sensor** (#1234). Real sign errors still warn.
 - 🐛 **A power cut no longer loses the day's EV sessions on homes without a battery**; the energy store is written every 5 minutes (#1252).
@@ -33,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **A device counter that dips and returns to the same value no longer logs a "reset" warning**; it is a debug line (#1235).
 - 🐛 **Observer mode no longer warns "commanded STOP … the stop is not taking"**; SEM sends nothing there, so it is only a debug line now (#1233).
 - 🐛 **Two grid meters: SEM stops searching every cycle for a dark sensor, and asks again when the device lookup was not ready** (#1286).
-- 🐛 **A complete charge plan no longer lets the car charge between its blocks** (#1282). Plan watts were rounded to whole watts, which looked like a tiny shortage.
+- 🐛 **A complete charge plan no longer lets the car charge between its blocks** (#1282). Whole-watt rounding looked like a tiny shortage.
 - 🐛 **When the daily cap cuts solar or battery energy, the month and year lose those kWh too** (#1243).
 - 🐛 **Hands-off marks and load modes you set now survive going back to an older version and forward again** (#1253).
 - 🐛 **A charger sensor or service changed on the Reconfigure page now changes what SEM runs** (#1247). The page shows the charger's own saved values.

@@ -1998,8 +1998,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             _saved = {**self.config_entry.data, **self.config_entry.options,
                       **self._data}
             _first = (_draft_list(self, "ev_chargers") or [{}])[0]
-            _before = {"ev_charger_service": _first.get("ev_charger_service")
-                       or _saved.get("ev_charger_service")}
+            _before = {"ev_charger_service": (
+                _first["ev_charger_service"] if "ev_charger_service" in _first
+                else _saved.get("ev_charger_service"))}
             # Update both flat keys and ev_chargers[0] (#112)
             _merge_form_input(self, self._data, user_input)
             ev_chargers = _draft_list(self, "ev_chargers")
