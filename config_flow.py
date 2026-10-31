@@ -259,14 +259,20 @@ def _carry_hidden_wiring(discovered: dict, submitted: dict, target: dict) -> Non
             target[k] = discovered[k]
 
 
+def _stale_service_wiring(before: dict, submitted: dict) -> tuple:
+    """The field name, service data and box name of a service the user
+    CHANGED: they belong to the service it replaced."""
+    if "ev_charger_service" not in submitted:
+        return ()
+    if (submitted.get("ev_charger_service") or "") == (before.get("ev_charger_service") or ""):
+        return ()
+    return _HIDDEN_CHARGER_WIRING[0][1]
+
+
 def _drop_stale_service_wiring(before: dict, submitted: dict, target: dict) -> None:
     """Edit: a service the user CHANGED takes no field names or box name
     from the one it replaced."""
-    if "ev_charger_service" not in submitted:
-        return
-    if (submitted.get("ev_charger_service") or "") == (before.get("ev_charger_service") or ""):
-        return
-    for k in _HIDDEN_CHARGER_WIRING[0][1]:
+    for k in _stale_service_wiring(before, submitted):
         target.pop(k, None)
 
 
@@ -1944,13 +1950,25 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         user_input["ev_charger_efficiency"]
                     ),
                 }
+            # (#1249) the service as the page showed it, before the merge
+            _saved = {**self.config_entry.data, **self.config_entry.options,
+                      **self._data}
+            _first = (_draft_list(self, "ev_chargers") or [{}])[0]
+            _before = {"ev_charger_service": _first.get("ev_charger_service")
+                       or _saved.get("ev_charger_service")}
             # Update both flat keys and ev_chargers[0] (#112)
             _merge_form_input(self, self._data, user_input)
             ev_chargers = _draft_list(self, "ev_chargers")
             if ev_chargers:
                 _merge_form_input(self, ev_chargers[0], user_input)
+                _drop_stale_service_wiring(_before, user_input, ev_chargers[0])
             else:
                 ev_chargers = [{"id": "ev_charger", "name": "EV Charger", **user_input}]
+            # the flat keys are the fallback of the charger's own copy: None
+            # (not a delete) so a copy in entry.data does not show through
+            for k in _stale_service_wiring(_before, user_input):
+                if _saved.get(k) is not None:
+                    self._data[k] = None
             self._data["ev_chargers"] = ev_chargers
             return await self.async_step_ev_charger_menu()
 
