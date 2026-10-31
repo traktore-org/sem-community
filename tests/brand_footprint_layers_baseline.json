@@ -1,6 +1,6 @@
 {
   "_comment": "#855 layers: brand mentions per generic file; may only shrink. Regenerate: scripts/audit_brand_footprint.py --layers-baseline",
-  "total": 1068,
+  "total": 1067,
   "per_file": {
     "__init__.py": 50,
     "analytics/day_tags.py": 1,
@@ -19,7 +19,7 @@
     "coordinator/charger_types.py": 9,
     "coordinator/charging_control.py": 3,
     "coordinator/control_entity.py": 3,
-    "coordinator/coordinator.py": 80,
+    "coordinator/coordinator.py": 79,
     "coordinator/curtailment.py": 1,
     "coordinator/cycle_trace.py": 1,
     "coordinator/decide.py": 3,

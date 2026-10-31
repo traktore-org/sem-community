@@ -17,6 +17,8 @@ from enum import Enum
 
 from homeassistant.core import HomeAssistant
 
+from ...utils.log_gate import log_on_change
+from .charge_record import ForcedChargeRecord
 from .charge_target import ChargeTargetHold
 
 _LOGGER = logging.getLogger(__name__)
@@ -112,11 +114,115 @@ class BatteryChargeAdapter(ABC):
             hold if isinstance(hold, ChargeTargetHold)
             else ChargeTargetHold(
                 hass, configured=(config.get("battery_target_soc_entity", ""),)))
+        #: (#1181) the forced charges SEM started, across a restart. The
+        #: coordinator hands every battery the entry's one record.
+        record = config.get("forced_charge_record")
+        self.charge_record = (record if isinstance(record, ForcedChargeRecord)
+                              else ForcedChargeRecord())
 
     @property
     def is_active(self) -> bool:
         """Whether a forced charge session is currently active."""
         return self._active
+
+    def charge_actuator(self) -> str:
+        """(#1181) The entity this brand's start turns on and only its stop
+        turns back, kept in the record — ``""`` when it has none."""
+        return ""
+
+    def _charging_state(self, state: str) -> bool:
+        """(#1181) Does the actuator's state say a forced charge runs?"""
+        return False
+
+    def actuator_charging(self) -> "bool | None":
+        """(#1181) True: the actuator reads a forced charge. False: it reads
+        one of its other states. None: it cannot be read yet."""
+        actuator = self.charge_actuator()
+        try:
+            st = self.hass.states.get(actuator) if actuator else None
+        except Exception:  # noqa: BLE001
+            st = None
+        state = getattr(st, "state", None) if st is not None else None
+        if not isinstance(state, str) or state in ("", "unknown", "unavailable"):
+            return None
+        return self._charging_state(state)
+
+    def _battery(self) -> str:
+        return str(self.config.get("battery_id", "") or "")
+
+    async def adopt_running(self) -> bool:
+        """(#1181) True when a charge SEM started for this battery is found
+        still on, now: the record names this battery for the actuator, and
+        the actuator still reads a charge. Such a charge is active from now on,
+        so Off, the unload hand-back and the next decision stop it.
+
+        Until the actuator can be read nothing is adopted, and this is asked
+        again on the next cycle: a stop sent to an entity HA has not loaded
+        yet is dropped without a word, and the name with it. An actuator
+        that reads no charge drops the name: the charge has ended. Reads
+        only, except that drop. Never raises."""
+        if self._active or getattr(self, "_adoption_settled", False):
+            return False                        # True only when adopted now
+        actuator = self.charge_actuator()
+        if not actuator:
+            self._adoption_settled = True
+            return False
+        try:
+            if not await self.charge_record.running(actuator, self._battery()):
+                self._adoption_settled = True
+                return False
+            charging = self.actuator_charging()
+            if charging is None:
+                return False                    # not readable yet: next cycle
+            self._adoption_settled = True
+            if not charging:
+                await self.charge_record.stopped(actuator)
+                return False
+        except Exception:  # noqa: BLE001 — a record never costs a cycle
+            _LOGGER.debug("forced charge record not read", exc_info=True)
+            return False
+        self._active = True
+        _LOGGER.info("Battery: %s is still on from a forced charge SEM "
+                     "started — SEM stops it unless the plan still wants it "
+                     "(#1181)", actuator)
+        return True
+
+    async def _note_stopped(self, readable: bool = True) -> None:
+        """(#1181) The actuator is back: it leaves the record. Not when it
+        could not be read before the stop: HA drops a call to an entity it
+        has not loaded without a word. The name then stays, and adoption
+        asks again until the actuator reads (review)."""
+        if not readable:
+            self._adoption_settled = False
+            return
+        try:
+            await self.charge_record.stopped(self.charge_actuator())
+        except Exception:  # noqa: BLE001 — the stop has landed regardless
+            _LOGGER.warning("Battery: SEM could not drop %s from its record "
+                            "of forced charges (#1181)",
+                            self.charge_actuator(), exc_info=True)
+
+    async def _note_failed_start(self) -> None:
+        """(#1181) A start that raised: the name stays only while the
+        actuator reads a charge — the write may have landed anyway. One
+        that reads no charge is not SEM's to stop later."""
+        if self.actuator_charging() is False:
+            await self._note_stopped()
+
+    async def _note_started(self) -> "ChargeStatus | None":
+        """(#1181) Before the start's write: the actuator goes in the
+        record. A FAILED status when it could not: no start goes out."""
+        try:
+            saved = await self.charge_record.started(
+                self.charge_actuator(), self._battery())
+        except Exception:  # noqa: BLE001
+            saved = False
+        if saved:
+            return None
+        return ChargeStatus(
+            status=ChargeCommandStatus.FAILED,
+            message="SEM could not save its record of the charge (#1181)",
+        )
 
     async def _put_target_back(self) -> None:
         """(#1180) The stop's last step: the charge-target number back to
@@ -311,6 +417,12 @@ class GoodWeChargeAdapter(BatteryChargeAdapter):
     Forced charge = "Eco Charge" or "General" mode with SOC target.
     """
 
+    def charge_actuator(self) -> str:
+        return str(self.config.get("inverter_work_mode_entity", "") or "")
+
+    def _charging_state(self, state: str) -> bool:
+        return state == "Eco Charge"
+
     async def start_forced_charge(self, command: ChargeCommand) -> ChargeStatus:
         """Start forced charge by setting work mode and SOC target."""
         work_mode_entity = self.config.get("inverter_work_mode_entity", "")
@@ -321,6 +433,9 @@ class GoodWeChargeAdapter(BatteryChargeAdapter):
                 status=ChargeCommandStatus.FAILED,
                 message="No inverter_work_mode_entity configured",
             )
+        unsaved = await self._note_started()     # (#1181)
+        if unsaved is not None:
+            return unsaved
 
         try:
             if soc_target_entity:
@@ -345,6 +460,7 @@ class GoodWeChargeAdapter(BatteryChargeAdapter):
         except Exception as exc:
             _LOGGER.error("Failed to start GoodWe forced charge: %s", exc)
             await self._release_target()
+            await self._note_failed_start()      # (#1181)
             return ChargeStatus(
                 status=ChargeCommandStatus.FAILED,
                 message=f"Service call failed: {exc}",
@@ -373,6 +489,7 @@ class GoodWeChargeAdapter(BatteryChargeAdapter):
             return _say_nothing_to_stop(
                 self, "no inverter_work_mode_entity configured")
 
+        readable = self.actuator_charging() is not None   # (#1181)
         try:
             await self.hass.services.async_call(
                 "select",
@@ -381,6 +498,10 @@ class GoodWeChargeAdapter(BatteryChargeAdapter):
             )
             self._active = False
             self._target_soc = 0.0
+            await self._note_stopped(readable)   # (#1181)
+            log_on_change(_LOGGER, f"goodwe_stop:{work_mode_entity}",
+                          logging.INFO, "GoodWe forced charge stopped (%s)",
+                          normal_mode)
             # (#1180) the mode first: a higher target under Eco Charge would
             # charge on from the grid
             await self._put_target_back()
@@ -389,7 +510,10 @@ class GoodWeChargeAdapter(BatteryChargeAdapter):
                 message=f"Restored {normal_mode} mode",
             )
         except Exception as exc:
-            _LOGGER.error("Failed to stop GoodWe forced charge: %s", exc)
+            # (#1181) Off retries a failed stop every cycle: say it once
+            log_on_change(_LOGGER, f"goodwe_stop:{work_mode_entity}",
+                          logging.ERROR,
+                          "Failed to stop GoodWe forced charge: %s", exc)
             return ChargeStatus(
                 status=ChargeCommandStatus.FAILED,
                 message=f"Stop failed: {exc}",
@@ -430,6 +554,12 @@ class GenericChargeAdapter(BatteryChargeAdapter):
     - A number entity for target SOC
     """
 
+    def charge_actuator(self) -> str:
+        return str(self.config.get("battery_force_charge_switch", "") or "")
+
+    def _charging_state(self, state: str) -> bool:
+        return state == "on"
+
     async def start_forced_charge(self, command: ChargeCommand) -> ChargeStatus:
         """Enable forced charge switch and set SOC target."""
         charge_switch = self.config.get("battery_force_charge_switch", "")
@@ -440,6 +570,9 @@ class GenericChargeAdapter(BatteryChargeAdapter):
                 status=ChargeCommandStatus.UNSUPPORTED,
                 message="No battery_force_charge_switch configured",
             )
+        unsaved = await self._note_started()     # (#1181)
+        if unsaved is not None:
+            return unsaved
 
         try:
             if soc_target_entity:
@@ -462,6 +595,7 @@ class GenericChargeAdapter(BatteryChargeAdapter):
             )
         except Exception as exc:
             await self._release_target()
+            await self._note_failed_start()      # (#1181)
             return ChargeStatus(
                 status=ChargeCommandStatus.FAILED,
                 message=f"Failed: {exc}",
@@ -490,6 +624,7 @@ class GenericChargeAdapter(BatteryChargeAdapter):
             return _say_nothing_to_stop(
                 self, "no battery_force_charge_switch configured")
 
+        readable = self.actuator_charging() is not None   # (#1181)
         try:
             await self.hass.services.async_call(
                 "switch",
@@ -498,6 +633,7 @@ class GenericChargeAdapter(BatteryChargeAdapter):
             )
             self._active = False
             self._target_soc = 0.0
+            await self._note_stopped(readable)   # (#1181)
             # (#1180) the switch first: a higher target with the switch on
             # would charge on from the grid
             await self._put_target_back()

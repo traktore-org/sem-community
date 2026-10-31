@@ -315,7 +315,8 @@ class FlowCalculator:
         self._per_string_accumulators: Dict[str, Dict[str, float]] = {}
         self._current_date: date = dt_util.now().date()
 
-    def calculate_power_flows(self, power: PowerReadings) -> PowerFlows:
+    @staticmethod
+    def calculate_power_flows(power: PowerReadings) -> PowerFlows:
         """Calculate instantaneous power flows using priority-based allocation (#349).
 
         Sources drain in priority order — ``solar → battery_discharge →
@@ -349,6 +350,9 @@ class FlowCalculator:
 
         v1.6.9 multi-charger split (below the allocator) + v1.7.0
         per-string passthrough (above it, #1203) are unchanged.
+
+        (#1185) A static method: the books build their flows again from a
+        dark input's held watts (``EnergyCalculator._book_flows``).
         """
         flows = PowerFlows()
 

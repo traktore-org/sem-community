@@ -46,6 +46,9 @@ def unload_release_reason(adapter, was_observer: bool) -> Optional[str]:
     - a discharge limit SEM wrote in this lifetime is still in force → hand
       it back (``command_normal`` restores the maximum; the same-value skip
       makes it a no-op when it already is).
+    - (#1181) a forced charge or sale SEM started has not been seen to stop,
+      or the power setpoint SEM wrote is not 0 W → stop it. A lifetime whose
+      first command was a sale wrote no limit, so the limit alone missed it.
     - otherwise → nothing. SEM never commanded this battery.
     """
     if was_observer:
@@ -55,6 +58,12 @@ def unload_release_reason(adapter, was_observer: bool) -> Optional[str]:
     charge = getattr(adapter, "_charge_adapter", None)
     if charge is not None and bool(getattr(charge, "is_active", False)):
         return "a forced charge SEM started is still active"
+    if (getattr(adapter, "_sem_forced_charge", None) is True
+            or getattr(adapter, "_sem_forced_discharge", None) is True):
+        return "a forced charge or sale SEM started has not been seen to stop"
+    setpoint = getattr(adapter, "_last_force_discharge_w", None)
+    if isinstance(setpoint, (int, float)) and not isinstance(setpoint, bool) and setpoint != 0:
+        return f"a power setpoint SEM wrote ({setpoint:.0f} W) is still in force"
     try:
         last = float(getattr(adapter, "_last_discharge_limit_w", -1.0))
     except (TypeError, ValueError):
@@ -82,9 +91,11 @@ async def async_release_batteries_on_unload(coordinator) -> dict:
     adapters = getattr(coordinator, "_battery_adapters", {}) or {}
     for bid, adapter in adapters.items():
         # (#1178) a cycle still running may have left another battery as
-        # this one's limit writer; the hand-back is every battery's own
+        # this one's limit writer; the hand-back is every battery's own.
+        # (#1182) The same for the sale power.
         try:
             adapter._limit_writer = None
+            adapter._setpoint_writer = None
         except Exception:  # noqa: BLE001 — a read-only stand-in in tests
             pass
         why = unload_release_reason(adapter, was_observer)
@@ -94,7 +105,13 @@ async def async_release_batteries_on_unload(coordinator) -> dict:
             continue
         try:
             await adapter.command_normal()
-            outcome[bid] = f"released: {why}"
+            # (#1181) a stop that failed records no NORMAL: say so, there is
+            # no next cycle to try it again
+            err = (getattr(adapter, "last_error", None)
+                   if getattr(adapter, "last_intent", None) is not BatteryIntent.NORMAL
+                   else None)
+            outcome[bid] = (f"release incomplete ({why}): {err}" if err
+                            else f"released: {why}")
         except Exception as e:  # noqa: BLE001
             outcome[bid] = f"release failed (non-blocking): {e}"
     return outcome
@@ -191,6 +208,30 @@ class BatteryControlAdapter(ABC):
     #: Reset by the pipeline each cycle: ``last_intent`` outlives a sale that
     #: has stopped going out.
     _sale_sent: bool = False
+    #: (#1182) The same for the sale power entity: set by the pipeline only
+    #: while the cycle's commands run, when another battery shares it — the
+    #: battery that writes it. ``None``: this adapter writes it.
+    _setpoint_writer: "Optional[str]" = None
+    #: (#1182) The value held back for that writer this cycle — sent after
+    #: all if the writer's command did not reach the entity.
+    _setpoint_withheld: "Optional[float]" = None
+    #: (#1182) This cycle's command, as the writer, left the sale power
+    #: entity holding its value (sent, or skipped as the same value). A
+    #: refused write is not that. Reset each cycle.
+    _setpoint_spoke: bool = False
+    #: (#1182) The zero held back was a stop on a device that takes no
+    #: write right after one: sent after all, it is still that stop.
+    _stop_withheld: bool = False
+
+    def sale_setpoint_entity(self) -> str:
+        """(#1182) The sale power entity this adapter's commands write, or
+        ``""``. A brand that sells another way overrides it."""
+        return str(self._force_discharge_entity or "")
+
+    def sale_surface(self) -> str:
+        """(#1182) What a sale from this battery lands on. Batteries with
+        the same answer sell as one, so the sale is split per answer."""
+        return self.sale_setpoint_entity()
 
     def _limit_not_mine(self, watts: float, force: bool = False) -> bool:
         """(#1178) True when this adapter must not write the shared
@@ -304,7 +345,10 @@ class BatteryControlAdapter(ABC):
 
     #: (#1066) Per direction: did a forced charge / discharge SEM started
     #: land, and has its stop landed since? None = unknown (this adapter has
-    #: not seen either). Written by ``actuate_battery._note_forced_op`` only.
+    #: not seen either). Written by ``actuate_battery._note_forced_op``, and
+    #: for a charge (#1181) by :meth:`async_adopt_running_charge` (True: the
+    #: last lifetime started one) and :meth:`_stop_own_charge` (False: Off or
+    #: the unload hand-back stopped it).
     _sem_forced_charge: "Optional[bool]" = None
     _sem_forced_discharge: "Optional[bool]" = None
     #: (#1066) cycles in a row a stop has not landed while a flag is True
@@ -587,7 +631,10 @@ class BatteryControlAdapter(ABC):
             return
         await self.command_normal()
         # command_normal sets _last_intent = NORMAL; override to STOP.
-        self._last_error = None
+        # (#1181) It records no NORMAL when the stop of a charge SEM started
+        # failed: the sale stop landed, but that error stays to be seen.
+        if self._last_intent is BatteryIntent.NORMAL:
+            self._last_error = None
         self._last_intent = BatteryIntent.STOP_FORCE_DISCHARGE
 
     # ── (#955) export control: the dialect is per brand ──────────────────
@@ -636,6 +683,19 @@ class BatteryControlAdapter(ABC):
         if isinstance(recipe, dict) and recipe.get("service"):
             self._adopted_recipe = dict(recipe)
 
+    def export_control_wired(self) -> bool:
+        """(#1183) Does this adapter have something to cut export with?
+
+        A brand that overrides ``command_limit_export`` has its own way
+        (Huawei: a service on the inverter; Deye: its work-mode select). The
+        generic adapter only once its number is set. Asked by the export
+        pick, so a generic battery beside the inverter's battery is not
+        offered a cut it cannot make.
+        """
+        fn = getattr(type(self), "command_limit_export", None)
+        owner = getattr(fn, "__qualname__", "").split(".")[0] if fn else ""
+        return bool(owner) and owner != "BatteryControlAdapter"
+
     def holds_export_cut(self) -> bool:
         """(#908) Is THIS adapter holding a cut SEM itself made?
 
@@ -683,6 +743,79 @@ class BatteryControlAdapter(ABC):
         if self._last_intent is BatteryIntent.NORMAL:
             self._last_error = None
             self._last_intent = BatteryIntent.OFF
+
+    async def async_adopt_running_charge(self) -> None:
+        """(#1181) Before this adapter's decisions: take over a forced
+        charge SEM started and has not seen stop, in the last lifetime too.
+
+        An HA restart never unloads the entry, so a switch or mode charge
+        (GoodWe, the generic switch setup) runs on across it. The new
+        adapter knew nothing of it: with night charging off by then, no stop
+        came, and Off and an unload had nothing to stop either. The charge
+        adapter's record (``charge_record.ForcedChargeRecord``) says whether
+        SEM turned this battery's actuator on; if so the charge is active,
+        and ``_sem_forced_charge`` is True, so the next NORMAL or limit
+        decision stops it first (``decide_battery._stop_what_sem_started``).
+        Only while the actuator still reads a charge, and not before it can
+        be read: the coordinator asks on every cycle, and it is a no-op once
+        settled.
+
+        Reads only (bar dropping a name whose actuator reads no charge), so
+        the coordinator calls it in observer mode too: the decision then
+        still sends nothing. Brands that keep no such record (Huawei reads
+        its own status sensor, Deye its snapshot) do nothing here. Never
+        raises."""
+        adopt = getattr(getattr(self, "_charge_adapter", None), "adopt_running", None)
+        if adopt is None:
+            return
+        try:
+            if await adopt():
+                self._sem_forced_charge = True
+                # An Off or a stop recorded before the charge could be seen
+                # (its actuator not loaded yet) no longer says what the pack
+                # was last told: without this, Off stays silent and the
+                # charge runs on (review).
+                if self._last_intent in (BatteryIntent.OFF,
+                                         BatteryIntent.STOP_FORCE_CHARGE):
+                    self._last_intent = None
+        except Exception:  # noqa: BLE001 — a record never costs a cycle
+            _LOGGER.debug("forced charge not adopted", exc_info=True)
+
+    async def _stop_own_charge(self) -> bool:
+        """(#1181) A forced charge SEM started, stopped by the hand-back.
+
+        Off and the unload release both hand the battery back through
+        ``command_normal`` (Off through ``command_off``). On GoodWe and the
+        generic switch setup that zeroed the setpoint and lifted the limit,
+        but only the stop turns the work mode or the switch back, so the
+        pack went on charging from the grid with nothing watching it, and
+        the charge target SEM wrote stayed (#1180). Huawei's own
+        ``command_normal`` already stops its charge; Deye's restores its
+        snapshot.
+
+        No charge of SEM's active → True, nothing sent. A stop that landed →
+        True, and ``_sem_forced_charge`` is False: the next decision has
+        nothing left to stop. A stop that failed → False and ``last_error``
+        says so. The caller still writes the rest of its hand-back (the
+        zero, the strategy, the limit: an unload has no next cycle, and the
+        #1066 protection cycle must still write its limit) and only records
+        no NORMAL / OFF, so the next cycle tries the stop again (#589)."""
+        charge = getattr(self, "_charge_adapter", None)
+        if charge is None or not bool(getattr(charge, "is_active", False)):
+            return True
+        from .force_charge import ChargeCommandStatus
+        status = await charge.stop_forced_charge()
+        if getattr(status, "status", None) is ChargeCommandStatus.FAILED:
+            self._last_error = (
+                f"{self.STOP_OWN_CHARGE_FAILED}: {getattr(status, 'message', '')}")
+            return False
+        if str(self._last_error or "").startswith(self.STOP_OWN_CHARGE_FAILED):
+            self._last_error = None
+        self._sem_forced_charge = False
+        return True
+
+    #: (#1181) how ``last_error`` names a hand-back stop that failed
+    STOP_OWN_CHARGE_FAILED = "stop_forced_charge failed"
 
     def _force_charge_already_stopped(self) -> bool:
         """True when a STOP_FORCE_CHARGE would command nothing (#757).
@@ -829,6 +962,11 @@ class BatteryControlAdapter(ABC):
         return value and NOT record intent when False (#589)."""
         if not self._force_discharge_entity:
             return True  # no-op needed — benign success
+        if self._setpoint_writer is not None:
+            # (#1182) another battery writes the shared entity this cycle;
+            # the pipeline gives this adapter its record after the cycle
+            self._setpoint_withheld = float(watts)
+            return True
         # (#749) ONE validation rule with the discharge-limit path: reject
         # non-power units (a current-native number would take watts as
         # amperes), reject unreadable states, and SCALE to the entity's
@@ -924,6 +1062,7 @@ class BatteryControlAdapter(ABC):
         # (the common NORMAL cycle) must not spam the bus.
         if (self._last_force_discharge_w is not None
                 and abs(watts - self._last_force_discharge_w) < 100.0):
+            self._setpoint_spoke = True   # (#1182) the entity holds it
             return True  # de-dup skip — no write needed, treat as success
         try:
             # Domain-aware: real-hardware setpoints are ``number.*`` (Huawei
@@ -946,6 +1085,7 @@ class BatteryControlAdapter(ABC):
                 blocking=True,
             )
             self._last_force_discharge_w = watts
+            self._setpoint_spoke = True   # (#1182) the write landed
             self._last_force_discharge_attempt_w = None
             if self._force_discharge_failures:
                 # Recovered — say so, and re-arm. A transient refusal that

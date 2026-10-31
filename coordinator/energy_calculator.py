@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import calendar
+import copy
 import inspect
 import logging
 import math
@@ -23,6 +24,7 @@ from .types import (
     PowerReadings, EnergyTotals, CostData, PerformanceMetrics,
     PowerFlows, EnergyFlows, shown_w,
 )
+from .flow_calculator import FlowCalculator
 from ..utils.time_manager import TimeManager
 from .units import energy_state_to_kwh
 from .sensor_reader import EV_ACTIVE_CHARGE_FLOOR_W
@@ -441,6 +443,12 @@ class EnergyCalculator:
         # (#1191 review) the battery's part of the export, from the last
         # cycle the grid read live: a held export keeps it (#1177)
         self._grid_live_battery_export_w: float = 0.0
+        #: (#1185) The readings and flows this cycle's books split by: a
+        #: held input's watts in place of the reader's 0 W. Set by
+        #: ``calculate_energy``; the coordinator hands them on to the flow
+        #: rows and the session splits. Steering keeps the cycle's own.
+        self.book_power: Optional[PowerReadings] = None
+        self.book_flows: Optional[PowerFlows] = None
 
         # Cost rates
         self._import_rate = config.get("electricity_import_rate",
@@ -852,6 +860,37 @@ class EnergyCalculator:
         watts["home_consumption_power"] = float(shown or 0.0)
         return watts
 
+    def _book_flows(self, power: PowerReadings,
+                    power_flows: "Optional[PowerFlows]",
+                    held_w: Dict[str, float]):
+        """(#1185) The readings and flows this cycle's books split by.
+
+        The cycle's flows come from the reader's watts, where a dark input
+        is 0 W (#818): right for steering, wrong for the books (class 58).
+        While an input is held (``_integral_held``), the rows book its held
+        watts, so the flows are built again from a copy of the readings
+        with the booked watts in — the held input's and the shown house
+        (#1047). The daily flows, the solar savings and the splits by source
+        then keep a dark input's share for the grace, as the rows do. The
+        copy's held units are in its totals, so it holds none of its own.
+
+        With no input held, the cycle's own readings and flows are used as
+        they are — also while the house alone is shown held (the #1105
+        battery stop): its sources are all live, and a held house beside
+        them would leave live import in no flow.
+        """
+        if power_flows is None or not self._integral_held:
+            return power, power_flows
+        held = {f: w for f, w in held_w.items()
+                if w != float(getattr(power, f, 0.0) or 0.0)}
+        if not held:
+            return power, power_flows
+        readings = copy.copy(power)
+        readings.held_w = {}
+        for field, watts in held.items():
+            setattr(readings, field, watts)
+        return readings, FlowCalculator.calculate_power_flows(readings)
+
     def _battery_flows(self, power_flows: "Optional[PowerFlows]"):
         """(#1177 review) The battery's flow shares for the books.
 
@@ -877,6 +916,7 @@ class EnergyCalculator:
         power_flows: "Optional[PowerFlows]" = None,
     ) -> EnergyTotals:
         """Calculate energy totals by integrating power over time."""
+        self.book_power = self.book_flows = None   # (#1185) this cycle's only
         now = dt_util.now()
         today = now.date()  # Midnight-based reset — matches HA Energy Dashboard
         # EV: deadline-based reset (#279 follow-up). The per-charger counter
@@ -892,6 +932,10 @@ class EnergyCalculator:
         # (#1177) a dark input books its last live read, not 0 W — read
         # first, so a skipped cycle's live read still counts as one
         held_w = self._integral_watts(power, dt_util.utcnow())
+        # (#1185) …and every split by source below takes the flows built
+        # from the same watts: from here ``power_flows`` is the books' own
+        book_power, power_flows = self._book_flows(power, power_flows, held_w)
+        self.book_power, self.book_flows = book_power, power_flows
         battery_flows = self._battery_flows(power_flows)
         # (#1191 review) the battery's part of a live meter's export, kept for
         # a dark meter's held export — taken here, before a skipped cycle
@@ -1019,15 +1063,15 @@ class EnergyCalculator:
             # own tariff; with none, exactly ``import_increment × rate``
             self._accumulate_cost("cost_import", today, month_key, year_key,
                                   self._import_cost(import_increment, interval_hours,
-                                                    power, power_flows, today,
+                                                    book_power, power_flows, today,
                                                     month_key, year_key)
                                   if self._device_tariff_cycle else
                                   import_increment * self._import_rate)
         if self._device_tariff_cycle:
             # (#812) no import this cycle: nothing to split, but the meter
             # baselines advance (their steps came from the sun)
-            self._import_cost(0.0, interval_hours, power, power_flows, today,
-                              month_key, year_key)
+            self._import_cost(0.0, interval_hours, book_power, power_flows,
+                              today, month_key, year_key)
         # (#628) utility-meter reconciliation — bidirectional, so it must run
         # before the reads below exactly like its solar and EV siblings.
         self._reconcile_metered_energy(

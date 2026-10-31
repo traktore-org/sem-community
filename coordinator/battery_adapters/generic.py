@@ -460,6 +460,11 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         self._last_export_limit_w = w
         self._last_export_intent = ExportIntent.LIMIT
 
+    def export_control_wired(self) -> bool:
+        """(#1183) Only a writable number can cut export here."""
+        ent = str(self._config.get("export_limit_entity", "") or "")
+        return ent.startswith("number.")
+
     def export_release_recipe(self):
         ent = str(self._config.get("export_limit_entity", "") or "")
         prior = getattr(self, "_export_prior", None)
@@ -506,6 +511,10 @@ class GenericBatteryAdapter(BatteryControlAdapter):
                 "data": {"entity_id": ent, "value": value}, "why": None}
 
     async def command_normal(self) -> None:
+        # (#1181) Off and the unload hand-back come here: only the stop turns
+        # the charge switch off, so a forced charge SEM started stops first.
+        # A failed stop records no NORMAL; the rest still goes out.
+        stopped = await self._stop_own_charge()
         await self._zero_setpoint()  # #523 mutual exclusion (#1005)
         # AC-coupled (Sessy): self-consumption is its OWN power strategy
         # (``nom`` = zero-on-meter), NOT the setpoint. Actively set it so a
@@ -516,7 +525,8 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         await self._set_strategy(self._strategy_self_consume)
         await self._apply_discharge_limit(self._max_discharge_w)
         self._clear_no_limit_error()                    # (#1066)
-        self._last_intent = BatteryIntent.NORMAL
+        if stopped:
+            self._last_intent = BatteryIntent.NORMAL
 
     async def command_off(self) -> None:
         """#523 (Rien): a Sessy in 'Off' should sit IDLE (no charge/discharge),
@@ -529,11 +539,15 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         if not self._strategy_entity:
             await super().command_off()
             return
+        # (#1181) idle means no grid charge of SEM's either; a stop that
+        # failed records no OFF, so the next cycle tries again
+        stopped = await self._stop_own_charge()
         await self._zero_setpoint()  # (#1005)
         await self._set_strategy(self._strategy_off)
         # (#1175) Hands off means no limit of SEM's left behind either.
         await self._hand_back_own_limit()
-        self._last_intent = BatteryIntent.OFF
+        if stopped:
+            self._last_intent = BatteryIntent.OFF
 
     async def command_limit_discharge(self, watts: float) -> None:
         await self._zero_setpoint()  # #523 mutual exclusion (#1005)

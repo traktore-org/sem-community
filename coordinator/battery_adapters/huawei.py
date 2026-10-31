@@ -498,6 +498,19 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         # Service-based (inverter device_id) OR a wired number entity.
         return bool(self._inverter_device_id) or bool(self._force_discharge_entity)
 
+    def sale_setpoint_entity(self) -> str:
+        """(#1182) With a device id the sale and its stop are services on
+        the device; the number entity is never written."""
+        if self._inverter_device_id:
+            return ""
+        return super().sale_setpoint_entity()
+
+    def sale_surface(self) -> str:
+        """(#1182) Packs on one device sell through one service call."""
+        if self._inverter_device_id:
+            return f"huawei_solar device {self._inverter_device_id}"
+        return super().sale_surface()
+
     # ─── Forced discharge: huawei_solar service (no number entity) ──────
 
     async def command_force_discharge(
@@ -608,6 +621,11 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
                 )
                 return False
         await super()._zero_setpoint()   # the one #523 door (#1005)
+        if self._setpoint_writer is not None:
+            # (#1182) another battery writes the shared entity: no stop went
+            # out yet. If the pipeline sends it after all, it marks it then.
+            self._sent_stop = False
+            self._stop_withheld = True
         return True
 
     async def _stop_forced_charge(self):

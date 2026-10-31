@@ -12,6 +12,8 @@ into one :class:`BatteryControlAdapter` protocol with one method
 per :class:`BatteryIntent`. Mirrors the EV ``charger_adapters/``
 pattern.
 """
+import logging
+
 from .base import BatteryControlAdapter
 from .deye import DeyeBatteryAdapter, DeyeCapability, DeyeControlSnapshot
 from .generic import GenericBatteryAdapter
@@ -19,10 +21,13 @@ from typing import Optional
 
 from .goodwe import GoodWeBatteryAdapter
 from .huawei import HuaweiBatteryAdapter
+from ...utils.log_gate import log_on_change
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def adapter_for(hass, config: dict) -> BatteryControlAdapter:
-    """Pick the right battery adapter for this install.
+    """Pick the right battery adapter for this battery.
 
     Auto-detect priority (matches today's
     ``adapter_for`` factory):
@@ -31,13 +36,22 @@ def adapter_for(hass, config: dict) -> BatteryControlAdapter:
     2. Huawei Solar integration loaded → HuaweiBatteryAdapter
     3. GoodWe integration loaded → GoodWeBatteryAdapter
     4. Otherwise → GenericBatteryAdapter (switch + number target)
+
+    (#1183) Steps 1–3 name the brand of the install. In a home with more
+    than one battery a brand counts only for a battery whose own entities
+    belong to it (``_own_brand_domains``): the brand's service calls go to
+    the brand's inverter, and a sibling battery would force-charge it.
     """
     platform = (config.get("battery_charge_platform") or "auto").lower()
     if platform == "deye":
         return DeyeBatteryAdapter(hass, config)
     if platform == "huawei":
+        if "huawei_solar" not in _own_brand_domains(hass, config):
+            return GenericBatteryAdapter(hass, config)
         return HuaweiBatteryAdapter(hass, config)
     if platform == "goodwe":
+        if "goodwe" not in _own_brand_domains(hass, config):
+            return GenericBatteryAdapter(hass, config)
         return GoodWeBatteryAdapter(hass, config)
     if platform == "generic":
         return GenericBatteryAdapter(hass, config)
@@ -45,31 +59,89 @@ def adapter_for(hass, config: dict) -> BatteryControlAdapter:
     # #531: a battery with its OWN AC-coupled control surface (a power-strategy
     # select, or a bidirectional power setpoint — e.g. Sessy) is not a brand DC
     # battery, even when a Huawei/GoodWe integration is loaded for a SIBLING in
-    # a mixed fleet. Without this gate the global auto-detect below promotes it
-    # to a Huawei/GoodWe adapter whose service calls never reach it (the
-    # mixed-brand self-heal bug). These per-battery keys come from
-    # ``_per_battery_config`` overlays, so single-brand installs are unaffected.
-    if (
-        config.get("battery_strategy_control_entity")
-        or config.get("battery_setpoint_bidirectional")
-        or config.get("battery_power_direction_entity")   # (#869)
-    ):
-        return GenericBatteryAdapter(hass, config)
+    # a mixed fleet; (#1183) nor is any battery whose own entities belong to
+    # another integration (``auto_brand``).
+    domain = auto_brand(hass, config)
+    if domain == "huawei_solar":
+        return HuaweiBatteryAdapter(hass, config)
+    if domain == "goodwe":
+        return GoodWeBatteryAdapter(hass, config)
+    return GenericBatteryAdapter(hass, config)
 
-    # Auto-detect. Check BOTH legacy ``hass.data`` and loaded config
-    # entries — modern integrations (incl. recent huawei_solar) store
-    # state in ``entry.runtime_data`` and never populate ``hass.data``,
-    # so the old ``"huawei_solar" in hass.data`` check silently failed and
-    # a real Huawei battery fell back to the Generic adapter (no forcible-
-    # discharge service path → #523 force-discharge dropped).
+
+#: The brand integrations auto-detect drives a battery through, in the order
+#: a one-battery home asks them, and the platform name each one pins.
+_BRAND_DOMAINS: tuple = (("huawei_solar", "huawei"), ("goodwe", "goodwe"))
+
+
+def _own_control_surface(config: dict) -> bool:
+    """(#531) A battery with its own AC-coupled control: a power-strategy
+    select, a bidirectional setpoint or a power-direction entity (#869)."""
+    return bool(config.get("battery_strategy_control_entity")
+                or config.get("battery_setpoint_bidirectional")
+                or config.get("battery_power_direction_entity"))
+
+
+def _own_brand_domains(hass, config: dict) -> tuple:
+    """(#1183) The brand integrations this battery may be driven through.
+
+    A home with one battery: every brand. The integration loaded there is
+    the battery's own, and ``battery_fleet_size`` is unset outside the
+    coordinator's per-battery context.
+
+    A home with more batteries: only the brand that the battery's own
+    entities belong to (``battery_own_entity_ids``, set per battery by
+    ``_battery_adapter_context``), asked of the entity registry. A brand
+    loaded for another battery is not this battery's. No brand among them,
+    two brands, or a registry that does not answer: none, and the battery
+    gets the generic adapter, which sends nothing to a brand's inverter.
+    """
     try:
-        if _integration_loaded(hass, "huawei_solar"):
-            return HuaweiBatteryAdapter(hass, config)
-        if _integration_loaded(hass, "goodwe"):
-            return GoodWeBatteryAdapter(hass, config)
+        fleet = int(config.get("battery_fleet_size") or 1)
+    except (TypeError, ValueError):
+        fleet = 1
+    if fleet <= 1:
+        return tuple(domain for domain, _name in _BRAND_DOMAINS)
+    own = config.get("battery_own_entity_ids") or ()
+    try:
+        from homeassistant.helpers import entity_registry as er
+        reg = er.async_get(hass)
+        platforms = {
+            str(getattr(reg.async_get(eid), "platform", "") or "")
+            for eid in own if isinstance(eid, str) and eid
+        }
+    except Exception as err:  # noqa: BLE001 — no registry answer is no brand
+        log_on_change(
+            _LOGGER, "battery_brand_registry", logging.WARNING,
+            "cannot read the entity registry to find a battery's brand, so "
+            "it is driven as a generic battery (#1183): %s", err)
+        return ()
+    found = tuple(domain for domain, _name in _BRAND_DOMAINS
+                  if domain in platforms)
+    return found if len(found) == 1 else ()
+
+
+def auto_brand(hass, config: dict) -> "Optional[str]":
+    """The brand integration auto-detect drives this battery through, or
+    None for the generic adapter.
+
+    A battery with its OWN AC-coupled control surface (#531, e.g. Sessy)
+    is not a brand DC battery. Otherwise the first of its brands
+    (``_own_brand_domains``) that is loaded. Checks BOTH legacy
+    ``hass.data`` and loaded config entries — modern integrations (incl.
+    recent huawei_solar) store state in ``entry.runtime_data`` and never
+    populate ``hass.data`` (#523: a real Huawei battery fell back to the
+    Generic adapter and lost its force-discharge path).
+    """
+    if _own_control_surface(config):
+        return None
+    try:
+        for domain in _own_brand_domains(hass, config):
+            if _integration_loaded(hass, domain):
+                return domain
     except (AttributeError, TypeError):
         pass
-    return GenericBatteryAdapter(hass, config)
+    return None
 
 
 def pinned_generic_brand(hass, config: dict) -> "Optional[str]":
@@ -86,11 +158,8 @@ def pinned_generic_brand(hass, config: dict) -> "Optional[str]":
     """
     if not _pinnable(config):
         return None
-    if _integration_loaded(hass, "huawei_solar"):
-        return "huawei"
-    if _integration_loaded(hass, "goodwe"):
-        return "goodwe"
-    return None
+    # (#1183) the brand THIS battery would auto-detect to, not the install's
+    return dict(_BRAND_DOMAINS).get(auto_brand(hass, config) or "")
 
 
 def _pinnable(config: dict) -> bool:
@@ -98,9 +167,7 @@ def _pinnable(config: dict) -> bool:
     platform = (config.get("battery_charge_platform") or "auto").lower()
     if platform != "generic":
         return False
-    return not (config.get("battery_strategy_control_entity")
-                or config.get("battery_setpoint_bidirectional")
-                or config.get("battery_power_direction_entity"))
+    return not _own_control_surface(config)
 
 
 def pinned_generic_pending(hass, config: dict) -> bool:
@@ -112,7 +179,7 @@ def pinned_generic_pending(hass, config: dict) -> bool:
     "no"."""
     if not _pinnable(config):
         return False
-    for domain in ("huawei_solar", "goodwe"):
+    for domain in _own_brand_domains(hass, config):    # (#1183)
         try:
             if (hass.config_entries.async_entries(domain)
                     and not _integration_loaded(hass, domain)):
@@ -148,4 +215,5 @@ __all__ = [
     "GoodWeBatteryAdapter",
     "GenericBatteryAdapter",
     "adapter_for",
+    "auto_brand",
 ]

@@ -413,6 +413,15 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
             return "Deye System Work Mode state is not an offered option"
         return ""
 
+    def sale_setpoint_entity(self) -> str:
+        """(#1182) The sale is the System Work Mode select; the sale power
+        number is never written."""
+        return ""
+
+    def sale_surface(self) -> str:
+        """(#1182) The select every sale on this inverter flips."""
+        return str(self._system_work_mode_entity or "")
+
     @staticmethod
     def discharge_rate_caveat() -> str:
         """(#827) Selling First sells at the INVERTER's own rate — SEM's

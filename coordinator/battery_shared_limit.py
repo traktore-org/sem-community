@@ -35,6 +35,28 @@ after a stop (``_sent_stop``) gets none from the writer that cycle. After the
 cycle each of them takes the writer's record, so its own record is what the
 entity holds: the same-limit skip, the sale's hand-back, the sensor and the
 actuator's dwell all read the entity, not a value nobody holds any more.
+
+(#1182) The sale power entity (``battery_force_discharge_control_entity``)
+has the same shape. Battery A sold and wrote 3000 W; battery B was NORMAL
+in the same cycle and wrote 0 W into the same entity (every mode zeroes it,
+#523). A's record still said 3000 W, so A never wrote again: A showed a
+sale while the entity read 0 W. One writer per entity per cycle here too:
+
+1. a sale (the sale is the reason the entity is there);
+2. else a forced charge on a bidirectional setpoint (its negative power);
+3. else any other command (they all write 0 W).
+
+Among the 0 W writers a battery ending a sale of its own goes first, so a
+stop goes out with its own command (before the shared limit's writer, which
+then gets its quiet cycle). Other ties go to the first battery in fleet
+order. The others' writes are held back in ``_write_force_discharge``
+(``_setpoint_writer``). A writer that did not leave its value in the entity
+(``_setpoint_spoke``: a sale withheld for a strategy select, #978, a stop
+with nothing to stop, #757, a blind cycle, #818, a refused write, #840)
+gives the entity to the next battery in line that held a write back, until
+one lands; a sale sent so marks ``_sale_sent`` by its own result. A sale
+held back behind a sale that landed went out with it. After the cycle each
+takes the writer's record.
 """
 from __future__ import annotations
 
@@ -77,6 +99,45 @@ def wish_of(decision, adapter=None, *,
     if intent not in _RANK:
         return None
     return _RANK[intent], intent, (limit_w if intent is _LIMIT else 0.0)
+
+
+def setpoint_entity(adapter) -> str:
+    """(#1182) The sale power entity this adapter's commands write, or
+    ``""``."""
+    fn = getattr(adapter, "sale_setpoint_entity", None)
+    if not callable(fn):
+        return ""
+    try:
+        return str(fn() or "")
+    except Exception:  # noqa: BLE001 — a stand-in without the attributes
+        return ""
+
+
+def setpoint_wish_of(decision, adapter, *,
+                     inputs_degraded: bool = False) -> Optional[tuple]:
+    """(#1182) What this battery's command writes to its sale power entity
+    this cycle, as ``(rank, intent, tie)`` — ``None`` when it writes none."""
+    from .actuate_battery import held_on_blind_cycle
+    if held_on_blind_cycle(decision, adapter, inputs_degraded):
+        return None                         # the actuator sends nothing
+    intent = decision.intent
+    if (intent is BatteryIntent.OFF
+            and getattr(adapter, "last_intent", None) is BatteryIntent.OFF):
+        return None                         # Off speaks once
+    if intent is _SALE:
+        if not getattr(adapter, "supports_forced_discharge", False):
+            return None                     # the actuator drops it
+        return 0, intent, 0.0
+    if (intent is BatteryIntent.FORCE_CHARGE
+            and getattr(adapter, "_setpoint_bidirectional", False)):
+        return 1, intent, 0.0
+    # every other command writes 0 W; a battery ending a sale of its own
+    # goes first, so its stop goes out with its own command
+    retries = getattr(adapter, "_stop_retries", 0)
+    owes_stop = bool(getattr(adapter, "last_intent", None) is _SALE
+                     or getattr(adapter, "_forcible_discharging", False) is True
+                     or (isinstance(retries, int) and retries > 0))
+    return 2, intent, (0.0 if owes_stop else 1.0)
 
 
 def shared_groups(rows: Iterable[tuple]) -> list:
@@ -149,19 +210,54 @@ def _drop_unsent_hold(adapter) -> None:
         _set(adapter, "_last_intent", None)
 
 
+async def _settle_setpoint(ads: dict, ranked: list, record) -> str:
+    """(#1182) After the commands: the battery whose write the shared sale
+    power entity holds. A writer whose command did not leave its value
+    there (it wrote nothing, or the write was refused) gives the entity to
+    the next battery in line that held a write back, until one lands.
+    ``record`` is the entity's record before the commands: no write landed
+    since, and a command may have set its own without one."""
+    writer = ranked[0]
+    if not getattr(ads[writer], "_setpoint_spoke", False):
+        for cand in ranked[1:]:
+            ad = ads[cand]
+            withheld = getattr(ad, "_setpoint_withheld", None)
+            if withheld is None:
+                continue
+            _set(ad, "_setpoint_writer", None)
+            # the same-value skip reads the entity's record, not one this
+            # command set without a write (a stop can record 0 W first)
+            _set(ad, "_last_force_discharge_w", record)
+            if withheld == 0.0:
+                ok = await ad._zero_setpoint()   # the #1005 door
+                if getattr(ad, "_stop_withheld", False):
+                    _set(ad, "_sent_stop", True)
+            else:
+                ok = await ad._write_force_discharge(withheld)
+                if withheld > 0:
+                    _set(ad, "_sale_sent", bool(ok))
+            writer = cand
+            if ok:
+                break
+    return writer
+
+
 async def actuate_batteries(
     rows: list,
     send: Callable[..., Awaitable[None]],
     *,
     observer: bool = False,
     inputs_degraded: bool = False,
+    sale_writers: Optional[dict] = None,
 ) -> dict:
-    """Send every battery's decision, one writer per shared limit.
+    """Send every battery's decision, one writer per shared limit and per
+    shared sale power entity (#1182).
 
     ``rows``: ``(battery_id, adapter, decision)`` in fleet order;
     ``send(decision, adapter)`` sends one (``actuate_battery``). Returns
     ``{battery_id: writer_id}`` for the batteries whose limit another
-    battery wrote.
+    battery wrote; ``sale_writers``, when given, is filled the same way for
+    the sale power.
 
     Observer sends nothing, so nothing is shared out. The writer is marked
     on each adapter only while the cycle's commands run: a command sent
@@ -177,6 +273,13 @@ async def actuate_batteries(
     groups = [(m, r) for m, r in shared_groups(
         (bid, limit_entity(ad), wishes[bid]) for bid, ad, _ in rows) if r]
     top = {bid: ranked[0] for members, ranked in groups for bid in members}
+    sp_wishes = {bid: setpoint_wish_of(d, ad, inputs_degraded=inputs_degraded)
+                 for bid, ad, d in rows}
+    sp_groups = [(m, r) for m, r in shared_groups(
+        (bid, setpoint_entity(ad), sp_wishes[bid]) for bid, ad, _ in rows) if r]
+    sp_top = {bid: ranked[0] for members, ranked in sp_groups
+              for bid in members}
+    sp_effective = dict(sp_top)
     for bid, writer_id in top.items():
         # (#1138) a hold's one extra send goes with the hold
         if (bid != writer_id and wishes[writer_id][1] is _LIMIT
@@ -187,6 +290,8 @@ async def actuate_batteries(
             _set(ads[bid], "_limit_resend_due", False)
     writers = set(top.values())
     before = {bid: ad.last_discharge_limit_w for bid, ad in ads.items()}
+    sp_before = {bid: getattr(ad, "_last_force_discharge_w", None)
+                 for bid, ad in ads.items()}
     stopped: set = set()
     effective = dict(top)
     try:
@@ -194,6 +299,9 @@ async def actuate_batteries(
             _set(ad, "_sent_stop", False)
             _set(ad, "_sale_sent", False)
             _set(ad, "_limit_withheld", None)
+            _set(ad, "_setpoint_spoke", False)
+            _set(ad, "_setpoint_withheld", None)
+            _set(ad, "_stop_withheld", False)
         for bid, ad, decision in ([r for r in rows if r[0] not in writers]
                                   + [r for r in rows if r[0] in writers]):
             writer_id = top.get(bid)
@@ -201,9 +309,20 @@ async def actuate_batteries(
             if writer_id == bid and limit_entity(ad) in stopped:
                 mark = bid                    # a quiet cycle: nobody writes
             _set(ad, "_limit_writer", mark)
+            sp_writer = sp_top.get(bid)
+            _set(ad, "_setpoint_writer", sp_writer if sp_writer != bid else None)
             await send(decision, ad)
             if writer_id is not None and getattr(ad, "_sent_stop", False):
                 stopped.add(limit_entity(ad))
+        # (#1182) the sale power first: whether a sale went out decides the
+        # limit's writer below
+        for members, ranked in sp_groups:
+            writer = await _settle_setpoint(ads, ranked, sp_before[ranked[0]])
+            for bid in members:
+                sp_effective[bid] = writer
+            if top.get(writer) is not None and getattr(
+                    ads[writer], "_sent_stop", False):
+                stopped.add(limit_entity(ads[writer]))
         for members, ranked in groups:
             for cand in ranked:
                 ad = ads[cand]
@@ -223,9 +342,17 @@ async def actuate_batteries(
     finally:
         for ad in ads.values():
             _set(ad, "_limit_writer", None)
+            _set(ad, "_setpoint_writer", None)
         for bid, writer_id in effective.items():
             if bid != writer_id:
                 follow_writer(ads[bid], ads[writer_id])
         for ad in ads.values():
             _drop_unsent_hold(ad)
+        for bid, writer_id in sp_effective.items():
+            if bid != writer_id:
+                _set(ads[bid], "_last_force_discharge_w",
+                     getattr(ads[writer_id], "_last_force_discharge_w", None))
+    if sale_writers is not None:
+        sale_writers.update(
+            {bid: w for bid, w in sp_effective.items() if bid != w})
     return {bid: w for bid, w in effective.items() if bid != w}

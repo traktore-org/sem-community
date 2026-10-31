@@ -41,10 +41,15 @@ class GoodWeBatteryAdapter(BatteryControlAdapter):
         return True
 
     async def command_normal(self) -> None:
+        # (#1181) Off and the unload hand-back come here: only the stop sets
+        # the work mode back, so a forced charge SEM started is stopped
+        # first. A failed stop records no NORMAL; the rest still goes out.
+        stopped = await self._stop_own_charge()
         await self._zero_setpoint()  # #523 mutual exclusion (#1005)
         await self._apply_discharge_limit(self._max_discharge_w)
         self._clear_no_limit_error()                    # (#1066)
-        self._last_intent = BatteryIntent.NORMAL
+        if stopped:
+            self._last_intent = BatteryIntent.NORMAL
 
     async def command_limit_discharge(self, watts: float) -> None:
         await self._zero_setpoint()  # #523 mutual exclusion (#1005)

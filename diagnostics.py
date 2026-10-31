@@ -651,6 +651,11 @@ async def async_get_config_entry_diagnostics(
         _hold = getattr(coordinator, "_charge_target_hold_obj", None)
         if isinstance(_hold, ChargeTargetHold):
             battery_info["charge_target_held"] = _hold.snapshot()
+        # (#1181) each switch or mode select SEM turned on and has not seen off
+        from .coordinator.battery_adapters.charge_record import ForcedChargeRecord
+        _rec = getattr(coordinator, "_forced_charge_record_obj", None)
+        if isinstance(_rec, ForcedChargeRecord):
+            battery_info["forced_charge_running"] = _rec.snapshot()
         # #709 — Deye forced-grid-charge observability. Read-only. Keep the
         # generic payload unchanged when no Deye adapter exists.
         deye_info = _build_deye_diagnostics(_adapters)

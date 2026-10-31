@@ -191,6 +191,44 @@ def effective_battery_count(pbcs: "list[dict]") -> int:
     return max(1, len(surfaces) + unknown)
 
 
+def sale_surface_count(units: "list[tuple]") -> int:
+    """(#1182) The divisor for the fleet sale split: the planned sale is
+    shared out per thing a sale lands on, not per discharge limit entity.
+
+    Two batteries on one sale power entity sell as one: each got half, and
+    one writer sent half the sale. Two on their own sale entities but one
+    limit entity sell twice: each got the whole sale, double the plan.
+
+    ``units``: ``(per-battery config, cached adapter or None)`` in fleet
+    order. A ``mode=off`` battery never sells. A built adapter answers for
+    itself: no sale at all (no entity, withdrawn after refusals, #840) is
+    no share, else its ``sale_surface``. Before the adapter is built (the
+    first cycle) the config's sale entity answers, else the limit entity as
+    before. Returns at least 1.
+    """
+    surfaces: set = set()
+    unknown = 0
+    for pbc, adapter in units:
+        if str(pbc.get("battery_mode", "auto") or "auto").lower() == "off":
+            continue
+        if adapter is not None:
+            if not getattr(adapter, "supports_forced_discharge", False):
+                continue
+            fn = getattr(adapter, "sale_surface", None)
+            key = ("sale", str(fn() or "")) if callable(fn) else ("sale", "")
+        elif pbc.get("battery_force_discharge_control_entity"):
+            key = ("sale", str(pbc["battery_force_discharge_control_entity"]))
+        elif pbc.get("battery_discharge_control_entity"):
+            key = ("limit", str(pbc["battery_discharge_control_entity"]))
+        else:
+            key = ("sale", "")
+        if key[1]:
+            surfaces.add(key)
+        else:
+            unknown += 1
+    return max(1, len(surfaces) + unknown)
+
+
 def house_load_is_measured(fleet) -> bool:
     """Is this cycle's ``home_consumption_w`` a measurement? (#1003)
 
@@ -736,8 +774,8 @@ def _decide_battery(view: "BatteryView") -> BatteryDecision:
                     # are the cap — the advisor bounded delivery by the
                     # home's own draw, so this stays an avoided-import
                     # delivery, never export-at-max. The pipeline already
-                    # split the block power across the fleet (#531/#691
-                    # treatment via effective_battery_count).
+                    # split the block power across the fleet, per sale
+                    # surface (#1182, sale_surface_count).
                     _cap = float(_sell[1] or 0.0)
                     _sched_w = float(getattr(sched, "discharge_power_w", 0.0) or 0.0)
                     # (#778) …and the budget caps it too, when the arc's master

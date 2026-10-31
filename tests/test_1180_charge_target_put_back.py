@@ -719,7 +719,8 @@ class TestCoordinatorWiring:
         assert isinstance(a, ChargeTargetHold) and a is b
         assert a._store.key == "sem.charge_target.entry-1"
         assert a._configured == {TARGET}
-        assert _FakeStore.made == ["sem.charge_target.entry-1"]
+        # one hold for both (#1181 adds the record's own store beside it)
+        assert _FakeStore.made.count("sem.charge_target.entry-1") == 1
 
     def test_no_entry_no_record(self):
         coord = self._coordinator({}, entry_id="")

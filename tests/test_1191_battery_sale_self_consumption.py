@@ -565,7 +565,8 @@ class TestTheNightAudit:
         for call in sites:
             flows = call.args[2] if len(call.args) > 2 else next(
                 (kw.value for kw in call.keywords if kw.arg == "power_flows"), None)
-            assert isinstance(flows, ast.Name) and flows.id == "power_flows", (
+            # (#1185) the books' flows, built from the held watts
+            assert isinstance(flows, ast.Name) and flows.id == "book_flows", (
                 f"line {call.lineno}: the night audit gets no flows")
 
 

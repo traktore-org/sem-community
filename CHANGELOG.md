@@ -13,9 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
-## 🐛 Bug Fixes
-
-- Simulation: a restart no longer drops a day, and an own-settings error of 5–10 % shows the what-if with a note instead of refusing (#1278)
+- 🐛 **With two batteries, SEM no longer sends the second battery's commands to the Huawei or GoodWe inverter** (#1183).
+- 🐛 **A rebuilt plan that moves when the battery sells to the grid now shows a new plan time** (#1184). A running sale keeps going.
+- 🐛 **Daily energy flows and solar savings no longer drop while a power sensor is out for a moment** (#1185). SEM uses its last reading.
+- 🐛 **Two batteries that share one sale power setting no longer stop each other's sale to the grid** (#1182). The sale is shared out right.
+- 🐛 **A grid charge on GoodWe or a charge switch now stops after you set the battery to Off, turn SEM off, or restart** (#1181).
+- 🐛 **Simulation: a restart no longer drops a day, and an error of 5–10 % shows the what-if with a note** (#1278).
 
 # [2.2.0] — 30.10.2026
 

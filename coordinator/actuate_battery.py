@@ -187,7 +187,8 @@ def _note_forced_op(adapter, attr: str, ret, landed_intent, value: bool) -> None
     stop verdict wins only while its direction is not known stopped, and a
     ``True`` is stopped before anything else. A stop routed as the OTHER
     direction (an arbitrage stop after a night charge) leaves this one
-    ``True`` — a discharge stop does not end a switch-based forced charge.
+    ``True`` here — unless the stop's own NORMAL ended the charge too
+    (#1181, ``BatteryControlAdapter._stop_own_charge``).
     """
     landed = ret is True or getattr(adapter, "last_intent", None) is landed_intent
     if landed:
