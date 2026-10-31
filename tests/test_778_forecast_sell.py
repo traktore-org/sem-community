@@ -131,6 +131,8 @@ class TestTheGate:
     def _plan(self, *, start=NOW, end=NIGHT, kwh=2.2, age_min=5):
         return {
             "computed_at": (NOW - timedelta(minutes=age_min)).isoformat(),
+            "slots": [{"start": NOW.isoformat(),
+                       "end": (NIGHT + timedelta(hours=10)).isoformat()}],
             "forecast_sell": {"enabled": True, "blocks": [
                 {"start": start.isoformat(), "end": end.isoformat(), "kwh": kwh},
             ]},

@@ -319,6 +319,24 @@ def merge_load_gates(load_gate: PlanGate, comfort_gate: PlanGate,
                        reason=holds[0].reason)
 
 
+def _now_in_plan_span(plan: dict, computed: datetime, now: datetime) -> bool:
+    """(#1272) ``now`` is inside the hours the plan was built for.
+
+    The same span rule as :func:`plan_gate`: the plan's authority runs from
+    its stamp (or its first slot, if earlier) to the end of its last slot.
+    A plan stamped after midnight ends at sunrise, so a sale block it
+    carries for that evening is not its to start. No readable span = no.
+    """
+    slots = plan.get("slots") or []
+    if not slots:
+        return False
+    start = _parse_dt(slots[0].get("start"))
+    end = _parse_dt(slots[-1].get("end"))
+    if start is None or end is None:
+        return False
+    return min(start, computed) <= now < end
+
+
 def arbitrage_sell_gate(plan, now: datetime) -> Tuple[bool, float]:
     """(#638 C6) The plan's WHEN for the arbitrage SELL.
 
@@ -340,6 +358,8 @@ def arbitrage_sell_gate(plan, now: datetime) -> Tuple[bool, float]:
             return closed
         arb = plan.get("arbitrage")
         if not isinstance(arb, dict):
+            return closed
+        if not _now_in_plan_span(plan, computed, now):
             return closed
         for b in arb.get("discharge_blocks") or []:
             start = _parse_dt(b.get("start"))
@@ -379,6 +399,8 @@ def forecast_sell_gate(plan, now: datetime) -> Tuple[bool, float]:
             return closed
         fs = plan.get("forecast_sell")
         if not isinstance(fs, dict):
+            return closed
+        if not _now_in_plan_span(plan, computed, now):
             return closed
         for b in fs.get("blocks") or []:
             start = _parse_dt(b.get("start"))

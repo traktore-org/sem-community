@@ -374,6 +374,8 @@ AT_1700 = DAY + timedelta(hours=17)
 
 def _plan_with(blocks):
     return {"computed_at": AT_1700.isoformat(),
+            "slots": [{"start": AT_1700.isoformat(),
+                       "end": (DAY + timedelta(hours=32)).isoformat()}],
             "forecast_sell": {"enabled": True, "blocks": [
                 {**b, "start": b["start"].isoformat(),
                  "end": b["end"].isoformat()} for b in blocks]}}
