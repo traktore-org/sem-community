@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **A home reading 1–2 % off during a big EV session no longer warns about a stale sensor** (#1234). Real sign errors still warn.
 - 🐛 **Setup finds a grid meter with separate import and export power sensors and no longer asks you to pick one** (#1237).
 - 🐛 **Force discharge goes back to Auto when the battery stops selling above the reserve** (#1165). It needs 15 minutes without sun while the home buys.
 - 🐛 **With two batteries, SEM no longer sends the second battery's commands to the Huawei or GoodWe inverter** (#1183).

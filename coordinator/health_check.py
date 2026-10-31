@@ -196,6 +196,19 @@ def largest_demand_term(power) -> str:
     return f"{name}={value:.0f}W"
 
 
+def balance_tolerance_w(power) -> float:
+    """(#1234) Two meters never agree to the watt: 50 W, or 2 % of the largest
+    demand term when that is more. A real sign error is thousands of watts."""
+    # FLEET-READ: fleet demand terms sized against the whole-house balance.
+    biggest = max(
+        float(power.home_consumption_power or 0.0),
+        float(power.ev_power or 0.0),  # FLEET-READ: fleet demand term
+        float(power.grid_export_power or 0.0),
+        float(power.battery_charge_power or 0.0),
+    )
+    return max(50.0, 0.02 * biggest)
+
+
 class HealthCheck:
     """Validates energy balance and calculation integrity each cycle."""
 
@@ -252,6 +265,7 @@ class HealthCheck:
             + power.battery_charge_power
         )
         imbalance = abs(supply - demand)
+        tolerance = balance_tolerance_w(power)
 
         # (#660) The residual the home-consumption clamp had to remove.
         #
@@ -269,7 +283,7 @@ class HealthCheck:
         # once the hold window is exhausted a held value that no longer
         # matches live inputs shows up here with the clamp record at 0.
         clamped = float(getattr(power, "home_residual_clamped_w", 0.0) or 0.0)
-        if clamped > 50:
+        if clamped > tolerance:
             if home_hold_active:
                 _LOGGER.debug(
                     "Home-consumption residual clamped by %.0fW while the "
@@ -289,7 +303,7 @@ class HealthCheck:
                     f"{power_terms(power)}. "
                     f"Largest demand term: {largest_demand_term(power)}"
                 )
-        elif imbalance > 50:  # Allow 50 W tolerance for rounding
+        elif imbalance > tolerance:  # rounding and meter noise (#1234)
             if home_hold_active:
                 _LOGGER.debug(
                     "Energy balance gap %.0fW (supply=%.0fW, demand=%.0fW) "
