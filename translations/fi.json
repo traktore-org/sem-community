@@ -2046,6 +2046,10 @@
       "title": "SEM ei näe verkkoon vientiäsi",
       "description": "Vain verkon tuontianturi **{import_entity}** on asetettu, joten SEM lukee viennin arvona 0 W. Mutta vientilaskurisi **{export_entity}** näyttää, että sähköä meni verkkoon. Korjaa avaamalla SEM-koontinäyttö, välilehti ⚙ **Asetukset**, ja valitse ylhäältä **Kaikki asetukset**. Aseta sitten **Verkon vientianturi** osiossa **Tariffi ja hinnoittelu**. Tai tyhjennä **Verkon tuontianturi**, niin SEM etsii parin itse."
     },
+    "unseen_power_row": {
+      "title": "SEM ei näe kaikkea aurinko- tai akkutehoasi",
+      "description": "Energia-paneeli laskee **{energy_entity}** kWh:na, ja sen laskuri nousee edelleen. Mutta teho, jonka SEM lukee (**{power_entity}**), ei sisällä sitä, joten SEM näyttää liian vähän aurinko- tai akkutehoa. SEM ei ota toista tehoanturia laitteelta, jota se jo lukee, koska se voisi laskea saman tehon kahdesti. Korjaa se lisäämällä tehoanturi tälle kohdalle Energia-paneelissa."
+    },
     "charger_device_gone": {
       "title": "Laturi {name}: laite puuttuu",
       "description": "Home Assistantissa ei enää ole laturin {name} laitetta. SEM ei voi ohjata sitä. Poista laturi SEMistä tai lisää laite uudelleen."

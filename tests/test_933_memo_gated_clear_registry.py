@@ -53,6 +53,10 @@ DECLARED: dict[str, str] = {
         "grid read of a lifetime clears once via _split_proof_reconciled, which "
         "covers a pick that IMPROVES to `declared` across a restart and so "
         "never corroborates again (#933)",
+    "coordinator/sensor_reader.py::SensorReader._watch_unseen_row":
+        "the first look of each reader lifetime clears the Repair once, "
+        "before any verdict, so one an older lifetime raised is dropped on "
+        "reload (#1236)",
     "coordinator/sensor_reader.py::SensorReader._watch_half_grid_pair":
         "the first look of each reader lifetime clears the Repair once, "
         "before any verdict, so one an older lifetime raised is dropped on "

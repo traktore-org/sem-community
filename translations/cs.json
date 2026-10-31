@@ -2046,6 +2046,10 @@
       "title": "SEM nevidí vaši dodávku do sítě",
       "description": "Je nastaven jen senzor importu ze sítě **{import_entity}**, takže SEM čte export jako 0 W. Ale vaše počítadlo exportu **{export_entity}** ukazuje, že energie šla do sítě. Oprava: otevřete panel SEM, kartu ⚙ **Konfigurace** a nahoře zvolte **Všechna nastavení**. Pak nastavte **Senzor exportu do sítě** v sekci **Tarif a ceny**. Nebo vymažte **Senzor importu ze sítě** a SEM si dvojici najde sám."
     },
+    "unseen_power_row": {
+      "title": "SEM nevidí celý výkon solárů nebo baterie",
+      "description": "Panel Energie počítá **{energy_entity}** v kWh a jeho počítadlo stále roste. Výkon, který SEM čte (**{power_entity}**), ho ale neobsahuje, takže SEM ukazuje příliš málo výkonu solárů nebo baterie. SEM nebere druhý senzor výkonu ze zařízení, které už čte, protože by mohl započítat stejný výkon dvakrát. Opravíte to přidáním senzoru výkonu k této položce v panelu Energie."
+    },
     "charger_device_gone": {
       "title": "Nabíječka {name}: chybí zařízení",
       "description": "Home Assistant už nemá zařízení nabíječky {name}. SEM ji nemůže řídit. Odeberte nabíječku v SEM, nebo zařízení znovu přidejte."

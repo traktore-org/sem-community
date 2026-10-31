@@ -2046,6 +2046,10 @@
       "title": "SEM kan ikke se din neteksport",
       "description": "Kun netimport-sensoren **{import_entity}** er sat, så SEM læser eksporten som 0 W. Men din eksporttæller **{export_entity}** viser, at strøm gik til nettet. Sådan retter du det: åbn SEM-dashboardet, fanen ⚙ **Konfiguration**, og vælg **Alle indstillinger** øverst. Sæt derefter **Neteksport-sensor** i afsnittet **Tarif og priser**. Eller ryd **Netimport-sensor**, så finder SEM parret selv."
     },
+    "unseen_power_row": {
+      "title": "SEM ser ikke al din sol- eller batterieffekt",
+      "description": "Energi-dashboardet tæller **{energy_entity}** i kWh, og dens tæller stiger stadig. Men den effekt, SEM læser (**{power_entity}**), indeholder den ikke, så SEM viser for lidt sol- eller batterieffekt. SEM tager ikke en anden effektsensor fra en enhed, den allerede læser, for den kunne tælle den samme effekt to gange. Ret det ved at tilføje en effektsensor til denne post i Energi-dashboardet."
+    },
     "charger_device_gone": {
       "title": "Lader {name}: enheden mangler",
       "description": "Home Assistant har ikke længere enheden bag laderen {name}. SEM kan ikke styre den. Fjern laderen i SEM, eller tilføj enheden igen."

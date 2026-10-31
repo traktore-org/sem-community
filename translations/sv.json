@@ -2046,6 +2046,10 @@
       "title": "SEM ser inte din nätexport",
       "description": "Bara nätimportsensorn **{import_entity}** är inställd, så SEM läser exporten som 0 W. Men din exporträknare **{export_entity}** visar att ström gick ut på nätet. Så rättar du det: öppna SEM-panelen, fliken ⚙ **Konfiguration**, och välj **Alla inställningar** högst upp. Ställ sedan in **Nätexportsensor** i avsnittet **Tariff och priser**. Eller töm **Nätimportsensor**, så letar SEM upp paret själv."
     },
+    "unseen_power_row": {
+      "title": "SEM ser inte all din sol- eller batterieffekt",
+      "description": "Energi-instrumentpanelen räknar **{energy_entity}** i kWh, och dess räknare stiger fortfarande. Men effekten som SEM läser (**{power_entity}**) innehåller den inte, så SEM visar för lite sol- eller batterieffekt. SEM tar ingen andra effektsensor från en enhet som den redan läser, eftersom den kunde räkna samma effekt två gånger. Åtgärda det genom att lägga till en effektsensor för denna post i Energi-instrumentpanelen."
+    },
     "charger_device_gone": {
       "title": "Laddare {name}: enheten saknas",
       "description": "Home Assistant har inte längre enheten bakom laddaren {name}. SEM kan inte styra den. Ta bort laddaren i SEM eller lägg till enheten igen."
