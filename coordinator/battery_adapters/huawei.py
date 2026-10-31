@@ -599,8 +599,8 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         if not self._forcible_discharging:
             return False
         ok = await self._issue_stop()
-        if not ok and self._inverter_device_id:
-            return False  # service raised — keep forcing, retry next cycle
+        if not ok:
+            return False  # the stop was refused — keep forcing, retry next cycle
         self._forcible_discharging = False
         self._last_force_discharge_w = 0.0
         # Re-issue the stop on the next couple of NORMAL cycles — a single
@@ -624,13 +624,13 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
                     "Huawei battery: stop_forcible_charge failed: %s", e,
                 )
                 return False
-        await super()._zero_setpoint()   # the one #523 door (#1005)
+        ok = await super()._zero_setpoint()   # the one #523 door (#1005)
         if self._setpoint_writer is not None:
             # (#1182) another battery writes the shared entity: no stop went
             # out yet. If the pipeline sends it after all, it marks it then.
             self._sent_stop = False
             self._stop_withheld = True
-        return True
+        return ok
 
     async def _stop_forced_charge(self):
         """The forced charge's stop, through the charge adapter. (#1178) It
