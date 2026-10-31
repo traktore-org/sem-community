@@ -1764,8 +1764,6 @@ class SensorReader:
             "grid_inverted": self._grid_sign_inverted,
             # (#1103) which source the lock is about — see restore. Before
             # this run's first source is known, keep the one restored.
-            # (#1192) the read without a dashboard names its source for the
-            # user flip only; its lock is saved as before, with none.
             "grid_source": (self._lock_source()
                             if self._lock_source() is not None
                             or self._restored_grid_source is _UNSET
@@ -2039,10 +2037,10 @@ class SensorReader:
         return None
 
     def _lock_source(self) -> Optional[str]:
-        """(#1192) The source a grid lock is saved with and checked against:
-        the dashboard read's. The read without one keeps its lock with no
-        source, as before it named its source for the user flip."""
-        return self._grid_source_key if self._energy_dashboard_config else None
+        """The source a grid lock is saved with and checked against: the
+        meter the grid is read from, with or without an Energy Dashboard
+        (#1246)."""
+        return self._grid_source_key
 
     def _check_restored_grid_lock(self) -> None:
         """(#1103) A restored grid sign lock is about ONE source. If the grid
@@ -2053,11 +2051,15 @@ class SensorReader:
         source is judged. Same binding as the one-tap flip (#971)."""
         recorded = self._restored_grid_source
         if recorded is _UNSET or self._lock_source() is None:
-            # nothing to check, or nothing read yet — or (#1192) the read
-            # without a dashboard, whose lock waits for a dashboard read
+            # nothing to check, or nothing read yet
             return
         self._restored_grid_source = _UNSET
         if recorded == self._grid_source_key:
+            return
+        if recorded is None and not self._energy_dashboard_config:
+            # (#1246) a store from before the read without a dashboard named
+            # its meter: nothing says which one it was, so keep the lock
+            # and name the meter from now on
             return
         if self.grid_read_is_pair():
             # A pair (manual, dashboard pair, discovered) has its sign BY

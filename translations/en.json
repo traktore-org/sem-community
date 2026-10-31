@@ -57,7 +57,7 @@
       },
       "reconfigure": {
         "title": "Reconfigure Solar Energy Management",
-        "description": "Update your EV charger and notification settings",
+        "description": "Update your EV charger and notification settings{charger_note}",
         "data": {
           "ev_connected_sensor": "EV Connected Status",
           "ev_charging_sensor": "EV Charging Status",

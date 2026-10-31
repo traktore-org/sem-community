@@ -57,7 +57,7 @@
       },
       "reconfigure": {
         "title": "重新配置太阳能消纳管理 (SEM)",
-        "description": "更新您的电动汽车充电桩和通知设置",
+        "description": "更新您的电动汽车充电桩和通知设置{charger_note}",
         "data": {
           "ev_connected_sensor": "充电桩连接状态",
           "ev_charging_sensor": "充电桩充电状态",

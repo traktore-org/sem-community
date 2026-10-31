@@ -57,7 +57,7 @@
       },
       "reconfigure": {
         "title": "Konfigurera om Solar Energy Management",
-        "description": "Uppdatera inställningarna för din EV-laddare och dina aviseringar",
+        "description": "Uppdatera inställningarna för din EV-laddare och dina aviseringar{charger_note}",
         "data": {
           "ev_connected_sensor": "EV Anslutningsstatus",
           "ev_charging_sensor": "EV Laddningsstatus",

@@ -35,6 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **Two grid meters: SEM stops searching every cycle for a dark sensor, and asks again when the device lookup was not ready** (#1286).
 - 🐛 **A complete charge plan no longer lets the car charge between its blocks** (#1282). Plan watts were rounded to whole watts, which looked like a tiny shortage.
 - 🐛 **When the daily cap cuts solar or battery energy, the month and year lose those kWh too** (#1243).
+- 🐛 **Hands-off marks and load modes you set now survive going back to an older version and forward again** (#1253).
+- 🐛 **A charger sensor or service changed on the Reconfigure page now changes what SEM runs** (#1247). The page shows the charger's own saved values.
+- 🐛 **A charger moved to helper sensors no longer keeps a "device is gone" Repair while its sensors still exist** (#1248).
+- 🐛 **A new service on the first charger's Configure page drops the old service's field name, data and box name** (#1249).
+- 🐛 **Reconfigure no longer shows three empty required EV fields for a charger set up in the charger list** (#1258). It says to use Configure.
+- 🐛 **Without an Energy Dashboard, a new grid sensor no longer inherits the grid sign learned on the old one** (#1246).
 - 🐛 **Setup finds a grid meter with separate import and export power sensors and no longer asks you to pick one** (#1237).
 - 🐛 **Force discharge goes back to Auto when the battery stops selling above the reserve** (#1165). It needs 15 minutes without sun while the home buys.
 - 🐛 **With two batteries, SEM no longer sends the second battery's commands to the Huawei or GoodWe inverter** (#1183).

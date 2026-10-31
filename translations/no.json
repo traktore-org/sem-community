@@ -57,7 +57,7 @@
       },
       "reconfigure": {
         "title": "Konfigurer Solar Energy Management på nytt",
-        "description": "Oppdater innstillingene for EV-lader og varslinger",
+        "description": "Oppdater innstillingene for EV-lader og varslinger{charger_note}",
         "data": {
           "ev_connected_sensor": "EV Tilkoblingsstatus",
           "ev_charging_sensor": "EV Ladestatus",

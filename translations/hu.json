@@ -57,7 +57,7 @@
       },
       "reconfigure": {
         "title": "A Solar Energy Management újrakonfigurálása",
-        "description": "Frissítse az EV-töltő és az értesítési beállításokat",
+        "description": "Frissítse az EV-töltő és az értesítési beállításokat{charger_note}",
         "data": {
           "ev_connected_sensor": "EV Csatlakoztatva",
           "ev_charging_sensor": "EV Töltési állapot",

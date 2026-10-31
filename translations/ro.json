@@ -57,7 +57,7 @@
       },
       "reconfigure": {
         "title": "Reconfigurare Solar Energy Management",
-        "description": "Actualizați setările încărcătorului VE și ale notificărilor",
+        "description": "Actualizați setările încărcătorului VE și ale notificărilor{charger_note}",
         "data": {
           "ev_connected_sensor": "Stare conectare VE",
           "ev_charging_sensor": "Stare încărcare VE",

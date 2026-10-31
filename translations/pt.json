@@ -57,7 +57,7 @@
       },
       "reconfigure": {
         "title": "Reconfigurar Solar Energy Management",
-        "description": "Atualize as definições do seu carregador VE e das notificações",
+        "description": "Atualize as definições do seu carregador VE e das notificações{charger_note}",
         "data": {
           "ev_connected_sensor": "Estado de conexão VE",
           "ev_charging_sensor": "Estado de carregamento VE",

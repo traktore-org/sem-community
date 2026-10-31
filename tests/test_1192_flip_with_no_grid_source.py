@@ -271,22 +271,13 @@ class TestTheReadWithoutADashboardNamesItsSource:
 
     def test_a_saved_lock_is_kept_as_before(self):
         """Its stores saved the lock with a None source. Named now, the
-        source must not drop that lock: the check waits for a dashboard."""
+        source must not drop that lock (#1246: it is named from now on)."""
         r = _legacy_reader()
         r.restore_sign_state({"grid_detected": True, "grid_inverted": True,
                               "grid_source": None})
         assert r.read_power().grid_power == -2000
         assert r._grid_sign_detected is True and r._grid_sign_inverted is True
-        # …and is saved as before, with no source (review: a legacy pair's
-        # lock must still be judged on the first dashboard read)
-        assert r.export_sign_state()["grid_source"] is None
-
-    def test_a_lock_from_a_dashboard_read_is_kept_in_the_store(self):
-        r = _legacy_reader()
-        r.restore_sign_state({"grid_detected": True, "grid_inverted": False,
-                              "grid_source": "combined:sensor.old_meter"})
-        r.read_power()
-        assert r.export_sign_state()["grid_source"] == "combined:sensor.old_meter"
+        assert r.export_sign_state()["grid_source"] == f"combined:{METER}"
 
     def test_a_legacy_pair_lock_is_judged_on_the_dashboard_read(self):
         """Review: legacy pair, a stale inverted lock, then a dashboard read

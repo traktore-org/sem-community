@@ -260,14 +260,27 @@ def _carry_hidden_wiring(discovered: dict, submitted: dict, target: dict) -> Non
             target[k] = discovered[k]
 
 
+#: the charger fields the Reconfigure page offers
+_RECONFIGURE_CHARGER_KEYS = (
+    "ev_connected_sensor", "ev_charging_sensor", "ev_charging_power_sensor",
+    "ev_charger_service", "ev_charger_service_entity_id", "ev_total_energy_sensor",
+)
+
+
+def _stale_service_wiring(before: dict, submitted: dict) -> tuple:
+    """The field name, service data and box name of a service the user
+    CHANGED: they belong to the service it replaced."""
+    if "ev_charger_service" not in submitted:
+        return ()
+    if (submitted.get("ev_charger_service") or "") == (before.get("ev_charger_service") or ""):
+        return ()
+    return _HIDDEN_CHARGER_WIRING[0][1]
+
+
 def _drop_stale_service_wiring(before: dict, submitted: dict, target: dict) -> None:
     """Edit: a service the user CHANGED takes no field names or box name
     from the one it replaced."""
-    if "ev_charger_service" not in submitted:
-        return
-    if (submitted.get("ev_charger_service") or "") == (before.get("ev_charger_service") or ""):
-        return
-    for k in _HIDDEN_CHARGER_WIRING[0][1]:
+    for k in _stale_service_wiring(before, submitted):
         target.pop(k, None)
 
 
@@ -1426,18 +1439,35 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # trio was REQUIRED, so a home with no charger could not save this
         # page at all. Without a charger the three are optional, and they
         # are checked only once the user starts filling them in.
-        # A charger kept only in the list still meets three empty required
-        # fields here, on purpose: this page saves flat keys into entry.data
-        # only, and a single charger's readers prefer those, so saving would
-        # split the charger in two. Its place is the options dialog.
+        # (#1258) A charger kept only in the list has no flat trio: this page
+        # saves flat keys into entry.data only, and a single charger's
+        # readers prefer those, so filling them would split the charger in
+        # two. The trio is left off and the page says where the charger is.
         has_charger = has_managed_charger(current_config)
+        list_only = bool(current_config.get("ev_chargers")) and not any(
+            current_config.get(k) for k in EV_REQUIRED_SENSORS)
+        # (#1247) SEM reads the first charger's own copy before the flat keys
+        # (``__init__._cfg``), so the page shows and saves that copy too.
+        from .charger_refs import first_card, flat_wiring_is_of, registry_device_of
+        from .hardware_detection import CHARGER_WIRING_KEYS
+        cards = current_config.get("ev_chargers") or []
+        card0 = first_card(cards) or {}
+        flat_is_first = not card0 or flat_wiring_is_of(
+            card0, current_config, registry_device_of(self.hass))
+
+        def shown(key: str) -> Any:
+            v = card0.get(key)
+            if v is None and (flat_is_first or key not in CHARGER_WIRING_KEYS):
+                v = current_config.get(key)
+            return v
 
         if user_input is not None:
             # Validate EV charger entities if provided
             if self._detector is None:
                 self._detector = HardwareDetector(self.hass)
 
-            if has_charger or any(user_input.get(k) for k in EV_REQUIRED_SENSORS):
+            if not list_only and (
+                    has_charger or any(user_input.get(k) for k in EV_REQUIRED_SENSORS)):
                 validation_errors = self._detector.validate_ev_configuration(user_input)
                 if validation_errors:
                     errors.update(validation_errors)
@@ -1468,14 +1498,36 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 updates: dict[str, Any] = {}
                 _merge_form_input(self, updates, user_input)
                 # a field that was never set is not written as None
+                # (#1247) what the user changed here goes into the first
+                # charger's own copy too; a service they swapped takes no
+                # field names from the one it replaced (#1249)
+                dropped = _stale_service_wiring(
+                    {"ev_charger_service": shown("ev_charger_service")}, user_input)
+                for k in dropped:
+                    updates[k] = None
+                new_cards = None
+                if card0 and not list_only:
+                    new_cards = [dict(c) if isinstance(c, dict) else c for c in cards]
+                    first = new_cards[cards.index(card0)]
+                    for k in _RECONFIGURE_CHARGER_KEYS:
+                        if k in updates and updates[k] != shown(k):
+                            first[k] = updates[k]
+                    for k in dropped:
+                        first.pop(k, None)
                 updates = {k: v for k, v in updates.items()
                            if v is not None or current_config.get(k) is not None}
                 options = dict(reconfigure_entry.options or {})
+                options_out = {**options, **{k: v for k, v in updates.items()
+                                             if k in options}}
+                if new_cards is not None:
+                    if "ev_chargers" in options:
+                        options_out["ev_chargers"] = new_cards
+                    else:
+                        updates["ev_chargers"] = new_cards
                 return self.async_update_reload_and_abort(
                     reconfigure_entry,
                     data_updates=updates,
-                    options={**options, **{k: v for k, v in updates.items()
-                                           if k in options}},
+                    options=options_out,
                 )
 
         # Get available notification services (notify.* and rest_command.*)
@@ -1498,45 +1550,54 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         except Exception:
             pass
 
+        trio_fields: dict = {} if list_only else {
+            # (#990) an optional entity field takes a suggestion, never
+            # default="": HA validates the default too, and "" is not an
+            # entity id, so the page could not be saved without both.
+            _charger_field(vol.Required(
+                "ev_connected_sensor",
+                default=shown("ev_connected_sensor") or "",
+            ), has_charger, current_config): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
+            ),
+            _charger_field(vol.Required(
+                "ev_charging_sensor",
+                default=shown("ev_charging_sensor") or "",
+            ), has_charger, current_config): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
+            ),
+            _charger_field(vol.Required(
+                "ev_charging_power_sensor",
+                default=shown("ev_charging_power_sensor") or "",
+            ), has_charger, current_config): _power_sensor_selector(getattr(self, "hass", None)),
+        }
+        charger_note = ("\n\n" + _flow_text(
+            self, "flow_charger_in_configure",
+            "Your EV charger is set up under Configure, not here.")
+            if list_only else "")
+
         return self.async_show_form(
             step_id="reconfigure",
+            description_placeholders={"charger_note": charger_note},
             data_schema=vol.Schema({
-                # (#990) an optional entity field takes a suggestion, never
-                # default="": HA validates the default too, and "" is not an
-                # entity id, so the page could not be saved without both.
-                _charger_field(vol.Required(
-                    "ev_connected_sensor",
-                    default=current_config.get("ev_connected_sensor") or "",
-                ), has_charger, current_config): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
-                ),
-                _charger_field(vol.Required(
-                    "ev_charging_sensor",
-                    default=current_config.get("ev_charging_sensor") or "",
-                ), has_charger, current_config): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
-                ),
-                _charger_field(vol.Required(
-                    "ev_charging_power_sensor",
-                    default=current_config.get("ev_charging_power_sensor") or "",
-                ), has_charger, current_config): _power_sensor_selector(getattr(self, "hass", None)),
+                **trio_fields,
                 # (#1214) a suggestion, never a default: HA refills an
                 # emptied field with its default, so it could not be erased
                 vol.Optional(
                     "ev_charger_service",
-                    description={"suggested_value": current_config.get("ev_charger_service") or None},
+                    description={"suggested_value": shown("ev_charger_service") or None},
                 ): selector.TextSelector(
                     selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
                 ),
                 vol.Optional(
                     "ev_charger_service_entity_id",
-                    description={"suggested_value": current_config.get("ev_charger_service_entity_id") or None},
+                    description={"suggested_value": shown("ev_charger_service_entity_id") or None},
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=["binary_sensor", "sensor", "switch"])
                 ),
                 vol.Optional(
                     "ev_total_energy_sensor",
-                    description={"suggested_value": current_config.get("ev_total_energy_sensor") or None},
+                    description={"suggested_value": shown("ev_total_energy_sensor") or None},
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor", device_class="energy")
                 ),
@@ -1933,13 +1994,25 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         user_input["ev_charger_efficiency"]
                     ),
                 }
+            # (#1249) the service as the page showed it, before the merge
+            _saved = {**self.config_entry.data, **self.config_entry.options,
+                      **self._data}
+            _first = (_draft_list(self, "ev_chargers") or [{}])[0]
+            _before = {"ev_charger_service": _first.get("ev_charger_service")
+                       or _saved.get("ev_charger_service")}
             # Update both flat keys and ev_chargers[0] (#112)
             _merge_form_input(self, self._data, user_input)
             ev_chargers = _draft_list(self, "ev_chargers")
             if ev_chargers:
                 _merge_form_input(self, ev_chargers[0], user_input)
+                _drop_stale_service_wiring(_before, user_input, ev_chargers[0])
             else:
                 ev_chargers = [{"id": "ev_charger", "name": "EV Charger", **user_input}]
+            # the flat keys are the fallback of the charger's own copy: None
+            # (not a delete) so a copy in entry.data does not show through
+            for k in _stale_service_wiring(_before, user_input):
+                if _saved.get(k) is not None:
+                    self._data[k] = None
             self._data["ev_chargers"] = ev_chargers
             return await self.async_step_ev_charger_menu()
 

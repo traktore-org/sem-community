@@ -57,7 +57,7 @@
       },
       "reconfigure": {
         "title": "Rekonfiguracja Solar Energy Management",
-        "description": "Zaktualizuj ustawienia ładowarki EV i powiadomień",
+        "description": "Zaktualizuj ustawienia ładowarki EV i powiadomień{charger_note}",
         "data": {
           "ev_connected_sensor": "Status podłączenia EV",
           "ev_charging_sensor": "Status ładowania EV",

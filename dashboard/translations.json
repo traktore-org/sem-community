@@ -2010,7 +2010,8 @@
     "sim_period_gaps": "{n} dní v tomto období je vynecháno: chyběl údaj nebo stál počítadlo.",
     "buffer_word": "Rezerva",
     "self_word": "vlastní",
-    "solar_word": "solár"
+    "solar_word": "solár",
+    "flow_charger_in_configure": "Vaše nabíječka EV se nastavuje v části Konfigurovat (Nastavení → Zařízení a služby → Solar Energy Management → Konfigurovat), ne zde."
   },
   "da": {
     "% of limit": "% af grænse",
@@ -4023,7 +4024,8 @@
     "sim_period_gaps": "{n} dage i denne periode er udeladt: en måling manglede, eller en måler stod stille.",
     "buffer_word": "Buffer",
     "self_word": "egen",
-    "solar_word": "sol"
+    "solar_word": "sol",
+    "flow_charger_in_configure": "Din EV-lader indstilles under Konfigurer (Indstillinger → Enheder og tjenester → Solar Energy Management → Konfigurer), ikke her."
   },
   "de": {
     "% of limit": "% des Limits",
@@ -6036,7 +6038,8 @@
     "sim_period_gaps": "{n} Tage in diesem Zeitraum sind ausgelassen: Ein Messwert fehlte oder ein Zähler stand still.",
     "buffer_word": "Puffer",
     "self_word": "eigen",
-    "solar_word": "solar"
+    "solar_word": "solar",
+    "flow_charger_in_configure": "Deine E-Auto-Ladestation stellst du unter Konfigurieren ein (Einstellungen → Geräte & Dienste → Solar Energy Management → Konfigurieren), nicht hier."
   },
   "en": {
     "% of limit": "% of limit",
@@ -8049,7 +8052,8 @@
     "sim_period_gaps": "{n} days in this period are left out: a reading was dark or a counter stood still.",
     "buffer_word": "Buffer",
     "self_word": "self",
-    "solar_word": "solar"
+    "solar_word": "solar",
+    "flow_charger_in_configure": "Your EV charger is set up under Configure (Settings → Devices & services → Solar Energy Management → Configure), not here."
   },
   "es": {
     "% of limit": "% del límite",
@@ -10062,7 +10066,8 @@
     "sim_period_gaps": "{n} días de este periodo quedan fuera: faltaba una lectura o un contador estuvo parado.",
     "buffer_word": "Reserva",
     "self_word": "propio",
-    "solar_word": "solar"
+    "solar_word": "solar",
+    "flow_charger_in_configure": "Tu cargador de VE se configura en Configurar (Ajustes → Dispositivos y servicios → Solar Energy Management → Configurar), no aquí."
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -12075,7 +12080,8 @@
     "sim_period_gaps": "{n} päivää tältä ajalta jätetään pois: lukema puuttui tai mittari seisoi.",
     "buffer_word": "Puskuri",
     "self_word": "oma",
-    "solar_word": "aurinko"
+    "solar_word": "aurinko",
+    "flow_charger_in_configure": "Sähköauton laturi asetetaan kohdassa Määritä (Asetukset → Laitteet ja palvelut → Solar Energy Management → Määritä), ei täällä."
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -14088,7 +14094,8 @@
     "sim_period_gaps": "{n} jours de cette période sont exclus : une mesure manquait ou un compteur était figé.",
     "buffer_word": "Tampon",
     "self_word": "autonome",
-    "solar_word": "solaire"
+    "solar_word": "solaire",
+    "flow_charger_in_configure": "Ta borne de recharge VE se règle sous Configurer (Paramètres → Appareils et services → Solar Energy Management → Configurer), pas ici."
   },
   "hu": {
     "% of limit": "% a határból",
@@ -16101,7 +16108,8 @@
     "sim_period_gaps": "Ebből az időszakból {n} nap kimarad: hiányzott egy mérés, vagy egy számláló állt.",
     "buffer_word": "Puffer",
     "self_word": "saját",
-    "solar_word": "napenergia"
+    "solar_word": "napenergia",
+    "flow_charger_in_configure": "Az elektromos autó töltőjét a Beállítás menüben állíthatod (Beállítások → Eszközök és szolgáltatások → Solar Energy Management → Beállítás), nem itt."
   },
   "it": {
     "% of limit": "% del limite",
@@ -18114,7 +18122,8 @@
     "sim_period_gaps": "{n} giorni di questo periodo sono esclusi: mancava una lettura o un contatore era fermo.",
     "buffer_word": "Buffer",
     "self_word": "autonomo",
-    "solar_word": "solare"
+    "solar_word": "solare",
+    "flow_charger_in_configure": "Il tuo caricatore EV si imposta in Configura (Impostazioni → Dispositivi e servizi → Solar Energy Management → Configura), non qui."
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -20127,7 +20136,8 @@
     "sim_period_gaps": "{n} dagen in deze periode zijn weggelaten: een meting ontbrak of een teller stond stil.",
     "buffer_word": "Buffer",
     "self_word": "eigen",
-    "solar_word": "zon"
+    "solar_word": "zon",
+    "flow_charger_in_configure": "Je EV-lader stel je in onder Configureren (Instellingen → Apparaten en diensten → Solar Energy Management → Configureren), niet hier."
   },
   "no": {
     "% of limit": "% av grense",
@@ -22140,7 +22150,8 @@
     "sim_period_gaps": "{n} dager i denne perioden er utelatt: en måling manglet eller en måler sto stille.",
     "buffer_word": "Buffer",
     "self_word": "egen",
-    "solar_word": "sol"
+    "solar_word": "sol",
+    "flow_charger_in_configure": "EV-laderen din stilles inn under Konfigurer (Innstillinger → Enheter og tjenester → Solar Energy Management → Konfigurer), ikke her."
   },
   "pl": {
     "% of limit": "% limitu",
@@ -24153,7 +24164,8 @@
     "sim_period_gaps": "{n} dni w tym okresie pominięto: brakowało odczytu lub licznik stał w miejscu.",
     "buffer_word": "Bufor",
     "self_word": "własne",
-    "solar_word": "solar"
+    "solar_word": "solar",
+    "flow_charger_in_configure": "Ładowarkę EV ustawisz w sekcji Konfiguruj (Ustawienia → Urządzenia i usługi → Solar Energy Management → Konfiguruj), nie tutaj."
   },
   "pt": {
     "% of limit": "% do limite",
@@ -26166,7 +26178,8 @@
     "sim_period_gaps": "{n} dias deste período ficam de fora: faltou uma leitura ou um contador parou.",
     "buffer_word": "Reserva",
     "self_word": "próprio",
-    "solar_word": "solar"
+    "solar_word": "solar",
+    "flow_charger_in_configure": "O seu carregador de VE é configurado em Configurar (Definições → Dispositivos e serviços → Solar Energy Management → Configurar), não aqui."
   },
   "ro": {
     "% of limit": "% din limită",
@@ -28179,7 +28192,8 @@
     "sim_period_gaps": "{n} zile din această perioadă sunt excluse: lipsea o citire sau un contor stătea pe loc.",
     "buffer_word": "Tampon",
     "self_word": "propriu",
-    "solar_word": "solar"
+    "solar_word": "solar",
+    "flow_charger_in_configure": "Încărcătorul tău EV se setează la Configurare (Setări → Dispozitive și servicii → Solar Energy Management → Configurare), nu aici."
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -30192,7 +30206,8 @@
     "sim_period_gaps": "{n} dagar i den här perioden är utelämnade: en mätning saknades eller en mätare stod still.",
     "buffer_word": "Buffert",
     "self_word": "egen",
-    "solar_word": "sol"
+    "solar_word": "sol",
+    "flow_charger_in_configure": "Din elbilsladdare ställs in under Konfigurera (Inställningar → Enheter och tjänster → Solar Energy Management → Konfigurera), inte här."
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -32205,6 +32220,7 @@
     "sim_period_gaps": "此期间有 {n} 天被排除：读数缺失或计数器停滞。",
     "buffer_word": "缓冲",
     "self_word": "自给",
-    "solar_word": "太阳能"
+    "solar_word": "太阳能",
+    "flow_charger_in_configure": "电动车充电桩请在“配置”中设置（设置 → 设备与服务 → Solar Energy Management → 配置），不在此处。"
   }
 }

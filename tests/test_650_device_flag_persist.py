@@ -104,6 +104,8 @@ class TestFlagsSurviveRebuild650:
         reg = UnifiedDeviceRegistry(MagicMock(), MagicMock(), MagicMock(), MagicMock())
         reg._store = MagicMock()
         reg._store.async_save = AsyncMock()
+        reg._copy_store = MagicMock()
+        reg._copy_store.async_save = AsyncMock()
         reg._critical_overrides = {"d_frz": True}
         reg._controllable_overrides = {"d_pump": False}
         await reg._save_storage()
