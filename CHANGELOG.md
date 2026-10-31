@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **Daily energy flows and solar savings no longer drop while a power sensor is out for a moment** (#1185). SEM uses its last reading.
 - 🐛 **Two batteries that share one sale power setting no longer stop each other's sale to the grid** (#1182). The sale is shared out right.
 - 🐛 **A grid charge on GoodWe or a charge switch now stops after you set the battery to Off, turn SEM off, or restart** (#1181).
+- 🐛 **With two batteries at 0 %, SEM now reads 0 % instead of no level** (#1169). A level below 0 % now counts as out.
 
 # [2.2.0] — 30.10.2026
 
