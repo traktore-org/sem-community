@@ -102,6 +102,9 @@ def _say_nothing_to_stop(adapter, why: str) -> ChargeStatus:
 class BatteryChargeAdapter(ABC):
     """Abstract base class for inverter-specific forced charge control."""
 
+    #: (#1281) the record, read whole, does not name this battery
+    not_started_by_sem: bool = False
+
     def __init__(self, hass: HomeAssistant, config: dict) -> None:
         self.hass = hass
         self.config = config
@@ -170,6 +173,10 @@ class BatteryChargeAdapter(ABC):
         try:
             if not await self.charge_record.running(actuator, self._battery()):
                 self._adoption_settled = True
+                # (#1281) a record read whole that does not name this
+                # battery: no charge on its actuator is SEM's to stop.
+                self.not_started_by_sem = bool(
+                    getattr(self.charge_record, "trusted", False))
                 return False
             charging = self.actuator_charging()
             if charging is None:

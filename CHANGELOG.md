@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **A refused stop of a Huawei sale on a power number is retried** (#1276). Before, it counted as sent and the battery kept selling.
 - 🐛 **Two Huawei packs on one device no longer end each other's sale** (#1275). A pack whose sale a sibling's stop ended sends it again.
 - 🐛 **The planned sale goes only to batteries that may sell** (#1277). A battery in self-consumption mode or without export permission took half and sold nothing.
+- 🐛 **A Deye battery keeps its saved settings when another battery above it is removed** (#1257). They now move to its new number.
+- 🐛 **A battery sale now ends a grid charge SEM started first** (#1280). Before, the switch or work mode stayed on while it sold.
+- 🐛 **A restart no longer turns off a charge switch you set yourself** (#1281). SEM now stops only the charges it started.
+- 🐛 **After a restart, an export cut now goes back to the setting SEM found** (#1274). The saved value was lost before the battery was set up.
 - 🐛 **Setup finds a grid meter with separate import and export power sensors and no longer asks you to pick one** (#1237).
 - 🐛 **Force discharge goes back to Auto when the battery stops selling above the reserve** (#1165). It needs 15 minutes without sun while the home buys.
 - 🐛 **With two batteries, SEM no longer sends the second battery's commands to the Huawei or GoodWe inverter** (#1183).

@@ -24,6 +24,7 @@ test stand-in.  This module ships the first production slice:
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any, Optional
 
 from homeassistant.helpers.storage import Store
@@ -32,6 +33,10 @@ _LOGGER = logging.getLogger(__name__)
 
 _SNAPSHOT_VERSION = 1
 _UNSAFE_VERSION = 1
+
+#: (#1257) Battery ids ``b1``..``b8`` are looked at for a saved snapshot that
+#: moved with its battery when the Energy Dashboard list changed.
+_SIBLING_PROBE = 8
 
 
 def _snapshot_store_key(config_entry_id: str, battery_id: str) -> str:
@@ -80,6 +85,75 @@ class DeyeSnapshotStore:
     async def async_clear(self) -> None:
         """Remove the persisted snapshot for this scope."""
         await self._store.async_remove()
+
+    # ─── a battery that changed number (#1257) ─────────────────
+
+    @staticmethod
+    def _mapping_of(data: Any) -> Optional[tuple]:
+        if not isinstance(data, dict):
+            return None
+        try:
+            return tuple((str(k), str(v)) for k, v in data["entity_mapping"])
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    async def async_adopt_sibling_snapshot(self, entity_mapping) -> bool:
+        """(#1257) Bring home the snapshot that was saved for this battery
+        under another number.
+
+        The key is the battery's place in the Energy Dashboard list. Remove a
+        battery from it and the ones after it move up, so their saved
+        settings are looked for under a number that holds none, or another
+        battery's. The snapshot names the entities it was taken from: the one
+        whose entities are this battery's is moved to this number, its
+        ``battery_id`` rewritten, and its safety latch with it (a latched
+        snapshot must never become replayable). A snapshot this number held
+        for another battery goes to the number the first one left, so a
+        reorder swaps them and nothing is lost. Nothing happens when this
+        number already holds this battery's own, or no sibling does. Never
+        raises."""
+        try:
+            return await self._adopt_sibling_snapshot(
+                tuple((str(k), str(v)) for k, v in entity_mapping))
+        except Exception:  # noqa: BLE001 — recovery never fails on this
+            _LOGGER.debug("Deye: sibling snapshot not adopted", exc_info=True)
+            return False
+
+    async def _adopt_sibling_snapshot(self, mapping: tuple) -> bool:
+        if not re.fullmatch(r"b\d+", self.battery_id) or not mapping:
+            return False
+        mine = await self.async_load()
+        if self._mapping_of(mine) == mapping:
+            return False
+        for n in range(1, _SIBLING_PROBE + 1):
+            sid = f"b{n}"
+            if sid == self.battery_id:
+                continue
+            other = DeyeSnapshotStore(self.hass, self.config_entry_id, sid)
+            found = await other.async_load()
+            if (self._mapping_of(found) != mapping
+                    or str(found.get("config_entry_id")) != self.config_entry_id):
+                continue
+            my_latch = await self._unsafe_store.async_load()
+            other_latch = await other._unsafe_store.async_load()
+            await self._store.async_save({**found, "battery_id": self.battery_id})
+            if other_latch is None:
+                await self._unsafe_store.async_remove()
+            else:
+                await self._unsafe_store.async_save(other_latch)
+            if isinstance(mine, dict) and mine:
+                await other._store.async_save({**mine, "battery_id": sid})
+            else:
+                await other._store.async_remove()
+            if my_latch is None:
+                await other._unsafe_store.async_remove()
+            else:
+                await other._unsafe_store.async_save(my_latch)
+            _LOGGER.info("Deye: the saved settings of %s moved from %s to %s "
+                         "(#1257)", mapping[0][1] if mapping else "?",
+                         sid, self.battery_id)
+            return True
+        return False
 
     # ─── safety latch ───────────────────────────────────────────
 

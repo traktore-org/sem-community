@@ -55,6 +55,7 @@ class ForcedChargeRecord:
         #: entity → the batteries whose charge turned it on
         self._running: dict[str, set[str]] = {}
         self._loaded = store is None
+        self._readable = store is not None
         self._lock = asyncio.Lock()
 
     async def started(self, entity_id: str, battery_id: str = "") -> bool:
@@ -96,6 +97,12 @@ class ForcedChargeRecord:
             return str(battery_id or "") in self._running.get(
                 str(entity_id or ""), ())
 
+    @property
+    def trusted(self) -> bool:
+        """(#1281) True when the record is kept on disk and was read whole,
+        so a battery it does not name started no charge of SEM's."""
+        return self._readable and self._loaded
+
     def snapshot(self) -> dict:
         """For diagnostics: each entity SEM turned on, and for which
         batteries."""
@@ -108,6 +115,7 @@ class ForcedChargeRecord:
         try:
             record = await self._store.async_load()
         except Exception:  # noqa: BLE001
+            self._readable = False
             _LOGGER.warning("Battery: SEM's record of the forced charges it "
                             "started cannot be read — it stops none it may "
                             "have started before the restart (#1181)",
@@ -120,6 +128,7 @@ class ForcedChargeRecord:
                 isinstance(e, str) and isinstance(b, list)
                 and all(isinstance(x, str) for x in b)
                 for e, b in running.items()):
+            self._readable = False
             _LOGGER.warning("Battery: SEM's record of the forced charges it "
                             "started is damaged — it stops none it may have "
                             "started before the restart (#1181)")

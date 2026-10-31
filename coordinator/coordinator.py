@@ -10043,6 +10043,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         self._battery_orphan_guard = {}
                     adapter._orphan_guard = self._battery_orphan_guard
                 self._battery_adapters[battery_id] = adapter
+                self._adopt_pending_export_prior(battery_id, adapter)
                 # (#764) Startup recovery is a real write — the #532
                 # orphan-stop that saved a LUNA2000 from draining to grid.
                 # Building the adapter under observer is fine (reads only);
@@ -10099,6 +10100,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 self._battery_orphan_guard = {}
                             adapter._orphan_guard = self._battery_orphan_guard
                         self._battery_adapters[battery_id] = adapter
+                        self._adopt_pending_export_prior(battery_id, adapter)
                         _LOGGER.info(
                             "Battery %s: upgraded GenericBatteryAdapter → %s "
                             "(brand integration finished loading)",
@@ -13613,7 +13615,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         guard._applied = True
         guard.reason = f"adopted an export cut from a previous lifetime (since {rec.get('since')})"
         recipes = rec.get("recipes") or {}
-        for bid, adapter in (getattr(self, "_battery_adapters", None) or {}).items():
+        # (#1274) Adapters are built later in the battery pipeline, so on a
+        # real first tick there are none yet: a recipe with no adapter waits
+        # for its battery instead of being dropped.
+        adapters = getattr(self, "_battery_adapters", None) or {}
+        self._export_priors_pending = {
+            str(bid): prior for bid, prior in recipes.items()
+            if prior and bid not in adapters}
+        for bid, adapter in adapters.items():
             prior = recipes.get(str(bid))
             if not prior:
                 continue   # the previous lifetime held nothing on this one
@@ -13621,6 +13630,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 adapter.adopt_export_prior(prior)
             except Exception:  # noqa: BLE001
                 pass
+
+    def _adopt_pending_export_prior(self, battery_id, adapter) -> None:
+        """Hand a battery the prior a previous lifetime saved for it, once."""
+        pending = getattr(self, "_export_priors_pending", None)
+        if not pending:
+            return
+        prior = pending.pop(str(battery_id), None)
+        if not prior:
+            return   # the previous lifetime held nothing on this one
+        try:
+            adapter.adopt_export_prior(prior)
+        except Exception:  # noqa: BLE001
+            pass
 
     async def async_release_export_guard(self, *, reason: str):
         """(#955, the #908 rule) Put the inverter's feed-in back if — and only

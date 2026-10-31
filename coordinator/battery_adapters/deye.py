@@ -1257,6 +1257,16 @@ class DeyeBatteryAdapter(BatteryControlAdapter):
         Any latch/store failure is fail-closed and leaves active control blocked.
         A persisted unsafe latch is never acknowledged or reset automatically.
         """
+        # (#1257) A battery that changed number gets its saved settings
+        # back first, so the latch read below is the moved one.
+        adopt = getattr(self._snapshot_store, "async_adopt_sibling_snapshot", None)
+        if callable(adopt):
+            try:
+                moved = adopt([list(item) for item in self._entity_mapping()])
+                if inspect.isawaitable(moved):
+                    await moved
+            except Exception:  # noqa: BLE001 — recovery goes on without it
+                _LOGGER.debug("Deye: sibling snapshot not adopted", exc_info=True)
         load_latch = getattr(self._snapshot_store, "async_load_latch", None)
         if not callable(load_latch):
             self._unsafe_latched = True
