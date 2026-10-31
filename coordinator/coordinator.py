@@ -9443,11 +9443,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     None, "export closed — the pack takes the sun first",
                     code="closed_meter", need_kwh=decision.need_kwh,
                     fill_kwh=decision.fill_kwh)
-        cap = decision.cap_w if (decision and enabled) else None
-        code = (decision.code if decision else
-                ("night" if not ledger else
-                 (("soc_expired" if soc_expired else "soc_unknown")
-                  if soc is None else "none")))
         # (#1284) The SOC has not been read since the start: its sensor is
         # still loading, or its first level waits for the repeat. That is
         # no outage, so a cap from before the start is kept, as through a
@@ -9459,6 +9454,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             and time.monotonic() - float(getattr(
                 self, "_boot_monotonic", float("-inf")))
             <= SENSOR_DARK_READ_GRACE_S)
+        cap = decision.cap_w if (decision and enabled) else None
+        code = (decision.code if decision else
+                ("night" if not ledger else
+                 (("soc_expired" if soc_expired else "soc_unknown")
+                  if soc is None else "none")))
         # (#820) a release gives the pack its full charge power, not only
         # the value the register happened to hold when pacing engaged
         action = await self._charge_pacing_writer.apply(
@@ -9488,7 +9488,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # ``soc_expired`` token, so a sustained outage is never
             # confused with a restart's never-read window.
             "soc_stale_s": soc_stale_s,
-            "cap_w": decision.cap_w if decision else None,
+            "cap_w": (decision.cap_w if decision else
+                      getattr(self._charge_pacing_writer, "last_written_w", None)
+                      if action == "held" and keep else None),
             # (#949) A cap with nowhere to go must not read like a cap that
             # is being applied. The decision's own prose stays true of the
             # DECISION; what the user needs here is the missing setting.
@@ -9505,6 +9507,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # the decision above still describes what pacing WOULD do.
                 "the battery is yielded to another party — SEM writes nothing"
                 if action == "yielded" else
+                # (#1284) no level since the start yet, and no outage either
+                "battery SOC not read since the start yet — the cap is kept"
+                if action == "held" and keep and not decision else
                 decision.reason if decision else (
                     "pacing idle — outside daylight or no forecast"
                     if not ledger else f"pacing idle — {_why}")),
@@ -10299,7 +10304,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         scheduler = self._battery_charge_scheduler
         now = dt_util.now()
         if not battery_soc_ready_for_plan(self, power):
+            log_on_change(
+                _LOGGER, "scheduler:soc_wait", logging.DEBUG,
+                "Battery scheduler: waiting for a battery SOC reading (#1284)")
             return
+        log_on_change(_LOGGER, "scheduler:soc_wait", logging.DEBUG,
+                      "Battery scheduler: battery SOC read")
 
         if not scheduler.should_trigger_evaluation(now):
             # Check for re-plan trigger (price update / SOC drift / EV change).
@@ -11655,8 +11665,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 soc_seed = float(_sl[-1].get("soc_kwh") or 0.0)
             elif (power is not None
                   and getattr(power, "battery_soc", None) is not None
-                  # (#1284) a SOC never read is no seed
-                  and getattr(power, "battery_soc_known", True)):
+                  # (#1284) a SOC never read is no seed — unless there is
+                  # no pack, whose row is empty either way
+                  and (getattr(power, "battery_soc_known", True)
+                       or cap_kwh2 <= 0)):
                 # (PROD, 08-08) an IDLE today has no trajectory
                 # to seed from — but the live SOC is not an invented
                 # number, and a quiet today must not erase tomorrow's

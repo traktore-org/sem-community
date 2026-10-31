@@ -221,10 +221,15 @@ class TestTheFirstWaitEnds:
         assert seen[-1][1:] == (False, True), seen
         assert seen[-1][0] in (55.0, 90.0), seen
 
-    def test_a_false_0_still_never_counts_inside_the_end(self):
-        r, states = _one("0.0")
-        seen = _reads(r, states, ["0.0"] + ["93"] * (2 * N))
+    def test_dark_reads_do_not_count_toward_the_end(self):
+        """A SOC sensor still loading after a restart is dark for minutes.
+        Only reads with a number count, so a false 0 % when it comes back
+        is still refused."""
+        r, states = _one("unavailable")
+        seen = _reads(r, states, ["unavailable"] * (4 * N) + ["0.0"]
+                      + ["93"] * N)
         assert not _published(seen, 0.0), seen
+        assert seen[-1] == (93.0, False, True), seen
 
 
 # ── 6. Readers of the SOC wait with it ────────────────────────────────────
@@ -353,8 +358,12 @@ class TestThePacerKeepsItsCapThroughTheStart:
 
     async def test_kept_while_the_first_level_waits(self):
         fake, hass, before, _writes = await self._engaged_then_restarted(20.0)
-        assert fake._charge_pacing_state["action"] == "held"
+        st = fake._charge_pacing_state
+        assert st["action"] == "held"
         assert len(_writes(hass)) == before, _writes(hass)
+        # …and the published state says so: the cap on the register, kept
+        assert st["cap_w"] is not None and st["cap_w"] > 0, st
+        assert "kept" in st["reason"], st
 
     async def test_released_past_the_grace(self):
         """Not vacuous: a SOC still not read past the grace is an outage,
