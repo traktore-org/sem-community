@@ -491,7 +491,7 @@ class TestARestartMidCharge:
         second = _restart(first)
         b2 = second.generic("b2")
         await b2.async_adopt_running_charge()
-        assert forced_ops(b2) == (None, None)
+        assert forced_ops(b2) == (False, None)
         await _cycle(b2, mode="off")
         assert first.hass.read(SWITCH) == "on"
         b1 = second.generic("b1")
@@ -539,7 +539,7 @@ class TestARestartMidCharge:
         life.hass.set(actuator, on)
         adapter = make(life)
         await adapter.async_adopt_running_charge()
-        assert forced_ops(adapter) == (None, None)
+        assert forced_ops(adapter) == (False, None)
         await _cycle(adapter)
         await _cycle(adapter, mode="off")
         await async_release_batteries_on_unload(_unloading(adapter))

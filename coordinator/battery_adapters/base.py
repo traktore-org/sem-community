@@ -767,11 +767,20 @@ class BatteryControlAdapter(ABC):
         still sends nothing. Brands that keep no such record (Huawei reads
         its own status sensor, Deye its snapshot) do nothing here. Never
         raises."""
-        adopt = getattr(getattr(self, "_charge_adapter", None), "adopt_running", None)
+        charge = getattr(self, "_charge_adapter", None)
+        adopt = getattr(charge, "adopt_running", None)
         if adopt is None:
             return
         try:
-            if await adopt():
+            adopted = await adopt()
+            # (#1281) The record was read whole and does not name this
+            # battery: SEM started no charge here, so the first stop after a
+            # restart has none to end. A user's own switch stays on. SEM's
+            # own later start sets the flag True again.
+            if (not adopted and self._sem_forced_charge is None
+                    and getattr(charge, "not_started_by_sem", False) is True):
+                self._sem_forced_charge = False
+            if adopted:
                 self._sem_forced_charge = True
                 # An Off or a stop recorded before the charge could be seen
                 # (its actuator not loaded yet) no longer says what the pack

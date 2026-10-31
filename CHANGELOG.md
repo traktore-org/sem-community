@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **A restart no longer turns off a charge switch you set yourself** (#1281). SEM now stops only the charges it started.
 - 🐛 **After a restart, an export cut now goes back to the setting SEM found** (#1274). The saved value was lost before the battery was set up.
 - 🐛 **Setup finds a grid meter with separate import and export power sensors and no longer asks you to pick one** (#1237).
 - 🐛 **Force discharge goes back to Auto when the battery stops selling above the reserve** (#1165). It needs 15 minutes without sun while the home buys.
