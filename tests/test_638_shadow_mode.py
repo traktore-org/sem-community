@@ -663,7 +663,7 @@ class TestFleetSocCoverage:
         rdr._soc_partial_logged = True
         avg = SensorReader._read_battery_soc_average(
             rdr, ["sensor.b1_power", "sensor.b2_power"])
-        assert avg == 0.0
+        assert avg is None      # (#1169) no reading, not a 0 % fleet
         assert rdr._soc_partial_logged is False
 
 

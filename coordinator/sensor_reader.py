@@ -3481,7 +3481,8 @@ class SensorReader:
             # stat_soc from one source must not masquerade as the fleet SOC).
             # #553 — pair units contribute via their charge-power entity's
             # device (same auto-detect heuristic).
-            soc_val = self._read_battery_soc_average(battery_units(ed)) or None
+            # (#1169) None is "no unit read"; a fleet at 0 % is a reading
+            soc_val = self._read_battery_soc_average(battery_units(ed))
             # Coverage, in three numbers because there are three states and
             # they call for different reactions: units CONFIGURED, units whose
             # SOC sensor is KNOWN, units that actually READ this cycle.
@@ -3727,6 +3728,10 @@ class SensorReader:
         is accepted once it has repeated for ``BATTERY_SOC_STEP_CONFIRM_READS``
         consecutive reads. Garbage does not repeat itself; a real level does.
         """
+        # (#1169) A level below 0 % is no reading — the rule the fleet
+        # average and each battery's own SOC already use.
+        if soc_val is not None and soc_val < 0:
+            soc_val = None
         if soc_val is None:
             self._hold_battery_soc(readings)
             return
@@ -5216,11 +5221,15 @@ class SensorReader:
             _LOGGER.debug("Device lookup failed for %s: %s (#259)", entity_id, e)
             return None
 
-    def _read_battery_soc_average(self, battery_power_entities: list) -> float:
+    def _read_battery_soc_average(
+        self, battery_power_entities: list,
+    ) -> Optional[float]:
         """Average SOC across multiple battery units.
 
         Auto-detects the SOC sensor for each battery power sensor and
-        returns the simple average of all valid readings.
+        returns the simple average of all valid readings — or None when no
+        unit gave one. (#1169) 0.0 is a reading: two empty packs are 0 %,
+        not a dark fleet.
 
         Records how much of the fleet that average actually covers in
         ``_soc_units_expected`` / ``_soc_units_read`` (#638 finding #3): a
@@ -5296,7 +5305,7 @@ class SensorReader:
         # Nothing readable at all is the SOC-None shape, not a partial one —
         # clear the one-shot so a later re-entry into partial is heard again.
         self._soc_partial_logged = False
-        return 0.0
+        return None
 
     def _read_from_legacy_config(self) -> PowerReadings:
         """Read power values from legacy configuration."""
