@@ -423,6 +423,13 @@ into the two signal families the reactive layer already consumes
   price level, the reserve SOC and the anti-cycle timers keep deciding
   *whether*; the plan only narrows *when*.
 
+The block powers in the shared plan retain the packer's precision. They also
+feed the control gate: rounding them to whole watts can make a complete EV
+plan look fractions of a watt-hour short and trigger an unnecessary start
+outside its windows (#1282). Presentation may round those numbers; the
+control budget must not. A genuine energy shortfall still releases the wait,
+and deadline forcing and unreachable-target safeguards remain authoritative.
+
 The trust rule, per demand, fail-open to pre-G4 behaviour: the switch is
 on, tonight's plan is stamped and fresh, `now` is inside the plan's own
 night span, and **this demand's verdict is `fits`**. A `yields`/`partial`

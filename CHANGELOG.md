@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **EVs no longer start outside planned windows because rounding made a complete charging plan appear short** (#1282).
+
 - 🐛 **With two batteries, SEM no longer sends the second battery's commands to the Huawei or GoodWe inverter** (#1183).
 - 🐛 **A rebuilt plan that moves when the battery sells to the grid now shows a new plan time** (#1184). A running sale keeps going.
 - 🐛 **Daily energy flows and solar savings no longer drop while a power sensor is out for a moment** (#1185). SEM uses its last reading.
