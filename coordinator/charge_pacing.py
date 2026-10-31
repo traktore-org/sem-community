@@ -442,7 +442,8 @@ class ChargePacingWriter:
 
     async def apply(self, hass, entity_id: str, cap_w, *,
                     observer: bool, yielded: bool = False,
-                    hw_max_w: float | None = None) -> str:
+                    hw_max_w: float | None = None,
+                    keep: bool = False) -> str:
         """Returns a short action token: wrote|held|write_refused|restored|
         idle|observer|yielded|no_limit_entity|limit_unreadable.
 
@@ -451,7 +452,11 @@ class ChargePacingWriter:
 
         (#1079 review) ``yielded`` is checked first and touches nothing —
         no adopt, no write, no release — so pacing's own state is exactly
-        as another party left it whenever SEM takes the battery back."""
+        as another party left it whenever SEM takes the battery back.
+
+        (#1284) ``keep``: no cap this cycle, and none owed yet — the SOC has
+        not been read since the start. An engaged cap then stays as it is,
+        as through a blink, instead of a release and a write back."""
         if yielded:
             return "yielded"
         if not observer:
@@ -484,6 +489,8 @@ class ChargePacingWriter:
                     self.last_written_w = None
                     self._adopted = self._store is None
                     return "observer"
+                if keep:
+                    return "held"
                 # (#820) Below the buffer is full power. Arne's register read
                 # 1560 W when pacing engaged, so 1560 was "the value to put
                 # back" and the pack never got its maximum. Give back the

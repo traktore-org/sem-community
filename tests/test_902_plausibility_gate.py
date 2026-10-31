@@ -71,11 +71,19 @@ def _reader(soc, power):
     return r
 
 
+def _settled(soc, power):
+    """A reader whose first level has counted. (#1284) The first level after
+    a start counts once it has repeated, so these tests read it that often."""
+    r = _reader(soc, power)
+    for _ in range(BATTERY_SOC_STEP_CONFIRM_READS):
+        r.read_power()
+    return r
+
+
 class TestSocStepGate:
     def test_the_prod_trace_holds_93_through_the_zero(self):
         soc, power = ["93"], ["5000"]
-        r = _reader(soc, power)
-        r.read_power()
+        r = _settled(soc, power)
         soc[0] = "unavailable"
         r.read_power()
         soc[0] = "0.0"
@@ -90,8 +98,7 @@ class TestSocStepGate:
 
     def test_a_legitimate_move_inside_the_bound_is_accepted(self):
         soc, power = ["93"], ["5000"]
-        r = _reader(soc, power)
-        r.read_power()
+        r = _settled(soc, power)
         soc[0] = str(93 - BATTERY_SOC_MAX_STEP_PCT + 1)
         p = r.read_power()
         assert p.battery_soc == pytest.approx(93 - BATTERY_SOC_MAX_STEP_PCT + 1)
@@ -102,8 +109,7 @@ class TestSocStepGate:
         first read after the gap is rejected as a step, but the same level
         on the following reads is accepted — a hold must never get stuck."""
         soc, power = ["93"], ["5000"]
-        r = _reader(soc, power)
-        r.read_power()
+        r = _settled(soc, power)
         soc[0] = "40"
         seen = []
         for _ in range(BATTERY_SOC_STEP_CONFIRM_READS + 1):
@@ -118,27 +124,32 @@ class TestSocStepGate:
         """0, 93, 0, 93 — the garbage never repeats itself, so it never
         becomes the truth."""
         soc, power = ["93"], ["5000"]
-        r = _reader(soc, power)
-        r.read_power()
+        r = _settled(soc, power)
         for v in ("0.0", "93", "0.0", "93", "0.0"):
             soc[0] = v
             p = r.read_power()
             assert p.battery_soc == pytest.approx(93.0), f"published {p.battery_soc} on {v}"
 
-    def test_the_first_ever_read_is_taken_as_is(self):
-        """No last value → nothing to step from. #875 owns the never-read
-        window; this gate only compares against a value that exists."""
+    def test_the_first_ever_read_counts_once_it_repeats(self):
+        """(#1284) No last value → nothing to step from, so the first level
+        is taken the way a step is: once it has repeated. Until then the SOC
+        is never read (#875), not the first number that arrived."""
         soc, power = ["12"], ["5000"]
-        p = _reader(soc, power).read_power()
+        r = _reader(soc, power)
+        for _ in range(BATTERY_SOC_STEP_CONFIRM_READS - 1):
+            p = r.read_power()
+            assert p.battery_soc_known is False
+            assert p.battery_soc_unavailable is True
+        p = r.read_power()
         assert p.battery_soc == pytest.approx(12.0)
         assert p.battery_soc_known is True
+        assert p.battery_soc_unavailable is False
 
     def test_the_rejection_is_logged_once_per_episode(self, caplog):
         from custom_components.solar_energy_management.utils.log_gate import reset_log_gate
         reset_log_gate()   # the #762 gate is process-global; earlier tests primed it
         soc, power = ["93"], ["5000"]
-        r = _reader(soc, power)
-        r.read_power()
+        r = _settled(soc, power)
         soc[0] = "0.0"
         with caplog.at_level(logging.WARNING):
             r.read_power()

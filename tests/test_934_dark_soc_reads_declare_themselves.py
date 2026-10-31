@@ -29,6 +29,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock
 import pytest
 
 from custom_components.solar_energy_management.consts.core import (
+    BATTERY_SOC_STEP_CONFIRM_READS,
     SENSOR_DARK_READ_GRACE_S,
 )
 from custom_components.solar_energy_management.coordinator.coordinator import (
@@ -169,6 +170,11 @@ def _reader(soc_state, clock):
     r = SensorReader(hass, {"battery_soc_sensor": "sensor.soc"})
     r._energy_dashboard_config = None
     r._now_monotonic = lambda: clock[0]
+    # (#1284) The first level after a start counts once it has repeated.
+    # Read it all but once here, so the test's own first read is the one
+    # that counts (a dark start reads dark either way).
+    for _ in range(BATTERY_SOC_STEP_CONFIRM_READS - 1):
+        r.read_power()
     return r
 
 

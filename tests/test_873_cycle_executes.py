@@ -98,6 +98,14 @@ async def run_cycle(config=None, states=None, nights=None) -> dict:
     coord.config_entry = None      # skip the first-refresh storage restore
     if nights is not None:
         coord._battery_night = SimpleNamespace(sealed=lambda: nights)
+    # (#1284) The first SOC after a start counts once it has repeated. A
+    # scenario is a home that is already running: its reader has read the
+    # level before this turn, so the turn decides on a known SOC.
+    from custom_components.solar_energy_management.consts.core import (
+        BATTERY_SOC_STEP_CONFIRM_READS,
+    )
+    for _ in range(BATTERY_SOC_STEP_CONFIRM_READS - 1):
+        coord._sensor_reader.read_power()
     return await coord._async_update_data()
 
 
