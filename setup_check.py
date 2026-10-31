@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
 
 from .coordinator.units import power_state_to_watts
+from .coordinator.units import finite_float
 
 # Below this a meter's sign says nothing: a house at rest reads a few watts
 # either way.
@@ -99,7 +100,7 @@ def _percent(hass, entity_id: Optional[str]) -> Optional[float]:
         return None
     state = hass.states.get(entity_id)
     try:
-        return float(state.state) if state is not None else None
+        return finite_float(state.state) if state is not None else None
     except (TypeError, ValueError):
         return None
 

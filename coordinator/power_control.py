@@ -17,6 +17,7 @@ from .units import (
     normalize_unit,
     power_unit_scale,
 )
+from .units import finite_float
 
 _LOGGER = logging.getLogger(__name__)
 _UNREADABLE_STATES = {"unknown", "unavailable", "none", ""}
@@ -192,7 +193,7 @@ def prepare_power_setpoint(
     if state is None:  # defensive; _native_power_scale already checked
         return None
     try:
-        current_value = float(state.state)
+        current_value = finite_float(state.state)
         native_value = float(watts) / scale_to_watts
     except (TypeError, ValueError, OverflowError):
         log_on_change(

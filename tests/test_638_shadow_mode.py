@@ -586,6 +586,7 @@ class TestFleetSocCoverage:
             _auto_detect_battery_soc=detect,
             _read_sensor=read,
             _soc_candidate_exists=exists,
+            _accept_unit_soc=lambda _entity, value: value,
             _soc_units_expected=0, _soc_units_read=0,
             _soc_partial_logged=False, _soc_undetected_logged=False,
         )

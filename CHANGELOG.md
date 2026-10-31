@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **A battery sale now ends a grid charge SEM started first** (#1280). Before, the switch or work mode stayed on while it sold.
 - 🐛 **A restart no longer turns off a charge switch you set yourself** (#1281). SEM now stops only the charges it started.
 - 🐛 **After a restart, an export cut now goes back to the setting SEM found** (#1274). The saved value was lost before the battery was set up.
+- 🐛 **One battery's false 0 % read no longer drags the fleet level down** (#1285). Each battery's level now has the same jump check as the fleet.
+- 🐛 **A sensor state of "nan" or "inf" is no number in every sensor read** (#1262). Before, the car's level, forecasts, tariffs and loads took it as a value.
+- 🐛 **Savings no longer count the house twice when the sun drops while the inverter reads dark** (#1269). The battery's share wins over the held solar.
+- 🐛 **A home reading 1–2 % off during a big EV session no longer warns about a stale sensor** (#1234). Real sign errors still warn.
 - 🐛 **Setup finds a grid meter with separate import and export power sensors and no longer asks you to pick one** (#1237).
 - 🐛 **Force discharge goes back to Auto when the battery stops selling above the reserve** (#1165). It needs 15 minutes without sun while the home buys.
 - 🐛 **With two batteries, SEM no longer sends the second battery's commands to the Huawei or GoodWe inverter** (#1183).

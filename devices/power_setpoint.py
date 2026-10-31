@@ -35,6 +35,7 @@ from homeassistant.core import HomeAssistant
 from ..coordinator.power_control import native_power_scale
 from ..consts.core import DEFAULT_DEVICE_RATED_POWER
 from .base import ControllableDevice, DeviceState, DeviceType
+from ..coordinator.units import finite_float
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -209,7 +210,7 @@ class PowerSetpointDevice(ControllableDevice):
         if scale is None:
             return None
         try:
-            native = float(state.state)
+            native = finite_float(state.state)
         except (TypeError, ValueError):
             return None
         low, _high, _step = self._bounds(scale)

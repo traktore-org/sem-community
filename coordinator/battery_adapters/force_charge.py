@@ -20,6 +20,7 @@ from homeassistant.core import HomeAssistant
 from ...utils.log_gate import log_on_change
 from .charge_record import ForcedChargeRecord
 from .charge_target import ChargeTargetHold
+from ..units import finite_float
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -398,7 +399,7 @@ class HuaweiChargeAdapter(BatteryChargeAdapter):
         current_soc = 0.0
         if state and state.state not in ("unknown", "unavailable"):
             try:
-                current_soc = float(state.state)
+                current_soc = finite_float(state.state)
             except (ValueError, TypeError):
                 pass
 
@@ -535,7 +536,7 @@ class GoodWeChargeAdapter(BatteryChargeAdapter):
             state = self.hass.states.get(soc_entity)
             if state and state.state not in ("unknown", "unavailable"):
                 try:
-                    current_soc = float(state.state)
+                    current_soc = finite_float(state.state)
                 except (ValueError, TypeError):
                     pass
 
@@ -663,7 +664,7 @@ class GenericChargeAdapter(BatteryChargeAdapter):
             state = self.hass.states.get(soc_entity)
             if state and state.state not in ("unknown", "unavailable"):
                 try:
-                    current_soc = float(state.state)
+                    current_soc = finite_float(state.state)
                 except (ValueError, TypeError):
                     pass
 

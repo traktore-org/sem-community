@@ -144,6 +144,7 @@ from .ev_soc_need import estimate_stop_step, soc_remaining_need
 from ..utils.log_gate import log_on_change
 from ..utils.helpers import battery_export_part, solar_export, solar_share_pct
 from ..analytics.energy_assistant import EnergyAssistant
+from .units import finite_float
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -4055,7 +4056,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 _soc_state = self.hass.states.get(_vehicle_soc_entity)
                 if _soc_state and _soc_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                     try:
-                        self._cycle_vehicle_soc = float(_soc_state.state)
+                        self._cycle_vehicle_soc = finite_float(_soc_state.state)
                     except (ValueError, TypeError):
                         _LOGGER.debug("Vehicle SOC %s not numeric: %r (#259)", _vehicle_soc_entity, _soc_state.state)
 
@@ -4285,7 +4286,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         soc_state = self.hass.states.get(per_charger_soc_entity)
                         if soc_state and soc_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                             try:
-                                self._cycle_vehicle_soc = float(soc_state.state)
+                                self._cycle_vehicle_soc = finite_float(soc_state.state)
                             except (ValueError, TypeError):
                                 _LOGGER.debug("Vehicle SOC %s not numeric: %r (#259)", per_charger_soc_entity, soc_state.state)
                     self._ev_device = ev_dev
@@ -4615,7 +4616,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             soc_st = self.hass.states.get(per_soc_entity)
                             if soc_st and soc_st.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                                 try:
-                                    self._cycle_vehicle_soc = float(soc_st.state)
+                                    self._cycle_vehicle_soc = finite_float(soc_st.state)
                                 except (ValueError, TypeError):
                                     _LOGGER.debug("Vehicle SOC %s not numeric: %r (#259)", per_soc_entity, soc_st.state)
                         # Ceiling (Max) gates surplus; floor (Min) drives night top-up (#245).
@@ -5846,7 +5847,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     soc_state = self.hass.states.get(charger_soc_entity)
                     if soc_state and soc_state.state not in ("unknown", "unavailable"):
                         try:
-                            per_charger_soc[cid] = float(soc_state.state)
+                            per_charger_soc[cid] = finite_float(soc_state.state)
                         except (ValueError, TypeError):
                             pass
 
@@ -8076,7 +8077,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             return None
         try:
             st = hass.states.get(eid)
-            return float(st.state) if st is not None else None
+            return finite_float(st.state) if st is not None else None
         except (TypeError, ValueError, AttributeError):
             return None
 
@@ -13438,7 +13439,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             st = self.hass.states.get(ent)
             if st and st.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                 try:
-                    return float(st.state)
+                    return finite_float(st.state)
                 except (ValueError, TypeError):
                     pass
         det = (getattr(self, "_ev_taper_detectors", {}) or {}).get(cid)
@@ -15084,7 +15085,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             hw_state = self.hass.states.get(per_hw_entity)
             if hw_state and hw_state.state not in ("unknown", "unavailable"):
                 try:
-                    per_hw_total = float(hw_state.state)
+                    per_hw_total = finite_float(hw_state.state)
                 except (ValueError, TypeError):
                     pass
         detector.update_energy(per_increment, per_hw_total)
@@ -15337,7 +15338,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 hw_state = self.hass.states.get(ev_total_entity)
                 if hw_state and hw_state.state not in ("unknown", "unavailable"):
                     try:
-                        hw_total = float(hw_state.state)
+                        hw_total = finite_float(hw_state.state)
                     except (ValueError, TypeError):
                         pass
             self._ev_taper_detector.update_energy(ev_increment, hw_total)
@@ -15456,7 +15457,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 soc_state = self.hass.states.get(per_charger_soc_entity)
                 if soc_state and soc_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                     try:
-                        per_charger_vehicle_soc = float(soc_state.state)
+                        per_charger_vehicle_soc = finite_float(soc_state.state)
                     except (ValueError, TypeError):
                         _LOGGER.debug("Vehicle SOC %s not numeric: %r (#259)", per_charger_soc_entity, soc_state.state)
 

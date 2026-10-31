@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, List, Optional, Tuple
 
 from ..utils.log_gate import log_on_change
 from .charger_types import ChargerDecision, ChargerIntent, ChargerPower
+from .units import finite_float
 
 if TYPE_CHECKING:
     from .charger_adapters.base import ChargerAdapter
@@ -1006,7 +1007,7 @@ class ChargerReconciler:
                         "unknown", "unavailable", None, "",
                     ):
                         try:
-                            _hw = int(round(float(_st.state)))
+                            _hw = int(round(finite_float(_st.state)))
                         except (ValueError, TypeError):
                             _hw = None
                 _fs = getattr(_dev, "failsafe", getattr(_dev, "failsafe_mode", None))

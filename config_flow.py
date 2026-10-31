@@ -86,6 +86,7 @@ from .hardware_detection import (
     discover_inverter_from_registry,
     power_sensor_ids,
 )
+from .coordinator.units import finite_float
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -566,7 +567,7 @@ def _detect_hardware_specs(hass: HomeAssistant, registry=None) -> Dict[str, floa
         if state is None:
             continue
         try:
-            val = float(state.state)
+            val = finite_float(state.state)
         except (TypeError, ValueError):
             continue
         if val <= 0:
@@ -598,7 +599,7 @@ def _detect_hardware_specs(hass: HomeAssistant, registry=None) -> Dict[str, floa
             if fnmatch.fnmatch(state.entity_id, pattern) \
                     and not is_sem_entity(hass, state.entity_id, registry):
                 try:
-                    val = float(state.state)
+                    val = finite_float(state.state)
                     if val > 0:
                         # #641 — the unit half goes through units.py (so MWh
                         # converts too). The ``> 500`` magnitude heuristic
@@ -629,7 +630,7 @@ def _detect_hardware_specs(hass: HomeAssistant, registry=None) -> Dict[str, floa
             if fnmatch.fnmatch(state.entity_id, pattern) and "inverter" in state.entity_id.lower() \
                     and not is_sem_entity(hass, state.entity_id, registry):
                 try:
-                    val = float(state.state)
+                    val = finite_float(state.state)
                     if val > 100:  # Must be in W
                         detected["system_size_kwp"] = round(val / 1000, 1)
                         break
@@ -650,7 +651,7 @@ def _detect_hardware_specs(hass: HomeAssistant, registry=None) -> Dict[str, floa
             if fnmatch.fnmatch(state.entity_id, pattern) \
                     and not is_sem_entity(hass, state.entity_id, registry):
                 try:
-                    val = float(state.state)
+                    val = finite_float(state.state)
                     if val > 0:
                         detected["battery_max_discharge_power"] = round(val, 0)
                         detected["battery_assist_max_power"] = round(val, 0)
@@ -4627,7 +4628,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 src_label = str(src)
                 st = self.hass.states.get(src_label)
                 try:
-                    watts = float(st.state) if st else None
+                    watts = finite_float(st.state) if st else None
                 except (ValueError, TypeError):
                     watts = None
             w_txt = f" · {watts:.0f} W" if isinstance(watts, float) else ""
