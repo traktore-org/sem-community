@@ -1309,6 +1309,24 @@ def _split_deviceless(platform: str, plat_entities: List[Any],
     return _floor({("unit", platform, "", ""): list(plat_entities)})
 
 
+def registry_unit(entry) -> Any:
+    """The unit a registry row belongs to: its device, else its config entry.
+
+    HA records one owner for every entity. Some integrations register no
+    device (DSMR Reader's MQTT sensors), and ``None`` is not an identity
+    (class 90), so a row with no device belongs to its config entry, the one
+    unit HA still records for it (#1223). The Config card's pair search and
+    the reader's "is this sensor on the meter's own device" test both ask
+    this, so they cannot answer differently (#1240). ``None`` when the row
+    has neither. The two kinds of unit never equal each other.
+    """
+    dev = getattr(entry, "device_id", None)
+    if dev:
+        return dev
+    ce = getattr(entry, "config_entry_id", None)
+    return ("entry", ce) if isinstance(ce, str) and ce else None
+
+
 def group_entities_by_unit(entities, *,
                            unproven_split: str = "merge") -> Dict[Any, List[Any]]:
     """Partition registry entries into the PHYSICAL units they describe.
@@ -2179,14 +2197,7 @@ def propose_roles_from_roster(dev_entities, domain: str, *,
     # (#1223) A row with no device belongs to its config entry, the one unit
     # HA records for it: DSMR Reader's MQTT sensors have no device, and its
     # pair was offered as two halves of nothing.
-    def _unit(e):
-        dev = getattr(e, "device_id", None)
-        if dev:
-            return dev
-        entry = getattr(e, "config_entry_id", None)
-        return ("entry", entry) if isinstance(entry, str) and entry else None
-
-    device_of = {str(getattr(e, "entity_id", "")): _unit(e)
+    device_of = {str(getattr(e, "entity_id", "")): registry_unit(e)
                  for e in dev_entities}
     for pair in pairs:
         present = [r for r in pair if r in out]

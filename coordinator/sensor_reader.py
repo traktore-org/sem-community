@@ -4570,6 +4570,7 @@ class SensorReader:
             from ..hardware_detection import (
                 roster_role_vocab as _vocab,
                 _entry_matches_declared as _matches,
+                registry_unit as _unit_of,
             )
             registry = er.async_get(self.hass)
         except Exception as e:  # noqa: BLE001 — no roster, no verdict
@@ -4577,7 +4578,10 @@ class SensorReader:
             return None, None
 
         wanted = {"grid_import_power": None, "grid_export_power": None}
-        grid_device_id = self._get_device_for_entity(
+        # (#1240) The counters' UNIT, not only their device: DSMR Reader's
+        # sensors have no device, and its pair and counters come from one
+        # config entry. ``registry_unit`` is the card's answer too.
+        grid_device_id = self._get_unit_for_entity(
             getattr(ed, "grid_import_energy", None))
         # Deterministic order (#485 H6): the registry's iteration order is not
         # contractual, and first-match-wins over an unsorted scan could swap
@@ -4603,8 +4607,7 @@ class SensorReader:
                 # A declared entity on the grid counter's own device outranks
                 # a declared entity elsewhere — same brand, two inverters.
                 same_device = bool(
-                    grid_device_id
-                    and getattr(entry, "device_id", None) == grid_device_id)
+                    grid_device_id and _unit_of(entry) == grid_device_id)
                 rank = (1 if same_device else 0,)
                 if role not in best or rank > best[role][0]:
                     best[role] = (rank, entry.entity_id)
@@ -5208,6 +5211,29 @@ class SensorReader:
                     _ri.clear_sensor_unavailable(self.hass, old)
                     self._sensor_repair_raised.discard(old)
                     self._sensor_unavailable_since.pop(old, None)
+
+    def _get_unit_for_entity(self, entity_id: str) -> Any:
+        """(#1240) The entity's device, else its config entry (a tuple).
+
+        The device answer is ``_get_device_for_entity``'s, unchanged. An
+        entity with no device belongs to its config entry, as in the Config
+        card (``hardware_detection.registry_unit``); ``None`` when it has
+        neither. Trust is given to a declared meter that shares this unit
+        with the grid counters, so a sensor on neither is still checked."""
+        if not entity_id:
+            return None
+        device = self._get_device_for_entity(entity_id)
+        if device:
+            return device
+        try:
+            from ..hardware_detection import registry_unit
+            entry = er.async_get(self.hass).async_get(entity_id)
+            unit = registry_unit(entry) if entry else None
+        except Exception as e:  # noqa: BLE001 — no registry, no verdict
+            _LOGGER.debug("Unit lookup failed for %s: %s (#1240)", entity_id, e)
+            return None
+        # only the config-entry kind: a device is the device lookup's to give
+        return unit if isinstance(unit, tuple) else None
 
     def _get_device_for_entity(self, entity_id: str) -> Optional[str]:
         """Get device_id for an entity from the entity registry."""
