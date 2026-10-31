@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **Simulation: a restart no longer drops a day, and an error of 5–10 % shows the what-if with a note** (#1278).
 - 🐛 **With two batteries at 0 %, SEM now reads 0 % instead of no level** (#1169). A level below 0 % now counts as out.
 - 🐛 **Grid power from a meter with no device now reads at once after a restart** (#1240). Its power sensors and counters come from one integration.
+- 🐛 **With two grid meters, SEM now adds the power of both** (#1241). A meter with no power pair is logged.
 
 # [2.2.0] — 30.10.2026
 
