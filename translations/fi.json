@@ -57,7 +57,7 @@
       },
       "reconfigure": {
         "title": "Määritä Solar Energy Management uudelleen",
-        "description": "Päivitä sähköauton laturin ja ilmoitusten asetukset",
+        "description": "Päivitä sähköauton laturin ja ilmoitusten asetukset{charger_note}",
         "data": {
           "ev_connected_sensor": "Sähköauto yhdistetty",
           "ev_charging_sensor": "Sähköauton lataustila",

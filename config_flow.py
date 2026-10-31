@@ -1425,18 +1425,21 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # trio was REQUIRED, so a home with no charger could not save this
         # page at all. Without a charger the three are optional, and they
         # are checked only once the user starts filling them in.
-        # A charger kept only in the list still meets three empty required
-        # fields here, on purpose: this page saves flat keys into entry.data
-        # only, and a single charger's readers prefer those, so saving would
-        # split the charger in two. Its place is the options dialog.
+        # (#1258) A charger kept only in the list has no flat trio: this page
+        # saves flat keys into entry.data only, and a single charger's
+        # readers prefer those, so filling them would split the charger in
+        # two. The trio is left off and the page says where the charger is.
         has_charger = has_managed_charger(current_config)
+        list_only = bool(current_config.get("ev_chargers")) and not any(
+            current_config.get(k) for k in EV_REQUIRED_SENSORS)
 
         if user_input is not None:
             # Validate EV charger entities if provided
             if self._detector is None:
                 self._detector = HardwareDetector(self.hass)
 
-            if has_charger or any(user_input.get(k) for k in EV_REQUIRED_SENSORS):
+            if not list_only and (
+                    has_charger or any(user_input.get(k) for k in EV_REQUIRED_SENSORS)):
                 validation_errors = self._detector.validate_ev_configuration(user_input)
                 if validation_errors:
                     errors.update(validation_errors)
@@ -1497,28 +1500,37 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         except Exception:
             pass
 
+        trio_fields: dict = {} if list_only else {
+            # (#990) an optional entity field takes a suggestion, never
+            # default="": HA validates the default too, and "" is not an
+            # entity id, so the page could not be saved without both.
+            _charger_field(vol.Required(
+                "ev_connected_sensor",
+                default=current_config.get("ev_connected_sensor") or "",
+            ), has_charger, current_config): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
+            ),
+            _charger_field(vol.Required(
+                "ev_charging_sensor",
+                default=current_config.get("ev_charging_sensor") or "",
+            ), has_charger, current_config): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
+            ),
+            _charger_field(vol.Required(
+                "ev_charging_power_sensor",
+                default=current_config.get("ev_charging_power_sensor") or "",
+            ), has_charger, current_config): _power_sensor_selector(getattr(self, "hass", None)),
+        }
+        charger_note = ("\n\n" + _flow_text(
+            self, "flow_charger_in_configure",
+            "Your EV charger is set up under Configure, not here.")
+            if list_only else "")
+
         return self.async_show_form(
             step_id="reconfigure",
+            description_placeholders={"charger_note": charger_note},
             data_schema=vol.Schema({
-                # (#990) an optional entity field takes a suggestion, never
-                # default="": HA validates the default too, and "" is not an
-                # entity id, so the page could not be saved without both.
-                _charger_field(vol.Required(
-                    "ev_connected_sensor",
-                    default=current_config.get("ev_connected_sensor") or "",
-                ), has_charger, current_config): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
-                ),
-                _charger_field(vol.Required(
-                    "ev_charging_sensor",
-                    default=current_config.get("ev_charging_sensor") or "",
-                ), has_charger, current_config): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
-                ),
-                _charger_field(vol.Required(
-                    "ev_charging_power_sensor",
-                    default=current_config.get("ev_charging_power_sensor") or "",
-                ), has_charger, current_config): _power_sensor_selector(getattr(self, "hass", None)),
+                **trio_fields,
                 # (#1214) a suggestion, never a default: HA refills an
                 # emptied field with its default, so it could not be erased
                 vol.Optional(

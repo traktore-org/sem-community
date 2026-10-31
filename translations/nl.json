@@ -57,7 +57,7 @@
       },
       "reconfigure": {
         "title": "SEM Herconfigureren",
-        "description": "Werk uw EV lader en meldingsinstellingen bij",
+        "description": "Werk uw EV lader en meldingsinstellingen bij{charger_note}",
         "data": {
           "ev_connected_sensor": "EV Verbonden Status",
           "ev_charging_sensor": "EV Laadstatus",

@@ -57,7 +57,7 @@
       },
       "reconfigure": {
         "title": "Změna konfigurace Solar Energy Management",
-        "description": "Aktualizujte nastavení nabíječky EV a oznámení",
+        "description": "Aktualizujte nastavení nabíječky EV a oznámení{charger_note}",
         "data": {
           "ev_connected_sensor": "Stav připojení EV",
           "ev_charging_sensor": "Stav nabíjení EV",

@@ -2007,7 +2007,8 @@
     "config_ext_ctrl_entity": "Indikátor řízení",
     "config_help_ext_ctrl": "Pro zařízení, které řídí i dodavatel nebo provozovatel sítě. Ano, SEM ustoupí: dokud je indikátor zapnutý, SEM do zařízení nic nezapisuje. SEM řídí, upozorni mě: SEM si ponechá řízení a zobrazí opravu, když vidí zápisy, které neprovedl. Indikátor je spínač, binární senzor nebo výběr, který ukazuje, že řízení má druhá strana.",
     "sim_caution": "Vaše nastavení se v kontrolovaných dnech odchyluje o {pct} %. Malé rozdíly čtěte opatrně.",
-    "sim_period_gaps": "{n} dní v tomto období je vynecháno: chyběl údaj nebo stál počítadlo."
+    "sim_period_gaps": "{n} dní v tomto období je vynecháno: chyběl údaj nebo stál počítadlo.",
+    "flow_charger_in_configure": "Vaše nabíječka EV se nastavuje v části Konfigurovat (Nastavení → Zařízení a služby → Solar Energy Management → Konfigurovat), ne zde."
   },
   "da": {
     "% of limit": "% af grænse",
@@ -4017,7 +4018,8 @@
     "config_ext_ctrl_entity": "Styringsindikator",
     "config_help_ext_ctrl": "Til en enhed, som en leverandør eller netoperatør også styrer. Ja, SEM viger: så længe indikatoren er tændt, skriver SEM intet til enheden. SEM styrer, giv mig besked: SEM beholder styringen og viser en reparation, når den ser skrivninger, den ikke selv har lavet. Indikatoren er en kontakt, binær sensor eller valgliste, der viser, at den anden part har styringen.",
     "sim_caution": "Dine egne indstillinger er {pct} % ved siden af i de kontrollerede dage. Læs små forskelle med forsigtighed.",
-    "sim_period_gaps": "{n} dage i denne periode er udeladt: en måling manglede, eller en måler stod stille."
+    "sim_period_gaps": "{n} dage i denne periode er udeladt: en måling manglede, eller en måler stod stille.",
+    "flow_charger_in_configure": "Din EV-lader indstilles under Konfigurer (Indstillinger → Enheder og tjenester → Solar Energy Management → Konfigurer), ikke her."
   },
   "de": {
     "% of limit": "% des Limits",
@@ -6027,7 +6029,8 @@
     "config_ext_ctrl_entity": "Steuer-Anzeige",
     "config_help_ext_ctrl": "Für ein Gerät, das auch ein Versorger oder Netzbetreiber steuert. Ja, SEM hält sich zurück: Solange die Anzeige an ist, schreibt SEM nichts an das Gerät. SEM steuert, melde es mir: SEM behält die Kontrolle und zeigt eine Reparatur, wenn es Schreibzugriffe sieht, die nicht von SEM stammen. Die Anzeige ist ein Schalter, Binärsensor oder eine Auswahl, die zeigt, dass der Dritte die Kontrolle hat.",
     "sim_caution": "Ihre eigenen Einstellungen liegen bei den geprüften Tagen {pct} % daneben. Lesen Sie kleine Unterschiede mit Vorsicht.",
-    "sim_period_gaps": "{n} Tage in diesem Zeitraum sind ausgelassen: Ein Messwert fehlte oder ein Zähler stand still."
+    "sim_period_gaps": "{n} Tage in diesem Zeitraum sind ausgelassen: Ein Messwert fehlte oder ein Zähler stand still.",
+    "flow_charger_in_configure": "Deine E-Auto-Ladestation stellst du unter Konfigurieren ein (Einstellungen → Geräte & Dienste → Solar Energy Management → Konfigurieren), nicht hier."
   },
   "en": {
     "% of limit": "% of limit",
@@ -8037,7 +8040,8 @@
     "config_ext_ctrl_entity": "Steering indicator",
     "config_help_ext_ctrl": "For a device that a supplier or grid operator also controls. Yes, SEM yields: while the indicator is on, SEM writes nothing to the device. SEM drives, tell me: SEM keeps control and shows a Repair when it sees writes it did not make. The indicator is any switch, binary sensor or select that shows the other party is in control.",
     "sim_caution": "Your own settings are off by {pct} % over the days checked. Read small differences with care.",
-    "sim_period_gaps": "{n} days in this period are left out: a reading was dark or a counter stood still."
+    "sim_period_gaps": "{n} days in this period are left out: a reading was dark or a counter stood still.",
+    "flow_charger_in_configure": "Your EV charger is set up under Configure (Settings → Devices & services → Solar Energy Management → Configure), not here."
   },
   "es": {
     "% of limit": "% del límite",
@@ -10047,7 +10051,8 @@
     "config_ext_ctrl_entity": "Indicador de control",
     "config_help_ext_ctrl": "Para un dispositivo que también controla una comercializadora o un operador de red. Sí, SEM cede: mientras el indicador esté activo, SEM no escribe nada en el dispositivo. SEM controla, avísame: SEM mantiene el control y muestra una reparación cuando ve escrituras que no son suyas. El indicador es un interruptor, sensor binario o selector que muestra que el tercero tiene el control.",
     "sim_caution": "Sus propios ajustes se desvían un {pct} % en los días comprobados. Lea las diferencias pequeñas con cautela.",
-    "sim_period_gaps": "{n} días de este periodo quedan fuera: faltaba una lectura o un contador estuvo parado."
+    "sim_period_gaps": "{n} días de este periodo quedan fuera: faltaba una lectura o un contador estuvo parado.",
+    "flow_charger_in_configure": "Tu cargador de VE se configura en Configurar (Ajustes → Dispositivos y servicios → Solar Energy Management → Configurar), no aquí."
   },
   "fi": {
     "% of limit": "% rajasta",
@@ -12057,7 +12062,8 @@
     "config_ext_ctrl_entity": "Ohjauksen ilmaisin",
     "config_help_ext_ctrl": "Laitteelle, jota myös sähköyhtiö tai verkkoyhtiö ohjaa. Kyllä, SEM väistyy: niin kauan kuin ilmaisin on päällä, SEM ei kirjoita laitteelle mitään. SEM ohjaa, ilmoita minulle: SEM pitää ohjauksen ja näyttää korjausilmoituksen, kun se näkee kirjoituksia, joita se ei tehnyt. Ilmaisin on kytkin, binäärianturi tai valinta, joka näyttää toisen osapuolen ohjaavan.",
     "sim_caution": "Omat asetuksesi poikkeavat {pct} % tarkistetuilla päivillä. Lue pienet erot varovasti.",
-    "sim_period_gaps": "{n} päivää tältä ajalta jätetään pois: lukema puuttui tai mittari seisoi."
+    "sim_period_gaps": "{n} päivää tältä ajalta jätetään pois: lukema puuttui tai mittari seisoi.",
+    "flow_charger_in_configure": "Sähköauton laturi asetetaan kohdassa Määritä (Asetukset → Laitteet ja palvelut → Solar Energy Management → Määritä), ei täällä."
   },
   "fr": {
     "% of limit": "% de la limite",
@@ -14067,7 +14073,8 @@
     "config_ext_ctrl_entity": "Indicateur de pilotage",
     "config_help_ext_ctrl": "Pour un appareil qu'un fournisseur ou un gestionnaire de réseau pilote aussi. Oui, SEM s'efface : tant que l'indicateur est actif, SEM n'écrit rien sur l'appareil. SEM pilote, prévenez-moi : SEM garde la main et affiche une réparation quand il voit des écritures qui ne viennent pas de lui. L'indicateur est un interrupteur, un capteur binaire ou une liste qui montre que le tiers a la main.",
     "sim_caution": "Vos propres réglages s'écartent de {pct} % sur les jours vérifiés. Lisez les petites différences avec prudence.",
-    "sim_period_gaps": "{n} jours de cette période sont exclus : une mesure manquait ou un compteur était figé."
+    "sim_period_gaps": "{n} jours de cette période sont exclus : une mesure manquait ou un compteur était figé.",
+    "flow_charger_in_configure": "Ta borne de recharge VE se règle sous Configurer (Paramètres → Appareils et services → Solar Energy Management → Configurer), pas ici."
   },
   "hu": {
     "% of limit": "% a határból",
@@ -16077,7 +16084,8 @@
     "config_ext_ctrl_entity": "Irányítás jelzője",
     "config_help_ext_ctrl": "Olyan eszközhöz, amelyet szolgáltató vagy hálózatüzemeltető is irányít. Igen, a SEM visszalép: amíg a jelző be van kapcsolva, a SEM nem ír semmit az eszközre. A SEM irányít, szóljon: a SEM megtartja az irányítást, és javítást jelez, ha olyan írást lát, amelyet nem ő végzett. A jelző kapcsoló, bináris érzékelő vagy választó, amely mutatja, hogy a másik fél irányít.",
     "sim_caution": "A saját beállításai {pct} %-kal térnek el az ellenőrzött napokon. A kis különbségeket óvatosan értelmezze.",
-    "sim_period_gaps": "Ebből az időszakból {n} nap kimarad: hiányzott egy mérés, vagy egy számláló állt."
+    "sim_period_gaps": "Ebből az időszakból {n} nap kimarad: hiányzott egy mérés, vagy egy számláló állt.",
+    "flow_charger_in_configure": "Az elektromos autó töltőjét a Beállítás menüben állíthatod (Beállítások → Eszközök és szolgáltatások → Solar Energy Management → Beállítás), nem itt."
   },
   "it": {
     "% of limit": "% del limite",
@@ -18087,7 +18095,8 @@
     "config_ext_ctrl_entity": "Indicatore di controllo",
     "config_help_ext_ctrl": "Per un dispositivo che controlla anche un fornitore o un gestore di rete. Sì, SEM cede: finché l'indicatore è attivo, SEM non scrive nulla sul dispositivo. SEM gestisce, avvisami: SEM mantiene il controllo e mostra una riparazione quando vede scritture non sue. L'indicatore è un interruttore, un sensore binario o un selettore che mostra che il terzo ha il controllo.",
     "sim_caution": "Le tue impostazioni si discostano del {pct} % nei giorni verificati. Leggi con cautela le piccole differenze.",
-    "sim_period_gaps": "{n} giorni di questo periodo sono esclusi: mancava una lettura o un contatore era fermo."
+    "sim_period_gaps": "{n} giorni di questo periodo sono esclusi: mancava una lettura o un contatore era fermo.",
+    "flow_charger_in_configure": "Il tuo caricatore EV si imposta in Configura (Impostazioni → Dispositivi e servizi → Solar Energy Management → Configura), non qui."
   },
   "nl": {
     "% of limit": "% van limiet",
@@ -20097,7 +20106,8 @@
     "config_ext_ctrl_entity": "Stuursignaal",
     "config_help_ext_ctrl": "Voor een apparaat dat ook een leverancier of netbeheerder bestuurt. Ja, SEM houdt zich in: zolang het signaal aan is, schrijft SEM niets naar het apparaat. SEM stuurt, meld het mij: SEM houdt de controle en toont een Reparatie als het schrijfacties ziet die niet van SEM komen. Het signaal is een schakelaar, binaire sensor of keuzelijst die laat zien dat de andere partij de controle heeft.",
     "sim_caution": "Uw eigen instellingen zitten er bij de gecontroleerde dagen {pct} % naast. Lees kleine verschillen met zorg.",
-    "sim_period_gaps": "{n} dagen in deze periode zijn weggelaten: een meting ontbrak of een teller stond stil."
+    "sim_period_gaps": "{n} dagen in deze periode zijn weggelaten: een meting ontbrak of een teller stond stil.",
+    "flow_charger_in_configure": "Je EV-lader stel je in onder Configureren (Instellingen → Apparaten en diensten → Solar Energy Management → Configureren), niet hier."
   },
   "no": {
     "% of limit": "% av grense",
@@ -22107,7 +22117,8 @@
     "config_ext_ctrl_entity": "Styringsindikator",
     "config_help_ext_ctrl": "For en enhet som en leverandør eller nettoperatør også styrer. Ja, SEM viker: så lenge indikatoren er på, skriver SEM ingenting til enheten. SEM styrer, si fra: SEM beholder styringen og viser en reparasjon når den ser skrivinger den ikke har gjort selv. Indikatoren er en bryter, binær sensor eller valgliste som viser at den andre parten har styringen.",
     "sim_caution": "Dine egne innstillinger avviker med {pct} % i de kontrollerte dagene. Les små forskjeller med forsiktighet.",
-    "sim_period_gaps": "{n} dager i denne perioden er utelatt: en måling manglet eller en måler sto stille."
+    "sim_period_gaps": "{n} dager i denne perioden er utelatt: en måling manglet eller en måler sto stille.",
+    "flow_charger_in_configure": "EV-laderen din stilles inn under Konfigurer (Innstillinger → Enheter og tjenester → Solar Energy Management → Konfigurer), ikke her."
   },
   "pl": {
     "% of limit": "% limitu",
@@ -24117,7 +24128,8 @@
     "config_ext_ctrl_entity": "Wskaźnik sterowania",
     "config_help_ext_ctrl": "Dla urządzenia, które steruje też dostawca lub operator sieci. Tak, SEM ustępuje: dopóki wskaźnik jest włączony, SEM nic nie zapisuje do urządzenia. SEM steruje, powiadom mnie: SEM zachowuje kontrolę i pokazuje naprawę, gdy widzi zapisy, których nie wykonał. Wskaźnik to przełącznik, czujnik binarny lub lista wyboru pokazująca, że kontrolę ma druga strona.",
     "sim_caution": "Twoje ustawienia odbiegają o {pct} % w sprawdzonych dniach. Małe różnice odczytuj ostrożnie.",
-    "sim_period_gaps": "{n} dni w tym okresie pominięto: brakowało odczytu lub licznik stał w miejscu."
+    "sim_period_gaps": "{n} dni w tym okresie pominięto: brakowało odczytu lub licznik stał w miejscu.",
+    "flow_charger_in_configure": "Ładowarkę EV ustawisz w sekcji Konfiguruj (Ustawienia → Urządzenia i usługi → Solar Energy Management → Konfiguruj), nie tutaj."
   },
   "pt": {
     "% of limit": "% do limite",
@@ -26127,7 +26139,8 @@
     "config_ext_ctrl_entity": "Indicador de controlo",
     "config_help_ext_ctrl": "Para um dispositivo que também é controlado por um fornecedor ou operador de rede. Sim, o SEM cede: enquanto o indicador estiver ativo, o SEM não escreve nada no dispositivo. O SEM controla, avise-me: o SEM mantém o controlo e mostra uma reparação quando vê escritas que não são suas. O indicador é um interruptor, sensor binário ou seletor que mostra que o terceiro tem o controlo.",
     "sim_caution": "As suas definições desviam-se {pct} % nos dias verificados. Leia as pequenas diferenças com cuidado.",
-    "sim_period_gaps": "{n} dias deste período ficam de fora: faltou uma leitura ou um contador parou."
+    "sim_period_gaps": "{n} dias deste período ficam de fora: faltou uma leitura ou um contador parou.",
+    "flow_charger_in_configure": "O seu carregador de VE é configurado em Configurar (Definições → Dispositivos e serviços → Solar Energy Management → Configurar), não aqui."
   },
   "ro": {
     "% of limit": "% din limită",
@@ -28137,7 +28150,8 @@
     "config_ext_ctrl_entity": "Indicator de control",
     "config_help_ext_ctrl": "Pentru un dispozitiv pe care îl controlează și un furnizor sau un operator de rețea. Da, SEM se retrage: cât timp indicatorul este activ, SEM nu scrie nimic în dispozitiv. SEM controlează, anunță-mă: SEM păstrează controlul și arată o reparație când vede scrieri care nu sunt ale sale. Indicatorul este un comutator, un senzor binar sau o listă care arată că cealaltă parte are controlul.",
     "sim_caution": "Setările dumneavoastră se abat cu {pct} % în zilele verificate. Citiți cu grijă diferențele mici.",
-    "sim_period_gaps": "{n} zile din această perioadă sunt excluse: lipsea o citire sau un contor stătea pe loc."
+    "sim_period_gaps": "{n} zile din această perioadă sunt excluse: lipsea o citire sau un contor stătea pe loc.",
+    "flow_charger_in_configure": "Încărcătorul tău EV se setează la Configurare (Setări → Dispozitive și servicii → Solar Energy Management → Configurare), nu aici."
   },
   "sv": {
     "% of limit": "% av gräns",
@@ -30147,7 +30161,8 @@
     "config_ext_ctrl_entity": "Styrindikator",
     "config_help_ext_ctrl": "För en enhet som en leverantör eller nätoperatör också styr. Ja, SEM viker: så länge indikatorn är på skriver SEM ingenting till enheten. SEM styr, säg till: SEM behåller styrningen och visar en reparation när den ser skrivningar den inte gjort själv. Indikatorn är en strömbrytare, binär sensor eller lista som visar att den andra parten styr.",
     "sim_caution": "Dina egna inställningar avviker med {pct} % under de kontrollerade dagarna. Läs små skillnader med försiktighet.",
-    "sim_period_gaps": "{n} dagar i den här perioden är utelämnade: en mätning saknades eller en mätare stod still."
+    "sim_period_gaps": "{n} dagar i den här perioden är utelämnade: en mätning saknades eller en mätare stod still.",
+    "flow_charger_in_configure": "Din elbilsladdare ställs in under Konfigurera (Inställningar → Enheter och tjänster → Solar Energy Management → Konfigurera), inte här."
   },
   "zh": {
     "% of limit": "% 达限制",
@@ -32157,6 +32172,7 @@
     "config_ext_ctrl_entity": "控制指示",
     "config_help_ext_ctrl": "适用于供电商或电网运营商也在控制的设备。是，SEM 让出控制：指示开启期间，SEM 不向设备写入任何内容。SEM 控制，并通知我：SEM 保持控制，并在发现不是自己做出的写入时显示修复提示。指示可以是开关、二元传感器或选择项，用来表明对方正在控制。",
     "sim_caution": "您自己的设置在已检查的天数中偏差 {pct} %。请谨慎看待较小的差异。",
-    "sim_period_gaps": "此期间有 {n} 天被排除：读数缺失或计数器停滞。"
+    "sim_period_gaps": "此期间有 {n} 天被排除：读数缺失或计数器停滞。",
+    "flow_charger_in_configure": "电动车充电桩请在“配置”中设置（设置 → 设备与服务 → Solar Energy Management → 配置），不在此处。"
   }
 }
