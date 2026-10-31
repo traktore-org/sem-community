@@ -8323,6 +8323,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         ctx["charge_target_hold"] = self._charge_target_hold()
         # (#1181) …and one record of the forced charges SEM started
         ctx["forced_charge_record"] = self._forced_charge_record()
+        # (#1275) …and one record of the sales per device: a stop to a device
+        # ends every pack's sale on it
+        sales = getattr(self, "_device_sales_obj", None)
+        if not isinstance(sales, dict):
+            sales = self._device_sales_obj = {}
+        ctx["device_sales"] = sales
         # (#1183) Which brand drives this battery is asked of its own
         # entities once the home has more than one: a brand integration
         # loaded for another battery is not this one's.
@@ -9557,7 +9563,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         )
         from .decide_battery import (
             decide_battery, effective_battery_count, forced_ops,
-            sale_surface_count, stop_misses,
+            may_take_the_sale, sale_surface_count, stop_misses,
         )
 
         # Per-battery adapter cache (#375 — was a single
@@ -9654,10 +9660,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # batteries on one sale power entity sell as one, and two on their
         # own sale entities sell twice even when they share one limit.
         _bat_ids = list((getattr(power, "batteries", {}) or {}).keys())
-        _sale_count = sale_surface_count([
+        # (#1277) …counting only the batteries that may take THIS sale: the
+        # arbitrage sale and the forecast spend read different switches.
+        _sale_units = [
             (pbc, self._battery_adapters.get(_bat_ids[i])
              if i < len(_bat_ids) else None)
-            for i, pbc in enumerate(_pbcs)]) if _n_cfg else 1
+            for i, pbc in enumerate(_pbcs)]
+        _shared = self.config if isinstance(self.config, dict) else {}
+        _sale_count = sale_surface_count(
+            _sale_units,
+            lambda p: may_take_the_sale(p, _shared, spend=False)
+        ) if _n_cfg else 1
+        _fsale_count = sale_surface_count(
+            _sale_units,
+            lambda p: may_take_the_sale(p, _shared, spend=True)
+        ) if _n_cfg else 1
 
         # Evaluate arbitrage ONLY when globally enabled. In v1.7.3 the global
         # toggle is forced off (#533) so this whole block is dormant — automatic
@@ -9748,7 +9765,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             from .energy_plan_actuation import forecast_sell_gate
             _fsell_in, _fsell_total_w = forecast_sell_gate(
                 getattr(self, "_energy_plan_shadow", None), dt_util.now())
-        _fsell = (_fsell_in, _fsell_total_w / _sale_count)
+        _fsell = (_fsell_in, _fsell_total_w / _fsale_count)
         _sell_status = None
         if _spend_on:
             _arb_fired = (

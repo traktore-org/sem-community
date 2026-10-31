@@ -561,7 +561,7 @@ class TestTheSplitInThePipeline:
             energy_plan_actuation as epa,
         )
         hass = _Hass()
-        cfgs = [_pbc(limits[i], sales[i]) for i in range(2)]
+        cfgs = [_pbc(limits[i], sales[i], mode="allow_arbitrage") for i in range(2)]
         stub = _stub(hass, {f"b{i + 1}": _battery(hass, limits[i], sales[i])
                             for i in range(2)})
         stub._per_battery_config = lambda i, n: cfgs[i]
@@ -634,4 +634,5 @@ def test_both_sale_splits_count_sale_surfaces():
                 n.id for n in ast.walk(node.value) if isinstance(n, ast.Name)}
     assert set(splits) == {"_arb_sell", "_fsell"}
     for name, names in splits.items():
-        assert "_sale_count" in names and "_eff_battery_count" not in names, name
+        want = "_sale_count" if name == "_arb_sell" else "_fsale_count"
+        assert want in names and "_eff_battery_count" not in names, name

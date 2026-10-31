@@ -39,6 +39,8 @@ NOW = datetime(2026, 8, 12, 19, 30, tzinfo=timezone.utc)
 def _plan(*, blocks=None, computed_at="2026-08-12T14:00:00+00:00"):
     return {
         "computed_at": computed_at,
+        "slots": [{"start": "2026-08-12T14:00:00+00:00",
+                   "end": "2026-08-13T06:00:00+00:00"}],
         "arbitrage": {
             "opportunity": True,
             "discharge_blocks": blocks if blocks is not None else [

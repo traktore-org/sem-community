@@ -191,7 +191,19 @@ def effective_battery_count(pbcs: "list[dict]") -> int:
     return max(1, len(surfaces) + unknown)
 
 
-def sale_surface_count(units: "list[tuple]") -> int:
+def may_take_the_sale(pbc: dict, shared: dict, spend: bool) -> bool:
+    """(#1277) Would this battery act on a sale verdict? The rule
+    ``decide_battery`` applies, asked before the split so a battery that
+    may not sell gets no share. ``spend`` picks the forecast spend (its own
+    switch in ``shared``) over the arbitrage sale (the battery's own)."""
+    flag = (bool(shared.get("forecast_spending_enabled", False)) if spend
+            else bool(pbc.get("battery_grid_arbitrage_enabled", False)))
+    perms = pbc.get("battery_permissions") or shared.get("battery_permissions")
+    return arbitrage_allowed_for_mode(
+        str(pbc.get("battery_mode", "auto") or "auto"), flag, perms)
+
+
+def sale_surface_count(units: "list[tuple]", may_sell=None) -> int:
     """(#1182) The divisor for the fleet sale split: the planned sale is
     shared out per thing a sale lands on, not per discharge limit entity.
 
@@ -204,12 +216,15 @@ def sale_surface_count(units: "list[tuple]") -> int:
     itself: no sale at all (no entity, withdrawn after refusals, #840) is
     no share, else its ``sale_surface``. Before the adapter is built (the
     first cycle) the config's sale entity answers, else the limit entity as
-    before. Returns at least 1.
+    before. ``may_sell(pbc)``, when given, drops a battery that may not take
+    this sale (#1277). Returns at least 1.
     """
     surfaces: set = set()
     unknown = 0
     for pbc, adapter in units:
         if str(pbc.get("battery_mode", "auto") or "auto").lower() == "off":
+            continue
+        if may_sell is not None and not may_sell(pbc):
             continue
         if adapter is not None:
             if not getattr(adapter, "supports_forced_discharge", False):

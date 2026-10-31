@@ -13,6 +13,7 @@ per :class:`BatteryIntent`. Mirrors the EV ``charger_adapters/``
 pattern.
 """
 import logging
+import re
 
 from .base import BatteryControlAdapter
 from .deye import DeyeBatteryAdapter, DeyeCapability, DeyeControlSnapshot
@@ -44,6 +45,8 @@ def adapter_for(hass, config: dict) -> BatteryControlAdapter:
     """
     platform = (config.get("battery_charge_platform") or "auto").lower()
     if platform == "deye":
+        if not _own_deye_battery(hass, config):
+            return GenericBatteryAdapter(hass, config)
         return DeyeBatteryAdapter(hass, config)
     if platform == "huawei":
         if "huawei_solar" not in _own_brand_domains(hass, config):
@@ -119,6 +122,63 @@ def _own_brand_domains(hass, config: dict) -> tuple:
     found = tuple(domain for domain, _name in _BRAND_DOMAINS
                   if domain in platforms)
     return found if len(found) == 1 else ()
+
+
+_ENTITY_ID = re.compile(r"^[a-z_]+\.[a-z0-9_]+$")
+
+
+def _deye_control_entities(config: dict) -> tuple:
+    """The entities the config names as Deye controls: every ``deye_*``
+    value shaped like an entity id, and each slot of ``deye_program_groups``."""
+    found: list = []
+    for key, value in config.items():
+        if not str(key).startswith("deye_"):
+            continue
+        if isinstance(value, str) and _ENTITY_ID.match(value):
+            found.append(value)
+        elif key == "deye_program_groups" and isinstance(value, (list, tuple)):
+            for group in value:
+                if isinstance(group, dict):
+                    found.extend(v for v in group.values()
+                                 if isinstance(v, str) and _ENTITY_ID.match(v))
+    return tuple(dict.fromkeys(found))
+
+
+def _own_deye_battery(hass, config: dict) -> bool:
+    """(#1273) Is this battery the one the Deye controls belong to?
+
+    Deye has no single integration to name, so the config's own control
+    entities stand in: in a home with more than one battery, the battery's
+    own entities must share an integration with them. A home with one
+    battery: yes. No shared integration, or a registry that does not
+    answer: no, and the battery gets the generic adapter, which sends
+    nothing to the Deye inverter's work mode or programs.
+    """
+    try:
+        fleet = int(config.get("battery_fleet_size") or 1)
+    except (TypeError, ValueError):
+        fleet = 1
+    if fleet <= 1:
+        return True
+    own = config.get("battery_own_entity_ids") or ()
+    try:
+        from homeassistant.helpers import entity_registry as er
+        reg = er.async_get(hass)
+
+        def _platforms(ids) -> set:
+            return {
+                str(getattr(reg.async_get(eid), "platform", "") or "")
+                for eid in ids if isinstance(eid, str) and eid
+            } - {""}
+
+        return bool(_platforms(own)
+                    & _platforms(_deye_control_entities(config)))
+    except Exception as err:  # noqa: BLE001 — no registry answer is no match
+        log_on_change(
+            _LOGGER, "battery_deye_registry", logging.WARNING,
+            "cannot read the entity registry to tell the Deye battery, so "
+            "this one is driven as a generic battery (#1273): %s", err)
+        return False
 
 
 def auto_brand(hass, config: dict) -> "Optional[str]":
