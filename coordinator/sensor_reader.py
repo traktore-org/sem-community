@@ -730,6 +730,8 @@ class SensorReader:
         # consecutive reads have repeated it — see _accept_battery_soc.
         self._soc_step_candidate: Optional[float] = None
         self._soc_step_streak: int = 0
+        # (#1284) reads that gave a number while no level was taken yet
+        self._soc_first_wait_reads: int = 0
         self._battery_power_implausible: bool = False
         #: (#988) is the current solar zero refuted by the balance?
         self._solar_zero_refuted = False
@@ -3732,6 +3734,10 @@ class SensorReader:
         with, and the false 0 % comes when the pack's link comes back, which
         a restart is. So the first level is taken the same way: once it has
         repeated. Until then the SOC is never read, as before the first read.
+        The wait has an end: a fleet whose units read far apart, one of them
+        dark every other read, gives two averages that never repeat. After
+        twice the confirm count of reads the current read is taken, and the
+        step check then works from it.
         """
         # (#1169) A level below 0 % is no reading — the rule the fleet
         # average and each battery's own SOC already use.
@@ -3748,7 +3754,12 @@ class SensorReader:
             else:
                 self._soc_step_candidate = soc_val
                 self._soc_step_streak = 1
-            if self._soc_step_streak < BATTERY_SOC_STEP_CONFIRM_READS:
+            if last is None:
+                self._soc_first_wait_reads += 1
+            waited_out = (last is None and self._soc_first_wait_reads
+                          >= 2 * BATTERY_SOC_STEP_CONFIRM_READS)
+            if (self._soc_step_streak < BATTERY_SOC_STEP_CONFIRM_READS
+                    and not waited_out):
                 if last is None:
                     log_on_change(
                         _LOGGER, "implausible:soc", logging.DEBUG,
@@ -3766,7 +3777,14 @@ class SensorReader:
                     )
                 self._hold_battery_soc(readings)
                 return
-            if last is not None:
+            if self._soc_step_streak < BATTERY_SOC_STEP_CONFIRM_READS:
+                log_on_change(
+                    _LOGGER, "implausible:soc", logging.WARNING,
+                    "No battery SOC repeated in the first %d reads since the "
+                    "start — taking %.0f%% (#1284)",
+                    self._soc_first_wait_reads, soc_val,
+                )
+            elif last is not None:
                 log_on_change(
                     _LOGGER, "implausible:soc", logging.INFO,
                     "Battery SOC level %.0f%% held for %d reads — accepting "

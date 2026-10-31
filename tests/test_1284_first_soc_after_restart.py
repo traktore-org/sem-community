@@ -202,3 +202,167 @@ class TestAWaitingLevelIsABattery:
         r, _ = _one("60")
         r.read_power()
         assert battery_unseen(self._coord(r, Presence.ABSENT)) is True
+
+
+# ── 5. The wait has an end ────────────────────────────────────────────────
+
+class TestTheFirstWaitEnds:
+    def test_two_averages_that_never_repeat_still_give_a_level(self):
+        """Review: units at 90 % and 20 %, unit 2 dark every other read,
+        give 55 % and 90 % in turn. Neither repeats, so without an end the
+        SOC stayed never read, and the plan never stamped."""
+        r, states = _fleet(90, 20)
+        seen = []
+        for i in range(2 * N):
+            states["sensor.soc2"] = _state(20 if i % 2 == 0 else
+                                           "unavailable", "%")
+            seen.append(_soc(r.read_power()))
+        assert seen[:-1] == [NEVER_READ] * (2 * N - 1), seen
+        assert seen[-1][1:] == (False, True), seen
+        assert seen[-1][0] in (55.0, 90.0), seen
+
+    def test_a_false_0_still_never_counts_inside_the_end(self):
+        r, states = _one("0.0")
+        seen = _reads(r, states, ["0.0"] + ["93"] * (2 * N))
+        assert not _published(seen, 0.0), seen
+
+
+# ── 6. Readers of the SOC wait with it ────────────────────────────────────
+
+def _cycle_coordinator(soc_state, extra=None):
+    """A real coordinator on the #873 rig, at its first turn after a start."""
+    from custom_components.solar_energy_management.coordinator.coordinator import (  # noqa: E501
+        SEMCoordinator,
+    )
+    from custom_components.solar_energy_management.tests.test_873_cycle_executes import (  # noqa: E501
+        WIRED,
+        _hass,
+        _sensors,
+    )
+    coord = SEMCoordinator(_hass(_sensors(0, 0, 0, soc_state)),
+                           {**WIRED, **(extra or {})})
+    coord.config_entry = None
+    return coord
+
+
+@pytest.mark.asyncio
+class TestTheNightSchedulerWaitsForALevel:
+    async def _socs_planned_on(self, soc_state, turns):
+        coord = _cycle_coordinator(
+            soc_state, {"battery_charge_scheduler_enabled": True})
+        sched = coord._battery_charge_scheduler
+        sched._in_planning_window = lambda now: True
+        planned = []
+        real = sched.evaluate
+
+        def _spy(*args, **kwargs):
+            planned.append(kwargs.get("current_soc"))
+            return real(*args, **kwargs)
+        sched.evaluate = _spy
+        for _ in range(turns):
+            await coord._async_update_data()
+        return planned
+
+    async def test_the_first_turns_plan_nothing_from_0(self):
+        """Review: the first turn planned the night from the 0.0 of a SOC
+        never read ("charge 0 % → 40 %"), then found 63 % above that target
+        and charged nothing all night."""
+        planned = await self._socs_planned_on(63, N + 1)
+        assert planned, "the scheduler never ran: the test proves nothing"
+        assert 0.0 not in planned, planned
+        assert planned[0] == pytest.approx(63.0), planned
+
+    async def test_a_dark_sensor_plans_nothing(self):
+        """The same for a SOC sensor still loading after a restart."""
+        planned = await self._socs_planned_on("unavailable", N + 1)
+        assert planned == [], planned
+
+
+@pytest.mark.asyncio
+class TestTheLegacyFlagsWaitForALevel:
+    async def test_never_read_is_not_too_low(self):
+        """Review: the charging context read the 0.0 as "battery too low"
+        and paused solar charging with "Bat 0%" on a car's charger."""
+        coord = _cycle_coordinator("unavailable")
+        data = await coord._async_update_data()
+        assert data["battery_too_low"] is False
+        assert data["battery_needs_priority"] is False
+
+    async def test_a_low_level_is_still_low(self):
+        """Not vacuous: a level that counted, below the priority level."""
+        coord = _cycle_coordinator(10)
+        for _ in range(N - 1):
+            coord._sensor_reader.read_power()
+        data = await coord._async_update_data()
+        assert data["battery_too_low"] is True
+
+
+@pytest.mark.asyncio
+class TestThePacerKeepsItsCapThroughTheStart:
+    """Review: a cap from before the start was released on the first turn
+    (no SOC yet) and written again once the level counted: a write pair on
+    every restart and reload. Now it is kept as through a blink, up to the
+    dark-read grace from the start."""
+
+    @staticmethod
+    def _store():
+        box = {}
+
+        class _Store:
+            async def async_load(self):
+                return box.get("rec")
+
+            async def async_save(self, rec):
+                box["rec"] = rec
+
+            async def async_remove(self):
+                box.pop("rec", None)
+        return _Store()
+
+    async def _engaged_then_restarted(self, boot_age_s):
+        import time
+
+        from custom_components.solar_energy_management.consts.core import (
+            SENSOR_DARK_READ_GRACE_S,
+        )
+        from custom_components.solar_energy_management.coordinator.coordinator import (  # noqa: E501
+            SEMCoordinator,
+        )
+        from custom_components.solar_energy_management.coordinator.types import (  # noqa: E501
+            PowerReadings,
+        )
+        from custom_components.solar_energy_management.tests.test_934_dark_soc_reads_declare_themselves import (  # noqa: E501
+            _pacer,
+            _writes,
+        )
+        assert SENSOR_DARK_READ_GRACE_S > 30
+        store = self._store()
+        fake, hass = _pacer()
+        fake._charge_pacing_store = lambda: store
+        live = PowerReadings(battery_soc=40.0, battery_soc_known=True)
+        await SEMCoordinator._run_charge_pacing(fake, live)
+        assert fake._charge_pacing_state["action"] == "wrote"
+        before = len(_writes(hass))
+        # The restart: a new writer, the same store and register.
+        fake._charge_pacing_writer = None
+        fake._boot_monotonic = time.monotonic() - boot_age_s
+        never = PowerReadings(battery_soc=0.0, battery_soc_unavailable=True,
+                              battery_soc_known=False)
+        await SEMCoordinator._run_charge_pacing(fake, never)
+        return fake, hass, before, _writes
+
+    async def test_kept_while_the_first_level_waits(self):
+        fake, hass, before, _writes = await self._engaged_then_restarted(20.0)
+        assert fake._charge_pacing_state["action"] == "held"
+        assert len(_writes(hass)) == before, _writes(hass)
+
+    async def test_released_past_the_grace(self):
+        """Not vacuous: a SOC still not read past the grace is an outage,
+        and the cap is given back as before."""
+        from custom_components.solar_energy_management.consts.core import (
+            SENSOR_DARK_READ_GRACE_S,
+        )
+        fake, hass, before, _writes = await self._engaged_then_restarted(
+            SENSOR_DARK_READ_GRACE_S + 30.0)
+        assert fake._charge_pacing_state["action"] == "restored"
+        assert len(_writes(hass)) == before + 1
