@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **A Deye battery keeps its saved settings when another battery above it is removed** (#1257). They now move to its new number.
 - 🐛 **A battery sale now ends a grid charge SEM started first** (#1280). Before, the switch or work mode stayed on while it sold.
 - 🐛 **A restart no longer turns off a charge switch you set yourself** (#1281). SEM now stops only the charges it started.
 - 🐛 **After a restart, an export cut now goes back to the setting SEM found** (#1274). The saved value was lost before the battery was set up.
