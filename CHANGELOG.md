@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **With the energy plan on, a car no longer charges for a few minutes between its planned blocks** (#1282).
+
 # [2.3.0-beta.1] — 31.10.2026
 
 - 🐛 **After a restart, SEM no longer takes a false 0 % battery level as true** (#1284). SEM waits until it reads the same level three times.
