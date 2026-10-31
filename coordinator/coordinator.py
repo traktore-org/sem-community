@@ -5631,7 +5631,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         self._storage.set_legionella_time(_leg_t.isoformat())
                     except (AttributeError, ValueError):
                         pass
-                await self._storage.async_save_energy_delayed()
+                # (#1252) a real write, at most every 5 min: the delayed
+                # one re-arms each cycle and only lands at a clean stop.
+                await self._storage.async_save_energy_throttled()
                 # Flush the daily store too (device runtimes, predictor, EV
                 # intelligence, flow/sign/per-charger state) on a throttled
                 # immediate write — previously it only reached disk on a

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **A power cut no longer loses the day's EV sessions on homes without a battery**; the energy store is written every 5 minutes (#1252).
 - 🐛 **"Buffer", "% self" and "% solar" on three cards are now translated** in all 16 languages (#1264).
 - 🐛 **Diagnostics hide the battery sensor and counter ids in the battery-sign block**, like the config section does (#1270).
 - 🐛 **The CO2 figures on three cards show the unit of the sensor (lb, g) instead of always "kg"** (#1242).
