@@ -3728,6 +3728,10 @@ class SensorReader:
         is accepted once it has repeated for ``BATTERY_SOC_STEP_CONFIRM_READS``
         consecutive reads. Garbage does not repeat itself; a real level does.
         """
+        # (#1169) A level below 0 % is no reading — the rule the fleet
+        # average and each battery's own SOC already use.
+        if soc_val is not None and soc_val < 0:
+            soc_val = None
         if soc_val is None:
             self._hold_battery_soc(readings)
             return

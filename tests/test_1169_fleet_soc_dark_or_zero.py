@@ -15,7 +15,10 @@ battery at 0 % never had that problem. The average now returns None for "no
 unit read" and 0.0 only for 0 %.
 
 Guard for both: a fleet whose units all read the same thing reads exactly as
-one battery that reads it — a number, or dark.
+one battery that reads it — a number, or dark — read by read, on both
+one-battery paths (SEM's own SOC sensor, and the Energy Dashboard's). Found
+by that guard in review: one battery took a level below 0 % as a reading,
+while the fleet average and each battery's own SOC already left it out.
 """
 from __future__ import annotations
 
@@ -54,9 +57,28 @@ def _fleet(soc1, soc2):
 
 
 def _one(soc):
-    """One battery, its SOC on its own sensor."""
-    return _reader({"sensor.soc": _state(soc, "%")},
-                   {"battery_soc_sensor": "sensor.soc"})
+    """One battery, its SOC on SEM's own SOC sensor setting."""
+    states = {"sensor.soc": _state(soc, "%")}
+    return _reader(states, {"battery_soc_sensor": "sensor.soc"}), states
+
+
+def _one_ed(soc):
+    """One battery in the Energy Dashboard, with the SOC set there."""
+    states = {"sensor.b1": _state(0, "W"), "sensor.imp": _state(0, "W"),
+              "sensor.exp": _state(0, "W"), "sensor.soc": _state(soc, "%")}
+    r = _reader(states, {})
+    r.hass.states.async_all = MagicMock(return_value=[])
+    r._sign_vote_warmup = 0
+    r.set_energy_dashboard_config(EnergyDashboardConfig(
+        grid_power_from="sensor.imp", grid_power_to="sensor.exp",
+        battery_power="sensor.b1", battery_power_list=["sensor.b1"],
+        battery_soc="sensor.soc", has_grid=True, has_battery=True))
+    return r, states
+
+
+def _set_all(states, value):
+    for eid in [e for e in states if "soc" in e]:
+        states[eid] = _state(value, "%")
 
 
 def _soc(power):
@@ -140,8 +162,29 @@ class TestAWholeDarkFleetIsDark:
 
 # ── 4. Guard: a fleet of like units reads as one battery ───────────────────
 
+VALUES = [0, 0.0, 1, 37.5, 100, -5] + DARK
+
+
 class TestAFleetOfLikeUnitsReadsAsOneBattery:
-    @pytest.mark.parametrize("value", [0, 0.0, 1, 37.5, 100] + DARK)
-    def test_same_readings_as_one_battery(self, value):
+    @pytest.mark.parametrize("single", [_one, _one_ed])
+    @pytest.mark.parametrize("value", VALUES)
+    def test_first_read(self, value, single):
         fleet, _ = _fleet(value, value)
-        assert _soc(fleet.read_power()) == _soc(_one(value).read_power())
+        one, _ = single(value)
+        assert _soc(fleet.read_power()) == _soc(one.read_power())
+
+    @pytest.mark.parametrize("single", [_one, _one_ed])
+    @pytest.mark.parametrize("value", VALUES)
+    def test_from_a_held_60_read_by_read(self, value, single):
+        """60 % to each value: the same reads held, the same read taken
+        (60 to 0 is held for two reads by the step check, then taken)."""
+        fleet, f_states = _fleet(60, 60)
+        one, o_states = single(60)
+        assert _soc(fleet.read_power()) == _soc(one.read_power())
+        _set_all(f_states, value)
+        _set_all(o_states, value)
+        f_seen = [_soc(fleet.read_power()) for _ in range(4)]
+        o_seen = [_soc(one.read_power()) for _ in range(4)]
+        assert f_seen == o_seen
+        if value in (0, 0.0):
+            assert [s[0] for s in f_seen] == [60.0, 60.0, 0.0, 0.0]
