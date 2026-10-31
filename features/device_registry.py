@@ -50,6 +50,7 @@ from ..consts.core import RATED_POWER_RULE, RATED_POWER_START_PEAK_RATIO
 from ..hardware_detection import discover_ev_charger_from_registry
 from ..const import LOAD_PRIORITY_BASE as _LOAD_PRIORITY_BASE
 from ..consts.devices import load_phase
+from ..coordinator.units import finite_float
 
 #: (#880) Domains whose control is a watt SETPOINT rather than a contact.
 #: The reporter configured "Control type: Number entity" and got a
@@ -1810,7 +1811,7 @@ class UnifiedDeviceRegistry:
                 state = self.hass.states.get(device.power_sensor)
                 if state and state.state not in ("unknown", "unavailable"):
                     try:
-                        current_power = float(state.state)
+                        current_power = finite_float(state.state)
                     except (ValueError, TypeError):
                         pass
             # (#745) On/off must prefer the device's OWN control-entity state.
@@ -1987,7 +1988,7 @@ class UnifiedDeviceRegistry:
             st = self.hass.states.get(entity)
             if st and st.state not in ("unknown", "unavailable"):
                 try:
-                    return float(st.state)
+                    return finite_float(st.state)
                 except (ValueError, TypeError):
                     return None
             return None
@@ -3015,7 +3016,7 @@ class UnifiedDeviceRegistry:
                 # unrounded this mirrored the sensor tick for tick. 10 W
                 # steps: a 37.5->40.1 W jitter stays 40, and a 42 W load
                 # still gets a rating instead of the 0 that 100 W gave it.
-                return float(round(float(state.state) / 10.0) * 10)
+                return float(round(finite_float(state.state) / 10.0) * 10)
             except (ValueError, TypeError):
                 pass
         return 0.0

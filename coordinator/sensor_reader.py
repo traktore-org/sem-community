@@ -24,6 +24,7 @@ from .charger_adapters.status_enum import (
 from .sign_audit import CounterCorrelationAudit, SplitSensorExclusivityAudit
 from .units import (
     energy_state_to_kwh,
+    finite_float,
     is_energy_unit,
     normalize_unit,
     power_state_to_watts,
@@ -2786,12 +2787,12 @@ class SensorReader:
             discharge_state = self.hass.states.get(discharge_entity)
             if charge_state and charge_state.state not in ("unknown", "unavailable"):
                 try:
-                    self._battery_charge_baseline[bid] = float(charge_state.state)
+                    self._battery_charge_baseline[bid] = finite_float(charge_state.state)
                 except (ValueError, TypeError):
                     pass
             if discharge_state and discharge_state.state not in ("unknown", "unavailable"):
                 try:
-                    self._battery_discharge_baseline[bid] = float(discharge_state.state)
+                    self._battery_discharge_baseline[bid] = finite_float(discharge_state.state)
                 except (ValueError, TypeError):
                     pass
             return self._battery_sign_inverted[bid]
@@ -2810,8 +2811,8 @@ class SensorReader:
             return self._battery_sign_inverted[bid]
 
         try:
-            charge_val = float(charge_state.state)
-            discharge_val = float(discharge_state.state)
+            charge_val = finite_float(charge_state.state)
+            discharge_val = finite_float(discharge_state.state)
         except (ValueError, TypeError):
             return self._battery_sign_inverted[bid]
 
@@ -6729,7 +6730,7 @@ class SensorReader:
                         st = self.hass.states.get(eid)
                         if st is not None and st.state not in ("unknown", "unavailable", None):
                             try:
-                                if float(st.state) >= 0:
+                                if finite_float(st.state) >= 0:
                                     _LOGGER.info(
                                         "Auto-detected battery cycles sensor: %s = %s (#593)",
                                         eid, st.state,
@@ -6941,7 +6942,7 @@ class SensorReader:
                     if by_keyword or by_signature:
                         if state and state.state not in ("unknown", "unavailable", None):
                             try:
-                                val = float(state.state)
+                                val = finite_float(state.state)
                                 if 0 <= val <= 100:
                                     if not getattr(self, '_battery_soc_logged', False):
                                         _LOGGER.info(
@@ -7003,7 +7004,7 @@ class SensorReader:
                 if state.state in ("unknown", "unavailable", None):
                     continue
                 try:
-                    val = float(state.state)
+                    val = finite_float(state.state)
                 except (ValueError, TypeError):
                     continue
                 if 0 <= val <= 100:
@@ -7119,7 +7120,7 @@ class SensorReader:
             state = self.hass.states.get(candidate)
             if state and state.state not in ("unknown", "unavailable", None):
                 try:
-                    val = float(state.state)
+                    val = finite_float(state.state)
                     if 0 <= val <= 100:
                         if not getattr(self, '_battery_soc_logged', False):
                             _LOGGER.info("Auto-detected battery SOC: %s = %.0f%%", candidate, val)
@@ -7179,7 +7180,7 @@ class SensorReader:
             if dc == "battery" or unit in ("%", "percent"):
                 continue
             try:
-                value = float(state.state)
+                value = finite_float(state.state)
                 if value <= 0:
                     continue
                 # #641 — the unit half goes through units.py (so an MWh-labelled

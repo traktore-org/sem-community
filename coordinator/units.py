@@ -60,6 +60,19 @@ def state_number(raw) -> Optional[float]:
         return None
     return value if math.isfinite(value) else None
 
+
+def finite_float(raw) -> float:
+    """(#1262) ``float()`` that refuses "nan" and "inf" like it refuses text.
+
+    For a call site that already catches ``ValueError`` from ``float(state)``:
+    NaN parses, is not None, and fails every compare, so it passed as a known
+    reading.
+    """
+    value = float(raw)
+    if not math.isfinite(value):
+        raise ValueError(f"not a finite number: {raw!r}")
+    return value
+
 # unit (stripped + lowercased) → multiplier to reach WATTS.
 #
 # Known limitation: matching is case-INSENSITIVE, so ``mW`` (milliwatt) and

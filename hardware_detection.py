@@ -32,6 +32,7 @@ from .consts.devices import (
 from .utils.select_option import pick_listed
 from .utils.switch_sense import charge_pause_twin, integration_name
 from .utils.own_entity import is_sem_entity  # (#1103)
+from .coordinator.units import finite_float
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -75,7 +76,7 @@ class EVChargerDetector:
 
         try:
             if sensor_type == "ev_charging_power":
-                value = float(state.state)
+                value = finite_float(state.state)
                 return -20000 <= value <= 20000
 
             elif sensor_type in ["ev_connected", "ev_charging"]:
@@ -3492,7 +3493,7 @@ def read_co2_intensity_kg(state: Any) -> Optional[float]:
     if factor is None:
         return None
     try:
-        kg = float(state.state) * factor
+        kg = finite_float(state.state) * factor
     except (TypeError, ValueError):
         return None
     if not (0.0 <= kg <= CO2_INTENSITY_MAX_KG):

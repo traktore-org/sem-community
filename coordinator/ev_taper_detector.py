@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     # Annotation-only (#786) — the module never touches hass at import time.
     from homeassistant.core import HomeAssistant
 from .units import power_unit_scale
+from .units import finite_float
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -1011,7 +1012,7 @@ class EVTaperDetector:
         readings = []
         for state in states:
             try:
-                val = float(state.state) * w_per_unit / 1000.0
+                val = finite_float(state.state) * w_per_unit / 1000.0
                 readings.append((state.last_changed, val))
             except (ValueError, TypeError):
                 continue

@@ -38,6 +38,7 @@ from ..utils.log_gate import log_on_change
 from ..utils.helpers import (
     BATTERY_SALE_SENSOR_KEY, battery_export_part, solar_export,
 )
+from .units import finite_float
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -3563,7 +3564,7 @@ class EnergyCalculator:
         if state is None or state.state in ("unknown", "unavailable", None, ""):
             return False
         try:
-            return math.isfinite(float(state.state))
+            return math.isfinite(finite_float(state.state))
         except (TypeError, ValueError):
             return False
 
