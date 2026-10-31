@@ -26,6 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **A sensor state of "nan" or "inf" is no number in every sensor read** (#1262). Before, the car's level, forecasts, tariffs and loads took it as a value.
 - 🐛 **Savings no longer count the house twice when the sun drops while the inverter reads dark** (#1269). The battery's share wins over the held solar.
 - 🐛 **A home reading 1–2 % off during a big EV session no longer warns about a stale sensor** (#1234). Real sign errors still warn.
+- 🐛 **A power cut no longer loses the day's EV sessions on homes without a battery**; the energy store is written every 5 minutes (#1252).
+- 🐛 **"Buffer", "% self" and "% solar" on three cards are now translated** in all 16 languages (#1264).
+- 🐛 **Diagnostics hide the battery sensor and counter ids in the battery-sign block**, like the config section does (#1270).
+- 🐛 **The CO2 figures on three cards show the unit of the sensor (lb, g) instead of always "kg"** (#1242).
+- 🐛 **A device counter that dips and returns to the same value no longer logs a "reset" warning**; it is a debug line (#1235).
+- 🐛 **Observer mode no longer warns "commanded STOP … the stop is not taking"**; SEM sends nothing there, so it is only a debug line now (#1233).
+- 🐛 **Two grid meters: SEM stops searching every cycle for a dark sensor, and asks again when the device lookup was not ready** (#1286).
 - 🐛 **Setup finds a grid meter with separate import and export power sensors and no longer asks you to pick one** (#1237).
 - 🐛 **Force discharge goes back to Auto when the battery stops selling above the reserve** (#1165). It needs 15 minutes without sun while the home buys.
 - 🐛 **With two batteries, SEM no longer sends the second battery's commands to the Huawei or GoodWe inverter** (#1183).

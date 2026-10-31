@@ -745,6 +745,16 @@ class ControllableDevice(ABC):
             # change while it read zero, so the window start is still the drop.
             recovered = kwh - pre_reset
             self._energy_counter_pre_reset_kwh = None
+            if recovered <= 0.0005:
+                # back at the value it fell from: nothing was booked, and
+                # nothing was reset. Said at debug, not as a warning.
+                _LOGGER.debug(
+                    "%s: energy counter %s recovered to %.3f kWh after an "
+                    "outage of %.0f s — same value, nothing booked",
+                    self.name, self.energy_entity_id, kwh, window_s,
+                )
+                self._book_energy(recovered)
+                return
             if recovered <= _MAX_PLAUSIBLE_LOAD_W * window_s / 3_600_000.0:
                 _LOGGER.warning(
                     "%s: energy counter %s recovered to %.3f kWh after a reset "

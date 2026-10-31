@@ -850,8 +850,9 @@ class SEMStorage:
         """Write the energy store to disk, at most once per
         ENERGY_SAVE_INTERVAL seconds (#800 round 3).
 
-        The battery-night recorder updates its open record every cycle; a
-        record whose whole point is surviving an UNCLEAN reboot cannot be
+        The cycle persist (every home, #1252) and the battery-night recorder
+        write through here; a record whose whole point is surviving an
+        UNCLEAN reboot cannot be
         written by ``async_delay_save`` (re-arms on every call → fires only
         at a graceful stop; see ``async_save_energy_now``'s docstring — the
         trap this file has now documented three times). Mirrors

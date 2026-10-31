@@ -4979,16 +4979,16 @@ class SensorReader:
         return (_lst("grid_import_energy", "grid_import_energy_list"),
                 _lst("grid_export_energy", "grid_export_energy_list"))
 
-    def _grid_meters(self, ed) -> "list[tuple[Any, list, list]]":
+    def _grid_meters(self, ed) -> "Optional[list[tuple[Any, list, list]]]":
         """(#1241) The grid METERS the Energy Dashboard's counters belong to:
         ``[(unit, import counters, export counters)]`` in counter order.
 
         A meter is the unit (device, else config entry) its import counters
         sit on; tariff counters of one meter are one meter. Export counters
-        join the meter they share a unit with. Empty when any import counter
-        has no unit: counters that cannot be told apart are one meter, as
-        before. Bug class 90 (an optional identity used as a grouping key:
-        None is not an identity)."""
+        join the meter they share a unit with. ``[]`` for one meter. ``None``
+        when an import counter has no unit YET: the lookup could not answer,
+        which is not "one meter" and must be asked again. Bug class 90 (an
+        optional identity used as a grouping key: None is not an identity)."""
         imports, exports = self._grid_counter_entities(ed)
         if len(imports) < 2:
             return []
@@ -4996,7 +4996,7 @@ class SensorReader:
         for eid in imports:
             unit = self._get_unit_for_entity(eid)
             if unit is None:
-                return []
+                return None
             for meter in meters:
                 if meter[0] == unit:
                     meter[1].append(eid)
@@ -5025,10 +5025,18 @@ class SensorReader:
         covered or none: a sum over some of the meters would be taken for the
         whole grid, so the main pair alone is read, as before, and the gap is
         said once. Held in ``disc["more"]``; looked for again every ~minute
-        while a meter has none, at once when a held sensor goes dark."""
+        while a meter has none, at once when a held sensor goes dark and then
+        every 6th cycle while it stays dark; a unit lookup that could not
+        answer is asked again every 6th cycle, never kept as "one meter"."""
         held = disc.get("more")
         if held is not None:
-            if disc.get("more_missing"):
+            if disc.get("more_unasked"):
+                countdown = disc["more_unasked"] - 1
+                if countdown > 0:
+                    disc["more_unasked"] = countdown
+                    return held
+                disc.pop("more_unasked")
+            elif disc.get("more_missing"):
                 countdown = disc.get("more_countdown", 0) - 1
                 if countdown > 0:
                     disc["more_countdown"] = countdown
@@ -5039,8 +5047,22 @@ class SensorReader:
                 and st.state not in ("unavailable", "unknown")
                 for pair in held for eid in pair if eid
             ):
+                disc.pop("more_dark", None)
                 return held
+            else:
+                dark = disc.get("more_dark")
+                if dark is not None:
+                    dark -= 1
+                    if dark > 0:
+                        disc["more_dark"] = dark
+                        return held
+                disc["more_dark"] = 6
         meters = self._grid_meters(ed)
+        if meters is None:
+            disc["more"] = held if held is not None else []
+            disc["more_missing"] = ()
+            disc["more_unasked"] = 6
+            return disc["more"]
         pairs: list = []
         missing: list = []
         taken = {disc.get("import"), disc.get("export")} - {None}

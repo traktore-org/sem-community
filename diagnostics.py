@@ -294,6 +294,13 @@ REDACT_CONFIG_KEYS = {
 }
 
 
+# (#1270) Entity ids in the battery-sign block: same class as the config keys.
+REDACT_BATTERY_SIGN_KEYS = {
+    "battery_power_sensor", "sensor", "counters",
+    "charge_counters", "discharge_counters",
+}
+
+
 def _safe(fn):
     """Evaluate a diagnostics accessor; a broken internal must never take
     the whole download down (the download IS the debugging tool)."""
@@ -833,7 +840,8 @@ async def async_get_config_entry_diagnostics(
         "external_control": _safe(
             lambda: coordinator._external_control.rows()) or [],
         "energy_dashboard": ed_info,
-        "battery_sign": battery_sign_info,
+        "battery_sign": async_redact_data(
+            battery_sign_info, REDACT_BATTERY_SIGN_KEYS),
         "split_grid_discovery": split_grid_info,
         "pv_strings_discovery": pv_strings_info,
         "charger_adapters": charger_adapter_info,
