@@ -101,9 +101,20 @@ class TestTheExportCounterDecides:
     def test_gains_add_up_over_cycles(self):
         h = Home()
         h.read()
-        for n in range(1, 7):
+        for n in range(1, 8):
             h.read(export_kwh=100.0 + 0.03 * n)
         h.ri.raise_half_grid_pair.assert_called_once()
+
+    def test_small_gains_on_separate_days_never_add_up(self):
+        from datetime import datetime, timedelta, timezone
+        from homeassistant.util import dt as dt_util
+        h = Home()
+        h.read()
+        day = datetime(2026, 11, 1, 12, tzinfo=timezone.utc)
+        for n in range(1, 8):
+            with patch.object(dt_util, "now", return_value=day + timedelta(days=n)):
+                h.read(export_kwh=100.0 + 0.1 * n)
+        h.ri.raise_half_grid_pair.assert_not_called()
 
     def test_a_counter_reset_is_not_export(self):
         h = Home(export_kwh=900.0)
@@ -128,7 +139,7 @@ class TestItGoesWhenTheHalfIsNoLongerAlone:
         h.read(export_kwh=101.0)
         h.rig.reader._raw_config["grid_export_power_entity"] = _EXP
         h.read(export_kwh=102.0)
-        h.ri.clear_half_grid_pair.assert_called_once()
+        assert h.ri.clear_half_grid_pair.call_count == 2  # start + this change
 
     def test_the_half_removed_clears_it(self):
         h = Home()
@@ -136,13 +147,20 @@ class TestItGoesWhenTheHalfIsNoLongerAlone:
         h.read(export_kwh=101.0)
         del h.rig.reader._raw_config["grid_import_power_entity"]
         h.read(export_kwh=102.0)
-        h.ri.clear_half_grid_pair.assert_called_once()
+        assert h.ri.clear_half_grid_pair.call_count == 2  # start + this change
 
-    def test_nothing_is_cleared_when_nothing_was_raised(self):
+    def test_a_new_reader_clears_a_repair_an_older_one_raised(self):
+        # the entry is reloaded: the new reader starts with raised=False
         h = Home()
         for _ in range(3):
             h.read()
-        h.ri.clear_half_grid_pair.assert_not_called()
+        h.ri.clear_half_grid_pair.assert_called_once()
+
+    def test_a_reader_clears_once_not_every_cycle(self):
+        h = Home()
+        for _ in range(5):
+            h.read()
+        assert h.ri.clear_half_grid_pair.call_count == 1
 
 
 class TestOtherHomesAreUnchanged:

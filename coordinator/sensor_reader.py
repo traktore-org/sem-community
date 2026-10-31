@@ -5016,9 +5016,9 @@ class SensorReader:
         disc["more_missing"] = tuple(missing)
         return pairs
 
-    #: (#1238) Export the counter must show, in kWh, before a saved import
-    #: half is said to hide it. Under this a flicker of a counter is noise.
-    _HALF_PAIR_PROOF_KWH = 0.1
+    #: (#1238) Export the counter must show, in kWh, within ONE day before a
+    #: saved import half is said to hide it. Under this it is noise.
+    _HALF_PAIR_PROOF_KWH = 0.2
 
     def _watch_half_grid_pair(self, ed, half_import: Optional[str],
                               grid_w: Optional[float]) -> None:
@@ -5039,13 +5039,16 @@ class SensorReader:
         if watch is None:
             watch = self._half_pair_watch = {
                 "last": None, "gain": 0.0, "raised": False, "half": None,
-                "saw_export": False}
+                "saw_export": False, "day": None}
+            # a new reader knows nothing: a Repair an older one raised (the
+            # entry was reloaded) is proven again or goes
+            _ri.clear_half_grid_pair(self.hass)
         exports = self._grid_counter_entities(ed)[1] if half_import else []
         if not half_import or not exports:
             if watch["raised"]:
                 _ri.clear_half_grid_pair(self.hass)
             watch.update(last=None, gain=0.0, raised=False, half=None,
-                         saw_export=False)
+                         saw_export=False, day=None)
             return
         if watch["half"] != half_import:      # another half: a new question
             watch.update(last=None, gain=0.0, half=half_import,
@@ -5059,6 +5062,11 @@ class SensorReader:
         deltas = self._counter_deltas(prev, 0.0, total, 0.0)
         if deltas is None:                    # first look, or a counter reset
             return
+        from homeassistant.util import dt as dt_util
+        today = dt_util.now().date()
+        if watch["day"] != today:             # tiny gains must not add up for weeks
+            watch["day"] = today
+            watch["gain"] = 0.0
         watch["gain"] += max(0.0, deltas[0])
         if (watch["gain"] >= self._HALF_PAIR_PROOF_KWH
                 and not watch["saw_export"] and not watch["raised"]):
