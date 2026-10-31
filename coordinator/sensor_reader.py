@@ -3727,6 +3727,11 @@ class SensorReader:
         dark for hours while the pack really did drain — so a rejected level
         is accepted once it has repeated for ``BATTERY_SOC_STEP_CONFIRM_READS``
         consecutive reads. Garbage does not repeat itself; a real level does.
+
+        (#1284) The first read after a start has no last level to compare
+        with, and the false 0 % comes when the pack's link comes back, which
+        a restart is. So the first level is taken the same way: once it has
+        repeated. Until then the SOC is never read, as before the first read.
         """
         # (#1169) A level below 0 % is no reading — the rule the fleet
         # average and each battery's own SOC already use.
@@ -3736,7 +3741,7 @@ class SensorReader:
             self._hold_battery_soc(readings)
             return
         last = self._last_valid_soc
-        if last is not None and abs(soc_val - last) > BATTERY_SOC_MAX_STEP_PCT:
+        if last is None or abs(soc_val - last) > BATTERY_SOC_MAX_STEP_PCT:
             cand = self._soc_step_candidate
             if cand is not None and abs(soc_val - cand) <= BATTERY_SOC_MAX_STEP_PCT:
                 self._soc_step_streak += 1
@@ -3744,20 +3749,29 @@ class SensorReader:
                 self._soc_step_candidate = soc_val
                 self._soc_step_streak = 1
             if self._soc_step_streak < BATTERY_SOC_STEP_CONFIRM_READS:
-                log_on_change(
-                    _LOGGER, "implausible:soc", logging.WARNING,
-                    "Battery SOC %.0f%% -> %.0f%% in one read is not a "
-                    "measurement — holding %.0f%% (#902; accepted if the level "
-                    "persists for %d reads)",
-                    last, soc_val, last, BATTERY_SOC_STEP_CONFIRM_READS,
-                )
+                if last is None:
+                    log_on_change(
+                        _LOGGER, "implausible:soc", logging.DEBUG,
+                        "First battery SOC %.0f%% since the start — taken "
+                        "once it has repeated for %d reads (#1284)",
+                        soc_val, BATTERY_SOC_STEP_CONFIRM_READS,
+                    )
+                else:
+                    log_on_change(
+                        _LOGGER, "implausible:soc", logging.WARNING,
+                        "Battery SOC %.0f%% -> %.0f%% in one read is not a "
+                        "measurement — holding %.0f%% (#902; accepted if the "
+                        "level persists for %d reads)",
+                        last, soc_val, last, BATTERY_SOC_STEP_CONFIRM_READS,
+                    )
                 self._hold_battery_soc(readings)
                 return
-            log_on_change(
-                _LOGGER, "implausible:soc", logging.INFO,
-                "Battery SOC level %.0f%% held for %d reads — accepting (#902)",
-                soc_val, self._soc_step_streak,
-            )
+            if last is not None:
+                log_on_change(
+                    _LOGGER, "implausible:soc", logging.INFO,
+                    "Battery SOC level %.0f%% held for %d reads — accepting "
+                    "(#902)", soc_val, self._soc_step_streak,
+                )
         self._soc_step_candidate = None
         self._soc_step_streak = 0
         readings.battery_soc = soc_val

@@ -462,6 +462,11 @@ def battery_unseen(coordinator) -> bool:
     reader = getattr(coordinator, "_sensor_reader", None)
     if getattr(reader, "_last_valid_soc", None) is not None:
         return False
+    # (#1284) A first level that waits for its repeat came from a battery's
+    # SOC sensor too: the wait changes when the level counts, not whether
+    # there is a pack.
+    if getattr(reader, "_soc_step_candidate", None) is not None:
+        return False
     detected = getattr(coordinator, "_detected_battery_capacity_kwh", None)
     if detected:
         return False

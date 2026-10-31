@@ -18,6 +18,9 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
+from custom_components.solar_energy_management.consts.core import (
+    BATTERY_SOC_STEP_CONFIRM_READS,
+)
 from custom_components.solar_energy_management.coordinator.charger_types import (
     BatteryIntent,
     BatteryRuntime,
@@ -76,10 +79,14 @@ class TestTheHoldHasANeverReadState:
         assert p.battery_soc_known is False, "0.0 was published as a held value"
 
     def test_the_first_success_makes_the_soc_known(self):
+        """(#1284) …once it has repeated: the first level after a start has
+        nothing to compare with, so it counts the way a step does."""
         soc = ["unavailable"]
         r = _reader(soc)
         r.read_power()
         soc[0] = "78"
+        for _ in range(BATTERY_SOC_STEP_CONFIRM_READS - 1):
+            assert r.read_power().battery_soc_known is False
         p = r.read_power()
         assert p.battery_soc == pytest.approx(78.0)
         assert p.battery_soc_known is True
@@ -102,7 +109,8 @@ class TestTheHoldHasANeverReadState:
         """The zero-order hold is the right design for a gap — untouched."""
         soc = ["78"]
         r = _reader(soc)
-        r.read_power()
+        for _ in range(BATTERY_SOC_STEP_CONFIRM_READS):
+            r.read_power()
         soc[0] = "unavailable"
         p = r.read_power()
         assert p.battery_soc == pytest.approx(78.0)
