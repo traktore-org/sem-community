@@ -565,7 +565,14 @@ class BatteryControlAdapter(ABC):
         re-issues the command rather than masquerading as successful.
 
         (#1175) A discharge limit SEM wrote before the sale is put back to
-        the max first (:meth:`_hand_back_own_limit`)."""
+        the max first (:meth:`_hand_back_own_limit`).
+
+        (#1280) A grid charge SEM started on a switch or work mode ends
+        first: a pack must not be told to sell and to charge at once. A stop
+        that fails withholds the sale (``last_error`` says so) and the next
+        cycle asks again."""
+        if not await self._stop_own_charge():
+            return
         await self._hand_back_own_limit()
         await self._send_sale(power_w)
 
