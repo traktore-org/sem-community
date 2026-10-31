@@ -451,6 +451,26 @@ def sale_stall_read(soc, power_w, *, soc_read: bool, power_read: bool,
             and abs(float(power_w)) <= MANUAL_CHARGE_STALL_W)
 
 
+def sale_stall_site(fleet, *, sun_down: bool = False):
+    """(#1165) This cycle's ``(grid import W, sun W)`` for
+    :func:`sale_stall_read`, or ``None`` when it is no measurement.
+
+    The steering reads must be measurements and the balance must close
+    (:func:`house_load_is_measured`): a grid sign read the wrong way shows
+    an export as import. One read may be dark: the solar one, while the sun
+    is below the horizon. Many inverters go offline at night, and the sun
+    is 0 W then whatever the sensor says."""
+    if float(getattr(fleet, "home_residual_clamped_w", 0.0) or 0.0) > 0.0:
+        return None
+    import_w = max(0.0, float(getattr(fleet, "grid_import_power", 0.0) or 0.0))
+    if not bool(getattr(fleet, "inputs_degraded", False)):
+        return import_w, max(0.0, float(getattr(fleet, "solar_power", 0.0) or 0.0))
+    dark = tuple(getattr(fleet, "dark_inputs", ()) or ())
+    if sun_down is True and dark == ("solar",):
+        return import_w, 0.0
+    return None
+
+
 def sale_stall_step(prev, now_s: float, soc, stall_read: bool):
     """(#1165) :func:`charge_stall_step` for a sale: a level BELOW the one
     the window started at starts it again — the pack still sells, slowly."""

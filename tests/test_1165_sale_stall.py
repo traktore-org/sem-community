@@ -50,6 +50,7 @@ from custom_components.solar_energy_management.coordinator.decide_battery import
     charge_stall_step,
     manual_mode_done,
     sale_stall_read,
+    sale_stall_site,
     sale_stall_step,
 )
 from custom_components.solar_energy_management.consts.core import (
@@ -192,6 +193,44 @@ class TestTheRule:
                                 reserve=20.0, sale_stalled=True) is False
 
 
+class TestTheSite:
+    """``sale_stall_site``: the home's grid import and sun, when they are a
+    measurement."""
+
+    def _fleet(self, **kw):
+        return SimpleNamespace(**{"grid_import_power": 400.0,
+                                  "solar_power": 0.0, "inputs_degraded": False,
+                                  "dark_inputs": (),
+                                  "home_residual_clamped_w": 0.0, **kw})
+
+    def test_a_measured_home_is_handed_over(self):
+        assert sale_stall_site(self._fleet()) == (400.0, 0.0)
+        assert sale_stall_site(self._fleet(
+            grid_import_power=0.0, solar_power=3000.0)) == (0.0, 3000.0)
+
+    def test_a_balance_that_did_not_close_is_none(self):
+        # A grid sign read the wrong way shows an export as import.
+        assert sale_stall_site(self._fleet(home_residual_clamped_w=300.0),
+                               sun_down=True) is None
+
+    def test_a_dark_solar_read_at_night_is_no_sun(self):
+        # (#1165 review 2) Many inverters go offline at night.
+        fleet = self._fleet(inputs_degraded=True, dark_inputs=("solar",),
+                            solar_power=0.0)
+        assert sale_stall_site(fleet, sun_down=True) == (400.0, 0.0)
+
+    @pytest.mark.parametrize("why,dark,sun_down", [
+        ("the sun is up", ("solar",), False),
+        ("the grid is dark", ("grid",), True),
+        ("the grid and the solar are dark", ("grid", "solar"), True),
+        ("the battery is dark", ("battery",), True),
+        ("dark, but no name", (), True),
+    ])
+    def test_any_other_dark_read_is_none(self, why, dark, sun_down):
+        fleet = self._fleet(inputs_degraded=True, dark_inputs=dark)
+        assert sale_stall_site(fleet, sun_down=sun_down) is None, why
+
+
 # ── 2. The coordinator ends the mode ───────────────────────────────────────
 
 def _seller(landed=True, asked_w=5000.0, limit_w=-1.0):
@@ -292,6 +331,28 @@ class TestAPackThatStopsAt30:
         _sell(coordinator, clock, {"primary": (30.0, 0.0)},
               _WINDOW_MIN + _SETTLE_MIN)
         assert entry.options["battery_mode"] == "auto"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("limit_eid,sale_eid,ends", [
+        ("number.sale_power", "number.sale_power", True),
+        ("number.max_discharge", "number.sale_power", False),
+        ("", "", False),
+    ])
+    async def test_a_limit_on_the_sales_own_register_is_no_hold(
+            self, hass, clock, limit_eid, sale_eid, ends):
+        # (#1165 review 2) One entity for the limit and the sale power: the
+        # sale wrote over the 0 W limit, so it holds nothing (#1175 skips
+        # the hand-back there too). Two entities, or none: the limit stands.
+        entry = _entry(hass, {"battery_mode": "force_discharge"})
+        coordinator = _sale_coordinator(hass, entry, (), ["primary"])
+        seller = _seller(limit_w=0.0)
+        seller._discharge_control_entity = limit_eid
+        seller._force_discharge_entity = sale_eid
+        coordinator._battery_adapters = {"primary": seller}
+        _sell(coordinator, clock, {"primary": (30.0, 0.0)},
+              _WINDOW_MIN + _SETTLE_MIN)
+        assert entry.options["battery_mode"] == (
+            "auto" if ends else "force_discharge")
 
     @pytest.mark.asyncio
     async def test_a_dark_power_or_level_read_keeps_the_mode(self, hass, clock):
@@ -527,8 +588,18 @@ class TestThePipeline:
             setattr(power, attr, value)
         assert await _pipeline_seen(monkeypatch, power) is None, why
 
+    @pytest.mark.parametrize("sun,seen", [
+        ("below_horizon", (400.0, 0.0)), ("above_horizon", None), (None, None),
+    ])
+    async def test_a_dark_solar_read_counts_only_after_sunset(
+            self, monkeypatch, sun, seen):
+        # (#1165 review 2) The pipeline asks ``sun.sun`` itself.
+        power = _readings()
+        power.inputs_degraded, power.dark_inputs = True, ("solar",)
+        assert await _pipeline_seen(monkeypatch, power, sun=sun) == seen
 
-async def _pipeline_seen(monkeypatch, power):
+
+async def _pipeline_seen(monkeypatch, power, sun=None):
     """The ``site`` ``_run_battery_pipeline`` hands the end check."""
     from custom_components.solar_energy_management.coordinator import (
         decide_battery as db,
@@ -540,6 +611,8 @@ async def _pipeline_seen(monkeypatch, power):
     stub._battery_charge_scheduler.enabled = False
     stub.config = {}
     stub._vpp_apply_battery_override = lambda pbc: {}
+    stub.hass.states.get = lambda eid: (
+        SimpleNamespace(state=sun) if eid == "sun.sun" and sun else None)
 
     def _finish(items, soc_read, count, power_read=None, site="unset"):
         seen["site"] = site
@@ -561,10 +634,11 @@ _PIPELINE = ast.parse(textwrap.dedent(
 
 
 def test_the_check_is_handed_the_site_by_name():
-    """Guard: the one end-check call passes ``site=_site``."""
+    """Guard: the one end-check call passes ``site=sale_stall_site(...)``."""
     calls = [n for n in ast.walk(_PIPELINE) if isinstance(n, ast.Call)
              and isinstance(n.func, ast.Attribute)
              and n.func.attr == "_finish_manual_battery_modes"]
     assert len(calls) == 1, "the end check moved: update this guard"
-    assert [ast.unparse(k.value) for k in calls[0].keywords
-            if k.arg == "site"] == ["_site"]
+    site = [k.value for k in calls[0].keywords if k.arg == "site"]
+    assert len(site) == 1 and isinstance(site[0], ast.Call)
+    assert ast.unparse(site[0].func) == "sale_stall_site"

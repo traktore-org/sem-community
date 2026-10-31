@@ -8173,6 +8173,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         def _own_limit(adapter):
             # (#1165 review) The discharge limit SEM last wrote (-1: none).
             # A value that is no number may be a limit: read it as 0 W.
+            # One entity for both the limit and the sale power is the sale's
+            # own register, so the sale wrote over that limit (#1175).
+            limit_eid = getattr(adapter, "_discharge_control_entity", None)
+            if limit_eid and limit_eid == getattr(
+                    adapter, "_force_discharge_entity", None):
+                return -1.0
             w = getattr(adapter, "last_discharge_limit_w", -1.0)
             return (0.0 if isinstance(w, bool) or not isinstance(w, (int, float))
                     else w)
@@ -9972,16 +9978,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # battery back to Auto before this cycle decides — on a level that is
         # a reading this cycle (not held, not the never-read 0.0).
         # (#1165) …and the home's grid import and sun, for a sale the pack
-        # stopped: only on a cycle whose steering reads are all measurements
-        # and whose balance closed (``house_load_is_measured``).
-        from .decide_battery import house_load_is_measured
-        _site = ((max(0.0, float(getattr(power, "grid_import_power", 0.0) or 0.0)),
-                  max(0.0, float(getattr(power, "solar_power", 0.0) or 0.0)))
-                 if house_load_is_measured(power) else None)
+        # stopped, when they are a measurement (``sale_stall_site``).
         try:
+            from .decide_battery import sale_stall_site
+            try:
+                _sun = self.hass.states.get("sun.sun")
+            except Exception:  # noqa: BLE001 — never break a cycle over the sun
+                _sun = None
             self._finish_manual_battery_modes(
                 battery_items, soc_seen, _bat_count, power_read=power_seen,
-                site=_site)
+                site=sale_stall_site(power, sun_down=(
+                    getattr(_sun, "state", None) == "below_horizon")))
         except Exception as err:  # noqa: BLE001 — a mode write must not end a cycle
             # (#762/#1092-class) a persistent fault here logged a full
             # traceback every cycle; log_on_change makes it a transition.
