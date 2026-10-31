@@ -731,6 +731,12 @@ class SensorReader:
         # consecutive reads have repeated it — see _accept_battery_soc.
         self._soc_step_candidate: Optional[float] = None
         self._soc_step_streak: int = 0
+        # (#1285) the same step test for each battery's own level, by SOC entity
+        self._unit_soc_last: Dict[str, float] = {}
+        self._unit_soc_candidate: Dict[str, tuple[float, int]] = {}
+        self._unit_soc_cycle: Dict[str, float] = {}   # per-cycle
+        self._unit_soc_confirmed = False              # per-cycle
+        self._unit_soc_held = False                   # per-cycle
         self._battery_power_implausible: bool = False
         #: (#988) is the current solar zero refuted by the balance?
         self._solar_zero_refuted = False
@@ -1083,6 +1089,9 @@ class SensorReader:
         self._battery_read_is_pair = False    # (#1215) per-cycle
         self._input_reads = {}                # (#818) per-cycle
         self._input_dark = {}                 # (#818) per-cycle
+        self._unit_soc_cycle = {}             # (#1285) per-cycle
+        self._unit_soc_confirmed = False
+        self._unit_soc_held = False
         self._unit_terms = {}                 # (#1186) per-cycle
         self._unit_sign = {"grid": 1.0, "battery": 1.0}
         self._unsourced_power = None          # (#1188) per-cycle
@@ -3380,9 +3389,9 @@ class SensorReader:
                 soc_entity = self._auto_detect_battery_soc(entity)
                 soc_val = None
                 if soc_entity:
-                    s = self._read_sensor(
+                    s = self._accept_unit_soc(soc_entity, self._read_sensor(
                         soc_entity, "battery_soc", allow_none=True,
-                    )
+                    ))
                     if s is not None and s >= 0:
                         soc_val = s
                 readings.batteries[bid] = BatteryPower(
@@ -3410,9 +3419,9 @@ class SensorReader:
                 soc_val = None                       # unresolved ≠ 0% (#694)
                 soc_entity = self._auto_detect_battery_soc(p_to)
                 if soc_entity:
-                    s = self._read_sensor(
+                    s = self._accept_unit_soc(soc_entity, self._read_sensor(
                         soc_entity, "battery_soc", allow_none=True,
-                    )
+                    ))
                     if s is not None and s >= 0:
                         soc_val = s
                 readings.batteries[bid] = BatteryPower(
@@ -3736,6 +3745,53 @@ class SensorReader:
             ed.battery_power, "no correction" if seeded else "negating",
         )
 
+    def _accept_unit_soc(self, soc_entity: str,
+                         raw: Optional[float]) -> Optional[float]:
+        """(#1285) One battery's level, held when it jumps no pack can.
+
+        The fleet test in ``_accept_battery_soc`` sees an average: one pack
+        sending a false 0 % beside a 40 % pack moves it 20 points, under the
+        step limit, so it took the false read. Each battery's own level has
+        the same rule: a step over ``BATTERY_SOC_MAX_STEP_PCT`` keeps the last
+        level, until the new one has repeated for
+        ``BATTERY_SOC_STEP_CONFIRM_READS`` reads. A dark or negative read is
+        passed back as it is. The unit's first level is taken as read. One
+        verdict per entity and cycle: the fleet average and the unit list
+        both ask.
+        """
+        if raw is None or raw < 0:
+            return raw
+        decided = self._unit_soc_cycle.get(soc_entity)
+        if decided is not None:
+            return decided
+        last = self._unit_soc_last.get(soc_entity)
+        out = raw
+        if last is not None and abs(raw - last) > BATTERY_SOC_MAX_STEP_PCT:
+            cand, streak = self._unit_soc_candidate.get(soc_entity, (None, 0))
+            if cand is not None and abs(raw - cand) <= BATTERY_SOC_MAX_STEP_PCT:
+                streak += 1
+            else:
+                cand, streak = raw, 1
+            if streak < BATTERY_SOC_STEP_CONFIRM_READS:
+                self._unit_soc_candidate[soc_entity] = (cand, streak)
+                log_on_change(
+                    _LOGGER, f"implausible:soc:{soc_entity}", logging.WARNING,
+                    "Battery %s level %.0f%% -> %.0f%% in one read is not a "
+                    "measurement — holding %.0f%% (#1285; accepted if the "
+                    "level persists for %d reads)",
+                    soc_entity, last, raw, last, BATTERY_SOC_STEP_CONFIRM_READS,
+                )
+                out = last
+                self._unit_soc_held = True
+            else:
+                # the unit's own count is done; the fleet need not count again
+                self._unit_soc_confirmed = True
+        if out == raw:
+            self._unit_soc_candidate.pop(soc_entity, None)
+            self._unit_soc_last[soc_entity] = raw
+        self._unit_soc_cycle[soc_entity] = out
+        return out
+
     def _accept_battery_soc(self, readings: PowerReadings,
                             soc_val: Optional[float]) -> None:
         """Take a SOC read into the readings — or refuse it.
@@ -3756,11 +3812,13 @@ class SensorReader:
         # average and each battery's own SOC already use.
         if soc_val is not None and soc_val < 0:
             soc_val = None
-        if soc_val is None:
+        if soc_val is None or self._unit_soc_held:
+            # (#1285) a unit held by its own step test holds the fleet too
             self._hold_battery_soc(readings)
             return
         last = self._last_valid_soc
-        if last is not None and abs(soc_val - last) > BATTERY_SOC_MAX_STEP_PCT:
+        if (last is not None and abs(soc_val - last) > BATTERY_SOC_MAX_STEP_PCT
+                and not self._unit_soc_confirmed):
             cand = self._soc_step_candidate
             if cand is not None and abs(soc_val - cand) <= BATTERY_SOC_MAX_STEP_PCT:
                 self._soc_step_streak += 1
@@ -5488,7 +5546,8 @@ class SensorReader:
                 continue
             known += 1
             # (#1202) a unit that gives no number is not a 0 % unit
-            val = self._read_sensor(soc_entity, "battery_soc", allow_none=True)
+            val = self._accept_unit_soc(soc_entity, self._read_sensor(
+                soc_entity, "battery_soc", allow_none=True))
             if val is not None and val >= 0:
                 soc_values.append(val)
         self._soc_units_configured = len(battery_power_entities)

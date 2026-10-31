@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **One battery's false 0 % read no longer drags the fleet level down** (#1285). Each battery's level now has the same jump check as the fleet.
 - 🐛 **A sensor state of "nan" or "inf" is no number in every sensor read** (#1262). Before, the car's level, forecasts, tariffs and loads took it as a value.
 - 🐛 **Savings no longer count the house twice when the sun drops while the inverter reads dark** (#1269). The battery's share wins over the held solar.
 - 🐛 **A home reading 1–2 % off during a big EV session no longer warns about a stale sensor** (#1234). Real sign errors still warn.
