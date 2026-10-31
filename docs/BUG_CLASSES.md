@@ -6684,3 +6684,13 @@ Refs #1202 #1197 #1196 #988 #818 #1262 #1169 #1284.
 **Sweep question:** when a check says "nothing changed", does it compare everything the next step acts on — and does a new field have to join both lists?
 **Left open:** a sale start near a minute's edge can give a new plan time for a few seconds' change: a time that is new, never a change that is hidden. The arbitrage kWh is compared even when arbitrage selling is off, so a dynamic-tariff home can get a few more new plan times (its total kWh was already compared). Both are choices, not filed.
 Refs #1184 #775 #1068 #778.
+
+### 178. A number rounded for display, then read back by a gate that compares it with the exact one — a complete plan looks short — GUARDED
+**Symptom:** at 00:15 a 5.2834 kWh car demand was packed into one future hour at 5283.4 W. The car still charged in short bursts before the block (#1282).
+**Root shape:** `_shadow_energy_plan` stored each block's `power_w` as `round(power_w, 0)`. `plan_gate` rebuilds the deliverable kWh from those watts and `ev_overlay` compares it with the exact need (tolerance 0.000001 kWh). 5283 W gives 5.2830 kWh, a false 0.4 Wh shortage, so the wait was released and the reactive floor started the car. The card needed whole watts; the gate did not.
+**Where it lives:** `coordinator/coordinator.py` `_shadow_energy_plan`; reader `plan_gate` in `coordinator/energy_plan_actuation.py`.
+**Closure:** `plan_blocks()` in `energy_plan_actuation.py` is the one writer of the stamped `blocks` rows and keeps 6 decimals (error about 0.0000005 W). Whole watts are for the card only. A real shortage, an urgent deadline and an unreachable target still release the wait.
+**Guard:** `tests/test_1282_plan_keeps_watt_precision.py` — the real chain `pack_night` to `plan_blocks` to `plan_gate` to `ev_overlay` for five odd needs; the three release cases; AST: the coordinator does not round `power_w` to whole watts. 3 of its 12 tests fail with whole-watt rounding put back; `test_967_plan_band_strip.py` builds its rows with `plan_blocks`.
+**Sweep question:** where a stored number is rounded, does any gate compare it with an unrounded one?
+**Left open:** none found; the other stamped fields (`planned_kwh`, `needed_kwh`) are shown only.
+Refs #1282.

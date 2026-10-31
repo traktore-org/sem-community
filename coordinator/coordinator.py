@@ -12736,15 +12736,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # The ledger itself — the card's hour axis and battery
             # trajectory, in the ONE shape a quiet night draws too.
             slot_rows = _slot_rows(ledger)
-            blocks = [{
-                "id": a.demand_id,
-                "start": a.start.isoformat(),
-                "end": a.end.isoformat(),
-                "power_w": round(a.power_w, 0),
-                "price": a.price,
-                # (#1023) only on the top-up: the strip hatches it
-                **({"late": True} if a.late else {}),
-            } for a in plan.allocations]
+            from .energy_plan_actuation import plan_blocks
+            blocks = plan_blocks(plan.allocations)
             self._energy_plan_shadow = {
                 "computed_at": now.isoformat(),
                 "fits": plan.fits,
