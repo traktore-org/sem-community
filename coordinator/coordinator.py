@@ -8323,6 +8323,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         ctx["charge_target_hold"] = self._charge_target_hold()
         # (#1181) …and one record of the forced charges SEM started
         ctx["forced_charge_record"] = self._forced_charge_record()
+        # (#1275) …and one record of the sales per device: a stop to a device
+        # ends every pack's sale on it
+        sales = getattr(self, "_device_sales_obj", None)
+        if not isinstance(sales, dict):
+            sales = self._device_sales_obj = {}
+        ctx["device_sales"] = sales
         # (#1183) Which brand drives this battery is asked of its own
         # entities once the home has more than one: a brand integration
         # loaded for another battery is not this one's.

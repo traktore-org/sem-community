@@ -478,6 +478,12 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         # stop per device per startup (back-to-back stops block the LUNA2000).
         # Defaults to a private dict so a standalone adapter / unit test works.
         self._orphan_guard: dict = {}
+        # (#1275) Packs on one device sell through one service call, and a
+        # stop to the device ends every sale on it. The coordinator shares
+        # this record across the packs; a standalone adapter gets its own.
+        shared = config.get("device_sales")
+        self._device_sales: dict = shared if isinstance(shared, dict) else {}
+        self._sale_epoch = None
 
     # ─── Capability ────────────────────────────────────────────
 
@@ -542,7 +548,10 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
             await self._send_sale(power_w)
             self._forcible_discharging = bool(self._force_discharge_entity)
             return
-        if self._forcible_discharging and abs(watts - self._last_force_discharge_w) < 100.0:
+        record = self._device_sale_record()
+        if (self._forcible_discharging
+                and abs(watts - self._last_force_discharge_w) < 100.0
+                and self._sale_epoch == record["epoch"]):
             # (#1165 review) The sale stands: a success, so no error from an
             # earlier write is left in ``last_error`` (the base clears it on
             # every sale it sends, de-duplicated or not).
@@ -561,6 +570,8 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
             )
             self._forcible_discharging = True
             self._last_force_discharge_w = watts
+            self._sale_epoch = record["epoch"]
+            record["sellers"].add(id(self))
             self._sale_sent = True   # (#1178)
             _LOGGER.info(
                 "Huawei battery: forcible discharge %.0f W to SOC %d%% "
@@ -608,6 +619,18 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         self._stop_retries = 2
         return True
 
+    def _device_sale_record(self) -> dict:
+        """(#1275) What the packs on this device share: ``epoch`` counts the
+        stops sent to it, ``sellers`` holds the packs whose sale stands."""
+        return self._device_sales.setdefault(
+            self._inverter_device_id, {"epoch": 0, "sellers": set()})
+
+    def _sibling_sells(self) -> bool:
+        """(#1275) Does another pack's sale stand on this device?"""
+        if not self._inverter_device_id:
+            return False
+        return bool(self._device_sale_record()["sellers"] - {id(self)})
+
     async def _issue_stop(self) -> bool:
         """Raw stop (service or number-entity). True on success."""
         self._sent_stop = True       # (#1178) no shared limit write after it
@@ -617,6 +640,9 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
                     "huawei_solar", "stop_forcible_charge",
                     {"device_id": self._inverter_device_id}, blocking=True,
                 )
+                record = self._device_sale_record()
+                record["epoch"] += 1     # the device sells for no pack now
+                record["sellers"].clear()
                 _LOGGER.info("Huawei battery: stopped forcible discharge")
                 return True
             except Exception as e:  # noqa: BLE001
@@ -785,6 +811,11 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         # Self-healing stop retries (flaky Modbus can drop a single stop).
         if self._stop_retries > 0:
             self._stop_retries -= 1
+            if self._sibling_sells():
+                # (#1275) the device sells for a sibling: a stop would end it
+                self._stop_retries = 0
+                self._last_intent = BatteryIntent.NORMAL
+                return
             await self._issue_stop()
             self._last_intent = BatteryIntent.NORMAL
             return
