@@ -192,6 +192,16 @@ dark half still marks the cycle degraded for control. Before that, a split
 pair could never report itself dark at all, so every blind-meter protection
 was silently off for those installs.
 
+## Solar strings can read a little below the solar total (#1261)
+
+With several inverters, the per-string energy rows can lag the solar total
+by about 0.06 kWh for a few minutes. It happens when one inverter has been
+dark for up to 3 minutes and another goes dark too, or when every inverter
+reads 0 W while the battery charges. SEM then holds each input's last
+reading on its own clock, and the clocks differ by a few seconds. The gap
+only reads low, never high, and closes by itself. It is not fixed: it would
+need a separate clock for each inverter, for an error this small.
+
 ## Peak load management
 
 Peak load management requires controllable devices with switch entities for shedding. Devices without a discoverable switch entity must be configured manually. The 15-minute rolling average calculation starts fresh after each HA restart.
