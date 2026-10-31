@@ -535,3 +535,80 @@ test('diagram and flow card: a load whose power entity is out reads "— W"', ()
     flow._updateDeviceValues([['boiler', info]]);
     assert.equal(nodes['dev-val-0'].textContent, '— W', 'not a count down to 0 W');
 });
+
+// ── #1265: half a pair that is set, and it is out ──────────────────────────
+
+const { pairOut } = await import('../src/util/missing-value.js');
+
+test('pairOut: a half that is not set does not vouch for the node', () => {
+    const states = { a: OUT, b: st('5'), c: st('0') };
+    assert.equal(pairOut(states, ['a', 'a2']), true, 'a half that is set but absent is out too');
+    assert.equal(pairOut(states, ['a', undefined]), true, 'the one half that is set is out');
+    assert.equal(pairOut(states, [undefined, 'a']), true);
+    assert.equal(pairOut(states, ['b', undefined]), false, 'the one half reads');
+    assert.equal(pairOut(states, ['c', undefined]), false, 'a real 0 is a reading');
+    assert.equal(pairOut(states, [undefined, undefined]), false, 'no sensor, nothing out');
+    assert.equal(pairOut(states, []), false);
+    // a full pair keeps its rule: out only when both halves are
+    assert.equal(pairOut(states, ['a', 'a']), true);
+    assert.equal(pairOut(states, ['a', 'b']), false);
+    assert.equal(pairOut(states, ['a', 'c']), false);
+});
+
+test('flow card: half a grid or battery pair that is out reads "— W"', () => {
+    const run = (entities, states, grid = 300) => {
+        const el = made('sem-flow-card', states, { entities });
+        const nodes = {};
+        el.renderRoot = {
+            getElementById: (id) => (id.startsWith('val-') ? (nodes[id] ??= { textContent: '', style: {}, setAttribute() {} }) : null),
+            querySelector: () => null, querySelectorAll: () => [],
+        };
+        el._currentValues = { 'val-grid': grid, 'val-battery-power': 0 };
+        el._updateFlowsImperative();
+        return nodes;
+    };
+    const entities = (grid, battery) => ({
+        solar: { entity: 'sensor.pv' }, home: { entity: 'sensor.home' }, grid, battery,
+    });
+    const base = { 'sensor.pv': st('1000'), 'sensor.home': st('1000') };
+    // only consumption is set, and it is out
+    let n = run(entities({ consumption: 'sensor.imp' }, { charge: 'sensor.chg' }),
+        { ...base, 'sensor.imp': OUT, 'sensor.chg': OUT });
+    assert.equal(n['val-grid'].textContent, '— W');
+    assert.equal(n['val-battery-power'].textContent, '— W');
+    // the same halves read: the node reads
+    n = run(entities({ consumption: 'sensor.imp' }, { charge: 'sensor.chg' }),
+        { ...base, 'sensor.imp': st('300'), 'sensor.chg': st('0') });
+    assert.equal(n['val-grid'].textContent, '↓ 300 W');
+    assert.equal(n['val-battery-power'].textContent, '0 W', 'a real 0 still prints 0');
+    // a full pair: out only when both are
+    n = run(entities({ consumption: 'sensor.imp', production: 'sensor.exp' },
+        { charge: 'sensor.chg', discharge: 'sensor.dis' }),
+    { ...base, 'sensor.imp': OUT, 'sensor.exp': st('0'), 'sensor.chg': st('0'), 'sensor.dis': OUT }, 0);
+    assert.equal(n['val-grid'].textContent, '0 W');
+    assert.equal(n['val-battery-power'].textContent, '0 W');
+    n = run(entities({ consumption: 'sensor.imp', production: 'sensor.exp' },
+        { charge: 'sensor.chg', discharge: 'sensor.dis' }),
+    { ...base, 'sensor.imp': OUT, 'sensor.exp': OUT, 'sensor.chg': OUT, 'sensor.dis': OUT });
+    assert.equal(n['val-grid'].textContent, '— W');
+    assert.equal(n['val-battery-power'].textContent, '— W');
+});
+
+test('diagram: half a grid or battery pair that is out reads "— W"', () => {
+    const draw1 = (grid, battery, states) => {
+        const entities = { solar: { entity: 'sensor.pv' }, home: { entity: 'sensor.home' }, grid, battery };
+        const el = made('sem-system-diagram-card', { 'sensor.pv': st('1000'), 'sensor.home': st('1000'), ...states },
+            { entities, show_ev: false });
+        el._gridDisp = 0; el._gridDispMode = '';
+        return words(text(el.render()));
+    };
+    const batt = { charge: 'sensor.chg', state_of_charge: 'sensor.soc' };
+    let out = draw1({ consumption: 'sensor.imp' }, batt,
+        { 'sensor.imp': OUT, 'sensor.chg': OUT, 'sensor.soc': st('50') });
+    assert.match(out, /battery — W/, out);
+    assert.match(out, /grid — W/, out);
+    const live = draw1({ consumption: 'sensor.imp' }, batt,
+        { 'sensor.imp': st('0'), 'sensor.chg': st('0'), 'sensor.soc': st('50') });
+    assert.match(live, /battery 0 W/, live);
+    assert.match(live, /grid 0 W/, live);
+});
