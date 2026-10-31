@@ -3489,7 +3489,13 @@ class SensorReader:
         # (#1236) Counters the derive set aside: is their kWh inside the power
         # read above? Looks only; no reading is changed.
         self._watch_unseen_row("solar", ed, readings.solar_power)
-        self._watch_unseen_row("battery", ed, readings.battery_power)
+        # two units moving opposite ways net to ~0 W, yet the counters add
+        # both: judge the sum of each unit's own size
+        _units = getattr(readings, "batteries", None) or {}
+        _gross = sum(abs(b.power_w) for b in _units.values()
+                     if isinstance(getattr(b, "power_w", None), (int, float)))
+        self._watch_unseen_row(
+            "battery", ed, _gross if _units else readings.battery_power)
         # (#1226) …and a battery the derive found nothing for, beside others
         missing = unsourced_counters(ed, "battery")
         pick = self.config.battery_power_sensor

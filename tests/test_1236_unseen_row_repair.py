@@ -234,3 +234,20 @@ async def test_one_inverter_alone_has_nothing_to_watch(hass):
     _run(hass, reader, minutes=20, counters=[a_counter], watts=[3000],
          power={a_power: 3000})
     assert _issue(hass, "solar") is None
+
+
+async def test_two_units_moving_opposite_ways_are_judged_by_their_gross_power(hass):
+    a_counters, _ = _battery(hass, "pack_a")
+    b_counters, _ = _battery(hass, "pack_b")
+    entry, dev = _device(hass, "pack_meters")
+    _entity(hass, entry, dev, "sensor.pack_a_power", "power", 3000)
+    _entity(hass, entry, dev, "sensor.pack_b_power", "power", -3000)
+    ed = _parse_prefs(hass, _prefs(
+        _batt(a_counters, "sensor.pack_a_power"),
+        _batt(b_counters, "sensor.pack_b_power")), quiet=True)
+    reader = _reader(hass, ed)
+    seen = []
+    with patch.object(type(reader), "_watch_unseen_row",
+                      lambda self, kind, ed_, w: seen.append((kind, w))):
+        reader.read_power()
+    assert ("battery", pytest.approx(6000)) in seen
