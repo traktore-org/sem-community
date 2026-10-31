@@ -12771,7 +12771,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 "id": a.demand_id,
                 "start": a.start.isoformat(),
                 "end": a.end.isoformat(),
-                "power_w": round(a.power_w, 0),
+                # (#1282) exact: the gates add these watts up and compare
+                # them with the need. Whole watts made a full plan read
+                # 0.4 Wh short and started the car between blocks. The
+                # sensor rounds for the card.
+                "power_w": a.power_w,
                 "price": a.price,
                 # (#1023) only on the top-up: the strip hatches it
                 **({"late": True} if a.late else {}),

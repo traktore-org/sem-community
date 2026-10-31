@@ -120,7 +120,7 @@ def stamped(plan, ledger, computed_at):
                     for r in plan.results],
         "slots": [{"start": s.start.isoformat(), "end": s.end.isoformat()} for s in ledger],
         "blocks": [{"id": a.demand_id, "start": a.start.isoformat(),
-                    "end": a.end.isoformat(), "power_w": round(a.power_w, 0)}
+                    "end": a.end.isoformat(), "power_w": a.power_w}  # (#1282) exact
                    for a in plan.allocations],
     }
 
