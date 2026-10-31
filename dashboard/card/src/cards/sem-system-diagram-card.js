@@ -29,7 +29,7 @@ import {
 } from '../base/sem-shared.js';
 import { nightArcPos } from '../util/night-arc.js';
 import { formatTemperatureLabel } from '../util/temperature.js';
-import { MISSING, allOut, fmtValue, isMissing, readNumber, socDisplay } from '../util/missing-value.js';
+import { MISSING, allOut, fmtValue, isMissing, pairOut, readNumber, socDisplay } from '../util/missing-value.js';
 import { chargerIdsFrom, evNodeSoc, evNodeSocLabel, socFromState } from '../util/ev-node-soc.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
@@ -708,7 +708,9 @@ class SEMSystemDiagramCard extends SEMLitBase {
         let battery, battStale;
         if (_battSplit) {
             battery = this._flowBattery();
-            battStale = false;
+            // (#1265) both halves out, or the one that is set: "— W", not 0 W
+            battStale = pairOut(this._hass?.states,
+                [this._eid('battery_charge_power'), this._eid('battery_discharge_power')]);
         } else {
             ({ value: battery, stale: battStale } =
                 this._readWithHold('battery_power', 'this._lastBattPower', 60000));
@@ -849,7 +851,12 @@ class SEMSystemDiagramCard extends SEMLitBase {
         // its own sensor is out, so it is out when one of them is.
         const outSet = new Set(unavailable);
         const solarOut = outSet.has('solar_power');
-        const gridOut = outSet.has('grid_import_power') && outSet.has('grid_export_power');
+        // (#1265) a pair is out when every half that is set is out; a half
+        // the user did not map is no reading. A combined grid sensor is one.
+        const states = this._hass?.states;
+        const gridOut = this._mode === 'entities' && this._entities?.grid?.entity
+            ? pairOut(states, [this._entities.grid.entity])
+            : pairOut(states, [this._eid('grid_import_power'), this._eid('grid_export_power')]);
         const evOut = outSet.has('ev_power');
         const homeSnap = this._powerSnapshot()?.home_w;
         const homeOut = (homeSnap === null || homeSnap === undefined)
