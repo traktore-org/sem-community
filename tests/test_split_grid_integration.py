@@ -12,6 +12,9 @@ the full pipeline was never tested.
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 
+from custom_components.solar_energy_management.consts.core import (
+    BATTERY_SOC_STEP_CONFIRM_READS,
+)
 from custom_components.solar_energy_management.coordinator.sensor_reader import (
     SensorReader,
 )
@@ -79,6 +82,13 @@ def _make_energy_dashboard_config(
     ed.has_battery = bool(battery_power)
     ed.has_ev = False
     return ed
+
+
+def _settled_read(reader):
+    """(#1284) The first SOC after a start counts once it has repeated."""
+    for _ in range(BATTERY_SOC_STEP_CONFIRM_READS - 1):
+        reader.read_power()
+    return reader.read_power()
 
 
 def _make_reader_with_states(mock_hass, states_dict, ed_config, extra_config=None):
@@ -1049,7 +1059,7 @@ class TestBatteryPowerConfigPipeline:
             "sensor.fronius_ladezustand": _state(63, unit="%"),
         }
         reader = _make_reader_with_states(hass, states, ed)
-        power = reader.read_power()
+        power = _settled_read(reader)
         power.calculate_derived()
 
         # net = charge − discharge → +2500 (SEM convention: + = charging)
@@ -1080,7 +1090,7 @@ class TestBatteryPowerConfigPipeline:
             "sensor.fronius_ladezustand": _state(40, unit="%"),
         }
         reader = _make_reader_with_states(hass, states, ed)
-        power = reader.read_power()
+        power = _settled_read(reader)
         power.calculate_derived()
 
         assert power.battery_power == -1800  # − = discharging (SEM)
@@ -1261,7 +1271,7 @@ class TestBatteryPowerConfigPipeline:
             hass, states, ed,
             extra_config={"battery_soc_sensor": "sensor.user_soc"},
         )
-        power = reader.read_power()
+        power = _settled_read(reader)
         assert power.battery_soc == 77
 
 

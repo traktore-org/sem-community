@@ -395,6 +395,8 @@ If the device has no power sensor at all (some cloud integrations publish only k
 
 **Two inverters or batteries (#1226):** SEM looks for a power sensor for each entry on its own. When one entry has none, SEM adds up only the others, and the Repair names that entry's counter. Add its power sensor to that entry in the Energy Dashboard. The pick on SEM's Configuration tab stands for all of solar (or the battery), so it would drop the entries that read. SEM does not take a second sensor from a device it already reads power from, because it could count the same power twice.
 
+**Two grid meters:** SEM looks for the import and export power sensors of each meter and adds both meters up. A meter with no such pair is noted in the HA log.
+
 ## SEM does not see your grid export
 
 **Symptom:** a Repair says *SEM does not see your grid export*. Your home sends power to the grid, but SEM shows no export.
@@ -929,7 +931,9 @@ While a sensor is out, the tab headers show "—" for its figure, not 0. A real
 "—", not Idle. The Battery card and the Home diagram keep updating from the
 sensors that still work. A solar string whose sensor is out shows "—"; the
 other strings still show their power. The cards do the same: EV power,
-battery health, costs and peak show "—" while their sensor is out.
+battery health, costs and peak show "—" while their sensor is out. The flow
+and Home diagram cards show "— W" for the grid or battery, also when you set
+only one sensor of its import and export (or charge and discharge) pair.
 
 The battery, grid and solar on/off sensors show **unknown**, not Off, once
 their power sensor has been out for 3 minutes. A power sensor that reports

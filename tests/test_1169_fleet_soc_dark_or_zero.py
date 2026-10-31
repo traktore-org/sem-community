@@ -26,6 +26,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from custom_components.solar_energy_management.consts.core import (
+    BATTERY_SOC_STEP_CONFIRM_READS,
+)
 from custom_components.solar_energy_management.ha_energy_reader import (
     EnergyDashboardConfig,
 )
@@ -85,13 +88,21 @@ def _soc(power):
     return tuple(getattr(power, f) for f in _SOC_FIELDS)
 
 
+def _first(r):
+    """The read where the first level after a start counts. (#1284) It
+    counts once it has repeated, so it is read that often."""
+    for _ in range(BATTERY_SOC_STEP_CONFIRM_READS - 1):
+        r.read_power()
+    return r.read_power()
+
+
 # ── 1. The report: a dark unit is left out, not averaged in as 0 % ──────────
 
 class TestADarkUnitIsNoReading:
     @pytest.mark.parametrize("raw", DARK)
     def test_95_and_dark_stays_95_past_the_three_read_check(self, raw):
         r, states = _fleet(95, 95)
-        assert r.read_power().battery_soc == 95.0
+        assert _first(r).battery_soc == 95.0
         states["sensor.soc2"] = _state(raw, "%")
         seen = [r.read_power() for _ in range(5)]
         assert [p.battery_soc for p in seen] == [95.0] * 5, (
@@ -102,7 +113,7 @@ class TestADarkUnitIsNoReading:
     @pytest.mark.parametrize("raw", DARK)
     def test_dark_from_the_first_read(self, raw):
         r, _ = _fleet(95, raw)
-        p = r.read_power()
+        p = _first(r)
         assert _soc(p) == (95.0, False, True)
         assert (p.battery_soc_units_expected, p.battery_soc_units_read) == (2, 1)
 
@@ -114,7 +125,7 @@ class TestZeroIsAReading:
         """The old code: dark, and "never read" — the charger path then
         treated an empty fleet as an unknown one."""
         r, _ = _fleet(0, 0)
-        p = r.read_power()
+        p = _first(r)
         assert _soc(p) == (0.0, False, True)
         assert p.battery_soc_partial is False
 
@@ -122,7 +133,7 @@ class TestZeroIsAReading:
         """The old code held the last level (3.5 %) for as long as both packs
         stayed at 0 %."""
         r, states = _fleet(4, 3)
-        assert r.read_power().battery_soc == 3.5
+        assert _first(r).battery_soc == 3.5
         states["sensor.soc1"] = _state(0, "%")
         states["sensor.soc2"] = _state(0, "%")
         for _ in range(3):
@@ -133,13 +144,13 @@ class TestZeroIsAReading:
     @pytest.mark.parametrize("raw", DARK)
     def test_one_empty_pack_and_one_dark_reads_0(self, raw):
         r, _ = _fleet(0, raw)
-        p = r.read_power()
+        p = _first(r)
         assert _soc(p) == (0.0, False, True)
         assert p.battery_soc_partial is True
 
     def test_0_and_10_still_average(self):
         r, _ = _fleet(0, 10)
-        assert _soc(r.read_power()) == (5.0, False, True)
+        assert _soc(_first(r)) == (5.0, False, True)
 
 
 # ── 3. A whole dark fleet is still dark ────────────────────────────────────
@@ -148,7 +159,7 @@ class TestAWholeDarkFleetIsDark:
     @pytest.mark.parametrize("raw", DARK)
     def test_held_then_dark(self, raw):
         r, states = _fleet(60, 60)
-        r.read_power()
+        _first(r)
         states["sensor.soc1"] = _state(raw, "%")
         states["sensor.soc2"] = _state(raw, "%")
         assert _soc(r.read_power()) == (60.0, True, True)
@@ -169,9 +180,13 @@ class TestAFleetOfLikeUnitsReadsAsOneBattery:
     @pytest.mark.parametrize("single", [_one, _one_ed])
     @pytest.mark.parametrize("value", VALUES)
     def test_first_read(self, value, single):
+        """…read by read from the start: (#1284) the first level waits for
+        its repeat on both, and counts on the same read."""
         fleet, _ = _fleet(value, value)
         one, _ = single(value)
-        assert _soc(fleet.read_power()) == _soc(one.read_power())
+        n = BATTERY_SOC_STEP_CONFIRM_READS + 1
+        assert ([_soc(fleet.read_power()) for _ in range(n)]
+                == [_soc(one.read_power()) for _ in range(n)])
 
     @pytest.mark.parametrize("single", [_one, _one_ed])
     @pytest.mark.parametrize("value", VALUES)
@@ -180,7 +195,7 @@ class TestAFleetOfLikeUnitsReadsAsOneBattery:
         (60 to 0 is held for two reads by the step check, then taken)."""
         fleet, f_states = _fleet(60, 60)
         one, o_states = single(60)
-        assert _soc(fleet.read_power()) == _soc(one.read_power())
+        assert _soc(_first(fleet)) == _soc(_first(one))
         _set_all(f_states, value)
         _set_all(o_states, value)
         f_seen = [_soc(fleet.read_power()) for _ in range(4)]

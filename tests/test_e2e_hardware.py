@@ -17,6 +17,10 @@ from unittest.mock import MagicMock, AsyncMock, patch
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
 
+from custom_components.solar_energy_management.consts.core import (
+    BATTERY_SOC_STEP_CONFIRM_READS,
+)
+
 
 
 # ════════════════════════════════════════════
@@ -1540,7 +1544,9 @@ class TestSolaXEnergyOnlyDerivation:
         # device (SolaX SOC = sensor.solax_battery_capacity, device_class battery/%).
         with patch.object(sr.er, "async_get", return_value=registry), \
              patch.object(sr.er, "async_entries_for_device", return_value=entries):
-            power = reader.read_power()
+            # (#1284) the first SOC after a start counts once it has repeated
+            for _ in range(BATTERY_SOC_STEP_CONFIRM_READS):
+                power = reader.read_power()
 
         # Before the fix every one of these read 0.
         assert power.solar_power == 8000

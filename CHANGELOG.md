@@ -41,6 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **A new service on the first charger's Configure page drops the old service's field name, data and box name** (#1249).
 - 🐛 **Reconfigure no longer shows three empty required EV fields for a charger set up in the charger list** (#1258). It says to use Configure.
 - 🐛 **Without an Energy Dashboard, a new grid sensor no longer inherits the grid sign learned on the old one** (#1246).
+# [2.3.0-beta.1] — 31.10.2026
+
+- 🐛 **After a restart, SEM no longer takes a false 0 % battery level as true** (#1284). SEM waits until it reads the same level three times.
 - 🐛 **Setup finds a grid meter with separate import and export power sensors and no longer asks you to pick one** (#1237).
 - 🐛 **Force discharge goes back to Auto when the battery stops selling above the reserve** (#1165). It needs 15 minutes without sun while the home buys.
 - 🐛 **With two batteries, SEM no longer sends the second battery's commands to the Huawei or GoodWe inverter** (#1183).

@@ -463,6 +463,11 @@ def battery_unseen(coordinator) -> bool:
     reader = getattr(coordinator, "_sensor_reader", None)
     if getattr(reader, "_last_valid_soc", None) is not None:
         return False
+    # (#1284) A first level that waits for its repeat came from a battery's
+    # SOC sensor too: the wait changes when the level counts, not whether
+    # there is a pack.
+    if getattr(reader, "_soc_step_candidate", None) is not None:
+        return False
     detected = getattr(coordinator, "_detected_battery_capacity_kwh", None)
     if detected:
         return False
@@ -487,6 +492,30 @@ def battery_unseen(coordinator) -> bool:
     except AttributeError:  # pragma: no cover — a frozen double
         pass
     return not detected > 0
+
+
+def battery_soc_ready_for_plan(coordinator, power) -> bool:
+    """May a plan be made on this cycle's battery SOC?
+
+    A silent sensor is not an empty battery (#638 finding #3): with a pack
+    to plan for, wait for a reading. A saved capacity is not proof of a
+    battery (#1063): the settings flow saves a default even on battery-less
+    homes. A pack that is merely not read YET (UNKNOWN presence, SOC and
+    capacity sensors still loading after a restart, or #1284's first level
+    waiting for its repeat) is not an absent one: only a plain ABSENT, or an
+    unseen pack that stayed unseen for 10 minutes of uptime, may plan
+    without it. One rule for the energy plan and the night scheduler.
+    """
+    no_pack = (
+        presence_of(coordinator).get(Module.BATTERY) is Presence.ABSENT
+        or (battery_unseen(coordinator)
+            and time.monotonic() - getattr(
+                coordinator, "_boot_monotonic", 0.0) >= 600.0))
+    return (
+        no_pack
+        or float(coordinator.config.get("battery_capacity_kwh", 0) or 0) <= 0
+        or not getattr(power, "battery_soc_unavailable", False)  # DARK-SOC: plan — a skipped plan retries next cycle
+    )
 
 
 def _entity_device_lookup(hass):
@@ -9423,6 +9452,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     None, "export closed — the pack takes the sun first",
                     code="closed_meter", need_kwh=decision.need_kwh,
                     fill_kwh=decision.fill_kwh)
+        # (#1284) The SOC has not been read since the start: its sensor is
+        # still loading, or its first level waits for the repeat. That is
+        # no outage, so a cap from before the start is kept, as through a
+        # blink, up to the dark-read grace from the start.
+        from ..consts.core import SENSOR_DARK_READ_GRACE_S
+        keep = bool(
+            power is not None and soc is None
+            and not getattr(power, "battery_soc_known", True)
+            and time.monotonic() - float(getattr(
+                self, "_boot_monotonic", float("-inf")))
+            <= SENSOR_DARK_READ_GRACE_S)
         cap = decision.cap_w if (decision and enabled) else None
         code = (decision.code if decision else
                 ("night" if not ledger else
@@ -9434,7 +9474,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             self.hass, entity, cap, observer=self._observer_mode,
             yielded=self.external_yielding("battery"),
             hw_max_w=float(self.config.get(
-                "battery_max_charge_power_w", 5000.0) or 5000.0))
+                "battery_max_charge_power_w", 5000.0) or 5000.0),
+            keep=keep)
         _bv = (getattr(self, "_sink_verdicts", None) or {}).get("battery")
         self._charge_pacing_state = {
             "enabled": enabled,
@@ -9456,7 +9497,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # ``soc_expired`` token, so a sustained outage is never
             # confused with a restart's never-read window.
             "soc_stale_s": soc_stale_s,
-            "cap_w": decision.cap_w if decision else None,
+            "cap_w": (decision.cap_w if decision else
+                      getattr(self._charge_pacing_writer, "last_written_w", None)
+                      if action == "held" and keep else None),
             # (#949) A cap with nowhere to go must not read like a cap that
             # is being applied. The decision's own prose stays true of the
             # DECISION; what the user needs here is the missing setting.
@@ -9473,6 +9516,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # the decision above still describes what pacing WOULD do.
                 "the battery is yielded to another party — SEM writes nothing"
                 if action == "yielded" else
+                # (#1284) no level since the start yet, and no outage either
+                "battery SOC not read since the start yet — the cap is kept"
+                if action == "held" and keep and not decision else
                 decision.reason if decision else (
                     "pacing idle — outside daylight or no forecast"
                     if not ledger else f"pacing idle — {_why}")),
@@ -10271,9 +10317,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         ``_execute_battery_charge_scheduler``. The scheduler's
         ``evaluate()`` is itself a pure function; we just gather its
         inputs the same way the legacy hook did.
+
+        (#1284) Not on a SOC that is no reading: the 0.0 of a SOC never
+        read planned the night from an empty pack ("charge 0 % → 40 %"),
+        and a drift to it asked for a re-plan. The plan's own rule decides;
+        the window stays open, so the next cycle with a reading evaluates.
         """
         scheduler = self._battery_charge_scheduler
         now = dt_util.now()
+        if not battery_soc_ready_for_plan(self, power):
+            log_on_change(
+                _LOGGER, "scheduler:soc_wait", logging.DEBUG,
+                "Battery scheduler: waiting for a battery SOC reading (#1284)")
+            return
+        log_on_change(_LOGGER, "scheduler:soc_wait", logging.DEBUG,
+                      "Battery scheduler: battery SOC read")
 
         if not scheduler.should_trigger_evaluation(now):
             # Check for re-plan trigger (price update / SOC drift / EV change).
@@ -11627,8 +11685,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             soc_seed = None
             if _sl:
                 soc_seed = float(_sl[-1].get("soc_kwh") or 0.0)
-            elif power is not None and getattr(
-                    power, "battery_soc", None) is not None:
+            elif (power is not None
+                  and getattr(power, "battery_soc", None) is not None
+                  # (#1284) a SOC never read is no seed — unless there is
+                  # no pack, whose row is empty either way
+                  and (getattr(power, "battery_soc_known", True)
+                       or cap_kwh2 <= 0)):
                 # (PROD, 08-08) an IDLE today has no trajectory
                 # to seed from — but the live SOC is not an invented
                 # number, and a quiet today must not erase tomorrow's
@@ -11846,16 +11908,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # capacity sensors still loading after a restart) is not an
                 # absent one: only a plain ABSENT, or an unseen pack that
                 # stayed unseen for 10 minutes of uptime, may plan without it.
-                _no_pack = (
-                    presence_of(self).get(Module.BATTERY) is Presence.ABSENT
-                    or (battery_unseen(self)
-                        and time.monotonic() - getattr(
-                            self, "_boot_monotonic", 0.0) >= 600.0))
-                _batt_ready = (
-                    _no_pack
-                    or float(self.config.get("battery_capacity_kwh", 0) or 0) <= 0
-                    or not getattr(power, "battery_soc_unavailable", False)  # DARK-SOC: plan — a skipped rebuild retries next cycle
-                )
+                _batt_ready = battery_soc_ready_for_plan(self, power)
                 if _batt_ready and self._shadow_energy_plan(
                         _sched, energy, power,
                         replan_cause=cause):
@@ -14434,8 +14487,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # retirement; the repoint keeps it sane until then).
         battery_priority_soc = self.config.get("battery_priority_soc", 30)
 
-        battery_too_low = power.battery_soc < battery_priority_soc
-        battery_needs_priority = power.battery_soc < battery_priority_soc
+        # (#875/#1284) a SOC never read is no level: not low, no priority
+        _soc_low = (bool(getattr(power, "battery_soc_known", True))
+                    and power.battery_soc < battery_priority_soc)
+        battery_too_low = _soc_low
+        battery_needs_priority = _soc_low
         # Ceiling (Max, default full) gates the surplus stop; floor (Min) drives
         # night top-up (#245). Resolve the (primary) charger's config so the base
         # context honors the PER-CHARGER targets, not just global. One car per

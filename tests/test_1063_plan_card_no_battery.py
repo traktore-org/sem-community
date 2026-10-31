@@ -254,7 +254,7 @@ class TestTheEntityCarriesIt:
 # Tomorrow: no battery row
 # ---------------------------------------------------------------------------
 
-def _preview(capacity_kwh, soc=0.0, saved=None):
+def _preview(capacity_kwh, soc=0.0, saved=None, known=True):
     fake = _fake_self(devices=[_fake_load()])
     if saved is not None:
         fake.config["battery_capacity_kwh"] = saved
@@ -263,7 +263,9 @@ def _preview(capacity_kwh, soc=0.0, saved=None):
     fake._forecast_reader = SimpleNamespace(
         forecast_data=SimpleNamespace(forecast_tomorrow_kwh=15.4))
     fake.battery_capacity_kwh = capacity_kwh
-    p = SEMCoordinator._compose_tomorrow_preview(fake, power=_power(soc=soc))
+    power = _power(soc=soc)
+    power.battery_soc_known = known
+    p = SEMCoordinator._compose_tomorrow_preview(fake, power=power)
     assert p is not None and p.get("provisional") is not None, (
         "the provisional plan is what draws the battery row")
     return p["provisional"]
@@ -278,7 +280,8 @@ class TestTomorrowHasNoBatteryRow:
         assert len(curve) > 1 and curve[-1]["kwh"] > curve[0]["kwh"]
 
     def test_no_battery_no_curve(self, freeze_targets):
-        prov = _preview(_capacity(ABSENT, 15.0))
+        # (#1284) a home with no battery never reads a SOC
+        prov = _preview(_capacity(ABSENT, 15.0), known=False)
         assert prov["soc_curve"] == []
         # The asks are still placed: only the battery row goes.
         assert prov["blocks"]
