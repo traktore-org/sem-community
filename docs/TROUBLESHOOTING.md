@@ -923,7 +923,9 @@ While a sensor is out, the tab headers show "—" for its figure, not 0. A real
 "—", not Idle. The Battery card and the Home diagram keep updating from the
 sensors that still work. A solar string whose sensor is out shows "—"; the
 other strings still show their power. The cards do the same: EV power,
-battery health, costs and peak show "—" while their sensor is out.
+battery health, costs and peak show "—" while their sensor is out. The flow
+and Home diagram cards show "— W" for the grid or battery, also when you set
+only one sensor of its import and export (or charge and discharge) pair.
 
 The battery, grid and solar on/off sensors show **unknown**, not Off, once
 their power sensor has been out for 3 minutes. A power sensor that reports
