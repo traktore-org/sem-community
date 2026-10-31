@@ -74,6 +74,7 @@ _PER_ENTRY_STORE_PREFIXES: tuple[str, ...] = (
 #: device mappings and its load priorities.
 _INSTALL_WIDE_STORES: tuple[str, ...] = (
     "sem_device_mappings",
+    f"{DOMAIN}_device_marks",     # (#1253) features/device_registry.py
     f"{DOMAIN}_load_management_devices",
 )
 

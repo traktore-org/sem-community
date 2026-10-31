@@ -307,6 +307,9 @@ class TestAnOldRatingIsCheckedAgain:
         reg._store = MagicMock()
         reg._store.async_load = AsyncMock(return_value=store)
         reg._store.async_save = AsyncMock()
+        reg._copy_store = MagicMock()
+        reg._copy_store.async_load = AsyncMock(return_value=None)
+        reg._copy_store.async_save = AsyncMock()
         return reg
 
     async def test_a_store_from_before_the_rule_marks_every_rating(self):
