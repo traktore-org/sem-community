@@ -3194,6 +3194,7 @@ class SensorReader:
                     disc["import"] = imp
                     disc["export"] = exp
                     disc["confidence"] = conf
+                    disc["more"] = None      # the other meters, asked again (#1241)
                     self._report_split_grid_confidence(disc)
                     if (_prev_imp is not None or _prev_exp is not None) and (
                         _prev_imp != imp or _prev_exp != exp
@@ -3262,6 +3263,22 @@ class SensorReader:
                     readings.grid_power = export_w - import_w
                     self._grid_sign_detected = True  # No sign correction needed
                     self._grid_source_key = f"discovered:{disc['import']}|{disc['export']}"
+                    # (#1241) One pair per grid meter, summed. Only from a
+                    # main pair that is trusted on its meter's own unit.
+                    if disc["confidence"] in ("declared", "same-device"):
+                        for n, (m_imp, m_exp) in enumerate(
+                                self._more_grid_pairs(ed, disc), 2):
+                            m_in = self._unit("grid", m_imp, self._read_sensor(
+                                m_imp, "grid_import", allow_none=True), -1.0) if m_imp else 0.0
+                            m_out = self._unit("grid", m_exp, self._read_sensor(
+                                m_exp, "grid_export", allow_none=True)) if m_exp else 0.0
+                            readings.grid_power += m_out - m_in
+                            self._grid_source_key += f"+{m_imp}|{m_exp}"
+                            if m_imp and m_exp:
+                                self._audit_split_pair(
+                                    f"grid#{n}", f"Grid meter {n} (auto-discovered split pair)",
+                                    m_in, m_imp, m_out, m_exp,
+                                )
                     # (#1186) a grid read from the pair: each side a unit
                     self._unit("grid", disc["import"], raw_import, -1.0)
                     if disc["export"]:
@@ -3294,6 +3311,12 @@ class SensorReader:
         elif ed.grid_export_energy:
             # (#1188) An export counter alone: no branch reads the grid.
             unsourced["grid"] = ed.grid_export_energy
+
+        # (#1238) The saved import half read ALONE: does the export counter
+        # show what it cannot see?
+        self._watch_half_grid_pair(
+            ed, manual_import if (manual_import and not manual_export) else None,
+            readings.grid_power)
 
         # (#933) The grid was read by an explicit path — SEM's own pair (the
         # guess Repair's own remedy, which reloads the entry), a declared
@@ -4537,7 +4560,9 @@ class SensorReader:
                 return True
         return False
 
-    def _declared_split_grid_power(self, ed) -> tuple[Optional[str], Optional[str]]:
+    def _declared_split_grid_power(
+        self, ed, counter: Optional[str] = None,
+    ) -> tuple[Optional[str], Optional[str]]:
         """(#947) The grid meters this install's integrations DECLARE.
 
         The #915 roster reads each integration's OWN repository and records
@@ -4570,6 +4595,7 @@ class SensorReader:
             from ..hardware_detection import (
                 roster_role_vocab as _vocab,
                 _entry_matches_declared as _matches,
+                registry_unit as _unit_of,
             )
             registry = er.async_get(self.hass)
         except Exception as e:  # noqa: BLE001 — no roster, no verdict
@@ -4577,8 +4603,12 @@ class SensorReader:
             return None, None
 
         wanted = {"grid_import_power": None, "grid_export_power": None}
-        grid_device_id = self._get_device_for_entity(
-            getattr(ed, "grid_import_energy", None))
+        # (#1240) The counters' UNIT, not only their device: DSMR Reader's
+        # sensors have no device, and its pair and counters come from one
+        # config entry. ``registry_unit`` is the card's answer too.
+        # (#1241) ``counter`` names the meter asked about; the first by default.
+        grid_device_id = self._get_unit_for_entity(
+            counter or getattr(ed, "grid_import_energy", None))
         # Deterministic order (#485 H6): the registry's iteration order is not
         # contractual, and first-match-wins over an unsorted scan could swap
         # which sensor plays import vs export between restarts.
@@ -4603,8 +4633,7 @@ class SensorReader:
                 # A declared entity on the grid counter's own device outranks
                 # a declared entity elsewhere — same brand, two inverters.
                 same_device = bool(
-                    grid_device_id
-                    and getattr(entry, "device_id", None) == grid_device_id)
+                    grid_device_id and _unit_of(entry) == grid_device_id)
                 rank = (1 if same_device else 0,)
                 if role not in best or rank > best[role][0]:
                     best[role] = (rank, entry.entity_id)
@@ -4631,7 +4660,9 @@ class SensorReader:
         attrs = getattr(live, "attributes", None)
         return not (isinstance(attrs, Mapping) and attrs.get("restored") is True)
 
-    def _discover_split_grid_power(self, ed) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    def _discover_split_grid_power(
+        self, ed, counter: Optional[str] = None,
+    ) -> tuple[Optional[str], Optional[str], Optional[str]]:
         """Discover separate import/export power sensors for setups without combined grid power.
 
         Supported naming patterns:
@@ -4653,18 +4684,21 @@ class SensorReader:
         Returns (import_entity, export_entity, confidence) where confidence is
         "same-device" if either side came from a device matching the grid energy
         sensor, "any-device" if matched by pattern only, or None if nothing matched.
+
+        (#1241) ``counter`` asks about ANOTHER meter: the one that counter
+        belongs to. That ask leaves the shared log memo alone.
         """
         # (#947) TIER 1 — what the install's own integrations DECLARE. This
         # runs before any name matching, because a declared role is evidence
         # and a substring is not. A declared pair needs no corroboration.
         declared_import, declared_export, on_grid_device = (
-            self._declared_split_grid_power(ed))
+            self._declared_split_grid_power(ed, counter))
         if declared_import or declared_export:
             # "declared" is the trusted tier; "declared-elsewhere" names the
             # same evidence WITHOUT device affinity, and corroborates.
             conf = "declared" if on_grid_device else "declared-elsewhere"
             result_key = (declared_import, declared_export, conf)
-            if result_key != self._last_split_grid_log:
+            if counter is None and result_key != self._last_split_grid_log:
                 self._last_split_grid_log = result_key
                 _LOGGER.info(
                     "Grid power meters DECLARED by their integrations "
@@ -4678,7 +4712,8 @@ class SensorReader:
 
         try:
             # Get device_id of grid energy sensor for same-device preference
-            grid_device_id = self._get_device_for_entity(ed.grid_import_energy)
+            grid_device_id = self._get_device_for_entity(
+                counter or ed.grid_import_energy)
             try:
                 registry = er.async_get(self.hass)
             except Exception:  # noqa: BLE001 — the predicate asks again
@@ -4766,7 +4801,9 @@ class SensorReader:
                 # wrote one INFO line per scan into the log + the
                 # diagnose ring buffer.
                 result_key = (import_power, export_power, confidence)
-                if result_key != self._last_split_grid_log:
+                if counter is not None:
+                    pass                      # another meter's ask (#1241)
+                elif result_key != self._last_split_grid_log:
                     self._last_split_grid_log = result_key
                     _LOGGER.info(
                         "Discovered split grid power sensors (%s): import=%s, export=%s",
@@ -4812,6 +4849,8 @@ class SensorReader:
             "export": None,
             "confidence": None,
             "warned": self._split_grid_discovery.get("warned", False),
+            # a restart is not news: the gap is said once per lifetime (#1241)
+            "more_said": self._split_grid_discovery.get("more_said"),
         }
         # (#947) A rediscovery invalidates the proof with the picks it judged.
         self._split_grid_proof = _fresh_grid_proof()
@@ -4880,6 +4919,158 @@ class SensorReader:
             return [one] if one else []
         return (_lst("grid_import_energy", "grid_import_energy_list"),
                 _lst("grid_export_energy", "grid_export_energy_list"))
+
+    def _grid_meters(self, ed) -> "list[tuple[Any, list, list]]":
+        """(#1241) The grid METERS the Energy Dashboard's counters belong to:
+        ``[(unit, import counters, export counters)]`` in counter order.
+
+        A meter is the unit (device, else config entry) its import counters
+        sit on; tariff counters of one meter are one meter. Export counters
+        join the meter they share a unit with. Empty when any import counter
+        has no unit: counters that cannot be told apart are one meter, as
+        before. Bug class 90 (an optional identity used as a grouping key:
+        None is not an identity)."""
+        imports, exports = self._grid_counter_entities(ed)
+        if len(imports) < 2:
+            return []
+        meters: list = []
+        for eid in imports:
+            unit = self._get_unit_for_entity(eid)
+            if unit is None:
+                return []
+            for meter in meters:
+                if meter[0] == unit:
+                    meter[1].append(eid)
+                    break
+            else:
+                meters.append((unit, [eid], []))
+        for eid in exports:
+            unit = self._get_unit_for_entity(eid)
+            for meter in meters:
+                if unit is not None and meter[0] == unit:
+                    meter[2].append(eid)
+                    break
+        # the first meter is the one the main pick answers for
+        first = self._get_unit_for_entity(getattr(ed, "grid_import_energy", None))
+        if len(meters) < 2 or meters[0][0] != first:
+            return []
+        return meters
+
+    def _more_grid_pairs(self, ed, disc: dict) -> "list[tuple]":
+        """(#1241) The pairs of the OTHER grid meters, one per meter.
+
+        Each is searched on its own meter's unit and must be trusted there
+        (declared, or a name match on that device) and be a whole read: an
+        import pick when the meter has import counters, an export pick when
+        it has export counters, and no sensor already used. All other meters
+        covered or none: a sum over some of the meters would be taken for the
+        whole grid, so the main pair alone is read, as before, and the gap is
+        said once. Held in ``disc["more"]``; looked for again every ~minute
+        while a meter has none, at once when a held sensor goes dark."""
+        held = disc.get("more")
+        if held is not None:
+            if disc.get("more_missing"):
+                countdown = disc.get("more_countdown", 0) - 1
+                if countdown > 0:
+                    disc["more_countdown"] = countdown
+                    return held
+                disc["more_countdown"] = 6
+            elif all(
+                (st := self.hass.states.get(eid)) is not None
+                and st.state not in ("unavailable", "unknown")
+                for pair in held for eid in pair if eid
+            ):
+                return held
+        meters = self._grid_meters(ed)
+        pairs: list = []
+        missing: list = []
+        taken = {disc.get("import"), disc.get("export")} - {None}
+        for _unit_key, imps, exps in meters[1:]:
+            imp, exp, conf = self._discover_split_grid_power(
+                ed, counter=(imps or exps)[0])
+            whole = (
+                conf in ("declared", "same-device")
+                and (bool(imp) or not imps) and (bool(exp) or not exps)
+                and not ({imp, exp} - {None}) & taken
+            )
+            if whole:
+                pairs.append((imp, exp))
+                taken |= {imp, exp} - {None}
+            else:
+                missing.extend(imps)
+        if missing:
+            pairs = []
+            if disc.get("more_said") != tuple(missing):
+                disc["more_said"] = tuple(missing)
+                _LOGGER.warning(
+                    "The Energy Dashboard names %d grid meters but SEM found "
+                    "a trusted import/export power pair for only the first "
+                    "(%s / %s). No pair for the counters %s, so grid power "
+                    "covers one meter, not all. Set grid_import_power_entity "
+                    "/ grid_export_power_entity, or one grid power sensor "
+                    "per meter in the Energy Dashboard. (#1241)",
+                    len(meters), disc.get("import"), disc.get("export"),
+                    ", ".join(missing),
+                )
+        disc["more"] = pairs
+        disc["more_missing"] = tuple(missing)
+        return pairs
+
+    #: (#1238) Export the counter must show, in kWh, before a saved import
+    #: half is said to hide it. Under this a flicker of a counter is noise.
+    _HALF_PAIR_PROOF_KWH = 0.1
+
+    def _watch_half_grid_pair(self, ed, half_import: Optional[str],
+                              grid_w: Optional[float]) -> None:
+        """(#1238) A grid import sensor saved ALONE reads export as 0 W. A
+        home that never exports may do that on purpose, so the half is not
+        wrong by itself: the export COUNTER decides. When it gains more than
+        ``_HALF_PAIR_PROOF_KWH`` while the grid never read as export, power
+        went to the grid that SEM could not see. Then the Repair says so, and
+        names the way out. It does not change the pick: that is the user's.
+
+        ``half_import`` is the saved half when it was read alone, else None
+        (whole pair, other source, or the dashboard's own answer), which
+        starts over and takes the Repair away. Bug class 84: the proof is
+        kept for this lifetime only; the Repair is not persistent, so a
+        restart asks again rather than keeping an old answer.
+        """
+        watch = getattr(self, "_half_pair_watch", None)
+        if watch is None:
+            watch = self._half_pair_watch = {
+                "last": None, "gain": 0.0, "raised": False, "half": None,
+                "saw_export": False}
+        exports = self._grid_counter_entities(ed)[1] if half_import else []
+        if not half_import or not exports:
+            if watch["raised"]:
+                _ri.clear_half_grid_pair(self.hass)
+            watch.update(last=None, gain=0.0, raised=False, half=None,
+                         saw_export=False)
+            return
+        if watch["half"] != half_import:      # another half: a new question
+            watch.update(last=None, gain=0.0, half=half_import,
+                         saw_export=False)
+        if isinstance(grid_w, (int, float)) and grid_w > 0:
+            watch["saw_export"] = True        # the half DOES show export
+        total = self._sum_counter_states(exports)
+        if total is None:
+            return
+        prev, watch["last"] = watch["last"], total
+        deltas = self._counter_deltas(prev, 0.0, total, 0.0)
+        if deltas is None:                    # first look, or a counter reset
+            return
+        watch["gain"] += max(0.0, deltas[0])
+        if (watch["gain"] >= self._HALF_PAIR_PROOF_KWH
+                and not watch["saw_export"] and not watch["raised"]):
+            watch["raised"] = True
+            _LOGGER.warning(
+                "Only the grid import power sensor (%s) is set, so SEM reads "
+                "grid export as 0 W, but the export counter %s gained %.2f "
+                "kWh: power went to the grid that SEM did not see. Set the "
+                "grid export sensor too, or clear the import one. (#1238)",
+                half_import, exports[0], watch["gain"])
+            _ri.raise_half_grid_pair(
+                self.hass, import_entity=half_import, export_entity=exports[0])
 
     def _corroborate_split_grid(self, disc: dict, ed, import_w, export_w) -> Optional[bool]:
         """(#947) Does this NAME-MATCHED pair actually measure the grid?
@@ -5208,6 +5399,29 @@ class SensorReader:
                     _ri.clear_sensor_unavailable(self.hass, old)
                     self._sensor_repair_raised.discard(old)
                     self._sensor_unavailable_since.pop(old, None)
+
+    def _get_unit_for_entity(self, entity_id: str) -> Any:
+        """(#1240) The entity's device, else its config entry (a tuple).
+
+        The device answer is ``_get_device_for_entity``'s, unchanged. An
+        entity with no device belongs to its config entry, as in the Config
+        card (``hardware_detection.registry_unit``); ``None`` when it has
+        neither. Trust is given to a declared meter that shares this unit
+        with the grid counters, so a sensor on neither is still checked."""
+        if not entity_id:
+            return None
+        device = self._get_device_for_entity(entity_id)
+        if device:
+            return device
+        try:
+            from ..hardware_detection import registry_unit
+            entry = er.async_get(self.hass).async_get(entity_id)
+            unit = registry_unit(entry) if entry else None
+        except Exception as e:  # noqa: BLE001 — no registry, no verdict
+            _LOGGER.debug("Unit lookup failed for %s: %s (#1240)", entity_id, e)
+            return None
+        # only the config-entry kind: a device is the device lookup's to give
+        return unit if isinstance(unit, tuple) else None
 
     def _get_device_for_entity(self, entity_id: str) -> Optional[str]:
         """Get device_id for an entity from the entity registry."""

@@ -2042,6 +2042,10 @@
       "title": "Ingen effektsensor för {energy_entity}",
       "description": "Energi-instrumentpanelen räknar **{energy_entity}** i kWh, men SEM hittade ingen effektsensor (W) för den. SEM lägger därför bara ihop de andra sol- eller batteriposterna, och energiflödena och överskottet blir fel. Åtgärda det genom att lägga till effektsensorn i denna post i Energi-instrumentpanelen. Finns det ingen effektsensor kan du ignorera detta meddelande."
     },
+    "half_grid_pair": {
+      "title": "SEM ser inte din nätexport",
+      "description": "Bara nätimportsensorn **{import_entity}** är inställd, så SEM läser exporten som 0 W. Men din exporträknare **{export_entity}** visar att ström gick ut på nätet. Så rättar du det: öppna SEM-panelen, fliken ⚙ **Konfiguration**, och välj **Alla inställningar** högst upp. Ställ sedan in **Nätexportsensor** i avsnittet **Tariff och priser**. Eller töm **Nätimportsensor**, så letar SEM upp paret själv."
+    },
     "charger_device_gone": {
       "title": "Laddare {name}: enheten saknas",
       "description": "Home Assistant har inte längre enheten bakom laddaren {name}. SEM kan inte styra den. Ta bort laddaren i SEM eller lägg till enheten igen."

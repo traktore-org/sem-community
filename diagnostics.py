@@ -475,6 +475,10 @@ async def async_get_config_entry_diagnostics(
             "import_sensor": disc.get("import"),
             "export_sensor": disc.get("export"),
             "confidence": disc.get("confidence"),
+            # (#1241) the pairs of the other grid meters, and the counters
+            # of a meter that has none (then the main pair is read alone)
+            "other_meter_pairs": [list(p) for p in (disc.get("more") or [])],
+            "meters_without_pair": list(disc.get("more_missing") or ()),
             "grid_energy_device_resolved": grid_device_resolved,
             # (#947 review) A field named "corroborated" reporting None for a
             # pick that is trusted WITHOUT corroboration is self-contradictory.

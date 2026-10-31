@@ -2042,6 +2042,10 @@
       "title": "Nessun sensore di potenza per {energy_entity}",
       "description": "La dashboard Energia conta **{energy_entity}** in kWh, ma SEM non ha trovato alcun sensore di potenza (W) per esso. SEM somma solo le altre voci solari o della batteria, quindi i flussi di energia e il surplus sono sbagliati. Per correggere, aggiungi il sensore di potenza a questa voce nella dashboard Energia. Se non esiste un sensore di potenza, puoi ignorare questo avviso."
     },
+    "half_grid_pair": {
+      "title": "SEM non vede la tua esportazione in rete",
+      "description": "È impostato solo il sensore importazione rete **{import_entity}**, quindi SEM legge l'esportazione come 0 W. Ma il tuo contatore di esportazione **{export_entity}** mostra che è uscita energia verso la rete. Per correggere, apri la dashboard SEM, scheda ⚙ **Configurazione**, e scegli **Tutte le impostazioni** in alto. Poi imposta il **Sensore esportazione rete** nella sezione **Tariffa e prezzi**. Oppure svuota il **Sensore importazione rete**, e SEM cerca la coppia da solo."
+    },
     "charger_device_gone": {
       "title": "Caricatore {name}: dispositivo mancante",
       "description": "Home Assistant non ha più il dispositivo del caricatore {name}. SEM non può comandarlo. Rimuovi il caricatore in SEM o aggiungi di nuovo il dispositivo."
