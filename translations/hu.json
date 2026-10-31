@@ -2042,6 +2042,10 @@
       "title": "Nincs teljesítményszenzor ehhez: {energy_entity}",
       "description": "Az Energia irányítópult kWh-ban számolja ezt: **{energy_entity}**, de a SEM nem talált hozzá teljesítményszenzort (W). A SEM ezért csak a többi napelemes vagy akkumulátoros bejegyzést adja össze, így az energiaáramlások és a többlet hibásak. A javításhoz add hozzá a teljesítményszenzort ehhez a bejegyzéshez az Energia irányítópulton. Ha nincs teljesítményszenzor, figyelmen kívül hagyhatod ezt az értesítést."
     },
+    "half_grid_pair": {
+      "title": "A SEM nem látja a hálózatba táplálást",
+      "description": "Csak a **{import_entity}** hálózati import szenzor van beállítva, ezért a SEM az exportot 0 W-nak olvassa. De az **{export_entity}** export számláló szerint áram ment a hálózatba. A javításhoz nyissa meg a SEM irányítópultot, a ⚙ **Konfiguráció** fület, és fent válassza a **Minden beállítás** lehetőséget. Ezután állítsa be a **Hálózati export szenzor** mezőt a **Tarifa és árazás** szakaszban. Vagy törölje a **Hálózati import szenzor** mezőt, és a SEM maga keresi meg a párt."
+    },
     "charger_device_gone": {
       "title": "{name} töltő: az eszköz hiányzik",
       "description": "A Home Assistant már nem ismeri a(z) {name} töltő eszközét. A SEM nem tudja vezérelni. Távolítsd el a töltőt a SEM-ben, vagy add hozzá újra az eszközt."

@@ -395,6 +395,14 @@ If the device has no power sensor at all (some cloud integrations publish only k
 
 **Two inverters or batteries (#1226):** SEM looks for a power sensor for each entry on its own. When one entry has none, SEM adds up only the others, and the Repair names that entry's counter. Add its power sensor to that entry in the Energy Dashboard. The pick on SEM's Configuration tab stands for all of solar (or the battery), so it would drop the entries that read. SEM does not take a second sensor from a device it already reads power from, because it could count the same power twice.
 
+## SEM does not see your grid export
+
+**Symptom:** a Repair says *SEM does not see your grid export*. Your home sends power to the grid, but SEM shows no export.
+
+**Cause (#1238):** only the grid import power sensor is set, so SEM reads export as 0 W. A home that never exports can do this on purpose. SEM raises the Repair only when the Energy Dashboard's export counter has gained energy while SEM read none.
+
+**Fix:** open SEM's ⚙ **Configuration** tab, pick **All settings**, and set **Grid export sensor** in **Tariff & pricing**. Or clear **Grid import sensor**: SEM then looks for the import and export pair itself. The Repair clears when the import sensor is no longer set alone. SEM does not change your choice.
+
 ## The battery platform is pinned to generic
 
 **Symptom:** a Repair says the battery platform is set to *generic* although a

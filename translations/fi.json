@@ -2042,6 +2042,10 @@
       "title": "Ei tehoanturia kohteelle {energy_entity}",
       "description": "Energia-paneeli laskee **{energy_entity}** kWh:na, mutta SEM ei löytänyt sille tehoanturia (W). SEM laskee siksi yhteen vain muut aurinko- tai akkukohdat, joten energiavirrat ja ylijäämä ovat väärin. Korjaa se lisäämällä tehoanturi tähän kohtaan Energia-paneelissa. Jos tehoanturia ei ole, voit ohittaa tämän ilmoituksen."
     },
+    "half_grid_pair": {
+      "title": "SEM ei näe verkkoon vientiäsi",
+      "description": "Vain verkon tuontianturi **{import_entity}** on asetettu, joten SEM lukee viennin arvona 0 W. Mutta vientilaskurisi **{export_entity}** näyttää, että sähköä meni verkkoon. Korjaa avaamalla SEM-koontinäyttö, välilehti ⚙ **Asetukset**, ja valitse ylhäältä **Kaikki asetukset**. Aseta sitten **Verkon vientianturi** osiossa **Tariffi ja hinnoittelu**. Tai tyhjennä **Verkon tuontianturi**, niin SEM etsii parin itse."
+    },
     "charger_device_gone": {
       "title": "Laturi {name}: laite puuttuu",
       "description": "Home Assistantissa ei enää ole laturin {name} laitetta. SEM ei voi ohjata sitä. Poista laturi SEMistä tai lisää laite uudelleen."

@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **With two batteries at 0 %, SEM now reads 0 % instead of no level** (#1169). A level below 0 % now counts as out.
 - 🐛 **Grid power from a meter with no device now reads at once after a restart** (#1240). Its power sensors and counters come from one integration.
 - 🐛 **With two grid meters, SEM now adds the power of both** (#1241). A meter with no power pair is logged.
+- 🐛 **A grid import sensor set alone now raises a Repair when your export counter shows power went to the grid** (#1238).
 
 # [2.2.0] — 30.10.2026
 

@@ -2042,6 +2042,10 @@
       "title": "Niciun senzor de putere pentru {energy_entity}",
       "description": "Panoul Energie numără **{energy_entity}** în kWh, dar SEM nu a găsit niciun senzor de putere (W) pentru el. SEM adună deci doar celelalte intrări solare sau de baterie, iar fluxurile de energie și surplusul sunt greșite. Pentru a remedia, adăugați senzorul de putere la această intrare din panoul Energie. Dacă nu există niciun senzor de putere, puteți ignora această notificare."
     },
+    "half_grid_pair": {
+      "title": "SEM nu vede exportul în rețea",
+      "description": "Doar senzorul de import din rețea **{import_entity}** este setat, deci SEM citește exportul ca 0 W. Dar contorul dvs. de export **{export_entity}** arată că s-a trimis energie în rețea. Pentru a remedia, deschideți tabloul SEM, fila ⚙ **Configurare**, și alegeți **Toate setările** din partea de sus. Apoi setați **Senzor export rețea** în secțiunea **Tarif și prețuri**. Sau goliți **Senzor import rețea**, iar SEM caută singur perechea."
+    },
     "charger_device_gone": {
       "title": "Încărcătorul {name}: dispozitivul lipsește",
       "description": "Home Assistant nu mai are dispozitivul încărcătorului {name}. SEM nu îl poate comanda. Șterge încărcătorul din SEM sau adaugă din nou dispozitivul."

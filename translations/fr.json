@@ -2042,6 +2042,10 @@
       "title": "Aucun capteur de puissance pour {energy_entity}",
       "description": "Le tableau de bord Énergie compte **{energy_entity}** en kWh, mais SEM n'a trouvé aucun capteur de puissance (W) pour lui. SEM n'additionne donc que les autres entrées solaires ou de batterie, et les flux d'énergie et le surplus sont faux. Pour corriger, ajoutez le capteur de puissance à cette entrée du tableau de bord Énergie. S'il n'existe aucun capteur de puissance, vous pouvez ignorer cet avis."
     },
+    "half_grid_pair": {
+      "title": "SEM ne voit pas votre export réseau",
+      "description": "Seul le capteur d'import réseau **{import_entity}** est réglé, donc SEM lit l'export comme 0 W. Mais votre compteur d'export **{export_entity}** montre que de l'énergie est partie vers le réseau. Pour corriger, ouvrez le tableau de bord SEM, onglet ⚙ **Configuration**, et choisissez **Tous les réglages** en haut. Puis réglez le **Capteur d'export réseau** dans la section **Tarif & prix**. Ou videz le **Capteur d'import réseau**, et SEM cherchera la paire lui-même."
+    },
     "charger_device_gone": {
       "title": "Borne {name} : appareil introuvable",
       "description": "Home Assistant ne connaît plus l'appareil de la borne {name}. SEM ne peut pas la piloter. Supprimez la borne dans SEM ou ajoutez de nouveau l'appareil."

@@ -3312,6 +3312,12 @@ class SensorReader:
             # (#1188) An export counter alone: no branch reads the grid.
             unsourced["grid"] = ed.grid_export_energy
 
+        # (#1238) The saved import half read ALONE: does the export counter
+        # show what it cannot see?
+        self._watch_half_grid_pair(
+            ed, manual_import if (manual_import and not manual_export) else None,
+            readings.grid_power)
+
         # (#933) The grid was read by an explicit path — SEM's own pair (the
         # guess Repair's own remedy, which reloads the entry), a declared
         # pair, a combined sensor — so nothing is guessed, and a guess Repair
@@ -5009,6 +5015,62 @@ class SensorReader:
         disc["more"] = pairs
         disc["more_missing"] = tuple(missing)
         return pairs
+
+    #: (#1238) Export the counter must show, in kWh, before a saved import
+    #: half is said to hide it. Under this a flicker of a counter is noise.
+    _HALF_PAIR_PROOF_KWH = 0.1
+
+    def _watch_half_grid_pair(self, ed, half_import: Optional[str],
+                              grid_w: Optional[float]) -> None:
+        """(#1238) A grid import sensor saved ALONE reads export as 0 W. A
+        home that never exports may do that on purpose, so the half is not
+        wrong by itself: the export COUNTER decides. When it gains more than
+        ``_HALF_PAIR_PROOF_KWH`` while the grid never read as export, power
+        went to the grid that SEM could not see. Then the Repair says so, and
+        names the way out. It does not change the pick: that is the user's.
+
+        ``half_import`` is the saved half when it was read alone, else None
+        (whole pair, other source, or the dashboard's own answer), which
+        starts over and takes the Repair away. Bug class 84: the proof is
+        kept for this lifetime only; the Repair is not persistent, so a
+        restart asks again rather than keeping an old answer.
+        """
+        watch = getattr(self, "_half_pair_watch", None)
+        if watch is None:
+            watch = self._half_pair_watch = {
+                "last": None, "gain": 0.0, "raised": False, "half": None,
+                "saw_export": False}
+        exports = self._grid_counter_entities(ed)[1] if half_import else []
+        if not half_import or not exports:
+            if watch["raised"]:
+                _ri.clear_half_grid_pair(self.hass)
+            watch.update(last=None, gain=0.0, raised=False, half=None,
+                         saw_export=False)
+            return
+        if watch["half"] != half_import:      # another half: a new question
+            watch.update(last=None, gain=0.0, half=half_import,
+                         saw_export=False)
+        if isinstance(grid_w, (int, float)) and grid_w > 0:
+            watch["saw_export"] = True        # the half DOES show export
+        total = self._sum_counter_states(exports)
+        if total is None:
+            return
+        prev, watch["last"] = watch["last"], total
+        deltas = self._counter_deltas(prev, 0.0, total, 0.0)
+        if deltas is None:                    # first look, or a counter reset
+            return
+        watch["gain"] += max(0.0, deltas[0])
+        if (watch["gain"] >= self._HALF_PAIR_PROOF_KWH
+                and not watch["saw_export"] and not watch["raised"]):
+            watch["raised"] = True
+            _LOGGER.warning(
+                "Only the grid import power sensor (%s) is set, so SEM reads "
+                "grid export as 0 W, but the export counter %s gained %.2f "
+                "kWh: power went to the grid that SEM did not see. Set the "
+                "grid export sensor too, or clear the import one. (#1238)",
+                half_import, exports[0], watch["gain"])
+            _ri.raise_half_grid_pair(
+                self.hass, import_entity=half_import, export_entity=exports[0])
 
     def _corroborate_split_grid(self, disc: dict, ed, import_w, export_w) -> Optional[bool]:
         """(#947) Does this NAME-MATCHED pair actually measure the grid?

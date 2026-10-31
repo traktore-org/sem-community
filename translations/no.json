@@ -2042,6 +2042,10 @@
       "title": "Ingen effektsensor for {energy_entity}",
       "description": "Energi-dashbordet teller **{energy_entity}** i kWh, men SEM fant ingen effektsensor (W) for den. SEM legger derfor bare sammen de andre sol- eller batterioppføringene, og energiflytene og overskuddet blir feil. Rett det ved å legge effektsensoren til denne oppføringen i Energi-dashbordet. Finnes det ingen effektsensor, kan du ignorere denne meldingen."
     },
+    "half_grid_pair": {
+      "title": "SEM ser ikke netteksporten din",
+      "description": "Bare netimport-sensoren **{import_entity}** er satt, så SEM leser eksporten som 0 W. Men eksporttelleren din **{export_entity}** viser at strøm gikk til nettet. Slik retter du det: åpne SEM-dashbordet, fanen ⚙ **Konfigurasjon**, og velg **Alle innstillinger** øverst. Sett deretter **Netteksport-sensor** i delen **Tariff og priser**. Eller tøm **Nettimport-sensor**, så finner SEM paret selv."
+    },
     "charger_device_gone": {
       "title": "Lader {name}: enheten mangler",
       "description": "Home Assistant har ikke lenger enheten bak laderen {name}. SEM kan ikke styre den. Fjern laderen i SEM, eller legg til enheten igjen."
