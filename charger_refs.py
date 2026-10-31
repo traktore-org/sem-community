@@ -529,8 +529,13 @@ def problems(refs: List[dict], resolved: List[dict], *,
             continue
         name = (ref.get("settings") or {}).get("name") or ref["id"]
         if not device_exists(dev):
-            out.append({"kind": "charger_device_gone", "id": ref["id"],
-                        "name": name})
+            # every entity it runs on still exists: moved to helper or
+            # template entities, so the old device is no loss (#1248)
+            ids = [str(v) for k in CHARGER_ENTITY_KEYS
+                   if (v := card.get(k)) and "." in str(v)]
+            if not ids or not all(entity_exists(i) for i in ids):
+                out.append({"kind": "charger_device_gone", "id": ref["id"],
+                            "name": name})
             continue
         # the crawler's own rule for a charger SEM can run (#1092)
         missing = _offer_missing({k: v for k, v in card.items() if v})
