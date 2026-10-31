@@ -83,6 +83,15 @@ class TestThePriorWaitsForItsAdapter:
         fake._adopt_pending_export_prior("b1", gen)
         assert gen.holds_export_cut() is False
 
+    async def test_a_prior_waiting_when_the_guard_released_is_dropped(self):
+        fake = _fresh({"engaged": True, "since": "t", "recipes": {"b2": RECIPE}})
+        await fake._ensure_export_guard()
+        fake._export_guard.state = "idle"          # the meter reopened, the cut went back
+        late = _generic()
+        fake._adopt_pending_export_prior("b2", late)
+        assert late.holds_export_cut() is False
+        assert not fake._export_priors_pending
+
 
 def test_the_pipeline_asks_for_the_prior_wherever_it_stores_an_adapter():
     import inspect

@@ -13632,6 +13632,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         pending = getattr(self, "_export_priors_pending", None)
         if not pending:
             return
+        guard = getattr(self, "_export_guard", None)
+        if getattr(guard, "state", None) != "engaged":
+            pending.clear()   # the cut was handed back; an old recipe must not re-arm it
+            return
         prior = pending.pop(str(battery_id), None)
         if not prior:
             return   # the previous lifetime held nothing on this one
