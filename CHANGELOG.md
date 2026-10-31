@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
-- 🐛 **Force discharge goes back to Auto when the battery stops selling above the reserve** (#1165). It needs 15 minutes at night with the home buying power.
+- 🐛 **Force discharge goes back to Auto when the battery stops selling above the reserve** (#1165). It needs 15 minutes with no sun while the home buys.
 - 🐛 **With two batteries, SEM no longer sends the second battery's commands to the Huawei or GoodWe inverter** (#1183).
 - 🐛 **A rebuilt plan that moves when the battery sells to the grid now shows a new plan time** (#1184). A running sale keeps going.
 - 🐛 **Daily energy flows and solar savings no longer drop while a power sensor is out for a moment** (#1185). SEM uses its last reading.

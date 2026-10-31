@@ -8173,11 +8173,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         def _own_limit(adapter):
             # (#1165 review) The discharge limit SEM last wrote (-1: none).
             # A value that is no number may be a limit: read it as 0 W.
-            # One entity for both the limit and the sale power is the sale's
-            # own register, so the sale wrote over that limit (#1175).
+            # One entity for both the limit and the sale power the adapter
+            # really writes is the sale's own register: the sale wrote over
+            # that limit (#1175). A sale by a service writes no entity.
+            sale_eid = getattr(adapter, "sale_setpoint_entity", None)
+            sale_eid = sale_eid() if callable(sale_eid) else ""
             limit_eid = getattr(adapter, "_discharge_control_entity", None)
-            if limit_eid and limit_eid == getattr(
-                    adapter, "_force_discharge_entity", None):
+            if limit_eid and limit_eid == sale_eid:
                 return -1.0
             w = getattr(adapter, "last_discharge_limit_w", -1.0)
             return (0.0 if isinstance(w, bool) or not isinstance(w, (int, float))

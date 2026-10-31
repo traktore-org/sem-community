@@ -373,6 +373,25 @@ async def test_one_entity_for_limit_and_sale_is_the_sales_own(build):
     assert hass.writes_to(SETPOINT) == [3000.0]
 
 
+@pytest.mark.asyncio
+async def test_one_entity_named_twice_on_a_huawei_sale_by_service_is_a_limit():
+    """(#1165 review) A Huawei with a device id sells by service and never
+    writes that entity, so SEM's 0 W there still caps the sale: it goes
+    back to the max first, as any limit of SEM's."""
+    hass = _Hass()
+    a = HuaweiBatteryAdapter(hass, {
+        "battery_discharge_control_entity": LIMIT,
+        "battery_force_discharge_control_entity": LIMIT,
+        "inverter_device_id": "luna",
+        "battery_max_discharge_power": MAX_W})
+    a._inverter_device_id = "luna"
+    await _hold_at_zero(a, hass)
+    assert a._own_limit_held() is True
+    await a.command_force_discharge(3000.0, 20.0)
+    assert hass.calls == [("number", "set_value",
+                           {"entity_id": LIMIT, "value": MAX_W})]
+
+
 # ── Off on an AC-coupled pack: hands off, SEM's limit included ──
 
 @pytest.mark.asyncio

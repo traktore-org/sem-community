@@ -456,10 +456,10 @@ def sale_stall_site(fleet, *, sun_down: bool = False):
     :func:`sale_stall_read`, or ``None`` when it is no measurement.
 
     The steering reads must be measurements and the balance must close
-    (:func:`house_load_is_measured`): a grid sign read the wrong way shows
-    an export as import. One read may be dark: the solar one, while the sun
-    is below the horizon. Many inverters go offline at night, and the sun
-    is 0 W then whatever the sensor says."""
+    (:func:`house_load_is_measured`), which catches many grid signs read
+    the wrong way, not all. One read may be dark: the solar one, while the
+    sun is below the horizon. Many inverters go offline at night, and the
+    sun is 0 W then whatever the sensor says."""
     if float(getattr(fleet, "home_residual_clamped_w", 0.0) or 0.0) > 0.0:
         return None
     import_w = max(0.0, float(getattr(fleet, "grid_import_power", 0.0) or 0.0))

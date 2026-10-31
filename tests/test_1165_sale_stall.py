@@ -108,6 +108,12 @@ class TestTheRule:
     def test_no_stall_unless_the_home_buys_with_no_sun(self, why, site):
         assert sale_stall_read(30.0, 0.0, **{**_SALE, "site": site}) is False, why
 
+    def test_the_thresholds_are_100_w(self):
+        # A standby draw is no "home that buys"; a dull day's sun is sun.
+        assert (MANUAL_SALE_STALL_IMPORT_W, MANUAL_SALE_STALL_SUN_W) == (100.0, 100.0)
+        assert sale_stall_read(30.0, 0.0, **{**_SALE, "site": (60.0, 0.0)}) is False
+        assert sale_stall_read(30.0, 0.0, **{**_SALE, "site": (400.0, 150.0)}) is False
+
     def test_the_edges_are_a_stall_read(self):
         site = (MANUAL_SALE_STALL_IMPORT_W, MANUAL_SALE_STALL_SUN_W)
         assert sale_stall_read(30.0, 0.0, **{**_SALE, "site": site}) is True
@@ -310,7 +316,7 @@ class TestAPackThatStopsAt30:
         ("SEM's own limit holds the pack", (30.0, 0.0), _NIGHT,
          {"_battery_adapters": {"primary": _seller(limit_w=0.0)}}),
         ("a limit that is no number", (30.0, 0.0), _NIGHT,
-         {"_battery_adapters": {"primary": _seller(limit_w="0")}}),
+         {"_battery_adapters": {"primary": _seller(limit_w="n/a")}}),
         ("observer sends nothing", (30.0, 0.0), _NIGHT, {"_observer_mode": True}),
     ])
     async def test_the_mode_stays(self, hass, clock, why, pack, site, change):
@@ -337,6 +343,8 @@ class TestAPackThatStopsAt30:
         ("number.sale_power", "number.sale_power", True),
         ("number.max_discharge", "number.sale_power", False),
         ("", "", False),
+        # a sale by service writes no entity (Huawei with a device id)
+        ("number.max_discharge", "", False),
     ])
     async def test_a_limit_on_the_sales_own_register_is_no_hold(
             self, hass, clock, limit_eid, sale_eid, ends):
@@ -347,7 +355,7 @@ class TestAPackThatStopsAt30:
         coordinator = _sale_coordinator(hass, entry, (), ["primary"])
         seller = _seller(limit_w=0.0)
         seller._discharge_control_entity = limit_eid
-        seller._force_discharge_entity = sale_eid
+        seller.sale_setpoint_entity = lambda: sale_eid
         coordinator._battery_adapters = {"primary": seller}
         _sell(coordinator, clock, {"primary": (30.0, 0.0)},
               _WINDOW_MIN + _SETTLE_MIN)
@@ -506,6 +514,15 @@ class TestTheActuatorRecordsWhatItSent:
         a = _Seller()
         await self._send(a, _decision(BatteryIntent.FORCE_DISCHARGE))
         assert await self._send(a, _decision(intent)) == 0.0
+
+    async def test_a_yielded_battery_asks_for_nothing(self):
+        # (#1079) SEM yields to another party: nothing goes out, so a sale
+        # asked before is no longer asked.
+        a = _Seller()
+        await self._send(a, _decision(BatteryIntent.FORCE_DISCHARGE))
+        assert await self._send(a, _decision(BatteryIntent.FORCE_DISCHARGE),
+                                yielded=True) == 0.0
+        assert a.sent == [("sell",)]
 
     async def test_observer_asks_for_nothing(self):
         a = _Seller()

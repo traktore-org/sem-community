@@ -572,8 +572,10 @@ class BatteryControlAdapter(ABC):
     def _own_limit_held(self) -> bool:
         """(#1175) Is the last discharge limit SEM wrote below the pack's
         max? −1 (SEM wrote none) is no. So is one entity for both the limit
-        and the sale power: that register is the sale's own."""
-        if getattr(self, "_discharge_control_entity", "") == self._force_discharge_entity:
+        and the sale power: that register is the sale's own. (#1165 review)
+        The sale power the sale really writes: a Huawei sale by service
+        writes no entity, so a limit there still holds it."""
+        if getattr(self, "_discharge_control_entity", "") == self.sale_setpoint_entity():
             return False
         return 0.0 <= self.last_discharge_limit_w < float(self.max_discharge_power_w)
 
