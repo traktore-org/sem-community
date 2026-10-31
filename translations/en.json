@@ -454,6 +454,7 @@
           "vehicle_soc_entity": "Vehicle Battery SOC sensor (optional)",
           "vehicle_range_entity": "Vehicle range sensor",
           "ev_kwh_per_100km": "Vehicle consumption (kWh/100km)",
+          "departure_calendar_entity": "Departure calendar",
           "ev_target_soc": "Consider full at (%)",
           "ev_battery_capacity_kwh": "EV battery capacity (kWh)",
           "initial_current": "Start current (A)",
@@ -520,6 +521,7 @@
           "vehicle_soc_entity": "Vehicle Battery SOC sensor (optional)",
           "vehicle_range_entity": "Vehicle range sensor",
           "ev_kwh_per_100km": "Vehicle consumption (kWh/100km)",
+          "departure_calendar_entity": "Departure calendar",
           "ev_target_soc": "Consider full at (%)",
           "ev_battery_capacity_kwh": "EV battery capacity (kWh)",
           "initial_current": "Start current (A)",
@@ -1216,6 +1218,9 @@
       "heat_pump_mode": {
         "name": "Heat Pump Mode"
       },
+      "heat_pump_cost_of_heat": {
+        "name": "Heat Pump Cost of Heat"
+      },
       "heat_pump_registration_status": {
         "name": "Heat Pump Registration Status"
       },
@@ -1619,6 +1624,9 @@
       "export_guard_enabled": {
         "name": "Export guard"
       },
+      "assist_write_intents_enabled": {
+        "name": "Voice commands"
+      },
       "export_guard_override_external": {
         "name": "Export guard: override external scheduling"
       },
@@ -1680,6 +1688,9 @@
       },
       "heat_pump_boost_offset": {
         "name": "Heat Pump Boost Offset"
+      },
+      "heat_pump_cop": {
+        "name": "Heat Pump COP"
       },
       "system_size_kwp": {
         "name": "PV System Size"

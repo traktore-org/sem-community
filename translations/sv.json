@@ -454,6 +454,7 @@
           "vehicle_soc_entity": "Sensor för fordonets batteri-SOC (valfri)",
           "vehicle_range_entity": "Fordonets räckviddssensor",
           "ev_kwh_per_100km": "Fordonsförbrukning (kWh/100km)",
+          "departure_calendar_entity": "Avgångskalender",
           "ev_target_soc": "Betrakta som full vid (%)",
           "ev_battery_capacity_kwh": "EV batterikapacitet (kWh)",
           "initial_current": "Startström (A)",
@@ -520,6 +521,7 @@
           "vehicle_soc_entity": "Sensor för fordonets batteri-SOC (valfri)",
           "vehicle_range_entity": "Fordonets räckviddssensor",
           "ev_kwh_per_100km": "Fordonsförbrukning (kWh/100km)",
+          "departure_calendar_entity": "Avgångskalender",
           "ev_target_soc": "Betrakta som full vid (%)",
           "ev_battery_capacity_kwh": "EV batterikapacitet (kWh)",
           "initial_current": "Startström (A)",
@@ -1216,6 +1218,9 @@
       "heat_pump_mode": {
         "name": "Värmepumpsläge"
       },
+      "heat_pump_cost_of_heat": {
+        "name": "Värmepump värmekostnad"
+      },
       "heat_pump_registration_status": {
         "name": "Värmepump registreringsstatus"
       },
@@ -1619,6 +1624,9 @@
       "export_guard_enabled": {
         "name": "Exportvakt"
       },
+      "assist_write_intents_enabled": {
+        "name": "Röstkommandon"
+      },
       "export_guard_override_external": {
         "name": "Exportvakt: åsidosätt extern styrning"
       },
@@ -1680,6 +1688,9 @@
       },
       "heat_pump_boost_offset": {
         "name": "Värmepump boost-offset"
+      },
+      "heat_pump_cop": {
+        "name": "Värmepump COP"
       },
       "system_size_kwp": {
         "name": "PV-anläggningens storlek"

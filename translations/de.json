@@ -454,6 +454,7 @@
           "vehicle_soc_entity": "Fahrzeug-Batterie-SOC-Sensor (optional)",
           "vehicle_range_entity": "Fahrzeug-Reichweitensensor",
           "ev_kwh_per_100km": "Fahrzeugverbrauch (kWh/100km)",
+          "departure_calendar_entity": "Abfahrtskalender",
           "ev_target_soc": "Als voll gelten ab (%)",
           "ev_battery_capacity_kwh": "EV-Batteriekapazität (kWh)",
           "initial_current": "Startstrom (A)",
@@ -520,6 +521,7 @@
           "vehicle_soc_entity": "Fahrzeug-Batterie-SOC-Sensor (optional)",
           "vehicle_range_entity": "Fahrzeug-Reichweitensensor",
           "ev_kwh_per_100km": "Fahrzeugverbrauch (kWh/100km)",
+          "departure_calendar_entity": "Abfahrtskalender",
           "ev_target_soc": "Als voll gelten ab (%)",
           "ev_battery_capacity_kwh": "EV-Batteriekapazität (kWh)",
           "initial_current": "Startstrom (A)",
@@ -1216,6 +1218,9 @@
       "heat_pump_mode": {
         "name": "Wärmepumpe Modus"
       },
+      "heat_pump_cost_of_heat": {
+        "name": "Wärmepumpe Wärmekosten"
+      },
       "heat_pump_registration_status": {
         "name": "Wärmepumpe Registrierungs-Status"
       },
@@ -1619,6 +1624,9 @@
       "export_guard_enabled": {
         "name": "Einspeise-Wächter"
       },
+      "assist_write_intents_enabled": {
+        "name": "Sprachbefehle"
+      },
       "export_guard_override_external": {
         "name": "Einspeise-Wächter: externe Steuerung übergehen"
       },
@@ -1680,6 +1688,9 @@
       },
       "heat_pump_boost_offset": {
         "name": "Wärmepumpe Boost-Offset"
+      },
+      "heat_pump_cop": {
+        "name": "Wärmepumpe COP"
       },
       "system_size_kwp": {
         "name": "PV-Anlagengröße"

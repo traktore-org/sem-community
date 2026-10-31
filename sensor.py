@@ -197,6 +197,8 @@ def _energy_plan_attrs(
             "start": s.get("start"), "end": s.get("end"),
             "price": s.get("price"), "cheap": s.get("cheap"),
             "home_grid_w": s.get("home_grid_w"),
+            # (#1085) only when the slot has a reading: no key, no bytes
+            **({"co2": s["co2"]} if s.get("co2") is not None else {}),
         } for s in (plan.get("slots") or [])],
         # (#1063) Where the plan drew the battery for the house, as
         # inclusive index runs over ``slots``. A flag per slot cost 14
@@ -1217,6 +1219,15 @@ SENSOR_TYPES = [
         device_class=SensorDeviceClass.MONETARY,
         state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement="CHF",
+    ),
+    # (#1081 Slice A) what one kWh of HEAT costs right now — price / COP,
+    # not the raw electricity price. "CHF/kWh" is a label, not an HA
+    # device_class unit (MONETARY only accepts a bare currency code);
+    # the real currency is set at runtime below.
+    SensorEntityDescription(
+        key="heat_pump_cost_of_heat",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="CHF/kWh",
     ),
     # Removed: Debug sensors not needed
     # daily_cost_data_source, monthly_cost_data_source
@@ -2724,6 +2735,11 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         if description.device_class == SensorDeviceClass.MONETARY:
             self._attr_native_unit_of_measurement = coordinator.hass.config.currency
 
+        # (#1081) a rate, not a device_class HA recognises — the real
+        # currency still comes from the house, the "/kWh" part does not.
+        if description.key == "heat_pump_cost_of_heat":
+            self._attr_native_unit_of_measurement = f"{coordinator.hass.config.currency}/kWh"
+
         # Entity category
         if description.key in self.DIAGNOSTIC_SENSORS:
             self._attr_entity_category = EntityCategory.DIAGNOSTIC
@@ -3160,6 +3176,15 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 if k.startswith("charger_") and k.endswith("_departure"):
                     cid = k[len("charger_"):-len("_departure")]
                     _per_charger_departure[cid] = v
+            # (#1085 Part B) this charger's one-off override, if any —
+            # "override active (skip) until 22:00". Read from the same
+            # dict Diagnose reads, keyed down to the ids known above so a
+            # battery's override never shows on the EV card.
+            _plan_overrides = self.coordinator.data.get("plan_overrides", {})
+            _per_charger_plan_override = {
+                cid: _plan_overrides[cid] for cid in _per_charger_states
+                if _plan_overrides.get(cid)
+            }
             attrs.update({
                 "battery_soc": self.coordinator.data.get("battery_soc"),
                 "calculated_current": self.coordinator.data.get("calculated_current"),
@@ -3172,6 +3197,9 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "per_charger_states": _per_charger_states,
                 "per_charger_anticycle": _per_charger_anticycle,
                 "per_charger_stop_war": _per_charger_stop_war,
+                # (#1085 Part B) one-off override, per charger — empty
+                # when none is active.
+                "per_charger_plan_override": _per_charger_plan_override,
                 # (#846) fire → check → adjust: the measured watts-per-amp
                 # table, the samples still earning confidence, and every
                 # refusal with its reason — plus the cold-start replay

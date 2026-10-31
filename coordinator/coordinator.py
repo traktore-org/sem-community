@@ -17,7 +17,7 @@ from ..utils.device_names import charger_display_name, charger_own_name  # (#105
 import logging
 import time
 from types import SimpleNamespace
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
@@ -145,6 +145,21 @@ from ..utils.helpers import battery_export_part, solar_export, solar_share_pct
 from ..analytics.energy_assistant import EnergyAssistant
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _calendar_next_for(host: Any, cid: str) -> Optional[datetime]:
+    """(#1087) ``host._calendar_departure_for(cid)``, or ``None`` when
+    ``host`` has no such METHOD at all — a unit test building this
+    coordinator's methods on a bare ``SimpleNamespace`` (several of the
+    ``#638`` shadow-plan tests do) has neither the method nor the cache
+    behind it, and must read as "no calendar", not crash. A ``MagicMock``
+    host answers ANY attribute, including this one, with another
+    MagicMock — real, callable, but not a ``datetime`` — so the result
+    is checked too, not just whether the call succeeded. Mirrors
+    ``ev_control.py``'s own ``_calendar_next_for``."""
+    fn = getattr(host, "_calendar_departure_for", None)
+    result = fn(cid) if callable(fn) else None
+    return result if isinstance(result, datetime) else None
 
 
 def _capability_clock() -> float:
@@ -868,6 +883,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         # Storage will be initialized with entry_id later
         self._storage: Optional[SEMStorage] = None
+        # (#1085 Part B) one-off per-device overrides; restored from
+        # storage on the first cycle, see ``_async_update_data``.
+        self._plan_overrides: Dict[str, Any] = {}
+        # (#1087) a charger's departure-calendar's next event, cached —
+        # departure_for stays sync/hass-free; this is the only async
+        # reader, throttled, mirrors tariff/calendar_provider.py's hook.
+        self._ev_calendar_next: Dict[str, Optional[datetime]] = {}
+        self._ev_calendar_summary: Dict[str, str] = {}
+        self._ev_calendar_read_at: Dict[str, datetime] = {}
 
         # Energy Dashboard config
         self._energy_dashboard_config: Optional[EnergyDashboardConfig] = None
@@ -3921,6 +3945,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             self._schedule_wpa_replay()
             self._restore_energy_plan(
                 self._storage.get_energy_plan_state())
+            # (#1085 Part B) a one-off override must still hold after a
+            # reboot — nobody re-sets "don't charge tonight" at 2am.
+            from . import plan_override as _po
+            self._plan_overrides = _po.deserialize(
+                self._storage.get_plan_overrides())
             # (#755) The night's outcome record restores beside the plan it
             # measures. A reboot mid-night that kept the plan but lost the
             # actuals would produce a night whose "took N kWh" starts at the
@@ -3989,6 +4018,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         "longer in the Energy Dashboard (%s): %s (#1195)",
                         entity, err)
             self._dropped_battery_limit_entities = []
+
+        # (#1085 Part B) Drop any override whose time is up, every cycle —
+        # so a device that just lapsed reads as clear everywhere below,
+        # and the persisted store does not grow forever.
+        from . import plan_override as _po
+        _now_override = dt_util.now()
+        try:
+            _purged_overrides = _po.purge_expired(self._plan_overrides, _now_override)
+            if _purged_overrides != self._plan_overrides:
+                self._plan_overrides = _purged_overrides
+                if self._storage is not None:
+                    self._storage.set_plan_overrides(_po.serialize(self._plan_overrides))
+        except Exception:  # noqa: BLE001 — a bad override must not stop the cycle
+            _LOGGER.warning("Plan overrides unreadable — cleared", exc_info=True)
+            self._plan_overrides = {}
 
         # Run deployment health check once after startup
         if self._initial_update_done and not getattr(self, '_health_checked', False):
@@ -4109,6 +4153,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 except Exception as e:  # noqa: BLE001
                     _LOGGER.debug("Tariff service-price refresh failed: %s", e)
 
+            # (#1087) a departure calendar's next event, same async hook.
+            try:
+                await self._async_refresh_calendar_departures()
+            except Exception as e:  # noqa: BLE001
+                _LOGGER.debug("Calendar departure refresh failed: %s", e)
+
             # Update tariff rates before energy/cost calculation so cost accumulators
             # use the current rate for this cycle (fixes dynamic tariff mid-day bug)
             try:
@@ -4141,6 +4191,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             except Exception as e:  # noqa: BLE001 — a CO2 read never costs a cycle
                 _LOGGER.debug("Grid CO2 read failed: %s", e)
                 self._energy_calculator.set_grid_co2_intensity(None, False)
+            # (#1085 Part A) the forecast half, for the 24-48h plan card —
+            # reads self._grid_co2_status, just populated above.
+            try:
+                self._maybe_refresh_co2_forecast()
+            except Exception as e:  # noqa: BLE001 — a forecast read never costs a cycle
+                _LOGGER.debug("Grid CO2 forecast read failed: %s", e)
 
             # Step 2a: Compute instantaneous power flows FIRST. v1.7.0
             # reorder — the autarky + cost-savings calculators need the
@@ -4834,6 +4890,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             if charging_context.night_target_kwh is not None
                             else per_remaining_floor
                         )
+                        try:
+                            _view_mode = _po.charger_mode_for(
+                                self._plan_overrides, cid, per_mode, _now_override)
+                        except Exception:  # noqa: BLE001 — a bad override is no override
+                            _view_mode = per_mode
                         view = build_charger_view(
                             self._cycle_fleet_state,
                             charger_id=cid,
@@ -4846,7 +4907,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             redirect_allowed=not bool(getattr(
                                 getattr(pcc, "state", None), "redirect_vetoed", False)),
                             charger_cfg=charger_cfg,
-                            mode=per_mode,
+                            mode=_view_mode,
                             daily_ev_kwh=self._charger_daily_kwh(cid, energy),
                             target_kwh=decide_target_kwh,
                             deadline_amps=int(charging_context.night_deadline_amps or 0),
@@ -4911,6 +4972,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         from .vpp_dispatch import vpp_pause_override
                         decision = vpp_pause_override(
                             decision, getattr(self, "_vpp_ev_override", None) == "pause")
+                        try:
+                            from . import plan_override as _po
+                            decision = _po.apply_to_charger_decision(
+                                self._plan_overrides, cid, decision, _now_override)
+                        except Exception:  # noqa: BLE001 — a bad override is no override
+                            _LOGGER.debug("plan override read skipped for %s", cid,
+                                          exc_info=True)
                         # Hysteresis stability layer (#461 flapping):
                         # median smoothing + ramp limit + delta/debounce
                         # guards + enable/disable delays. Applied BEFORE
@@ -6335,7 +6403,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 # Resolve deadline from charger config — same path the
                                 # planner uses, just without the full plan computation.
                                 _ev_deadline_dt = departure_for(
-                                    _pcfg, _now, self.config)
+                                    _pcfg, _now, self.config,
+                                    calendar_next=_calendar_next_for(self, _cid))
                                 # (#967) and the preview holds through an expensive
                                 # window open exactly as the night will (D3), so the
                                 # strip never promises a start in the peak band.
@@ -6544,6 +6613,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             surplus_window = self._predictor.predict_surplus_window(now)
             if surplus_window:
                 result["predicted_surplus_window"] = surplus_window
+
+            # (#1085 Part B) {device_id: {"action", "until"}} for every
+            # device with an active override, for Diagnose and the
+            # device cards. Empty dict = nothing active, the common case.
+            from . import plan_override as _po
+            _po_now = dt_util.now()
+            result["plan_overrides"] = {
+                device_id: _po.status_payload(self._plan_overrides, device_id, _po_now)
+                for device_id in self._plan_overrides
+                if _po.active_override(self._plan_overrides, device_id, _po_now) is not None
+            }
 
             # 3a — full cycle incl. enrichment succeeded; clear the degrade flag
             # so the next enrichment failure warns again (warn-once per episode).
@@ -7627,6 +7707,27 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             except (AttributeError, TypeError, ValueError):
                 pass
 
+        # (#1081 Slice A) heat's real price is price / COP, not the raw
+        # electricity price — cheaper on a mild day than a cold one even
+        # at the same rate. The device's own tariff (#812) if it has one,
+        # else the house's; never invents a price when neither can say.
+        _hp_cop = (float(getattr(hp_controller, "cop", 3.0) or 3.0)
+                  if hp_controller is not None else None)
+        _hp_price = None
+        if hp_controller is not None:
+            try:
+                _dtariffs = getattr(
+                    getattr(self, "_surplus_controller", None),
+                    "device_tariffs", None)
+                _hp_tariff = (_dtariffs.plan_tariff(hp_controller)
+                             if _dtariffs is not None else None)
+                if _hp_tariff is not None:
+                    _hp_price = _hp_tariff.price_at(dt_util.now())
+            except Exception:  # noqa: BLE001 — a missing price is no price
+                _hp_price = None
+        from .heat_cost import cost_of_heat as _cost_of_heat_fn
+        _hp_cost_of_heat = _cost_of_heat_fn(_hp_price, _hp_cop)
+
         heat_pump_data = HeatPumpSensorData(
             heat_pump_registered=registered_flag,
             heat_pump_mode=hp_mode,
@@ -7657,6 +7758,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             heat_pump_energy_measured=bool(getattr(
                 hp_controller, "daily_energy_is_measured", False
             )),
+            heat_pump_cop=_hp_cop,
+            heat_pump_cost_of_heat=_hp_cost_of_heat,
         )
 
         # ── Hot water data (#454) ───────────────────────────────────
@@ -8137,6 +8240,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # Observer sends nothing, so nothing was asked of the pack.
         commands = not bool(getattr(self, "_observer_mode", False))
         now_s = _manual_stall_clock()
+        from . import plan_override as _po
+        _ov_now = dt_util.now()
+        _ovs = getattr(self, "_plan_overrides", None)
+        _ovs = _ovs if isinstance(_ovs, dict) else {}
         new_stalls: dict = {}
         stalled_ids: set = set()
         done: list = []
@@ -8146,7 +8253,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             soc = getattr(runtime, "last_known_soc", None)
             is_read = bool(soc_read.get(battery_id, False))
             stalled = False
-            if mode == "force_charge":
+            # (#1085) A one-off "force" rides the same road as Force charge,
+            # so it must end the same way: at the target, or on a stall.
+            _ov = _po.active_override(_ovs, battery_id, _ov_now)
+            by_override = (_ov is not None and _ov.action == "force"
+                           and mode != "off")
+            if mode == "force_charge" or by_override:
                 adapter = adapters.get(battery_id)
                 # What actuate_battery last SENT this battery (0 when it sent
                 # a stop, held one, or sent anything else).
@@ -8171,6 +8283,26 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             done.append((mode, manual_mode_done(
                 mode, soc, soc_read=is_read, reserve=reserve_soc_of(cfg),
                 charge_stalled=stalled)))
+            if by_override:
+                okey = ("override", battery_id)
+                if manual_mode_done("force_charge", soc, soc_read=is_read,
+                                    reserve=reserve_soc_of(cfg),
+                                    charge_stalled=stalled):
+                    n_ov = streaks.get(okey, (None, 0))[1] + 1
+                    if n_ov >= BATTERY_SOC_STEP_CONFIRM_READS:
+                        streaks.pop(okey, None)
+                        self._plan_overrides = _po.clear_override(
+                            self._plan_overrides, battery_id)
+                        if self._storage is not None:
+                            self._storage.set_plan_overrides(
+                                _po.serialize(self._plan_overrides))
+                        _LOGGER.info(
+                            "Battery %s: forced charge finished at %s%% — "
+                            "plan override ended (#1085)", battery_id, soc)
+                    else:
+                        streaks[okey] = ("force_charge", n_ov)
+                else:
+                    streaks.pop(okey, None)
         self._manual_charge_stalls = new_stalls
         # Each control and the batteries it drives.
         groups = ({idx: [idx] for idx in range(len(done))} if per_battery
@@ -9953,11 +10085,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
             _forced = ((False, False) if self._observer_mode
                        else forced_ops(adapter))
+            _battery_cfg = self._vpp_apply_battery_override(
+                self._per_battery_config(batt_idx, _bat_count))
+            try:
+                from . import plan_override as _po
+                _battery_cfg = _po.apply_to_battery_config(
+                    self._plan_overrides, battery_id, _battery_cfg, dt_util.now())
+            except Exception:  # noqa: BLE001 — a bad override is no override
+                _LOGGER.debug("plan override read skipped for %s", battery_id,
+                              exc_info=True)
             view = BatteryView(
                 runtime=runtime,
-                config=self._vpp_apply_battery_override(
-                    self._per_battery_config(batt_idx, _bat_count)
-                ),
+                config=_battery_cfg,
                 fleet=fleet,
                 charging_state=getattr(charging_state, "value", str(charging_state)),
                 ev_charging=bool(getattr(power, "ev_charging", False)),
@@ -10335,6 +10474,32 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             "at": dt_util.now().isoformat()}
         _LOGGER.info("Battery boost for %s ended: %s", boost.charger_id, reason)
 
+    # ── (#1085 Part B) one-off plan overrides ──────────────────────────
+    def set_plan_override(
+        self, device_id: str, action: str, minutes: int,
+        value: Optional[float] = None,
+    ) -> None:
+        """Set ``device_id``'s one-off override — tonight only, survives
+        a restart, auto-expires. Replaces any override already on this
+        device. Raises ``ValueError`` on a bad action (the schema already
+        rejects one, this is belt-and-suspenders) or ``minutes`` outside 1 to 1440."""
+        from . import plan_override as _po
+        now = dt_util.utcnow()
+        self._plan_overrides = _po.set_override(
+            self._plan_overrides, device_id, action,
+            now + timedelta(minutes=minutes), now, value=value)
+        if self._storage is not None:
+            self._storage.set_plan_overrides(_po.serialize(self._plan_overrides))
+        _LOGGER.info("Plan override: %s %s for %d min", device_id, action, minutes)
+
+    def clear_plan_override(self, device_id: str) -> None:
+        """End ``device_id``'s override now, if one is set."""
+        from . import plan_override as _po
+        self._plan_overrides = _po.clear_override(self._plan_overrides, device_id)
+        if self._storage is not None:
+            self._storage.set_plan_overrides(_po.serialize(self._plan_overrides))
+        _LOGGER.info("Plan override cleared: %s", device_id)
+
     def _tick_battery_boost(self, power) -> None:
         """(#1025) Once per cycle: end the boost when its car unplugs, its
         charger's mode changes, the pack reaches the floor or the permission
@@ -10395,6 +10560,91 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             cap = 0.0
         return {"default_floor": floor, "capacity_kwh": round(cap, 2)}
 
+    #: how often a charger's calendar is read again when nothing changed.
+    _CALENDAR_DEPARTURE_REFRESH_S = 900
+
+    def _calendar_departure_for(self, cid: str) -> Optional[datetime]:
+        """(#1087) The cached next-event start for this charger's
+        departure calendar, or ``None``. Pure read — ``departure_for``
+        itself stays sync/hass-free; this is what feeds it. Defensive:
+        a bare test-double coordinator built without ``__init__`` has
+        no cache at all, which must read as "no calendar", not crash."""
+        return (getattr(self, "_ev_calendar_next", None) or {}).get(cid)
+
+    async def _async_refresh_calendar_departures(self) -> None:
+        """(#1087) Each charger with ``departure_calendar_entity`` set:
+        the calendar's own next event, read via ``calendar.get_events``
+        and cached — throttled per charger, same hook/shape as
+        ``tariff/calendar_provider.py``'s ``async_refresh_service_prices``.
+        A charger with nothing configured, or a calendar read that fails,
+        simply has no cached value — ``departure_for`` then falls back to
+        the weekday table exactly as if no calendar existed."""
+        chargers = self.config.get("ev_chargers") or []
+        if not chargers:
+            return
+        services = getattr(self.hass, "services", None)
+        if services is None or not services.has_service("calendar", "get_events"):
+            return
+        now = dt_util.now()
+        for cfg in chargers:
+            if not isinstance(cfg, dict):
+                continue
+            cid = str(cfg.get("id") or "")
+            entity = str(cfg.get("departure_calendar_entity") or "").strip()
+            if not cid:
+                continue
+            if not entity:
+                self._ev_calendar_next.pop(cid, None)
+                self._ev_calendar_summary.pop(cid, None)
+                self._ev_calendar_read_at.pop(cid, None)
+                continue
+            last = self._ev_calendar_read_at.get(cid)
+            if (last is not None
+                    and (now - last).total_seconds() < self._CALENDAR_DEPARTURE_REFRESH_S):
+                continue
+            try:
+                resp = await services.async_call(
+                    "calendar", "get_events",
+                    {"entity_id": entity,
+                     "start_date_time": now,
+                     "end_date_time": now + timedelta(days=14)},
+                    blocking=True, return_response=True,
+                )
+            except Exception as err:  # noqa: BLE001 — an unreadable calendar is no calendar
+                _LOGGER.debug("calendar departure: cannot read %s: %s", entity, err)
+                continue
+            self._ev_calendar_read_at[cid] = now
+            events = ((resp or {}).get(entity) or {}).get("events") or []
+            rows = []
+            for event in events:
+                if not isinstance(event, dict):
+                    continue
+                raw = event.get("start")
+                if not isinstance(raw, str):
+                    continue
+                # (#1087) an all-day event's "start" is a bare DATE
+                # ("2026-10-30", from HA's own CalendarEvent.start_date
+                # path) — no "T" means no time, and it cannot name a
+                # departure HOUR, so it is skipped rather than guessed
+                # at (#925). ``parse_datetime`` on its own would accept
+                # a bare date as midnight, which is not a real deadline.
+                if "T" not in raw:
+                    continue
+                parsed = dt_util.parse_datetime(raw)
+                if parsed is None:
+                    continue
+                if parsed.tzinfo is None:
+                    parsed = dt_util.as_local(parsed)
+                if parsed > now:
+                    rows.append((parsed, str(event.get("summary") or "")))
+            if rows:
+                next_start, next_summary = min(rows, key=lambda r: r[0])
+                self._ev_calendar_next[cid] = next_start
+                self._ev_calendar_summary[cid] = next_summary
+            else:
+                self._ev_calendar_next[cid] = None
+                self._ev_calendar_summary.pop(cid, None)
+
     def _departure_view(self, cid: str, charger_cfg) -> Dict[str, Any]:
         """(#1023) One charger's departure, as the EV card shows it: the
         default time, each weekday's own, the departure tonight is planned
@@ -10428,10 +10678,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 late = {"start": min(s for s, _ in spans).isoformat(),
                         "end": max(e for _, e in spans).isoformat(),
                         "kwh": round(kwh, 2), "cost": round(cost, 2)}
+        _cal_next = _calendar_next_for(self, cid)
         return {
             "default": departure_hhmm(cfg, self.config),
             "by_weekday": weekday_departures(cfg),
-            "next": departure_for(cfg, now, self.config).isoformat(),
+            "next": departure_for(cfg, now, self.config,
+                                  calendar_next=_cal_next).isoformat(),
+            # (#1087) the calendar event itself, when it's what "next"
+            # came from — the card names the event, not just the time.
+            "from_calendar": bool(_cal_next and _cal_next > now),
+            "calendar_summary": (self._ev_calendar_summary.get(cid, "")
+                                 if _cal_next and _cal_next > now else ""),
             "one_block": bool(cfg.get("ev_plan_one_block", False)),
             "late_min": late_min,
             "late": late,
@@ -10646,6 +10903,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 source = "detected"
         kg = None
         has_forecast = False
+        forecast_attribute = None
         if eid:
             st = self.hass.states.get(eid)
             if st is None and source == "detected":
@@ -10656,14 +10914,82 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             kg = read_co2_intensity_kg(st)
             if st is not None:
                 from ..hardware_detection import series_attribute
-                has_forecast = series_attribute(getattr(st, "attributes", {})) is not None
+                forecast_attribute = series_attribute(getattr(st, "attributes", {}) or {})
+                has_forecast = forecast_attribute is not None
         self._grid_co2_status = {
             "source": source or "none",
             "kg_per_kwh": None if kg is None else round(kg, 4),
             "fallback": kg is None,
             "has_forecast": has_forecast,
         }
+        # (#1085 Part A) NOT on _grid_co2_status — that dict is published to
+        # diagnostics/sensor attributes and the entity id is deliberately
+        # never in it (test_the_status_never_holds_an_entity_id). Kept on
+        # the instance instead, for _maybe_refresh_co2_forecast only.
+        self._grid_co2_eid = eid
+        self._grid_co2_forecast_attr = forecast_attribute
         return kg
+
+    #: (#1085 Part A) how often the forecast ROWS are re-parsed. The data
+    #: already sits in the entity's attributes (no I/O, unlike the weather
+    #: service call temperature forecast needs) — this only bounds the
+    #: parse cost, not a network cost.
+    _CO2_FORECAST_REFRESH_S = 1800
+
+    def _maybe_refresh_co2_forecast(self) -> None:
+        """(#1085 Part A) Re-parse the CO2 entity's own forecast attribute,
+        at most every ``_CO2_FORECAST_REFRESH_S``. Synchronous: the data is
+        already in the entity's state, read fresh by ``_grid_co2_reading``
+        this same cycle — no service call, no background task."""
+        now = time.monotonic()
+        if now - getattr(self, "_co2_forecast_at", -1e9) < self._CO2_FORECAST_REFRESH_S:
+            return
+        self._co2_forecast_at = now
+        eid = getattr(self, "_grid_co2_eid", None)
+        attribute = getattr(self, "_grid_co2_forecast_attr", None)
+        if not eid or not attribute:
+            self._co2_forecast = []
+            return
+        st = self.hass.states.get(eid)
+        if st is None:
+            self._co2_forecast = []
+            return
+        from ..hardware_detection import (
+            CO2_INTENSITY_MAX_KG, co2_unit_factor, parse_co2_forecast_rows,
+        )
+        attrs = getattr(st, "attributes", {}) or {}
+        factor = co2_unit_factor(attrs.get("unit_of_measurement"))
+        if factor is None:
+            self._co2_forecast = []
+            return
+        out = []
+        for start, raw in parse_co2_forecast_rows(attrs, attribute):
+            kg = raw * factor
+            if 0.0 <= kg <= CO2_INTENSITY_MAX_KG:
+                out.append((start, kg))
+        self._co2_forecast = out
+
+    def _co2_at(self, when) -> Optional[float]:
+        """(#1085 Part A) Grid CO2 intensity (kg/kWh) at ``when``: the live
+        reading for the next 30 minutes, else the forecast row covering
+        it — a row's span runs to the NEXT row's start (or one hour, for
+        the last row), since CO2 forecasts carry no explicit cadence the
+        way the weather service's hourly/daily split does. None beyond
+        the forecast, exactly like ``_temperature_at``."""
+        try:
+            now = dt_util.now()
+            if when <= now + timedelta(minutes=30):
+                status = getattr(self, "_grid_co2_status", None) or {}
+                return status.get("kg_per_kwh")
+            rows = getattr(self, "_co2_forecast", None) or []
+            for i, (start, kg) in enumerate(rows):
+                end = (rows[i + 1][0] if i + 1 < len(rows)
+                       else start + timedelta(hours=1))
+                if start <= when < end:
+                    return kg
+            return None
+        except Exception:  # noqa: BLE001
+            return None
 
     def _intraday_forecast_on(self) -> bool:
         """(#1068) The soak flag: the day follows measured yield."""
@@ -10762,7 +11088,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 sig.append((
                     "ev", cid,
                     round(float(cfg.get("daily_ev_target") or 0.0), 1),
-                    departure_signature(cfg, self.config),  # (#1023)
+                    departure_signature(
+                        cfg, self.config,
+                        calendar_next=_calendar_next_for(self, cid)),  # (#1023/#1087)
                     bool(cfg.get("ev_plan_one_block", False)),
                     late_charge_s(cfg),
                     # (#1020) the mode it runs in, a schedule's included, so
@@ -11482,6 +11810,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # stamped plan priced it. One forecast, one tariff,
                     # two different answers; the preview was the wrong one.
                     export_rate=self._export_rate_at(),
+                    co2_at=lambda ts: self._co2_at(ts),
                 )
                 labels2 = {}
                 demands2 = []
@@ -11854,7 +12183,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # (#1023) The departure the card shows: a charger without
                 # a time of its own leaves at the global one, not at the
                 # night window's end.
-                deadline = departure_for(cfg, now, self.config)
+                deadline = departure_for(
+                    cfg, now, self.config,
+                    calendar_next=_calendar_next_for(self, cid))
                 try:
                     # The canonical one-list slot (#576): a drag override wins
                     # immediately — the same accessor decide() uses.
@@ -12165,6 +12496,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     "home_w": round(s.home_w, 1),
                     "soc_kwh": round(s.soc_kwh, 2),
                     "home_grid_w": round(s.home_grid_w, 1),
+                    # (#1085 Part A) kg/kWh; None when no CO2 source is
+                    # configured or the slot is beyond the forecast.
+                    "co2": None if s.co2 is None else round(s.co2, 4),
                     **({"batt": True} if s.home_batt_kwh > 1e-6 else {}),
                 } for s in rows]
 
@@ -12286,6 +12620,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             prov = self._tariff_provider
             _price_at = lambda ts: tariff_price_at(prov, ts)  # noqa: E731
             _cheap_at = lambda ts: tariff_cheap_at(prov, ts)  # noqa: E731
+            _co2_at = lambda ts: self._co2_at(ts)  # noqa: E731
             # (Rien's shape, 08-08) slots follow the MARKET: 15-min where
             # the published curve is 15-min, hourly where there is no
             # curve to ask. An hourly slot on a 15-min market wears its
@@ -12348,6 +12683,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # night hour cheaper than the export rate could never
                     # win; priced, the preference is economic and can lose.
                     export_rate=self._export_rate_at(),
+                    co2_at=_co2_at,
                     step_s=_step_s,
                 ))
                 t = day_end
@@ -12359,11 +12695,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                           night_end)
                 if end <= t:
                     end = min(t + _td(seconds=_step_s), night_end)
+                try:
+                    co2 = _co2_at(t)
+                except Exception:  # noqa: BLE001 — no reading, honestly
+                    co2 = None
                 slots.append(LedgerSlot(
                     start=t, end=end,
                     price=_price_at(t),
                     level_cheap=_cheap_at(t),
                     home_w=_home_at(t),
+                    co2=co2,
                 ))
                 t = end
             if not slots:
@@ -16749,6 +17090,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         cfg.get("heat_pump_force_on_threshold", 5000)
                     )
                     hp.invert_sg_ready = bool(cfg.get("heat_pump_invert_sg_ready", False))
+                    hp.cop = float(cfg.get("heat_pump_cop", 3.0) or 3.0)
                     # #602/#576 — priority is the DRAG-LIST position now (resolved
                     # by refresh_direct_device_overrides), NOT a standalone knob.
                     # (Previously clobbered here from heat_pump_priority every

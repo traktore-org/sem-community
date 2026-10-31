@@ -454,6 +454,7 @@
           "vehicle_soc_entity": "SOC-sensor for kjøretøyets batteri (valgfri)",
           "vehicle_range_entity": "Kjøretøyets rekkeviddesensor",
           "ev_kwh_per_100km": "Kjøretøyets forbruk (kWh/100km)",
+          "departure_calendar_entity": "Avgangskalender",
           "ev_target_soc": "Regn som full ved (%)",
           "ev_battery_capacity_kwh": "Elbilbatteriets kapasitet (kWh)",
           "initial_current": "Startstrøm (A)",
@@ -520,6 +521,7 @@
           "vehicle_soc_entity": "SOC-sensor for kjøretøyets batteri (valgfri)",
           "vehicle_range_entity": "Kjøretøyets rekkeviddesensor",
           "ev_kwh_per_100km": "Kjøretøyets forbruk (kWh/100km)",
+          "departure_calendar_entity": "Avgangskalender",
           "ev_target_soc": "Regn som full ved (%)",
           "ev_battery_capacity_kwh": "Elbilbatteriets kapasitet (kWh)",
           "initial_current": "Startstrøm (A)",
@@ -1216,6 +1218,9 @@
       "heat_pump_mode": {
         "name": "Varmepumpemodus"
       },
+      "heat_pump_cost_of_heat": {
+        "name": "Varmepumpe varmekostnad"
+      },
       "heat_pump_registration_status": {
         "name": "Varmepumpe registreringsstatus"
       },
@@ -1619,6 +1624,9 @@
       "export_guard_enabled": {
         "name": "Eksportvakt"
       },
+      "assist_write_intents_enabled": {
+        "name": "Talekommandoer"
+      },
       "export_guard_override_external": {
         "name": "Eksportvakt: overstyr ekstern styring"
       },
@@ -1680,6 +1688,9 @@
       },
       "heat_pump_boost_offset": {
         "name": "Varmepumpe boost-offset"
+      },
+      "heat_pump_cop": {
+        "name": "Varmepumpe COP"
       },
       "system_size_kwp": {
         "name": "Størrelse på solcelleanlegg"

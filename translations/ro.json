@@ -454,6 +454,7 @@
           "vehicle_soc_entity": "Senzor SOC baterie vehicul (opțional)",
           "vehicle_range_entity": "Senzor autonomie vehicul",
           "ev_kwh_per_100km": "Consum vehicul (kWh/100km)",
+          "departure_calendar_entity": "Calendar de plecare",
           "ev_target_soc": "Consideră plin la (%)",
           "ev_battery_capacity_kwh": "Capacitatea bateriei VE (kWh)",
           "initial_current": "Curent inițial (A)",
@@ -520,6 +521,7 @@
           "vehicle_soc_entity": "Senzor SOC baterie vehicul (opțional)",
           "vehicle_range_entity": "Senzor autonomie vehicul",
           "ev_kwh_per_100km": "Consum vehicul (kWh/100km)",
+          "departure_calendar_entity": "Calendar de plecare",
           "ev_target_soc": "Consideră plin la (%)",
           "ev_battery_capacity_kwh": "Capacitatea bateriei VE (kWh)",
           "initial_current": "Curent inițial (A)",
@@ -1216,6 +1218,9 @@
       "heat_pump_mode": {
         "name": "Mod pompă de căldură"
       },
+      "heat_pump_cost_of_heat": {
+        "name": "Costul căldurii pompei de căldură"
+      },
       "heat_pump_registration_status": {
         "name": "Stare înregistrare pompă de căldură"
       },
@@ -1619,6 +1624,9 @@
       "export_guard_enabled": {
         "name": "Gardă de export"
       },
+      "assist_write_intents_enabled": {
+        "name": "Comenzi vocale"
+      },
       "export_guard_override_external": {
         "name": "Gardă de export: ignoră controlul extern"
       },
@@ -1680,6 +1688,9 @@
       },
       "heat_pump_boost_offset": {
         "name": "Decalaj de stimulare pompă de căldură"
+      },
+      "heat_pump_cop": {
+        "name": "COP pompă de căldură"
       },
       "system_size_kwp": {
         "name": "Puterea instalată PV"

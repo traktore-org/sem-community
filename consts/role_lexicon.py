@@ -318,6 +318,22 @@ READ_ROLE_RULES: Final[Dict[str, Dict[str, Any]]] = {
         "not": (r"energy", r"today", r"daily", r"total", r"month", r"year",
                 r"cumulative", r"phase", r"l1", r"l2", r"l3", r"limit"),
     },
+    # (#1168) The price a kWh costs to BUY right now. Discovery only: the
+    # tariff code still finds its price sensor by brand name. Only the keys
+    # the integrations themselves declare are listed. Amber declares
+    # ``current`` and ``forecasts`` for import, feed-in and controlled load
+    # alike, so no key tells its directions apart: it gets no price role.
+    # Octopus, aWATTar and the Nord Pool the roster lists declare no
+    # translation keys. ``current_price`` is a common word: it counts in
+    # ENTSO-e only.
+    "import_price": {
+        "platform": "sensor",
+        "any": (r"^electricity_price$",       # tibber
+                r"^current_interval_price$"),  # tibber_prices
+        "brand_any": {"entsoe": (r"^current_price$",)},
+        "not": (r"average", r"level", r"rank", r"rating", r"base", r"trend",
+                r"phase", r"next", r"last", r"min", r"max", r"percent"),
+    },
     "battery_power": {
         "platform": "sensor",
         "any": (r"^battery_(active_)?power$", r"^storage_.*charge_discharge_power$",

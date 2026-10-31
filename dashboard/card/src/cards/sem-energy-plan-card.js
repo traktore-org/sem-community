@@ -692,7 +692,11 @@ class SEMEnergyPlanCard extends SEMLitBase {
                                     if (!Number.isFinite(sl) || !Number.isFinite(sw)) return nothing;
                                     const price = (s.price === null || s.price === undefined)
                                         ? '—' : `${s.price} ${currency}`;
-                                    const tipS = `${this._hm(s.start)}–${this._hm(s.end)} · ${price}`
+                                    // (#1085 Part A) g/kWh, same rounding as the
+                                    // energy-impact card's co2_kg_per_kwh_today.
+                                    const co2 = Number.isFinite(s.co2)
+                                        ? ` · ${Math.round(s.co2 * 1000)} g/kWh` : '';
+                                    const tipS = `${this._hm(s.start)}–${this._hm(s.end)} · ${price}${co2}`
                                         + (s.cheap ? ` · ${this._t('energy_plan_legend_cheap')}` : '');
                                     return html`<div class="slotcell" title="${tipS}"
                                         style="left:${sl}%;width:${sw}%"></div>`;

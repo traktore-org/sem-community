@@ -607,6 +607,19 @@ class SEMStorage:
         self._energy_data["energy_plan"] = dict(state)
         self._energy_data.pop("overnight_plan", None)
 
+    def get_plan_overrides(self) -> Dict[str, Any]:
+        """(#1085 Part B) One-off per-device overrides, raw (still JSON
+        shape — ``plan_override.deserialize`` turns this into
+        ``PlanOverride`` records). Nobody re-sets a "don't charge
+        tonight" at 2am, so this must survive a restart same as the
+        energy plan stamp above."""
+        return self._energy_data.get("plan_overrides", {})
+
+    def set_plan_overrides(self, state: Dict[str, Any]) -> None:
+        """(#1085 Part B) Persist the override set; saved by the same
+        delayed-save cycle as ``set_energy_plan_state``."""
+        self._energy_data["plan_overrides"] = dict(state)
+
     # (#755) The third number: what each demand actually DID. Durable on
     # purpose — a night spans midnight and the daily bucket empties there,
     # so the per-device runtime accumulators cannot carry a night's outcome.

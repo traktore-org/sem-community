@@ -435,3 +435,23 @@ def test_validate_daily_data_negative_daily_clamped():
     data = {"daily_accumulators": {"solar_2026-07-04": -3.5}}
     assert SEMStorage._validate_daily_data(data) is True
     assert data["daily_accumulators"]["solar_2026-07-04"] == 0.0
+
+
+# ──────────────────────────────────────────────
+# Plan overrides (#1085 Part B)
+# ──────────────────────────────────────────────
+
+def test_get_plan_overrides_defaults_empty(storage):
+    assert storage.get_plan_overrides() == {}
+
+
+def test_set_then_get_plan_overrides_round_trips(storage):
+    state = {"charger1": {"action": "skip", "expires_at": "2026-10-29T22:00:00+01:00",
+                          "value": None, "set_at": "2026-10-29T18:00:00+01:00"}}
+    storage.set_plan_overrides(state)
+    assert storage.get_plan_overrides() == state
+    # The top-level dict is new (same shallow-copy contract as
+    # set_energy_plan_state) — a second device added after the fact
+    # does not leak into the stored copy.
+    state["charger2"] = {"action": "force"}
+    assert "charger2" not in storage.get_plan_overrides()

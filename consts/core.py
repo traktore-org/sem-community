@@ -367,6 +367,9 @@ DEFAULT_HEAT_PUMP_PRIORITY: Final = 4
 DEFAULT_HEAT_PUMP_MIN_POWER: Final = 2000  # Watts
 DEFAULT_HEAT_PUMP_BOOST_OFFSET: Final = 2.0  # Degrees
 DEFAULT_HEAT_PUMP_FORCE_ON_THRESHOLD: Final = 5000  # Watts
+# (#1081) A typical air-source heat pump's seasonal average; a flat
+# number until a user enters their own — a real curve is a later part.
+DEFAULT_HEAT_PUMP_COP: Final = 3.0
 
 # Hot water settings
 DEFAULT_HOT_WATER_ENABLED: Final = False

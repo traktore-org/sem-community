@@ -1877,7 +1877,8 @@ def _heat_pump_rows(full_config: dict) -> list[dict]:
             "heat_pump_energy_sensor", "heat_pump_temperature_sensor",
             "heat_pump_rated_power", "heat_pump_priority",
             "heat_pump_boost_offset", "heat_pump_max_setpoint",
-            "heat_pump_force_on_threshold", "heat_pump_invert_sg_ready",
+            "heat_pump_force_on_threshold", "heat_pump_cop",
+            "heat_pump_invert_sg_ready",
             "heat_pump_sg_ready_service", "heat_pump_sg_ready_service_data",
             "heat_pump_sg_ready_state_entity",
             "heat_pump_relay1_on_value", "heat_pump_relay1_off_value",
@@ -3252,6 +3253,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 boost_offset=float(_row.get("heat_pump_boost_offset", 2.0)),
                 max_setpoint=float(_row.get("heat_pump_max_setpoint", 55.0)),
                 force_on_threshold=float(_row.get("heat_pump_force_on_threshold", 5000)),
+                cop=float(_row.get("heat_pump_cop", 3.0)),
                 invert_sg_ready=bool(_row.get("heat_pump_invert_sg_ready", False)),
                 sg_ready_service=_svc or None,
                 sg_ready_service_data=_svc_data,
@@ -3423,6 +3425,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
         # (#1174) the plain sentences the logbook names a decision with
         from .plain_reasons import async_load_plain_reasons
         await async_load_plain_reasons(hass)
+        # (#1086 Part A) Assist explain/write intents — inert until a
+        # custom_sentences file exists (docs/USER_GUIDE.md ships one to
+        # copy in; SEM does not write it itself, see assist_intents.py).
+        from .assist_intents import async_register_intents
+        async_register_intents(hass)
         sim_job = getattr(coordinator, "_simulation_job", None)
         if sim_job is not None:
             entry.async_on_unload(lambda: sim_job.cancel(persist=False))
@@ -4444,6 +4451,40 @@ async def _async_register_services(
         _LOGGER.debug("Registered services: %s.start/stop_battery_boost", DOMAIN)
     except Exception as err:  # noqa: BLE001
         _LOGGER.error("Failed to register the battery boost services: %s", err)
+
+    async def async_plan_override_service(call) -> None:
+        """(#1085 Part B) One-off: this device only, for this many
+        minutes — then it's gone, even across a restart."""
+        coordinator.set_plan_override(
+            call.data["device_id"], call.data["action"],
+            call.data["minutes"], call.data.get("value"))
+        await coordinator.async_request_refresh()
+
+    async def async_plan_override_clear_service(call) -> None:
+        """(#1085 Part B) End a device's override now."""
+        coordinator.clear_plan_override(call.data["device_id"])
+        await coordinator.async_request_refresh()
+
+    try:
+        from .coordinator.plan_override import ACTIONS as _PLAN_OVERRIDE_ACTIONS
+        hass.services.async_register(
+            DOMAIN, "plan_override", async_plan_override_service,
+            schema=vol.Schema({
+                vol.Required("device_id"): cv.string,
+                vol.Required("action"): vol.In(_PLAN_OVERRIDE_ACTIONS),
+                vol.Required("minutes"): vol.All(
+                    vol.Coerce(int), vol.Range(min=1, max=24 * 60)),
+                vol.Optional("value"): vol.Coerce(float),
+            }),
+        )
+        hass.services.async_register(
+            DOMAIN, "plan_override_clear", async_plan_override_clear_service,
+            schema=vol.Schema({vol.Required("device_id"): cv.string}),
+        )
+        _LOGGER.debug(
+            "Registered services: %s.plan_override/plan_override_clear", DOMAIN)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.error("Failed to register the plan override services: %s", err)
 
     async def async_set_charger_departure(call) -> None:
         """(#1023) The EV card's departure rows: each weekday's own time,
@@ -6881,11 +6922,12 @@ async def _async_register_phase_services(
         "heat_pump_activation_path", "heat_pump_deactivation_path",
         "heat_pump_relay_path", "heat_pump_temperature_reading_path",
         "heat_pump_offpeak_path", "heat_pump_current_temperature",
+        "heat_pump_cop", "heat_pump_cost_of_heat",
     }
     _DIAGNOSE_HEAT_PUMP_OPTION = {
         "heat_pump_relay1_entity", "heat_pump_relay2_entity",
         "heat_pump_climate_entity", "heat_pump_boost_offset",
-        "heat_pump_max_setpoint", "heat_pump_priority",
+        "heat_pump_max_setpoint", "heat_pump_priority", "heat_pump_cop",
         "heat_pump_power_sensor", "heat_pump_temperature_sensor",
         "heat_pump_rated_power", "heat_pump_force_on_threshold",
         "heat_pump_sg_ready_service", "heat_pump_sg_ready_service_data",

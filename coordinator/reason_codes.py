@@ -54,6 +54,8 @@ CHARGER_GRID_EVENT = "charger_grid_event"
 CHARGER_STOP_NOW = "charger_stop_now"
 CHARGER_RAMP = "charger_ramp"
 CHARGER_HOLD_STEADY = "charger_hold_steady"
+CHARGER_PLAN_OVERRIDE_STOP = "charger_plan_override_stop"
+CHARGER_PLAN_OVERRIDE_RUN = "charger_plan_override_run"
 
 # ── batteries ────────────────────────────────────────────────────────
 BATTERY_OFF = "battery_off"
@@ -127,6 +129,8 @@ EXPORT_PRICE_UNKNOWN = "export_price_unknown"
 #: takes none.
 PARAMS: Dict[str, Tuple[str, ...]] = {
     CHARGER_PLAN_WAIT_UNTIL: ("time",),
+    CHARGER_PLAN_OVERRIDE_STOP: ("time",),
+    CHARGER_PLAN_OVERRIDE_RUN: ("time",),
     BATTERY_FEEDS_CAR: ("floor",),
     BATTERY_CAR_BELOW_FLOOR: ("floor",),
     EXPORT_NOT_WORTH: ("value", "threshold"),

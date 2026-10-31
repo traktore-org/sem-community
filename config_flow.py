@@ -1614,6 +1614,7 @@ OPTIONS_FLOW_OWNED_KEYS = frozenset({
     "daily_ev_target",
     "daily_ev_target_max",
     "demand_charge_rate",
+    "departure_calendar_entity",  # (#1087)
     "deye_actuation_enabled",
     "deye_battery_voltage_entity",
     "deye_battery_voltage_max_age_s",
@@ -2383,6 +2384,17 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "ev_kwh_per_100km",
                     default=self._data.get("ev_kwh_per_100km", 18),
                 ): bounds_selector("ev_kwh_per_100km", mode="box"),
+                # (#1087) the departure the calendar names, when there is
+                # one — wins over the weekday table while it is ahead.
+                # Clearable: no default, so an emptied field goes back to
+                # the weekday table rather than staying "set to nothing".
+                vol.Optional(
+                    "departure_calendar_entity",
+                    description={"suggested_value":
+                                self._data.get("departure_calendar_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="calendar")
+                ),
                 # Per-charger SOC target (#215): Min floor + Max solar ceiling (#245)
                 vol.Optional(
                     "ev_target_soc",
@@ -2616,6 +2628,14 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "ev_kwh_per_100km",
                     default=charger.get("ev_kwh_per_100km", self._data.get("ev_kwh_per_100km", 18)),
                 ): bounds_selector("ev_kwh_per_100km", mode="box"),
+                # (#1087) see the add step's own field for the reasoning.
+                vol.Optional(
+                    "departure_calendar_entity",
+                    description={"suggested_value":
+                                charger.get("departure_calendar_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="calendar")
+                ),
                 # Per-charger SOC target (#215)
                 vol.Optional(
                     "ev_target_soc",

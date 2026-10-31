@@ -454,6 +454,7 @@
           "vehicle_soc_entity": "Senzor SOC baterie vozidla (volitelné)",
           "vehicle_range_entity": "Senzor dojezdu vozidla",
           "ev_kwh_per_100km": "Spotřeba vozidla (kWh/100km)",
+          "departure_calendar_entity": "Kalendář odjezdu",
           "ev_target_soc": "Považovat za plné při (%)",
           "ev_battery_capacity_kwh": "Kapacita baterie EV (kWh)",
           "initial_current": "Počáteční proud (A)",
@@ -520,6 +521,7 @@
           "vehicle_soc_entity": "Senzor SOC baterie vozidla (volitelné)",
           "vehicle_range_entity": "Senzor dojezdu vozidla",
           "ev_kwh_per_100km": "Spotřeba vozidla (kWh/100km)",
+          "departure_calendar_entity": "Kalendář odjezdu",
           "ev_target_soc": "Považovat za plné při (%)",
           "ev_battery_capacity_kwh": "Kapacita baterie EV (kWh)",
           "initial_current": "Počáteční proud (A)",
@@ -1216,6 +1218,9 @@
       "heat_pump_mode": {
         "name": "Režim tepelného čerpadla"
       },
+      "heat_pump_cost_of_heat": {
+        "name": "Náklady na teplo tepelného čerpadla"
+      },
       "heat_pump_registration_status": {
         "name": "Stav registrace tepelného čerpadla"
       },
@@ -1619,6 +1624,9 @@
       "export_guard_enabled": {
         "name": "Hlídač exportu"
       },
+      "assist_write_intents_enabled": {
+        "name": "Hlasové příkazy"
+      },
       "export_guard_override_external": {
         "name": "Hlídač exportu: ignorovat externí řízení"
       },
@@ -1680,6 +1688,9 @@
       },
       "heat_pump_boost_offset": {
         "name": "Navýšení teploty tepelného čerpadla"
+      },
+      "heat_pump_cop": {
+        "name": "COP tepelného čerpadla"
       },
       "system_size_kwp": {
         "name": "Velikost FV systému"

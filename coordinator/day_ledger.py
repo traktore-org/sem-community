@@ -67,6 +67,7 @@ def build_day_slots(*, start: datetime, end: datetime, day_kwh: float,
                     home_w_at, price_at, level_cheap_at,
                     surplus_margin_w: float = DEFAULT_SURPLUS_MARGIN_W,
                     export_rate=0.0,
+                    co2_at=None,
                     step_s: int = 3600) -> list:
     """Tile ``[start, end)`` into day-shaped ``LedgerSlot``s.
 
@@ -87,6 +88,11 @@ def build_day_slots(*, start: datetime, end: datetime, day_kwh: float,
     ``price_at``: a live feed-in tariff pays a different rate each hour, and
     a single number priced every surplus slot at a rate the user is not
     paid. A plain number still means one rate all day.
+
+    ``co2_at`` (#1085 Part A) — grid CO2 intensity (kg/kWh) at the slot
+    start, or ``None`` when no CO2 source is configured. Carried on every
+    slot the same way ``price_at`` is; a raising accessor degrades to an
+    honestly-unknown CO2 figure rather than costing the slot.
     """
     rate_at = export_rate_fn(export_rate)
     slots = []
@@ -112,6 +118,13 @@ def build_day_slots(*, start: datetime, end: datetime, day_kwh: float,
         except Exception:  # noqa: BLE001 — a broken profile is a flat 0
             home_w = 0.0
         surplus_w = solar_w - home_w
+        co2 = None
+        if co2_at is not None:
+            try:
+                c = co2_at(t)
+                co2 = float(c) if c is not None else None
+            except Exception:  # noqa: BLE001 — no reading, honestly
+                co2 = None
         if surplus_w >= surplus_margin_w:
             slots.append(LedgerSlot(
                 start=t, end=slot_end,
@@ -123,6 +136,7 @@ def build_day_slots(*, start: datetime, end: datetime, day_kwh: float,
                 level_cheap=True, home_w=0.0,
                 cap_override_w=surplus_w,
                 solar_w=solar_w, home_gross_w=home_w,
+                co2=co2,
             ))
         else:
             price = None
@@ -140,6 +154,7 @@ def build_day_slots(*, start: datetime, end: datetime, day_kwh: float,
                 price=price, level_cheap=cheap,
                 home_w=max(0.0, home_w - solar_w),
                 solar_w=solar_w, home_gross_w=home_w,
+                co2=co2,
             ))
         t = slot_end
     return slots

@@ -454,6 +454,7 @@
           "vehicle_soc_entity": "Sensor de SOC da bateria do veículo (opcional)",
           "vehicle_range_entity": "Sensor de autonomia do veículo",
           "ev_kwh_per_100km": "Consumo do veículo (kWh/100km)",
+          "departure_calendar_entity": "Calendário de partida",
           "ev_target_soc": "Considerar cheio a (%)",
           "ev_battery_capacity_kwh": "Capacidade da bateria do VE (kWh)",
           "initial_current": "Corrente inicial (A)",
@@ -520,6 +521,7 @@
           "vehicle_soc_entity": "Sensor de SOC da bateria do veículo (opcional)",
           "vehicle_range_entity": "Sensor de autonomia do veículo",
           "ev_kwh_per_100km": "Consumo do veículo (kWh/100km)",
+          "departure_calendar_entity": "Calendário de partida",
           "ev_target_soc": "Considerar cheio a (%)",
           "ev_battery_capacity_kwh": "Capacidade da bateria do VE (kWh)",
           "initial_current": "Corrente inicial (A)",
@@ -1216,6 +1218,9 @@
       "heat_pump_mode": {
         "name": "Modo da bomba de calor"
       },
+      "heat_pump_cost_of_heat": {
+        "name": "Custo do calor da bomba de calor"
+      },
       "heat_pump_registration_status": {
         "name": "Estado de registo da bomba de calor"
       },
@@ -1619,6 +1624,9 @@
       "export_guard_enabled": {
         "name": "Guarda de exportação"
       },
+      "assist_write_intents_enabled": {
+        "name": "Comandos de voz"
+      },
       "export_guard_override_external": {
         "name": "Guarda de exportação: ignorar controlo externo"
       },
@@ -1680,6 +1688,9 @@
       },
       "heat_pump_boost_offset": {
         "name": "Offset de boost da bomba de calor"
+      },
+      "heat_pump_cop": {
+        "name": "COP da bomba de calor"
       },
       "system_size_kwp": {
         "name": "Potência do sistema FV"

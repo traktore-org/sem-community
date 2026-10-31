@@ -17,7 +17,7 @@ from typing import Any, Dict, Optional
 
 from homeassistant.core import HomeAssistant
 
-from .base import SetpointDevice, DeviceState
+from .base import SetpointDevice, DeviceState, ComfortBandMixin
 from ..consts.devices import CONTACT_VALUE_SERVICES
 from ..utils.select_option import listed_option
 
@@ -80,12 +80,11 @@ class HeatPumpStatus:
     sg_ready_state: SGReadyState = SGReadyState.NORMAL
     current_temperature: Optional[float] = None
     target_temperature: Optional[float] = None
-    cop: Optional[float] = None  # Coefficient of Performance
     is_solar_boosted: bool = False
     boost_start_time: Optional[datetime] = None
 
 
-class HeatPumpController(SetpointDevice):
+class HeatPumpController(ComfortBandMixin, SetpointDevice):
     """SG-Ready heat pump controller.
 
     Registers as a SetpointDevice in the SurplusController.
@@ -93,6 +92,15 @@ class HeatPumpController(SetpointDevice):
     and optionally increases the temperature setpoint.
 
     Typical priority: battery(2) > heat pump(3-4) > EV(5)
+
+    (#1081 Slice B) ``ComfortBandMixin`` gives this class
+    ``comfort_plan_demand()``/``record_comfort_sample()`` for free, the
+    same way ``HotWaterController`` already has it — wiring, not new
+    logic. The band's four fields (``comfort_entity``, ``comfort_target``,
+    ``comfort_offset``, ``comfort_limit``) are set through the existing
+    device-goals surface, not a new control; a heat pump nobody set a
+    goal on keeps the mixin's class defaults and ``comfort_state`` stays
+    ``disengaged`` — byte-for-byte today's behaviour.
     """
 
     def __init__(
@@ -123,6 +131,7 @@ class HeatPumpController(SetpointDevice):
         relay1_off_value: Optional[str] = None,
         relay2_on_value: Optional[str] = None,
         relay2_off_value: Optional[str] = None,
+        cop: float = 3.0,
     ):
         super().__init__(
             hass=hass,
@@ -167,6 +176,10 @@ class HeatPumpController(SetpointDevice):
         self.sg_ready_state_entity = (sg_ready_state_entity or "").strip() or None
         self.temperature_entity_id = temperature_entity_id
         self.force_on_threshold = force_on_threshold
+        # (#1081 Slice A) a flat seasonal-average COP until a real curve
+        # exists (Slice C); never 0/negative — cost_of_heat() would divide
+        # by it.
+        self.cop = float(cop) if cop and cop > 0 else 3.0
         self._hp_status = HeatPumpStatus()
 
         # #594 — vacation mode. Set each cycle by the coordinator. While
@@ -225,6 +238,20 @@ class HeatPumpController(SetpointDevice):
         "how much SG-Ready actually shifted" — which today is unanswerable.
         """
         return f"sg{int(self._hp_status.sg_ready_state)}"
+
+    @property
+    def comfort_state(self) -> str:
+        """(#1081 Slice B, mirrors HotWaterController #594/#1062) vacation
+        suspends comfort pre-heat the same way it already suspends SG-Ready
+        off-peak forcing — no banked block while away."""
+        if self.vacation:
+            return "disengaged"
+        return super().comfort_state
+
+    def _comfort_fallback_reading(self) -> Optional[float]:
+        """No ``comfort_entity`` configured → the pump's own temperature
+        sensor, already in °C (#1118)."""
+        return self.get_current_temperature()
 
     @property
     def needs_offpeak_activation(self) -> bool:
@@ -681,6 +708,7 @@ class HeatPumpController(SetpointDevice):
             "is_solar_boosted": self._hp_status.is_solar_boosted,
             "current_temperature": self.get_current_temperature(),
             "force_on_threshold": self.force_on_threshold,
+            "cop": self.cop,  # #1081 Slice A
             "vacation": self.vacation,  # #594
             # #421 — telemetry surface (mirrors #359/#416/#420 pattern).
             "activation_path": self._last_activation_path,

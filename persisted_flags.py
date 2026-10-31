@@ -66,6 +66,9 @@ PERSISTED_FLAG_DEFAULTS: Final[Dict[str, bool]] = {
     # (#1080) ships off: SEM does not buy from the grid on a negative export
     # value unless this says so.
     "ev_absorb_grid_fill": False,
+    # (#1086 Part A) ships off: Assist can always EXPLAIN a decision; a
+    # WRITE intent ("charge the Audi to 80%") needs this said first.
+    "assist_write_intents_enabled": False,
 }
 
 
