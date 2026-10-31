@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Diagnostics hide the battery sensor and counter ids in the battery-sign block**, like the config section does (#1270).
 - 🐛 **The CO2 figures on three cards show the unit of the sensor (lb, g) instead of always "kg"** (#1242).
 - 🐛 **A device counter that dips and returns to the same value no longer logs a "reset" warning**; it is a debug line (#1235).
 - 🐛 **Observer mode no longer warns "commanded STOP … the stop is not taking"**; SEM sends nothing there, so it is only a debug line now (#1233).
