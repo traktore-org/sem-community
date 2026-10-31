@@ -83,11 +83,15 @@ def _find_grid_pair(hass, cfg: Any) -> Tuple[Optional[str], Optional[str]]:
         return None, None
     try:
         from .coordinator.sensor_reader import SensorReader
-        imp, exp, _confidence = SensorReader(
+        imp, exp, confidence = SensorReader(
             hass, {})._discover_split_grid_power(cfg)
     except Exception:  # noqa: BLE001 — a search never breaks an install
         return None, None
-    return imp, exp
+    # Found means SEM will read it as the grid: a whole pair, trusted at
+    # once. A name guess or one half is still checked later, so setup asks.
+    if imp and exp and confidence in ("declared", "same-device"):
+        return imp, exp
+    return None, None
 
 
 def _percent(hass, entity_id: Optional[str]) -> Optional[float]:
@@ -124,7 +128,7 @@ def build_setup_check(hass, cfg: Any,
         check.grid_from = "dashboard"
     elif not getattr(cfg, "grid_power_list", None):
         # Counters only: the case SEM's reader answers with its pair search.
-        # A pair, or either half of one, is a found meter.
+        # A whole, trusted pair is a found meter.
         imp, exp = _find_grid_pair(hass, cfg)
         if imp or exp:
             check.grid_pair = (imp, exp)

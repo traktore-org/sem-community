@@ -84,6 +84,21 @@ def test_counters_with_no_pair_still_open_the_picker():
     assert check.grid_pair == (None, None)
 
 
+@pytest.mark.parametrize("found", [
+    (IMP, EXP, "any-device"),        # not yet corroborated: the reader waits
+    (IMP, EXP, "declared-elsewhere"),
+    (IMP, None, "same-device"),      # one half is no pair
+    (None, EXP, "same-device"),
+])
+def test_only_a_whole_trusted_pair_closes_the_picker(found):
+    house = _slimmelezer(import_kw=1.2, export_kw=0.0)
+    with patch.object(sr_mod.SensorReader, "_discover_split_grid_power",
+                      return_value=found):
+        check = _check(house)
+    assert check.grid_from != "pair"
+    assert check.grid_pair == (None, None)
+
+
 def test_setup_and_the_reader_pick_the_same_pair():
     """One search, two callers: what setup shows is what SEM reads."""
     house = _slimmelezer(import_kw=0.8, export_kw=0.0)
