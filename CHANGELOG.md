@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **With the Deye platform, only the Deye battery is driven as Deye** (#1273). A second battery in the home gets the generic adapter.
 - 🐛 **A refused stop of a Huawei sale on a power number is retried** (#1276). Before, it counted as sent and the battery kept selling.
 - 🐛 **Two Huawei packs on one device no longer end each other's sale** (#1275). A pack whose sale a sibling's stop ended sends it again.
+- 🐛 **The planned sale goes only to batteries that may sell** (#1277). A battery in self-consumption mode or without export permission took half and sold nothing.
 - 🐛 **Setup finds a grid meter with separate import and export power sensors and no longer asks you to pick one** (#1237).
 - 🐛 **Force discharge goes back to Auto when the battery stops selling above the reserve** (#1165). It needs 15 minutes without sun while the home buys.
 - 🐛 **With two batteries, SEM no longer sends the second battery's commands to the Huawei or GoodWe inverter** (#1183).
