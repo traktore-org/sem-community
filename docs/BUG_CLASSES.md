@@ -6694,3 +6694,12 @@ Refs #1184 #775 #1068 #778.
 **Sweep question:** where a stored number is rounded, does any gate compare it with an unrounded one?
 **Left open:** none found; the other stamped fields (`planned_kwh`, `needed_kwh`) are shown only.
 Refs #1282.
+### 178. A correction written to one period of a set — the day is cut, the month keeps it — GUARDED
+**Symptom:** the daily cap cut the day to its ceiling while the month, year and lifetime kept the kWh it removed (#1243). The day read less than the month it belonged to.
+**Root shape:** the energy rows live in four dictionaries (day, month, year, lifetime) and each writer must move all four. The cap wrote the day alone, on the reasoning (#1218) that no figure reached it twice. Kin of class 169 (two lists that nothing keeps in step).
+**Where it lives:** `coordinator/energy_calculator.py` `calculate_energy`, the caps for battery discharge, battery charge and solar (**fixed**: one helper, `_cap_day`, takes the removed kWh from the other three, floored at 0, once per excess).
+**Closure:** the cap is the one place a day is cut, and it keeps all four periods in line, as the home balance and the counter corrections already did.
+**Guard:** `tests/test_1243_cap_moves_all_periods.py` — for solar, battery charge and battery discharge: after a cut the month, year and lifetime equal the earlier days plus the capped day; 20 further cycles take nothing more; a day under the ceiling is untouched; a longer row never goes below 0. The first two groups fail on the old code.
+**Sweep question:** when a writer changes one period of a row, does it change the other three — and does a reader that sums them agree with the day?
+**Left open:** if the battery size is set too low, the cap cuts a real day. That is how the cap always worked; day, month and year now at least agree.
+Refs #1243 #1218.

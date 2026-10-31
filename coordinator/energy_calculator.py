@@ -1248,7 +1248,7 @@ class EnergyCalculator:
         # Capping after the derivation would let one corrupt BMS counter push a
         # bogus figure into the home row for a cycle before the net caught it.
         # (#1218) A counter's figure never gets here: the corrections refuse
-        # one above the same ceiling, because a cap writes the day alone.
+        # one above the same ceiling, so the cap only sees the integrator.
         battery_capacity = self.config.get("battery_capacity_kwh", 15)
         max_daily_battery = self._daily_ceiling("battery_charge")
         inverter_kwp = self.config.get("system_size_kwp", 10)
@@ -1259,7 +1259,7 @@ class EnergyCalculator:
                 "Battery discharge %.1f kWh exceeds %.0f kWh daily limit (3x %.0f kWh capacity) — capping",
                 energy.daily_battery_discharge, max_daily_battery, battery_capacity,
             )
-            self._daily_accumulators[f"battery_discharge_{today}"] = max_daily_battery
+            self._cap_day("battery_discharge", today, max_daily_battery)
             energy.daily_battery_discharge = max_daily_battery
 
         if energy.daily_battery_charge > max_daily_battery:
@@ -1267,7 +1267,7 @@ class EnergyCalculator:
                 "Battery charge %.1f kWh exceeds %.0f kWh daily limit — capping",
                 energy.daily_battery_charge, max_daily_battery,
             )
-            self._daily_accumulators[f"battery_charge_{today}"] = max_daily_battery
+            self._cap_day("battery_charge", today, max_daily_battery)
             energy.daily_battery_charge = max_daily_battery
 
         if energy.daily_solar > max_daily_solar:
@@ -1275,7 +1275,7 @@ class EnergyCalculator:
                 "Solar %.1f kWh exceeds %.0f kWh daily limit (%d kWp × 16h) — capping",
                 energy.daily_solar, max_daily_solar, inverter_kwp,
             )
-            self._daily_accumulators[f"solar_{today}"] = max_daily_solar
+            self._cap_day("solar", today, max_daily_solar)
             energy.daily_solar = max_daily_solar
 
         # Home consumption — LAST (#628). Home is the residual of every row
@@ -4038,14 +4038,34 @@ class EnergyCalculator:
             # never be dragged below zero by one day's correction.
             accumulators[key] = max(0.0, accumulators.get(key, 0.0) + delta)
 
+    def _cap_day(self, category: str, today: date, ceiling: float) -> None:
+        """(#1243) Cut the day's row to ``ceiling`` and the longer rows with it.
+
+        Day, month, year and lifetime must agree. What the cap removes from
+        the day leaves the other three, floored at 0. Nothing is taken when
+        the day already sits at the ceiling.
+        """
+        day_key = f"{category}_{today}"
+        removed = self._daily_accumulators.get(day_key, 0.0) - ceiling
+        self._daily_accumulators[day_key] = ceiling
+        if removed <= 0:
+            return
+        for accumulators, key in (
+            (self._monthly_accumulators, f"{category}_{self._month_key(today)}"),
+            (self._yearly_accumulators, f"{category}_{today.year}"),
+            (self._lifetime_accumulators, f"lifetime_{category}"),
+        ):
+            accumulators[key] = max(0.0, accumulators.get(key, 0.0) - removed)
+
     def _daily_ceiling(self, category: str) -> float:
         """(#1218) The most one day's row of ``category`` may hold.
 
         One figure for both places that judge it: the cap at the end of
         ``calculate_energy`` and the counter corrections before it. The cap
-        writes the day alone; a correction moves the month, year and lifetime
-        with it. A correction may therefore never adopt what the cap would
-        cut. EV has its own (``_max_daily_ev_kwh``).
+        takes what it cuts from the month, year and lifetime too (#1243). A
+        correction may never adopt what the cap would cut: it would grow the
+        longer rows again each cycle.
+        EV has its own (``_max_daily_ev_kwh``).
         """
         if category in ("battery_charge", "battery_discharge"):
             # 3 full cycles/day is generous limit
