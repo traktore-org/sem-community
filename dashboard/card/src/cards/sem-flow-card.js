@@ -531,7 +531,7 @@ class SEMFlowCard extends SEMLitBase {
 
         const autarkyEntity = this._getEntityId('autarky_rate');
         if (autarkyEntity) {
-            this._animateValue('val-autarky', autarky, 800, v => `\u26A1 ${fmtValue(v, 0)}% self`);
+            this._animateValue('val-autarky', autarky, 800, v => `\u26A1 ${fmtValue(v, 0)}% ${this._t('self_word')}`);
         }
 
         this._setText('val-inverter-status', this._getStateStr('charging_state'));

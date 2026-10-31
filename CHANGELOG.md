@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **"Buffer", "% self" and "% solar" on three cards are now translated** in all 16 languages (#1264).
 - 🐛 **Diagnostics hide the battery sensor and counter ids in the battery-sign block**, like the config section does (#1270).
 - 🐛 **The CO2 figures on three cards show the unit of the sensor (lb, g) instead of always "kg"** (#1242).
 - 🐛 **A device counter that dips and returns to the same value no longer logs a "reset" warning**; it is a debug line (#1235).
