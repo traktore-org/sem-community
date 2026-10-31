@@ -104,6 +104,9 @@ _INTEGRAL_INPUTS = (
     ("battery", "battery_power_all_unavailable",
      ("battery_charge_power", "battery_discharge_power")),
 )
+#: (#1269) the supply fields, and the input each one is read from
+_SUPPLY_INPUT = {"solar_power": "solar", "grid_import_power": "grid",
+                 "battery_discharge_power": "battery"}
 #: (#1177) the flows the battery's books are split by (charge origin, #770;
 #: the delivered share of a discharge, #776)
 _BATTERY_FLOW_FIELDS = ("solar_to_battery", "grid_to_battery",
@@ -885,11 +888,36 @@ class EnergyCalculator:
                 if w != float(getattr(power, f, 0.0) or 0.0)}
         if not held:
             return power, power_flows
+        held = self._cap_held_supply(power, held, held_w)
         readings = copy.copy(power)
         readings.held_w = {}
         for field, watts in held.items():
             setattr(readings, field, watts)
         return readings, FlowCalculator.calculate_power_flows(readings)
+
+    def _cap_held_supply(self, power: PowerReadings, held: Dict[str, float],
+                         held_w: Dict[str, float]) -> Dict[str, float]:
+        """(#1269) A held supply covers only what the live ones leave open.
+
+        The sun drops while the inverter reads dark: the held solar would
+        still cover the house, and the live battery beside it would be paid
+        as a second source. The live reads win; the held supply is cut to
+        the demand they leave, all held supplies by the same share.
+        """
+        held_supply = {f: w for f, w in held.items() if f in _SUPPLY_INPUT}
+        if not held_supply:
+            return held
+        # FLEET-READ: whole-house demand the supplies are sized against
+        demand = (held_w["home_consumption_power"] + held_w["grid_export_power"]
+                  + held_w["battery_charge_power"] + float(power.ev_power or 0.0))
+        live = sum(held_w[f] for f, name in _SUPPLY_INPUT.items()
+                   if name not in self._integral_held)
+        room = max(0.0, demand - live)
+        total = sum(held_supply.values())
+        if total <= room:
+            return held
+        share = room / total
+        return {**held, **{f: w * share for f, w in held_supply.items()}}
 
     def _battery_flows(self, power_flows: "Optional[PowerFlows]"):
         """(#1177 review) The battery's flow shares for the books.
