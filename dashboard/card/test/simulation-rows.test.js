@@ -5,7 +5,7 @@ import {
     TAG_GLYPH, tagGlyphs, isSelectable, PERIOD_PICKS, periodOf, activePeriod, periodDays,
     chipDate, rowDate, money, formatDelta, formatPct, ESTIMATED, needsEst, visibleRows,
     tagTiles, totalLine, initialForm, isChanged, buildParams, canRun, minutesLeft,
-    progressShare, fill, monthsOf, monthPeriod, calibration, BATTERY_MODES, EV_MODES,
+    progressShare, fill, monthsOf, monthPeriod, calibration, periodGaps, BATTERY_MODES, EV_MODES,
     FILTERS, filterRows, totalFor, dayDetail, monthRows, energyRows, PRESETS, applyPreset,
     buildStart,
 } from '../src/util/simulation-rows.js';
@@ -331,11 +331,28 @@ test('the two mode selects: SEM\'s modes, changed when not the install\'s', () =
 
 test('calibration: a run the own settings could not reproduce shows no what-if', () => {
     const c = calibration({ calibrated: false, calibration: { error_pct: 12.3, days: 20, left_out: 3, car_days: 9, car_error_pct: 15.1 }, repriced: true });
-    assert.deepEqual(c, { ok: false, pct: 12.3, days: 20, leftOut: 3, carDays: 9, carPct: 15.1, repriced: true });
+    assert.deepEqual(c, { ok: false, caution: false, pct: 12.3, days: 20, leftOut: 3, carDays: 9, carPct: 15.1, repriced: true });
     assert.equal(calibration({ calibrated: true, calibration: { error_pct: 1.2 } }).ok, true);
     assert.equal(calibration({ calibrated: true, calibration: { error_pct: 1.2 } }).carPct, null);
     assert.equal(calibration({}).ok, true);
     assert.equal(calibration(null).days, null);
+});
+
+test('calibration: 5 to 10 % shows the what-if with a caution', () => {
+    const c = calibration({ calibrated: true, calibration: { error_pct: 5.3, max_pct: 5 } });
+    assert.equal(c.ok, true);
+    assert.equal(c.caution, true);
+    assert.equal(calibration({ calibrated: true, calibration: { error_pct: 4.9, max_pct: 5 } }).caution, false);
+    assert.equal(calibration({ calibrated: false, calibration: { error_pct: 12, max_pct: 5 } }).caution, false);
+});
+
+test('periodGaps: counts the days of a period that cannot be picked', () => {
+    const days = [
+        { date: '2026-10-01', tags: ['gap'] }, { date: '2026-10-02', tags: ['sunny'] },
+        { date: '2026-10-03', tags: ['gap'] }, { date: '2026-09-01', tags: ['gap'] },
+    ];
+    assert.equal(periodGaps(days, { from: '2026-10-01', to: '2026-10-31' }), 2);
+    assert.equal(periodGaps(days, null), 0);
 });
 
 // ── The "most recent days" slider (a phone needs one drag, not 90 taps) ──

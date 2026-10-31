@@ -120,6 +120,13 @@ export function periodDays(days, period) {
     return stored(days).filter(d => d >= period.from && d <= period.to).length;
 }
 
+/** How many stored days inside the period are left out as gaps. */
+export function periodGaps(days, period) {
+    if (!period) return 0;
+    return (days || []).filter(d => !isSelectable(d)
+        && String(d.date) >= period.from && String(d.date) <= period.to).length;
+}
+
 /** '2026-10-13' → '13.10' */
 export function chipDate(iso) {
     const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
@@ -475,10 +482,14 @@ export function fill(text, values) {
 export function calibration(result) {
     const c = result?.calibration;
     const num = (v) => (v === null || v === undefined ? null : Number(v));
-    if (!c || result?.calibrated === undefined) return { ok: true, pct: null, days: null, leftOut: 0, carDays: 0, carPct: null, repriced: false };
+    if (!c || result?.calibrated === undefined) return { ok: true, caution: false, pct: null, days: null, leftOut: 0, carDays: 0, carPct: null, repriced: false };
+    const pct = num(c.error_pct);
+    const max = num(c.max_pct);
     return {
         ok: !!result.calibrated,
-        pct: num(c.error_pct),
+        // shown, but past the level where the numbers stand without a note
+        caution: !!result.calibrated && pct !== null && max !== null && pct > max,
+        pct,
         days: num(c.days),
         leftOut: Number(c.left_out) || 0,
         carDays: Number(c.car_days) || 0,

@@ -20,9 +20,10 @@ never change what is simulated.
 The calibration check (#1083 accuracy). Before a what-if is believed, the
 same days run with the install's OWN settings, in the same walk (one day
 resident still). If that misses the real cost by more than
-``CALIBRATION_MAX_PCT`` of the money moved, the result carries
+``CALIBRATION_REFUSE_PCT`` of the money moved, the result carries
 ``calibrated: false`` and the measured error, and the card shows that this
-period cannot be simulated reliably instead of what-if numbers.
+period cannot be simulated reliably instead of what-if numbers. Between
+``CALIBRATION_MAX_PCT`` and that, the numbers show with the error beside them.
 
 A day the recorder cannot answer for is skipped with a reason; it never
 stops the run. The finished run (or what a stop left of it, flagged) goes
@@ -51,6 +52,7 @@ from ..analytics.simulation.hourly_day import (
     GRID_EXPORT_BATTERY,
     HourlyDay,
 )
+from ..analytics.day_tags import without_restart_gap
 from ..analytics.simulation.summary import summarise
 from ..utils.helpers import BATTERY_SALE_SENSOR_KEY, solar_export
 from .day_tag_store import (
@@ -69,9 +71,13 @@ _LOGGER = logging.getLogger(__name__)
 MAX_DAYS = 365
 #: the days the tab offers
 OFFERED_DAYS = BACKFILL_DAYS
-#: the own settings must give back the real cost within this share of the
-#: money moved (import cost + export revenue), or no what-if is shown
+#: the own settings give back the real cost within this share of the money
+#: moved (import cost + export revenue): the what-if stands without a note
 CALIBRATION_MAX_PCT = 5.0
+#: past this share no what-if is shown; between the two it is shown with the
+#: measured error beside it (#1278: PROD sat at 5.3 % with the hourly
+#: battery model 16 % short on discharge)
+CALIBRATION_REFUSE_PCT = 10.0
 #: (#1216) roles the run reads beside the day-tag roles: the pack's sale
 SALE_ROLES = {GRID_EXPORT_BATTERY: BATTERY_SALE_SENSOR_KEY}
 
@@ -249,9 +255,10 @@ class Calibration(_Tally):
         err = self.error_pct
         car = self.car.error_pct
         return {
-            "calibrated": err is not None and err <= CALIBRATION_MAX_PCT,
+            "calibrated": err is not None and err <= CALIBRATION_REFUSE_PCT,
             "error_pct": None if err is None else round(err, 1),
             "max_pct": CALIBRATION_MAX_PCT,
+            "refuse_pct": CALIBRATION_REFUSE_PCT,
             "days": self.days,
             "left_out": self.left_out,
             "car_days": self.car.days,
@@ -322,7 +329,7 @@ class SimulationJob:
         storage = self.storage
         if storage is None:
             return []
-        recs = [r for r in storage.get_day_tags()
+        recs = [without_restart_gap(r) for r in storage.get_day_tags()
                 if isinstance(r, dict) and r.get("date")]
         recs.sort(key=lambda r: str(r["date"]))
         return recs[-OFFERED_DAYS:]

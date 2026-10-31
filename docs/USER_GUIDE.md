@@ -1949,8 +1949,12 @@ kept. One run at a time.
 - **Indicative** days had a missing hour, price or battery level, or a
   counter that jumped. Read them as a rough guide.
 - Before showing a what-if, SEM replays the same period with your own
-  settings. If that misses your real cost by more than 5 %, the tab says
-  the period cannot be simulated reliably instead.
+  settings. Up to 5 % off, the numbers show as they are. Between 5 % and
+  10 %, they show with a note and the error. Over 10 %, the tab says the
+  period cannot be simulated reliably instead.
+- A restart no longer leaves a day out. The tab says how many days in the
+  period are left out for another reason, such as a dark reading or a
+  stuck counter.
   This check leaves out days where a counter jumped, and says how many
   days it used. Days when a car charged get their own line: how far off
   your settings are on those days.

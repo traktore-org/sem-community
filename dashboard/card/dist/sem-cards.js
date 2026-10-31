@@ -5855,7 +5855,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     <div class="stat"><div class="stat-value">${xi(e.days,this._period)}</div><div class="stat-label">${this._t("sim_in_period")}</div></div>
                     <div class="stat"><div class="stat-value">${e.gaps??"—"}</div><div class="stat-label">${this._t("sim_data_gaps")}</div></div>
                 </div>
-            </div></ha-card>`}_renderPeriod(){const e=this._days?.days||[],t=function(e,t,i=new Date){if(!t)return null;for(const s of gi){const r=bi(e,s,i);if(r&&r.from===t.from&&r.to===t.to)return s}return null}(e,this._period),i=this._period,s=xi(e,i);return W`
+            </div></ha-card>`}_renderPeriod(){const e=this._days?.days||[],t=function(e,t,i=new Date){if(!t)return null;for(const s of gi){const r=bi(e,s,i);if(r&&r.from===t.from&&r.to===t.to)return s}return null}(e,this._period),i=this._period,s=xi(e,i),r=function(e,t){return t?(e||[]).filter(e=>!_i(e)&&String(e.date)>=t.from&&String(e.date)<=t.to).length:0}(e,i);return W`
             <ha-card><div class="wrap">
                 <div class="ct-title"><ha-icon icon="mdi:calendar-range"></ha-icon>${this._t("sim_period")}</div>
                 ${e.length?W`
@@ -5870,6 +5870,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                     </div>
                     ${this._renderRecentSlider(e)}
                     <div class="span">${i?Ui(this._t("sim_period_span"),{from:wi(i.from,this._hass?.language||"en"),to:wi(i.to,this._hass?.language||"en"),n:s}):this._t("sim_pick_period_hint")}</div>
+                    ${r>0?W`<div class="legend">${Ui(this._t("sim_period_gaps"),{n:r})}</div>`:K}
                     <div class="legend">${this._t("sim_period_note")}</div>`:W`
                     <div class="legend">${this._days?this._t("sim_no_days"):this._t("sim_loading")}</div>`}
             </div></ha-card>`}_renderRecentSlider(e){const t=function(e){return mi(e).length}(e);if(t<2)return K;const i=function(e,t){if(!t)return 0;const i=mi(e),s=i.filter(e=>e>=t.from&&e<=t.to);if(!s.length||s[s.length-1]!==i[i.length-1])return null;const r=vi(e,s.length);return r&&r.from===t.from&&r.to===t.to?s.length:null}(e,this._period),s=i??0,r=s?vi(e,s):null,a=r?`${$i(r.from)} – ${$i(r.to)}`:"";return W`
@@ -5990,7 +5991,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
             <div class="ct-title sub"><ha-icon icon="mdi:lightning-bolt"></ha-icon>${this._t("sim_energy")}
                 <span class="right muted">${this._t("sim_actual_word")} → ${this._t("sim_simulated_word")}</span></div>
             ${t.map(e=>W`<div class="dl"><span>${this._t(e.key)}</span>
-                <span class="num">${e.actual} → ${e.simulated}${e.unit?" "+e.unit:""} ${this._est()}</span></div>`)}`:K}_renderResults(){const e=this._result;if(!e)return K;const t=this._hass?.language||"en",i=this._currency(),s=this._filter,{rows:r,more:a}=function(e,t=!1,i=8){const s=[...e||[]].sort((e,t)=>String(t.date).localeCompare(String(e.date)));return t||s.length<=i?{rows:s,more:0}:{rows:s.slice(0,i),more:s.length-i}}(Ei(e.days,s),this._expanded),o=function(e,t,i=null){const s=Number(t?.days)||0,r=[];for(const t of Di){const a=e?.[t]||{},o=Number(a.days)||0;if("cheap"===t&&0===o)continue;const n="sunny"===t||"mixed"===t||"grey"===t;r.push({tag:t,glyph:pi[t],days:o,of:n?null:s,delta:o?Si(a.delta):null,actual:o?Number(a.actual)||0:null,simulated:o?Number(a.simulated)||0:null,on:i===t})}return r}(e.per_tag,e.total,s),n=Fi(function(e,t){return t?e?.per_tag?.[t]||{days:0}:e?.total||{}}(e,s)),l=Fi(e.total),c=e.skipped||[],d=function(e){const t=e?.calibration,i=e=>null==e?null:Number(e);return t&&void 0!==e?.calibrated?{ok:!!e.calibrated,pct:i(t.error_pct),days:i(t.days),leftOut:Number(t.left_out)||0,carDays:Number(t.car_days)||0,carPct:i(t.car_error_pct),repriced:!!e.repriced}:{ok:!0,pct:null,days:null,leftOut:0,carDays:0,carPct:null,repriced:!1}}(e);if(!d.ok)return W`
+                <span class="num">${e.actual} → ${e.simulated}${e.unit?" "+e.unit:""} ${this._est()}</span></div>`)}`:K}_renderResults(){const e=this._result;if(!e)return K;const t=this._hass?.language||"en",i=this._currency(),s=this._filter,{rows:r,more:a}=function(e,t=!1,i=8){const s=[...e||[]].sort((e,t)=>String(t.date).localeCompare(String(e.date)));return t||s.length<=i?{rows:s,more:0}:{rows:s.slice(0,i),more:s.length-i}}(Ei(e.days,s),this._expanded),o=function(e,t,i=null){const s=Number(t?.days)||0,r=[];for(const t of Di){const a=e?.[t]||{},o=Number(a.days)||0;if("cheap"===t&&0===o)continue;const n="sunny"===t||"mixed"===t||"grey"===t;r.push({tag:t,glyph:pi[t],days:o,of:n?null:s,delta:o?Si(a.delta):null,actual:o?Number(a.actual)||0:null,simulated:o?Number(a.simulated)||0:null,on:i===t})}return r}(e.per_tag,e.total,s),n=Fi(function(e,t){return t?e?.per_tag?.[t]||{days:0}:e?.total||{}}(e,s)),l=Fi(e.total),c=e.skipped||[],d=function(e){const t=e?.calibration,i=e=>null==e?null:Number(e);if(!t||void 0===e?.calibrated)return{ok:!0,caution:!1,pct:null,days:null,leftOut:0,carDays:0,carPct:null,repriced:!1};const s=i(t.error_pct),r=i(t.max_pct);return{ok:!!e.calibrated,caution:!!e.calibrated&&null!==s&&null!==r&&s>r,pct:s,days:i(t.days),leftOut:Number(t.left_out)||0,carDays:Number(t.car_days)||0,carPct:i(t.car_error_pct),repriced:!!e.repriced}}(e);if(!d.ok)return W`
             <ha-card><div class="wrap">
                 <div class="ct-title"><ha-icon icon="mdi:chart-box-outline"></ha-icon>${this._t("sim_results")} · ${Ui(this._t("sim_last_run"),{n:l.days})}</div>
                 <div class="err">${Ui(this._t("sim_cant_simulate"),{pct:null===d.pct?"?":d.pct})}</div>
@@ -6046,6 +6047,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
                 <div class="legend">${this._est()} ${this._t("sim_est_legend")}</div>
                 <div class="legend">${this._t("sim_limits")}</div>
             </div></ha-card>`}_renderCalibLines(e){return W`
+            ${e.caution?W`<div class="warn">${Ui(this._t("sim_caution"),{pct:e.pct})}</div>`:K}
             ${null===e.days?K:W`<div class="legend">${Ui(this._t("sim_days_checked"),{n:e.days,m:e.leftOut})}</div>`}
             ${e.carDays>0&&null!==e.carPct?W`<div class="legend">${Ui(this._t("sim_car_error"),{pct:e.carPct,n:e.carDays})}</div>`:K}`}render(){return W`
             <div class="sim">
@@ -6109,6 +6111,7 @@ const e=globalThis,t=e.ShadowRoot&&(void 0===e.ShadyCSS||e.ShadyCSS.nativeShadow
             .legend { font-size: 11px; color: var(--secondary-text-color); margin-top: 8px; }
             .note { font-size: 12px; color: var(--secondary-text-color); margin: 2px 0 6px; }
             .err { font-size: 12px; color: var(--error-color, #db4437); margin-top: 8px; }
+            .warn { font-size: 12px; color: var(--warning-color, #ff9800); margin-top: 8px; }
             .group {
                 margin-top: 8px; padding: 6px 12px; border: 1px solid var(--divider-color);
                 border-radius: 10px; background: rgba(255,255,255,0.025);

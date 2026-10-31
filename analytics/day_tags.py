@@ -33,7 +33,7 @@ Rules (each one plain, each one pinned by a test from a real day):
   day's cheapest slot reached the cheap threshold. Nothing on a flat
   tariff: a flat tariff has no comparison to make (#994).
 * **gap** — any source reading dark for more than ``GAP_DARK_MIN`` minutes
-  in daylight, a restart, or a frozen counter: the lifetime solar counter
+  in daylight, or a frozen counter: the lifetime solar counter
   flat all day while the forecast promised more than ``FROZEN_MIN_KWH``
   (PROD 12.10.2026: the Huawei counter sat at 23 832.86 kWh all day).
 """
@@ -228,15 +228,13 @@ def tag_prices(prices: Optional[Iterable[Optional[float]]],
     return None
 
 
-def tag_gap(*, dark_daylight_min: float = 0.0, restarted: bool = False,
+def tag_gap(*, dark_daylight_min: float = 0.0,
             counter_flat: bool = False,
             forecast_kwh: Optional[float] = None) -> List[str]:
     """Why the day's data cannot be trusted; empty when it can."""
     why = []
     if float(dark_daylight_min or 0.0) > GAP_DARK_MIN:
         why.append(f"a reading dark {int(round(dark_daylight_min))} min in daylight")
-    if restarted:
-        why.append("a restart")
     if counter_flat and (forecast_kwh or 0.0) > FROZEN_MIN_KWH:
         why.append("the solar counter did not move")
     return why
@@ -252,7 +250,6 @@ def tag_day(*, date: str,
             prices: Optional[Iterable[Optional[float]]] = None,
             cheap_threshold: Optional[float] = None,
             dark_daylight_min: float = 0.0,
-            restarted: bool = False,
             counter_flat: bool = False,
             hourly: bool = False,
             envelope_kwh: Optional[float] = None) -> DayTags:
@@ -270,7 +267,7 @@ def tag_day(*, date: str,
     else:
         sky = tag_sky(actual_kwh, forecast_kwh, clear_sky_kwh, var)
     sessions = [float(k) for k in session_kwh if k and float(k) > 0]
-    why = tag_gap(dark_daylight_min=dark_daylight_min, restarted=restarted,
+    why = tag_gap(dark_daylight_min=dark_daylight_min,
                   counter_flat=counter_flat, forecast_kwh=forecast_kwh)
     return DayTags(
         date=str(date),
@@ -285,3 +282,19 @@ def tag_day(*, date: str,
         forecast_kwh=forecast_kwh,
         variability=var,
     )
+
+
+#: the reason a day was once tagged a gap for a restart (#1278)
+_OLD_RESTART_GAP = ["a restart"]
+
+
+def without_restart_gap(record: Mapping) -> dict:
+    """A stored record with the old restart-only gap lifted (#1278). A
+    restart loses no hourly statistics; a day whose data a counter jump
+    damaged is left out by the replay itself. Other gap reasons stay."""
+    rec = dict(record)
+    if rec.get("gap") and list(rec.get("gap_why") or []) == _OLD_RESTART_GAP:
+        rec["gap"] = False
+        rec["gap_why"] = []
+        rec["tags"] = [t for t in (rec.get("tags") or []) if t != "gap"]
+    return rec

@@ -419,7 +419,7 @@ class DayTagger:
             session_kwh=self._sessions(iso), prices=prices,
             cheap_threshold=_float((self.coordinator.config or {}).get(
                 "cheap_price_threshold")),
-            dark_daylight_min=dark, restarted=self.storage.started_on(iso),
+            dark_daylight_min=dark,
             counter_flat=counter_flat,
         ).as_dict()
         tags["rule"] = DAY_TAG_RULE
@@ -586,7 +586,7 @@ class DayTagger:
             prices=prices,
             cheap_threshold=_float((self.coordinator.config or {}).get(
                 "cheap_price_threshold")),
-            dark_daylight_min=dark, restarted=self.storage.started_on(iso),
+            dark_daylight_min=dark,
             counter_flat=solar_kwh < 0.01, hourly=True, envelope_kwh=envelope,
         ).as_dict()
 

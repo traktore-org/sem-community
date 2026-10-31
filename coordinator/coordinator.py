@@ -3844,15 +3844,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         if self._storage is None and self.config_entry:
             self._storage = SEMStorage(self.hass, self.config_entry.entry_id)
             await self._storage.async_load()
-            # (#1083) a restart makes that day's data less trustworthy for
-            # a replay; the day tagger reads this mark
-            from .day_tag_store import day_tags_on
-            if day_tags_on(self):
-                try:
-                    # (#645) the coordinator's one day clock
-                    self._storage.note_start(self._tracker_date.isoformat())
-                except Exception:  # noqa: BLE001 — a tag mark never costs a refresh
-                    _LOGGER.debug("could not note the start for day tags")
             # Restore energy calculator state
             state = self._storage.export_energy_calculator_state()
             self._energy_calculator.restore_state(state)

@@ -801,17 +801,6 @@ class SEMStorage:
         runs.append(record)
         self._daily_data["simulation_runs"] = runs[-SIMULATION_RUNS_MAX:]
 
-    def note_start(self, iso_date: str) -> None:
-        """(#1083) Remember the days SEM started on — a restart makes that
-        day's data less trustworthy for a replay. Last 30 kept."""
-        starts = [d for d in (self._daily_data.get("sem_starts") or [])
-                  if isinstance(d, str) and d != iso_date]
-        starts.append(str(iso_date))
-        self._daily_data["sem_starts"] = sorted(starts)[-30:]
-
-    def started_on(self, iso_date: str) -> bool:
-        return iso_date in (self._daily_data.get("sem_starts") or [])
-
     # Save operations
     async def async_save_energy_delayed(self) -> None:
         """Save energy data with delayed write for performance.

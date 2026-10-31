@@ -80,10 +80,9 @@ def test_a_flat_counter_on_a_dark_forecast_is_no_gap():
     assert not t.gap
 
 
-def test_a_long_dark_reading_or_a_restart_is_a_gap():
+def test_a_long_dark_reading_is_a_gap_a_restart_is_not():
     assert tag_day(date="d", dark_daylight_min=GAP_DARK_MIN + 1).gap
     assert not tag_day(date="d", dark_daylight_min=GAP_DARK_MIN).gap
-    assert tag_day(date="d", restarted=True).gap
 
 
 def test_dark_readings_are_left_out_not_counted_as_zero():

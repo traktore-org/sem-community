@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+## 🐛 Bug Fixes
+
+- Simulation: a restart no longer drops a day, and an own-settings error of 5–10 % shows the what-if with a note instead of refusing (#1278)
+
 # [2.2.0] — 30.10.2026
 
 ## 📦 Stable Release
