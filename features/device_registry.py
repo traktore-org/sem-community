@@ -360,8 +360,11 @@ class UnifiedDeviceRegistry:
             kept = None
         if not isinstance(kept, dict) or "legacy_flags_adopted" not in kept:
             return data, False
+        kept_users = kept.get("control_modes_user") or []
+        if not isinstance(kept_users, list):
+            return data, False
         modes = data.get("control_modes") or {}
-        users = [d for d in kept.get("control_modes_user") or [] if d in modes]
+        users = [d for d in kept_users if isinstance(d, str) and d in modes]
         _LOGGER.info("(#1253) restored the hands-off latch and %d load mode(s) "
                      "an older SEM version dropped", len(users))
         return {**data, "legacy_flags_adopted": bool(kept["legacy_flags_adopted"]),

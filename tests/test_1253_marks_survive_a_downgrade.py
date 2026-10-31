@@ -113,3 +113,13 @@ def test_an_unreadable_copy_changes_nothing():
     reg._copy_store.async_load = AsyncMock(side_effect=OSError("disk"))
     _run(reg._load_storage())
     assert reg._user_control_modes == set()
+
+
+def test_a_malformed_copy_keeps_the_device_mappings():
+    for bad in ({"legacy_flags_adopted": True, "control_modes_user": 5},
+                {"legacy_flags_adopted": True, "control_modes_user": [[DRYER]]}):
+        main = {**OLD_BUILD_FILE, "mappings": {"a": "b"}}
+        reg = _reg(main, bad)
+        _run(reg._load_storage())
+        assert reg._manual_mappings == {"a": "b"}
+        assert reg._user_control_modes == set()
