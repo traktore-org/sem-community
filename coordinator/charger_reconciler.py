@@ -964,15 +964,25 @@ class ChargerReconciler:
         if _stop_intent_held and _drawing:
             self._stop_commanded_while_drawing += 1
             if self._stop_commanded_while_drawing in (3, 12, 60):
-                _LOGGER.warning(
-                    "reconcile(%s): commanded STOP %d× but charger still drawing "
-                    "%.0f W (status/power says charging) — the stop is not taking. "
-                    "Check the charger's stop control (enable switch %s, status %s).",
-                    self.charger_id, self._stop_commanded_while_drawing,
-                    float(getattr(power, "power_w", 0.0) or 0.0),
-                    getattr(getattr(adapter, "_device", None), "start_stop_entity", None),
-                    getattr(getattr(adapter, "_device", None), "charging_status_entity", None),
-                )
+                _dev = getattr(adapter, "_device", None)
+                if getattr(_dev, "observer_mode", False) is True:
+                    # observer mode sends nothing: the box defies no stop
+                    _LOGGER.debug(
+                        "reconcile(%s): would have commanded STOP %d× while the "
+                        "charger draws %.0f W (observer mode, nothing sent)",
+                        self.charger_id, self._stop_commanded_while_drawing,
+                        float(getattr(power, "power_w", 0.0) or 0.0),
+                    )
+                else:
+                    _LOGGER.warning(
+                        "reconcile(%s): commanded STOP %d× but charger still drawing "
+                        "%.0f W (status/power says charging) — the stop is not taking. "
+                        "Check the charger's stop control (enable switch %s, status %s).",
+                        self.charger_id, self._stop_commanded_while_drawing,
+                        float(getattr(power, "power_w", 0.0) or 0.0),
+                        getattr(_dev, "start_stop_entity", None),
+                        getattr(_dev, "charging_status_entity", None),
+                    )
         elif not _drawing:
             self._stop_commanded_while_drawing = 0
             # #627 — the contactor is open again (user unplugged, car
