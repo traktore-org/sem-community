@@ -259,6 +259,13 @@ def _carry_hidden_wiring(discovered: dict, submitted: dict, target: dict) -> Non
             target[k] = discovered[k]
 
 
+#: the charger fields the Reconfigure page offers
+_RECONFIGURE_CHARGER_KEYS = (
+    "ev_connected_sensor", "ev_charging_sensor", "ev_charging_power_sensor",
+    "ev_charger_service", "ev_charger_service_entity_id", "ev_total_energy_sensor",
+)
+
+
 def _stale_service_wiring(before: dict, submitted: dict) -> tuple:
     """The field name, service data and box name of a service the user
     CHANGED: they belong to the service it replaced."""
@@ -1438,6 +1445,20 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         has_charger = has_managed_charger(current_config)
         list_only = bool(current_config.get("ev_chargers")) and not any(
             current_config.get(k) for k in EV_REQUIRED_SENSORS)
+        # (#1247) SEM reads the first charger's own copy before the flat keys
+        # (``__init__._cfg``), so the page shows and saves that copy too.
+        from .charger_refs import first_card, flat_wiring_is_of, registry_device_of
+        from .hardware_detection import CHARGER_WIRING_KEYS
+        cards = current_config.get("ev_chargers") or []
+        card0 = first_card(cards) or {}
+        flat_is_first = not card0 or flat_wiring_is_of(
+            card0, current_config, registry_device_of(self.hass))
+
+        def shown(key: str) -> Any:
+            v = card0.get(key)
+            if v is None and (flat_is_first or key not in CHARGER_WIRING_KEYS):
+                v = current_config.get(key)
+            return v
 
         if user_input is not None:
             # Validate EV charger entities if provided
@@ -1476,14 +1497,36 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 updates: dict[str, Any] = {}
                 _merge_form_input(self, updates, user_input)
                 # a field that was never set is not written as None
+                # (#1247) what the user changed here goes into the first
+                # charger's own copy too; a service they swapped takes no
+                # field names from the one it replaced (#1249)
+                dropped = _stale_service_wiring(
+                    {"ev_charger_service": shown("ev_charger_service")}, user_input)
+                for k in dropped:
+                    updates[k] = None
+                new_cards = None
+                if card0 and not list_only:
+                    new_cards = [dict(c) if isinstance(c, dict) else c for c in cards]
+                    first = new_cards[cards.index(card0)]
+                    for k in _RECONFIGURE_CHARGER_KEYS:
+                        if k in updates and updates[k] != shown(k):
+                            first[k] = updates[k]
+                    for k in dropped:
+                        first.pop(k, None)
                 updates = {k: v for k, v in updates.items()
                            if v is not None or current_config.get(k) is not None}
                 options = dict(reconfigure_entry.options or {})
+                options_out = {**options, **{k: v for k, v in updates.items()
+                                             if k in options}}
+                if new_cards is not None:
+                    if "ev_chargers" in options:
+                        options_out["ev_chargers"] = new_cards
+                    else:
+                        updates["ev_chargers"] = new_cards
                 return self.async_update_reload_and_abort(
                     reconfigure_entry,
                     data_updates=updates,
-                    options={**options, **{k: v for k, v in updates.items()
-                                           if k in options}},
+                    options=options_out,
                 )
 
         # Get available notification services (notify.* and rest_command.*)
@@ -1512,19 +1555,19 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # entity id, so the page could not be saved without both.
             _charger_field(vol.Required(
                 "ev_connected_sensor",
-                default=current_config.get("ev_connected_sensor") or "",
+                default=shown("ev_connected_sensor") or "",
             ), has_charger, current_config): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
             ),
             _charger_field(vol.Required(
                 "ev_charging_sensor",
-                default=current_config.get("ev_charging_sensor") or "",
+                default=shown("ev_charging_sensor") or "",
             ), has_charger, current_config): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
             ),
             _charger_field(vol.Required(
                 "ev_charging_power_sensor",
-                default=current_config.get("ev_charging_power_sensor") or "",
+                default=shown("ev_charging_power_sensor") or "",
             ), has_charger, current_config): _power_sensor_selector(getattr(self, "hass", None)),
         }
         charger_note = ("\n\n" + _flow_text(
@@ -1541,19 +1584,19 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # emptied field with its default, so it could not be erased
                 vol.Optional(
                     "ev_charger_service",
-                    description={"suggested_value": current_config.get("ev_charger_service") or None},
+                    description={"suggested_value": shown("ev_charger_service") or None},
                 ): selector.TextSelector(
                     selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
                 ),
                 vol.Optional(
                     "ev_charger_service_entity_id",
-                    description={"suggested_value": current_config.get("ev_charger_service_entity_id") or None},
+                    description={"suggested_value": shown("ev_charger_service_entity_id") or None},
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=["binary_sensor", "sensor", "switch"])
                 ),
                 vol.Optional(
                     "ev_total_energy_sensor",
-                    description={"suggested_value": current_config.get("ev_total_energy_sensor") or None},
+                    description={"suggested_value": shown("ev_total_energy_sensor") or None},
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor", device_class="energy")
                 ),

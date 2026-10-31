@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **A charger sensor or service changed on the Reconfigure page now changes what SEM runs** (#1247). The page shows the charger's own saved values.
 - 🐛 **A charger moved to helper sensors no longer keeps a "device is gone" Repair while its sensors still exist** (#1248).
 - 🐛 **A new service on the first charger's Configure page drops the old service's field name, data and box name** (#1249).
 - 🐛 **Reconfigure no longer shows three empty required EV fields for a charger set up in the charger list** (#1258). It says to use Configure.
