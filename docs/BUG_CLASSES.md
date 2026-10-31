@@ -334,7 +334,12 @@ channel; energy/reactive sensors excluded; a power-only 400 W load reads ON end-
 payload; and a brand-named *derived* sensor does NOT make a controlless load controllable). **Sweep
 question:** for every power/energy figure a surface derives from an Energy-Dashboard entity, is the
 companion power sensor *derived* when the ED has no `stat_rate`, or assumed present — and does that
-derivation leak into a *control* decision? Refs #250 #274 #597 #600 #744 #1172 #1189 #1222 #1225.
+derivation leak into a *control* decision? Refs #250 #274 #597 #600 #744 #1172 #1189 #1222 #1225 #1237.
+**Instance (#1237) — setup and runtime disagree on what a meter is:** setup read only the dashboard's power
+sensors, so a counters-only grid with a found import/export pair opened the "no grid sensor" picker, and a pick
+there became the only grid sensor (export read 0 W). **Fixed:** `setup_check._find_grid_pair` runs the reader's own
+`_discover_split_grid_power`; a found pair (or half) is shown, asks nothing and pins nothing. **Guard:**
+`tests/test_1237_setup_finds_the_pair.py`. **Left open:** the no-dashboard `sources` step still asks for one grid sensor.
 
 ### 11. Corrected value overwrites a raw display field (paired-figure basis mismatch) — GUARDED
 **Symptom:** two figures shown side by side on a card disagree in a way that reads as a
