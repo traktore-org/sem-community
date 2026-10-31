@@ -206,6 +206,12 @@ export class SEMLitBase extends LitElement {
         return (e && e.attributes && e.attributes.unit_of_measurement) || '';
     }
 
+    // #1242 — the unit a CO2 sensor shows in (a user may pick lb or g); kg
+    // when the sensor has none.
+    _kgUnit(suffix) {
+        return this._unitOf(`${this._prefix}${suffix}`) || 'kg';
+    }
+
     // Resolve the primary charger's per-charger entity id for a setting suffix,
     // falling back to the legacy global id (#255 — global EV setting entities were
     // removed; per-charger is canonical). e.g. _pcEntity('number', 'daily_ev_target',
