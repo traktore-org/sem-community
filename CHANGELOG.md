@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **A device counter that dips and returns to the same value no longer logs a "reset" warning**; it is a debug line (#1235).
 - 🐛 **Observer mode no longer warns "commanded STOP … the stop is not taking"**; SEM sends nothing there, so it is only a debug line now (#1233).
 - 🐛 **Two grid meters: SEM stops searching every cycle for a dark sensor, and asks again when the device lookup was not ready** (#1286).
 - 🐛 **Setup finds a grid meter with separate import and export power sensors and no longer asks you to pick one** (#1237).
