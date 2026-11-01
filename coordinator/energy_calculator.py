@@ -520,9 +520,9 @@ class EnergyCalculator:
         #: (#1230) this run's watched flows (``METER_FLOW_KEYS``), added in
         #: ``_import_cost``
         self._meter_flow: Dict[str, float] = dict.fromkeys(METER_FLOW_KEYS, 0.0)
-        #: (#1230) device id → [seconds it was staged on its own meter,
-        #: the house's grid kWh at its own price], summed this run (its
-        #: ``since_dev_t`` and ``since_dev`` are read against them)
+        #: (#1230) device id → [seconds it was staged on its own meter, the
+        #: house's grid kWh then, those kWh at its own price], summed this
+        #: run (its read's ``dev_t`` and ``since_dev`` are read against them)
         self._meter_dev_flow: Dict[str, List[float]] = {}
         #: (#812) this cycle's own-tariff devices, staged by the coordinator
         self._device_tariff_cycle: list = []
@@ -4799,17 +4799,26 @@ class EnergyCalculator:
         for e in entries:
             used = 0.0
             if e.meter:   # its time on its meter, its price over the flows
-                dev = self._meter_dev_flow.setdefault(e.device_id, [0.0, 0.0])
+                dev = self._meter_dev_flow.setdefault(e.device_id, [0.0] * 3)
                 own = house_rate if e.price is None else float(e.price)
                 if grid_kwh is not None and math.isfinite(own):
                     dev[0] += interval_hours * 3600.0
-                    dev[1] += grid_kwh * own
+                    dev[1] += grid_kwh
+                    dev[2] += grid_kwh * own
             if e.meter and e.baseline is not None:
                 last = self.device_meter_last.get(e.device_id)
                 step = max(0.0, float(e.meter_kwh or 0.0))
                 start = self._watched_start(last, e.baseline, dev)
                 if step > 0.0 and start is not None:
-                    spread.append((e, start, dev[1] - float(last["since_dev"])))
+                    spread.append((e, start, dev[1] - float(last["since_dev_gh"]),
+                                   dev[2] - float(last["since_dev"])))
+                elif step > 0.0 and self._off_own_meter(last, dev):
+                    # SEM watched while it was not on its own meter: it was
+                    # booked by its draw then, or was the house's
+                    _LOGGER.info(
+                        "Own meter of %s: %.3f kWh over time it was off its "
+                        "own meter or tariff — not priced (#1230)",
+                        e.device_id, step)
                 elif not self._hold_meter_gap(e):
                     used = step
                 self._keep_meter_read(e, last, step, start, dev)
@@ -4860,8 +4869,8 @@ class EnergyCalculator:
         rows = last.get("since_rows") if isinstance(last, dict) else None
         if (not isinstance(rows, dict) or rows.get("run") != self._run_token
                 or not all(_finite(rows.get(k)) for k in METER_FLOW_KEYS)
-                or not (_finite(last.get("since_dev"))
-                        and _finite(last.get("since_dev_t")))):
+                or not all(_finite(last.get(k)) for k in (
+                    "since_dev_t", "since_dev_gh", "since_dev"))):
             return None
         try:
             span_s = (datetime.fromisoformat(str(baseline["at"]))
@@ -4874,6 +4883,19 @@ class EnergyCalculator:
             return None
         return rows
 
+    def _off_own_meter(self, last: Any, dev: List[float]) -> bool:
+        """(#1230) True when SEM integrated more than
+        ``MAX_INTEGRATION_GAP_SECONDS`` since the device's last read while
+        the device was not staged on its own meter (its meter or tariff was
+        off). Time SEM did not see is the #1228 hold's, not this."""
+        rows = last.get("rows") if isinstance(last, dict) else None
+        if (not isinstance(rows, dict) or rows.get("run") != self._run_token
+                or not _finite(rows.get("seen")) or not _finite(last.get("dev_t"))):
+            return False
+        seen = self._seen_s - float(rows["seen"])
+        on = dev[0] - float(last["dev_t"])
+        return seen - on > MAX_INTEGRATION_GAP_SECONDS
+
     def _keep_meter_read(self, entry, last: Any, step: float,
                          start: Optional[Dict[str, Any]], dev: List[float]
                          ) -> None:
@@ -4881,20 +4903,22 @@ class EnergyCalculator:
         cycle's end). (#1230) ``moved``: when the value last moved, what
         ``meter_step`` judges a step by. ``since``: the read a step is spread
         from — where it moved, while this run still watches from there; else
-        this read. ``since_dev_t``, ``since_dev``: the device's
-        ``_meter_dev_flow`` at it."""
+        this read. ``dev_t``: the device's time on its meter at this read;
+        ``since_dev_t``, ``since_dev_gh``, ``since_dev``: its
+        ``_meter_dev_flow`` at the read a step is spread from."""
         read = dict(entry.baseline)
         same = (step <= 0.0 and isinstance(last, dict)
                 and last.get("entity") == read.get("entity")
                 and last.get("value") == read.get("value"))
         read["moved"] = (last.get("moved") or last.get("at")) if same else read.get("at")
+        read["dev_t"] = dev[0]
         if same and start is not None:
             read["since"], read["since_rows"] = last["since"], start
-            read["since_dev_t"] = last["since_dev_t"]
-            read["since_dev"] = last["since_dev"]
+            for key in ("since_dev_t", "since_dev_gh", "since_dev"):
+                read[key] = last[key]
         else:
             read["since"], read["since_rows"] = read.get("at"), None
-            read["since_dev_t"], read["since_dev"] = dev
+            read["since_dev_t"], read["since_dev_gh"], read["since_dev"] = dev
         self.device_meter_last[entry.device_id] = read
         self._meter_written.add(entry.device_id)
 
@@ -4912,14 +4936,16 @@ class EnergyCalculator:
         """
         flow = self._meter_flow
         plans = []
-        for e, start, d_dev in steps:
+        for e, start, d_own, d_own_cost in steps:
             d_gh = flow["flow_gh"] - float(start["flow_gh"])
             d_home = flow["flow_home"] - float(start["flow_home"])
             if d_gh <= 0.0 or d_home <= 0.0:
                 continue
             house = (flow["flow_cost"] - float(start["flow_cost"])) / d_gh
             want = max(0.0, float(e.meter_kwh)) * min(1.0, d_gh / d_home)
-            plans.append((e, want, house, d_dev / d_gh))
+            # its own price over the cycles it was staged in
+            own = d_own_cost / d_own if d_own > 0.0 else house
+            plans.append((e, want, house, own))
         total = sum(p[1] for p in plans)
         taken, _ = self._device_taken(today)
         free = self._daily_accumulators.get(f"grid_import_{today}", 0.0) - taken

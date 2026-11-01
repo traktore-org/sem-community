@@ -401,7 +401,7 @@ class DeviceTariffs:
                         str(last.get("moved")))).total_seconds() / 3600.0
                 except (TypeError, ValueError):
                     moved_h = read_h   # no time of its own (an older store)
-                elapsed_h = max(0.0, min(moved_h, read_h + METER_STAND_MAX_H))
+                elapsed_h = max(0.0, read_h, min(moved_h, read_h + METER_STAND_MAX_H))
                 step = value - float(last.get("value"))
             except (TypeError, ValueError):
                 elapsed_h, step = 0.0, -1.0

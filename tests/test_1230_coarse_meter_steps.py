@@ -17,6 +17,7 @@ rate the house booked them, at most the day's import no device took.
 """
 from __future__ import annotations
 
+import logging
 import math
 from datetime import datetime, timedelta
 from types import SimpleNamespace
@@ -294,25 +295,27 @@ class TestADeviceOffItsMeterForAWhile:
     """Its time off its own meter is not its own meter's time: the step
     after it is the #1228 one, never spread on flows it was not in."""
 
-    def test_its_kwh_are_not_counted_twice(self):
+    def test_its_kwh_are_not_counted_twice(self, caplog):
         # off its meter it is booked by its draw; the step after spans that
-        # half hour too (3.0 kWh if spread)
+        # half hour too (3.0 kWh if booked again, in a 4 kW house)
         house = Meter(tick=0.1, counters=False)
-        house.cycle()
-        house.run(900)
+        house.cycle(house_w=4000.0)
+        house.run(900, house_w=4000.0)
         pump = house.pumps[0]
         pump.tariff_meter = ""
         pump.get_current_consumption.return_value = 2000.0
-        house.run(1800)
+        house.run(1800, house_w=4000.0)
         pump.tariff_meter = METER
         pump.get_current_consumption.return_value = 0.0
-        house.run(900)
-        assert house.pump_kwh() < 2.2
-        assert house.pump_kwh() <= house.grid_kwh()
+        with caplog.at_level(logging.INFO):
+            house.run(900, house_w=4000.0)
+        assert "off its own meter or tariff" in caplog.text
+        assert house.pump_kwh() == pytest.approx(2.0, abs=0.01)
+        assert house.calc.device_meter_gaps == {}
 
-    def test_its_time_off_its_tariff_is_not_priced_at_nothing(self):
-        # with no tariff for half an hour it is not staged; at the price of
-        # the flows it was in, that half hour cost 0.007
+    def test_its_time_off_its_tariff_stays_the_houses(self):
+        # with no tariff for half an hour it is not staged: that half hour
+        # is the house's at the house rate, not moved to the pump later
         house = Meter(tick=0.1, counters=False)
         house.cycle()
         house.run(900)
@@ -321,8 +324,38 @@ class TestADeviceOffItsMeterForAWhile:
         house.run(1800)
         pump.tariff_rate = PUMP
         house.run(900)
-        assert house.pump_kwh() > 1.9
-        assert house.pump_cost() == pytest.approx(house.pump_kwh() * PUMP, abs=0.002)
+        assert house.pump_kwh() == pytest.approx(1.0, abs=0.002)
+        assert house.pump_cost() == pytest.approx(house.pump_kwh() * PUMP)
+        assert house.import_cost() == pytest.approx(
+            (house.grid_kwh() - house.pump_kwh()) * HOUSE
+            + house.pump_kwh() * PUMP, abs=1e-9)
+
+    def test_a_minute_off_its_meter_keeps_its_price(self):
+        # one minute of a five-minute step off its meter: the step is still
+        # spread, at its own 0.20 (0.16 if that minute counted as free)
+        house = Meter(tick=0.001, every=300, counters=False)
+        house.cycle()
+        house.run(120)
+        pump = house.pumps[0]
+        pump.tariff_meter = ""
+        house.run(60)
+        pump.tariff_meter = METER
+        house.run(3420)
+        assert house.pump_kwh() == pytest.approx(2.0, abs=0.002)
+        assert house.pump_cost() == pytest.approx(house.pump_kwh() * PUMP, abs=1e-9)
+
+    def test_a_skipped_cycle_is_not_time_off_its_meter(self, caplog):
+        # SEM did not see the skip: the step over it is the #1228 one (with
+        # no grid counter it is dropped and said so, for that reason)
+        house = Meter(tick=0.01, counters=False)
+        house.cycle()
+        house.run(600)
+        house.down(130, import_kwh=0.0, pump_kwh=2.0 * 130 / 3600)
+        house.cycle()
+        with caplog.at_level(logging.INFO):
+            house.run(10)
+        assert "no grid import counter" in caplog.text
+        assert "off its own meter" not in caplog.text
 
 
 @pytest.mark.unit
