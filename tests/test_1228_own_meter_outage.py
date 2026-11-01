@@ -271,6 +271,7 @@ class TestTheRowsMustCoverTheSpan:
 
     def test_a_meter_dark_while_sem_runs_is_booked_from_the_rows(self):
         # no counters: the integrator watched every cycle of the span
+        # (#1230: spread over this run's flows since the meter last moved)
         house = House(counters=False)
         house.cycle()
         house.run(60)

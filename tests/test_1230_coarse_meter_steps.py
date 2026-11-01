@@ -189,6 +189,24 @@ class TestThePrice:
         assert house.import_cost() - house.pump_cost() == pytest.approx(
             (house.grid_kwh() - house.pump_kwh()) * HOUSE, abs=1e-9)
 
+    def test_a_dark_meters_step_is_priced_over_its_dark_time(self):
+        # the meter is dark for 20 min while the pump's rate goes 0.10 →
+        # 0.40 halfway: its 0.67 kWh cost 0.25 a kWh, not its day's 0.10
+        def own(now):
+            return 0.10 if now <= T0 + timedelta(minutes=20) else 0.40
+        house = Meter(tick=0.001, own=own, counters=False)
+        house.cycle()
+        house.run(600)
+        house.dark = {METER}
+        house.run(1200)
+        house.dark = set()
+        house.run(10)
+        dark = 2.0 * 1200 / 3600
+        assert house.pump_kwh() == pytest.approx(2.0 * 1810 / 3600, abs=0.002)
+        assert house.pump_cost() == pytest.approx(
+            (2.0 * 600 / 3600) * 0.10 + dark * (0.10 + 0.40) / 2
+            + 2.0 * 10 / 3600 * 0.40, abs=0.002)
+
     def test_an_unreadable_price_moves_no_money(self):
         house = Meter(tick=0.1)
         for pump in house.pumps:
@@ -272,6 +290,42 @@ class TestTimeSemDidNotSee:
 
 
 @pytest.mark.unit
+class TestADeviceOffItsMeterForAWhile:
+    """Its time off its own meter is not its own meter's time: the step
+    after it is the #1228 one, never spread on flows it was not in."""
+
+    def test_its_kwh_are_not_counted_twice(self):
+        # off its meter it is booked by its draw; the step after spans that
+        # half hour too (3.0 kWh if spread)
+        house = Meter(tick=0.1, counters=False)
+        house.cycle()
+        house.run(900)
+        pump = house.pumps[0]
+        pump.tariff_meter = ""
+        pump.get_current_consumption.return_value = 2000.0
+        house.run(1800)
+        pump.tariff_meter = METER
+        pump.get_current_consumption.return_value = 0.0
+        house.run(900)
+        assert house.pump_kwh() < 2.2
+        assert house.pump_kwh() <= house.grid_kwh()
+
+    def test_its_time_off_its_tariff_is_not_priced_at_nothing(self):
+        # with no tariff for half an hour it is not staged; at the price of
+        # the flows it was in, that half hour cost 0.007
+        house = Meter(tick=0.1, counters=False)
+        house.cycle()
+        house.run(900)
+        pump = house.pumps[0]
+        pump.tariff_rate = 0.0
+        house.run(1800)
+        pump.tariff_rate = PUMP
+        house.run(900)
+        assert house.pump_kwh() > 1.9
+        assert house.pump_cost() == pytest.approx(house.pump_kwh() * PUMP, abs=0.002)
+
+
+@pytest.mark.unit
 class TestTheBaseline:
     def test_a_standing_value_keeps_the_read_it_moved_at(self):
         house = Meter(tick=0.1, counters=False)
@@ -302,16 +356,64 @@ class TestTheBaseline:
         old = {k: v for k, v in read.items() if k != "moved"}
         assert step(100.17, old) is None
 
+    def test_a_damaged_moved_time_loses_no_tick(self):
+        house = Meter(tick=0.1, counters=False)
+        house.cycle()
+        house.run(60)
+        house.calc.device_meter_last["heat_pump"]["moved"] = "garbage"
+        house.run(3540)
+        assert house.calc.device_meter_last["heat_pump"]["moved"] != "garbage"
+        assert house.pump_kwh() == pytest.approx(2.0, abs=0.002)
+
+    def test_a_jump_after_two_days_standing_is_a_swapped_meter(self):
+        pump = _load("heat_pump", rate=0.20, meter=METER)
+        pump.rated_power = 3000.0
+        at = datetime(2026, 10, 12, 2, 5, 0)
+        read = {"entity": METER, "date": "2026-10-12", "value": 100.0,
+                "at": (at - timedelta(seconds=10)).isoformat(),
+                "moved": (at - timedelta(days=2)).isoformat()}
+
+        def step(value, stored):
+            return DeviceTariffs(_hass_with({METER: _kwh(value)})).meter_step(
+                pump, {"heat_pump": stored}, at)[0]
+        # read 10 s ago: judged by a day at most (72 kWh, not 144)
+        assert step(170.0, read) == pytest.approx(70.0)
+        assert step(140.0 + 72.2, read) is None
+        # not read for three days (SEM down): all of it may be use
+        down = dict(read, at=(at - timedelta(days=3)).isoformat(),
+                    moved=(at - timedelta(days=4)).isoformat())
+        assert step(300.0, down) == pytest.approx(200.0)
+
     def test_the_read_survives_a_restart(self):
         house = Meter(tick=0.1)
         house.cycle()
         house.run(600)
         read = house.calc.device_meter_last["heat_pump"]
-        assert {"moved", "since", "since_rows", "since_dev"} <= set(read)
+        assert {"moved", "since", "since_rows", "since_dev", "since_dev_t"} <= set(read)
         fresh = EnergyCalculator({}, MagicMock())
         fresh.restore_state(house.calc.get_state())
         assert fresh.device_meter_last["heat_pump"]["since"] == read["since"]
         assert fresh.device_meter_last["heat_pump"]["since_rows"] == read["since_rows"]
+
+
+@pytest.mark.unit
+class TestMidnight:
+    def test_a_step_across_midnight_is_booked_in_the_new_day(self):
+        # the day rows start again at midnight: the step is the new day's,
+        # at most what the new day has imported, never more
+        house = Meter(tick=0.1, counters=False)
+        house.now = datetime(2026, 10, 12, 23, 30, 0)
+        house.cycle()
+        house.run(1790)
+        rows = house.calc._daily_accumulators
+        before = rows.get(f"device_tariff_kwh:heat_pump_{house.now.date()}", 0.0)
+        house.run(1810)
+        day2 = house.now.date()
+        after = rows.get(f"device_tariff_kwh:heat_pump_{day2}", 0.0)
+        assert day2 == datetime(2026, 10, 13).date()
+        assert after <= rows.get(f"grid_import_{day2}", 0.0) + 1e-9
+        assert before == pytest.approx(1.0, abs=0.11)
+        assert before + after == pytest.approx(2.0, abs=0.11)
 
 
 # ── the oracle: every meter a home may have ─────────────────────────────
@@ -324,13 +426,12 @@ class TestTheBaseline:
 def test_every_meter_books_what_the_pump_used(tick, every, pump_w):
     """A pump on all night: whatever the meter's tick and how often HA shows
     it, the grid kWh are what the pump used, less what the meter has not
-    shown yet (at most a tick and one wait), and once more a tick the first
-    read may refuse (a tick over 0.1 kWh in one cycle)."""
+    shown yet (at most a tick and one wait)."""
     house = Meter(tick=tick, every=every, counters=False)
     house.cycle(house_w=pump_w + 300.0)
     house.run(3600, house_w=pump_w + 300.0, pump_w=pump_w)
     used = pump_w / 1000.0
-    unshown = tick + pump_w * every / 3.6e6 + (tick if tick > 0.1 else 0.0)
+    unshown = tick + pump_w * every / 3.6e6
     assert used - unshown - 1e-6 <= house.pump_kwh() <= used + 1e-6
     assert house.import_cost() == pytest.approx(
         (house.grid_kwh() - house.pump_kwh()) * HOUSE
