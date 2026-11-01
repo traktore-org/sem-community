@@ -72,7 +72,8 @@ from ..const import (
 from ..utils.time_manager import TimeManager
 from ..ha_energy_reader import (
     read_energy_dashboard_config_outcome, EnergyDashboardConfig, battery_units,
-    battery_units_before_derive, energy_counters, yield_found_units_to_picks,
+    battery_units_before_derive, energy_counters, unit_energy_counters,
+    yield_found_units_to_picks,
 )
 from .install_modules import Module, Presence, module_reload_due, module_verdict, presence_of
 from .battery_controls import (  # (#1071, #1195)
@@ -143,6 +144,7 @@ from .ev_soc_need import estimate_stop_step, soc_remaining_need
 from ..utils.log_gate import log_on_change
 from ..utils.helpers import battery_export_part, solar_export, solar_share_pct
 from ..analytics.energy_assistant import EnergyAssistant
+from .units import finite_float
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -250,7 +252,13 @@ def plan_decision_core(plan) -> tuple:
     prose summaries, allocation reasons) re-derive from live numbers on
     every build and must not hold a restamp hostage. Anything unreadable
     degrades to a non-equal constant — a broken shape restamps, never
-    silences."""
+    silences.
+
+    (#1184) Every field a plan gate acts on is the decision: the sale
+    blocks and their kWh (the rate a gate sells at) are compared too. A
+    sale left out moved unseen on a kept stamp. The forecast sale's times
+    are compared to the minute and its kWh to 0.1: its start is a float
+    anchored to the night, and a few seconds are the same sale."""
     if not isinstance(plan, dict):
         return ("<no-plan>",)
     try:
@@ -276,12 +284,20 @@ def plan_decision_core(plan) -> tuple:
                     for b in (arb.get("charge_blocks") or [])
                     if isinstance(b, dict))),
                 tuple(sorted(
-                    (str(b.get("start")), str(b.get("end")))
+                    (str(b.get("start")), str(b.get("end")),
+                     round(float(b.get("kwh") or 0.0), 1))
                     for b in (arb.get("discharge_blocks") or [])
                     if isinstance(b, dict))),
             )
         else:
             arb_core = None
+        fsell = plan.get("forecast_sell")
+        fsell_core = tuple(sorted(
+            (str(b.get("start"))[:16], str(b.get("end"))[:16],
+             round(float(b.get("kwh") or 0.0), 1))
+            for b in ((fsell.get("blocks") or [])
+                      if isinstance(fsell, dict) else [])
+            if isinstance(b, dict)))
         return (
             blocks, demands, whys,
             str(plan.get("takeover")),
@@ -289,6 +305,7 @@ def plan_decision_core(plan) -> tuple:
             round(float(plan.get("total_cost") or 0.0), 2),
             str(plan.get("battery_fleet_partial")),
             arb_core,
+            fsell_core,
         )
     except Exception:  # noqa: BLE001 — an unreadable plan restamps, safely
         return ("<unreadable>", id(plan))
@@ -322,7 +339,10 @@ def plan_day_remaining_kwh(owner) -> float:
 # (#1068) The keys ``plan_decision_core`` deliberately ignores: they are the
 # sky, not the decision. An identical repack keeps its stamp (#775) but must
 # not keep a stale sky — PROD 08.10 showed "0 W grid 10–17" all afternoon.
-TRAJECTORY_KEYS = ("slots", "self_consumption", "summary", "forecast_sell")
+# (#1184) Never a key a plan gate acts on: ``forecast_sell`` sat here, so a
+# kept stamp sold at the new build's times. ``slots`` stays — a gate reads
+# only its span, and every build of one period ends it at the night end.
+TRAJECTORY_KEYS = ("slots", "self_consumption", "summary")
 
 
 def keep_decision_take_trajectory(prev: dict, fresh: dict, now_iso: str) -> dict:
@@ -458,6 +478,11 @@ def battery_unseen(coordinator) -> bool:
     reader = getattr(coordinator, "_sensor_reader", None)
     if getattr(reader, "_last_valid_soc", None) is not None:
         return False
+    # (#1284) A first level that waits for its repeat came from a battery's
+    # SOC sensor too: the wait changes when the level counts, not whether
+    # there is a pack.
+    if getattr(reader, "_soc_step_candidate", None) is not None:
+        return False
     detected = getattr(coordinator, "_detected_battery_capacity_kwh", None)
     if detected:
         return False
@@ -482,6 +507,30 @@ def battery_unseen(coordinator) -> bool:
     except AttributeError:  # pragma: no cover — a frozen double
         pass
     return not detected > 0
+
+
+def battery_soc_ready_for_plan(coordinator, power) -> bool:
+    """May a plan be made on this cycle's battery SOC?
+
+    A silent sensor is not an empty battery (#638 finding #3): with a pack
+    to plan for, wait for a reading. A saved capacity is not proof of a
+    battery (#1063): the settings flow saves a default even on battery-less
+    homes. A pack that is merely not read YET (UNKNOWN presence, SOC and
+    capacity sensors still loading after a restart, or #1284's first level
+    waiting for its repeat) is not an absent one: only a plain ABSENT, or an
+    unseen pack that stayed unseen for 10 minutes of uptime, may plan
+    without it. One rule for the energy plan and the night scheduler.
+    """
+    no_pack = (
+        presence_of(coordinator).get(Module.BATTERY) is Presence.ABSENT
+        or (battery_unseen(coordinator)
+            and time.monotonic() - getattr(
+                coordinator, "_boot_monotonic", 0.0) >= 600.0))
+    return (
+        no_pack
+        or float(coordinator.config.get("battery_capacity_kwh", 0) or 0) <= 0
+        or not getattr(power, "battery_soc_unavailable", False)  # DARK-SOC: plan — a skipped plan retries next cycle
+    )
 
 
 def _entity_device_lookup(hass):
@@ -3868,15 +3917,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         if self._storage is None and self.config_entry:
             self._storage = SEMStorage(self.hass, self.config_entry.entry_id)
             await self._storage.async_load()
-            # (#1083) a restart makes that day's data less trustworthy for
-            # a replay; the day tagger reads this mark
-            from .day_tag_store import day_tags_on
-            if day_tags_on(self):
-                try:
-                    # (#645) the coordinator's one day clock
-                    self._storage.note_start(self._tracker_date.isoformat())
-                except Exception:  # noqa: BLE001 — a tag mark never costs a refresh
-                    _LOGGER.debug("could not note the start for day tags")
             # Restore energy calculator state
             state = self._storage.export_energy_calculator_state()
             self._energy_calculator.restore_state(state)
@@ -4089,7 +4129,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 _soc_state = self.hass.states.get(_vehicle_soc_entity)
                 if _soc_state and _soc_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                     try:
-                        self._cycle_vehicle_soc = float(_soc_state.state)
+                        self._cycle_vehicle_soc = finite_float(_soc_state.state)
                     except (ValueError, TypeError):
                         _LOGGER.debug("Vehicle SOC %s not numeric: %r (#259)", _vehicle_soc_entity, _soc_state.state)
 
@@ -4331,7 +4371,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         soc_state = self.hass.states.get(per_charger_soc_entity)
                         if soc_state and soc_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                             try:
-                                self._cycle_vehicle_soc = float(soc_state.state)
+                                self._cycle_vehicle_soc = finite_float(soc_state.state)
                             except (ValueError, TypeError):
                                 _LOGGER.debug("Vehicle SOC %s not numeric: %r (#259)", per_charger_soc_entity, soc_state.state)
                     self._ev_device = ev_dev
@@ -4661,7 +4701,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             soc_st = self.hass.states.get(per_soc_entity)
                             if soc_st and soc_st.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                                 try:
-                                    self._cycle_vehicle_soc = float(soc_st.state)
+                                    self._cycle_vehicle_soc = finite_float(soc_st.state)
                                 except (ValueError, TypeError):
                                     _LOGGER.debug("Vehicle SOC %s not numeric: %r (#259)", per_soc_entity, soc_st.state)
                         # Ceiling (Max) gates surplus; floor (Min) drives night top-up (#245).
@@ -5446,6 +5486,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 except Exception as e:
                     _LOGGER.warning("Yearly seeding from statistics failed (will retry): %s", e)
 
+            # Step 9b2: (#1245) the battery sale's recorded history, read once
+            # into the year, month and lifetime rows. After the seeds above:
+            # each row is held under the export they set. A dashboard that
+            # could not be read is not "no dashboard" (#925): it waits.
+            if (
+                self._recorder_seeds_ready
+                and self._ed_answered
+                and self._energy_calculator.sale_history_pending
+            ):
+                try:
+                    await self._energy_calculator.read_sale_history(
+                        self.hass, self._energy_dashboard_config
+                    )
+                except Exception as e:
+                    _LOGGER.warning("Battery sale history read failed (will retry): %s", e)
+
             # Step 9c: Calculate battery health metrics. #593 — a configured
             # HARDWARE lifetime-cycle sensor is preferred over the throughput
             # estimate (which only counts what SEM has seen since install and
@@ -5689,7 +5745,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         self._storage.set_legionella_time(_leg_t.isoformat())
                     except (AttributeError, ValueError):
                         pass
-                await self._storage.async_save_energy_delayed()
+                # (#1252) a real write, at most every 5 min: the delayed
+                # one re-arms each cycle and only lands at a clean stop.
+                await self._storage.async_save_energy_throttled()
                 # Flush the daily store too (device runtimes, predictor, EV
                 # intelligence, flow/sign/per-charger state) on a throttled
                 # immediate write — previously it only reached disk on a
@@ -5904,7 +5962,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     soc_state = self.hass.states.get(charger_soc_entity)
                     if soc_state and soc_state.state not in ("unknown", "unavailable"):
                         try:
-                            per_charger_soc[cid] = float(soc_state.state)
+                            per_charger_soc[cid] = finite_float(soc_state.state)
                         except (ValueError, TypeError):
                             pass
 
@@ -8169,13 +8227,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             return None
         try:
             st = hass.states.get(eid)
-            return float(st.state) if st is not None else None
+            return finite_float(st.state) if st is not None else None
         except (TypeError, ValueError, AttributeError):
             return None
 
     def _finish_manual_battery_modes(
         self, battery_items, soc_read: dict, count: int,
-        power_read: "dict | None" = None,
+        power_read: "dict | None" = None, site=None,
     ) -> None:
         """(#1131) Put a battery back on Auto when its manual job is done.
 
@@ -8212,14 +8270,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         (#1166) A pack whose inverter stops it below 90 % stalls from its
         own end level (``battery_charge_end_soc_entity``, per battery) less
         a small margin; with no level read, 90 % as before.
+
+        (#1165) A sale ends the same way when the inverter stops it above
+        the reserve (its own lower level): the pack sends no more while the
+        home buys from the grid with no sun (``sale_stall_read``). ``site``
+        is this cycle's ``(grid import W, sun W)``, or ``None`` when those
+        reads are no measurement. It is the home's, not a pack's: it says
+        no export limit can be what holds the pack back.
         """
         from .decide_battery import (
             charge_stall_read, charge_stall_soc, charge_stall_step, forced_ops,
-            manual_mode_done,
+            manual_mode_done, sale_stall_read, sale_stall_step,
         )
         from ..consts.core import BATTERY_SOC_STEP_CONFIRM_READS
         if self.config_entry is None or not battery_items:
             self._manual_charge_stalls = {}
+            self._manual_sale_stalls = {}
             return          # too early to persist anything
         streaks = getattr(self, "_manual_done_streaks", None)
         if not isinstance(streaks, dict):
@@ -8231,9 +8297,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # is known, so no unit's job is finished.
             streaks.clear()
             self._manual_charge_stalls = {}
+            self._manual_sale_stalls = {}
             return
         stalls = getattr(self, "_manual_charge_stalls", None)
         stalls = stalls if isinstance(stalls, dict) else {}
+        sales = getattr(self, "_manual_sale_stalls", None)
+        sales = sales if isinstance(sales, dict) else {}
         power_read = power_read if isinstance(power_read, dict) else {}
         adapters = getattr(self, "_battery_adapters", None)
         adapters = adapters if isinstance(adapters, dict) else {}
@@ -8245,13 +8314,40 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         _ovs = getattr(self, "_plan_overrides", None)
         _ovs = _ovs if isinstance(_ovs, dict) else {}
         new_stalls: dict = {}
+        new_sales: dict = {}
         stalled_ids: set = set()
         done: list = []
+
+        def _asked(adapter, attr):
+            # What actuate_battery last SENT this battery (0 when it sent a
+            # stop, held one, or sent anything else).
+            w = getattr(adapter, attr, 0.0)
+            return (0.0 if isinstance(w, bool) or not isinstance(w, (int, float))
+                    else w)
+
+        def _own_limit(adapter):
+            # (#1165 review) The discharge limit SEM last wrote (-1: none).
+            # A value that is no number may be a limit: read it as 0 W.
+            # One entity for both the limit and the sale power the adapter
+            # really writes is the sale's own register: the sale wrote over
+            # that limit (#1175). A sale by a service writes no entity.
+            sale_eid = getattr(adapter, "sale_setpoint_entity", None)
+            sale_eid = sale_eid() if callable(sale_eid) else ""
+            limit_eid = getattr(adapter, "_discharge_control_entity", None)
+            if limit_eid and limit_eid == sale_eid:
+                return -1.0
+            w = getattr(adapter, "last_discharge_limit_w", -1.0)
+            return (0.0 if isinstance(w, bool) or not isinstance(w, (int, float))
+                    else w)
+
         for idx, (battery_id, runtime) in enumerate(battery_items):
             cfg = self._per_battery_config(idx, count)
             mode = str(cfg.get("battery_mode", "auto") or "auto").lower()
             soc = getattr(runtime, "last_known_soc", None)
             is_read = bool(soc_read.get(battery_id, False))
+            own_w = getattr(runtime, "last_known_w", None)
+            own_power_read = power_read.get(battery_id) is True
+            adapter = adapters.get(battery_id)
             stalled = False
             # (#1085) A one-off "force" rides the same road as Force charge,
             # so it must end the same way: at the target, or on a stall.
@@ -8259,30 +8355,34 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             by_override = (_ov is not None and _ov.action == "force"
                            and mode != "off")
             if mode == "force_charge" or by_override:
-                adapter = adapters.get(battery_id)
-                # What actuate_battery last SENT this battery (0 when it sent
-                # a stop, held one, or sent anything else).
-                asked_w = getattr(adapter, "_sem_charge_asked_w", 0.0)
-                if isinstance(asked_w, bool) or not isinstance(
-                        asked_w, (int, float)):
-                    asked_w = 0.0
                 window, stalled = charge_stall_step(
                     stalls.get(battery_id), now_s, soc, charge_stall_read(
-                        soc, getattr(runtime, "last_known_w", None),
-                        soc_read=is_read,
-                        power_read=power_read.get(battery_id) is True,
-                        asked_w=asked_w,
+                        soc, own_w, soc_read=is_read,
+                        power_read=own_power_read,
+                        asked_w=_asked(adapter, "_sem_charge_asked_w"),
                         sem_charging=(forced_ops(adapter)[0]
                                       if commands else None),
                         stall_soc=charge_stall_soc(
                             self._charge_end_soc(cfg))))
                 if window is not None:
                     new_stalls[battery_id] = window
-                if stalled:
-                    stalled_ids.add(battery_id)
+            elif mode == "force_discharge":
+                window, stalled = sale_stall_step(
+                    sales.get(battery_id), now_s, soc, sale_stall_read(
+                        soc, own_w, soc_read=is_read,
+                        power_read=own_power_read,
+                        asked_w=_asked(adapter, "_sem_discharge_asked_w"),
+                        sem_selling=(forced_ops(adapter)[1]
+                                     if commands else None),
+                        site=site, limit_w=_own_limit(adapter)))
+                if window is not None:
+                    new_sales[battery_id] = window
+            if stalled:
+                stalled_ids.add(battery_id)
             done.append((mode, manual_mode_done(
                 mode, soc, soc_read=is_read, reserve=reserve_soc_of(cfg),
-                charge_stalled=stalled)))
+                charge_stalled=stalled and mode == "force_charge",
+                sale_stalled=stalled and mode == "force_discharge")))
             if by_override:
                 okey = ("override", battery_id)
                 if manual_mode_done("force_charge", soc, soc_read=is_read,
@@ -8304,6 +8404,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 else:
                     streaks.pop(okey, None)
         self._manual_charge_stalls = new_stalls
+        self._manual_sale_stalls = new_sales
         # Each control and the batteries it drives.
         groups = ({idx: [idx] for idx in range(len(done))} if per_battery
                   else {None: list(range(len(done)))})
@@ -8334,12 +8435,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 "all" if key is None else battery_items[key][0], mode,
                 ", ".join(f"{float(battery_items[i][1].last_known_soc):.0f}%"
                           for i in members),
-                (" (the pack took no more charge, #1164)"
+                ((" (the pack took no more charge, #1164)"
+                  if mode == "force_charge" else
+                  " (the pack sent no more, #1165)")
                  if any(battery_items[i][0] in stalled_ids for i in members)
                  else ""),
                 DEFAULT_BATTERY_MODE)
             for i in members:
                 self._manual_charge_stalls.pop(battery_items[i][0], None)
+                self._manual_sale_stalls.pop(battery_items[i][0], None)
 
     def _arbitrage_enabled(self, battery_count: int = 0) -> bool:
         """(#533 / #638 C6+C7) Can battery→grid arbitrage act on THIS install?
@@ -8397,6 +8501,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # (#1180) one hold for the entry, shared by every battery: the packs
         # behind one inverter write the same charge-target number
         ctx["charge_target_hold"] = self._charge_target_hold()
+        # (#1181) …and one record of the forced charges SEM started
+        ctx["forced_charge_record"] = self._forced_charge_record()
+        # (#1275) …and one record of the sales per device: a stop to a device
+        # ends every pack's sale on it
+        sales = getattr(self, "_device_sales_obj", None)
+        if not isinstance(sales, dict):
+            sales = self._device_sales_obj = {}
+        ctx["device_sales"] = sales
+        # (#1183) Which brand drives this battery is asked of its own
+        # entities once the home has more than one: a brand integration
+        # loaded for another battery is not this one's.
+        ctx["battery_fleet_size"] = int(count)
+        if count > 1:
+            ctx["battery_own_entity_ids"] = self._battery_own_entities(index)
         platform = (ctx.get("battery_charge_platform") or "auto").lower()
         if platform == "deye":
             if not entry_id:
@@ -8411,6 +8529,32 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     self.hass, entry_id, ctx["battery_id"],
                 )
         return ctx
+
+    def _battery_own_entities(self, index: int) -> tuple:
+        """(#1183) The entities that are the battery at ``index``'s alone.
+
+        Its Energy Dashboard sensor (``battery_units``, the order of its
+        ``b<N>`` id), the other sensor of a two-sensor pair, its own energy
+        counters (``unit_energy_counters``), and its slot of each
+        per-battery control list. Never a shared key: in a home of several
+        batteries the global keys may be another battery's.
+        """
+        own: list = []
+        ed = getattr(self, "_energy_dashboard_config", None)
+        units = battery_units(ed)
+        if 0 <= index < len(units):
+            unit = units[index]
+            own.append(unit)
+            for pair in getattr(ed, "battery_power_pairs", None) or ():
+                if isinstance(pair, (list, tuple)) and unit in pair:
+                    own.extend(pair)
+            own.extend(unit_energy_counters(ed, unit) or ())
+        for list_key, _single_key in PER_BATTERY_ENTITY_LISTS:
+            lst = self.config.get(list_key)
+            if isinstance(lst, list) and 0 <= index < len(lst) and lst[index]:
+                own.append(lst[index])
+        return tuple(dict.fromkeys(
+            eid for eid in own if isinstance(eid, str) and eid))
 
     def _charge_target_hold(self):
         """(#1180) The charge-target number as SEM found it, for the whole
@@ -8436,6 +8580,28 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             configured=(self.config.get("battery_target_soc_entity", ""),))
         return hold
 
+    def _forced_charge_record(self):
+        """(#1181) The switches and mode selects SEM turned on for a grid
+        charge, for the whole entry. Persisted for the same reason as the
+        charge target: an HA restart never unloads the entry, so the next
+        lifetime must know which charge is SEM's to stop. No record
+        without an entry id."""
+        record = getattr(self, "_forced_charge_record_obj", None)
+        if record is not None:
+            return record
+        from .battery_adapters.charge_record import ForcedChargeRecord
+        entry_id = str(getattr(
+            getattr(self, "config_entry", None), "entry_id", "") or "")
+        store = None
+        if entry_id:
+            try:
+                from homeassistant.helpers.storage import Store
+                store = Store(self.hass, 1, f"sem.forced_charge.{entry_id}")
+            except Exception:  # noqa: BLE001 — a store never costs a cycle
+                store = None
+        record = self._forced_charge_record_obj = ForcedChargeRecord(store)
+        return record
+
     def _warn_battery_entity_collision(self, battery_id: str, pbc: dict) -> None:
         """Warn (once per entity) when two batteries share a control entity.
 
@@ -8450,13 +8616,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         (#1178) Not the discharge limit: batteries behind one inverter often
         share it (#691), and the pipeline gives a shared limit ONE writer
         per cycle (``battery_shared_limit``), so they no longer fight.
+        (#1182) Nor the sale power entity, for the same reason.
         """
         seen = getattr(self, "_battery_control_entity_owner", None)
         if seen is None:
             seen = {}
             self._battery_control_entity_owner = seen
         for key in (
-            "battery_force_discharge_control_entity",
             "battery_strategy_control_entity",
         ):
             ent = pbc.get(key)
@@ -9434,6 +9600,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     None, "export closed — the pack takes the sun first",
                     code="closed_meter", need_kwh=decision.need_kwh,
                     fill_kwh=decision.fill_kwh)
+        # (#1284) The SOC has not been read since the start: its sensor is
+        # still loading, or its first level waits for the repeat. That is
+        # no outage, so a cap from before the start is kept, as through a
+        # blink, up to the dark-read grace from the start.
+        from ..consts.core import SENSOR_DARK_READ_GRACE_S
+        keep = bool(
+            power is not None and soc is None
+            and not getattr(power, "battery_soc_known", True)
+            and time.monotonic() - float(getattr(
+                self, "_boot_monotonic", float("-inf")))
+            <= SENSOR_DARK_READ_GRACE_S)
         cap = decision.cap_w if (decision and enabled) else None
         code = (decision.code if decision else
                 ("night" if not ledger else
@@ -9445,7 +9622,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             self.hass, entity, cap, observer=self._observer_mode,
             yielded=self.external_yielding("battery"),
             hw_max_w=float(self.config.get(
-                "battery_max_charge_power_w", 5000.0) or 5000.0))
+                "battery_max_charge_power_w", 5000.0) or 5000.0),
+            keep=keep)
         _bv = (getattr(self, "_sink_verdicts", None) or {}).get("battery")
         self._charge_pacing_state = {
             "enabled": enabled,
@@ -9467,7 +9645,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # ``soc_expired`` token, so a sustained outage is never
             # confused with a restart's never-read window.
             "soc_stale_s": soc_stale_s,
-            "cap_w": decision.cap_w if decision else None,
+            "cap_w": (decision.cap_w if decision else
+                      getattr(self._charge_pacing_writer, "last_written_w", None)
+                      if action == "held" and keep else None),
             # (#949) A cap with nowhere to go must not read like a cap that
             # is being applied. The decision's own prose stays true of the
             # DECISION; what the user needs here is the missing setting.
@@ -9484,6 +9664,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # the decision above still describes what pacing WOULD do.
                 "the battery is yielded to another party — SEM writes nothing"
                 if action == "yielded" else
+                # (#1284) no level since the start yet, and no outage either
+                "battery SOC not read since the start yet — the cap is kept"
+                if action == "held" and keep and not decision else
                 decision.reason if decision else (
                     "pacing idle — outside daylight or no forecast"
                     if not ledger else f"pacing idle — {_why}")),
@@ -9569,14 +9752,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             self._last_battery_decisions = {}
             return
         from .actuate_battery import actuate_battery
-        from .battery_adapters import adapter_for, _integration_loaded
+        from .battery_adapters import adapter_for, auto_brand
         from .battery_shared_limit import actuate_batteries
         from .charger_types import (
             BatteryIntent, BatteryRuntime, BatteryView,
             FleetContext,
         )
         from .decide_battery import (
-            decide_battery, effective_battery_count, forced_ops, stop_misses,
+            decide_battery, effective_battery_count, forced_ops,
+            may_take_the_sale, sale_surface_count, stop_misses,
         )
 
         # Per-battery adapter cache (#375 — was a single
@@ -9662,13 +9846,31 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         _charge_active = (
             scheduler_decision is not None and scheduler_decision.should_charge
         )
-        # #691: the LIMIT_DISCHARGE home split (and the C6 sell split) must
-        # divide by the batteries that actually CONSUME the budget — a
-        # mode=off battery never gets the clamp, and batteries sharing one
-        # discharge-limit entity are a single actuation surface.
+        # #691: the LIMIT_DISCHARGE home split must divide by the batteries
+        # that actually CONSUME the budget — a mode=off battery never gets
+        # the clamp, and batteries sharing one discharge-limit entity are a
+        # single actuation surface.
         _n_cfg = len(getattr(power, "batteries", {}) or {})
-        _eff_battery_count = effective_battery_count(
-            [self._per_battery_config(i, _n_cfg) for i in range(_n_cfg)]
+        _pbcs = [self._per_battery_config(i, _n_cfg) for i in range(_n_cfg)]
+        _eff_battery_count = effective_battery_count(_pbcs) if _n_cfg else 1
+        # (#1182) …and the C6 sell split by what a sale lands on: two
+        # batteries on one sale power entity sell as one, and two on their
+        # own sale entities sell twice even when they share one limit.
+        _bat_ids = list((getattr(power, "batteries", {}) or {}).keys())
+        # (#1277) …counting only the batteries that may take THIS sale: the
+        # arbitrage sale and the forecast spend read different switches.
+        _sale_units = [
+            (pbc, self._battery_adapters.get(_bat_ids[i])
+             if i < len(_bat_ids) else None)
+            for i, pbc in enumerate(_pbcs)]
+        _shared = self.config if isinstance(self.config, dict) else {}
+        _sale_count = sale_surface_count(
+            _sale_units,
+            lambda p: may_take_the_sale(p, _shared, spend=False)
+        ) if _n_cfg else 1
+        _fsale_count = sale_surface_count(
+            _sale_units,
+            lambda p: may_take_the_sale(p, _shared, spend=True)
         ) if _n_cfg else 1
 
         # Evaluate arbitrage ONLY when globally enabled. In v1.7.3 the global
@@ -9749,7 +9951,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             from .energy_plan_actuation import arbitrage_sell_gate
             _sell_in, _sell_total_w = arbitrage_sell_gate(
                 getattr(self, "_energy_plan_shadow", None), dt_util.now())
-        _arb_sell = (_sell_in, _sell_total_w / max(1, _eff_battery_count))
+        _arb_sell = (_sell_in, _sell_total_w / _sale_count)
 
         # (#778) The forecast-led SPEND — same discipline, own switch, own
         # gate. Behind the SAME #758 kill switch: a kill switch some
@@ -9760,7 +9962,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             from .energy_plan_actuation import forecast_sell_gate
             _fsell_in, _fsell_total_w = forecast_sell_gate(
                 getattr(self, "_energy_plan_shadow", None), dt_util.now())
-        _fsell = (_fsell_in, _fsell_total_w / max(1, _eff_battery_count))
+        _fsell = (_fsell_in, _fsell_total_w / _fsale_count)
         _sell_status = None
         if _spend_on:
             _arb_fired = (
@@ -9991,9 +10193,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # (#1131) A manual charge or sale that has done its job hands the
         # battery back to Auto before this cycle decides — on a level that is
         # a reading this cycle (not held, not the never-read 0.0).
+        # (#1165) …and the home's grid import and sun, for a sale the pack
+        # stopped, when they are a measurement (``sale_stall_site``).
         try:
+            from .decide_battery import sale_stall_site
+            try:
+                _sun = self.hass.states.get("sun.sun")
+            except Exception:  # noqa: BLE001 — never break a cycle over the sun
+                _sun = None
             self._finish_manual_battery_modes(
-                battery_items, soc_seen, _bat_count, power_read=power_seen)
+                battery_items, soc_seen, _bat_count, power_read=power_seen,
+                site=sale_stall_site(power, sun_down=(
+                    getattr(_sun, "state", None) == "below_horizon")))
         except Exception as err:  # noqa: BLE001 — a mode write must not end a cycle
             # (#762/#1092-class) a persistent fault here logged a full
             # traceback every cycle; log_on_change makes it a transition.
@@ -10029,6 +10240,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         self._battery_orphan_guard = {}
                     adapter._orphan_guard = self._battery_orphan_guard
                 self._battery_adapters[battery_id] = adapter
+                self._adopt_pending_export_prior(battery_id, adapter)
                 # (#764) Startup recovery is a real write — the #532
                 # orphan-stop that saved a LUNA2000 from draining to grid.
                 # Building the adapter under observer is fine (reads only);
@@ -10045,6 +10257,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     battery_id, type(adapter).__name__,
                     getattr(adapter, "supports_forced_discharge", "n/a"),
                 )
+                if (_bat_count > 1
+                        and type(adapter).__name__ == "GenericBatteryAdapter"
+                        and auto_brand(self.hass, {}) is not None):
+                    # (#1183) say why a fleet battery is not the brand's
+                    _LOGGER.info(
+                        "Battery %s: none of its own entities (%s) belong to "
+                        "%s, so SEM drives it as a generic battery (#1183)",
+                        battery_id,
+                        ", ".join(_pbc.get("battery_own_entity_ids") or ())
+                        or "none found",
+                        auto_brand(self.hass, {}))
             elif type(adapter).__name__ == "GenericBatteryAdapter":
                 # Self-heal a startup race: the brand integration (e.g.
                 # huawei_solar) can finish loading AFTER SEM's first battery
@@ -10054,22 +10277,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # (cheap: only while still Generic + a brand entry exists).
                 # #531: never self-heal a battery that has its OWN AC-coupled
                 # control surface (strategy select / bidirectional setpoint —
-                # e.g. a Sessy b2 in a Huawei fleet). adapter_for() now keeps
-                # those Generic, but skip the per-cycle rebuild entirely so a
-                # mixed-brand fleet doesn't churn an adapter that can't change.
-                _heal_cfg = self._per_battery_config(batt_idx, _bat_count)
-                _ac_coupled = bool(
-                    _heal_cfg.get("battery_strategy_control_entity")
-                    or _heal_cfg.get("battery_setpoint_bidirectional")
-                )
-                if not _ac_coupled and (
-                    _integration_loaded(self.hass, "huawei_solar")
-                    or _integration_loaded(self.hass, "goodwe")
-                ):
-                    # (#1180) built like the first one, so it gets the
-                    # entry's charge-target hold and runtime scope too
-                    _rebuilt = adapter_for(self.hass, self._battery_adapter_context(
-                        battery_id, batt_idx, _bat_count))
+                # e.g. a Sessy b2 in a Huawei fleet), and (#1183) never one
+                # whose own entities name no loaded brand in a home of more
+                # batteries: ``auto_brand`` asks what adapter_for() asks, so
+                # a mixed-brand fleet doesn't churn an adapter that can't
+                # change, and a sibling's brand is never this battery's.
+                # (#1180) built like the first one, so it gets the entry's
+                # charge-target hold and runtime scope too
+                _pbc = self._battery_adapter_context(
+                    battery_id, batt_idx, _bat_count)
+                if ((_pbc.get("battery_charge_platform") or "auto")
+                        .lower() == "auto"
+                        and auto_brand(self.hass, _pbc) is not None):
+                    _rebuilt = adapter_for(self.hass, _pbc)
                     if type(_rebuilt).__name__ != "GenericBatteryAdapter":
                         adapter = _rebuilt
                         if hasattr(adapter, "_orphan_guard"):
@@ -10077,12 +10297,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                 self._battery_orphan_guard = {}
                             adapter._orphan_guard = self._battery_orphan_guard
                         self._battery_adapters[battery_id] = adapter
+                        self._adopt_pending_export_prior(battery_id, adapter)
                         _LOGGER.info(
                             "Battery %s: upgraded GenericBatteryAdapter → %s "
                             "(brand integration finished loading)",
                             battery_id, type(adapter).__name__,
                         )
 
+            # (#1181) a switch charge SEM started before a restart is SEM's
+            # to stop. Asked every cycle until the actuator can be read, then
+            # a no-op; reads only, so observer mode too. Never raises.
+            try:
+                await adapter.async_adopt_running_charge()
+            except Exception:  # noqa: BLE001 — a stand-in adapter in tests
+                pass
             _forced = ((False, False) if self._observer_mode
                        else forced_ops(adapter))
             _battery_cfg = self._vpp_apply_battery_override(
@@ -10207,11 +10435,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         if getattr(self, "_battery_reload_pending", False) is True:
             return          # (#1195) see above: an adapter may await
+        _sale_writers: dict = {}
         _writers = await actuate_batteries(
             _cycle_rows, _send, observer=self._observer_mode,
-            inputs_degraded=_degraded)
+            inputs_degraded=_degraded, sale_writers=_sale_writers)
         for battery_id, writer_id in _writers.items():
             self._last_battery_decisions[battery_id]["limit_written_by"] = writer_id
+        for battery_id, writer_id in _sale_writers.items():   # (#1182)
+            self._last_battery_decisions[battery_id]["sale_power_written_by"] = writer_id
 
         # Reset scheduler when night ends — preserved from legacy
         if (scheduler.enabled
@@ -10241,9 +10472,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         ``_execute_battery_charge_scheduler``. The scheduler's
         ``evaluate()`` is itself a pure function; we just gather its
         inputs the same way the legacy hook did.
+
+        (#1284) Not on a SOC that is no reading: the 0.0 of a SOC never
+        read planned the night from an empty pack ("charge 0 % → 40 %"),
+        and a drift to it asked for a re-plan. The plan's own rule decides;
+        the window stays open, so the next cycle with a reading evaluates.
         """
         scheduler = self._battery_charge_scheduler
         now = dt_util.now()
+        if not battery_soc_ready_for_plan(self, power):
+            log_on_change(
+                _LOGGER, "scheduler:soc_wait", logging.DEBUG,
+                "Battery scheduler: waiting for a battery SOC reading (#1284)")
+            return
+        log_on_change(_LOGGER, "scheduler:soc_wait", logging.DEBUG,
+                      "Battery scheduler: battery SOC read")
 
         if not scheduler.should_trigger_evaluation(now):
             # Check for re-plan trigger (price update / SOC drift / EV change).
@@ -11271,14 +11514,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # The collector used to ask only load:, so a comfort block
                 # could never reach its device. merge_load_gates carries
                 # the rules; absence == no say, exactly as before.
-                deficit_kwh = (max(0.0, float(getattr(dev, "daily_min_runtime_sec", 0) or 0)
-                                   - float(getattr(dev, "_daily_runtime_accumulated_sec", 0) or 0))
-                               / 3600.0
+                deficit_h = (max(0.0, float(getattr(dev, "daily_min_runtime_sec", 0) or 0)
+                                 - float(getattr(dev, "_daily_runtime_accumulated_sec", 0) or 0))
+                             / 3600.0)
+                deficit_kwh = (deficit_h
                                * float(getattr(dev, "rated_power", 0.0) or 0.0) / 1000.0)
                 verdict = merge_load_gates(
                     self._energy_plan_gate(f"load:{did}", now),
                     self._energy_plan_gate(f"comfort:{did}", now),
-                    deficit_kwh=deficit_kwh)
+                    deficit_kwh=deficit_kwh, deficit_h=deficit_h)
                 if verdict is not None:
                     windows[did] = verdict
             except Exception:  # noqa: BLE001 — one odd device won't gate the rest
@@ -11786,8 +12030,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             soc_seed = None
             if _sl:
                 soc_seed = float(_sl[-1].get("soc_kwh") or 0.0)
-            elif power is not None and getattr(
-                    power, "battery_soc", None) is not None:
+            elif (power is not None
+                  and getattr(power, "battery_soc", None) is not None
+                  # (#1284) a SOC never read is no seed — unless there is
+                  # no pack, whose row is empty either way
+                  and (getattr(power, "battery_soc_known", True)
+                       or cap_kwh2 <= 0)):
                 # (PROD, 08-08) an IDLE today has no trajectory
                 # to seed from — but the live SOC is not an invented
                 # number, and a quiet today must not erase tomorrow's
@@ -12006,16 +12254,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # capacity sensors still loading after a restart) is not an
                 # absent one: only a plain ABSENT, or an unseen pack that
                 # stayed unseen for 10 minutes of uptime, may plan without it.
-                _no_pack = (
-                    presence_of(self).get(Module.BATTERY) is Presence.ABSENT
-                    or (battery_unseen(self)
-                        and time.monotonic() - getattr(
-                            self, "_boot_monotonic", 0.0) >= 600.0))
-                _batt_ready = (
-                    _no_pack
-                    or float(self.config.get("battery_capacity_kwh", 0) or 0) <= 0
-                    or not getattr(power, "battery_soc_unavailable", False)  # DARK-SOC: plan — a skipped rebuild retries next cycle
-                )
+                _batt_ready = battery_soc_ready_for_plan(self, power)
                 if _batt_ready and self._shadow_energy_plan(
                         _sched, energy, power,
                         replan_cause=cause):
@@ -12820,7 +13059,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     _blocks = forecast_sell_blocks(
                         dt_util.now(), _night_start0,
                         float(_pe0.get("battery_spendable_kwh") or 0.0),
-                        max_discharge_w)
+                        max_discharge_w,
+                        # (#1184) a running sale keeps its block open
+                        selling=bool(getattr(
+                            self, "_forecast_sell_active", False)))
                     if _blocks:
                         fsell = {
                             "enabled": True,
@@ -12905,15 +13147,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # The ledger itself — the card's hour axis and battery
             # trajectory, in the ONE shape a quiet night draws too.
             slot_rows = _slot_rows(ledger)
-            blocks = [{
-                "id": a.demand_id,
-                "start": a.start.isoformat(),
-                "end": a.end.isoformat(),
-                "power_w": round(a.power_w, 0),
-                "price": a.price,
-                # (#1023) only on the top-up: the strip hatches it
-                **({"late": True} if a.late else {}),
-            } for a in plan.allocations]
+            from .energy_plan_actuation import plan_blocks
+            blocks = plan_blocks(plan.allocations)
             self._energy_plan_shadow = {
                 "computed_at": now.isoformat(),
                 "fits": plan.fits,
@@ -13004,6 +13239,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         common_data = {
             "battery_soc": power.battery_soc,
+            "battery_soc_known": (bool(getattr(power, "battery_soc_known", True))
+                                  # DARK-SOC: display — only the words of the charger text (#1288)
+                                  and not getattr(power, "battery_soc_unavailable", False)),
             "calculated_current": calculated_current,
             "available_power": available_power,
             "daily_ev_energy": energy.daily_ev,
@@ -13610,7 +13848,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             st = self.hass.states.get(ent)
             if st and st.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                 try:
-                    return float(st.state)
+                    return finite_float(st.state)
                 except (ValueError, TypeError):
                     pass
         det = (getattr(self, "_ev_taper_detectors", {}) or {}).get(cid)
@@ -13787,7 +14025,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         guard._applied = True
         guard.reason = f"adopted an export cut from a previous lifetime (since {rec.get('since')})"
         recipes = rec.get("recipes") or {}
-        for bid, adapter in (getattr(self, "_battery_adapters", None) or {}).items():
+        # (#1274) Adapters are built later in the battery pipeline, so on a
+        # real first tick there are none yet: a recipe with no adapter waits
+        # for its battery instead of being dropped.
+        adapters = getattr(self, "_battery_adapters", None) or {}
+        self._export_priors_pending = {
+            str(bid): prior for bid, prior in recipes.items()
+            if prior and bid not in adapters}
+        for bid, adapter in adapters.items():
             prior = recipes.get(str(bid))
             if not prior:
                 continue   # the previous lifetime held nothing on this one
@@ -13795,6 +14040,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 adapter.adopt_export_prior(prior)
             except Exception:  # noqa: BLE001
                 pass
+
+    def _adopt_pending_export_prior(self, battery_id, adapter) -> None:
+        """Hand a battery the prior a previous lifetime saved for it, once."""
+        pending = getattr(self, "_export_priors_pending", None)
+        if not pending:
+            return
+        guard = getattr(self, "_export_guard", None)
+        if getattr(guard, "state", None) != "engaged":
+            pending.clear()   # the cut was handed back; an old recipe must not re-arm it
+            return
+        prior = pending.pop(str(battery_id), None)
+        if not prior:
+            return   # the previous lifetime held nothing on this one
+        try:
+            adapter.adopt_export_prior(prior)
+        except Exception:  # noqa: BLE001
+            pass
 
     async def async_release_export_guard(self, *, reason: str):
         """(#955, the #908 rule) Put the inverter's feed-in back if — and only
@@ -13983,6 +14245,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         Not "has a release recipe": Huawei can always produce one (the
         integration owns the reset), so that test named an inverter SEM had
         never cut.
+
+        (#1183) Capability is ``export_control_wired``: overriding the verb
+        is not enough. The generic adapter overrides it with no number to
+        write, so a generic battery listed before the Huawei one took every
+        cut and refused it.
         """
         adapters = getattr(self, "_battery_adapters", None) or {}
         if not adapters:
@@ -13994,10 +14261,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             except Exception:  # noqa: BLE001 — a brand that cannot answer is not the one
                 continue
         for adapter in adapters.values():
-            fn = getattr(type(adapter), "command_limit_export", None)
-            owner = getattr(fn, "__qualname__", "").split(".")[0] if fn else ""
-            if owner and owner != "BatteryControlAdapter":
-                return adapter
+            try:
+                if adapter.export_control_wired() is True:
+                    return adapter
+            except Exception:  # noqa: BLE001 — a brand that cannot answer is not the one
+                continue
         return self._primary_battery_adapter()
 
     def _resume_expired_pauses(self) -> None:
@@ -14580,8 +14848,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # retirement; the repoint keeps it sane until then).
         battery_priority_soc = self.config.get("battery_priority_soc", 30)
 
-        battery_too_low = power.battery_soc < battery_priority_soc
-        battery_needs_priority = power.battery_soc < battery_priority_soc
+        # (#875/#1284) a SOC never read is no level: not low, no priority
+        _soc_low = (bool(getattr(power, "battery_soc_known", True))
+                    and power.battery_soc < battery_priority_soc)
+        battery_too_low = _soc_low
+        battery_needs_priority = _soc_low
         # Ceiling (Max, default full) gates the surplus stop; floor (Min) drives
         # night top-up (#245). Resolve the (primary) charger's config so the base
         # context honors the PER-CHARGER targets, not just global. One car per
@@ -15230,7 +15501,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             hw_state = self.hass.states.get(per_hw_entity)
             if hw_state and hw_state.state not in ("unknown", "unavailable"):
                 try:
-                    per_hw_total = float(hw_state.state)
+                    per_hw_total = finite_float(hw_state.state)
                 except (ValueError, TypeError):
                     pass
         detector.update_energy(per_increment, per_hw_total)
@@ -15483,7 +15754,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 hw_state = self.hass.states.get(ev_total_entity)
                 if hw_state and hw_state.state not in ("unknown", "unavailable"):
                     try:
-                        hw_total = float(hw_state.state)
+                        hw_total = finite_float(hw_state.state)
                     except (ValueError, TypeError):
                         pass
             self._ev_taper_detector.update_energy(ev_increment, hw_total)
@@ -15602,7 +15873,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 soc_state = self.hass.states.get(per_charger_soc_entity)
                 if soc_state and soc_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                     try:
-                        per_charger_vehicle_soc = float(soc_state.state)
+                        per_charger_vehicle_soc = finite_float(soc_state.state)
                     except (ValueError, TypeError):
                         _LOGGER.debug("Vehicle SOC %s not numeric: %r (#259)", per_charger_soc_entity, soc_state.state)
 
@@ -16812,7 +17083,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 "%s: own price %s (#812)", names.get(e.device_id),
                 "unreadable — its grid kWh are priced at the house rate"
                 if e.price is None else "readable")
-        calc.set_device_tariff_cycle(entries)
+        # (#1293) every registered device: time before a device is
+        # registered is not time off its own meter
+        calc.set_device_tariff_cycle(
+            entries, known=[str(getattr(d, "device_id", "") or "") for d in devices])
 
     def _device_tariff_books(self) -> Dict[str, Any]:
         """(#812) Today's grid kWh and cost per own-tariff device, for its

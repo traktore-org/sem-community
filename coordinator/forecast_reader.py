@@ -24,6 +24,7 @@ from homeassistant.const import STATE_UNKNOWN, STATE_UNAVAILABLE
 from homeassistant.util import dt as dt_util
 
 from .units import power_state_to_watts, power_unit_scale
+from .units import finite_float
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -1101,7 +1102,7 @@ class ForecastReader:
             if not state:
                 continue
             try:
-                value = float(state.state)
+                value = finite_float(state.state)
             except (ValueError, TypeError):
                 continue
             name = (state.attributes or {}).get("friendly_name") or entity_id
@@ -1164,7 +1165,7 @@ class ForecastReader:
             state = self.hass.states.get(entity_id)
             if state and state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE, None):
                 try:
-                    total += float(state.state)
+                    total += finite_float(state.state)
                     any_available = True
                 except (ValueError, TypeError):
                     pass
@@ -1195,7 +1196,7 @@ class ForecastReader:
         state = self.hass.states.get(entity_id)
         if state and state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE, None):
             try:
-                return float(state.state)
+                return finite_float(state.state)
             except (ValueError, TypeError):
                 pass
         return default

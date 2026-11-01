@@ -57,7 +57,7 @@
       },
       "reconfigure": {
         "title": "Reconfigurar Solar Energy Management",
-        "description": "Atualize as definições do seu carregador VE e das notificações",
+        "description": "Atualize as definições do seu carregador VE e das notificações{charger_note}",
         "data": {
           "ev_connected_sensor": "Estado de conexão VE",
           "ev_charging_sensor": "Estado de carregamento VE",
@@ -2052,6 +2052,14 @@
     "power_sensor_not_found_unit": {
       "title": "Nenhum sensor de potência para {energy_entity}",
       "description": "O painel de Energia conta **{energy_entity}** em kWh, mas o SEM não encontrou nenhum sensor de potência (W) para ele. O SEM soma apenas as outras entradas solares ou de bateria, por isso os fluxos de energia e o excedente estão errados. Para corrigir, adicione o sensor de potência a esta entrada no painel de Energia. Se não existir nenhum sensor de potência, pode ignorar este aviso."
+    },
+    "half_grid_pair": {
+      "title": "O SEM não vê a sua exportação para a rede",
+      "description": "Apenas o sensor de importação da rede **{import_entity}** está definido, por isso o SEM lê a exportação como 0 W. Mas o seu contador de exportação **{export_entity}** mostra que saiu energia para a rede. Para corrigir, abra o painel do SEM, separador ⚙ **Configuração**, e escolha **Todas as definições** no topo. Depois defina o **Sensor de exportação para a rede** na secção **Tarifa e preços**. Ou esvazie o **Sensor de importação da rede**, e o SEM procura o par sozinho."
+    },
+    "unseen_power_row": {
+      "title": "O SEM não vê toda a sua potência solar ou da bateria",
+      "description": "O painel de Energia conta **{energy_entity}** em kWh, e o seu contador continua a subir. Mas a potência que o SEM lê (**{power_entity}**) não o inclui, por isso o SEM mostra pouca potência solar ou da bateria. O SEM não usa um segundo sensor de potência de um dispositivo que já lê, porque podia contar a mesma potência duas vezes. Para corrigir, adicione um sensor de potência para esta entrada no painel de Energia."
     },
     "charger_device_gone": {
       "title": "Carregador {name}: dispositivo em falta",

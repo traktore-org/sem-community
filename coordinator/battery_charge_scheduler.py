@@ -858,12 +858,15 @@ def schedule_view_from_plan(plan, now) -> dict:
             active = bool(start <= now < end)
         except TypeError:  # naive/aware mismatch — honest False
             active = False
+        # (#1282) the plan keeps exact watts for its gates; the entity
+        # shows whole watts, as it always has
+        shown_w = round(power, 0)
         slots.append({
             "start": start.isoformat(),
             "end": end.isoformat(),
-            "battery_w": power,
+            "battery_w": shown_w,
             "ev_w": 0,
-            "total_w": power,
+            "total_w": shown_w,
             "price": price,
             "active": active,
         })

@@ -21,7 +21,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ✨ **Ask Assist to skip or force charge for one night, or go back to normal** (#1086). Off by default, like the other voice commands.
 - ✨ **Pause or force a battery or charger for a set time** (#1085). It survives a restart and ends on its own.
 - 🔧 **Setup now knows the price sensor of Tibber, Tibber Prices and ENTSO-e by its own name** (#1168). Nothing reads it yet.
+- 🐛 **The wallbox text no longer shows "Bat 0%" before the battery level is read** (#1288). It shows "Wait: Bat" until then.
+- 🐛 **A new install fills this year's totals from Home Assistant's history** (#1291). The seed asked the recorder the wrong way and never ran.
+- 🐛 **Power and energy charts show the right size for sensors kept in kW or MWh** (#1292). They were drawn a thousand times off.
+- 🐛 **A car waits for its planned block when the plan fits the need to 99.9 %** (#1289). Before, a few Wh short ended the wait.
+- 🐛 **A load keeps waiting for its planned block when its rated power rises after the plan** (#1290). The wait now counts hours, not kWh.
+- 🐛 **Old battery sales no longer count as solar in this year's and the lifetime CO2 avoided** (#1245). SEM reads them once from Home Assistant's history.
+- 🐛 **With the energy plan on, a car no longer charges for a few minutes between its planned blocks** (#1282).
+- 🐛 **A device with its own tariff books all its kWh when its meter moves in 0.1 kWh steps or every few minutes** (#1230).
+- 🐛 **A device with its own tariff and meter no longer loses part of its kWh after a short restart** (#1293).
+- 🐛 **A battery sale only starts inside the hours of the plan that holds it** (#1272). A plan made after midnight no longer sells that evening.
+- 🐛 **With the Deye platform, only the Deye battery is driven as Deye** (#1273). A second battery in the home gets the generic adapter.
+- 🐛 **A refused stop of a Huawei sale on a power number is retried** (#1276). Before, it counted as sent and the battery kept selling.
+- 🐛 **Two Huawei packs on one device no longer end each other's sale** (#1275). A pack whose sale a sibling's stop ended sends it again.
+- 🐛 **The planned sale goes only to batteries that may sell** (#1277). A battery in self-consumption mode or without export permission took half and sold nothing.
+- 🐛 **A Deye battery keeps its saved settings when another battery above it is removed** (#1257). They now move to its new number.
+- 🐛 **A battery sale now ends a grid charge SEM started first** (#1280). Before, the switch or work mode stayed on while it sold.
+- 🐛 **A restart no longer turns off a charge switch you set yourself** (#1281). SEM now stops only the charges it started.
+- 🐛 **After a restart, an export cut goes back to the setting SEM found** (#1274). The saved value was lost before the battery was set up.
+- 🐛 **One battery's false 0 % read no longer drags the fleet level down** (#1285). Each battery's level now has the same jump check as the fleet.
+- 🐛 **A sensor state of "nan" or "inf" is no number** (#1262). The car level, forecasts, tariffs and loads read it as a value.
+- 🐛 **Savings no longer count the house twice when the sun drops while the inverter reads dark** (#1269). The battery's share wins over the held solar.
+- 🐛 **A home reading 1–2 % off during a big EV session no longer warns about a stale sensor** (#1234). Real sign errors still warn.
+- 🐛 **A power cut no longer loses the day's EV sessions on homes without a battery**; the energy store is written every 5 minutes (#1252).
+- 🐛 **"Buffer", "% self" and "% solar" on three cards are now translated** in all 16 languages (#1264).
+- 🐛 **Diagnostics hide the battery sensor and counter ids in the battery-sign block**, like the config section does (#1270).
+- 🐛 **The CO2 figures on three cards show the unit of the sensor (lb, g) instead of always "kg"** (#1242).
+- 🐛 **A device counter that dips and returns to the same value no longer logs a "reset" warning**; it is a debug line (#1235).
+- 🐛 **Observer mode no longer warns "commanded STOP … the stop is not taking"**; SEM sends nothing there, so it is only a debug line now (#1233).
+- 🐛 **Two grid meters: SEM stops searching every cycle for a dark sensor, and asks again when the device lookup was not ready** (#1286).
+- 🐛 **When the daily cap cuts solar or battery energy, the month and year lose those kWh too** (#1243).
+- 🐛 **Hands-off marks and load modes you set now survive going back to an older version and forward again** (#1253).
+- 🐛 **A charger sensor or service changed on the Reconfigure page now changes what SEM runs** (#1247). The page shows the charger's own saved values.
+- 🐛 **A charger moved to helper sensors no longer keeps a "device is gone" Repair while its sensors still exist** (#1248).
+- 🐛 **A new service on the first charger's Configure page drops the old service's field name, data and box name** (#1249).
+- 🐛 **Reconfigure no longer shows three empty required EV fields for a charger set up in the charger list** (#1258). It says to use Configure.
+- 🐛 **Without an Energy Dashboard, a new grid sensor no longer inherits the grid sign learned on the old one** (#1246).
+
+# [2.3.0-beta.1] — 31.10.2026
+
+- 🐛 **After a restart, SEM no longer takes a false 0 % battery level as true** (#1284). SEM waits until it reads the same level three times.
+- 🐛 **Setup finds a grid meter with separate import and export power sensors and no longer asks you to pick one** (#1237).
+- 🐛 **Force discharge goes back to Auto when the battery stops selling above the reserve** (#1165). It needs 15 minutes without sun while the home buys.
+- 🐛 **With two batteries, SEM no longer sends the second battery's commands to the Huawei or GoodWe inverter** (#1183).
+- 🐛 **A rebuilt plan that moves when the battery sells to the grid now shows a new plan time** (#1184). A running sale keeps going.
 - 🐛 **Daily energy flows and solar savings no longer drop while a power sensor is out for a moment** (#1185). SEM uses its last reading.
+- 🐛 **Two batteries that share one sale power setting no longer stop each other's sale to the grid** (#1182). The sale is shared out right.
+- 🐛 **A grid charge on GoodWe or a charge switch now stops after you set the battery to Off, turn SEM off, or restart** (#1181).
+- 🐛 **Simulation: a restart no longer drops a day, and an error of 5–10 % shows the what-if with a note** (#1278).
+- 🐛 **With two batteries at 0 %, SEM now reads 0 % instead of no level** (#1169). A level below 0 % now counts as out.
+- 🐛 **Flow and diagram cards show "— W" for a grid or battery sensor that is out, when only one of its two sensors is set** (#1265).
+- 🐛 **Grid power from a meter with no device now reads at once after a restart** (#1240). Its power sensors and counters come from one integration.
+- 🐛 **With two grid meters, SEM now adds the power of both** (#1241). A meter with no power pair is logged.
+- 🐛 **A grid import sensor set alone now raises a Repair when your export counter shows power went to the grid** (#1238).
+- 🐛 **A second inverter or battery whose power SEM cannot read now raises a Repair when its counter shows unseen energy** (#1236).
 
 # [2.2.0] — 30.10.2026
 

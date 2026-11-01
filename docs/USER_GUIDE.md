@@ -658,8 +658,8 @@ When you have multiple batteries (e.g. Huawei + Growatt, or split Huawei units),
 | **Auto** | The inverter runs the battery as usual. SEM steps in only to: charge it from the grid in the planned cheap hours when tonight needs it (or at a negative price); sell in the plan's sell hours when selling is on; hold it to the house while a car is plugged in and the spare sun is under the Solar Gate or the battery is under the Buffer SoC; hold it to the house while grid-funded loads run. | Default |
 | **Self-Consumption** | As Auto, but it never sells to the grid, unless you turn on *Battery may sell to the grid* | Keep the battery for the house |
 | **Force Charge** | Charges to 100 % now, at the maximum charge power, from the sun and the grid, **at any price**. Only the grid peak limit slows or stops it. At 100 % the mode goes back to Auto. Some inverters stop the charge below 100 %. From 90 % on, a battery that takes no more charge for 15 minutes also goes back to Auto. Is your inverter set to stop lower? Pick its level in Settings, **Battery end-of-charge level**. SEM only reads it and then counts from 2 % below it. | Deliberate top-up before heavy use |
-| **Force Discharge** | Sells at the maximum discharge power down to this battery's reserve, then the mode goes back to Auto. It does not sell while the battery level cannot be read. | Emergency backup or a manual sale |
-| **Off** | One clean hand-over to the inverter, then SEM sends nothing to this battery | Manual control or testing |
+| **Force Discharge** | Sells at the maximum discharge power down to this battery's reserve, then the mode goes back to Auto. Some inverters stop the sale above the reserve: a battery that sends nothing for 15 minutes while the home buys from the grid and there is no sun also goes back to Auto. It does not sell while the battery level cannot be read. | Emergency backup or a manual sale |
+| **Off** | One clean hand-over to the inverter, then SEM sends nothing to this battery. A charge from the grid that SEM started stops first, also when you turn SEM off. After a restart, SEM stops that charge unless the plan still needs it. | Manual control or testing |
 
 > **Force Charge and the price.** It does not wait for a cheap hour: at night
 > in an expensive hour it buys from the grid. It is a deliberate override —
@@ -1956,8 +1956,12 @@ kept. One run at a time.
 - **Indicative** days had a missing hour, price or battery level, or a
   counter that jumped. Read them as a rough guide.
 - Before showing a what-if, SEM replays the same period with your own
-  settings. If that misses your real cost by more than 5 %, the tab says
-  the period cannot be simulated reliably instead.
+  settings. Up to 5 % off, the numbers show as they are. Between 5 % and
+  10 %, they show with a note and the error. Over 10 %, the tab says the
+  period cannot be simulated reliably instead.
+- A restart no longer leaves a day out. The tab says how many days in the
+  period are left out for another reason, such as a dark reading or a
+  stuck counter.
   This check leaves out days where a counter jumped, and says how many
   days it used. Days when a car charged get their own line: how far off
   your settings are on those days.

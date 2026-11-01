@@ -258,7 +258,8 @@ class SEMTabHeader extends SEMLitBase {
         if (tab === 'system') return [
             fig(this._getState('energy_optimization_score'), (v) => v.toFixed(0)),
             fig(this._getState('lifetime_total_savings'), money(0)),
-            fig(this._getState('lifetime_co2_avoided'), (v) => v.toFixed(0) + ' kg'),
+            fig(this._getState('lifetime_co2_avoided'),
+                (v) => v.toFixed(0) + ' ' + this._kgUnit('lifetime_co2_avoided')),
         ];
         return [MISSING, MISSING, MISSING];
     }

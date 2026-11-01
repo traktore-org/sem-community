@@ -57,7 +57,7 @@
       },
       "reconfigure": {
         "title": "A Solar Energy Management újrakonfigurálása",
-        "description": "Frissítse az EV-töltő és az értesítési beállításokat",
+        "description": "Frissítse az EV-töltő és az értesítési beállításokat{charger_note}",
         "data": {
           "ev_connected_sensor": "EV Csatlakoztatva",
           "ev_charging_sensor": "EV Töltési állapot",
@@ -2052,6 +2052,14 @@
     "power_sensor_not_found_unit": {
       "title": "Nincs teljesítményszenzor ehhez: {energy_entity}",
       "description": "Az Energia irányítópult kWh-ban számolja ezt: **{energy_entity}**, de a SEM nem talált hozzá teljesítményszenzort (W). A SEM ezért csak a többi napelemes vagy akkumulátoros bejegyzést adja össze, így az energiaáramlások és a többlet hibásak. A javításhoz add hozzá a teljesítményszenzort ehhez a bejegyzéshez az Energia irányítópulton. Ha nincs teljesítményszenzor, figyelmen kívül hagyhatod ezt az értesítést."
+    },
+    "half_grid_pair": {
+      "title": "A SEM nem látja a hálózatba táplálást",
+      "description": "Csak a **{import_entity}** hálózati import szenzor van beállítva, ezért a SEM az exportot 0 W-nak olvassa. De az **{export_entity}** export számláló szerint áram ment a hálózatba. A javításhoz nyissa meg a SEM irányítópultot, a ⚙ **Konfiguráció** fület, és fent válassza a **Minden beállítás** lehetőséget. Ezután állítsa be a **Hálózati export szenzor** mezőt a **Tarifa és árazás** szakaszban. Vagy törölje a **Hálózati import szenzor** mezőt, és a SEM maga keresi meg a párt."
+    },
+    "unseen_power_row": {
+      "title": "A SEM nem látja a teljes nap- vagy akkuteljesítményt",
+      "description": "Az Energia irányítópult kWh-ban számolja ezt: **{energy_entity}**, és a számlálója folyamatosan nő. De a SEM által olvasott teljesítmény (**{power_entity}**) nem tartalmazza, ezért a SEM túl keveset mutat a nap- vagy akkuteljesítményből. A SEM nem vesz második teljesítményszenzort olyan eszközről, amelyet már olvas, mert ugyanazt a teljesítményt kétszer számolhatná. A javításhoz adj teljesítményszenzort ehhez a bejegyzéshez az Energia irányítópulton."
     },
     "charger_device_gone": {
       "title": "{name} töltő: az eszköz hiányzik",

@@ -127,7 +127,7 @@ class SEMBatteryZonesCard extends SEMLitBase {
         const autostart = this._state(ZONES[0].entity);
         const buffer    = this._state(ZONES[1].entity);
         const priority  = this._state(ZONES[2].entity);
-        const subtitle  = `${this._t('auto_start_soc')} ${fmtValue(autostart, 0)}% · Buffer ${fmtValue(buffer, 0)}% · ${this._t('priority_soc')} ${fmtValue(priority, 0)}%`;
+        const subtitle  = `${this._t('auto_start_soc')} ${fmtValue(autostart, 0)}% · ${this._t('buffer_word')} ${fmtValue(buffer, 0)}% · ${this._t('priority_soc')} ${fmtValue(priority, 0)}%`;
 
         return html`
             <style>

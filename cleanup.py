@@ -40,6 +40,7 @@ _LOGGER = logging.getLogger(__name__)
 #:   coordinator/coordinator.py (#949) -> f"sem.pacing.{entry_id}"
 #:   coordinator/coordinator.py (#955) -> f"sem.export_guard.{entry_id}"
 #:   coordinator/coordinator.py (#1180) -> f"sem.charge_target.{entry_id}"
+#:   coordinator/coordinator.py (#1181) -> f"sem.forced_charge.{entry_id}"
 _PER_ENTRY_STORE_FORMATS: tuple[str, ...] = (
     f"{DOMAIN}_{{entry_id}}_energy",
     f"{DOMAIN}_{{entry_id}}_daily",
@@ -56,6 +57,8 @@ _PER_ENTRY_STORE_FORMATS: tuple[str, ...] = (
     "sem.parked.{entry_id}",
     # (#1180) coordinator/coordinator.py — the charge target SEM found
     "sem.charge_target.{entry_id}",
+    # (#1181) coordinator/coordinator.py — the forced charges SEM started
+    "sem.forced_charge.{entry_id}",
 )
 
 #: Per-entry stores whose key carries a SECOND scope (a battery id), so they
@@ -71,6 +74,7 @@ _PER_ENTRY_STORE_PREFIXES: tuple[str, ...] = (
 #: device mappings and its load priorities.
 _INSTALL_WIDE_STORES: tuple[str, ...] = (
     "sem_device_mappings",
+    f"{DOMAIN}_device_marks",     # (#1253) features/device_registry.py
     f"{DOMAIN}_load_management_devices",
 )
 

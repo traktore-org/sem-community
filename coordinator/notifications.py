@@ -361,6 +361,12 @@ class NotificationManager:
         except Exception as e:
             _LOGGER.debug("Failed to send notification: %s", e)
 
+    @staticmethod
+    def _without_soc(_t, key: str, default: str) -> str:
+        """The text with no percent: an unread level is not 0 % (#1288)."""
+        template = _t(key, default)
+        return template.replace(" {soc}%", "").replace("{soc}%", "").strip()
+
     def _get_notification_messages(
         self,
         state: str,
@@ -370,6 +376,7 @@ class NotificationManager:
         messages = {}
 
         battery_soc = data.get("battery_soc", 0)
+        soc_known = bool(data.get("battery_soc_known", True))
         calculated_current = data.get("calculated_current", 0)
         available_power = data.get("available_power", 0)
         ev_session_energy = data.get("ev_session_energy", 0)
@@ -403,8 +410,9 @@ class NotificationManager:
                 "Bat+Sol: {current}A", current=calculated_current)
 
         elif state == ChargingState.SOLAR_PAUSE_LOW_BATTERY:
-            messages["charger"] = _t("notif_charger_pause_bat",
-                "Pause: Bat {soc}%", soc=battery_soc)
+            messages["charger"] = (
+                _t("notif_charger_pause_bat", "Pause: Bat {soc}%", soc=battery_soc) if soc_known
+                else self._without_soc(_t, "notif_charger_pause_bat", "Pause: Bat {soc}%"))
 
         elif state == ChargingState.SOLAR_TARGET_REACHED:
             messages["charger"] = _t("notif_charger_target", "Target reached")
@@ -413,8 +421,9 @@ class NotificationManager:
                 charged=daily_ev_energy, target=daily_ev_target)
 
         elif state == ChargingState.SOLAR_WAITING_BATTERY_PRIORITY:
-            messages["charger"] = _t("notif_charger_wait_bat",
-                "Wait: Bat {soc}%", soc=battery_soc)
+            messages["charger"] = (
+                _t("notif_charger_wait_bat", "Wait: Bat {soc}%", soc=battery_soc) if soc_known
+                else self._without_soc(_t, "notif_charger_wait_bat", "Wait: Bat {soc}%"))
 
         elif state == ChargingState.SOLAR_MIN_PV:
             messages["charger"] = _t("notif_charger_min_pv",

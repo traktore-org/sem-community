@@ -699,23 +699,23 @@ async def test_a_whatif_runs_the_own_settings_beside_it():
     calib = res["calibration"]
     assert calib["days"] == 3
     assert calib["error_pct"] is not None
-    assert res["calibrated"] is (calib["error_pct"] <= calib["max_pct"])
+    assert res["calibrated"] is (calib["error_pct"] <= calib["refuse_pct"])
     assert set(res["ev"]) == {"moved_kwh", "not_delivered_kwh",
                               "not_delivered_value"}
 
 
 @pytest.mark.asyncio
 async def test_own_settings_far_from_the_bill_say_so():
-    # The recorded house bought 2 kWh an hour at night with a full pack:
+    # The recorded house bought 1.5 kWh an hour at night with a full pack:
     # the own settings (the pack covers the house) cannot give that back.
     real = _rows
 
     def lossy(date):
         out = real(date)
         for row in out["sensor.sem_grid_import"]:
-            row["change"] = 2.0
+            row["change"] = 1.5
         for row in out["sensor.sem_home"]:
-            row["change"] = 2.0
+            row["change"] = 1.5
         for row in out["sensor.sem_soc"]:
             row["mean"] = 95.0
         return out
@@ -726,7 +726,7 @@ async def test_own_settings_far_from_the_bill_say_so():
         await _finish(job)
     res = storage.get_simulation_runs()[0]["result"]
     assert res["calibrated"] is False
-    assert res["calibration"]["error_pct"] > 5.0
+    assert res["calibration"]["error_pct"] > 10.0
 
 
 @pytest.mark.asyncio

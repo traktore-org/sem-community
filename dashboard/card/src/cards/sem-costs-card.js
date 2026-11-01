@@ -177,15 +177,15 @@ class SEMCostsCard extends SEMLitBase {
                             <div class="section-title">${this._t('environment')}</div>
                             <div class="metric-row">
                                 <span class="metric-label">${this._t('co2_today')}</span>
-                                <span class="metric-val c-leaf">${this._fmt(this._val('daily_co2_avoided'), 1)} kg</span>
+                                <span class="metric-val c-leaf">${this._fmt(this._val('daily_co2_avoided'), 1)} ${this._kgUnit('daily_co2_avoided')}</span>
                             </div>
                             <div class="metric-row">
                                 <span class="metric-label">${this._t('co2_yearly')}</span>
-                                <span class="metric-val c-leaf">${this._fmt(this._val('yearly_co2_avoided'), 0)} kg</span>
+                                <span class="metric-val c-leaf">${this._fmt(this._val('yearly_co2_avoided'), 0)} ${this._kgUnit('yearly_co2_avoided')}</span>
                             </div>
                             <div class="metric-row">
                                 <span class="metric-label">${this._t('co2_lifetime')}</span>
-                                <span class="metric-val c-leaf">${this._fmt(this._val('lifetime_co2_avoided'), 0)} kg</span>
+                                <span class="metric-val c-leaf">${this._fmt(this._val('lifetime_co2_avoided'), 0)} ${this._kgUnit('lifetime_co2_avoided')}</span>
                             </div>
                             <div class="metric-row">
                                 <span class="metric-label">${this._t('trees_yearly')}</span>

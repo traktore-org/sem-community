@@ -83,6 +83,10 @@ CALCULATOR_STATE_KEYS: tuple[str, ...] = (
     # (#1228) an own meter's step over an outage, waiting for the house rows
     # over the same time: lost, a restart inside the wait drops it
     "device_meter_gaps",
+    # (#1293) the time SEM saw and the flows an own meter's step is spread
+    # over: lost, the first step after a short restart is shared against one
+    # cycle's import
+    "meter_watch",
     # (#1049) each charger's own counter baselines, and what each box drew
     # since its counter last moved
     "charger_counter_baselines",
@@ -138,6 +142,9 @@ CALCULATOR_STATE_KEYS: tuple[str, ...] = (
     # (#1046) the EV day the car's flow rows were first booked on. Lost,
     # every restart would read as the upgrade day.
     "ev_flow_since",
+    # (#1245) the battery sale's history was read into its rows. Lost, every
+    # restart would ask the recorder again.
+    "sale_history_read",
 )
 
 
@@ -814,17 +821,6 @@ class SEMStorage:
         runs.append(record)
         self._daily_data["simulation_runs"] = runs[-SIMULATION_RUNS_MAX:]
 
-    def note_start(self, iso_date: str) -> None:
-        """(#1083) Remember the days SEM started on — a restart makes that
-        day's data less trustworthy for a replay. Last 30 kept."""
-        starts = [d for d in (self._daily_data.get("sem_starts") or [])
-                  if isinstance(d, str) and d != iso_date]
-        starts.append(str(iso_date))
-        self._daily_data["sem_starts"] = sorted(starts)[-30:]
-
-    def started_on(self, iso_date: str) -> bool:
-        return iso_date in (self._daily_data.get("sem_starts") or [])
-
     # Save operations
     async def async_save_energy_delayed(self) -> None:
         """Save energy data with delayed write for performance.
@@ -874,8 +870,9 @@ class SEMStorage:
         """Write the energy store to disk, at most once per
         ENERGY_SAVE_INTERVAL seconds (#800 round 3).
 
-        The battery-night recorder updates its open record every cycle; a
-        record whose whole point is surviving an UNCLEAN reboot cannot be
+        The cycle persist (every home, #1252) and the battery-night recorder
+        write through here; a record whose whole point is surviving an
+        UNCLEAN reboot cannot be
         written by ``async_delay_save`` (re-arms on every call → fires only
         at a graceful stop; see ``async_save_energy_now``'s docstring — the
         trap this file has now documented three times). Mirrors

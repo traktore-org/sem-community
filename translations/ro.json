@@ -57,7 +57,7 @@
       },
       "reconfigure": {
         "title": "Reconfigurare Solar Energy Management",
-        "description": "Actualizați setările încărcătorului VE și ale notificărilor",
+        "description": "Actualizați setările încărcătorului VE și ale notificărilor{charger_note}",
         "data": {
           "ev_connected_sensor": "Stare conectare VE",
           "ev_charging_sensor": "Stare încărcare VE",
@@ -2052,6 +2052,14 @@
     "power_sensor_not_found_unit": {
       "title": "Niciun senzor de putere pentru {energy_entity}",
       "description": "Panoul Energie numără **{energy_entity}** în kWh, dar SEM nu a găsit niciun senzor de putere (W) pentru el. SEM adună deci doar celelalte intrări solare sau de baterie, iar fluxurile de energie și surplusul sunt greșite. Pentru a remedia, adăugați senzorul de putere la această intrare din panoul Energie. Dacă nu există niciun senzor de putere, puteți ignora această notificare."
+    },
+    "half_grid_pair": {
+      "title": "SEM nu vede exportul în rețea",
+      "description": "Doar senzorul de import din rețea **{import_entity}** este setat, deci SEM citește exportul ca 0 W. Dar contorul dvs. de export **{export_entity}** arată că s-a trimis energie în rețea. Pentru a remedia, deschideți tabloul SEM, fila ⚙ **Configurare**, și alegeți **Toate setările** din partea de sus. Apoi setați **Senzor export rețea** în secțiunea **Tarif și prețuri**. Sau goliți **Senzor import rețea**, iar SEM caută singur perechea."
+    },
+    "unseen_power_row": {
+      "title": "SEM nu vede toată puterea solară sau a bateriei",
+      "description": "Panoul Energie numără **{energy_entity}** în kWh, iar contorul lui continuă să crească. Dar puterea pe care o citește SEM (**{power_entity}**) nu îl include, deci SEM arată prea puțină putere solară sau a bateriei. SEM nu ia un al doilea senzor de putere de la un dispozitiv pe care îl citește deja, pentru că ar putea număra aceeași putere de două ori. Pentru a remedia, adăugați un senzor de putere pentru această intrare din panoul Energie."
     },
     "charger_device_gone": {
       "title": "Încărcătorul {name}: dispozitivul lipsește",

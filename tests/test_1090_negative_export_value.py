@@ -60,10 +60,17 @@ async def _two_cycles(config, states):
     from custom_components.solar_energy_management.coordinator.coordinator import (
         SEMCoordinator,
     )
+    from custom_components.solar_energy_management.consts.core import (
+        BATTERY_SOC_STEP_CONFIRM_READS,
+    )
     coord = SEMCoordinator(_hass(states), dict(config))
     coord.config_entry = None
     nights = sealed_nights()
     coord._battery_night = SimpleNamespace(sealed=lambda: nights)
+    # (#1284) the first SOC after a start counts once it has repeated; this
+    # home is already running, as in run_cycle
+    for _ in range(BATTERY_SOC_STEP_CONFIRM_READS - 1):
+        coord._sensor_reader.read_power()
     await coord._async_update_data()
     return await coord._async_update_data()
 

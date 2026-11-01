@@ -604,8 +604,8 @@ async def test_a_failed_stop_keeps_the_stop_first():
 async def test_an_arbitrage_stop_after_a_night_charge_still_ends_the_charge():
     """Review HIGH 1. A switch-based forced charge runs; the target is met
     and the arbitrage verdict (``not_profitable``) takes the slot. Its stop
-    is a DISCHARGE stop, which does not turn the switch off. The charge must
-    still be stopped — and only then does the clamp run."""
+    is a DISCHARGE stop; the switch only goes off through the charge stop.
+    The charge must still be stopped — and only then does the clamp run."""
     from custom_components.solar_energy_management.coordinator.battery_adapters.force_charge import (
         ChargeCommandStatus,
     )
@@ -615,19 +615,35 @@ async def test_an_arbitrage_stop_after_a_night_charge_still_ends_the_charge():
         "battery_target_soc_entity": "number.target"})
     started = Mock(status=ChargeCommandStatus.CHARGING, message="")
     stopped = Mock(status=ChargeCommandStatus.IDLE, message="")
-    ad._charge_adapter = Mock(start_forced_charge=AsyncMock(return_value=started),
-                              stop_forced_charge=AsyncMock(return_value=stopped))
+    # (#1181) is_active as the real adapter keeps it: a bare Mock reads as
+    # a charge running for ever
+    ca = Mock(is_active=False)
+
+    async def _start(cmd):
+        ca.is_active = True
+        return started
+
+    async def _stop():
+        ca.is_active = False
+        return stopped
+    ca.start_forced_charge = AsyncMock(side_effect=_start)
+    ca.stop_forced_charge = AsyncMock(side_effect=_stop)
+    ad._charge_adapter = ca
     d = await _cycle(ad, sched=_sched("scheduled"),
                      gate=_gate(covered=True, in_block=True))
     assert d.intent is BatteryIntent.FORCE_CHARGE
     assert ad._sem_forced_charge is True
     arb = _sched("not_profitable", from_arbitrage=True)
     seen = [(await _cycle(ad, sched=arb)).intent for _ in range(4)]
+    # (#1181) The discharge stop hands the pack back through NORMAL, and
+    # NORMAL now stops a charge SEM started: the switch goes off in that
+    # same cycle, so the clamp runs from the next one.
     assert seen == [BatteryIntent.STOP_FORCE_DISCHARGE,
-                    BatteryIntent.STOP_FORCE_CHARGE,
+                    BatteryIntent.LIMIT_DISCHARGE,
                     BatteryIntent.LIMIT_DISCHARGE,
                     BatteryIntent.LIMIT_DISCHARGE], seen
     assert ad._charge_adapter.stop_forced_charge.await_count == 1
+    assert ad._sem_forced_charge is False
 
 
 def _deye():

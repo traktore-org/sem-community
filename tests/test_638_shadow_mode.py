@@ -586,6 +586,7 @@ class TestFleetSocCoverage:
             _auto_detect_battery_soc=detect,
             _read_sensor=read,
             _soc_candidate_exists=exists,
+            _accept_unit_soc=lambda _entity, value: value,
             _soc_units_expected=0, _soc_units_read=0,
             _soc_partial_logged=False, _soc_undetected_logged=False,
         )
@@ -663,7 +664,7 @@ class TestFleetSocCoverage:
         rdr._soc_partial_logged = True
         avg = SensorReader._read_battery_soc_average(
             rdr, ["sensor.b1_power", "sensor.b2_power"])
-        assert avg == 0.0
+        assert avg is None      # (#1169) no reading, not a 0 % fleet
         assert rdr._soc_partial_logged is False
 
 

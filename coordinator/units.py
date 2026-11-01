@@ -42,6 +42,13 @@ from typing import Optional
 # state strings that are not a reading
 _NOT_A_VALUE = (None, "", "unknown", "unavailable", "none")
 
+#: (#1245) The units every recorder statistics query asks for. Left out
+#: (``None``), the recorder hands each sensor's numbers in the unit its state
+#: shows: a counter or a sensor shown in Wh reads 1000 times too high. Only
+#: energy is named: power still comes back in the unit HA shows (SEM reads
+#: no power history); % and money are never converted.
+RECORDER_UNITS = {"energy": "kWh"}
+
 
 def state_number(raw) -> Optional[float]:
     """(#1202) A state as a finite number, or None when it gives none.
@@ -59,6 +66,19 @@ def state_number(raw) -> Optional[float]:
     except (ValueError, TypeError):
         return None
     return value if math.isfinite(value) else None
+
+
+def finite_float(raw) -> float:
+    """(#1262) ``float()`` that refuses "nan" and "inf" like it refuses text.
+
+    For a call site that already catches ``ValueError`` from ``float(state)``:
+    NaN parses, is not None, and fails every compare, so it passed as a known
+    reading.
+    """
+    value = float(raw)
+    if not math.isfinite(value):
+        raise ValueError(f"not a finite number: {raw!r}")
+    return value
 
 # unit (stripped + lowercased) → multiplier to reach WATTS.
 #

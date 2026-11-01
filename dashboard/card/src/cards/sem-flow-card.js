@@ -13,7 +13,7 @@
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { unsafeSVG } from 'lit/directives/unsafe-svg.js';
-import { MISSING, fmtValue, isMissing, readNumber } from '../util/missing-value.js';
+import { MISSING, fmtValue, isMissing, pairOut, readNumber } from '../util/missing-value.js';
 import {
     semTheme, semFormatPower, semCalcDuration, semGetCurrency, semDefineCard,
     SEM_COLORS, SEM_DEVICE_COLORS, SEM_FLOW_ACTIVE_THRESHOLD,
@@ -467,10 +467,11 @@ class SEMFlowCard extends SEMLitBase {
         const autarky = this._getState('autarky_rate');
 
         const solarOut = this._isOut('solar_power');
+        // (#1265) a pair is out when every half that is set is out
         const gridOut = gridCombined ? this._isOut('grid_power')
-            : this._isOut('grid_import_power') && this._isOut('grid_export_power');
+            : this._pairOut('grid_import_power', 'grid_export_power');
         const battOut = battSplit
-            ? this._isOut('battery_charge_power') && this._isOut('battery_discharge_power')
+            ? this._pairOut('battery_charge_power', 'battery_discharge_power')
             : this._isOut('battery_power');
         const evOut = this._isOut('ev_power');
 
@@ -530,7 +531,7 @@ class SEMFlowCard extends SEMLitBase {
 
         const autarkyEntity = this._getEntityId('autarky_rate');
         if (autarkyEntity) {
-            this._animateValue('val-autarky', autarky, 800, v => `\u26A1 ${fmtValue(v, 0)}% self`);
+            this._animateValue('val-autarky', autarky, 800, v => `\u26A1 ${fmtValue(v, 0)}% ${this._t('self_word')}`);
         }
 
         this._setText('val-inverter-status', this._getStateStr('charging_state'));
@@ -1036,6 +1037,12 @@ class SEMFlowCard extends SEMLitBase {
     _isOut(key) {
         const entityId = this._getEntityId(key);
         return !!entityId && readNumber(this._hass?.states[entityId]) == null;
+    }
+
+    // (#1265) Is a node fed by two sensors out? A half the user did not map
+    // is no reading and does not vouch for the node (util/missing-value.js).
+    _pairOut(keyA, keyB) {
+        return pairOut(this._hass?.states, [this._getEntityId(keyA), this._getEntityId(keyB)]);
     }
 
     // (#699) The coordinator's ATOMIC balance snapshot — all values from one

@@ -294,6 +294,13 @@ REDACT_CONFIG_KEYS = {
 }
 
 
+# (#1270) Entity ids in the battery-sign block: same class as the config keys.
+REDACT_BATTERY_SIGN_KEYS = {
+    "battery_power_sensor", "sensor", "counters",
+    "charge_counters", "discharge_counters",
+}
+
+
 def _safe(fn):
     """Evaluate a diagnostics accessor; a broken internal must never take
     the whole download down (the download IS the debugging tool)."""
@@ -475,6 +482,10 @@ async def async_get_config_entry_diagnostics(
             "import_sensor": disc.get("import"),
             "export_sensor": disc.get("export"),
             "confidence": disc.get("confidence"),
+            # (#1241) the pairs of the other grid meters, and the counters
+            # of a meter that has none (then the main pair is read alone)
+            "other_meter_pairs": [list(p) for p in (disc.get("more") or [])],
+            "meters_without_pair": list(disc.get("more_missing") or ()),
             "grid_energy_device_resolved": grid_device_resolved,
             # (#947 review) A field named "corroborated" reporting None for a
             # pick that is trusted WITHOUT corroboration is self-contradictory.
@@ -651,6 +662,11 @@ async def async_get_config_entry_diagnostics(
         _hold = getattr(coordinator, "_charge_target_hold_obj", None)
         if isinstance(_hold, ChargeTargetHold):
             battery_info["charge_target_held"] = _hold.snapshot()
+        # (#1181) each switch or mode select SEM turned on and has not seen off
+        from .coordinator.battery_adapters.charge_record import ForcedChargeRecord
+        _rec = getattr(coordinator, "_forced_charge_record_obj", None)
+        if isinstance(_rec, ForcedChargeRecord):
+            battery_info["forced_charge_running"] = _rec.snapshot()
         # #709 — Deye forced-grid-charge observability. Read-only. Keep the
         # generic payload unchanged when no Deye adapter exists.
         deye_info = _build_deye_diagnostics(_adapters)
@@ -824,7 +840,8 @@ async def async_get_config_entry_diagnostics(
         "external_control": _safe(
             lambda: coordinator._external_control.rows()) or [],
         "energy_dashboard": ed_info,
-        "battery_sign": battery_sign_info,
+        "battery_sign": async_redact_data(
+            battery_sign_info, REDACT_BATTERY_SIGN_KEYS),
         "split_grid_discovery": split_grid_info,
         "pv_strings_discovery": pv_strings_info,
         "charger_adapters": charger_adapter_info,

@@ -66,7 +66,7 @@ def _start(refs, resolved, device_of, live, sure=(NEW_DEV,)):
 def test_premise_his_store_names_the_gone_device():
     refs, resolved = _his_store()
     assert cr.problems(refs, resolved, device_exists=lambda d: d == NEW_DEV,
-                       entity_exists=lambda e: True)[0]["kind"] == "charger_device_gone"
+                       entity_exists=lambda e: False)[0]["kind"] == "charger_device_gone"
 
 
 def test_the_ref_follows_his_entities():

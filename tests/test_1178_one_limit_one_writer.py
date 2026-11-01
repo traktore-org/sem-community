@@ -368,17 +368,18 @@ class TestWhatStays:
 
     async def test_a_shared_limit_is_no_longer_called_a_fight(self, caplog):
         """The setup warning said two batteries on one entity "will fight".
-        For the discharge limit that is no longer true; for the sale power
-        it still is."""
+        For the discharge limit that is no longer true, nor for the sale
+        power (#1182); for a strategy select it still is."""
         stub = MagicMock()
         stub._battery_control_entity_owner = None
         for bid in ("b1", "b2"):
             SEMCoordinator._warn_battery_entity_collision(stub, bid, {
                 "battery_discharge_control_entity": LIMIT,
-                "battery_force_discharge_control_entity": SETPOINT})
+                "battery_force_discharge_control_entity": SETPOINT,
+                "battery_strategy_control_entity": STRATEGY})
         fights = [r.getMessage() for r in caplog.records
                   if "collision" in r.getMessage()]
-        assert len(fights) == 1 and SETPOINT in fights[0]
+        assert len(fights) == 1 and STRATEGY in fights[0]
 
     async def test_an_unload_during_a_cycle_still_hands_back(self):
         """A cycle still running has b2 marked; the unload's hand-back is

@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 import json
 import logging
+import math
 import re
 import time
 
@@ -93,6 +94,16 @@ def _energy_plan_state(plan: Any) -> str:
 _PLAN_ATTR_BUDGET_BYTES = RECORDER_ATTR_BUDGET_BYTES
 
 
+def _whole_watts(value: Any) -> Any:
+    """(#1282) A plan block's watts as the card shows them. Anything that
+    is not a number passes through unchanged."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return value
+    if not math.isfinite(value):
+        return value
+    return round(float(value), 0)
+
+
 def _merge_plan_blocks(blocks: Any) -> List[Dict[str, Any]]:
     """(#638) Collapse a demand's back-to-back slot allocations into runs.
 
@@ -121,7 +132,9 @@ def _merge_plan_blocks(blocks: Any) -> List[Dict[str, Any]]:
             "id": b.get("id"),
             "start": b.get("start"),
             "end": b.get("end"),
-            "power_w": b.get("power_w"),
+            # (#1282) the plan keeps exact watts for its gates; the card
+            # shows whole watts, as it always has
+            "power_w": _whole_watts(b.get("power_w")),
         }
         if b.get("late"):
             row["late"] = True      # (#1023) the top-up stays its own run

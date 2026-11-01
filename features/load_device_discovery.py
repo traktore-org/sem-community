@@ -14,6 +14,7 @@ from ..ha_energy_reader import (
     get_all_individual_devices,
     _find_load_power_sensor,
 )
+from ..coordinator.units import finite_float
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -66,7 +67,7 @@ def setpoint_is_running(hass: HomeAssistant, entity_id: str) -> Optional[bool]:
         return None
     state = hass.states.get(entity_id)
     try:
-        value = float(state.state)
+        value = finite_float(state.state)
     except (TypeError, ValueError, AttributeError):
         return None
     attrs = getattr(state, "attributes", None) or {}
@@ -545,7 +546,7 @@ class LoadDeviceDiscovery:
                 max_value = 32
                 if state and state.state not in ("unavailable", "unknown"):
                     try:
-                        original_value = float(state.state)
+                        original_value = finite_float(state.state)
                     except (ValueError, TypeError):
                         pass
                     min_value = state.attributes.get("min", 0)
@@ -638,7 +639,7 @@ class LoadDeviceDiscovery:
                 state = self.hass.states.get(number)
                 if state and state.state not in ("unknown", "unavailable"):
                     try:
-                        original_value = float(state.state)
+                        original_value = finite_float(state.state)
                     except (ValueError, TypeError):
                         original_value = None
 
@@ -700,7 +701,7 @@ class LoadDeviceDiscovery:
                     state = self.hass.states.get(entity)
                     if state and state.state not in ("unavailable", "unknown"):
                         try:
-                            original_value = float(state.state)
+                            original_value = finite_float(state.state)
                         except (ValueError, TypeError):
                             original_value = 16
 
@@ -721,7 +722,7 @@ class LoadDeviceDiscovery:
                         state = self.hass.states.get(entity)
                         if state and state.state not in ("unavailable", "unknown"):
                             try:
-                                original_value = float(state.state)
+                                original_value = finite_float(state.state)
                             except (ValueError, TypeError):
                                 original_value = 16
 
@@ -892,7 +893,7 @@ class LoadDeviceDiscovery:
             return False
 
         try:
-            power_value = float(power_state.state)
+            power_value = finite_float(power_state.state)
             # Power should be reasonable (0-10kW for most household devices)
             return 0 <= power_value <= 10000
         except (ValueError, TypeError):
@@ -920,7 +921,7 @@ class LoadDeviceDiscovery:
         state = self.hass.states.get(power_entity)
         if state and state.state not in ("unknown", "unavailable"):
             try:
-                return float(state.state)
+                return finite_float(state.state)
             except (ValueError, TypeError):
                 pass
         return 0.0
@@ -983,7 +984,7 @@ class LoadDeviceDiscovery:
         # Get current power first (needed for is_on fallback)
         if power_state and power_state.state not in ("unknown", "unavailable"):
             try:
-                current_power = float(power_state.state)
+                current_power = finite_float(power_state.state)
                 power_known = True
             except (ValueError, TypeError):
                 pass

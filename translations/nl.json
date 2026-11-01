@@ -57,7 +57,7 @@
       },
       "reconfigure": {
         "title": "SEM Herconfigureren",
-        "description": "Werk uw EV lader en meldingsinstellingen bij",
+        "description": "Werk uw EV lader en meldingsinstellingen bij{charger_note}",
         "data": {
           "ev_connected_sensor": "EV Verbonden Status",
           "ev_charging_sensor": "EV Laadstatus",
@@ -2052,6 +2052,14 @@
     "power_sensor_not_found_unit": {
       "title": "Geen vermogenssensor voor {energy_entity}",
       "description": "Het Energiedashboard telt **{energy_entity}** in kWh, maar SEM vond er geen vermogenssensor (W) voor. SEM telt alleen de andere zonne- of batterijregels op, dus de energiestromen en het overschot kloppen niet. Voeg daarom de vermogenssensor toe aan deze regel in het Energiedashboard. Is er geen vermogenssensor, dan kun je deze melding negeren."
+    },
+    "half_grid_pair": {
+      "title": "SEM ziet je teruglevering niet",
+      "description": "Alleen de netimportsensor **{import_entity}** is ingesteld, dus SEM leest export als 0 W. Maar je exportteller **{export_entity}** laat zien dat er stroom naar het net ging. Open om dit op te lossen het SEM-dashboard, tabblad ⚙ **Configuratie**, en kies bovenaan **Alle instellingen**. Stel daarna de **Netexportsensor** in bij sectie **Tarief & prijzen**. Of maak de **Netimportsensor** leeg, dan zoekt SEM het paar zelf."
+    },
+    "unseen_power_row": {
+      "title": "SEM ziet niet al je zonne- of batterijvermogen",
+      "description": "Het Energiedashboard telt **{energy_entity}** in kWh, en de teller blijft stijgen. Maar het vermogen dat SEM leest (**{power_entity}**) bevat hem niet, dus SEM toont te weinig zonne- of batterijvermogen. SEM neemt geen tweede vermogenssensor van een apparaat dat het al leest, omdat het hetzelfde vermogen dubbel zou kunnen tellen. Voeg om dit te herstellen een vermogenssensor toe voor deze regel in het Energiedashboard."
     },
     "charger_device_gone": {
       "title": "Lader {name}: apparaat ontbreekt",

@@ -589,7 +589,7 @@ class TestYearlySeedSumsEveryCounter:
             "sensor.batt_charge": _rows(0, 500), "sensor.batt_discharge": _rows(0, 450),
         }
         statistics = MagicMock()
-        statistics.statistics_during_period = AsyncMock(return_value=stats)
+        statistics.statistics_during_period = MagicMock(return_value=stats)
         calc = _calc()
         with patch.dict("sys.modules", {
             "homeassistant.components.recorder": MagicMock(),
@@ -598,7 +598,7 @@ class TestYearlySeedSumsEveryCounter:
             await calc.seed_yearly_from_statistics(MagicMock(), _ed())
 
         asked = [
-            set(c.args[3]) for c in statistics.statistics_during_period.await_args_list
+            set(c.args[3]) for c in statistics.statistics_during_period.call_args_list
             if len(c.args) > 3 and isinstance(c.args[3], (list, set, tuple))
         ]
         assert set(stats) in asked
@@ -615,7 +615,7 @@ class TestYearlySeedSumsEveryCounter:
         seed for it, not a 0 written over what live tracking holds."""
         stats = {eid: _rows(0, 100) for eid in (*SOLAR, *IMPORT, *CHARGE, *DISCHARGE)}
         statistics = MagicMock()
-        statistics.statistics_during_period = AsyncMock(return_value=stats)
+        statistics.statistics_during_period = MagicMock(return_value=stats)
         calc = _calc()
         year = str(datetime.now().year)
         calc._yearly_accumulators[f"grid_export_{year}"] = 3.0

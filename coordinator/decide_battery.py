@@ -191,6 +191,59 @@ def effective_battery_count(pbcs: "list[dict]") -> int:
     return max(1, len(surfaces) + unknown)
 
 
+def may_take_the_sale(pbc: dict, shared: dict, spend: bool) -> bool:
+    """(#1277) Would this battery act on a sale verdict? The rule
+    ``decide_battery`` applies, asked before the split so a battery that
+    may not sell gets no share. ``spend`` picks the forecast spend (its own
+    switch in ``shared``) over the arbitrage sale (the battery's own)."""
+    flag = (bool(shared.get("forecast_spending_enabled", False)) if spend
+            else bool(pbc.get("battery_grid_arbitrage_enabled", False)))
+    perms = pbc.get("battery_permissions") or shared.get("battery_permissions")
+    return arbitrage_allowed_for_mode(
+        str(pbc.get("battery_mode", "auto") or "auto"), flag, perms)
+
+
+def sale_surface_count(units: "list[tuple]", may_sell=None) -> int:
+    """(#1182) The divisor for the fleet sale split: the planned sale is
+    shared out per thing a sale lands on, not per discharge limit entity.
+
+    Two batteries on one sale power entity sell as one: each got half, and
+    one writer sent half the sale. Two on their own sale entities but one
+    limit entity sell twice: each got the whole sale, double the plan.
+
+    ``units``: ``(per-battery config, cached adapter or None)`` in fleet
+    order. A ``mode=off`` battery never sells. A built adapter answers for
+    itself: no sale at all (no entity, withdrawn after refusals, #840) is
+    no share, else its ``sale_surface``. Before the adapter is built (the
+    first cycle) the config's sale entity answers, else the limit entity as
+    before. ``may_sell(pbc)``, when given, drops a battery that may not take
+    this sale (#1277). Returns at least 1.
+    """
+    surfaces: set = set()
+    unknown = 0
+    for pbc, adapter in units:
+        if str(pbc.get("battery_mode", "auto") or "auto").lower() == "off":
+            continue
+        if may_sell is not None and not may_sell(pbc):
+            continue
+        if adapter is not None:
+            if not getattr(adapter, "supports_forced_discharge", False):
+                continue
+            fn = getattr(adapter, "sale_surface", None)
+            key = ("sale", str(fn() or "")) if callable(fn) else ("sale", "")
+        elif pbc.get("battery_force_discharge_control_entity"):
+            key = ("sale", str(pbc["battery_force_discharge_control_entity"]))
+        elif pbc.get("battery_discharge_control_entity"):
+            key = ("limit", str(pbc["battery_discharge_control_entity"]))
+        else:
+            key = ("sale", "")
+        if key[1]:
+            surfaces.add(key)
+        else:
+            unknown += 1
+    return max(1, len(surfaces) + unknown)
+
+
 def house_load_is_measured(fleet) -> bool:
     """Is this cycle's ``home_consumption_w`` a measurement? (#1003)
 
@@ -305,9 +358,21 @@ def charge_stall_soc(end_soc) -> float:
         return MANUAL_CHARGE_STALL_SOC
     return min(MANUAL_CHARGE_STALL_SOC, end - MANUAL_CHARGE_END_MARGIN)
 
+#: (#1165) Some inverters end a sale at their own lower level (30 %, while
+#: SEM's reserve is 20 %), so the pack never reaches the reserve. A sale is
+#: also done when the pack sends no more, on the charge's window (the same
+#: watts, time and gap). An export limit can hold a selling pack back too,
+#: so a pack that sends nothing counts only while the home buys at least
+#: this much from the grid: a limit stops what goes out, never the home…
+MANUAL_SALE_STALL_IMPORT_W = 100.0
+#: (#1165) …and the sun gives at most this much: a hybrid inverter that is
+#: full with sun has no room for the pack, though the home may still buy.
+MANUAL_SALE_STALL_SUN_W = 100.0
+
 
 def manual_mode_done(mode, soc, *, soc_read: bool, reserve: float,
-                     charge_stalled: bool = False) -> bool:
+                     charge_stalled: bool = False,
+                     sale_stalled: bool = False) -> bool:
     """(#1131) Has a manual charge or sale finished its job?
 
     Force charge and force discharge are one job each, not a place to stay.
@@ -320,6 +385,8 @@ def manual_mode_done(mode, soc, *, soc_read: bool, reserve: float,
     (#1164) A charge is also done when the pack has stopped taking it at
     its inverter's own end-of-charge level (``charge_stalled``, from
     :func:`charge_stall_step`): a pack that stops at 95 % never reaches 100.
+    (#1165) A sale is also done when the pack has stopped sending above the
+    reserve (``sale_stalled``, from :func:`sale_stall_step`).
 
     A level SEM cannot read finishes nothing: a held or never-read SOC is
     not the battery's level (#932, #875)."""
@@ -329,7 +396,7 @@ def manual_mode_done(mode, soc, *, soc_read: bool, reserve: float,
     if m == "force_charge":
         return float(soc) >= MANUAL_CHARGE_TARGET_SOC or bool(charge_stalled)
     if m == "force_discharge":
-        return float(soc) <= float(reserve)
+        return float(soc) <= float(reserve) or bool(sale_stalled)
     return False
 
 
@@ -362,10 +429,76 @@ def charge_stall_step(prev, now_s: float, soc, stall_read: bool):
     cycle without a stall read ends the window; a level above the one it
     started at starts it again — the pack still charges, slowly — and so
     does a gap over ``MANUAL_CHARGE_STALL_GAP_S`` since the last check."""
+    return _stall_step(prev, now_s, soc, stall_read, moves=1.0)
+
+
+def sale_stall_read(soc, power_w, *, soc_read: bool, power_read: bool,
+                    asked_w, sem_selling, site, limit_w=None) -> bool:
+    """(#1165) Does this cycle show a pack that sends no more of a sale?
+
+    All of: the level and the pack's own power are readings; SEM's sale
+    landed and is not stopped (``sem_selling``, from :func:`forced_ops`);
+    the last sale SENT asked for at least one step (``asked_w``); the pack
+    moves no more than ``MANUAL_CHARGE_STALL_W`` either way; and ``site``,
+    this cycle's ``(grid import W, sun W)``, shows the home buying at least
+    ``MANUAL_SALE_STALL_IMPORT_W`` with no more than
+    ``MANUAL_SALE_STALL_SUN_W`` of sun. ``site`` is ``None`` on a cycle
+    whose grid or sun is no measurement, and then nothing is read. Nor is it
+    when SEM's own discharge limit (``limit_w``, what the adapter last wrote;
+    ``None`` or below 0 when none) is under one step: a sale does not lift
+    it, so the pack may be held by SEM, not by its inverter (review).
+
+    Why the home: an export limit holds back what goes out. A home that
+    buys sends nothing out, so a pack that could sell would at least feed
+    the home. Why no sun: a hybrid inverter full with sun has no room for
+    the pack, and the home can buy then too."""
+    if not (soc_read and power_read) or soc is None or power_w is None:
+        return False
+    if site is None:
+        return False
+    if limit_w is not None and 0.0 <= float(limit_w) < FORCED_CHARGE_STEP_W:
+        return False
+    import_w, sun_w = site
+    return (sem_selling is True
+            and float(asked_w or 0.0) >= FORCED_CHARGE_STEP_W
+            and float(import_w) >= MANUAL_SALE_STALL_IMPORT_W
+            and float(sun_w) <= MANUAL_SALE_STALL_SUN_W
+            and abs(float(power_w)) <= MANUAL_CHARGE_STALL_W)
+
+
+def sale_stall_site(fleet, *, sun_down: bool = False):
+    """(#1165) This cycle's ``(grid import W, sun W)`` for
+    :func:`sale_stall_read`, or ``None`` when it is no measurement.
+
+    The steering reads must be measurements and the balance must close
+    (:func:`house_load_is_measured`), which catches many grid signs read
+    the wrong way, not all. One read may be dark: the solar one, while the
+    sun is below the horizon. Many inverters go offline at night, and the
+    sun is 0 W then whatever the sensor says."""
+    if float(getattr(fleet, "home_residual_clamped_w", 0.0) or 0.0) > 0.0:
+        return None
+    import_w = max(0.0, float(getattr(fleet, "grid_import_power", 0.0) or 0.0))
+    if not bool(getattr(fleet, "inputs_degraded", False)):
+        return import_w, max(0.0, float(getattr(fleet, "solar_power", 0.0) or 0.0))
+    dark = tuple(getattr(fleet, "dark_inputs", ()) or ())
+    if sun_down is True and dark == ("solar",):
+        return import_w, 0.0
+    return None
+
+
+def sale_stall_step(prev, now_s: float, soc, stall_read: bool):
+    """(#1165) :func:`charge_stall_step` for a sale: a level BELOW the one
+    the window started at starts it again — the pack still sells, slowly."""
+    return _stall_step(prev, now_s, soc, stall_read, moves=-1.0)
+
+
+def _stall_step(prev, now_s: float, soc, stall_read: bool, *, moves: float):
+    """The window of :func:`charge_stall_step` and :func:`sale_stall_step`.
+    ``moves`` is the way the job moves the level: +1 a charge, -1 a sale."""
     if not stall_read:
         return None, False
     now_s = float(now_s)
-    if (prev is None or float(soc) > float(prev[1])
+    if (prev is None or moves * (float(soc) - float(prev[1])) > 0
             or now_s - float(prev[2]) > MANUAL_CHARGE_STALL_GAP_S):
         return (now_s, float(soc), now_s), False
     since_s, start_soc = float(prev[0]), float(prev[1])
@@ -736,8 +869,8 @@ def _decide_battery(view: "BatteryView") -> BatteryDecision:
                     # are the cap — the advisor bounded delivery by the
                     # home's own draw, so this stays an avoided-import
                     # delivery, never export-at-max. The pipeline already
-                    # split the block power across the fleet (#531/#691
-                    # treatment via effective_battery_count).
+                    # split the block power across the fleet, per sale
+                    # surface (#1182, sale_surface_count).
                     _cap = float(_sell[1] or 0.0)
                     _sched_w = float(getattr(sched, "discharge_power_w", 0.0) or 0.0)
                     # (#778) …and the budget caps it too, when the arc's master

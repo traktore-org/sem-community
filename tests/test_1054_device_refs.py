@@ -318,7 +318,7 @@ class TestProblems:
     def test_device_gone(self):
         ref = card_to_ref(dict(NEW), GOE_DEV, GOE_LIVE)
         out = problems([ref], [resolve(ref)], device_exists=lambda d: False,
-                       entity_exists=lambda e: True)
+                       entity_exists=lambda e: False)
         assert [p["kind"] for p in out] == ["charger_device_gone"]
 
     def test_role_missing(self):

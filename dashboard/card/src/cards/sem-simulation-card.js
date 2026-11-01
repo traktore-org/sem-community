@@ -24,7 +24,7 @@ import { SEMLitBase, semGlassCss, html, css, nothing } from '../base/sem-lit-bas
 import { semGetCurrency, semDefineCard } from '../base/sem-shared.js';
 import { downloadBase64 } from '../util/download.js';
 import {
-    tagGlyphs, PERIOD_PICKS, periodOf, activePeriod, periodDays, monthsOf, monthPeriod,
+    tagGlyphs, PERIOD_PICKS, periodOf, activePeriod, periodDays, monthsOf, monthPeriod, periodGaps,
     recentMax, recentPeriod, recentAt, chipDate, rowDate, money, formatDelta, needsEst,
     visibleRows, filterRows, tagTiles, totalFor, totalLine, dayDetail, monthRows, energyRows,
     initialForm, isChanged, canRun, buildStart, PRESETS, applyPreset, minutesLeft,
@@ -307,6 +307,7 @@ class SEMSimulationCard extends SEMLitBase {
         const active = activePeriod(days, this._period);
         const p = this._period;
         const n = periodDays(days, p);
+        const g = periodGaps(days, p);
         return html`
             <ha-card><div class="wrap">
                 <div class="ct-title"><ha-icon icon="mdi:calendar-range"></ha-icon>${this._t('sim_period')}</div>
@@ -322,6 +323,7 @@ class SEMSimulationCard extends SEMLitBase {
                     </div>
                     ${this._renderRecentSlider(days)}
                     <div class="span">${p ? fill(this._t('sim_period_span'), { from: rowDate(p.from, this._hass?.language || 'en'), to: rowDate(p.to, this._hass?.language || 'en'), n }) : this._t('sim_pick_period_hint')}</div>
+                    ${g > 0 ? html`<div class="legend">${fill(this._t('sim_period_gaps'), { n: g })}</div>` : nothing}
                     <div class="legend">${this._t('sim_period_note')}</div>` : html`
                     <div class="legend">${this._days ? this._t('sim_no_days') : this._t('sim_loading')}</div>`}
             </div></ha-card>`;
@@ -629,6 +631,7 @@ class SEMSimulationCard extends SEMLitBase {
 
     _renderCalibLines(calib) {
         return html`
+            ${calib.caution ? html`<div class="warn">${fill(this._t('sim_caution'), { pct: calib.pct })}</div>` : nothing}
             ${calib.days === null ? nothing : html`<div class="legend">${fill(this._t('sim_days_checked'), { n: calib.days, m: calib.leftOut })}</div>`}
             ${calib.carDays > 0 && calib.carPct !== null ? html`<div class="legend">${fill(this._t('sim_car_error'), { pct: calib.carPct, n: calib.carDays })}</div>` : nothing}`;
     }
@@ -705,6 +708,7 @@ class SEMSimulationCard extends SEMLitBase {
             .legend { font-size: 11px; color: var(--secondary-text-color); margin-top: 8px; }
             .note { font-size: 12px; color: var(--secondary-text-color); margin: 2px 0 6px; }
             .err { font-size: 12px; color: var(--error-color, #db4437); margin-top: 8px; }
+            .warn { font-size: 12px; color: var(--warning-color, #ff9800); margin-top: 8px; }
             .group {
                 margin-top: 8px; padding: 6px 12px; border: 1px solid var(--divider-color);
                 border-radius: 10px; background: rgba(255,255,255,0.025);

@@ -49,12 +49,16 @@ def forecast_sell_blocks(
     night_start: Optional[datetime],
     spendable_kwh: float,
     max_discharge_w: float,
+    selling: bool = False,
 ) -> List[dict]:
     """The plan's WHEN: one JIT block ``[night_start − duration, night_start)``.
 
     Returns ``[]`` whenever there is nothing to say — no budget, no night
     boundary, a rate that cannot move energy, or a night that has already
     begun (the night owns the battery from its first minute).
+
+    ``selling``: the sale is running now. Its block then never starts
+    after ``now`` (#1184).
     """
     try:
         kwh = float(spendable_kwh or 0.0)
@@ -88,6 +92,15 @@ def forecast_sell_blocks(
     # (kwh/hours) — constant across recomputes. A span-trimmed kwh tapered
     # the sell toward zero as the night approached.
     start = night_start - timedelta(hours=hours)
+    # (#1184) A rebuild while the sale runs sizes the block from what is
+    # left, and selling is what shrinks it: the new start lands at about
+    # ``now``, and a little after it whenever the pack fell faster than
+    # the sale rate. That closed the gate and stopped a running sale until
+    # the clock caught up. The same rule as above: a block that is open
+    # stays open. The kWh is unchanged, so the rate eases to land on the
+    # night start.
+    if selling and start > now:
+        start = now
     return [{"start": start, "end": night_start, "kwh": round(kwh, 2)}]
 
 

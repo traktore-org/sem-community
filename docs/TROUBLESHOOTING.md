@@ -395,6 +395,24 @@ If the device has no power sensor at all (some cloud integrations publish only k
 
 **Two inverters or batteries (#1226):** SEM looks for a power sensor for each entry on its own. When one entry has none, SEM adds up only the others, and the Repair names that entry's counter. Add its power sensor to that entry in the Energy Dashboard. The pick on SEM's Configuration tab stands for all of solar (or the battery), so it would drop the entries that read. SEM does not take a second sensor from a device it already reads power from, because it could count the same power twice.
 
+**Two grid meters:** SEM looks for the import and export power sensors of each meter and adds both meters up. A meter with no such pair is noted in the HA log.
+
+## SEM does not see your grid export
+
+**Symptom:** a Repair says *SEM does not see your grid export*. Your home sends power to the grid, but SEM shows no export.
+
+**Cause (#1238):** only the grid import power sensor is set, so SEM reads export as 0 W. A home that never exports can do this on purpose. SEM raises the Repair only when the Energy Dashboard's export counter has gained energy while SEM read none.
+
+**Fix:** open SEM's ⚙ **Configuration** tab, pick **All settings**, and set **Grid export sensor** in **Tariff & pricing**. Or clear **Grid import sensor**: SEM then looks for the import and export pair itself. The Repair clears when the import sensor is no longer set alone. SEM does not change your choice.
+
+## SEM does not see all your solar or battery power
+
+**Symptom:** a Repair says *SEM does not see all your solar or battery power*. You have two inverters or two batteries, and solar or battery power in SEM is lower than the real one.
+
+**Cause (#1236):** the Energy Dashboard has a power sensor for one entry and only a kWh counter for the other. SEM takes no second power sensor from a device it already reads, or beside a sensor it cannot place (a template, a site meter). The same power could count twice, and a high surplus starts loads on grid power. SEM raises the Repair only when the counter of the other entry gains energy that the power SEM reads does not explain. If your power sensor already holds both entries, nothing is raised.
+
+**Fix:** add a power sensor for that entry in the Energy Dashboard (*Settings → Dashboards → Energy*). Or link one sensor that holds all inverters or batteries together. SEM changes no reading by itself. The Repair clears when no counter is set aside any more.
+
 ## The battery platform is pinned to generic
 
 **Symptom:** a Repair says the battery platform is set to *generic* although a
@@ -913,7 +931,9 @@ While a sensor is out, the tab headers show "—" for its figure, not 0. A real
 "—", not Idle. The Battery card and the Home diagram keep updating from the
 sensors that still work. A solar string whose sensor is out shows "—"; the
 other strings still show their power. The cards do the same: EV power,
-battery health, costs and peak show "—" while their sensor is out.
+battery health, costs and peak show "—" while their sensor is out. The flow
+and Home diagram cards show "— W" for the grid or battery, also when you set
+only one sensor of its import and export (or charge and discharge) pair.
 
 The battery, grid and solar on/off sensors show **unknown**, not Off, once
 their power sensor has been out for 3 minutes. A power sensor that reports

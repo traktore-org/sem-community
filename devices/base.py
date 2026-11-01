@@ -745,6 +745,16 @@ class ControllableDevice(ABC):
             # change while it read zero, so the window start is still the drop.
             recovered = kwh - pre_reset
             self._energy_counter_pre_reset_kwh = None
+            if recovered <= 0.0005:
+                # back at the value it fell from: nothing was booked, and
+                # nothing was reset. Said at debug, not as a warning.
+                _LOGGER.debug(
+                    "%s: energy counter %s recovered to %.3f kWh after an "
+                    "outage of %.0f s — same value, nothing booked",
+                    self.name, self.energy_entity_id, kwh, window_s,
+                )
+                self._book_energy(recovered)
+                return
             if recovered <= _MAX_PLAUSIBLE_LOAD_W * window_s / 3_600_000.0:
                 _LOGGER.warning(
                     "%s: energy counter %s recovered to %.3f kWh after a reset "
@@ -986,7 +996,7 @@ class ControllableDevice(ABC):
         if not state or state.state in ("unknown", "unavailable", None):
             return False
         try:
-            return float(state.state) >= self.stop_at
+            return finite_float(state.state) >= self.stop_at
         except (ValueError, TypeError):
             return False
 
@@ -3252,7 +3262,7 @@ class CurrentControlDevice(ControllableDevice):
             return None
         st = self.hass.states.get(sensor)
         try:
-            target = float(st.state)
+            target = finite_float(st.state)
         except (AttributeError, TypeError, ValueError):
             return None
         if target > 0 and target > float(session_kwh):
@@ -3268,7 +3278,7 @@ class CurrentControlDevice(ControllableDevice):
             return None
         st = self.hass.states.get(sensor)
         try:
-            return float(st.state)
+            return finite_float(st.state)
         except (AttributeError, TypeError, ValueError):
             return None
 
@@ -3537,7 +3547,7 @@ class CurrentControlDevice(ControllableDevice):
                     "unknown", "unavailable", None, "",
                 ):
                     try:
-                        armed = float(st.state) > 0
+                        armed = finite_float(st.state) > 0
                     except (ValueError, TypeError):
                         armed = False
         if not armed:
@@ -4422,3 +4432,4 @@ def surplus_device_from_spec(
 from .power_setpoint import (  # noqa: E402,F401
     PowerSetpointDevice, device_class_for_control,
 )
+from ..coordinator.units import finite_float

@@ -24,6 +24,7 @@ from .charger_adapters.status_enum import (
 from .sign_audit import CounterCorrelationAudit, SplitSensorExclusivityAudit
 from .units import (
     energy_state_to_kwh,
+    finite_float,
     is_energy_unit,
     normalize_unit,
     power_state_to_watts,
@@ -31,7 +32,8 @@ from .units import (
 )
 
 from ..ha_energy_reader import (
-    battery_units, unit_energy_counters, unsourced_counters,
+    battery_units, energy_counters, left_alone_counters, unit_energy_counters,
+    unsourced_counters,
 )
 from ..utils.log_gate import log_on_change
 from ..utils.own_entity import is_sem_entity
@@ -730,6 +732,14 @@ class SensorReader:
         # consecutive reads have repeated it — see _accept_battery_soc.
         self._soc_step_candidate: Optional[float] = None
         self._soc_step_streak: int = 0
+        # (#1285) the same step test for each battery's own level, by SOC entity
+        self._unit_soc_last: Dict[str, float] = {}
+        self._unit_soc_candidate: Dict[str, tuple[float, int]] = {}
+        self._unit_soc_cycle: Dict[str, float] = {}   # per-cycle
+        self._unit_soc_confirmed = False              # per-cycle
+        self._unit_soc_held = False                   # per-cycle
+        # (#1284) reads that gave a number while no level was taken yet
+        self._soc_first_wait_reads: int = 0
         self._battery_power_implausible: bool = False
         #: (#988) is the current solar zero refuted by the balance?
         self._solar_zero_refuted = False
@@ -770,6 +780,9 @@ class SensorReader:
         #: (#933) once per reader lifetime: the first PROVEN grid read clears a
         #: guess Repair a previous lifetime left, whatever tier proved it.
         self._split_proof_reconciled: bool = False
+        #: (#1236) Per kind ("solar" / "battery"): the proof that kWh of a
+        #: counter SEM set aside does not show up in the power it reads.
+        self._unseen_watch: dict[str, dict] = {}
         self._uses_split_grid: bool = False
         #: (#1188) This cycle's sources the Energy Dashboard counts in kWh and
         #: SEM reads from no power sensor: source → its kWh counter. None when
@@ -1082,6 +1095,9 @@ class SensorReader:
         self._battery_read_is_pair = False    # (#1215) per-cycle
         self._input_reads = {}                # (#818) per-cycle
         self._input_dark = {}                 # (#818) per-cycle
+        self._unit_soc_cycle = {}             # (#1285) per-cycle
+        self._unit_soc_confirmed = False
+        self._unit_soc_held = False
         self._unit_terms = {}                 # (#1186) per-cycle
         self._unit_sign = {"grid": 1.0, "battery": 1.0}
         self._unsourced_power = None          # (#1188) per-cycle
@@ -1750,8 +1766,6 @@ class SensorReader:
             "grid_inverted": self._grid_sign_inverted,
             # (#1103) which source the lock is about — see restore. Before
             # this run's first source is known, keep the one restored.
-            # (#1192) the read without a dashboard names its source for the
-            # user flip only; its lock is saved as before, with none.
             "grid_source": (self._lock_source()
                             if self._lock_source() is not None
                             or self._restored_grid_source is _UNSET
@@ -2025,10 +2039,10 @@ class SensorReader:
         return None
 
     def _lock_source(self) -> Optional[str]:
-        """(#1192) The source a grid lock is saved with and checked against:
-        the dashboard read's. The read without one keeps its lock with no
-        source, as before it named its source for the user flip."""
-        return self._grid_source_key if self._energy_dashboard_config else None
+        """The source a grid lock is saved with and checked against: the
+        meter the grid is read from, with or without an Energy Dashboard
+        (#1246)."""
+        return self._grid_source_key
 
     def _check_restored_grid_lock(self) -> None:
         """(#1103) A restored grid sign lock is about ONE source. If the grid
@@ -2039,11 +2053,15 @@ class SensorReader:
         source is judged. Same binding as the one-tap flip (#971)."""
         recorded = self._restored_grid_source
         if recorded is _UNSET or self._lock_source() is None:
-            # nothing to check, or nothing read yet — or (#1192) the read
-            # without a dashboard, whose lock waits for a dashboard read
+            # nothing to check, or nothing read yet
             return
         self._restored_grid_source = _UNSET
         if recorded == self._grid_source_key:
+            return
+        if recorded is None and not self._energy_dashboard_config:
+            # (#1246) a store from before the read without a dashboard named
+            # its meter: nothing says which one it was, so keep the lock
+            # and name the meter from now on
             return
         if self.grid_read_is_pair():
             # A pair (manual, dashboard pair, discovered) has its sign BY
@@ -2786,12 +2804,12 @@ class SensorReader:
             discharge_state = self.hass.states.get(discharge_entity)
             if charge_state and charge_state.state not in ("unknown", "unavailable"):
                 try:
-                    self._battery_charge_baseline[bid] = float(charge_state.state)
+                    self._battery_charge_baseline[bid] = finite_float(charge_state.state)
                 except (ValueError, TypeError):
                     pass
             if discharge_state and discharge_state.state not in ("unknown", "unavailable"):
                 try:
-                    self._battery_discharge_baseline[bid] = float(discharge_state.state)
+                    self._battery_discharge_baseline[bid] = finite_float(discharge_state.state)
                 except (ValueError, TypeError):
                     pass
             return self._battery_sign_inverted[bid]
@@ -2810,8 +2828,8 @@ class SensorReader:
             return self._battery_sign_inverted[bid]
 
         try:
-            charge_val = float(charge_state.state)
-            discharge_val = float(discharge_state.state)
+            charge_val = finite_float(charge_state.state)
+            discharge_val = finite_float(discharge_state.state)
         except (ValueError, TypeError):
             return self._battery_sign_inverted[bid]
 
@@ -3194,6 +3212,7 @@ class SensorReader:
                     disc["import"] = imp
                     disc["export"] = exp
                     disc["confidence"] = conf
+                    disc["more"] = None      # the other meters, asked again (#1241)
                     self._report_split_grid_confidence(disc)
                     if (_prev_imp is not None or _prev_exp is not None) and (
                         _prev_imp != imp or _prev_exp != exp
@@ -3262,6 +3281,22 @@ class SensorReader:
                     readings.grid_power = export_w - import_w
                     self._grid_sign_detected = True  # No sign correction needed
                     self._grid_source_key = f"discovered:{disc['import']}|{disc['export']}"
+                    # (#1241) One pair per grid meter, summed. Only from a
+                    # main pair that is trusted on its meter's own unit.
+                    if disc["confidence"] in ("declared", "same-device"):
+                        for n, (m_imp, m_exp) in enumerate(
+                                self._more_grid_pairs(ed, disc), 2):
+                            m_in = self._unit("grid", m_imp, self._read_sensor(
+                                m_imp, "grid_import", allow_none=True), -1.0) if m_imp else 0.0
+                            m_out = self._unit("grid", m_exp, self._read_sensor(
+                                m_exp, "grid_export", allow_none=True)) if m_exp else 0.0
+                            readings.grid_power += m_out - m_in
+                            self._grid_source_key += f"+{m_imp}|{m_exp}"
+                            if m_imp and m_exp:
+                                self._audit_split_pair(
+                                    f"grid#{n}", f"Grid meter {n} (auto-discovered split pair)",
+                                    m_in, m_imp, m_out, m_exp,
+                                )
                     # (#1186) a grid read from the pair: each side a unit
                     self._unit("grid", disc["import"], raw_import, -1.0)
                     if disc["export"]:
@@ -3294,6 +3329,12 @@ class SensorReader:
         elif ed.grid_export_energy:
             # (#1188) An export counter alone: no branch reads the grid.
             unsourced["grid"] = ed.grid_export_energy
+
+        # (#1238) The saved import half read ALONE: does the export counter
+        # show what it cannot see?
+        self._watch_half_grid_pair(
+            ed, manual_import if (manual_import and not manual_export) else None,
+            readings.grid_power)
 
         # (#933) The grid was read by an explicit path — SEM's own pair (the
         # guess Repair's own remedy, which reloads the entry), a declared
@@ -3356,9 +3397,9 @@ class SensorReader:
                 soc_entity = self._auto_detect_battery_soc(entity)
                 soc_val = None
                 if soc_entity:
-                    s = self._read_sensor(
+                    s = self._accept_unit_soc(soc_entity, self._read_sensor(
                         soc_entity, "battery_soc", allow_none=True,
-                    )
+                    ))
                     if s is not None and s >= 0:
                         soc_val = s
                 readings.batteries[bid] = BatteryPower(
@@ -3386,9 +3427,9 @@ class SensorReader:
                 soc_val = None                       # unresolved ≠ 0% (#694)
                 soc_entity = self._auto_detect_battery_soc(p_to)
                 if soc_entity:
-                    s = self._read_sensor(
+                    s = self._accept_unit_soc(soc_entity, self._read_sensor(
                         soc_entity, "battery_soc", allow_none=True,
-                    )
+                    ))
                     if s is not None and s >= 0:
                         soc_val = s
                 readings.batteries[bid] = BatteryPower(
@@ -3447,6 +3488,16 @@ class SensorReader:
         elif ed.battery_charge_energy or ed.battery_discharge_energy:
             unsourced["battery"] = (ed.battery_charge_energy
                                     or ed.battery_discharge_energy)
+        # (#1236) Counters the derive set aside: is their kWh inside the power
+        # read above? Looks only; no reading is changed.
+        self._watch_unseen_row("solar", ed, readings.solar_power)
+        # two units moving opposite ways net to ~0 W, yet the counters add
+        # both: judge the sum of each unit's own size
+        _units = getattr(readings, "batteries", None) or {}
+        _gross = sum(abs(b.power_w) for b in _units.values()
+                     if isinstance(getattr(b, "power_w", None), (int, float)))
+        self._watch_unseen_row(
+            "battery", ed, _gross if _units else readings.battery_power)
         # (#1226) …and a battery the derive found nothing for, beside others
         missing = unsourced_counters(ed, "battery")
         pick = self.config.battery_power_sensor
@@ -3481,7 +3532,8 @@ class SensorReader:
             # stat_soc from one source must not masquerade as the fleet SOC).
             # #553 — pair units contribute via their charge-power entity's
             # device (same auto-detect heuristic).
-            soc_val = self._read_battery_soc_average(battery_units(ed)) or None
+            # (#1169) None is "no unit read"; a fleet at 0 % is a reading
+            soc_val = self._read_battery_soc_average(battery_units(ed))
             # Coverage, in three numbers because there are three states and
             # they call for different reactions: units CONFIGURED, units whose
             # SOC sensor is KNOWN, units that actually READ this cycle.
@@ -3711,6 +3763,58 @@ class SensorReader:
             ed.battery_power, "no correction" if seeded else "negating",
         )
 
+    def _accept_unit_soc(self, soc_entity: str,
+                         raw: Optional[float]) -> Optional[float]:
+        """(#1285) One battery's level, held when it jumps no pack can.
+
+        The fleet test in ``_accept_battery_soc`` sees an average: one pack
+        sending a false 0 % beside a 40 % pack moves it 20 points, under the
+        step limit, so it took the false read. Each battery's own level has
+        the same rule: a step over ``BATTERY_SOC_MAX_STEP_PCT`` keeps the last
+        level, until the new one has repeated for
+        ``BATTERY_SOC_STEP_CONFIRM_READS`` reads. A dark or negative read is
+        passed back as it is. The unit's first level is taken as read. One
+        verdict per entity and cycle: the fleet average and the unit list
+        both ask.
+        """
+        if raw is None or raw < 0:
+            return raw
+        decided = self._unit_soc_cycle.get(soc_entity)
+        if decided is not None:
+            return decided
+        last = self._unit_soc_last.get(soc_entity)
+        out = raw
+        if self._last_valid_soc is None:
+            # (#1284) no level is accepted yet: the fleet test waits for the
+            # first level to repeat, and the units take their baseline from it
+            self._unit_soc_cycle[soc_entity] = raw
+            return raw
+        if last is not None and abs(raw - last) > BATTERY_SOC_MAX_STEP_PCT:
+            cand, streak = self._unit_soc_candidate.get(soc_entity, (None, 0))
+            if cand is not None and abs(raw - cand) <= BATTERY_SOC_MAX_STEP_PCT:
+                streak += 1
+            else:
+                cand, streak = raw, 1
+            if streak < BATTERY_SOC_STEP_CONFIRM_READS:
+                self._unit_soc_candidate[soc_entity] = (cand, streak)
+                log_on_change(
+                    _LOGGER, f"implausible:soc:{soc_entity}", logging.WARNING,
+                    "Battery %s level %.0f%% -> %.0f%% in one read is not a "
+                    "measurement — holding %.0f%% (#1285; accepted if the "
+                    "level persists for %d reads)",
+                    soc_entity, last, raw, last, BATTERY_SOC_STEP_CONFIRM_READS,
+                )
+                out = last
+                self._unit_soc_held = True
+            else:
+                # the unit's own count is done; the fleet need not count again
+                self._unit_soc_confirmed = True
+        if out == raw:
+            self._unit_soc_candidate.pop(soc_entity, None)
+            self._unit_soc_last[soc_entity] = raw
+        self._unit_soc_cycle[soc_entity] = out
+        return out
+
     def _accept_battery_soc(self, readings: PowerReadings,
                             soc_val: Optional[float]) -> None:
         """Take a SOC read into the readings — or refuse it.
@@ -3726,35 +3830,73 @@ class SensorReader:
         dark for hours while the pack really did drain — so a rejected level
         is accepted once it has repeated for ``BATTERY_SOC_STEP_CONFIRM_READS``
         consecutive reads. Garbage does not repeat itself; a real level does.
+
+        (#1284) The first read after a start has no last level to compare
+        with, and the false 0 % comes when the pack's link comes back, which
+        a restart is. So the first level is taken the same way: once it has
+        repeated. Until then the SOC is never read, as before the first read.
+        The wait has an end: a fleet whose units read far apart, one of them
+        dark every other read, gives two averages that never repeat. After
+        twice the confirm count of reads the current read is taken, and the
+        step check then works from it.
         """
-        if soc_val is None:
+        # (#1169) A level below 0 % is no reading — the rule the fleet
+        # average and each battery's own SOC already use.
+        if soc_val is not None and soc_val < 0:
+            soc_val = None
+        if soc_val is None or self._unit_soc_held:
+            # (#1285) a unit held by its own step test holds the fleet too
             self._hold_battery_soc(readings)
             return
         last = self._last_valid_soc
-        if last is not None and abs(soc_val - last) > BATTERY_SOC_MAX_STEP_PCT:
+        if last is None or (abs(soc_val - last) > BATTERY_SOC_MAX_STEP_PCT
+                            and not self._unit_soc_confirmed):
             cand = self._soc_step_candidate
             if cand is not None and abs(soc_val - cand) <= BATTERY_SOC_MAX_STEP_PCT:
                 self._soc_step_streak += 1
             else:
                 self._soc_step_candidate = soc_val
                 self._soc_step_streak = 1
+            if last is None:
+                self._soc_first_wait_reads += 1
+            waited_out = (last is None and self._soc_first_wait_reads
+                          >= 2 * BATTERY_SOC_STEP_CONFIRM_READS)
+            if (self._soc_step_streak < BATTERY_SOC_STEP_CONFIRM_READS
+                    and not waited_out):
+                if last is None:
+                    log_on_change(
+                        _LOGGER, "implausible:soc", logging.DEBUG,
+                        "First battery SOC %.0f%% since the start — taken "
+                        "once it has repeated for %d reads (#1284)",
+                        soc_val, BATTERY_SOC_STEP_CONFIRM_READS,
+                    )
+                else:
+                    log_on_change(
+                        _LOGGER, "implausible:soc", logging.WARNING,
+                        "Battery SOC %.0f%% -> %.0f%% in one read is not a "
+                        "measurement — holding %.0f%% (#902; accepted if the "
+                        "level persists for %d reads)",
+                        last, soc_val, last, BATTERY_SOC_STEP_CONFIRM_READS,
+                    )
+                self._hold_battery_soc(readings)
+                return
             if self._soc_step_streak < BATTERY_SOC_STEP_CONFIRM_READS:
                 log_on_change(
                     _LOGGER, "implausible:soc", logging.WARNING,
-                    "Battery SOC %.0f%% -> %.0f%% in one read is not a "
-                    "measurement — holding %.0f%% (#902; accepted if the level "
-                    "persists for %d reads)",
-                    last, soc_val, last, BATTERY_SOC_STEP_CONFIRM_READS,
+                    "No battery SOC repeated in the first %d reads since the "
+                    "start — taking %.0f%% (#1284)",
+                    self._soc_first_wait_reads, soc_val,
                 )
-                self._hold_battery_soc(readings)
-                return
-            log_on_change(
-                _LOGGER, "implausible:soc", logging.INFO,
-                "Battery SOC level %.0f%% held for %d reads — accepting (#902)",
-                soc_val, self._soc_step_streak,
-            )
+            elif last is not None:
+                log_on_change(
+                    _LOGGER, "implausible:soc", logging.INFO,
+                    "Battery SOC level %.0f%% held for %d reads — accepting "
+                    "(#902)", soc_val, self._soc_step_streak,
+                )
         self._soc_step_candidate = None
         self._soc_step_streak = 0
+        if last is None:
+            self._unit_soc_last.update(self._unit_soc_cycle)
         readings.battery_soc = soc_val
         self._last_valid_soc = soc_val
         self._last_valid_soc_mono = float(self._now_monotonic())
@@ -4532,7 +4674,9 @@ class SensorReader:
                 return True
         return False
 
-    def _declared_split_grid_power(self, ed) -> tuple[Optional[str], Optional[str]]:
+    def _declared_split_grid_power(
+        self, ed, counter: Optional[str] = None,
+    ) -> tuple[Optional[str], Optional[str]]:
         """(#947) The grid meters this install's integrations DECLARE.
 
         The #915 roster reads each integration's OWN repository and records
@@ -4565,6 +4709,7 @@ class SensorReader:
             from ..hardware_detection import (
                 roster_role_vocab as _vocab,
                 _entry_matches_declared as _matches,
+                registry_unit as _unit_of,
             )
             registry = er.async_get(self.hass)
         except Exception as e:  # noqa: BLE001 — no roster, no verdict
@@ -4572,8 +4717,12 @@ class SensorReader:
             return None, None
 
         wanted = {"grid_import_power": None, "grid_export_power": None}
-        grid_device_id = self._get_device_for_entity(
-            getattr(ed, "grid_import_energy", None))
+        # (#1240) The counters' UNIT, not only their device: DSMR Reader's
+        # sensors have no device, and its pair and counters come from one
+        # config entry. ``registry_unit`` is the card's answer too.
+        # (#1241) ``counter`` names the meter asked about; the first by default.
+        grid_device_id = self._get_unit_for_entity(
+            counter or getattr(ed, "grid_import_energy", None))
         # Deterministic order (#485 H6): the registry's iteration order is not
         # contractual, and first-match-wins over an unsorted scan could swap
         # which sensor plays import vs export between restarts.
@@ -4598,8 +4747,7 @@ class SensorReader:
                 # A declared entity on the grid counter's own device outranks
                 # a declared entity elsewhere — same brand, two inverters.
                 same_device = bool(
-                    grid_device_id
-                    and getattr(entry, "device_id", None) == grid_device_id)
+                    grid_device_id and _unit_of(entry) == grid_device_id)
                 rank = (1 if same_device else 0,)
                 if role not in best or rank > best[role][0]:
                     best[role] = (rank, entry.entity_id)
@@ -4626,7 +4774,9 @@ class SensorReader:
         attrs = getattr(live, "attributes", None)
         return not (isinstance(attrs, Mapping) and attrs.get("restored") is True)
 
-    def _discover_split_grid_power(self, ed) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    def _discover_split_grid_power(
+        self, ed, counter: Optional[str] = None,
+    ) -> tuple[Optional[str], Optional[str], Optional[str]]:
         """Discover separate import/export power sensors for setups without combined grid power.
 
         Supported naming patterns:
@@ -4648,18 +4798,21 @@ class SensorReader:
         Returns (import_entity, export_entity, confidence) where confidence is
         "same-device" if either side came from a device matching the grid energy
         sensor, "any-device" if matched by pattern only, or None if nothing matched.
+
+        (#1241) ``counter`` asks about ANOTHER meter: the one that counter
+        belongs to. That ask leaves the shared log memo alone.
         """
         # (#947) TIER 1 — what the install's own integrations DECLARE. This
         # runs before any name matching, because a declared role is evidence
         # and a substring is not. A declared pair needs no corroboration.
         declared_import, declared_export, on_grid_device = (
-            self._declared_split_grid_power(ed))
+            self._declared_split_grid_power(ed, counter))
         if declared_import or declared_export:
             # "declared" is the trusted tier; "declared-elsewhere" names the
             # same evidence WITHOUT device affinity, and corroborates.
             conf = "declared" if on_grid_device else "declared-elsewhere"
             result_key = (declared_import, declared_export, conf)
-            if result_key != self._last_split_grid_log:
+            if counter is None and result_key != self._last_split_grid_log:
                 self._last_split_grid_log = result_key
                 _LOGGER.info(
                     "Grid power meters DECLARED by their integrations "
@@ -4673,7 +4826,8 @@ class SensorReader:
 
         try:
             # Get device_id of grid energy sensor for same-device preference
-            grid_device_id = self._get_device_for_entity(ed.grid_import_energy)
+            grid_device_id = self._get_device_for_entity(
+                counter or ed.grid_import_energy)
             try:
                 registry = er.async_get(self.hass)
             except Exception:  # noqa: BLE001 — the predicate asks again
@@ -4761,7 +4915,9 @@ class SensorReader:
                 # wrote one INFO line per scan into the log + the
                 # diagnose ring buffer.
                 result_key = (import_power, export_power, confidence)
-                if result_key != self._last_split_grid_log:
+                if counter is not None:
+                    pass                      # another meter's ask (#1241)
+                elif result_key != self._last_split_grid_log:
                     self._last_split_grid_log = result_key
                     _LOGGER.info(
                         "Discovered split grid power sensors (%s): import=%s, export=%s",
@@ -4807,6 +4963,8 @@ class SensorReader:
             "export": None,
             "confidence": None,
             "warned": self._split_grid_discovery.get("warned", False),
+            # a restart is not news: the gap is said once per lifetime (#1241)
+            "more_said": self._split_grid_discovery.get("more_said"),
         }
         # (#947) A rediscovery invalidates the proof with the picks it judged.
         self._split_grid_proof = _fresh_grid_proof()
@@ -4875,6 +5033,281 @@ class SensorReader:
             return [one] if one else []
         return (_lst("grid_import_energy", "grid_import_energy_list"),
                 _lst("grid_export_energy", "grid_export_energy_list"))
+
+    def _grid_meters(self, ed) -> "Optional[list[tuple[Any, list, list]]]":
+        """(#1241) The grid METERS the Energy Dashboard's counters belong to:
+        ``[(unit, import counters, export counters)]`` in counter order.
+
+        A meter is the unit (device, else config entry) its import counters
+        sit on; tariff counters of one meter are one meter. Export counters
+        join the meter they share a unit with. ``[]`` for one meter. ``None``
+        when an import counter has no unit YET: the lookup could not answer,
+        which is not "one meter" and must be asked again. Bug class 90 (an
+        optional identity used as a grouping key: None is not an identity)."""
+        imports, exports = self._grid_counter_entities(ed)
+        if len(imports) < 2:
+            return []
+        meters: list = []
+        for eid in imports:
+            unit = self._get_unit_for_entity(eid)
+            if unit is None:
+                return None
+            for meter in meters:
+                if meter[0] == unit:
+                    meter[1].append(eid)
+                    break
+            else:
+                meters.append((unit, [eid], []))
+        for eid in exports:
+            unit = self._get_unit_for_entity(eid)
+            for meter in meters:
+                if unit is not None and meter[0] == unit:
+                    meter[2].append(eid)
+                    break
+        # the first meter is the one the main pick answers for
+        first = self._get_unit_for_entity(getattr(ed, "grid_import_energy", None))
+        if len(meters) < 2 or meters[0][0] != first:
+            return []
+        return meters
+
+    def _more_grid_pairs(self, ed, disc: dict) -> "list[tuple]":
+        """(#1241) The pairs of the OTHER grid meters, one per meter.
+
+        Each is searched on its own meter's unit and must be trusted there
+        (declared, or a name match on that device) and be a whole read: an
+        import pick when the meter has import counters, an export pick when
+        it has export counters, and no sensor already used. All other meters
+        covered or none: a sum over some of the meters would be taken for the
+        whole grid, so the main pair alone is read, as before, and the gap is
+        said once. Held in ``disc["more"]``; looked for again every ~minute
+        while a meter has none, at once when a held sensor goes dark and then
+        every 6th cycle while it stays dark; a unit lookup that could not
+        answer is asked again every 6th cycle, never kept as "one meter"."""
+        held = disc.get("more")
+        if held is not None:
+            if disc.get("more_unasked"):
+                countdown = disc["more_unasked"] - 1
+                if countdown > 0:
+                    disc["more_unasked"] = countdown
+                    return held
+                disc.pop("more_unasked")
+            elif disc.get("more_missing"):
+                countdown = disc.get("more_countdown", 0) - 1
+                if countdown > 0:
+                    disc["more_countdown"] = countdown
+                    return held
+                disc["more_countdown"] = 6
+            elif all(
+                (st := self.hass.states.get(eid)) is not None
+                and st.state not in ("unavailable", "unknown")
+                for pair in held for eid in pair if eid
+            ):
+                disc.pop("more_dark", None)
+                return held
+            else:
+                dark = disc.get("more_dark")
+                if dark is not None:
+                    dark -= 1
+                    if dark > 0:
+                        disc["more_dark"] = dark
+                        return held
+                disc["more_dark"] = 6
+        meters = self._grid_meters(ed)
+        if meters is None:
+            disc["more"] = held if held is not None else []
+            disc["more_missing"] = ()
+            disc["more_unasked"] = 6
+            return disc["more"]
+        pairs: list = []
+        missing: list = []
+        taken = {disc.get("import"), disc.get("export")} - {None}
+        for _unit_key, imps, exps in meters[1:]:
+            imp, exp, conf = self._discover_split_grid_power(
+                ed, counter=(imps or exps)[0])
+            whole = (
+                conf in ("declared", "same-device")
+                and (bool(imp) or not imps) and (bool(exp) or not exps)
+                and not ({imp, exp} - {None}) & taken
+            )
+            if whole:
+                pairs.append((imp, exp))
+                taken |= {imp, exp} - {None}
+            else:
+                missing.extend(imps)
+        if missing:
+            pairs = []
+            if disc.get("more_said") != tuple(missing):
+                disc["more_said"] = tuple(missing)
+                _LOGGER.warning(
+                    "The Energy Dashboard names %d grid meters but SEM found "
+                    "a trusted import/export power pair for only the first "
+                    "(%s / %s). No pair for the counters %s, so grid power "
+                    "covers one meter, not all. Set grid_import_power_entity "
+                    "/ grid_export_power_entity, or one grid power sensor "
+                    "per meter in the Energy Dashboard. (#1241)",
+                    len(meters), disc.get("import"), disc.get("export"),
+                    ", ".join(missing),
+                )
+        disc["more"] = pairs
+        disc["more_missing"] = tuple(missing)
+        return pairs
+
+    #: (#1238) Export the counter must show, in kWh, within ONE day before a
+    #: saved import half is said to hide it. Under this it is noise.
+    _HALF_PAIR_PROOF_KWH = 0.2
+
+    def _watch_half_grid_pair(self, ed, half_import: Optional[str],
+                              grid_w: Optional[float]) -> None:
+        """(#1238) A grid import sensor saved ALONE reads export as 0 W. A
+        home that never exports may do that on purpose, so the half is not
+        wrong by itself: the export COUNTER decides. When it gains more than
+        ``_HALF_PAIR_PROOF_KWH`` while the grid never read as export, power
+        went to the grid that SEM could not see. Then the Repair says so, and
+        names the way out. It does not change the pick: that is the user's.
+
+        ``half_import`` is the saved half when it was read alone, else None
+        (whole pair, other source, or the dashboard's own answer), which
+        starts over and takes the Repair away. Bug class 84: the proof is
+        kept for this lifetime only; the Repair is not persistent, so a
+        restart asks again rather than keeping an old answer.
+        """
+        watch = getattr(self, "_half_pair_watch", None)
+        if watch is None:
+            watch = self._half_pair_watch = {
+                "last": None, "gain": 0.0, "raised": False, "half": None,
+                "saw_export": False, "day": None}
+            # a new reader knows nothing: a Repair an older one raised (the
+            # entry was reloaded) is proven again or goes
+            _ri.clear_half_grid_pair(self.hass)
+        exports = self._grid_counter_entities(ed)[1] if half_import else []
+        if not half_import or not exports:
+            if watch["raised"]:
+                _ri.clear_half_grid_pair(self.hass)
+            watch.update(last=None, gain=0.0, raised=False, half=None,
+                         saw_export=False, day=None)
+            return
+        if watch["half"] != half_import:      # another half: a new question
+            watch.update(last=None, gain=0.0, half=half_import,
+                         saw_export=False)
+        if isinstance(grid_w, (int, float)) and grid_w > 0:
+            watch["saw_export"] = True        # the half DOES show export
+        total = self._sum_counter_states(exports)
+        if total is None:
+            return
+        prev, watch["last"] = watch["last"], total
+        deltas = self._counter_deltas(prev, 0.0, total, 0.0)
+        if deltas is None:                    # first look, or a counter reset
+            return
+        from homeassistant.util import dt as dt_util
+        today = dt_util.now().date()
+        if watch["day"] != today:             # tiny gains must not add up for weeks
+            watch["day"] = today
+            watch["gain"] = 0.0
+        watch["gain"] += max(0.0, deltas[0])
+        if (watch["gain"] >= self._HALF_PAIR_PROOF_KWH
+                and not watch["saw_export"] and not watch["raised"]):
+            watch["raised"] = True
+            _LOGGER.warning(
+                "Only the grid import power sensor (%s) is set, so SEM reads "
+                "grid export as 0 W, but the export counter %s gained %.2f "
+                "kWh: power went to the grid that SEM did not see. Set the "
+                "grid export sensor too, or clear the import one. (#1238)",
+                half_import, exports[0], watch["gain"])
+            _ri.raise_half_grid_pair(
+                self.hass, import_entity=half_import, export_entity=exports[0])
+
+    #: (#1236) Smallest gain, in kWh, of a set-aside counter within ONE day
+    #: before the power SEM reads is checked against it, and the least time
+    #: SEM must have watched. Under this it is counter noise.
+    _UNSEEN_PROOF_KWH = 0.5
+    _UNSEEN_MIN_WINDOW_S = 600.0
+    #: A look further back than this is a gap, not a step: the window
+    #: restarts rather than counting power SEM did not read.
+    _UNSEEN_MAX_STEP_S = 300.0
+
+    def _watch_unseen_row(self, kind: str, ed, seen_w) -> None:
+        """(#1236) A second inverter or battery whose counter sits on a
+        device SEM already reads, or beside a link SEM cannot place, gets no
+        power sensor (a second one could count the same watts twice). Its
+        kWh counter still shows whether the power SEM reads holds it: over
+        the same time, the kWh of ALL counters of ``kind`` is set against the
+        power SEM read, summed up. If the set-aside counters gained and that
+        power explains less than half of their gain, power flowed that SEM
+        did not see. Then a Repair says so, naming the counters. A link that
+        already holds both rows leaves no gap, so nothing is said.
+
+        Nothing is added to any reading. Bug class 84: the proof is kept for
+        this reader lifetime only; the Repair is not persistent.
+        """
+        watch = self._unseen_watch.get(kind)
+        if watch is None:
+            watch = self._unseen_watch[kind] = self._fresh_unseen_watch()
+            # a new reader knows nothing: a Repair an older one raised (the
+            # entry was reloaded) is proven again or goes
+            _ri.clear_unseen_power_row(self.hass, kind)
+        left = left_alone_counters(ed, kind)
+        if not left:
+            if watch["raised"]:
+                _ri.clear_unseen_power_row(self.hass, kind)
+            self._unseen_watch[kind] = self._fresh_unseen_watch()
+            return
+        if kind == "solar":
+            counters = energy_counters(ed, "solar")
+        else:
+            counters = (energy_counters(ed, "battery_charge")
+                        + energy_counters(ed, "battery_discharge"))
+        counters = list(dict.fromkeys(counters + left))
+        total = self._sum_counter_states(counters)
+        gone = self._sum_counter_states(left)
+        now = time.monotonic()
+        power = abs(seen_w) if isinstance(seen_w, (int, float)) else None
+        prev = watch.copy()
+        watch.update(all=total, left=gone, t=now, w=power)
+        if (total is None or gone is None or power is None
+                or prev["all"] is None or prev["left"] is None
+                or prev["w"] is None or prev["t"] is None):
+            return
+        step = now - prev["t"]
+        d_all = self._counter_deltas(prev["all"], prev["left"], total, gone)
+        if d_all is None or not 0 < step <= self._UNSEEN_MAX_STEP_S:
+            return                       # a reset, or a gap: sit this one out
+        from homeassistant.util import dt as dt_util
+        today = dt_util.now().date()
+        if watch["day"] != today:        # tiny gains must not add up for weeks
+            watch.update(day=today, gain_all=0.0, gain_left=0.0,
+                         seen_kwh=0.0, window_s=0.0)
+        watch["gain_all"] += max(0.0, d_all[0])
+        watch["gain_left"] += max(0.0, d_all[1])
+        watch["seen_kwh"] += (prev["w"] + power) / 2.0 * step / 3_600_000.0
+        watch["window_s"] += step
+        gap = watch["gain_all"] - watch["seen_kwh"]
+        if (not watch["raised"]
+                and watch["window_s"] >= self._UNSEEN_MIN_WINDOW_S
+                and watch["gain_left"] >= self._UNSEEN_PROOF_KWH
+                and gap >= 0.5 * watch["gain_left"]
+                and gap >= 0.1 * watch["gain_all"]):
+            watch["raised"] = True
+            seen = (list(ed.solar_power_list) if kind == "solar"
+                    else battery_units(ed))
+            _LOGGER.warning(
+                "The %s counter(s) %s gained %.2f kWh, but the %s power SEM "
+                "reads (%s) accounts for %.2f kWh of the %.2f kWh all %s "
+                "counters gained: power flowed that SEM did not see. SEM "
+                "takes no second power sensor from a device it reads, or "
+                "beside a link it cannot place, because it could count the "
+                "same power twice. (#1236)",
+                kind, ", ".join(left), watch["gain_left"], kind,
+                ", ".join(seen) or "none", watch["seen_kwh"],
+                watch["gain_all"], kind)
+            _ri.raise_unseen_power_row(
+                self.hass, kind, energy_entity=", ".join(left),
+                power_entity=", ".join(seen))
+
+    @staticmethod
+    def _fresh_unseen_watch() -> dict:
+        return {"all": None, "left": None, "t": None, "w": None,
+                "gain_all": 0.0, "gain_left": 0.0, "seen_kwh": 0.0,
+                "window_s": 0.0, "day": None, "raised": False}
 
     def _corroborate_split_grid(self, disc: dict, ed, import_w, export_w) -> Optional[bool]:
         """(#947) Does this NAME-MATCHED pair actually measure the grid?
@@ -5204,6 +5637,29 @@ class SensorReader:
                     self._sensor_repair_raised.discard(old)
                     self._sensor_unavailable_since.pop(old, None)
 
+    def _get_unit_for_entity(self, entity_id: str) -> Any:
+        """(#1240) The entity's device, else its config entry (a tuple).
+
+        The device answer is ``_get_device_for_entity``'s, unchanged. An
+        entity with no device belongs to its config entry, as in the Config
+        card (``hardware_detection.registry_unit``); ``None`` when it has
+        neither. Trust is given to a declared meter that shares this unit
+        with the grid counters, so a sensor on neither is still checked."""
+        if not entity_id:
+            return None
+        device = self._get_device_for_entity(entity_id)
+        if device:
+            return device
+        try:
+            from ..hardware_detection import registry_unit
+            entry = er.async_get(self.hass).async_get(entity_id)
+            unit = registry_unit(entry) if entry else None
+        except Exception as e:  # noqa: BLE001 — no registry, no verdict
+            _LOGGER.debug("Unit lookup failed for %s: %s (#1240)", entity_id, e)
+            return None
+        # only the config-entry kind: a device is the device lookup's to give
+        return unit if isinstance(unit, tuple) else None
+
     def _get_device_for_entity(self, entity_id: str) -> Optional[str]:
         """Get device_id for an entity from the entity registry."""
         if not entity_id:
@@ -5216,11 +5672,15 @@ class SensorReader:
             _LOGGER.debug("Device lookup failed for %s: %s (#259)", entity_id, e)
             return None
 
-    def _read_battery_soc_average(self, battery_power_entities: list) -> float:
+    def _read_battery_soc_average(
+        self, battery_power_entities: list,
+    ) -> Optional[float]:
         """Average SOC across multiple battery units.
 
         Auto-detects the SOC sensor for each battery power sensor and
-        returns the simple average of all valid readings.
+        returns the simple average of all valid readings — or None when no
+        unit gave one. (#1169) 0.0 is a reading: two empty packs are 0 %,
+        not a dark fleet.
 
         Records how much of the fleet that average actually covers in
         ``_soc_units_expected`` / ``_soc_units_read`` (#638 finding #3): a
@@ -5256,7 +5716,8 @@ class SensorReader:
                 continue
             known += 1
             # (#1202) a unit that gives no number is not a 0 % unit
-            val = self._read_sensor(soc_entity, "battery_soc", allow_none=True)
+            val = self._accept_unit_soc(soc_entity, self._read_sensor(
+                soc_entity, "battery_soc", allow_none=True))
             if val is not None and val >= 0:
                 soc_values.append(val)
         self._soc_units_configured = len(battery_power_entities)
@@ -5296,7 +5757,7 @@ class SensorReader:
         # Nothing readable at all is the SOC-None shape, not a partial one —
         # clear the one-shot so a later re-entry into partial is heard again.
         self._soc_partial_logged = False
-        return 0.0
+        return None
 
     def _read_from_legacy_config(self) -> PowerReadings:
         """Read power values from legacy configuration."""
@@ -6498,7 +6959,7 @@ class SensorReader:
                         st = self.hass.states.get(eid)
                         if st is not None and st.state not in ("unknown", "unavailable", None):
                             try:
-                                if float(st.state) >= 0:
+                                if finite_float(st.state) >= 0:
                                     _LOGGER.info(
                                         "Auto-detected battery cycles sensor: %s = %s (#593)",
                                         eid, st.state,
@@ -6710,7 +7171,7 @@ class SensorReader:
                     if by_keyword or by_signature:
                         if state and state.state not in ("unknown", "unavailable", None):
                             try:
-                                val = float(state.state)
+                                val = finite_float(state.state)
                                 if 0 <= val <= 100:
                                     if not getattr(self, '_battery_soc_logged', False):
                                         _LOGGER.info(
@@ -6772,7 +7233,7 @@ class SensorReader:
                 if state.state in ("unknown", "unavailable", None):
                     continue
                 try:
-                    val = float(state.state)
+                    val = finite_float(state.state)
                 except (ValueError, TypeError):
                     continue
                 if 0 <= val <= 100:
@@ -6888,7 +7349,7 @@ class SensorReader:
             state = self.hass.states.get(candidate)
             if state and state.state not in ("unknown", "unavailable", None):
                 try:
-                    val = float(state.state)
+                    val = finite_float(state.state)
                     if 0 <= val <= 100:
                         if not getattr(self, '_battery_soc_logged', False):
                             _LOGGER.info("Auto-detected battery SOC: %s = %.0f%%", candidate, val)
@@ -6948,7 +7409,7 @@ class SensorReader:
             if dc == "battery" or unit in ("%", "percent"):
                 continue
             try:
-                value = float(state.state)
+                value = finite_float(state.state)
                 if value <= 0:
                     continue
                 # #641 — the unit half goes through units.py (so an MWh-labelled

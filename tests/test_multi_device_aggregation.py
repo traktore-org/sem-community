@@ -5,6 +5,9 @@ and grid tariffs when the Energy Dashboard has multiple sources (#112).
 """
 from unittest.mock import MagicMock
 
+from custom_components.solar_energy_management.consts.core import (
+    BATTERY_SOC_STEP_CONFIRM_READS,
+)
 from custom_components.solar_energy_management.coordinator.sensor_reader import (
     SensorReader,
 )
@@ -19,6 +22,13 @@ def _make_state(value, unit="W"):
     state.state = str(value)
     state.attributes = {"unit_of_measurement": unit}
     return state
+
+
+def _settled_ed_read(reader):
+    """(#1284) The first SOC after a start counts once it has repeated."""
+    for _ in range(BATTERY_SOC_STEP_CONFIRM_READS - 1):
+        reader._read_from_energy_dashboard()
+    return reader._read_from_energy_dashboard()
 
 
 def _make_reader(mock_hass, config=None):
@@ -241,7 +251,7 @@ class TestBatterySocAverage:
             has_grid=False,
         )
         reader.set_energy_dashboard_config(ed)
-        readings = reader._read_from_energy_dashboard()
+        readings = _settled_ed_read(reader)
         # Average of 80 and 60
         assert readings.battery_soc == 70.0
 
@@ -267,7 +277,7 @@ class TestBatterySocAverage:
             has_grid=False,
         )
         reader.set_energy_dashboard_config(ed)
-        readings = reader._read_from_energy_dashboard()
+        readings = _settled_ed_read(reader)
         assert readings.battery_soc == 80.0
 
     def test_config_soc_overrides_average(self, mock_hass):
@@ -291,7 +301,7 @@ class TestBatterySocAverage:
             has_grid=False,
         )
         reader.set_energy_dashboard_config(ed)
-        readings = reader._read_from_energy_dashboard()
+        readings = _settled_ed_read(reader)
         # Config SOC overrides auto-detect average
         assert readings.battery_soc == 55.0
 
@@ -343,7 +353,7 @@ class TestFullMultiDeviceSetup:
             has_ev=True,
         )
         reader.set_energy_dashboard_config(ed)
-        readings = reader._read_from_energy_dashboard()
+        readings = _settled_ed_read(reader)
 
         # Solar: 3500 + 2800 = 6300
         assert readings.solar_power == 6300.0
@@ -398,7 +408,7 @@ class TestFullMultiDeviceSetup:
             has_battery=True,
         )
         reader.set_energy_dashboard_config(ed)
-        readings = reader._read_from_energy_dashboard()
+        readings = _settled_ed_read(reader)
 
         # Solar: 4000 + 3000 = 7000
         assert readings.solar_power == 7000.0

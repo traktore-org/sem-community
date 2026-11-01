@@ -57,7 +57,7 @@
       },
       "reconfigure": {
         "title": "Reconfigure Solar Energy Management",
-        "description": "Update your EV charger and notification settings",
+        "description": "Update your EV charger and notification settings{charger_note}",
         "data": {
           "ev_connected_sensor": "EV Connected Status",
           "ev_charging_sensor": "EV Charging Status",
@@ -2052,6 +2052,14 @@
     "power_sensor_not_found_unit": {
       "title": "No power sensor for {energy_entity}",
       "description": "The Energy Dashboard counts **{energy_entity}** in kWh, but SEM found no power sensor (W) for it. SEM adds up only the other solar or battery entries, so the energy flows and the surplus are wrong. To fix it, add the power sensor to this entry in the Energy Dashboard. If there is no power sensor, you can ignore this notice."
+    },
+    "half_grid_pair": {
+      "title": "SEM does not see your grid export",
+      "description": "Only the grid import sensor **{import_entity}** is set, so SEM reads grid export as 0 W. But your export counter **{export_entity}** shows power went to the grid. To fix it, open the SEM dashboard, tab ⚙ **Configuration**, and pick **All settings** at the top. Then set **Grid export sensor** in section **Tariff & pricing**. Or clear **Grid import sensor**, and SEM looks for the pair itself."
+    },
+    "unseen_power_row": {
+      "title": "SEM does not see all your solar or battery power",
+      "description": "The Energy Dashboard counts **{energy_entity}** in kWh, and its counter keeps rising. But the power SEM reads (**{power_entity}**) does not cover it, so SEM shows too little solar or battery power. SEM takes no second power sensor from a device it already reads, because it could count the same power twice. To fix it, add a power sensor for this entry in the Energy Dashboard."
     },
     "charger_device_gone": {
       "title": "Charger {name}: its device is gone",

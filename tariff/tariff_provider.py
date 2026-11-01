@@ -21,6 +21,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from .value_layer import NO_VALUE, ValueSettings
+from ..coordinator.units import finite_float
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -1162,7 +1163,7 @@ class DynamicTariffProvider(TariffProvider):
         state = self.hass.states.get(self._price_entity)
         if state and state.state not in ("unknown", "unavailable"):
             try:
-                value = float(state.state)
+                value = finite_float(state.state)
                 # (#994) NaN and inf parse perfectly well and then compare
                 # False against every threshold, so a price of "nan" would
                 # have been classified rather than refused.
@@ -2082,7 +2083,7 @@ class DynamicTariffProvider(TariffProvider):
             state = self.hass.states.get(self._feedin_entity)
             if state and state.state not in ("unknown", "unavailable"):
                 try:
-                    return self._signed_export(float(state.state))
+                    return self._signed_export(finite_float(state.state))
                 except (ValueError, TypeError):
                     pass
         return self.export_rate

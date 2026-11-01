@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
 
 from .coordinator.units import power_state_to_watts
+from .coordinator.units import finite_float
 
 # Below this a meter's sign says nothing: a house at rest reads a few watts
 # either way.
@@ -30,7 +31,10 @@ class SetupCheck:
     solar_w: Optional[float] = None
     grid_entity: Optional[str] = None
     grid_w: Optional[float] = None        # as the sensor reads it; sign unknown
-    grid_from: str = "missing"            # dashboard | guessed | missing
+    grid_from: str = "missing"            # dashboard | guessed | pair | missing
+    # (#1237) The import / export power sensors SEM's own search found for a
+    # meter the dashboard gave counters only. No single entity stands for it.
+    grid_pair: Tuple[Optional[str], Optional[str]] = (None, None)
     battery_w: Optional[float] = None     # sum as read; sign unknown
     soc: Optional[float] = None
     other_grid: Optional[str] = None
@@ -70,12 +74,33 @@ def _sum(values) -> Optional[float]:
     return sum(vals) if vals else None
 
 
+def _find_grid_pair(hass, cfg: Any) -> Tuple[Optional[str], Optional[str]]:
+    """(#1237) The grid meter's import / export power sensors, found by the
+    SAME search SEM runs once it is up (declared keys, then names, device
+    first). Setup must not ask about a meter SEM finds by itself, and a
+    sensor picked here would be read as the only one, so the pair would
+    never be looked for."""
+    if hass is None or not getattr(cfg, "grid_import_energy", None):
+        return None, None
+    try:
+        from .coordinator.sensor_reader import SensorReader
+        imp, exp, confidence = SensorReader(
+            hass, {})._discover_split_grid_power(cfg)
+    except Exception:  # noqa: BLE001 — a search never breaks an install
+        return None, None
+    # Found means SEM will read it as the grid: a whole pair, trusted at
+    # once. A name guess or one half is still checked later, so setup asks.
+    if imp and exp and confidence in ("declared", "same-device"):
+        return imp, exp
+    return None, None
+
+
 def _percent(hass, entity_id: Optional[str]) -> Optional[float]:
     if not entity_id or hass is None:
         return None
     state = hass.states.get(entity_id)
     try:
-        return float(state.state) if state is not None else None
+        return finite_float(state.state) if state is not None else None
     except (TypeError, ValueError):
         return None
 
@@ -102,6 +127,16 @@ def build_setup_check(hass, cfg: Any,
         if bought is not None and sent is not None:
             check.grid_w = bought - sent
         check.grid_from = "dashboard"
+    elif not getattr(cfg, "grid_power_list", None):
+        # Counters only: the case SEM's reader answers with its pair search.
+        # A whole, trusted pair is a found meter.
+        imp, exp = _find_grid_pair(hass, cfg)
+        if imp or exp:
+            check.grid_pair = (imp, exp)
+            check.grid_from = "pair"
+            bought, sent = _watts(hass, imp), _watts(hass, exp)
+            if bought is not None or sent is not None:
+                check.grid_w = (bought or 0.0) - (sent or 0.0)
 
     # Battery as read. Only its size is shown, so the sign does not matter.
     parts = []
@@ -117,7 +152,7 @@ def build_setup_check(hass, cfg: Any,
 
     hit = (proposals or {}).get("grid_import_power_sensor") or {}
     other = hit.get("entity")
-    if other and other != check.grid_entity:
+    if other and other != check.grid_entity and check.grid_from != "pair":
         check.other_grid = other
         check.other_grid_w = _watts(hass, other)
 

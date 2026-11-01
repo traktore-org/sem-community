@@ -181,7 +181,7 @@ class SEMHomeStatusCard extends SEMLitBase {
                         <ha-icon icon="mdi:leaf"
                                  style="--mdc-icon-size:18px;color:#8DC892"></ha-icon>
                         <div class="env-chip-content">
-                            <span class="env-chip-val">${co2Today} kg</span>
+                            <span class="env-chip-val">${co2Today} ${this._kgUnit('daily_co2_avoided')}</span>
                             <span class="env-chip-label">${this._t('co2_today')}</span>
                         </div>
                     </div>
@@ -189,7 +189,7 @@ class SEMHomeStatusCard extends SEMLitBase {
                         <ha-icon icon="mdi:tree"
                                  style="--mdc-icon-size:18px;color:#8DC892"></ha-icon>
                         <div class="env-chip-content">
-                            <span class="env-chip-val">${co2Life} kg</span>
+                            <span class="env-chip-val">${co2Life} ${this._kgUnit('lifetime_co2_avoided')}</span>
                             <span class="env-chip-label">${this._t('co2_lifetime')}</span>
                         </div>
                     </div>

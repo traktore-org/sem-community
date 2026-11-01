@@ -33,6 +33,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
 
+from .energy_planner import FIT_EPS
+
 # A stamped plan can never legitimately be older than one ENERGY DAY
 # (night-end to night-end): since the horizon-spanning change a 07:30
 # stamp is ~15 h old when its night blocks open, so the old 14 h cap
@@ -44,6 +46,13 @@ _MAX_PLAN_AGE = timedelta(hours=24)
 _EPS_KWH = 1e-6
 
 
+def blocks_hold(have: float, need: float) -> bool:
+    """(#1289) Do the blocks still hold the need? The same share the planner
+    calls "fits" (``FIT_EPS``); a tighter wait ended it for a plan the
+    planner had just passed."""
+    return have + _EPS_KWH >= max(0.0, float(need)) * FIT_EPS
+
+
 @dataclass(frozen=True)
 class PlanGate:
     """One demand's actuation verdict against the stamped plan.
@@ -51,14 +60,20 @@ class PlanGate:
     ``covered`` is the trust switch: False means "the plan has no say over
     this demand" — the caller must change nothing. When True:
     ``in_block`` — ``now`` sits inside one of this demand's planned blocks;
-    ``block_power_w`` — that block's planned power (0.0 outside a block);
+    ``block_power_w`` — that block's planned power in whole watts, the
+    setpoint it asks for (0.0 outside a block);
     ``remaining_kwh`` — energy the blocks can still deliver from ``now``
-    to their ends (the honest "can waiting still meet the floor" number).
+    to their ends (the honest "can waiting still meet the floor" number),
+    from the plan's exact watts: it is compared with the exact need
+    (#1282).
     """
     covered: bool = False
     in_block: bool = False
     block_power_w: float = 0.0
     remaining_kwh: float = 0.0
+    # (#1290) The same blocks in hours: a load's wait counts runtime, so it
+    # needs no rating of its own.
+    remaining_h: float = 0.0
     next_block_start: Optional[datetime] = None
     # (#638 Stage 2) When the NEXT of this demand's blocks opens — None
     # inside a block or when none remain. The verdict's ``until``, the
@@ -81,6 +96,24 @@ def _parse_dt(value) -> Optional[datetime]:
         return datetime.fromisoformat(str(value))
     except ValueError:
         return None
+
+
+def plan_blocks(allocations) -> list:
+    """The stamped ``blocks`` rows, in the ONE shape ``plan_gate`` reads.
+
+    ``power_w`` keeps its precision: the gate rebuilds deliverable kWh from
+    it and compares with the unrounded need. Whole watts turned a complete
+    plan into a 0.4 Wh shortage (#1282). Rounding is for the card.
+    """
+    return [{
+        "id": a.demand_id,
+        "start": a.start.isoformat(),
+        "end": a.end.isoformat(),
+        "power_w": a.power_w,
+        "price": a.price,
+        # (#1023) only on the top-up: the strip hatches it
+        **({"late": True} if a.late else {}),
+    } for a in allocations]
 
 
 def plan_gate(plan: Optional[dict], demand_id: str, now: datetime) -> PlanGate:
@@ -140,6 +173,7 @@ def plan_gate(plan: Optional[dict], demand_id: str, now: datetime) -> PlanGate:
         in_block = False
         block_power = 0.0
         remaining = 0.0
+        remaining_h = 0.0
         next_start = None
         for b in plan.get("blocks") or []:
             if b.get("id") != demand_id:
@@ -158,17 +192,26 @@ def plan_gate(plan: Optional[dict], demand_id: str, now: datetime) -> PlanGate:
                 # membership) is worse than declining. Same direction as the
                 # outer except — UNCOVERED, i.e. pre-G4 behaviour.
                 return PlanGate(reason="malformed block")
-            if start <= now < end:
+            # (#1282) A setpoint goes out in whole watts, as before; only
+            # the energy sum below needs the plan's exact watts. A block
+            # under half a watt (a float rest the packer placed) asks for
+            # no power, so it is no block to run in: the battery reads a
+            # 0 W block as "no cap" and would charge at full power. Its
+            # energy still counts below.
+            setpoint = round(power, 0)
+            if start <= now < end and setpoint > 0.0:
                 in_block = True
-                block_power = max(block_power, power)
+                block_power = max(block_power, setpoint)
             elif start > now and (next_start is None or start < next_start):
                 next_start = start
             left_h = (end - max(start, now)).total_seconds() / 3600.0
             if left_h > 0:
                 remaining += power / 1000.0 * left_h
+                remaining_h += left_h
         return PlanGate(covered=True, in_block=in_block,
                         block_power_w=block_power,
                         remaining_kwh=round(remaining, 6),
+                        remaining_h=round(remaining_h, 6),
                         next_block_start=None if in_block else next_start)
     except (TypeError, ValueError, KeyError, IndexError):
         return PlanGate(reason="unreadable plan")
@@ -250,12 +293,13 @@ def ev_overlay(
         else:
             amps = int(math.ceil(gate.block_power_w / wpa))
         return (False, max(int(min_amps), min(int(max_amps), amps)))
-    if gate.remaining_kwh + _EPS_KWH >= max(0.0, float(remaining_kwh)):
+    if blocks_hold(gate.remaining_kwh, remaining_kwh):
         return (True, 0)
     return (False, 0)
 
 
-def load_verdict(gate: PlanGate, *, deficit_kwh: float):
+def load_verdict(gate: PlanGate, *, deficit_kwh: float,
+                 deficit_h: Optional[float] = None):
     """(#638 Stage 3) The load-side verdict, in the same PlanVerdict shape
     the EV decision consumes — loads graduate from a bare window bool to a
     hold that carries its reason and its ``until``.
@@ -271,7 +315,12 @@ def load_verdict(gate: PlanGate, *, deficit_kwh: float):
     if gate.in_block:
         return PlanVerdict(hold=False, in_block=True,
                            reason="joint energy plan: in planned block")
-    if gate.remaining_kwh + _EPS_KWH < deficit_kwh:
+    # (#1290) With the deficit in hours, compare hours: the plan sized the
+    # blocks with the rating of planning time, the rating now may be higher.
+    if deficit_h is not None:
+        if not blocks_hold(gate.remaining_h, deficit_h):
+            return NO_OPINION
+    elif not blocks_hold(gate.remaining_kwh, deficit_kwh):
         return NO_OPINION
     when = (f" — block opens at {gate.next_block_start:%H:%M}"
             if gate.next_block_start else "")
@@ -283,7 +332,8 @@ def load_verdict(gate: PlanGate, *, deficit_kwh: float):
 
 
 def merge_load_gates(load_gate: PlanGate, comfort_gate: PlanGate,
-                     *, deficit_kwh: float):
+                     *, deficit_kwh: float,
+                     deficit_h: Optional[float] = None):
     """(#638 C5) One device, two demands — the merged verdict.
 
     A device carries its runtime deficit (``load:``) and its comfort
@@ -301,7 +351,8 @@ def merge_load_gates(load_gate: PlanGate, comfort_gate: PlanGate,
                            reason="joint energy plan: in planned block")
     holds = []
     if load_gate.covered:
-        lv = load_verdict(load_gate, deficit_kwh=deficit_kwh)
+        lv = load_verdict(load_gate, deficit_kwh=deficit_kwh,
+                          deficit_h=deficit_h)
         if not lv.hold:
             # The load half failed open — no hold may stand over the
             # device's reactive deficit run.
@@ -317,6 +368,24 @@ def merge_load_gates(load_gate: PlanGate, comfort_gate: PlanGate,
     return PlanVerdict(hold=True,
                        until=min(untils) if untils else None,
                        reason=holds[0].reason)
+
+
+def _now_in_plan_span(plan: dict, computed: datetime, now: datetime) -> bool:
+    """(#1272) ``now`` is inside the hours the plan was built for.
+
+    The same span rule as :func:`plan_gate`: the plan's authority runs from
+    its stamp (or its first slot, if earlier) to the end of its last slot.
+    A plan stamped after midnight ends at sunrise, so a sale block it
+    carries for that evening is not its to start. No readable span = no.
+    """
+    slots = plan.get("slots") or []
+    if not slots:
+        return False
+    start = _parse_dt(slots[0].get("start"))
+    end = _parse_dt(slots[-1].get("end"))
+    if start is None or end is None:
+        return False
+    return min(start, computed) <= now < end
 
 
 def arbitrage_sell_gate(plan, now: datetime) -> Tuple[bool, float]:
@@ -340,6 +409,8 @@ def arbitrage_sell_gate(plan, now: datetime) -> Tuple[bool, float]:
             return closed
         arb = plan.get("arbitrage")
         if not isinstance(arb, dict):
+            return closed
+        if not _now_in_plan_span(plan, computed, now):
             return closed
         for b in arb.get("discharge_blocks") or []:
             start = _parse_dt(b.get("start"))
@@ -379,6 +450,8 @@ def forecast_sell_gate(plan, now: datetime) -> Tuple[bool, float]:
             return closed
         fs = plan.get("forecast_sell")
         if not isinstance(fs, dict):
+            return closed
+        if not _now_in_plan_span(plan, computed, now):
             return closed
         for b in fs.get("blocks") or []:
             start = _parse_dt(b.get("start"))

@@ -57,7 +57,7 @@
       },
       "reconfigure": {
         "title": "Solar Energy Management neu konfigurieren",
-        "description": "EV-Lader und Benachrichtigungseinstellungen aktualisieren",
+        "description": "EV-Lader und Benachrichtigungseinstellungen aktualisieren{charger_note}",
         "data": {
           "ev_connected_sensor": "EV Verbindungsstatus",
           "ev_charging_sensor": "EV Ladestatus",
@@ -2052,6 +2052,14 @@
     "power_sensor_not_found_unit": {
       "title": "Kein Leistungssensor für {energy_entity}",
       "description": "Das Energie-Dashboard zählt **{energy_entity}** in kWh, aber SEM hat dafür keinen Leistungssensor (W) gefunden. SEM addiert nur die anderen Solar- oder Batterieeinträge, daher sind die Energieflüsse und der Überschuss falsch. Füge dazu den Leistungssensor zu diesem Eintrag im Energie-Dashboard hinzu. Gibt es keinen Leistungssensor, kannst du diesen Hinweis ignorieren."
+    },
+    "half_grid_pair": {
+      "title": "SEM sieht deine Netzeinspeisung nicht",
+      "description": "Nur der Netz-Bezug-Sensor **{import_entity}** ist gesetzt, daher liest SEM die Einspeisung als 0 W. Dein Einspeisezähler **{export_entity}** zeigt aber, dass Strom ins Netz ging. Öffne zur Behebung das SEM-Dashboard, Tab ⚙ **Konfiguration**, und wähle oben **Alle Einstellungen**. Setze dann den **Netz-Einspeise-Sensor** im Abschnitt **Tarif & Preise**. Oder leere den **Netz-Bezug-Sensor**, dann sucht SEM das Paar selbst."
+    },
+    "unseen_power_row": {
+      "title": "SEM sieht nicht deine ganze Solar- oder Batterieleistung",
+      "description": "Das Energie-Dashboard zählt **{energy_entity}** in kWh, und sein Zähler steigt weiter. Die Leistung, die SEM liest (**{power_entity}**), enthält ihn aber nicht, daher zeigt SEM zu wenig Solar- oder Batterieleistung. SEM nimmt keinen zweiten Leistungssensor von einem Gerät, das es schon liest, weil es dieselbe Leistung doppelt zählen könnte. Füge zur Behebung einen Leistungssensor für diesen Eintrag im Energie-Dashboard hinzu."
     },
     "charger_device_gone": {
       "title": "Ladegerät {name}: Gerät fehlt",

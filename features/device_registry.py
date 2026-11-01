@@ -48,8 +48,10 @@ from ..devices.base import _MAX_PLAUSIBLE_LOAD_W
 from ..devices.held_power import held_power_from_states
 from ..consts.core import RATED_POWER_RULE, RATED_POWER_START_PEAK_RATIO
 from ..hardware_detection import discover_ev_charger_from_registry
+from ..const import DOMAIN
 from ..const import LOAD_PRIORITY_BASE as _LOAD_PRIORITY_BASE
 from ..consts.devices import load_phase
+from ..coordinator.units import finite_float
 
 #: (#880) Domains whose control is a watt SETPOINT rather than a contact.
 #: The reporter configured "Control type: Number entity" and got a
@@ -58,6 +60,9 @@ _LOGGER = logging.getLogger(__name__)
 
 STORAGE_VERSION = 1
 STORAGE_KEY = "sem_device_mappings"
+#: (#1253) a copy of the two keys older builds drop when they rewrite the
+#: device file; a file of its own, which they never touch
+STORAGE_COPY_KEY = f"{DOMAIN}_device_marks"
 
 
 #: (#880) The top of every EVSE SEM supports. A "current" control that
@@ -239,6 +244,7 @@ class UnifiedDeviceRegistry:
         self._load_manager = load_manager
         self._discovery = discovery
         self._store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
+        self._copy_store = Store(hass, STORAGE_VERSION, STORAGE_COPY_KEY)
         self._devices: List[UnifiedDevice] = []
         self._manual_mappings: Dict[str, Dict[str, Any]] = {}
         self._priority_overrides: Dict[str, int] = {}
@@ -341,6 +347,29 @@ class UnifiedDeviceRegistry:
         """Return current device list."""
         return self._devices
 
+    async def _restore_from_copy(self, data: dict) -> tuple:
+        """(#1253) A device file with no hands-off latch was rewritten by an
+        older build, which keeps only the keys it knows. Put the two it
+        dropped back from the copy; a mode the older build changed or
+        removed is no longer the user's."""
+        copy_store = getattr(self, "_copy_store", None)
+        try:
+            kept = await copy_store.async_load() if copy_store is not None else None
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("(#1253) could not read the marks copy: %s", err)
+            kept = None
+        if not isinstance(kept, dict) or "legacy_flags_adopted" not in kept:
+            return data, False
+        kept_users = kept.get("control_modes_user") or []
+        if not isinstance(kept_users, list):
+            return data, False
+        modes = data.get("control_modes") or {}
+        users = [d for d in kept_users if isinstance(d, str) and d in modes]
+        _LOGGER.info("(#1253) restored the hands-off latch and %d load mode(s) "
+                     "an older SEM version dropped", len(users))
+        return {**data, "legacy_flags_adopted": bool(kept["legacy_flags_adopted"]),
+                "control_modes_user": users}, True
+
     async def _load_storage(self) -> None:
         """Load the registry's own store and run its one-shot upgrades.
 
@@ -352,6 +381,9 @@ class UnifiedDeviceRegistry:
         """
         try:
             data = await self._store.async_load()
+            restored = False
+            if data and "legacy_flags_adopted" not in data:
+                data, restored = await self._restore_from_copy(data)
             if data:
                 self._manual_mappings = data.get("mappings", {})
                 self._priority_overrides = data.get("priority_overrides", {})
@@ -493,6 +525,9 @@ class UnifiedDeviceRegistry:
                     len(self._priority_overrides),
                     len(self._control_mode_overrides),
                 )
+                if restored:
+                    # everything is loaded, so the save writes the whole file
+                    await self._save_storage()
         except Exception as e:
             _LOGGER.warning("Could not load device mappings: %s", e)
 
@@ -1810,7 +1845,7 @@ class UnifiedDeviceRegistry:
                 state = self.hass.states.get(device.power_sensor)
                 if state and state.state not in ("unknown", "unavailable"):
                     try:
-                        current_power = float(state.state)
+                        current_power = finite_float(state.state)
                     except (ValueError, TypeError):
                         pass
             # (#745) On/off must prefer the device's OWN control-entity state.
@@ -1987,7 +2022,7 @@ class UnifiedDeviceRegistry:
             st = self.hass.states.get(entity)
             if st and st.state not in ("unknown", "unavailable"):
                 try:
-                    return float(st.state)
+                    return finite_float(st.state)
                 except (ValueError, TypeError):
                     return None
             return None
@@ -2990,6 +3025,16 @@ class UnifiedDeviceRegistry:
             "control_modes_user": sorted(self._user_control_modes),   # (#1119)
         }
         await self._store.async_save(data)
+        copy_store = getattr(self, "_copy_store", None)
+        if copy_store is not None:
+            # (#1253) the copy is a safety net; it must never fail the real save
+            try:
+                await copy_store.async_save({
+                    "legacy_flags_adopted": data["legacy_flags_adopted"],
+                    "control_modes_user": data["control_modes_user"],
+                })
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.warning("(#1253) could not save the marks copy: %s", err)
         _LOGGER.debug("Saved device mappings to storage")
 
     def discover_ev_charger(self) -> Dict[str, Any]:
@@ -3015,7 +3060,7 @@ class UnifiedDeviceRegistry:
                 # unrounded this mirrored the sensor tick for tick. 10 W
                 # steps: a 37.5->40.1 W jitter stays 40, and a 42 W load
                 # still gets a rating instead of the 0 that 100 W gave it.
-                return float(round(float(state.state) / 10.0) * 10)
+                return float(round(finite_float(state.state) / 10.0) * 10)
             except (ValueError, TypeError):
                 pass
         return 0.0

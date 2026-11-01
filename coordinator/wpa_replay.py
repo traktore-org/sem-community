@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import logging
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
+from .units import finite_float
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -144,7 +145,7 @@ async def read_series(hass, entity_id: str, days: int) -> List[Tuple[float, floa
     out: List[Tuple[float, float]] = []
     for st in states:
         try:
-            v = float(st.state)
+            v = finite_float(st.state)
         except (TypeError, ValueError):
             continue          # unknown / unavailable rows carry no value
         out.append((st.last_changed.timestamp(), v))

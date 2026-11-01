@@ -38,6 +38,7 @@ from .phase_shed import (
     order_candidates,
     relief_a,
 )
+from ..coordinator.units import finite_float
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -1861,7 +1862,7 @@ class LoadManagementCoordinator:
                         previous = None
                         if state is not None:
                             try:
-                                previous = float(state.state)
+                                previous = finite_float(state.state)
                             except (ValueError, TypeError):
                                 previous = None
                         self._devices[device_id]["_pre_shed_setpoint"] = previous
@@ -1900,7 +1901,7 @@ class LoadManagementCoordinator:
                         current_state = self.hass.states.get(entity)
                         if current_state:
                             try:
-                                self._devices[device_id]["_pre_shed_current"] = float(current_state.state)
+                                self._devices[device_id]["_pre_shed_current"] = finite_float(current_state.state)
                             except (ValueError, TypeError):
                                 self._devices[device_id]["_pre_shed_current"] = control.get("original_value", 16)
 

@@ -29,6 +29,12 @@ Issues filed today:
   * ``power_sensor_not_found_<source>`` — the Energy Dashboard counts the
     grid, solar or battery in kWh and SEM found no power sensor for it
     (#1188). Cleared the cycle a sensor is found.
+  * ``half_grid_pair`` — only the grid import power sensor is set, export
+    reads 0 W, and the export counter moved (#1238). Cleared the cycle the
+    import half is no longer read alone.
+  * ``unseen_power_row_<kind>`` — a second inverter or battery whose counter
+    SEM set aside gained kWh that the power SEM reads does not explain
+    (#1236). Cleared when no counter is set aside any more.
 
 The legacy log-channel feedback ("the solar_energy_management
 component should handle unavailability gracefully instead of
@@ -257,6 +263,10 @@ _DOCS_ANCHORS = {
     "power_sensor_not_found": "sem-found-no-power-sensor",
     # (#1226) …for one inverter or battery, beside others that read
     "power_sensor_not_found_unit": "sem-found-no-power-sensor",
+    # (#1238) only the grid import sensor is set; the export counter moves
+    "half_grid_pair": "sem-does-not-see-your-grid-export",
+    # (#1236) a second inverter or battery's kWh is not inside the power read
+    "unseen_power_row": "sem-does-not-see-all-your-solar-or-battery-power",
     # (#935) files from an install that came before this one
     "previous_install_leftovers": "files-from-a-previous-sem-install",
     "sensor_stale": "a-sensor-stopped-updating-stale",
@@ -447,6 +457,74 @@ def raise_split_grid_rejected(hass: HomeAssistant, *, import_entity, export_enti
         )
     except Exception as e:  # noqa: BLE001
         _LOGGER.debug("issue_registry.create (split_grid_rejected) failed: %s", e)
+
+
+def raise_half_grid_pair(hass: HomeAssistant, *, import_entity, export_entity) -> None:
+    """(#1238) Only the grid IMPORT power sensor is set, so export reads 0 W,
+    and the export counter shows that power went to the grid. Non-persistent:
+    the reader proves it again after every start."""
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id="half_grid_pair",
+            is_fixable=False,
+            is_persistent=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="half_grid_pair",
+            learn_more_url=next_step_url("docs", "half_grid_pair", **_versions(hass)),
+            translation_placeholders={
+                "import_entity": str(import_entity or "—"),
+                "export_entity": str(export_entity or "—"),
+            },
+        )
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.create (half_grid_pair) failed: %s", e)
+
+
+def clear_half_grid_pair(hass: HomeAssistant) -> None:
+    try:
+        ir.async_delete_issue(hass, DOMAIN, "half_grid_pair")
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete (half_grid_pair) failed: %s", e)
+
+
+def _unseen_row_issue_id(kind: str) -> str:
+    return f"unseen_power_row_{kind}"
+
+
+def raise_unseen_power_row(hass: HomeAssistant, kind: str, *,
+                           energy_entity, power_entity) -> None:
+    """(#1236) A counter SEM set aside (its device is read already, or a link
+    SEM cannot place may hold it) gained kWh that the power SEM reads does
+    not explain. Said, not fixed: a second power sensor could count the same
+    watts twice. Non-persistent: the reader proves it again after a start."""
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id=_unseen_row_issue_id(kind),
+            is_fixable=False,
+            is_persistent=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="unseen_power_row",
+            learn_more_url=next_step_url("docs", "unseen_power_row", **_versions(hass)),
+            translation_placeholders={
+                "energy_entity": str(energy_entity or "—"),
+                "power_entity": str(power_entity or "—"),
+            },
+        )
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.create (unseen_power_row_%s) failed: %s",
+                      kind, e)
+
+
+def clear_unseen_power_row(hass: HomeAssistant, kind: str) -> None:
+    try:
+        ir.async_delete_issue(hass, DOMAIN, _unseen_row_issue_id(kind))
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete (unseen_power_row_%s) failed: %s",
+                      kind, e)
 
 
 def clear_split_grid_guessed(hass: HomeAssistant) -> None:

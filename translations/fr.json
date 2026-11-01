@@ -57,7 +57,7 @@
       },
       "reconfigure": {
         "title": "Reconfigurer Solar Energy Management",
-        "description": "Mettez à jour les paramètres de votre chargeur VE et de vos notifications",
+        "description": "Mettez à jour les paramètres de votre chargeur VE et de vos notifications{charger_note}",
         "data": {
           "ev_connected_sensor": "État de connexion VE",
           "ev_charging_sensor": "État de charge VE",
@@ -2052,6 +2052,14 @@
     "power_sensor_not_found_unit": {
       "title": "Aucun capteur de puissance pour {energy_entity}",
       "description": "Le tableau de bord Énergie compte **{energy_entity}** en kWh, mais SEM n'a trouvé aucun capteur de puissance (W) pour lui. SEM n'additionne donc que les autres entrées solaires ou de batterie, et les flux d'énergie et le surplus sont faux. Pour corriger, ajoutez le capteur de puissance à cette entrée du tableau de bord Énergie. S'il n'existe aucun capteur de puissance, vous pouvez ignorer cet avis."
+    },
+    "half_grid_pair": {
+      "title": "SEM ne voit pas votre export réseau",
+      "description": "Seul le capteur d'import réseau **{import_entity}** est réglé, donc SEM lit l'export comme 0 W. Mais votre compteur d'export **{export_entity}** montre que de l'énergie est partie vers le réseau. Pour corriger, ouvrez le tableau de bord SEM, onglet ⚙ **Configuration**, et choisissez **Tous les réglages** en haut. Puis réglez le **Capteur d'export réseau** dans la section **Tarif & prix**. Ou videz le **Capteur d'import réseau**, et SEM cherchera la paire lui-même."
+    },
+    "unseen_power_row": {
+      "title": "SEM ne voit pas toute votre puissance solaire ou batterie",
+      "description": "Le tableau de bord Énergie compte **{energy_entity}** en kWh, et son compteur continue de monter. Mais la puissance que SEM lit (**{power_entity}**) ne l'inclut pas, donc SEM affiche trop peu de puissance solaire ou batterie. SEM ne prend pas de second capteur de puissance sur un appareil qu'il lit déjà, car il pourrait compter deux fois la même puissance. Pour corriger, ajoutez un capteur de puissance pour cette entrée du tableau de bord Énergie."
     },
     "charger_device_gone": {
       "title": "Borne {name} : appareil introuvable",

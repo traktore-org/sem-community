@@ -77,6 +77,9 @@ _BASELINE = {
     "set_accumulator", "set_baseline",
     "set_daily_accumulator", "set_flow_accumulator", "set_monthly_accumulator",
     "set_previous_value",
+    # (#1252) the cycle now saves through the throttled path; the timer
+    # version stays for the tests that drive a delayed write
+    "async_save_energy_delayed",
     # compat-alias / public API kept deliberately
     "deactivate_all",                          # thin wrapper; #656 wired the
                                                # module-level deactivate_devices

@@ -99,7 +99,7 @@ class SEMCostsDetailCard extends SEMLitBase {
             const cost = this._val('lifetime_ev_cost');
             const share = this._val('lifetime_ev_solar_share');
             const perKwh = cost == null ? null : cost / energy;
-            return `${fmtValue(perKwh, 2)} ${curr}/kWh · ${fmtValue(share, 0)}% solar`;
+            return `${fmtValue(perKwh, 2)} ${curr}/kWh · ${fmtValue(share, 0)}% ${this._t('solar_word')}`;
         }
         if (id === 'investment') {
             const inv = this._numVal('number.sem_system_investment_cost');

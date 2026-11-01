@@ -40,7 +40,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from custom_components.solar_energy_management.coordinator.energy_plan_actuation import (
-    ev_overlay, plan_gate,
+    ev_overlay, plan_blocks, plan_gate,
 )
 from custom_components.solar_energy_management.coordinator.energy_planner import (
     Demand, LedgerSlot, build_night_ledger, pack_night,
@@ -119,9 +119,7 @@ def stamped(plan, ledger, computed_at):
                      "needed_kwh": round(r.needed_kwh, 2), "note": r.note or None}
                     for r in plan.results],
         "slots": [{"start": s.start.isoformat(), "end": s.end.isoformat()} for s in ledger],
-        "blocks": [{"id": a.demand_id, "start": a.start.isoformat(),
-                    "end": a.end.isoformat(), "power_w": round(a.power_w, 0)}
-                   for a in plan.allocations],
+        "blocks": plan_blocks(plan.allocations),
     }
 
 

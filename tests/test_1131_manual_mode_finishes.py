@@ -332,7 +332,7 @@ async def _run_pipeline(monkeypatch, power):
     order: list = []
     stub = _pipeline_stub()
     stub._finish_manual_battery_modes = (
-        lambda items, soc_read, count, power_read=False: order.append((
+        lambda items, soc_read, count, power_read=False, site=None: order.append((
             "finish", [(bid, rt.last_known_soc) for bid, rt in items],
             dict(soc_read), count)))
     stub._vpp_apply_battery_override = (

@@ -112,3 +112,27 @@ export function allOut(states, ids) {
     }
     return seen;
 }
+
+/**
+ * (#1265) Is a node out, when its power comes from one or two sensors?
+ *
+ * A grid or battery node can be fed by a pair (import and export, charge and
+ * discharge). The user may set only one half. A half that is not set is not
+ * a reading, so it cannot vouch for the node: the node is out when every
+ * half that IS set is out, and at least one half is set. With no half set
+ * there is no sensor, so nothing is out. A full pair is out only when both
+ * halves are.
+ *
+ * @param {object} states  hass.states
+ * @param {Array<string|undefined|null>} ids  entity ids; an empty one is not set
+ * @returns {boolean}
+ */
+export function pairOut(states, ids) {
+    let set = 0;
+    for (const id of ids || []) {
+        if (!id) continue;
+        set++;
+        if (readNumber(states?.[id]) != null) return false;
+    }
+    return set > 0;
+}

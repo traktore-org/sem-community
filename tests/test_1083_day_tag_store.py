@@ -67,13 +67,6 @@ def test_storage_round_trip_bound_and_same_day_replaces():
     assert tags == sorted(tags, key=lambda t: t["date"])
 
 
-def test_starts_are_remembered_per_day():
-    st = _storage()
-    st.note_start("2026-10-12")
-    assert st.started_on("2026-10-12")
-    assert not st.started_on("2026-10-11")
-
-
 def test_sampling_keeps_dark_readings_dark():
     s = sample_series([(START + timedelta(hours=9), "800"),
                        (START + timedelta(hours=11), "unavailable"),

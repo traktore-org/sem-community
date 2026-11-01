@@ -57,7 +57,7 @@
       },
       "reconfigure": {
         "title": "Konfigurer Solar Energy Management på nytt",
-        "description": "Oppdater innstillingene for EV-lader og varslinger",
+        "description": "Oppdater innstillingene for EV-lader og varslinger{charger_note}",
         "data": {
           "ev_connected_sensor": "EV Tilkoblingsstatus",
           "ev_charging_sensor": "EV Ladestatus",
@@ -2052,6 +2052,14 @@
     "power_sensor_not_found_unit": {
       "title": "Ingen effektsensor for {energy_entity}",
       "description": "Energi-dashbordet teller **{energy_entity}** i kWh, men SEM fant ingen effektsensor (W) for den. SEM legger derfor bare sammen de andre sol- eller batterioppføringene, og energiflytene og overskuddet blir feil. Rett det ved å legge effektsensoren til denne oppføringen i Energi-dashbordet. Finnes det ingen effektsensor, kan du ignorere denne meldingen."
+    },
+    "half_grid_pair": {
+      "title": "SEM ser ikke netteksporten din",
+      "description": "Bare netimport-sensoren **{import_entity}** er satt, så SEM leser eksporten som 0 W. Men eksporttelleren din **{export_entity}** viser at strøm gikk til nettet. Slik retter du det: åpne SEM-dashbordet, fanen ⚙ **Konfigurasjon**, og velg **Alle innstillinger** øverst. Sett deretter **Netteksport-sensor** i delen **Tariff og priser**. Eller tøm **Nettimport-sensor**, så finner SEM paret selv."
+    },
+    "unseen_power_row": {
+      "title": "SEM ser ikke all sol- eller batterieffekten din",
+      "description": "Energi-dashbordet teller **{energy_entity}** i kWh, og telleren stiger fortsatt. Men effekten SEM leser (**{power_entity}**) inneholder den ikke, så SEM viser for lite sol- eller batterieffekt. SEM tar ikke en ny effektsensor fra en enhet den allerede leser, fordi den kunne telle samme effekt to ganger. Rett det ved å legge til en effektsensor for denne oppføringen i Energi-dashbordet."
     },
     "charger_device_gone": {
       "title": "Lader {name}: enheten mangler",

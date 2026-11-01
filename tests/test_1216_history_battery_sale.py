@@ -497,7 +497,7 @@ def seed_env(env, monkeypatch):
     import sys
     rec_stats = sys.modules["homeassistant.components.recorder.statistics"]
 
-    async def _stats(hass, start, end, ids, period, units, types):
+    def _stats(hass, start, end, ids, period, units, types):
         env["queries"].append({"ids": set(ids), "period": period})
         return {eid: rows for eid, rows in env["stats"].items() if eid in ids}
     monkeypatch.setattr(rec_stats, "statistics_during_period", _stats)

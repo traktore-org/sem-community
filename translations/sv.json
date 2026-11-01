@@ -57,7 +57,7 @@
       },
       "reconfigure": {
         "title": "Konfigurera om Solar Energy Management",
-        "description": "Uppdatera inställningarna för din EV-laddare och dina aviseringar",
+        "description": "Uppdatera inställningarna för din EV-laddare och dina aviseringar{charger_note}",
         "data": {
           "ev_connected_sensor": "EV Anslutningsstatus",
           "ev_charging_sensor": "EV Laddningsstatus",
@@ -2052,6 +2052,14 @@
     "power_sensor_not_found_unit": {
       "title": "Ingen effektsensor för {energy_entity}",
       "description": "Energi-instrumentpanelen räknar **{energy_entity}** i kWh, men SEM hittade ingen effektsensor (W) för den. SEM lägger därför bara ihop de andra sol- eller batteriposterna, och energiflödena och överskottet blir fel. Åtgärda det genom att lägga till effektsensorn i denna post i Energi-instrumentpanelen. Finns det ingen effektsensor kan du ignorera detta meddelande."
+    },
+    "half_grid_pair": {
+      "title": "SEM ser inte din nätexport",
+      "description": "Bara nätimportsensorn **{import_entity}** är inställd, så SEM läser exporten som 0 W. Men din exporträknare **{export_entity}** visar att ström gick ut på nätet. Så rättar du det: öppna SEM-panelen, fliken ⚙ **Konfiguration**, och välj **Alla inställningar** högst upp. Ställ sedan in **Nätexportsensor** i avsnittet **Tariff och priser**. Eller töm **Nätimportsensor**, så letar SEM upp paret själv."
+    },
+    "unseen_power_row": {
+      "title": "SEM ser inte all din sol- eller batterieffekt",
+      "description": "Energi-instrumentpanelen räknar **{energy_entity}** i kWh, och dess räknare stiger fortfarande. Men effekten som SEM läser (**{power_entity}**) innehåller den inte, så SEM visar för lite sol- eller batterieffekt. SEM tar ingen andra effektsensor från en enhet som den redan läser, eftersom den kunde räkna samma effekt två gånger. Åtgärda det genom att lägga till en effektsensor för denna post i Energi-instrumentpanelen."
     },
     "charger_device_gone": {
       "title": "Laddare {name}: enheten saknas",
