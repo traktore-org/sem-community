@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **A restart no longer drops lifetime totals above 100 MWh or costs above 100,000** (#1295). The lifetime home read the grid import.
 - 🐛 **After a restart, a HomeWizard P1 meter no longer reads grid import as export** (#1294). SEM now takes the sign from the meter model.
 - 🐛 **A battery's settings rejoin it when its sensor returns** (#1256). The missing-sensor Repair lists all missing battery sensors and lets you pick replacements.
 - 🐛 **The wallbox text no longer shows "Bat 0%" before the battery level is read** (#1288). It shows "Wait: Bat" until then.

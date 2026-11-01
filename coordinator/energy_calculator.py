@@ -120,6 +120,11 @@ _BATTERY_FLOW_FIELDS = ("solar_to_battery", "grid_to_battery",
 # residential install imports or exports 1 MWh in a day.
 MAX_PLAUSIBLE_DAILY_KWH = 1000.0
 
+# (#1295) Before #1295 the store dropped every lifetime total above this at
+# each restart, and the seed rebuilt the home from the raised steps alone. A
+# home whose totals or counters reach it is rebuilt once from the balance.
+_OLD_STORE_BOUND_KWH = 100_000.0
+
 # Accumulator category for EV charging energy (#666). A named constant, not a
 # literal, because this string is the join between four otherwise-independent
 # places (live accumulation, the yearly recorder seeding, the hardware-counter
@@ -729,6 +734,9 @@ class EnergyCalculator:
         # persisted, so a seed taken from a different set (the first tariff
         # only, before #1043) is known and taken again. None = no record.
         self._lifetime_seed_counters: Optional[Dict[str, List[str]]] = None
+        # (#1295) Has a seed checked the lifetime home for the old 100 MWh
+        # store bound? Persisted, so the one-time rebuild runs once.
+        self._lifetime_home_checked: bool = False
         # (#1043) Per counter: when it was first seen without a reading while
         # HA was running. Runtime only — the wait starts again on every start.
         self._lifetime_seed_unready_since: Dict[str, float] = {}
@@ -1876,15 +1884,26 @@ class EnergyCalculator:
                 set_changed = any(len(ids) > 1 for ids in counters.values())
             else:
                 set_changed = self._lifetime_seed_counters != seed_set
+            # (#1295) once: the old store bound may have rebuilt this home
+            # from one raised step at every restart
+            if not self._lifetime_home_checked and self._old_bound_reached(totals):
+                old_home = current.pop("lifetime_home", None)
+                _LOGGER.info(
+                    "Lifetime home rebuilt once from the counters (#1295): "
+                    "a total reached 100 MWh, which the store dropped at each "
+                    "restart before (was %s kWh)", old_home,
+                )
             if (
                 raise_needed
                 or set_changed
                 or current.get("lifetime_solar", 0) <= solar * 0.9
+                or not _finite(current.get("lifetime_home"))
             ):
                 self._raise_lifetime_to_counters(
                     totals, self._read_ev_seed(ed_config, _read), seed_set,
                 )
             self._lifetime_seed_counters = seed_set
+            self._lifetime_home_checked = True
             self._lifetime_seeded = True
             return
 
@@ -1897,9 +1916,7 @@ class EnergyCalculator:
                 value = max(value, current.get(key, 0.0))
             self._lifetime_accumulators[key] = value
         acc = self._lifetime_accumulators
-        home = max(0, acc["lifetime_solar"] + acc["lifetime_grid_import"]
-                   + acc["lifetime_battery_discharge"] - acc["lifetime_grid_export"]
-                   - acc["lifetime_battery_charge"])
+        home = self._lifetime_home_balance(self._lifetime_totals())
         self._lifetime_accumulators["lifetime_home"] = home
 
         ev_total = self._read_ev_seed(ed_config, _read)
@@ -1907,6 +1924,7 @@ class EnergyCalculator:
             self._lifetime_accumulators["lifetime_ev"] = ev_total
 
         self._lifetime_seed_counters = seed_set
+        self._lifetime_home_checked = True
         self._lifetime_seeded = True
         _LOGGER.info(
             "Lifetime seeded from hardware: solar=%.0f import=%.0f export=%.0f "
@@ -1925,6 +1943,33 @@ class EnergyCalculator:
                 return read(energy_sensor)
         return 0.0
 
+    @staticmethod
+    def _lifetime_home_balance(totals: Dict[str, float]) -> float:
+        """The lifetime home as the seed takes it from the five totals, keyed
+        by category: solar + import + discharge − export − charge, never
+        below 0."""
+        def _get(category: str) -> float:
+            value = totals.get(category, 0.0)
+            return float(value) if _finite(value) else 0.0
+        return max(0.0, _get("solar") + _get("grid_import")
+                   + _get("battery_discharge") - _get("grid_export")
+                   - _get("battery_charge"))
+
+    def _lifetime_totals(self) -> Dict[str, float]:
+        """The five saved lifetime totals, keyed by category."""
+        return {c: self._lifetime_accumulators.get(f"lifetime_{c}", 0.0)
+                for c in ENERGY_COUNTER_CATEGORIES}
+
+    def _old_bound_reached(self, totals: Dict[str, float]) -> bool:
+        """(#1295) Could the old store bound have hurt this home's lifetime
+        home? It dropped every lifetime total above 100 MWh at a restart.
+        Asked of the saved totals, the counters and the counters' balance —
+        a home dropped alone shows only in the balance."""
+        values = list(self._lifetime_totals().values()) + list(totals.values())
+        values += [self._lifetime_accumulators.get("lifetime_home"),
+                   self._lifetime_home_balance(totals)]
+        return any(_finite(v) and v > _OLD_STORE_BOUND_KWH for v in values)
+
     def _raise_lifetime_to_counters(
         self, totals: Dict[str, float], ev_total: float, seed_set: Dict[str, List[str]],
     ) -> None:
@@ -1934,8 +1979,11 @@ class EnergyCalculator:
         history SEM holds, and that history stays. On a fresh install every
         total is 0, so this is the full seed. ``lifetime_home`` moves by the
         same amounts, with the sign each category has in the energy balance.
+        (#1295) A home with no number holds no history to move: it is taken
+        from the balance of all five totals, not from the raised steps alone.
         """
         acc = self._lifetime_accumulators
+        rebuild_home = not _finite(acc.get("lifetime_home"))
         home_delta = 0.0
         raised = []
         for category in ENERGY_COUNTER_CATEGORIES:
@@ -1949,9 +1997,13 @@ class EnergyCalculator:
         if ev_total > acc.get("lifetime_ev", 0.0):
             raised.append(f"ev +{ev_total - acc.get('lifetime_ev', 0.0):.0f}")
             acc["lifetime_ev"] = ev_total
+        if rebuild_home:
+            acc["lifetime_home"] = self._lifetime_home_balance(self._lifetime_totals())
+            raised.append(f"home = {acc['lifetime_home']:.0f}")
         if not raised:
             return
-        acc["lifetime_home"] = max(0.0, acc.get("lifetime_home", 0.0) + home_delta)
+        if not rebuild_home:
+            acc["lifetime_home"] = max(0.0, acc.get("lifetime_home", 0.0) + home_delta)
         _LOGGER.info(
             "Lifetime seeded from hardware — raised to the Energy Dashboard "
             "counters %s: %s kWh", seed_set, ", ".join(raised),
@@ -5898,6 +5950,7 @@ class EnergyCalculator:
             ),
             "yearly_cost_seeded": self._yearly_cost_seeded,
             "sale_history_read": self._sale_history_read,   # (#1245)
+            "lifetime_home_checked": self._lifetime_home_checked,   # (#1295)
             "rate_history": list(self._rate_history),
             "device_meter_last": dict(self.device_meter_last),   # (#812)
             # (#1228) a step over an outage still waiting for its rows
@@ -6061,6 +6114,8 @@ class EnergyCalculator:
             self._yearly_seeded = state.get("yearly_seeded", False)
             self._yearly_cost_seeded = state.get("yearly_cost_seeded", False)
             self._sale_history_read = state.get("sale_history_read") is True
+            self._lifetime_home_checked = (
+                state.get("lifetime_home_checked") is True)   # (#1295)
             self._lifetime_seed_counters = _as_seed_counters(
                 state.get("lifetime_seed_counters"))
             # (#812) a corrupt entry is dropped, never a reason to fail restore

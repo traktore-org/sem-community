@@ -398,7 +398,10 @@ async def test_async_load_563_inflated_lifetime_keeps_dailies(storage):
 
     The calculator's accumulators live in the DAILY store. A pre-#551
     store holding ×1000-inflated lifetime counters (>100 MWh) must NOT
-    take the day's dailies, monthlies and cost accumulators with it."""
+    take the day's dailies, monthlies and cost accumulators with it.
+    (#1295) The store keeps lifetime totals of any size: a meter can count
+    past 100 MWh. The seed heals an inflated one from its own counter
+    (tests/test_1295_lifetime_above_100_mwh.py)."""
     daily_store = {
         "baselines": {},
         "flow_accumulators": {},
@@ -419,10 +422,11 @@ async def test_async_load_563_inflated_lifetime_keeps_dailies(storage):
     assert d["daily_accumulators"]["solar_2026-07-04"] == 38.2
     assert d["monthly_accumulators"]["solar_2026-07"] == 150.0
     assert d["daily_cost_accumulators"]["cost_2026-07-04"] == 1.31
-    # Only the inflated lifetime entries are gone (re-seeded from hw later)
-    assert "lifetime_solar" not in d["lifetime_accumulators"]
-    assert "lifetime_grid_import" not in d["lifetime_accumulators"]
-    assert d["lifetime_accumulators"]["lifetime_home"] == 55.0
+    # Lifetime totals reach the calculator as saved (#1295)
+    assert d["lifetime_accumulators"] == {
+        "lifetime_solar": 3_200_000.0, "lifetime_grid_import": 640_000.0,
+        "lifetime_home": 55.0,
+    }
 
 
 def test_validate_daily_data_structural_corruption():
