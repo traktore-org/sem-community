@@ -504,18 +504,21 @@ class SEMChartCard extends SEMLitBase {
     async _fetchStatistics(series, startISO, endISO, granularity) {
         const statIds = series.map(s => s.entity);
         const period  = granularity === 'month' ? 'month' : granularity === 'hour' ? 'hour' : 'day';
+        // (#1292) the axes say W and kWh; ask for those units so a sensor kept
+        // in kW or MWh is not drawn a thousand times too small or large
+        const units   = { power: 'W', energy: 'kWh' };
         let stats;
         try {
             stats = await this._hass.callWS({
                 type: 'recorder/statistics_during_period',
                 start_time: startISO, end_time: endISO,
-                statistic_ids: statIds, period, types: ['state', 'mean', 'max'],
+                statistic_ids: statIds, period, types: ['state', 'mean', 'max'], units,
             });
         } catch {
             stats = await this._hass.callWS({
                 type: 'history/statistics_during_period',
                 start_time: startISO, end_time: endISO,
-                statistic_ids: statIds, period,
+                statistic_ids: statIds, period, units,
             });
         }
         // On a STACKED power chart (e.g. EV charging power = solar+battery+grid
