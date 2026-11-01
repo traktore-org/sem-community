@@ -6701,6 +6701,7 @@ async def _async_register_phase_services(
         if grid_flip or batt_flip:
             cleared = {**opts, "grid_sign_user_flip": False, "battery_sign_user_flip": False,
                        "grid_sign_user_flip_source": None}   # (#971) the binding goes with it
+            cleared.pop("grid_sign_user_flip_on_fixed", None)   # (#1294) and its mark
             if coordinator is not None:
                 coordinator._skip_options_reload = dict(cleared)
             hass.config_entries.async_update_entry(target, options=cleared)
@@ -6768,6 +6769,7 @@ async def _async_register_phase_services(
             new_options = {**(target.options or {}), "grid_sign_user_flip": new_flip,
                            "grid_sign_user_flip_source": (
                                NO_GRID_SOURCE if new_flip else None)}
+            new_options.pop("grid_sign_user_flip_on_fixed", None)   # (#1294)
         # Suppress the update-listener reload; we issue one explicit reload
         # so the new sign is live without a double tear-down (set_option
         # pattern).
