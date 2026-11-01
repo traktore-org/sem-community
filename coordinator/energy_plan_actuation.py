@@ -33,6 +33,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
 
+from .energy_planner import FIT_EPS
+
 # A stamped plan can never legitimately be older than one ENERGY DAY
 # (night-end to night-end): since the horizon-spanning change a 07:30
 # stamp is ~15 h old when its night blocks open, so the old 14 h cap
@@ -42,6 +44,13 @@ from typing import Optional, Tuple
 _MAX_PLAN_AGE = timedelta(hours=24)
 
 _EPS_KWH = 1e-6
+
+
+def blocks_hold(have: float, need: float) -> bool:
+    """(#1289) Do the blocks still hold the need? The same share the planner
+    calls "fits" (``FIT_EPS``); a tighter wait ended it for a plan the
+    planner had just passed."""
+    return have + _EPS_KWH >= max(0.0, float(need)) * FIT_EPS
 
 
 @dataclass(frozen=True)
@@ -278,7 +287,7 @@ def ev_overlay(
         else:
             amps = int(math.ceil(gate.block_power_w / wpa))
         return (False, max(int(min_amps), min(int(max_amps), amps)))
-    if gate.remaining_kwh + _EPS_KWH >= max(0.0, float(remaining_kwh)):
+    if blocks_hold(gate.remaining_kwh, remaining_kwh):
         return (True, 0)
     return (False, 0)
 
@@ -299,7 +308,7 @@ def load_verdict(gate: PlanGate, *, deficit_kwh: float):
     if gate.in_block:
         return PlanVerdict(hold=False, in_block=True,
                            reason="joint energy plan: in planned block")
-    if gate.remaining_kwh + _EPS_KWH < deficit_kwh:
+    if not blocks_hold(gate.remaining_kwh, deficit_kwh):
         return NO_OPINION
     when = (f" — block opens at {gate.next_block_start:%H:%M}"
             if gate.next_block_start else "")
