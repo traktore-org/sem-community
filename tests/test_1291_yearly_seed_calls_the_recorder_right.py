@@ -4,12 +4,14 @@
 a real recorder the call failed, the error was caught and a new install
 started its year at zero. The seed now goes through ``_recorder_stats``.
 """
-import inspect
+
 import sys
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+from custom_components.solar_energy_management.tests import ast_contracts
 
 from custom_components.solar_energy_management.coordinator import energy_calculator
 from custom_components.solar_energy_management.coordinator.energy_calculator import (
@@ -29,9 +31,9 @@ def _calc():
 
 
 def test_the_seed_never_awaits_the_recorder_function_itself():
-    src = inspect.getsource(EnergyCalculator.seed_yearly_from_statistics)
-    assert "await statistics_during_period" not in src
-    assert src.count("_recorder_stats(") >= 2
+    fn = EnergyCalculator.seed_yearly_from_statistics
+    assert not ast_contracts.calls(fn, "statistics_during_period")
+    assert ast_contracts.calls(fn, "_recorder_stats")
 
 
 @pytest.mark.asyncio
