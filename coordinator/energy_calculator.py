@@ -4799,7 +4799,9 @@ class EnergyCalculator:
         for e in entries:
             used = 0.0
             if e.meter:   # its time on its meter, its price over the flows
-                dev = self._meter_dev_flow.setdefault(e.device_id, [0.0] * 3)
+                dev = self._meter_dev_flow.get(e.device_id)
+                if dev is None:   # SEM's load id, not a registry device_id
+                    dev = self._meter_dev_flow[e.device_id] = [0.0] * 3
                 own = house_rate if e.price is None else float(e.price)
                 if grid_kwh is not None and math.isfinite(own):
                     dev[0] += interval_hours * 3600.0
