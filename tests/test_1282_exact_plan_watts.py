@@ -270,10 +270,11 @@ def _rounded_gate_fields(source):
 
 def test_the_plan_writer_rounds_no_field_a_gate_reads():
     found, bad = _rounded_gate_fields(
-        inspect.getsource(SEMCoordinator._shadow_energy_plan))
-    assert found, "no block dict found in _shadow_energy_plan — fix the guard"
+        inspect.getsource(energy_plan_actuation.plan_blocks))
+    assert found, "no block dict found in plan_blocks — fix the guard"
+    assert "plan_blocks(" in inspect.getsource(SEMCoordinator._shadow_energy_plan)
     assert not bad, (
-        f"_shadow_energy_plan rounds {bad} — a gate adds these up and "
+        f"plan_blocks rounds {bad} — a gate adds these up and "
         "compares them with the exact need (#1282). Round in the sensor.")
 
 
