@@ -2042,6 +2042,23 @@
       "title": "Ei tehoanturia kohteelle {energy_entity}",
       "description": "Energia-paneeli laskee **{energy_entity}** kWh:na, mutta SEM ei löytänyt sille tehoanturia (W). SEM laskee siksi yhteen vain muut aurinko- tai akkukohdat, joten energiavirrat ja ylijäämä ovat väärin. Korjaa se lisäämällä tehoanturi tähän kohtaan Energia-paneelissa. Jos tehoanturia ei ole, voit ohittaa tämän ilmoituksen."
     },
+    "power_sensor_not_found_fixable": {
+      "title": "Ei tehoanturia kohteelle {energy_entity}",
+      "fix_flow": {
+        "step": {
+          "pick": {
+            "title": "Korvaa puuttuva akkuanturi ({position})",
+            "description": "SEM tarvitsee nämä akun anturit ja ohjaukset, mutta ne puuttuvat tai eivät ole käytettävissä:\n\n{missing}\n\nValitse anturi kohteelle **{old}** tai jätä tyhjäksi, niin se säilyy. Akku säilyttää SEM-asetuksensa (varaus-SOC, tila ja muut). Jos Energia-kojetaulu mainitsee yhä vanhan anturin, vaihda se myös siellä.",
+            "data": {
+              "replacement": "Korvaaja"
+            }
+          }
+        },
+        "abort": {
+          "nothing_chosen": "Korvaajaa ei valittu, joten mikään ei muuttunut."
+        }
+      }
+    },
     "half_grid_pair": {
       "title": "SEM ei näe verkkoon vientiäsi",
       "description": "Vain verkon tuontianturi **{import_entity}** on asetettu, joten SEM lukee viennin arvona 0 W. Mutta vientilaskurisi **{export_entity}** näyttää, että sähköä meni verkkoon. Korjaa avaamalla SEM-koontinäyttö, välilehti ⚙ **Asetukset**, ja valitse ylhäältä **Kaikki asetukset**. Aseta sitten **Verkon vientianturi** osiossa **Tariffi ja hinnoittelu**. Tai tyhjennä **Verkon tuontianturi**, niin SEM etsii parin itse."

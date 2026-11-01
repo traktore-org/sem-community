@@ -2042,6 +2042,23 @@
       "title": "Nenhum sensor de potência para {energy_entity}",
       "description": "O painel de Energia conta **{energy_entity}** em kWh, mas o SEM não encontrou nenhum sensor de potência (W) para ele. O SEM soma apenas as outras entradas solares ou de bateria, por isso os fluxos de energia e o excedente estão errados. Para corrigir, adicione o sensor de potência a esta entrada no painel de Energia. Se não existir nenhum sensor de potência, pode ignorar este aviso."
     },
+    "power_sensor_not_found_fixable": {
+      "title": "Sem sensor de potência para {energy_entity}",
+      "fix_flow": {
+        "step": {
+          "pick": {
+            "title": "Substituir um sensor de bateria em falta ({position})",
+            "description": "O SEM precisa destes sensores e controlos da bateria, mas eles estão em falta ou indisponíveis:\n\n{missing}\n\nEscolha um sensor para **{old}**, ou deixe vazio para o manter. A bateria mantém as suas definições do SEM (SOC de reserva, modo e o resto). Se o painel de Energia ainda indicar o sensor antigo, altere-o também aí.",
+            "data": {
+              "replacement": "Substituto"
+            }
+          }
+        },
+        "abort": {
+          "nothing_chosen": "Nenhum substituto foi escolhido, por isso nada mudou."
+        }
+      }
+    },
     "half_grid_pair": {
       "title": "O SEM não vê a sua exportação para a rede",
       "description": "Apenas o sensor de importação da rede **{import_entity}** está definido, por isso o SEM lê a exportação como 0 W. Mas o seu contador de exportação **{export_entity}** mostra que saiu energia para a rede. Para corrigir, abra o painel do SEM, separador ⚙ **Configuração**, e escolha **Todas as definições** no topo. Depois defina o **Sensor de exportação para a rede** na secção **Tarifa e preços**. Ou esvazie o **Sensor de importação da rede**, e o SEM procura o par sozinho."

@@ -263,6 +263,7 @@ _DOCS_ANCHORS = {
     "power_sensor_not_found": "sem-found-no-power-sensor",
     # (#1226) …for one inverter or battery, beside others that read
     "power_sensor_not_found_unit": "sem-found-no-power-sensor",
+    "power_sensor_not_found_fixable": "sem-found-no-power-sensor",
     # (#1238) only the grid import sensor is set; the export counter moves
     "half_grid_pair": "sem-does-not-see-your-grid-export",
     # (#1236) a second inverter or battery's kWh is not inside the power read
@@ -546,7 +547,8 @@ def _power_not_found_issue_id(source: str) -> str:
 
 
 def raise_power_sensor_not_found(hass: HomeAssistant, source: str, *,
-                                 energy_entity, beside: bool = False) -> bool:
+                                 energy_entity, beside: bool = False,
+                                 rows=None) -> bool:
     """(#1188) The Energy Dashboard counts this source in kWh, and SEM found
     no power sensor for it, so the source reads 0 W. Until now one log line
     said so. Non-persistent: the reader asks again after every start.
@@ -556,23 +558,34 @@ def raise_power_sensor_not_found(hass: HomeAssistant, source: str, *,
     Dashboard only: the Config card pick stands for the whole source, so it
     would drop the units that read.
 
+    (#1256) ``rows``: for a battery, every battery entity that is gone
+    (``battery_sensor_check.battery_problems``). When SEM can re-point one,
+    the Repair is fixable: its flow lets the user pick each replacement.
+
     True when the Repair was filed, so the caller tries again when not."""
     tr_key = "power_sensor_not_found"
     if beside:
         tr_key = "power_sensor_not_found_unit"
+    fixable = bool(rows) and any(r.get("editable") for r in rows)
+    placeholders = {"energy_entity": str(energy_entity or "—")}
+    data = None
+    if fixable:
+        tr_key = "power_sensor_not_found_fixable"
+        placeholders["missing"] = "\n".join(
+            f"- {r.get('entity') or r.get('label')}" for r in rows)
+        data = {"rows": [dict(r) for r in rows], "placeholders": dict(placeholders)}
     try:
         ir.async_create_issue(
             hass,
             domain=DOMAIN,
             issue_id=_power_not_found_issue_id(source),
-            is_fixable=False,
+            is_fixable=fixable,
             is_persistent=False,
             severity=ir.IssueSeverity.ERROR,
             translation_key=tr_key,
             learn_more_url=next_step_url("docs", tr_key, **_versions(hass)),
-            translation_placeholders={
-                "energy_entity": str(energy_entity or "—"),
-            },
+            translation_placeholders=placeholders,
+            data=data,
         )
     except Exception as e:  # noqa: BLE001
         _LOGGER.debug("issue_registry.create (power_sensor_not_found_%s) "

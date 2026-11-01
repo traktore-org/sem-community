@@ -2042,6 +2042,23 @@
       "title": "Geen vermogenssensor voor {energy_entity}",
       "description": "Het Energiedashboard telt **{energy_entity}** in kWh, maar SEM vond er geen vermogenssensor (W) voor. SEM telt alleen de andere zonne- of batterijregels op, dus de energiestromen en het overschot kloppen niet. Voeg daarom de vermogenssensor toe aan deze regel in het Energiedashboard. Is er geen vermogenssensor, dan kun je deze melding negeren."
     },
+    "power_sensor_not_found_fixable": {
+      "title": "Geen vermogenssensor voor {energy_entity}",
+      "fix_flow": {
+        "step": {
+          "pick": {
+            "title": "Een ontbrekende batterijsensor vervangen ({position})",
+            "description": "SEM heeft deze batterijsensoren en -regelingen nodig, maar ze ontbreken of zijn niet beschikbaar:\n\n{missing}\n\nKies een sensor voor **{old}**, of laat het leeg om hem te houden. De batterij houdt haar SEM-instellingen (reserve-SOC, modus en de rest). Noemt het Energiedashboard nog de oude sensor, wijzig hem daar dan ook.",
+            "data": {
+              "replacement": "Vervanger"
+            }
+          }
+        },
+        "abort": {
+          "nothing_chosen": "Er is geen vervanger gekozen, dus er is niets veranderd."
+        }
+      }
+    },
     "half_grid_pair": {
       "title": "SEM ziet je teruglevering niet",
       "description": "Alleen de netimportsensor **{import_entity}** is ingesteld, dus SEM leest export als 0 W. Maar je exportteller **{export_entity}** laat zien dat er stroom naar het net ging. Open om dit op te lossen het SEM-dashboard, tabblad ⚙ **Configuratie**, en kies bovenaan **Alle instellingen**. Stel daarna de **Netexportsensor** in bij sectie **Tarief & prijzen**. Of maak de **Netimportsensor** leeg, dan zoekt SEM het paar zelf."

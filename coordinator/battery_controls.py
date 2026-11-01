@@ -55,6 +55,20 @@ PER_BATTERY_LIST_KEYS: tuple[str, ...] = tuple(
 #: (#1195) Which battery each slot of those lists belongs to: its entry in
 #: ``battery_units`` (the combined power sensor, or a pair's charge sensor).
 BATTERY_SLOT_UNITS_KEY = "battery_slot_units"
+#: (#1256) A removed battery's slot values, by its unit. The battery takes
+#: them back when its sensor returns, or when the Repair names its
+#: replacement. The oldest go first past ``_MAX_PARKED`` batteries.
+PARKED_SETTINGS_KEY = "battery_parked_settings"
+_MAX_PARKED = 8
+
+
+def parked_settings(saved: Mapping) -> dict[str, dict]:
+    """(#1256) The parked slot values, ``{unit: {list key: value}}``."""
+    value = saved.get(PARKED_SETTINGS_KEY)
+    if not isinstance(value, Mapping):
+        return {}
+    return {u: {k: v for k, v in s.items() if k in PER_BATTERY_LIST_KEYS}
+            for u, s in value.items() if isinstance(u, str) and isinstance(s, Mapping)}
 
 _BATTERY_SLUG_RE = re.compile(r"^sensor\.sem_battery_(b\d+)_power$")
 # (#1171) the same sensor by its unique id (a renamed entity keeps it), and
@@ -346,6 +360,28 @@ def _slots_stand_in(saved: Mapping, units: list, before: Any) -> list | None:
     return None
 
 
+def rename_battery_unit(saved: Mapping, old: str, new: str) -> dict:
+    """(#1256) The option changes that make ``new`` the battery ``old`` was.
+
+    The battery's slots follow it by its unit: a record that names ``old``
+    now names ``new``, and values parked for ``old`` are parked for ``new``,
+    so ``realign_battery_slots`` gives them to ``new`` when it shows up. With
+    no ``old`` (a battery that never had a power sensor) the one parked
+    battery is taken, if there is exactly one. Pure.
+    """
+    changes: dict = {}
+    record = saved.get(BATTERY_SLOT_UNITS_KEY)
+    if old and new != old and isinstance(record, list) and old in record:
+        changes[BATTERY_SLOT_UNITS_KEY] = [new if u == old else u for u in record]
+    parked = parked_settings(saved)
+    if not old and len(parked) == 1:
+        old = next(iter(parked))
+    if old in parked and new != old:
+        parked[new] = parked.pop(old)
+        changes[PARKED_SETTINGS_KEY] = parked
+    return changes
+
+
 def realign_battery_slots(saved: Any, units: Any,
                           before: Any = None) -> tuple[dict, bool] | None:
     """(#1195) The per-battery lists put in the order of ``units``.
@@ -388,15 +424,40 @@ def realign_battery_slots(saved: Any, units: Any,
     else:
         old_slot_of = _old_slot_of(record, units)
     changes: dict = {BATTERY_SLOT_UNITS_KEY: list(units)}
+    parked = parked_settings(saved)
+    if record is not None:
+        taken = {j for j in old_slot_of if j is not None}
+        for j, unit in enumerate(record):
+            if j in taken or unit in units:
+                continue
+            values = {k: saved[k][j] for k in PER_BATTERY_LIST_KEYS
+                      if isinstance(saved.get(k), list) and j < len(saved[k])
+                      and saved[k][j] is not None}
+            if values:
+                parked.pop(unit, None)
+                parked[unit] = values
+    back = {i: parked.pop(unit) for i, unit in enumerate(units)
+            if old_slot_of[i] is None and unit in parked}
+    while len(parked) > _MAX_PARKED:
+        parked.pop(next(iter(parked)))
     for key in PER_BATTERY_LIST_KEYS:
         old = saved.get(key)
         if not isinstance(old, list):
-            continue
+            if not any(key in v for v in back.values()):
+                continue
+            old = []
         new = _strip_unset_tail([
             old[j] if j is not None and j < len(old) else None
             for j in old_slot_of])
+        for i, values in back.items():
+            if key in values:
+                new += [None] * (i + 1 - len(new))
+                new[i] = values[key]
+        new = _strip_unset_tail(new)
         if new != _strip_unset_tail(old):
             changes[key] = new
+    if parked != parked_settings(saved):
+        changes[PARKED_SETTINGS_KEY] = parked
     return changes, not first
 
 
@@ -454,7 +515,13 @@ def align_battery_slots(hass: Any, entry: Any, coordinator: Any, units: Any,
         coordinator._battery_reload_pending = True
     if moved:
         old_units = merged.get(BATTERY_SLOT_UNITS_KEY) or []
-        new_units = [u for u in changes[BATTERY_SLOT_UNITS_KEY] if u not in old_units]
+        back = parked_settings(merged)
+        new_units = [u for u in changes[BATTERY_SLOT_UNITS_KEY]
+                     if u not in old_units and u not in back]
+        for unit in changes[BATTERY_SLOT_UNITS_KEY]:
+            if unit not in old_units and unit in back:
+                _LOGGER.info("Battery %s is back: its saved SEM settings are "
+                             "restored. (#1256)", unit)
         _LOGGER.warning(
             "The batteries in the Energy Dashboard changed (%s → %s). Each "
             "battery keeps its own SEM settings at its new number%s%s.",

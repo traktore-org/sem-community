@@ -2042,6 +2042,23 @@
       "title": "Ingen effektsensor för {energy_entity}",
       "description": "Energi-instrumentpanelen räknar **{energy_entity}** i kWh, men SEM hittade ingen effektsensor (W) för den. SEM lägger därför bara ihop de andra sol- eller batteriposterna, och energiflödena och överskottet blir fel. Åtgärda det genom att lägga till effektsensorn i denna post i Energi-instrumentpanelen. Finns det ingen effektsensor kan du ignorera detta meddelande."
     },
+    "power_sensor_not_found_fixable": {
+      "title": "Ingen effektsensor för {energy_entity}",
+      "fix_flow": {
+        "step": {
+          "pick": {
+            "title": "Ersätt en saknad batterisensor ({position})",
+            "description": "SEM använder dessa batterisensorer och styrningar, men de saknas eller är otillgängliga:\n\n{missing}\n\nVälj en sensor för **{old}**, eller lämna tomt för att behålla den. Batteriet behåller sina SEM-inställningar (reserv-SOC, läge och resten). Nämner Energi-instrumentpanelen fortfarande den gamla sensorn, ändra den även där.",
+            "data": {
+              "replacement": "Ersättning"
+            }
+          }
+        },
+        "abort": {
+          "nothing_chosen": "Ingen ersättning valdes, så inget har ändrats."
+        }
+      }
+    },
     "half_grid_pair": {
       "title": "SEM ser inte din nätexport",
       "description": "Bara nätimportsensorn **{import_entity}** är inställd, så SEM läser exporten som 0 W. Men din exporträknare **{export_entity}** visar att ström gick ut på nätet. Så rättar du det: öppna SEM-panelen, fliken ⚙ **Konfiguration**, och välj **Alla inställningar** högst upp. Ställ sedan in **Nätexportsensor** i avsnittet **Tariff och priser**. Eller töm **Nätimportsensor**, så letar SEM upp paret själv."

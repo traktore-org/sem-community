@@ -2042,6 +2042,23 @@
       "title": "Ingen effektsensor for {energy_entity}",
       "description": "Energi-dashbordet teller **{energy_entity}** i kWh, men SEM fant ingen effektsensor (W) for den. SEM legger derfor bare sammen de andre sol- eller batterioppføringene, og energiflytene og overskuddet blir feil. Rett det ved å legge effektsensoren til denne oppføringen i Energi-dashbordet. Finnes det ingen effektsensor, kan du ignorere denne meldingen."
     },
+    "power_sensor_not_found_fixable": {
+      "title": "Ingen effektsensor for {energy_entity}",
+      "fix_flow": {
+        "step": {
+          "pick": {
+            "title": "Erstatt en manglende batterisensor ({position})",
+            "description": "SEM bruker disse batterisensorene og styringene, men de mangler eller er utilgjengelige:\n\n{missing}\n\nVelg en sensor for **{old}**, eller la feltet stå tomt for å beholde den. Batteriet beholder SEM-innstillingene sine (reserve-SOC, modus og resten). Nevner Energi-dashbordet fortsatt den gamle sensoren, endre den også der.",
+            "data": {
+              "replacement": "Erstatning"
+            }
+          }
+        },
+        "abort": {
+          "nothing_chosen": "Ingen erstatning ble valgt, så ingenting er endret."
+        }
+      }
+    },
     "half_grid_pair": {
       "title": "SEM ser ikke netteksporten din",
       "description": "Bare netimport-sensoren **{import_entity}** er satt, så SEM leser eksporten som 0 W. Men eksporttelleren din **{export_entity}** viser at strøm gikk til nettet. Slik retter du det: åpne SEM-dashbordet, fanen ⚙ **Konfigurasjon**, og velg **Alle innstillinger** øverst. Sett deretter **Netteksport-sensor** i delen **Tariff og priser**. Eller tøm **Nettimport-sensor**, så finner SEM paret selv."

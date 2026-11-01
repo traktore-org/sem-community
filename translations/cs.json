@@ -2042,6 +2042,23 @@
       "title": "Žádný senzor výkonu pro {energy_entity}",
       "description": "Panel Energie počítá **{energy_entity}** v kWh, ale SEM pro něj nenašel žádný senzor výkonu (W). SEM proto sčítá jen ostatní položky solární výroby nebo baterií, takže toky energie i přebytek jsou špatně. Opravíte to přidáním senzoru výkonu k této položce v panelu Energie. Pokud žádný senzor výkonu neexistuje, můžete toto upozornění ignorovat."
     },
+    "power_sensor_not_found_fixable": {
+      "title": "Žádný snímač výkonu pro {energy_entity}",
+      "fix_flow": {
+        "step": {
+          "pick": {
+            "title": "Nahradit chybějící snímač baterie ({position})",
+            "description": "SEM potřebuje tyto snímače a ovládací prvky baterie, ale chybí nebo jsou nedostupné:\n\n{missing}\n\nVyberte snímač pro **{old}**, nebo nechte prázdné, aby zůstal. Baterie si ponechá svá nastavení SEM (rezervní SOC, režim a zbytek). Pokud panel Energie stále uvádí starý snímač, změňte jej i tam.",
+            "data": {
+              "replacement": "Náhrada"
+            }
+          }
+        },
+        "abort": {
+          "nothing_chosen": "Nebyla vybrána žádná náhrada, nic se nezměnilo."
+        }
+      }
+    },
     "half_grid_pair": {
       "title": "SEM nevidí vaši dodávku do sítě",
       "description": "Je nastaven jen senzor importu ze sítě **{import_entity}**, takže SEM čte export jako 0 W. Ale vaše počítadlo exportu **{export_entity}** ukazuje, že energie šla do sítě. Oprava: otevřete panel SEM, kartu ⚙ **Konfigurace** a nahoře zvolte **Všechna nastavení**. Pak nastavte **Senzor exportu do sítě** v sekci **Tarif a ceny**. Nebo vymažte **Senzor importu ze sítě** a SEM si dvojici najde sám."

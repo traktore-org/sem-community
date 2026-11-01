@@ -2042,6 +2042,23 @@
       "title": "{energy_entity} 没有功率传感器",
       "description": "能源看板以 kWh 统计 **{energy_entity}**，但 SEM 没有找到它的功率传感器 (W)。因此 SEM 只累加其他太阳能或电池条目，能量流和余电都不正确。修复方法：在能源看板的这一项中添加功率传感器。如果没有功率传感器，可以忽略此通知。"
     },
+    "power_sensor_not_found_fixable": {
+      "title": "{energy_entity} 没有功率传感器",
+      "fix_flow": {
+        "step": {
+          "pick": {
+            "title": "替换缺失的电池传感器（{position}）",
+            "description": "SEM 依赖下列电池传感器和控制项，但它们缺失或不可用：\n\n{missing}\n\n为 **{old}** 选择一个传感器，或留空以保留原样。电池会保留其 SEM 设置（备用 SOC、模式等）。如果能源仪表板仍使用旧传感器，也请在那里更改。",
+            "data": {
+              "replacement": "替代项"
+            }
+          }
+        },
+        "abort": {
+          "nothing_chosen": "未选择替代项，因此没有任何更改。"
+        }
+      }
+    },
     "half_grid_pair": {
       "title": "SEM 看不到您的电网馈电",
       "description": "只设置了电网购电传感器 **{import_entity}**，所以 SEM 将馈电读为 0 W。但您的馈电计数器 **{export_entity}** 显示有电送入了电网。修复方法：打开 SEM 看板的 ⚙ **配置** 标签页，在顶部选择 **全部设置**。然后在 **电价与费率** 部分设置 **电网馈电传感器**。或者清空 **电网购电传感器**，SEM 会自己查找这一对传感器。"

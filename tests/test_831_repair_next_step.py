@@ -41,6 +41,7 @@ DOCS_SIDE = {
     "power_sensor_not_found",
     # (#1226) …for one inverter or battery while the others read
     "power_sensor_not_found_unit",
+    "power_sensor_not_found_fixable",   # (#1256) the flow picks the replacements
     # (#1238) only the grid import sensor is set; the export counter moved —
     # the next step is the user's own config
     "half_grid_pair",

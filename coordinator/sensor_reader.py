@@ -15,6 +15,8 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 
 from . import repair_issues as _ri
+from .battery_sensor_check import battery_problems as _battery_problems
+from ..const import DOMAIN
 
 from .types import FleetEvPower, PowerReadings
 from .charger_adapters.status_enum import (
@@ -794,7 +796,7 @@ class SensorReader:
         self._unsourced_since: dict[str, float] = {}
         #: (#1188) The counter each raised Repair names (#1226: and whether
         #: other units of the source read — its text says so).
-        self._unsourced_raised: dict[str, tuple[str, bool]] = {}
+        self._unsourced_raised: dict[str, tuple] = {}
         #: (#1188, class 84) The sources this reader has found once. Each
         #: source's first "found" clears what an options reload left: the
         #: Repair outlives the reader.
@@ -5531,6 +5533,22 @@ class SensorReader:
             disc.get("import"), disc.get("export"),
         )
 
+    def _battery_repair_rows(self, counter: str, beside: bool) -> list:
+        """(#1256) Every battery entity that is gone, for the Repair. The
+        battery's other sensors and controls are named with its power."""
+        try:
+            entries = self.hass.config_entries.async_entries(DOMAIN)
+            if not isinstance(entries, list) or not entries:
+                return []
+            entry = entries[0]
+            merged = {**dict(entry.data), **dict(entry.options)}
+            return _battery_problems(
+                self.hass, merged, self._energy_dashboard_config,
+                unsourced=counter, beside=beside)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Battery Repair rows not read: %s", err)
+            return []
+
     def report_unsourced_power(self, *, waiting: bool) -> None:
         """(#1188) A source the Energy Dashboard counts in kWh that SEM reads
         from no power sensor reads 0 W. The flows, the Sankey and the surplus
@@ -5566,11 +5584,14 @@ class SensorReader:
             since = self._unsourced_since.setdefault(source, now)
             if now - since < _ri.UNAVAILABLE_REPAIR_THRESHOLD_S:
                 continue
-            told = (counter, source in beside)
+            rows = (self._battery_repair_rows(counter, source in beside)
+                    if source == "battery" else None)
+            told = (counter, source in beside,
+                    tuple(r["entity"] or r["label"] for r in rows or ()))
             if (self._unsourced_raised.get(source) != told
                     and _ri.raise_power_sensor_not_found(
                         self.hass, source, energy_entity=counter,
-                        beside=source in beside)):
+                        beside=source in beside, rows=rows)):
                 self._unsourced_raised[source] = told
                 _LOGGER.warning(
                     "No %s power sensor: the Energy Dashboard counts %s in kWh, "

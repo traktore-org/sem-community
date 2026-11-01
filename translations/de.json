@@ -2042,6 +2042,23 @@
       "title": "Kein Leistungssensor für {energy_entity}",
       "description": "Das Energie-Dashboard zählt **{energy_entity}** in kWh, aber SEM hat dafür keinen Leistungssensor (W) gefunden. SEM addiert nur die anderen Solar- oder Batterieeinträge, daher sind die Energieflüsse und der Überschuss falsch. Füge dazu den Leistungssensor zu diesem Eintrag im Energie-Dashboard hinzu. Gibt es keinen Leistungssensor, kannst du diesen Hinweis ignorieren."
     },
+    "power_sensor_not_found_fixable": {
+      "title": "Kein Leistungssensor für {energy_entity}",
+      "fix_flow": {
+        "step": {
+          "pick": {
+            "title": "Fehlenden Batteriesensor ersetzen ({position})",
+            "description": "SEM braucht diese Batteriesensoren und -steuerungen, aber sie fehlen oder sind nicht verfügbar:\n\n{missing}\n\nWähle einen Sensor für **{old}** oder lass das Feld leer, um ihn zu behalten. Die Batterie behält ihre SEM-Einstellungen (Reserve-SOC, Modus und den Rest). Nennt das Energie-Dashboard noch den alten Sensor, ändere ihn dort auch.",
+            "data": {
+              "replacement": "Ersatz"
+            }
+          }
+        },
+        "abort": {
+          "nothing_chosen": "Es wurde kein Ersatz gewählt, daher hat sich nichts geändert."
+        }
+      }
+    },
     "half_grid_pair": {
       "title": "SEM sieht deine Netzeinspeisung nicht",
       "description": "Nur der Netz-Bezug-Sensor **{import_entity}** ist gesetzt, daher liest SEM die Einspeisung als 0 W. Dein Einspeisezähler **{export_entity}** zeigt aber, dass Strom ins Netz ging. Öffne zur Behebung das SEM-Dashboard, Tab ⚙ **Konfiguration**, und wähle oben **Alle Einstellungen**. Setze dann den **Netz-Einspeise-Sensor** im Abschnitt **Tarif & Preise**. Oder leere den **Netz-Bezug-Sensor**, dann sucht SEM das Paar selbst."
