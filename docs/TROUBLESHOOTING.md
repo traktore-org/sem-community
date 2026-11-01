@@ -393,6 +393,8 @@ blind on grid is the honest reading, not a fault to work around.
 
 If the device has no power sensor at all (some cloud integrations publish only kWh), you can ignore the Repair. SEM then reads that power as 0 W.
 
+**A battery sensor is gone:** open the Repair. It lists every battery sensor and control SEM uses that is missing, and you can pick a new one for each. The battery keeps its SEM settings, such as reserve and mode. When the old sensor comes back, its settings join the battery again.
+
 **Two inverters or batteries (#1226):** SEM looks for a power sensor for each entry on its own. When one entry has none, SEM adds up only the others, and the Repair names that entry's counter. Add its power sensor to that entry in the Energy Dashboard. The pick on SEM's Configuration tab stands for all of solar (or the battery), so it would drop the entries that read. SEM does not take a second sensor from a device it already reads power from, because it could count the same power twice.
 
 **Two grid meters:** SEM looks for the import and export power sensors of each meter and adds both meters up. A meter with no such pair is noted in the HA log.
