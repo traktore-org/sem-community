@@ -42,6 +42,7 @@ from custom_components.solar_energy_management.ha_energy_reader import _parse_pr
 from .test_1172_declared_power_key import (
     _KWH, _W, EXPORT, IMPORT, POWER, PREFS, _p1_meter,
 )
+from .test_1192_flip_with_no_grid_source import _press
 from .test_diagnostics import coordinator, entry, mock_hass  # noqa: F401
 
 SOLAR = "sensor.solaredge_current_power"
@@ -279,6 +280,45 @@ class TestAFlipTappedOnTheOldLock:
         assert off["grid_sign_user_flip"] is False
         assert "grid_sign_user_flip_on_fixed" not in off
         assert off["grid_sign_user_flip_source"] is None
+
+    async def test_the_service_turns_it_on_then_off(self, hass):
+        """The real flip_grid_sign handler, two taps (review)."""
+        old = {"grid_sign_user_flip": True, "grid_sign_user_flip_source": SOURCE}
+        reader = _reader(hass, **old)
+        reader.read_power()
+        result, saved = await _press(old, reader)
+        assert result["user_flip"] is True
+        assert saved["grid_sign_user_flip_source"] == SOURCE
+        assert saved["grid_sign_user_flip_on_fixed"] is True
+        again = _reader(hass, **saved)
+        assert again.read_power().grid_export_power == pytest.approx(976)
+        result, saved = await _press(saved, again)
+        assert result["user_flip"] is False
+        assert "grid_sign_user_flip_on_fixed" not in saved
+        last = _reader(hass, **saved)
+        assert last.read_power().grid_import_power == pytest.approx(976)
+
+    async def test_a_tap_while_the_meter_is_out_clears_a_no_meter_flip(self, hass):
+        """A flip bound to no meter is not about the P1: a tap while the P1
+        is out turns it off, as #1192 has it (review)."""
+        reader = _reader(hass, grid_sign_user_flip=True,
+                         grid_sign_user_flip_source=sr.NO_GRID_SOURCE)
+        reader.read_power()
+        hass.states.async_set(POWER, "unavailable", _W)
+        reader.read_power()
+        assert reader._tap_source() == sr.NO_GRID_SOURCE
+        assert reader.user_flip_on_for_tap() is True
+
+    async def test_with_grid_sign_invert_the_flip_stays_as_it_was(self, hass, caplog):
+        """That read takes no lock, so a flip on it was not undoing one: the
+        home reads as before the fix, and nothing is said about it."""
+        reader = _reader(hass, grid_sign_invert=True, grid_sign_user_flip=True,
+                         grid_sign_user_flip_source=SOURCE)
+        with caplog.at_level(logging.WARNING):
+            readings = reader.read_power()
+        assert readings.grid_export_power == pytest.approx(976)
+        assert reader.user_flip_applies() is True
+        assert "#1294" not in caplog.text
 
     async def test_a_tap_on_a_kwh_meter_saves_no_mark(self, hass):
         reader = _reader(hass, model_id="HWE-KWH3")

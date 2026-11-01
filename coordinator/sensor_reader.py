@@ -2499,7 +2499,25 @@ class SensorReader:
         such a tap with a None source, which read as a flip from before the
         binding and flipped the next meter SEM found; a None that is SAVED is
         that tap, only a missing key is a flip from before.
+
+        (#1294) …and not one tapped against an old lock on a meter whose
+        model now sets the sign (``_flip_on_an_old_lock``).
         """
+        applies = self._flip_bound_here()
+        if applies and self._flip_on_an_old_lock():
+            if not self._stale_flip_said:
+                self._stale_flip_said = True
+                _LOGGER.warning(
+                    "grid sign: the one-tap user flip on %s was tapped against a "
+                    "learned lock; the meter's model now sets the sign, so the "
+                    "flip would turn it around — not applying it (#1294). Tap "
+                    "'Fix grid sign' again if the grid still reads the wrong way.",
+                    self._grid_source_key)
+            return False
+        return applies
+
+    def _flip_bound_here(self) -> bool:
+        """(#971/#1192) Is the saved flip bound to the source read now?"""
         if not bool(self._raw_config.get("grid_sign_user_flip", False)):
             return False
         recorded = self._user_flip_source()
@@ -2523,24 +2541,17 @@ class SensorReader:
                  else recorded or "an auto-detected source"),
                 current,
             )
-        if applies and self._flip_on_an_old_lock():
-            if not self._stale_flip_said:
-                self._stale_flip_said = True
-                _LOGGER.warning(
-                    "grid sign: the one-tap user flip on %s was tapped against a "
-                    "learned lock; the meter's model now sets the sign, so the "
-                    "flip would turn it around — not applying it (#1294). Tap "
-                    "'Fix grid sign' again if the grid still reads the wrong way.",
-                    current)
-            return False
         return applies
 
     def _flip_on_an_old_lock(self) -> bool:
         """(#1294) A saved flip on a meter whose model sets the sign, tapped
         before the read kept that sign (no ``grid_sign_user_flip_on_fixed``).
         It undid a learned lock that read the meter the wrong way; the read
-        has no such lock now, so the flip would turn a right sign around."""
-        return (self.grid_sign_fixed() is not None
+        has no such lock now, so the flip would turn a right sign around.
+        Not with ``grid_sign_invert``: that read takes no lock, and a flip on
+        it was the user's own choice."""
+        return (not self._raw_config.get("grid_sign_invert", False)
+                and self.grid_sign_fixed() is not None
                 and not self._raw_config.get("grid_sign_user_flip_on_fixed"))
 
     def user_flip_on_for_tap(self) -> bool:
@@ -2551,8 +2562,7 @@ class SensorReader:
         the tap flips this meter, as the log line asks."""
         if not bool(self._raw_config.get("grid_sign_user_flip", False)):
             return False
-        if (self._user_flip_source() in (None, self._tap_source())
-                and self._flip_on_an_old_lock()):
+        if self._flip_bound_here() and self._flip_on_an_old_lock():
             # (#1294) off as read, so the tap turns it on, against this sign
             return False
         return (self.user_flip_applies()
