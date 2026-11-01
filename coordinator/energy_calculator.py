@@ -527,7 +527,10 @@ class EnergyCalculator:
         #: flows: time off its meter is this less its time on it. The first
         #: cycle after a restart comes before the devices are registered.
         self._known_s: Dict[str, float] = {}
+        #: (#1293) the registered ids handed over for the next cycle, and
+        #: those of the cycle being booked
         self._cycle_known: Set[str] = set()
+        self._known_now: Set[str] = set()
         #: (#1230) the watched flows (``METER_FLOW_KEYS``), added in
         #: ``_import_cost``
         self._meter_flow: Dict[str, float] = dict.fromkeys(METER_FLOW_KEYS, 0.0)
@@ -1036,8 +1039,8 @@ class EnergyCalculator:
 
         self._last_update = now
         self._seen_s += interval_hours * 3600.0   # (#1228)
-        known, self._cycle_known = self._cycle_known, set()   # (#1293)
-        for did in known:
+        self._known_now, self._cycle_known = self._cycle_known, set()   # (#1293)
+        for did in self._known_now:
             self._known_s[did] = self._known_s.get(did, 0.0) + interval_hours * 3600.0
 
         # Check for day/month/year rollover and reset accumulators
@@ -5048,11 +5051,13 @@ class EnergyCalculator:
                 or not _finite(seen) or seen < 0.0
                 or not isinstance(flow, dict)
                 or not all(_finite(flow.get(k)) for k in METER_FLOW_KEYS)
+                or flow["flow_t"] < 0.0
                 or not isinstance(dev, dict)
                 or not all(isinstance(v, list) and len(v) == 3
-                           and all(_finite(x) for x in v) for v in dev.values())
+                           and all(_finite(x) for x in v) and v[0] >= 0.0
+                           for v in dev.values())
                 or not isinstance(known, dict)
-                or not all(_finite(v) for v in known.values())):
+                or not all(_finite(v) and v >= 0.0 for v in known.values())):
             return
         self._watch_token = token
         self._seen_s = float(seen)
@@ -5103,15 +5108,20 @@ class EnergyCalculator:
         cover the span: no grid import counter (the house lost that import
         too), PV with no solar counter and the sun up, a new day (the day's
         rows start again), no rows at the start (a store from before), the
-        device off its own meter, or the wait is over.
+        device off its own meter, or the wait is over. (#1293) A device not
+        registered yet waits: SEM's first cycle after a restart comes before
+        its devices are registered.
         """
         rows = self._meter_rows(today)
         ready = []
         for did in sorted(self.device_meter_gaps):
             gap = self.device_meter_gaps[did]
-            why = (self._meter_gap_unread(gap, rows, now)
-                   if did in self._meter_staged
-                   else "the device has no own meter now")
+            if did in self._meter_staged:
+                why = self._meter_gap_unread(gap, rows, now)
+            elif did in self._known_now:
+                why = "the device has no own meter now"
+            else:   # (#1293) not registered yet (the first cycle after a restart)
+                why = self._meter_gap_unread(gap, rows, now) or "wait"
             if why == "wait":
                 continue
             del self.device_meter_gaps[did]

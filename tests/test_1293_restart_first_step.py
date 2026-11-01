@@ -28,7 +28,7 @@ from custom_components.solar_energy_management.coordinator.energy_calculator imp
     METER_FLOW_KEYS, EnergyCalculator,
 )
 from custom_components.solar_energy_management.tests.test_1228_own_meter_outage import (
-    HOUSE, METER, PUMP,
+    HOUSE, IMPORT, METER, PUMP, House,
 )
 from custom_components.solar_energy_management.tests.test_1230_coarse_meter_steps import (
     Meter,
@@ -284,6 +284,68 @@ class TestDevicesRegisteredLate:
         assert "off its own meter or tariff" in caplog.text
         assert house.calc.device_meter_gaps == {}
 
+    def test_a_held_step_waits_for_its_device(self, caplog):
+        # an hour down held for its counters, a second short restart: the
+        # first cycle after it has no device registered (2.0 kWh dropped
+        # as "no own meter now" before)
+        house = House()
+        house.cycle()
+        house.run(60)
+        before = house.pump_kwh()
+        house.restart()
+        house.down(3600, import_kwh=2.3, pump_kwh=2.0)
+        house.cycle()
+        house.dark = {IMPORT}
+        house.run(10)
+        assert "heat_pump" in house.calc.device_meter_gaps
+        house.restart()
+        house.dark = set()
+        pumps, house.pumps = house.pumps, []
+        house.down(60, import_kwh=2.3 / 60, pump_kwh=2.0 / 60)
+        with caplog.at_level(logging.INFO):
+            house.cycle()
+            assert "heat_pump" in house.calc.device_meter_gaps
+            house.pumps = pumps
+            house.run(10)
+        assert "not priced" not in caplog.text
+        assert house.calc.device_meter_gaps == {}
+        assert house.pump_kwh() - before == pytest.approx(
+            2.0 + 2.0 * 80 / 3600, abs=0.01)
+
+    def test_a_held_step_of_a_device_gone_waits_for_the_day_at_most(self, caplog):
+        house = House()
+        house.cycle()
+        house.run(60)
+        house.restart()
+        house.down(3600, import_kwh=2.3, pump_kwh=2.0)
+        house.cycle()
+        house.dark = {IMPORT}
+        house.run(10)
+        house.dark = set()
+        house.pumps = []
+        house.run(600)
+        assert "heat_pump" in house.calc.device_meter_gaps
+        house.now = house.now.replace(hour=23, minute=59, second=55)
+        with caplog.at_level(logging.INFO):
+            house.run(30)   # the jump is a skipped cycle; then the new day
+        assert house.calc.device_meter_gaps == {}
+        assert "a new day began" in caplog.text
+
+    def test_a_cycle_with_no_staging_knows_no_device(self):
+        # the coordinator's staging failed this cycle: no device is known
+        # in it, not the last cycle's
+        house = Meter(tick=0.1)
+        house.cycle()
+        house.run(30)
+        known = house.calc._known_s["heat_pump"]
+        stage, house.calc.set_device_tariff_cycle = (
+            house.calc.set_device_tariff_cycle, lambda *a, **k: None)
+        house.run(10)
+        assert house.calc._known_s["heat_pump"] == known
+        house.calc.set_device_tariff_cycle = stage
+        house.run(10)
+        assert house.calc._known_s["heat_pump"] == pytest.approx(known + 10.0)
+
     def test_time_off_its_meter_in_this_run_still_counts(self, caplog):
         # found late, then off its meter for half an hour: that is its
         # own time off, booked by its draw, not booked again
@@ -369,6 +431,9 @@ class TestTheStore:
         {"token": "t", "seen": 1.0, "known": "junk"},
         {"token": "t", "seen": 1.0, "known": {"heat_pump": float("nan")}},
         {"token": "t", "seen": 1.0, "known": {"heat_pump": False}},
+        {"token": "t", "seen": 1.0, "known": {"heat_pump": -1.0}},
+        {"token": "t", "seen": 1.0, "dev": {"heat_pump": [-1.0, 0.0, 0.0]}},
+        {"token": "t", "seen": 1.0, "flow": {"flow_t": -1.0}},
     ])
     def test_a_damaged_record_starts_fresh(self, damage):
         house = Meter(tick=0.1)
