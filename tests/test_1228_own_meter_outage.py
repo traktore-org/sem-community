@@ -100,7 +100,9 @@ class House:
         self._show()
         entries = DeviceTariffs(self.hass).cycle(
             self.pumps, self.calc.device_meter_last, self.now)
-        self.calc.set_device_tariff_cycle(entries)
+        # (#1293) as the coordinator: every registered device is known
+        self.calc.set_device_tariff_cycle(
+            entries, known=[p.device_id for p in self.pumps])
         p = PowerReadings(solar_power=0.0, grid_power=-house_w)
         p.calculate_derived()
         p.home_consumption_power = house_w

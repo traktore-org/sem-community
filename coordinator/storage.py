@@ -83,6 +83,10 @@ CALCULATOR_STATE_KEYS: tuple[str, ...] = (
     # (#1228) an own meter's step over an outage, waiting for the house rows
     # over the same time: lost, a restart inside the wait drops it
     "device_meter_gaps",
+    # (#1293) the time SEM saw and the flows an own meter's step is spread
+    # over: lost, the first step after a short restart is shared against one
+    # cycle's import
+    "meter_watch",
     # (#1049) each charger's own counter baselines, and what each box drew
     # since its counter last moved
     "charger_counter_baselines",

@@ -517,16 +517,30 @@ class EnergyCalculator:
         #: (#1228) the own-meter devices staged this cycle: a held step of
         #: any other device is dropped
         self._meter_staged: Set[str] = set()
-        #: (#1228) seconds this run has integrated, and the run they belong
-        #: to: time SEM did not see is a span's length less what it saw
+        #: (#1228) seconds SEM has integrated: time SEM did not see is a
+        #: span's length less what it saw. (#1293) Kept over a restart, with
+        #: the flows below and their token (``meter_watch`` in the store).
         self._seen_s = 0.0
+        #: (#1228) this run: each restart starts the wait for counters again
         self._run_token = uuid.uuid4().hex
-        #: (#1230) this run's watched flows (``METER_FLOW_KEYS``), added in
+        #: (#1293) what the sums of seen time and flows belong to: rows
+        #: stamped with another token are not read against them
+        self._watch_token = uuid.uuid4().hex
+        #: (#1293) device id → seconds SEM integrated while the device was
+        #: registered (``set_device_tariff_cycle``'s ``known``), kept with the
+        #: flows: time off its meter is this less its time on it. The first
+        #: cycle after a restart comes before the devices are registered.
+        self._known_s: Dict[str, float] = {}
+        #: (#1293) the registered ids handed over for the next cycle, and
+        #: those of the cycle being booked
+        self._cycle_known: Set[str] = set()
+        self._known_now: Set[str] = set()
+        #: (#1230) the watched flows (``METER_FLOW_KEYS``), added in
         #: ``_import_cost``
         self._meter_flow: Dict[str, float] = dict.fromkeys(METER_FLOW_KEYS, 0.0)
         #: (#1230) device id → [seconds it was staged on its own meter, the
-        #: house's grid kWh then, those kWh at its own price], summed this
-        #: run (its read's ``dev_t`` and ``since_dev`` are read against them)
+        #: house's grid kWh then, those kWh at its own price], summed (its
+        #: read's ``dev_t`` and ``since_dev`` are read against them)
         self._meter_dev_flow: Dict[str, List[float]] = {}
         #: (#812) this cycle's own-tariff devices, staged by the coordinator
         self._device_tariff_cycle: list = []
@@ -1054,6 +1068,9 @@ class EnergyCalculator:
 
         self._last_update = now
         self._seen_s += interval_hours * 3600.0   # (#1228)
+        self._known_now, self._cycle_known = self._cycle_known, set()   # (#1293)
+        for did in self._known_now:
+            self._known_s[did] = self._known_s.get(did, 0.0) + interval_hours * 3600.0
 
         # Check for day/month/year rollover and reset accumulators
         self._check_rollover(today, month_key, year_key)
@@ -4803,10 +4820,14 @@ class EnergyCalculator:
             "lifetime_kwh": self._get_lifetime(category),
         }
 
-    def set_device_tariff_cycle(self, entries) -> None:
+    def set_device_tariff_cycle(self, entries, known=()) -> None:
         """(#812) The own-tariff devices of THIS cycle (``DeviceCycle``),
-        staged by the coordinator before ``calculate_energy`` books it."""
+        staged by the coordinator before ``calculate_energy`` books it.
+        (#1293) ``known``: the ids of every device registered this cycle,
+        with or without its own tariff."""
         self._device_tariff_cycle = list(entries or ())
+        self._cycle_known = {str(did) for did in known or ()} | {
+            e.device_id for e in self._device_tariff_cycle}
 
     def _import_cost(self, import_kwh: float, interval_hours: float,
                      power, power_flows, today: date,
@@ -4863,7 +4884,7 @@ class EnergyCalculator:
                 if step > 0.0 and start is not None:
                     spread.append((e, start, dev[1] - float(last["since_dev_gh"]),
                                    dev[2] - float(last["since_dev"])))
-                elif step > 0.0 and self._off_own_meter(last, dev):
+                elif step > 0.0 and self._off_own_meter(last, dev, e.device_id):
                     # SEM watched while it was not on its own meter: it was
                     # booked by its draw then, or was the house's
                     _LOGGER.info(
@@ -4914,11 +4935,12 @@ class EnergyCalculator:
 
     def _watched_start(self, last: Any, baseline: Dict[str, Any],
                        dev: List[float]) -> Optional[Dict[str, Any]]:
-        """(#1230) The rows of the read a step is spread from, when this run
+        """(#1230) The rows of the read a step is spread from, when SEM
         integrated every cycle from it to this read with the device on its
-        own meter (``dev``: its ``_meter_dev_flow``); else None."""
+        own meter (``dev``: its ``_meter_dev_flow``); else None. (#1293) A
+        short restart in between is one long cycle: the flows are kept."""
         rows = last.get("since_rows") if isinstance(last, dict) else None
-        if (not isinstance(rows, dict) or rows.get("run") != self._run_token
+        if (not isinstance(rows, dict) or rows.get("watch") != self._watch_token
                 or not all(_finite(rows.get(k)) for k in METER_FLOW_KEYS)
                 or not all(_finite(last.get(k)) for k in (
                     "since_dev_t", "since_dev_gh", "since_dev"))):
@@ -4934,18 +4956,21 @@ class EnergyCalculator:
             return None
         return rows
 
-    def _off_own_meter(self, last: Any, dev: List[float]) -> bool:
+    def _off_own_meter(self, last: Any, dev: List[float], did: str) -> bool:
         """(#1230) True when SEM integrated more than
         ``MAX_INTEGRATION_GAP_SECONDS`` since the device's last read while
         the device was not staged on its own meter (its meter or tariff was
-        off). Time SEM did not see is the #1228 hold's, not this."""
+        off). Time SEM did not see is the #1228 hold's, not this.
+
+        (#1293) Over a restart too, and only while SEM had the device
+        registered (``_known_s``): before that SEM booked nothing for it."""
         rows = last.get("rows") if isinstance(last, dict) else None
-        if (not isinstance(rows, dict) or rows.get("run") != self._run_token
-                or not _finite(rows.get("seen")) or not _finite(last.get("dev_t"))):
+        if (not isinstance(rows, dict) or rows.get("watch") != self._watch_token
+                or not _finite(last.get("known_t")) or not _finite(last.get("dev_t"))):
             return False
-        seen = self._seen_s - float(rows["seen"])
+        known = self._known_s.get(did, 0.0) - float(last["known_t"])
         on = dev[0] - float(last["dev_t"])
-        return seen - on > MAX_INTEGRATION_GAP_SECONDS
+        return known - on > MAX_INTEGRATION_GAP_SECONDS
 
     def _keep_meter_read(self, entry, last: Any, step: float,
                          start: Optional[Dict[str, Any]], dev: List[float]
@@ -4963,6 +4988,7 @@ class EnergyCalculator:
                 and last.get("value") == read.get("value"))
         read["moved"] = (last.get("moved") or last.get("at")) if same else read.get("at")
         read["dev_t"] = dev[0]
+        read["known_t"] = self._known_s.get(entry.device_id, 0.0)   # (#1293)
         if same and start is not None:
             read["since"], read["since_rows"] = last["since"], start
             for key in ("since_dev_t", "since_dev_gh", "since_dev"):
@@ -5054,11 +5080,49 @@ class EnergyCalculator:
                 if k.startswith(DEVICE_TARIFF_COST) and k.endswith(suffix)),
         )
 
+    def _restore_meter_watch(self, record: Any) -> None:
+        """(#1293) The time SEM saw and the watched flows, from the store.
+
+        A missing or damaged record starts all of them again under a new
+        token: rows stamped before are then not read against them (a step
+        is shared as before), never against sums that went back to 0. Only
+        a device with a meter read keeps its sums. Called after
+        ``device_meter_last`` is restored."""
+        self._watch_token = uuid.uuid4().hex
+        self._seen_s = 0.0
+        self._meter_flow = dict.fromkeys(METER_FLOW_KEYS, 0.0)
+        self._meter_dev_flow, self._known_s = {}, {}
+        if not isinstance(record, dict):
+            return
+        token, seen = record.get("token"), record.get("seen")
+        flow, dev, known = record.get("flow"), record.get("dev"), record.get("known")
+        if (not isinstance(token, str) or not token
+                or not _finite(seen) or seen < 0.0
+                or not isinstance(flow, dict)
+                or not all(_finite(flow.get(k)) for k in METER_FLOW_KEYS)
+                or flow["flow_t"] < 0.0
+                or not isinstance(dev, dict)
+                or not all(isinstance(v, list) and len(v) == 3
+                           and all(_finite(x) for x in v) and v[0] >= 0.0
+                           for v in dev.values())
+                or not isinstance(known, dict)
+                or not all(_finite(v) and v >= 0.0 for v in known.values())):
+            return
+        self._watch_token = token
+        self._seen_s = float(seen)
+        self._meter_flow = {k: float(flow[k]) for k in METER_FLOW_KEYS}
+        self._meter_dev_flow = {
+            str(did): [float(x) for x in v] for did, v in dev.items()
+            if str(did) in self.device_meter_last}
+        self._known_s = {str(did): float(v) for did, v in known.items()
+                         if str(did) in self.device_meter_last}
+
     def _meter_rows(self, today: date) -> Dict[str, Any]:
         """(#1228) The house rows a meter step's span is read against: the
         day's grid import and its cost, what the house, the batteries and
         the car used, and what own-tariff devices already took of the
-        import. With the time this run has integrated."""
+        import. With the time SEM has integrated and the watched flows,
+        stamped with their token (#1293)."""
         suffix = f"_{today}"
         rows = self._daily_accumulators
         taken, taken_cost = self._device_taken(today)
@@ -5069,7 +5133,7 @@ class EnergyCalculator:
             "used": sum(rows.get(f"{c}{suffix}", 0.0) for c in (
                 "home", "battery_charge", MIDNIGHT_EV_CATEGORY)),
             "taken": taken, "taken_cost": taken_cost,
-            "seen": self._seen_s, "run": self._run_token,
+            "seen": self._seen_s, "watch": self._watch_token,   # (#1293)
             "rise": self._dark_rise(),
             **self._meter_flow,   # (#1230)
         }
@@ -5093,15 +5157,20 @@ class EnergyCalculator:
         cover the span: no grid import counter (the house lost that import
         too), PV with no solar counter and the sun up, a new day (the day's
         rows start again), no rows at the start (a store from before), the
-        device off its own meter, or the wait is over.
+        device off its own meter, or the wait is over. (#1293) A device not
+        registered yet waits: SEM's first cycle after a restart comes before
+        its devices are registered.
         """
         rows = self._meter_rows(today)
         ready = []
         for did in sorted(self.device_meter_gaps):
             gap = self.device_meter_gaps[did]
-            why = (self._meter_gap_unread(gap, rows, now)
-                   if did in self._meter_staged
-                   else "the device has no own meter now")
+            if did in self._meter_staged:
+                why = self._meter_gap_unread(gap, rows, now)
+            elif did in self._known_now:
+                why = "the device has no own meter now"
+            else:   # (#1293) not registered yet (the first cycle after a restart)
+                why = self._meter_gap_unread(gap, rows, now) or "wait"
             if why == "wait":
                 continue
             del self.device_meter_gaps[did]
@@ -5148,7 +5217,7 @@ class EnergyCalculator:
         except (KeyError, TypeError, ValueError):
             return "its start cannot be read"
         seen = (rows["seen"] - float(start["seen"])
-                if start.get("run") == rows["run"] else 0.0)
+                if start.get("watch") == rows["watch"] else 0.0)
         if span_s - seen <= MAX_INTEGRATION_GAP_SECONDS:
             return None   # SEM integrated the whole span
         if not (self._meter_counter_enabled
@@ -5844,6 +5913,16 @@ class EnergyCalculator:
             "device_meter_last": dict(self.device_meter_last),   # (#812)
             # (#1228) a step over an outage still waiting for its rows
             "device_meter_gaps": dict(self.device_meter_gaps),
+            # (#1293) the time SEM saw and the flows a meter step is spread
+            # over: lost, the first step after a short restart was shared
+            # against one cycle's import
+            "meter_watch": {
+                "token": self._watch_token, "seen": self._seen_s,
+                "flow": dict(self._meter_flow),
+                "dev": {did: list(v) for did, v in self._meter_dev_flow.items()},
+                "known": {did: v for did, v in self._known_s.items()
+                          if did in self.device_meter_last},
+            },
             "accumulated_savings": self._accumulated_savings,
             "accumulated_battery_savings": self._accumulated_battery_savings,
             "accumulated_cost": self._accumulated_cost,
@@ -6010,6 +6089,7 @@ class EnergyCalculator:
                 str(k): dict(v) for k, v in (_mg.items() if isinstance(_mg, dict) else ())
                 if isinstance(v, dict) and _finite(v.get("kwh"))
                 and isinstance(v.get("since"), str)}
+            self._restore_meter_watch(state.get("meter_watch"))   # (#1293)
             rate_history = state.get("rate_history", [])
             self._rate_history = deque(
                 rate_history if isinstance(rate_history, list) else [], maxlen=30

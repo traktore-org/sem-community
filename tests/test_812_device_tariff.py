@@ -662,6 +662,8 @@ async def test_a_real_setup_gives_the_pump_its_tariff_and_sensor(
     coord._stage_device_tariffs()
     staged = coord._energy_calculator._device_tariff_cycle
     assert [(e.device_id, e.price) for e in staged] == [("heat_pump", pytest.approx(0.21))]
+    # (#1293) and every registered device, with or without its own tariff
+    assert {"heat_pump", "heat_pump_2"} <= coord._energy_calculator._cycle_known
     out = coord._device_tariff_books()
     assert "daily_tariff_cost_heat_pump" in out
     assert not any(k.endswith("heat_pump_2") for k in out)
