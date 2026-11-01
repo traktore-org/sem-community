@@ -3784,6 +3784,11 @@ class SensorReader:
             return decided
         last = self._unit_soc_last.get(soc_entity)
         out = raw
+        if self._last_valid_soc is None:
+            # (#1284) no level is accepted yet: the fleet test waits for the
+            # first level to repeat, and the units take their baseline from it
+            self._unit_soc_cycle[soc_entity] = raw
+            return raw
         if last is not None and abs(raw - last) > BATTERY_SOC_MAX_STEP_PCT:
             cand, streak = self._unit_soc_candidate.get(soc_entity, (None, 0))
             if cand is not None and abs(raw - cand) <= BATTERY_SOC_MAX_STEP_PCT:
@@ -3890,6 +3895,8 @@ class SensorReader:
                 )
         self._soc_step_candidate = None
         self._soc_step_streak = 0
+        if last is None:
+            self._unit_soc_last.update(self._unit_soc_cycle)
         readings.battery_soc = soc_val
         self._last_valid_soc = soc_val
         self._last_valid_soc_mono = float(self._now_monotonic())
