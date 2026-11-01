@@ -265,6 +265,8 @@ PLATFORM_GRID_SIGN_INVERT: dict[str, bool] = {
 # seed applies when the meter's device model_id is listed. A HomeWizard P1
 # reads the utility meter, so its direction is fixed. A HomeWizard kWh meter
 # reads the way it was wired, so the counters decide, as they always did.
+# (#1294) A listed model's sign is fixed, not a first guess: the read applies
+# it on every cycle, over any lock (``SensorReader.grid_sign_fixed``).
 PLATFORM_GRID_SIGN_MODELS: dict[str, tuple[str, ...]] = {
     "homewizard": ("HWE-P1",),
 }
@@ -498,6 +500,8 @@ class SensorReader:
         #: (``_battery_lock_bids``); None before the first read.
         self._battery_read_locks: Optional[frozenset] = None
         self._pair_lock_said = False
+        #: (#1294) the log line that a meter's model sets the grid sign
+        self._fixed_sign_said = False
         self._battery_pair_lock_said = False
         #: (#1194) A restored fleet battery lock from a store written while
         #: the one-battery read still flipped an "Inverted" sensor. Moved
@@ -1523,6 +1527,9 @@ class SensorReader:
                 self._user_flip_source()
                 if self._raw_config.get("grid_sign_user_flip", False) else None),
             "grid_source": self._grid_source_key,
+            # (#1294) the source's kind alone, kept when the file redacts ids
+            "grid_source_kind": (self._grid_source_key or "").partition(":")[0]
+            or None,
             # (#1192) what a tap now is bound to: none while the meter is dark
             "grid_read_source": self._grid_read_source,
             "user_flip_applies": self.user_flip_applies(),
@@ -1530,6 +1537,8 @@ class SensorReader:
             "auto_inverted": self._grid_sign_inverted,
             # (#1215) a pair takes no lock: auto_inverted is then not applied
             "grid_read_is_pair": self.grid_read_is_pair(),
+            # (#1294) the meter's model sets the sign: no lock or heal moves it
+            "grid_sign_fixed": self._fixed_for_diag(),
             "evidence": round(self._grid_sign_evidence, 1),
             "total_magnitude": round(self._grid_sign_total_mag, 1),
             "samples": self._grid_sign_samples,
@@ -1549,6 +1558,12 @@ class SensorReader:
                 "grid_export_energy", "grid_export_energy_list"
             ),
         }
+
+    def _fixed_for_diag(self) -> Optional[bool]:
+        try:
+            return self.grid_sign_fixed()
+        except Exception:  # noqa: BLE001 — diagnostics must never raise
+            return None
 
     def battery_sign_diagnostics(self) -> dict:
         """#588 battery-sign support payload, mirroring grid_sign_diagnostics.
@@ -2435,6 +2450,24 @@ class SensorReader:
         kind = (self._grid_source_key or "").split(":", 1)[0]
         return kind in self._PAIR_GRID_SOURCES
 
+    def grid_sign_fixed(self) -> Optional[bool]:
+        """(#1294) ``needs_negate`` when the grid is read from one meter whose
+        model fixes its sign (``PLATFORM_GRID_SIGN_MODELS``: a HomeWizard P1
+        reads the utility meter, + while importing), else None.
+
+        Such a sign is known, not learned. The read applies it over any lock,
+        and the balance self-heal stands down, as on a pair (#1215): a heal
+        that blamed this meter for a fault elsewhere saved import as export.
+        The user's flip and ``grid_sign_invert`` still apply (a user choice).
+        """
+        kind, _, entity_id = (self._grid_source_key or "").partition(":")
+        if kind != "combined" or not entity_id:
+            return None
+        platform, negate = self._grid_brand_seed(entity_id)
+        if negate is None or platform not in PLATFORM_GRID_SIGN_MODELS:
+            return None
+        return negate
+
     def user_flip_applies(self) -> bool:
         """(#971) Does the persisted one-tap flip apply to THIS cycle's source?
 
@@ -2530,6 +2563,29 @@ class SensorReader:
                     "learned negation does not apply to it (#1215)",
                     self._grid_source_key)
             return False
+
+        # (#1294) A meter whose model fixes its sign (a P1 meter) takes it on
+        # every read. The seed below ran only while nothing was locked, so a
+        # saved lock that read its import as export kept it out for good. The
+        # lock is this meter's, so it is set to the meter's sign.
+        fixed = self.grid_sign_fixed()
+        if fixed is not None:
+            if not self._fixed_sign_said:
+                self._fixed_sign_said = True
+                replaced = (self._grid_sign_detected
+                            and self._grid_sign_inverted != fixed)
+                (_LOGGER.warning if replaced else _LOGGER.info)(
+                    "grid sign: %s is a meter whose model sets the sign: %s%s "
+                    "(#1294)",
+                    self._grid_source_key,
+                    "negating (HA convention)" if fixed
+                    else "no correction (SEM convention)",
+                    " — the saved lock said the opposite and is replaced"
+                    if replaced else "",
+                )
+            self._grid_sign_inverted = fixed
+            self._grid_sign_detected = True
+            return fixed
 
         # Deterministic brand seed first (#461): a known meter integration
         # locks the sign immediately. Solar can still override it below.

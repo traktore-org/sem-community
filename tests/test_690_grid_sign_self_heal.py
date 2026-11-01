@@ -53,6 +53,10 @@ class _Reader:
         # (#1215) a one-sensor meter: its sign is learned, so it is healed
         return False
 
+    def grid_sign_fixed(self):
+        # (#1294) no meter model sets its sign
+        return None
+
 
 def _coord(**cfg):
     c = SEMCoordinator.__new__(SEMCoordinator)
