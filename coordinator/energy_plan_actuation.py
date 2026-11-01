@@ -51,9 +51,12 @@ class PlanGate:
     ``covered`` is the trust switch: False means "the plan has no say over
     this demand" — the caller must change nothing. When True:
     ``in_block`` — ``now`` sits inside one of this demand's planned blocks;
-    ``block_power_w`` — that block's planned power (0.0 outside a block);
+    ``block_power_w`` — that block's planned power in whole watts, the
+    setpoint it asks for (0.0 outside a block);
     ``remaining_kwh`` — energy the blocks can still deliver from ``now``
-    to their ends (the honest "can waiting still meet the floor" number).
+    to their ends (the honest "can waiting still meet the floor" number),
+    from the plan's exact watts: it is compared with the exact need
+    (#1282).
     """
     covered: bool = False
     in_block: bool = False
@@ -94,7 +97,7 @@ def plan_blocks(allocations) -> list:
         "id": a.demand_id,
         "start": a.start.isoformat(),
         "end": a.end.isoformat(),
-        "power_w": round(a.power_w, 6),
+        "power_w": a.power_w,
         "price": a.price,
         # (#1023) only on the top-up: the strip hatches it
         **({"late": True} if a.late else {}),
@@ -176,9 +179,16 @@ def plan_gate(plan: Optional[dict], demand_id: str, now: datetime) -> PlanGate:
                 # membership) is worse than declining. Same direction as the
                 # outer except — UNCOVERED, i.e. pre-G4 behaviour.
                 return PlanGate(reason="malformed block")
-            if start <= now < end:
+            # (#1282) A setpoint goes out in whole watts, as before; only
+            # the energy sum below needs the plan's exact watts. A block
+            # under half a watt (a float rest the packer placed) asks for
+            # no power, so it is no block to run in: the battery reads a
+            # 0 W block as "no cap" and would charge at full power. Its
+            # energy still counts below.
+            setpoint = round(power, 0)
+            if start <= now < end and setpoint > 0.0:
                 in_block = True
-                block_power = max(block_power, power)
+                block_power = max(block_power, setpoint)
             elif start > now and (next_start is None or start < next_start):
                 next_start = start
             left_h = (end - max(start, now)).total_seconds() / 3600.0

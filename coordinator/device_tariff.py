@@ -25,6 +25,8 @@ What reads it:
   × the share of the house load the grid supplied this cycle (SEM's own
   flow split). (#1228) A meter step over more time than a cycle (SEM down,
   a skipped cycle) is booked against the house rows over the same time.
+  (#1230) A step of a meter that moves in whole ticks, or shows a new value
+  every few minutes, is spread over the time since the meter last moved.
 
 Pure apart from reading entity states through ``hass``.
 """
@@ -65,6 +67,11 @@ METER_RESOLUTION_KWH = 0.1
 #: The device's top power when it states none (W): the plausibility bound
 #: of a meter step.
 FALLBACK_TOP_POWER_W = 3000.0
+
+#: (#1230) A value that stood while SEM read it is judged by at most this
+#: much time more than SEM did not read: a jump after days of standing is a
+#: swapped meter, not use.
+METER_STAND_MAX_H = 24.0
 
 _UNREADABLE = ("unavailable", "unknown", "none", "")
 
@@ -364,9 +371,13 @@ class DeviceTariffs:
         The baseline is stamped with the meter's entity id and the time it
         was read. A step counts only when it is plausible for the time that
         passed: at most the device's top power × the elapsed time (plus one
-        meter tick). A different entity, a fall or an implausible jump
-        re-baselines with no step — said once, not every cycle. Midnight is
-        no boundary: a step across it is booked in its own cycle.
+        meter tick). (#1230) The time since the value last moved (``moved``),
+        not since the last read: a meter that shows a new value every few
+        minutes moves by minutes of use at once. At most
+        ``METER_STAND_MAX_H`` more than the time since the last read. A different entity, a fall
+        or an implausible jump re-baselines with no step — said once, not
+        every cycle. Midnight is no boundary: a step across it is booked in
+        its own cycle.
         """
         tariff = tariff_of(device)
         did = str(getattr(device, "device_id", "") or "")
@@ -383,8 +394,14 @@ class DeviceTariffs:
             why = "a different meter"
         else:
             try:
-                elapsed_h = max(0.0, (now - datetime.fromisoformat(
-                    str(last.get("at")))).total_seconds() / 3600.0)
+                read_h = (now - datetime.fromisoformat(
+                    str(last.get("at")))).total_seconds() / 3600.0
+                try:
+                    moved_h = (now - datetime.fromisoformat(
+                        str(last.get("moved")))).total_seconds() / 3600.0
+                except (TypeError, ValueError):
+                    moved_h = read_h   # no time of its own (an older store)
+                elapsed_h = max(0.0, read_h, min(moved_h, read_h + METER_STAND_MAX_H))
                 step = value - float(last.get("value"))
             except (TypeError, ValueError):
                 elapsed_h, step = 0.0, -1.0

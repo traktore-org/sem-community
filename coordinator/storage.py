@@ -138,6 +138,9 @@ CALCULATOR_STATE_KEYS: tuple[str, ...] = (
     # (#1046) the EV day the car's flow rows were first booked on. Lost,
     # every restart would read as the upgrade day.
     "ev_flow_since",
+    # (#1245) the battery sale's history was read into its rows. Lost, every
+    # restart would ask the recorder again.
+    "sale_history_read",
 )
 
 

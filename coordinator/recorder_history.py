@@ -29,6 +29,8 @@ from typing import Any, Callable, Coroutine, List, Optional
 
 from homeassistant.core import HomeAssistant, callback
 
+from .units import RECORDER_UNITS
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -179,7 +181,7 @@ async def read_hourly_statistics(
 
         result = await get_instance(hass).async_add_executor_job(
             statistics_during_period,
-            hass, start, end, set(entity_ids), "hour", None, set(types),
+            hass, start, end, set(entity_ids), "hour", RECORDER_UNITS, set(types),
         )
     except Exception as err:  # noqa: BLE001 — no recorder, or a busy one
         _LOGGER.debug("hourly statistics unavailable: %s", err)

@@ -26,7 +26,7 @@ from .types import (
 )
 from .flow_calculator import FlowCalculator
 from ..utils.time_manager import TimeManager
-from .units import energy_state_to_kwh
+from .units import RECORDER_UNITS, energy_state_to_kwh
 from .sensor_reader import EV_ACTIVE_CHARGE_FLOOR_W
 from .repair_issues import UNAVAILABLE_REPAIR_THRESHOLD_S
 from ..ha_energy_reader import ENERGY_COUNTER_CATEGORIES, energy_counters
@@ -372,6 +372,38 @@ def _stat_bucket_year_month(row: Dict[str, Any]) -> Optional[tuple[int, int]]:
     return None
 
 
+def _sale_history_spans(
+    rows: List[Dict[str, Any]], year: int, month: int,
+) -> Optional[Dict[str, float]]:
+    """(#1245) kWh in a sensor's recorded month rows of ``sum``: its whole
+    life, this year and this month. None when no row holds a number.
+
+    A month row's ``sum`` is where the sum stood at the bucket's end, and the
+    recorder's sum starts at 0 at the sensor's first statistic, so a period
+    with no row before it starts from 0. A row after this month is left out.
+    """
+    last: Optional[float] = None
+    before_year = before_month = 0.0
+    for row in rows:
+        try:
+            value = float(row.get("sum"))
+        except (TypeError, ValueError):
+            continue
+        bucket = _stat_bucket_year_month(row)
+        if not math.isfinite(value) or bucket is None or bucket > (year, month):
+            continue
+        if bucket < (year, 1):
+            before_year = value
+        if bucket < (year, month):
+            before_month = value
+        last = value
+    if last is None:
+        return None
+    return {"lifetime": max(0.0, last),
+            "year": max(0.0, last - before_year),
+            "month": max(0.0, last - before_month)}
+
+
 def _sem_stat_entity_id(hass: Optional[HomeAssistant], key: str) -> Optional[str]:
     """(#1216) The entity id of SEM's own sensor ``key``, by its unique id
     (``sem_<key>``) — users rename entities. None when it cannot be found."""
@@ -396,6 +428,9 @@ GRID_EXPORT_BATTERY_CATEGORY = "grid_export_battery"
 #: meter corrects the row, each keeps its share of what was added since the
 #: last correction
 _ROWS_BESIDE = {"grid_export": (GRID_EXPORT_BATTERY_CATEGORY,)}
+#: (#1245) where the read of the sale's whole recorded history starts: before
+#: any SEM sensor existed
+_SALE_HISTORY_START = datetime(2000, 1, 1, tzinfo=dt_util.UTC)
 
 # (#1077) The value layer's cost categories: what solar used at home was
 # worth over exporting it, what exported kWh fetched before the fee, and the
@@ -408,6 +443,11 @@ VALUE_FEED_IN_FEE = "value_feed_in_fee"
 #: own import cost, so the two daily figures roll together.
 DEVICE_TARIFF_KWH = "device_tariff_kwh:"
 DEVICE_TARIFF_COST = "device_tariff_cost:"
+#: (#1230) What this run has watched, stamped on an own meter's reads: the
+#: seconds integrated, the house's kWh, its grid part (the share × the
+#: house), and that grid part at the house rate. A meter step is spread
+#: over the time since the meter last moved with these.
+METER_FLOW_KEYS = ("flow_t", "flow_gh", "flow_home", "flow_cost")
 CO2_KG_PER_TREE_PER_YEAR = 22  # EPA estimate
 
 
@@ -463,7 +503,9 @@ class EnergyCalculator:
         self._rate_history: deque = deque(maxlen=30)
         #: (#812) device id → the stamped baseline of a device's own meter
         #: (entity, date, value, time), kept with the energy state so a
-        #: restart books the first step after it.
+        #: restart books the first step after it. (#1230) ``moved``: when
+        #: the value last moved; ``since``, ``since_rows``, ``since_dev``: the
+        #: read a step is spread from (``_keep_meter_read``).
         self.device_meter_last: Dict[str, Dict[str, Any]] = {}
         #: (#1228) device id → an own meter's step over time no cycle booked
         #: (SEM down, a skipped cycle, the meter dark), waiting for the house
@@ -479,6 +521,13 @@ class EnergyCalculator:
         #: to: time SEM did not see is a span's length less what it saw
         self._seen_s = 0.0
         self._run_token = uuid.uuid4().hex
+        #: (#1230) this run's watched flows (``METER_FLOW_KEYS``), added in
+        #: ``_import_cost``
+        self._meter_flow: Dict[str, float] = dict.fromkeys(METER_FLOW_KEYS, 0.0)
+        #: (#1230) device id → [seconds it was staged on its own meter, the
+        #: house's grid kWh then, those kWh at its own price], summed this
+        #: run (its read's ``dev_t`` and ``since_dev`` are read against them)
+        self._meter_dev_flow: Dict[str, List[float]] = {}
         #: (#812) this cycle's own-tariff devices, staged by the coordinator
         self._device_tariff_cycle: list = []
         #: (#812) the calendar day the last cycle booked under — the day the
@@ -682,6 +731,15 @@ class EnergyCalculator:
         # when the recorder simply has no cost history to compare against.
         self._yearly_cost_floor_checked: bool = False
         self._yearly_cost_floor_attempts: int = 0
+        # (#1245) The battery sale's recorded history was read into the year,
+        # month and lifetime rows (``read_sale_history``). Persisted: it runs
+        # once per install. The rest is runtime: the year part is done this
+        # start, and a start that cannot read the recorder gives up until the
+        # next start.
+        self._sale_history_read: bool = False
+        self._sale_history_year_done: bool = False
+        self._sale_history_attempts: int = 0
+        self._sale_history_given_up: bool = False
         # Auto-detected from recorder statistics (first solar energy entry)
         self._install_year_decimal: Optional[float] = None
         # (#773) Sealed days of the true-baseload residual, newest last.
@@ -1980,7 +2038,7 @@ class EnergyCalculator:
 
         try:
             stats = await statistics_during_period(
-                hass, start_time, None, entity_ids, "hour", None, {"sum"}
+                hass, start_time, None, entity_ids, "hour", RECORDER_UNITS, {"sum"}
             )
         except Exception as e:
             _LOGGER.warning("Failed to query recorder statistics for yearly seeding: %s", e)
@@ -2045,7 +2103,8 @@ class EnergyCalculator:
                         # Try querying separately
                         try:
                             ev_result = await statistics_during_period(
-                                hass, start_time, None, [energy_sensor], "hour", None, {"sum"}
+                                hass, start_time, None, [energy_sensor], "hour",
+                                RECORDER_UNITS, {"sum"},
                             )
                             ev_stats = ev_result.get(energy_sensor, [])
                         except Exception:
@@ -2074,6 +2133,111 @@ class EnergyCalculator:
             seeded.get("battery_charge", 0), seeded.get("battery_discharge", 0),
             home, ev_total,
         )
+
+    @property
+    def sale_history_pending(self) -> bool:
+        """(#1245) Is the one-time read of the battery sale's history owed?"""
+        return not (self._sale_history_read or self._sale_history_given_up)
+
+    async def read_sale_history(self, hass: HomeAssistant, ed_config) -> None:
+        """(#1245) Read the battery sale's recorded history into the year,
+        month and lifetime rows of ``grid_export_battery`` — once.
+
+        SEM books the sale beside the export since #1191, so on an install
+        already running those rows held only what it booked since then, and
+        every older sale still counted as solar sent out (yearly and lifetime
+        CO2). The yearly seed reads the history (#1216), but it runs once, on
+        a year that holds nothing yet. SEM's own ``flow_battery_to_grid_energy``
+        sensor (#776) holds the sale since SEM published it; a sale before
+        that cannot be known.
+
+        Each row only rises to its history, never above the export beside it
+        (``battery_export_part``): the live row also holds the meter's
+        corrections. It waits for the seeds that set the export: with an
+        Energy Dashboard, the yearly seed before the year and month rows, and
+        this start's lifetime seed before the lifetime row — unless that seed
+        can never run (``_lifetime_seed_never_runs``). While the lifetime row
+        waits, the year is read again at each start (it only rises).
+
+        The lifetime row moves ``accumulated_self_consumed_kwh`` by the same
+        kWh. Those sales were counted as solar's export there too (the day
+        snapshot before #1191), and the ROI takes that total away from the
+        lifetime one to estimate the years before SEM. Moved alone, the
+        lifetime figure would have paid them as pre-SEM avoided imports.
+        """
+        if not self.sale_history_pending:
+            return
+        year_ready = not ed_config or self._yearly_seeded
+        lifetime_ready = (not ed_config or self._lifetime_seeded
+                          or self._lifetime_seed_never_runs(ed_config))
+        if not year_ready or (self._sale_history_year_done and not lifetime_ready):
+            return
+        # Counted before the query, so a failure anywhere ends the tries too
+        if self._sale_history_attempts >= 3:
+            self._sale_history_given_up = True
+            _LOGGER.debug("Battery sale history not read this start")
+            return
+        self._sale_history_attempts += 1
+        sale_id = _sem_stat_entity_id(hass, BATTERY_SALE_SENSOR_KEY)
+        stats = None
+        if sale_id:
+            stats = await self._recorder_stats(
+                hass, _SALE_HISTORY_START, {sale_id}, "month", {"sum"})
+        if stats is None:
+            return
+        now = dt_util.now()
+        spans = _sale_history_spans(stats.get(sale_id) or [], now.year, now.month)
+        if spans is not None:
+            year_key = str(now.year)
+            month_key = self._month_key(now.date())
+            raised = {
+                "year": self._raise_sale_row(
+                    self._yearly_accumulators, year_key, spans["year"]),
+                "month": self._raise_sale_row(
+                    self._monthly_accumulators, month_key, spans["month"]),
+            }
+            if lifetime_ready:
+                raised["lifetime"] = self._raise_sale_row(
+                    self._lifetime_accumulators, None, spans["lifetime"])
+                self._accumulated_self_consumed_kwh += raised["lifetime"]
+            if any(raised.values()):
+                _LOGGER.info(
+                    "Battery sale history read into its rows: %s kWh",
+                    ", ".join(f"{k} +{v:.1f}" for k, v in raised.items()))
+        self._sale_history_year_done = True
+        self._sale_history_attempts = 0    # the lifetime row gets its own tries
+        if lifetime_ready:
+            self._sale_history_read = True
+
+    @staticmethod
+    def _lifetime_seed_never_runs(ed_config) -> bool:
+        """(#1245) Can ``seed_lifetime_from_hardware`` never seed this
+        dashboard? It waits for solar, import and export counters that read,
+        so a dashboard with none of one of them (an external statistic never
+        has a state) keeps every lifetime row as SEM books it."""
+        return not all(
+            any(":" not in e for e in energy_counters(ed_config, category))
+            for category in ("solar", "grid_import", "grid_export"))
+
+    @staticmethod
+    def _raise_sale_row(
+        store: Dict[str, float], period_key: Optional[str], recorded: float,
+    ) -> float:
+        """(#1245) Raise one period's sale row to ``recorded``, never above
+        the export beside it. The kWh it rose by (0.0 when it did not)."""
+        if period_key is None:
+            key = f"lifetime_{GRID_EXPORT_BATTERY_CATEGORY}"
+            export_key = "lifetime_grid_export"
+        else:
+            key = f"{GRID_EXPORT_BATTERY_CATEGORY}_{period_key}"
+            export_key = f"grid_export_{period_key}"
+        current = float(store.get(key, 0.0) or 0.0)
+        target = battery_export_part(
+            float(store.get(export_key, 0.0) or 0.0), recorded)
+        if target <= current:
+            return 0.0
+        store[key] = target
+        return target - current
 
     async def _maybe_seed_yearly_cost(
         self, hass: Optional[HomeAssistant], ed_config, year_key: str
@@ -2458,7 +2622,7 @@ class EnergyCalculator:
             from homeassistant.components.recorder import get_instance
             job = get_instance(hass).async_add_executor_job(
                 statistics_during_period,
-                hass, start, None, entity_ids, period, None, types,
+                hass, start, None, entity_ids, period, RECORDER_UNITS, types,
             )
             if inspect.isawaitable(job):
                 job = await job
@@ -2469,7 +2633,7 @@ class EnergyCalculator:
         if result is None:
             try:
                 direct = statistics_during_period(
-                    hass, start, None, entity_ids, period, None, types
+                    hass, start, None, entity_ids, period, RECORDER_UNITS, types
                 )
                 if inspect.isawaitable(direct):
                     direct = await direct
@@ -4665,6 +4829,12 @@ class EnergyCalculator:
         skipped cycle, a meter dark for minutes. This cycle's import and
         share say nothing of that time, so the step is held and booked
         against the house rows over the same time (``_settle_meter_gaps``).
+
+        (#1230) Nor a step of a meter that moved last before the read
+        before: whole 0.01 or 0.1 kWh ticks, or a value HA shows every few
+        minutes. The step holds what the device used since it last moved,
+        so it is spread over that time when this run watched all of it
+        (``_spread_meter_steps``).
         """
         from .device_tariff import grid_share
         house_rate = float(self._import_rate or 0.0)
@@ -4672,16 +4842,39 @@ class EnergyCalculator:
         left = max(0.0, float(import_kwh or 0.0))
         share = grid_share(getattr(power_flows, "grid_to_home", 0.0),
                            getattr(power, "home_consumption_power", 0.0))
-        wants = []
+        grid_kwh = self._add_meter_flow(share, power, interval_hours, house_rate)
+        wants, spread = [], []
         self._meter_staged = {e.device_id for e in entries if e.meter}
         for e in entries:
-            held = False
+            used = 0.0
+            if e.meter:   # its time on its meter, its price over the flows
+                dev = self._meter_dev_flow.get(e.device_id)
+                if dev is None:   # SEM's load id, not a registry device_id
+                    dev = self._meter_dev_flow[e.device_id] = [0.0] * 3
+                own = house_rate if e.price is None else float(e.price)
+                if grid_kwh is not None and math.isfinite(own):
+                    dev[0] += interval_hours * 3600.0
+                    dev[1] += grid_kwh
+                    dev[2] += grid_kwh * own
             if e.meter and e.baseline is not None:
-                held = self._hold_meter_gap(e)
-                self.device_meter_last[e.device_id] = dict(e.baseline)
-                self._meter_written.add(e.device_id)
-            if e.meter:
-                used = 0.0 if held else max(0.0, e.meter_kwh)
+                last = self.device_meter_last.get(e.device_id)
+                step = max(0.0, float(e.meter_kwh or 0.0))
+                start = self._watched_start(last, e.baseline, dev)
+                if step > 0.0 and start is not None:
+                    spread.append((e, start, dev[1] - float(last["since_dev_gh"]),
+                                   dev[2] - float(last["since_dev"])))
+                elif step > 0.0 and self._off_own_meter(last, dev):
+                    # SEM watched while it was not on its own meter: it was
+                    # booked by its draw then, or was the house's
+                    _LOGGER.info(
+                        "Own meter of %s: %.3f kWh over time it was off its "
+                        "own meter or tariff — not priced (#1230)",
+                        e.device_id, step)
+                elif not self._hold_meter_gap(e):
+                    used = step
+                self._keep_meter_read(e, last, step, start, dev)
+            elif e.meter:
+                used = max(0.0, e.meter_kwh)
             else:
                 used = max(0.0, e.power_w) * interval_hours / 1000.0
             wants.append(used * share)
@@ -4699,7 +4892,125 @@ class EnergyCalculator:
                                   month_key, year_key, kwh * price)
             cost += kwh * price
             left -= kwh
+        if spread:
+            self._spread_meter_steps(spread, today, month_key, year_key)
         return cost + max(0.0, left) * house_rate
+
+    def _add_meter_flow(self, share: float, power, interval_hours: float,
+                        house_rate: float) -> Optional[float]:
+        """(#1230) Add this cycle to the run's watched flows; returns the
+        house's grid kWh this cycle (the share × what it used). A cycle with
+        no finite number is not added (None): it counts as time not seen."""
+        home_w = _as_float(getattr(power, "home_consumption_power", 0.0))
+        home = max(0.0, home_w) * interval_hours / 1000.0
+        if not all(math.isfinite(v) for v in (share, home, house_rate)):
+            return None
+        flow = self._meter_flow
+        flow["flow_t"] += interval_hours * 3600.0
+        flow["flow_home"] += home
+        flow["flow_gh"] += share * home
+        flow["flow_cost"] += share * home * house_rate
+        return share * home
+
+    def _watched_start(self, last: Any, baseline: Dict[str, Any],
+                       dev: List[float]) -> Optional[Dict[str, Any]]:
+        """(#1230) The rows of the read a step is spread from, when this run
+        integrated every cycle from it to this read with the device on its
+        own meter (``dev``: its ``_meter_dev_flow``); else None."""
+        rows = last.get("since_rows") if isinstance(last, dict) else None
+        if (not isinstance(rows, dict) or rows.get("run") != self._run_token
+                or not all(_finite(rows.get(k)) for k in METER_FLOW_KEYS)
+                or not all(_finite(last.get(k)) for k in (
+                    "since_dev_t", "since_dev_gh", "since_dev"))):
+            return None
+        try:
+            span_s = (datetime.fromisoformat(str(baseline["at"]))
+                      - datetime.fromisoformat(str(last["since"]))).total_seconds()
+        except (KeyError, TypeError, ValueError):
+            return None
+        seen = min(self._meter_flow["flow_t"] - float(rows["flow_t"]),
+                   dev[0] - float(last["since_dev_t"]))
+        if span_s < 0.0 or span_s - seen > MAX_INTEGRATION_GAP_SECONDS:
+            return None
+        return rows
+
+    def _off_own_meter(self, last: Any, dev: List[float]) -> bool:
+        """(#1230) True when SEM integrated more than
+        ``MAX_INTEGRATION_GAP_SECONDS`` since the device's last read while
+        the device was not staged on its own meter (its meter or tariff was
+        off). Time SEM did not see is the #1228 hold's, not this."""
+        rows = last.get("rows") if isinstance(last, dict) else None
+        if (not isinstance(rows, dict) or rows.get("run") != self._run_token
+                or not _finite(rows.get("seen")) or not _finite(last.get("dev_t"))):
+            return False
+        seen = self._seen_s - float(rows["seen"])
+        on = dev[0] - float(last["dev_t"])
+        return seen - on > MAX_INTEGRATION_GAP_SECONDS
+
+    def _keep_meter_read(self, entry, last: Any, step: float,
+                         start: Optional[Dict[str, Any]], dev: List[float]
+                         ) -> None:
+        """Write this read back as the meter's baseline (rows stamped at the
+        cycle's end). (#1230) ``moved``: when the value last moved, what
+        ``meter_step`` judges a step by. ``since``: the read a step is spread
+        from — where it moved, while this run still watches from there; else
+        this read. ``dev_t``: the device's time on its meter at this read;
+        ``since_dev_t``, ``since_dev_gh``, ``since_dev``: its
+        ``_meter_dev_flow`` at the read a step is spread from."""
+        read = dict(entry.baseline)
+        same = (step <= 0.0 and isinstance(last, dict)
+                and last.get("entity") == read.get("entity")
+                and last.get("value") == read.get("value"))
+        read["moved"] = (last.get("moved") or last.get("at")) if same else read.get("at")
+        read["dev_t"] = dev[0]
+        if same and start is not None:
+            read["since"], read["since_rows"] = last["since"], start
+            for key in ("since_dev_t", "since_dev_gh", "since_dev"):
+                read[key] = last[key]
+        else:
+            read["since"], read["since_rows"] = read.get("at"), None
+            read["since_dev_t"], read["since_dev_gh"], read["since_dev"] = dev
+        self.device_meter_last[entry.device_id] = read
+        self._meter_written.add(entry.device_id)
+
+    def _spread_meter_steps(self, steps, today: date, month_key: str,
+                            year_key: str) -> None:
+        """(#1230) Book meter steps over the time since each meter moved.
+
+        A step × the grid's share of the house over that time (SEM's own
+        flow split, weighted by what the house used) is the device's grid
+        kWh. They are priced at the device's price over that time, and leave
+        the house cost at the rate the house booked them then. A tick may
+        hold use from before that time too, so the steps of one cycle take
+        at most the day's import no device took (in proportion), not the
+        import of their own time.
+        """
+        flow = self._meter_flow
+        plans = []
+        for e, start, d_own, d_own_cost in steps:
+            d_gh = flow["flow_gh"] - float(start["flow_gh"])
+            d_home = flow["flow_home"] - float(start["flow_home"])
+            if d_gh <= 0.0 or d_home <= 0.0:
+                continue
+            house = (flow["flow_cost"] - float(start["flow_cost"])) / d_gh
+            want = max(0.0, float(e.meter_kwh)) * min(1.0, d_gh / d_home)
+            # its own price over the cycles it was staged in
+            own = d_own_cost / d_own if d_own > 0.0 else house
+            plans.append((e, want, house, own))
+        total = sum(p[1] for p in plans)
+        taken, _ = self._device_taken(today)
+        free = self._daily_accumulators.get(f"grid_import_{today}", 0.0) - taken
+        scale = min(1.0, max(0.0, free) / total) if total > 0 else 0.0
+        for e, want, house, price in plans:
+            kwh = want * scale
+            if kwh <= 0.0:
+                continue
+            self._accumulate(f"{DEVICE_TARIFF_KWH}{e.device_id}", today,
+                             month_key, year_key, kwh)
+            self._accumulate_cost(f"{DEVICE_TARIFF_COST}{e.device_id}", today,
+                                  month_key, year_key, kwh * price)
+            self._accumulate_cost("cost_import", today, month_key, year_key,
+                                  kwh * (price - house))
 
     def _hold_meter_gap(self, entry) -> bool:
         """(#1228) Hold a meter step that covers more than one cycle.
@@ -4760,6 +5071,7 @@ class EnergyCalculator:
             "taken": taken, "taken_cost": taken_cost,
             "seen": self._seen_s, "run": self._run_token,
             "rise": self._dark_rise(),
+            **self._meter_flow,   # (#1230)
         }
 
     def _settle_meter_gaps(self, today: date, month_key: str, year_key: str,
@@ -4804,8 +5116,11 @@ class EnergyCalculator:
         if self._meter_written:
             rows = self._meter_rows(today)
             for did in self._meter_written:
-                if isinstance(self.device_meter_last.get(did), dict):
-                    self.device_meter_last[did]["rows"] = dict(rows)
+                read = self.device_meter_last.get(did)
+                if isinstance(read, dict):
+                    read["rows"] = dict(rows)
+                    if read.get("since_rows") is None:   # (#1230) it moved here
+                        read["since_rows"] = dict(rows)
             self._meter_written = set()
 
     def _dark_rise(self) -> Optional[str]:
@@ -5524,6 +5839,7 @@ class EnergyCalculator:
                 if self._lifetime_seed_counters is not None else None
             ),
             "yearly_cost_seeded": self._yearly_cost_seeded,
+            "sale_history_read": self._sale_history_read,   # (#1245)
             "rate_history": list(self._rate_history),
             "device_meter_last": dict(self.device_meter_last),   # (#812)
             # (#1228) a step over an outage still waiting for its rows
@@ -5676,6 +5992,7 @@ class EnergyCalculator:
             self._yearly_cost_accumulators = state.get("yearly_cost_accumulators", {})
             self._yearly_seeded = state.get("yearly_seeded", False)
             self._yearly_cost_seeded = state.get("yearly_cost_seeded", False)
+            self._sale_history_read = state.get("sale_history_read") is True
             self._lifetime_seed_counters = _as_seed_counters(
                 state.get("lifetime_seed_counters"))
             # (#812) a corrupt entry is dropped, never a reason to fail restore

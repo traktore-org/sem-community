@@ -85,7 +85,7 @@ def test_without_a_top_up_nothing_is_marked():
 def _blocks(plan):
     """The coordinator's stash shape for the plan's allocations."""
     return [{"id": a.demand_id, "start": a.start.isoformat(),
-             "end": a.end.isoformat(), "power_w": round(a.power_w, 0),
+             "end": a.end.isoformat(), "power_w": a.power_w,  # (#1282) exact
              "price": a.price, **({"late": True} if a.late else {})}
             for a in plan.allocations]
 

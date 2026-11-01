@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Old battery sales no longer count as solar in this year's and the lifetime CO2 avoided** (#1245). SEM reads them once from Home Assistant's history.
+- 🐛 **With the energy plan on, a car no longer charges for a few minutes between its planned blocks** (#1282).
+- 🐛 **A device with its own tariff books all its kWh when its meter moves in 0.1 kWh steps or every few minutes** (#1230).
 - 🐛 **A battery sale only starts inside the hours of the plan that holds it** (#1272). A plan made after midnight no longer sells that evening.
 - 🐛 **With the Deye platform, only the Deye battery is driven as Deye** (#1273). A second battery in the home gets the generic adapter.
 - 🐛 **A refused stop of a Huawei sale on a power number is retried** (#1276). Before, it counted as sent and the battery kept selling.
@@ -33,7 +36,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **A device counter that dips and returns to the same value no longer logs a "reset" warning**; it is a debug line (#1235).
 - 🐛 **Observer mode no longer warns "commanded STOP … the stop is not taking"**; SEM sends nothing there, so it is only a debug line now (#1233).
 - 🐛 **Two grid meters: SEM stops searching every cycle for a dark sensor, and asks again when the device lookup was not ready** (#1286).
-- 🐛 **A complete charge plan no longer lets the car charge between its blocks** (#1282). Whole-watt rounding looked like a tiny shortage.
 - 🐛 **When the daily cap cuts solar or battery energy, the month and year lose those kWh too** (#1243).
 - 🐛 **Hands-off marks and load modes you set now survive going back to an older version and forward again** (#1253).
 - 🐛 **A charger sensor or service changed on the Reconfigure page now changes what SEM runs** (#1247). The page shows the charger's own saved values.
@@ -41,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **A new service on the first charger's Configure page drops the old service's field name, data and box name** (#1249).
 - 🐛 **Reconfigure no longer shows three empty required EV fields for a charger set up in the charger list** (#1258). It says to use Configure.
 - 🐛 **Without an Energy Dashboard, a new grid sensor no longer inherits the grid sign learned on the old one** (#1246).
+
 # [2.3.0-beta.1] — 31.10.2026
 
 - 🐛 **After a restart, SEM no longer takes a false 0 % battery level as true** (#1284). SEM waits until it reads the same level three times.
