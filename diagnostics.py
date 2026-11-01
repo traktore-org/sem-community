@@ -300,6 +300,13 @@ REDACT_BATTERY_SIGN_KEYS = {
     "charge_counters", "discharge_counters",
 }
 
+# (#1294) …and in the grid-sign block. ``grid_source_kind`` keeps the shape.
+REDACT_GRID_SIGN_KEYS = {
+    "grid_power_sensor", "grid_seed_sensor", "grid_source",
+    "grid_read_source", "user_flip_source",
+    "import_counters", "export_counters",
+}
+
 
 def _safe(fn):
     """Evaluate a diagnostics accessor; a broken internal must never take
@@ -448,14 +455,20 @@ async def async_get_config_entry_diagnostics(
             },
         }
 
-    # #588 — battery sign detection state (mirrors grid sign block above).
+    # #588 — battery sign detection state. (#1294) The grid's beside it: the
+    # file had no grid sign at all, so a wrong saved lock could not be seen.
     battery_sign_info: dict[str, Any] = {}
+    grid_sign_info: dict[str, Any] = {}
     reader_pre = getattr(coordinator, "_sensor_reader", None)
     if reader_pre is not None:
         try:
             battery_sign_info = reader_pre.battery_sign_diagnostics()
         except Exception:  # noqa: BLE001 — diagnostics must never raise
             battery_sign_info = {"error": "diagnostics_failed"}
+        try:
+            grid_sign_info = reader_pre.grid_sign_diagnostics()
+        except Exception:  # noqa: BLE001 — diagnostics must never raise
+            grid_sign_info = {"error": "diagnostics_failed"}
 
     # Split-grid discovery state (issue #166): surface which import/export
     # sensors auto-discovery picked and how confident it is. A "split-lowconf"
@@ -840,6 +853,7 @@ async def async_get_config_entry_diagnostics(
         "external_control": _safe(
             lambda: coordinator._external_control.rows()) or [],
         "energy_dashboard": ed_info,
+        "grid_sign": async_redact_data(grid_sign_info, REDACT_GRID_SIGN_KEYS),
         "battery_sign": async_redact_data(
             battery_sign_info, REDACT_BATTERY_SIGN_KEYS),
         "split_grid_discovery": split_grid_info,

@@ -2012,7 +2012,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         (#1215) It acts only where the grid sign is learned: a pair (manual,
         the dashboard's two sensors, a found pair) has its sign by setup.
         That also ended the #166 wait for a low-confidence found pair: such a
-        pick is a pair once read, and reads 0 W (no heal) until then.
+        pick is a pair once read, and reads 0 W (no heal) until then. (#1294)
+        Nor on a meter whose model sets its sign (a P1 meter).
 
         Two things it must NOT do (#690):
 
@@ -2040,6 +2041,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # no grid sign to flip, and the read never applies the lock to it.
             # A flip would change nothing but the saved state.
             if self._sensor_reader.grid_read_is_pair():
+                return False
+            # Guard 4 (#1294): a meter whose model fixes its sign (a P1) has
+            # no sign to heal either; the read would put it straight back.
+            if self._sensor_reader.grid_sign_fixed() is not None:
                 return False
             self._positive_balance_count = 0
             self._negative_balance_count = getattr(self, '_negative_balance_count', 0) + 1
