@@ -31,6 +31,7 @@ from custom_components.solar_energy_management.coordinator.energy_calculator imp
     EnergyCalculator,
 )
 from custom_components.solar_energy_management.coordinator.storage import SEMStorage
+from custom_components.solar_energy_management.consts.core import MAX_PLAUSIBLE_DAILY_KWH
 from custom_components.solar_energy_management.ha_energy_reader import (
     EnergyDashboardConfig,
 )
@@ -150,14 +151,28 @@ class TestStoreKeepsLifetime:
         assert SEMStorage._validate_daily_data(data) is True
         assert data[acc_key] == {"cost_2026": value}
 
-    @pytest.mark.parametrize("acc_key", [
-        "daily_accumulators", "monthly_accumulators", "yearly_accumulators",
+    @pytest.mark.parametrize("acc_key, too_big", [
+        ("daily_accumulators", 150_000.0), ("monthly_accumulators", 150_000.0),
+        ("yearly_accumulators", 5_000_000.0),
     ])
-    def test_a_period_row_keeps_its_bound(self, acc_key):
+    def test_a_period_row_keeps_its_bound(self, acc_key, too_big):
         """#563's bound stays where a home's kWh cannot reach it."""
-        data = {acc_key: {"solar_2026": 150_000.0, "home_2026": 12.5}}
+        data = {acc_key: {"solar_2026": too_big, "home_2026": 12.5}}
         assert SEMStorage._validate_daily_data(data) is True
         assert data[acc_key] == {"home_2026": 12.5}
+
+    def test_a_large_array_keeps_its_year(self):
+        """About 100 kWp makes 150 MWh in a year: kept."""
+        data = {"yearly_accumulators": {"solar_2026": 150_000.0}}
+        assert SEMStorage._validate_daily_data(data) is True
+        assert data["yearly_accumulators"] == {"solar_2026": 150_000.0}
+
+    def test_no_period_bound_is_below_what_its_days_can_hold(self):
+        """A row's bound sits above the most the daily ceiling lets in."""
+        bounds = storage_mod.ACCUMULATOR_ROW_BOUNDS
+        for acc_key, days in (("daily_accumulators", 1), ("monthly_accumulators", 31),
+                              ("yearly_accumulators", 366)):
+            assert bounds[acc_key] >= days * MAX_PLAUSIBLE_DAILY_KWH, acc_key
 
     @pytest.mark.parametrize("bad", [math.nan, math.inf, -math.inf, "12", None])
     @pytest.mark.parametrize("acc_key", sorted(storage_mod.ACCUMULATOR_ROW_BOUNDS))
@@ -271,6 +286,31 @@ class TestRestartKeepsTheHome:
                     "lifetime_grid_export": 10_000.0, "lifetime_home": 3.5}
         calc = await _restart(_saved(lifetime), values=values)
         assert _lifetime(calc, "home") == pytest.approx(105_000.0)
+
+
+    @pytest.mark.asyncio
+    async def test_an_ev_home_just_past_the_bound_is_not_touched(self):
+        """No total ever passed 100 MWh; the balance did, by the car's kWh
+        the live home leaves out. The old bound never ran: kept."""
+        values = {"sensor.p1_import": 65_000.0, "sensor.p1_export": 20_000.0,
+                  "sensor.inverter_kwh": 60_000.0}
+        lifetime = {"lifetime_solar": 60_000.0, "lifetime_grid_import": 65_000.0,
+                    "lifetime_grid_export": 20_000.0, "lifetime_home": 97_000.0}
+        calc = await _restart(_saved(lifetime), values=values)
+        assert _lifetime(calc, "home") == pytest.approx(97_000.0)
+        assert calc._lifetime_home_checked is True
+
+    @pytest.mark.asyncio
+    async def test_the_check_reads_the_totals_the_rebuild_reads(self):
+        """A counter below its saved total (an inverter left the dashboard):
+        the rebuild reads the saved 60 MWh, so the check must too."""
+        values = {"sensor.p1_import": 70_000.0, "sensor.p1_export": 20_000.0,
+                  "sensor.inverter_kwh": 35_000.0}
+        lifetime = {"lifetime_solar": 60_000.0, "lifetime_grid_import": 70_000.0,
+                    "lifetime_grid_export": 20_000.0, "lifetime_home": 3.5}
+        calc = await _restart(_saved(lifetime), values=values)
+        assert _lifetime(calc, "solar") == pytest.approx(60_000.0)
+        assert _lifetime(calc, "home") == pytest.approx(110_000.0)
 
 
 @pytest.mark.unit

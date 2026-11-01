@@ -18,7 +18,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from ..const import DEFAULT_ELECTRICITY_IMPORT_RATE, DOMAIN
-from ..consts.core import SENSOR_DARK_READ_GRACE_S
+from ..consts.core import MAX_PLAUSIBLE_DAILY_KWH, SENSOR_DARK_READ_GRACE_S
 
 from .types import (
     PowerReadings, EnergyTotals, CostData, PerformanceMetrics,
@@ -113,16 +113,10 @@ _SUPPLY_INPUT = {"solar_power": "solar", "grid_import_power": "grid",
 _BATTERY_FLOW_FIELDS = ("solar_to_battery", "grid_to_battery",
                         "battery_to_home", "battery_to_ev", "battery_to_grid")
 
-# Sanity ceiling for one day of a metered category (#628). Solar, battery and
-# EV have physical bounds to check against (kWp × 16 h, 3 × the battery size,
-# chargers × amps × 24 h — see ``_daily_ceiling``); grid does not, so this is a
-# pure unit-error trap — a Wh register read as kWh is 1000× out. No
-# residential install imports or exports 1 MWh in a day.
-MAX_PLAUSIBLE_DAILY_KWH = 1000.0
 
 # (#1295) Before #1295 the store dropped every lifetime total above this at
 # each restart, and the seed rebuilt the home from the raised steps alone. A
-# home whose totals or counters reach it is rebuilt once from the balance.
+# home that bound hurt is rebuilt once from the balance (``_old_bound_hurt``).
 _OLD_STORE_BOUND_KWH = 100_000.0
 
 # Accumulator category for EV charging energy (#666). A named constant, not a
@@ -1885,14 +1879,10 @@ class EnergyCalculator:
             else:
                 set_changed = self._lifetime_seed_counters != seed_set
             # (#1295) once: the old store bound may have rebuilt this home
-            # from one raised step at every restart
-            if not self._lifetime_home_checked and self._old_bound_reached(totals):
-                old_home = current.pop("lifetime_home", None)
-                _LOGGER.info(
-                    "Lifetime home rebuilt once from the counters (#1295): "
-                    "a total reached 100 MWh, which the store dropped at each "
-                    "restart before (was %s kWh)", old_home,
-                )
+            # from one raised step at every restart. Popped, the raise below
+            # takes it from the balance.
+            heal = not self._lifetime_home_checked and self._old_bound_hurt(totals)
+            old_home = current.pop("lifetime_home", None) if heal else None
             if (
                 raise_needed
                 or set_changed
@@ -1901,6 +1891,13 @@ class EnergyCalculator:
             ):
                 self._raise_lifetime_to_counters(
                     totals, self._read_ev_seed(ed_config, _read), seed_set,
+                )
+            if heal:
+                _LOGGER.info(
+                    "Lifetime home set once from the counters' balance "
+                    "(#1295): %.0f kWh (was %s kWh). Before, a restart "
+                    "dropped every lifetime total above 100 MWh.",
+                    current.get("lifetime_home", 0.0), old_home,
                 )
             self._lifetime_seed_counters = seed_set
             self._lifetime_home_checked = True
@@ -1960,15 +1957,26 @@ class EnergyCalculator:
         return {c: self._lifetime_accumulators.get(f"lifetime_{c}", 0.0)
                 for c in ENERGY_COUNTER_CATEGORIES}
 
-    def _old_bound_reached(self, totals: Dict[str, float]) -> bool:
-        """(#1295) Could the old store bound have hurt this home's lifetime
-        home? It dropped every lifetime total above 100 MWh at a restart.
-        Asked of the saved totals, the counters and the counters' balance —
-        a home dropped alone shows only in the balance."""
-        values = list(self._lifetime_totals().values()) + list(totals.values())
-        values += [self._lifetime_accumulators.get("lifetime_home"),
-                   self._lifetime_home_balance(totals)]
-        return any(_finite(v) and v > _OLD_STORE_BOUND_KWH for v in values)
+    def _old_bound_hurt(self, totals: Dict[str, float]) -> bool:
+        """(#1295) Did the old store bound hurt this home's lifetime home?
+
+        It dropped every lifetime total above 100 MWh at each restart. A
+        dropped total was raised back to its counter, and the home moved by
+        that whole step, or was rebuilt from it: once any total (saved or on
+        its counter) or the home passes the bound, the home is wrong. A home
+        dropped alone restarted from 0, so it holds less than the balance
+        minus the bound; a home never dropped holds the balance less the
+        car's kWh since the seed, far more than that.
+        """
+        saved = self._lifetime_totals()
+        # what the raise leaves each total at, which the rebuild reads
+        after = {c: max(saved[c] if _finite(saved[c]) else 0.0, totals[c])
+                 for c in ENERGY_COUNTER_CATEGORIES}
+        home = self._lifetime_accumulators.get("lifetime_home")
+        home = float(home) if _finite(home) else 0.0
+        if any(v > _OLD_STORE_BOUND_KWH for v in (*after.values(), home)):
+            return True
+        return home < self._lifetime_home_balance(after) - _OLD_STORE_BOUND_KWH
 
     def _raise_lifetime_to_counters(
         self, totals: Dict[str, float], ev_total: float, seed_set: Dict[str, List[str]],

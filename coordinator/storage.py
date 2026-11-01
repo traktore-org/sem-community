@@ -19,6 +19,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from ..const import DOMAIN
+from ..consts.core import MAX_PLAUSIBLE_DAILY_KWH
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -54,7 +55,8 @@ SIMULATION_RUN_DAYS_MAX = 365
 
 # (#563, #1295) The rows the load check repairs, each with the largest value
 # it can hold. A value above it was read in the wrong unit (Wh as kWh) and is
-# dropped. ``None`` = no fixed bound:
+# dropped. A year holds 366 days at the daily ceiling: a large solar array
+# passes 100 MWh in a year. ``None`` = no fixed bound:
 # * a lifetime total follows meters that count since they were fitted — a
 #   Dutch P1 import counter read 122,342 kWh (#1294). Dropped at each restart,
 #   the seed rebuilt the home from the import step alone. The seed compares
@@ -66,7 +68,7 @@ ACCUMULATOR_ROW_BOUNDS: Dict[str, Optional[float]] = {
     "accumulators": 100_000.0,
     "daily_accumulators": 100_000.0,
     "monthly_accumulators": 100_000.0,
-    "yearly_accumulators": 100_000.0,
+    "yearly_accumulators": 366 * MAX_PLAUSIBLE_DAILY_KWH,
     "lifetime_accumulators": None,
     "daily_cost_accumulators": None,
     "monthly_cost_accumulators": None,
