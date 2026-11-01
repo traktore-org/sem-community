@@ -310,7 +310,7 @@ def test_a_negative_daily_correction_survives_the_store():
     day_key = f"{CO2_CORRECTION_CATEGORY}_{_keys()[0]}"
     state = calc.get_state()
     assert state["daily_accumulators"][day_key] == pytest.approx(1.5 * (0.05 - 0.128))
-    assert SEMStorage._repair_accumulator_dicts(state, ("daily_accumulators",))
+    assert SEMStorage._repair_accumulator_dicts(state)
     assert state["daily_accumulators"][day_key] == pytest.approx(1.5 * (0.05 - 0.128))
     again = _calc()
     again.restore_state(state)
