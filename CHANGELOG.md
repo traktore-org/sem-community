@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Old battery sales no longer count as solar in this year's and the lifetime CO2 avoided** (#1245). SEM reads them once from Home Assistant's history.
 - 🐛 **With the energy plan on, a car no longer charges for a few minutes between its planned blocks** (#1282).
 
 # [2.3.0-beta.1] — 31.10.2026
