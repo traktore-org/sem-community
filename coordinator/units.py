@@ -45,7 +45,8 @@ _NOT_A_VALUE = (None, "", "unknown", "unavailable", "none")
 #: (#1245) The units every recorder statistics query asks for. Left out
 #: (``None``), the recorder hands each sensor's numbers in the unit its state
 #: shows: a counter or a sensor shown in Wh reads 1000 times too high. Only
-#: energy is named; power, % and money come back as stored.
+#: energy is named: power still comes back in the unit HA shows (SEM reads
+#: no power history); % and money are never converted.
 RECORDER_UNITS = {"energy": "kWh"}
 
 

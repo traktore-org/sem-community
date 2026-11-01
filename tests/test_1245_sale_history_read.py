@@ -259,15 +259,39 @@ class TestItWaitsForTheSeeds:
         """The lifetime seed waits for solar, import and export counters that
         read (an external statistic never has a state). Without one it never
         seeds, and every lifetime row is SEM's own."""
+        from homeassistant.core import State
+
+        def _hass():
+            # every counter that has a state reads 50,000 kWh
+            return MagicMock(is_running=True, **{"states.get.side_effect": (
+                lambda eid: State(eid, "50000", {"unit_of_measurement": "kWh"}))})
+        # twin: the whole dashboard seeds at once
+        whole = _running()
+        whole._lifetime_seeded = False
+        whole.seed_lifetime_from_hardware(_hass(), _ed())
+        assert whole._lifetime_seeded is True
+
         c = _running()
         c._lifetime_seeded = False
         ed = _ed(**missing)
-        c.seed_lifetime_from_hardware(MagicMock(**{"states.get.return_value": None,
-                                                   "is_running": True}), ed)
+        c.seed_lifetime_from_hardware(_hass(), ed)
         assert c._lifetime_seeded is False
         await c.read_sale_history(MagicMock(), ed)
         assert c._lifetime_accumulators[f"lifetime_{SALE}"] == pytest.approx(230.0)
         assert c._sale_history_read is True
+
+    async def test_the_lifetime_row_gets_its_own_three_tries(self, env):
+        c = _running()
+        c._lifetime_seeded = False
+        await c.read_sale_history(MagicMock(), _ed())      # the year, read
+        c._lifetime_seeded = True
+        env["stats"] = None                                 # then the recorder fails
+        for _ in range(3):
+            await c.read_sale_history(MagicMock(), _ed())
+            assert c.sale_history_pending
+        assert len(env["queries"]) == 4
+        await c.read_sale_history(MagicMock(), _ed())
+        assert not c.sale_history_pending and len(env["queries"]) == 4
 
     async def test_without_an_energy_dashboard_it_reads_at_once(self, env):
         c = _running()
@@ -383,11 +407,19 @@ def test_the_cycle_reads_it_after_the_yearly_seed():
         pytest.fail("no coordinator function calls read_sale_history")
     assert calls["seed_lifetime_from_hardware"] < calls["read_sale_history"]
     assert calls["seed_yearly_from_statistics"] < calls["read_sale_history"]
-    src = ast.get_source_segment(inspect.getsource(coordinator), fn)
-    assert "sale_history_pending" in src
-    # a dashboard that could not be read is not "no dashboard" (#925)
-    gate = src[:src.index("read_sale_history")]
-    assert gate.rstrip().rfind("_ed_answered") > gate.rfind("Step 9b2")
+    # the ``if`` around the call: every part of it is one ``and`` — the
+    # recorder ready, the dashboard answered (#925: unread is not "no"),
+    # the read still owed
+    gates = [
+        node.test for node in ast.walk(fn) if isinstance(node, ast.If)
+        and any(isinstance(n, ast.Attribute) and n.attr == "read_sale_history"
+                for stmt in node.body for n in ast.walk(stmt))]
+    assert gates, "read_sale_history is called outside an if"
+    test = gates[-1]
+    assert isinstance(test, ast.BoolOp) and isinstance(test.op, ast.And)
+    parts = {v.attr for v in test.values if isinstance(v, ast.Attribute)}
+    assert {"_recorder_seeds_ready", "_ed_answered",
+            "sale_history_pending"} <= parts
 
 
 def test_every_recorder_query_asks_energy_in_kwh():

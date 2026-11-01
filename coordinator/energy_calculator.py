@@ -2162,6 +2162,7 @@ class EnergyCalculator:
                     "Battery sale history read into its rows: %s kWh",
                     ", ".join(f"{k} +{v:.1f}" for k, v in raised.items()))
         self._sale_history_year_done = True
+        self._sale_history_attempts = 0    # the lifetime row gets its own tries
         if lifetime_ready:
             self._sale_history_read = True
 
