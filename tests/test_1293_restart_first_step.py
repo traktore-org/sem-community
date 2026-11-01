@@ -170,7 +170,8 @@ class TestOffItsMeterOverARestart:
 class TestDevicesRegisteredLate:
     """SEM's first cycle after a restart comes before its devices are
     registered: no device is staged in it, and its time is the restart's
-    gap. That is not time off its meter."""
+    gap. That is not time off its meter. A device registered with no
+    tariff is."""
 
     def _late(self, *, down, late, caplog):
         # no grid import counter: only the time SEM saw says the house rows
@@ -220,6 +221,69 @@ class TestDevicesRegisteredLate:
         assert "off its own meter or tariff" in caplog.text
         assert house.calc.device_meter_gaps == {}
 
+    def test_off_its_tariff_over_a_restart_stays_the_houses(self):
+        # registered with no tariff for half an hour after a restart: that
+        # half hour is the house's at the house rate (2.0 kWh at the pump's
+        # price if it counted as time SEM did not have the pump)
+        house = Meter(tick=0.1, counters=False)
+        house.cycle()
+        house.run(900)
+        pump = house.pumps[0]
+        pump.tariff_rate = 0.0
+        house.restart()
+        house.down(30, import_kwh=2.3 * 30 / 3600, pump_kwh=2.0 * 30 / 3600)
+        house.cycle()
+        house.run(1770)
+        pump.tariff_rate = PUMP
+        house.run(900)
+        assert house.pump_kwh() == pytest.approx(1.0, abs=0.002)
+        assert house.pump_cost() == pytest.approx(house.pump_kwh() * PUMP)
+
+    def test_a_run_that_never_had_the_device_is_not_time_off(self, caplog):
+        # a restart, 100 s with no device registered, a second restart: SEM
+        # never booked anything for the pump in that run
+        house = Meter(tick=0.1, counters=False)
+        house.cycle()
+        house.run(1790)
+        house.restart()
+        pumps, house.pumps = house.pumps, []
+        house.down(20, import_kwh=2.3 * 20 / 3600, pump_kwh=2.0 * 20 / 3600)
+        house.cycle()
+        house.run(100)
+        house.restart()
+        house.down(20, import_kwh=2.3 * 20 / 3600, pump_kwh=2.0 * 20 / 3600)
+        house.cycle()
+        house.pumps = pumps
+        with caplog.at_level(logging.INFO):
+            house.run(1800)
+        assert "not priced" not in caplog.text
+        assert house.pump_kwh() == pytest.approx(
+            house.shown[METER] - 500.0, abs=0.01)
+
+    def test_a_device_registered_late_then_read_counts_its_own_time(self, caplog):
+        # registered late, read for a while in this run, then 200 s off its
+        # meter: its late start is long past, the 200 s are its own
+        house = Meter(tick=0.1, counters=False)
+        house.cycle(house_w=4000.0)
+        house.run(900, house_w=4000.0)
+        house.restart()
+        pumps, house.pumps = house.pumps, []
+        house.down(100, import_kwh=4.0 * 100 / 3600, pump_kwh=2.0 * 100 / 3600)
+        house.cycle(house_w=4000.0)
+        house.run(40, house_w=4000.0)
+        house.pumps = pumps
+        house.run(600, house_w=4000.0)
+        pump = pumps[0]
+        pump.tariff_meter = ""
+        pump.get_current_consumption.return_value = 2000.0
+        house.run(200, house_w=4000.0)
+        pump.tariff_meter = METER
+        pump.get_current_consumption.return_value = 0.0
+        with caplog.at_level(logging.INFO):
+            house.run(300, house_w=4000.0)
+        assert "off its own meter or tariff" in caplog.text
+        assert house.calc.device_meter_gaps == {}
+
     def test_time_off_its_meter_in_this_run_still_counts(self, caplog):
         # found late, then off its meter for half an hour: that is its
         # own time off, booked by its draw, not booked again
@@ -262,6 +326,8 @@ class TestTheStore:
         assert fresh._seen_s == pytest.approx(calc._seen_s)
         assert fresh._meter_flow == pytest.approx(calc._meter_flow)
         assert fresh._meter_dev_flow == pytest.approx(calc._meter_dev_flow)
+        assert fresh._known_s == pytest.approx(calc._known_s)
+        assert fresh._known_s["heat_pump"] > 0.0
         # the run itself is new: its wait for counters starts again
         assert fresh._run_token != calc._run_token
 
@@ -287,6 +353,7 @@ class TestTheStore:
         assert fresh._seen_s == 0.0
         assert fresh._meter_flow == dict.fromkeys(METER_FLOW_KEYS, 0.0)
         assert fresh._meter_dev_flow == {}
+        assert fresh._known_s == {}
 
     @pytest.mark.parametrize("damage", [
         "junk",
@@ -299,6 +366,9 @@ class TestTheStore:
         {"token": "t", "seen": 1.0, "dev": {"heat_pump": [1.0, 2.0]}},
         {"token": "t", "seen": 1.0, "dev": {"heat_pump": [1.0, 2.0, "x"]}},
         {"token": "t", "seen": 1.0, "dev": "junk"},
+        {"token": "t", "seen": 1.0, "known": "junk"},
+        {"token": "t", "seen": 1.0, "known": {"heat_pump": float("nan")}},
+        {"token": "t", "seen": 1.0, "known": {"heat_pump": False}},
     ])
     def test_a_damaged_record_starts_fresh(self, damage):
         house = Meter(tick=0.1)
@@ -308,9 +378,9 @@ class TestTheStore:
         flow = dict(state["meter_watch"]["flow"])
         if isinstance(damage, dict) and "flow" in damage:
             flow.update(damage["flow"])
-            damage = {**damage, "flow": flow}
+            damage = {"dev": {}, "known": {}, **damage, "flow": flow}
         elif isinstance(damage, dict):
-            damage = {"flow": flow, "dev": {}, **damage}
+            damage = {"flow": flow, "dev": {}, "known": {}, **damage}
         state["meter_watch"] = damage
         fresh = EnergyCalculator({}, MagicMock())
         fresh.restore_state(state)
@@ -318,6 +388,7 @@ class TestTheStore:
         assert fresh._seen_s == 0.0
         assert fresh._meter_flow == dict.fromkeys(METER_FLOW_KEYS, 0.0)
         assert fresh._meter_dev_flow == {}
+        assert fresh._known_s == {}
 
     def test_after_a_damaged_record_the_step_is_never_spread_on_stale_rows(self):
         # the old rows are not this record's: booked as before #1293, never
@@ -335,6 +406,34 @@ class TestTheStore:
         house.cycle()
         assert house.pump_kwh() - before == pytest.approx(2.3 * 30 / 3600, abs=1e-6)
 
+    def test_rows_of_another_record_are_never_spread_on(self):
+        # the same sums under another token are not the rows' sums: the
+        # tick is shared against one cycle's import, as before #1293
+        house = Meter(tick=0.1)
+        house.cycle()
+        house.run(1790)
+        before = house.pump_kwh()
+        house.restart()
+        house.calc._watch_token = "another"
+        house.down(30, import_kwh=2.3 * 30 / 3600, pump_kwh=2.0 * 30 / 3600)
+        house.cycle()
+        assert house.pump_kwh() - before == pytest.approx(2.3 * 30 / 3600, abs=1e-6)
+
+    def test_rows_of_another_record_never_say_off_its_meter(self, caplog):
+        house = Meter(tick=0.1, counters=False)
+        house.cycle(house_w=4000.0)
+        house.run(900, house_w=4000.0)
+        pump = house.pumps[0]
+        pump.tariff_meter = ""
+        house.run(1800, house_w=4000.0)
+        house.restart()
+        house.calc._watch_token = "another"
+        pump.tariff_meter = METER
+        with caplog.at_level(logging.INFO):
+            house.run(300, house_w=4000.0)
+        assert "off its own meter" not in caplog.text
+        assert "no grid import counter" in caplog.text
+
     def test_a_device_with_no_read_is_not_kept(self):
         house = Meter(tick=0.1, pumps=("heat_pump", "boiler"))
         house.cycle()
@@ -344,3 +443,4 @@ class TestTheStore:
         fresh = EnergyCalculator({}, MagicMock())
         fresh.restore_state(state)
         assert set(fresh._meter_dev_flow) == {"heat_pump"}
+        assert set(fresh._known_s) == {"heat_pump"}

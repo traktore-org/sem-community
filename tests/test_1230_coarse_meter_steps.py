@@ -78,7 +78,9 @@ class Meter(House):
                 pump.tariff_rate = self.own(self.now)
         entries = DeviceTariffs(self.hass).cycle(
             self.pumps, self.calc.device_meter_last, self.now)
-        self.calc.set_device_tariff_cycle(entries)
+        # (#1293) as the coordinator: every registered device is known
+        self.calc.set_device_tariff_cycle(
+            entries, known=[p.device_id for p in self.pumps])
         grid_w = house_w * self.grid(self.now)
         p = PowerReadings(solar_power=house_w - grid_w, grid_power=-grid_w)
         p.calculate_derived()
