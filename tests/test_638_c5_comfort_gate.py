@@ -95,7 +95,7 @@ class TestTheCollectorMergesBothDemands:
     def test_either_block_open_is_a_run_verdict(self):
         gates = {
             "load:heizband": PlanGate(covered=True, in_block=False,
-                                      remaining_kwh=5.0),
+                                      remaining_kwh=5.0, remaining_h=5.0),
             "comfort:heizband": PlanGate(covered=True, in_block=True,
                                          block_power_w=1000.0),
         }
@@ -108,7 +108,7 @@ class TestTheCollectorMergesBothDemands:
         alone must not hold the device's reactive deficit run."""
         gates = {
             "load:heizband": PlanGate(covered=True, in_block=False,
-                                      remaining_kwh=0.1),  # < 1 kWh deficit
+                                      remaining_kwh=0.1, remaining_h=0.1),  # < 1 h deficit
             "comfort:heizband": PlanGate(covered=True, in_block=False,
                                          next_block_start=NOW),
         }
@@ -120,7 +120,7 @@ class TestTheCollectorMergesBothDemands:
         late = datetime(2026, 8, 11, 16, 0)
         gates = {
             "load:heizband": PlanGate(covered=True, in_block=False,
-                                      remaining_kwh=5.0,
+                                      remaining_kwh=5.0, remaining_h=5.0,
                                       next_block_start=late),
             "comfort:heizband": PlanGate(covered=True, in_block=False,
                                          next_block_start=early),

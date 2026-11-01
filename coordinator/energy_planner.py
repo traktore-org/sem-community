@@ -25,7 +25,7 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
-_FIT_EPS = 0.999          # float-drift guard on "floor met", never a real short
+FIT_EPS = 0.999          # "fits" = this share of the need; the plan wait accepts the same (#1289)
 _W_EPS = 1.0              # grants below 1 W are noise
 
 
@@ -320,9 +320,9 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
                 got += power / 1000.0 * run_h
                 run_cost += power / 1000.0 * run_h * float(_price(d, b))
                 prev_end = s.end
-                if got >= need * _FIT_EPS:
+                if got >= need * FIT_EPS:
                     break
-            if got < need * _FIT_EPS:
+            if got < need * FIT_EPS:
                 continue
             if d.min_run_s > 0:
                 # (#688) A block shorter than min-run would run min-run.
@@ -475,7 +475,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
             last_block_end[d.id] = end
             planned += e_kwh
             cost += e_kwh * price
-        if (need > 1e-9 and planned < need * _FIT_EPS and unpriced
+        if (need > 1e-9 and planned < need * FIT_EPS and unpriced
                 and d.source != "battery"):
             note = (f"{unpriced} slot(s) unpriced — replans when the "
                     f"day-ahead series lands")
@@ -483,7 +483,7 @@ def pack_night(demands, ledger, *, floor_kwh=0.0, max_discharge_w=5000.0,
             if not any(_cheap(d, i) for i in idx):
                 note = "no cheap window tonight"
         note = "; ".join(n for n in (block_note, note) if n)
-        status = ("fits" if planned >= need * _FIT_EPS or need <= 1e-9
+        status = ("fits" if planned >= need * FIT_EPS or need <= 1e-9
                   else "partial" if planned > 0 else "yields")
         results.append(DemandResult(
             demand_id=d.id, status=status, planned_kwh=round(planned, 3),

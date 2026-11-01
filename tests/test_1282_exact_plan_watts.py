@@ -118,7 +118,10 @@ def test_the_old_rounding_did_release_the_wait(plan):
     Without it the test above could pass for another reason."""
     gate = plan_gate(_rounded(plan), EV, _at(0, 15))
     assert gate.covered
-    assert _overlay(gate) == (False, 0)
+    # (#1289) the wait now accepts 99.9 % of the need, so the 0.4 Wh no
+    # longer ends it; the gate's sum still shows the old rounding.
+    assert gate.remaining_kwh < NEED_KWH - 1e-6
+    assert _overlay(gate) == (True, 0)
 
 
 # ── What must still release the wait (the reporter's own list) ──
@@ -169,7 +172,7 @@ def _load_plan(power_w):
 
 
 def test_a_load_keeps_its_hold_on_exact_watts():
-    rated = 800.4
+    rated = 300.4
     # One hour ran in the first block; one hour of deficit is left — the
     # coordinator's own formula (deficit hours × rated W).
     deficit_kwh = 1.0 * rated / 1000.0
