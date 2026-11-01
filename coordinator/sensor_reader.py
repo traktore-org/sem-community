@@ -500,8 +500,10 @@ class SensorReader:
         #: (``_battery_lock_bids``); None before the first read.
         self._battery_read_locks: Optional[frozenset] = None
         self._pair_lock_said = False
-        #: (#1294) the log line that a meter's model sets the grid sign
+        #: (#1294) the log lines that a meter's model sets the grid sign, and
+        #: that a flip tapped against an old lock on it is not applied
         self._fixed_sign_said = False
+        self._stale_flip_said = False
         self._battery_pair_lock_said = False
         #: (#1194) A restored fleet battery lock from a store written while
         #: the one-battery read still flipped an "Inverted" sensor. Moved
@@ -1539,6 +1541,9 @@ class SensorReader:
             "grid_read_is_pair": self.grid_read_is_pair(),
             # (#1294) the meter's model sets the sign: no lock or heal moves it
             "grid_sign_fixed": self._fixed_for_diag(),
+            "grid_read_model_id": self._read_model_for_diag(),
+            "user_flip_on_fixed": bool(
+                self._raw_config.get("grid_sign_user_flip_on_fixed", False)),
             "evidence": round(self._grid_sign_evidence, 1),
             "total_magnitude": round(self._grid_sign_total_mag, 1),
             "samples": self._grid_sign_samples,
@@ -1562,6 +1567,17 @@ class SensorReader:
     def _fixed_for_diag(self) -> Optional[bool]:
         try:
             return self.grid_sign_fixed()
+        except Exception:  # noqa: BLE001 — diagnostics must never raise
+            return None
+
+    def _read_model_for_diag(self) -> Optional[str]:
+        """(#1294) The device model of the one meter read, so support sees
+        why its sign is or is not fixed."""
+        kind, _, entity_id = (self._grid_source_key or "").partition(":")
+        if kind != "combined" or not entity_id:
+            return None
+        try:
+            return self._device_model_id(entity_id)
         except Exception:  # noqa: BLE001 — diagnostics must never raise
             return None
 
@@ -2507,7 +2523,25 @@ class SensorReader:
                  else recorded or "an auto-detected source"),
                 current,
             )
+        if applies and self._flip_on_an_old_lock():
+            if not self._stale_flip_said:
+                self._stale_flip_said = True
+                _LOGGER.warning(
+                    "grid sign: the one-tap user flip on %s was tapped against a "
+                    "learned lock; the meter's model now sets the sign, so the "
+                    "flip would turn it around — not applying it (#1294). Tap "
+                    "'Fix grid sign' again if the grid still reads the wrong way.",
+                    current)
+            return False
         return applies
+
+    def _flip_on_an_old_lock(self) -> bool:
+        """(#1294) A saved flip on a meter whose model sets the sign, tapped
+        before the read kept that sign (no ``grid_sign_user_flip_on_fixed``).
+        It undid a learned lock that read the meter the wrong way; the read
+        has no such lock now, so the flip would turn a right sign around."""
+        return (self.grid_sign_fixed() is not None
+                and not self._raw_config.get("grid_sign_user_flip_on_fixed"))
 
     def user_flip_on_for_tap(self) -> bool:
         """(#1192) Is the saved flip on for what a tap now would flip? Yes
@@ -2516,6 +2550,10 @@ class SensorReader:
         a second tap turns it off. A flip about another meter is off here:
         the tap flips this meter, as the log line asks."""
         if not bool(self._raw_config.get("grid_sign_user_flip", False)):
+            return False
+        if (self._user_flip_source() in (None, self._tap_source())
+                and self._flip_on_an_old_lock()):
+            # (#1294) off as read, so the tap turns it on, against this sign
             return False
         return (self.user_flip_applies()
                 or self._user_flip_source() == self._tap_source())
@@ -2539,6 +2577,12 @@ class SensorReader:
         binding. The ONE production caller is the service."""
         out = {**(options or {}), "grid_sign_user_flip": bool(new_flip)}
         out["grid_sign_user_flip_source"] = self._tap_source() if new_flip else None
+        # (#1294) tapped against a sign the meter's model sets: the read
+        # applies this flip (one tapped against a learned lock it does not)
+        if new_flip and self.grid_sign_fixed() is not None:
+            out["grid_sign_user_flip_on_fixed"] = True
+        else:
+            out.pop("grid_sign_user_flip_on_fixed", None)
         return out
 
     def _detect_grid_sign(self, readings: PowerReadings) -> bool:

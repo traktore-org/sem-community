@@ -51,8 +51,14 @@ SOURCE = f"combined:{POWER}"
 WRONG_LOCK = {"grid_detected": True, "grid_inverted": False, "grid_source": SOURCE}
 
 
+#: The P1 declared in the Energy Dashboard's own grid entry (power_config).
+DECLARED = {**PREFS, "energy_sources": [
+    {**PREFS["energy_sources"][0], "power_config": {"stat_rate": POWER}},
+    *PREFS["energy_sources"][1:]]}
+
+
 def _reader(hass, *, model_id="HWE-P1", pick=True, dashboard=True, lock=None,
-            p1_w="976", solar_w="100", battery_w="90", **cfg):
+            p1_w="976", solar_w="100", battery_w="90", prefs=None, **cfg):
     """The reporter's home after a restart: the P1 imports ``p1_w``."""
     _p1_meter(hass, model_id=model_id)
     hass.states.async_set(POWER, p1_w, _W)
@@ -65,7 +71,8 @@ def _reader(hass, *, model_id="HWE-P1", pick=True, dashboard=True, lock=None,
         config["solar_production_sensor"] = SOLAR
     reader = SensorReader(hass, config)
     if dashboard:
-        reader.set_energy_dashboard_config(_parse_prefs(hass, PREFS, quiet=True))
+        reader.set_energy_dashboard_config(
+            _parse_prefs(hass, prefs or PREFS, quiet=True))
     if lock is not None:
         reader.restore_sign_state(dict(lock))
     return reader
@@ -75,6 +82,7 @@ HOMES = {
     "pick": {"pick": True},                       # the reporter's
     "dashboard": {"pick": False},                 # #1172: SEM found it
     "no_dashboard": {"pick": True, "dashboard": False},
+    "declared": {"pick": False, "prefs": DECLARED},   # never had a seed
 }
 
 
@@ -179,9 +187,14 @@ class TestNoLockMovesTheMeter:
         assert readings.grid_import_power == pytest.approx(976)
 
     async def test_the_counters_never_vote_it_away(self, hass):
-        """Counters that say the opposite (export rising) for many cycles:
-        the voter does not run on a fixed meter."""
+        """Counters that say the opposite (export rising) for many cycles,
+        with the seed already spent and no lock: the voter does not run on a
+        fixed meter (before the fix it locked SEM's sign, so export)."""
         reader = _reader(hass)
+        reader.read_power()
+        reader._brand_seed_done = True
+        reader._grid_sign_detected = False
+        reader._grid_sign_inverted = False
         reader._sign_vote_warmup = 0
         for i in range(30):
             hass.states.async_set(IMPORT, "12.0", _KWH)
@@ -190,10 +203,12 @@ class TestNoLockMovesTheMeter:
         assert reader._grid_sign_samples == 0
         assert readings.grid_import_power == pytest.approx(976)
 
-    async def test_the_user_flip_still_applies(self, hass):
-        """Fix grid sign is the user's choice, as on a pair (#1215)."""
+    async def test_a_flip_tapped_on_the_meters_sign_still_applies(self, hass):
+        """Fix grid sign tapped against the meter's own sign is the user's
+        choice, as on a pair (#1215)."""
         reader = _reader(hass, grid_sign_user_flip=True,
-                         grid_sign_user_flip_source=SOURCE)
+                         grid_sign_user_flip_source=SOURCE,
+                         grid_sign_user_flip_on_fixed=True)
         readings = reader.read_power()
         assert readings.grid_export_power == pytest.approx(976)
 
@@ -203,6 +218,72 @@ class TestNoLockMovesTheMeter:
         reader = _reader(hass, grid_sign_invert=True)
         readings = reader.read_power()
         assert readings.grid_import_power == pytest.approx(976)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# A flip tapped against the old lock (review): it undid that lock, and the
+# read no longer has it, so applied it would turn the right sign around
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestAFlipTappedOnTheOldLock:
+    async def test_it_is_not_applied(self, hass, caplog):
+        """The #589 warning told this home to tap Fix grid sign. The flip
+        then read the wrong lock right; on top of the meter's sign it would
+        read the 976 W import as export, with the audit and heal silent."""
+        reader = _reader(hass, lock=WRONG_LOCK, grid_sign_user_flip=True,
+                         grid_sign_user_flip_source=SOURCE)
+        with caplog.at_level(logging.WARNING):
+            for _ in range(3):
+                readings = reader.read_power()
+        assert readings.grid_import_power == pytest.approx(976)
+        assert reader.user_flip_applies() is False
+        said = [r for r in caplog.records
+                if "#1294" in r.getMessage() and "flip" in r.getMessage()]
+        assert len(said) == 1
+
+    async def test_control_before_the_fix_it_read_import_too(self, hass, monkeypatch):
+        """The same home without the fixed sign: lock and flip together read
+        import, which is what the fix must keep."""
+        monkeypatch.setattr(sr, "PLATFORM_GRID_SIGN_MODELS", {})
+        reader = _reader(hass, lock=WRONG_LOCK, grid_sign_user_flip=True,
+                         grid_sign_user_flip_source=SOURCE)
+        assert reader.read_power().grid_import_power == pytest.approx(976)
+
+    async def test_a_flip_from_before_the_binding_is_not_applied(self, hass):
+        """A flip with no source saved (#971) applied to the found meter."""
+        reader = _reader(hass, lock=WRONG_LOCK, grid_sign_user_flip=True)
+        assert reader.read_power().grid_import_power == pytest.approx(976)
+
+    async def test_a_kwh_meter_keeps_its_flip(self, hass):
+        reader = _reader(hass, model_id="HWE-KWH3", lock=WRONG_LOCK,
+                         grid_sign_user_flip=True,
+                         grid_sign_user_flip_source=SOURCE)
+        assert reader.read_power().grid_import_power == pytest.approx(976)
+        assert reader.user_flip_applies() is True
+
+    async def test_a_tap_now_turns_the_read_around(self, hass):
+        """The old flip is off as read, so a tap turns a flip on, saved
+        against the meter's sign, and that one applies."""
+        reader = _reader(hass, grid_sign_user_flip=True,
+                         grid_sign_user_flip_source=SOURCE)
+        reader.read_power()
+        assert reader.user_flip_on_for_tap() is False
+        options = reader.user_flip_options({}, True)
+        assert options["grid_sign_user_flip"] is True
+        assert options["grid_sign_user_flip_source"] == SOURCE
+        assert options["grid_sign_user_flip_on_fixed"] is True
+        again = _reader(hass, **options)
+        assert again.read_power().grid_export_power == pytest.approx(976)
+        assert again.user_flip_on_for_tap() is True
+        off = again.user_flip_options(options, False)
+        assert off["grid_sign_user_flip"] is False
+        assert "grid_sign_user_flip_on_fixed" not in off
+        assert off["grid_sign_user_flip_source"] is None
+
+    async def test_a_tap_on_a_kwh_meter_saves_no_mark(self, hass):
+        reader = _reader(hass, model_id="HWE-KWH3")
+        reader.read_power()
+        assert "grid_sign_user_flip_on_fixed" not in reader.user_flip_options({}, True)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -281,24 +362,16 @@ class TestTheSignReport:
 _IDS = (POWER, IMPORT, EXPORT)
 
 
-def _grid_block():
-    return {
-        "grid_power_sensor": POWER, "grid_power_raw_state": "976.0",
-        "grid_seed_sensor": POWER, "grid_platform": "homewizard",
-        "brand_seeded": True, "user_flip": False, "user_flip_source": None,
-        "grid_source": SOURCE, "grid_source_kind": "combined",
-        "grid_read_source": SOURCE, "grid_sign_fixed": True,
-        "auto_detected": True, "auto_inverted": True,
-        "import_counters": [IMPORT], "export_counters": [EXPORT],
-    }
-
-
 @pytest.mark.asyncio
-async def test_the_diagnostics_file_has_the_grid_sign(mock_hass, entry, coordinator):  # noqa: F811
+async def test_the_diagnostics_file_has_the_grid_sign(hass, mock_hass, entry, coordinator):  # noqa: F811
     """The reporter's file had a battery sign block and no grid one, so the
-    saved lock could only be inferred from a log line."""
+    saved lock could only be inferred from a log line. The block is the real
+    reader's, so a new key that carries an entity id fails here."""
+    real = _reader(hass, lock=WRONG_LOCK, grid_sign_user_flip=True,
+                   grid_sign_user_flip_source=SOURCE)
+    real.read_power()
     reader = MagicMock()
-    reader.grid_sign_diagnostics.return_value = _grid_block()
+    reader.grid_sign_diagnostics.return_value = real.grid_sign_diagnostics()
     reader.battery_sign_diagnostics.return_value = {}
     coordinator._sensor_reader = reader
     entry.runtime_data = coordinator
@@ -306,9 +379,12 @@ async def test_the_diagnostics_file_has_the_grid_sign(mock_hass, entry, coordina
     out = (await async_get_config_entry_diagnostics(mock_hass, entry))["grid_sign"]
     assert out["grid_platform"] == "homewizard"
     assert out["grid_sign_fixed"] is True
+    assert out["grid_read_model_id"] == "HWE-P1"
     assert out["grid_source_kind"] == "combined"
     assert out["auto_inverted"] is True
+    assert out["user_flip_applies"] is False
     assert not [i for i in _IDS if i in str(out)]          # ids redacted (#1270)
+    assert "p1_meter" not in str(out)
 
 
 @pytest.mark.asyncio
