@@ -12897,6 +12897,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
         common_data = {
             "battery_soc": power.battery_soc,
+            "battery_soc_known": (bool(getattr(power, "battery_soc_known", True))
+                                  and not getattr(power, "battery_soc_unavailable", False)),
             "calculated_current": calculated_current,
             "available_power": available_power,
             "daily_ev_energy": energy.daily_ev,
