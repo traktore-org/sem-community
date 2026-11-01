@@ -348,3 +348,23 @@ class TestAcrossAClockChange:
         assert "c1" in po.deserialize(raw)
         assert po.active_override(out, "c1", now.astimezone(timezone.utc) + timedelta(hours=23)) is not None
         assert po.active_override(out, "c1", now.astimezone(timezone.utc) + timedelta(hours=25)) is None
+
+
+@pytest.mark.asyncio
+async def test_skip_on_a_keba_stops_by_the_normal_stop_never_authorize():
+    # skip is a DISABLE like the VPP pause and the phase switch; on a KEBA
+    # that is the one stop every other stop uses (#1085, #1163).
+    from unittest.mock import AsyncMock, MagicMock
+    from custom_components.solar_energy_management.coordinator.charger_adapters.keba import (
+        KebaAdapter,
+    )
+    overrides = po.set_override({}, "charger1", "skip", LATER, NOW)
+    out = po.apply_to_charger_decision(overrides, "charger1", _decision(), NOW)
+    assert out.intent is ChargerIntent.DISABLE
+    device = MagicMock()
+    device.stop_session = AsyncMock()
+    device.authorize = AsyncMock()
+    adapter = KebaAdapter(device)
+    await adapter.command_disable()
+    device.stop_session.assert_awaited_once()
+    device.authorize.assert_not_awaited()

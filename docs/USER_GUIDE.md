@@ -1244,6 +1244,12 @@ notification instead of silently missing it.
 A deadline at/after the night-window end (the default) changes nothing — night charging stays
 gentle and peak-managed exactly as before. Only an explicit earlier deadline forces current.
 
+**Departure from a calendar.** *(#1087)* In the charger's options, pick a
+**Departure calendar**. Its next timed event replaces the weekday departure
+while it is still ahead, and the EV card names the event. An all-day event is
+skipped. SEM reads the calendar every 15 minutes. Clear the field to go back
+to the weekday times.
+
 **Set as default.** *(#246)* Each charger has a **Set Target As Default** button
 (`button.sem_charger_<id>_set_default_target`) that copies that charger's current Min/Max and
 charge-by time into the global defaults, so newly-added chargers inherit them.
