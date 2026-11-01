@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🐛 **Old battery sales no longer count as solar in this year's and the lifetime CO2 avoided** (#1245). SEM reads them once from Home Assistant's history.
 - 🐛 **With the energy plan on, a car no longer charges for a few minutes between its planned blocks** (#1282).
 - 🐛 **A device with its own tariff books all its kWh when its meter moves in 0.1 kWh steps or every few minutes** (#1230).
+- 🐛 **A device with its own tariff and meter no longer loses part of its kWh after a short restart** (#1293).
 - 🐛 **A battery sale only starts inside the hours of the plan that holds it** (#1272). A plan made after midnight no longer sells that evening.
 - 🐛 **With the Deye platform, only the Deye battery is driven as Deye** (#1273). A second battery in the home gets the generic adapter.
 - 🐛 **A refused stop of a Huawei sale on a power number is retried** (#1276). Before, it counted as sent and the battery kept selling.

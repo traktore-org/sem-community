@@ -78,7 +78,9 @@ class Meter(House):
                 pump.tariff_rate = self.own(self.now)
         entries = DeviceTariffs(self.hass).cycle(
             self.pumps, self.calc.device_meter_last, self.now)
-        self.calc.set_device_tariff_cycle(entries)
+        # (#1293) as the coordinator: every registered device is known
+        self.calc.set_device_tariff_cycle(
+            entries, known=[p.device_id for p in self.pumps])
         grid_w = house_w * self.grid(self.now)
         p = PowerReadings(solar_power=house_w - grid_w, grid_power=-grid_w)
         p.calculate_derived()
@@ -275,17 +277,21 @@ class TestTimeSemDidNotSee:
         assert house.pump_kwh() == pytest.approx(live + down / 2, abs=0.015)
         assert house.calc.device_meter_gaps == {}
 
-    def test_a_restart_starts_the_read_again(self):
+    def test_a_short_restart_keeps_the_read(self):
+        # (#1293) the watched flows are kept: the read the value moved at
+        # before the restart is still the one a step is spread from
         house = Meter(tick=0.1)
         house.cycle()
         house.run(1800)
         before = house.pump_kwh()
+        since = house.calc.device_meter_last["heat_pump"]["since"]
         house.restart()
         house.down(30, import_kwh=2.3 * 30 / 3600, pump_kwh=2.0 * 30 / 3600)
         house.cycle()
-        house.run(1800)
         read = house.calc.device_meter_last["heat_pump"]
-        assert read["since_rows"]["run"] == house.calc._run_token
+        assert read["since"] == since
+        assert read["since_rows"]["watch"] == house.calc._watch_token
+        house.run(1800)
         assert house.pump_kwh() - before == pytest.approx(1.0, abs=0.002)
         assert house.pump_kwh() == pytest.approx(2.0, abs=0.002)
 

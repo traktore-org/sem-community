@@ -16742,7 +16742,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 "%s: own price %s (#812)", names.get(e.device_id),
                 "unreadable — its grid kWh are priced at the house rate"
                 if e.price is None else "readable")
-        calc.set_device_tariff_cycle(entries)
+        # (#1293) every registered device: time before a device is
+        # registered is not time off its own meter
+        calc.set_device_tariff_cycle(
+            entries, known=[str(getattr(d, "device_id", "") or "") for d in devices])
 
     def _device_tariff_books(self) -> Dict[str, Any]:
         """(#812) Today's grid kWh and cost per own-tariff device, for its
