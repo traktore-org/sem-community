@@ -39,6 +39,11 @@ def mock_hass():
     h.services = MagicMock()
     h.services.async_call = AsyncMock()
     h.states.is_state = MagicMock(return_value=False)
+    # (#1156) A bare MagicMock's auto __float__ (1.0) would make an
+    # unconfigured sensor read as a real "1.0 W" state instead of failing
+    # closed like real HA does for an unknown entity_id. Tests that want a
+    # specific reading already override this per-test.
+    h.states.get = MagicMock(return_value=None)
     h.data = {}
     return h
 
@@ -217,7 +222,8 @@ async def test_switch_device_deactivate_after_min_on_time(switch_device):
 
 @pytest.mark.asyncio
 async def test_switch_device_adjust_power(switch_device):
-    """Test adjust_power returns rated_power when active, 0 when idle."""
+    """#1156: adjust_power returns its measured draw when active (here,
+    unconfigured sensor → the rated_power seeded on activate), 0 when idle."""
     result = await switch_device.adjust_power(5000.0)
     assert result == 0.0
     await switch_device.activate(3000.0)

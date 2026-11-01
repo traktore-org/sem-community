@@ -2,6 +2,13 @@
  "chargers": [],
  "meters": [],
  "near_misses": [],
- "proposals": [],
+ "proposals": [
+  {
+   "import_price": [
+    "sensor.home_current_electricity_market_price",
+    "none"
+   ]
+  }
+ ],
  "vehicles": []
 }

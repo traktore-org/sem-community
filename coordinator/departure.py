@@ -68,22 +68,36 @@ def weekday_departures(charger_cfg: Optional[Mapping[str, Any]]) -> Dict[str, st
 
 
 def departure_signature(charger_cfg: Optional[Mapping[str, Any]],
-                        config: Optional[Mapping[str, Any]]) -> tuple:
+                        config: Optional[Mapping[str, Any]],
+                        calendar_next: Optional[datetime] = None) -> tuple:
     """What the departure is configured to: changes when the user edits a
-    time, not as the clock passes one."""
+    time, not as the clock passes one. ``calendar_next`` (#1087) — the
+    calendar's own next-event start, pre-fetched by the coordinator —
+    folds in too, so a changed or newly-seen event re-triggers planning
+    the same way an edited time does."""
     return (departure_hhmm(charger_cfg, config),
-            tuple(sorted(weekday_departures(charger_cfg).items())))
+            tuple(sorted(weekday_departures(charger_cfg).items())),
+            calendar_next.isoformat() if calendar_next else None)
 
 
 def departure_for(charger_cfg: Optional[Mapping[str, Any]], now: datetime,
-                  config: Optional[Mapping[str, Any]]) -> datetime:
+                  config: Optional[Mapping[str, Any]],
+                  calendar_next: Optional[datetime] = None) -> datetime:
     """The charger's next departure after ``now``: today's, if it is still
     ahead, else tomorrow's — each day at its weekday's time, or the default.
     So a night plan made on Sunday evening plans for Monday morning.
 
+    ``calendar_next`` (#1087) — a calendar entity's next event, pre-fetched
+    by the coordinator (this function stays sync and hass-free) — wins over
+    the weekday table when it is still ahead of ``now``. A calendar with no
+    event, or one already past, falls through to the existing chain exactly
+    as if no calendar were configured.
+
     Wall-clock arithmetic on a zone-aware ``now``, like ``resolve_deadline``
     (#274/M2): the departure gets the offset of its own wall time across a
     DST change."""
+    if calendar_next is not None and calendar_next > now:
+        return calendar_next
     default = departure_hhmm(charger_cfg, config)
     by_day = weekday_departures(charger_cfg)
     for offset in (0, 1):

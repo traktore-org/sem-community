@@ -212,6 +212,8 @@ def test_the_view_says_what_the_rows_show(monkeypatch):
         "late_min": 30,
         "late": None,              # nothing stamped for it
         "boost_allowed": True,
+        "from_calendar": False,    # (#1087) no calendar configured
+        "calendar_summary": "",
     }
 
 
@@ -452,7 +454,8 @@ def test_the_refusals_are_translated():
 # ── The card's strings ───────────────────────────────────────────────────
 
 CARD_KEYS = (
-    "ev_dep_most_days", "ev_dep_next", "ev_dep_tap_hint", "ev_dep_use_default",
+    "ev_dep_most_days", "ev_dep_next", "ev_dep_next_calendar",
+    "ev_dep_tap_hint", "ev_dep_use_default",
     "ev_dep_one_block", "ev_dep_late_charge", "ev_dep_late_off",
     "ev_dep_minutes", "ev_dep_late_hint", "ev_dep_late_hint_plan",
     "ev_dep_help_days", "ev_dep_help_one_block", "ev_dep_help_late",

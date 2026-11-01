@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **A surplus load that throttles itself frees the rest of its rating** (#1156). Before, the walk reserved the full rating while the load drew less.
+- ✨ **The energy plan shows a slot's grid CO2 alongside its price** (#1085). Only when your CO2 sensor carries a forecast; off otherwise.
+- ✨ **Ask Assist why the battery or car is doing something, or what tonight costs** (#1086). One sentence can set a charger's target, off by default.
+- ✨ **A heat pump's own COP sets what a kWh of heat really costs, now a sensor** (#1081). Pre-heat timing can use it.
+- ✨ **An EV charger's departure can follow a calendar's next event instead of a fixed time** (#1087). The card names the event.
+- ✨ **Ask Assist to skip or force charge for one night, or go back to normal** (#1086). Off by default, like the other voice commands.
+- ✨ **Pause or force a battery or charger for a set time** (#1085). It survives a restart and ends on its own.
+- 🔧 **Setup now knows the price sensor of Tibber, Tibber Prices and ENTSO-e by its own name** (#1168). Nothing reads it yet.
 # [2.3.0-beta.2] — 01.11.2026
 
 - 🐛 **A restart no longer drops lifetime totals above 100 MWh or costs above 100,000** (#1295). The lifetime home read the grid import.

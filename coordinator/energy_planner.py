@@ -84,6 +84,10 @@ class LedgerSlot:
     price: Optional[float]
     level_cheap: bool = False
     home_w: float = 0.0
+    # (#1085 Part A) grid CO2 intensity, kg/kWh; None = no reading/forecast
+    # for this slot. Carried, never derived from price — the two signals
+    # can disagree (a cheap hour on a fossil-heavy mix).
+    co2: Optional[float] = None
     # (#755) the world this slot was built from. A day slot derived its
     # surplus from solar minus house and then threw both away, so nothing
     # downstream could say how much solar a slot carried — which made a

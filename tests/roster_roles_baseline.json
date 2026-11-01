@@ -139,6 +139,11 @@
         "site_grid_power"
       ]
     },
+    "entsoe": {
+      "import_price": [
+        "current_price"
+      ]
+    },
     "ev_charger_modbus": {
       "ev_current_control": [
         "ev_charger_modbus.set_charging_current"
@@ -571,8 +576,16 @@
       "grid_power": [
         "power_flow_grid"
       ],
+      "import_price": [
+        "electricity_price"
+      ],
       "system_size_spec": [
         "storage_rated_power"
+      ]
+    },
+    "tibber_prices": {
+      "import_price": [
+        "current_interval_price"
       ]
     },
     "toyota": {

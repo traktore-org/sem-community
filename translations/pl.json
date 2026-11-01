@@ -454,6 +454,7 @@
           "vehicle_soc_entity": "Czujnik SOC akumulatora pojazdu (opcjonalny)",
           "vehicle_range_entity": "Czujnik zasięgu pojazdu",
           "ev_kwh_per_100km": "Zużycie pojazdu (kWh/100km)",
+          "departure_calendar_entity": "Kalendarz wyjazdu",
           "ev_target_soc": "Uznaj za pełny przy (%)",
           "ev_battery_capacity_kwh": "Pojemność akumulatora EV (kWh)",
           "initial_current": "Prąd początkowy (A)",
@@ -520,6 +521,7 @@
           "vehicle_soc_entity": "Czujnik SOC akumulatora pojazdu (opcjonalny)",
           "vehicle_range_entity": "Czujnik zasięgu pojazdu",
           "ev_kwh_per_100km": "Zużycie pojazdu (kWh/100km)",
+          "departure_calendar_entity": "Kalendarz wyjazdu",
           "ev_target_soc": "Uznaj za pełny przy (%)",
           "ev_battery_capacity_kwh": "Pojemność akumulatora EV (kWh)",
           "initial_current": "Prąd początkowy (A)",
@@ -1216,6 +1218,9 @@
       "heat_pump_mode": {
         "name": "Tryb pompy ciepła"
       },
+      "heat_pump_cost_of_heat": {
+        "name": "Koszt ciepła pompy ciepła"
+      },
       "heat_pump_registration_status": {
         "name": "Status rejestracji pompy ciepła"
       },
@@ -1619,6 +1624,9 @@
       "export_guard_enabled": {
         "name": "Strażnik eksportu"
       },
+      "assist_write_intents_enabled": {
+        "name": "Komendy głosowe"
+      },
       "export_guard_override_external": {
         "name": "Strażnik eksportu: pomiń sterowanie zewnętrzne"
       },
@@ -1680,6 +1688,9 @@
       },
       "heat_pump_boost_offset": {
         "name": "Podbicie temperatury pompy ciepła"
+      },
+      "heat_pump_cop": {
+        "name": "COP pompy ciepła"
       },
       "system_size_kwp": {
         "name": "Moc instalacji PV"

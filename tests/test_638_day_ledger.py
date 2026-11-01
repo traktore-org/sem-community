@@ -153,6 +153,27 @@ class TestDaySlots:
     def test_an_empty_window_is_no_slots(self):
         assert _slots(start=_t(18), end=_t(18)) == []
 
+    def test_co2_is_none_when_no_accessor_is_given(self):
+        """(#1085 Part A) Default behaviour is unchanged: no co2_at means
+        every slot's co2 is None, surplus or deficit alike."""
+        assert all(s.co2 is None for s in _slots())
+
+    def test_co2_rides_both_surplus_and_deficit_slots(self):
+        noon = [s for s in _slots(co2_at=lambda t: 0.05 + t.hour * 0.001)
+                if s.start.hour == 12][0]
+        evening = [s for s in _slots(co2_at=lambda t: 0.05 + t.hour * 0.001,
+                                     home_w_at=lambda t: 2500.0)
+                   if s.start.hour == 17][0]
+        assert noon.co2 == pytest.approx(0.05 + 12 * 0.001)
+        assert evening.co2 == pytest.approx(0.05 + 17 * 0.001)
+
+    def test_a_raising_co2_accessor_stays_honestly_unknown(self):
+        """Same contract as price_at: a fault must not cost the slot."""
+        def _raise(t):
+            raise RuntimeError("no reading this cycle")
+        slots = _slots(co2_at=_raise)
+        assert slots and all(s.co2 is None for s in slots)
+
 
 class TestThePackerRunsUnchangedOverTheDay:
     """The whole point: no second engine. A day-shaped slot list feeds the

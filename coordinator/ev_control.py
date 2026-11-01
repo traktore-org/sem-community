@@ -15,6 +15,7 @@ from ..utils.device_names import charger_display_name  # (#1053)
 
 import logging
 import math
+from datetime import datetime, timedelta
 from typing import Any, Optional
 
 from homeassistant.util import dt as dt_util
@@ -36,6 +37,19 @@ from .ev_tariff_planner import NightChargePlan, plan_night_charge
 from .units import power_state_to_watts
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _calendar_next_for(host: Any, cid: str) -> Optional[datetime]:
+    """(#1087) ``host._calendar_departure_for(cid)``, or ``None`` when
+    ``host`` is a bare test double without it — same defensive shape as
+    the ``_tariff_provider`` lookups nearby; a unit test building
+    ``EVControlMixin`` on a plain ``SimpleNamespace`` must read as "no
+    calendar", not crash. A ``MagicMock`` host answers ANY attribute,
+    including this one, with another MagicMock — real, callable, but
+    not a ``datetime`` — so the result is checked too."""
+    fn = getattr(host, "_calendar_departure_for", None)
+    result = fn(cid) if callable(fn) else None
+    return result if isinstance(result, datetime) else None
 
 
 def amps_from_headroom(
@@ -376,7 +390,9 @@ class EVControlMixin:
                              "get_price_level_at", None),
             # (#1023) The next departure as a moment: a weekday's time may
             # be more than a day away.
-            deadline_at=departure_for(cfg, now, self.config),
+            deadline_at=departure_for(
+                cfg, now, self.config,
+                calendar_next=_calendar_next_for(self, str(cfg.get("id") or ""))),
         )
         return plan
 
@@ -403,8 +419,20 @@ class EVControlMixin:
             # (#1023) The departure the card shows, not the window's end —
             # the next one, so tonight's window ends at tomorrow's weekday
             # time.
-            deadline = departure_for(cfg, dt_util.now(), self.config).strftime(
-                "%H:%M")
+            _now_ndk = dt_util.now()
+            _cal_ndk = _calendar_next_for(self, str(cfg.get("id") or ""))
+            # (#1087) this call degrades the deadline to "%H:%M" + mod-24h
+            # arithmetic below — correct for "today or tomorrow" (the
+            # weekday table's own shape) but wrong for a calendar event
+            # days out, which would wrap back to looking like tomorrow.
+            # A deadline that far away carries no urgency for THIS
+            # window's hours anyway, so it is left out here only; the
+            # other 4 call sites still get the real calendar datetime.
+            if _cal_ndk is not None and (_cal_ndk - _now_ndk) > timedelta(hours=36):
+                _cal_ndk = None
+            deadline = departure_for(
+                cfg, _now_ndk, self.config, calendar_next=_cal_ndk,
+            ).strftime("%H:%M")
             sh, sm = night_start.split(":")[:2]
             dh, dm = deadline.split(":")[:2]
             start_min = int(sh) * 60 + int(sm)

@@ -32,7 +32,9 @@ class TestSEMSwitches:
         intent); ``observer_mode`` remains, joined by ``vacation_mode``
         (#594 — suppress comfort heating while away) and
         ``energy_plan_actuation`` (#638 G4 — feed the joint overnight
-        plan into the night signals; default off = pure shadow)."""
+        plan into the night signals; default off = pure shadow).
+        ``assist_write_intents_enabled`` (#1086) gates Assist's one
+        write-intent; explain-intents need no permission."""
         keys = [s.key for s in SWITCH_TYPES]
         assert keys == ["observer_mode", "vacation_mode",
                         "energy_plan_actuation",
@@ -49,6 +51,8 @@ class TestSEMSwitches:
                         "battery_discharge_limit_caps_charge",
                         # #1080 — a car's start gap bought on a negative export value
                         "ev_absorb_grid_fill",
+                        # #1086 — gates Assist's one write-intent, default OFF
+                        "assist_write_intents_enabled",
                         # arc #921 — four switches, all default OFF, after the permissions
                         "export_guard_enabled", "export_guard_override_external",
                         "battery_house_sink_enabled", "ev_morning_window_enabled",

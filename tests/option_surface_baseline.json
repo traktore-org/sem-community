@@ -5,7 +5,7 @@
     "reason; removing one is the point of the issue.",
     "Regenerate:  python3 scripts/audit_options.py --baseline"
   ],
-  "total": 218,
+  "total": 221,
   "first_run_fields": 19,
   "first_run_steps": 5,
   "first_run_fields_best": 19,
@@ -43,6 +43,7 @@
     "daily_ev_target",
     "daily_ev_target_max",
     "demand_charge_rate",
+    "departure_calendar_entity",
     "deye_actuation_enabled",
     "deye_battery_voltage_entity",
     "deye_battery_voltage_max_age_s",
@@ -203,6 +204,7 @@
     "export_guard_engage_s",
     "export_guard_release_s",
     "heat_pump_boost_offset",
+    "heat_pump_cop",
     "hot_water_solar_target",
     "legionella_interval_hours",
     "legionella_target_temp",
@@ -216,6 +218,7 @@
     "update_interval"
   ],
   "switch_entities": [
+    "assist_write_intents_enabled",
     "battery_charge_pacing_enabled",
     "battery_discharge_limit_caps_charge",
     "battery_house_sink_enabled",

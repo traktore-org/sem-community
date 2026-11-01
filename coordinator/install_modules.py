@@ -439,9 +439,11 @@ ENTITY_MODULES: Mapping[tuple[str, str], frozenset[Module]] = _table(
         "heat_pump_energy_today", "heat_pump_energy_total", "heat_pump_energy_year",
         "heat_pump_mode", "heat_pump_registration_status",
         "heat_pump_sg_ready_state",
+        "heat_pump_cost_of_heat",  # (#1081 Slice A)
     )),
     _rows("number", _HP, (
         "heat_pump_boost_offset",
+        "heat_pump_cop",  # (#1081 Slice A)
     )),
     _rows("binary_sensor", _HP, (
         "heat_pump_registered", "heat_pump_solar_boost",
@@ -532,6 +534,9 @@ CORE_BY_DECISION: Mapping[tuple[str, str], str] = {
     ("switch", "simulation_tab"): (
         "the Simulation tab replays recorded days with a battery of any size; "
         "a house without one asks what one would save (#1083)"),
+    ("switch", "assist_write_intents_enabled"): (
+        "gates a voice write-intent, not a hardware module — every install "
+        "runs Assist or none (#1086)"),
     # (#996) Tell-tales: a flat tariff or a missing forecast stays visible.
     ("sensor", "forecast_source"): "says 'none' when there is no forecast — the tell-tale",
     ("binary_sensor", "forecast_available"): "off when there is no forecast — the tell-tale",

@@ -10,9 +10,9 @@
   ],
   "schema": 1,
   "install_floor": 50,
-  "roster_rows": 202,
-  "domains_with_roles": 67,
-  "roles_mined": 191,
+  "roster_rows": 203,
+  "domains_with_roles": 69,
+  "roles_mined": 194,
   "unnamed_over_floor": 136,
   "top_gap": [
     "homematicip_local",

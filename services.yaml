@@ -690,6 +690,57 @@ stop_battery_boost:
   name: Stop the battery boost
   description: (#1025) End the running battery boost.
 
+plan_override:
+  name: Override a device for one night
+  description: >-
+    (#1085) Change what one battery or charger does, for this many minutes
+    only — then it reverts, even across a restart. The standing mode is
+    not changed.
+  fields:
+    device_id:
+      name: Device
+      description: "The battery or charger's id, as in SEM's configuration."
+      required: true
+      selector:
+        text:
+    action:
+      name: Action
+      description: "skip (don't run), force (run now), cap or move (stored, not yet acted on)."
+      required: true
+      selector:
+        select:
+          options:
+            - skip
+            - cap
+            - move
+            - force
+    minutes:
+      name: For
+      description: "How long the override holds, in minutes."
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 1440
+          unit_of_measurement: min
+    value:
+      name: Value
+      description: "A number the action needs (unused today)."
+      required: false
+      selector:
+        number:
+
+plan_override_clear:
+  name: End a device's override
+  description: (#1085) End a device's override now, before its time is up.
+  fields:
+    device_id:
+      name: Device
+      description: "The battery or charger's id, as in SEM's configuration."
+      required: true
+      selector:
+        text:
+
 set_charger_departure:
   name: Set a charger's departure plan
   description: >-

@@ -454,6 +454,7 @@
           "vehicle_soc_entity": "Ajoneuvon akun SOC-anturi (valinnainen)",
           "vehicle_range_entity": "Ajoneuvon toimintamatka-anturi",
           "ev_kwh_per_100km": "Ajoneuvon kulutus (kWh/100km)",
+          "departure_calendar_entity": "Lähtökalenteri",
           "ev_target_soc": "Katso täydeksi kohdassa (%)",
           "ev_battery_capacity_kwh": "Sähköauton akun kapasiteetti (kWh)",
           "initial_current": "Aloitusvirta (A)",
@@ -520,6 +521,7 @@
           "vehicle_soc_entity": "Ajoneuvon akun SOC-anturi (valinnainen)",
           "vehicle_range_entity": "Ajoneuvon toimintamatka-anturi",
           "ev_kwh_per_100km": "Ajoneuvon kulutus (kWh/100km)",
+          "departure_calendar_entity": "Lähtökalenteri",
           "ev_target_soc": "Katso täydeksi kohdassa (%)",
           "ev_battery_capacity_kwh": "Sähköauton akun kapasiteetti (kWh)",
           "initial_current": "Aloitusvirta (A)",
@@ -1216,6 +1218,9 @@
       "heat_pump_mode": {
         "name": "Lämpöpumpun tila"
       },
+      "heat_pump_cost_of_heat": {
+        "name": "Lämpöpumpun lämmön hinta"
+      },
       "heat_pump_registration_status": {
         "name": "Lämpöpumpun rekisteröinnin tila"
       },
@@ -1619,6 +1624,9 @@
       "export_guard_enabled": {
         "name": "Vientivahti"
       },
+      "assist_write_intents_enabled": {
+        "name": "Äänikomennot"
+      },
       "export_guard_override_external": {
         "name": "Vientivahti: ohita ulkoinen ohjaus"
       },
@@ -1680,6 +1688,9 @@
       },
       "heat_pump_boost_offset": {
         "name": "Lämpöpumpun boost-poikkeama"
+      },
+      "heat_pump_cop": {
+        "name": "Lämpöpumpun COP"
       },
       "system_size_kwp": {
         "name": "PV-järjestelmän koko"

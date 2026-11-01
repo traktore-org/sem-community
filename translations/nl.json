@@ -454,6 +454,7 @@
           "vehicle_soc_entity": "Voertuig-batterij-SOC-sensor (optioneel)",
           "vehicle_range_entity": "Voertuig-bereiksensor",
           "ev_kwh_per_100km": "Voertuigverbruik (kWh/100km)",
+          "departure_calendar_entity": "Vertrekkalender",
           "ev_target_soc": "Beschouw als vol bij (%)",
           "ev_battery_capacity_kwh": "EV-batterijcapaciteit (kWh)",
           "initial_current": "Startstroom (A)",
@@ -520,6 +521,7 @@
           "vehicle_soc_entity": "Voertuig-batterij-SOC-sensor (optioneel)",
           "vehicle_range_entity": "Voertuig-bereiksensor",
           "ev_kwh_per_100km": "Voertuigverbruik (kWh/100km)",
+          "departure_calendar_entity": "Vertrekkalender",
           "ev_target_soc": "Beschouw als vol bij (%)",
           "ev_battery_capacity_kwh": "EV-batterijcapaciteit (kWh)",
           "initial_current": "Startstroom (A)",
@@ -1216,6 +1218,9 @@
       "heat_pump_mode": {
         "name": "Warmtepomp Modus"
       },
+      "heat_pump_cost_of_heat": {
+        "name": "Warmtepomp warmtekosten"
+      },
       "heat_pump_registration_status": {
         "name": "Warmtepomp Registratie Status"
       },
@@ -1619,6 +1624,9 @@
       "export_guard_enabled": {
         "name": "Exportwaker"
       },
+      "assist_write_intents_enabled": {
+        "name": "Spraakopdrachten"
+      },
       "export_guard_override_external": {
         "name": "Exportwaker: externe sturing negeren"
       },
@@ -1680,6 +1688,9 @@
       },
       "heat_pump_boost_offset": {
         "name": "Warmtepomp Boost-offset"
+      },
+      "heat_pump_cop": {
+        "name": "Warmtepomp COP"
       },
       "system_size_kwp": {
         "name": "PV-systeemgrootte"

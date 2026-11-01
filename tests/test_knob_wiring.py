@@ -29,8 +29,13 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 _LOGIC_ROOTS = ["coordinator", "features", "devices", "tariff", "utils", "consts"]
 
 # Keys intentionally consumed somewhere the loose grep can't see (e.g. only
-# through dynamic config dict iteration). Empty today — add with a reason.
-_ALLOWED_NO_READER: set[str] = set()
+# through dynamic config dict iteration). Add with a reason.
+_ALLOWED_NO_READER: set[str] = {
+    # (#1086) read in assist_intents.py, a top-level module like sensor.py/
+    # switch.py — outside _LOGIC_ROOTS by design (it is Assist glue, not
+    # decision logic), not a dead knob.
+    "assist_write_intents_enabled",
+}
 
 
 def _logic_blob() -> str:

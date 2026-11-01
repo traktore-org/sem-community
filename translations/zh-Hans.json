@@ -454,6 +454,7 @@
           "vehicle_soc_entity": "车辆电池电量 (SOC) 传感器（可选）",
           "vehicle_range_entity": "车辆续航里程传感器",
           "ev_kwh_per_100km": "车辆百公里能耗 (kWh/100km)",
+          "departure_calendar_entity": "出发日历",
           "ev_target_soc": "达到此值视为充满 (%)",
           "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
           "initial_current": "起始电流 (A)",
@@ -520,6 +521,7 @@
           "vehicle_soc_entity": "车辆电池电量 (SOC) 传感器（可选）",
           "vehicle_range_entity": "车辆续航里程传感器",
           "ev_kwh_per_100km": "车辆百公里能耗 (kWh/100km)",
+          "departure_calendar_entity": "出发日历",
           "ev_target_soc": "达到此值视为充满 (%)",
           "ev_battery_capacity_kwh": "电动汽车电池容量 (kWh)",
           "initial_current": "起始电流 (A)",
@@ -1216,6 +1218,9 @@
       "heat_pump_mode": {
         "name": "热泵模式"
       },
+      "heat_pump_cost_of_heat": {
+        "name": "热泵热量成本"
+      },
       "heat_pump_registration_status": {
         "name": "热泵注册状态"
       },
@@ -1619,6 +1624,9 @@
       "export_guard_enabled": {
         "name": "出口守护"
       },
+      "assist_write_intents_enabled": {
+        "name": "语音指令"
+      },
       "export_guard_override_external": {
         "name": "出口守护：覆盖外部调度"
       },
@@ -1680,6 +1688,9 @@
       },
       "heat_pump_boost_offset": {
         "name": "热泵增强运行偏置"
+      },
+      "heat_pump_cop": {
+        "name": "热泵能效系数(COP)"
       },
       "system_size_kwp": {
         "name": "光伏系统装机容量 (kWp)"
