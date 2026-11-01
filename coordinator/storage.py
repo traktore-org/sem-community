@@ -8,6 +8,7 @@ Uses two storage strategies:
 from __future__ import annotations
 
 import logging
+import math
 import time
 from datetime import datetime
 from typing import Dict, Any, Optional, Callable
@@ -18,6 +19,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from ..const import DOMAIN
+from ..consts.core import MAX_PLAUSIBLE_DAILY_KWH
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -50,6 +52,28 @@ DAY_TAGS_MAX = 400
 # a year of rows is ~75 KB, three runs ~220 KB).
 SIMULATION_RUNS_MAX = 3
 SIMULATION_RUN_DAYS_MAX = 365
+
+# (#563, #1295) The rows the load check repairs, each with the largest value
+# it can hold. A value above it was read in the wrong unit (Wh as kWh) and is
+# dropped. A year holds 366 days at the daily ceiling: a large solar array
+# passes 100 MWh in a year. ``None`` = no fixed bound:
+# * a lifetime total follows meters that count since they were fitted — a
+#   Dutch P1 import counter read 122,342 kWh (#1294). Dropped at each restart,
+#   the seed rebuilt the home from the import step alone. The seed compares
+#   each lifetime total with its own counter instead (#551).
+# * a cost row is money: a year in yen or forint, a month in rupiah, passes
+#   100,000 in a normal home.
+# A new row must be listed here; a test checks every calculator row is.
+ACCUMULATOR_ROW_BOUNDS: Dict[str, Optional[float]] = {
+    "accumulators": 100_000.0,
+    "daily_accumulators": 100_000.0,
+    "monthly_accumulators": 100_000.0,
+    "yearly_accumulators": 366 * MAX_PLAUSIBLE_DAILY_KWH,
+    "lifetime_accumulators": None,
+    "daily_cost_accumulators": None,
+    "monthly_cost_accumulators": None,
+    "yearly_cost_accumulators": None,
+}
 
 # (#668) The keys of ``EnergyCalculator.get_state()`` that this layer carries.
 #
@@ -145,6 +169,9 @@ CALCULATOR_STATE_KEYS: tuple[str, ...] = (
     # (#1245) the battery sale's history was read into its rows. Lost, every
     # restart would ask the recorder again.
     "sale_history_read",
+    # (#1295) a seed checked the lifetime home for the old 100 MWh bound.
+    # Lost, every restart would rebuild the home from the counters again.
+    "lifetime_home_checked",
 )
 
 
@@ -258,18 +285,14 @@ class SEMStorage:
         offending accumulator: #563 proved the all-or-nothing version
         destroyed data — one ×1000-inflated lifetime counter (pre-#551
         Wh-as-kWh reads) tripped the 100 MWh cap on the upgrade restart
-        and wiped every daily/monthly/cost accumulator with it. Dropped
-        lifetime entries are re-seeded from hardware counters by the
-        energy calculator; daily/monthly entries rebuild naturally.
+        and wiped every daily/monthly/cost accumulator with it. Since
+        #1295 a lifetime total has no fixed bound (a meter can count past
+        100 MWh): the seed checks it against its own counter.
         """
         if not isinstance(data, dict):
             return False
 
-        if not SEMStorage._repair_accumulator_dicts(
-            data,
-            ("accumulators", "daily_accumulators", "monthly_accumulators",
-             "yearly_accumulators", "lifetime_accumulators"),
-        ):
+        if not SEMStorage._repair_accumulator_dicts(data):
             return False
 
         # Validate last_update timestamp if present
@@ -288,28 +311,23 @@ class SEMStorage:
         per-entry repair semantics as ``_validate_energy_data``.
         ``solar_counter_baselines`` (#556) is deliberately NOT in the
         whitelist — it holds nested dicts and a date string, which the
-        numeric-value repair would mangle."""
+        numeric-value repair would mangle. The rows checked and their
+        bounds are ``ACCUMULATOR_ROW_BOUNDS``."""
         if not isinstance(data, dict):
             return False
-        return SEMStorage._repair_accumulator_dicts(
-            data,
-            ("daily_accumulators", "monthly_accumulators",
-             "yearly_accumulators", "lifetime_accumulators",
-             "daily_cost_accumulators", "monthly_cost_accumulators",
-             "yearly_cost_accumulators"),
-        )
+        return SEMStorage._repair_accumulator_dicts(data)
 
     @staticmethod
-    def _repair_accumulator_dicts(data: Dict[str, Any], acc_keys) -> bool:
-        """Per-entry repair of accumulator dicts inside ``data``.
+    def _repair_accumulator_dicts(data: Dict[str, Any]) -> bool:
+        """Per-entry repair of the accumulator rows inside ``data``.
 
-        Returns False only on STRUCTURAL corruption (an accumulator
-        container that is not a dict). Bad entries are repaired in
-        place: non-numeric and >100 MWh values are dropped (dropped
-        lifetime entries get re-seeded from hardware counters by the
-        energy calculator; daily/monthly rebuild naturally), negative
-        daily values are clamped to 0."""
-        for acc_key in acc_keys:
+        Every row of ``ACCUMULATOR_ROW_BOUNDS`` the store holds is checked.
+        Returns False only on STRUCTURAL corruption (a row that is not a
+        dict). Bad entries are repaired in place: a value that is no finite
+        number is dropped, and so is one above its row's bound (day, month
+        and year rebuild; lifetime and cost rows have no bound, #1295).
+        Negative daily values are clamped to 0."""
+        for acc_key, bound in ACCUMULATOR_ROW_BOUNDS.items():
             accumulators = data.get(acc_key)
             if accumulators is None:
                 continue
@@ -318,19 +336,19 @@ class SEMStorage:
                 return False
             dropped = []
             for key, value in accumulators.items():
-                if not isinstance(value, (int, float)):
+                if (not isinstance(value, (int, float))
+                        or isinstance(value, bool) or not math.isfinite(value)):
                     _LOGGER.warning(
                         "Non-numeric accumulator %s.%s=%s — dropping entry",
                         acc_key, key, value,
                     )
                     dropped.append(key)
                     continue
-                # Sane range: no single accumulator should exceed 100 MWh
-                if abs(value) > 100_000:
+                if bound is not None and abs(value) > bound:
                     _LOGGER.warning(
-                        "Accumulator %s.%s=%.1f kWh exceeds 100 MWh limit — "
-                        "dropping entry (rest of the store is kept)",
-                        acc_key, key, value,
+                        "Accumulator %s.%s=%.1f kWh exceeds the %.0f kWh "
+                        "limit — dropping entry (rest of the store is kept)",
+                        acc_key, key, value, bound,
                     )
                     dropped.append(key)
                     continue

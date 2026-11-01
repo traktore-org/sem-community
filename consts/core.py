@@ -102,6 +102,14 @@ CAPABILITY_MISS_CONFIRM_READS: Final = 6
 CAPABILITY_MISS_HOLD_S: Final = 600.0
 BATTERY_POWER_PLAUSIBLE_MAX_W: Final = 100_000.0  # no home battery; 22.8 MW was 2 000x the hardware
 
+# Sanity ceiling for one day of a metered category (#628). Solar, battery and
+# EV have physical bounds to check against (kWp × 16 h, 3 × the battery size,
+# chargers × amps × 24 h — see ``EnergyCalculator._daily_ceiling``); grid does
+# not, so this is a pure unit-error trap — a Wh register read as kWh is 1000×
+# out. No residential install imports or exports 1 MWh in a day. (#1295) The
+# store's bound on a year's row is 366 days of it.
+MAX_PLAUSIBLE_DAILY_KWH: Final = 1000.0
+
 # (#988) How much energy must be leaving the house with no source other than
 # the sun before a solar reading of 0 W is refused as a measurement. The
 # Huawei feed on the reference install drops ~273 times a day and only some
