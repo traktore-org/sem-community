@@ -1,7 +1,7 @@
 """Tests for yearly sensor seeding from HA recorder statistics."""
 import pytest
 from datetime import datetime
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock, patch
 
 from custom_components.solar_energy_management.coordinator.energy_calculator import (
     EnergyCalculator,
@@ -95,7 +95,7 @@ class TestYearlySeeding:
                                  batt_charge=150, batt_discharge=120, ev=80)
 
         mock_module = MagicMock()
-        mock_module.statistics_during_period = AsyncMock(return_value=stats)
+        mock_module.statistics_during_period = MagicMock(return_value=stats)
         with patch.dict("sys.modules", {
             "homeassistant.components.recorder": MagicMock(),
             "homeassistant.components.recorder.statistics": mock_module,
@@ -122,7 +122,7 @@ class TestYearlySeeding:
         stats = _make_full_stats(solar=500, grid_import=300, grid_export=200,
                                  batt_charge=150, batt_discharge=120, ev=80)
         mock_module = MagicMock()
-        mock_module.statistics_during_period = AsyncMock(return_value=stats)
+        mock_module.statistics_during_period = MagicMock(return_value=stats)
         with patch.dict("sys.modules", {
             "homeassistant.components.recorder": MagicMock(),
             "homeassistant.components.recorder.statistics": mock_module,
@@ -213,7 +213,7 @@ class TestYearlySeeding:
                                  batt_charge=100, batt_discharge=30, ev=0)
 
         mock_module = MagicMock()
-        mock_module.statistics_during_period = AsyncMock(return_value=stats)
+        mock_module.statistics_during_period = MagicMock(return_value=stats)
         with patch.dict("sys.modules", {
             "homeassistant.components.recorder": MagicMock(),
             "homeassistant.components.recorder.statistics": mock_module,

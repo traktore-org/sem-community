@@ -2003,14 +2003,6 @@ class EnergyCalculator:
             _LOGGER.debug("Yearly accumulators already have %.1f kWh, skipping seed", current_total)
             return
 
-        try:
-            from homeassistant.components.recorder.statistics import (
-                statistics_during_period,
-            )
-        except ImportError:
-            _LOGGER.debug("Recorder not available for yearly seeding")
-            return
-
         # Category → every Energy Dashboard counter of it (#1043: all tariffs
         # and inverters, not the first one).
         category_counters = {
@@ -2036,12 +2028,13 @@ class EnergyCalculator:
         if sale_id and sale_id not in entity_ids:
             entity_ids.append(sale_id)
 
-        try:
-            stats = await statistics_during_period(
-                hass, start_time, None, entity_ids, "hour", RECORDER_UNITS, {"sum"}
-            )
-        except Exception as e:
-            _LOGGER.warning("Failed to query recorder statistics for yearly seeding: %s", e)
+        # (#1291) the query is sync database work: it runs on the recorder's
+        # own thread, never awaited on the loop
+        stats = await self._recorder_stats(
+            hass, start_time, set(entity_ids), "hour", {"sum"}
+        )
+        if stats is None:
+            _LOGGER.warning("Failed to query recorder statistics for yearly seeding")
             return
 
         if not stats:
@@ -2101,14 +2094,10 @@ class EnergyCalculator:
                     ev_stats = stats.get(energy_sensor, [])
                     if not ev_stats:
                         # Try querying separately
-                        try:
-                            ev_result = await statistics_during_period(
-                                hass, start_time, None, [energy_sensor], "hour",
-                                RECORDER_UNITS, {"sum"},
-                            )
-                            ev_stats = ev_result.get(energy_sensor, [])
-                        except Exception:
-                            pass
+                        ev_result = await self._recorder_stats(
+                            hass, start_time, {energy_sensor}, "hour", {"sum"}
+                        )
+                        ev_stats = (ev_result or {}).get(energy_sensor, [])
                     if len(ev_stats) >= 2:
                         last_ev = ev_stats[-1].get("sum") if ev_stats[-1].get("sum") is not None else 0
                         first_ev = ev_stats[0].get("sum") if ev_stats[0].get("sum") is not None else 0

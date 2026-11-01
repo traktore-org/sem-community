@@ -453,7 +453,7 @@ def test_every_recorder_query_asks_energy_in_kwh():
             else:
                 continue
             calls.append((str(path.relative_to(root)), node.lineno, units))
-    assert len(calls) >= 6, calls
+    assert len(calls) >= 4, calls
     wrong = [c for c in calls if c[2] != "RECORDER_UNITS"]
     assert not wrong, wrong
 
