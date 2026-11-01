@@ -1619,6 +1619,12 @@ not already manage — a box you have already configured is never offered a
 second time, so the suggestions are always for the *new* charger. If nothing
 was discovered the fields come up empty; fill them in by hand.
 
+**How do I change a charger's sensors later?**
+
+Use **Configure**. **Reconfigure** changes only the first charger. For a
+charger you added in the charger list, it leaves the charger fields off and
+tells you to use **Configure**.
+
 **A wrong entity was auto-detected — how do I remove it?**
 
 Clear the field and save. Optional pickers (start/stop switch, current
