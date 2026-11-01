@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 🐛 **The wallbox text no longer shows "Bat 0%" before the battery level is read** (#1288). It shows "Wait: Bat" until then.
 - 🐛 **A new install fills this year's totals from Home Assistant's history** (#1291). The seed asked the recorder the wrong way and never ran.
+- 🐛 **Power and energy charts show the right size for sensors kept in kW or MWh** (#1292). They were drawn a thousand times off.
 - 🐛 **Old battery sales no longer count as solar in this year's and the lifetime CO2 avoided** (#1245). SEM reads them once from Home Assistant's history.
 - 🐛 **With the energy plan on, a car no longer charges for a few minutes between its planned blocks** (#1282).
 - 🐛 **A device with its own tariff books all its kWh when its meter moves in 0.1 kWh steps or every few minutes** (#1230).
