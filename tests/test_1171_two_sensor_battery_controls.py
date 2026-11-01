@@ -400,6 +400,8 @@ DECLARED_READERS = {
         "the raw list, dumped beside the pairs",
     ("coordinator/coordinator.py", "_configured_entity_ids"):
         "entities in use, read beside the pairs",
+    ("coordinator/battery_sensor_check.py", "_wired"):
+        "(#1256) lists every dashboard row that is gone, pairs and combined alike",
 }
 
 

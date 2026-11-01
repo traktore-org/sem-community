@@ -2053,6 +2053,23 @@
       "title": "No power sensor for {energy_entity}",
       "description": "The Energy Dashboard counts **{energy_entity}** in kWh, but SEM found no power sensor (W) for it. SEM adds up only the other solar or battery entries, so the energy flows and the surplus are wrong. To fix it, add the power sensor to this entry in the Energy Dashboard. If there is no power sensor, you can ignore this notice."
     },
+    "power_sensor_not_found_fixable": {
+      "title": "No power sensor for {energy_entity}",
+      "fix_flow": {
+        "step": {
+          "pick": {
+            "title": "Replace a missing battery sensor ({position})",
+            "description": "SEM depends on these battery sensors and controls, and they are missing or unavailable:\n\n{missing}\n\nPick a sensor for **{old}**, or leave it empty to keep it. The battery keeps its SEM settings (reserve SOC, mode and the rest). If the Energy Dashboard still names the old sensor, change it there too.",
+            "data": {
+              "replacement": "Replacement"
+            }
+          }
+        },
+        "abort": {
+          "nothing_chosen": "No replacement was picked, so nothing changed."
+        }
+      }
+    },
     "half_grid_pair": {
       "title": "SEM does not see your grid export",
       "description": "Only the grid import sensor **{import_entity}** is set, so SEM reads grid export as 0 W. But your export counter **{export_entity}** shows power went to the grid. To fix it, open the SEM dashboard, tab ⚙ **Configuration**, and pick **All settings** at the top. Then set **Grid export sensor** in section **Tariff & pricing**. Or clear **Grid import sensor**, and SEM looks for the pair itself."

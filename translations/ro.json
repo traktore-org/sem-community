@@ -2053,6 +2053,23 @@
       "title": "Niciun senzor de putere pentru {energy_entity}",
       "description": "Panoul Energie numără **{energy_entity}** în kWh, dar SEM nu a găsit niciun senzor de putere (W) pentru el. SEM adună deci doar celelalte intrări solare sau de baterie, iar fluxurile de energie și surplusul sunt greșite. Pentru a remedia, adăugați senzorul de putere la această intrare din panoul Energie. Dacă nu există niciun senzor de putere, puteți ignora această notificare."
     },
+    "power_sensor_not_found_fixable": {
+      "title": "Niciun senzor de putere pentru {energy_entity}",
+      "fix_flow": {
+        "step": {
+          "pick": {
+            "title": "Înlocuiește un senzor de baterie lipsă ({position})",
+            "description": "SEM are nevoie de acești senzori și comenzi ale bateriei, dar lipsesc sau nu sunt disponibili:\n\n{missing}\n\nAlege un senzor pentru **{old}** sau lasă gol ca să îl păstrezi. Bateria își păstrează setările SEM (SOC de rezervă, modul și restul). Dacă panoul Energie încă numește senzorul vechi, schimbă-l și acolo.",
+            "data": {
+              "replacement": "Înlocuitor"
+            }
+          }
+        },
+        "abort": {
+          "nothing_chosen": "Nu a fost ales niciun înlocuitor, deci nimic nu s-a schimbat."
+        }
+      }
+    },
     "half_grid_pair": {
       "title": "SEM nu vede exportul în rețea",
       "description": "Doar senzorul de import din rețea **{import_entity}** este setat, deci SEM citește exportul ca 0 W. Dar contorul dvs. de export **{export_entity}** arată că s-a trimis energie în rețea. Pentru a remedia, deschideți tabloul SEM, fila ⚙ **Configurare**, și alegeți **Toate setările** din partea de sus. Apoi setați **Senzor export rețea** în secțiunea **Tarif și prețuri**. Sau goliți **Senzor import rețea**, iar SEM caută singur perechea."

@@ -336,6 +336,8 @@ _ALLOWED = {
     "coordinator/install_modules.py",
     # (#1195) moves the saved list with its battery; sends nothing
     "coordinator/battery_controls.py",
+    # (#1256) lists the wired entities that are gone; re-points, sends nothing
+    "coordinator/battery_sensor_check.py",
 }
 
 

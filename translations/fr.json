@@ -2053,6 +2053,23 @@
       "title": "Aucun capteur de puissance pour {energy_entity}",
       "description": "Le tableau de bord Énergie compte **{energy_entity}** en kWh, mais SEM n'a trouvé aucun capteur de puissance (W) pour lui. SEM n'additionne donc que les autres entrées solaires ou de batterie, et les flux d'énergie et le surplus sont faux. Pour corriger, ajoutez le capteur de puissance à cette entrée du tableau de bord Énergie. S'il n'existe aucun capteur de puissance, vous pouvez ignorer cet avis."
     },
+    "power_sensor_not_found_fixable": {
+      "title": "Aucun capteur de puissance pour {energy_entity}",
+      "fix_flow": {
+        "step": {
+          "pick": {
+            "title": "Remplacer un capteur de batterie manquant ({position})",
+            "description": "SEM a besoin de ces capteurs et commandes de batterie, mais ils sont absents ou indisponibles :\n\n{missing}\n\nChoisissez un capteur pour **{old}**, ou laissez vide pour le garder. La batterie garde ses réglages SEM (SOC de réserve, mode et le reste). Si le tableau de bord Énergie nomme encore l'ancien capteur, changez-le aussi là.",
+            "data": {
+              "replacement": "Remplacement"
+            }
+          }
+        },
+        "abort": {
+          "nothing_chosen": "Aucun remplacement choisi, rien n'a changé."
+        }
+      }
+    },
     "half_grid_pair": {
       "title": "SEM ne voit pas votre export réseau",
       "description": "Seul le capteur d'import réseau **{import_entity}** est réglé, donc SEM lit l'export comme 0 W. Mais votre compteur d'export **{export_entity}** montre que de l'énergie est partie vers le réseau. Pour corriger, ouvrez le tableau de bord SEM, onglet ⚙ **Configuration**, et choisissez **Tous les réglages** en haut. Puis réglez le **Capteur d'export réseau** dans la section **Tarif & prix**. Ou videz le **Capteur d'import réseau**, et SEM cherchera la paire lui-même."

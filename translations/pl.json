@@ -2053,6 +2053,23 @@
       "title": "Brak czujnika mocy dla {energy_entity}",
       "description": "Pulpit Energia liczy **{energy_entity}** w kWh, ale SEM nie znalazł dla niego czujnika mocy (W). SEM sumuje więc tylko pozostałe wpisy solarne lub baterii, a przepływy energii i nadwyżka są błędne. Aby to naprawić, dodaj czujnik mocy do tego wpisu w pulpicie Energia. Jeśli czujnik mocy nie istnieje, możesz zignorować to powiadomienie."
     },
+    "power_sensor_not_found_fixable": {
+      "title": "Brak czujnika mocy dla {energy_entity}",
+      "fix_flow": {
+        "step": {
+          "pick": {
+            "title": "Zastąp brakujący czujnik baterii ({position})",
+            "description": "SEM potrzebuje tych czujników i elementów sterowania baterii, ale ich brakuje lub są niedostępne:\n\n{missing}\n\nWybierz czujnik dla **{old}** albo zostaw puste, aby go zachować. Bateria zachowuje swoje ustawienia SEM (rezerwowy SOC, tryb i resztę). Jeśli panel Energia nadal wskazuje stary czujnik, zmień go także tam.",
+            "data": {
+              "replacement": "Zamiennik"
+            }
+          }
+        },
+        "abort": {
+          "nothing_chosen": "Nie wybrano zamiennika, więc nic się nie zmieniło."
+        }
+      }
+    },
     "half_grid_pair": {
       "title": "SEM nie widzi Twojego oddawania do sieci",
       "description": "Ustawiony jest tylko czujnik importu z sieci **{import_entity}**, więc SEM odczytuje eksport jako 0 W. Ale Twój licznik eksportu **{export_entity}** pokazuje, że energia popłynęła do sieci. Aby to naprawić, otwórz pulpit SEM, kartę ⚙ **Konfiguracja**, i wybierz u góry **Wszystkie ustawienia**. Następnie ustaw **Czujnik eksportu do sieci** w sekcji **Taryfa i ceny**. Albo wyczyść **Czujnik importu z sieci**, a SEM sam poszuka pary."

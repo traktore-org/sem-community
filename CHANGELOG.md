@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ✨ **Ask Assist to skip or force charge for one night, or go back to normal** (#1086). Off by default, like the other voice commands.
 - ✨ **Pause or force a battery or charger for a set time** (#1085). It survives a restart and ends on its own.
 - 🔧 **Setup now knows the price sensor of Tibber, Tibber Prices and ENTSO-e by its own name** (#1168). Nothing reads it yet.
+- 🐛 **A battery's settings rejoin it when its sensor returns** (#1256). The missing-sensor Repair lists all missing battery sensors and lets you pick replacements.
 - 🐛 **The wallbox text no longer shows "Bat 0%" before the battery level is read** (#1288). It shows "Wait: Bat" until then.
 - 🐛 **A new install fills this year's totals from Home Assistant's history** (#1291). The seed asked the recorder the wrong way and never ran.
 - 🐛 **Power and energy charts show the right size for sensors kept in kW or MWh** (#1292). They were drawn a thousand times off.
