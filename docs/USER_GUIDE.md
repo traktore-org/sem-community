@@ -782,6 +782,9 @@ Two switches, and they are deliberately separate rather than one setting:
 - **Battery may sell to the grid** — off: SEM does not sell on a high price
   or from the forecast budget. *Force Discharge* still sells; it is a manual
   order.
+  With more than one battery, the planned sale goes only to the batteries
+  that may sell. One in **Self-Consumption** mode, or with this switch off,
+  gets none of it.
 - **Battery may charge the car** — off: no charger is offered battery power,
   and while a car is plugged in the battery is held to the house, even when
   full and in the sun.
