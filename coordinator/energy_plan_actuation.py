@@ -71,6 +71,9 @@ class PlanGate:
     in_block: bool = False
     block_power_w: float = 0.0
     remaining_kwh: float = 0.0
+    # (#1290) The same blocks in hours: a load's wait counts runtime, so it
+    # needs no rating of its own.
+    remaining_h: float = 0.0
     next_block_start: Optional[datetime] = None
     # (#638 Stage 2) When the NEXT of this demand's blocks opens — None
     # inside a block or when none remain. The verdict's ``until``, the
@@ -170,6 +173,7 @@ def plan_gate(plan: Optional[dict], demand_id: str, now: datetime) -> PlanGate:
         in_block = False
         block_power = 0.0
         remaining = 0.0
+        remaining_h = 0.0
         next_start = None
         for b in plan.get("blocks") or []:
             if b.get("id") != demand_id:
@@ -203,9 +207,11 @@ def plan_gate(plan: Optional[dict], demand_id: str, now: datetime) -> PlanGate:
             left_h = (end - max(start, now)).total_seconds() / 3600.0
             if left_h > 0:
                 remaining += power / 1000.0 * left_h
+                remaining_h += left_h
         return PlanGate(covered=True, in_block=in_block,
                         block_power_w=block_power,
                         remaining_kwh=round(remaining, 6),
+                        remaining_h=round(remaining_h, 6),
                         next_block_start=None if in_block else next_start)
     except (TypeError, ValueError, KeyError, IndexError):
         return PlanGate(reason="unreadable plan")
@@ -292,7 +298,8 @@ def ev_overlay(
     return (False, 0)
 
 
-def load_verdict(gate: PlanGate, *, deficit_kwh: float):
+def load_verdict(gate: PlanGate, *, deficit_kwh: float,
+                 deficit_h: Optional[float] = None):
     """(#638 Stage 3) The load-side verdict, in the same PlanVerdict shape
     the EV decision consumes — loads graduate from a bare window bool to a
     hold that carries its reason and its ``until``.
@@ -308,7 +315,12 @@ def load_verdict(gate: PlanGate, *, deficit_kwh: float):
     if gate.in_block:
         return PlanVerdict(hold=False, in_block=True,
                            reason="joint energy plan: in planned block")
-    if not blocks_hold(gate.remaining_kwh, deficit_kwh):
+    # (#1290) With the deficit in hours, compare hours: the plan sized the
+    # blocks with the rating of planning time, the rating now may be higher.
+    if deficit_h is not None:
+        if not blocks_hold(gate.remaining_h, deficit_h):
+            return NO_OPINION
+    elif not blocks_hold(gate.remaining_kwh, deficit_kwh):
         return NO_OPINION
     when = (f" — block opens at {gate.next_block_start:%H:%M}"
             if gate.next_block_start else "")
@@ -320,7 +332,8 @@ def load_verdict(gate: PlanGate, *, deficit_kwh: float):
 
 
 def merge_load_gates(load_gate: PlanGate, comfort_gate: PlanGate,
-                     *, deficit_kwh: float):
+                     *, deficit_kwh: float,
+                     deficit_h: Optional[float] = None):
     """(#638 C5) One device, two demands — the merged verdict.
 
     A device carries its runtime deficit (``load:``) and its comfort
@@ -338,7 +351,8 @@ def merge_load_gates(load_gate: PlanGate, comfort_gate: PlanGate,
                            reason="joint energy plan: in planned block")
     holds = []
     if load_gate.covered:
-        lv = load_verdict(load_gate, deficit_kwh=deficit_kwh)
+        lv = load_verdict(load_gate, deficit_kwh=deficit_kwh,
+                          deficit_h=deficit_h)
         if not lv.hold:
             # The load half failed open — no hold may stand over the
             # device's reactive deficit run.

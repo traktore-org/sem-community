@@ -11186,14 +11186,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # The collector used to ask only load:, so a comfort block
                 # could never reach its device. merge_load_gates carries
                 # the rules; absence == no say, exactly as before.
-                deficit_kwh = (max(0.0, float(getattr(dev, "daily_min_runtime_sec", 0) or 0)
-                                   - float(getattr(dev, "_daily_runtime_accumulated_sec", 0) or 0))
-                               / 3600.0
+                deficit_h = (max(0.0, float(getattr(dev, "daily_min_runtime_sec", 0) or 0)
+                                 - float(getattr(dev, "_daily_runtime_accumulated_sec", 0) or 0))
+                             / 3600.0)
+                deficit_kwh = (deficit_h
                                * float(getattr(dev, "rated_power", 0.0) or 0.0) / 1000.0)
                 verdict = merge_load_gates(
                     self._energy_plan_gate(f"load:{did}", now),
                     self._energy_plan_gate(f"comfort:{did}", now),
-                    deficit_kwh=deficit_kwh)
+                    deficit_kwh=deficit_kwh, deficit_h=deficit_h)
                 if verdict is not None:
                     windows[did] = verdict
             except Exception:  # noqa: BLE001 — one odd device won't gate the rest
