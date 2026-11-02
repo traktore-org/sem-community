@@ -57,6 +57,10 @@ gives the entity to the next battery in line that held a write back, until
 one lands; a sale sent so marks ``_sale_sent`` by its own result. A sale
 held back behind a sale that landed went out with it. After the cycle each
 takes the writer's record.
+
+(#1179) The limit does not rise for a pack at its floor. Packs on one limit
+entity are judged as one there (``packs_judged_together``): one inverter
+may feed the house from one pack while the other rests.
 """
 from __future__ import annotations
 
@@ -168,6 +172,37 @@ def _set(adapter, attr: str, value) -> None:
         pass
 
 
+def packs_judged_together(rows: list) -> list:
+    """(#1179) Packs behind one limit entity are one pack to the limit's
+    floor rule (``actuate_battery._pack_at_floor``): idle only when every
+    one of them is idle, moving when any one moves. One inverter can feed
+    the house from one pack while the other rests, and the rest is no floor.
+
+    ``rows``: ``(battery_id, adapter, decision)``; returns them in the same
+    order, a decision changed only in its pack fields."""
+    from dataclasses import is_dataclass, replace
+    by_entity: dict = {}
+    for i, (_, ad, _) in enumerate(rows):
+        ent = limit_entity(ad)
+        if ent:
+            by_entity.setdefault(ent, []).append(i)
+    out = list(rows)
+    for idx in by_entity.values():
+        if len(idx) < 2:
+            continue
+        ds = [rows[i][2] for i in idx]
+        moves = any(getattr(d, "pack_moves", False) is True for d in ds)
+        idle = all(getattr(d, "pack_idle_soc", None) is not None for d in ds)
+        for i in idx:
+            bid, ad, d = rows[i]
+            if not is_dataclass(d):
+                continue
+            soc = d.pack_idle_soc if (idle and not moves) else None
+            if soc != d.pack_idle_soc or moves != d.pack_moves:
+                out[i] = (bid, ad, replace(d, pack_idle_soc=soc, pack_moves=moves))
+    return out
+
+
 def follow_writer(adapter, writer) -> None:
     """After the cycle: ``adapter`` did not write its shared limit, so it
     takes ``writer``'s record of it.
@@ -267,6 +302,7 @@ async def actuate_batteries(
         for _, ad, decision in rows:
             await send(decision, ad)
         return {}
+    rows = packs_judged_together(rows)
     ads = {bid: ad for bid, ad, _ in rows}
     wishes = {bid: wish_of(d, ad, inputs_degraded=inputs_degraded)
               for bid, ad, d in rows}

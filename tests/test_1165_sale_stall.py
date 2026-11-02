@@ -657,5 +657,19 @@ def test_the_check_is_handed_the_site_by_name():
              and n.func.attr == "_finish_manual_battery_modes"]
     assert len(calls) == 1, "the end check moved: update this guard"
     site = [k.value for k in calls[0].keywords if k.arg == "site"]
-    assert len(site) == 1 and isinstance(site[0], ast.Call)
+    assert len(site) == 1
+    if isinstance(site[0], ast.Name):
+        # (#1179) a local the views read too: every value it is given is
+        # the measurement, or no measurement at all
+        given = [n.value for n in ast.walk(_PIPELINE)
+                 if isinstance(n, ast.Assign)
+                 and any(isinstance(t, ast.Name) and t.id == site[0].id
+                         for t in n.targets)]
+        calls_of = [g for g in given if isinstance(g, ast.Call)]
+        assert calls_of and all(
+            ast.unparse(g.func) == "sale_stall_site" for g in calls_of)
+        assert all(isinstance(g, ast.Call) or (
+            isinstance(g, ast.Constant) and g.value is None) for g in given)
+        return
+    assert isinstance(site[0], ast.Call)
     assert ast.unparse(site[0].func) == "sale_stall_site"

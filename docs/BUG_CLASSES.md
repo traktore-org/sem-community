@@ -3756,6 +3756,35 @@ meter check 8, treating every limit in force as a house clamp 4. Swept: the expo
 guard (#955) already holds both ways (120 s / 300 s); charge pacing (#820) has a deadband both ways
 and a cap from the plan, not the house; the forced charge under the meter limit (#1069) must lower
 at once (class 59), so its raise wait is the only one it can have (assessed).
+**Round 3 (#1179) — a write the pack cannot follow.** PROD, 30.10 and 01.11.2026: the pack sat at
+20 % (its inverter's own end of discharge) and 0 W all evening, and the limit still moved 15–17
+times under the car clamp (1000 → 3000 → 1000 → 2500 → 750 …; some rises came a minute after a
+fall, so they were targets that round 2's wait does not hold). A pack at its floor sends nothing
+whatever the limit says, so each move is a write that does nothing. SEM cannot read that floor (the
+inverter's own setting; SEM's reserve may be another number). **Closure:** the actuator learns it
+from the pack. `decide_battery.pack_reading` carries what the pack showed on every decision
+(`pack_idle_soc`, `pack_moves`; left out of equality): idle is its own power within 100 W, its own
+SOC and power readings this cycle (`BatteryRuntime.soc_read` / `power_read`, from the pipeline's
+per-unit flags), and the home buying at least one step from the grid with at most 100 W of sun
+(`BatteryView.grid_and_sun`, the #1165 `sale_stall_site` measurement — the grid import, because the
+inverter covers the whole meter, car included). `actuate_battery._pack_at_floor` counts
+`DISCHARGE_LIMIT_FLOOR_CYCLES` (6, ~1 min) such cycles with a limit of at least one step in force;
+from then on the limit does not rise, targets included. It still falls, by #900's rule. The pack
+moving, its level two points from the count's start (one point is PROD's own 20/19 flicker), no
+limit of a step in force (the 0 W hold teaches nothing), another command, observer or a yield
+starts the count again; a cycle with no reading keeps it. Packs on one limit entity are judged as
+one (`battery_shared_limit.packs_judged_together`): one inverter may feed the house from one pack
+while the other rests. A wrong "floor" costs grid import, never the car: the limit only stays
+lower. **Guard:** `tests/test_1179_empty_pack_limit_holds.py` — every condition of the reading;
+the PROD evening on a real adapter writes the first clamp and one fall, against six or more writes
+with no reading; a house rise waits too; a fall still lands and does not rise back; each restart
+of the count; a one-point flicker keeps it; observer and yield forget it; packs on one entity; the
+real pipeline hands each battery its own flags and the site, and the whole chain holds a rise
+until the pack sends. **Left open:** a pack whose power sensor is stuck at 0 W while it discharges
+looks idle until its level moves two points (a sensor fault; the limit only stays lower). Swept:
+the #620 grid-funded clamp, the #879 hold, its cover, the blind release and the cars' share all
+write through this one branch, so the rule covers them; NORMAL writes the max once and is not a
+house-follower; the forced charge's room cap (#1069) moves a charge, which an empty pack can take.
 **Guard:** `tests/test_940_contactor_anticycle.py` — an **invariant oracle**, not a row test:
 4000 cycles of randomised desired states against a *coherent simulated relay* (SEM's own commands
 move it, plus a 2 %/cycle external flip, and `observed.enabled` reports it), asserting that no
