@@ -1830,6 +1830,9 @@ intensity sensor**. For now, CO₂ avoided still uses a fixed 0.128 kg per kWh;
 the live value is off by default. The sensor *CO2 Avoided Today* shows which
 sensor SEM found.
 
+If the sensor has a forecast, the Energy Plan card shows each slot's CO₂ when
+you hover it.
+
 ### PV health
 
 `sensor.sem_pv_health` says whether the plant does what the forecast said.
