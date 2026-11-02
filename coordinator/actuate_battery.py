@@ -191,24 +191,50 @@ def _settled_rise_w(raw_w: float, last_w: float, adapter) -> float:
     return last_w
 
 
+def _limit_entity_w(adapter):
+    """(#1179 review) What the adapter's discharge limit entity holds now,
+    in W, or ``None`` when there is none or it cannot be read."""
+    ent = getattr(adapter, "_discharge_control_entity", None)
+    hass = getattr(adapter, "_hass", None)
+    if not isinstance(ent, str) or not ent or hass is None:
+        return None
+    try:
+        from .units import power_state_to_watts
+        w = power_state_to_watts(hass.states.get(ent))
+        return None if w is None or w != w else float(w)
+    except Exception:  # noqa: BLE001 — a stand-in adapter reads nothing
+        return None
+
+
 def _pack_at_floor(decision, adapter, last_w: float, in_force: bool):
     """(#1179) The level this pack has shown its floor at, under the limit in
     force (``last_w``), or ``None`` while it has not.
 
     Keeps ``(soc, cycles)`` on the adapter as ``_pack_floor``. A cycle counts
-    when a limit of at least one step is in force and the decision shows the
-    pack idle (``pack_idle_soc``). The pack moving (``pack_moves``), no
-    such limit in force, or a level ``PACK_FLOOR_SOC_DRIFT`` points from the
-    count's own start begins it again. A cycle with no reading keeps it."""
+    when a limit of at least one step is in force — SEM's record of it AND
+    what the entity holds now — and the decision shows the pack idle
+    (``pack_idle_soc``). The pack moving (``pack_moves``), no such limit in
+    force, or a level ``PACK_FLOOR_SOC_DRIFT`` points from the count's own
+    start begins it again. A cycle with no reading, or an entity that cannot
+    be read, keeps it.
+
+    (review) The entity, because a limit someone else set to 0 W (an app,
+    a register that did not keep SEM's write) also leaves a full pack idle.
+    Learnt from SEM's record alone, that held every rise, and the held value
+    is the record, so the same-value skip never wrote the entity again."""
     if (not in_force or last_w < DISCHARGE_LIMIT_STEP_W
             or getattr(decision, "pack_moves", False) is True):
+        _set(adapter, "_pack_floor", None)
+        return None
+    held_w = _limit_entity_w(adapter)
+    if held_w is not None and held_w < DISCHARGE_LIMIT_STEP_W:
         _set(adapter, "_pack_floor", None)
         return None
     kept = getattr(adapter, "_pack_floor", None)
     if not isinstance(kept, tuple):
         kept = None
     soc = getattr(decision, "pack_idle_soc", None)
-    if soc is not None:
+    if soc is not None and held_w is not None:
         if kept is None or abs(float(soc) - kept[0]) >= PACK_FLOOR_SOC_DRIFT:
             kept = (float(soc), 0)
         kept = (kept[0], min(kept[1] + 1, DISCHARGE_LIMIT_FLOOR_CYCLES))
@@ -374,6 +400,7 @@ async def _dispatch_battery(
             or observer or yielded):
         # (#1179) a pack's floor is learnt again under the next limit
         _set(adapter, "_pack_floor", None)
+        _set(adapter, "_floor_held", False)
     if yielded:
         # (#1079) Another party steers this battery and the user said SEM
         # yields: no adapter method runs, so nothing is written. Observer
@@ -482,9 +509,8 @@ async def _dispatch_battery(
                     decision.battery_id, _floor_soc)
             else:
                 _LOGGER.info(
-                    "actuate_battery(%s): the pack may send again — the "
-                    "discharge limit follows its rule (#1179)",
-                    decision.battery_id)
+                    "actuate_battery(%s): the discharge limit follows the "
+                    "house again (#1179)", decision.battery_id)
         try:
             adapter._limit_lower_streak = streak
         except Exception:  # noqa: BLE001 — a read-only stub is not a failure

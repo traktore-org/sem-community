@@ -278,6 +278,36 @@ class TestTheEmptyPack:
             await actuate_battery(_clamp(1000.0, idle_soc=20.0), a, **kw)
             assert a._pack_floor is None, kw
 
+    async def test_a_limit_someone_else_set_low_teaches_nothing(self):
+        """Review: SEM's record says 1000 W, but an app set the entity to
+        0 W. A full pack then sends nothing too. Learnt from the record, the
+        hold kept every rise, and the held value equals the record, so the
+        entity was never written again."""
+        hass, a = _adapter()
+        await _run(a, [1000.0], idle_soc=80.0)
+        hass._states[LIMIT] = hass._num(0.0)
+        await _run(a, [1000.0] * (N + 3), idle_soc=80.0)
+        assert getattr(a, "_pack_floor", None) is None
+        await _run(a, [3000.0], idle_soc=80.0)
+        assert hass.values() == [1000.0, 3000.0]
+
+    async def test_an_entity_that_cannot_be_read_adds_nothing(self):
+        hass, a = _adapter()
+        await _run(a, [1000.0] * 3, idle_soc=20.0)
+        kept = a._pack_floor
+        hass._states[LIMIT] = SimpleNamespace(state="unavailable", attributes={})
+        await _run(a, [1000.0] * (N + 3), idle_soc=20.0)
+        assert a._pack_floor == kept
+
+    async def test_a_limit_no_longer_in_force_starts_again(self):
+        """``follow_writer`` and ``_drop_unsent_hold`` clear the intent: the
+        record is then no limit in force."""
+        hass, a = await _at_floor(1000.0)
+        a._last_intent = None
+        await _run(a, [3000.0], idle_soc=20.0)
+        assert hass.values() == [3000.0]
+        assert a._pack_floor is None
+
     async def test_the_log_says_it_once_each_way(self, caplog):
         import logging
         caplog.set_level(logging.INFO)
@@ -287,6 +317,18 @@ class TestTheEmptyPack:
         said = [r.getMessage() for r in caplog.records if "#1179" in r.getMessage()]
         assert len(said) == 2, said
         assert "sends nothing at 20%" in said[0]
+        assert "follows the house again" in said[1]
+
+    async def test_the_end_of_a_clamp_is_not_logged_later(self, caplog):
+        """Review: the next clamp, hours later, said the pack may send."""
+        import logging
+        hass, a = await _at_floor(1000.0)
+        await actuate_battery(BatteryDecision(
+            battery_id="b1", intent=BatteryIntent.NORMAL, reason="car gone"), a)
+        caplog.set_level(logging.INFO)
+        caplog.clear()
+        await _run(a, [1000.0] * 2)
+        assert not [r for r in caplog.records if "#1179" in r.getMessage()]
 
 
 # ─── 3. packs on one limit entity ───────────────────────────────────────────
@@ -315,6 +357,38 @@ class TestPacksOnOneEntity:
     def test_both_idle_stay_idle(self):
         out = packs_judged_together(_rows((20.0, False), (21.0, False)))
         assert [d.pack_idle_soc for _, _, d in out] == [20.0, 21.0]
+
+    @pytest.mark.asyncio
+    async def test_the_dispatch_judges_them_as_one(self):
+        """Through ``actuate_batteries``: b1 rests while b2 feeds the house
+        on the same entity. That is no floor, so the rise goes out."""
+        from custom_components.solar_energy_management.coordinator.battery_shared_limit import (
+            actuate_batteries,
+        )
+        hass = _Hass()
+        _, a1 = _adapter(hass)
+        _, a2 = _adapter(hass)
+
+        async def _cycle(w, idle1, moves2):
+            await actuate_batteries([
+                ("b1", a1, _clamp(w, idle_soc=idle1, bid="b1")),
+                ("b2", a2, _clamp(w, idle_soc=None if moves2 else idle1,
+                                  moves=moves2, bid="b2"))],
+                actuate_battery)
+
+        for _ in range(N + 2):
+            await _cycle(1000.0, 20.0, True)
+        await _cycle(3000.0, 20.0, True)
+        assert hass.values() == [1000.0, 3000.0]
+        # …and both resting is the floor
+        hass2 = _Hass()
+        _, b1 = _adapter(hass2)
+        _, b2 = _adapter(hass2)
+        a1, a2, hass = b1, b2, hass2
+        for _ in range(N + 2):
+            await _cycle(1000.0, 20.0, False)
+        await _cycle(3000.0, 20.0, False)
+        assert hass.values() == [1000.0]
 
     def test_own_entities_are_judged_alone(self):
         rows = _rows((20.0, False), (None, True), entities=(LIMIT, LIMIT2))
@@ -389,6 +463,16 @@ class TestThePipeline:
         seen = await self._views(monkeypatch, _power(
             {}, battery_soc_unavailable=True))
         assert (seen[0].runtime.soc_read, seen[0].runtime.power_read) == (False, True)
+
+    @pytest.mark.parametrize("fleet", [
+        {"battery_power_read": False},
+        {"battery_power_unavailable": True},
+    ])
+    async def test_one_battery_without_a_power_reading(self, monkeypatch, fleet):
+        """A battery with no power sensor reads 0.0 W: no reading, so never
+        idle."""
+        seen = await self._views(monkeypatch, _power({}, **fleet))
+        assert (seen[0].runtime.soc_read, seen[0].runtime.power_read) == (True, False)
 
     async def test_a_grid_that_is_no_measurement_is_no_site(self, monkeypatch):
         seen = await self._views(monkeypatch, _power(
