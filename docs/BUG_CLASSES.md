@@ -3768,20 +3768,29 @@ SOC and power readings this cycle (`BatteryRuntime.soc_read` / `power_read`, fro
 per-unit flags), and the home buying at least one step from the grid with at most 100 W of sun
 (`BatteryView.grid_and_sun`, the #1165 `sale_stall_site` measurement — the grid import, because the
 inverter covers the whole meter, car included). `actuate_battery._pack_at_floor` counts
-`DISCHARGE_LIMIT_FLOOR_CYCLES` (6, ~1 min) such cycles with a limit of at least one step in force;
-from then on the limit does not rise, targets included. It still falls, by #900's rule. The pack
+`DISCHARGE_LIMIT_FLOOR_CYCLES` (6, ~1 min) such cycles with a limit of at least one step in force —
+SEM's record AND what the entity holds now (review: an app that set the entity to 0 W leaves a full
+pack idle too; learnt from the record alone, the held value equalled the record and the same-value
+skip never wrote the entity again); from then on the limit does not rise, targets included. It still falls, by #900's rule. The pack
 moving, its level two points from the count's start (one point is PROD's own 20/19 flicker), no
 limit of a step in force (the 0 W hold teaches nothing), another command, observer or a yield
 starts the count again; a cycle with no reading keeps it. Packs on one limit entity are judged as
 one (`battery_shared_limit.packs_judged_together`): one inverter may feed the house from one pack
-while the other rests. A wrong "floor" costs grid import, never the car: the limit only stays
-lower. **Guard:** `tests/test_1179_empty_pack_limit_holds.py` — every condition of the reading;
+while the other rests. A wrong "floor" costs grid import: the limit stays where it is, and it
+falls by the usual six-cycle wait (review fuzz: on a wrong floor a fall can land a few cycles later
+than develop's, bounded by that wait; an able pack sends over 100 W under any held limit and ends
+it the next cycle). **Guard:** `tests/test_1179_empty_pack_limit_holds.py` — every condition of the reading;
 the PROD evening on a real adapter writes the first clamp and one fall, against six or more writes
 with no reading; a house rise waits too; a fall still lands and does not rise back; each restart
-of the count; a one-point flicker keeps it; observer and yield forget it; packs on one entity; the
-real pipeline hands each battery its own flags and the site, and the whole chain holds a rise
-until the pack sends. **Left open:** a pack whose power sensor is stuck at 0 W while it discharges
-looks idle until its level moves two points (a sensor fault; the limit only stays lower). Swept:
+of the count; a one-point flicker keeps it; an entity someone else set low teaches nothing, one
+that cannot be read adds nothing; observer and yield forget it; packs on one entity, also through
+`actuate_batteries`; the real pipeline hands each battery its own flags (one battery with no power
+reading has none) and the site, and the whole chain holds a rise until the pack sends. Review
+mutants: 22 of 25 killed at first, the 3 survivors (the dispatch wiring, the one-battery power
+flag, the in-force reset) and the entity check now each fail a test. **Left open:** a pack whose power sensor is stuck at 0 W while it discharges
+looks idle until its level moves two points, and a cloud pack polled every few minutes can look
+idle until its next poll (both cost grid import only). Six cycles are 3–6 min at a 30–60 s update
+interval. Swept:
 the #620 grid-funded clamp, the #879 hold, its cover, the blind release and the cars' share all
 write through this one branch, so the rule covers them; NORMAL writes the max once and is not a
 house-follower; the forced charge's room cap (#1069) moves a charge, which an empty pack can take.
