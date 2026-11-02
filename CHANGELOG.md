@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **An empty home battery no longer has its discharge limit moved up while a car charges** (#1179). Each move was a write that did nothing.
 - 🐛 **A surplus load that throttles itself frees the rest of its rating** (#1156). Before, the walk reserved the full rating while the load drew less.
 - ✨ **The energy plan shows a slot's grid CO2 alongside its price** (#1085). Only when your CO2 sensor carries a forecast; off otherwise.
 - ✨ **Ask Assist why the battery or car is doing something, or what tonight costs** (#1086). One sentence can set a charger's target, off by default.
