@@ -45,11 +45,14 @@ devices by priority and gives each its share if enough is available:
 
 | Device | "Minimum" | Consumes |
 |---|---|---|
-| Heater / switch (discrete) | its rated power — all-or-nothing | exactly its rating, or nothing |
+| Heater / switch (discrete) | its rated power — all-or-nothing | its rating to start; once on, what its power sensor reads |
 | Battery (the sink) | 0 | whatever is left |
 
 A discrete load only switches on when the available surplus meets its full rated
 power; otherwise it yields and that power flows to the battery.
+
+Once a load runs, SEM counts what it draws, not its rating. When a heater
+lowers its own power, the spare surplus goes to the next load.
 
 **Where the rating comes from matters** (#744). If you registered the load with a
 `rated_power`, that is the number. Otherwise SEM holds a 1 kW placeholder until it
