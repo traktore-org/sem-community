@@ -294,7 +294,7 @@ class TestTheEmptyPack:
 def _rows(*pairs, entities=(LIMIT, LIMIT)):
     hass = _Hass()
     out = []
-    for i, ((soc, moves), ent) in enumerate(zip(pairs, entities)):
+    for i, ((soc, moves), ent) in enumerate(zip(pairs, entities, strict=True)):
         _, ad = _adapter(hass, ent)
         out.append((f"b{i + 1}", ad, _clamp(1000.0, idle_soc=soc, moves=moves,
                                              bid=f"b{i + 1}")))
