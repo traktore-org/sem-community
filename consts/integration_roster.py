@@ -30,7 +30,7 @@ from typing import Any, Dict, Final
 SCHEMA: Final = 1
 
 
-ROSTER_META: Final[Dict[str, Any]] = {'generated_at': '2026-10-30T22:58:34Z', 'sources': {'core_analytics': 'https://analytics.home-assistant.io/data.json', 'core_index': 'https://raw.githubusercontent.com/home-assistant/core/dev/homeassistant/generated/integrations.json', 'custom_installs': 'https://analytics.home-assistant.io/custom_integrations.json', 'hacs': 'https://data-v2.hacs.xyz/integration/data.json', 'website': 'https://www.home-assistant.io/integrations.json'}, 'install_floor': 50, 'candidates': 1365, 'kept': 203, 'with_roles': 69, 'roles_mined': 194}
+ROSTER_META: Final[Dict[str, Any]] = {'generated_at': '2026-11-02T11:07:14Z', 'sources': {'core_analytics': 'https://analytics.home-assistant.io/data.json', 'core_index': 'https://raw.githubusercontent.com/home-assistant/core/dev/homeassistant/generated/integrations.json', 'custom_installs': 'https://analytics.home-assistant.io/custom_integrations.json', 'hacs': 'https://data-v2.hacs.xyz/integration/data.json', 'website': 'https://www.home-assistant.io/integrations.json'}, 'install_floor': 50, 'candidates': 1365, 'kept': 203, 'with_roles': 69, 'roles_mined': 196}
 
 #: domain -> what the ecosystem says this integration is.
 ROSTER: Final[Dict[str, Dict[str, Any]]] = {
@@ -291,6 +291,7 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'battery_strategy': {'platform': 'select', 'keys': ('operating_mode',), 'options': ('normal', 'standby')},
         'battery_target_soc': {'platform': 'number', 'keys': ('ac_charge_soc_limit',), 'options': ()},
         'grid_power': {'platform': 'sensor', 'keys': ('grid_power',), 'options': ()},
+        'solar_power': {'platform': 'sensor', 'keys': ('pv_total_power',), 'options': ()},
     },
     'enphase_ev': {
         'ev_charge_mode': {'platform': 'select', 'keys': ('charge_mode',), 'options': ()},
@@ -329,6 +330,7 @@ ROLE_VOCAB: Final[Dict[str, Dict[str, Dict[str, Any]]]] = {
         'grid_export_power': {'platform': 'sensor', 'keys': ('grid_export_power', 'power_to_grid'), 'options': (), 'exact_only': ('power_to_grid',)},
         'grid_import_power': {'platform': 'sensor', 'keys': ('grid_import_power',), 'options': ()},
         'grid_power': {'platform': 'sensor', 'keys': ('grid_power',), 'options': (), 'exact_only': ('grid_power',)},
+        'solar_power': {'platform': 'sensor', 'keys': ('pv_total_power',), 'options': ()},
     },
     'growatt_server': {
         'battery_charge_limit': {'platform': 'number', 'keys': ('battery_charge_power_limit',), 'options': ()},

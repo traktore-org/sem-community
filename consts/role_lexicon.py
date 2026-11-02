@@ -108,6 +108,9 @@ ROLE_RULES: Final[Dict[str, Dict[str, Any]]] = {
                 # a smart-load threshold decides when a SECOND load runs,
                 # not how full the pack should be
                 r"smart_load", r"generator", r"grid_peak",
+                # (#810) a START threshold says when AC charging begins, not
+                # how full the pack may get
+                r"(?:^|_)start(?:_|$)",
                 # A protection FLOOR is not a target, and confusing the two
                 # is not a near miss — it inverts the knob. Write "charge to
                 # 80" into "never discharge below" and the pack stops
@@ -241,8 +244,11 @@ READ_ROLE_RULES: Final[Dict[str, Dict[str, Any]]] = {
     "solar_power": {
         "platform": "sensor",
         "any": (r"^(pv|solar|input)_power$", r"^power_pv", r"pv_active_power",
-                r"^solar_generation", r"^inverter_input_power$"),
-        "not": (r"total", r"today", r"daily", r"yesterday", r"month",
+                r"^solar_generation", r"^inverter_input_power$",
+                # the sum of all strings, named "total" (#810, EG4)
+                r"^(pv|solar)_total_power$", r"^total_(pv|solar)_power$"),
+        "not": (r"^(?!(pv|solar)_total_power$|total_(pv|solar)_power$).*total",
+                r"today", r"daily", r"yesterday", r"month",
                 r"forecast", r"string", r"pv\d", r"mppt"),
     },
     "grid_power": {

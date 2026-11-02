@@ -295,6 +295,10 @@ PLATFORM_GRID_SIGN_INVERT: dict[str, bool] = {
     # behavior (−4.9 kW while exporting, SEM read it as import until the
     # manual flip). HIGH-CONFIDENCE: platform string from his diagnostics.
     "deyecloud": True,
+    # EG4 Web Monitor (#810): ``grid_power`` is power_to_user − power_to_grid
+    # in the integration's own code, so +=import. Read off its source and
+    # run against its Modbus path in a simulator; no EG4 diagnostics yet.
+    "eg4_web_monitor": True,
 }
 
 # (#1172) An integration whose sign holds for some of its devices only: the

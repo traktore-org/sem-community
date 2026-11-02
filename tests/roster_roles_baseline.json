@@ -129,6 +129,9 @@
       ],
       "grid_power": [
         "grid_power"
+      ],
+      "solar_power": [
+        "pv_total_power"
       ]
     },
     "enphase_ev": {
@@ -209,6 +212,9 @@
       ],
       "grid_power": [
         "grid_power"
+      ],
+      "solar_power": [
+        "pv_total_power"
       ]
     },
     "growatt_server": {

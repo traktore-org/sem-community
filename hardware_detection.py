@@ -1814,7 +1814,7 @@ KNOWN_INVERTER_DOMAINS = frozenset({
     "growatt_server", "growatt", "enphase_envoy", "powerwall", "tesla",
     "kostal_plenticore", "sonnen", "sonnenbatterie", "victron",
     "victron_gx", "deye", "solarman", "sun2000", "saj_modbus",
-    "solis", "solis_modbus",
+    "solis", "solis_modbus", "eg4_web_monitor",
 })
 
 #: Domains that are infrastructure, never hardware brands.
