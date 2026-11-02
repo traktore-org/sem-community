@@ -31,6 +31,7 @@ Decision tree (precedence top-down):
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from . import reason_codes as RC
@@ -486,6 +487,47 @@ def sale_stall_site(fleet, *, sun_down: bool = False):
     return None
 
 
+#: (#1179) A pack that sends nothing counts as one that cannot only while
+#: the home buys at least this much from the grid: one discharge limit
+#: step. Under a limit of a step or more, a pack that could send would then
+#: send more than ``MANUAL_CHARGE_STALL_W``.
+PACK_FLOOR_IMPORT_W = 250.0
+
+
+def pack_reading(view: "BatteryView") -> tuple:
+    """(#1179) What this battery's pack showed this cycle, for the discharge
+    limit's floor rule in ``actuate_battery``: ``(idle_soc, moves)``.
+
+    ``idle_soc`` is the pack's own SOC when it sent nothing although the
+    home needed it: its own SOC and power are readings this cycle
+    (``BatteryRuntime.soc_read`` / ``power_read``), the power moves no more
+    than ``MANUAL_CHARGE_STALL_W`` either way, and ``view.grid_and_sun``
+    (a measurement, :func:`sale_stall_site`) shows the home buying at least
+    ``PACK_FLOOR_IMPORT_W`` with no more than ``MANUAL_SALE_STALL_SUN_W`` of
+    sun. Else ``None``. ``moves`` is True when the pack's own power is a
+    reading over ``MANUAL_CHARGE_STALL_W`` either way: it sends or it takes.
+    Whether a limit let it send is the actuator's to add: it knows the
+    limit in force."""
+    rt = view.runtime
+    power_read = getattr(rt, "power_read", False) is True
+    try:
+        power_w = float(getattr(rt, "last_known_w", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        return None, False
+    if not power_read or power_w != power_w:      # NaN is no reading
+        return None, False
+    if abs(power_w) > MANUAL_CHARGE_STALL_W:
+        return None, True
+    site = getattr(view, "grid_and_sun", None)
+    if getattr(rt, "soc_read", False) is not True or site is None:
+        return None, False
+    import_w, sun_w = site
+    if (float(import_w) < PACK_FLOOR_IMPORT_W
+            or float(sun_w) > MANUAL_SALE_STALL_SUN_W):
+        return None, False
+    return float(rt.last_known_soc), False
+
+
 def sale_stall_step(prev, now_s: float, soc, stall_read: bool):
     """(#1165) :func:`charge_stall_step` for a sale: a level BELOW the one
     the window started at starts it again — the pack still sells, slowly."""
@@ -616,8 +658,13 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
 
     Pure function — same input → same output.
     """
-    return _stop_what_sem_started(
+    decision = _stop_what_sem_started(
         view, _cap_forced_charge(view, _decide_battery(view)))
+    # (#1179) what the pack showed rides along, for the limit's floor rule
+    idle_soc, moves = pack_reading(view)
+    if idle_soc is None and not moves:
+        return decision
+    return replace(decision, pack_idle_soc=idle_soc, pack_moves=moves)
 
 
 def _decide_battery(view: "BatteryView") -> BatteryDecision:

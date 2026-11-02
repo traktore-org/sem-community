@@ -1389,6 +1389,7 @@ During night charging, the home battery should only power home consumption — n
 - It goes up only when the home load stays higher: about a minute for 500 W or more, about five minutes for one 250 W step (at the default 10 s update interval). A short burst, such as a kettle, does not change it, so the inverter is not written every few minutes. Meanwhile the grid covers the rest of the home load
 - It goes down about a minute after the home load drops, so the battery does not feed the car
 - When the meter is over its peak limit, it goes up at once
+- When the battery is empty, it does not go up. An empty battery cannot discharge, so a higher limit does nothing. SEM sees this when the battery sends nothing for six updates in a row (about a minute at the default 10 s update interval) while the home buys from the grid and there is no sun. It goes up again once the battery charges or discharges
 - The limit ends when night charging ends, when you unplug the car, or when the car has drawn nothing for 15 minutes. If you turn off **Battery may charge the car**, the limit stays while a car is plugged in
 - Requires a Huawei Solar inverter (or compatible) with a `number` entity for discharge limit control
 - Does your battery's discharge limit also stop it charging? Turn on **Discharge limit also caps charging** (off by default). Then, when the sun covers the house and the car has drawn nothing for 15 minutes, SEM lifts the limit so the sun can charge the battery

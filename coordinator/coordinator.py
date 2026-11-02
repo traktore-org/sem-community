@@ -10155,6 +10155,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         or getattr(power, "battery_soc_unavailable", False)  # DARK-SOC: action — the sell gates ask this (#932)
                     ),
                     name=bp.name or battery_id,
+                    # (#1179) the limit's floor rule reads only readings
+                    soc_read=soc_seen[battery_id],
+                    power_read=power_seen[battery_id],
                 )))
         else:
             # Legacy single-battery fallback — synthesise one runtime.
@@ -10175,6 +10178,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 available=not bool(
                     getattr(power, "battery_soc_unavailable", False)  # DARK-SOC: action — the sell gates ask this (#932)
                 ),
+                soc_read=soc_seen["primary"],       # (#1179)
+                power_read=power_seen["primary"],
             )))
 
         # #523: reset the per-cycle "selling to grid" flag; set it below
@@ -10200,16 +10205,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # a reading this cycle (not held, not the never-read 0.0).
         # (#1165) …and the home's grid import and sun, for a sale the pack
         # stopped, when they are a measurement (``sale_stall_site``).
+        # (#1179) …and the same measurement rides on every view, for the
+        # discharge limit's floor rule.
+        from .decide_battery import sale_stall_site
         try:
-            from .decide_battery import sale_stall_site
-            try:
-                _sun = self.hass.states.get("sun.sun")
-            except Exception:  # noqa: BLE001 — never break a cycle over the sun
-                _sun = None
+            _sun = self.hass.states.get("sun.sun")
+        except Exception:  # noqa: BLE001 — never break a cycle over the sun
+            _sun = None
+        try:
+            _site = sale_stall_site(power, sun_down=(
+                getattr(_sun, "state", None) == "below_horizon"))
+        except Exception:  # noqa: BLE001 — no measurement is no site
+            _site = None
+        try:
             self._finish_manual_battery_modes(
                 battery_items, soc_seen, _bat_count, power_read=power_seen,
-                site=sale_stall_site(power, sun_down=(
-                    getattr(_sun, "state", None) == "below_horizon")))
+                site=_site)
         except Exception as err:  # noqa: BLE001 — a mode write must not end a cycle
             # (#762/#1092-class) a persistent fault here logged a full
             # traceback every cycle; log_on_change makes it a transition.
@@ -10393,6 +10404,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 sem_forced_discharge=_forced[1],
                 sem_stop_misses=(0 if self._observer_mode
                                  else stop_misses(adapter)),
+                grid_and_sun=_site,      # (#1179)
             )
 
             # 3. Decide

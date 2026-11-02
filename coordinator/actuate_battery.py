@@ -113,6 +113,23 @@ DISCHARGE_LIMIT_LOWER_DWELL_CYCLES: int = 6
 DISCHARGE_LIMIT_FOLLOW_DWELL_CYCLES: int = 6
 DISCHARGE_LIMIT_ONE_STEP_DWELL_CYCLES: int = 30
 
+# (#1179) A pack at its floor (empty for its own inverter) sends nothing,
+# whatever the limit says, so every move of the limit is a write that does
+# nothing. SEM does not know that floor: it is the inverter's own setting,
+# and SEM's reserve may be another number. PROD, 30.10 and 01.11: the pack
+# sat at 20 % and 0 W all evening, and the limit still moved 15–17 times
+# under the car clamp. So the actuator learns it from the pack: this many
+# cycles in a row (~1 min) with a limit of at least one step in force, the
+# pack idle and the home buying from the grid with no sun
+# (``BatteryDecision.pack_idle_soc``). From then on the limit does not
+# rise: the pack could not use the room. It still falls, as before; that
+# is the side that keeps the pack out of the car once it can send again.
+DISCHARGE_LIMIT_FLOOR_CYCLES: int = 6
+#: (#1179) …and the count starts again when the pack moves (it sends or
+#: takes more than 100 W), when its level is this many points away from the
+#: level the count started at, or when no limit of a step is in force.
+PACK_FLOOR_SOC_DRIFT: float = 2.0
+
 #: (#1069 review) A forced charge capped by the room under the grid limit
 #: is RAISED only after the bigger room held this many cycles (~1 min).
 #: Lowering never waits: the limit must never be exceeded. Without it a
@@ -172,6 +189,59 @@ def _settled_rise_w(raw_w: float, last_w: float, adapter) -> float:
     if len(houses) >= DISCHARGE_LIMIT_ONE_STEP_DWELL_CYCLES:
         return float(math.ceil(min(houses) / step) * step)
     return last_w
+
+
+def _limit_entity_w(adapter):
+    """(#1179 review) What the adapter's discharge limit entity holds now,
+    in W, or ``None`` when there is none or it cannot be read."""
+    ent = getattr(adapter, "_discharge_control_entity", None)
+    hass = getattr(adapter, "_hass", None)
+    if not isinstance(ent, str) or not ent or hass is None:
+        return None
+    try:
+        from .units import power_state_to_watts
+        w = power_state_to_watts(hass.states.get(ent))
+        return None if w is None or w != w else float(w)
+    except Exception:  # noqa: BLE001 — a stand-in adapter reads nothing
+        return None
+
+
+def _pack_at_floor(decision, adapter, last_w: float, in_force: bool):
+    """(#1179) The level this pack has shown its floor at, under the limit in
+    force (``last_w``), or ``None`` while it has not.
+
+    Keeps ``(soc, cycles)`` on the adapter as ``_pack_floor``. A cycle counts
+    when a limit of at least one step is in force — SEM's record of it AND
+    what the entity holds now — and the decision shows the pack idle
+    (``pack_idle_soc``). The pack moving (``pack_moves``), no such limit in
+    force, or a level ``PACK_FLOOR_SOC_DRIFT`` points from the count's own
+    start begins it again. A cycle with no reading, or an entity that cannot
+    be read, keeps it.
+
+    (review) The entity, because a limit someone else set to 0 W (an app,
+    a register that did not keep SEM's write) also leaves a full pack idle.
+    Learnt from SEM's record alone, that held every rise, and the held value
+    is the record, so the same-value skip never wrote the entity again."""
+    if (not in_force or last_w < DISCHARGE_LIMIT_STEP_W
+            or getattr(decision, "pack_moves", False) is True):
+        _set(adapter, "_pack_floor", None)
+        return None
+    held_w = _limit_entity_w(adapter)
+    if held_w is not None and held_w < DISCHARGE_LIMIT_STEP_W:
+        _set(adapter, "_pack_floor", None)
+        return None
+    kept = getattr(adapter, "_pack_floor", None)
+    if not isinstance(kept, tuple):
+        kept = None
+    soc = getattr(decision, "pack_idle_soc", None)
+    if soc is not None and held_w is not None:
+        if kept is None or abs(float(soc) - kept[0]) >= PACK_FLOOR_SOC_DRIFT:
+            kept = (float(soc), 0)
+        kept = (kept[0], min(kept[1] + 1, DISCHARGE_LIMIT_FLOOR_CYCLES))
+        _set(adapter, "_pack_floor", kept)
+    if kept is not None and kept[1] >= DISCHARGE_LIMIT_FLOOR_CYCLES:
+        return kept[0]
+    return None
 
 
 def _note_forced_op(adapter, attr: str, ret, landed_intent, value: bool) -> None:
@@ -326,6 +396,11 @@ async def _dispatch_battery(
     _set(adapter, "_sem_charge_asked_w", 0.0)
     # (#1165) …and the same for a sale, set by the FORCE_DISCHARGE branch.
     _set(adapter, "_sem_discharge_asked_w", 0.0)
+    if (decision.intent is not BatteryIntent.LIMIT_DISCHARGE
+            or observer or yielded):
+        # (#1179) a pack's floor is learnt again under the next limit
+        _set(adapter, "_pack_floor", None)
+        _set(adapter, "_floor_held", False)
     if yielded:
         # (#1079) Another party steers this battery and the user said SEM
         # yields: no adapter method runs, so nothing is written. Observer
@@ -420,6 +495,22 @@ async def _dispatch_battery(
         else:
             _set(adapter, "_limit_rise", None)
             streak = 0
+        # (#1179) A pack at its floor cannot use a higher limit: the rise
+        # stays unsent. A fall still goes out by the rule above.
+        _floor_soc = _pack_at_floor(decision, adapter, last_w, _in_force)
+        if _floor_soc is not None and limit_w > last_w:
+            limit_w = last_w
+        if (_floor_soc is not None) != (getattr(adapter, "_floor_held", False) is True):
+            _set(adapter, "_floor_held", _floor_soc is not None)
+            if _floor_soc is not None:
+                _LOGGER.info(
+                    "actuate_battery(%s): the pack sends nothing at %.0f%% — "
+                    "the discharge limit does not rise (#1179)",
+                    decision.battery_id, _floor_soc)
+            else:
+                _LOGGER.info(
+                    "actuate_battery(%s): the discharge limit follows the "
+                    "house again (#1179)", decision.battery_id)
         try:
             adapter._limit_lower_streak = streak
         except Exception:  # noqa: BLE001 — a read-only stub is not a failure

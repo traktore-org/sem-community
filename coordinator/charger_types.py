@@ -275,6 +275,11 @@ class BatteryRuntime:
     capacity-weighted SOC and by the scheduler's deficit math."""
     available: bool = True
     name: str = ""
+    #: (#1179) ``last_known_soc`` / ``last_known_w`` are this unit's own
+    #: readings this cycle (not held, not the 0.0 of a sensor that never
+    #: answered). ``False`` — a view built without them — reads nothing.
+    soc_read: bool = False
+    power_read: bool = False
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -422,6 +427,12 @@ class BatteryDecision:
     reason_code: str = field(default="", compare=False)
     reason_params: Mapping[str, Any] = field(
         default_factory=dict, compare=False)
+    #: (#1179) What the pack showed this cycle (``decide_battery.pack_reading``),
+    #: for the discharge limit's floor rule: its own SOC when it sent nothing
+    #: while the home bought from the grid with no sun, else ``None``…
+    pack_idle_soc: Optional[float] = field(default=None, compare=False)
+    #: …and whether its own power moved more than 100 W either way.
+    pack_moves: bool = field(default=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -533,6 +544,9 @@ class BatteryView:
     #: (#1066) cycles in a row the stop of such an op has not landed
     #: (:func:`decide_battery.stop_misses`); 0 when nothing is pending.
     sem_stop_misses: int = 0
+    #: (#1179) this cycle's ``(grid import W, sun W)`` when both are a
+    #: measurement (:func:`decide_battery.sale_stall_site`), else ``None``.
+    grid_and_sun: Optional[tuple] = None
 
 
 # ─────────────────────────────────────────────────────────────────
